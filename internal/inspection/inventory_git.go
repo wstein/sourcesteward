@@ -940,6 +940,12 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool, scopes, f
 			out = append(out, v)
 			continue
 		}
+		if rawDisk && !inventoryPathSelected(path, filters) {
+			v.unknown = "disk path outside requested literal selection"
+			positions[path] = len(out)
+			out = append(out, v)
+			continue
+		}
 		if !rawDisk {
 			positions[path] = len(out)
 			out = append(out, v)
