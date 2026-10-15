@@ -2,9 +2,13 @@
 package inspection
 
 import (
+	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -38,7 +42,7 @@ func ValidateInventoryOptions(o InventoryOptions) error {
 	}
 	for _, s := range o.Paths {
 		clean := filepath.Clean(s)
-		if s == "" || filepath.IsAbs(s) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		if s == "" || filepath.IsAbs(s) || (o.Anchor != "cwd" && (clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)))) {
 			return errors.New("literal paths must remain within the workspace")
 		}
 	}
@@ -68,4 +72,112 @@ func ValidateInventoryOptions(o InventoryOptions) error {
 		}
 	}
 	return nil
+}
+
+// Inventory observes selected native repository state without target writes.
+func Inventory(ctx context.Context, path string, options InventoryOptions) InventoryResult {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	empty := Result{SchemaVersion: 1, Status: "error", Backend: "unknown", Evidence: []Evidence{}, Diagnostics: []Diagnostic{}}
+	r := newInventoryResult(empty)
+	if err := ValidateInventoryOptions(options); err != nil {
+		return r.fail("invalid-options", err.Error())
+	}
+	if ctx.Err() != nil {
+		return r.fail("canceled", "inventory canceled")
+	}
+	identity := Inspect(ctx, path)
+	r = newInventoryResult(identity)
+	if identity.Status != "ok" {
+		r.Status = "error"
+		r.Boundary.Complete = false
+		r.Diagnostics = append(r.Diagnostics, identity.Diagnostics...)
+		if len(r.Diagnostics) == 0 {
+			return r.fail("identity-failed", "cannot safely identify inventory target")
+		}
+		return r
+	}
+	normalized, e := normalizeInventoryOptions(identity, options)
+	if e != nil {
+		return r.fail("invalid-options", e.Error())
+	}
+	switch identity.Backend {
+	case "git":
+		r = inventoryGit(ctx, identity, normalized)
+	case "jj":
+		r = inventoryJJ(ctx, identity, normalized)
+	default:
+		return r.fail("unsupported-backend", "inventory backend unsupported")
+	}
+	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return boundedInventoryFailure(r, "inventory-timeout", "inventory exceeded its ten-second deadline")
+		}
+		return boundedInventoryFailure(r, "canceled", "inventory canceled")
+	}
+	if r.Status != "error" {
+		final := Inspect(ctx, path)
+		if final.Status != "ok" || !reflect.DeepEqual(identity, final) {
+			return boundedInventoryFailure(r, "changed-repository", "repository identity or ownership changed during inventory")
+		}
+	}
+	if ctx.Err() != nil {
+		return boundedInventoryFailure(r, "inventory-timeout", "inventory deadline or cancellation prevented final validation")
+	}
+	if e = checkInventoryLimits(r); e != nil {
+		return boundedInventoryFailure(r, "inventory-limit", e.Error())
+	}
+	return r
+}
+func boundedInventoryFailure(r InventoryResult, code, message string) InventoryResult {
+	// Discard incomplete collections so an oversized/error observation cannot escape its envelope bound.
+	r.Workspaces = []InventoryWorkspace{}
+	r.References = []InventoryReference{}
+	r.Bases = []InventoryBase{}
+	r.Files = []InventoryFile{}
+	r.Boundary.Limitations = []string{"Incomplete observations were discarded; no consequential action is authorized."}
+	r.Diagnostics = []Diagnostic{}
+	if r.Query != nil {
+		r.Query.Evidence = []string{}
+	}
+	return r.fail(code, message)
+}
+func normalizeInventoryOptions(identity Result, o InventoryOptions) (InventoryOptions, error) {
+	if len(o.Scopes) == 0 && o.Query != "ref-exists" && o.Query != "ancestor" {
+		o.Scopes = []string{"disk", "tracked", "untracked"}
+	}
+	root := identity.InputPath
+	if identity.Repository != nil && identity.Repository.Worktree != nil {
+		root = *identity.Repository.Worktree
+	}
+	if identity.JJRepository != nil {
+		root = identity.JJRepository.WorkspaceRoot
+	}
+	anchor := root
+	if o.Anchor == "cwd" {
+		cwd, e := os.Getwd()
+		if e != nil {
+			return o, errors.New("cannot resolve caller directory")
+		}
+		cwd, e = filepath.EvalSymlinks(cwd)
+		if e != nil || !within(root, cwd) {
+			return o, errors.New("caller directory is outside selected workspace")
+		}
+		anchor = cwd
+	}
+	normalized := []string{}
+	for _, p := range o.Paths {
+		target := filepath.Join(anchor, p)
+		if !within(root, target) {
+			return o, errors.New("literal path escapes selected workspace")
+		}
+		relative, e := filepath.Rel(root, target)
+		if e != nil {
+			return o, e
+		}
+		normalized = append(normalized, filepath.ToSlash(relative))
+	}
+	o.Paths = normalized
+	o.Anchor = "workspace"
+	return o, nil
 }
