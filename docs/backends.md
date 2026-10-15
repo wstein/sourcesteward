@@ -117,6 +117,16 @@ historical read-only inspection/inventory evidence.
 explicit base. Checked-out/workspace-used targets and unsupported integration proof retain work.
 jj remote-associated or conflicted targets remain retained; bookmark cleanup never implies change
 abandonment. Optional private plan persistence is distinct from repository effects. Explicitly authorized local reference cleanup records durable native recovery and checks stale state;
-Git uses old-OID CAS, while jj checks pinned operations and exact allowed deltas. Owned workspace
-retirement remains later work. See [tidy](tidy.md); its acceptance evidence is
+Git uses old-OID CAS, while jj checks pinned operations and exact allowed deltas. Owned task retirement requires its separate v2 plan, ownership and complete disk proof. See [tidy](tidy.md); its acceptance evidence is
 independent of prior inspection, inventory and workspace creation.
+
+
+## Owned workspace retirement capability
+
+Native Git supports its coupled worktree registration/files removal only when both actions are
+explicitly selected and clean owned state is proven; registration-only is retained as unsupported.
+Native jj forgetting preserves files, and separately selected filesystem removal uses complete
+manifest/identity revalidation and confined entry removal. Recovery pins retain native identities;
+no jj abandonment, remote deletion, broad prune or garbage collection is implied. Full jj stored/disk
+equality, including one-integrated-parent empty-WC proof where applicable, establishes freshness;
+stored-unsnapshotted inspection alone remains insufficient. See [tidy](tidy.md) for limits.

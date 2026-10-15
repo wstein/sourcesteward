@@ -5,6 +5,7 @@ Use `stw version --json`, `stw inspect [PATH] --json` or `stw inventory [PATH] -
 
 | Command | Authoritative schema | Stable publication URL |
 | --- | --- | --- |
+| `stw tidy plan/apply --json` (owned retirement) | [tidy.schema.json](../schemas/v2/tidy.schema.json) | [Retirement schema 2](https://wstein.github.io/sourcesteward/schemas/v2/tidy.schema.json) |
 | `stw tidy plan --json` | [tidy.schema.json](../schemas/v1/tidy.schema.json) | [Tidy schema 1](https://wstein.github.io/sourcesteward/schemas/v1/tidy.schema.json) |
 | `stw version --json` | [version.schema.json](../schemas/v1/version.schema.json) | [Version schema 1](https://wstein.github.io/sourcesteward/schemas/v1/version.schema.json) |
 | `stw inspect --json` (Git and unselected/ambiguous ownership) | [inspect.schema.json](../schemas/v1/inspect.schema.json) | [Inspection schema 1](https://wstein.github.io/sourcesteward/schemas/v1/inspect.schema.json) |
@@ -137,3 +138,18 @@ JSON. `tidy-apply` now uses this same unchanged contract. Apply requires a store
 authorization; action details expose native recovery pins and result limitations identify the durable
 journal location. Refused/partial outcomes must not be treated as completed deletion. Future incompatible retirement result shapes use a separate schema
 version. Existing inspection, inventory, version and workspace schema bytes remain unchanged.
+
+## Owned retirement results (schema 2)
+
+Retirement selection emits `schema_version: 2`, `plan: null` and the separate `retirement` record.
+Complete successful results include the record; early operational failures may omit it. The record
+binds completed creation plan/task/journal ownership, native source and target identities, physical
+path identities, stored/disk manifests, distinct registration/files selections and action blockers.
+The envelope retains actions, diagnostics and limitations so partial effects and durable journal
+locations remain visible. Authorization refusal for a recognized stored retirement plan also uses
+schema 2; an unrecognized plan ID cannot establish its result kind and may use schema 1.
+
+Publish/validate against the independent v2 URL; do not reinterpret a reference tidy v1 plan as
+retirement authority. Both versions remain available and the v1 schema's exact bytes are checked by
+a regression checksum. Additional object members remain compatible; new incompatible semantics or
+field types require another version. See [tidy](tidy.md) for native coupled/separate effects.

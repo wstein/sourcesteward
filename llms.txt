@@ -44,4 +44,4 @@ from the installed binary; check its version and help first.
 
 - [Inventory guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/inventory.md): scopes, literal paths, three-valued predicates and observation limits.
 
-- [Tidy guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/tidy.md): native ancestry reference plans, retained uncertainty, optional private state and authorized local cleanup with durable recovery.
+- [Tidy guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/tidy.md): native ancestry reference plans, retained uncertainty, optional private state and authorized local cleanup and separately selected owned workspace retirement with durable recovery.

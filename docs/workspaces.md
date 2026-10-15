@@ -73,3 +73,10 @@ never substitute for the selected base. Active filters refuse; configured driver
 `set`, `unset` and `unspecified` also refuse because they collide with attribute sentinels.
 No filter helper is executed or silently disabled. Configuration and attribute evidence
 are included in stale-plan validation.
+
+## Execute reviewed owned retirement
+
+`workspace retire-plan` remains a non-destructive handoff/preparation command. Actual retirement
+uses the separate [tidy retirement workflow](tidy.md): exact completed task/owner evidence, explicit
+integration base, registration selection and optional exact filesystem target, followed by authorized
+apply. Native Git coupled effects and jj separate forget/files effects retain their distinct semantics.

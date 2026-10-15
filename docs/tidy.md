@@ -30,7 +30,7 @@ a bookmark would not imply abandoning a change. Remote-associated jj bookmarks r
 
 Native Git commit IDs may use SHA1 or SHA256. jj commit, change and operation IDs remain separate.
 Native jj observes pinned stored state without snapshotting; disk cleanliness is not established
-by stored-unsnapshotted state. Workspace retirement and filesystem removal remain later work.
+by stored-unsnapshotted state. Owned task retirement has a separate versioned plan and explicit registration/files selections; see below.
 
 ## Stateless and stored plans
 
@@ -101,4 +101,61 @@ Cancellation or failure after native action start may leave partial effects; res
 completed/attempted actions and recovery location. An incomplete journal is not permission to retry
 blindly. A completed retry succeeds only after its recorded postconditions are verified. Sampled
 checks cannot exclude every external or ABA race; jj deletion is not an atomic Git-style CAS.
-Workspace registration removal, recursive filesystem removal and jj abandonment are excluded.
+Reference cleanup excludes workspace registration removal, filesystem removal and jj abandonment;
+owned retirement uses a separately reviewed version 2 plan.
+
+## Owned task retirement
+
+Retirement selects one completed SourceSteward task, its exact owner and an explicit integration
+base. Creation plans, completed journals, native registration identity and physical destination
+identity must agree. A matching path or task label alone provides no ownership proof.
+
+```sh
+# Plan native registration removal; jj preserves files. Git retains this selection as unsupported.
+stw tidy plan /path/to/source --base refs/heads/main --state-dir /private/task-state --task task-id --owner owner-id --remove-registration --json
+
+# Separately select the exact owned destination for filesystem removal.
+stw tidy plan /path/to/source --base refs/heads/main --state-dir /private/task-state --task task-id --owner owner-id --remove-registration --remove-files /absolute/owned/task --json
+stw tidy apply --plan GENERATED_RETIREMENT_PLAN_ID --state-dir /private/task-state --authorize --json
+```
+
+Use a native jj literal base/bookmark instead of the Git full reference in these examples. Retirement
+flags are mutually exclusive with `--ref`. The private store, task, owner and registration selection
+are required; `--remove-files` must equal the recorded canonical owned destination. These selections
+are inspectable proposed effects, while `apply --authorize` grants execution of the reviewed plan.
+
+Git cannot forget a present worktree registration while preserving its files. Registration-only
+plans retain that unsupported action. With both selections and complete safe evidence, fixed native
+Git removal performs the coupled registration and filesystem effects and removes only the exact
+SourceSteward-owned lock. Both action outcomes are reported; no dirty-state override is offered.
+jj registration removal natively forgets the exact workspace while preserving disk content. A
+separate files action revalidates physical identity and the full manifest, removes only verified
+entries through confined descriptors, and retains unexpected/new files rather than following links
+or recursively deleting an inferred path. Forgetting alone never authorizes filesystem removal.
+
+The current/source workspace, foreign or incomplete ownership, dirty/untracked/ignored-extra files,
+conflicts, symlinks, special files, transformed/sparse trees, unsupported metadata and exceeded bounds
+retain or refuse retirement. A full bounded stored/disk comparison includes executable modes and
+native metadata identities. jj stored-unsnapshotted state alone is never cleanliness proof; an empty
+working-copy commit is eligible only with one integrated parent, identical stored trees and a full
+clean disk comparison. Known activity or uncertain freshness retains work; labels cannot establish
+that every external editor or agent is idle.
+
+Retirement uses [tidy schema v2](../schemas/v2/tidy.schema.json), with `plan: null` and an optional
+`retirement` record (present for complete successful observations, potentially absent on early
+failure). It binds original creation ownership, expected source/target identities, full physical
+manifests, separate actions/effects/blockers and recovery limits. Reference cleanup retains schema
+v1 unchanged. Dispatch on `schema_version`, including operational failures.
+
+A private durable retirement journal and native recovery pin precede removal. Before each action,
+apply rechecks ownership, integration, registration and physical state. Recovery retains native
+committed content/identities and reports the journal location; it does not promise automatic file
+restoration or recovery of untracked content. Interrupted or uncertain effects remain partial and
+require manual review; no automatic rollback or blind retry is attempted. Completed retries verify
+recorded postconditions and remaining files. Native writes and disk removal still have sampled
+external/ABA race limits rather than a repository-wide transaction.
+
+Retirement uses the same ten-second planning/sixty-second apply deadlines, 1 MiB encoded record
+bound and aggregate 1024-entry bound; each stored/disk raw file is bounded to 64 KiB. Oversized or
+incomplete evidence never authorizes a truncated removal target. Remote deletion, garbage collection,
+jj change abandonment and arbitrary forced cleanup remain excluded.
