@@ -1,0 +1,10 @@
+/bin/
+/dist/
+/coverage.out
+.DS_Store
+__pycache__/
+*.pyc
+*.exe
+*.test
+/.venv/
+.env*
