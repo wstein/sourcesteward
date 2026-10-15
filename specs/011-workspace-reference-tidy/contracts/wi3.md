@@ -44,6 +44,7 @@ type RetirementEntry struct {
     Path, Kind, Digest string // relative literal path; regular/directory; SHA256 content
     Device, Inode uint64
     Size int64
+    Mode uint32 // full raw mode for stale physical state checks
     Executable bool
 }
 type RetirementManifest struct {
@@ -213,7 +214,7 @@ cover forget as well as recovery; no hidden workspace initialization or registra
 Git native author confirmed feasibility of the proposed model, requiring complete admitted
 registration metadata manifest, stored/index/raw disk proof and parent/sibling snapshots. Binary
 stored blobs use bounded raw cat-file output, not a UTF8-enforcing metadata reader. Shared manifest
-helpers must freeze before source implementation. jj/core final WI3 confirmation is still pending.
+helpers must freeze before source implementation. Core and jj confirmations were subsequently obtained as recorded below.
 
 Git raw stored-content reads use fixed bounded cat-file through the reviewed sandbox runner, preserving
 arbitrary binary bytes. Recheck complete source/index/native ownership and exact target registration
@@ -230,3 +231,52 @@ explicit selected registration absence and immutable physical manifest/legacy cr
 It must not require vanished current target registration as proof, nor adopt unrelated native state.
 RegistrationParent is canonical nonzero for Git; jj uses zero PathIdentity when no registration
 filesystem root is removed, with strict backend-specific validator rather than invented paths.
+
+## Frozen shared manifest helper interface
+```go
+type RetirementStoredFile struct {
+    Path, Digest string
+    Size int64
+    Executable bool
+}
+type retirementManifestAdmission struct {
+    Backend string
+    NativeMetadataPaths []string
+    StoredFiles []RetirementStoredFile
+}
+func observeRetirementManifest(context.Context, string, retirementManifestAdmission) (RetirementManifest, error)
+func removeRecordedManifest(context.Context, PathIdentity, PathIdentity, RetirementManifest) (TidyNativeOutcome, error)
+```
+Removal arguments are exact root and parent identities (root.Path is target), then immutable expected
+manifest. No redundant unbound path. NativeMetadataPaths are EXACT relative file/directory paths,
+never directory-prefix exemptions. Entire physical tree is walked/fingerprinted; admitted metadata
+is excluded only from stored user-content equivalence, not physical checks/deletion manifest. Unknown
+empty directories retain unless an admitted parent of a known path. StoredFiles comparison includes
+exact binary content digest/size/executable and excludes no unknown/untracked/ignored entries.
+Confined filesystem helper never fills Outcome.Expected; native/core wrapper independently validates
+source native poststate and fills it only with exact permitted delta proof. All helper errors after
+removal start preserve Attempted/Effects/incomplete outcomes; root/parent/current manifest checked
+immediately before removal, no-follow file identities/content checked per entry, directories removed
+only when empty. Native lookup supplies fixed literal paths and raw contents before Go traversal.
+
+Dependency boundary: internal/inspection cannot import internal/workspace. Native jj inspection bridge
+returns bounded stored-file facts and exact metadata admission facts in its own native types;
+workspace jj adapter converts those facts and invokes the shared workspace manifest walker. Do not
+introduce an import cycle or duplicate disk-removal implementation. Core author confirmed this helper
+shape; independent source review still must verify descriptor confinement and replacement failure paths.
+
+Native jj author confirms feasibility for both pinned versions: TreeEntry templates expose literal
+path/type/executable/conflict, raw bounded file-show with root-file literal selectors preserves
+binary bytes, and full sparse layout is exactly native `.\n`; other sparse layouts retain. Existing
+64KiB native output/file bound remains unchanged (larger content retains, no silent content runner
+bound increase). Empty-WC proof requires exactly one parent, parent native ancestry into base,
+empty stored parent/WC delta, no conflicts, full stored manifest and actual disk equality. Existing
+reviewed private execution context is reusable for native recovery/forget, subject to new forget
+conformance/effect tests. Core and Git author model/helper feasibility confirmations are recorded
+above; independent final WI3 analyze and source/acceptance gates remain mandatory.
+
+Physical RetirementEntry.Mode records full raw mode for stale physical identity checks. Native
+stored-file facts preserve executable semantics only; recovery from committed trees does not promise
+restoring every original filesystem permission/ownership bit. Reject NFC/casefold-aliased physical
+paths under the existing Spec010 ordinary-tree admission rules; do not silently normalize or merge
+separate names. Permission changes between plan/apply/removal are stale, never cleanup proof.
