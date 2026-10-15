@@ -31,11 +31,11 @@
 - [x] T014 [US3] Implement accessible static landing page in docs/index.html and docs/assets/site.css.
 - [x] T015 [US3] Add allowlisted static artifact packaging in scripts/package-pages.py.
 - [x] T016 [US3] Add pinned, same-run CI→Pages workflow in .github/workflows/ci.yml.
-- [ ] T017 [US3] Configure repository topics/homepage and Actions Pages source using gh; verify live deployment.
+- [x] T017 [US3] Configure repository topics/homepage and Actions Pages source using gh; verify live deployment.
 
 ## Phase 6: Polish and handoff
-- [ ] T018 Review specifications/source for consistency and record evidence in docs/verification.md.
-- [ ] T019 Run make check and race tests; publish focused Conventional Commits; create durable local checkout.
+- [x] T018 Review specifications/source for consistency and record evidence in docs/verification.md.
+- [x] T019 Run make check and race tests; publish focused Conventional Commits; create durable local checkout.
 
 ## Additional user requirements
 - [x] T020 Add Dependabot and community standards in .github/, CONTRIBUTING.md, CODE_OF_CONDUCT.md and SECURITY.md.

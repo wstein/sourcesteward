@@ -3,7 +3,7 @@
   "features": [
     {
       "id": "001-project-foundation",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/001-project-foundation/spec.md",
       "evidence": "verification.md"
     },
