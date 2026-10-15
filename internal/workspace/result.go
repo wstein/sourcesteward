@@ -167,6 +167,12 @@ func bounded(r Result) Result {
 	if e == nil && len(b) <= recordLimit {
 		return r
 	}
+	recovery := ""
+	if r.Plan != nil && validText(r.Plan.StateDir) && validID(r.Plan.PlanID) {
+		recovery = "Recovery journal: " + r.Plan.StateDir + "/operations/" + r.Plan.PlanID + ".json"
+	}
+	r.Status = "partial"
+	r.Diagnostics = []Diagnostic{{"result-limit", "Workspace output exceeded its one-MiB bound; omitted evidence cannot authorize recovery."}}
 	if r.Task != nil {
 		r.Task.Inventory = nil
 		r.Task.RemainingWork = []string{"Inventory omitted because the result bound was exceeded; retain the workspace."}
@@ -177,18 +183,44 @@ func bounded(r Result) Result {
 	}
 	r.Plan = nil
 	r.Task = nil
-	for i := range r.Actions {
-		r.Actions[i].Name = shortText(r.Actions[i].Name, 128)
-		r.Actions[i].Status = shortText(r.Actions[i].Status, 32)
-		r.Actions[i].Detail = shortText(r.Actions[i].Detail, 512)
+	if len(r.Actions) > observationLimit {
+		r.Actions = r.Actions[:observationLimit]
 	}
-	if len(r.Actions) > 1024 {
-		r.Actions = r.Actions[:1024]
+	for i := range r.Actions {
+		r.Actions[i].Name = shortText(r.Actions[i].Name, 32)
+		switch r.Actions[i].Status {
+		case "completed", "incomplete", "refused", "planned":
+		default:
+			r.Actions[i].Status = "incomplete"
+		}
+		r.Actions[i].Detail = "Effect evidence abbreviated; inspect the durable operation journal."
 	}
 	r.Limitations = []string{"Output evidence was bounded; inspect durable state before deciding any recovery."}
-	r.Status = "partial"
-	r.Diagnostics = []Diagnostic{{"result-limit", "Workspace output exceeded its one-MiB bound; inspect the durable operation journal."}}
-	return r
+	if recovery != "" {
+		r.Limitations = append(r.Limitations, recovery)
+	}
+	b, e = json.Marshal(r)
+	if e == nil && len(b) <= recordLimit {
+		return r
+	}
+	// The fixed envelope is the final fail-closed bound, including JSON escaping.
+	safe := newResult("workspace-apply")
+	switch r.Command {
+	case "workspace-plan", "workspace-apply", "workspace-handoff", "workspace-retire-plan":
+		safe.Command = r.Command
+	}
+	switch r.Backend {
+	case "git", "jj", "unknown", "ambiguous", "gitbutler":
+		safe.Backend = r.Backend
+	}
+	safe.Status = "partial"
+	safe.Diagnostics = r.Diagnostics
+	safe.Actions = []ActionOutcome{{"known-effects", "incomplete", "Some completed effects were omitted from bounded output; inspect the durable journal."}}
+	safe.Limitations = []string{"No omitted evidence authorizes mutation or recovery."}
+	if recovery != "" {
+		safe.Limitations = append(safe.Limitations, recovery)
+	}
+	return safe
 }
 
 func shortText(s string, n int) string {
