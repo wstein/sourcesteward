@@ -1,6 +1,6 @@
-# Feature Specification: Conflict Diagnosis
+# Feature Specification: Conflict Diagnosis and Integration Preflight
 
-**Feature Branch**: `codex/lazyjj-inspired-roadmap` (specification batch; implementation branches deferred)
+**Feature Branch**: `codex/014-integration-preflight-spec` (specification only)
 **Created**: 2026-10-15
 **Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
 **Input**: Provide useful evidence to any agent or human.
@@ -51,10 +51,26 @@ A caller receives the same evidence in human and structured output without hidde
 4. **Given** repository-controlled helpers, instructions or configuration, **When** the operation runs, **Then** no undeclared executable, hook, prompt or network action occurs and state outside declared effects is preserved.
 5. **Given** a missing mandatory backend/version or absent acceptance execution, **When** conformance is evaluated, **Then** the missing evidence blocks acceptance rather than counting as a pass.
 
+### User Story 4 — Preview whether selected changes combine (Priority: P1)
+
+A human or agent needs an explicit, bounded outcome without disturbing unrelated work.
+
+**Why this priority**: This closes a user-selected everyday workflow gap while retaining ownership and recovery guarantees.
+
+**Independent Test**: Exercise supported success, refusal and interrupted cases in temporary Git and jj fixtures and compare relevant before/after state.
+
+**Acceptance Scenarios**:
+
+1. **Given** explicit source, destination and integration semantics, **When** preflight is requested, **Then** the isolated preview reports predicted clean/conflicted/unknown state and affected paths tied to exact sampled identities.
+2. **Given** dirty original workspaces or repository helpers, **When** preflight runs, **Then** the originals remain untouched and no helpers, hooks or snapshots run there.
+3. **Given** unsupported topology, cancellation or changed inputs, **When** preflight stops, **Then** unknown/incomplete evidence is explicit, temporary state is safely retired and no safe-to-merge promise is made.
+
 ### Edge Cases
 
 - Binary, rename/delete and directory/file conflicts; conflicts on non-current jj changes.
 - Missing participants, edited conflict markers, divergent operations and large/sensitive file contents.
+
+- Dirty caller workspaces, custom merge drivers, copied configuration, unsupported merge topology and scratch cleanup failure.
 
 ## Requirements
 
@@ -70,10 +86,19 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-008**: Declare and enforce observation/action scope, output and time limits, cancellation and incomplete-result behavior; never convert missing or truncated evidence into success or permission to mutate.
 - **FR-009**: Require acceptance evidence for minimum/current supported Git and jj, including failure, concurrency, ownership and effects cases; missing mandatory coverage cannot count as passed conformance.
 
+- **FR-010**: Add integration preflight for explicit source/destination identities and chosen merge/replay semantics; distinguish existing conflict diagnosis from predicted conflicts.
+- **FR-011**: Perform any simulation in caller-disclosed, privately owned disposable state isolated from the source repository/workspaces; no original files, references, objects, index or operation log may change.
+- **FR-012**: Never snapshot original jj workspaces or perform-and-abort a real merge in an original Git worktree; declare any temporary writes and remove only owned scratch state.
+- **FR-013**: Bind predictions to sampled inputs and integration semantics; report predicted clean/conflicted/unknown, limitations and bounded affected paths. Clean preflight is not proof of tests passing or future integration success.
+- **FR-014**: Suppress repository-controlled execution and network in preflight. On cancellation, partial failure or unavailable isolation, report failure/unknown with remaining scratch ownership, without unsandboxed/original-workspace fallback.
+
 ### Key Entities
 
 - Conflict observation: backend state, affected paths, participant identities and uncertainty.
 - Resolver handoff: bounded evidence, context and non-executed next-step suggestions.
+
+- Preflight observation: source/destination identities, semantics, predicted conflicts, completeness and limits.
+- Disposable preview state: disclosed private ownership, allowed writes and cleanup outcome.
 
 ## Success Criteria
 
@@ -90,3 +115,5 @@ A caller receives the same evidence in human and structured output without hidde
 - Conflict resolution and restore/continue actions require later mutation specifications; no correctness claim based solely on marker removal.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
+
+- Depends on Spec 012 for optional stack scope. Preflight permits disclosed isolated temporary writes; ordinary diagnosis remains read-only. No integration apply, conflict resolution or publication is added.
