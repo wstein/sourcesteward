@@ -33,6 +33,7 @@ type TidyCandidate struct {
 type TidyObservation struct {
     Expected Snapshot
     Candidates []TidyCandidate
+    WorkspacePaths []string // all observed registrations, internal only
     Limitations []string
 }
 type TidyPlanRecord struct {
@@ -60,3 +61,10 @@ reanalyzed before their source work without weakening WI1 published compatibilit
 A retained jj bookmark with Reason ambiguous-target may have empty CommitID/ChangeID only when
 Proof is none; it can never be deleted. Missing explicit names refuse the operation rather than
 produce fabricated candidates. Full native IDs remain mandatory for every delete candidate.
+
+All-registration confinement: internal TidyObservation.WorkspacePaths includes every observed native
+workspace path, including detached Git registrations, jj workspaces without bookmarks and unselected
+references. Core checks secure state disjointness against this complete bounded list, never only
+selected candidate WorkspacePaths. This internal field does not alter published result/schema; before/
+after observation equality and aggregate limits include it. Missing registration paths retain/refuse
+rather than authorize a store overlapping another checkout.

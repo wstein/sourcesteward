@@ -1,7 +1,7 @@
 # WI2 Plan: Authorized Local Reference Cleanup
 
 ## Goal and dependency
-US2/US3: apply the exact persisted WI1 local-reference plan after explicit authorization,
+US2/US3: apply the exact WI2-generated persisted local-reference plan after explicit authorization,
 recording durable native recovery before every deletion. Depends on accepted WI1 API/schema.
 No workspace retirement, remote intent changes, forge calls or history abandonment.
 
