@@ -149,3 +149,19 @@ func TestInventoryRejectsUnboundedOrUndecodableMetadata(t *testing.T) {
 		t.Fatal("aggregate input bound missing")
 	}
 }
+
+func TestInventoryErrorEnvelopeBoundsPath(t *testing.T) {
+	for _, path := range []string{strings.Repeat("<", 100000), strings.Repeat("<", outputLimit), "\xff"} {
+		r := Inventory(context.Background(), path, InventoryOptions{})
+		raw, e := json.Marshal(r)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if r.Status != "error" || len(raw) > inventoryResultLimit {
+			t.Fatalf("error result status=%s bytes=%d", r.Status, len(raw))
+		}
+		if len(r.Identity.Diagnostics) == 0 {
+			t.Fatal("failed embedded identity has no diagnostic")
+		}
+	}
+}
