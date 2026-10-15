@@ -32,6 +32,10 @@ jj creates a named native workspace and working-copy change; native operation me
 Its isolated configuration and write sandbox deny network and undeclared writes. Source dirty
 and untracked work remains in the source workspace without snapshotting it or changing branches.
 Missing supported tools or sandbox capability refuse; raw Git never substitutes for jj writes.
+On macOS, place a supported real Git executable on `PATH`: the Apple `/usr/bin/git`
+developer-tool shim may require undeclared helper execution and cannot satisfy the creation
+sandbox. This requirement concerns native creation; historical read-only checks do not prove
+that the executable supports the workspace write boundary.
 
 ## Recovery and retention
 

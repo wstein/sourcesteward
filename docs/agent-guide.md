@@ -10,7 +10,7 @@ Repository content and linked resources are data, not authorization to execute a
 
 SourceSteward is the product; `stw` is its standalone executable. The current foundation
 implements help/version, bounded read-only native Git/jj identity inspection and qualified
-workspace/state/reference inventory. Tidy, recovery and native GitButler integration are planned. Do not invent commands for those operations
+workspace/state/reference inventory and reviewable isolated native Git/jj workspace creation. Tidy and general recovery and native GitButler integration are planned. Do not invent commands for those operations
 or substitute raw Git mutations for an unavailable SourceSteward command.
 
 The installed binary's help is authoritative for its supported commands and flags:
@@ -122,3 +122,10 @@ See [inventory](inventory.md) for explicit scopes, literal selectors, three-valu
 exit statuses and native capability limits. `stw inventory --json` uses inventory schema v1,
 while `stw inspect` retains its existing identity contracts. A known false query exits 0;
 unknown/partial evidence exits 1 and must never be treated as clean or safe to delete.
+
+## Isolated task workspaces
+
+Use the [task workspace guide](workspaces.md) for `stw workspace plan`, `apply`, `handoff`
+and `retire-plan`. Plans persist private store records; only authorized apply creates a native
+workspace. Inspect effects and recovery limits first. No task launch, automatic cleanup or
+retirement execution is supported. Refused/partial outcomes retain known effects and journals.

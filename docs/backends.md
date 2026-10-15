@@ -101,3 +101,12 @@ disk freshness remains unknown and staging unsupported. Missing/foreign registra
 are retained as evidence, not repaired. Configured jj aliases are not evaluated.
 See [inventory](inventory.md) for command scopes and [Spec 009 verification](../specs/009-workspace-inventory/verification.md)
 for actual acceptance; no new capability is verified by historical Spec 008 evidence.
+
+## Isolated task workspace capability
+
+Reviewed plan/apply creates a detached Git worktree or native jj workspace from an explicit
+base; handoff and retirement preparation retain owned state. Native creation has declared
+repository/destination/store writes, stale checks and pre-action recovery journals. No backend
+fallback, hook bypass or automatic cleanup is supported. See [task workspaces](workspaces.md)
+for command effects, capability refusals and bounds. Spec 010 acceptance is independent of
+historical read-only inspection/inventory evidence.
