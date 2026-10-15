@@ -143,6 +143,9 @@ func (c tidyCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResu
 	}
 	observation, err := c.observeApply(ctx, a, p, p.Expected)
 	if err != nil {
+		if ctx.Err() != nil {
+			return failTidy(r, ctx.Err())
+		}
 		return refuseTidy(r, tidyErrorCode(err), "Stored plan is stale or native evidence is unavailable; generate a new plan.")
 	}
 	targets := eligibleTidyCandidates(p)
@@ -378,6 +381,9 @@ func (c tidyCoordinator) retryTidy(ctx context.Context, s *store, p TidyPlanReco
 	}
 	post, err := c.observeApply(ctx, a, p, j.Expected)
 	if err != nil {
+		if ctx.Err() != nil {
+			return failTidy(r, ctx.Err())
+		}
 		return refuseTidy(r, "stale-completed-operation", "Completed-operation native postconditions changed; no effects were repeated.")
 	}
 	for _, entry := range j.Entries {
