@@ -40,15 +40,7 @@ def sandbox_prefix():
     raise RuntimeError('No supported enforced read-only sandbox on this host')
 
 
-def preflight(lane):
-    spec = importlib.util.spec_from_file_location('backends', ROOT / 'scripts/install-backends.py')
-    installer = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(installer)
-    pins = installer.load_pins()[lane]
-    for tool in ('git', 'jj'):
-        executable = shutil.which(tool)
-        if executable is None: raise RuntimeError('Required backend unavailable: ' + tool)
-        installer.verify_version(Path(executable), tool, pins[tool].get('runtime_version', pins[tool]['version']))
+def check_sandbox():
     prefix = sandbox_prefix()
     with tempfile.TemporaryDirectory(prefix='stw-sandbox-preflight-') as directory:
         probe = Path(directory) / 'probe'
@@ -58,10 +50,26 @@ def preflight(lane):
         denied = subprocess.run([*prefix, '/bin/sh', '-c', 'printf changed > "$1"', 'probe', str(probe)], env=env, capture_output=True, timeout=15)
         if denied.returncode == 0 or probe.read_text() != 'unchanged':
             raise RuntimeError('Required sandbox did not prevent filesystem writes')
-        result = subprocess.run([*prefix, shutil.which('jj'), '--version'], env=env, capture_output=True, timeout=15)
-        expected = 'jj ' + pins['jj']['runtime_version'] + '\n'
-        if result.returncode or result.stdout.decode('utf-8') != expected:
-            raise RuntimeError('Required read-only jj sandbox cannot execute; install a supported host sandbox without relaxing protections')
+        result = subprocess.run([*prefix, '/bin/true'], env=env, capture_output=True, timeout=15)
+        if result.returncode:
+            raise RuntimeError('Required read-only sandbox cannot execute; install a supported host sandbox without relaxing protections')
+    print('Enforced read-only sandbox capability verified')
+
+
+def preflight(lane):
+    spec = importlib.util.spec_from_file_location('backends', ROOT / 'scripts/install-backends.py')
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    pins = installer.load_pins()[lane]
+    for tool in ('git', 'jj'):
+        executable = shutil.which(tool)
+        if executable is None: raise RuntimeError('Required backend unavailable: ' + tool)
+        installer.verify_version(Path(executable), tool, pins[tool].get('runtime_version', pins[tool]['version']))
+    check_sandbox()
+    with tempfile.TemporaryDirectory(prefix='stw-jj-preflight-') as directory:
+        result = subprocess.run([*sandbox_prefix(), shutil.which('jj'), '--version'], env=clean_environment(Path(directory)), capture_output=True, timeout=15)
+        if result.returncode or result.stdout.decode('utf-8') != 'jj ' + pins['jj']['runtime_version'] + '\n':
+            raise RuntimeError('Required read-only sandbox cannot execute the pinned jj backend')
     print('Exact ' + lane + ' Git/jj versions and enforced read-only sandbox verified')
 
 
@@ -140,9 +148,12 @@ def acceptance():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--preflight', choices=('minimum', 'current'))
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--preflight', choices=('minimum', 'current'))
+    mode.add_argument('--sandbox-preflight', action='store_true')
     args = parser.parse_args()
-    if args.preflight: preflight(args.preflight)
+    if args.sandbox_preflight: check_sandbox()
+    elif args.preflight: preflight(args.preflight)
     else: acceptance()
 
 
