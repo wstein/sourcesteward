@@ -338,9 +338,12 @@ func (gitAdapter) Create(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	n.Phase = "unknown"
 	n.Effects = append(n.Effects, "native Git worktree creation attempted; destination and new registration may have changed")
 	_, code, runErr := runSandboxed(ctx, bin, []string{"--no-replace-objects", "worktree", "add", "--detach", "--lock", "--reason", "stw:" + p.TaskID, "--", p.Destination, p.Expected.BaseCommit}, p.Expected.Identity.WorkspaceRoot, []string{p.Destination, filepath.Join(p.Expected.Identity.RepositoryDir, "worktrees")}, protected)
-	verifyCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	verified, verifyErr := (gitAdapter{}).Verify(verifyCtx, p)
+	// Cancellation after native start cannot imply rollback. Preserve the unknown
+	// outcome rather than extending the total action deadline for reconciliation.
+	if ctx.Err() != nil {
+		return n, ctx.Err()
+	}
+	verified, verifyErr := (gitAdapter{}).Verify(ctx, p)
 	if verifyErr == nil {
 		n.Identity = verified.Identity
 		n.Phase = "registered"
