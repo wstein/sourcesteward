@@ -122,3 +122,11 @@ func TestTidyDuplicateSelectionStructuredRefusal(t *testing.T) {
 		t.Fatalf("%s %v", out.String(), err)
 	}
 }
+
+func TestTidyReferenceCountBeforeSelectorCopy(t *testing.T) {
+	refs := make([]string, 1025)
+	refs[0] = "\x00"
+	if err := validateTidyPlanCLI(nil, workspace.TidyPlanOptions{Base: "HEAD", Refs: refs}); err == nil || err.Error() != "--ref exceeds 1024 selectors" {
+		t.Fatalf("count must be checked before inspecting/copying selectors: %v", err)
+	}
+}
