@@ -62,7 +62,7 @@ func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) 
 	root := &cobra.Command{
 		Use:           "stw",
 		Short:         "Explainable version-control tools for humans and AI agents",
-		Long:          "SourceSteward — Explainable version-control tools for humans and AI agents.\n\nProvides help, version reporting and bounded read-only Git repository identity inspection. Cleanup and native jj/GitButler adapters are planned.",
+		Long:          "SourceSteward — Explainable version-control tools for humans and AI agents.\n\nProvides help, version reporting and bounded read-only native Git/jj identity inspection and inventory. Tidy and GitButler integration remain planned.",
 		SilenceErrors: true, SilenceUsage: true,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error { return cmd.Help() },
@@ -104,7 +104,7 @@ func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) 
 		},
 	}
 	versionCommand.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	root.AddCommand(versionCommand, inspectCommand())
+	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand())
 	root.SetHelpCommand(&cobra.Command{
 		Use: "help [command]", Short: "Help about a command", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
