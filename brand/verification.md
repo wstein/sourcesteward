@@ -26,8 +26,16 @@
 
 Independent review cleared e65220c2677d84a626c6f9ef9bcc43d9e3f26382 with no actionable
 findings and independently passing make check. Asset regeneration produced no differences;
-go test -race ./... also passed. Exact-source CI/Pages verification remains pending.
-Publication uses focused Conventional Commits; revision.txt binds the live site to checked source.
+go test -race ./... also passed. The documentation followup 63e5f9b2b1b8a7099e9b5c8ba034ef9229f05d96
+was independently cleared before publication. Seven focused Conventional Commits were
+fast-forward published to main, and the durable checkout was updated without local changes.
+
+[CI/Pages run 38751223604](https://github.com/wstein/sourcesteward/actions/runs/38751223604)
+succeeded for 63e5f9b2b1b8a7099e9b5c8ba034ef9229f05d96. The live revision.txt returned
+that exact SHA; fetched index.html, site.css, logo.svg, favicon.svg, favicon.ico and
+social-preview.png matched checked source bytes. The public site was reloaded and visually
+confirmed with the new identity. This subsequent documentation-only acceptance record
+will pass through the same exact-revision CI/Pages gate.
 
 ## Limits
 

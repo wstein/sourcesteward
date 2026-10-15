@@ -1,9 +1,10 @@
 # Progress and handoff
 
 ## Current milestone
-002-wide-tie-brand is implemented and awaiting publication acceptance.
+002-wide-tie-brand is complete and published.
 The wide tie asset set, navy/orange site, useful README badges and local make build target
-pass source/browser checks. See [branding evidence](../brand/verification.md).
+pass source/browser checks and independent review. CI/Pages run 38751223604 passed;
+live revision 63e5f9b matched the checked HTML/CSS, logo, favicons and social preview. See [branding evidence](../brand/verification.md).
 
 001-project-foundation is complete. The public SourceSteward repository starts with an empty
 commit and focused Conventional Commits for specifications, CLI, community, branding, site,
