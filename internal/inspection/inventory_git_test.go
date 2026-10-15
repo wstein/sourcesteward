@@ -261,3 +261,35 @@ func TestGitInventorySHA256AndConflicts(t *testing.T) {
 		}
 	}
 }
+
+func TestGitInventorySlashedRemoteAndBaseProvenance(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	oid := strings.TrimSpace(git(t, d, "rev-parse", "HEAD"))
+	git(t, d, "remote", "add", "team/upstream", "https://example.invalid/repo")
+	git(t, d, "update-ref", "refs/remotes/team/upstream/trunk", oid)
+	git(t, d, "symbolic-ref", "refs/remotes/team/upstream/HEAD", "refs/remotes/team/upstream/trunk")
+	git(t, d, "config", "branch.main.remote", "team/upstream")
+	git(t, d, "config", "branch.main.merge", "refs/heads/trunk")
+	r := gitInventory(t, d, InventoryOptions{Scopes: []string{"stored"}, Remotes: []string{"team/upstream"}})
+	if r.Status != "ok" {
+		t.Fatalf("%+v", r)
+	}
+	for _, ref := range r.References {
+		if ref.Name == "refs/remotes/team/upstream/trunk" && (ref.Remote == nil || *ref.Remote != "team/upstream") {
+			t.Fatalf("%+v", ref)
+		}
+	}
+	configured := false
+	for _, base := range r.Bases {
+		if strings.HasPrefix(base.Provenance, "configured:") {
+			configured = true
+			if base.CommitID == nil || *base.CommitID != oid {
+				t.Fatalf("%+v", base)
+			}
+		}
+	}
+	if !configured {
+		t.Fatal("missing configured candidate")
+	}
+}
