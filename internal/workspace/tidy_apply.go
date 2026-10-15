@@ -186,6 +186,9 @@ func (c tidyCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResu
 			}
 			return c.partialTidy(s, p, j, r, pinErr)
 		}
+		if !validTidyNativeTransition(actionPlan.Expected, fresh) || (p.Backend == "jj" && confirmed.OperationID != fresh.Identity.OperationID) {
+			return c.partialTidy(s, p, j, r, failure("unrelated-native-delta", "Native recovery changed source identity, base, registrations or safety state beyond its declared reference effect."))
+		}
 		if _, err = c.observeApply(ctx, a, p, fresh); err != nil {
 			return c.partialTidy(s, p, j, r, err)
 		}
@@ -212,6 +215,9 @@ func (c tidyCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResu
 				deleteErr = failure("deletion-unconfirmed", "Native target deletion is not completely verified; inspect the recovery journal.")
 			}
 			return c.partialTidy(s, p, j, r, deleteErr)
+		}
+		if !validTidyNativeTransition(fresh, *outcome.Expected) {
+			return c.partialTidy(s, p, j, r, failure("unrelated-native-delta", "Native deletion changed source identity, base, registrations or safety state beyond its declared reference effect."))
 		}
 		post, err := c.observeApply(ctx, a, p, *outcome.Expected)
 		if err != nil {
@@ -373,4 +379,24 @@ func writeTidyJournal(s *store, p TidyPlanRecord, j TidyJournal, exclusive bool)
 		return failure("record-limit", "Tidy recovery journal exceeds its aggregate1024-record bound; further native actions are refused.")
 	}
 	return s.write("tidy-operations", p.PlanID, j, exclusive)
+}
+
+// The adapter proves exact reference deltas (including all unrelated refs and
+// native operation parents). The coordinator independently protects every
+// stable identity/base/registration/configuration field and reobserves the
+// entire returned snapshot, including its reference digest, before advancing.
+func validTidyNativeTransition(before, after Snapshot) bool {
+	if !validSnapshot(after) || before.Identity.Backend != after.Identity.Backend {
+		return false
+	}
+	if before.Identity.Backend == "jj" {
+		if before.Identity.OperationID == after.Identity.OperationID || after.ReferenceDigest != after.Identity.OperationID {
+			return false
+		}
+		before.Identity.OperationID = ""
+		after.Identity.OperationID = ""
+	}
+	before.ReferenceDigest = ""
+	after.ReferenceDigest = ""
+	return reflect.DeepEqual(before, after)
 }

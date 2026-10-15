@@ -179,3 +179,12 @@ func TestTidyMalformedNativeOutcomeNeverAuthorizesDeletion(t *testing.T) {
 		t.Fatal("possible effects lost")
 	}
 }
+
+func TestTidyCoreRejectsUnrelatedStateDeltaAfterRecovery(t *testing.T) {
+	c, f, o := fixtureTidyApply(t)
+	f.onPin = func() { f.observation.Expected.BaseCommit = strings.Repeat("d", 40) }
+	r := c.apply(context.Background(), o)
+	if r.Status != "partial" || f.deletes != 0 {
+		t.Fatalf("unrelated native base delta authorized deletion %+v", r)
+	}
+}
