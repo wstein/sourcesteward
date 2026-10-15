@@ -63,9 +63,9 @@
     },
     {
       "id": "010-isolated-task-workspaces",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/010-isolated-task-workspaces/spec.md",
-      "evidence": null
+      "evidence": "../specs/010-isolated-task-workspaces/verification.md"
     },
     {
       "id": "011-workspace-reference-tidy",
