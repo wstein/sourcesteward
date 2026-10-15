@@ -23,7 +23,7 @@ Independent test: apply errors/partial effects validate same published contract;
 ## Review and handoff
 - [x] T213 [P] Document authorization/native recovery roots/retention/manual restoration limits in docs/tidy.md and docs/backends.md; preserve previous capability claims.
 - [x] T214 Obtain independent source review and final artifact analysis; run gofmt/make check/race/both native lanes and record actual revisions/commands in specs/011-workspace-reference-tidy/wi2-verification.md.
-- [ ] T215 Update tasks/progress/status honestly, focused Conventional Commits and open/attach WI2 PR in specs/011-workspace-reference-tidy/wi2-tasks.md and docs/progress.md.
+- [x] T215 Update tasks/progress/status honestly, focused Conventional Commits and open/attach WI2 PR in specs/011-workspace-reference-tidy/wi2-tasks.md and docs/progress.md.
 
 ## Dependencies and parallel work
 T201 sourcegate; T202→T203 foundation. Git T204→T206 and jj T205→T207 in separate worktrees;

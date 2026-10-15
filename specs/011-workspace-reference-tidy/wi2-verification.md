@@ -39,3 +39,6 @@ transaction and jj operation-parent checks are not CAS. Incomplete/uncertain ope
 replay; inspect the durable journal and exact predeclared recovery root manually. A commit pin
 preserves reachable history, not arbitrary filesystem/configuration metadata. Remote-bound jj
 bookmarks retain. Private recovery roots are not automatically collected. WI3 removal remains planned.
+
+WI2 handoff: [PR #37](https://github.com/wstein/sourcesteward/pull/37). Final consistency
+review cleared the source/schema/evidence; exact-head hosted checks and owner merge remain pending.
