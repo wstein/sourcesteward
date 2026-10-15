@@ -142,6 +142,10 @@ func observeJJInventory(ctx context.Context, identity Result, o InventoryOptions
 				}
 			}
 			r.Query.Value = fmt.Sprint(found)
+			r.Query.Reason = "No exact native bookmark exists in the sampled operation."
+			if found {
+				r.Query.Reason = "Exact native bookmark observed in the sampled operation."
+			}
 		} else {
 			from, fromErr := resolve(o.From)
 			to, toErr := resolve(o.To)
@@ -157,6 +161,7 @@ func observeJJInventory(ctx context.Context, identity Result, o InventoryOptions
 					return fail(e)
 				}
 				r.Query.Value = value.Value
+				r.Query.Reason = "Native ancestry evaluated at the sampled operation."
 				r.Query.Evidence = []string{from.CommitID, to.CommitID, operation}
 			}
 		}
