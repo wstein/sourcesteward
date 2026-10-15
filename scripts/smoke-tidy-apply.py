@@ -155,7 +155,8 @@ def acceptance(binary=BINARY):
                 assert restored == first, restored
                 def protected(snap):
                     return {key: value for key, value in snap.items()
-                            if not (key == '.jj/repo' or key.startswith('.jj/repo/'))
+                            if (not (key == '.jj/repo' or key.startswith('.jj/repo/'))
+                                or key in ('.jj/repo/config.toml', '.jj/repo/config-id'))
                             and not (group == 'jj-colocated' and (key == '.git/objects' or key.startswith('.git/objects/') or key == '.git/refs/jj' or key.startswith('.git/refs/jj/')))}
             assert protected(before_files) == protected(after_files), ('Apply changed undeclared source state', group)
             mark('delete-recovery')
