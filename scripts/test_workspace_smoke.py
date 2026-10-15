@@ -17,7 +17,7 @@ class WorkspaceSmokeTests(unittest.TestCase):
         for group, ids in smoke.CASE_IDS.items():
             self.assertEqual(len(ids), len(set(ids)))
             self.assertGreaterEqual(len(ids), 12)
-            for required in ('plan', 'apply', 'retry', 'handoff', 'retire-plan', 'stale', 'occupied', 'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry'):
+            for required in ('plan', 'apply', 'retry', 'handoff', 'retire-plan', 'stale', 'occupied', 'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry', 'manager-ownership'):
                 self.assertIn(group + '.' + required, ids)
 
     def test_missing_backend_is_failure(self):
