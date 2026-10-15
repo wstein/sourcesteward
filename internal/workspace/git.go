@@ -20,6 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
+	"golang.org/x/text/unicode/norm"
 )
 
 type gitAdapter struct{}
@@ -247,7 +248,7 @@ func validateGitTree(raw string) error {
 		components := strings.Split(path, "/")
 		for i := range components {
 			prefix := strings.Join(components[:i+1], "/")
-			folded := strings.ToLower(prefix)
+			folded := strings.ToLower(norm.NFC.String(prefix))
 			if previous, exists := paths[folded]; exists && (previous != prefix || files[folded] || i == len(components)-1) {
 				return failure("git-tree-refused", "base contains aliased file or directory names")
 			}
