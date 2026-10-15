@@ -56,12 +56,30 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(source, "untracked"), []byte("keep\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	for _, invalid := range []string{"all()", "@-", "trunk()", "root()"} {
+		if _, e := ObserveJJWorkspace(context.Background(), source, invalid); e == nil {
+			t.Fatalf("accepted revset program %q", invalid)
+		}
+	}
 	observed, err := ObserveJJWorkspace(context.Background(), source, base)
 	if err != nil {
 		t.Fatal(err)
 	}
 	destination := filepath.Join(root, "task")
 	if err = os.Mkdir(destination, 0700); err != nil {
+		t.Fatal(err)
+	}
+	native(source, "bookmark", "create", "moved", "--revision", base)
+	stale, e := CreateJJWorkspace(context.Background(), source, observed, "stw-task", destination)
+	if e == nil || stale.Phase != "not-started" {
+		t.Fatalf("accepted stale operation: %+v %v", stale, e)
+	}
+	entries, e := os.ReadDir(destination)
+	if e != nil || len(entries) != 0 {
+		t.Fatalf("stale destination effects: %v %v", entries, e)
+	}
+	observed, err = ObserveJJWorkspace(context.Background(), source, base)
+	if err != nil {
 		t.Fatal(err)
 	}
 	created, err := CreateJJWorkspace(context.Background(), source, observed, "stw-task", destination)

@@ -51,19 +51,32 @@ func ObserveJJWorkspace(ctx context.Context, path, base string) (JJWorkspaceStat
 		if observed != state.Source {
 			return errJJChanged
 		}
-		out, e := s.read(path, observed.OperationID, "log", "--revisions", base, "--no-graph", "--template", jjInventoryIDs)
+		bookmarks, e := s.read(path, observed.OperationID, "bookmark", "list", "--all-remotes", "--template", jjInventoryBookmarks)
 		if e != nil {
 			return e
 		}
-		ids, e := scalarRecord(out, 2)
-		if e != nil || !identifier(ids[0], 40, "0123456789abcdef") || !identifier(ids[1], 32, "klmnopqrstuvwxyz") {
-			return errors.New("jj base must resolve to exactly one full native commit")
-		}
-		state.BaseCommit = ids[0]
-		state.BaseChange = ids[1]
-		out, e = s.read(path, observed.OperationID, "workspace", "list", "--template", jjInventoryWorkspaces)
+		refs, e := jjInventoryReferences(bookmarks)
 		if e != nil {
 			return e
+		}
+		target, e := jjInventoryResolve(base, &observed, refs, func(expr string) (string, error) {
+			return s.read(path, observed.OperationID, "log", "--revisions", expr, "--no-graph", "--template", jjInventoryIDs)
+		})
+		if e != nil {
+			return e
+		}
+		if target == nil || target.ChangeID == nil {
+			return errors.New("jj base must be @, one full native commit/change identity or one unambiguous literal bookmark")
+		}
+		state.BaseCommit = target.CommitID
+		state.BaseChange = *target.ChangeID
+		out, e := s.read(path, observed.OperationID, "workspace", "list", "--template", jjInventoryWorkspaces)
+		if e != nil {
+			return e
+		}
+		records, e := jjInventoryRecords(out, 5)
+		if e != nil || len(records) > 1024 {
+			return errors.New("jj workspace registration bound exceeded")
 		}
 		state.RegistrationDigest = jjWorkspaceDigest(out)
 		state.GitDir, e = jjWorkspaceGitDir(repo)
@@ -91,7 +104,7 @@ func validJJTaskName(name string) bool {
 		return false
 	}
 	for _, r := range name {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
 			return false
 		}
 	}
@@ -211,6 +224,8 @@ func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceSta
 	if e != nil {
 		return result, e
 	}
+	// Observation prose is descriptive, not a mutation precondition.
+	expected.Source.Observation = fresh.Source.Observation
 	if !reflect.DeepEqual(fresh, expected) {
 		return result, errJJChanged
 	}
