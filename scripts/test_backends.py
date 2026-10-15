@@ -107,7 +107,7 @@ class BackendInstallerTests(unittest.TestCase):
 
     def test_sandbox_preflight_requires_denied_write_and_successful_read(self):
         for write_code, read_code, passed in ((0, 0, False), (1, 1, False), (1, 0, True)):
-            responses = [SimpleNamespace(returncode=write_code), SimpleNamespace(returncode=read_code)]
+            responses = [SimpleNamespace(returncode=write_code, stderr=b'denied'), SimpleNamespace(returncode=read_code, stderr=b'namespace denied')]
             with self.subTest(write=write_code, read=read_code), patch.object(smoke, 'sandbox_prefix', return_value=['/bwrap']), patch.object(smoke.subprocess, 'run', side_effect=responses):
                 if passed: smoke.check_sandbox()
                 else:
