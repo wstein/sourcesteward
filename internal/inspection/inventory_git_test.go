@@ -391,3 +391,23 @@ func TestGitInventoryDiskQueriesIgnoreOtherWorkspaceState(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestGitInventoryGitlinkStoredAndStagedChanges(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "one")
+	one := strings.TrimSpace(git(t, d, "rev-parse", "HEAD"))
+	git(t, d, "commit", "--allow-empty", "-qm", "two")
+	two := strings.TrimSpace(git(t, d, "rev-parse", "HEAD"))
+	git(t, d, "update-index", "--add", "--cacheinfo", "160000,"+one+",module")
+	git(t, d, "commit", "-qm", "initial gitlink")
+	git(t, d, "update-index", "--cacheinfo", "160000,"+two+",module")
+	r := gitInventory(t, d, InventoryOptions{Query: "dirty", Scopes: []string{"staged"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("staged gitlink %+v", r)
+	}
+	git(t, d, "commit", "-qm", "advance gitlink")
+	r = gitInventory(t, d, InventoryOptions{Query: "dirty", Scopes: []string{"stored"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("stored gitlink %+v", r)
+	}
+}
