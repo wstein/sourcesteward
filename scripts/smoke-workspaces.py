@@ -19,7 +19,7 @@ _spec = importlib.util.spec_from_file_location('jj_smoke', ROOT / 'scripts/smoke
 helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
 NAMES = ('plan', 'apply', 'retry', 'handoff', 'retire-plan', 'stale', 'occupied',
-         'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry', 'authorization', 'human')
+         'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry', 'authorization', 'human', 'manager-ownership')
 CASE_IDS = {group: tuple(group + '.' + name for name in NAMES)
             for group in ('git', 'jj-standalone', 'jj-colocated')}
 
@@ -206,8 +206,7 @@ def acceptance(binary=BINARY):
                 config = source / '.jj/repo/config.toml'
                 prior = config.read_bytes() if config.exists() else None
                 config.write_text('[aliases]\nworkspace = ["util", "exec", "--", "' + str(helper) + '"]\n')
-                safe = plan(area / 'helper-target', 'helpers')
-                invoke('apply', ['--plan', safe['plan']['plan_id'], '--state-dir', state, '--authorize'])
+                plan(area / 'helper-target', 'helpers', status=('refused', 'error'))
                 if prior is None:
                     config.unlink()
                 else:
@@ -215,21 +214,27 @@ def acceptance(binary=BINARY):
             assert not sentinel.exists(), 'Repository-controlled helper executed'
             mark(group, 'helpers')
 
-            interrupted = plan(area / 'incomplete', 'incomplete')
-            wrappers = area / 'wrappers'
-            wrappers.mkdir()
-            tool = 'git' if group == 'git' else 'jj'
-            wrapper = wrappers / tool
-            # The wrapper stands in for a native process reporting failure after actual creation.
-            # All arguments are forwarded exactly; this is trusted fixture code, not source data.
-            wrapper.write_text('#!/usr/bin/env python3\nimport os, subprocess, sys\na=sys.argv[1:]\nr=subprocess.run([' + repr(real_tools[tool]) + ', *a])\nmutation=any(a[i:i+2] in (["worktree","add"],["workspace","add"]) for i in range(len(a)-1))\nsys.exit(71 if mutation and r.returncode == 0 else r.returncode)\n')
-            wrapper.chmod(0o700)
-            failed_env = dict(env, PATH=str(wrappers) + os.pathsep + env['PATH'])
-            failed = invoke('apply', ['--plan', interrupted['plan']['plan_id'], '--state-dir', state, '--authorize'], status=('partial', 'error'), run_env=failed_env)
-            assert (area / 'incomplete').is_dir(), failed
-            incomplete_path = state / 'operations' / (interrupted['plan']['plan_id'] + '.json')
-            assert json.loads(incomplete_path.read_text())['phase'] == 'incomplete', failed
-            invoke('apply', ['--plan', interrupted['plan']['plan_id'], '--state-dir', state, '--authorize'], status='partial', native_roots=(source, area / 'incomplete'), run_env=failed_env)
+            git_marker = source / '.git'
+            created_git_marker = not git_marker.exists()
+            if created_git_marker:
+                git_marker.mkdir()
+            owner_marker = git_marker / 'gitbutler'
+            owner_marker.mkdir()
+            managed = plan(area / 'managed-target', 'managed', status=('refused', 'error'))
+            assert managed['backend'] in ('gitbutler', 'ambiguous'), managed
+            owner_marker.rmdir()
+            if created_git_marker:
+                git_marker.rmdir()
+            mark(group, 'manager-ownership')
+
+            # Simulated crash record after native completion: deliberately downgrade
+            # this trusted fixture's durable journal. Native subprocess interruption
+            # is independently fault-injected by core tests. Replay must not adopt,
+            # repair or reexecute effects merely because the registration exists.
+            journal['phase'] = 'incomplete'
+            journal_path.write_text(json.dumps(journal))
+            invoke('apply', ['--plan', plan_id, '--state-dir', state, '--authorize'],
+                   status='partial', native_roots=(source, destination))
             mark(group, 'incomplete-retry')
     expected = {case for ids in CASE_IDS.values() for case in ids}
     require_complete(completed, expected)
