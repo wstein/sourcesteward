@@ -35,7 +35,7 @@ explicit least-write/network-denying sandbox. Missing enforcement refuses. No ex
 ## Project Structure
 - `internal/workspace/workspace.go`, `result.go`: public operation/model contract; no CLI effects.
 - `internal/workspace/state.go`, `paths.go`: private secure store, locking, journal, path identity.
-- `internal/workspace/workspace_git.go`, `workspace_jj.go`: native adapter observations/actions.
+- `internal/workspace/git.go`, `jj.go`: native adapter observations/actions.
 - `internal/workspace/*_test.go`: real temporary repositories, failure/effect tests.
 - `internal/cli/workspace.go`, `workspace_test.go`: Cobra syntax and shared human/JSON result.
 - `schemas/v1/workspace.schema.json`, `internal/contracts/workspace_test.go`: new independent schema.
