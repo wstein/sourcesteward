@@ -73,6 +73,7 @@ type RetirementPlanRecord struct {
     SchemaVersion int // 2
     PlanID, SourcePath, StateDir, Backend, Digest string
     CreationPlan MutationPlan
+    CreationJournalDigest string // canonical SHA256 of strict validated completed creation journal
     Task TaskRecord // immutable completed creation ownership, Inventory=nil
     Expected RetirementObservation
     RemoveRegistration bool
@@ -164,3 +165,45 @@ feasibility before final WI3 analyze clearance. Independent experiments establis
 sets only, not full safe retirement or accepted native conformance. Mandatory original Spec010
 creation/materialization fixtures, binary/metadata payload cases, sandbox and partial-effect tests
 remain implementation acceptance gates.
+
+## Exact ownership and native post-action delta
+At planning, securely reread the original Spec010 plan, task and completed creation journal through
+legacy state namespaces under the shared lock. Validate original plan/store/id/digest, strict journal
+phase complete and native creation identity, task filename/task/plan/owner/repository/destination
+agreement, original destination dev/inode and native sameOwner relation. Bind the canonical strict
+completed journal digest as CreationJournalDigest. Before EACH effect and any retry, reread all three
+records and require exact original plan/task/journal digest equality plus current native ownership;
+normal task progress may change Target current commit/op but never stable registration identity.
+Copied records belonging to another state path/repository/registration or modified completed journals
+refuse. Journal phase complete proves creation completion, never external process inactivity.
+
+PrepareRecovery returns TidyNativeOutcome.Expected only after validating the exact predeclared native
+recovery-root addition and native sole-parent operation advance (jj), with unchanged base resolution,
+workspace registrations, target current identity/tree, original physical Manifest/Metadata and every
+unrelated reference/safety observation. Core freshly observes and requires exact Expected snapshot
+equality before fsync-confirming recovery or permitting registration removal. No Expected means no
+next destructive action. Registration removal permits ONLY selected registration disappearance,
+exact admitted owned native metadata/lock changes, source native operation advance (jj), and, for
+authorized Git combined removal, exact destination-tree disappearance. Unrelated registrations,
+refs/base/source files/sibling paths/safety config remain equal. An adapter returns verified Expected
+only after this full delta; core independently resamples source snapshot and compares it exactly.
+
+After jj forget, target native identity lookup is expected unavailable; never replace original physical
+manifest with a new unowned observation. Core uses the immutable pre-forget ownership/dev/inode and
+physical Manifest/Metadata, verifies current source repository snapshot/recovery root/absent exact
+registration, then rechecks complete physical bytes/type/inodes against that original manifest before
+files removal. Snapshot field is internal postaction native state; original manifests remain immutable
+and separately bound throughout all phases. After Git combined removal, validate exact target path
+and registration absence instead of attempting to inspect or recreate them. All mismatches preserve
+known completed effects as partial/refused; no arbitrary refreshed baseline is trusted.
+
+Recovery roots preserve the selected target commit/tree, not every historical per-worktree reflog
+entry or arbitrary original index/configuration metadata. Native Git worktree removal deletes its
+admitted per-worktree reflog/index/lock metadata; manual recovery can recreate stored committed
+content within declared native limits, not promise byte-identical restored registration/reflog or
+preservation of all otherwise-unreachable historical commits. Plan recovery_limits must state this.
+
+WI3 native jj recovery/forget reuses the independently reviewed WI2 private execution context for
+colocated source safety. No actual source Git HEAD/index write grant and no broad repo-parent grant
+is added for convenience. Exact context/copy/source-preservation/native operation-delta tests must
+cover forget as well as recovery; no hidden workspace initialization or registration.

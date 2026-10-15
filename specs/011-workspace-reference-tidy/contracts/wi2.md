@@ -69,3 +69,23 @@ all unrelated state unchanged. Core performs a fresh Observe and requires exact 
 before advancing durable journal state or authorizing the next action. Missing/unverified/unequal
 Expected remains partial/refused; never accept an arbitrary postaction state as the new baseline.
 This strengthens the analyzed per-action delta contract without weakening schema v1 compatibility.
+
+## Native jj private execution context amendment
+Existing colocated jj may reset source Git HEAD/index during bookmark operations even with
+--ignore-working-copy/git.colocate=false. Native mutation therefore executes in a private bounded
+context inside the existing isolation directory: exact copied working_copy checkout/tree_state/type
+metadata and an absolute .jj/repo pointer to the same shared native repository; no .git, no init, no
+workspace add/update/register and no migration. Only known current-user single-link regular files
+are copied, with no-follow reads, input/output limits and source identity/content checks before/after.
+Source HEAD/index/configuration/working_copy bytes and complete registered workspace list remain
+unchanged. Native operations may write only already declared shared operation/object/index stores
+and private context; no broad repository parent or source Git metadata write grant. Exact native
+sole-parent operation/bookmark delta proof remains mandatory, using actual source observation for
+validation rather than trusting the private path as another owned workspace. Source read capability
+and final identity remain unchanged. Failure to enforce this mechanism refuses colocated mutation.
+
+Mandatory both-version experiments and conformance must verify no registration/init/source-write
+effects, equal shared repository identities and complete expected native operation/ref deltas; proxy
+research alone is not accepted shipping evidence. Tests include hostile metadata symlink/extra files,
+bounds, copy/source replacement races and nonzero/cancel after native start. Recovery bookmark uses
+fixed trailing ? to avoid native Git-ref export; both protections are required for colocated safety.
