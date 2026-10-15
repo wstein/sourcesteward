@@ -4,6 +4,7 @@ package inspection
 import (
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"strings"
 	"testing"
@@ -15,6 +16,14 @@ func TestBoundedCapture(t *testing.T) {
 	n, e := c.Write(p)
 	if e != nil || n != len(p) || c.Len() != outputLimit || !c.overflow {
 		t.Fatalf("%d %v", n, e)
+	}
+}
+func TestBoundedCaptureThroughIOCopy(t *testing.T) {
+	var c capture
+	source := io.LimitReader(strings.NewReader(strings.Repeat("x", outputLimit+10)), outputLimit+10)
+	n, e := io.Copy(&c, source)
+	if e != nil || n != outputLimit+10 || c.Len() != outputLimit || !c.overflow {
+		t.Fatalf("copy bypassed capture bound: n=%d length=%d overflow=%t err=%v", n, c.Len(), c.overflow, e)
 	}
 }
 func TestCancellationAndMissingGit(t *testing.T) {

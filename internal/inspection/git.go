@@ -14,9 +14,12 @@ import (
 const outputLimit = 64 * 1024
 
 type capture struct {
-	bytes.Buffer
+	buffer   bytes.Buffer
 	overflow bool
 }
+
+func (c *capture) Len() int       { return c.buffer.Len() }
+func (c *capture) String() string { return c.buffer.String() }
 
 func (c *capture) Write(p []byte) (int, error) {
 	n := len(p)
@@ -25,7 +28,7 @@ func (c *capture) Write(p []byte) (int, error) {
 		c.overflow = true
 		p = p[:left]
 	}
-	c.Buffer.Write(p)
+	c.buffer.Write(p)
 	return n, nil
 }
 
