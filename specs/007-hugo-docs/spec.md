@@ -23,7 +23,7 @@ internal specs/progress/harness files stay unpublished, and revision.txt identif
 - FR003: Keep current landing content and navy/orange/white identity, local fonts, favicon and accessible theme selector; generated pages use the same styles/script.
 - FR004: Render an explicit public-guide allowlist; do not recursively publish docs/, specs/, .git/ or arbitrary repository files.
 - FR005: Derive CLI reference from Cobra metadata; do not execute command Run/RunE callbacks or inspect the working repository during generation.
-- FR006: Serve schemas/v1/*.schema.json unchanged when present, rejecting symlinks and unexpected files. Missing schemas are allowed until feature 006 integration.
+- FR006: Serve schemas/v1/*.schema.json unchanged when present, rejecting symlinks and unexpected files. Both schema files and all selected public guides are mandatory after feature 006 integration.
 - FR007: Keep unsafe Markdown HTML disabled, disable template access to environment/commands/network, and escape authored content through Hugo rendering.
 - FR008: CI checks and builds the exact source SHA; deployment uploads the identical checked artifact, preserving revision.txt proof. No automatic merges.
 - FR009: Source Markdown has one owner; public navigation and links resolve correctly under /sourcesteward/.
