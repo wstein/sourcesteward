@@ -957,7 +957,10 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool, scopes, f
 			v.xy = ".D"
 			signature += "\x00missing:" + path
 		} else if e != nil {
-			return nil, "", errors.New("cannot inspect tracked disk path")
+			v.unknown = "tracked disk path is unreadable"
+			positions[path] = len(out)
+			out = append(out, v)
+			continue
 		} else {
 			data := []byte{}
 			if p[0] == "120000" {
@@ -974,7 +977,10 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool, scopes, f
 					data = []byte(link)
 				}
 			} else if !st.Mode().IsRegular() {
-				return nil, "", errors.New("tracked disk path is not a regular file")
+				v.unknown = "tracked disk path has an unsupported or unsafe file type; content not read"
+				positions[path] = len(out)
+				out = append(out, v)
+				continue
 			} else {
 				if st.Size() > outputLimit {
 					v.unknown = "tracked disk content exceeds 64 KiB per-file observation limit"
@@ -985,13 +991,25 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool, scopes, f
 				}
 				f, e := openGitInventoryDisk(diskRoot, path)
 				if e != nil {
-					return nil, "", e
+					if strings.Contains(e.Error(), "changed while opening") {
+						return nil, "", e
+					}
+					v.unknown = "tracked disk content could not be safely opened"
+					positions[path] = len(out)
+					out = append(out, v)
+					continue
 				}
 				data, e = readGitInventoryContent(s.ctx, f)
 				after, statErr := f.Stat()
 				f.Close()
 				if e != nil || statErr != nil {
-					return nil, "", errors.New("cannot read tracked disk content")
+					if s.ctx.Err() != nil {
+						return nil, "", s.ctx.Err()
+					}
+					v.unknown = "tracked disk content is unreadable"
+					positions[path] = len(out)
+					out = append(out, v)
+					continue
 				}
 				if len(data) > outputLimit {
 					v.unknown = "tracked disk content exceeds 64 KiB per-file observation limit"
