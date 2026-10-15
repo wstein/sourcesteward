@@ -76,14 +76,14 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 38743805161 succeeded; live revision and static bytes matched the checked source. The final
 documentation-only evidence commit will go through the same CI/Pages gate.
 
-## Next bounded action
+## Historical next action — superseded
 Open the documentation-only acceptance follow-up PR and confirm its exact-revision CI.
 Policy PR #9 and implementation PR #10 were merged by the user; native source/effects and
 final artifact analysis are independently cleared. No live schema publication or Pages
 verification is claimed here. Broader status, mutation, recovery, repository migration and
 GitButler integration require separate specifications.
 
-## LazyJJ-inspired roadmap proposal
+## Historical LazyJJ-inspired roadmap proposal
 
 The [roadmap](roadmap.md#proposed-workflow-features-inspired-by-lazyjj) now prioritizes
 workspace/reference inventory, isolated task workspaces, checkpoints, stack inspection and
@@ -95,7 +95,7 @@ workspace/reference inventory, then analyze its plan/tasks before implementation
 This documentation-only update was checked with `python3 scripts/check-docs.py` and
 `git diff --check`; it does not establish runtime or independent-review evidence.
 
-## Workflow specification batch
+## Historical workflow specification batch
 
 Specs 009–016 now capture all eight user-selected workflows with prioritized stories,
 acceptance scenarios, requirements, measurable outcomes and author quality checklists.
@@ -167,3 +167,11 @@ independent review or cross-artifact analysis.
 Follow-up draft PRs #20–#26 target their predecessors, beginning on original draft PR #19.
 Original PRs #12–#19 were preserved. Next bounded step remains planning Spec 009 and
 generating tasks before cross-artifact analysis; no implementation was performed.
+
+## Current next action
+
+Review the Spec 009 two-PR stack (analyzed design, then implementation and evidence)
+and confirm hosted Linux minimum/current checks. Spec 009 is implemented with explicit
+native qualifications; the earlier proposal/planning entries are historical and do
+not override this action. Owner approval/merge and live schema publication are pending.
+Do not start task workspace mutations or tidy from inventory evidence alone.

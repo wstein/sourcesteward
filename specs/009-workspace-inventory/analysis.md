@@ -17,3 +17,14 @@ this report is recorded by the integrating author as workflow evidence.
 
 Proceed to failing behavior tests. This is design consistency evidence, not
 implementation, native effects, schema or independent source acceptance.
+
+## Final implementation consistency analysis
+
+Independent read-only re-analysis covered shipping source `1639e30`, populated fixture
+commit `544dd08` and final handoff artifacts. Coverage remains 19/19 requirements and
+31 tasks (100%), zero unmapped tasks, zero critical/high findings and zero duplication.
+The native raw-hash strategy and qualified jj observations match the contract. A medium
+progress-record terminology finding was resolved by labeling superseded planning/next
+action entries historical and adding one current next action. The pre-existing low
+constitutional historical-scope wording remains recorded above; no normative MUST conflict.
+Hosted conformance and owner review remain separate gates, not implied by this analysis.
