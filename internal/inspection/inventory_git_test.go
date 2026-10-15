@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -236,7 +237,9 @@ func TestGitInventoryRejectsConcurrentReferences(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
-func TestGitInventorySHA256AndConflicts(t *testing.T) {
+func TestGitInventorySHA256AndConflicts(t *testing.T) { gitInventorySHA256ConflictFixture(t) }
+func gitInventorySHA256ConflictFixture(t *testing.T) {
+	t.Helper()
 	d := t.TempDir()
 	git(t, d, "init", "-q", "--object-format=sha256", "-b", "main")
 	os.WriteFile(filepath.Join(d, "file"), []byte("base\n"), 0600)
@@ -248,13 +251,14 @@ func TestGitInventorySHA256AndConflicts(t *testing.T) {
 	git(t, d, "checkout", "-q", "main")
 	os.WriteFile(filepath.Join(d, "file"), []byte("main\n"), 0600)
 	git(t, d, "commit", "-qam", "main")
-	_, _, e := runGit(context.Background(), d, "merge", "--no-edit", "other")
-	if e != nil {
-		t.Fatal(e)
+	_, code, e := runGit(context.Background(), d, "merge", "--no-edit", "other")
+	if e != nil || code != 1 {
+		t.Fatalf("fixture merge must stop with conflicts (exit 1), got exit=%d err=%v", code, e)
 	}
 	r := gitInventory(t, d, InventoryOptions{})
 	if r.Status != "ok" || r.Workspaces[0].Conflicts.Value != "true" {
-		t.Fatalf("%+v", r)
+		raw, _ := json.Marshal(r)
+		t.Fatalf("SHA-256 conflict inventory: %s", raw)
 	}
 	for _, ref := range r.References {
 		if ref.CommitID != nil && len(*ref.CommitID) != 64 {
@@ -423,4 +427,15 @@ func TestGitInventoryFilteredUntrackedSummaryIsUnknown(t *testing.T) {
 	if r.Workspaces[0].Untracked.Value != "unknown" || r.Workspaces[0].Untracked.Reason == "" {
 		t.Fatalf("broader workspace %+v", r.Workspaces[0])
 	}
+}
+
+func TestGitInventorySHA256ConflictFixtureIgnoresGlobalConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	global := "[user]\n useConfigOnly = true\n[core]\n autocrlf = input\n"
+	if e := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(global), 0600); e != nil {
+		t.Fatal(e)
+	}
+	gitInventorySHA256ConflictFixture(t)
 }
