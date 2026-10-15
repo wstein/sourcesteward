@@ -1,0 +1,1 @@
+{{ define "main" }}{{ .Content }}<ul class="docs-index">{{ range .Pages.ByTitle }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a>{{ with .Description }}<p>{{ . }}</p>{{ end }}</li>{{ end }}</ul>{{ end }}

@@ -1,0 +1,9 @@
+{
+  "version": "0.168.0",
+  "source": "https://github.com/gohugoio/hugo/releases/tag/v0.168.0",
+  "artifacts": {
+    "linux-amd64": {"name": "hugo_0.168.0_linux-amd64.tar.gz", "sha256": "fada83ad56bb27ed4cb7dd81590303bdac16140f944ac4e66fc248117e2d5594"},
+    "darwin-arm64": {"name": "hugo_0.168.0_darwin-universal.pkg", "sha256": "01b2f0abc453242225a9bfac2c91c66a078135a28f12222a475649a299a20281"},
+    "darwin-amd64": {"name": "hugo_0.168.0_darwin-universal.pkg", "sha256": "01b2f0abc453242225a9bfac2c91c66a078135a28f12222a475649a299a20281"}
+  }
+}

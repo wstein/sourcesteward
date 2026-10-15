@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b2545">
+<meta name="description" content="{{ .Title }} — SourceSteward documentation">
+<title>{{ .Title }} — SourceSteward</title>
+<link rel="icon" href="{{ "assets/favicon.svg" | relURL }}" type="image/svg+xml">
+<link rel="alternate icon" href="{{ "assets/favicon.ico" | relURL }}">
+<link rel="stylesheet" href="{{ "assets/site.css" | relURL }}">
+<script src="{{ "assets/theme.js" | relURL }}" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="wrap header">
+<a class="wordmark" href="{{ "" | relURL }}" aria-label="SourceSteward home"><img src="{{ "assets/logo.svg" | relURL }}" width="42" height="42" alt=""><span>Source<span class="accent">Steward</span></span></a>
+<nav aria-label="Main navigation"><a href="{{ "docs/" | relURL }}">Documentation</a><a href="{{ "reference/" | relURL }}">CLI reference</a><a href="https://github.com/wstein/sourcesteward">GitHub ↗</a></nav>
+{{ partial "theme.html" . }}
+</header>
+<main id="main" class="wrap docs-page">
+<p class="eyebrow">SOURCESTEWARD DOCUMENTATION</p>
+<h1>{{ .Title }}</h1>
+<div class="docs-content">{{ block "main" . }}{{ end }}</div>
+</main>
+<footer class="wrap footer"><span>SourceSteward / Explainable tools. Deliberate actions.</span><div><a href="{{ "" | relURL }}">Home</a><a href="https://github.com/wstein/sourcesteward/blob/main/LICENSE">EUPL-1.2</a></div></footer>
+</body></html>

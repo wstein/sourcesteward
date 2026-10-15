@@ -67,3 +67,21 @@ A single GitHub Actions workflow checks every PR and push. The deployment job ru
 for main pushes, depends on the successful check job in that same workflow run, and checks
 out that exact run SHA. Pages uses GitHub Actions as its build source. There is no PR or
 manual-dispatch deployment path. Source CI does not publish CLI releases or Git tags.
+
+## Generated public documentation
+
+The site uses pinned Hugo standard 0.168.0, repository-owned templates and local assets.
+Install the official binary locally with `python3 scripts/install-hugo.py` (network required,
+SHA256 checked); it writes ignored `.tools/hugo` without installing system packages.
+Then run `make pages` to generate and validate ignored `dist/pages/` from the current revision.
+The destination must not already exist; remove only your previous build output before rebuilding.
+Set `HUGO` to an explicitly installed Hugo 0.168.0 executable if preferred. Other runtime
+versions are rejected. Linux amd64 and macOS universal official downloads are pinned;
+other platforms can supply the same official version manually.
+
+Public guides come from an explicit allowlist, while command reference is generated from
+Cobra metadata without executing command callbacks. Hugo shortcodes are rejected in guide
+sources, unsafe raw HTML is disabled, and templates cannot execute tools or fetch remote
+resources. Internal specifications, progress and agent instructions are not included in the
+public artifact. Published schemas retain source bytes. CI validates the exact artifact and
+main-only Pages deploys that same artifact after checks pass; `revision.txt` records its SHA.

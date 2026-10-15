@@ -19,6 +19,8 @@ def local_target(root, source, target):
     elif url.scheme or url.netloc or not url.path:
         return
     else:
+        if source == root / 'docs/index.html' and target == 'docs/':
+            return
         path = (source.parent / unquote(url.path)).resolve()
     if not path.is_relative_to(root.resolve()) or not path.exists() or (target.startswith(RAW_MAIN) and not path.is_file()):
         raise ValueError(f'{source.relative_to(root)}: broken local link {target}')
@@ -43,8 +45,9 @@ def check_links(root, source):
 
 
 class Page(HTMLParser):
-    def __init__(self):
+    def __init__(self, theme_script="assets/theme.js"):
         super().__init__()
+        self.theme_script = theme_script
         self.ids = set()
         self.anchors = []
         self.has_main = False
@@ -69,7 +72,7 @@ class Page(HTMLParser):
         if tag == 'img' and 'alt' not in attrs: raise ValueError('Image missing alt attribute')
         if attrs.get('href', '').startswith('#'): self.anchors.append(attrs['href'][1:])
         if tag == 'script':
-            if attrs != {'src': 'assets/theme.js', 'defer': None} or self.theme_scripts:
+            if attrs != {'src': self.theme_script, 'defer': None} or self.theme_scripts:
                 raise ValueError('Only the single local deferred theme script is allowed')
             self.theme_scripts += 1
             self.in_script = True
