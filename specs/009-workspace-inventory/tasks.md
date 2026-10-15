@@ -27,7 +27,7 @@ Independent test: distinguish staged/disk/stored/untracked/conflict scopes; unsn
 
 ## Phase 5 — US3: bounded human/structured contract (P1)
 Independent test: same model human/JSON, errors/schema/regressions, mandatory native versions, malicious helpers and limit/cancellation cases.
-- [ ] T014 [P] [US3] Write failing Cobra parsing/human-JSON/known-false exit0/partial-error exit1/syntax exit2 tests in internal/cli/inventory_test.go (FR-007/008/010).
+- [ ] T014 [P] [US3] Write failing Cobra parsing/human-JSON/predicate-only known-false exit0/explicit-extra-scope partial-error exit1/syntax exit2 tests in internal/cli/inventory_test.go (FR-007/008/010).
 - [ ] T015 [P] [US3] Write failing inventory success/partial/error schema fixtures in internal/contracts/contracts_test.go (FR-007/009).
 - [ ] T016 [US3] Add CLI parsing/rendering from shared result only in internal/cli/inventory.go and register in internal/cli/root.go (FR-007/008).
 - [ ] T017 [US3] Publish new inventory-only schema v1 in schemas/v1/inventory.schema.json and validate actual output fixtures without modifying inspect/version contracts (FR-007/009).
@@ -36,8 +36,8 @@ Independent test: same model human/JSON, errors/schema/regressions, mandatory na
 
 ## Phase 6 — US4: predicates and literal files (P1)
 Independent test: true/false/unknown separate from failure; literal unusual filenames, rename/deletion and unsupported scopes disclose exact completeness.
-- [ ] T020 [P] [US4] Add failing native Git predicate/invalid-operand/literal-file/rename/deletion tests in internal/inspection/inventory_git_test.go (FR-010/014).
-- [ ] T021 [P] [US4] Add failing native jj predicate/literal-file/stored-diff/unsupported-staging tests in internal/inspection/inventory_jj_test.go (FR-010/014).
+- [ ] T020 [P] [US4] Add failing native Git predicate/invalid-operand/literal-file/rename/deletion/root-vs-multiparent stored tests in internal/inspection/inventory_git_test.go (FR-010/014).
+- [ ] T021 [P] [US4] Add failing native jj predicate/literal-file/merged-parent stored-diff/unsupported-staging tests in internal/inspection/inventory_jj_test.go (FR-010/014).
 - [ ] T022 [US4] Implement clean/dirty/ref-exists/ancestor predicates and literal workspace/cwd file filtering in internal/inspection/inventory_git.go (FR-010/014).
 - [ ] T023 [US4] Implement native jj predicates and stored path records with explicit disk/staging gaps in internal/inspection/inventory_jj.go (FR-010/014).
 
