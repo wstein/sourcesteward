@@ -61,6 +61,7 @@ jobs:
         lane: [minimum, current]
     env:
       STW_REQUIRE_JJ: '1'
+      STW_REQUIRE_NATIVE_SANDBOX: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
