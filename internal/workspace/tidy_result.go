@@ -47,14 +47,15 @@ type TidyPlanRecord struct {
 	RecoveryLimits []string        `json:"recovery_limits"`
 }
 type TidyResult struct {
-	SchemaVersion int             `json:"schema_version"`
-	Command       string          `json:"command"`
-	Status        string          `json:"status"`
-	Backend       string          `json:"backend"`
-	Plan          *TidyPlanRecord `json:"plan"`
-	Actions       []ActionOutcome `json:"actions"`
-	Diagnostics   []Diagnostic    `json:"diagnostics"`
-	Limitations   []string        `json:"limitations"`
+	Retirement    *RetirementPlanRecord `json:"retirement,omitempty"`
+	SchemaVersion int                   `json:"schema_version"`
+	Command       string                `json:"command"`
+	Status        string                `json:"status"`
+	Backend       string                `json:"backend"`
+	Plan          *TidyPlanRecord       `json:"plan"`
+	Actions       []ActionOutcome       `json:"actions"`
+	Diagnostics   []Diagnostic          `json:"diagnostics"`
+	Limitations   []string              `json:"limitations"`
 }
 type tidyAdapter interface {
 	Observe(context.Context, string, string) (TidyObservation, error)
