@@ -50,7 +50,7 @@ def check_sandbox():
         denied = subprocess.run([*prefix, '/bin/sh', '-c', 'printf changed > "$1"', 'probe', str(probe)], env=env, capture_output=True, timeout=15)
         if denied.returncode == 0 or probe.read_text() != 'unchanged':
             raise RuntimeError('Required sandbox did not prevent filesystem writes')
-        result = subprocess.run([*prefix, '/bin/true'], env=env, capture_output=True, timeout=15)
+        result = subprocess.run([*prefix, '/usr/bin/true'], env=env, capture_output=True, timeout=15)
         if result.returncode:
             raise RuntimeError('Required read-only sandbox cannot execute; install a supported host sandbox without relaxing protections')
     print('Enforced read-only sandbox capability verified')
