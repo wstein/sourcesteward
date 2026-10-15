@@ -28,5 +28,6 @@ The [backend contract](docs/backends.md) is the design boundary for jj readiness
 [AGENTS.md](AGENTS.md) is the short entry map. [docs/README.md](docs/README.md) indexes the
 knowledge base. Specifications own user outcomes, plans own design choices, tasks own scoped
 implementation work, and [progress](docs/progress.md) records handoffs. [Harness guidance](docs/harness.md)
-defines the feedback loop. Website packaging copies only index.html and assets; the deployed
-revision is recorded in revision.txt. No release automation or agent scheduler is installed.
+defines the feedback loop. Website packaging stages an explicit public-guide allowlist, generated Cobra reference,
+local assets and versioned schemas through repo-owned Hugo templates. Internal knowledge
+files stay outside the artifact; revision.txt identifies the exact checked source SHA. No release automation or agent scheduler is installed.
