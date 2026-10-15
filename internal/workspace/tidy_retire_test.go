@@ -67,12 +67,13 @@ func TestRetirementRecoveryPinsTargetIdentity(t *testing.T) {
 }
 
 type fakeRetirementAdapter struct {
-	observation                RetirementObservation
-	state, plan                string
-	pins, registrations, files int
-	pinErr                     bool
-	onPin                      func()
-	prepared, confirmed        bool
+	recoveryPresent, registrationReused bool
+	observation                         RetirementObservation
+	state, plan                         string
+	pins, registrations, files          int
+	pinErr                              bool
+	onPin                               func()
+	prepared, confirmed                 bool
 }
 
 func (f *fakeRetirementAdapter) Observe(context.Context, string, string, TaskRecord, MutationPlan) (RetirementObservation, error) {
@@ -80,6 +81,7 @@ func (f *fakeRetirementAdapter) Observe(context.Context, string, string, TaskRec
 }
 func (f *fakeRetirementAdapter) PrepareRecovery(_ context.Context, p RetirementPlanRecord) (TidyRecovery, TidyNativeOutcome, error) {
 	f.pins++
+	f.recoveryPresent = true
 	s, err := openRetirementStore(f.state, false)
 	if err == nil {
 		var j RetirementJournal
@@ -214,5 +216,52 @@ func TestRetirementNativeGitPublicLifecycle(t *testing.T) {
 	r = ApplyTidy(context.Background(), options)
 	if r.Status != "ok" {
 		t.Fatalf("public native retry %+v", r)
+	}
+}
+
+func (f *fakeRetirementAdapter) VerifyPost(context.Context, RetirementPlanRecord, TidyRecovery, Snapshot) error {
+	if !f.recoveryPresent || f.registrationReused {
+		return os.ErrNotExist
+	}
+	return nil
+}
+func TestRetirementRetryRequiresNativeRecoveryAndRegistrationProof(t *testing.T) {
+	for _, kind := range []string{"missing-recovery", "reused-registration"} {
+		t.Run(kind, func(t *testing.T) {
+			c, f, o := fixtureRetirement(t)
+			planned := c.plan(context.Background(), o)
+			if planned.Status != "ok" {
+				t.Fatal(planned)
+			}
+			f.plan = planned.Retirement.PlanID
+			options := TidyApplyOptions{StateDir: o.StateDir, PlanID: f.plan, Authorize: true}
+			if r := c.apply(context.Background(), options); r.Status != "ok" {
+				t.Fatal(r)
+			}
+			if kind == "missing-recovery" {
+				f.recoveryPresent = false
+				f.observation.Expected.ReferenceDigest = strings.Repeat("6", 64)
+			} else {
+				f.registrationReused = true
+				f.observation.Expected.RegistrationDigest = strings.Repeat("6", 64)
+			}
+			s, err := openRetirementStore(o.StateDir, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var j RetirementJournal
+			if err = s.read("tidy-retirement-operations", f.plan, &j); err != nil {
+				t.Fatal(err)
+			}
+			j.ExpectedSnapshot = f.observation.Expected
+			if err = s.write("tidy-retirement-operations", f.plan, j, false); err != nil {
+				t.Fatal(err)
+			}
+			s.Close()
+			r := c.apply(context.Background(), options)
+			if r.Status == "ok" || f.pins != 1 || f.registrations != 1 {
+				t.Fatalf("edited expected snapshot blessed invalid native recovery/registration state: %+v", r)
+			}
+		})
 	}
 }

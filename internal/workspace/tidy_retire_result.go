@@ -95,3 +95,10 @@ type retirementAdapter interface {
 func retirementRecoveryFor(p RetirementPlanRecord) TidyRecovery {
 	return tidyRecoveryFor(TidyPlanRecord{PlanID: p.PlanID, Backend: p.Backend, Expected: p.Expected.Expected}, TidyCandidate{Kind: "workspace", Name: p.Task.TaskID, CommitID: p.Expected.Target.CommitID, ChangeID: p.Expected.Target.ChangeID})
 }
+
+// Post-retirement verification never looks up a vanished target workspace or
+// invokes a removal method. It proves exact retained recovery and registration
+// absence through the selected native backend, including on completed retries.
+type retirementPostVerifier interface {
+	VerifyPost(context.Context, RetirementPlanRecord, TidyRecovery, Snapshot) error
+}

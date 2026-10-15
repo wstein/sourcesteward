@@ -56,7 +56,7 @@ func (c retirementCoordinator) initialRetirementObservation(ctx context.Context,
 	}
 	return o, nil
 }
-func (c retirementCoordinator) sourceRetirementPost(ctx context.Context, s *store, p RetirementPlanRecord, expected Snapshot) error {
+func (c retirementCoordinator) sourceRetirementPost(ctx context.Context, s *store, p RetirementPlanRecord, expected Snapshot, a retirementAdapter, recovery TidyRecovery) error {
 	if err := verifyRetirementOwnership(s, p); err != nil {
 		return err
 	}
@@ -78,7 +78,11 @@ func (c retirementCoordinator) sourceRetirementPost(ctx context.Context, s *stor
 	if !reflect.DeepEqual(fresh, expected) {
 		return failure("stale-retirement", "Source/base/refs/registration/operation/safety state changed after the recorded native effect.")
 	}
-	return nil
+	verifier, ok := a.(retirementPostVerifier)
+	if !ok {
+		return failure("unsupported-capability", "The selected backend cannot read-only verify retained recovery and exact registration absence.")
+	}
+	return verifier.VerifyPost(ctx, p, recovery, expected)
 }
 func (c retirementCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResult {
 	r := newRetirementResult("tidy-apply")
@@ -213,7 +217,7 @@ func (c retirementCoordinator) apply(ctx context.Context, o TidyApplyOptions) Ti
 		}
 		return c.partialRetirement(s, p, j, r, actionErr)
 	}
-	if err = c.sourceRetirementPost(ctx, s, p, *outcome.Expected); err != nil {
+	if err = c.sourceRetirementPost(ctx, s, p, *outcome.Expected, a, confirmed); err != nil {
 		return c.partialRetirement(s, p, j, r, err)
 	}
 	j.ExpectedSnapshot = *outcome.Expected
@@ -222,7 +226,7 @@ func (c retirementCoordinator) apply(ctx context.Context, o TidyApplyOptions) Ti
 		return c.partialRetirement(s, p, j, r, err)
 	}
 	if p.RemoveFiles != "" {
-		if err = c.sourceRetirementPost(ctx, s, p, j.ExpectedSnapshot); err != nil {
+		if err = c.sourceRetirementPost(ctx, s, p, j.ExpectedSnapshot, a, confirmed); err != nil {
 			return c.partialRetirement(s, p, j, r, err)
 		}
 		if p.Backend == "jj" {
@@ -246,7 +250,7 @@ func (c retirementCoordinator) apply(ctx context.Context, o TidyApplyOptions) Ti
 		if !retirementPathAbsent(p.Task.Destination, p.Expected.DestinationParent) {
 			return c.partialRetirement(s, p, j, r, failure("filesystem-unconfirmed", "The exact owned destination is not absent after file removal."))
 		}
-		if err = c.sourceRetirementPost(ctx, s, p, j.ExpectedSnapshot); err != nil {
+		if err = c.sourceRetirementPost(ctx, s, p, j.ExpectedSnapshot, a, confirmed); err != nil {
 			return c.partialRetirement(s, p, j, r, err)
 		}
 		j.Phase = "files-complete"
@@ -376,7 +380,7 @@ func (c retirementCoordinator) retryRetirement(ctx context.Context, s *store, p 
 		r.Diagnostics = []Diagnostic{{"incomplete-operation", "Prior retirement may have native recovery, registration or file effects; automatic repeated removal/adoption is refused."}}
 		return boundedTidy(r)
 	}
-	if err := c.sourceRetirementPost(ctx, s, p, j.ExpectedSnapshot); err != nil {
+	if err := c.sourceRetirementPost(ctx, s, p, j.ExpectedSnapshot, a, *j.Recovery); err != nil {
 		return failTidy(r, err)
 	}
 	if p.RemoveFiles != "" {
