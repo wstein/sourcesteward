@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,4 +160,71 @@ func TestRealGitWorkspaceLifecycleSchema(t *testing.T) {
 	invoke("workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
 	invoke("workspace", "handoff", dest, "--state-dir", state)
 	invoke("workspace", "retire-plan", dest, "--state-dir", state)
+}
+
+func TestRealJJWorkspaceLifecycleSchema(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("STW_REQUIRE_JJ") == "1" {
+			t.Fatal("mandatory jj missing")
+		}
+		t.Skip("jj unavailable")
+	}
+	home := t.TempDir()
+	config := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(config, []byte("[user]\nname = \"Tester\"\nemail = \"test@example.org\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("JJ_CONFIG", config)
+	s := schema(t, "workspace")
+	for _, colocate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("colocated-%t", colocate), func(t *testing.T) {
+			root := t.TempDir()
+			source := filepath.Join(root, "source")
+			state := filepath.Join(root, "state")
+			dest := filepath.Join(root, "task")
+			if err := os.Mkdir(state, 0700); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"git", "init", "--no-colocate", source}
+			if colocate {
+				args = []string{"git", "init", "--colocate", source}
+			}
+			command := exec.Command("jj", args...)
+			if out, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("jj fixture: %s %v", out, err)
+			}
+			invoke := func(args ...string) workspace.Result {
+				t.Helper()
+				var out, diagnostic bytes.Buffer
+				args = append(args, "--json")
+				code := cli.Run(context.Background(), "test", args, &out, &diagnostic)
+				valid(t, s, out.Bytes())
+				var result workspace.Result
+				if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				if code != 0 {
+					for _, d := range result.Diagnostics {
+						if (d.Code == "jj-sandbox-unavailable" || d.Code == "jj-workspace-sandbox-unavailable") && os.Getenv("STW_REQUIRE_JJ") != "1" && os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") != "1" {
+							t.Skip("native jj sandbox unavailable")
+						}
+					}
+					t.Fatalf("workspace exit%d: %s %s", code, out.String(), diagnostic.String())
+				}
+				return result
+			}
+			plan := invoke("workspace", "plan", source, "--base", "@", "--destination", dest, "--task", "jj-contract-task", "--owner", "tester", "--state-dir", state)
+			if plan.Plan == nil {
+				t.Fatal("missing jj plan")
+			}
+			applied := invoke("workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
+			if applied.Task == nil || applied.Task.Native.ChangeID == "" || applied.Task.Native.OperationID == "" {
+				t.Fatal("missing native jj identities")
+			}
+			invoke("workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
+			invoke("workspace", "handoff", dest, "--state-dir", state)
+			invoke("workspace", "retire-plan", dest, "--state-dir", state)
+		})
+	}
 }
