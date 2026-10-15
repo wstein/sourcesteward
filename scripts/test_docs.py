@@ -54,14 +54,12 @@ class DocumentationTests(unittest.TestCase):
             assets.mkdir(parents=True)
             (root / 'docs/index.html').write_text('<html></html>')
             (assets / 'theme.js').write_text('// local theme')
-            shutil.copytree(ROOT / 'schemas', root / 'schemas')
-            package.package(root, root / 'accepted', 'a' * 40)
-            self.assertTrue((root / 'accepted/assets/theme.js').exists())
+            package.validate_assets(root)
             for path in (assets / 'other.js', assets / 'nested/theme.js'):
                 path.parent.mkdir(exist_ok=True)
                 path.write_text('// unexpected')
                 with self.assertRaises(ValueError):
-                    package.package(root, root / 'rejected', 'a' * 40)
+                    package.validate_assets(root)
                 path.unlink()
 
     def test_wide_tie_assets_are_flat_and_self_contained(self):
@@ -159,6 +157,8 @@ class DocumentationTests(unittest.TestCase):
             self.assertTrue((destination / 'assets/favicon.ico').is_file())
             self.assertTrue((destination / 'assets/social-preview.png').is_file())
             self.assertFalse((destination / 'roadmap.md').exists())
+            self.assertTrue((destination / 'docs/roadmap/index.html').exists())
+            self.assertTrue((destination / 'reference/stw-version/index.html').exists())
             self.assertEqual((destination / 'revision.txt').read_text(), 'a' * 40 + '\n')
             with self.assertRaises(ValueError): package.package(ROOT, destination, 'b' * 40)
 
@@ -170,27 +170,27 @@ class DocumentationTests(unittest.TestCase):
             shutil.copyfile(ROOT / 'docs/index.html', root / 'docs/index.html')
             shutil.copytree(ROOT / 'schemas', root / 'schemas')
             destination = root / 'output'
-            package.package(root, destination, 'a' * 40)
+            package.copy_schemas(root, destination)
             for name in ('version.schema.json', 'inspect.schema.json'):
                 self.assertEqual((destination / 'schemas/v1' / name).read_bytes(),
                                  (ROOT / 'schemas/v1' / name).read_bytes())
             shutil.rmtree(destination)
             extra = root / 'schemas/v1/private.json'
             extra.write_text('{}')
-            with self.assertRaises(ValueError): package.package(root, destination, 'a' * 40)
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
             self.assertFalse(destination.exists())
             extra.unlink()
             missing = root / 'schemas/v1/inspect.schema.json'
             saved_bytes = missing.read_bytes()
             missing.unlink()
-            with self.assertRaises(ValueError): package.package(root, destination, 'a' * 40)
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
             self.assertFalse(destination.exists())
             missing.write_bytes(saved_bytes)
             for source in (root / 'schemas/v1/version.schema.json', root / 'schemas/v1', root / 'schemas'):
                 saved = source.with_name(source.name + '-saved')
                 source.rename(saved)
                 source.symlink_to(saved, target_is_directory=saved.is_dir())
-                with self.assertRaises(ValueError): package.package(root, destination, 'a' * 40)
+                with self.assertRaises(ValueError): package.copy_schemas(root, destination)
                 self.assertFalse(destination.exists())
                 source.unlink()
                 saved.rename(source)
@@ -202,7 +202,7 @@ class DocumentationTests(unittest.TestCase):
             (root / 'docs/assets').mkdir(parents=True)
             (root / 'docs/index.html').write_text('<html></html>')
             (root / 'docs/assets/leak.txt').symlink_to(ROOT / 'go.mod')
-            with self.assertRaises(ValueError): package.package(root, root / 'output', 'a' * 40)
+            with self.assertRaises(ValueError): package.validate_assets(root)
             self.assertFalse((root / 'output').exists())
             with self.assertRaises(ValueError): package.package(ROOT, root / 'output', 'invalid')
 

@@ -24,3 +24,9 @@ vet:
 	$(GO) vet ./...
 docs-check:
 	python3 -B scripts/check-docs.py
+
+# Install once with: python3 scripts/install-hugo.py (network access required).
+.PHONY: pages
+pages:
+	python3 -B scripts/package-pages.py dist/pages "$$(git rev-parse HEAD)"
+	python3 -B scripts/check-site.py dist/pages "$$(git rev-parse HEAD)"

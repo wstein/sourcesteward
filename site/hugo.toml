@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: EUPL-1.2
+baseURL = "https://wstein.github.io/sourcesteward/"
+locale = "en"
+title = "SourceSteward"
+disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
+enableRobotsTXT = false
+enableGitInfo = false
+[markup.goldmark.renderer]
+unsafe = false
+[security]
+enableInlineShortcodes = false
+[security.exec]
+allow = []
+osEnv = []
+[security.funcs]
+getenv = []
+[security.http]
+urls = []
+methods = []

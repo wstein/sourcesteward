@@ -1,46 +1,142 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: EUPL-1.2
-"""Package only the static website and its exact source revision."""
+"""Stage an explicit public allowlist and build one checked Hugo artifact."""
 from pathlib import Path
+import json
+import os
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
+from urllib.parse import unquote, urlsplit
+
+BASE = '/sourcesteward/'
+GUIDES = {
+    'docs/development.md': ('development', 'Development'),
+    'docs/backends.md': ('backends', 'Backend readiness'),
+    'docs/roadmap.md': ('roadmap', 'Roadmap'),
+    'docs/agent-guide.md': ('agents', 'Agent guide'),
+    'docs/json-contracts.md': ('json-contracts', 'JSON contracts'),
+}
+SCHEMAS = ('version.schema.json','inspect.schema.json')
 
 
-def package(root, destination, revision):
-    root = root.resolve()
-    if not re.fullmatch(r'[0-9a-f]{40}', revision): raise ValueError('Full source SHA required')
-    if destination.exists() or destination.is_symlink(): raise ValueError('Destination must not exist')
+def validate_assets(root):
     index, assets = root / 'docs/index.html', root / 'docs/assets'
-    if index.is_symlink() or assets.is_symlink() or not index.is_file() or not assets.is_dir():
+    if (root / 'docs').is_symlink() or index.is_symlink() or assets.is_symlink() or not index.is_file() or not assets.is_dir():
         raise ValueError('Regular static site sources required')
     for path in assets.rglob('*'):
         if path.is_symlink() or (path.is_file() and path.suffix not in ('.svg', '.png', '.ico', '.css', '.ttf', '.woff2', '.txt') and path != assets / 'theme.js'):
             raise ValueError('Unexpected or linked site asset: ' + str(path))
-    schemas = root / 'schemas'
-    version = schemas / 'v1'
-    schema_names = ('version.schema.json', 'inspect.schema.json')
-    if schemas.is_symlink() or version.is_symlink() or not schemas.is_dir() or not version.is_dir():
-        raise ValueError('Regular versioned schema directory required')
-    expected = {'v1'} | {'v1/' + name for name in schema_names}
+    return index, assets
+
+
+def guide_markdown(root, source, text):
+    if '{{<' in text or '{{%' in text: raise ValueError('Hugo source shortcodes forbidden: ' + str(source))
+    def rewrite(match):
+        label, target = match.groups()
+        url = urlsplit(target)
+        if url.scheme:
+            if url.scheme not in ('http','https','mailto'): raise ValueError('Unsafe guide URL: ' + target)
+            return match.group(0)
+        if url.netloc: raise ValueError('Protocol-relative guide URL forbidden')
+        if not url.path: return match.group(0)
+        path = (source.parent / unquote(url.path)).resolve()
+        if not path.is_relative_to(root.resolve()): raise ValueError('Guide link escapes source tree: ' + target)
+        relative = path.relative_to(root.resolve()).as_posix()
+        if relative in GUIDES and path.is_file():
+            destination = BASE + 'docs/' + GUIDES[relative][0] + '/'
+        elif relative.startswith('schemas/v1/') and path.suffix == '.json':
+            destination = BASE + relative
+        else:
+            destination = 'https://github.com/wstein/sourcesteward/blob/main/' + relative
+        if url.fragment: destination += '#' + url.fragment
+        return '[' + label + '](' + destination + ')'
+    # Authored guides use ordinary inline Markdown links, not reference definitions.
+    return re.sub(r'\[([^\]]*)\]\(([^\s)]+)\)',rewrite,text)
+
+
+def copy_schemas(root, destination, required=True):
+    source = root / 'schemas/v1'
+    if source.is_symlink() or (root / 'schemas').is_symlink(): raise ValueError('Linked schema directory forbidden')
+    if not source.exists():
+        if required: raise ValueError('Required public schemas are missing')
+        return
+    schema_root = root / 'schemas'
+    expected = {'v1'} | {'v1/' + name for name in SCHEMAS}
     actual = set()
-    for path in schemas.rglob('*'):
-        relative = path.relative_to(schemas).as_posix()
+    for path in schema_root.rglob('*'):
+        relative = path.relative_to(schema_root).as_posix()
         if path.is_symlink() or relative not in expected or (relative != 'v1' and not path.is_file()):
             raise ValueError('Unexpected or linked schema source: ' + str(path))
         actual.add(relative)
-    if actual != expected:
-        raise ValueError('Both schema 1 contracts are required')
-    destination.mkdir(parents=True)
-    shutil.copyfile(index, destination / 'index.html')
-    shutil.copytree(assets, destination / 'assets')
-    (destination / 'schemas/v1').mkdir(parents=True)
-    for name in schema_names:
-        shutil.copyfile(version / name, destination / 'schemas/v1' / name)
+    if actual != expected: raise ValueError('Both schema 1 contracts are required')
+    paths = list(source.iterdir())
+    for path in paths:
+        if path.is_symlink() or not path.is_file(): raise ValueError('Regular schema files required')
+        json.loads(path.read_text())
+    target = destination / 'schemas/v1'
+    target.mkdir(parents=True)
+    for path in paths: shutil.copyfile(path,target / path.name)
+
+
+def write_content(path,title,body):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text('+++\ntitle = ' + json.dumps(title) + '\n+++\n\n' + body)
+
+
+def package(root, destination, revision, hugo=None, require_schemas=True):
+    root, destination = root.resolve(), destination.absolute()
+    if not re.fullmatch(r'[0-9a-f]{40}',revision): raise ValueError('Full source SHA required')
+    if destination.exists() or destination.is_symlink(): raise ValueError('Destination must not exist')
+    index, assets = validate_assets(root)
+    hugo = str(hugo or os.environ.get('HUGO') or root / '.tools/hugo')
+    pin = json.loads((root / 'scripts/hugo-release.json').read_text())['version']
+    version = subprocess.check_output([hugo,'version'],text=True)
+    if not re.match(r'^hugo v' + re.escape(pin) + r'(?:-[0-9a-f]+)? ',version): raise ValueError('Hugo ' + pin + ' required; run scripts/install-hugo.py')
+    with tempfile.TemporaryDirectory(prefix='stw-pages-') as directory:
+        stage = Path(directory)
+        for name in ('hugo.toml','layouts'):
+            source = root / 'site' / name
+            if source.is_symlink() or any(p.is_symlink() for p in source.rglob('*')): raise ValueError('Linked Hugo source forbidden')
+            if source.is_dir(): shutil.copytree(source,stage / name)
+            else: shutil.copyfile(source,stage / name)
+        shutil.copytree(assets,stage / 'static/assets')
+        # Home remains authored HTML; only exact local URL attributes are rebased.
+        home = re.sub(r'(href|src)="assets/',r'\1="' + BASE + 'assets/',index.read_text())
+        home = home.replace('href="docs/"','href="' + BASE + 'docs/"')
+        # A trusted repo-owned layout, never source Markdown as a template.
+        (stage / 'layouts/index.html').write_text(home)
+        content = stage / 'content'
+        write_content(content / '_index.md','SourceSteward','')
+        write_content(content / 'docs/_index.md','Documentation','Current public guides. Repository operations remain limited to the implemented command contract.\n')
+        for name,(slug,title) in GUIDES.items():
+            source = root / name
+            if not source.exists():
+                raise ValueError('Missing public guide: ' + name)
+            if source.is_symlink(): raise ValueError('Linked public guide forbidden')
+            body = guide_markdown(root,source,source.read_text())
+            body = re.sub(r'^# [^\n]*\n','',body,count=1)
+            write_content(content / 'docs' / slug / 'index.md',title,body)
+        reference = json.loads(subprocess.check_output(['go','run','-buildvcs=false','./cmd/stw-docs'],cwd=root,text=True))
+        write_content(content / 'reference/_index.md','CLI reference','Generated from the current Cobra command tree. No repository command is executed during generation.\n')
+        for command in reference:
+            slug = command['path'].replace(' ','-')
+            body = command['long'] + '\n\n## Usage\n\n```text\n' + command['usage'] + '\n```\n\n## Flags\n\n```text\n' + command['flags'] + '```\n'
+            write_content(content / 'reference' / slug / 'index.md',command['path'],body)
+        copy_schemas(root,stage / 'static',required=require_schemas)
+        llms = root / 'llms.txt'
+        if llms.exists():
+            if llms.is_symlink(): raise ValueError('Linked llms.txt forbidden')
+            shutil.copyfile(llms,stage / 'static/llms.txt')
+        subprocess.run([hugo,'--source',str(stage),'--destination',str(stage / 'public'),'--noBuildLock'],check=True,env={**{key:value for key,value in os.environ.items() if not key.startswith('HUGO_')},'HUGO_ENVIRONMENT':'production'})
+        destination.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copytree(stage / 'public',destination)
     (destination / 'revision.txt').write_text(revision + '\n')
     (destination / '.nojekyll').touch()
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 3: raise SystemExit('usage: package-pages.py DESTINATION FULL_SOURCE_SHA')
-    package(Path(__file__).resolve().parents[1], Path(sys.argv[1]), sys.argv[2])
+    package(Path(__file__).resolve().parents[1],Path(sys.argv[1]),sys.argv[2])
