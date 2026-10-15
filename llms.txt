@@ -43,3 +43,5 @@ from the installed binary; check its version and help first.
 - [Native jj verification](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/008-jj-inspection/verification.md): actual acceptance evidence and pending gates.
 
 - [Inventory guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/inventory.md): scopes, literal paths, three-valued predicates and observation limits.
+
+- [Tidy guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/tidy.md): native ancestry reference plans, retained uncertainty, optional private state and no deletion.

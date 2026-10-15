@@ -5,6 +5,7 @@ Use `stw version --json`, `stw inspect [PATH] --json` or `stw inventory [PATH] -
 
 | Command | Authoritative schema | Stable publication URL |
 | --- | --- | --- |
+| `stw tidy plan --json` | [tidy.schema.json](../schemas/v1/tidy.schema.json) | [Tidy schema 1](https://wstein.github.io/sourcesteward/schemas/v1/tidy.schema.json) |
 | `stw version --json` | [version.schema.json](../schemas/v1/version.schema.json) | [Version schema 1](https://wstein.github.io/sourcesteward/schemas/v1/version.schema.json) |
 | `stw inspect --json` (Git and unselected/ambiguous ownership) | [inspect.schema.json](../schemas/v1/inspect.schema.json) | [Inspection schema 1](https://wstein.github.io/sourcesteward/schemas/v1/inspect.schema.json) |
 | `stw inspect --json` (selected native jj) | [inspect.schema.json](../schemas/v2/inspect.schema.json) | [Native jj inspection schema 2](https://wstein.github.io/sourcesteward/schemas/v2/inspect.schema.json) |
@@ -119,3 +120,19 @@ commit/change/operation identities. Embedded inventory uses its established inde
 Offline tests validate real operational output and independently invalid fixtures without
 fetching external schema references. See [task workspaces](workspaces.md) for authorization,
 effects, recovery and bounded execution. Publication evidence remains separate from source checks.
+
+## Tidy results (independent schema 1)
+
+`stw tidy plan --json` emits a tidy envelope with `command`, `status`, `backend`, nullable
+`plan`, `actions`, `diagnostics` and `limitations`. The plan binds source, selected references,
+base/native identities, digests, candidate decisions/proofs, declared effects and recovery limits.
+Stateless plans have empty plan IDs; stored plans have generated immutable IDs. Candidates use
+`branch` or `bookmark`, `delete` or `retain`, and `native-ancestry` or `none`; ambiguous retained
+jj targets may have empty commit/change IDs only with `reason: "ambiguous-target"` and no proof.
+Deletion candidates cannot contain workspace blockers or missing native identity/proof.
+
+Complete observations, including all-retained plans, exit 0. Operational refusal/error/partial
+results exit 1 and validate against the same schema. Usage/writer failures may not emit complete
+JSON. The schema reserves `tidy-apply` for the next WI; this reservation does not expose an apply
+command or authorize effects. Future incompatible retirement result shapes use a separate schema
+version. Existing inspection, inventory, version and workspace schema bytes remain unchanged.
