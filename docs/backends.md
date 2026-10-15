@@ -110,3 +110,12 @@ repository/destination/store writes, stale checks and pre-action recovery journa
 fallback, hook bypass or automatic cleanup is supported. See [task workspaces](workspaces.md)
 for command effects, capability refusals and bounds. Spec 010 acceptance is independent of
 historical read-only inspection/inventory evidence.
+
+## Local reference tidy planning
+
+`stw tidy plan` supports bounded native Git branch and jj bookmark ancestry evidence against an
+explicit base. Checked-out/workspace-used targets and unsupported integration proof retain work.
+jj remote-associated or conflicted targets remain retained; bookmark cleanup never implies change
+abandonment. Optional private plan persistence is distinct from repository effects. Cleanup execution
+and owned workspace retirement remain later WIs. See [tidy](tidy.md); its acceptance evidence is
+independent of prior inspection, inventory and workspace creation.
