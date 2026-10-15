@@ -228,6 +228,8 @@ func validateGitTree(raw string) error {
 		return failure("git-checkout-limit", "base checkout exceeds 1024 leaf entries")
 	}
 	var total int64
+	paths := map[string]string{}
+	files := map[string]bool{}
 	for _, entry := range entries {
 		meta, path, ok := strings.Cut(entry, "\t")
 		fields := strings.Fields(meta)
@@ -240,6 +242,18 @@ func validateGitTree(raw string) error {
 		for _, component := range strings.Split(path, "/") {
 			if component == "." || component == ".." || strings.EqualFold(component, ".git") || component == "" {
 				return failure("git-tree-refused", "base contains an unsafe checkout path")
+			}
+		}
+		components := strings.Split(path, "/")
+		for i := range components {
+			prefix := strings.Join(components[:i+1], "/")
+			folded := strings.ToLower(prefix)
+			if previous, exists := paths[folded]; exists && (previous != prefix || files[folded] || i == len(components)-1) {
+				return failure("git-tree-refused", "base contains aliased file or directory names")
+			}
+			paths[folded] = prefix
+			if i == len(components)-1 {
+				files[folded] = true
 			}
 		}
 		size, err := strconv.ParseInt(fields[3], 10, 64)
