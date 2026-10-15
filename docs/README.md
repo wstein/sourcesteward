@@ -18,4 +18,5 @@
 - [Contributing](../CONTRIBUTING.md), [conduct](../CODE_OF_CONDUCT.md), [security](../SECURITY.md).
 
 - [Inspection acceptance](inspection-verification.md): bounded identity/detection verification.
+- [CLI JSON contracts](json-contracts.md): versioned schemas, compatibility and offline validation.
 - [Site theme specification](../specs/004-site-themes/spec.md) and [verification](../specs/004-site-themes/verification.md).
