@@ -51,8 +51,59 @@ jobs:
         with:
           path: /tmp/sourcesteward-pages
 
+  conformance:
+    name: Git/jj conformance (${{ matrix.lane }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [minimum, current]
+    env:
+      STW_REQUIRE_JJ: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install distro sandbox without relaxing host protections
+        run: |
+          sandbox_settings() {
+            for setting in kernel/unprivileged_userns_clone kernel/apparmor_restrict_unprivileged_userns user/max_user_namespaces; do
+              if test -f "/proc/sys/$setting"; then cat "/proc/sys/$setting"; else echo unavailable; fi
+            done
+          }
+          if test -f /proc/sys/kernel/unprivileged_userns_clone; then
+            test "$(cat /proc/sys/kernel/unprivileged_userns_clone)" = 1
+          fi
+          before="$(sandbox_settings)"
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y bubblewrap apparmor
+          test "$before" = "$(sandbox_settings)"
+      - name: Install checked native backend releases
+        env:
+          BACKEND_LANE: ${{ matrix.lane }}
+        run: |
+          python3 -B scripts/install-backends.py "$BACKEND_LANE"
+          echo "$GITHUB_WORKSPACE/.tools/conformance/$BACKEND_LANE/git/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.tools/conformance/$BACKEND_LANE/jj" >> "$GITHUB_PATH"
+      - name: Assert exact versions and required sandbox capability
+        env:
+          BACKEND_LANE: ${{ matrix.lane }}
+        run: python3 -B scripts/smoke-jj-inspection.py --preflight "$BACKEND_LANE"
+      - name: Mandatory real-backend and schema conformance with race checks
+        run: go test -count=1 -race ./...
+      - name: Real CLI inspection and zero-write acceptance
+        run: |
+          go build -o bin/stw ./cmd/stw
+          python3 -B scripts/smoke-inspection.py
+          python3 -B scripts/smoke-jj-inspection.py
+
   pages:
-    needs: check
+    needs: [check, conformance]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
