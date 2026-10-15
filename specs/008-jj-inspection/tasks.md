@@ -31,9 +31,9 @@
 **Independent test**: Real outputs validate offline; invalid combinations fail; both pinned conformance lanes fail on missing tools or absent scenarios.
 - [ ] T012 [P] [US3] Write failing real-output/negative schema tests in internal/contracts/contracts_test.go for schema2 backend jj, repository=null, complete jj_repository only on success, distinct ID alphabets/lengths and qualification; assert both v1 files remain byte-identical.
 - [ ] T013 [US3] Implement schemas/v2/inspect.schema.json and offline compilation in internal/contracts/contracts_test.go without runtime dependency changes.
-- [ ] T014 [US3] Write failing publication/allowlist/symlink/extra-file tests then update scripts/package-pages.py, scripts/test_package_pages.py and scripts/check-site.py to publish v1/v2 verbatim at stable project URLs.
+- [ ] T014 [US3] Write failing publication/allowlist/symlink/extra-file tests then update scripts/package-pages.py, scripts/test_docs.py and scripts/test_hugo.py and scripts/check-site.py to publish v1/v2 verbatim at stable project URLs.
 - [ ] T015 [P] [US3] Implement checked pinned Git2.46.0/2.56.0 and jj0.45.1/0.46.0 installers with release hash verification in scripts/install-backends.py and scripts/backend-releases.json; test checksum/version/missing-tool refusal.
-- [ ] T016 [US3] Implement mandatory real-fixture mode STW_REQUIRE_JJ=1 and actual CLI smoke coverage in internal/inspection/jj_test.go and scripts/check-inspection.py; prove unavailable backend and zero executed mandatory cases fail.
+- [ ] T016 [US3] Implement mandatory real-fixture mode STW_REQUIRE_JJ=1 and actual CLI smoke coverage in internal/inspection/jj_test.go and scripts/smoke-jj-inspection.py; prove unavailable backend and zero executed mandatory cases fail.
 - [ ] T017 [US3] Wire minimum/current paired backend conformance jobs in .github/workflows/ci.yml with exact version assertions, full Go/schema tests and race checks; preserve Pages dependency on all same-revision gates.
 
 ## Phase 6: Verification and Handoff
