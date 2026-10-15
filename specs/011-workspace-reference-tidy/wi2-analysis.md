@@ -15,3 +15,10 @@ Remaining low stale wording in goal was corrected to WI2-generated persisted pla
 findings remain. WI3 is not analyzed; its concrete interface/confinement still requires a separate gate.
 This is design clearance, not source review or execution evidence. Actual partial/cancel/persistence,
 packed-ref and concurrent jj operation cases remain mandatory implementation acceptance tests.
+
+## Colocated native execution-context amendment
+Independent reviewer cleared 0538311 after native both-version feasibility confirmation: private
+bounded known metadata setup, absolute same-repository pointer, no .git/init/registration, context
+read-only during native execution, narrow shared-store effects and original source bytes preserved.
+Exact operation/ref delta checks remain required. No remaining high/critical design findings; actual
+source review and native conformance are separate acceptance gates.

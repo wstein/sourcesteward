@@ -82,8 +82,8 @@ type RetirementPlanRecord struct {
 }
 type RetirementJournal struct {
     SchemaVersion int // 2
-    PlanID, Phase string
-    Expected RetirementObservation
+    PlanID, PlanDigest, Phase string
+    ExpectedSnapshot Snapshot // mutable only after full permitted native delta validation
     PlannedRecovery TidyRecovery
     Recovery *TidyRecovery
     Actions []ActionOutcome
@@ -99,8 +99,10 @@ type retirementAdapter interface {
 
 Core implements shared bounded manifest comparison/removal and adapter dispatch, strict validators,
 state locking/journals and result rendering model. Git RemoveRegistration performs native coupled
-registration+filesystem removal only when both selectors authorized; reports both effects. Git owned lock reason must exactly match stw:<task-id>; unlocking and
-any native force needed for that lock are explicit effects, never an override for dirty/unknown files. Git
+registration+filesystem removal only when both selectors authorized; reports both effects. Git owned lock reason must exactly match stw:<task-id>; native coupled lock removal and
+any force needed for that exact owned lock are explicit effects, never an override for dirty/unknown files.
+Prefer fixed native worktree remove --force --force -- DEST without a separate unlock phase when
+the pinned native capability permits; no unnecessary pre-removal unlock mutation. Git
 RemoveFiles verifies exact already-absent owned destination and reports no duplicate mutation;
 jj RemoveRegistration forgets only exact native registration and RemoveFiles delegates to shared
 confined manifest removal after source/native post-forget validation. Native helpers never persist
@@ -207,3 +209,24 @@ WI3 native jj recovery/forget reuses the independently reviewed WI2 private exec
 colocated source safety. No actual source Git HEAD/index write grant and no broad repo-parent grant
 is added for convenience. Exact context/copy/source-preservation/native operation-delta tests must
 cover forget as well as recovery; no hidden workspace initialization or registration.
+
+Git native author confirmed feasibility of the proposed model, requiring complete admitted
+registration metadata manifest, stored/index/raw disk proof and parent/sibling snapshots. Binary
+stored blobs use bounded raw cat-file output, not a UTF8-enforcing metadata reader. Shared manifest
+helpers must freeze before source implementation. jj/core final WI3 confirmation is still pending.
+
+Git raw stored-content reads use fixed bounded cat-file through the reviewed sandbox runner, preserving
+arbitrary binary bytes. Recheck complete source/index/native ownership and exact target registration
+metadata manifest after recovery-root creation and immediately before forced owned removal; matching
+lock reason alone never replaces current complete clean disk/index/stored proof.
+
+Core author confirms conditional feasibility with exact journal binding: RetirementJournal.PlanDigest
+must equal immutable RetirementPlanRecord.Digest. Original full retirement observation including
+Target/Manifest/Metadata remains only in immutable plan.Expected; mutable ExpectedSnapshot is a
+separate journal Snapshot, updated only after exact permitted native deltas plus fresh source sample.
+Never rewrite original manifests after forget. Initial retirementAdapter.Observe requires target native
+registration; after forget, core uses reviewed native source Observe plus exact ExpectedSnapshot,
+explicit selected registration absence and immutable physical manifest/legacy creation record checks.
+It must not require vanished current target registration as proof, nor adopt unrelated native state.
+RegistrationParent is canonical nonzero for Git; jj uses zero PathIdentity when no registration
+filesystem root is removed, with strict backend-specific validator rather than invented paths.

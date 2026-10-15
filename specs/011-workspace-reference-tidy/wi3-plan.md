@@ -9,7 +9,7 @@ New retirement result contract v2 preserves published tidy v1 bytes and existing
 ## Concrete native effects
 Git: present worktree registration-only unsupported/retain. Both registration and exact --remove-files
 permit native combined worktree remove only after clean full raw/stored disk proof. Admit only the
-exact owned Spec010 lock, disclose its removal if native unlock required, journal and preserve native
+exact owned Spec010 lock, disclose coupled native lock removal, journal and preserve native
 recovery ref first. No force dirty removal, manual metadata deletion or broad prune.
 jj: native workspace forget removes exact registration but keeps disk; separate files action is opt-in,
 confined Go filesystem removal. Pin native recovery bookmark before forget. No abandon/rawGit writes.
