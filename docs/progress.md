@@ -78,3 +78,20 @@ workspace/reference inventory, then analyze its plan/tasks before implementation
 
 This documentation-only update was checked with `python3 scripts/check-docs.py` and
 `git diff --check`; it does not establish runtime or independent-review evidence.
+
+## Workflow specification batch
+
+Specs 009–016 now capture all eight user-selected workflows with prioritized stories,
+acceptance scenarios, requirements, measurable outcomes and author quality checklists.
+The feature index marks each as planned; no implementation evidence is claimed.
+Spec 010 owns the shared mutation contract; Spec 011 owns retirement execution, avoiding
+a circular dependency for creation. Spec 009 is the active local Specify feature.
+Next: review/plan Spec 009, generate tasks, then perform cross-artifact analysis before
+implementation. No plans or tasks have been generated in this specification-only batch.
+
+Specification-batch source checks: `make check` passed with the existing pinned Hugo
+provided through `HUGO=/private/tmp/sourcesteward-hugo-docs/.tools/hugo` and cached Go
+dependencies. The initial run stopped at the packaging test because this new worktree
+had no `.tools/hugo`; rerunning with the existing executable passed all checks.
+All eight drafts passed author structure/quality review. This is not independent
+review, backend feature acceptance or cross-artifact spec/plan/task analysis.
