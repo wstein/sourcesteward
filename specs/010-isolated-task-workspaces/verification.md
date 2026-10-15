@@ -130,3 +130,30 @@ The 45-case native workspace suite passed again in both pinned local lanes at ex
 source e5fbaf9 with enforced sandboxing and no mandatory skips. Final exact-head hosted
 results are recorded in the PR body. Previous source/effects
 evidence remains applicable to unchanged adapters and contracts.
+
+## Merged acceptance and fixture quiescence follow-up
+
+Owner merged implementation PR #32 and filter repair PR #33. Exact PR head `c3a6f97`
+passed hosted source and both Linux conformance lanes in
+[run38803498326](https://github.com/wstein/sourcesteward/actions/runs/38803498326);
+both native logs confirm45workspace cases per lane. Merged main `e44c59f` has the
+same full tree. Its [CIrun38803599327](https://github.com/wstein/sourcesteward/actions/runs/38803599327)
+passed source, both native lanes and automatic Pages on attempt2. Initial source attempt
+had one existing SHA256 no-write fixture failure; no assertion was weakened on rerun.
+Live revision.txt reports e44c59f19106a685e79fd2f6b4f2e7e3d29f59ea; published workspace
+schema bytes match source, SHA256 fb4d4623c7b3f329e596e7a3608116d10d3bb3c6801aaece6a073e154ccfd825.
+
+A separate disposable reproduction found an empty fixture commit returning while
+objects/maintenance.lock still existed; the file disappeared10mslater without any
+inspection call. This proves a setup race, although the original hosted assertion did
+not identify its changed path. Test-first fixture source `9d64c13` disables automatic
+maintenance only for fixture write commands, retains full before/after bytes and
+adds sorted relative changed-path diagnostics without file contents. Trace2 regression
+failed before the fix, independently proving background maintenance was launched.
+
+Independent scoped review cleared9d64c13 and reran the trace/shapes five times. Author
+minimum/current Git trace/shapes30repetitions each pass; full inspection tests and vet
+pass. Integrating author makecheck passes with mandatory current backends/sandbox,
+43Python tests,12theme cases,132docs and all Go/module/architecture/whitespace checks.
+This fixture-only follow-up changes no production operation, schema or native permission.
+Its PR body records separate hosted acceptance; earlier merged feature checks stand.
