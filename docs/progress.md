@@ -1,6 +1,25 @@
 # Progress and handoff
 
-## Active work: Spec 010 isolated task workspaces
+## Active work: Spec 011 workspace and reference tidy
+
+Spec 009 inventory and Spec 010 isolated workspace creation, handoff and retirement
+preflight are merged. Spec 010 source and fixture follow-ups landed through PRs
+#32–#35. Retirement preflight does not remove registrations, references or files.
+The historical records below preserve their original handoff gates.
+
+Delivery now proceeds in three separately reviewed work items:
+
+1. Evidence-only tidy plans with explicit integration bases and retained reasons.
+2. Authorized local Git branch/jj bookmark cleanup with durable recovery and stale checks.
+3. Owned workspace retirement with separate registration and exact-path file effects.
+
+Each follows plan → tasks → independent analysis → implement → review/test, with
+native Git/jj conformance and a separate PR. None of these tidy capabilities is
+implemented yet. Latest merged source is `f7c2a10`; its hosted checks remain a
+separate gate. The pre-reconciliation `17bdd16` baseline passed local `make check`
+with current Git/jj and mandatory native sandboxing.
+
+## Historical Spec 010 implementation handoff
 
 Implemented native Git/jj task creation through stored plans and explicit authorization,
 durable ownership/recovery journals, conservative retry, handoff and retirement preparation.

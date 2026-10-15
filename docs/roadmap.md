@@ -1,6 +1,6 @@
 # SourceSteward roadmap
 
-SourceSteward is an early version-control toolkit. Help/version and bounded native Git/jj identity inspection are implemented.
+SourceSteward is an early version-control toolkit. Help/version, bounded native Git/jj identity inspection, qualified inventory and isolated task workspace creation are implemented.
 No model, GitButler installation or cloud account is required to run those commands.
 
 ## Foundation — current milestone
@@ -12,12 +12,11 @@ acceptance is tracked in Spec 008.
 ## Inspect and inventory — native evidence with explicit limits
 Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
 `stw inventory` adds registered workspaces/worktrees, native references, explicit bases,
-three-valued predicates and selected file-state scopes with native limitations. Tidy,
-recovery and mutation remain deferred; see the [inventory guide](inventory.md). Existing inspection has explicit targeting, predictable
+three-valued predicates and selected file-state scopes with native limitations. Tidy deletion and checkpoint recovery remain planned; reviewed workspace creation, handoff and retirement preflight are implemented; see the [inventory guide](inventory.md). Existing inspection has explicit targeting, predictable
 exit codes and bounded output without inspected-target writes or implicit fetches. Native jj
 creates and removes private temporary isolation/probe files outside that target.
 
-## Spec 008 — native jj identity inspection, implemented candidate
+## Spec 008 — native jj identity inspection, implemented
 Native inspection supports standalone, colocated and secondary jj workspaces with separate
 workspace, commit, change and operation identities. Schema v2 preserves published Git/version
 v1 contracts. Usable read-only Linux/macOS sandboxing is mandatory; stored-unsnapshotted
@@ -53,7 +52,7 @@ for stacks, isolated Claude workspaces, checkpoints and GitHub PR helpers. This 
 separate from Cretezy/lazyjj, the terminal UI. Adopt useful workflows through native
 SourceSteward adapters; installing either project is not a prerequisite.
 
-These are proposals, not implemented commands or approved specifications. Ratings express
+The table records product direction; inventory and bounded workspace creation are implemented, while the remaining lifecycle operations require their own acceptance evidence. Ratings express
 product priority and fit, not measured quality. Command names below are illustrative.
 
 | Proposed capability | Priority | SourceSteward adaptation |
@@ -97,7 +96,7 @@ History editing, remote deletion, publishing automation, a graphical client, age
 and MCP integration are outside the foundation. A future MCP interface will reuse the same
 command core and contracts; it will not grant additional permissions.
 
-## Draft specification index
+## Specification index
 
 - [009-workspace-inventory: Workspace, State and Reference Inventory](../specs/009-workspace-inventory/spec.md) — 10/10.
 - [010-isolated-task-workspaces: Isolated Task Workspaces](../specs/010-isolated-task-workspaces/spec.md) — 10/10.
@@ -108,9 +107,14 @@ command core and contracts; it will not grant additional permissions.
 - [015-local-restacking: Local Restacking](../specs/015-local-restacking/spec.md) — 8/10.
 - [016-stacked-pr-coordination: Stacked PR Coordination](../specs/016-stacked-pr-coordination/spec.md) — 8/10.
 
-Spec 009 has an implemented candidate with [verification evidence](../specs/009-workspace-inventory/verification.md).
-The remaining feature drafts require planning, tasks and cross-artifact analysis before implementation.
-The active local Specify pointer selects Spec 009 for the next bounded planning step.
+Specs 009 and 010 are implemented and merged; see their
+[009 verification](../specs/009-workspace-inventory/verification.md) and
+[010 verification](../specs/010-isolated-task-workspaces/verification.md).
+Spec 011 is the active delivery: WI1 evidence-only plans, WI2 authorized local
+reference cleanup, then WI3 owned workspace retirement. Each receives planning,
+tasks, independent analysis, implementation, review and its own PR. Registration
+removal, filesystem removal and reference cleanup have distinct effects; jj
+abandonment is outside this delivery. Remaining features are planned, not implemented.
 
 - [017-work-transfer: Selected Work Transfer](../specs/017-work-transfer/spec.md) — 9/10; draft, implementation pending.
 
