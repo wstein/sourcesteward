@@ -14,7 +14,7 @@ import (
 	"unicode/utf8"
 )
 
-// Inspect reads identity only. It never invokes native managed-backend commands.
+// Inspect reads native identity only, without modifying repository state.
 func Inspect(ctx context.Context, path string) Result { return inspect(ctx, path, runGit) }
 func inspect(ctx context.Context, path string, run runner) (result Result) {
 	defer func() {
@@ -58,6 +58,26 @@ func inspect(ctx context.Context, path string, run runner) (result Result) {
 		return r.fail(err.Error(), "cannot inspect backend metadata")
 	}
 	jj := len(r.Evidence) > 0
+	if jj {
+		jjCtx, cancel := context.WithTimeout(ctx, jjTimeout)
+		defer cancel()
+		if err := detectJJGitButler(jjCtx, abs, &r); err != nil {
+			r.SchemaVersion = 2
+			r.Backend = "jj"
+			if jjCtx.Err() != nil {
+				return r.fail("jj-timeout", "jj inspection exceeded its ten-second deadline")
+			}
+			return r.fail("invalid-metadata", "cannot safely inspect colocated ownership metadata")
+		}
+		if managed(&r) && r.Backend == "ambiguous" {
+			return r
+		}
+		r.SchemaVersion = 2
+		r.Backend = "jj"
+		r.Status = "error"
+		r.Diagnostics = []Diagnostic{}
+		return inspectJJ(jjCtx, abs, r)
+	}
 	version, code, err := run(ctx, abs, "version")
 	if err != nil {
 		if ctx.Err() != nil {

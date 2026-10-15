@@ -25,14 +25,29 @@ type Repository struct {
 	ObjectFormat   string  `json:"object_format"`
 	Head           Head    `json:"head"`
 }
+type JJObservation struct {
+	WorkingCopy string `json:"working_copy"`
+	Limitation  string `json:"limitation"`
+}
+type JJRepository struct {
+	WorkspaceRoot string        `json:"workspace_root"`
+	MetadataDir   string        `json:"metadata_dir"`
+	RepositoryDir string        `json:"repository_dir"`
+	WorkspaceName string        `json:"workspace_name"`
+	ChangeID      string        `json:"change_id"`
+	CommitID      string        `json:"commit_id"`
+	OperationID   string        `json:"operation_id"`
+	Observation   JJObservation `json:"observation"`
+}
 type Result struct {
-	SchemaVersion int          `json:"schema_version"`
-	Status        string       `json:"status"`
-	Backend       string       `json:"backend"`
-	InputPath     string       `json:"input_path"`
-	Evidence      []Evidence   `json:"evidence"`
-	Repository    *Repository  `json:"repository"`
-	Diagnostics   []Diagnostic `json:"diagnostics"`
+	SchemaVersion int           `json:"schema_version"`
+	Status        string        `json:"status"`
+	Backend       string        `json:"backend"`
+	InputPath     string        `json:"input_path"`
+	Evidence      []Evidence    `json:"evidence"`
+	Repository    *Repository   `json:"repository"`
+	Diagnostics   []Diagnostic  `json:"diagnostics"`
+	JJRepository  *JJRepository `json:"jj_repository,omitempty"`
 }
 
 func (r Result) Error() string {
@@ -44,6 +59,7 @@ func (r Result) Error() string {
 func (r *Result) fail(code, msg string) Result {
 	r.Status = "error"
 	r.Repository = nil
+	r.JJRepository = nil
 	r.Diagnostics = []Diagnostic{{code, msg}}
 	return *r
 }
