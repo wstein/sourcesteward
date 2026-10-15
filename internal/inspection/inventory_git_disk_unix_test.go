@@ -54,3 +54,24 @@ func TestGitInventoryLiteralQueryDoesNotReadOtherDiskPaths(t *testing.T) {
 		t.Fatal("unobserved broader workspace claimed clean")
 	}
 }
+
+func TestGitInventoryUnsafeSelectedDiskPathIsUnknown(t *testing.T) {
+	for _, kind := range []string{"fifo", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			d := repo(t)
+			os.WriteFile(filepath.Join(d, "file"), []byte("tracked"), 0600)
+			git(t, d, "add", ".")
+			git(t, d, "commit", "-qm", "initial")
+			os.Remove(filepath.Join(d, "file"))
+			if kind == "fifo" {
+				syscall.Mkfifo(filepath.Join(d, "file"), 0600)
+			} else {
+				os.Symlink(filepath.Join(t.TempDir(), "outside"), filepath.Join(d, "file"))
+			}
+			r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"file"}})
+			if r.Status != "partial" || r.Query.Value != "unknown" || len(r.Files) != 1 || r.Files[0].Change != "unknown" || len(r.Files[0].Limitations) == 0 {
+				t.Fatalf("%+v", r)
+			}
+		})
+	}
+}
