@@ -1,0 +1,46 @@
+# Development
+
+## Prerequisites and checks
+Go 1.27.2+, Git and Python 3 are required for development. Python validates documentation
+and assets only; the CLI has no Python dependency. Cobra v1.10.2 is pinned in go.mod/go.sum.
+
+```sh
+make check
+go test -race ./...
+go run ./cmd/stw version --json
+```
+
+`make check` checks formatting, Go tests, vet, module verification, local documentation links,
+SVG structure, site assets and whitespace. It does not create release artifacts or mutate a
+user repository. Tests construct a fresh command for each invocation.
+
+## Specification workflow
+The completed foundation design is in ../specs/001-project-foundation/ (from the repository
+root: specs/001-project-foundation). Its spec, plan, research, data model, contract, quickstart
+and tasks describe the current milestone. The roadmap describes future work only.
+
+Project-local Codex skills were installed with:
+
+```sh
+specify init --here --force --non-interactive --integration codex --integration-options='--skills' --script sh
+```
+
+Do not rerun `--force` without reviewing managed-file changes. Spec Kit's current feature
+pointer is machine-local and ignored. In a fresh clone, set it using the normal Specify flow
+or point `SPECIFY_FEATURE_DIRECTORY` at `specs/001-project-foundation` for the setup scripts.
+No extension hooks are configured. `specify preset resolve spec-template` resolves the active template.
+
+## Website
+The site is plain HTML/CSS with local SVG and font assets. Preview with:
+
+```sh
+python3 -m http.server 8000 --directory docs
+```
+
+Open http://localhost:8000/. `docs/index.html` and `docs/assets/` are deployed; development
+Markdown, scripts, source files and specs are not copied into the Pages artifact.
+
+A single GitHub Actions workflow checks every PR and push. The deployment job runs only
+for main pushes, depends on the successful check job in that same workflow run, and checks
+out that exact run SHA. Pages uses GitHub Actions as its build source. There is no PR or
+manual-dispatch deployment path. Source CI does not publish CLI releases or Git tags.
