@@ -39,3 +39,18 @@ func TestInputBoundsAndIdentifiers(t *testing.T) {
 		t.Fatal("accepted invalid bounded text")
 	}
 }
+
+func TestBoundedResultAlwaysFitsHostileEvidence(t *testing.T) {
+	r := newResult("workspace-apply")
+	r.Status = "partial"
+	r.Actions = []ActionOutcome{{"native-effect", "completed", strings.Repeat("x", recordLimit+1)}}
+	r.Limitations = []string{strings.Repeat("y", recordLimit+1)}
+	r = bounded(r)
+	data, e := json.Marshal(r)
+	if e != nil || len(data) > recordLimit {
+		t.Fatalf("unbounded fallback: %d %v", len(data), e)
+	}
+	if len(r.Actions) == 0 || r.Actions[0].Status != "completed" {
+		t.Fatal("completed native effect lost")
+	}
+}
