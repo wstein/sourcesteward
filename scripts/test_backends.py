@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('backends', ROOT / 'scripts/install-backends.py')
 backends = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backends)
+smoke_spec = importlib.util.spec_from_file_location('smoke_jj', ROOT / 'scripts/smoke-jj-inspection.py')
+smoke = importlib.util.module_from_spec(smoke_spec)
+smoke_spec.loader.exec_module(smoke)
 
 
 def archive(entries):
@@ -99,3 +103,12 @@ class BackendInstallerTests(unittest.TestCase):
             self.assertIn(required, workflow)
         for forbidden in ('--privileged', 'apparmor_restrict_unprivileged_userns=0', 'chmod u+s'):
             self.assertNotIn(forbidden, workflow)
+        self.assertLess(workflow.index('scripts/smoke-jj-inspection.py --sandbox-preflight'), workflow.index('scripts/install-backends.py'))
+
+    def test_sandbox_preflight_requires_denied_write_and_successful_read(self):
+        for write_code, read_code, passed in ((0, 0, False), (1, 1, False), (1, 0, True)):
+            responses = [SimpleNamespace(returncode=write_code), SimpleNamespace(returncode=read_code)]
+            with self.subTest(write=write_code, read=read_code), patch.object(smoke, 'sandbox_prefix', return_value=['/bwrap']), patch.object(smoke.subprocess, 'run', side_effect=responses):
+                if passed: smoke.check_sandbox()
+                else:
+                    with self.assertRaises(RuntimeError): smoke.check_sandbox()
