@@ -157,7 +157,7 @@ func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
-		unsafe := strings.HasPrefix(key, "filter.") || strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "core.worktree" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
+		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "core.worktree" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
 		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || key == "submodule.recurse" && !gitFalse(value) || strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 		if unsafe {
 			return "", failure("git-unsafe-configuration", "configured hooks, checkout helpers or unsupported checkout configuration require an explicit supported policy before creation")
@@ -180,11 +180,59 @@ func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string
 	if err = validateGitTree(tree); err != nil {
 		return "", err
 	}
+	attributes, err := gitCheckoutFilterEvidence(ctx, bin, id.WorkspaceRoot, commit, tree)
+	if err != nil {
+		return "", err
+	}
 	info, err := os.Stat(bin)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", failure("git-unavailable", "Git executable identity is unavailable")
 	}
-	return gitDigest(config + "\x00" + hooks + "\x00" + tree + "\x00" + bin + "\x00" + fmt.Sprintf("%d:%d:%d", info.Mode(), info.Size(), info.ModTime().UnixNano())), nil
+	return gitDigest(config + "\x00" + hooks + "\x00" + tree + "\x00" + attributes + "\x00" + bin + "\x00" + fmt.Sprintf("%d:%d:%d", info.Mode(), info.Size(), info.ModTime().UnixNano())), nil
+}
+
+// Attribute inspection resolves data only: check-attr does not run filter
+// drivers. --source pins committed attributes to the admitted checkout base,
+// rather than reading a dirty or untracked source .gitattributes. Native info
+// and default global attributes remain effective and are included in evidence.
+func gitCheckoutFilterEvidence(ctx context.Context, bin, dir, commit, tree string) (string, error) {
+	var paths []string
+	if tree != "" {
+		for _, entry := range strings.Split(strings.TrimSuffix(tree, "\x00"), "\x00") {
+			_, path, ok := strings.Cut(entry, "\t")
+			if !ok {
+				return "", failure("git-tree-refused", "checkout tree lacks complete path evidence")
+			}
+			paths = append(paths, path)
+		}
+	}
+	var evidence strings.Builder
+	for start := 0; start < len(paths); start += 128 {
+		end := start + 128
+		if end > len(paths) {
+			end = len(paths)
+		}
+		args := []string{"check-attr", "--source=" + commit, "-z", "filter", "--"}
+		args = append(args, paths[start:end]...)
+		raw, err := gitRead(ctx, bin, dir, args...)
+		if err != nil {
+			return "", err
+		}
+		fields := strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00")
+		if len(fields) != (end-start)*3 {
+			return "", failure("git-attributes-refused", "checkout filter evidence is incomplete")
+		}
+		for i, path := range paths[start:end] {
+			if fields[i*3] != path || fields[i*3+1] != "filter" {
+				return "", failure("git-attributes-refused", "checkout filter evidence does not match the selected base paths")
+			}
+			if value := fields[i*3+2]; value != "unspecified" && value != "unset" {
+				return "", failure("git-active-filter-refused", "base checkout has an active filter attribute; task creation never runs or silently suppresses configured filter helpers")
+			}
+		}
+		evidence.WriteString(raw)
+	}
+	return evidence.String(), nil
 }
 func gitFalse(s string) bool { return s == "false" || s == "no" || s == "off" || s == "0" }
 
