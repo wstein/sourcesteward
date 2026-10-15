@@ -1,0 +1,1139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v2/tidy.schema.json",
+  "title": "SourceSteward owned workspace retirement result v2",
+  "description": "Retirement plans and apply outcomes. Existing reference tidy v1 remains unchanged. Operational early failures may omit retirement; usage/writer failures may not emit complete JSON. Additional object members and diagnostic codes are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "backend",
+    "actions",
+    "diagnostics",
+    "limitations",
+    "plan"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "command": {
+      "enum": [
+        "tidy-plan",
+        "tidy-apply"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "refused",
+        "partial",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "git",
+        "jj",
+        "unknown",
+        "ambiguous",
+        "gitbutler"
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "status",
+          "detail"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "plan": {
+      "type": "null"
+    },
+    "retirement": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/retirement"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "native": {
+      "type": "object",
+      "required": [
+        "backend",
+        "repository_dir",
+        "workspace_root",
+        "workspace_name",
+        "git_dir",
+        "head_ref",
+        "commit_id",
+        "change_id",
+        "operation_id",
+        "object_format"
+      ],
+      "properties": {
+        "backend": {
+          "enum": [
+            "git",
+            "jj"
+          ]
+        },
+        "repository_dir": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "workspace_root": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "workspace_name": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "git_dir": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "head_ref": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "commit_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "change_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "operation_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "object_format": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commit_id": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+              },
+              "change_id": {
+                "const": ""
+              },
+              "operation_id": {
+                "const": ""
+              },
+              "object_format": {
+                "enum": [
+                  "sha1",
+                  "sha256"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commit_id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              },
+              "change_id": {
+                "type": "string",
+                "pattern": "^[k-z]{32}$"
+              },
+              "operation_id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{128}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "path": {
+      "type": "object",
+      "required": [
+        "path",
+        "device",
+        "inode"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "identity",
+        "base_selector",
+        "base_commit",
+        "base_change",
+        "reference_digest",
+        "registration_digest",
+        "safety_digest"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/native"
+        },
+        "base_selector": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "base_commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "base_change": {
+          "type": "string",
+          "pattern": "^([k-z]{32})?$"
+        },
+        "reference_digest": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{64}|[a-f0-9]{128})$"
+        },
+        "registration_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "safety_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task_id",
+        "owner",
+        "plan_id",
+        "backend",
+        "destination",
+        "recovery_pointer",
+        "native",
+        "destination_identity",
+        "base_commit",
+        "base_change",
+        "state",
+        "inventory",
+        "remaining_work",
+        "recovery_limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj"
+          ]
+        },
+        "destination": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "recovery_pointer": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "native": {
+          "$ref": "#/$defs/native"
+        },
+        "destination_identity": {
+          "$ref": "#/$defs/path"
+        },
+        "base_commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "base_change": {
+          "type": "string",
+          "pattern": "^([k-z]{32})?$"
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "inventory": {
+          "type": "null"
+        },
+        "remaining_work": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "recovery_limits": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "native": {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "native": {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "creation_plan": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "plan_id",
+        "task_id",
+        "owner",
+        "source_path",
+        "destination",
+        "state_dir",
+        "backend",
+        "reason",
+        "digest",
+        "expected",
+        "destination_parent",
+        "destination_identity",
+        "effects",
+        "recovery_limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "source_path": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "destination": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "state_dir": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expected": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "destination_parent": {
+          "$ref": "#/$defs/path"
+        },
+        "destination_identity": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/path"
+            }
+          ]
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "recovery_limits": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "backend": {
+                        "const": "git"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "backend": {
+                        "const": "jj"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "name",
+        "target",
+        "decision",
+        "reason",
+        "proof",
+        "effects",
+        "blockers"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "decision": {
+          "enum": [
+            "delete",
+            "retain"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "proof": {
+          "enum": [
+            "native-ancestry",
+            "empty-working-copy-integrated-parent",
+            "none"
+          ]
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "proof": {
+                "enum": [
+                  "native-ancestry",
+                  "empty-working-copy-integrated-parent"
+                ]
+              },
+              "blockers": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "path",
+        "kind",
+        "digest",
+        "device",
+        "inode",
+        "size",
+        "mode",
+        "executable"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "regular",
+            "directory"
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "executable": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "regular"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "entries",
+        "digest",
+        "complete"
+      ],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/entry"
+          }
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sibling": {
+      "type": "object",
+      "required": [
+        "identity",
+        "kind"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/path"
+        },
+        "kind": {
+          "enum": [
+            "regular",
+            "directory"
+          ]
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": [
+        "expected",
+        "target",
+        "destination",
+        "destination_parent",
+        "registration_parent",
+        "manifest",
+        "metadata",
+        "siblings",
+        "sibling_digest",
+        "lock_reason",
+        "workspace_paths",
+        "workspace_paths_complete",
+        "proof",
+        "actions",
+        "limitations"
+      ],
+      "properties": {
+        "expected": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "target": {
+          "$ref": "#/$defs/native"
+        },
+        "destination": {
+          "$ref": "#/$defs/path"
+        },
+        "destination_parent": {
+          "$ref": "#/$defs/path"
+        },
+        "registration_parent": {
+          "$ref": "#/$defs/path"
+        },
+        "manifest": {
+          "$ref": "#/$defs/manifest"
+        },
+        "metadata": {
+          "$ref": "#/$defs/manifest"
+        },
+        "siblings": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/sibling"
+          }
+        },
+        "sibling_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "lock_reason": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "workspace_paths": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "workspace_paths_complete": {
+          "type": "boolean"
+        },
+        "proof": {
+          "enum": [
+            "native-ancestry",
+            "empty-working-copy-integrated-parent",
+            "none"
+          ]
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "retirement": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "plan_id",
+        "source_path",
+        "state_dir",
+        "backend",
+        "digest",
+        "creation_plan",
+        "creation_journal_digest",
+        "task",
+        "expected",
+        "remove_registration",
+        "remove_files",
+        "effects",
+        "recovery_limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "source_path": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "state_dir": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj"
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "creation_plan": {
+          "$ref": "#/$defs/creation_plan"
+        },
+        "creation_journal_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "task": {
+          "$ref": "#/$defs/task"
+        },
+        "expected": {
+          "$ref": "#/$defs/observation"
+        },
+        "remove_registration": {
+          "const": true
+        },
+        "remove_files": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "recovery_limits": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "creation_plan": {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              },
+              "task": {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              },
+              "expected": {
+                "properties": {
+                  "expected": {
+                    "properties": {
+                      "identity": {
+                        "properties": {
+                          "backend": {
+                            "const": "git"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "target": {
+                    "properties": {
+                      "backend": {
+                        "const": "git"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "creation_plan": {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              },
+              "task": {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              },
+              "expected": {
+                "properties": {
+                  "expected": {
+                    "properties": {
+                      "identity": {
+                        "properties": {
+                          "backend": {
+                            "const": "jj"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "target": {
+                    "properties": {
+                      "backend": {
+                        "const": "jj"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "refused",
+              "error"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "retirement"
+        ],
+        "properties": {
+          "backend": {
+            "enum": [
+              "git",
+              "jj"
+            ]
+          },
+          "retirement": {
+            "$ref": "#/$defs/retirement"
+          },
+          "diagnostics": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "retirement": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "jj"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "retirement": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
