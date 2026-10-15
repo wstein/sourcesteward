@@ -78,8 +78,10 @@ metadata and an absolute .jj/repo pointer to the same shared native repository; 
 workspace add/update/register and no migration. Only known current-user single-link regular files
 are copied, with no-follow reads, input/output limits and source identity/content checks before/after.
 Source HEAD/index/configuration/working_copy bytes and complete registered workspace list remain
-unchanged. Native operations may write only already declared shared operation/object/index stores
-and private context; no broad repository parent or source Git metadata write grant. Exact native
+unchanged. Private context creation/copy occurs only during bounded setup; context is read-only during native
+execution. Native operations may write only already declared shared operation/object/index stores;
+no private context, broad repository parent or source Git metadata write grant. Source configuration
+helpers remain blocked by the existing isolated session configuration boundary. Exact native
 sole-parent operation/bookmark delta proof remains mandatory, using actual source observation for
 validation rather than trusting the private path as another owned workspace. Source read capability
 and final identity remain unchanged. Failure to enforce this mechanism refuses colocated mutation.
