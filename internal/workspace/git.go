@@ -269,37 +269,37 @@ func validateGitTree(raw string) error {
 	return nil
 }
 
-func gitProtectedMetadata(common string) ([]string, error) {
+func gitProtectedMetadata(common string) ([]string, bool, error) {
 	dir := filepath.Join(common, "worktrees")
 	st, err := os.Lstat(dir)
 	if os.IsNotExist(err) {
 		if err = os.Mkdir(dir, 0700); err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return nil, nil
+		return nil, true, nil
 	}
 	if err != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 {
-		return nil, failure("git-metadata-refused", "Git worktree metadata is not an ordinary directory")
+		return nil, false, failure("git-metadata-refused", "Git worktree metadata is not an ordinary directory")
 	}
 	f, err := os.Open(dir)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(observationLimit + 1)
 	if err != nil && err != io.EOF || len(entries) > observationLimit {
-		return nil, failure("git-observation-limit", "existing worktree metadata exceeds the observation limit")
+		return nil, false, failure("git-observation-limit", "existing worktree metadata exceeds the observation limit")
 	}
 	var roots []string
 	for _, entry := range entries {
 		st, e := entry.Info()
 		if e != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 {
-			return nil, failure("git-metadata-refused", "existing worktree metadata contains unsupported entries")
+			return nil, false, failure("git-metadata-refused", "existing worktree metadata contains unsupported entries")
 		}
 		roots = append(roots, filepath.Join(dir, entry.Name()))
 	}
 	sort.Strings(roots)
-	return roots, nil
+	return roots, false, nil
 }
 
 func (gitAdapter) Create(ctx context.Context, p MutationPlan) (NativeWorkspace, error) {
@@ -327,9 +327,12 @@ func (gitAdapter) Create(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	if !validID(p.TaskID) {
 		return n, failure("git-task-refused", "task identity is invalid")
 	}
-	protected, err := gitProtectedMetadata(p.Expected.Identity.RepositoryDir)
+	protected, metadataCreated, err := gitProtectedMetadata(p.Expected.Identity.RepositoryDir)
 	if err != nil {
 		return n, err
+	}
+	if metadataCreated {
+		n.Effects = append(n.Effects, "created the native Git worktree metadata container")
 	}
 	bin, err := gitExecutable()
 	if err != nil {
