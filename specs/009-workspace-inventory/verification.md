@@ -53,3 +53,22 @@ including committed Git refs/linked worktrees, native jj bookmark targets and th
 oversized-input error envelope. Hosted Linux minimum/current conformance and PR handoff
 remain pending at this record's creation. No live schema/Pages deployment, release, merge or mutation
 capability is claimed. The implementation status is `implemented`, not globally verified.
+
+## Current integration status and Linux fixture repair
+
+The owner merged design PR #29 and implementation PR #30 into main `9c4f385`.
+PR #30's conflict after the design merge was resolved with an exact-lease rebase;
+its resulting tree was byte-identical to the pre-rebase tree. The stack is now merged.
+
+Hosted run 38794077321 exposed one fixture failure in all three Linux jobs: the
+SHA-256 conflict setup called the production Git runner, which deliberately strips
+GIT_* identity overrides, and ignored merge exit 128 on a runner without identity.
+The fixture therefore never created conflicts. This was reproduced with hostile
+global `user.useConfigOnly=true`; no production safety behavior was weakened.
+
+Follow-up source `91301f6` sets explicit local test identity/configuration, asserts
+merge exit 1 and prints JSON diagnostics. Independent test-only review cleared it.
+`make check` with mandatory current native jj and cached pinned Hugo passed, including
+37 Python tests, 12 theme tests, schema fixtures, Go vet/module checks and whitespace.
+Hosted minimum/current verification of this fixture repair remains pending; feature
+status stays implemented rather than globally verified. No live deployment is claimed.

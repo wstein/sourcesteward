@@ -52,7 +52,7 @@ Independent test: explicit remote samples/base/revision, multiple candidates, no
 - [X] T028 Update documented capabilities, schema URL/packaging and guidance in docs/backends.md, docs/json-contracts.md, docs/agent-guide.md and scripts/package-pages.py.
 - [X] T029 Run gofmt, make check, go test -race ./..., go vet ./..., go mod verify and git diff --check; record exact commands/results in specs/009-workspace-inventory/verification.md.
 - [X] T030 Obtain independent exact-revision source/safety/schema review and resolve findings; rerun analysis in specs/009-workspace-inventory/analysis.md.
-- [ ] T031 Update docs/progress.md and docs/feature-status.json honestly; open implementation PR after focused commits and attach it; record hosted minimum/current evidence or remaining acceptance gaps in specs/009-workspace-inventory/verification.md.
+- [X] T031 Update docs/progress.md and docs/feature-status.json honestly; open implementation PR after focused commits and attach it; record hosted minimum/current evidence or remaining acceptance gaps in specs/009-workspace-inventory/verification.md.
 
 ## Dependencies and parallel execution
 T001→T002→T003/T004→T005 gates adapter implementation. US1 precedes US2; US4/US5 need native inventory foundations. CLI/schema US3 can proceed against frozen models in parallel with adapters. Within US1, US2, US4 and US5, Git and jj tests/implementation are independent isolated-worktree assignments; do not overlap edits to shared jj setup/model/CLI without coordination. T018/T019 require integrated adapters; T029→T030→T031 completes handoff.
@@ -62,4 +62,4 @@ Suggested internal MVP is US1, but PR acceptance includes all five stories and F
 ## Requirement traceability
 FR-001:T006–009; FR-002:T006–009; FR-003:T010–013; FR-004:T006–009; FR-005:T005,T010–013,T018; FR-006:T005–009,T013,T018; FR-007:T003–004,T014–017; FR-008:T003–004,T010–012,T014,T016,T018; FR-009:T002,T015,T017–019,T029–031; FR-010:T003,T014,T020–023; FR-011:T024–027; FR-012:T024–027; FR-013:T024–027; FR-014:T020–023; FR-015:T024–027.
 
-31 tasks: setup2, foundation3, US1=4, US2=4, US3=6, US4=4, US5=4, polish4. Completed tasks link to the analysis and verification records; T031 remains pending until PR handoff.
+31 tasks: setup2, foundation3, US1=4, US2=4, US3=6, US4=4, US5=4, polish4. All task handoffs are recorded in analysis/verification, including PRs #29/#30 and the remaining hosted acceptance repair; completed tasks do not imply globally verified deployment.

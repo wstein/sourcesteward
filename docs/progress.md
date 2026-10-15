@@ -175,3 +175,12 @@ and confirm hosted Linux minimum/current checks. Spec 009 is implemented with ex
 native qualifications; the earlier proposal/planning entries are historical and do
 not override this action. Owner approval/merge and live schema publication are pending.
 Do not start task workspace mutations or tidy from inventory evidence alone.
+
+## Latest integration handoff
+
+The owner merged Spec 009 design/implementation PRs #29/#30 into main `9c4f385`.
+The conflict-only rebase preserved the full implementation tree. A Linux-only fixture
+identity failure, also reproduced locally, is repaired in a focused test-only follow-up.
+Independent review and full local checks pass; the next action is to review that repair
+and confirm its exact hosted minimum/current checks. Earlier owner-merge-pending statements
+are historical snapshots; no live schema publication or global verification is inferred.
