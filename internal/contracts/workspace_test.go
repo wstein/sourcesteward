@@ -4,6 +4,7 @@ package contracts_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -167,6 +168,44 @@ func TestRealGitWorkspaceLifecycleSchema(t *testing.T) {
 	plan := invoke("workspace", "plan", source, "--base", "HEAD", "--destination", dest, "--task", "contract-task", "--owner", "tester", "--state-dir", state)
 	if plan.Plan == nil {
 		t.Fatal("missing real plan")
+	}
+	// A valid digest is not semantic proof: store contents remain untrusted.
+	planPath := filepath.Join(state, "plans", plan.Plan.PlanID+".json")
+	original, err := os.ReadFile(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	altered := *plan.Plan
+	altered.Expected.BaseCommit = "x"
+	altered.Digest = ""
+	altered.DestinationIdentity = nil
+	digestInput, err := json.Marshal(altered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	altered.Digest = fmt.Sprintf("%x", sha256.Sum256(digestInput))
+	tampered, err := json.Marshal(altered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(planPath, tampered, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var invalidOut, invalidDiagnostic bytes.Buffer
+	code := cli.Run(context.Background(), "test", []string{"workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize", "--json"}, &invalidOut, &invalidDiagnostic)
+	valid(t, s, invalidOut.Bytes())
+	var invalid workspace.Result
+	if err = json.Unmarshal(invalidOut.Bytes(), &invalid); err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 || invalid.Plan != nil || invalid.Task != nil {
+		t.Fatalf("malformed native plan escaped: exit%d %s %s", code, invalidOut.String(), invalidDiagnostic.String())
+	}
+	if _, err = os.Lstat(dest); !os.IsNotExist(err) {
+		t.Fatalf("invalid plan changed destination: %v", err)
+	}
+	if err = os.WriteFile(planPath, original, 0600); err != nil {
+		t.Fatal(err)
 	}
 	applied := invoke("workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
 	if applied.Task == nil {
