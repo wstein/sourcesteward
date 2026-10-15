@@ -1,6 +1,11 @@
 # Progress and handoff
 
 ## Current milestone
+004-site-themes is implemented on its topic worktree: a prominent README site link and
+a native system/light/dark Pages selector, with narrow local-script authorization. Source
+checks pass (10 Python and 12 Node cases); browser acceptance, independent source review
+and PR creation are pending. See [theme evidence](../specs/004-site-themes/verification.md).
+
 003-agent-hints is implemented and locally verified on codex/003-agent-hints. Root help
 links to task-specific agent guidance and llms.txt; version/JSON and error contracts are
 preserved. Independent review cleared the implementation. Main and remote publication

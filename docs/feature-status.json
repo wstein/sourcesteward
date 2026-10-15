@@ -20,6 +20,12 @@
       "evidence": "agent-hints-verification.md"
     },
     {
+      "id": "004-site-themes",
+      "status": "implemented",
+      "spec": "../specs/004-site-themes/spec.md",
+      "evidence": "../specs/004-site-themes/verification.md"
+    },
+    {
       "id": "repository-inspection",
       "status": "planned",
       "spec": null,
