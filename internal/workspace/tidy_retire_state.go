@@ -128,6 +128,9 @@ func tidyStoredKind(o TidyApplyOptions) (string, error) {
 	if found == "tidy-retirement-plans" {
 		return "retirement", nil
 	}
+	if found == "" && o.Authorize {
+		return "reference", failure("unknown-plan", "No immutable tidy plan with this ID exists in the selected private state directory.")
+	}
 	return "reference", nil
 }
 func checkOtherTidyNamespace(s *store, id, other string) error {

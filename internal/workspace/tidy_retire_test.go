@@ -290,3 +290,22 @@ func TestRetirementObservationEnforcesCombinedEvidenceBound(t *testing.T) {
 		t.Fatal("combined full observation exceeded1024 records without refusal")
 	}
 }
+
+func TestTidyUnknownPlanDoesNotInitializePrivateState(t *testing.T) {
+	for _, authorize := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unauthorized", true: "authorized"}[authorize], func(t *testing.T) {
+			state := privateDir(t)
+			r := ApplyTidy(context.Background(), TidyApplyOptions{StateDir: state, PlanID: strings.Repeat("a", 32), Authorize: authorize})
+			if r.Status == "ok" {
+				t.Fatal("unknown plan accepted")
+			}
+			entries, err := os.ReadDir(state)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("unknown plan initialized private state: %v %v", entries, err)
+			}
+			if !authorize && (len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "authorization-required") {
+				t.Fatal("unauthorized unknown plan changed authorization diagnostic")
+			}
+		})
+	}
+}
