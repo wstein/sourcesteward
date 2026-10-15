@@ -20,3 +20,5 @@
 - [Inspection acceptance](inspection-verification.md): bounded identity/detection verification.
 - [CLI JSON contracts](json-contracts.md): versioned schemas, compatibility and offline validation.
 - [Site theme specification](../specs/004-site-themes/spec.md) and [verification](../specs/004-site-themes/verification.md).
+
+- [Generated documentation specification](../specs/007-hugo-docs/spec.md) and [verification](../specs/007-hugo-docs/verification.md).
