@@ -131,6 +131,14 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if err != nil || verified.WorkspaceRoot != destination {
 		t.Fatalf("verify: %+v %v", verified, err)
 	}
+	foreignGit := filepath.Join(destination, ".git")
+	if e := os.MkdirAll(filepath.Join(foreignGit, "gitbutler"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := VerifyJJWorkspace(context.Background(), source, "stw-task", destination, observed.Source.RepositoryDir); e == nil {
+		t.Fatal("accepted ambiguous task ownership")
+	}
+
 }
 
 func TestJJWorkspaceWriteScopeValidation(t *testing.T) {

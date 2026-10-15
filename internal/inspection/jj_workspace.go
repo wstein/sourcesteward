@@ -405,7 +405,11 @@ func VerifyJJWorkspace(ctx context.Context, source, name, destination, repo stri
 	if identity.Status != "ok" || identity.JJRepository == nil || identity.JJRepository.RepositoryDir != repo {
 		return j, errors.New("source jj repository identity changed")
 	}
-	e := withJJSession(ctx, source, identity, func(s jjSession, _, _, _ string) error {
+	destinationIdentity := Inspect(ctx, destination)
+	if destinationIdentity.Status != "ok" || destinationIdentity.Backend != "jj" || destinationIdentity.JJRepository == nil || destinationIdentity.JJRepository.RepositoryDir != repo || destinationIdentity.JJRepository.WorkspaceName != name {
+		return j, errors.New("foreign or ambiguous jj destination ownership")
+	}
+	e := withJJSession(ctx, destination, destinationIdentity, func(s jjSession, _, _, _ string) error {
 		var e error
 		j, e = jjWorkspaceVerifySession(ctx, s, destination, name, repo)
 		return e
