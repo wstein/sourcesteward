@@ -97,6 +97,8 @@ func (c coordinator) plan(ctx context.Context, o PlanOptions) Result {
 		return failResult(r, e)
 	}
 	p := MutationPlan{SchemaVersion: 1, TaskID: o.Task, Owner: o.Owner, SourcePath: source, Destination: o.Destination, StateDir: o.StateDir, Backend: identity.Backend, Reason: "Create one isolated task checkout at the explicitly selected base.", Expected: snap, DestinationParent: parent, Effects: []string{"Persist private plan, pre-action recovery journal and task ownership records.", "Reserve one new private destination directory.", "Create one native task workspace registration and materialize its checkout; shared native metadata may change."}, RecoveryLimits: []string{"No automatic rollback, filesystem removal, branch/bookmark deletion or source restoration.", "Inspect the durable journal and native registration after interruption; incomplete operations require manual recovery.", "Sampled checks do not exclude concurrent external or ABA changes; owner labels are not authentication."}}
+	p.Effects = append(p.Effects, nativeEffects(p.Backend)...)
+	p.RecoveryLimits = append(p.RecoveryLimits, "Linux sandbox execution restrictions are limited by native runtime needs; configuration/helper preflight and network denial are enforced, but hostile same-user concurrent replacement cannot be excluded.")
 	if e = disjointStore(p); e != nil {
 		return failResult(r, e)
 	}
@@ -240,6 +242,10 @@ func (c coordinator) apply(ctx context.Context, o ApplyOptions) Result {
 	if e = ctx.Err(); e != nil {
 		return c.incomplete(s, p, j, r, e)
 	}
+	fresh, e := currentIdentity(p.Destination)
+	if e != nil || fresh != reserved {
+		return c.incomplete(s, p, j, r, failure("changed-destination", "Reserved destination changed before native action."))
+	}
 	native, e := a.Create(ctx, p)
 	if native.Effects == nil {
 		native.Effects = []string{}
@@ -248,8 +254,13 @@ func (c coordinator) apply(ctx context.Context, o ApplyOptions) Result {
 		native.Limitations = []string{}
 	}
 	j.Native = &native
+	r.Limitations = append(r.Limitations, native.Limitations...)
+	effectStatus := "incomplete"
+	if e == nil && native.Complete && native.SourceUnchanged {
+		effectStatus = "completed"
+	}
 	for _, effect := range native.Effects {
-		j.Actions = append(j.Actions, ActionOutcome{"native-effect", "completed", effect})
+		j.Actions = append(j.Actions, ActionOutcome{"native-effect", effectStatus, effect})
 	}
 	if e != nil || !native.Complete || !native.SourceUnchanged {
 		if e == nil {
@@ -283,7 +294,7 @@ func (c coordinator) incomplete(s *store, p MutationPlan, j journal, r Result, e
 }
 func (c coordinator) retry(ctx context.Context, s *store, p MutationPlan, j journal, a nativeAdapter, r Result) Result {
 	r.Actions = j.Actions
-	if j.SchemaVersion != 1 || j.PlanID != p.PlanID || j.Actions == nil || j.Diagnostics == nil {
+	if !validJournal(j, p) {
 		return failResult(r, failure("invalid-state", "Operation journal is incompatible."))
 	}
 	if j.Phase != "complete" && j.Phase != "native-created" {
@@ -321,7 +332,7 @@ func (c coordinator) retry(ctx context.Context, s *store, p MutationPlan, j jour
 }
 func (c coordinator) finalize(ctx context.Context, s *store, p MutationPlan, j journal, a nativeAdapter, r Result) Result {
 	native, e := a.Verify(ctx, p)
-	if e != nil || !native.Complete || !sameOwner(native.Identity, j.Native.Identity) {
+	if e != nil || !native.Complete || native.Identity != j.Native.Identity {
 		return c.incomplete(s, p, j, r, failure("verification-failed", "Native registration ownership could not be verified after creation."))
 	}
 	task := TaskRecord{SchemaVersion: 1, TaskID: p.TaskID, Owner: p.Owner, PlanID: p.PlanID, Backend: p.Backend, Destination: p.Destination, RecoveryPointer: filepath.Join(p.StateDir, "operations", p.PlanID+".json"), Native: j.Native.Identity, DestinationIdentity: *j.DestinationIdentity, BaseCommit: p.Expected.BaseCommit, BaseChange: p.Expected.BaseChange, State: "complete", RemainingWork: []string{}, RecoveryLimits: p.RecoveryLimits}
@@ -351,4 +362,35 @@ func sameOwner(a, b NativeIdentity) bool {
 }
 func validTask(t TaskRecord, p MutationPlan) bool {
 	return t.SchemaVersion == 1 && t.TaskID == p.TaskID && t.PlanID == p.PlanID && t.Owner == p.Owner && t.Backend == p.Backend && t.Destination == p.Destination && t.BaseCommit == p.Expected.BaseCommit && t.BaseChange == p.Expected.BaseChange && t.Native.Backend == p.Backend && t.Native.WorkspaceRoot == p.Destination && t.Native.RepositoryDir == p.Expected.Identity.RepositoryDir && t.RemainingWork != nil && t.RecoveryLimits != nil
+}
+
+func nativeEffects(backend string) []string {
+	if backend == "git" {
+		return []string{"Create one detached, locked native Git worktree at the resolved base commit; create no branch or bookmark.", "Write the new common-dir/worktrees registration, its per-worktree HEAD/index/lock metadata and destination checkout only; preexisting workspace metadata stays read-only.", "Refuse configured hooks, checkout filters and unsupported helper/configuration paths rather than skip installed hooks; source HEAD/index/configuration/files remain unchanged."}
+	}
+	return []string{"Create one named native jj workspace and a new working-copy commit/change based on the explicit resolved base commit.", "Write shared jj repository operation/object/workspace metadata and underlying Git objects/refs/jj where the native backend requires them; preserve source working-copy metadata/files and bookmarks.", "Use isolated noninteractive configuration with SourceSteward/stw@localhost authorship, source snapshot suppression, pinned operation and git.colocate=false.", "Register without source checkout, then materialize only the newly reserved owned destination with native jj update-stale; a failed second phase can leave registration and checkout incomplete."}
+}
+func validJournal(j journal, p MutationPlan) bool {
+	if j.SchemaVersion != 1 || j.PlanID != p.PlanID || j.Actions == nil || j.Diagnostics == nil || len(j.Actions) > observationLimit || len(j.Diagnostics) > observationLimit {
+		return false
+	}
+	switch j.Phase {
+	case "prepared", "native-created", "complete", "incomplete":
+	default:
+		return false
+	}
+	if j.Native != nil {
+		if j.Native.Effects == nil || j.Native.Limitations == nil || !validNativeIdentity(j.Native.Identity) {
+			return false
+		}
+	}
+	return true
+}
+func validNativeIdentity(n NativeIdentity) bool {
+	for _, s := range []string{n.Backend, n.RepositoryDir, n.WorkspaceRoot, n.WorkspaceName, n.GitDir, n.HeadRef, n.CommitID, n.ChangeID, n.OperationID, n.ObjectFormat} {
+		if !validText(s) {
+			return false
+		}
+	}
+	return (n.Backend == "git" || n.Backend == "jj") && filepath.IsAbs(n.RepositoryDir) && filepath.IsAbs(n.WorkspaceRoot)
 }

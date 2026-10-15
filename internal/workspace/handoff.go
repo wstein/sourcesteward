@@ -58,7 +58,7 @@ func (c coordinator) handoff(ctx context.Context, o Options, retire bool) Result
 	if e = s.read("operations", p.PlanID, &j); e != nil {
 		return failResult(r, e)
 	}
-	if j.Phase != "complete" || j.Native == nil || j.DestinationIdentity == nil || !validTask(*found, p) || !sameOwner(j.Native.Identity, found.Native) || found.DestinationIdentity != *j.DestinationIdentity {
+	if !validJournal(j, p) || j.Phase != "complete" || j.Native == nil || !j.Native.Complete || !j.Native.SourceUnchanged || j.DestinationIdentity == nil || !validTask(*found, p) || !sameOwner(j.Native.Identity, found.Native) || found.DestinationIdentity != *j.DestinationIdentity {
 		return refuse(r, "invalid-ownership", "Task ownership is not supported by a complete creation journal.")
 	}
 	current, e := currentIdentity(path)
