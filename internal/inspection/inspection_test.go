@@ -52,7 +52,7 @@ func TestManagedAndMalformed(t *testing.T) {
 		t.Fatal(e)
 	}
 	r := Inspect(context.Background(), d)
-	if r.Status != "unsupported" || r.Backend != "jj" {
+	if r.Status != "error" || r.Backend != "jj" || r.SchemaVersion != 2 {
 		t.Fatalf("%+v", r)
 	}
 	os.Mkdir(filepath.Join(d, ".git", "gitbutler"), 0700)
@@ -151,7 +151,7 @@ func TestDetectionBoundaries(t *testing.T) {
 		d := t.TempDir()
 		os.Mkdir(filepath.Join(d, ".jj"), 0700)
 		r := Inspect(context.Background(), d)
-		if r.Backend != "jj" || r.Status != "unsupported" {
+		if r.Backend != "jj" || r.Status != "error" || r.SchemaVersion != 2 {
 			t.Fatalf("%+v", r)
 		}
 	})
