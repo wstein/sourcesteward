@@ -18,7 +18,7 @@ type gitTidyWorktree struct{ path, head, branch string }
 func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out := TidyObservation{Candidates: []TidyCandidate{}, Limitations: []string{"Only native ancestry proves local integration; squash equivalence and forge evidence are unavailable and never inferred.", "State is sampled; external races and ABA changes are not transactionally excluded."}}
+	out := TidyObservation{WorkspacePaths: []string{}, Candidates: []TidyCandidate{}, Limitations: []string{"Only native ancestry proves local integration; squash equivalence and forge evidence are unavailable and never inferred.", "State is sampled; external races and ABA changes are not transactionally excluded."}}
 	expected, e := (gitAdapter{}).Observe(ctx, path, base)
 	if e != nil {
 		return out, e
@@ -46,6 +46,10 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 	if e != nil {
 		return out, e
 	}
+	for _, w := range works {
+		out.WorkspacePaths = append(out.WorkspacePaths, w.path)
+	}
+	sort.Strings(out.WorkspacePaths)
 	if len(refs)+len(works) > observationLimit {
 		return out, failure("tidy-observation-limit", "Combined branch and worktree evidence exceeds 1024 records")
 	}
