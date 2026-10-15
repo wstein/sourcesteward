@@ -40,6 +40,9 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 	}
 	s := gitInventorySession{ctx: ctx, run: run, format: id.Repository.ObjectFormat}
 	dir := id.InputPath
+	if o.Query == "ref-exists" || o.Query == "ancestor" {
+		return s.referencePredicate(id, o)
+	}
 	config, code, err := s.command(dir, "config", "--null", "--name-only", "--get-regexp", `^filter\..*\.(clean|process|required)$`)
 	if err != nil || code > 1 {
 		return r.fail("git-inventory-failed", "cannot safely suppress configured content helpers")
@@ -77,6 +80,26 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 	refs, e := parseGitInventoryRefs(refraw, s.format)
 	if e != nil {
 		return r.fail("invalid-metadata", e.Error())
+	}
+	r.References = refs
+	remoteRaw, remoteCode, remoteErr := s.command(dir, "remote")
+	if remoteErr != nil || remoteCode != 0 {
+		return r.fail("git-inventory-failed", "cannot observe native remote names")
+	}
+	if !utf8.ValidString(remoteRaw) {
+		return r.fail("invalid-metadata", "invalid native remote names")
+	}
+	remoteNames := strings.Split(strings.TrimSuffix(remoteRaw, "\n"), "\n")
+	sort.Slice(remoteNames, func(i, j int) bool { return len(remoteNames[i]) > len(remoteNames[j]) })
+	for i := range refs {
+		if refs[i].Kind == "remote" {
+			for _, name := range remoteNames {
+				if name != "" && strings.HasPrefix(refs[i].Name, "refs/remotes/"+name+"/") {
+					refs[i].Remote = ptr(name)
+					break
+				}
+			}
+		}
 	}
 	r.References = refs
 	requiresRaw := false
@@ -327,7 +350,10 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 			if statusComplete {
 				dirty := len(r.Files) > 0
 				q.Value = known(dirty == (o.Query == "dirty")).Value
-				q.Reason = ""
+				q.Reason = "selected scopes are clean"
+				if dirty {
+					q.Reason = "selected scopes are dirty"
+				}
 				q.Evidence = append(q.Evidence, "requested literal paths and scopes inspected without refresh")
 			} else {
 				r.partial("clean/dirty requires complete selected scope observations")
@@ -517,67 +543,6 @@ type gitInventoryStatus struct {
 	submodule      bool
 }
 
-func parseGitInventoryStatus(raw string) ([]gitInventoryStatus, error) {
-	fields, e := gitInventoryNUL(raw)
-	if e != nil {
-		return nil, e
-	}
-	out := []gitInventoryStatus{}
-	for i := 0; i < len(fields); i++ {
-		f := fields[i]
-		v := gitInventoryStatus{}
-		if len(f) < 3 {
-			return nil, errors.New("malformed Git status record")
-		}
-		switch f[0] {
-		case '?', '!':
-			if f[1] != ' ' {
-				return nil, errors.New("malformed Git path status")
-			}
-			v.path = f[2:]
-			v.kind = "untracked"
-			if f[0] == '!' {
-				v.kind = "ignored"
-			}
-		case '1', '2', 'u':
-			n := 9
-			if f[0] == '2' {
-				n = 10
-			}
-			if f[0] == 'u' {
-				n = 11
-			}
-			p := strings.SplitN(f, " ", n)
-			if len(p) != n || len(p[1]) != 2 || strings.Trim(p[1], ".MADRCUT") != "" || len(p[2]) != 4 {
-				return nil, errors.New("malformed Git tracked status")
-			}
-			v.kind = "tracked"
-			v.xy = p[1]
-			v.path = p[n-1]
-			v.submodule = p[2][0] == 'S'
-			if f[0] == 'u' {
-				v.kind = "conflict"
-			}
-			if f[0] == '2' {
-				i++
-				if i >= len(fields) {
-					return nil, errors.New("missing rename source")
-				}
-				v.old = ptr(fields[i])
-			}
-		default:
-			return nil, errors.New("unknown Git status record")
-		}
-		if v.path == "" || filepath.IsAbs(v.path) || v.path == ".." || strings.HasPrefix(v.path, "../") || v.old != nil && (*v.old == "" || filepath.IsAbs(*v.old) || strings.HasPrefix(*v.old, "../")) {
-			return nil, errors.New("invalid native Git path")
-		}
-		if len(out) >= inventoryRecordLimit {
-			return nil, errors.New("inventory record limit exceeded")
-		}
-		out = append(out, v)
-	}
-	return out, nil
-}
 func (v gitInventoryStatus) matches(scope string) bool {
 	switch scope {
 	case "tracked":
@@ -749,10 +714,19 @@ func (s gitInventorySession) bases(dir string, id Result, r *InventoryResult) er
 			if e != nil {
 				return e
 			}
+			remote, remoteCode, remoteErr := s.command(dir, "config", "--get", "branch."+branch+".remote")
+			if remoteErr != nil || remoteCode > 1 {
+				return errors.New("cannot observe configured base remote")
+			}
+			remote = terminated(remote)
 			for _, name := range values {
-				b := InventoryBase{Name: name, Provenance: "configured:branch." + branch + ".merge", Limitations: []string{}}
+				nativeName := name
+				if remoteCode == 0 && remote != "." && strings.HasPrefix(name, "refs/heads/") {
+					nativeName = "refs/remotes/" + remote + "/" + strings.TrimPrefix(name, "refs/heads/")
+				}
+				b := InventoryBase{Name: nativeName, Provenance: "configured:branch." + branch + ".merge", Limitations: []string{}}
 				for _, ref := range r.References {
-					if ref.Name == name {
+					if ref.Name == nativeName {
 						b.CommitID = ref.CommitID
 					}
 				}
@@ -1048,4 +1022,66 @@ func parseGitInventoryDiff(raw, scope string) ([]InventoryFile, error) {
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// Reference predicates collect no unrelated disk/workspace observations.
+func (s gitInventorySession) referencePredicate(id Result, o InventoryOptions) InventoryResult {
+	r := newInventoryResult(id)
+	q := &InventoryQuery{Predicate: o.Query, Value: "unknown", Reason: "requested native reference evidence unavailable", Evidence: []string{}}
+	r.Query = q
+	const format = "--format=%(refname)%00%(objectname)%00%(upstream)%00%(symref)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00"
+	raw, c, e := s.command(id.InputPath, "for-each-ref", format)
+	if e != nil || c != 0 {
+		return r.fail("git-inventory-failed", "cannot enumerate Git predicate references")
+	}
+	refs, e := parseGitInventoryRefs(raw, s.format)
+	if e != nil {
+		return r.fail("invalid-metadata", e.Error())
+	}
+	r.References = refs
+	if o.Query == "ref-exists" {
+		matches := gitInventoryRefMatches(refs, o.Ref)
+		switch len(matches) {
+		case 0:
+			q.Value = "false"
+			q.Reason = "reference absent in sampled native references"
+		case 1:
+			q.Value = "true"
+			q.Reason = "reference present in sampled native references"
+			q.Evidence = append(q.Evidence, matches[0].Name)
+		default:
+			q.Reason = "reference selector is ambiguous"
+			r.partial(q.Reason)
+		}
+	} else {
+		from, ef := s.resolve(id.InputPath, id, refs, o.From)
+		to, et := s.resolve(id.InputPath, id, refs, o.To)
+		if ef != nil || et != nil {
+			q.Reason = "ancestry requires uniquely resolved native commit identities"
+			r.partial(q.Reason)
+		} else {
+			value, e := s.ancestor(id.InputPath, *from, *to)
+			if e != nil {
+				return r.fail("git-inventory-failed", e.Error())
+			}
+			q.Value = known(value).Value
+			q.Reason = "sampled native ancestry is " + q.Value
+			q.Evidence = []string{*from, *to}
+		}
+	}
+	last, c, e := s.command(id.InputPath, "for-each-ref", format)
+	if e != nil || c != 0 {
+		return r.fail("git-inventory-failed", "cannot recheck Git predicate references")
+	}
+	if last != raw {
+		return r.fail("changed-repository", "Git references changed during inventory")
+	}
+	head, e := readHead(s.ctx, s.run, id.InputPath, id.Repository.ObjectFormat)
+	if e != nil || head.State != id.Repository.Head.State || !sameGitInventoryOID(head.OID, id.Repository.Head.OID) || !sameGitInventoryOID(head.Ref, id.Repository.Head.Ref) {
+		return r.fail("changed-repository", "Git HEAD changed during inventory")
+	}
+	if e := checkInventoryLimits(r); e != nil {
+		return r.fail("inventory-limit", e.Error())
+	}
+	return r
 }
