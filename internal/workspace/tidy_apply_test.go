@@ -238,3 +238,14 @@ func TestTidyJournalReadRejectsUnboundedAndMalformedRecords(t *testing.T) {
 		})
 	}
 }
+
+func TestTidyCancellationDuringInitialApplyObservationIsExplicit(t *testing.T) {
+	c, f, o := fixtureTidyApply(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.onObserve = func(int) { cancel() }
+	r := c.apply(ctx, o)
+	if len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "canceled" || f.pins != 0 || f.deletes != 0 {
+		t.Fatalf("cancellation hidden as stale evidence: %+v", r)
+	}
+}
