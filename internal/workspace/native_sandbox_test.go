@@ -96,6 +96,9 @@ func TestNativeSandboxWriteConfinement(t *testing.T) {
 func TestNativeSandboxDeniesNetwork(t *testing.T) {
 	l, e := net.Listen("tcp", "127.0.0.1:0")
 	if e != nil {
+		if os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") == "" && errors.Is(e, os.ErrPermission) {
+			t.Skip("outer host policy denies network probe listener")
+		}
 		t.Fatal(e)
 	}
 	defer l.Close()
@@ -121,5 +124,30 @@ func TestNativeSandboxBoundsAndEnvironment(t *testing.T) {
 	_, _, e = sandboxTestRun(t, ctx, []string{"wait"}, nil, nil)
 	if !errors.Is(e, context.DeadlineExceeded) {
 		t.Fatalf("deadline: %v", e)
+	}
+}
+
+func TestNativeSandboxRejectsAliasedGrant(t *testing.T) {
+	root, e := filepath.EvalSymlinks(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	alias := filepath.Join(root, "alias")
+	if e := os.Symlink(root, alias); e != nil {
+		t.Fatal(e)
+	}
+	bin, e := os.Executable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	bin, e = filepath.EvalSymlinks(bin)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, _, e := runSandboxed(context.Background(), bin, nil, root, []string{alias}, nil); e == nil {
+		t.Fatal("aliased write grant admitted")
+	}
+	if _, _, e := runSandboxed(context.Background(), bin, nil, root, []string{"/"}, nil); e == nil {
+		t.Fatal("root write grant admitted")
 	}
 }
