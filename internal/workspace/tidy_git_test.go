@@ -135,3 +135,19 @@ func TestGitTidyMalformedReferenceEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestGitTidyProtectsExplicitBaseCommitAliases(t *testing.T) {
+	d := fixtureGit(t)
+	base := gitFixture(t, d, "rev-parse", "HEAD")
+	gitFixture(t, d, "branch", "base-target", base)
+	gitFixture(t, d, "commit", "--allow-empty", "-qm", "advance source")
+	o, e := (gitTidyAdapter{}).Observe(context.Background(), d, base)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, c := range o.Candidates {
+		if c.Name == "refs/heads/base-target" && c.Decision != "retain" {
+			t.Fatal("explicit base commit alias admitted for cleanup")
+		}
+	}
+}
