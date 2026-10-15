@@ -133,3 +133,19 @@ func TestInventoryNormalizesLiteralPaths(t *testing.T) {
 		t.Fatal("escaped workspace")
 	}
 }
+
+func TestInventoryRejectsUnboundedOrUndecodableMetadata(t *testing.T) {
+	r := newInventoryResult(Result{})
+	r.Boundary.Limitations = []string{"\xff"}
+	if checkInventoryLimits(r) == nil {
+		t.Fatal("invalid UTF-8 would be silently replaced")
+	}
+	r = newInventoryResult(Result{})
+	r.Query = &InventoryQuery{Evidence: []string{strings.Repeat("x", inventoryResultLimit+1)}}
+	if checkInventoryLimits(r) == nil {
+		t.Fatal("oversized query evidence accepted")
+	}
+	if ValidateInventoryOptions(InventoryOptions{Remotes: []string{strings.Repeat("x", outputLimit/2), strings.Repeat("y", outputLimit/2+1)}}) == nil {
+		t.Fatal("aggregate input bound missing")
+	}
+}
