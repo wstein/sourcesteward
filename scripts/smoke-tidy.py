@@ -78,6 +78,7 @@ def acceptance(binary=BINARY):
                 native('git', ['checkout', '-q', 'trunk'], source)
                 linked = area / 'linked'
                 native('git', ['worktree', 'add', '-q', '-b', 'used', str(linked), first], source)
+                native('git', ['commit', '--allow-empty', '-qm', 'distinct checked-out work'], linked)
                 base, used = 'refs/heads/trunk', 'used'
             else:
                 native('jj', ['git', 'init', '--colocate' if group == 'jj-colocated' else '--no-colocate', str(source)])
