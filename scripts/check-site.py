@@ -32,7 +32,7 @@ def validate(destination,revision,source_root=ROOT):
         text = path.read_text()
         page = checker.Page(theme_script=BASE + 'assets/theme.js')
         page.feed(text)
-        if not (page.has_main and page.has_lang and page.has_viewport): raise ValueError('Missing accessible page shell: ' + str(path))
+        if not (page.has_main and page.has_lang and page.has_viewport and page.theme_scripts == 1): raise ValueError('Missing accessible page shell: ' + str(path))
         if not set(page.anchors).issubset(page.ids): raise ValueError('Broken local anchor: ' + str(path))
         links = Links(); links.feed(text)
         for target,runtime in links.targets:

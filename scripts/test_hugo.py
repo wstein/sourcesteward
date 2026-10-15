@@ -52,12 +52,16 @@ class HugoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'revision.txt').write_text('a'*40+'\n')
-            good = '<html lang="en"><meta name="viewport"><main id="main">OK</main></html>'
+            (root / 'assets').mkdir()
+            (root / 'assets/theme.js').write_text('// theme')
+            good = '<html lang="en"><meta name="viewport"><script src="/sourcesteward/assets/theme.js" defer></script><main id="main">OK</main></html>'
             (root / 'index.html').write_text(good)
             check_site.validate(root,'a'*40,source_root=root)
             for extra in ('<a href="/docs/">Lost base</a>','<a href="/sourcesteward/missing/">Broken</a>','<img alt="" src="https://example.org/a.png">'):
                 (root / 'index.html').write_text(good + extra)
                 with self.subTest(extra=extra), self.assertRaises(ValueError): check_site.validate(root,'a'*40,source_root=root)
+            (root / 'index.html').write_text(good.replace('<script src="/sourcesteward/assets/theme.js" defer></script>',''))
+            with self.assertRaises(ValueError): check_site.validate(root,'a'*40,source_root=root)
             (root / 'index.html').write_text(good)
             (root / 'AGENTS.md').write_text('private')
             with self.assertRaises(ValueError): check_site.validate(root,'a'*40,source_root=root)

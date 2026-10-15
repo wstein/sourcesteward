@@ -1,11 +1,11 @@
 # Development
 
 ## Prerequisites and checks
-Go 1.27.2+, Git, Python 3 and Node.js 22+ are required for development.
-Node runs dependency-free theme behavior tests; CI selects Node 24. Python validates documentation
-and assets only; the CLI has no Python dependency. Cobra v1.10.2 is pinned in go.mod/go.sum.
+Go 1.27.2+, Git, Python 3, Node.js 22+ and pinned Hugo 0.168.0 are required for full development checks.
+Node runs dependency-free theme behavior tests; CI selects Node 24. Python stages/checks public documentation and assets; the CLI has no Python dependency. Cobra v1.10.2 is pinned in go.mod/go.sum.
 
 ```sh
+python3 scripts/install-hugo.py # once, checked official download
 make check
 go test -race ./...
 go run ./cmd/stw version --json
@@ -51,22 +51,21 @@ or point `SPECIFY_FEATURE_DIRECTORY` at `specs/001-project-foundation` for the s
 No extension hooks are configured. `specify preset resolve spec-template` resolves the active template.
 
 ## Website
-The site is plain HTML/CSS with local SVG and font assets, plus one local theme script.
-The Theme select follows the system by default, or saves Light/Dark locally when storage
-is available. Returning to System clears that preference. Without JavaScript the switch is
-hidden and CSS follows system appearance. No network or package dependency is required. Preview with:
+The published site is static HTML/CSS with local SVG/font assets and one local theme
+script, generated with pinned Hugo. The Theme select follows the system by default or
+saves Light/Dark locally when storage is available. Returning to System clears that
+preference. Without JavaScript the switch is hidden and CSS follows system appearance.
+Visitors need no packages, external assets or service connection.
 
-```sh
-python3 -m http.server 8000 --directory docs
-```
+`docs/index.html` remains the landing source. Public documentation and command reference
+are generated through the controlled build below; a raw HTTP server over docs/ previews
+only the authored landing, not the final generated routes.
 
-Open http://localhost:8000/. `docs/index.html` and `docs/assets/` are deployed; development
-Markdown, scripts, source files and specs are not copied into the Pages artifact.
-
-A single GitHub Actions workflow checks every PR and push. The deployment job runs only
-for main pushes, depends on the successful check job in that same workflow run, and checks
-out that exact run SHA. Pages uses GitHub Actions as its build source. There is no PR or
-manual-dispatch deployment path. Source CI does not publish CLI releases or Git tags.
+A single GitHub Actions workflow checks every PR and push. Its check job builds and
+validates the artifact from the exact run SHA. The deployment job runs only for main
+pushes after that job succeeds, consuming its identical uploaded artifact without
+rebuilding or checking out another revision. Pages uses GitHub Actions as its build source.
+There is no PR/manual-dispatch deployment path, CLI release or Git-tag publication.
 
 ## Generated public documentation
 
