@@ -19,8 +19,8 @@ SourceSteward is an early Go/Cobra scaffold inspired by the convenience of
 evidence-based local cleanup and worktree-aware operations, with native Git/jj support and separately planned GitButler integration.
 No implementation code is copied from those projects.
 
-**Current scope:** help/version and bounded read-only Git/jj identity inspection, versioned JSON schemas, specifications, source CI and the project site.
-Status enumeration, cleanup, recovery and native GitButler integration remain planned.
+**Current scope:** help/version, bounded read-only Git/jj identity inspection and qualified workspace/state/reference inventory, versioned JSON schemas, specifications, source CI and the project site.
+Tidy, recovery and native GitButler integration remain planned. Inventory exposes explicit native capability limits; see [inventory](docs/inventory.md).
 Spec 008 implements native jj inspection; final cross-platform acceptance is tracked in its [verification record](specs/008-jj-inspection/verification.md).
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
@@ -36,6 +36,7 @@ go run ./cmd/stw --help
 go run ./cmd/stw version
 go run ./cmd/stw version --json
 go run ./cmd/stw inspect --json
+go run ./cmd/stw inventory --json
 ```
 
 To install the development CLI with Go:

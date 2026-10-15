@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlsplit
 
 BASE = '/sourcesteward/'
 GUIDES = {
+    'docs/inventory.md': ('inventory', 'Inventory'),
     'docs/development.md': ('development', 'Development'),
     'docs/backends.md': ('backends', 'Backend readiness'),
     'docs/roadmap.md': ('roadmap', 'Roadmap'),

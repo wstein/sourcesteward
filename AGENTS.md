@@ -7,10 +7,10 @@ Start with [knowledge map](docs/README.md), [progress](docs/progress.md),
 [architecture](ARCHITECTURE.md), [harness](docs/harness.md) and the active specs/ feature.
 Read .specify/memory/constitution.md before implementation.
 Use the installed Spec Kit flow: constitution → specify → plan → tasks → implement → analyze.
-Implemented scope includes CLI help/version, bounded read-only native Git/jj identity inspection, source checks, specs and the Pages website.
+Implemented scope includes CLI help/version, bounded read-only native Git/jj identity inspection and qualified workspace/state/reference inventory, source checks, specs and the Pages website.
 Git and jj are Tier 1 peers under constitution 1.1.0; Spec 008 implements native jj inspection.
 Final integrated review/CI and PR handoff remain recorded in its verification evidence.
-Do not imply status enumeration, cleanup, recovery or native GitButler integration already work.
+Inventory capability limits and Spec 009 acceptance evidence remain explicit. Do not imply tidy, recovery or native GitButler integration already work.
 Declare supported versions/capabilities, preserve backend-specific identities and published
 JSON contracts, and require per-backend conformance evidence for read-only effects.
 

@@ -90,3 +90,14 @@ silently performing another backend's writes.
 - https://github.com/jj-vcs/jj/blob/main/docs/operation-log.md
 - https://docs.gitbutler.com/cli-guides/cli-tutorial/scripting
 - https://docs.gitbutler.com/ai-agents/parallel-agents
+
+## Inventory capability boundary
+
+`stw inventory` extends identity with bounded native workspace/reference evidence and
+explicitly scoped file observations. Both Tier 1 backends support reference-existence
+and ancestry predicates with separate false, unknown and execution-failure outcomes.
+Git disk/index state and jj stored working-copy state retain different semantics; jj
+disk freshness remains unknown and staging unsupported. Missing/foreign registrations
+are retained as evidence, not repaired. Configured jj aliases are not evaluated.
+See [inventory](inventory.md) for command scopes and [Spec 009 verification](../specs/009-workspace-inventory/verification.md)
+for actual acceptance; no new capability is verified by historical Spec 008 evidence.
