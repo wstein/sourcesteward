@@ -196,7 +196,7 @@ def acceptance(binary=BINARY):
             if is_git:
                 native('git', ['worktree', 'add', '-q', str(linked), 'used'], source)
             else:
-                native('jj', ['--ignore-working-copy', 'workspace', 'add', '--name', 'new-owner', '-r', json.dumps(name('used')), str(linked)], source)
+                native('jj', ['workspace', 'add', '--name', 'new-owner', '-r', json.dumps(name('used')), str(linked)], source)
             before_linked = helpers.snapshot(linked)
             apply(used, status=('refused', 'error', 'partial'), preserve=True)
             assert helpers.snapshot(linked) == before_linked, 'Apply changed another workspace'
