@@ -3,6 +3,7 @@
 """Require native workspace acceptance and complete effect comparisons."""
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -16,8 +17,8 @@ class WorkspaceSmokeTests(unittest.TestCase):
         self.assertEqual(set(smoke.CASE_IDS), {'git', 'jj-standalone', 'jj-colocated'})
         for group, ids in smoke.CASE_IDS.items():
             self.assertEqual(len(ids), len(set(ids)))
-            self.assertGreaterEqual(len(ids), 12)
-            for required in ('plan', 'apply', 'retry', 'handoff', 'retire-plan', 'stale', 'occupied', 'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry', 'manager-ownership'):
+            self.assertEqual(len(ids), 15)
+            for required in ('plan', 'apply', 'retry', 'handoff', 'retire-plan', 'stale', 'occupied', 'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry', 'manager-ownership', 'authorization', 'human'):
                 self.assertIn(group + '.' + required, ids)
 
     def test_missing_backend_is_failure(self):
@@ -30,6 +31,15 @@ class WorkspaceSmokeTests(unittest.TestCase):
         with patch.object(smoke.shutil, 'which', return_value='/bin/backend'):
             with self.assertRaisesRegex(RuntimeError, 'Build bin/stw'):
                 smoke.acceptance(Path('/nonexistent-workspace-stw'))
+
+    def test_missing_enforced_sandbox_is_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / 'stw'
+            binary.touch()
+            with patch.object(smoke.shutil, 'which', return_value='/bin/backend'), \
+                    patch.object(smoke.helpers, 'check_sandbox', side_effect=RuntimeError('sandbox unavailable')):
+                with self.assertRaisesRegex(RuntimeError, 'sandbox unavailable'):
+                    smoke.acceptance(binary)
 
     def test_manifest_guard_rejects_missing_extra_or_repeated_case(self):
         expected = {'one', 'two'}
