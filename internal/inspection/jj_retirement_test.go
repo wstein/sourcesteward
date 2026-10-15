@@ -24,6 +24,8 @@ func TestJJRetirementNativeLifecycle(t *testing.T) {
 			os.WriteFile(filepath.Join(source, "binary"), data, 0700)
 			jjFixture(t, source, "describe", "-m", "base")
 			jjFixture(t, source, "bookmark", "create", "main")
+			other := filepath.Join(root, "unrelated")
+			jjFixture(t, source, "--config", "git.colocate=false", "workspace", "add", "--name", "unrelated", other)
 			base, e := ObserveJJWorkspace(context.Background(), source, "main")
 			if e != nil {
 				t.Fatal(e)
@@ -42,6 +44,7 @@ func TestJJRetirementNativeLifecycle(t *testing.T) {
 				t.Fatalf("%+v", state)
 			}
 			before := snapshot(t, target)
+			otherBefore := snapshot(t, other)
 			gitBefore := snapshot(t, state.Expected.GitDir)
 			sourceWC := snapshot(t, filepath.Join(source, ".jj", "working_copy"))
 			recovery, fresh, o, e := PrepareJJRetirementRecovery(context.Background(), source, state.Expected, state.Target, "stw-recovery-retire?")
@@ -52,7 +55,7 @@ func TestJJRetirementNativeLifecycle(t *testing.T) {
 			if e != nil || !o.Complete || o.Expected == nil {
 				t.Fatalf("forget %+v %v", o, e)
 			}
-			if !reflect.DeepEqual(before, snapshot(t, target)) || !reflect.DeepEqual(gitBefore, snapshot(t, state.Expected.GitDir)) || !reflect.DeepEqual(sourceWC, snapshot(t, filepath.Join(source, ".jj", "working_copy"))) {
+			if !reflect.DeepEqual(before, snapshot(t, target)) || !reflect.DeepEqual(otherBefore, snapshot(t, other)) || !reflect.DeepEqual(gitBefore, snapshot(t, state.Expected.GitDir)) || !reflect.DeepEqual(sourceWC, snapshot(t, filepath.Join(source, ".jj", "working_copy"))) {
 				t.Fatal("forget changed files or source metadata")
 			}
 			if _, e := VerifyJJWorkspace(context.Background(), source, "task", target, base.Source.RepositoryDir); e == nil {
