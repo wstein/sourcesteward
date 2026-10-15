@@ -21,6 +21,9 @@ func gitRetirementFixture(t *testing.T) (string, MutationPlan, TaskRecord) {
 	gitFixture(t, d, "commit", "-qm", "binary and executable")
 	parent := gitTempDir(t)
 	state := gitTempDir(t)
+	if e := os.Chmod(state, 0700); e != nil {
+		t.Fatal(e)
+	}
 	planned := PlanCreate(context.Background(), PlanOptions{Path: d, Base: "HEAD", Destination: filepath.Join(parent, "task"), Task: "retire-owned", Owner: "fixture", StateDir: state})
 	if planned.Status != "ok" {
 		t.Fatalf("creation plan: %+v", planned)
@@ -65,7 +68,11 @@ func TestGitRetirementRetainsChangedAndUnknownPayload(t *testing.T) {
 			case "untracked":
 				os.WriteFile(filepath.Join(task.Destination, "extra"), []byte("keep"), 0600)
 			case "ignored":
-				gitFixture(t, d, "config", "core.excludesFile", filepath.Join(gitTempDir(t), "ignore"))
+				ignore := filepath.Join(gitTempDir(t), "ignore")
+				if e := os.WriteFile(ignore, []byte("extra\n"), 0600); e != nil {
+					t.Fatal(e)
+				}
+				gitFixture(t, d, "config", "core.excludesFile", ignore)
 				os.WriteFile(filepath.Join(task.Destination, "extra"), []byte("keep"), 0600)
 			case "registration-payload":
 				os.WriteFile(filepath.Join(task.Native.GitDir, "user-payload"), []byte("keep"), 0600)
@@ -118,5 +125,35 @@ func TestGitRetirementNativeCombinedRemovalAndRecovery(t *testing.T) {
 	files, e := (gitRetirementAdapter{}).RemoveFiles(context.Background(), p, recovery, *out.Expected)
 	if e != nil || !files.Complete || files.Attempted {
 		t.Fatalf("duplicate file removal attempted: %+v %v", files, e)
+	}
+}
+
+func TestGitRetirementSandboxRootHelper(t *testing.T) {
+	for i, arg := range os.Args {
+		if arg == "stw-retirement-root-helper" {
+			if e := os.Remove(os.Args[i+1]); e == nil {
+				os.Exit(41)
+			}
+			os.Exit(0)
+		}
+	}
+}
+
+func TestGitRetirementSandboxPreservesGrantedRoot(t *testing.T) {
+	root := gitTempDir(t)
+	bin, e := os.Executable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	bin, e = filepath.EvalSymlinks(bin)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, code, e := runSandboxed(context.Background(), bin, []string{"-test.run=TestGitRetirementSandboxRootHelper", "--", "stw-retirement-root-helper", root}, filepath.Dir(bin), []string{root}, nil)
+	if e != nil || code != 0 {
+		t.Fatalf("granted root could be removed: %d %v", code, e)
+	}
+	if _, e := os.Stat(root); e != nil {
+		t.Fatal("granted root removed")
 	}
 }
