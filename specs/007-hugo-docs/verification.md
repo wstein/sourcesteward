@@ -84,3 +84,14 @@ reviewed79026dc artifact byte for byte except revision.txt, including all12 HTML
 local assets, llms.txt and both schemas. The final exact merge SHA is rebuilt and compared
 before coordinator handoff; no new browser behavior requires repetition. Publication of
 the resulting branch head and updated PR #8 CI remain coordinator-owned.
+
+## Publication history correction (2026-10-15)
+The statements above that integration happened "without rewriting published commits",
+"without rebase" or "without force push" describe the topic branches before publication. To
+make the stacked PRs rebase-mergeable, the branches were afterwards rebased onto main as
+linear commits and force-pushed with a lease on the reviewed heads (PRs #6 to #8); the
+integration merge commits were replaced by ordinary commits carrying the same changes. Each
+rebased branch tree was verified byte-identical to its reviewed head before pushing, so the
+review evidence still applies to the merged content. The commit IDs cited above that resolve
+(`0cd52d3`, `4e8db2a`, `ab30b4d`, `e563a6d`, `f801c06`) are pre-rebase branch commits and
+are not in main's history (checked 2026-10-15); other cited IDs belong to deleted branches.
