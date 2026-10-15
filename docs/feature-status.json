@@ -69,9 +69,9 @@
     },
     {
       "id": "011-workspace-reference-tidy",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/011-workspace-reference-tidy/spec.md",
-      "evidence": null
+      "evidence": "../specs/011-workspace-reference-tidy/verification.md"
     },
     {
       "id": "012-stack-inspection",

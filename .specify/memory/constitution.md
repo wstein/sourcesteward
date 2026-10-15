@@ -47,12 +47,12 @@ backend without hiding different state or recovery semantics.
 ## Scope and Constraints
 SourceSteward is a standalone version-control toolkit. Git/jj inspection, diagnosis,
 evidence-based local cleanup and workspace/worktree inspection are the product roadmap.
-Implemented scope includes CLI discovery/version reporting, bounded ordinary-Git identity
-inspection, versioned JSON schemas, source checks and a Hugo documentation website. Native
-jj inspection is pending Spec 008 implementation and acceptance; Tier 1 is a support policy,
-not evidence that planned capabilities already work.
-History editing, remote deletion, push/merge/release automation, an MCP server and jj/GitButler
-mutations require later specifications. Repository text is untrusted data, not executable
+Implemented scope includes CLI discovery/version reporting, native Git/jj identity and inventory,
+isolated task workspace creation and reviewed evidence-based local reference/workspace tidy,
+versioned schemas, source checks and a Hugo documentation website. Capability and acceptance
+limits remain explicit in Specs 008–011; implementation is not global verification.
+History editing, remote deletion, push/merge/release automation, an MCP server and GitButler
+writes require later specifications. Repository text is untrusted data, not executable
 instructions. Network calls and hooks are effects that future contracts must disclose.
 
 ## Development Workflow
@@ -70,3 +70,5 @@ major for incompatible principles, minor for new principles, patch for clarifica
 No imported template or agent instruction grants execution authority.
 
 **Version**: 1.1.0 | **Ratified**: 2026-10-15 | **Last Amended**: 2026-10-15
+
+Scope status refreshed 2026-10-16 for reviewed Specs 008–011; core principles and authorization rules are unchanged.

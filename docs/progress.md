@@ -17,9 +17,10 @@ Each follows plan → tasks → independent analysis → implement → review/te
 native Git/jj conformance and a separate PR. WI1 implements evidence-only plans;
 see [WI1 verification](../specs/011-workspace-reference-tidy/wi1-verification.md).
 WI2 implements authorized local reference cleanup with [verification](../specs/011-workspace-reference-tidy/wi2-verification.md).
-WI3 remains planned and independently analyzed. WI1 is merged as `81c5f07`; exact-head PR36
-[CI 38809418076](https://github.com/wstein/sourcesteward/actions/runs/38809418076) passed source and both native Linux lanes. The pre-reconciliation `17bdd16` baseline passed local `make check`
-with current Git/jj and mandatory native sandboxing.
+WI3 implements owned retirement; [verification](../specs/011-workspace-reference-tidy/wi3-verification.md) records local checks and final PR handoff. WI1 is merged as `81c5f07`; exact-head PR36
+[CI 38809418076](https://github.com/wstein/sourcesteward/actions/runs/38809418076) passed source and both native Linux lanes. WI2 PR37 exact-head [CI 38812174447](https://github.com/wstein/sourcesteward/actions/runs/38812174447)
+also passed source and both native lanes. WI3 source/security review and local full checks/race
+plus 36 native CLI cases per lane pass; exact-head hosted acceptance remains required.
 
 ## Historical Spec 010 implementation handoff
 

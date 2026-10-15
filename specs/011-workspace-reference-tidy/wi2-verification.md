@@ -38,7 +38,7 @@ native CI lanes remain required. External/ABA races are sampled; Git target CAS 
 transaction and jj operation-parent checks are not CAS. Incomplete/uncertain operations refuse
 replay; inspect the durable journal and exact predeclared recovery root manually. A commit pin
 preserves reachable history, not arbitrary filesystem/configuration metadata. Remote-bound jj
-bookmarks retain. Private recovery roots are not automatically collected. WI3 removal remains planned.
+bookmarks retain. Private recovery roots are not automatically collected. At this WI2 handoff, WI3 removal remained planned; later evidence is in [WI3 verification](wi3-verification.md).
 
 WI2 handoff: [PR #37](https://github.com/wstein/sourcesteward/pull/37). Final consistency
 review cleared the source/schema/evidence; exact-head hosted checks and owner merge remain pending.

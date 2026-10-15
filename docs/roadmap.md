@@ -1,6 +1,6 @@
 # SourceSteward roadmap
 
-SourceSteward is an early version-control toolkit. Help/version, bounded native Git/jj identity inspection, qualified inventory and isolated task workspace creation are implemented.
+SourceSteward is an early version-control toolkit. Help/version, bounded native Git/jj identity inspection, qualified inventory, isolated task workspace creation and bounded local reference/workspace tidy are implemented.
 No model, GitButler installation or cloud account is required to run those commands.
 
 ## Foundation — current milestone
@@ -12,7 +12,7 @@ acceptance is tracked in Spec 008.
 ## Inspect and inventory — native evidence with explicit limits
 Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
 `stw inventory` adds registered workspaces/worktrees, native references, explicit bases,
-three-valued predicates and selected file-state scopes with native limitations. Tidy deletion and checkpoint recovery remain planned; reviewed workspace creation, handoff and retirement preflight are implemented; see the [inventory guide](inventory.md). Existing inspection has explicit targeting, predictable
+three-valued predicates and selected file-state scopes with native limitations. Reviewed local reference cleanup and owned retirement are implemented; checkpoint recovery remains planned; see the [inventory guide](inventory.md). Existing inspection has explicit targeting, predictable
 exit codes and bounded output without inspected-target writes or implicit fetches. Native jj
 creates and removes private temporary isolation/probe files outside that target.
 
@@ -28,15 +28,15 @@ for completed macOS/Linux evidence and final handoff gates.
 Explain problems and propose repair options. Repository text is data, never instructions.
 Report unsupported states and uncertainty instead of inventing a successful diagnosis.
 
-## Plan local cleanup
-Retain checked-out/worktree-owned and uncertain branches. Record exact tip/base identities
-and evidence: ancestry, squash equivalence, or verified PR integration into the selected
-base. A missing upstream alone is never merge proof. API failures retain affected branches.
-
-## Apply and recover
-Apply only explicit, validated plans; refuse stale refs or changed relevant state. Preserve
-recovery refs and report per-action outcomes, including partial failures. Define worktree,
-configuration and reflog effects before implementation. Plans do not supply authorization.
+## Plan, apply and retain recovery
+`stw tidy plan` uses explicit native integration bases and ancestry proof; uncertain, workspace-used
+or remote-bound jj references retain. Squash/forge proof is unsupported, never inferred.
+`stw tidy apply` requires explicit authorization and freshly declared effects, revalidates state,
+and durably records native recovery before changes. Owned retirement has distinct registration
+and exact-path file effects, full fresh disk proof and versioned v2 results. Git registration-only
+removal of a present worktree retains unsupported; jj forget preserves files. Read the
+[tidy guide](tidy.md) and [Spec 011 evidence](../specs/011-workspace-reference-tidy/verification.md).
+External races/ABA remain sampled; recovery is bounded manual evidence, not automatic restoration.
 
 ## Worktrees, jj and GitButler
 The [backend contract](backends.md) makes Git/jj Tier 1 support commitments explicit;
@@ -52,7 +52,7 @@ for stacks, isolated Claude workspaces, checkpoints and GitHub PR helpers. This 
 separate from Cretezy/lazyjj, the terminal UI. Adopt useful workflows through native
 SourceSteward adapters; installing either project is not a prerequisite.
 
-The table records product direction; inventory and bounded workspace creation are implemented, while the remaining lifecycle operations require their own acceptance evidence. Ratings express
+The table records product direction; inventory, bounded workspace creation and tidy retirement are implemented with scoped acceptance evidence. Checkpoints, stack editing and forge coordination remain planned. Ratings express
 product priority and fit, not measured quality. Command names below are illustrative.
 
 | Proposed capability | Priority | SourceSteward adaptation |
@@ -110,9 +110,8 @@ command core and contracts; it will not grant additional permissions.
 Specs 009 and 010 are implemented and merged; see their
 [009 verification](../specs/009-workspace-inventory/verification.md) and
 [010 verification](../specs/010-isolated-task-workspaces/verification.md).
-Spec 011 is the active delivery: WI1 evidence-only plans are implemented with
-[local verification](../specs/011-workspace-reference-tidy/wi1-verification.md); WI2 authorized local
-reference cleanup, then WI3 owned workspace retirement. Each receives planning,
+Spec 011 implements WI1 evidence-only plans, WI2 authorized local reference cleanup and
+WI3 owned workspace retirement; [verification](../specs/011-workspace-reference-tidy/verification.md) records each separate handoff. Each receives planning,
 tasks, independent analysis, implementation, review and its own PR. Registration
 removal, filesystem removal and reference cleanup have distinct effects; jj
 abandonment is outside this delivery. Remaining features are planned, not implemented.
