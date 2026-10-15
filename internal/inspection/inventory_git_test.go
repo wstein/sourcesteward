@@ -147,7 +147,7 @@ func TestGitInventoryDoesNotRunContentHelpers(t *testing.T) {
 	git(t, d, "config", "core.fsmonitor", helper)
 	os.WriteFile(filepath.Join(d, "tracked"), []byte("new\n"), 0600)
 	r := gitInventory(t, d, InventoryOptions{Scopes: []string{"disk", "staged", "stored"}})
-	if r.Status != "ok" {
+	if r.Status != "partial" {
 		t.Fatalf("%+v", r)
 	}
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
