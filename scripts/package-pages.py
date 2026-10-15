@@ -19,7 +19,7 @@ GUIDES = {
     'docs/agent-guide.md': ('agents', 'Agent guide'),
     'docs/json-contracts.md': ('json-contracts', 'JSON contracts'),
 }
-SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json'), 'v2': ('inspect.schema.json',)}
+SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json'), 'v2': ('inspect.schema.json',)}
 SCHEMA_PATHS = {version + '/' + name for version, names in SCHEMAS.items() for name in names}
 
 
