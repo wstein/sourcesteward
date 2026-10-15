@@ -1,0 +1,1778 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/inventory.schema.json",
+  "title": "SourceSteward bounded native Git/jj inventory (schema 1)",
+  "description": "Sampled local facts, qualified unknown observations and operational failures. Native jj disk freshness is unknown without snapshots. Added properties and diagnostic codes are compatible extensions. Usage/writer failures may not emit complete JSON.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "backend",
+    "input_path",
+    "identity",
+    "boundary",
+    "workspaces",
+    "references",
+    "bases",
+    "files",
+    "query",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "inventory"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "partial",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "unknown",
+        "git",
+        "jj",
+        "gitbutler",
+        "ambiguous"
+      ]
+    },
+    "input_path": {
+      "type": "string"
+    },
+    "identity": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/git_identity"
+        },
+        {
+          "$ref": "#/$defs/jj_identity"
+        }
+      ]
+    },
+    "boundary": {
+      "$ref": "#/$defs/boundary"
+    },
+    "workspaces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workspace"
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "bases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/base"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
+    "query": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/query"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "observation": {
+      "type": "object",
+      "required": [
+        "value",
+        "reason"
+      ],
+      "properties": {
+        "value": {
+          "enum": [
+            "true",
+            "false",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "value": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "workspace": {
+      "type": "object",
+      "required": [
+        "path",
+        "name",
+        "manager",
+        "registration",
+        "task_owner",
+        "commit_id",
+        "change_id",
+        "operation_id",
+        "tracked",
+        "untracked",
+        "conflicts",
+        "limitations"
+      ],
+      "properties": {
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "manager": {
+          "type": "string"
+        },
+        "registration": {
+          "enum": [
+            "present",
+            "missing",
+            "unknown"
+          ]
+        },
+        "task_owner": {
+          "const": "unknown"
+        },
+        "commit_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "minLength": 40,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[k-z]{32}$",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{128}$",
+              "minLength": 128,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tracked": {
+          "$ref": "#/$defs/observation"
+        },
+        "untracked": {
+          "$ref": "#/$defs/observation"
+        },
+        "conflicts": {
+          "$ref": "#/$defs/observation"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "commit_id",
+        "change_id"
+      ],
+      "properties": {
+        "commit_id": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+          "minLength": 40,
+          "maxLength": 64
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[k-z]{32}$",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "remote",
+        "commit_id",
+        "change_id",
+        "upstream",
+        "upstreams",
+        "added_targets",
+        "removed_targets",
+        "tracked",
+        "contains_revision",
+        "merged_into_base",
+        "local_only",
+        "limitations"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "local",
+            "remote",
+            "tag"
+          ]
+        },
+        "remote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "minLength": 40,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[k-z]{32}$",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upstream": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstreams": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "added_targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/target"
+          }
+        },
+        "removed_targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/target"
+          }
+        },
+        "tracked": {
+          "$ref": "#/$defs/observation"
+        },
+        "contains_revision": {
+          "$ref": "#/$defs/observation"
+        },
+        "merged_into_base": {
+          "$ref": "#/$defs/observation"
+        },
+        "local_only": {
+          "$ref": "#/$defs/observation"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "base": {
+      "type": "object",
+      "required": [
+        "name",
+        "commit_id",
+        "change_id",
+        "provenance",
+        "selected",
+        "limitations"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "commit_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "minLength": 40,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[k-z]{32}$",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": [
+        "path",
+        "old_path",
+        "scope",
+        "change",
+        "limitations"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "old_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "tracked",
+            "staged",
+            "disk",
+            "stored",
+            "untracked",
+            "ignored"
+          ]
+        },
+        "change": {
+          "enum": [
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+            "copied",
+            "untracked",
+            "ignored",
+            "conflict",
+            "unknown"
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "required": [
+        "predicate",
+        "value",
+        "reason",
+        "evidence"
+      ],
+      "properties": {
+        "predicate": {
+          "enum": [
+            "clean",
+            "dirty",
+            "ref-exists",
+            "ancestor"
+          ]
+        },
+        "value": {
+          "enum": [
+            "true",
+            "false",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "value": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "complete",
+        "freshness",
+        "limitations",
+        "limits"
+      ],
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "freshness": {
+          "const": "sampled-nontransactional"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limits": {
+          "type": "object",
+          "required": [
+            "deadline_seconds",
+            "command_bytes",
+            "result_bytes",
+            "records"
+          ],
+          "properties": {
+            "deadline_seconds": {
+              "const": 10
+            },
+            "command_bytes": {
+              "const": 65536
+            },
+            "result_bytes": {
+              "const": 1048576
+            },
+            "records": {
+              "const": 1024
+            }
+          }
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "git_identity": {
+      "title": "SourceSteward inspection result (schema 1)",
+      "description": "Success and operational failure results. Usage and writer failures may not emit JSON. Unknown object properties and diagnostic codes are compatible extensions.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status",
+        "backend",
+        "input_path",
+        "evidence",
+        "repository",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unsupported",
+            "error"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj",
+            "gitbutler",
+            "ambiguous",
+            "unknown"
+          ]
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Absolute path when available; empty if input cannot be represented or resolved."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/evidence"
+          }
+        },
+        "repository": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/git_identity/$defs/repository"
+            }
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/diagnostic"
+          }
+        }
+      },
+      "$defs": {
+        "head": {
+          "type": "object",
+          "required": [
+            "state",
+            "ref",
+            "oid"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "attached",
+                "detached",
+                "unborn"
+              ]
+            },
+            "ref": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^refs/heads/.+"
+                }
+              ]
+            },
+            "oid": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "attached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "detached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "null"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "unborn"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "repository": {
+          "type": "object",
+          "required": [
+            "git_dir",
+            "common_dir",
+            "worktree",
+            "bare",
+            "linked_worktree",
+            "object_format",
+            "head"
+          ],
+          "properties": {
+            "git_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "common_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worktree": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bare": {
+              "type": "boolean"
+            },
+            "linked_worktree": {
+              "type": "boolean"
+            },
+            "object_format": {
+              "enum": [
+                "sha1",
+                "sha256"
+              ]
+            },
+            "head": {
+              "$ref": "#/$defs/git_identity/$defs/head"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "bare": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "worktree": {
+                    "type": "null"
+                  },
+                  "linked_worktree": {
+                    "const": false
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "worktree": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha1"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{40}$",
+                            "minLength": 40,
+                            "maxLength": 40
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha256"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$",
+                            "minLength": 64,
+                            "maxLength": 64
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "kind",
+            "location"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "jj-metadata",
+                "gitbutler-metadata",
+                "gitbutler-reference"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              },
+              "repository": {
+                "$ref": "#/$defs/git_identity/$defs/repository"
+              },
+              "diagnostics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "repository": {
+                "type": "null"
+              },
+              "diagnostics": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unsupported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "enum": [
+                  "jj",
+                  "gitbutler",
+                  "ambiguous"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "jj_identity": {
+      "title": "SourceSteward native jj inspection result (schema 2)",
+      "description": "Native jj stored identity and operational failures. Git/version retain schema 1. Additional object properties and diagnostic codes are compatible extensions. Usage/writer failures may not emit complete JSON.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status",
+        "backend",
+        "input_path",
+        "evidence",
+        "repository",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "backend": {
+          "const": "jj"
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Absolute path when available; empty if input cannot be represented or resolved."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jj_identity/$defs/evidence"
+          }
+        },
+        "repository": {
+          "type": "null"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jj_identity/$defs/diagnostic"
+          }
+        },
+        "jj_repository": {
+          "$ref": "#/$defs/jj_identity/$defs/jj_repository"
+        }
+      },
+      "$defs": {
+        "evidence": {
+          "type": "object",
+          "required": [
+            "kind",
+            "location"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "jj-metadata",
+                "gitbutler-metadata",
+                "gitbutler-reference"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "jj_repository": {
+          "type": "object",
+          "required": [
+            "workspace_root",
+            "metadata_dir",
+            "repository_dir",
+            "workspace_name",
+            "change_id",
+            "commit_id",
+            "operation_id",
+            "observation"
+          ],
+          "properties": {
+            "workspace_root": {
+              "type": "string",
+              "minLength": 1
+            },
+            "metadata_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "repository_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "change_id": {
+              "type": "string",
+              "pattern": "^[k-z]{32}$",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            "commit_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$",
+              "minLength": 40,
+              "maxLength": 40
+            },
+            "operation_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{128}$",
+              "minLength": 128,
+              "maxLength": 128
+            },
+            "observation": {
+              "type": "object",
+              "required": [
+                "working_copy",
+                "limitation"
+              ],
+              "properties": {
+                "working_copy": {
+                  "const": "stored-unsnapshotted"
+                },
+                "limitation": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "jj_repository"
+            ],
+            "properties": {
+              "diagnostics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "jj_repository"
+              ]
+            },
+            "properties": {
+              "diagnostics": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "identity": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "enum": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "unknown"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "backend": {
+                "const": "unknown"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "workspaces": {
+            "items": {
+              "properties": {
+                "change_id": {
+                  "type": "null"
+                },
+                "operation_id": {
+                  "type": "null"
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "change_id": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "change_id": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "references": {
+            "items": {
+              "properties": {
+                "change_id": {
+                  "type": "null"
+                },
+                "operation_id": {
+                  "type": "null"
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "change_id": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "change_id": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "bases": {
+            "items": {
+              "properties": {
+                "change_id": {
+                  "type": "null"
+                },
+                "operation_id": {
+                  "type": "null"
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "change_id": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "change_id": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "jj"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "workspaces": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "minLength": 40,
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "references": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "minLength": 40,
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "bases": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "minLength": 40,
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "gitbutler"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "backend": {
+                "const": "gitbutler"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "ambiguous"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "backend": {
+                "const": "ambiguous"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "identity": {
+            "properties": {
+              "repository": {
+                "type": "object",
+                "properties": {
+                  "object_format": {
+                    "const": "sha1"
+                  }
+                },
+                "required": [
+                  "object_format"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "workspaces": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "minLength": 40,
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "references": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "minLength": 40,
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "bases": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$",
+                      "minLength": 40,
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "identity": {
+            "properties": {
+              "repository": {
+                "type": "object",
+                "properties": {
+                  "object_format": {
+                    "const": "sha256"
+                  }
+                },
+                "required": [
+                  "object_format"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "workspaces": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$",
+                      "minLength": 64,
+                      "maxLength": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "references": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$",
+                      "minLength": 64,
+                      "maxLength": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "added_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "minLength": 64,
+                        "maxLength": 64
+                      }
+                    }
+                  }
+                },
+                "removed_targets": {
+                  "items": {
+                    "properties": {
+                      "commit_id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "minLength": 64,
+                        "maxLength": 64
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "bases": {
+            "items": {
+              "properties": {
+                "commit_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$",
+                      "minLength": 64,
+                      "maxLength": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
