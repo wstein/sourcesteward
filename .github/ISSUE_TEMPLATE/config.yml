@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/wstein/sourcesteward/discussions
+    about: Discuss usage and design before filing an implementation request.
+  - name: Private security report
+    url: https://github.com/wstein/sourcesteward/security/advisories/new
+    about: Report vulnerabilities privately; do not disclose secrets in issues.

@@ -1,0 +1,20 @@
+name: Bug report
+description: Report reproducible behavior in an implemented feature.
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities use Security → Report a vulnerability. Redact secrets and private repository data."
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and expected/actual behavior
+      description: Include a minimal command or fixture; distinguish implemented features from roadmap items.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: SourceSteward revision/version, operating system, Go/Git/jj/GitButler versions where relevant.
+    validations:
+      required: true

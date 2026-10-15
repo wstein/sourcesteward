@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose a user outcome and acceptance scenarios.
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: User outcome
+      description: Who benefits and what can they accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance scenarios and backend effects
+      description: Describe observable success, failure cases, scope and affected Git/jj/GitButler workflows.
+    validations:
+      required: true
