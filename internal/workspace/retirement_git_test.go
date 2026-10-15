@@ -129,6 +129,9 @@ func TestGitRetirementNativeCombinedRemovalAndRecovery(t *testing.T) {
 	if strings.Contains(gitFixture(t, d, "worktree", "list", "--porcelain"), task.Destination) {
 		t.Fatal("registration remained")
 	}
+	if e := (gitRetirementAdapter{}).VerifyPost(context.Background(), p, recovery, *out.Expected); e != nil {
+		t.Fatal(e)
+	}
 	files, e := (gitRetirementAdapter{}).RemoveFiles(context.Background(), p, recovery, *out.Expected)
 	if e != nil || !files.Complete || files.Attempted {
 		t.Fatalf("duplicate file removal attempted: %+v %v", files, e)

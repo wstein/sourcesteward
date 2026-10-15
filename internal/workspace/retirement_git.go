@@ -486,3 +486,9 @@ func gitRetirementVerifyAbsent(ctx context.Context, p RetirementPlanRecord, reco
 func gitRetirementOutcome() TidyNativeOutcome {
 	return TidyNativeOutcome{Effects: []string{}, Limitations: []string{"Native Git worktree removal has no CAS transaction; native ownership, disk content and parent identities are sampled, and external races or ABA changes cannot be excluded.", "Recovery pins preserve the current stored tree, not untracked files or original worktree index, lock, configuration, reflog bytes, or every unreachable historical commit. Granted parent directories remain present."}}
 }
+
+// VerifyPost is read-only: completed retry must prove exact native registration
+// absence and an independent recovery pin, never trust journal snapshots alone.
+func (gitRetirementAdapter) VerifyPost(ctx context.Context, p RetirementPlanRecord, recovery TidyRecovery, expected Snapshot) error {
+	return gitRetirementVerifyAbsent(ctx, p, recovery, expected)
+}
