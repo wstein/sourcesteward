@@ -20,6 +20,14 @@ type versionInformation struct {
 
 type runtimeFailure struct{ error }
 
+const agentHints = `
+Are you an AI? Use these resources ONLY IF your task specifically asks you to:
+  Help a human understand, set up or use SourceSteward:
+    https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/agent-guide.md
+  Debug or investigate a problem with SourceSteward:
+    https://raw.githubusercontent.com/wstein/sourcesteward/main/llms.txt
+`
+
 // Run is the sole diagnostic/exit boundary. Each call owns a fresh command tree.
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) int {
 	if err := ctx.Err(); err != nil {
@@ -71,6 +79,9 @@ func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) 
 			description = cmd.Short
 		}
 		_, helpError = fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n%s", description, cmd.UsageString())
+		if helpError == nil && cmd == root {
+			_, helpError = io.WriteString(cmd.OutOrStdout(), agentHints)
+		}
 	})
 	info := versionInformation{SchemaVersion: 1, Name: "SourceSteward", Version: version}
 	jsonOutput := false
