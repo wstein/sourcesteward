@@ -411,3 +411,16 @@ func TestGitInventoryGitlinkStoredAndStagedChanges(t *testing.T) {
 		t.Fatalf("stored gitlink %+v", r)
 	}
 }
+
+func TestGitInventoryFilteredUntrackedSummaryIsUnknown(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	os.WriteFile(filepath.Join(d, "outside"), []byte("untracked"), 0600)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"untracked"}, Paths: []string{"safe"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("selected predicate %+v", r)
+	}
+	if r.Workspaces[0].Untracked.Value != "unknown" || r.Workspaces[0].Untracked.Reason == "" {
+		t.Fatalf("broader workspace %+v", r.Workspaces[0])
+	}
+}
