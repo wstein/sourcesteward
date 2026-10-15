@@ -95,3 +95,17 @@ contracts or authorizes history rewriting, external messages, publication or del
 History editing, remote deletion, publishing automation, a graphical client, agent scheduling
 and MCP integration are outside the foundation. A future MCP interface will reuse the same
 command core and contracts; it will not grant additional permissions.
+
+## Draft specification index
+
+- [009-workspace-inventory: Workspace and Worktree Inventory](../specs/009-workspace-inventory/spec.md) — 10/10.
+- [010-isolated-task-workspaces: Isolated Task Workspaces](../specs/010-isolated-task-workspaces/spec.md) — 10/10.
+- [011-workspace-reference-tidy: Workspace and Reference Tidy](../specs/011-workspace-reference-tidy/spec.md) — 10/10.
+- [012-stack-inspection: Stack Inspection and Diffs](../specs/012-stack-inspection/spec.md) — 9/10.
+- [013-checkpoint-resume: Checkpoint and Resume](../specs/013-checkpoint-resume/spec.md) — 9/10.
+- [014-conflict-diagnosis: Conflict Diagnosis](../specs/014-conflict-diagnosis/spec.md) — 9/10.
+- [015-local-restacking: Local Restacking](../specs/015-local-restacking/spec.md) — 8/10.
+- [016-stacked-pr-coordination: Stacked PR Coordination](../specs/016-stacked-pr-coordination/spec.md) — 8/10.
+
+All eight drafts require planning, tasks and cross-artifact analysis before implementation.
+The active local Specify pointer selects Spec 009 for the next bounded planning step.
