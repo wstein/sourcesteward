@@ -109,3 +109,32 @@ func TestDestinationRejectsAliasesAndOccupiedPaths(t *testing.T) {
 		t.Fatal("accepted symlink parent")
 	}
 }
+
+func TestStrictJSONRejectsCaseFoldedFields(t *testing.T) {
+	var v struct {
+		Value string `json:"value"`
+	}
+	for _, data := range []string{`{"VALUE":"bad"}`, `{"value":"good","VALUE":"bad"}`, `{"value":"good"} null`} {
+		if e := decodeStrict([]byte(data), &v); e == nil {
+			t.Fatalf("accepted incompatible keys %s", data)
+		}
+	}
+}
+func TestStoreRejectsRecordDirectoryReplacement(t *testing.T) {
+	p := privateDir(t)
+	s, e := openStore(p, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	original := filepath.Join(p, "plans")
+	if e = os.Rename(original, original+"-old"); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Mkdir(original, 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.write("plans", "new", map[string]string{"value": "bad"}, true); e == nil {
+		t.Fatal("wrote after record directory replacement")
+	}
+}
