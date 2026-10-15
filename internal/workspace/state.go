@@ -24,7 +24,13 @@ type store struct {
 	writable bool
 }
 
-func openStore(path string, write bool) (s *store, err error) {
+func openStore(path string, write bool) (*store, error) {
+	return openStoreKinds(path, write, []string{"plans", "operations", "tasks"})
+}
+
+// openStoreKinds shares the secure lock and record validation while preserving
+// the existing workspace store layout for legacy callers.
+func openStoreKinds(path string, write bool, kinds []string) (s *store, err error) {
 	root, id, e := openCanonical(path)
 	if e != nil {
 		return nil, e
@@ -54,7 +60,10 @@ func openStore(path string, write bool) (s *store, err error) {
 			return nil, e
 		}
 	}
-	for _, name := range []string{"plans", "operations", "tasks"} {
+	for _, name := range kinds {
+		if !validID(name) || s.dirs[name] != nil {
+			return nil, failure("invalid-state", "Invalid or repeated private state directory kind.")
+		}
 		if write {
 			if e = root.Mkdir(name, 0700); e != nil && !errors.Is(e, os.ErrExist) {
 				return nil, e
