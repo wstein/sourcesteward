@@ -18,10 +18,13 @@ func tidyCommandWith(run func(context.Context, workspace.TidyPlanOptions) worksp
 	return tidyCommandWithOperations(run, workspace.ApplyTidy)
 }
 func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult, applyRun func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult) *cobra.Command {
-	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files and never contacts a forge.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nWorkspace retirement remains planned.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
+	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files and never contacts a forge.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nOwned task retirement requires separate registration and exact filesystem selections.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
 	var options workspace.TidyPlanOptions
 	var structured bool
-	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native ancestry and retained local reference candidates", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if (cmd.Flags().Changed("task") || cmd.Flags().Changed("owner") || cmd.Flags().Changed("remove-registration") || cmd.Flags().Changed("remove-files")) && options.Task == "" && options.Owner == "" && !options.RemoveRegistration && options.RemoveFiles == "" {
+			return fmt.Errorf("retirement selectors require --task, --owner, --state-dir and --remove-registration")
+		}
 		if err := validateTidyPlanCLI(args, options); err != nil {
 			return err
 		}
@@ -32,10 +35,14 @@ func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptio
 	plan.Flags().StringVar(&options.Base, "base", "", "Required literal native integration base; no inferred trunk")
 	plan.Flags().StringArrayVar(&options.Refs, "ref", nil, "Select a literal local branch/bookmark name (repeatable; otherwise all bounded local references)")
 	plan.Flags().StringVar(&options.StateDir, "state-dir", "", "Optional existing private mode0700 state directory; omission makes planning stateless")
+	plan.Flags().StringVar(&options.Task, "task", "", "Select an exactly owned completed task for retirement")
+	plan.Flags().StringVar(&options.Owner, "owner", "", "Expected task owner; private store access remains the trust boundary")
+	plan.Flags().BoolVar(&options.RemoveRegistration, "remove-registration", false, "Plan exact native registration removal; required for task retirement")
+	plan.Flags().StringVar(&options.RemoveFiles, "remove-files", "", "Separately select the exact owned absolute destination for filesystem removal")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
 	var applyOptions workspace.TidyApplyOptions
 	var applyStructured bool
-	apply := &cobra.Command{Use: "apply", Short: "Apply an authorized stored local reference cleanup plan", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	apply := &cobra.Command{Use: "apply", Short: "Apply an authorized stored reference or task retirement plan", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := validateWorkspaceCLI("plan", applyOptions.PlanID, "state-dir", applyOptions.StateDir); err != nil {
 			return err
 		}
@@ -43,7 +50,7 @@ func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptio
 	}}
 	apply.Flags().StringVar(&applyOptions.PlanID, "plan", "", "Exact generated immutable tidy plan identity")
 	apply.Flags().StringVar(&applyOptions.StateDir, "state-dir", "", "Private store containing the reviewed plan and durable recovery journal")
-	apply.Flags().BoolVar(&applyOptions.Authorize, "authorize", false, "Authorize only the reviewed plan's declared local recovery and reference deletion effects")
+	apply.Flags().BoolVar(&applyOptions.Authorize, "authorize", false, "Authorize only the reviewed plan's declared recovery, reference or retirement effects")
 	apply.Flags().BoolVar(&applyStructured, "json", false, "Output one versioned tidy result, including operational refusals and partial effects")
 	family.AddCommand(plan, apply)
 	return family
@@ -72,6 +79,23 @@ func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error
 	}
 	if len(options.Refs) > 1024 {
 		return fmt.Errorf("--ref exceeds 1024 selectors")
+	}
+	retirement := options.Task != "" || options.Owner != "" || options.RemoveRegistration || options.RemoveFiles != ""
+	if retirement {
+		if len(options.Refs) != 0 {
+			return fmt.Errorf("--ref and retirement selectors are mutually exclusive")
+		}
+		if !options.RemoveRegistration {
+			return fmt.Errorf("--remove-registration is required for task retirement")
+		}
+		if err := validateWorkspaceCLI("task", options.Task, "owner", options.Owner, "state-dir", options.StateDir); err != nil {
+			return err
+		}
+		if options.RemoveFiles != "" {
+			if err := validateWorkspaceCLI("remove-files", options.RemoveFiles); err != nil {
+				return err
+			}
+		}
 	}
 	values := append([]string{options.Base}, options.Refs...)
 	if options.StateDir != "" {
@@ -107,6 +131,28 @@ func renderTidyText(writer io.Writer, result workspace.TidyResult) error {
 		}
 		for _, limit := range p.RecoveryLimits {
 			fmt.Fprintf(&text, "Recovery limit: %q\n", limit)
+		}
+	}
+	if result.Retirement != nil {
+		p := result.Retirement
+		fmt.Fprintf(&text, "Retirement plan: %q\nTask: %q\nOwner: %q\nSource: %q\nDestination: %q\nState directory: %q\nBase selector: %q\nBase commit: %q\nBase change: %q\nRemove registration selected: %t\nFilesystem target selected: %q\n", p.PlanID, p.Task.TaskID, p.Task.Owner, p.SourcePath, p.Task.Destination, p.StateDir, p.Expected.Expected.BaseSelector, p.Expected.Expected.BaseCommit, p.Expected.Expected.BaseChange, p.RemoveRegistration, p.RemoveFiles)
+		for _, action := range p.Expected.Actions {
+			fmt.Fprintf(&text, "Retirement action: %q target=%q decision=%q reason=%q proof=%q\n", action.Name, action.Target, action.Decision, action.Reason, action.Proof)
+			for _, effect := range action.Effects {
+				fmt.Fprintf(&text, "  Effect: %q\n", effect)
+			}
+			for _, blocker := range action.Blockers {
+				fmt.Fprintf(&text, "  Blocker: %q\n", blocker)
+			}
+		}
+		for _, effect := range p.Effects {
+			fmt.Fprintf(&text, "Effect: %q\n", effect)
+		}
+		for _, limit := range p.RecoveryLimits {
+			fmt.Fprintf(&text, "Recovery limit: %q\n", limit)
+		}
+		for _, limit := range p.Expected.Limitations {
+			fmt.Fprintf(&text, "Observation limit: %q\n", limit)
 		}
 	}
 	for _, action := range result.Actions {

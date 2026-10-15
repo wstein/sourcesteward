@@ -205,3 +205,50 @@ func TestTidyApplyHumanRecoveryAndWriterFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTidyRetirementSelectorsBeforeOperation(t *testing.T) {
+	for _, args := range [][]string{
+		{"plan", "--base", "HEAD", "--task", ""},
+		{"plan", "--base", "HEAD", "--task", "task"},
+		{"plan", "--base", "HEAD", "--task", "task", "--owner", "owner", "--remove-registration"},
+		{"plan", "--base", "HEAD", "--task", "task", "--owner", "owner", "--state-dir", "/tmp/state"},
+		{"plan", "--base", "HEAD", "--task", "task", "--owner", "owner", "--state-dir", "/tmp/state", "--remove-registration", "--ref", "topic"},
+		{"plan", "--base", "HEAD", "--remove-files", "/tmp/task"},
+		{"plan", "--base", "HEAD", "--task", "../escape", "--owner", "owner", "--state-dir", "/tmp/state", "--remove-registration"},
+	} {
+		called := false
+		cmd := tidyCommandWith(func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult {
+			called = true
+			return workspace.TidyResult{Status: "ok"}
+		})
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(args)
+		var failure runtimeFailure
+		if err := cmd.Execute(); err == nil || errors.As(err, &failure) || called {
+			t.Fatalf("%q err=%v called=%t", args, err, called)
+		}
+	}
+}
+func TestTidyRetirementFlagsAndQuotedHumanActions(t *testing.T) {
+	cmd := tidyCommandWith(func(_ context.Context, o workspace.TidyPlanOptions) workspace.TidyResult {
+		if o.Task != "task" || o.Owner != "owner" || !o.RemoveRegistration || o.RemoveFiles != "/tmp/task" || o.StateDir != "/tmp/state" || len(o.Refs) != 0 {
+			t.Fatal(o)
+		}
+		return workspace.TidyResult{SchemaVersion: 2, Command: "tidy-plan", Status: "ok", Backend: "git", Retirement: &workspace.RetirementPlanRecord{PlanID: "retirement", Backend: "git", RemoveRegistration: true, RemoveFiles: o.RemoveFiles, Expected: workspace.RetirementObservation{Actions: []workspace.RetirementAction{{Name: "registration", Target: "task", Decision: "delete", Proof: "native-ancestry", Reason: "clean"}, {Name: "files", Target: "literal\npath\x1b", Decision: "delete", Proof: "native-ancestry", Reason: "separate-authorization"}}}, Effects: []string{"coupled native registration and files removal"}, RecoveryLimits: []string{"retained recovery pin"}}, Actions: []workspace.ActionOutcome{}, Diagnostics: []workspace.Diagnostic{}, Limitations: []string{}}
+	})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"plan", "--base", "HEAD", "--task", "task", "--owner", "owner", "--remove-registration", "--remove-files", "/tmp/task", "--state-dir", "/tmp/state"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Retirement plan:", "registration", "files", "separate-authorization", "coupled native", "recovery pin"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %q: %s", want, out.String())
+		}
+	}
+	if strings.ContainsRune(out.String(), '\x1b') {
+		t.Fatal(out.String())
+	}
+}
