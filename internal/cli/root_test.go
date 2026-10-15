@@ -63,6 +63,100 @@ func TestCommandsDoNotLeakFlags(t *testing.T) {
 	}
 }
 
+func TestRootHelpAgentHints(t *testing.T) {
+	want := "Are you an AI? Use these resources ONLY IF your task specifically asks you to:\n" +
+		"  Help a human understand, set up or use SourceSteward:\n" +
+		"    https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/agent-guide.md\n" +
+		"  Debug or investigate a problem with SourceSteward:\n" +
+		"    https://raw.githubusercontent.com/wstein/sourcesteward/main/llms.txt\n"
+	for _, args := range [][]string{nil, {"--help"}, {"-h"}, {"help"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var out, diagnostic bytes.Buffer
+			if code := Run(context.Background(), "dev", args, &out, &diagnostic); code != 0 || diagnostic.Len() != 0 {
+				t.Fatalf("code=%d stderr=%q", code, diagnostic.String())
+			}
+			if strings.Count(out.String(), want) != 1 || !strings.HasSuffix(out.String(), want) {
+				t.Fatalf("expected one trailing agent notice: %q", out.String())
+			}
+			if !strings.Contains(out.String(), "Usage:") || !strings.Contains(out.String(), "Available Commands:") {
+				t.Fatalf("ordinary root help missing: %q", out.String())
+			}
+		})
+	}
+}
+
+func TestAgentHintsAbsentOutsideRootHelp(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		code int
+	}{
+		{[]string{"version"}, 0},
+		{[]string{"version", "--json"}, 0},
+		{[]string{"version", "--help"}, 0},
+		{[]string{"version", "-h"}, 0},
+		{[]string{"help", "version"}, 0},
+		{[]string{"help", "help"}, 0},
+		{[]string{"help", "--help"}, 0},
+		{[]string{"help", "-h"}, 0},
+		{[]string{"unknown"}, 2},
+		{[]string{"--unknown"}, 2},
+		{[]string{"help", "unknown"}, 2},
+		{[]string{"version", "--unknown"}, 2},
+		{[]string{"version", "extra"}, 2},
+		{[]string{"help", "version", "extra"}, 2},
+	} {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			var out, diagnostic bytes.Buffer
+			if code := Run(context.Background(), "dev", tc.args, &out, &diagnostic); code != tc.code {
+				t.Fatalf("code=%d stderr=%q", code, diagnostic.String())
+			}
+			combined := out.String() + diagnostic.String()
+			for _, forbidden := range []string{"Are you an AI?", "raw.githubusercontent.com", "docs/agent-guide.md", "llms.txt"} {
+				if strings.Contains(combined, forbidden) {
+					t.Fatalf("unexpected agent hint %q: %q", forbidden, combined)
+				}
+			}
+			if tc.code != 0 && out.Len() != 0 {
+				t.Fatalf("error produced stdout: %q", out.String())
+			}
+		})
+	}
+}
+
+type failOnWrite struct {
+	buffer bytes.Buffer
+	calls  int
+	fail   int
+}
+
+func (w *failOnWrite) Write(p []byte) (int, error) {
+	w.calls++
+	if w.calls == w.fail {
+		return 0, errors.New("selected help write failed")
+	}
+	return w.buffer.Write(p)
+}
+
+func (w *failOnWrite) String() string { return w.buffer.String() }
+
+func TestAgentHintWriteFailure(t *testing.T) {
+	for _, args := range [][]string{nil, {"--help"}, {"-h"}, {"help"}} {
+		for _, fail := range []int{1, 2} {
+			out := &failOnWrite{fail: fail}
+			var diagnostic bytes.Buffer
+			if code := Run(context.Background(), "dev", args, out, &diagnostic); code != 1 {
+				t.Fatalf("args=%q fail=%d code=%d stderr=%q", args, fail, code, diagnostic.String())
+			}
+			if out.calls != fail || diagnostic.String() != "Error: selected help write failed\n" {
+				t.Fatalf("args=%q fail=%d writes=%d stderr=%q", args, fail, out.calls, diagnostic.String())
+			}
+			if fail == 2 && !strings.Contains(out.String(), "Usage:") {
+				t.Fatalf("notice failure lost successful ordinary help: %q", out.String())
+			}
+		}
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("output unavailable") }
