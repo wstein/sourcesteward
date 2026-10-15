@@ -1,0 +1,671 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/tidy.schema.json",
+  "title": "SourceSteward tidy result v1",
+  "description": "Reference cleanup plans and reserved apply results. Additional object members and diagnostic codes are compatible extensions; usage/writer failures may not emit complete JSON.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "backend",
+    "plan",
+    "actions",
+    "diagnostics",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "enum": [
+        "tidy-plan",
+        "tidy-apply"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "refused",
+        "partial",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "git",
+        "jj",
+        "unknown",
+        "ambiguous",
+        "gitbutler"
+      ]
+    },
+    "plan": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/plan"
+        }
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "status",
+          "detail"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    }
+  },
+  "$defs": {
+    "native": {
+      "type": "object",
+      "required": [
+        "backend",
+        "repository_dir",
+        "workspace_root",
+        "workspace_name",
+        "git_dir",
+        "head_ref",
+        "commit_id",
+        "change_id",
+        "operation_id",
+        "object_format"
+      ],
+      "properties": {
+        "backend": {
+          "enum": [
+            "git",
+            "jj"
+          ]
+        },
+        "repository_dir": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "workspace_root": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "workspace_name": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "git_dir": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "head_ref": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "commit_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "change_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "operation_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "object_format": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commit_id": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+              },
+              "change_id": {
+                "const": ""
+              },
+              "operation_id": {
+                "const": ""
+              },
+              "object_format": {
+                "enum": [
+                  "sha1",
+                  "sha256"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commit_id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              },
+              "change_id": {
+                "type": "string",
+                "pattern": "^[k-z]{32}$"
+              },
+              "operation_id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{128}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "identity",
+        "base_selector",
+        "base_commit",
+        "base_change",
+        "reference_digest",
+        "registration_digest",
+        "safety_digest"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/native"
+        },
+        "base_selector": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "base_commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "base_change": {
+          "type": "string",
+          "pattern": "^([k-z]{32})?$"
+        },
+        "reference_digest": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{64}|[a-f0-9]{128})$"
+        },
+        "registration_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "safety_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "commit_id",
+        "change_id",
+        "decision",
+        "reason",
+        "proof",
+        "workspace_paths",
+        "limitations"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "branch",
+            "bookmark"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "commit_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "change_id": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "decision": {
+          "enum": [
+            "delete",
+            "retain"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "proof": {
+          "enum": [
+            "native-ancestry",
+            "none"
+          ]
+        },
+        "workspace_paths": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "proof": {
+                "const": "native-ancestry"
+              },
+              "workspace_paths": {
+                "maxItems": 0
+              },
+              "commit_id": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "branch"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commit_id": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+              },
+              "change_id": {
+                "const": ""
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "bookmark"
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "commit_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "change_id": {
+                    "type": "string",
+                    "pattern": "^[k-z]{32}$"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "commit_id": {
+                    "const": ""
+                  },
+                  "change_id": {
+                    "const": ""
+                  },
+                  "decision": {
+                    "const": "retain"
+                  },
+                  "proof": {
+                    "const": "none"
+                  },
+                  "reason": {
+                    "const": "ambiguous-target"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "plan_id",
+        "source_path",
+        "state_dir",
+        "backend",
+        "digest",
+        "expected",
+        "selected_refs",
+        "candidates",
+        "effects",
+        "recovery_limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9._-]{0,127})?$"
+        },
+        "source_path": {
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1
+        },
+        "state_dir": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj"
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expected": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "selected_refs": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/candidate"
+          }
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "recovery_limits": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "backend": {
+                        "const": "git"
+                      }
+                    }
+                  }
+                }
+              },
+              "candidates": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "const": "branch"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "backend": {
+                        "const": "jj"
+                      }
+                    }
+                  }
+                }
+              },
+              "candidates": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "const": "bookmark"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "error",
+              "refused"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "git",
+              "jj"
+            ]
+          },
+          "diagnostics": {
+            "maxItems": 0
+          },
+          "plan": {
+            "$ref": "#/$defs/plan"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "plan": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "jj"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "plan": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
