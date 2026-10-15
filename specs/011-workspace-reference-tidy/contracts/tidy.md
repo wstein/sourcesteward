@@ -39,3 +39,7 @@ and tree equivalence, never empty alone. No automatic restoration/cleanup after 
 Reads10seconds/apply60seconds/nativeoutput64KiB/recordresult1MiB/aggregate1024 entries.
 Paths/selectors4096bytes, IDs128bytes. Missing mandatory capability, sandbox, command output or
 freshness refuses; no unbounded fallback. Cancellation after start reports known partial effects.
+
+The v1 command discriminant reserves tidy-plan and tidy-apply from WI1 publication; WI1 does not
+expose apply until WI2 acceptance. WI3 uses a separate v2 retirement contract rather than expanding
+strict v1 candidate enums/fields. Published v1 bytes and prior fixtures remain unchanged.
