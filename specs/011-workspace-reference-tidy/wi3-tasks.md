@@ -31,7 +31,7 @@ Independent test: separate effects and partial outcomes agree human/JSON; old an
 ## Review and handoff
 - [x] T318 [P] Document native effect differences/freshness/capability limits/manual recovery and versioned schema publication in docs/tidy.md, docs/backends.md and docs/json-contracts.md.
 - [x] T319 Obtain independent source/sandbox review and final artifact analysis, run gofmt/make check/race/all mandatory native lanes and record exact evidence in specs/011-workspace-reference-tidy/wi3-verification.md.
-- [ ] T320 Update all tasks/progress/featurestatus based on actual three-WI evidence, atomic Conventional Commits and open/attach WI3 PR in docs/progress.md and specs/011-workspace-reference-tidy/wi3-tasks.md.
+- [x] T320 Update all tasks/progress/featurestatus based on actual three-WI evidence, atomic Conventional Commits and open/attach WI3 PR in docs/progress.md and specs/011-workspace-reference-tidy/wi3-tasks.md.
 
 ## Dependencies and parallel work
 T301 sourcegate then T302→T303 corefoundation. Git T304→T306 and jj T305→T307 parallelworktrees.

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/011-tidy-plans` (three sequential implementation work items)
 **Created**: 2026-10-15
-**Status**: All three WIs implemented and independently reviewed; local verification complete; WI3 PR/hosted acceptance pending
+**Status**: All three WIs implemented and independently reviewed; local verification complete; PRs 36/37/38 opened; WI3 hosted acceptance pending
 **Input**: Evidence-based plans, stale-state checks and recovery.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 

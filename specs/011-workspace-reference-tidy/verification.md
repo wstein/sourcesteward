@@ -3,7 +3,7 @@
 Three separately analyzed, implemented and reviewed WIs use atomic Conventional Commits and
 isolated worktrees. [WI1 evidence](wi1-verification.md) covers plans and PR36 (owner merged);
 [WI2 evidence](wi2-verification.md) covers local references and PR37; [WI3 evidence](wi3-verification.md)
-covers owned retirement and its pending PR handoff. Global implementation is bounded by native
+covers owned retirement and PR38 (stacked on PR37). Global implementation is bounded by native
 capabilities; exact-head hosted acceptance is recorded per WI, not assumed from local checks.
 
 The CI matrix requires minimum/current Git and jj, mandatory sandbox capability and complete

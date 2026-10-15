@@ -42,3 +42,6 @@ and any cleanup of development worktrees remain separate actions.
 
 Final cross-artifact analysis cleared 2998009 plus the scoped evidence/status updates.
 Final source review separately cleared the no-write dispatch guard 0fb7e0c and CLI guidance 2998009.
+
+WI3 handoff: [PR #38](https://github.com/wstein/sourcesteward/pull/38), stacked on PR37.
+All local tasks are complete; exact-head hosted Linux checks and owner review/merge remain pending.

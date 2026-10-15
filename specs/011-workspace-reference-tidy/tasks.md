@@ -5,7 +5,7 @@ Three sequential implementation WIs; each gets plan → tasks → independent an
 
 - [WI1 plan](wi1-plan.md) and [WI1 tasks](wi1-tasks.md): evidence-only plans, US1/US3.
 - [WI2 plan](wi2-plan.md) and [WI2 tasks](wi2-tasks.md): local reference cleanup, US2/US3; [independent design analysis cleared](wi2-analysis.md), implementation complete; separate verification/PR handoff.
-- [WI3 plan](wi3-plan.md) and [WI3 tasks](wi3-tasks.md): owned retirement, US1/US2/US3; concrete interface and independent analysis cleared; implementation and local review/verification complete; PR handoff pending.
+- [WI3 plan](wi3-plan.md) and [WI3 tasks](wi3-tasks.md): owned retirement, US1/US2/US3; concrete interface and independent analysis cleared; implementation and local review/verification complete; PR38 handoff complete; hosted acceptance pending.
 
 ## Requirement traceability
 | Requirement | WI1 tasks | Later execution gates |
