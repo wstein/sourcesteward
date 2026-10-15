@@ -67,3 +67,20 @@ Postimplementation analysis maps all 10 functional requirements to implementatio
 records no critical/high gaps. Its one LOW stale optional-llms phrase in data-model.md is
 corrected to match the mandatory production gate. T012 is complete. Coordinator PR/CI
 handoff is pending; no main merge, remote push or publication was performed by this author.
+
+## Published-stack ancestry reconciliation
+Reviewed schema head ab30b4d3941c492f131b34b216286343cd68e4d4 incorporates the owner-merged
+main theme source and reviewed inspection ancestry. It is merged into the published007
+branch without rebase, force push or rewriting published commits. Known conflicts retained
+Hugo's pinned build, generated routes, narrow theme-script validation and isolated asset
+unit tests; full package/schema tests still validate authoritative schemas and exact bytes.
+Progress records now acknowledge merged PRs #4/#5 and preserve upstream schema/inspection
+review evidence. A duplicate theme knowledge-map entry from automatic merging was removed.
+
+The runtime/source/template/style/workflow inputs remain identical to reviewed79026dc.
+Integrated make check passes: 19 Python cases,12 Node cases,Go/vet/module/architecture and
+whitespace checks. A complete public artifact generated with a probe revision matches the
+reviewed79026dc artifact byte for byte except revision.txt, including all12 HTML pages,
+local assets, llms.txt and both schemas. The final exact merge SHA is rebuilt and compared
+before coordinator handoff; no new browser behavior requires repetition. Publication of
+the resulting branch head and updated PR #8 CI remain coordinator-owned.
