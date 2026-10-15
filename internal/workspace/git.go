@@ -158,6 +158,10 @@ func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
 		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "core.worktree" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
+		// check-attr's textual sentinel values can also be literal driver names.
+		// Refuse those definitions rather than mistake an executable literal for
+		// absent/unset attributes. Case-insensitive refusal is conservative.
+		unsafe = unsafe || strings.HasPrefix(key, "filter.unspecified.") || strings.HasPrefix(key, "filter.unset.") || strings.HasPrefix(key, "filter.set.")
 		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || key == "submodule.recurse" && !gitFalse(value) || strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 		if unsafe {
 			return "", failure("git-unsafe-configuration", "configured hooks, checkout helpers or unsupported checkout configuration require an explicit supported policy before creation")
