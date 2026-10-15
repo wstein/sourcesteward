@@ -96,3 +96,17 @@ Implementation PR [#32](https://github.com/wstein/sourcesteward/pull/32) is open
 to the implementation task. All30tasks are complete; no owner merge was performed. The PR
 body records final exact-head hosted checks as they finish, avoiding a documentation-only
 source commit loop after successful CI.
+
+## Hosted source-job prerequisite repair
+
+Initial Linux source job [116650730308](https://github.com/wstein/sourcesteward/actions/runs/38801303196/job/116650730308)
+failed with git-sandbox-unavailable: the source check now includes real native Git task
+creation, but only conformance jobs provisioned bubblewrap/AppArmor. Regression `a16fec3`
+first failed; repair `fc72b3c` provisions the same checked distro sandbox/profile and
+preflight in the source job and requires native sandbox tests. Host protection values
+are checked unchanged. No skips, unsandboxed fallback or production code changes.
+
+Independent scoped review cleared the CI repair and reran all13backend/workflow tests.
+All43Python tests pass with checked Hugo; documentation and whitespace checks pass.
+Runtime source remains byte-identical to reviewed/tested5e32515. Final-head hosted Linux
+checks are recorded in PR #32's body when complete; superseded runs preserve failure logs.
