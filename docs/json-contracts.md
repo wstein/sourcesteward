@@ -106,3 +106,16 @@ partial (exit 1), while operational failure is error (exit 1). Invalid combinati
 rejected by offline fixtures. See [inventory](inventory.md) and its
 [normative contract](../specs/009-workspace-inventory/contracts/inventory.md).
 This source change stages the schema for Pages; it does not prove live deployment.
+
+## Workspace schema v1
+
+[Workspace schema](../schemas/v1/workspace.schema.json) is independently versioned and staged
+for publication at [Workspace v1](https://wstein.github.io/sourcesteward/schemas/v1/workspace.schema.json).
+Its command discriminator is `workspace-plan`, `workspace-apply`, `workspace-handoff` or
+`workspace-retire-plan`. Results contain typed nullable plan/task records, action outcomes,
+diagnostics and limitations. Refusal/error output retains the same envelope; completed
+actions survive partial failure. Git native commit identity remains distinct from jj
+commit/change/operation identities. Embedded inventory uses its established independent contract.
+Offline tests validate real operational output and independently invalid fixtures without
+fetching external schema references. See [task workspaces](workspaces.md) for authorization,
+effects, recovery and bounded execution. Publication evidence remains separate from source checks.
