@@ -334,3 +334,19 @@ func TestGitInventoryStoredSelectionAndMergeAmbiguity(t *testing.T) {
 		t.Fatalf("explicit stored endpoints %+v", r)
 	}
 }
+
+func TestGitInventoryOversizedDiskIsUnknown(t *testing.T) {
+	d := repo(t)
+	os.WriteFile(filepath.Join(d, "large"), []byte("small"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	os.WriteFile(filepath.Join(d, "large"), []byte(strings.Repeat("x", outputLimit+1)), 0600)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}})
+	if r.Status != "partial" || r.Query.Value != "unknown" {
+		t.Fatalf("%+v", r)
+	}
+	r = gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"absent"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("unrelated content %+v", r)
+	}
+}
