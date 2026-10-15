@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -43,7 +44,9 @@ func TestGitFixtureDoesNotLaunchAutomaticMaintenance(t *testing.T) {
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	c := exec.Command("git", args...)
+	// Fixture writes must finish before no-write snapshots start. Automatic
+	// maintenance can leave a detached child changing repository lock files.
+	c := exec.Command("git", append([]string{"-c", "maintenance.auto=false"}, args...)...)
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.invalid", "GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.invalid")
 	b, e := c.CombinedOutput()
@@ -150,7 +153,7 @@ func TestShapesAndNoWrites(t *testing.T) {
 				t.Fatalf("%+v", r)
 			}
 			if !reflect.DeepEqual(before, after) {
-				t.Fatal("inspection changed bytes")
+				t.Fatalf("inspection changed bytes at relative paths: %q", changedSnapshotPaths(root, before, after))
 			}
 			if r.Repository.Bare != (shape == "bare") || r.Repository.LinkedWorktree != (shape == "linked") {
 				t.Fatalf("%+v", r.Repository)
@@ -163,6 +166,30 @@ func TestShapesAndNoWrites(t *testing.T) {
 			}
 		})
 	}
+}
+
+func changedSnapshotPaths(root string, before, after map[string]string) []string {
+	changed := map[string]bool{}
+	for path, b := range before {
+		if a, ok := after[path]; !ok || a != b {
+			changed[path] = true
+		}
+	}
+	for path, a := range after {
+		if b, ok := before[path]; !ok || a != b {
+			changed[path] = true
+		}
+	}
+	paths := make([]string, 0, len(changed))
+	for path := range changed {
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			relative = path
+		}
+		paths = append(paths, relative)
+	}
+	sort.Strings(paths)
+	return paths
 }
 func TestDetectionBoundaries(t *testing.T) {
 	t.Run("nested", func(t *testing.T) {
