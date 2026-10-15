@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"github.com/wstein/sourcesteward/internal/inspection"
 	"strings"
 	"testing"
 )
@@ -52,5 +53,29 @@ func TestBoundedResultAlwaysFitsHostileEvidence(t *testing.T) {
 	}
 	if len(r.Actions) == 0 || r.Actions[0].Status != "completed" {
 		t.Fatal("completed native effect lost")
+	}
+}
+
+func TestBoundedResultCountsEscapedJSONBytes(t *testing.T) {
+	r := newResult("workspace-apply")
+	for i := 0; i < 1024; i++ {
+		r.Actions = append(r.Actions, ActionOutcome{strings.Repeat("\x01", 128), "completed", strings.Repeat("\x01", 1024)})
+	}
+	r = bounded(r)
+	data, e := json.Marshal(r)
+	if e != nil || len(data) > recordLimit {
+		t.Fatalf("escaped output bound: %d %v", len(data), e)
+	}
+	if r.Status != "partial" {
+		t.Fatal("bounded evidence claimed complete")
+	}
+}
+func TestOmittedInventoryIsPartial(t *testing.T) {
+	r := newResult("workspace-handoff")
+	r.Status = "ok"
+	r.Task = &TaskRecord{RemainingWork: []string{}, RecoveryLimits: []string{}, Inventory: &inspection.InventoryResult{InputPath: strings.Repeat("x", recordLimit+1)}}
+	r = bounded(r)
+	if r.Status != "partial" || r.Task == nil || r.Task.Inventory != nil {
+		t.Fatal("omitted inventory did not disclose partial result")
 	}
 }
