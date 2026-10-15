@@ -137,3 +137,17 @@ or independent acceptance is claimed. Planning/tasks/analysis remain pending.
 Explicit Upstream Synchronization: draft scenarios, requirements and author quality checks updated.
 Documentation links and whitespace checks passed before PR handoff. No runtime capability
 or independent acceptance is claimed. Planning/tasks/analysis remain pending.
+
+### Toolbelt specification batch verification
+
+Integrated `make check` passed at `739abf5dced84f14987aa9d9b85fb16aa91fc269` with cached Go dependencies and the existing
+pinned Hugo executable selected via `HUGO=/private/tmp/sourcesteward-hugo-docs/.tools/hugo`.
+This covered Go tests/vet/module integrity, 32 Python tests, 12 theme cases, 112 authored
+document checks, architecture boundaries and whitespace. All seven affected/new drafts
+passed author structure, consecutive requirement numbering and checklist review; all
+remain planned. This is source/documentation evidence, not new backend acceptance,
+independent review or cross-artifact analysis.
+
+Follow-up draft PRs #20–#26 target their predecessors, beginning on original draft PR #19.
+Original PRs #12–#19 were preserved. Next bounded step remains planning Spec 009 and
+generating tasks before cross-artifact analysis; no implementation was performed.
