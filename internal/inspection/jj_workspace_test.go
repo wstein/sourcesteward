@@ -82,7 +82,7 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	native(source, "bookmark", "create", "moved", "--revision", base)
-	stale, e := CreateJJWorkspace(context.Background(), source, observed, "stw-task", destination)
+	stale, e := CreateJJWorkspace(context.Background(), source, observed, "stw.task", destination)
 	if e == nil || stale.Phase != "not-started" {
 		t.Fatalf("accepted stale operation: %+v %v", stale, e)
 	}
@@ -101,7 +101,7 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if e == nil || collision.Phase != "not-started" {
 		t.Fatalf("native name collision mutated: %+v %v", collision, e)
 	}
-	created, err := CreateJJWorkspace(context.Background(), source, observed, "stw-task", destination)
+	created, err := CreateJJWorkspace(context.Background(), source, observed, "stw.task", destination)
 	if err != nil {
 		t.Fatalf("creation: %+v %v", created, err)
 	}
@@ -124,10 +124,10 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if _, err = os.Lstat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected colocated Git metadata: %v", err)
 	}
-	if _, err = CreateJJWorkspace(context.Background(), source, observed, "stw-task", destination); err == nil {
+	if _, err = CreateJJWorkspace(context.Background(), source, observed, "stw.task", destination); err == nil {
 		t.Fatal("reused existing destination")
 	}
-	verified, err := VerifyJJWorkspace(context.Background(), source, "stw-task", destination, observed.Source.RepositoryDir)
+	verified, err := VerifyJJWorkspace(context.Background(), source, "stw.task", destination, observed.Source.RepositoryDir)
 	if err != nil || verified.WorkspaceRoot != destination {
 		t.Fatalf("verify: %+v %v", verified, err)
 	}
@@ -135,7 +135,7 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if e := os.MkdirAll(filepath.Join(foreignGit, "gitbutler"), 0700); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := VerifyJJWorkspace(context.Background(), source, "stw-task", destination, observed.Source.RepositoryDir); e == nil {
+	if _, e := VerifyJJWorkspace(context.Background(), source, "stw.task", destination, observed.Source.RepositoryDir); e == nil {
 		t.Fatal("accepted ambiguous task ownership")
 	}
 
