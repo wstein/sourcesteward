@@ -5,6 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -98,4 +102,61 @@ func TestWorkspaceNativePlanAndTaskSchema(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestRealGitWorkspaceLifecycleSchema(t *testing.T) {
+	// Production refuses Apple's developer-tool shim. Tests may select the actual
+	// installed native executable; mandatory CI supplies pinned Git through PATH.
+	if executable, err := exec.LookPath("git"); err == nil && runtime.GOOS == "darwin" && executable == "/usr/bin/git" {
+		for _, candidate := range []string{"/Applications/Xcode.app/Contents/Developer/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git"} {
+			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+				t.Setenv("PATH", filepath.Dir(candidate)+string(os.PathListSeparator)+os.Getenv("PATH"))
+				break
+			}
+		}
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	state := filepath.Join(root, "state")
+	dest := filepath.Join(root, "task")
+	if err := os.Mkdir(state, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-q", "-b", "main", source}, {"-C", source, "-c", "user.name=Tester", "-c", "user.email=test@example.org", "commit", "--allow-empty", "-m", "initial"}} {
+		cmd := exec.Command("git", args...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git fixture: %s %v", out, err)
+		}
+	}
+	s := schema(t, "workspace")
+	invoke := func(args ...string) workspace.Result {
+		t.Helper()
+		var out, diagnostic bytes.Buffer
+		args = append(args, "--json")
+		code := cli.Run(context.Background(), "test", args, &out, &diagnostic)
+		valid(t, s, out.Bytes())
+		var result workspace.Result
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if code != 0 {
+			t.Fatalf("workspace exit%d: %s %s", code, out.String(), diagnostic.String())
+		}
+		return result
+	}
+	plan := invoke("workspace", "plan", source, "--base", "HEAD", "--destination", dest, "--task", "contract-task", "--owner", "tester", "--state-dir", state)
+	if plan.Plan == nil {
+		t.Fatal("missing real plan")
+	}
+	applied := invoke("workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
+	if applied.Task == nil {
+		t.Fatal("missing task identity")
+	}
+	invoke("workspace", "apply", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
+	invoke("workspace", "handoff", dest, "--state-dir", state)
+	invoke("workspace", "retire-plan", dest, "--state-dir", state)
 }
