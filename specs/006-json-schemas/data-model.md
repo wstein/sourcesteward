@@ -1,0 +1,4 @@
+# Data model
+Version result: schema_version integer constant1, name constant SourceSteward, version nonempty string.
+Inspection result: feature005 model, preserving every existing required field and nullable semantics. Head state determines ref/oid presence; repository object format determines oid length when nonnull. Status ok requires ordinary Git identity and no diagnostics; unsupported/error require null repository and at least one diagnostic. Unsupported is reserved for jj/gitbutler/ambiguous; unknown ordinary errors remain possible.
+No additional runtime entities or output fields. Repository identity/evidence paths remain nonempty strings without platform-specific formatting; input_path may be empty when an early failure prevents safe absolute resolution. Evidence and diagnostics remain arrays even when empty.
