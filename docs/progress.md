@@ -5,25 +5,22 @@
 Version and inspection results have JSON Schema2020-12 contracts, real-output validation,
 negative invariant fixtures and verbatim static publication. Source checks and race tests
 pass on the final005 source revision. Independent review cleared006 source at98f65df;
-coordinator PR publication remains pending. See [JSON acceptance](json-schema-verification.md).
+[PR #6](https://github.com/wstein/sourcesteward/pull/6) is open; schema URLs await merge and Pages deployment. See [JSON acceptance](json-schema-verification.md).
 
 005-repository-inspection is implemented and independently verified on codex/005-repository-inspection.
 Identity inspection and conservative managed-backend refusal are bounded by the reviewed
 contract. Source checks, race tests and 10 process cases pass. Independent review cleared source
 revision 1d8d7c5; coordinator publication remains pending. See [inspection acceptance](inspection-verification.md).
 
-004-site-themes passes local source/UI acceptance on its topic worktree: a prominent
-README site link and native system/light/dark Pages selector, with narrow local-script
-authorization. Source checks pass (10 Python and 12 Node cases). Both palettes pass browser
-checks at 375/1280 pixels, with additional tablet checks; keyboard selection, reload and
-system reset work. No-script system-light styling was inspected separately. Real OS dark
-preference/change was not exercised. Independent exact-revision review and PR/CI handoff
-remain coordinator-owned; no publication is claimed. See [theme evidence](../specs/004-site-themes/verification.md).
+004-site-themes is merged to main through [PR #5](https://github.com/wstein/sourcesteward/pull/5).
+The README site link and system/light/dark Pages selector passed source, browser and
+independent review checks. This records merged source; real OS dark preference/change
+remains untested. See [theme evidence](../specs/004-site-themes/verification.md).
 
-003-agent-hints is implemented and locally verified on codex/003-agent-hints. Root help
-links to task-specific agent guidance and llms.txt; version/JSON and error contracts are
-preserved. Independent review cleared the implementation. Main and remote publication
-remain unchanged. See [agent hints acceptance](agent-hints-verification.md).
+003-agent-hints is merged to main through [PR #4](https://github.com/wstein/sourcesteward/pull/4).
+Root help links to task-specific agent guidance and llms.txt; version/JSON and error
+contracts are preserved. Independent review cleared the implementation. See
+[agent hints acceptance](agent-hints-verification.md).
 
 002-wide-tie-brand is complete and published.
 The wide tie asset set, navy/orange site, useful README badges and local make build target
