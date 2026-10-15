@@ -16,8 +16,9 @@ Delivery now proceeds in three separately reviewed work items:
 Each follows plan → tasks → independent analysis → implement → review/test, with
 native Git/jj conformance and a separate PR. WI1 implements evidence-only plans;
 see [WI1 verification](../specs/011-workspace-reference-tidy/wi1-verification.md).
-WI2 and WI3 remain planned. Latest merged source `f7c2a10` passed hosted CI
-[run 38806519542](https://github.com/wstein/sourcesteward/actions/runs/38806519542). The pre-reconciliation `17bdd16` baseline passed local `make check`
+WI2 implements authorized local reference cleanup with [verification](../specs/011-workspace-reference-tidy/wi2-verification.md).
+WI3 remains planned and independently analyzed. WI1 is merged as `81c5f07`; exact-head PR36
+[CI 38809418076](https://github.com/wstein/sourcesteward/actions/runs/38809418076) passed source and both native Linux lanes. The pre-reconciliation `17bdd16` baseline passed local `make check`
 with current Git/jj and mandatory native sandboxing.
 
 ## Historical Spec 010 implementation handoff

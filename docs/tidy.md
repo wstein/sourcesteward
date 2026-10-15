@@ -64,7 +64,7 @@ or partial evidence, cancellation or operational/output failure. Exit 2 means in
 Writer failures may leave incomplete JSON; always check the exit status and parse validity.
 
 Observations are samples, not a transaction. External changes and ABA races cannot all be ruled
-out. Later apply must revalidate each action and record durable recovery before effects; remote
+out. Apply revalidates each action and records durable recovery before effects; remote
 reference deletion, automatic garbage collection, jj abandonment, hooks and network are excluded.
 
 ## Authorized local reference cleanup
