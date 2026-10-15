@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/011-tidy-plans` (three sequential implementation work items)
 **Created**: 2026-10-15
-**Status**: Planning — three work items; implementation and acceptance pending
+**Status**: WI1 design analyzed; implementation/acceptance pending. WI2/WI3 planning and analysis pending
 **Input**: Evidence-based plans, stale-state checks and recovery.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 

@@ -56,3 +56,7 @@ Core verifies full observation equality before persistence, validates secure sta
 complete native IDs/Snapshot/digests and encoded/aggregate bounds. No candidate containing
 workspace paths or unknown proof can be selected for deletion. Later WI2/3 types are refined and
 reanalyzed before their source work without weakening WI1 published compatibility.
+
+A retained jj bookmark with Reason ambiguous-target may have empty CommitID/ChangeID only when
+Proof is none; it can never be deleted. Missing explicit names refuse the operation rather than
+produce fabricated candidates. Full native IDs remain mandatory for every delete candidate.
