@@ -19,8 +19,7 @@ content tree. Original Markdown stays in docs/. A narrow link transform maps sel
 guide links to public pages and other repository links to canonical GitHub source URLs.
 Hugo templates own accessible guide shell and navigation; unsafe HTML is disabled.
 Public assets and versioned schema files enter the staging tree only after validation.
-The final artifact carries revision.txt, .nojekyll and optional llms.txt once feature 003
-lands. CLI reference comes from a small Go generation command calling an exported,
+The final artifact carries revision.txt, .nojekyll and required public llms.txt from feature 003. CLI reference comes from a small Go generation command calling an exported,
 read-only CLI documentation function that walks the freshly constructed Cobra tree.
 No command callback is executed; command flags and descriptions are emitted as Markdown.
 
@@ -34,12 +33,12 @@ job consumes it after checks without regenerating content or checking a differen
 
 ## Risks and mitigations
 Generated guide links may refer to private knowledge files: resolve those to GitHub source,
-never copy recursively. Schema and inspection branches are pending: base code must build
-without them, then coordinator integrates/reviews again. Platform binary extraction is
+never copy recursively. Reviewed schema and inspection branches are integrated before final acceptance;
+both schema contracts and the agent guide are now mandatory. Platform binary extraction is
 strictly allowlisted; no installation scripts execute. Browser QA remains coordinator-owned.
 
 ## Design review refinement
 The exact source→slug allowlist is recorded in contracts/site.md. Source shortcode
 openers are rejected before Hugo receives Markdown, avoiding built-in remote embeds.
-Final feature-006 integration must require both public version and inspect schemas;
-this branch alone records absence as transitional rather than claiming publication.
+Final feature-006 integration requires both public version and inspect schemas.
+The explicit allowlist includes docs/json-contracts.md as the fifth public guide.

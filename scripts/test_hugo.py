@@ -13,6 +13,7 @@ class HugoTests(unittest.TestCase):
     def test_public_guide_allowlist_and_link_mapping(self):
         self.assertEqual(pages.GUIDES['docs/development.md'][0], 'development')
         self.assertNotIn('docs/harness.md', pages.GUIDES)
+        self.assertEqual(pages.GUIDES['docs/json-contracts.md'][0], 'json-contracts')
         source = ROOT / 'docs/development.md'
         transformed = pages.guide_markdown(ROOT, source, '[Backend](backends.md) [Harness](harness.md)')
         self.assertIn('/sourcesteward/docs/backends/', transformed)
@@ -68,3 +69,16 @@ class HugoTests(unittest.TestCase):
             (root / 'index.html').write_text(good)
             (root / 'AGENTS.md').write_text('private')
             with self.assertRaises(ValueError): check_site.validate(root,'a'*40,source_root=root)
+
+    def test_all_public_guides_and_llms_are_mandatory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'docs').mkdir()
+            for name in pages.GUIDES: (root / name).write_text('# Public guide')
+            (root / 'llms.txt').write_text('# Public hints')
+            pages.validate_public_sources(root)
+            (root / 'docs/agent-guide.md').unlink()
+            with self.assertRaises(ValueError): pages.validate_public_sources(root)
+            (root / 'docs/agent-guide.md').write_text('# Public guide')
+            (root / 'llms.txt').unlink()
+            with self.assertRaises(ValueError): pages.validate_public_sources(root)

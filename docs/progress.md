@@ -1,10 +1,11 @@
 # Progress and handoff
 
 ## Current milestone
-007-hugo-docs is integrating reviewed schema/inspection foundations after isolated local source acceptance: pinned Hugo, selected public guides,
-generated Cobra reference and a build-once checked Pages artifact. Fifteen Python and 12 Node
-cases plus Go/race/source checks pass. Schema/inspection integration, final independent review,
-browser QA and publication remain coordinator-owned; see [Hugo evidence](../specs/007-hugo-docs/verification.md).
+007-hugo-docs integrates reviewed003/005/006 foundations with pinned Hugo, five selected
+public guides, generated Cobra reference including inspect, and a build-once checked Pages
+artifact. Both schemas and public agent sources are mandatory. Nineteen Python and 12 Node
+cases plus Go/race/source checks pass. Final independent review, browser QA and publication
+remain coordinator-owned; see [Hugo evidence](../specs/007-hugo-docs/verification.md).
 
 004-site-themes passes local source/UI acceptance on its topic worktree: a prominent
 README site link and native system/light/dark Pages selector, with narrow local-script
