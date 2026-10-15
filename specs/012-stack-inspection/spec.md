@@ -1,6 +1,6 @@
 # Feature Specification: Stack Inspection and Diffs
 
-**Feature Branch**: `codex/lazyjj-inspired-roadmap` (specification batch; implementation branches deferred)
+**Feature Branch**: `codex/012-changed-file-spec` (specification only)
 **Created**: 2026-10-15
 **Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
 **Input**: Human-readable summaries and versioned JSON; disclose ambiguous boundaries.
@@ -51,10 +51,26 @@ A caller receives the same evidence in human and structured output without hidde
 4. **Given** repository-controlled helpers, instructions or configuration, **When** the operation runs, **Then** no undeclared executable, hook, prompt or network action occurs and state outside declared effects is preserved.
 5. **Given** a missing mandatory backend/version or absent acceptance execution, **When** conformance is evaluated, **Then** the missing evidence blocks acceptance rather than counting as a pass.
 
+### User Story 4 — Select changed files precisely (Priority: P1)
+
+A human or agent needs an explicit, bounded outcome without disturbing unrelated work.
+
+**Why this priority**: This closes a user-selected everyday workflow gap while retaining ownership and recovery guarantees.
+
+**Independent Test**: Exercise supported success, refusal and interrupted cases in temporary Git and jj fixtures and compare relevant before/after state.
+
+**Acceptance Scenarios**:
+
+1. **Given** a chosen base and endpoint with renamed/deleted files, **When** a path-filtered query runs, **Then** the result preserves old/new paths, change kind, endpoint scope and selection anchoring.
+2. **Given** staged and unstaged Git changes or unsnapshotted jj edits, **When** a scope is selected, **Then** disk, index and stored-history results remain distinct; unsupported scopes are explicit.
+3. **Given** glob-like or control-character filenames and oversized results, **When** files are queried, **Then** literal selection and safe rendering preserve names and exclusions/truncation are disclosed.
+
 ### Edge Cases
 
 - Merge commits, disconnected histories, multiple roots/bases, divergent jj changes and immutable revisions.
 - Renames, binary files, unusual filenames, output limits and concurrent ref/operation changes.
+
+- Changed paths absent on disk, rename crossing filter boundaries and staged/disk edits to the same file.
 
 ## Requirements
 
@@ -70,10 +86,16 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-008**: Declare and enforce observation/action scope, output and time limits, cancellation and incomplete-result behavior; never convert missing or truncated evidence into success or permission to mutate.
 - **FR-009**: Require acceptance evidence for minimum/current supported Git and jj, including failure, concurrency, ownership and effects cases; missing mandatory coverage cannot count as passed conformance.
 
+- **FR-010**: Reuse Spec 009 literal path selection and declared anchoring for changed-since-base queries; distinguish endpoint-to-endpoint comparison from merge-base comparison and report the selected mode.
+- **FR-011**: Keep stored-history stack diffs separate from disk/index file observations supplied by Spec 009; do not silently include disk edits or require a staging area for jj.
+- **FR-012**: Include deletions, rename source/destination and binary/change kinds in structured file results; disclose path filters, ignored/untracked exclusions and truncation rather than silently listing only extant files.
+
 ### Key Entities
 
 - Stack observation: declared base, ordered/graph relationships, native revisions and ambiguity.
 - Diff observation: endpoints, scope, files and completeness.
+
+- Changed-file selection: literal paths, anchoring, endpoints/comparison mode, state scope and exclusions.
 
 ## Success Criteria
 
@@ -87,6 +109,8 @@ A caller receives the same evidence in human and structured output without hidde
 ## Assumptions
 
 - Depends on Spec 008 identity and Spec 009 inventory/reference evidence.
-- Stack edits, restacking, publication and live working-directory diffs are excluded.
+- Stack edits, restacking and publication are excluded. Live file observations are available only through the explicitly selected Spec 009 scope; stored stack diffs remain stored-history observations.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
+
+- Live file-state queries are delegated to Spec 009; this does not turn stored stack diffs into live disk diffs.
