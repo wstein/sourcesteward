@@ -1,25 +1,25 @@
 # Tasks: Generated documentation
 
 ## Setup and gates
-- [x] T001 Create reviewed design artifacts in specs/007-hugo-docs/ (await coordinator release).
-- [ ] T002 Add failing contract tests in scripts/test_hugo.py and internal/cli/docs_test.go.
+- [x] T001 Create reviewed design artifacts in specs/007-hugo-docs/ (coordinator released implementation after design review).
+- [x] T002 Add failing contract tests in scripts/test_hugo.py and internal/cli/docs_test.go.
 
 ## US1 — Branded public guides
-- [ ] T003 [US1] Add local config/templates in site/ preserving landing and theme control.
-- [ ] T004 [US1] Add explicit staging/link resolution and shortcode rejection in scripts/package-pages.py.
-- [ ] T005 [US1] Add public documentation navigation in docs/index.html and shared styles in docs/assets/site.css.
+- [x] T003 [US1] Add local config/templates in site/ preserving landing and theme control.
+- [x] T004 [US1] Add explicit staging/link resolution and shortcode rejection in scripts/package-pages.py.
+- [x] T005 [US1] Add public documentation navigation in docs/index.html and shared styles in docs/assets/site.css.
 
 ## US2 — Generated reference
-- [ ] T006 [US2] Export deterministic command metadata in internal/cli/docs.go and cmd/stw-docs/main.go.
-- [ ] T007 [US2] Stage generated command pages and verify actual command/flag coverage in scripts/test_hugo.py.
+- [x] T006 [US2] Export deterministic command metadata in internal/cli/docs.go and cmd/stw-docs/main.go.
+- [x] T007 [US2] Stage generated command pages and verify actual command/flag coverage in scripts/test_hugo.py.
 
 ## US3 — Checked artifact publication
-- [ ] T008 [US3] Pin official hashes and safe installer in scripts/hugo-release.json and scripts/install-hugo.py.
-- [ ] T009 [US3] Carry verbatim schemas/public llms and revision through scripts/package-pages.py.
-- [ ] T010 [US3] Build/check once and deploy identical artifact in .github/workflows/ci.yml; add Makefile target.
+- [x] T008 [US3] Pin official hashes and safe installer in scripts/hugo-release.json and scripts/install-hugo.py.
+- [x] T009 [US3] Carry verbatim schemas/public llms and revision through scripts/package-pages.py.
+- [x] T010 [US3] Build/check once and deploy identical artifact in .github/workflows/ci.yml; add Makefile target.
 
 ## Verification and handoff
-- [ ] T011 Run source/generated checks, inspect privacy/link/schema boundaries and record specs/007-hugo-docs/verification.md.
+- [x] T011 Run source/generated checks, inspect privacy/link/schema boundaries and record specs/007-hugo-docs/verification.md.
 - [ ] T012 Obtain coordinator browser QA and independent exact-revision review; fix findings before PR handoff.
 
 Dependencies: T001 release → T002; T003/T004/T006/T008 after tests; T005 after shell;

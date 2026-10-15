@@ -33,18 +33,24 @@
     },
     {
       "id": "006-json-schemas",
-      "status": "verified",
+      "status": "implemented",
       "spec": "../specs/006-json-schemas/spec.md",
       "evidence": "json-schema-verification.md"
     },
     {
-      "id": "jj-adapter",
+      "id": "007-hugo-docs",
+      "status": "implemented",
+      "spec": "../specs/007-hugo-docs/spec.md",
+      "evidence": "../specs/007-hugo-docs/verification.md"
+    },
+    {
+      "id": "gitbutler-adapter",
       "status": "planned",
       "spec": null,
       "evidence": null
     },
     {
-      "id": "gitbutler-adapter",
+      "id": "jj-adapter",
       "status": "planned",
       "spec": null,
       "evidence": null
