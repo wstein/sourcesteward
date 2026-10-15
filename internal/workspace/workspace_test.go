@@ -7,6 +7,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/inspection"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -122,5 +123,77 @@ func TestCoordinatorHandoffRetirementAndTaskCollision(t *testing.T) {
 		if retire && r.Task.State != "retained" {
 			t.Fatal("retirement did not retain")
 		}
+	}
+}
+
+func TestPlansDiscloseBackendSpecificEffects(t *testing.T) {
+	c, _, o := fixtureCoordinator(t)
+	r := c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatal(r.Error())
+	}
+	all := strings.Join(r.Plan.Effects, " ")
+	for _, term := range []string{"detached", "worktrees", "locked"} {
+		if !strings.Contains(all, term) {
+			t.Fatalf("missing native effect %q: %s", term, all)
+		}
+	}
+}
+func TestIncompleteEffectsAreNotClaimedComplete(t *testing.T) {
+	c, f, o := fixtureCoordinator(t)
+	p := c.plan(context.Background(), o)
+	f.fail = true
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	for _, a := range r.Actions {
+		if a.Name == "native-effect" && a.Status == "completed" {
+			t.Fatal("uncertain native effect claimed complete")
+		}
+	}
+}
+func TestInitialFinalizeRequiresExactNativeIdentity(t *testing.T) {
+	c, f, o := fixtureCoordinator(t)
+	p := c.plan(context.Background(), o)
+	s, e := openStore(o.StateDir, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	id, e := reserveDestination(*p.Plan)
+	if e != nil {
+		t.Fatal(e)
+	}
+	effective := *p.Plan
+	effective.DestinationIdentity = &id
+	native, _ := f.Create(context.Background(), effective)
+	j := journal{SchemaVersion: 1, PlanID: p.Plan.PlanID, Phase: "native-created", Native: &native, DestinationIdentity: &id, Actions: []ActionOutcome{}, Diagnostics: []Diagnostic{}}
+	f.snap.Identity.CommitID = "concurrent commit after create"
+	r := c.finalize(context.Background(), s, effective, j, f, newResult("workspace-apply"))
+	if r.Status != "partial" {
+		t.Fatalf("accepted concurrent native identity: %#v", r)
+	}
+}
+func TestHandoffRejectsIncompleteJournalEvidence(t *testing.T) {
+	c, _, o := fixtureCoordinator(t)
+	p := c.plan(context.Background(), o)
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	if r.Status != "ok" {
+		t.Fatal(r.Error())
+	}
+	s, e := openStore(o.StateDir, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var j journal
+	if e = s.read("operations", p.Plan.PlanID, &j); e != nil {
+		t.Fatal(e)
+	}
+	j.Native.Complete = false
+	if e = s.write("operations", p.Plan.PlanID, j, false); e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
+	r = c.handoff(context.Background(), Options{o.Destination, o.StateDir}, false)
+	if r.Status != "refused" {
+		t.Fatal("accepted noncomplete native ownership")
 	}
 }
