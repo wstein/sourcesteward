@@ -7,6 +7,7 @@ check:
 	$(GO) vet ./...
 	$(GO) mod verify
 	python3 -B -m unittest discover -s scripts -p 'test_*.py'
+	node --test scripts/test_theme.mjs
 	python3 -B scripts/check-docs.py
 	python3 -B scripts/check-architecture.py
 	git diff --check

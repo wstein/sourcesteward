@@ -50,9 +50,15 @@ class Page(HTMLParser):
         self.has_main = False
         self.has_lang = False
         self.has_viewport = False
+        self.theme_scripts = 0
+        self.in_script = False
 
     def handle_starttag(self, tag, attrs):
+        if len(attrs) != len(dict(attrs)):
+            raise ValueError('Duplicate HTML attribute')
         attrs = dict(attrs)
+        if any(name.startswith('on') for name in attrs):
+            raise ValueError('Inline event handlers forbidden')
         if 'id' in attrs:
             if attrs['id'] in self.ids:
                 raise ValueError('Duplicate HTML ID: ' + attrs['id'])
@@ -62,9 +68,20 @@ class Page(HTMLParser):
         if tag == 'meta' and attrs.get('name') == 'viewport': self.has_viewport = True
         if tag == 'img' and 'alt' not in attrs: raise ValueError('Image missing alt attribute')
         if attrs.get('href', '').startswith('#'): self.anchors.append(attrs['href'][1:])
-        if tag == 'script': raise ValueError('Foundation site must not execute scripts')
+        if tag == 'script':
+            if attrs != {'src': 'assets/theme.js', 'defer': None} or self.theme_scripts:
+                raise ValueError('Only the single local deferred theme script is allowed')
+            self.theme_scripts += 1
+            self.in_script = True
         if tag in ('img', 'link') and any(urlsplit(attrs.get(k, '')).scheme or urlsplit(attrs.get(k, '')).netloc for k in ('src', 'href')):
             raise ValueError('Foundation site assets must be local')
+
+    def handle_data(self, data):
+        if self.in_script and data.strip():
+            raise ValueError('Inline script content forbidden')
+
+    def handle_endtag(self, tag):
+        if tag == 'script': self.in_script = False
 
 
 def check(root):
