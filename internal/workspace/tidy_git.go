@@ -60,7 +60,7 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 		switch {
 		case ref.symbolic:
 			c.Reason = "symbolic-reference"
-		case c.Name == base:
+		case c.Name == base || c.CommitID == expected.BaseCommit:
 			c.Reason = "selected-base"
 		case len(c.WorkspacePaths) > 0:
 			c.Reason = "workspace-used"
