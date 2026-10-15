@@ -32,6 +32,13 @@ def validate_assets(root):
     return index, assets
 
 
+def validate_public_sources(root):
+    for name in (*GUIDES,'llms.txt'):
+        source = root / name
+        if source.is_symlink() or not source.is_file():
+            raise ValueError('Regular public source required: ' + name)
+
+
 def guide_markdown(root, source, text):
     if '{{<' in text or '{{%' in text: raise ValueError('Hugo source shortcodes forbidden: ' + str(source))
     def rewrite(match):
@@ -91,6 +98,7 @@ def package(root, destination, revision, hugo=None, require_schemas=True):
     if not re.fullmatch(r'[0-9a-f]{40}',revision): raise ValueError('Full source SHA required')
     if destination.exists() or destination.is_symlink(): raise ValueError('Destination must not exist')
     index, assets = validate_assets(root)
+    validate_public_sources(root)
     hugo = str(hugo or os.environ.get('HUGO') or root / '.tools/hugo')
     pin = json.loads((root / 'scripts/hugo-release.json').read_text())['version']
     version = subprocess.check_output([hugo,'version'],text=True)
@@ -113,9 +121,6 @@ def package(root, destination, revision, hugo=None, require_schemas=True):
         write_content(content / 'docs/_index.md','Documentation','Current public guides. Repository operations remain limited to the implemented command contract.\n')
         for name,(slug,title) in GUIDES.items():
             source = root / name
-            if not source.exists():
-                raise ValueError('Missing public guide: ' + name)
-            if source.is_symlink(): raise ValueError('Linked public guide forbidden')
             body = guide_markdown(root,source,source.read_text())
             body = re.sub(r'^# [^\n]*\n','',body,count=1)
             write_content(content / 'docs' / slug / 'index.md',title,body)
@@ -127,9 +132,7 @@ def package(root, destination, revision, hugo=None, require_schemas=True):
             write_content(content / 'reference' / slug / 'index.md',command['path'],body)
         copy_schemas(root,stage / 'static',required=require_schemas)
         llms = root / 'llms.txt'
-        if llms.exists():
-            if llms.is_symlink(): raise ValueError('Linked llms.txt forbidden')
-            shutil.copyfile(llms,stage / 'static/llms.txt')
+        shutil.copyfile(llms,stage / 'static/llms.txt')
         subprocess.run([hugo,'--source',str(stage),'--destination',str(stage / 'public'),'--noBuildLock'],check=True,env={**{key:value for key,value in os.environ.items() if not key.startswith('HUGO_')},'HUGO_ENVIRONMENT':'production'})
         destination.parent.mkdir(parents=True,exist_ok=True)
         shutil.copytree(stage / 'public',destination)
