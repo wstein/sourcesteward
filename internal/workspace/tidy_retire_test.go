@@ -65,3 +65,137 @@ func TestRetirementRecoveryPinsTargetIdentity(t *testing.T) {
 		t.Fatal("source commit pinned instead of retired target")
 	}
 }
+
+type fakeRetirementAdapter struct {
+	observation                RetirementObservation
+	state, plan                string
+	pins, registrations, files int
+	pinErr                     bool
+	onPin                      func()
+	prepared, confirmed        bool
+}
+
+func (f *fakeRetirementAdapter) Observe(context.Context, string, string, TaskRecord, MutationPlan) (RetirementObservation, error) {
+	return f.observation, nil
+}
+func (f *fakeRetirementAdapter) PrepareRecovery(_ context.Context, p RetirementPlanRecord) (TidyRecovery, TidyNativeOutcome, error) {
+	f.pins++
+	s, err := openRetirementStore(f.state, false)
+	if err == nil {
+		var j RetirementJournal
+		err = s.read("tidy-retirement-operations", f.plan, &j)
+		s.Close()
+		f.prepared = err == nil && j.Phase == "prepared" && j.PlannedRecovery == retirementRecoveryFor(p)
+	}
+	r := retirementRecoveryFor(p)
+	f.observation.Expected.ReferenceDigest = strings.Repeat("4", 64)
+	if f.onPin != nil {
+		f.onPin()
+	}
+	snap := f.observation.Expected
+	out := TidyNativeOutcome{Attempted: true, Complete: !f.pinErr, Effects: []string{"Created exact target recovery root " + r.Name}, Limitations: []string{}, Expected: &snap}
+	if f.pinErr {
+		return r, out, os.ErrPermission
+	}
+	return r, out, nil
+}
+func (f *fakeRetirementAdapter) RemoveRegistration(_ context.Context, p RetirementPlanRecord, _ TidyRecovery, _ Snapshot) (TidyNativeOutcome, error) {
+	f.registrations++
+	s, err := openRetirementStore(f.state, false)
+	if err == nil {
+		var j RetirementJournal
+		err = s.read("tidy-retirement-operations", f.plan, &j)
+		s.Close()
+		f.confirmed = err == nil && j.Phase == "recovery-confirmed" && j.Recovery != nil
+	}
+	if err := os.Remove(p.Task.Destination); err != nil {
+		return TidyNativeOutcome{}, err
+	}
+	f.observation.Expected.RegistrationDigest = strings.Repeat("5", 64)
+	snap := f.observation.Expected
+	return TidyNativeOutcome{Attempted: true, Complete: true, Effects: []string{"Removed exact owned registration and destination"}, Limitations: []string{}, Expected: &snap}, nil
+}
+func (f *fakeRetirementAdapter) RemoveFiles(_ context.Context, _ RetirementPlanRecord, _ TidyRecovery, _ Snapshot) (TidyNativeOutcome, error) {
+	f.files++
+	snap := f.observation.Expected
+	return TidyNativeOutcome{Attempted: false, Complete: true, Effects: []string{"Verified exact destination absent after coupled native removal"}, Limitations: []string{}, Expected: &snap}, nil
+}
+func fixtureRetirement(t *testing.T) (retirementCoordinator, *fakeRetirementAdapter, TidyPlanOptions) {
+	t.Helper()
+	creation, native, o := fixtureCoordinator(t)
+	planned := creation.plan(context.Background(), o)
+	created := creation.apply(context.Background(), ApplyOptions{StateDir: o.StateDir, PlanID: planned.Plan.PlanID, Authorize: true})
+	if created.Status != "ok" {
+		t.Fatal(created)
+	}
+	registrationParent := filepath.Dir(created.Task.Native.GitDir)
+	if err := os.MkdirAll(registrationParent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	destParent, err := currentIdentity(filepath.Dir(o.Destination))
+	if err != nil {
+		t.Fatal(err)
+	}
+	regParent, err := currentIdentity(registrationParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := RetirementManifest{Entries: []RetirementEntry{}, Complete: true}
+	manifest.Digest = retirementManifestDigest(manifest)
+	siblings := []RetirementSibling{}
+	observation := RetirementObservation{Expected: native.snap, Target: created.Task.Native, Destination: created.Task.DestinationIdentity, DestinationParent: destParent, RegistrationParent: regParent, Manifest: manifest, Metadata: manifest, Siblings: siblings, SiblingDigest: retirementRecordDigest(siblings), LockReason: "stw:" + o.Task, WorkspacePaths: []string{o.Path, o.Destination}, WorkspacePathsComplete: true, Proof: "native-ancestry", Actions: []RetirementAction{{Name: "remove-registration", Target: o.Destination, Decision: "delete", Reason: "integrated", Proof: "native-ancestry", Effects: []string{}, Blockers: []string{}}, {Name: "remove-files", Target: o.Destination, Decision: "delete", Reason: "clean", Proof: "native-ancestry", Effects: []string{}, Blockers: []string{}}}, Limitations: []string{}}
+	f := &fakeRetirementAdapter{observation: observation, state: o.StateDir}
+	c := retirementCoordinator{inspect: creation.inspect, adapter: func(string) (retirementAdapter, error) { return f, nil }, sourceObserve: func(context.Context, string, string, string) (Snapshot, error) { return f.observation.Expected, nil }, cwd: func() (string, error) { return o.Path, nil }}
+	return c, f, TidyPlanOptions{Path: o.Path, Base: o.Base, StateDir: o.StateDir, Task: o.Task, Owner: o.Owner, RemoveRegistration: true, RemoveFiles: o.Destination}
+}
+func TestRetirementPlanAndApplyDurableRecoveryAndVerifiedRetry(t *testing.T) {
+	c, f, o := fixtureRetirement(t)
+	r := c.plan(context.Background(), o)
+	if r.Status != "ok" || r.Retirement == nil {
+		t.Fatalf("plan %+v", r)
+	}
+	f.plan = r.Retirement.PlanID
+	opts := TidyApplyOptions{StateDir: o.StateDir, PlanID: f.plan, Authorize: true}
+	r = c.apply(context.Background(), opts)
+	if r.Status != "ok" || !f.prepared || !f.confirmed || f.pins != 1 || f.registrations != 1 || f.files != 1 {
+		t.Fatalf("apply %+v prepared%v confirmed%v", r, f.prepared, f.confirmed)
+	}
+	r = c.apply(context.Background(), opts)
+	if r.Status != "ok" || f.registrations != 1 || f.pins != 1 {
+		t.Fatalf("completed retry %+v", r)
+	}
+}
+func TestRetirementPartialPinNeverRemovesOrReplays(t *testing.T) {
+	c, f, o := fixtureRetirement(t)
+	r := c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatal(r)
+	}
+	f.plan = r.Retirement.PlanID
+	f.pinErr = true
+	opts := TidyApplyOptions{StateDir: o.StateDir, PlanID: f.plan, Authorize: true}
+	r = c.apply(context.Background(), opts)
+	if r.Status != "partial" || f.registrations != 0 || f.pins != 1 {
+		t.Fatalf("partial %+v", r)
+	}
+	r = c.apply(context.Background(), opts)
+	if r.Status != "partial" || f.pins != 1 || f.registrations != 0 {
+		t.Fatalf("blind retirement replay %+v", r)
+	}
+}
+func TestRetirementBadStateNeverCreatesFiles(t *testing.T) {
+	c, _, o := fixtureRetirement(t)
+	o.StateDir = o.Path
+	before, err := os.ReadDir(o.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := c.plan(context.Background(), o)
+	if r.Status == "ok" {
+		t.Fatal("source state accepted")
+	}
+	after, err := os.ReadDir(o.Path)
+	if err != nil || len(after) != len(before) {
+		t.Fatal("unsafe source state gained files on refusal")
+	}
+}

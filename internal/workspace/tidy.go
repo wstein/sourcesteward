@@ -22,6 +22,9 @@ type tidyCoordinator struct {
 func PlanTidy(ctx context.Context, o TidyPlanOptions) TidyResult {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
+		return boundedTidy(defaultRetirementCoordinator().plan(ctx, o))
+	}
 	c := tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}
 	return boundedTidy(c.plan(ctx, o))
 }
@@ -314,7 +317,7 @@ func disjointTidyStore(p TidyPlanRecord) error {
 	return nil
 }
 func withinTidyBounds(r TidyResult) bool {
-	count := len(r.Actions) + len(r.Diagnostics) + len(r.Limitations)
+	count := len(r.Actions) + len(r.Diagnostics) + len(r.Limitations) + retirementResultRecordCount(r.Retirement)
 	if r.Plan != nil {
 		p := r.Plan
 		count += len(p.SelectedRefs) + len(p.Candidates) + len(p.Effects) + len(p.RecoveryLimits)
@@ -333,6 +336,9 @@ func boundedTidy(r TidyResult) TidyResult {
 		return r
 	}
 	safe := newTidyResult("tidy-plan")
+	if r.SchemaVersion == 2 {
+		safe.SchemaVersion = 2
+	}
 	if r.Command == "tidy-apply" {
 		safe.Command = r.Command
 	}
@@ -381,6 +387,9 @@ func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string
 }
 
 func tidyResultRecoveryPointer(r TidyResult) string {
+	if r.Retirement != nil && validID(r.Retirement.PlanID) && validText(retirementJournalPointer(*r.Retirement)) {
+		return retirementJournalPointer(*r.Retirement)
+	}
 	if r.Plan != nil && validID(r.Plan.PlanID) && validText(r.Plan.StateDir) && filepath.IsAbs(r.Plan.StateDir) {
 		pointer := tidyJournalPointer(*r.Plan)
 		if validText(pointer) {
@@ -388,7 +397,7 @@ func tidyResultRecoveryPointer(r TidyResult) string {
 		}
 	}
 	for _, limit := range r.Limitations {
-		if pointer, ok := strings.CutPrefix(limit, "Recovery journal: "); ok && validText(pointer) && filepath.IsAbs(pointer) && filepath.Clean(pointer) == pointer && filepath.Base(filepath.Dir(pointer)) == "tidy-operations" && strings.HasSuffix(pointer, ".json") && validID(strings.TrimSuffix(filepath.Base(pointer), ".json")) {
+		if pointer, ok := strings.CutPrefix(limit, "Recovery journal: "); ok && validText(pointer) && filepath.IsAbs(pointer) && filepath.Clean(pointer) == pointer && (filepath.Base(filepath.Dir(pointer)) == "tidy-operations" || filepath.Base(filepath.Dir(pointer)) == "tidy-retirement-operations") && strings.HasSuffix(pointer, ".json") && validID(strings.TrimSuffix(filepath.Base(pointer), ".json")) {
 			return pointer
 		}
 	}

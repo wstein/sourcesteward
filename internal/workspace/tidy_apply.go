@@ -31,6 +31,16 @@ type TidyJournal struct {
 func ApplyTidy(ctx context.Context, o TidyApplyOptions) TidyResult {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	kind, err := tidyStoredKind(o)
+	if kind == "retirement" {
+		if err != nil {
+			return boundedTidy(failTidy(newRetirementResult("tidy-apply"), err))
+		}
+		return boundedTidy(defaultRetirementCoordinator().apply(ctx, o))
+	}
+	if err != nil {
+		return boundedTidy(failTidy(newTidyResult("tidy-apply"), err))
+	}
 	return boundedTidy((tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}).apply(ctx, o))
 }
 func tidyApplyEffects(p TidyPlanRecord) []string {
@@ -111,6 +121,9 @@ func (c tidyCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResu
 		return failTidy(r, err)
 	}
 	defer s.Close()
+	if err = checkOtherTidyNamespace(s, o.PlanID, "tidy-retirement-plans"); err != nil {
+		return failTidy(r, err)
+	}
 	var p TidyPlanRecord
 	if err = s.read("tidy-plans", o.PlanID, &p); err != nil {
 		return failTidy(r, err)
