@@ -27,9 +27,11 @@ working-copy change based on the explicit commit; it changes operation metadata.
 may remove its newly reserved destination on failure; this is disclosed and never extended to
 foreign paths. Source disk,
 index/working-copy state, source HEAD/bookmarks, config and untracked files remain unchanged.
-No fetch, push, scripts, stash, reset, hook suppression, model launch or deletion is permitted.
+No fetch, push, scripts, stash, source reset, hook suppression, model launch or deletion is permitted.
+Native Git worktree-add may internally reset only its new owned destination to materialize the
+planned checkout; this is a declared backend effect, never a source checkout reset.
 
-Git safe preflight rejects all executable hooks, configured checkout filters/attributes,
+Git safe preflight rejects all executable hooks, configured executable checkout filters and unsafe external attributes sources,
 submodule activation and unsupported sparse/promisor/external-helper paths before native action;
 no successful operation may silently bypass an installed hook. Missing safety evidence refuses.
 Git writes also require a network-denying sandbox limited to the owned destination and new
