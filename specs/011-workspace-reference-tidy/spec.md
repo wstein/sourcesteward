@@ -1,10 +1,22 @@
 # Feature Specification: Workspace and Reference Tidy
 
-**Feature Branch**: `codex/lazyjj-inspired-roadmap` (specification batch; implementation branches deferred)
+**Feature Branch**: `codex/011-tidy-plans` (three sequential implementation work items)
 **Created**: 2026-10-15
-**Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
+**Status**: Planning — three work items; implementation and acceptance pending
 **Input**: Evidence-based plans, stale-state checks and recovery.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
+
+## Delivery Work Items
+
+1. WI1: evidence-only reference tidy plans; no native deletion.
+2. WI2: authorized local Git branch/jj bookmark cleanup with durable recovery and stale checks.
+3. WI3: owned workspace retirement with registration and exact filesystem actions separately authorized.
+
+Unsupported squash/forge proof retains. jj bookmarks with any remote counterpart retain to avoid
+changing later remote deletion intent. Git registration-only removal of a present checkout is
+unsupported and retains; combined native removal requires both exact action authorizations.
+Native jj empty working-copy retirement requires one integrated parent, complete stored-tree
+equality to that parent and complete fresh clean disk; emptiness alone is never proof.
 
 ## User Scenarios & Testing
 
