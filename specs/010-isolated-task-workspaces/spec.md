@@ -1,8 +1,8 @@
 # Feature Specification: Isolated Task Workspaces
 
-**Feature Branch**: `codex/lazyjj-inspired-roadmap` (specification batch; implementation branches deferred)
+**Feature Branch**: `codex/010-isolated-task-workspaces`
 **Created**: 2026-10-15
-**Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
+**Status**: Planned — design and tasks prepared; independent analysis and implementation pending
 **Input**: Native Git worktrees and jj workspaces, with safe handoff and retirement.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
