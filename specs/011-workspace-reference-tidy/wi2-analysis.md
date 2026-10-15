@@ -12,7 +12,7 @@ Independent reviewer cleared design revision 777d754 on 2026-10-15 after resolvi
    apply effects distinguish newly generated WI2 plans, with replan-required and zero native effects.
 
 Remaining low stale wording in goal was corrected to WI2-generated persisted plan. No critical/high
-findings remain. WI3 is not analyzed; its concrete interface/confinement still requires a separate gate.
+findings remain. At this revision WI3 was not analyzed; its later clearance is recorded in [WI3 analysis](wi3-analysis.md).
 This is design clearance, not source review or execution evidence. Actual partial/cancel/persistence,
 packed-ref and concurrent jj operation cases remain mandatory implementation acceptance tests.
 
