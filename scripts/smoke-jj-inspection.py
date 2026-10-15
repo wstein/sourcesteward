@@ -20,6 +20,12 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / 'bin/stw'
 PREFIX = ['--ro-bind', '/', '/', '--unshare-net', '--die-with-parent', '--new-session', '--cap-drop', 'ALL', '--']
+LINUX_PAYLOAD_PROBE = '''import json, os
+from pathlib import Path
+status = Path('/proc/self/status').read_text().splitlines()
+cap_eff = next(line.split()[1] for line in status if line.startswith('CapEff:'))
+print(json.dumps({'cap_eff': cap_eff, 'profile': Path('/proc/self/attr/current').read_text().strip(), 'netns': os.readlink('/proc/self/ns/net')}))
+'''
 
 
 def clean_environment(home):
@@ -53,7 +59,25 @@ def check_sandbox():
         result = subprocess.run([*prefix, '/usr/bin/true'], env=env, capture_output=True, timeout=15)
         if result.returncode:
             raise RuntimeError('Required read-only sandbox cannot execute; install a supported host sandbox without relaxing protections. Probe diagnostic: ' + repr(result.stderr[:2048]))
+        if platform.system() == 'Linux':
+            result = subprocess.run([*prefix, '/usr/bin/python3', '-I', '-c', LINUX_PAYLOAD_PROBE], env=env, capture_output=True, timeout=15)
+            if result.returncode:
+                raise RuntimeError('Sandbox payload evidence probe failed: ' + repr(result.stderr[:2048]))
+            evidence = json.loads(result.stdout)
+            validate_linux_payload(evidence, os.readlink('/proc/self/ns/net'))
+            print(json.dumps({'sandbox_payload': evidence}))
     print('Enforced read-only sandbox capability verified')
+
+
+def validate_linux_payload(evidence, host_netns):
+    if evidence.get('cap_eff') != '0000000000000000':
+        raise RuntimeError('Sandbox payload retained effective capabilities')
+    label = evidence.get('profile', '')
+    if 'unpriv_bwrap' not in label or not label.endswith(' (enforce)') or 'unconfined' in label:
+        raise RuntimeError('Sandbox payload is missing enforced distro child confinement')
+    network = evidence.get('netns', '')
+    if not re.fullmatch(r'net:\[\d+\]', network) or network == host_netns:
+        raise RuntimeError('Sandbox payload did not enter a private network namespace')
 
 
 def preflight(lane):
