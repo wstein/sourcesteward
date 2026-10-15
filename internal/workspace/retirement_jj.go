@@ -15,6 +15,11 @@ import (
 
 type jjRetirementAdapter struct{}
 
+// VerifyPost observes native recovery and registration absence without touching retained files.
+func (jjRetirementAdapter) VerifyPost(ctx context.Context, p RetirementPlanRecord, r TidyRecovery, expected Snapshot) error {
+	return inspection.VerifyJJRetirementPostState(ctx, p.SourcePath, jjTidyNativeState(expected), jjRetirementNativeTarget(p.Expected.Target), inspection.JJTidyRecovery{Name: r.Name, CommitID: r.CommitID, ChangeID: r.ChangeID, OperationID: r.OperationID})
+}
+
 func (jjRetirementAdapter) Observe(ctx context.Context, source, base string, task TaskRecord, creation MutationPlan) (RetirementObservation, error) {
 	o := RetirementObservation{Siblings: []RetirementSibling{}, WorkspacePaths: []string{}, Actions: []RetirementAction{}, Limitations: []string{}}
 	state, e := inspection.ObserveJJRetirement(ctx, source, base, task.Destination, task.TaskID, creation.Expected.Identity.RepositoryDir)
