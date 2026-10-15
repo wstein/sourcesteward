@@ -15,7 +15,7 @@ def package(root, destination, revision):
     if index.is_symlink() or assets.is_symlink() or not index.is_file() or not assets.is_dir():
         raise ValueError('Regular static site sources required')
     for path in assets.rglob('*'):
-        if path.is_symlink() or (path.is_file() and path.suffix not in ('.svg', '.css', '.ttf', '.woff2', '.txt')):
+        if path.is_symlink() or (path.is_file() and path.suffix not in ('.svg', '.png', '.ico', '.css', '.ttf', '.woff2', '.txt')):
             raise ValueError('Unexpected or linked site asset: ' + str(path))
     destination.mkdir(parents=True)
     shutil.copyfile(index, destination / 'index.html')

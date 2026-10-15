@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import struct
+import hashlib
+import xml.etree.ElementTree as ET
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +15,39 @@ def load(name, filename):
     return module
 
 class DocumentationTests(unittest.TestCase):
+    def test_wide_tie_assets_are_flat_and_self_contained(self):
+        allowed = {'#0b2545', '#f05032', '#ff8066', '#ffffff', 'none'}
+        ns = '{http://www.w3.org/2000/svg}'
+        for asset in sorted((ROOT / 'docs/assets').glob('*.svg')):
+            root = ET.parse(asset).getroot()
+            self.assertIsNotNone(root.find(ns + 'title'))
+            self.assertIsNotNone(root.find(ns + 'desc'))
+            if asset.name in ('logo.svg', 'logo-mark.svg', 'favicon.svg'):
+                self.assertEqual(len(root.findall('.//' + ns + 'circle')), 3)
+            for node in root.iter():
+                self.assertNotIn(node.tag.removeprefix(ns), ('image', 'linearGradient', 'radialGradient', 'filter', 'script', 'text'))
+                self.assertFalse(any('href' in key for key in node.attrib))
+                for key in ('fill', 'stroke'):
+                    if key in node.attrib: self.assertIn(node.attrib[key], allowed)
+        site = (ROOT / 'docs/index.html').read_text()
+        self.assertIn('href="assets/favicon.svg"', site)
+        self.assertNotIn('#5eead4', (ROOT / 'docs/assets/site.css').read_text())
+
+    def test_brand_raster_dimensions_and_hashes(self):
+        sizes = {'logo.png':(256,256), 'banner.png':(1000,150), 'social-preview.png':(1280,640),
+                 'apple-touch-icon.png':(180,180), 'android-chrome-192.png':(192,192), 'android-chrome-512.png':(512,512)}
+        sizes.update({f'favicon-{n}.png':(n,n) for n in (16,24,32,48,64)})
+        for name, size in sizes.items():
+            raw = (ROOT / 'docs/assets' / name).read_bytes()
+            self.assertEqual(raw[:8], b'\x89PNG\r\n\x1a\n')
+            self.assertEqual(struct.unpack('>II', raw[16:24]), size)
+        self.assertEqual((ROOT / 'docs/assets/apple-touch-icon.png').read_bytes()[25], 2)
+        icon = (ROOT / 'docs/assets/favicon.ico').read_bytes()
+        self.assertEqual(struct.unpack('<HHH',icon[:6]), (0,1,4))
+        for line in (ROOT / 'brand/SHA256SUMS').read_text().splitlines():
+            expected, name = line.split('  ',1)
+            self.assertEqual(hashlib.sha256((ROOT / name).read_bytes()).hexdigest(), expected, name)
+
     def test_architecture_rejects_direct_effects(self):
         architecture = load('architecture', 'check-architecture.py')
         architecture.validate(['github.com/wstein/sourcesteward/internal/cli fmt context github.com/spf13/cobra'])
@@ -42,6 +78,8 @@ class DocumentationTests(unittest.TestCase):
             package.package(ROOT, destination, 'a' * 40)
             self.assertTrue((destination / 'index.html').is_file())
             self.assertTrue((destination / 'assets/logo.svg').is_file())
+            self.assertTrue((destination / 'assets/favicon.ico').is_file())
+            self.assertTrue((destination / 'assets/social-preview.png').is_file())
             self.assertFalse((destination / 'roadmap.md').exists())
             self.assertEqual((destination / 'revision.txt').read_text(), 'a' * 40 + '\n')
             with self.assertRaises(ValueError): package.package(ROOT, destination, 'b' * 40)

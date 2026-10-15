@@ -65,6 +65,7 @@ def check(root):
     for folder in ('docs', 'brand', 'specs'):
         authored.extend((root / folder).rglob('*.md'))
     authored.append(root / 'docs/index.html')
+    authored.extend((root / 'brand').glob('*.html'))
     for source in authored: check_links(root, source)
     page = Page()
     page.feed((root / 'docs/index.html').read_text())
