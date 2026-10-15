@@ -4,7 +4,7 @@ Three sequential implementation WIs; each gets plan → tasks → independent an
 → implementation → independent review/verification → focused commits → PR.
 
 - [WI1 plan](wi1-plan.md) and [WI1 tasks](wi1-tasks.md): evidence-only plans, US1/US3.
-- WI2: local reference cleanup, US2/US3; separate plan/tasks follow before its implementation.
+- [WI2 plan](wi2-plan.md) and [WI2 tasks](wi2-tasks.md): local reference cleanup, US2/US3; independent analysis pending.
 - WI3: owned retirement, US1/US2/US3; separate plan/tasks follow before its implementation.
 
 ## Requirement traceability
@@ -28,3 +28,10 @@ Three sequential implementation WIs; each gets plan → tasks → independent an
 
 This overview does not claim later WIs implemented or analyzed. WI1 is independently testable;
 WI2 depends on accepted WI1; WI3 depends on accepted WI2 recovery/state contract.
+
+
+## WI2 requirement traceability
+FR001→T201–203/T208; FR002→T204–209; FR003→T205/T207/T213 (forge unsupported retains);
+FR004→T204–208; FR005→T205/T207/T213; FR006→WI3, not enabled here; FR007→T202–209;
+FR008→T204–207/T212; FR009→T210–211; FR010→T202–203/T208–212; FR011→T212/T214–215.
+SC001→T204–212/T214; SC002→T202–209/T212; SC003→T210–211/T214; SC004→T201/T214–215.
