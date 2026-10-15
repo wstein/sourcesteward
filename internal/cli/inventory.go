@@ -43,7 +43,7 @@ func inventoryCommandWith(run func(context.Context, string, inspection.Inventory
 				return runtimeFailure{err}
 			}
 			if result.Status != "ok" || (result.Query != nil && result.Query.Value == "unknown") {
-				return runtimeFailure{result}
+				return runtimeFailure{fmt.Errorf("inventory incomplete: %q", result.Error())}
 			}
 			return nil
 		},
