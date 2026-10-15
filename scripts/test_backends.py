@@ -108,10 +108,19 @@ class BackendInstallerTests(unittest.TestCase):
     def test_sandbox_preflight_requires_denied_write_and_successful_read(self):
         for write_code, read_code, passed in ((0, 0, False), (1, 1, False), (1, 0, True)):
             responses = [SimpleNamespace(returncode=write_code, stderr=b'denied'), SimpleNamespace(returncode=read_code, stderr=b'namespace denied')]
-            with self.subTest(write=write_code, read=read_code), patch.object(smoke, 'sandbox_prefix', return_value=['/bwrap']), patch.object(smoke.subprocess, 'run', side_effect=responses):
+            with self.subTest(write=write_code, read=read_code), patch.object(smoke.platform, 'system', return_value='Darwin'), patch.object(smoke, 'sandbox_prefix', return_value=['/bwrap']), patch.object(smoke.subprocess, 'run', side_effect=responses):
                 if passed: smoke.check_sandbox()
                 else:
                     with self.assertRaises(RuntimeError): smoke.check_sandbox()
+
+    def test_linux_payload_requires_zero_capabilities_enforced_child_and_private_network(self):
+        valid = {'cap_eff': '0000000000000000', 'profile': 'bwrap//&unpriv_bwrap (enforce)', 'netns': 'net:[2]'}
+        smoke.validate_linux_payload(valid, 'net:[1]')
+        for field, invalid in [('cap_eff', '0000000000001000'), ('cap_eff', ''), ('profile', 'unconfined'), ('profile', 'unpriv_bwrap (complain)'), ('profile', 'bwrap (enforce)'), ('netns', 'net:[1]'), ('netns', 'missing')]:
+            case = dict(valid)
+            case[field] = invalid
+            with self.subTest(field=field, value=invalid), self.assertRaises(RuntimeError):
+                smoke.validate_linux_payload(case, 'net:[1]')
 
     def test_namespace_diagnostics_never_execute_jj_or_target_commands(self):
         variants = smoke.diagnostic_variants('/usr/bin/bwrap')
