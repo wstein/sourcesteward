@@ -116,6 +116,7 @@ historical read-only inspection/inventory evidence.
 `stw tidy plan` supports bounded native Git branch and jj bookmark ancestry evidence against an
 explicit base. Checked-out/workspace-used targets and unsupported integration proof retain work.
 jj remote-associated or conflicted targets remain retained; bookmark cleanup never implies change
-abandonment. Optional private plan persistence is distinct from repository effects. Cleanup execution
-and owned workspace retirement remain later WIs. See [tidy](tidy.md); its acceptance evidence is
+abandonment. Optional private plan persistence is distinct from repository effects. Explicitly authorized local reference cleanup records durable native recovery and checks stale state;
+Git uses old-OID CAS, while jj checks pinned operations and exact allowed deltas. Owned workspace
+retirement remains later work. See [tidy](tidy.md); its acceptance evidence is
 independent of prior inspection, inventory and workspace creation.
