@@ -9,7 +9,7 @@ type TidyNativeOutcome struct {
     Effects, Limitations []string
 }
 // Add to tidyAdapter for WI2 after independent interface analysis:
-PrepareRecovery(context.Context, TidyPlanRecord, TidyCandidate) (TidyRecovery, Snapshot, error)
+PrepareRecovery(context.Context, TidyPlanRecord, TidyCandidate) (TidyRecovery, Snapshot, TidyNativeOutcome, error)
 Delete(context.Context, TidyPlanRecord, TidyCandidate, TidyRecovery, Snapshot) (TidyNativeOutcome, error)
 ```
 Coordinator owns durable journal and authorization; adapters return exact native effects even on
@@ -26,3 +26,26 @@ work. A prepared/incomplete journal cannot authorize blind repetition; completed
 postconditions and preserve recovery evidence. Native roots remain after success and are not GC'd.
 Published WI1 schema remains unchanged; WI2 output must validate it or use a separately versioned
 contract if new fields/discriminants are needed. Schema compatibility is an independent analyze gate.
+
+## Required pre-action and native delta proof
+Prepared durable journal PREDECLARES exact deterministic recovery root name and expected target
+identity before PrepareRecovery. This function returns Attempted/Complete/Effects even on errors:
+root creation may have happened despite timeout/cancel/nonzero native exit. Such outcomes remain
+partial with the predeclared recovery pointer, never reported no-effects. Target deletion requires
+confirmed exact recovery-root target, fresh validated state and durable confirmed-root journal first.
+
+Git: support loose and packed local branches. Native update-ref may rewrite packed-refs when deleting
+a packed target; explicitly grant only required refs/recovery namespace, exact packed-refs/lock and
+associated canonical Git metadata, protecting every unrelated sibling regular file/directory as
+read-only. Refuse symlink/special/oversized or unknown metadata/grants. If narrow confinement cannot
+be enforced, retain/refuse that capability explicitly before mutation; never broad common-dir write
+fallback. Tests must pack refs then delete one target while preserving unrelated loose/packed refs,
+source/worktree metadata and bytes outside declared native effects; include pin/delete failure paths.
+
+jj: each successful own operation must have the exact expected previous operation as its sole
+operation parent, current operation/heads must match that operation, and full bounded observations
+must differ only by the predeclared recovery bookmark addition or selected target removal. Selected
+base resolution, workspace registrations/identities, safety state and every unrelated reference
+remain equal. Concurrent operation/heads or unrelated ref deltas refuse and report already completed
+own effects. Operation IDs are opaque native identities; never infer ordering from text or simply
+replace Expected with arbitrary postaction snapshot. This is sampling, not atomic compare-and-swap.

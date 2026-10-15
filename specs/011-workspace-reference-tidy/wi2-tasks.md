@@ -2,16 +2,16 @@
 
 ## Setup and foundation
 - [ ] T201 Finalize exact recovery/journal/interface and immutable-schema compatibility, run independent WI2 analyze in specs/011-workspace-reference-tidy/contracts/wi2.md and wi2-analysis.md.
-- [ ] T202 Write failing prepared/fsync/recoveryrecord/collision/storefailure/interruption/cancel/outputbound tests in internal/workspace/tidy_apply_test.go and state_test.go.
+- [ ] T202 Write failing prepared/predeclared-root/fsync/recoveryrecord/collision/storefailure/interruption/cancel/possible-pin-effects/outputbound tests in internal/workspace/tidy_apply_test.go and state_test.go.
 - [ ] T203 Implement strict bounded durable tidy operation journal phases, recovery pointers and conservative retry validation in internal/workspace/tidy_apply.go and state.go.
 
 ## US2 — Apply only reviewed valid cleanup
 Independent test: exact localtargets only deleted after durable recovery; stale/partial cases retain and report accurately.
-- [ ] T204 [P] [US2] Write failing Git recoverypin/CAS/selectedbase/registration-hook/race/noGC/partial tests in internal/workspace/tidy_git_test.go.
-- [ ] T205 [P] [US2] Write failing jj recoverybookmark/opstale/remote-counterpart/conflicted/workspaceused/noabandon/partial tests in internal/workspace/tidy_jj_test.go and internal/inspection/jj_tidy_test.go.
-- [ ] T206 [P] [US2] Implement native private Git zero-OID recovery ref creation and old-tip CAS deletion with fixed arguments/nohooks/nonetwork in internal/workspace/tidy_git.go.
-- [ ] T207 [P] [US2] Implement native protected jj recoverybookmark and exact localbookmark deletion with pinned/current operation sampling in internal/inspection/jj_tidy.go and internal/workspace/tidy_jj.go.
-- [ ] T208 [US2] Implement ApplyTidy authorization/store-plan validation/per-action reobservation/recovery-before-delete and partial outcomes in internal/workspace/tidy_apply.go; never suppress unrelated changedstate.
+- [ ] T204 [P] [US2] Write failing Git recoverypin/CAS/loose-packed-refs/unrelated-sibling-preservation/selectedbase/registration-hook/race/noGC/partial tests in internal/workspace/tidy_git_test.go.
+- [ ] T205 [P] [US2] Write failing jj recoverybookmark/exact-operation-parent-and-delta/concurrentheads/opstale/remote-counterpart/conflicted/workspaceused/noabandon/partial tests in internal/workspace/tidy_jj_test.go and internal/inspection/jj_tidy_test.go.
+- [ ] T206 [P] [US2] Implement native private Git zero-OID recovery ref creation and old-tip CAS deletion with exact loose/packed-refs metadata grants, unrelated sibling protections and fixed arguments/nohooks/nonetwork in internal/workspace/tidy_git.go.
+- [ ] T207 [P] [US2] Implement native protected jj recoverybookmark and exact localbookmark deletion with pinned/current operation sampling, sole expected operation parent and only predeclared bookmark deltas in internal/inspection/jj_tidy.go and internal/workspace/tidy_jj.go.
+- [ ] T208 [US2] Implement ApplyTidy authorization/store-plan validation/per-action reobservation/predeclared-root preparedjournal/confirmed-root fsync-before-delete and partial possible-root outcomes in internal/workspace/tidy_apply.go; never suppress unrelated changedstate.
 - [ ] T209 [US2] Implement conservative verified-complete retry and manual recovery guidance, refusing uncertain prepared/incomplete replay in internal/workspace/tidy_apply.go and tidy_apply_test.go.
 
 ## US3 — Bounded contract
