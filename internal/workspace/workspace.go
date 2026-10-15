@@ -371,7 +371,7 @@ func sameOwner(a, b NativeIdentity) bool {
 	return a.Backend == b.Backend && a.RepositoryDir == b.RepositoryDir && a.WorkspaceRoot == b.WorkspaceRoot && a.WorkspaceName == b.WorkspaceName && a.GitDir == b.GitDir
 }
 func validTask(t TaskRecord, p MutationPlan) bool {
-	return t.SchemaVersion == 1 && t.TaskID == p.TaskID && t.PlanID == p.PlanID && t.Owner == p.Owner && t.Backend == p.Backend && t.Destination == p.Destination && t.BaseCommit == p.Expected.BaseCommit && t.BaseChange == p.Expected.BaseChange && t.Native.Backend == p.Backend && t.Native.WorkspaceRoot == p.Destination && t.Native.RepositoryDir == p.Expected.Identity.RepositoryDir && t.RemainingWork != nil && t.RecoveryLimits != nil
+	return t.State == "complete" && t.RecoveryPointer == filepath.Join(p.StateDir, "operations", p.PlanID+".json") && validNativeIdentity(t.Native) && t.SchemaVersion == 1 && t.TaskID == p.TaskID && t.PlanID == p.PlanID && t.Owner == p.Owner && t.Backend == p.Backend && t.Destination == p.Destination && t.BaseCommit == p.Expected.BaseCommit && t.BaseChange == p.Expected.BaseChange && t.Native.Backend == p.Backend && t.Native.WorkspaceRoot == p.Destination && t.Native.RepositoryDir == p.Expected.Identity.RepositoryDir && t.RemainingWork != nil && t.RecoveryLimits != nil
 }
 
 func nativeEffects(backend string) []string {
