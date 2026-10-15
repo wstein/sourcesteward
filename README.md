@@ -1,6 +1,11 @@
 # SourceSteward
 
-<img src="docs/assets/logo.svg" alt="SourceSteward branch-and-guide-rail mark" width="96" height="96">
+![SourceSteward — Explainable version control](docs/assets/banner.svg)
+
+[![CI](https://github.com/wstein/sourcesteward/actions/workflows/ci.yml/badge.svg)](https://github.com/wstein/sourcesteward/actions/workflows/ci.yml)
+[![Go 1.27.2+](https://img.shields.io/badge/Go-1.27.2%2B-0b2545)](go.mod)
+[![License EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-0b2545)](LICENSE)
+[![Pre-release](https://img.shields.io/badge/status-pre--release-f05032)](docs/roadmap.md)
 
 **Explainable version-control tools for humans and AI agents.**
 
