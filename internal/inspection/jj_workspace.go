@@ -172,6 +172,13 @@ func jjWorkspaceSourceDigest(metadata, git string) (string, error) {
 	for _, entry := range entries {
 		paths = append(paths, filepath.Join(metadata, "working_copy", entry.Name()))
 	}
+	repo, e := resolveJJRepository(metadata)
+	if e != nil {
+		return "", e
+	}
+	for _, part := range []string{"config-id", "config.toml", "store/type", "store/git_target"} {
+		paths = append(paths, filepath.Join(repo, filepath.FromSlash(part)))
+	}
 	h := sha256.New()
 	for _, p := range paths {
 		st, e := os.Lstat(p)
@@ -197,7 +204,7 @@ func jjWorkspaceSourceDigest(metadata, git string) (string, error) {
 // CreateJJWorkspace grants only declared native store/destination writes. It never resumes a partial creation.
 func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceState, name, destination string) (JJWorkspaceCreation, error) {
 	result := JJWorkspaceCreation{Phase: "not-started", Effects: []string{}, Limitations: []string{"jj registration and checkout are separate native phases; interrupted state is retained for manual recovery.", "Operation checks are sampled, not a compare-and-swap transaction; concurrent/ABA changes can be missed.", "Destination materialization uses native update-stale without operation pinning; source files are never snapshotted.", "A generated working-copy commit uses SourceSteward <stw@localhost>; no user identity is inferred."}}
-	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	if !validJJTaskName(name) || !filepath.IsAbs(destination) {
 		return result, errors.New("invalid jj task name or destination")
@@ -205,7 +212,7 @@ func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceSta
 	if e := metadataDir(destination); e != nil {
 		return result, e
 	}
-	if within(expected.Source.WorkspaceRoot, destination) || within(destination, expected.Source.WorkspaceRoot) || within(expected.Source.RepositoryDir, destination) || within(destination, expected.Source.RepositoryDir) {
+	if within(expected.GitDir, destination) || within(destination, expected.GitDir) || within(expected.Source.RepositoryDir, expected.Source.WorkspaceRoot) || within(expected.Source.WorkspaceRoot, destination) || within(destination, expected.Source.WorkspaceRoot) || within(expected.Source.RepositoryDir, destination) || within(destination, expected.Source.RepositoryDir) {
 		return result, errors.New("jj destination overlaps source or shared metadata")
 	}
 	dir, e := os.Open(destination)
@@ -235,7 +242,12 @@ func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceSta
 	}
 	e = withJJSession(ctx, path, identity, func(s jjSession, root, metadata, repo string) error {
 		// No command can invoke configured helpers; colocation is explicitly off even in jj0.46.
-		roots := []string{repo, filepath.Join(expected.GitDir, "objects"), filepath.Join(expected.GitDir, "refs", "jj"), destination}
+		roots := []string{filepath.Join(expected.GitDir, "objects"), filepath.Join(expected.GitDir, "refs", "jj"), destination}
+		// Whitelist native mutable stores; the repository root, secure config IDs,
+		// store type and backing-store pointer remain read-only.
+		for _, part := range []string{"index", "op_heads", "op_store", "store/extra", "submodule_store", "workspace_store"} {
+			roots = append(roots, filepath.Join(repo, filepath.FromSlash(part)))
+		}
 		for _, p := range roots {
 			if e := metadataDir(p); e != nil {
 				return e
