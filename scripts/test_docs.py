@@ -71,6 +71,35 @@ class DocumentationTests(unittest.TestCase):
             (root / 'README.md').write_text('[Web](https://example.org/)')
             checker.check_links(root, root / 'README.md')
 
+    def test_raw_main_guidance_links_resolve_offline(self):
+        checker = load('checker_raw', 'check-docs.py')
+        prefix = 'https://raw.githubusercontent.com/wstein/sourcesteward/main/'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'docs').mkdir()
+            (root / 'docs/agent-guide.md').write_text('# Agent guide')
+            source = root / 'llms.txt'
+            source.write_text('[Guide](' + prefix + 'docs/agent-guide.md)')
+            checker.check_links(root, source)
+            for target in ('docs/missing.md', 'docs/', '../outside.md', '%2e%2e/outside.md'):
+                with self.subTest(target=target):
+                    source.write_text('[Missing](' + prefix + target + ')')
+                    with self.assertRaises(ValueError): checker.check_links(root, source)
+            outside = root.parent / (root.name + '-outside.md')
+            outside.write_text('outside')
+            try:
+                (root / 'docs/escape.md').symlink_to(outside)
+                source.write_text('[Escape](' + prefix + 'docs/escape.md)')
+                with self.assertRaises(ValueError): checker.check_links(root, source)
+            finally:
+                outside.unlink()
+            source.write_text('const guideURL = "' + prefix + 'missing.md"')
+            with self.assertRaises(ValueError): checker.check_links(root, source)
+            source.write_text('[Directory](docs/)')
+            checker.check_links(root, source)
+            source.write_text('[Unrelated](https://example.org/missing.md)')
+            checker.check_links(root, source)
+
     def test_packaging_excludes_source_and_binds_revision(self):
         package = load('package', 'package-pages.py')
         with tempfile.TemporaryDirectory() as directory:

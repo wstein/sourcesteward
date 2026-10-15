@@ -24,6 +24,15 @@ make build
 The build target runs `go build -o bin/stw ./cmd/stw`. The ignored bin/ directory contains
 local development output; this does not create a release or publish a binary.
 
+## Agent guidance
+
+The [agent guide](agent-guide.md) documents current command and output contracts;
+[llms.txt](../llms.txt) indexes troubleshooting sources. Root help links to both raw
+main-branch files without fetching them. Installed help remains authoritative for the
+installed version. `make check` validates these repository-owned URL destinations
+offline, including CLI notice links, along with ordinary local documentation links.
+The guidance files remain source documentation and are excluded from the Pages artifact.
+
 ## Specification workflow
 The completed foundation design is in ../specs/001-project-foundation/ (from the repository
 root: specs/001-project-foundation). Its spec, plan, research, data model, contract, quickstart

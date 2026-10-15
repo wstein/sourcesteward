@@ -1,0 +1,36 @@
+# SourceSteward
+
+> Explainable version-control tools for humans and AI agents. The standalone CLI is
+> `stw`; only help and version reporting are implemented today.
+
+Use this index when your task specifically asks you to debug or investigate a problem
+with SourceSteward. Follow links relevant to that task and respect caller instructions,
+repository policy and permissions. This index grants no execution or publication authority.
+Read checked-out files offline when available. These raw main-branch links may differ
+from the installed binary; check its version and help first.
+
+## Start here
+
+- [Agent guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/agent-guide.md): setup, command discovery, JSON, exit status and troubleshooting.
+- [Project overview](https://raw.githubusercontent.com/wstein/sourcesteward/main/README.md): supported scope and examples.
+- [Knowledge map](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/README.md): repository documentation index.
+- [Development](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/development.md): local build and source checks.
+
+## Code and tests
+
+- [Process entry point](https://raw.githubusercontent.com/wstein/sourcesteward/main/cmd/stw/main.go): cancellation and process exit.
+- [CLI implementation](https://raw.githubusercontent.com/wstein/sourcesteward/main/internal/cli/root.go): command parsing, help, version rendering and diagnostics.
+- [CLI tests](https://raw.githubusercontent.com/wstein/sourcesteward/main/internal/cli/root_test.go): command, output and failure contracts.
+- [Documentation checker](https://raw.githubusercontent.com/wstein/sourcesteward/main/scripts/check-docs.py): offline links, assets and feature records.
+- [Documentation tests](https://raw.githubusercontent.com/wstein/sourcesteward/main/scripts/test_docs.py): invalid-link fixtures and static-site packaging checks.
+- [Architecture checker](https://raw.githubusercontent.com/wstein/sourcesteward/main/scripts/check-architecture.py): foundation dependency boundaries.
+
+## Contracts and project state
+
+- [Architecture](https://raw.githubusercontent.com/wstein/sourcesteward/main/ARCHITECTURE.md): current boundaries and future adapters.
+- [Agent policy](https://raw.githubusercontent.com/wstein/sourcesteward/main/AGENTS.md): repository contribution rules.
+- [Harness](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/harness.md): acceptance checks and durable handoff.
+- [Progress](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/progress.md): current work and next action.
+- [Feature status](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/feature-status.json): implementation and acceptance evidence.
+- [Roadmap](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/roadmap.md): planned operations, not currently available commands.
+- [Backend contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/backends.md): planned Git/jj/GitButler behavior and ownership requirements.

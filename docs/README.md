@@ -1,6 +1,8 @@
 # Repository knowledge map
 
 - [Project overview](../README.md): implemented scope and first commands.
+- [Agent guide](agent-guide.md): task-relevant setup and current CLI contracts.
+- [Troubleshooting index](../llms.txt): agent-readable documentation, source and tests.
 - [Architecture](../ARCHITECTURE.md): boundaries and planned adapter model.
 - [Development](development.md): prerequisites, checks and site publication.
 - [Backend readiness](backends.md): Git/jj/GitButler capability and effect contracts.

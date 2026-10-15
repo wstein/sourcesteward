@@ -52,6 +52,8 @@ Spec Kit 1.1.3 was initialized with the Codex skills integration. Read the
 The flow is constitution → specify → plan → tasks → implement → analyze.
 Project-local skills live in `.agents/skills`; use `$speckit-specify` for the next feature.
 See [development](docs/development.md) for checks and publication behavior.
+The [agent guide](docs/agent-guide.md) covers current CLI use;
+[llms.txt](llms.txt) indexes troubleshooting documentation and source.
 
 ## Community and engineering
 
