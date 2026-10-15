@@ -1,6 +1,7 @@
 # Progress and handoff
 
 ## Current milestone
+
 004-site-themes passes local source/UI acceptance on its topic worktree: a prominent
 README site link and native system/light/dark Pages selector, with narrow local-script
 authorization. Source checks pass (10 Python and 12 Node cases). Both palettes pass browser
@@ -24,6 +25,7 @@ commit and focused Conventional Commits for specifications, CLI, community, bran
 harness and CI. A durable local checkout is available. See [verification](verification.md).
 
 ## Decisions
+
 - Repository/module: wstein/sourcesteward; product: SourceSteward; standalone short CLI: stw.
 - Go 1.27.2 and Cobra v1.10.2; EUPL-1.2 original source/artwork; font licenses retained.
 - Git-first and jj-ready, with optional GitButler adapters planned; no backend executes yet.
@@ -33,6 +35,7 @@ harness and CI. A durable local checkout is available. See [verification](verifi
 - Spec Kit workflow and small repository-local harness; no agent scheduler or auto-merge.
 
 ## Measured state
+
 make check, race tests and six real-process smoke cases passed. Independent source review
 cleared fd4d652ce402621bf07b4d83ee5a5da7b70f4fd3 after two regression fixes. Browser inspection
 passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI and Pages run
@@ -40,6 +43,7 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 documentation-only evidence commit will go through the same CI/Pages gate.
 
 ## Next bounded action
+
 Specify repository inspection and explicit Git/jj/GitButler detection. Define result schemas,
 no-write inspection effects and temporary-repository fixtures before implementing adapters.
 Cleanup, mutation/recovery, repository migration and MCP remain outside foundation scope.
