@@ -42,7 +42,8 @@ Bound: 1024 entries, 64KiB per content query/file, 1MiB encoded records, apply60
 Revalidate all preconditions per action including after earlier own effects; cancellation cannot imply rollback.
 
 ## Gate and review
-Pre-design constitution PASS subject to exact v2 model/interface freeze and independent WI3 analyze.
+Pre-design constitution PASS subject to coordinator-proposed exact v2 model/interface native/core
+author confirmation and independent WI3 analyze. Proposed concrete fields are in contracts/wi3.md.
 Any inability to enforce parent/sibling or confined deletion proof blocks WI3 source/acceptance;
 never ship an advertised native jj retirement that always refuses disk freshness.
 See [tasks](wi3-tasks.md), [contract](contracts/wi3.md). Test-first implementation in native/core/CLI

@@ -7,10 +7,10 @@
 
 ## US1 — Review retirement candidates
 Independent test: useful native clean cases eligible; uncertain/foreign/dirty paths retained with precise evidence.
-- [ ] T304 [P] [US1] Write failing Git rawdisk/index/storedtree/ignoredextra/transforms/sparse/symlink/gitlink/active/integration tests in internal/workspace/tidy_git_retire_test.go.
-- [ ] T305 [P] [US1] Write failing jj complete disk/binary/literalpath/ignoredextra/sparse/conflict/single-integrated-parent versus emptyalone/multiparent tests in internal/inspection/jj_tidy_retire_test.go.
-- [ ] T306 [P] [US1] Implement bounded Git full cleanliness/registration/taskownership evidence and distinct combined-effect eligibility in internal/workspace/tidy_git_retire.go.
-- [ ] T307 [P] [US1] Implement native jj full tree/rawbyte and confined fresh disk proof, one-parent integrated equivalent tree case and exact ownership in internal/inspection/jj_tidy_retire.go and internal/workspace/tidy_jj_retire.go.
+- [ ] T304 [P] [US1] Write failing Git native-metadata-extra-payload/pointer-swap/rawdisk/index/storedtree/ignoredextra/transforms/sparse/symlink/gitlink/active/integration tests in internal/workspace/tidy_git_retire_test.go.
+- [ ] T305 [P] [US1] Write failing jj native-metadata-extra-payload/symlink-metadata/complete disk/binary/literalpath/ignoredextra/sparse/conflict/single-integrated-parent versus emptyalone/multiparent tests in internal/inspection/jj_tidy_retire_test.go.
+- [ ] T306 [P] [US1] Implement bounded Git full cleanliness/exact admitted native metadata manifests/registration/taskownership evidence and distinct combined-effect eligibility in internal/workspace/tidy_git_retire.go.
+- [ ] T307 [P] [US1] Implement native jj full tree/rawbyte, fixed minimum/current metadata allowlists and confined fresh disk proof, one-parent integrated equivalent tree case and exact ownership in internal/inspection/jj_tidy_retire.go and internal/workspace/tidy_jj_retire.go.
 
 ## US2 — Apply reviewed retirement
 Independent test: exact authorized native effects only, recovery durable first, siblings/source preserved even on failure.
