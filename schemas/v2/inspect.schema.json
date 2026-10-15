@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v2/inspect.schema.json",
+  "title": "SourceSteward native jj inspection result (schema 2)",
+  "description": "Native jj stored identity and operational failures. Git/version retain schema 1. Additional object properties and diagnostic codes are compatible extensions. Usage/writer failures may not emit complete JSON.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "backend",
+    "input_path",
+    "evidence",
+    "repository",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "unsupported",
+        "error"
+      ]
+    },
+    "backend": {
+      "const": "jj"
+    },
+    "input_path": {
+      "type": "string",
+      "description": "Absolute path when available; empty if input cannot be represented or resolved."
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "repository": {
+      "type": "null"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "jj_repository": {
+      "$ref": "#/$defs/jj_repository"
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "location"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "jj-metadata",
+            "gitbutler-metadata",
+            "gitbutler-reference"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "jj_repository": {
+      "type": "object",
+      "required": [
+        "workspace_root",
+        "metadata_dir",
+        "repository_dir",
+        "workspace_name",
+        "change_id",
+        "commit_id",
+        "operation_id",
+        "observation"
+      ],
+      "properties": {
+        "workspace_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metadata_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspace_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "change_id": {
+          "type": "string",
+          "pattern": "^[k-z]{32}$",
+          "minLength": 32,
+          "maxLength": 32
+        },
+        "commit_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "minLength": 40,
+          "maxLength": 40
+        },
+        "operation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{128}$",
+          "minLength": 128,
+          "maxLength": 128
+        },
+        "observation": {
+          "type": "object",
+          "required": [
+            "working_copy",
+            "limitation"
+          ],
+          "properties": {
+            "working_copy": {
+              "const": "stored-unsnapshotted"
+            },
+            "limitation": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "jj_repository"
+        ],
+        "properties": {
+          "diagnostics": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "jj_repository"
+          ]
+        },
+        "properties": {
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

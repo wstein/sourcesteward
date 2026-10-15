@@ -3,6 +3,7 @@ package contracts_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,9 +35,10 @@ func compiler() *jsonschema.Compiler {
 	c.UseLoader(denyLoader{})
 	return c
 }
-func schema(t *testing.T, name string) *jsonschema.Schema {
+func schema(t *testing.T, name string) *jsonschema.Schema { return schemaAt(t, "v1", name) }
+func schemaAt(t *testing.T, version, name string) *jsonschema.Schema {
 	t.Helper()
-	raw, e := os.ReadFile(filepath.Join(root(t), "schemas/v1", name+".schema.json"))
+	raw, e := os.ReadFile(filepath.Join(root(t), "schemas", version, name+".schema.json"))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -44,6 +46,7 @@ func schema(t *testing.T, name string) *jsonschema.Schema {
 	if e != nil {
 		t.Fatal(e)
 	}
+	base := "https://wstein.github.io/sourcesteward/schemas/" + version + "/"
 	obj := doc.(map[string]any)
 	if obj["$id"] != base+name+".schema.json" || obj["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
 		t.Fatal("incorrect schema identity or dialect")
@@ -92,7 +95,11 @@ func valid(t *testing.T, s *jsonschema.Schema, raw []byte) {
 		t.Fatalf("invalid output: %s\n%s", raw, e)
 	}
 }
-func TestSchemasCompileOffline(t *testing.T) { schema(t, "version"); schema(t, "inspect") }
+func TestSchemasCompileOffline(t *testing.T) {
+	schema(t, "version")
+	schema(t, "inspect")
+	schemaAt(t, "v2", "inspect")
+}
 func TestCompilerRejectsBadSchemasAndExternalReferences(t *testing.T) {
 	for _, doc := range []any{map[string]any{"type": 42}, map[string]any{"$ref": "https://invalid.example/schema"}, map[string]any{"$ref": "#/$defs/missing"}} {
 		c := compiler()
@@ -263,7 +270,11 @@ func TestRealCLIOutputs(t *testing.T) {
 		if e := os.MkdirAll(filepath.Join(managed, marker), 0700); e != nil {
 			t.Fatal(e)
 		}
-		run(marker, 1, inspect, "inspect", managed, "--json")
+		selected := inspect
+		if marker == ".jj" {
+			selected = schemaAt(t, "v2", "inspect")
+		}
+		run(marker, 1, selected, "inspect", managed, "--json")
 	}
 	sha256 := t.TempDir()
 	git(sha256, "init", "--object-format=sha256", "-b", "main")
@@ -305,4 +316,194 @@ func TestJSONNumbersAreNotStrings(t *testing.T) {
 	if schema(t, "version").Validate(v) == nil {
 		t.Fatal("string schema version accepted")
 	}
+}
+
+// Published v1 contracts are immutable even when the native jj contract evolves.
+func TestPublishedV1Bytes(t *testing.T) {
+	for name, want := range map[string]string{
+		"inspect": "8e12ee38a3e065e1f2e47b88ec4b1668cd8a32d8879e4803870e8994a9cfcfae",
+		"version": "886864837547ded4992af89e8e8e04d38fe7bf77724f91a8960a184c51a0659f",
+	} {
+		raw, err := os.ReadFile(filepath.Join(root(t), "schemas/v1", name+".schema.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != want {
+			t.Fatalf("published %s v1 bytes changed: %s", name, got)
+		}
+	}
+}
+func jjSeed() string {
+	return `{"schema_version":2,"status":"ok","backend":"jj","input_path":"/tmp/repo","evidence":[{"kind":"jj-metadata","location":"/tmp/repo/.jj"}],"repository":null,"diagnostics":[],"jj_repository":{"workspace_root":"/tmp/repo","metadata_dir":"/tmp/repo/.jj","repository_dir":"/tmp/repo/.jj/repo","workspace_name":"default","change_id":"` + strings.Repeat("k", 32) + `","commit_id":"` + strings.Repeat("a", 40) + `","operation_id":"` + strings.Repeat("b", 128) + `","observation":{"working_copy":"stored-unsnapshotted","limitation":"Stored identity does not certify disk freshness or concurrent state."}}}`
+}
+func TestJJInspectionInvariants(t *testing.T) {
+	s := schemaAt(t, "v2", "inspect")
+	valid(t, s, []byte(jjSeed()))
+	cases := []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"schema", func(v map[string]any) { v["schema_version"] = 1 }},
+		{"backend", func(v map[string]any) { v["backend"] = "git" }},
+		{"status", func(v map[string]any) { v["status"] = "maybe" }},
+		{"git-repository", func(v map[string]any) { v["repository"] = map[string]any{} }},
+		{"missing-jj", func(v map[string]any) { delete(v, "jj_repository") }},
+		{"null-jj", func(v map[string]any) { v["jj_repository"] = nil }},
+		{"error-with-identity", func(v map[string]any) {
+			v["status"] = "error"
+			v["diagnostics"] = []any{map[string]any{"code": "jj-failed", "message": "failed"}}
+		}},
+		{"success-diagnostic", func(v map[string]any) { v["diagnostics"] = []any{map[string]any{"code": "x", "message": "x"}} }},
+	}
+	for _, field := range []string{"workspace_root", "metadata_dir", "repository_dir", "workspace_name", "change_id", "commit_id", "operation_id", "observation"} {
+		field := field
+		cases = append(cases, struct {
+			name   string
+			mutate func(map[string]any)
+		}{"missing-" + field, func(v map[string]any) { delete(v["jj_repository"].(map[string]any), field) }})
+	}
+	for _, field := range []string{"workspace_root", "metadata_dir", "repository_dir", "workspace_name"} {
+		field := field
+		cases = append(cases, struct {
+			name   string
+			mutate func(map[string]any)
+		}{"empty-" + field, func(v map[string]any) { v["jj_repository"].(map[string]any)[field] = "" }})
+	}
+	for _, pair := range [][2]string{{"change_id", strings.Repeat("a", 32)}, {"change_id", strings.Repeat("k", 31)}, {"commit_id", strings.Repeat("k", 40)}, {"commit_id", strings.Repeat("a", 40) + "\n"}, {"operation_id", strings.Repeat("B", 128)}, {"operation_id", strings.Repeat("b", 127)}} {
+		pair := pair
+		cases = append(cases, struct {
+			name   string
+			mutate func(map[string]any)
+		}{"invalid-" + pair[0] + pair[1][:1], func(v map[string]any) { v["jj_repository"].(map[string]any)[pair[0]] = pair[1] }})
+	}
+	cases = append(cases, struct {
+		name   string
+		mutate func(map[string]any)
+	}{"snapshot", func(v map[string]any) {
+		v["jj_repository"].(map[string]any)["observation"].(map[string]any)["working_copy"] = "fresh"
+	}}, struct {
+		name   string
+		mutate func(map[string]any)
+	}{"empty-limitation", func(v map[string]any) {
+		v["jj_repository"].(map[string]any)["observation"].(map[string]any)["limitation"] = ""
+	}})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := value(t, []byte(jjSeed())).(map[string]any)
+			tc.mutate(v)
+			if s.Validate(v) == nil {
+				t.Fatal("invalid native invariant accepted")
+			}
+		})
+	}
+	v := value(t, []byte(jjSeed())).(map[string]any)
+	v["future"] = true
+	v["jj_repository"].(map[string]any)["future"] = true
+	v["jj_repository"].(map[string]any)["observation"].(map[string]any)["future"] = true
+	if err := s.Validate(v); err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []string{"error", "unsupported"} {
+		v := value(t, []byte(jjSeed())).(map[string]any)
+		v["status"] = status
+		delete(v, "jj_repository")
+		v["diagnostics"] = []any{map[string]any{"code": "future-code", "message": "failure", "future": true}}
+		if err := s.Validate(v); err != nil {
+			t.Fatal(err)
+		}
+		v["diagnostics"] = []any{}
+		if s.Validate(v) == nil {
+			t.Fatal("empty error diagnostics accepted")
+		}
+	}
+}
+
+func TestRealJJCLIOutputs(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("STW_REQUIRE_JJ") == "1" {
+			t.Fatal("mandatory native jj schema fixtures require jj on PATH")
+		}
+		t.Skip("jj not installed; STW_REQUIRE_JJ=1 makes native schema fixtures mandatory")
+	}
+	s := schemaAt(t, "v2", "inspect")
+	binary := filepath.Join(t.TempDir(), "stw")
+	build := exec.Command("go", "build", "-o", binary, "./cmd/stw")
+	build.Dir = root(t)
+	if raw, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, raw)
+	}
+	home := t.TempDir()
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "TMPDIR=" + t.TempDir(), "LC_ALL=C", "JJ_CONFIG=" + filepath.Join(home, "config.toml"), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + filepath.Join(home, "gitconfig")}
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[user]\nname = \"Tester\"\nemail = \"test@example.org\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	jj := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("jj", args...)
+		cmd.Env = env
+		if raw, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("jj %v: %v %s", args, err, raw)
+		}
+	}
+	run := func(name, path string, want int, runenv []string) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command(binary, "inspect", path, "--json")
+			cmd.Env = runenv
+			var out, errout bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &errout
+			err := cmd.Run()
+			exit := 0
+			if err != nil {
+				ee, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatal(err)
+				}
+				exit = ee.ExitCode()
+			}
+			if exit != want {
+				t.Fatalf("exit %d want %d: %s %s", exit, want, out.String(), errout.String())
+			}
+			if !bytes.HasSuffix(out.Bytes(), []byte("\n")) {
+				t.Fatal("JSON result lacks newline")
+			}
+			valid(t, s, out.Bytes())
+			v := value(t, out.Bytes()).(map[string]any)
+			if (want == 0) != (v["status"] == "ok") {
+				t.Fatal("exit/result disagreement")
+			}
+			if want == 0 && errout.Len() != 0 {
+				t.Fatal(errout.String())
+			}
+			if want == 1 && !strings.HasPrefix(errout.String(), "Error:") {
+				t.Fatal("missing Error diagnostic")
+			}
+		})
+	}
+	standalone := filepath.Join(t.TempDir(), "standalone")
+	jj("git", "init", "--no-colocate", standalone)
+	run("standalone", standalone, 0, env)
+	colocated := filepath.Join(t.TempDir(), "colocated")
+	jj("git", "init", "--colocate", colocated)
+	run("colocated", colocated, 0, env)
+	secondary := filepath.Join(t.TempDir(), "secondary")
+	jj("-R", standalone, "workspace", "add", secondary)
+	run("secondary", secondary, 0, env)
+	nested := filepath.Join(secondary, "nested")
+	if err := os.Mkdir(nested, 0700); err != nil {
+		t.Fatal(err)
+	}
+	run("nested", nested, 0, env)
+	if err := os.WriteFile(filepath.Join(standalone, "unsnapshotted"), []byte("disk edit"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run("unsnapshotted", standalone, 0, env)
+	malformed := t.TempDir()
+	if err := os.Mkdir(filepath.Join(malformed, ".jj"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	run("malformed", malformed, 1, env)
+	noBackend := []string{"PATH=" + t.TempDir(), "HOME=" + home, "TMPDIR=" + t.TempDir()}
+	run("missing-jj", standalone, 1, noBackend)
 }
