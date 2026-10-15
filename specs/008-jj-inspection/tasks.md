@@ -38,8 +38,8 @@
 
 ## Phase 6: Verification and Handoff
 - [x] T018 Update implemented scope/limits/schema guidance in README.md, docs/backends.md, docs/json-contracts.md, docs/agent-guide.md, ARCHITECTURE.md and llms.txt; verify generated command reference through existing Hugo checks.
-- [ ] T019 Run gofmt, make check, race tests, build, real CLI/conformance and packaging checks; record actual versions/results/skips and FR/SC acceptance evidence in specs/008-jj-inspection/verification.md and docs/feature-status.json/docs/progress.md.
-- [ ] T020 Run post-implementation artifact analysis and independent exact-revision source/effects review; fix concrete findings and record clearance in specs/008-jj-inspection/analysis.md and verification.md before atomic Conventional Commits/PR handoff.
+- [x] T019 Run gofmt, make check, race tests, build, real CLI/conformance and packaging checks; record actual versions/results/skips and FR/SC acceptance evidence in specs/008-jj-inspection/verification.md and docs/feature-status.json/docs/progress.md.
+- [x] T020 Run post-implementation artifact analysis and independent exact-revision source/effects review; fix concrete findings and record clearance in specs/008-jj-inspection/analysis.md and verification.md before atomic Conventional Commits/PR handoff.
 
 ## Dependencies and Execution Order
 T001→T002→T003→T004 blocks native implementation. US1 T005→T006/T007→T008 follows foundation. US2 T009 begins before effect implementation T010/T011 and may share US1 fixture preparation. US3 tests T012 precede T013; publication tests precede T014. Installer T015 can run independently after the design gate; required execution T016 and CI T017 depend on real native fixtures. Final T018–T020 follows all stories. Each story has independent acceptance checks; none authorizes a partial Tier 1 release without the other required safety/contracts evidence.

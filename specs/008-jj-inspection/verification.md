@@ -52,3 +52,25 @@ No CLI release, merge, live schema publication or Pages deployment is claimed.
 
 T019/T020 final handoff remain open until integrated documentation/package checks,
 post-implementation analysis, independent final review and latest-head CI are recorded.
+
+## Final Acceptance and User Integration
+[Actions run38777527598](https://github.com/wstein/sourcesteward/actions/runs/38777527598)
+passed source checks and both minimum/current lanes at beb3285. Actual Linux payload
+proof showed CapEff=0, enforced bubblewrap/unpriv_bwrap confinement and a distinct network
+namespace. Each lane passed required Go/schema/race checks, ten ordinary-Git CLI cases
+and six native-jj CLI cases. No global host-security relaxation was required.
+
+The user merged policy [PR #9](https://github.com/wstein/sourcesteward/pull/9) and native
+inspection [PR #10](https://github.com/wstein/sourcesteward/pull/10). Main cf46592 is tree-identical
+to accepted implementation beb3285; native source bytes retain independently cleared949c082.
+
+Independent final post-implementation analysis cleared documentation revision
+95bb36d71481d2c1fc6dd47f2da6dd142c6a0e77 with all16requirements mapped to20tasks and no
+remaining findings. Earlier D1/D2/D3 guidance findings and their fixes are preserved in
+analysis.md. Public guide bytes match the exact validated1a18a51 Hugo artifact:12HTML/34static,
+all three schema files verbatim. Only internal acceptance records change in this closing commit;
+source/race tests were not repeated for that documentation-only delta.
+
+T019/T020 acceptance work is complete. A documentation-only follow-up PR and its same-revision
+CI remain the publication handoff; there is no new feature, browser QA, release or live-site
+claim in this record.

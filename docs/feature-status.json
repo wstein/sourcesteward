@@ -45,7 +45,7 @@
     },
     {
       "id": "008-jj-inspection",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/008-jj-inspection/spec.md",
       "evidence": "../specs/008-jj-inspection/verification.md"
     },
