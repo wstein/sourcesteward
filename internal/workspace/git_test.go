@@ -6,15 +6,34 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
+func gitTempDir(t *testing.T) string {
+	t.Helper()
+	p, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
 func fixtureGit(t *testing.T) string {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	d := t.TempDir()
+	if runtime.GOOS == "darwin" {
+		if p, e := exec.LookPath("git"); e == nil && p == "/usr/bin/git" {
+			for _, native := range []string{"/Applications/Xcode.app/Contents/Developer/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git"} {
+				if st, e := os.Stat(native); e == nil && st.Mode().IsRegular() {
+					t.Setenv("PATH", filepath.Dir(native)+":"+os.Getenv("PATH"))
+					break
+				}
+			}
+		}
+	}
+	t.Setenv("HOME", gitTempDir(t))
+	t.Setenv("XDG_CONFIG_HOME", gitTempDir(t))
+	d := gitTempDir(t)
 	gitFixture(t, d, "init", "-q")
 	gitFixture(t, d, "config", "user.name", "Fixture")
 	gitFixture(t, d, "config", "user.email", "fixture@example.invalid")
@@ -24,6 +43,73 @@ func fixtureGit(t *testing.T) string {
 	gitFixture(t, d, "add", ".")
 	gitFixture(t, d, "commit", "-qm", "fixture")
 	return d
+}
+
+func TestGitWorkspaceLiteralBasesAndStaleSafety(t *testing.T) {
+	d := fixtureGit(t)
+	for _, base := range []string{"HEAD", gitFixture(t, d, "symbolic-ref", "HEAD")} {
+		if _, err := (gitAdapter{}).Observe(context.Background(), d, base); err != nil {
+			t.Fatalf("literal base %q: %v", base, err)
+		}
+	}
+	s, err := (gitAdapter{}).Observe(context.Background(), d, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitFixture(t, d, "config", "safe.test", "changed")
+	dest := gitTempDir(t)
+	if _, err := (gitAdapter{}).Create(context.Background(), MutationPlan{TaskID: "stale", SourcePath: d, Destination: dest, Expected: s}); err == nil {
+		t.Fatal("stale safety admitted")
+	}
+	entries, err := os.ReadDir(dest)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("stale plan changed reserved destination")
+	}
+}
+
+func TestGitWorkspaceLinkedSourceMetadataPreserved(t *testing.T) {
+	d := fixtureGit(t)
+	linked := filepath.Join(gitTempDir(t), "linked")
+	gitFixture(t, d, "worktree", "add", "--detach", linked, "HEAD")
+	id, err := gitNativeIdentity(context.Background(), linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := os.ReadFile(filepath.Join(id.GitDir, "index"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(linked, "file"), []byte("linked dirty\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := (gitAdapter{}).Observe(context.Background(), linked, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := gitTempDir(t)
+	n, err := (gitAdapter{}).Create(context.Background(), MutationPlan{TaskID: "linked-source", SourcePath: linked, Destination: dest, Expected: s})
+	if err != nil || !n.SourceUnchanged {
+		t.Fatalf("create from linked: %v %+v", err, n)
+	}
+	got, err := os.ReadFile(filepath.Join(id.GitDir, "index"))
+	if err != nil || string(got) != string(index) {
+		t.Fatal("linked source index changed")
+	}
+	dirty, err := os.ReadFile(filepath.Join(linked, "file"))
+	if err != nil || string(dirty) != "linked dirty\n" {
+		t.Fatal("linked source content changed")
+	}
+}
+
+func TestGitTreeAdmissionBounds(t *testing.T) {
+	for _, raw := range []string{"160000 commit abc -\tmodule\x00", "120000 blob abc 5\tlink\x00", "100644 blob abc 16777217\tlarge\x00", "100644 blob abc 5\t../outside\x00", "100644 blob abc 5\t.GIT/config\x00"} {
+		if err := validateGitTree(raw); err == nil {
+			t.Fatalf("unsafe tree admitted: %q", raw)
+		}
+	}
+	if err := validateGitTree("100644 blob abc 5\tspaces and\nnewlines\x00"); err != nil {
+		t.Fatal(err)
+	}
 }
 func gitFixture(t *testing.T, dir string, args ...string) string {
 	t.Helper()
@@ -50,7 +136,7 @@ func TestGitWorkspaceNativeCreatePreservesSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dest := filepath.Join(t.TempDir(), "task")
+	dest := filepath.Join(gitTempDir(t), "task")
 	if err := os.Mkdir(dest, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +233,7 @@ func TestGitWorkspaceRefusesSelectorsAndOccupiedDestination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dest := t.TempDir()
+	dest := gitTempDir(t)
 	if err := os.WriteFile(filepath.Join(dest, "foreign"), []byte("keep"), 0600); err != nil {
 		t.Fatal(err)
 	}
