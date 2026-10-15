@@ -1,4 +1,4 @@
-# WI3 Retirement Contract and Pending Interface Gate
+# WI3 Retirement Contract and Interface Freeze
 
 Public selection: `stw tidy plan [PATH] --base REF --state-dir ABS --task ID --owner OWNER
 --remove-registration [--remove-files ABS] [--json]`; --ref and retirement flags mutually exclusive.
@@ -9,8 +9,8 @@ required for native Git combined remove. Plan output lists each distinct effect,
 Publish a separate tidy retirement schema v2; preserve tidy v1 bytes/fixtures. Backend identities,
 base/operation/safety, task/native creation ownership, canonical destination inode, full manifest,
 separate registration/files action selections, recovery root and action outcomes must be explicit.
-Concrete Go structures below are proposed for coordinator/native-author freeze before independent
-WI3 analyze; this document remains a draft design gate, NOT source authorization. Do not reinterpret old task records
+Concrete Go structures below were confirmed by coordinator/native/core authors and independently
+analyzed at 84455ef. Source execution remains gated on WI2 PR completion and root dispatch. Do not reinterpret old task records
 or weaken their strict decoders; new retirement journals refer to immutable creation ownership.
 
 Before registration action: stale/owner/integration/disk proof, prepared durable journal, durable
@@ -25,7 +25,7 @@ symlink/special entries or list overflow refuse. jj deletion is descriptor-confi
 verified entries, never recursive path-derived broad removal. Same-user external races/ABA cannot
 be excluded, are sampled and disclosed, and uncertain effects remain partial/manual recovery.
 
-## Proposed exact shared model for freeze
+## Exact shared model
 
 ```go
 // Existing API signatures unchanged; PlanTidy dispatches workspace selectors, ApplyTidy
@@ -158,13 +158,13 @@ Native recovery bookmark names use the generated stw-recovery- identity plus a f
 so they are valid jj names but cannot be auto-exported as Git refs in colocated repositories. Fixed
 literal selector encoding is required on every native lookup/delete. Native git.colocate=false alone
 is insufficient to suppress auto-export for an existing colocated workspace; no exported @git
-recovery reference or later remote deletion intent is allowed. Native working_copy lock files may
-require narrowly declared write permission during jj native actions; their exact paths must be
-admitted as action-time effects and verified afterward, never broad metadata-directory grants
-covering unknown payload. Initial observation admits only the supported completed metadata set.
+recovery reference or later remote deletion intent is allowed. The reviewed private execution context authorizes NO new write grant to the actual source
+working_copy, including lock files. Any future additional lock-file grant needs separate concrete
+design analysis and source review; it is not authorized by this contract. Initial observation admits
+only the supported completed metadata set.
 
-This exact model is the coordinator proposal; native/core authors must confirm implementation
-feasibility before final WI3 analyze clearance. Independent experiments establish observed filename
+This exact model has coordinator/native/core feasibility confirmation and independent WI3
+design clearance. Independent experiments establish observed filename
 sets only, not full safe retirement or accepted native conformance. Mandatory original Spec010
 creation/materialization fixtures, binary/metadata payload cases, sandbox and partial-effect tests
 remain implementation acceptance gates.
