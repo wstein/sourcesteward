@@ -281,3 +281,12 @@ func TestRetirementMissingReadOnlyPostCapabilityRefusesBeforeEffects(t *testing.
 		t.Fatalf("missing required verification capability caused native effects: %+v", r)
 	}
 }
+
+func TestRetirementObservationEnforcesCombinedEvidenceBound(t *testing.T) {
+	_, f, _ := fixtureRetirement(t)
+	o := f.observation
+	o.Limitations = make([]string, observationLimit)
+	if err := validateRetirementObservation(o, o.Expected.Identity.WorkspaceRoot, o.Expected.BaseSelector, TaskRecord{TaskID: "task-1", Backend: "git", Native: o.Target, Destination: o.Target.WorkspaceRoot, DestinationIdentity: o.Destination}); err == nil {
+		t.Fatal("combined full observation exceeded1024 records without refusal")
+	}
+}

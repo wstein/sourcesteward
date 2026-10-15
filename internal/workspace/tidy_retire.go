@@ -209,6 +209,11 @@ func retirementEligible(p RetirementPlanRecord) bool {
 	return true
 }
 func validateRetirementObservation(o RetirementObservation, source, base string, task TaskRecord) error {
+	probe := newRetirementResult("tidy-plan")
+	probe.Retirement = &RetirementPlanRecord{Expected: o}
+	if !withinTidyBounds(probe) {
+		return failure("record-limit", "Combined complete retirement observation exceeds its aggregate1024-record or one-MiB bound.")
+	}
 	if !validSnapshot(o.Expected) || o.Expected.Identity.Backend != task.Backend || o.Expected.Identity.WorkspaceRoot != source || o.Expected.BaseSelector != base || o.Expected.Identity.RepositoryDir != task.Native.RepositoryDir || !validNativeIdentity(o.Target) || !sameOwner(o.Target, task.Native) || o.Target.WorkspaceRoot != task.Destination || o.Destination != task.DestinationIdentity || o.DestinationParent.Path != filepath.Dir(task.Destination) || !validRetirementPathIdentity(o.DestinationParent) || !validTidyPaths(o.WorkspacePaths) || o.Siblings == nil || o.Actions == nil || !validStrings(o.Limitations) || !validText(o.LockReason) || (o.Proof != "native-ancestry" && o.Proof != "empty-working-copy-integrated-parent" && o.Proof != "none") {
 		return failure("invalid-evidence", "Retirement ownership, native identities, paths or complete evidence are malformed.")
 	}
