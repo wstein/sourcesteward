@@ -110,7 +110,8 @@ def acceptance(binary=BINARY):
                     return {key: val for key, val in snap.items() if key != '.git/worktrees' and not key.startswith('.git/worktrees/')}
                 return {key: val for key, val in snap.items()
                         if (not key.startswith('.jj/repo/') and key != '.jj/repo' or key == '.jj/repo/config.toml')
-                        and not (group == 'jj-colocated' and (key == '.git/objects' or key.startswith('.git/objects/')))}
+                        and not (group == 'jj-colocated' and (key == '.git/objects' or key.startswith('.git/objects/')
+                        or key == '.git/refs/jj' or key.startswith('.git/refs/jj/')))}
 
             def source_identity():
                 if group == 'git':
