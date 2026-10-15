@@ -1,6 +1,6 @@
-# Feature Specification: Checkpoint and Resume
+# Feature Specification: Checkpoint, Resume and Selective Undo
 
-**Feature Branch**: `codex/lazyjj-inspired-roadmap` (specification batch; implementation branches deferred)
+**Feature Branch**: `codex/013-selective-undo-spec` (specification only)
 **Created**: 2026-10-15
 **Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
 **Input**: Preserve progress with backend-specific recovery guarantees.
@@ -52,10 +52,26 @@ A caller receives the same evidence in human and structured output without hidde
 4. **Given** repository-controlled helpers, instructions or configuration, **When** the operation runs, **Then** no undeclared executable, hook, prompt or network action occurs and state outside declared effects is preserved.
 5. **Given** a missing mandatory backend/version or absent acceptance execution, **When** conformance is evaluated, **Then** the missing evidence blocks acceptance rather than counting as a pass.
 
+### User Story 4 — Undo an explicit local operation selectively (Priority: P1)
+
+A human or agent needs an explicit, bounded outcome without disturbing unrelated work.
+
+**Why this priority**: This closes a user-selected everyday workflow gap while retaining ownership and recovery guarantees.
+
+**Independent Test**: Exercise supported success, refusal and interrupted cases in temporary Git and jj fixtures and compare relevant before/after state.
+
+**Acceptance Scenarios**:
+
+1. **Given** a selected commit, merge or native operation, **When** undo is planned, **Then** the caller chooses inverse change or supported history restoration and sees files, references, descendants and retained recovery scope.
+2. **Given** a merge with ambiguous parent or unrelated concurrent edits, **When** undo is requested, **Then** explicit parent/semantics selection is required and unsafe replacement refuses.
+3. **Given** an authorized unchanged plan with recovery evidence, **When** undo applies, **Then** only selected effects occur, partial outcomes are recorded and remote or hook effects are not claimed reversed.
+
 ### Edge Cases
 
 - Staged versus unstaged edits, untracked/ignored files, binary content, symlinks and deleted files.
 - Expired objects, divergent operations, changed workspace ownership and partial capture/restore failures.
+
+- Published/shared history, merge parent ambiguity, expired operation/object retention and inverse changes that create conflicts.
 
 ## Requirements
 
@@ -72,10 +88,17 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-009**: Declare and enforce observation/action scope, output and time limits, cancellation and incomplete-result behavior; never convert missing or truncated evidence into success or permission to mutate.
 - **FR-010**: Require acceptance evidence for minimum/current supported Git and jj, including failure, concurrency, ownership and effects cases; missing mandatory coverage cannot count as passed conformance.
 
+- **FR-011**: Extend recovery beyond checkpoints with explicit local commit/merge/native-operation undo plans, reusing Spec 010 expected-state and authorization contracts.
+- **FR-012**: Separate creation of an inverse change from history/operation restoration; never choose between these semantics implicitly. Require an explicit mainline/parent when merge reversal is ambiguous.
+- **FR-013**: Enumerate affected files, index/disk state, references and rewritten descendants before apply; retain pre-action native identities and refuse shared/foreign-owned or changed relevant state.
+- **FR-014**: Respect jj change/operation semantics and Git commit/merge semantics; report unsupported selective recovery and never use broad operation restoration as a substitute for an unrequested selective undo.
+
 ### Key Entities
 
 - Checkpoint: retained native identities, content scope, task context and recovery limits.
 - Resume comparison: checkpoint/current differences and safe next actions.
+
+- Selective undo plan: selected operation/revision, reversal semantics, parent choice, affected files/references/descendants and recovery.
 
 ## Success Criteria
 
@@ -92,3 +115,5 @@ A caller receives the same evidence in human and structured output without hidde
 - Checkpoints are local and explicit; automatic background snapshots, cloud synchronization and remote rollback are excluded.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
+
+- Selective local undo is newly in scope; it neither reverses remote publication nor supplies authorization to discard current work.

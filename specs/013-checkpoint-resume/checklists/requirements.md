@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Checkpoint and Resume
+# Specification Quality Checklist: Checkpoint, Resume and Selective Undo
 
 **Purpose**: Author review of specification completeness before planning.
 **Created**: 2026-10-15
@@ -26,3 +26,5 @@
 ## Notes
 
 Author review only: these checks assess draft clarity, not implementation or independent acceptance. Native backend names and JSON are user-facing compatibility requirements, not an implementation design. Plans/tasks, concrete contract design, per-requirement test mapping and cross-artifact analysis remain pending. No extension hooks are configured in this checkout.
+
+Author recheck on 2026-10-15 covers the added stories and requirements; plan/task analysis and implementation acceptance remain pending.
