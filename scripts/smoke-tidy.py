@@ -86,7 +86,11 @@ def acceptance(binary=BINARY):
                 (source / '.gitignore').write_text('ignored.txt\n')
                 native('jj', ['describe', '-m', 'initial'], source)
                 first = native('jj', ['log', '--no-graph', '-r', '@', '-T', 'commit_id'], source)
-                for name in ('integrated', 'literal.name', 'literal.name-longer'):
+                # A jj-only literal name cannot acquire an automatic @git
+                # counterpart in a colocated fixture. Exportable names are
+                # tested separately for remote-counterpart retention.
+                native('jj', ['bookmark', 'create', '"integrated?"', '-r', first], source)
+                for name in ('remote-test', 'literal.name', 'literal.name-longer'):
                     native('jj', ['bookmark', 'create', name, '-r', first], source)
                 native('jj', ['new'], source)
                 (source / 'tracked.txt').write_text('trunk\n')
@@ -140,7 +144,9 @@ def acceptance(binary=BINARY):
                 return value
 
             def ref_name(name):
-                return 'refs/heads/' + name if group == 'git' else name
+                if group == 'git':
+                    return 'refs/heads/' + name
+                return 'integrated?' if name == 'integrated' else name
 
             def candidate(value, name):
                 name = ref_name(name)
@@ -211,7 +217,7 @@ def acceptance(binary=BINARY):
                 # The backing Git counterpart is still a remote counterpart in jj;
                 # deletion intent must not be inferred from local ancestry alone.
                 native('jj', ['--ignore-working-copy', 'git', 'export'], source)
-                upstream = candidate(observe('upstream-not-proof'), 'integrated')
+                upstream = candidate(observe('upstream-not-proof'), 'remote-test')
             assert upstream['decision'] == 'retain', upstream
     expected = {case_id for cases in CASE_IDS.values() for case_id in cases}
     require_complete(completed, expected)
