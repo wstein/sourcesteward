@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlsplit
 
 BASE = '/sourcesteward/'
 GUIDES = {
+    'docs/workspaces.md': ('workspaces', 'Task workspaces'),
     'docs/inventory.md': ('inventory', 'Inventory'),
     'docs/development.md': ('development', 'Development'),
     'docs/backends.md': ('backends', 'Backend readiness'),
@@ -20,7 +21,7 @@ GUIDES = {
     'docs/agent-guide.md': ('agents', 'Agent guide'),
     'docs/json-contracts.md': ('json-contracts', 'JSON contracts'),
 }
-SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json'), 'v2': ('inspect.schema.json',)}
+SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json'), 'v2': ('inspect.schema.json',)}
 SCHEMA_PATHS = {version + '/' + name for version, names in SCHEMAS.items() for name in names}
 
 
