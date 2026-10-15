@@ -148,6 +148,29 @@ def acceptance(binary=BINARY, milestone=None):
         def jj(args, cwd=root):
             return setup('jj', ['--no-pager', '--color=never', *args], cwd)
 
+        def workspace_expectation(cwd):
+            # Use native fixture metadata, never the result under test, to determine
+            # whether the supported version exposes every registered root.
+            raw = jj(['--ignore-working-copy', 'workspace', 'list', '--template',
+                      'json(self.name()) ++ "\\n" ++ json(self.root()) ++ "\\n"'], cwd)
+            fields = [json.loads(line) for line in raw.splitlines()]
+            assert len(fields) % 2 == 0, raw
+            registrations = {}
+            for name, path in zip(fields[::2], fields[1::2]):
+                health = 'unknown' if path is None else ('present' if Path(path).is_dir() else 'missing')
+                registrations[name] = (path, health)
+            status = 'ok' if all(health == 'present' for _, health in registrations.values()) else 'partial'
+            return status, registrations
+
+        def assert_registrations(output, expected):
+            if output is None:
+                return
+            records = {record['name']: record for record in output['workspaces']}
+            assert set(records) == set(expected), (records, expected)
+            for name, (path, health) in expected.items():
+                assert records[name]['path'] == path and records[name]['registration'] == health, (records[name], expected)
+                assert records[name]['manager'] == ('jj' if health == 'present' else 'unknown'), records[name]
+
         for colocated in (False, True):
             layout = 'colocated' if colocated else 'standalone'
             jjrepo = root / ('jj-colocated' if colocated else 'jj-standalone')
@@ -176,13 +199,20 @@ def acceptance(binary=BINARY, milestone=None):
             observe(f'M4.{layout}.staging-unsupported', jjrepo, ['--scope', 'staged'], status='partial')
             secondary = root / ('colocated-secondary' if colocated else 'standalone-secondary')
             jj(['workspace', 'add', '--name', 'secondary', str(secondary)], jjrepo)
-            output = observe(f'M4.{layout}.workspaces', jjrepo, ['--scope', 'stored'])
+            status, registrations = workspace_expectation(jjrepo)
+            output = observe(f'M4.{layout}.workspaces', jjrepo, ['--scope', 'stored'], status=status)
+            assert_registrations(output, registrations)
             if output is not None:
                 assert {item['name'] for item in output['workspaces']} >= {'default', 'secondary'}, output
-            observe(f'M4.{layout}.secondary', secondary, ['--scope', 'stored'])
+            status, registrations = workspace_expectation(secondary)
+            output = observe(f'M4.{layout}.secondary', secondary, ['--scope', 'stored'], status=status)
+            assert_registrations(output, registrations)
             shutil.rmtree(secondary)
             # Native jj registration records may lack paths; absence must never trigger repair.
-            output = observe(f'M4.{layout}.missing', jjrepo, ['--scope', 'stored'])
+            status, registrations = workspace_expectation(jjrepo)
+            assert status == 'partial' and registrations['secondary'][1] in ('missing', 'unknown'), registrations
+            output = observe(f'M4.{layout}.missing', jjrepo, ['--scope', 'stored'], status='partial')
+            assert_registrations(output, registrations)
             if output is not None:
                 assert 'secondary' in {item['name'] for item in output['workspaces']}, output
     selected = (milestone,) if milestone else tuple(CASE_IDS)
