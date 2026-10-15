@@ -263,7 +263,7 @@ func validTidyCandidate(c TidyCandidate, backend, format string) bool {
 	return validAlphabet(c.CommitID, 40, "0123456789abcdef") && validAlphabet(c.ChangeID, 32, "klmnopqrstuvwxyz")
 }
 func validateTidyPlan(p TidyPlanRecord, state, id string) error {
-	if p.SchemaVersion != 1 || p.StateDir != state || p.PlanID != id || (id != "" && !validID(id)) || (state == "" && id != "") || !validAlphabet(p.Digest, 64, "0123456789abcdef") || p.Digest != tidyPlanDigest(p) || !filepath.IsAbs(p.SourcePath) || filepath.Clean(p.SourcePath) != p.SourcePath || !validText(p.SourcePath) || !validText(p.StateDir) || !validStrings(p.SelectedRefs) || !validStrings(p.Effects) || !validStrings(p.RecoveryLimits) {
+	if p.SchemaVersion != 1 || p.StateDir != state || p.PlanID != id || (id != "" && !validID(id)) || (state == "" && id != "") || !validAlphabet(p.Digest, 64, "0123456789abcdef") || p.Digest != tidyPlanDigest(p) || !filepath.IsAbs(p.SourcePath) || filepath.Clean(p.SourcePath) != p.SourcePath || !validText(p.SourcePath) || !validText(p.StateDir) || (p.StateDir != "" && !validText(tidyJournalPointer(p))) || !validStrings(p.SelectedRefs) || !validStrings(p.Effects) || !validStrings(p.RecoveryLimits) {
 		return failure("invalid-plan", "Tidy plan is incompatible, modified or not bound to this private store.")
 	}
 	observation := TidyObservation{Expected: p.Expected, Candidates: p.Candidates, Limitations: []string{}, WorkspacePaths: []string{}}
@@ -339,8 +339,8 @@ func boundedTidy(r TidyResult) TidyResult {
 	case "git", "jj", "unknown", "ambiguous", "gitbutler":
 		safe.Backend = r.Backend
 	}
-	if r.Plan != nil && validID(r.Plan.PlanID) && validText(r.Plan.StateDir) && filepath.IsAbs(r.Plan.StateDir) {
-		safe.Limitations = []string{"Recovery journal: " + tidyJournalPointer(*r.Plan)}
+	if pointer := tidyResultRecoveryPointer(r); pointer != "" {
+		safe.Limitations = []string{"Recovery journal: " + pointer}
 		safe.Actions = []ActionOutcome{{"known-effects", "incomplete", "Known or possible native effects were omitted from bounded output; inspect the durable journal before recovery."}}
 	}
 	safe.Status = "partial"
@@ -377,4 +377,19 @@ func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string
 		}
 	}
 	return nil
+}
+
+func tidyResultRecoveryPointer(r TidyResult) string {
+	if r.Plan != nil && validID(r.Plan.PlanID) && validText(r.Plan.StateDir) && filepath.IsAbs(r.Plan.StateDir) {
+		pointer := tidyJournalPointer(*r.Plan)
+		if validText(pointer) {
+			return pointer
+		}
+	}
+	for _, limit := range r.Limitations {
+		if pointer, ok := strings.CutPrefix(limit, "Recovery journal: "); ok && validText(pointer) && filepath.IsAbs(pointer) && filepath.Clean(pointer) == pointer && filepath.Base(filepath.Dir(pointer)) == "tidy-operations" && strings.HasSuffix(pointer, ".json") && validID(strings.TrimSuffix(filepath.Base(pointer), ".json")) {
+			return pointer
+		}
+	}
+	return ""
 }

@@ -158,3 +158,24 @@ func TestTidyBoundedPartialRetainsRecoveryJournalPointer(t *testing.T) {
 		t.Fatalf("lost durable pointer %+v", r)
 	}
 }
+
+func TestTidyBoundedPartialWithoutPlanRetainsRecoveryPointer(t *testing.T) {
+	c, _, o := fixtureTidyApply(t)
+	r := c.apply(context.Background(), o)
+	r.Plan = nil
+	r.Status = "partial"
+	r.Limitations = append(r.Limitations, strings.Repeat("\x01", recordLimit))
+	r = boundedTidy(r)
+	if !strings.Contains(strings.Join(r.Limitations, " "), o.StateDir+"/tidy-operations/"+o.PlanID+".json") {
+		t.Fatal("bounded error lost independent journal pointer")
+	}
+}
+func TestTidyMalformedNativeOutcomeNeverAuthorizesDeletion(t *testing.T) {
+	entry := TidyActionRecord{Actions: []ActionOutcome{}}
+	if addTidyNativeOutcome(&entry, "create-recovery", TidyNativeOutcome{Attempted: true, Complete: true, Effects: make([]string, observationLimit+1), Limitations: []string{}}) {
+		t.Fatal("oversized outcome accepted")
+	}
+	if len(entry.Actions) != 1 || entry.Actions[0].Status != "incomplete" {
+		t.Fatal("possible effects lost")
+	}
+}

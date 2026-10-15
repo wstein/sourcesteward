@@ -173,7 +173,10 @@ func (c tidyCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResu
 		}
 		index := len(j.Entries) - 1
 		confirmed, fresh, outcome, pinErr := a.PrepareRecovery(ctx, actionPlan, target)
-		addTidyNativeOutcome(&j.Entries[index], "create-recovery", outcome)
+		if !addTidyNativeOutcome(&j.Entries[index], "create-recovery", outcome) {
+			outcome.Complete = false
+			pinErr = failure("invalid-native-outcome", "Native recovery outcome exceeded complete evidence bounds; target deletion was not attempted.")
+		}
 		if pinErr == nil && ctx.Err() != nil {
 			pinErr = ctx.Err()
 		}
@@ -197,7 +200,10 @@ func (c tidyCoordinator) apply(ctx context.Context, o TidyApplyOptions) TidyResu
 		}
 		actionPlan.Expected = fresh
 		outcome, deleteErr := a.Delete(ctx, actionPlan, target, confirmed, fresh)
-		addTidyNativeOutcome(&j.Entries[index], "delete-reference", outcome)
+		if !addTidyNativeOutcome(&j.Entries[index], "delete-reference", outcome) {
+			outcome.Complete = false
+			deleteErr = failure("invalid-native-outcome", "Native deletion outcome exceeded complete evidence bounds; inspect recovery before further work.")
+		}
 		if deleteErr == nil && ctx.Err() != nil {
 			deleteErr = ctx.Err()
 		}
@@ -246,7 +252,11 @@ func validConfirmedTidyRecovery(got, want TidyRecovery, backend string) bool {
 	}
 	return validAlphabet(got.OperationID, 128, "0123456789abcdef")
 }
-func addTidyNativeOutcome(entry *TidyActionRecord, name string, out TidyNativeOutcome) {
+func addTidyNativeOutcome(entry *TidyActionRecord, name string, out TidyNativeOutcome) bool {
+	if !validStrings(out.Effects) || !validStrings(out.Limitations) || len(out.Effects)+len(out.Limitations) > observationLimit {
+		entry.Actions = append(entry.Actions, ActionOutcome{name, "incomplete", "Native outcome evidence was malformed or exceeded bounds; effects may remain at the predeclared recovery root. Further mutation is refused."})
+		return false
+	}
 	status := "incomplete"
 	if out.Complete {
 		status = "completed"
@@ -265,7 +275,10 @@ func addTidyNativeOutcome(entry *TidyActionRecord, name string, out TidyNativeOu
 	for _, limit := range out.Limitations {
 		entry.Actions = append(entry.Actions, ActionOutcome{"native-limit", "incomplete", shortText(limit, 4096)})
 	}
+
+	return true
 }
+
 func tidyJournalActions(j TidyJournal) []ActionOutcome {
 	actions := []ActionOutcome{}
 	for _, entry := range j.Entries {
