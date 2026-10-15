@@ -33,7 +33,7 @@
 - [x] T015 Update AGENTS.md, README.md, docs/{agent-guide,backends,roadmap,harness,README}.md and llms.txt to distinguish implemented identity inspection from deferred adapters/mutations.
 - [x] T016 Run gofmt, make check, go test -race ./..., real-process acceptance, snapshots/sentinels and git diff --check; record actual evidence and limitations in docs/inspection-verification.md.
 - [x] T017 Perform final Spec Kit cross-artifact analyze in specs/005-repository-inspection/analysis.md; fix consistency findings.
-- [ ] T018 Obtain independent exact-revision source review, fix concrete findings, update docs/progress.md and docs/feature-status.json, and create focused Conventional Commits without pushing/merging.
+- [x] T018 Obtain independent exact-revision source review, fix concrete findings, update docs/progress.md and docs/feature-status.json, and create focused Conventional Commits without pushing/merging.
 
 ## Dependencies and execution
 T002 blocks source implementation. T003–T005 precede US1. US2 detection fixtures can be designed independently, but detection integrates before ordinary HEAD inspection. US3 safety controls must pass before any handoff; US1 is not publishable alone. Each behavior test must fail before its implementation. No author publication.
