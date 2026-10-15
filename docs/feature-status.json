@@ -56,9 +56,51 @@
       "evidence": null
     },
     {
-      "id": "local-cleanup",
+      "id": "009-workspace-inventory",
       "status": "planned",
-      "spec": null,
+      "spec": "../specs/009-workspace-inventory/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "010-isolated-task-workspaces",
+      "status": "planned",
+      "spec": "../specs/010-isolated-task-workspaces/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "011-workspace-reference-tidy",
+      "status": "planned",
+      "spec": "../specs/011-workspace-reference-tidy/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "012-stack-inspection",
+      "status": "planned",
+      "spec": "../specs/012-stack-inspection/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "013-checkpoint-resume",
+      "status": "planned",
+      "spec": "../specs/013-checkpoint-resume/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "014-conflict-diagnosis",
+      "status": "planned",
+      "spec": "../specs/014-conflict-diagnosis/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "015-local-restacking",
+      "status": "planned",
+      "spec": "../specs/015-local-restacking/spec.md",
+      "evidence": null
+    },
+    {
+      "id": "016-stacked-pr-coordination",
+      "status": "planned",
+      "spec": "../specs/016-stacked-pr-coordination/spec.md",
       "evidence": null
     }
   ]
