@@ -68,3 +68,14 @@ documents plus Go/module/architecture/whitespace checks), race tests, build and 
 cases. Basic site asset/script allowlisting and packaging checks pass in that suite. No browser
 reinspection is claimed: the merged site implementation is byte-identical to reviewed main.
 Independent integration review is pending for this subsequent merge commit.
+
+## Publication history correction (2026-10-15)
+The statements above that integration happened "without rewriting published commits",
+"without rebase" or "without force push" describe the topic branches before publication. To
+make the stacked PRs rebase-mergeable, the branches were afterwards rebased onto main as
+linear commits and force-pushed with a lease on the reviewed heads (PR #7); the integration
+merge commits were replaced by ordinary commits carrying the same changes. Each rebased
+branch tree was verified byte-identical to its reviewed head before pushing, so the review
+evidence still applies to the merged content. Of the commit IDs cited above, `1d8d7c5` is a
+pre-rebase branch commit and is not in main's history; `d74341a` is in main (checked
+2026-10-15).

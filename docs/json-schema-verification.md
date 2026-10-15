@@ -50,3 +50,14 @@ The rerun passed all Go tests/vet/module checks,13 Python cases,12 Node theme ca
 70 authored-document checks, architecture and whitespace. Runtime and schema files are
 unchanged; prior race results still apply. The following documentation commit records
 these results and corrects inherited merged PR4/5 progress. Final integration review is pending.
+
+## Publication history correction (2026-10-15)
+The statements above that integration happened "without rewriting published commits",
+"without rebase" or "without force push" describe the topic branches before publication. To
+make the stacked PRs rebase-mergeable, the branches were afterwards rebased onto main as
+linear commits and force-pushed with a lease on the reviewed heads (PRs #6 and #7); the
+integration merge commits were replaced by ordinary commits carrying the same changes. Each
+rebased branch tree was verified byte-identical to its reviewed head before pushing, so the
+review evidence still applies to the merged content. The commit IDs cited above (`1d8d7c5`,
+`42c5638`, `98f65df`, `c52f089`) are pre-rebase branch commits and are not in main's history
+(checked 2026-10-15).
