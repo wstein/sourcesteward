@@ -216,3 +216,43 @@ func TestTaskOwnershipRejectsForgedRecoveryAndCompletion(t *testing.T) {
 		t.Fatal("accepted noncomplete stored task")
 	}
 }
+
+func TestMalformedSemanticPlansNeverEscapeIntoResults(t *testing.T) {
+	for _, change := range []func(*MutationPlan){func(p *MutationPlan) { p.Expected.BaseCommit = "x" }, func(p *MutationPlan) { p.Expected.Identity.CommitID = "x" }, func(p *MutationPlan) { p.Expected.SafetyDigest = "x" }, func(p *MutationPlan) { p.Effects = []string{strings.Repeat("x", 4097)} }} {
+		c, _, o := fixtureCoordinator(t)
+		r := c.plan(context.Background(), o)
+		p := *r.Plan
+		change(&p)
+		p.Digest = planDigest(p)
+		s, e := openStore(o.StateDir, true)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = s.write("plans", p.PlanID, p, false); e != nil {
+			t.Fatal(e)
+		}
+		s.Close()
+		r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true})
+		if r.Status != "error" || r.Plan != nil || r.Task != nil {
+			t.Fatalf("malformed stored plan escaped result: %#v", r)
+		}
+	}
+}
+func TestMalformedJournalActionsNeverEscapeIntoResults(t *testing.T) {
+	c, _, o := fixtureCoordinator(t)
+	r := c.plan(context.Background(), o)
+	p := *r.Plan
+	s, e := openStore(o.StateDir, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	j := journal{SchemaVersion: 1, PlanID: p.PlanID, Phase: "incomplete", Actions: []ActionOutcome{{"x", "incomplete", strings.Repeat("x", 4097)}}, Diagnostics: []Diagnostic{}}
+	if e = s.write("operations", p.PlanID, j, true); e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true})
+	if r.Status != "error" || len(r.Actions) != 0 {
+		t.Fatalf("malformed journal action escaped: %#v", r)
+	}
+}
