@@ -4,14 +4,14 @@ SourceSteward is a Go CLI with a static project site. Its backend-neutral execut
 
 ## Current boundaries
 ```text
-cmd/stw → internal/cli → internal/inspection → fixed Git built-ins + read-only metadata
+cmd/stw → internal/cli → internal/inspection → fixed Git built-ins | sandboxed native jj + read-only metadata
                        → Cobra + standard library
 scripts/       → source/documentation checks and Pages packaging
 specs/         → acceptance contracts, plans, tasks and evidence pointers
 ```
 cmd owns process cancellation and exit status. internal/cli owns parsing, rendering and the
 single diagnostic boundary. It imports only the reviewed inspection operation, not os, os/exec, filesystem or network adapters.
-internal/inspection owns local filesystem discovery, typed results and bounded Git plumbing.
+internal/inspection owns local filesystem discovery, typed results, bounded Git plumbing and native jj execution.
 scripts/check-architecture.py mechanically checks the CLI boundary.
 
 ## Planned operation boundary
@@ -20,12 +20,16 @@ CLI / future MCP → application operation → selected Git | jj | GitButler ada
                         ↓
                 shared typed result + explicit backend-specific evidence
 ```
-Bounded ordinary-Git identity inspection exists; native jj/GitButler adapters do not. Avoid premature universal interfaces: capabilities, stable
+Bounded native Git/jj identity inspection exists; GitButler integration remains planned. Avoid premature universal interfaces: capabilities, stable
 identities, inspection effects and recovery guarantees are specified before implementation.
 Git and jj are Tier 1 peers with native adapters for supported capabilities; native jj identity
-inspection remains pending Spec 008 acceptance. The [backend contract](docs/backends.md)
+inspection is implemented with final cross-platform acceptance tracked in Spec 008. The [backend contract](docs/backends.md)
 defines ownership-based selection, versions, schema compatibility and conformance evidence.
-Read-only jj acceptance must verify working-copy and operation-log effects independently.
+Native jj uses enforced read-only Linux/macOS sandboxing, isolated configuration, snapshot
+suppression and operation pinning. No unsandboxed fallback is permitted. Private temporary
+isolation/probe files outside the target are the disclosed setup effect. Git/version retain
+schema v1; native jj results use schema v2. Conformance verifies working-copy and operation-log
+effects independently, including read-side repair refusal.
 
 ## Knowledge and execution
 [AGENTS.md](AGENTS.md) is the short entry map. [docs/README.md](docs/README.md) indexes the

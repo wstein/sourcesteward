@@ -1,11 +1,11 @@
 # Backend readiness: Git, Jujutsu and GitButler
 
-Git and Jujutsu (jj) are Tier 1 peers under constitution 1.1.0. `stw inspect` implements bounded ordinary-Git identity inspection (Git 2.46+).
-It detects recognized jj/GitButler evidence and refuses unsupported managed backends.
-Native jj inspection is the next bounded feature, Spec 008; it is not implemented yet.
+Git and Jujutsu (jj) are Tier 1 peers under constitution 1.1.0. `stw inspect` implements
+bounded native identity inspection for ordinary Git and standalone, colocated and secondary
+jj workspaces. Native jj support is implemented in Spec 008; final platform/conformance
+acceptance is tracked in the [verification record](../specs/008-jj-inspection/verification.md).
 GitButler remains a separately specified future integration. Tier 1 commits to native support,
-versioned contracts and conformance evidence, not identical capabilities.
-The CLI/application boundary must not assume every workspace is ordinary Git.
+versioned contracts and conformance evidence, preserving each backend's semantics.
 
 ## Capability model
 | Concept | Git | Jujutsu (jj) | GitButler |
@@ -35,13 +35,23 @@ a bookmark with every branch behavior, or an operation log with undoing remote e
 6. If both jj and GitButler metadata appear, report ambiguity and retain state; do not guess.
 
 ## Effects and plans
-Each operation declares filesystem/repository writes, snapshotting, index refresh, network,
-hooks, editor/prompt requirements and recovery scope. Inspection defaults to no writes where
-supported; otherwise disclose the effect and require an explicit effectful invocation.
-A jj read-only contract must test both working-copy and operation-log effects.
-`--ignore-working-copy` avoids snapshotting but may report stale state; it does not alone
-prove absence of operation-log changes. Spec 008 must select and verify a supported native
-read mode, including divergent-operation behavior, and disclose freshness limits.
+Each operation declares filesystem/repository writes, snapshots, index refresh, network,
+hooks, editor/prompt requirements and recovery scope. Identity inspection never writes the
+inspected workspace or repository. Native jj creates and removes private temporary configuration
+and probe files outside the inspected target; it excludes caller/repository configuration text.
+
+Native jj requires usable Linux bubblewrap or macOS sandbox-exec enforcing filesystem write
+and network denial. Missing/denied enforcement fails with `jj-sandbox-unavailable`; there is
+no unsandboxed retry. Fixed trusted identity commands and isolated configuration prevent helper
+invocation; Linux sandboxing does not claim executable denial. macOS additionally restricts
+executable launch. Read-side jj index rebuilds or metadata migrations are denied rather than
+allowed to repair the repository.
+
+Every native read suppresses snapshots and pins operation selection. Results explicitly say
+`stored-unsnapshotted`: disk edits/untracked files are not represented, freshness is unknown,
+and sampling cannot guarantee a transaction or detect all concurrent/ABA changes. Divergent
+operations and stale workspace state never trigger automatic merging or workspace updates.
+Native inspection has a ten-second total deadline and 64 KiB per-command output bound.
 
 Bind plans to backend, repository/workspace identity, relevant refs, changes and operation
 identity where supported. Revalidate before applying; reject stale plans. Recovery is backend-
@@ -53,7 +63,7 @@ Use separate workspaces/worktrees when tasks need separate filesystem or runtime
 | Backend | Current accepted capability | Version support | Next acceptance gate |
 | --- | --- | --- | --- |
 | Git | Bounded identity inspection | Git 2.46+ | Preserve existing fixtures and v1 schema |
-| jj | Ownership detection and explicit unsupported result | Native versions pending Spec 008 | Native identity inspection, version policy and no-write evidence |
+| jj | Native stored identity inspection implemented; final acceptance tracked in Spec 008 | Stable jj 0.45.1+; enforced sandbox required | Minimum/current conformance and no-target-write evidence |
 | GitButler | Recognized ownership detection and explicit unsupported result | No native adapter supported | Separate specification |
 
 Each Tier 1 adapter must declare supported minimum/current versions and capabilities, and
@@ -63,8 +73,14 @@ executables, stale/concurrent state and absence of unintended writes. Capability
 backend-specific identities stay visible in human output, JSON schemas and documentation.
 Published v1 contracts remain compatible; incompatible result shapes require a new version.
 
-Implement native jj identity inspection through Spec 008, then expand status/diagnosis for
-both backends through reviewed specifications. Mutations require separate per-backend plans,
+Git conformance pins minimum 2.46.0 and current 2.56.0; jj conformance pins minimum 0.45.1
+and current 0.46.0. Later stable versions must retain the supported identity interfaces; an
+untested release is not equivalent to recorded conformance. Git/version keep published schema
+v1; selected native jj success/errors use schema v2 with distinct workspace, change, commit and
+operation identities. Ambiguous/GitButler/pre-selection outcomes retain schema v1. See
+[JSON contracts](json-contracts.md).
+
+Expand status/diagnosis for both backends through reviewed specifications. Mutations require separate per-backend plans,
 state validation and recovery evidence. Do not implement one backend's missing behavior by
 silently performing another backend's writes.
 
