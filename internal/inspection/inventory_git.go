@@ -123,6 +123,11 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 		w.Tracked = unknown("disk state unavailable")
 		w.Untracked = unknown("disk state unavailable")
 		w.Conflicts = unknown("disk state unavailable")
+		if o.Query != "" && w.Path != nil && (id.Repository.Worktree == nil || *w.Path != *id.Repository.Worktree) {
+			w.Limitations = append(w.Limitations, "workspace disk state is outside selected predicate scope")
+			r.Workspaces = append(r.Workspaces, w)
+			continue
+		}
 		if w.Path == nil {
 			r.Workspaces = append(r.Workspaces, w)
 			continue
@@ -180,16 +185,23 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 		w.Registration = "present"
 		transforms, transformErr := false, error(nil)
 		if requiresRaw {
-			transforms, transformErr = s.workspaceTransforms(*w.Path)
+			transforms, transformErr = s.workspaceTransforms(*w.Path, nil)
 		}
 		if transformErr != nil {
 			return r.fail("git-inventory-failed", transformErr.Error())
 		}
-		parsed, signature, e := s.workspaceStatus(*w.Path, requiresRaw)
+		selectedTransforms := transforms
+		if requiresRaw && transforms && len(o.Paths) > 0 {
+			selectedTransforms, transformErr = s.workspaceTransforms(*w.Path, o.Paths)
+			if transformErr != nil {
+				return r.fail("git-inventory-failed", transformErr.Error())
+			}
+		}
+		parsed, signature, e := s.workspaceStatus(*w.Path, requiresRaw, o.Scopes, o.Paths)
 		if e != nil {
 			return r.fail("git-inventory-failed", e.Error())
 		}
-		second, nextSignature, e := s.workspaceStatus(*w.Path, requiresRaw)
+		second, nextSignature, e := s.workspaceStatus(*w.Path, requiresRaw, o.Scopes, o.Paths)
 		if e != nil {
 			return r.fail("git-inventory-failed", e.Error())
 		}
@@ -200,6 +212,7 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 
 		tracked, untracked, conflicts := false, false, false
 		submodules := false
+		selectedSubmodules := false
 		rawUnknown := ""
 		selectedRawUnknown := ""
 		for _, v := range parsed {
@@ -207,6 +220,9 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 			untracked = untracked || v.kind == "untracked"
 			conflicts = conflicts || v.kind == "conflict"
 			submodules = submodules || v.submodule
+			if v.submodule && inventoryPathSelected(v.path, o.Paths) {
+				selectedSubmodules = true
+			}
 			if v.unknown != "" {
 				rawUnknown = v.unknown
 				if inventoryPathSelected(v.path, o.Paths) {
@@ -219,6 +235,9 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 			w.Tracked = unknown("raw disk comparison not requested")
 		}
 		w.Untracked = known(untracked)
+		if !gitInventoryHasScope(o.Scopes, "untracked") {
+			w.Untracked = unknown("untracked scope not requested")
+		}
 		w.Conflicts = known(conflicts)
 		if rawUnknown != "" {
 			w.Tracked = unknown(rawUnknown)
@@ -234,10 +253,17 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 		}
 		if id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
 			currentStatus = parsed
-			s.transforms = transforms
-			if requiresRaw && (transforms || submodules || selectedRawUnknown != "") {
+			s.transforms = selectedTransforms
+			if requiresRaw && (selectedTransforms || selectedSubmodules || selectedRawUnknown != "") {
 				statusComplete = false
-				r.partial(w.Tracked.Reason)
+				reason := "configured transformations suppressed; raw comparisons not authoritative"
+				if selectedSubmodules {
+					reason = "submodule disk state excluded to avoid recursive helpers"
+				}
+				if selectedRawUnknown != "" {
+					reason = selectedRawUnknown
+				}
+				r.partial(reason)
 			}
 		}
 		r.Workspaces = append(r.Workspaces, w)
@@ -683,7 +709,7 @@ func (s gitInventorySession) storedFiles(dir string, oid, base *string, paths []
 		if !gitInventoryOID(parent, s.format) {
 			return nil, errors.New("invalid stored Git parent")
 		}
-		args = []string{"diff", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", parent, *oid, "--"}
+		args = []string{"diff", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", parent, *oid, "--"}
 	}
 	raw, c, e := s.command(dir, args...)
 	if e != nil || c != 0 {
@@ -801,14 +827,12 @@ func (s gitInventorySession) bases(dir string, id Result, r *InventoryResult) er
 }
 
 // workspaceTransforms inspects literal attributes without running content filters.
-func (s gitInventorySession) workspaceTransforms(dir string) (bool, error) {
+func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (bool, error) {
 	autocrlf, c, e := s.command(dir, "config", "--get", "core.autocrlf")
 	if e != nil || c > 1 {
 		return false, errors.New("cannot observe native normalization configuration")
 	}
-	if c == 0 && terminated(autocrlf) != "false" && terminated(autocrlf) != "" {
-		return true, nil
-	}
+	normalizes := c == 0 && terminated(autocrlf) != "false" && terminated(autocrlf) != ""
 	raw, c, e := s.command(dir, "ls-files", "--cached", "-z")
 	if e != nil || c != 0 {
 		return false, errors.New("cannot safely observe content attribute usage")
@@ -820,8 +844,18 @@ func (s gitInventorySession) workspaceTransforms(dir string) (bool, error) {
 	if len(paths) > inventoryRecordLimit {
 		return false, errors.New("inventory record limit exceeded")
 	}
+	selected := paths[:0]
+	for _, path := range paths {
+		if inventoryPathSelected(path, filters) {
+			selected = append(selected, path)
+		}
+	}
+	paths = selected
 	if len(paths) == 0 {
 		return false, nil
+	}
+	if normalizes {
+		return true, nil
 	}
 	args := []string{"check-attr", "-z", "filter", "text", "eol", "ident", "working-tree-encoding", "--"}
 	args = append(args, paths...)
@@ -851,7 +885,7 @@ func (s gitInventorySession) workspaceTransforms(dir string) (bool, error) {
 
 // workspaceStatus never asks Git to hash worktree contents. Content comparisons
 // happen here, so even concurrent configuration changes cannot execute filters.
-func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInventoryStatus, string, error) {
+func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool, scopes, filters []string) ([]gitInventoryStatus, string, error) {
 	raw, c, e := s.command(dir, "ls-files", "--stage", "-z")
 	if e != nil || c != 0 {
 		return nil, "", errors.New("cannot observe Git index")
@@ -978,7 +1012,7 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 		positions[path] = len(out)
 		out = append(out, v)
 	}
-	raw, c, e = s.command(dir, "diff", "--cached", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--")
+	raw, c, e = s.command(dir, "diff", "--cached", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", "--")
 	if e != nil || c != 0 {
 		return nil, "", errors.New("cannot observe staged Git files")
 	}
@@ -1011,12 +1045,20 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 		}
 	}
 	for _, ignored := range []bool{false, true} {
+		if ignored && !gitInventoryHasScope(scopes, "ignored") || !ignored && !gitInventoryHasScope(scopes, "untracked") {
+			continue
+		}
 		args := []string{"ls-files", "--others", "--exclude-standard", "-z"}
 		kind := "untracked"
 		if ignored {
 			args = append(args, "--ignored")
 			kind = "ignored"
 		}
+		if len(filters) > 0 {
+			args = append(args, "--")
+			args = append(args, filters...)
+		}
+		args = append([]string{"--literal-pathspecs"}, args...)
 		raw, c, e = s.command(dir, args...)
 		if e != nil || c != 0 {
 			return nil, "", errors.New("cannot enumerate native Git untracked/ignored paths")
@@ -1169,4 +1211,13 @@ func readGitInventoryContent(ctx context.Context, f *os.File) ([]byte, error) {
 			return nil, e
 		}
 	}
+}
+
+func gitInventoryHasScope(scopes []string, want string) bool {
+	for _, scope := range scopes {
+		if scope == want {
+			return true
+		}
+	}
+	return false
 }
