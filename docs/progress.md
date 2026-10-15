@@ -5,8 +5,10 @@
 with enforced read-only Linux/macOS sandboxing, isolated configuration and schema v2.
 Published Git/version v1 contracts remain unchanged. Independently reviewed native source
 949c082 passes both macOS jj versions and mandatory minimum/current Linux conformance at
-3b152f6 (Actions run38777280084). Final documentation/integration review and latest-head CI
-remain pending. See [Spec 008 evidence](../specs/008-jj-inspection/verification.md).
+beb3285 (Actions run38777527598), including capability/confinement/network-namespace proof.
+The user merged policy PR #9 and implementation PR #10; main cf46592 has the same tree as
+accepted beb3285. Final documentation analysis cleared95bb36d; a documentation-only follow-up
+PR and CI handoff remain pending. See [Spec 008 evidence](../specs/008-jj-inspection/verification.md).
 
 007-hugo-docs are merged to main through
 [PR #7](https://github.com/wstein/sourcesteward/pull/7),
@@ -14,10 +16,10 @@ remain pending. See [Spec 008 evidence](../specs/008-jj-inspection/verification.
 [PR #8](https://github.com/wstein/sourcesteward/pull/8). Their recorded acceptance covers
 bounded ordinary-Git identity inspection, versioned JSON contracts and pinned Hugo guides/
 command reference. This is merged-source status; deployment evidence remains in each feature's
-verification record. Native jj inspection is implemented in Spec 008; final PR/CI handoff
-remains pending.
+verification record. Native jj inspection is implemented and merged through Spec 008;
+its documentation follow-up handoff remains pending.
 
-The Tier 1 policy amendment is prepared for owner review: Git and jj receive equal support
+The Tier 1 policy amendment was merged by the user through PR #9: Git and jj receive equal support
 commitments for explicitly supported capabilities. See [amendment evidence](tier1-policy.md).
 
 004-site-themes is merged to main through [PR #5](https://github.com/wstein/sourcesteward/pull/5).
@@ -44,7 +46,7 @@ harness and CI. A durable local checkout is available. See [verification](verifi
 - Repository/module: wstein/sourcesteward; product: SourceSteward; standalone short CLI: stw.
 - Go 1.27.2 and Cobra v1.10.2; EUPL-1.2 original source/artwork; font licenses retained.
 - Git and jj are Tier 1 peers with bounded native identity inspection implemented. Final
-  Spec 008 handoff is pending; GitButler and broader mutations require separate specifications.
+  Spec 008 implementation is merged; documentation follow-up is pending; GitButler and broader mutations require separate specifications.
 - Wide navy tie, orange knot and white branch; local family fonts with preserved OFL notices.
 - Static Pages with local assets and same-run exact-SHA checks; no CLI release automation.
 - Weekly Dependabot, community standards, private security reporting and owner review.
@@ -59,7 +61,8 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 documentation-only evidence commit will go through the same CI/Pages gate.
 
 ## Next bounded action
-Finish exact-revision documentation/integration analysis and review for Spec 008, then confirm
-latest-head CI before handoff. PR #9 carries the Tier 1 policy; PR #10 carries native inspection.
-No merge, deployment or live schema publication is claimed here. Broader status, mutation,
-recovery, repository migration and GitButler integration require separate specifications.
+Open the documentation-only acceptance follow-up PR and confirm its exact-revision CI.
+Policy PR #9 and implementation PR #10 were merged by the user; native source/effects and
+final artifact analysis are independently cleared. No live schema publication or Pages
+verification is claimed here. Broader status, mutation, recovery, repository migration and
+GitButler integration require separate specifications.
