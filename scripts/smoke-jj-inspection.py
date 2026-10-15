@@ -52,7 +52,7 @@ def check_sandbox():
             raise RuntimeError('Required sandbox did not prevent filesystem writes')
         result = subprocess.run([*prefix, '/usr/bin/true'], env=env, capture_output=True, timeout=15)
         if result.returncode:
-            raise RuntimeError('Required read-only sandbox cannot execute; install a supported host sandbox without relaxing protections')
+            raise RuntimeError('Required read-only sandbox cannot execute; install a supported host sandbox without relaxing protections. Probe diagnostic: ' + repr(result.stderr[:2048]))
     print('Enforced read-only sandbox capability verified')
 
 
@@ -69,7 +69,7 @@ def preflight(lane):
     with tempfile.TemporaryDirectory(prefix='stw-jj-preflight-') as directory:
         result = subprocess.run([*sandbox_prefix(), shutil.which('jj'), '--version'], env=clean_environment(Path(directory)), capture_output=True, timeout=15)
         if result.returncode or result.stdout.decode('utf-8') != 'jj ' + pins['jj']['runtime_version'] + '\n':
-            raise RuntimeError('Required read-only sandbox cannot execute the pinned jj backend')
+            raise RuntimeError('Required read-only sandbox cannot execute the pinned jj backend. Probe diagnostic: ' + repr(result.stderr[:2048]))
     print('Exact ' + lane + ' Git/jj versions and enforced read-only sandbox verified')
 
 
