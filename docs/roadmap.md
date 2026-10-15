@@ -113,3 +113,5 @@ The active local Specify pointer selects Spec 009 for the next bounded planning 
 - [017-work-transfer: Selected Work Transfer](../specs/017-work-transfer/spec.md) — 9/10; draft, implementation pending.
 
 - [018-change-editing: Amend, Fix Up and Split Changes](../specs/018-change-editing/spec.md) — 9/10; draft, implementation pending.
+
+- [019-upstream-sync: Explicit Upstream Synchronization](../specs/019-upstream-sync/spec.md) — 7/10; draft, implementation pending.

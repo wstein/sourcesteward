@@ -131,3 +131,9 @@ or independent acceptance is claimed. Planning/tasks/analysis remain pending.
 Amend, Fix Up and Split Changes: draft scenarios, requirements and author quality checks updated.
 Documentation links and whitespace checks passed before PR handoff. No runtime capability
 or independent acceptance is claimed. Planning/tasks/analysis remain pending.
+
+### 019-upstream-sync — Toolbelt use-case specification update
+
+Explicit Upstream Synchronization: draft scenarios, requirements and author quality checks updated.
+Documentation links and whitespace checks passed before PR handoff. No runtime capability
+or independent acceptance is claimed. Planning/tasks/analysis remain pending.
