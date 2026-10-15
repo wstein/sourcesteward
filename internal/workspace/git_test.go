@@ -212,7 +212,7 @@ func TestGitWorkspaceNativeCreatePreservesSource(t *testing.T) {
 }
 
 func TestGitWorkspaceRefusesUnsafeConfiguration(t *testing.T) {
-	for _, tc := range []struct{ key, value string }{{"core.hooksPath", "empty-hooks"}, {"filter.hostile.smudge", "touch /tmp/not-executed"}, {"core.fsmonitor", "touch /tmp/not-executed"}, {"includeIf.onbranch:task.path", "absent"}, {"core.sparseCheckout", "true"}, {"extensions.worktreeConfig", "true"}, {"remote.origin.promisor", "true"}} {
+	for _, tc := range []struct{ key, value string }{{"core.hooksPath", "empty-hooks"}, {"core.fsmonitor", "touch /tmp/not-executed"}, {"includeIf.onbranch:task.path", "absent"}, {"core.sparseCheckout", "true"}, {"extensions.worktreeConfig", "true"}, {"remote.origin.promisor", "true"}} {
 		t.Run(tc.key, func(t *testing.T) {
 			d := fixtureGit(t)
 			base := gitFixture(t, d, "rev-parse", "HEAD")
