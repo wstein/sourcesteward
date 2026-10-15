@@ -13,7 +13,7 @@ PrepareRecovery(context.Context, TidyPlanRecord, TidyCandidate) (TidyRecovery, S
 Delete(context.Context, TidyPlanRecord, TidyCandidate, TidyRecovery, Snapshot) (TidyNativeOutcome, error)
 ```
 Coordinator owns durable journal and authorization; adapters return exact native effects even on
-errors after start. Native recovery root names derive generated plan/action IDs, never raw ref paths.
+errors after start. Native recovery root names derive persisted PlanID plus stable candidate action hash, never raw ref paths.
 Kinds git-recovery-ref/jj-recovery-bookmark; full IDs and native operation reflect backend distinctions.
 Git collisionchecked zero-OID creation precedes targetCAS. jj recovery creation advances operation;
 fresh Expected snapshot is returned and checked, never silently accepted unrelated concurrent change.
@@ -49,3 +49,14 @@ base resolution, workspace registrations/identities, safety state and every unre
 remain equal. Concurrent operation/heads or unrelated ref deltas refuse and report already completed
 own effects. Operation IDs are opaque native identities; never infer ordering from text or simply
 replace Expected with arbitrary postaction snapshot. This is sampling, not atomic compare-and-swap.
+
+## Plan purpose and backward compatibility
+WI1 stored plans describe observation/private persistence only and MUST refuse ApplyTidy, even if
+the caller adds --authorize. WI2 newly generated plans explicitly enumerate PROPOSED apply effects:
+private prepared/recovery journals; exact native recovery-root creation; exact selected local reference
+deletion; retained native recovery roots and manual restoration limits. Planning itself still changes
+no native state. Recognized fixed versioned Effects/RecoveryLimits templates, backend and exact target
+binding form the plan-purpose marker and are strictly validated with the plan digest. Unknown,
+read-only WI1 or modified templates refuse with replan-required; matching plan shape/digest alone never grants mutation.
+No new required v1 fields or altered old schema bytes. Tests apply a real WI1 observation plan under
+WI2 and require refusal with zero native effects, then generate a new explicit WI2 plan successfully.
