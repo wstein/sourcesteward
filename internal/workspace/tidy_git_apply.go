@@ -113,7 +113,7 @@ func gitTidyCurrentCandidate(ctx context.Context, p TidyPlanRecord, c TidyCandid
 }
 
 func gitTidyReferenceMap(ctx context.Context, bin, path string) (map[string]string, error) {
-	raw, e := gitRead(ctx, bin, path, "for-each-ref", "--format=%(refname)%00%(objectname)%00")
+	raw, e := gitRead(ctx, bin, path, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00")
 	if e != nil {
 		return nil, e
 	}
@@ -198,7 +198,7 @@ func (gitTidyAdapter) PrepareRecovery(ctx context.Context, p TidyPlanRecord, c T
 	if code != 0 {
 		return recovery, Snapshot{}, out, failure("tidy-recovery-failed", "Native recovery ref creation failed; inspect the exact proposed root before any retry")
 	}
-	refs[recovery.Name] = c.CommitID
+	refs[recovery.Name] = c.CommitID + "\x00"
 	fresh, e := gitTidyVerifyDelta(ctx, p, p.Expected, refs)
 	if e != nil {
 		return recovery, Snapshot{}, out, e
@@ -227,7 +227,7 @@ func (gitTidyAdapter) Delete(ctx context.Context, p TidyPlanRecord, c TidyCandid
 	if e != nil {
 		return out, e
 	}
-	if gitTidyReferenceDigest(refs) != expected.ReferenceDigest || refs[recovery.Name] != c.CommitID || refs[c.Name] != c.CommitID {
+	if gitTidyReferenceDigest(refs) != expected.ReferenceDigest || refs[recovery.Name] != c.CommitID+"\x00" || refs[c.Name] != c.CommitID+"\x00" {
 		return out, failure("tidy-recovery-refused", "Exact recovery ref or original branch tip is unavailable")
 	}
 	if e := gitTidyLiteralRecovery(ctx, bin, p.SourcePath, recovery); e != nil {

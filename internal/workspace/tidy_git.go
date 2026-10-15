@@ -30,6 +30,11 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 	if e != nil {
 		return out, e
 	}
+	allRefs, e := gitTidyReferenceMap(ctx, bin, path)
+	if e != nil {
+		return out, e
+	}
+	expected.ReferenceDigest = gitTidyReferenceDigest(allRefs)
 	raw, e := gitRead(ctx, bin, path, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00%(objecttype)%00", "refs/heads/")
 	if e != nil {
 		return out, e
@@ -94,6 +99,11 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 	if e != nil {
 		return out, e
 	}
+	allRefs, e = gitTidyReferenceMap(ctx, bin, path)
+	if e != nil {
+		return out, e
+	}
+	fresh.ReferenceDigest = gitTidyReferenceDigest(allRefs)
 	if !reflect.DeepEqual(fresh, expected) {
 		return out, failure("tidy-stale-observation", "Git source, base, references, registrations or safety evidence changed during tidy observation")
 	}
