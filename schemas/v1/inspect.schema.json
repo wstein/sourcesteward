@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/inspect.schema.json",
+  "title": "SourceSteward inspection result (schema 1)",
+  "description": "Success and operational failure results. Usage and writer failures may not emit JSON. Unknown object properties and diagnostic codes are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "backend",
+    "input_path",
+    "evidence",
+    "repository",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "unsupported",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "git",
+        "jj",
+        "gitbutler",
+        "ambiguous",
+        "unknown"
+      ]
+    },
+    "input_path": {
+      "type": "string",
+      "description": "Absolute path when available; empty if input cannot be represented or resolved."
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "repository": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/repository"
+        }
+      ]
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "head": {
+      "type": "object",
+      "required": [
+        "state",
+        "ref",
+        "oid"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "attached",
+            "detached",
+            "unborn"
+          ]
+        },
+        "ref": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^refs/heads/.+"
+            }
+          ]
+        },
+        "oid": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "attached"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "oid": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "detached"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "ref": {
+                "type": "null"
+              },
+              "oid": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "unborn"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "oid": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "git_dir",
+        "common_dir",
+        "worktree",
+        "bare",
+        "linked_worktree",
+        "object_format",
+        "head"
+      ],
+      "properties": {
+        "git_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "common_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "worktree": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bare": {
+          "type": "boolean"
+        },
+        "linked_worktree": {
+          "type": "boolean"
+        },
+        "object_format": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "head": {
+          "$ref": "#/$defs/head"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "bare": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "worktree": {
+                "type": "null"
+              },
+              "linked_worktree": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "worktree": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "object_format": {
+                "const": "sha1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "head": {
+                "properties": {
+                  "oid": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{40}$",
+                        "minLength": 40,
+                        "maxLength": 40
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "object_format": {
+                "const": "sha256"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "head": {
+                "properties": {
+                  "oid": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "minLength": 64,
+                        "maxLength": 64
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "location"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "jj-metadata",
+            "gitbutler-metadata",
+            "gitbutler-reference"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "repository": {
+            "$ref": "#/$defs/repository"
+          },
+          "diagnostics": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "repository": {
+            "type": "null"
+          },
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "unsupported"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "jj",
+              "gitbutler",
+              "ambiguous"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

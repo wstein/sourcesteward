@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/version.schema.json",
+  "title": "SourceSteward version result (schema 1)",
+  "description": "Version JSON only; usage and write failures do not promise JSON. Unknown properties are additive extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "const": "SourceSteward"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
