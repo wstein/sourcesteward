@@ -164,7 +164,7 @@ func validText(s string) bool {
 }
 func bounded(r Result) Result {
 	b, e := json.Marshal(r)
-	if e == nil && len(b) <= recordLimit {
+	if e == nil && len(b) <= recordLimit && resultRecordCount(r) <= observationLimit {
 		return r
 	}
 	recovery := ""
@@ -178,13 +178,13 @@ func bounded(r Result) Result {
 		r.Task.RemainingWork = []string{"Inventory omitted because the result bound was exceeded; retain the workspace."}
 	}
 	b, e = json.Marshal(r)
-	if e == nil && len(b) <= recordLimit {
+	if e == nil && len(b) <= recordLimit && resultRecordCount(r) <= observationLimit {
 		return r
 	}
 	r.Plan = nil
 	r.Task = nil
-	if len(r.Actions) > observationLimit {
-		r.Actions = r.Actions[:observationLimit]
+	if len(r.Actions) > observationLimit-8 {
+		r.Actions = r.Actions[:observationLimit-8]
 	}
 	for i := range r.Actions {
 		r.Actions[i].Name = shortText(r.Actions[i].Name, 32)
@@ -200,7 +200,7 @@ func bounded(r Result) Result {
 		r.Limitations = append(r.Limitations, recovery)
 	}
 	b, e = json.Marshal(r)
-	if e == nil && len(b) <= recordLimit {
+	if e == nil && len(b) <= recordLimit && resultRecordCount(r) <= observationLimit {
 		return r
 	}
 	// The fixed envelope is the final fail-closed bound, including JSON escaping.
@@ -232,4 +232,18 @@ func shortText(s string, n int) string {
 		s = s[:len(s)-1]
 	}
 	return s + "…"
+}
+
+func resultRecordCount(r Result) int {
+	count := len(r.Actions) + len(r.Diagnostics) + len(r.Limitations)
+	if r.Plan != nil {
+		count += len(r.Plan.Effects) + len(r.Plan.RecoveryLimits)
+	}
+	if r.Task != nil {
+		count += len(r.Task.RemainingWork) + len(r.Task.RecoveryLimits)
+		if i := r.Task.Inventory; i != nil {
+			count += len(i.Workspaces) + len(i.References) + len(i.Bases) + len(i.Files) + len(i.Diagnostics)
+		}
+	}
+	return count
 }
