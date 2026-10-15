@@ -1,6 +1,6 @@
 GO ?= go
 
-.PHONY: check test fmt vet docs-check
+.PHONY: build check test fmt vet docs-check
 check:
 	@test -z "$$(gofmt -l cmd internal)" || { echo 'Run make fmt'; exit 1; }
 	$(GO) test ./...
@@ -10,6 +10,10 @@ check:
 	python3 -B scripts/check-docs.py
 	python3 -B scripts/check-architecture.py
 	git diff --check
+
+build:
+	mkdir -p bin
+	$(GO) build -o bin/stw ./cmd/stw
 
 test:
 	$(GO) test ./...

@@ -14,6 +14,16 @@ go run ./cmd/stw version --json
 SVG structure, site assets and whitespace. It does not create release artifacts or mutate a
 user repository. Tests construct a fresh command for each invocation.
 
+## Build the local CLI
+
+```sh
+make build
+./bin/stw version --json
+```
+
+The build target runs `go build -o bin/stw ./cmd/stw`. The ignored bin/ directory contains
+local development output; this does not create a release or publish a binary.
+
 ## Specification workflow
 The completed foundation design is in ../specs/001-project-foundation/ (from the repository
 root: specs/001-project-foundation). Its spec, plan, research, data model, contract, quickstart
