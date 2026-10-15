@@ -19,7 +19,8 @@ GUIDES = {
     'docs/agent-guide.md': ('agents', 'Agent guide'),
     'docs/json-contracts.md': ('json-contracts', 'JSON contracts'),
 }
-SCHEMAS = ('version.schema.json','inspect.schema.json')
+SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json'), 'v2': ('inspect.schema.json',)}
+SCHEMA_PATHS = {version + '/' + name for version, names in SCHEMAS.items() for name in names}
 
 
 def validate_assets(root):
@@ -54,7 +55,7 @@ def guide_markdown(root, source, text):
         relative = path.relative_to(root.resolve()).as_posix()
         if relative in GUIDES and path.is_file():
             destination = BASE + 'docs/' + GUIDES[relative][0] + '/'
-        elif relative.startswith('schemas/v1/') and path.suffix == '.json':
+        elif relative.removeprefix('schemas/') in SCHEMA_PATHS and relative.startswith('schemas/'):
             destination = BASE + relative
         else:
             destination = 'https://github.com/wstein/sourcesteward/blob/main/' + relative
@@ -64,28 +65,31 @@ def guide_markdown(root, source, text):
     return re.sub(r'\[([^\]]*)\]\(([^\s)]+)\)',rewrite,text)
 
 
-def copy_schemas(root, destination, required=True):
-    source = root / 'schemas/v1'
-    if source.is_symlink() or (root / 'schemas').is_symlink(): raise ValueError('Linked schema directory forbidden')
-    if not source.exists():
-        if required: raise ValueError('Required public schemas are missing')
-        return
+def schema_sources(root):
     schema_root = root / 'schemas'
-    expected = {'v1'} | {'v1/' + name for name in SCHEMAS}
+    if schema_root.is_symlink() or not schema_root.is_dir():
+        raise ValueError('Regular schema directory required')
+    expected = set(SCHEMAS) | SCHEMA_PATHS
     actual = set()
     for path in schema_root.rglob('*'):
         relative = path.relative_to(schema_root).as_posix()
-        if path.is_symlink() or relative not in expected or (relative != 'v1' and not path.is_file()):
+        if path.is_symlink() or relative not in expected or (relative in SCHEMAS and not path.is_dir()) or (relative in SCHEMA_PATHS and not path.is_file()):
             raise ValueError('Unexpected or linked schema source: ' + str(path))
         actual.add(relative)
-    if actual != expected: raise ValueError('Both schema 1 contracts are required')
-    paths = list(source.iterdir())
+    if actual != expected: raise ValueError('All published schema contracts are required')
+    paths = [schema_root / name for name in sorted(SCHEMA_PATHS)]
+    for path in paths: json.loads(path.read_text())
+    return paths
+
+
+def copy_schemas(root, destination, required=True):
+    if not (root / 'schemas').exists() and not (root / 'schemas').is_symlink() and not required:
+        return
+    paths = schema_sources(root)
     for path in paths:
-        if path.is_symlink() or not path.is_file(): raise ValueError('Regular schema files required')
-        json.loads(path.read_text())
-    target = destination / 'schemas/v1'
-    target.mkdir(parents=True)
-    for path in paths: shutil.copyfile(path,target / path.name)
+        target = destination / 'schemas' / path.relative_to(root / 'schemas')
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(path,target)
 
 
 def write_content(path,title,body):

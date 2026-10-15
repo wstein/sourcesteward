@@ -174,6 +174,8 @@ class DocumentationTests(unittest.TestCase):
             for name in ('version.schema.json', 'inspect.schema.json'):
                 self.assertEqual((destination / 'schemas/v1' / name).read_bytes(),
                                  (ROOT / 'schemas/v1' / name).read_bytes())
+            self.assertEqual((destination / 'schemas/v2/inspect.schema.json').read_bytes(),
+                             (ROOT / 'schemas/v2/inspect.schema.json').read_bytes())
             shutil.rmtree(destination)
             extra = root / 'schemas/v1/private.json'
             extra.write_text('{}')
