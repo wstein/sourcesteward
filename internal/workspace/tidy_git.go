@@ -50,6 +50,7 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 		out.WorkspacePaths = append(out.WorkspacePaths, w.path)
 	}
 	sort.Strings(out.WorkspacePaths)
+	out.WorkspacePathsComplete = true
 	if len(refs)+len(works) > observationLimit {
 		return out, failure("tidy-observation-limit", "Combined branch and worktree evidence exceeds 1024 records")
 	}
