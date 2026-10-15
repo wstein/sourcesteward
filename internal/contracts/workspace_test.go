@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/cli"
@@ -60,5 +61,41 @@ func TestRealWorkspaceCLIErrorSchema(t *testing.T) {
 			t.Fatalf("%q exit%d %s %s", args, code, out.String(), diagnostic.String())
 		}
 		valid(t, s, out.Bytes())
+	}
+}
+
+func TestWorkspaceNativePlanAndTaskSchema(t *testing.T) {
+	s := schema(t, "workspace")
+	for _, backend := range []string{"git", "jj"} {
+		identity := workspace.NativeIdentity{Backend: backend, RepositoryDir: "/repo/.git", WorkspaceRoot: "/repo", GitDir: "/repo/.git", CommitID: strings.Repeat("a", 40), ObjectFormat: "sha1"}
+		baseChange := ""
+		if backend == "jj" {
+			identity.RepositoryDir = "/repo/.jj/repo"
+			identity.WorkspaceName = "default"
+			identity.ChangeID = strings.Repeat("k", 32)
+			identity.OperationID = strings.Repeat("b", 128)
+			baseChange = identity.ChangeID
+		}
+		plan := &workspace.MutationPlan{SchemaVersion: 1, PlanID: "generated-id", TaskID: "task", Owner: "owner", SourcePath: "/repo", Destination: "/task", StateDir: "/state", Backend: backend, Reason: "isolated task", Digest: strings.Repeat("c", 64), Expected: workspace.Snapshot{Identity: identity, BaseSelector: "HEAD", BaseCommit: identity.CommitID, BaseChange: baseChange, ReferenceDigest: strings.Repeat("d", 64), RegistrationDigest: strings.Repeat("e", 64), SafetyDigest: strings.Repeat("f", 64)}, DestinationParent: workspace.PathIdentity{Path: "/", Device: 1, Inode: 1}, Effects: []string{"native workspace"}, RecoveryLimits: []string{"manual retention"}}
+		result := workspace.Result{SchemaVersion: 1, Command: "workspace-plan", Status: "ok", Backend: backend, Plan: plan, Actions: []workspace.ActionOutcome{}, Diagnostics: []workspace.Diagnostic{}, Limitations: []string{}}
+		raw, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		valid(t, s, raw)
+		result.Command = "workspace-handoff"
+		result.Task = &workspace.TaskRecord{SchemaVersion: 1, TaskID: "task", Owner: "owner", PlanID: plan.PlanID, Backend: backend, Destination: "/task", RecoveryPointer: "/state/operations/generated-id.json", Native: identity, DestinationIdentity: workspace.PathIdentity{Path: "/task", Device: 1, Inode: 2}, BaseCommit: identity.CommitID, BaseChange: baseChange, State: "observed", RemainingWork: []string{}, RecoveryLimits: []string{}}
+		raw, err = json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		valid(t, s, raw)
+		for _, field := range []string{"commit_id", "change_id", "operation_id"} {
+			v := value(t, raw).(map[string]any)
+			v["task"].(map[string]any)["native"].(map[string]any)[field] = "invalid-id"
+			if s.Validate(v) == nil {
+				t.Fatalf("backend %s accepted malformed %s", backend, field)
+			}
+		}
 	}
 }

@@ -33,6 +33,8 @@ func TestWorkspaceUsageBeforeOperation(t *testing.T) {
 		{"plan"}, {"plan", "--base", "HEAD", "--destination", "/tmp/dest", "--task", "task", "--owner", "owner"},
 		{"plan", "one", "two"}, {"apply", "--state-dir", "/tmp/state"}, {"apply", "--plan", "id", "--state-dir", "/tmp/state", "--base", "HEAD"},
 		{"handoff"}, {"retire-plan", "--state-dir", "/tmp/state", "--authorize"}, {"unknown"},
+		{"apply", "--plan", "../escape", "--state-dir", "/tmp/state"},
+		{"handoff", strings.Repeat("x", 4097), "--state-dir", "/tmp/state"},
 	} {
 		called := false
 		cmd := workspaceCommandWith(workspaceRunner(func(context.Context, string, workspace.PlanOptions, workspace.ApplyOptions, workspace.Options) workspace.Result {
