@@ -188,3 +188,53 @@ func TestTidyCoreRejectsUnrelatedStateDeltaAfterRecovery(t *testing.T) {
 		t.Fatalf("unrelated native base delta authorized deletion %+v", r)
 	}
 }
+
+func TestTidyJournalReadRejectsUnboundedAndMalformedRecords(t *testing.T) {
+	for _, kind := range []string{"aggregate", "diagnostic", "action-status", "identity"} {
+		t.Run(kind, func(t *testing.T) {
+			c, f, o := fixtureTidyApply(t)
+			if r := c.apply(context.Background(), o); r.Status != "ok" {
+				t.Fatal(r)
+			}
+			s, err := openTidyStore(o.StateDir, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var p TidyPlanRecord
+			var j TidyJournal
+			if err = s.read("tidy-plans", o.PlanID, &p); err != nil {
+				t.Fatal(err)
+			}
+			if err = s.read("tidy-operations", o.PlanID, &j); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "aggregate":
+				j.Entries[0].Actions = make([]ActionOutcome, observationLimit+1)
+				for i := range j.Entries[0].Actions {
+					j.Entries[0].Actions[i] = ActionOutcome{"delete-reference", "completed", "bounded individual action"}
+				}
+			case "diagnostic":
+				j.Diagnostics = []Diagnostic{{Code: "", Message: strings.Repeat("x", 4097)}}
+			case "action-status":
+				j.Entries[0].Actions[0].Status = "invented"
+			case "identity":
+				j.Expected.Identity.RepositoryDir = "/foreign-repository"
+			}
+			if validTidyJournal(j, p) {
+				t.Fatalf("invalid %s journal accepted", kind)
+			}
+			if err = s.write("tidy-operations", o.PlanID, j, false); err != nil {
+				t.Fatal(err)
+			}
+			s.Close()
+			r := c.apply(context.Background(), o)
+			if r.Status == "ok" || f.pins != 1 || f.deletes != 1 || len(r.Actions) != 0 {
+				t.Fatalf("malformed journal replayed or flattened: %+v", r)
+			}
+			if !strings.Contains(strings.Join(r.Limitations, " "), o.StateDir+"/tidy-operations/"+o.PlanID+".json") {
+				t.Fatal("malformed state dropped recovery pointer")
+			}
+		})
+	}
+}
