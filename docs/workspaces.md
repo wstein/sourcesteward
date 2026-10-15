@@ -26,7 +26,7 @@ The generated plan ID identifies a stored immutable record. A plan alone never g
 permission. Apply requires explicit `--authorize` and revalidates relevant source/base,
 registrations, destination and ownership. Changed or uncertain evidence refuses.
 
-Git creates a detached worktree and no branch. Checkout hooks, filters, unsupported sparse,
+Git creates a detached worktree and no branch. Executable checkout hooks, active filters, unsupported sparse,
 submodule or external-helper configurations refuse rather than silently bypassing helpers.
 jj creates a named native workspace and working-copy change; native operation metadata changes.
 Its isolated configuration and write sandbox deny network and undeclared writes. Source dirty
@@ -65,3 +65,11 @@ use the independent [workspace schema v1](../schemas/v1/workspace.schema.json), 
 commit IDs separately from jj commit/change/operation identities. Existing inspect, inventory
 and version contracts remain unchanged. See [JSON contracts](json-contracts.md) and the
 [normative workspace contract](../specs/010-isolated-task-workspaces/contracts/workspace.md).
+
+Unused Git filter definitions (including a system-wide Git LFS installation) are admitted
+only after bounded native attribute checks for every path in the pinned base. Committed,
+info and default-global attributes remain effective; source dirty/untracked attributes
+never substitute for the selected base. Active filters refuse; configured driver names
+`set`, `unset` and `unspecified` also refuse because they collide with attribute sentinels.
+No filter helper is executed or silently disabled. Configuration and attribute evidence
+are included in stale-plan validation.

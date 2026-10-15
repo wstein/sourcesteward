@@ -89,3 +89,11 @@ Native jj checkout size is bounded by its60second action deadline and partial-ma
 reporting, not a precomputed Git tree budget; store/result/output bounds still apply. Large jj
 checkout may leave owned partial files/registration, which must be reported and retained, never
 automatically retried into user-edited files or claimed rolled back.
+
+Unused Git filter definitions (including a system-wide Git LFS installation) are admitted
+only after bounded native attribute checks for every path in the pinned base. Committed,
+info and default-global attributes remain effective; source dirty/untracked attributes
+never substitute for the selected base. Active filters refuse; configured driver names
+`set`, `unset` and `unspecified` also refuse because they collide with attribute sentinels.
+No filter helper is executed or silently disabled. Configuration and attribute evidence
+are included in stale-plan validation.

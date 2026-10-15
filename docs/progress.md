@@ -11,6 +11,8 @@ Independent source review and final consistency analysis clear source `5e32515`.
 `make check`, race tests and both pinned local native lanes pass: 10 inspection, six jj
 inspection, 36 inventory and 45 workspace CLI cases per lane. See
 [verification](../specs/010-isolated-task-workspaces/verification.md) for limits and exact evidence.
+Scoped review and full checks also clear the post-CI unused-filter admission repair
+`e5fbaf9`; active checkout filters and ambiguous sentinel-named drivers still refuse.
 Spec 010 is implemented, not globally verified. PR handoff records hosted Linux minimum/current
 CI at the final head; owner review/merge and live publication remain separate actions.
 Next action: review [PR #32](https://github.com/wstein/sourcesteward/pull/32) and its exact-head checks.

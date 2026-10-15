@@ -67,3 +67,12 @@ materializing an ambiguous checkout. Unicode normalization uses the already pinn
 golang.org/x/text module, promoted to an explicit dependency for its normalization API;
 the standard library has no canonical Unicode normalization facility. This retains
 Unicode filenames while detecting canonical-equivalent and case-equivalent collisions.
+
+## Unused filter definitions versus active checkout filters
+Linux source CI exposed system-wide Git LFS definitions even in pristine disposable
+repositories. The initial broad filter-definition refusal was stricter than required.
+Final admission uses bounded native check-attr --source at the pinned base for every
+validated leaf path, retains effective info/default-global attributes and fingerprints
+results. Active filters refuse without execution or suppression. Configured sentinel
+names set/unset/unspecified refuse to avoid ambiguity in native attribute output.
+Primary setup evidence: https://github.com/git-lfs/git-lfs/blob/main/debian/postinst .

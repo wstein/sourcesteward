@@ -33,3 +33,8 @@ Encoded and aggregate result bounds apply even to escaped or combined stored evi
 The illustrative private interface was synchronized with Backend/Reason/RecoveryLimits;
 status, progress and acceptance evidence are updated at handoff. Hosted CI, owner merge
 and live publication remain separate observations and cannot be inferred from analysis.
+
+Scoped post-CI source review separately cleared `e5fbaf9`: bounded base-pinned attribute
+evidence admits unused filter definitions while retaining helper/hook refusal. Reserved
+sentinel-name ambiguity is regression-tested and refused; native/config evidence remains
+bound to stale validation. Shared CLI, ownership, journal and recovery contracts did not change.
