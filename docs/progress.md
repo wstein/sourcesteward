@@ -1,23 +1,16 @@
 # Progress and handoff
 
 ## Current milestone
-007-hugo-docs integrates reviewed003/005/006 foundations with pinned Hugo, five selected
-public guides, generated Cobra reference including inspect, and a build-once checked Pages
-artifact. Both schemas and public agent sources are mandatory. Nineteen Python and 12 Node
-cases plus Go/race/source checks pass. Final exact-revision review and browser QA pass;
-[PR #8](https://github.com/wstein/sourcesteward/pull/8) is open and passed CI before
-the latest reviewed stack integration; final integration review/push remain coordinator-owned; see [Hugo evidence](../specs/007-hugo-docs/verification.md).
+005-repository-inspection, 006-json-schemas and 007-hugo-docs are merged to main through
+[PR #7](https://github.com/wstein/sourcesteward/pull/7),
+[PR #6](https://github.com/wstein/sourcesteward/pull/6) and
+[PR #8](https://github.com/wstein/sourcesteward/pull/8). Their recorded acceptance covers
+bounded ordinary-Git identity inspection, versioned JSON contracts and pinned Hugo guides/
+command reference. This is merged-source status; deployment evidence remains in each feature's
+verification record. Native jj inspection remains pending Spec 008.
 
-006-json-schemas is implemented on codex/006-json-schemas, stacked on inspection005.
-Version and inspection results have JSON Schema2020-12 contracts, real-output validation,
-negative invariant fixtures and verbatim static publication. Source checks and race tests
-pass on the final005 source revision. Independent review cleared006 source at98f65df;
-[PR #6](https://github.com/wstein/sourcesteward/pull/6) is open; schema URLs await merge and Pages deployment. See [JSON acceptance](json-schema-verification.md).
-
-005-repository-inspection is implemented and independently verified on codex/005-repository-inspection.
-Identity inspection and conservative managed-backend refusal are bounded by the reviewed
-contract. Source checks, race tests and 10 process cases pass. Independent review cleared source
-revision 1d8d7c5; coordinator publication remains pending. See [inspection acceptance](inspection-verification.md).
+The Tier 1 policy amendment is prepared for owner review: Git and jj receive equal support
+commitments for explicitly supported capabilities. See [amendment evidence](tier1-policy.md).
 
 004-site-themes is merged to main through [PR #5](https://github.com/wstein/sourcesteward/pull/5).
 The README site link and system/light/dark Pages selector passed source, browser and
@@ -42,7 +35,8 @@ harness and CI. A durable local checkout is available. See [verification](verifi
 
 - Repository/module: wstein/sourcesteward; product: SourceSteward; standalone short CLI: stw.
 - Go 1.27.2 and Cobra v1.10.2; EUPL-1.2 original source/artwork; font licenses retained.
-- Git-first and jj-ready, with optional GitButler adapters planned; bounded ordinary-Git identity reads execute; native managed adapters remain planned.
+- Git and jj are Tier 1 peers by policy; bounded ordinary-Git identity reads execute. Native jj
+  inspection is pending Spec 008; GitButler remains a future separately specified integration.
 - Wide navy tie, orange knot and white branch; local family fonts with preserved OFL notices.
 - Static Pages with local assets and same-run exact-SHA checks; no CLI release automation.
 - Weekly Dependabot, community standards, private security reporting and owner review.
@@ -57,6 +51,6 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 documentation-only evidence commit will go through the same CI/Pages gate.
 
 ## Next bounded action
-Review inspection and schema contracts at the final integrated revision; publish only after independent review. Hugo documentation generation preserves existing branding and versioned schema URLs in feature007.
-Broader status and native backend adapters require separate specifications.
-Cleanup, mutation/recovery, repository migration and MCP remain outside foundation scope.
+Review the Tier 1 amendment, then specify/analyze/implement native jj identity inspection as
+Spec 008 with compatible schemas and Git/jj conformance CI. Broader status and mutations
+remain separate features. Cleanup, recovery, repository migration and MCP remain deferred.

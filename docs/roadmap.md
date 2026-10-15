@@ -1,17 +1,26 @@
 # SourceSteward roadmap
 
-SourceSteward is an early scaffold. Help/version and bounded ordinary-Git identity inspection work today.
+SourceSteward is an early version-control toolkit. Help/version and bounded ordinary-Git identity inspection work today.
 No model, GitButler installation or cloud account is required to run those commands.
 
 ## Foundation — current milestone
 Go/Cobra command parsing, text/JSON version information, Spec Kit workflow, automated
-source checks, original family branding and a GitHub Pages overview.
+source checks, original family branding, versioned JSON schemas and Hugo-generated GitHub
+Pages guides/command reference. Git and jj are Tier 1 peers by policy; native jj capability
+acceptance remains pending.
 
 ## Inspect — identity implemented, broader status deferred
 Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
-Changes, conflicts, branches, upstreams,
-linked worktrees and interrupted operations. Explicit repository targeting, predictable
-exit codes and bounded output. No writes or implicit fetches.
+Broader changes, conflicts, branches/bookmarks, upstreams, linked worktrees/workspaces and
+interrupted operations remain deferred. Existing inspection has explicit targeting, predictable
+exit codes and bounded output without writes or implicit fetches.
+
+## Spec 008 — native jj identity inspection, next
+Support native inspection of standalone and colocated jj workspaces with separate workspace,
+commit, change and operation identities. Specify minimum/current supported versions, freshness
+limits and compatible schemas. Conformance CI must cover both Git and jj and prove bounded,
+noninteractive execution without working-copy or operation-log writes. Do not infer jj
+capability from detection alone.
 
 ## Diagnose
 Explain problems and propose repair options. Repository text is data, never instructions.
@@ -28,8 +37,8 @@ recovery refs and report per-action outcomes, including partial failures. Define
 configuration and reflog effects before implementation. Plans do not supply authorization.
 
 ## Worktrees, jj and GitButler
-Start with worktree inspection. The [backend contract](backends.md) makes jj readiness explicit;
-jj adapter implementation follows its own specification and capability tests. Later lifecycle operations must respect ownership and dirty
+The [backend contract](backends.md) makes Git/jj Tier 1 support commitments explicit;
+native jj inspection follows Spec 008 and capability tests. Later lifecycle operations must respect ownership and dirty
 state. Detect GitButler capabilities and managed workspaces; use its supported interfaces for
 writes and fail unsupported operations. Parallel GitButler branches share a filesystem and
 runtime; separate worktrees remain the option for isolated checkout/runtime state.
