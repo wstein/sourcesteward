@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: EUPL-1.2
+package workspace
+
+import (
+	"context"
+	"errors"
+	"os"
+	"strings"
+	"testing"
+)
+
+type fakeTidyMutation struct {
+	*fakeTidyAdapter
+	pins, deletes                int
+	pinErr                       bool
+	onPin                        func()
+	onDelete                     func()
+	pinPrepared, deleteConfirmed bool
+	state, plan                  string
+}
+
+func (f *fakeTidyMutation) PrepareRecovery(_ context.Context, p TidyPlanRecord, c TidyCandidate) (TidyRecovery, Snapshot, TidyNativeOutcome, error) {
+	f.pins++
+	s, err := openTidyStore(f.state, false)
+	if err == nil {
+		var j TidyJournal
+		err = s.read("tidy-operations", f.plan, &j)
+		s.Close()
+		f.pinPrepared = err == nil && len(j.Entries) > 0 && j.Entries[len(j.Entries)-1].Phase == "prepared" && j.Entries[len(j.Entries)-1].Recovery.Name == tidyRecoveryFor(p, c).Name
+	}
+	r := tidyRecoveryFor(p, c)
+	f.observation.Expected.ReferenceDigest = strings.Repeat("4", 64)
+	out := TidyNativeOutcome{Attempted: true, Complete: !f.pinErr, Effects: []string{"Created exact recovery root " + r.Name}, Limitations: []string{}}
+	if f.onPin != nil {
+		f.onPin()
+	}
+	if f.pinErr {
+		return r, f.observation.Expected, out, errors.New("interrupted after pin")
+	}
+	return r, f.observation.Expected, out, nil
+}
+func (f *fakeTidyMutation) Delete(_ context.Context, p TidyPlanRecord, c TidyCandidate, r TidyRecovery, expected Snapshot) (TidyNativeOutcome, error) {
+	f.deletes++
+	s, err := openTidyStore(f.state, false)
+	if err == nil {
+		var j TidyJournal
+		err = s.read("tidy-operations", f.plan, &j)
+		s.Close()
+		f.deleteConfirmed = err == nil && j.Entries[len(j.Entries)-1].Phase == "recovery-confirmed"
+	}
+	f.observation.Expected.ReferenceDigest = strings.Repeat("5", 64)
+	f.observation.Candidates = []TidyCandidate{}
+	if f.onDelete != nil {
+		f.onDelete()
+	}
+	snap := f.observation.Expected
+	return TidyNativeOutcome{Attempted: true, Complete: true, Effects: []string{"Deleted only " + c.Name}, Limitations: []string{}, Expected: &snap}, nil
+}
+func fixtureTidyApply(t *testing.T) (tidyCoordinator, *fakeTidyMutation, TidyApplyOptions) {
+	t.Helper()
+	c, f, o := fixtureTidyCoordinator(t)
+	m := &fakeTidyMutation{fakeTidyAdapter: f}
+	c.adapter = func(string) (tidyAdapter, error) { return m, nil }
+	r := c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatalf("plan %#v", r)
+	}
+	m.state = o.StateDir
+	m.plan = r.Plan.PlanID
+	return c, m, TidyApplyOptions{StateDir: o.StateDir, PlanID: r.Plan.PlanID, Authorize: true}
+}
+func TestTidyApplyDurableRecoveryBeforeDeletionAndVerifiedRetry(t *testing.T) {
+	c, f, o := fixtureTidyApply(t)
+	r := c.apply(context.Background(), o)
+	if r.Status != "ok" || f.pins != 1 || f.deletes != 1 || !f.pinPrepared || !f.deleteConfirmed {
+		t.Fatalf("unsafe apply %+v pin%d delete%d prepared%v confirmed%v", r, f.pins, f.deletes, f.pinPrepared, f.deleteConfirmed)
+	}
+	r = c.apply(context.Background(), o)
+	if r.Status != "ok" || f.pins != 1 || f.deletes != 1 {
+		t.Fatalf("repeat effects %+v", r)
+	}
+	f.observation.Expected.SafetyDigest = strings.Repeat("9", 64)
+	if r = c.apply(context.Background(), o); r.Status == "ok" {
+		t.Fatal("changed complete retry accepted")
+	}
+}
+func TestTidyApplyAuthorizationOldPurposeAndStaleRefusal(t *testing.T) {
+	for _, kind := range []string{"authorization", "old-purpose", "stale"} {
+		t.Run(kind, func(t *testing.T) {
+			c, f, o := fixtureTidyApply(t)
+			if kind == "authorization" {
+				o.Authorize = false
+			}
+			if kind == "stale" {
+				f.observation.Expected.BaseCommit = strings.Repeat("c", 40)
+			}
+			if kind == "old-purpose" {
+				s, err := openTidyStore(o.StateDir, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var p TidyPlanRecord
+				if err = s.read("tidy-plans", o.PlanID, &p); err != nil {
+					t.Fatal(err)
+				}
+				p.Effects = []string{"Persist one immutable plan in the explicitly selected private state directory; no native repository effects."}
+				p.RecoveryLimits = []string{"Evidence is sampled and nontransactional; external or ABA changes may be missed.", "A plan does not authorize deletion; references, registrations, files and native state are unchanged.", "Only native ancestry is supported; squash-equivalence and forge proof are unavailable and do not authorize deletion."}
+				p.Digest = tidyPlanDigest(p)
+				if err = s.write("tidy-plans", p.PlanID, p, false); err != nil {
+					t.Fatal(err)
+				}
+				s.Close()
+			}
+			r := c.apply(context.Background(), o)
+			if r.Status != "refused" || f.pins != 0 || f.deletes != 0 {
+				t.Fatalf("unsafe refusal %+v", r)
+			}
+		})
+	}
+}
+func TestTidyApplyPossiblePinEffectsAndPersistenceFailureNeverDelete(t *testing.T) {
+	for _, kind := range []string{"pin-error", "journal-failure", "canceled"} {
+		t.Run(kind, func(t *testing.T) {
+			c, f, o := fixtureTidyApply(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if kind == "pin-error" {
+				f.pinErr = true
+			}
+			if kind == "journal-failure" {
+				f.onPin = func() {
+					if err := os.Chmod(o.StateDir, 0755); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if kind == "canceled" {
+				f.onPin = cancel
+			}
+			r := c.apply(ctx, o)
+			if r.Status != "partial" || f.pins != 1 || f.deletes != 0 || len(r.Actions) == 0 {
+				t.Fatalf("lost pin effects %+v", r)
+			}
+			os.Chmod(o.StateDir, 0700)
+			r = c.apply(context.Background(), o)
+			if r.Status != "partial" || f.pins != 1 || f.deletes != 0 {
+				t.Fatalf("blind uncertain replay %+v", r)
+			}
+		})
+	}
+}
+func TestTidyBoundedPartialRetainsRecoveryJournalPointer(t *testing.T) {
+	c, _, o := fixtureTidyApply(t)
+	r := c.apply(context.Background(), o)
+	r.Limitations = append(r.Limitations, strings.Repeat("\x01", recordLimit))
+	r = boundedTidy(r)
+	if r.Status != "partial" || !strings.Contains(strings.Join(r.Limitations, " "), o.StateDir+"/tidy-operations/"+o.PlanID+".json") {
+		t.Fatalf("lost durable pointer %+v", r)
+	}
+}

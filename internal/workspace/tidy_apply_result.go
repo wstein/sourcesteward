@@ -37,7 +37,7 @@ func tidyRecoveryFor(p TidyPlanRecord, c TidyCandidate) TidyRecovery {
 		r.Name = "refs/stw/recovery/" + p.PlanID + "/" + suffix
 	} else {
 		r.Kind = "jj-recovery-bookmark"
-		r.Name = "stw-recovery-" + p.PlanID + "-" + suffix
+		r.Name = "stw-recovery-" + p.PlanID + "-" + suffix + "?"
 	}
 	return r
 }
