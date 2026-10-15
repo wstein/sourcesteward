@@ -136,6 +136,16 @@ func renderTidyText(writer io.Writer, result workspace.TidyResult) error {
 	if result.Retirement != nil {
 		p := result.Retirement
 		fmt.Fprintf(&text, "Retirement plan: %q\nTask: %q\nOwner: %q\nSource: %q\nDestination: %q\nState directory: %q\nBase selector: %q\nBase commit: %q\nBase change: %q\nRemove registration selected: %t\nFilesystem target selected: %q\n", p.PlanID, p.Task.TaskID, p.Task.Owner, p.SourcePath, p.Task.Destination, p.StateDir, p.Expected.Expected.BaseSelector, p.Expected.Expected.BaseCommit, p.Expected.Expected.BaseChange, p.RemoveRegistration, p.RemoveFiles)
+		fmt.Fprintf(&text, "Source operation: %q\nTarget commit: %q\nTarget change: %q\nTarget operation: %q\nCreation journal digest: %q\nDestination identity: device=%d inode=%d\nManifest: digest=%q complete=%t\nMetadata manifest: digest=%q complete=%t\n", p.Expected.Expected.Identity.OperationID, p.Expected.Target.CommitID, p.Expected.Target.ChangeID, p.Expected.Target.OperationID, p.CreationJournalDigest, p.Expected.Destination.Device, p.Expected.Destination.Inode, p.Expected.Manifest.Digest, p.Expected.Manifest.Complete, p.Expected.Metadata.Digest, p.Expected.Metadata.Complete)
+		for _, entry := range p.Expected.Manifest.Entries {
+			fmt.Fprintf(&text, "Manifest entry: %q kind=%q digest=%q size=%d mode=%d executable=%t device=%d inode=%d\n", entry.Path, entry.Kind, entry.Digest, entry.Size, entry.Mode, entry.Executable, entry.Device, entry.Inode)
+		}
+		for _, entry := range p.Expected.Metadata.Entries {
+			fmt.Fprintf(&text, "Metadata entry: %q kind=%q digest=%q size=%d mode=%d executable=%t device=%d inode=%d\n", entry.Path, entry.Kind, entry.Digest, entry.Size, entry.Mode, entry.Executable, entry.Device, entry.Inode)
+		}
+		for _, sibling := range p.Expected.Siblings {
+			fmt.Fprintf(&text, "Protected sibling: %q kind=%q device=%d inode=%d\n", sibling.Identity.Path, sibling.Kind, sibling.Identity.Device, sibling.Identity.Inode)
+		}
 		for _, action := range p.Expected.Actions {
 			fmt.Fprintf(&text, "Retirement action: %q target=%q decision=%q reason=%q proof=%q\n", action.Name, action.Target, action.Decision, action.Reason, action.Proof)
 			for _, effect := range action.Effects {

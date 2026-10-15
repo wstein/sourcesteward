@@ -235,7 +235,7 @@ func TestTidyRetirementFlagsAndQuotedHumanActions(t *testing.T) {
 		if o.Task != "task" || o.Owner != "owner" || !o.RemoveRegistration || o.RemoveFiles != "/tmp/task" || o.StateDir != "/tmp/state" || len(o.Refs) != 0 {
 			t.Fatal(o)
 		}
-		return workspace.TidyResult{SchemaVersion: 2, Command: "tidy-plan", Status: "ok", Backend: "git", Retirement: &workspace.RetirementPlanRecord{PlanID: "retirement", Backend: "git", RemoveRegistration: true, RemoveFiles: o.RemoveFiles, Expected: workspace.RetirementObservation{Actions: []workspace.RetirementAction{{Name: "registration", Target: "task", Decision: "delete", Proof: "native-ancestry", Reason: "clean"}, {Name: "files", Target: "literal\npath\x1b", Decision: "delete", Proof: "native-ancestry", Reason: "separate-authorization"}}}, Effects: []string{"coupled native registration and files removal"}, RecoveryLimits: []string{"retained recovery pin"}}, Actions: []workspace.ActionOutcome{}, Diagnostics: []workspace.Diagnostic{}, Limitations: []string{}}
+		return workspace.TidyResult{SchemaVersion: 2, Command: "tidy-plan", Status: "ok", Backend: "git", Retirement: &workspace.RetirementPlanRecord{PlanID: "retirement", Backend: "git", RemoveRegistration: true, RemoveFiles: o.RemoveFiles, Expected: workspace.RetirementObservation{Target: workspace.NativeIdentity{CommitID: "target-commit", ChangeID: "target-change", OperationID: "target-operation"}, Manifest: workspace.RetirementManifest{Complete: true, Entries: []workspace.RetirementEntry{{Path: "owned-file", Kind: "regular", Digest: "file-digest"}}}, Actions: []workspace.RetirementAction{{Name: "registration", Target: "task", Decision: "delete", Proof: "native-ancestry", Reason: "clean"}, {Name: "files", Target: "literal\npath\x1b", Decision: "delete", Proof: "native-ancestry", Reason: "separate-authorization"}}}, Effects: []string{"coupled native registration and files removal"}, RecoveryLimits: []string{"retained recovery pin"}}, Actions: []workspace.ActionOutcome{}, Diagnostics: []workspace.Diagnostic{}, Limitations: []string{}}
 	})
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -243,7 +243,7 @@ func TestTidyRetirementFlagsAndQuotedHumanActions(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Retirement plan:", "registration", "files", "separate-authorization", "coupled native", "recovery pin"} {
+	for _, want := range []string{"Retirement plan:", "registration", "files", "separate-authorization", "coupled native", "recovery pin", "target-commit", "target-change", "target-operation", "Manifest entry:", "owned-file", "file-digest"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("missing %q: %s", want, out.String())
 		}
