@@ -10,13 +10,13 @@ ROOT=Path(__file__).resolve().parents[1]
 BINARY=ROOT/'bin/stw'
 def run(args,cwd):
     return subprocess.run([str(BINARY),*args],cwd=cwd,capture_output=True,text=True)
-def check(args,cwd,code,status=None):
+def check(args,cwd,code,status=None,schema_version=1):
     p=run(args,cwd)
     assert p.returncode==code,(args,p.returncode,p.stdout,p.stderr)
     assert p.stderr.count('\n')==(0 if code==0 else 1),(args,p.stderr)
     if status:
         result=json.loads(p.stdout)
-        assert result['schema_version']==1 and result['status']==status,result
+        assert result['schema_version']==schema_version and result['status']==status,result
     elif code: assert not p.stdout,p.stdout
     return p
 with tempfile.TemporaryDirectory() as directory:
@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory() as directory:
     check(['inspect','--json'],repo,0,'ok')
     check(['inspect'],repo,0)
     (repo/'.jj').mkdir()
-    check(['inspect','--json'],repo,1,'unsupported')
+    check(['inspect','--json'],repo,1,'error',schema_version=2)
     check(['inspect'],repo,1)
     (repo/'.git/gitbutler').mkdir()
     result=json.loads(check(['inspect','--json'],repo,1,'unsupported').stdout)
