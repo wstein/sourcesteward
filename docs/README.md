@@ -25,3 +25,5 @@
 - [CLI JSON contracts](json-contracts.md): versioned schemas, compatibility and offline validation.
 
 - [Inventory](inventory.md): native workspace/reference/state observations and three-valued queries.
+
+- [Task workspaces](workspaces.md): reviewable isolated Git/jj creation and retained handoffs.
