@@ -134,6 +134,7 @@ jobs:
           python3 -B scripts/smoke-workspaces.py
           python3 -B scripts/smoke-tidy.py
           python3 -B scripts/smoke-tidy-apply.py
+          python3 -B scripts/smoke-retirement.py
 
   pages:
     needs: [check, conformance]
