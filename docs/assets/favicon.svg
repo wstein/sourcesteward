@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="title description">
+<title id="title">SourceSteward</title><desc id="description">Optically strengthened wide tie icon with orange knot, navy body and white branch.</desc>
+<rect width="64" height="64" rx="12" fill="#ffffff"/>
+<path fill="#f05032" d="M22 5H42L38 14H26Z"/>
+<path fill="#0b2545" d="M25 17H39L55 48 32 61 9 48Z"/>
+<g fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<path fill="none" d="M29 28V49M29 35L40 41"/>
+<circle cx="29" cy="28" r="4"/><circle cx="29" cy="49" r="4"/><circle cx="40" cy="41" r="4"/>
+</g>
+</svg>
