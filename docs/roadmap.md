@@ -13,7 +13,8 @@ acceptance is tracked in Spec 008.
 Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
 Broader changes, conflicts, branches/bookmarks, upstreams, linked worktrees/workspaces and
 interrupted operations remain deferred. Existing inspection has explicit targeting, predictable
-exit codes and bounded output without writes or implicit fetches.
+exit codes and bounded output without inspected-target writes or implicit fetches. Native jj
+creates and removes private temporary isolation/probe files outside that target.
 
 ## Spec 008 — native jj identity inspection, implemented candidate
 Native inspection supports standalone, colocated and secondary jj workspaces with separate
