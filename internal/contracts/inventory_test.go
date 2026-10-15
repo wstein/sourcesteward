@@ -96,11 +96,20 @@ func TestRealInventoryCLIOutputs(t *testing.T) {
 	if raw, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("init: %s %v", raw, err)
 	}
+	command = exec.Command(git, "-C", repo, "-c", "user.name=Tester", "-c", "user.email=test@example.org", "commit", "--allow-empty", "-m", "initial")
+	if raw, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("commit: %s %v", raw, err)
+	}
+	linked := filepath.Join(t.TempDir(), "linked workspace")
+	command = exec.Command(git, "-C", repo, "worktree", "add", "-b", "linked", linked)
+	if raw, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("worktree: %s %v", raw, err)
+	}
 	for _, tc := range []struct {
 		name string
 		args []string
 		want int
-	}{{"absent-reference", []string{"inventory", repo, "--query", "ref-exists", "--ref", "refs/heads/absent", "--json"}, 0}, {"missing-path", []string{"inventory", filepath.Join(home, "absent"), "--json"}, 1}, {"usage", []string{"inventory", repo, "--query", "ancestor", "--from", "main", "--json"}, 2}} {
+	}{{"absent-reference", []string{"inventory", repo, "--query", "ref-exists", "--ref", "refs/heads/absent", "--json"}, 0}, {"missing-path", []string{"inventory", filepath.Join(home, "absent"), "--json"}, 1}, {"oversized-input", []string{"inventory", strings.Repeat("<", 100000), "--json"}, 1}, {"usage", []string{"inventory", repo, "--query", "ancestor", "--from", "main", "--json"}, 2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out, diagnostic bytes.Buffer
 			code := cli.Run(context.Background(), "test", tc.args, &out, &diagnostic)
@@ -114,6 +123,9 @@ func TestRealInventoryCLIOutputs(t *testing.T) {
 				return
 			}
 			valid(t, s, out.Bytes())
+			if out.Len() > 1048576 {
+				t.Fatal("result exceeds inventory JSON byte bound")
+			}
 			if !bytes.HasSuffix(out.Bytes(), []byte("\n")) {
 				t.Fatal("missing final newline")
 			}
@@ -127,6 +139,18 @@ func TestRealInventoryCLIOutputs(t *testing.T) {
 		t.Fatalf("%d %s %s", code, out.String(), diagnostic.String())
 	}
 	valid(t, s, out.Bytes())
+	var result inspection.InventoryResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Workspaces) != 2 || len(result.References) < 2 {
+		t.Fatalf("expected registered worktrees and committed references: %s", out.String())
+	}
+	for _, reference := range result.References {
+		if len(reference.AddedTargets) != 1 || reference.CommitID == nil || len(*reference.CommitID) != 40 {
+			t.Fatalf("missing committed Git target: %+v", reference)
+		}
+	}
 }
 
 func TestRealJJInventoryCLIOutputs(t *testing.T) {
@@ -147,6 +171,10 @@ func TestRealJJInventoryCLIOutputs(t *testing.T) {
 	command := exec.Command("jj", "git", "init", "--no-colocate", repo)
 	if raw, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("init: %s %v", raw, err)
+	}
+	command = exec.Command("jj", "-R", repo, "bookmark", "create", "task", "-r", "@")
+	if raw, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("bookmark: %s %v", raw, err)
 	}
 	s := schema(t, "inventory")
 	for _, tc := range []struct {
@@ -172,6 +200,25 @@ func TestRealJJInventoryCLIOutputs(t *testing.T) {
 				t.Fatalf("exit %d want %d: %s %s", code, tc.want, out.String(), diagnostic.String())
 			}
 			valid(t, s, out.Bytes())
+			if tc.name == "stored" {
+				var result inspection.InventoryResult
+				if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, reference := range result.References {
+					if reference.Name != "task" {
+						continue
+					}
+					found = true
+					if len(reference.AddedTargets) != 1 || reference.CommitID == nil || reference.ChangeID == nil || len(*reference.CommitID) != 40 || len(*reference.ChangeID) != 32 {
+						t.Fatalf("missing native jj target identities: %+v", reference)
+					}
+				}
+				if !found {
+					t.Fatalf("native bookmark absent: %s", out.String())
+				}
+			}
 		})
 	}
 }
