@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "id": "001-project-foundation",
+      "status": "implemented",
+      "spec": "../specs/001-project-foundation/spec.md",
+      "evidence": "verification.md"
+    },
+    {
+      "id": "repository-inspection",
+      "status": "planned",
+      "spec": null,
+      "evidence": null
+    },
+    {
+      "id": "jj-adapter",
+      "status": "planned",
+      "spec": null,
+      "evidence": null
+    },
+    {
+      "id": "gitbutler-adapter",
+      "status": "planned",
+      "spec": null,
+      "evidence": null
+    },
+    {
+      "id": "local-cleanup",
+      "status": "planned",
+      "spec": null,
+      "evidence": null
+    }
+  ]
+}
