@@ -26,12 +26,12 @@ type Snapshot struct {
 type PathIdentity struct { Path string; Device, Inode uint64 }
 type MutationPlan struct {
     SchemaVersion int
-    PlanID, TaskID, Owner, SourcePath, Destination, StateDir, BaseInput string
+    PlanID, TaskID, Owner, SourcePath, Destination, StateDir, Backend, Reason string
     Expected Snapshot
     DestinationParent PathIdentity
     DestinationIdentity *PathIdentity
     Digest string
-    Effects, Recovery []string
+    Effects, RecoveryLimits []string
 }
 type NativeWorkspace struct {
     Identity NativeIdentity
