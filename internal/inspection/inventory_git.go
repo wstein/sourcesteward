@@ -235,6 +235,9 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 			w.Tracked = unknown("raw disk comparison not requested")
 		}
 		w.Untracked = known(untracked)
+		if len(o.Paths) > 0 {
+			w.Untracked = unknown("untracked paths outside requested literal selection were not observed")
+		}
 		if !gitInventoryHasScope(o.Scopes, "untracked") {
 			w.Untracked = unknown("untracked scope not requested")
 		}
