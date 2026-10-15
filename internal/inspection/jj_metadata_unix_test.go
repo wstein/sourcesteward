@@ -41,6 +41,7 @@ func TestJJMetadataFIFORefused(t *testing.T) {
 }
 func TestJJReferencesUseAggregateBudget(t *testing.T) {
 	root := t.TempDir()
+	root, _ = filepath.EvalSymlinks(root)
 	for i := 0; i < 2; i++ {
 		d := filepath.Join(root, fmt.Sprint(i))
 		os.Mkdir(d, 0700)
@@ -51,5 +52,16 @@ func TestJJReferencesUseAggregateBudget(t *testing.T) {
 	budget := 128
 	if e := boundedRefs(context.Background(), root, 0, &budget); e == nil {
 		t.Fatal("aggregate traversal budget ignored")
+	}
+}
+func TestJJMalformedPackedReferencesRefused(t *testing.T) {
+	root := t.TempDir()
+	root, _ = filepath.EvalSymlinks(root)
+	os.Mkdir(filepath.Join(root, ".jj"), 0700)
+	os.Mkdir(filepath.Join(root, ".git"), 0700)
+	os.WriteFile(filepath.Join(root, ".git/packed-refs"), []byte("not a valid packed reference\n"), 0600)
+	r := Result{Evidence: []Evidence{{"jj-metadata", filepath.Join(root, ".jj")}}}
+	if e := detectJJGitButler(context.Background(), root, &r); e == nil {
+		t.Fatal("malformed packed refs accepted")
 	}
 }

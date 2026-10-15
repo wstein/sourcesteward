@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -59,6 +60,11 @@ func inspect(ctx context.Context, path string, run runner) (result Result) {
 	}
 	jj := len(r.Evidence) > 0
 	if jj {
+		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+			r.SchemaVersion = 2
+			r.Backend = "jj"
+			return r.fail("jj-sandbox-unavailable", "native jj inspection requires usable read-only bubblewrap on Linux or sandbox-exec on macOS")
+		}
 		jjCtx, cancel := context.WithTimeout(ctx, jjTimeout)
 		defer cancel()
 		if err := detectJJGitButler(jjCtx, abs, &r); err != nil {

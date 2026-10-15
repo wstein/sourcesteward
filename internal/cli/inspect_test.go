@@ -43,7 +43,11 @@ func TestInspectJJHumanAndJSON(t *testing.T) {
 		t.Fatal(e)
 	}
 	if code != 0 && os.Getenv("STW_REQUIRE_JJ") != "1" {
-		t.Skip("native sandbox unavailable")
+		if diagnostics, ok := r["diagnostics"].([]any); ok && len(diagnostics) > 0 {
+			if first, ok := diagnostics[0].(map[string]any); ok && first["code"] == "jj-sandbox-unavailable" {
+				t.Skip("native sandbox unavailable")
+			}
+		}
 	}
 	if code != 0 || r["schema_version"] != float64(2) || r["backend"] != "jj" || r["repository"] != nil || diagnostic.Len() != 0 {
 		t.Fatalf("%d %s %s", code, out.String(), diagnostic.String())

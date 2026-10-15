@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,7 @@ func TestJJMachineRecordsAndVersions(t *testing.T) {
 			t.Fatalf("accepted %q", s)
 		}
 	}
-	for _, v := range []string{"0.44.0", "0.45.0", "0.46.0-rc1", "1.0.0", "0.46", "x.46.0"} {
+	for _, v := range []string{"0.44.0", "0.45.0", "0.46.0-rc1", "1.0.0", "0.46", "x.46.0", "0.046.0", "0.46.00"} {
 		if supportedJJVersion(v) {
 			t.Fatalf("unsupported version %q", v)
 		}
@@ -27,6 +28,75 @@ func TestJJMachineRecordsAndVersions(t *testing.T) {
 		if !supportedJJVersion(v) {
 			t.Fatal(v)
 		}
+	}
+}
+
+func TestJJObservationPinningAndConcurrentChanges(t *testing.T) {
+	root := "/workspace"
+	opID := strings.Repeat("a", 128)
+	for _, kind := range []string{"stable", "operation-changed", "workspace-changed", "malformed", "invalid-utf8", "canceled"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			operations, workspaces := 0, 0
+			query := func(op string, args ...string) (string, error) {
+				if args[0] == "operation" {
+					operations++
+					if op != "@" {
+						t.Fatal("discovery not at explicit @")
+					}
+					id := opID
+					if kind == "operation-changed" && operations == 2 {
+						id = strings.Repeat("b", 128)
+					}
+					if kind == "malformed" {
+						return "null\n", nil
+					}
+					if kind == "canceled" {
+						cancel()
+						return "", ctx.Err()
+					}
+					return `"` + id + `"` + "\n", nil
+				}
+				if op != opID {
+					t.Fatal("identity not pinned to full operation")
+				}
+				if args[0] == "workspace" && args[1] == "root" {
+					return root + "\n", nil
+				}
+				if args[0] == "workspace" {
+					workspaces++
+					name := "default"
+					if kind == "workspace-changed" && workspaces == 2 {
+						name = "other"
+					}
+					if kind == "invalid-utf8" {
+						return "\"" + string([]byte{255}) + "\"\n\"/workspace\"\n", nil
+					}
+					return `"` + name + `"` + "\n\"/workspace\"\n", nil
+				}
+				return `"` + strings.Repeat("c", 40) + `"` + "\n\"" + strings.Repeat("k", 32) + "\"\n", nil
+			}
+			j, e := observeJJ(ctx, root, "/workspace/.jj", "/workspace/.jj/repo", query)
+			switch kind {
+			case "stable":
+				if e != nil || j.OperationID != opID || operations != 2 || workspaces != 2 {
+					t.Fatalf("%+v %v", j, e)
+				}
+			case "operation-changed", "workspace-changed":
+				if !errors.Is(e, errJJChanged) {
+					t.Fatal(e)
+				}
+			case "canceled":
+				if !errors.Is(e, context.Canceled) {
+					t.Fatal(e)
+				}
+			default:
+				if e == nil {
+					t.Fatal("invalid observation accepted")
+				}
+			}
+		})
 	}
 }
 func TestJJEnvironmentIsolation(t *testing.T) {
@@ -41,6 +111,7 @@ func TestJJEnvironmentIsolation(t *testing.T) {
 }
 func TestJJMetadataBounds(t *testing.T) {
 	d := t.TempDir()
+	d, _ = filepath.EvalSymlinks(d)
 	p := filepath.Join(d, "file")
 	os.WriteFile(p, make([]byte, outputLimit+1), 0600)
 	if _, e := metadataFile(p); e == nil {
@@ -201,8 +272,21 @@ func TestJJSessionBoundedProcess(t *testing.T) {
 	defer cancel()
 	s := jjSession{ctx: ctx, sandbox: fake, env: jjEnvironment(root)}
 	_, _, e := s.execute(root, "unused", nil)
-	if e == nil {
-		t.Fatal("unbounded process accepted")
+	if !errors.Is(e, context.DeadlineExceeded) {
+		t.Fatalf("unbounded process result %v", e)
+	}
+	for _, stream := range []string{"stdout", "stderr"} {
+		t.Run(stream, func(t *testing.T) {
+			suffix := ""
+			if stream == "stderr" {
+				suffix = " >&2"
+			}
+			os.WriteFile(fake, []byte("#!/bin/sh\ni=0\nwhile [ \"$i\" -lt 1100 ]; do printf xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+suffix+"; i=$((i+1)); done\n"), 0700)
+			s.ctx = context.Background()
+			if _, _, e := s.execute(root, "unused", nil); !errors.Is(e, errJJOutput) {
+				t.Fatalf("output bound %v", e)
+			}
+		})
 	}
 }
 
@@ -283,17 +367,66 @@ func TestJJDoesNotRequireGit(t *testing.T) {
 	requireJJ(t)
 	root := t.TempDir()
 	jjFixture(t, root, "git", "init", filepath.Join(root, "repo"))
+	requireJJSandbox(t, filepath.Join(root, "repo"))
 	jjPath, _ := exec.LookPath("jj")
+	jjPath, _ = filepath.Abs(jjPath)
 	bindir := t.TempDir()
 	if err := os.Symlink(jjPath, filepath.Join(bindir, "jj")); err != nil {
 		t.Fatal(err)
 	}
+	if b, e := exec.LookPath("bwrap"); e == nil {
+		b, _ = filepath.Abs(b)
+		if e := os.Symlink(b, filepath.Join(bindir, "bwrap")); e != nil {
+			t.Fatal(e)
+		}
+	}
+	t.Setenv("PATH", bindir)
 	// The backend must be selected before attempting the injected unavailable Git runner.
 	r := inspect(context.Background(), filepath.Join(root, "repo"), func(context.Context, string, ...string) (string, int, error) {
 		t.Fatal("Git invoked for jj ownership")
 		return "", -1, exec.ErrNotFound
 	})
-	if r.Backend != "jj" || r.SchemaVersion != 2 || strings.Contains(r.Error(), "Git executable") {
+	if r.Backend != "jj" || r.SchemaVersion != 2 || r.Status != "ok" {
 		t.Fatalf("%+v", r)
+	}
+	t.Setenv("PATH", t.TempDir())
+	r = Inspect(context.Background(), filepath.Join(root, "repo"))
+	if r.Diagnostics[0].Code != "jj-unavailable" || r.SchemaVersion != 2 {
+		t.Fatal(r)
+	}
+}
+
+func TestJJConflictedWorkingCopy(t *testing.T) {
+	requireJJ(t)
+	root := t.TempDir()
+	d := filepath.Join(root, "repo")
+	jjFixture(t, root, "git", "init", d)
+	requireJJSandbox(t, d)
+	file := filepath.Join(d, "file")
+	os.WriteFile(file, []byte("base\n"), 0600)
+	jjFixture(t, d, "describe", "-m", "base")
+	id := func() string {
+		return strings.TrimSpace(jjFixture(t, d, "log", "-r", "@", "--no-graph", "-T", "self.commit_id()"))
+	}
+	base := id()
+	jjFixture(t, d, "new", base)
+	os.WriteFile(file, []byte("first\n"), 0600)
+	jjFixture(t, d, "describe", "-m", "first")
+	first := id()
+	jjFixture(t, d, "new", base)
+	os.WriteFile(file, []byte("second\n"), 0600)
+	jjFixture(t, d, "describe", "-m", "second")
+	second := id()
+	jjFixture(t, d, "new", first, second)
+	if got := strings.TrimSpace(jjFixture(t, d, "log", "-r", "@", "--no-graph", "-T", "self.conflict()")); got != "true" {
+		t.Fatalf("fixture not conflicted %q", got)
+	}
+	before := snapshot(t, root)
+	r := Inspect(context.Background(), d)
+	if r.Status != "ok" || r.JJRepository == nil {
+		t.Fatal(r)
+	}
+	if !reflect.DeepEqual(before, snapshot(t, root)) {
+		t.Fatal("conflicted inspection changed bytes")
 	}
 }
