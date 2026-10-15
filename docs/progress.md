@@ -14,9 +14,10 @@ Delivery now proceeds in three separately reviewed work items:
 3. Owned workspace retirement with separate registration and exact-path file effects.
 
 Each follows plan → tasks → independent analysis → implement → review/test, with
-native Git/jj conformance and a separate PR. None of these tidy capabilities is
-implemented yet. Latest merged source is `f7c2a10`; its hosted checks remain a
-separate gate. The pre-reconciliation `17bdd16` baseline passed local `make check`
+native Git/jj conformance and a separate PR. WI1 implements evidence-only plans;
+see [WI1 verification](../specs/011-workspace-reference-tidy/wi1-verification.md).
+WI2 and WI3 remain planned. Latest merged source `f7c2a10` passed hosted CI
+[run 38806519542](https://github.com/wstein/sourcesteward/actions/runs/38806519542). The pre-reconciliation `17bdd16` baseline passed local `make check`
 with current Git/jj and mandatory native sandboxing.
 
 ## Historical Spec 010 implementation handoff
