@@ -182,6 +182,7 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 			return failTidy(r, err)
 		}
 		probe.Plan = &p
+		probe.Limitations = append(append([]string{}, observation.Limitations...), p.RecoveryLimits...)
 		if !withinTidyBounds(probe) {
 			return failTidy(r, failure("record-limit", "Stored plan exceeds output bounds."))
 		}

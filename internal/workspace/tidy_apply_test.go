@@ -249,3 +249,22 @@ func TestTidyCancellationDuringInitialApplyObservationIsExplicit(t *testing.T) {
 		t.Fatalf("cancellation hidden as stale evidence: %+v", r)
 	}
 }
+
+func TestTidyProposedEffectsOutputBoundIsCheckedBeforePersistence(t *testing.T) {
+	c, f, o := fixtureTidyCoordinator(t)
+	f.observation.Limitations = make([]string, 1012)
+	for i := range f.observation.Limitations {
+		f.observation.Limitations[i] = "bounded native qualification"
+	}
+	r := c.plan(context.Background(), o)
+	if r.Status == "ok" {
+		t.Fatal("oversized final proposed-effects result accepted")
+	}
+	entries, err := os.ReadDir(o.StateDir + "/tidy-plans")
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatal("result bound was detected only after storing an undisclosed immutable plan")
+	}
+}
