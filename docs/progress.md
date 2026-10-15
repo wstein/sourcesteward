@@ -101,3 +101,9 @@ review, backend feature acceptance or cross-artifact spec/plan/task analysis.
 Workspace, State and Reference Inventory: draft scenarios, requirements and author quality checks updated.
 Documentation links and whitespace checks passed before PR handoff. No runtime capability
 or independent acceptance is claimed. Planning/tasks/analysis remain pending.
+
+### 012-stack-inspection — Toolbelt use-case specification update
+
+Stack Inspection and Diffs: draft scenarios, requirements and author quality checks updated.
+Documentation links and whitespace checks passed before PR handoff. No runtime capability
+or independent acceptance is claimed. Planning/tasks/analysis remain pending.
