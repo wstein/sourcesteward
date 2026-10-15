@@ -13,8 +13,8 @@ def validate(lines):
         package, *imports = line.split()
         if package == MODULE + 'internal/cli':
             for dependency in imports:
-                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency != MODULE + 'internal/inspection'):
-                    raise ValueError('CLI may access only the reviewed inspection operation: ' + dependency)
+                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace')):
+                    raise ValueError('CLI may access only reviewed inspection/workspace operations: ' + dependency)
         if package.startswith(MODULE + 'cmd/'):
             for dependency in imports:
                 if dependency.startswith(MODULE) and dependency != MODULE + 'internal/cli':
