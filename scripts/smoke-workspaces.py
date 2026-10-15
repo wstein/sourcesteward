@@ -94,6 +94,8 @@ def acceptance(binary=BINARY):
                 base = 'HEAD'
             else:
                 native('jj', ['git', 'init', '--colocate' if group == 'jj-colocated' else '--no-colocate', str(source)])
+                (source / 'tracked.txt').write_text('stored fixture\n')
+                native('jj', ['describe', '-m', 'initial fixture'], source)
                 native('jj', ['bookmark', 'create', 'trunk', '-r', '@'], source)
                 base = 'trunk'
             (source / 'untracked\nfile.txt').write_text('source work must survive\n')
@@ -140,6 +142,10 @@ def acceptance(binary=BINARY):
             mark(group, 'authorization')
             applied = invoke('apply', ['--plan', plan_id, '--state-dir', state, '--authorize'])
             assert destination.is_dir() and applied['task']['owner'] == 'conformance', applied
+            assert (destination / 'tracked.txt').read_text() == 'stored fixture\n'
+            assert not (destination / 'untracked\nfile.txt').exists()
+            task_path = state / 'tasks/task.json'
+            assert task_path.is_file() and task_path.stat().st_mode & 0o777 == 0o600
             assert source_content() == before_content and source_identity() == before_identity, ('Source checkout changed', group)
             if group == 'git':
                 assert native('git', ['rev-parse', 'HEAD'], destination) == mutation['expected']['base_commit']
