@@ -36,3 +36,21 @@ func TestGitInventoryConfinedDiskOpen(t *testing.T) {
 	}
 	f.Close()
 }
+
+func TestGitInventoryLiteralQueryDoesNotReadOtherDiskPaths(t *testing.T) {
+	d := repo(t)
+	for _, name := range []string{"safe", "other"} {
+		os.WriteFile(filepath.Join(d, name), []byte("clean"), 0600)
+	}
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	os.Remove(filepath.Join(d, "other"))
+	syscall.Mkfifo(filepath.Join(d, "other"), 0600)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"safe"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("%+v", r)
+	}
+	if r.Workspaces[0].Tracked.Value != "unknown" {
+		t.Fatal("unobserved broader workspace claimed clean")
+	}
+}
