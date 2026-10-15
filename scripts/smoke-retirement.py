@@ -53,7 +53,7 @@ def acceptance(binary=BINARY):
                 value = json.loads(run.stdout)
             except json.JSONDecodeError as error:
                 raise AssertionError(('Missing structured result', family, operation, run.returncode, run.stdout, run.stderr)) from error
-            assert value['status'] in statuses and value['command'] == family + '-' + operation, value
+            assert value['status'] in statuses and value['command'] == family + '-' + operation, {key: value.get(key) for key in ('schema_version', 'command', 'status', 'backend', 'diagnostics', 'actions')}
             assert run.returncode == (0 if value['status'] == 'ok' else 1), (value, run.stderr)
             return value
 
