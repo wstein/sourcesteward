@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import shutil
 import struct
 import hashlib
 import xml.etree.ElementTree as ET
@@ -159,6 +160,39 @@ class DocumentationTests(unittest.TestCase):
             self.assertFalse((destination / 'roadmap.md').exists())
             self.assertEqual((destination / 'revision.txt').read_text(), 'a' * 40 + '\n')
             with self.assertRaises(ValueError): package.package(ROOT, destination, 'b' * 40)
+
+    def test_schema_packaging_is_verbatim_and_rejects_unexpected_sources(self):
+        package = load('package_schemas', 'package-pages.py')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(ROOT / 'docs/assets', root / 'docs/assets')
+            shutil.copyfile(ROOT / 'docs/index.html', root / 'docs/index.html')
+            shutil.copytree(ROOT / 'schemas', root / 'schemas')
+            destination = root / 'output'
+            package.package(root, destination, 'a' * 40)
+            for name in ('version.schema.json', 'inspect.schema.json'):
+                self.assertEqual((destination / 'schemas/v1' / name).read_bytes(),
+                                 (ROOT / 'schemas/v1' / name).read_bytes())
+            shutil.rmtree(destination)
+            extra = root / 'schemas/v1/private.json'
+            extra.write_text('{}')
+            with self.assertRaises(ValueError): package.package(root, destination, 'a' * 40)
+            self.assertFalse(destination.exists())
+            extra.unlink()
+            missing = root / 'schemas/v1/inspect.schema.json'
+            saved_bytes = missing.read_bytes()
+            missing.unlink()
+            with self.assertRaises(ValueError): package.package(root, destination, 'a' * 40)
+            self.assertFalse(destination.exists())
+            missing.write_bytes(saved_bytes)
+            for source in (root / 'schemas/v1/version.schema.json', root / 'schemas/v1', root / 'schemas'):
+                saved = source.with_name(source.name + '-saved')
+                source.rename(saved)
+                source.symlink_to(saved, target_is_directory=saved.is_dir())
+                with self.assertRaises(ValueError): package.package(root, destination, 'a' * 40)
+                self.assertFalse(destination.exists())
+                source.unlink()
+                saved.rename(source)
 
     def test_packaging_rejects_symlinks_and_invalid_revision(self):
         package = load('package', 'package-pages.py')
