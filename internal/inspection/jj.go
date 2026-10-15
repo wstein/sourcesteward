@@ -20,6 +20,8 @@ const jjTimeout = 10 * time.Second
 const jjLimitation = "Stored working-copy state; disk edits and untracked files were not snapshotted. Freshness is unknown; observations are not transactional and concurrent or ABA changes may be missed."
 
 var errJJOutput = errors.New("jj output limit")
+var errJJChanged = errors.New("jj identity changed")
+var errJJInvalid = errors.New("invalid jj operation identity")
 
 type jjSession struct {
 	ctx                  context.Context
@@ -126,15 +128,35 @@ func inspectJJ(ctx context.Context, dir string, r Result) Result {
 		if errors.Is(e, errJJOutput) {
 			return fail("jj-output-limit", "jj output exceeded the inspection limit")
 		}
+		if errors.Is(e, errJJChanged) {
+			return fail("changed-repository", "jj identity changed during inspection")
+		}
+		if errors.Is(e, errJJInvalid) {
+			return fail("invalid-metadata", "jj returned an invalid operation identity")
+		}
 		return fail("jj-failed", "cannot read stored jj identity safely; check operation heads, workspace state and metadata without automatic repair")
 	}
-	op, e := query("@", "operation", "log", "--limit", "1", "--no-graph", "--template", `json(self.id()) ++ "\n"`)
+	observed, e := observeJJ(ctx, root, metadata, repository, query)
 	if e != nil {
 		return failed(e)
 	}
+	r.Status = "ok"
+	r.Repository = nil
+	r.JJRepository = &observed
+	r.Diagnostics = []Diagnostic{}
+	return r
+}
+
+// observeJJ keeps native machine-interface sampling testable without executing repository data.
+func observeJJ(ctx context.Context, root, metadata, repository string, query func(string, ...string) (string, error)) (JJRepository, error) {
+	zero := JJRepository{}
+	op, e := query("@", "operation", "log", "--limit", "1", "--no-graph", "--template", `json(self.id()) ++ "\n"`)
+	if e != nil {
+		return zero, e
+	}
 	operation, e := scalarRecord(op, 1)
 	if e != nil || !identifier(operation[0], 128, "0123456789abcdef") {
-		return fail("invalid-metadata", "jj returned an invalid operation identity")
+		return zero, errJJInvalid
 	}
 	opID := operation[0]
 	readIdentity := func() (JJRepository, error) {
@@ -169,28 +191,24 @@ func inspectJJ(ctx context.Context, dir string, r Result) Result {
 	}
 	first, e := readIdentity()
 	if e != nil {
-		return failed(e)
+		return zero, e
 	}
 	second, e := readIdentity()
 	if e != nil {
-		return failed(e)
+		return zero, e
 	}
 	final, e := query("@", "operation", "log", "--limit", "1", "--no-graph", "--template", `json(self.id()) ++ "\n"`)
 	if e != nil {
-		return failed(e)
+		return zero, e
 	}
 	finalIDs, e := scalarRecord(final, 1)
 	if e != nil || finalIDs[0] != opID || first != second {
-		return fail("changed-repository", "jj identity changed during inspection")
+		return zero, errJJChanged
 	}
 	if ctx.Err() != nil {
-		return fail("canceled", "inspection canceled")
+		return zero, ctx.Err()
 	}
-	r.Status = "ok"
-	r.Repository = nil
-	r.JJRepository = &first
-	r.Diagnostics = []Diagnostic{}
-	return r
+	return first, nil
 }
 func identifier(v string, n int, alphabet string) bool {
 	return len(v) == n && strings.Trim(v, alphabet) == ""
@@ -233,21 +251,17 @@ func supportedJJVersion(s string) bool {
 	major, e := strconv.Atoi(p[0])
 	minor, f := strconv.Atoi(p[1])
 	patch, g := strconv.Atoi(p[2])
-	return e == nil && f == nil && g == nil && major == 0 && (minor > 45 || minor == 45 && patch >= 1)
+	return e == nil && f == nil && g == nil && strconv.Itoa(major) == p[0] && strconv.Itoa(minor) == p[1] && strconv.Itoa(patch) == p[2] && major == 0 && (minor > 45 || minor == 45 && patch >= 1)
 }
 func jjEnvironment(config string) []string {
 	env := []string{}
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
 		upper := strings.ToUpper(key)
-		if strings.HasPrefix(upper, "JJ_") || strings.HasPrefix(upper, "GIT_") || strings.HasPrefix(upper, "RUST_") || strings.HasPrefix(upper, "LD_") || strings.HasPrefix(upper, "DYLD_") {
-			continue
-		}
 		switch upper {
-		case "HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "TMPDIR", "TEMP", "TMP", "PAGER", "EDITOR", "VISUAL", "TERM", "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS":
-			continue
+		case "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ":
+			env = append(env, entry)
 		}
-		env = append(env, entry)
 	}
 	return append(env, "JJ_CONFIG=", "HOME="+config, "USERPROFILE="+config, "XDG_CONFIG_HOME="+config, "XDG_CACHE_HOME="+config, "XDG_DATA_HOME="+config, "TMPDIR="+config, "TERM=dumb")
 }

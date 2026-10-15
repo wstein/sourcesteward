@@ -180,13 +180,28 @@ func detectJJGitButler(ctx context.Context, _ string, r *Result) error {
 			return errors.New("invalid packed refs")
 		}
 		for _, line := range strings.Split(string(b), "\n") {
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			if strings.HasPrefix(line, "^") {
+				if !gitMetadataOID(line[1:]) {
+					return errors.New("invalid peeled packed reference")
+				}
+				continue
+			}
 			fields := strings.Fields(line)
+			if len(fields) != 2 || !gitMetadataOID(fields[0]) || !strings.HasPrefix(fields[1], "refs/") {
+				return errors.New("invalid packed reference")
+			}
 			if len(fields) == 2 && (strings.HasPrefix(fields[1], "refs/gitbutler/") || fields[1] == "refs/heads/gitbutler/workspace") {
 				r.Evidence = append(r.Evidence, Evidence{"gitbutler-reference", fields[1]})
 			}
 		}
 	}
 	return nil
+}
+func gitMetadataOID(s string) bool {
+	return (len(s) == 40 || len(s) == 64) && strings.Trim(s, "0123456789abcdef") == ""
 }
 func boundedRefs(ctx context.Context, path string, depth int, budget *int) error {
 	if e := ctx.Err(); e != nil {
