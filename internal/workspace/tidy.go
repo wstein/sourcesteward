@@ -86,10 +86,8 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 		if !observation.WorkspacePathsComplete {
 			return failTidy(r, failure("unknown-workspace-path", "Cannot prove state-store disjointness because a registered workspace root is unavailable."))
 		}
-		for _, path := range observation.WorkspacePaths {
-			if overlaps(o.StateDir, path) {
-				return failTidy(r, failure("state-overlap", "Tidy state directory must be disjoint from every registered workspace, including unselected or detached work."))
-			}
+		if err = qualifyTidyWorkspaceRoots(ctx, observation.WorkspacePaths, o.StateDir); err != nil {
+			return failTidy(r, err)
 		}
 	}
 	candidates := append([]TidyCandidate{}, observation.Candidates...)
@@ -150,6 +148,9 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 		return failTidy(r, err)
 	}
 	if o.StateDir != "" {
+		if err = qualifyTidyWorkspaceRoots(ctx, fresh.WorkspacePaths, o.StateDir); err != nil {
+			return failTidy(r, err)
+		}
 		s, err := openTidyStore(o.StateDir, true)
 		if err != nil {
 			return failTidy(r, err)
@@ -342,4 +343,21 @@ func validTidyPaths(paths []string) bool {
 		seen[path] = true
 	}
 	return true
+}
+
+// A native registration can contain a lexical symlink alias or missing root.
+// Such paths are evidence, but never proof that a writable store is disjoint.
+func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string) error {
+	for _, path := range paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, err := currentIdentity(path); err != nil {
+			return failure("unknown-workspace-path", "A registered workspace root is missing, replaced or not a canonical real directory; state-store disjointness is unproven.")
+		}
+		if overlaps(state, path) {
+			return failure("state-overlap", "Tidy state directory must be disjoint from every registered workspace, including unselected or detached work.")
+		}
+	}
+	return nil
 }
