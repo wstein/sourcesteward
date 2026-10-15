@@ -310,7 +310,15 @@ func (c tidyCoordinator) partialTidy(s *store, p TidyPlanRecord, j TidyJournal, 
 	return boundedTidy(r)
 }
 func validTidyJournal(j TidyJournal, p TidyPlanRecord) bool {
-	if j.SchemaVersion != 1 || j.PlanID != p.PlanID || j.PlanDigest != p.Digest || !validSnapshot(j.Expected) || j.Expected.Identity.Backend != p.Backend || j.Entries == nil || j.Diagnostics == nil || (j.Phase != "complete" && j.Phase != "prepared" && j.Phase != "incomplete") {
+	if !tidyJournalWithinBounds(j) || !sameTidyStableState(p.Expected, j.Expected) || j.SchemaVersion != 1 || j.PlanID != p.PlanID || j.PlanDigest != p.Digest || !validSnapshot(j.Expected) || j.Expected.Identity.Backend != p.Backend || j.Entries == nil || j.Diagnostics == nil || (j.Phase != "complete" && j.Phase != "prepared" && j.Phase != "incomplete") {
+		return false
+	}
+	for _, diagnostic := range j.Diagnostics {
+		if diagnostic.Code == "" || diagnostic.Message == "" || !validText(diagnostic.Code) || !validText(diagnostic.Message) {
+			return false
+		}
+	}
+	if j.Phase == "complete" && len(j.Diagnostics) > 0 {
 		return false
 	}
 	targets := eligibleTidyCandidates(p)
@@ -326,12 +334,26 @@ func validTidyJournal(j TidyJournal, p TidyPlanRecord) bool {
 			return false
 		}
 		for _, action := range entry.Actions {
-			if !validText(action.Name) || !validText(action.Status) || !validText(action.Detail) {
+			if action.Name == "" || !validText(action.Name) || (action.Status != "completed" && action.Status != "incomplete" && action.Status != "refused") || !validText(action.Detail) {
 				return false
 			}
 		}
 	}
 	if j.Phase == "complete" {
+		for _, entry := range j.Entries {
+			created, deleted := false, false
+			for _, action := range entry.Actions {
+				if action.Name == "create-recovery" && action.Status == "completed" {
+					created = true
+				}
+				if action.Name == "delete-reference" && action.Status == "completed" {
+					deleted = true
+				}
+			}
+			if !created || !deleted {
+				return false
+			}
+		}
 		if len(j.Entries) != len(targets) {
 			return false
 		}
@@ -371,11 +393,7 @@ func (c tidyCoordinator) retryTidy(ctx context.Context, s *store, p TidyPlanReco
 }
 
 func writeTidyJournal(s *store, p TidyPlanRecord, j TidyJournal, exclusive bool) error {
-	count := len(j.Entries) + len(j.Diagnostics)
-	for _, entry := range j.Entries {
-		count += len(entry.Actions) + len(entry.Candidate.WorkspacePaths) + len(entry.Candidate.Limitations)
-	}
-	if count > observationLimit {
+	if !tidyJournalWithinBounds(j) {
 		return failure("record-limit", "Tidy recovery journal exceeds its aggregate1024-record bound; further native actions are refused.")
 	}
 	return s.write("tidy-operations", p.PlanID, j, exclusive)
@@ -393,6 +411,32 @@ func validTidyNativeTransition(before, after Snapshot) bool {
 		if before.Identity.OperationID == after.Identity.OperationID || after.ReferenceDigest != after.Identity.OperationID {
 			return false
 		}
+		before.Identity.OperationID = ""
+		after.Identity.OperationID = ""
+	}
+	before.ReferenceDigest = ""
+	after.ReferenceDigest = ""
+	return reflect.DeepEqual(before, after)
+}
+
+func tidyJournalWithinBounds(j TidyJournal) bool {
+	count := len(j.Entries) + len(j.Diagnostics)
+	if count > observationLimit {
+		return false
+	}
+	for _, entry := range j.Entries {
+		count += len(entry.Actions) + len(entry.Candidate.WorkspacePaths) + len(entry.Candidate.Limitations)
+		if count > observationLimit {
+			return false
+		}
+	}
+	return true
+}
+func sameTidyStableState(before, after Snapshot) bool {
+	if before.Identity.Backend != after.Identity.Backend {
+		return false
+	}
+	if before.Identity.Backend == "jj" {
 		before.Identity.OperationID = ""
 		after.Identity.OperationID = ""
 	}
