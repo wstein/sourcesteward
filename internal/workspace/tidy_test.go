@@ -286,3 +286,17 @@ func TestTidyNativeJJUnreferencedWorkspaceStateOverlap(t *testing.T) {
 		})
 	}
 }
+
+func TestTidyCanonicalStatelessRootsDoNotReportUnknownDisjointness(t *testing.T) {
+	c, _, o := fixtureTidyCoordinator(t)
+	o.StateDir = ""
+	r := c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatalf("stateless plan failed %#v", r)
+	}
+	for _, limitation := range r.Limitations {
+		if strings.Contains(limitation, "missing or noncanonical") {
+			t.Fatalf("canonical roots falsely reported unknown: %s", limitation)
+		}
+	}
+}

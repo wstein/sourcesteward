@@ -363,7 +363,7 @@ func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string
 		if _, err := currentIdentity(path); err != nil {
 			return failure("unknown-workspace-path", "A registered workspace root is missing, replaced or not a canonical real directory; state-store disjointness is unproven.")
 		}
-		if overlaps(state, path) {
+		if state != "" && overlaps(state, path) {
 			return failure("state-overlap", "Tidy state directory must be disjoint from every registered workspace, including unselected or detached work.")
 		}
 	}
