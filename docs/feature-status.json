@@ -114,6 +114,12 @@
       "status": "planned",
       "spec": "../specs/018-change-editing/spec.md",
       "evidence": null
+    },
+    {
+      "id": "019-upstream-sync",
+      "status": "planned",
+      "spec": "../specs/019-upstream-sync/spec.md",
+      "evidence": null
     }
   ]
 }
