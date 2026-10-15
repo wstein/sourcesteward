@@ -155,8 +155,8 @@ func TestGitInventoryDoesNotRunContentHelpers(t *testing.T) {
 	}
 }
 func TestGitInventoryParsersRejectMalformed(t *testing.T) {
-	for _, raw := range []string{"1 broken\x00", "? invalid\xff\x00", "? missing-terminator"} {
-		if _, err := parseGitInventoryStatus(raw); err == nil {
+	for _, raw := range []string{"M\x00", "M\x00invalid\xff\x00", "M\x00missing-terminator"} {
+		if _, err := parseGitInventoryDiff(raw, "stored"); err == nil {
 			t.Fatalf("accepted %q", raw)
 		}
 	}
@@ -291,5 +291,21 @@ func TestGitInventorySlashedRemoteAndBaseProvenance(t *testing.T) {
 	}
 	if !configured {
 		t.Fatal("missing configured candidate")
+	}
+}
+
+func TestGitInventoryPredicatesIgnoreUnrelatedMissingWorktrees(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	linked := filepath.Join(t.TempDir(), "linked")
+	git(t, d, "worktree", "add", "-qb", "topic", linked)
+	os.RemoveAll(linked)
+	r := gitInventory(t, d, InventoryOptions{Query: "ref-exists", Ref: "absent"})
+	if r.Status != "ok" || r.Query.Value != "false" || r.Query.Reason == "" {
+		t.Fatalf("%+v", r)
+	}
+	r = gitInventory(t, d, InventoryOptions{Query: "ancestor", From: "HEAD", To: "HEAD"})
+	if r.Status != "ok" || r.Query.Value != "true" || r.Query.Reason == "" {
+		t.Fatalf("%+v", r)
 	}
 }
