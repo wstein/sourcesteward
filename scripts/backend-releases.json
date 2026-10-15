@@ -1,5 +1,6 @@
 {
   "minimum": {
+    "sandbox_profile": {"package_version": "4.0.1really4.0.1-0ubuntu0.24.04.9", "sha256": "11d39094f044f0cda0febb3ad517b830301da6b2ce929664af09ee9e4dd264f9", "source": "https://archive.ubuntu.com/ubuntu/pool/main/a/apparmor/apparmor-profiles_4.0.1really4.0.1-0ubuntu0.24.04.9_all.deb"},
     "git": {"version": "2.46.0", "source": "https://www.kernel.org/pub/software/scm/git/sha256sums.asc", "sha256": "7f123462a28b7ca3ebe2607485f7168554c2b10dfc155c7ec46300666ac27f95"},
     "jj": {"version": "0.45.1", "runtime_version": "0.45.1-7c41cdeb16b6b321c64e789a966b6adf723816a5", "source": "https://github.com/jj-vcs/jj/releases/tag/v0.45.1", "artifacts": {
       "linux-amd64": {"name": "jj-v0.45.1-x86_64-unknown-linux-musl.tar.gz", "sha256": "f35438350b5d61963aac5dd74ede510b31d6b9690769d1a6268cf058cc825f72"},
@@ -7,6 +8,7 @@
     }}
   },
   "current": {
+    "sandbox_profile": {"package_version": "4.0.1really4.0.1-0ubuntu0.24.04.9", "sha256": "11d39094f044f0cda0febb3ad517b830301da6b2ce929664af09ee9e4dd264f9", "source": "https://archive.ubuntu.com/ubuntu/pool/main/a/apparmor/apparmor-profiles_4.0.1really4.0.1-0ubuntu0.24.04.9_all.deb"},
     "git": {"version": "2.56.0", "source": "https://www.kernel.org/pub/software/scm/git/sha256sums.asc", "sha256": "26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3"},
     "jj": {"version": "0.46.0", "runtime_version": "0.46.0-7d382314f9420b4b8d932245b49c99492c812b9f", "source": "https://github.com/jj-vcs/jj/releases/tag/v0.46.0", "artifacts": {
       "linux-amd64": {"name": "jj-v0.46.0-x86_64-unknown-linux-musl.tar.gz", "sha256": "fce0271158e665ceb82dc66c5eb95b1728649094e9133074f3b5baece345fc08"},

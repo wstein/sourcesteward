@@ -81,7 +81,8 @@ jobs:
           fi
           before="$(sandbox_settings)"
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y bubblewrap apparmor
+          sudo apt-get install --no-install-recommends -y bubblewrap apparmor apparmor-profiles
+          python3 -B scripts/activate-sandbox-profile.py
           test "$before" = "$(sandbox_settings)"
       - name: Require sandbox capability before building toolchains
         run: python3 -B scripts/smoke-jj-inspection.py --sandbox-preflight

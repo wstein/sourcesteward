@@ -123,3 +123,26 @@ class BackendInstallerTests(unittest.TestCase):
         self.assertIn('--unshare-user', variants['explicit-user'])
         self.assertIn('--cap-drop', variants['explicit-user'])
         self.assertNotIn('--cap-drop', variants['setup-capability-diagnostic'])
+
+    def test_distro_profile_digest_and_local_overrides_are_strict(self):
+        spec = importlib.util.spec_from_file_location('profile', ROOT / 'scripts/activate-sandbox-profile.py')
+        profile = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(profile)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source'
+            source.write_bytes(b'checked distro profile')
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            override = root / 'local'
+            profile.validate_profile(source, digest, [override])
+            with self.assertRaises(ValueError): profile.validate_profile(source, '0'*64, [override])
+            override.write_text('allow capability,')
+            with self.assertRaises(ValueError): profile.validate_profile(source, digest, [override])
+            override.write_text('')
+            profile.validate_profile(source, digest, [override])
+            override.unlink()
+            override.symlink_to(source)
+            with self.assertRaises(ValueError): profile.validate_profile(source, digest, [override])
+            source.unlink()
+            source.symlink_to(override)
+            with self.assertRaises(ValueError): profile.validate_profile(source, digest, [])
