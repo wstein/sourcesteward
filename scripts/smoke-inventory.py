@@ -49,7 +49,11 @@ def acceptance(binary=BINARY):
                                     capture_output=True, timeout=20)
             assert helpers.snapshot(root) == before, ('Inventory changed fixture state', args)
             allowed_statuses = (status,) if isinstance(status, str) else status
-            actual_status = status if human else json.loads(result.stdout)['status']
+            try:
+                actual_status = status if human else json.loads(result.stdout)['status']
+            except (json.JSONDecodeError, KeyError) as error:
+                raise AssertionError(('Missing inventory result', args, result.returncode,
+                                      result.stdout, result.stderr)) from error
             assert actual_status in allowed_statuses, (args, result.stdout)
             expected = 0 if actual_status == 'ok' else 1
             assert result.returncode == expected, (args, result.returncode, result.stdout, result.stderr)
@@ -119,6 +123,11 @@ def acceptance(binary=BINARY):
         assert [item['path'] for item in filtered['files']] == ['literal[*].txt'], filtered
         observe(repo, ['--query', 'ref-exists', '--ref', 'refs/heads/custom-trunk'], predicate='ref-exists', value='true', human=True)
         observe(root / 'not-a-repo', status='error')
+        setup('git', ['config', 'filter.hostile.clean', str(helper)], repo)
+        setup('git', ['config', 'filter.hostile.process', str(helper)], repo)
+        (repo / '.gitattributes').write_text('tracked.txt filter=hostile\n')
+        observe(repo, ['--query', 'clean', '--scope', 'disk'], status='partial', predicate='clean', value='unknown')
+        assert not sentinel.exists(), 'Repository-controlled clean/process filter executed'
 
         def jj(args, cwd=root):
             return setup('jj', ['--no-pager', '--color=never', *args], cwd)
@@ -135,6 +144,11 @@ def acceptance(binary=BINARY):
             observe(jjrepo, ['--query', 'ancestor', '--from', child, '--to', parent], predicate='ancestor', value='false')
             observe(jjrepo, ['--query', 'ancestor', '--from', parent, '--to', child], predicate='ancestor', value='true')
             observe(jjrepo, ['--scope', 'stored'])
+            stored_name = 'literal[*]\nfile.txt'
+            (jjrepo / stored_name).write_text('native stored change\n')
+            jj(['describe', '-m', 'Stored filename fixture'], jjrepo)
+            stored = observe(jjrepo, ['--scope', 'stored', '--path', stored_name])
+            assert [item['path'] for item in stored['files']] == [stored_name], stored
             (jjrepo / 'unsnapshotted.txt').write_text('unsnapshotted disk edits\n')
             output = observe(jjrepo, status='partial')
             assert output['backend'] == 'jj', output
@@ -150,7 +164,7 @@ def acceptance(binary=BINARY):
             # Native jj registration records may lack paths; absence must never trigger repair.
             output = observe(jjrepo, ['--scope', 'stored'])
             assert 'secondary' in {item['name'] for item in output['workspaces']}, output
-    if cases != 33:
+    if cases != 36:
         raise AssertionError('Mandatory inventory case count differs: ' + str(cases))
     print(str(cases) + ' native inventory CLI cases passed with byte/mode-identical target state')
 
