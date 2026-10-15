@@ -29,6 +29,15 @@ func TestNativeSandboxHelper(t *testing.T) {
 					os.Exit(41)
 				}
 			}
+		case "null":
+			f, e := os.OpenFile("/dev/null", os.O_RDWR, 0)
+			if e != nil {
+				os.Exit(44)
+			}
+			if _, e = f.Write([]byte("discard")); e != nil {
+				os.Exit(45)
+			}
+			f.Close()
 		case "network":
 			c, e := net.DialTimeout("tcp", a[1], time.Second)
 			if e == nil {
@@ -149,5 +158,12 @@ func TestNativeSandboxRejectsAliasedGrant(t *testing.T) {
 	}
 	if _, _, e := runSandboxed(context.Background(), bin, nil, root, []string{"/"}, nil); e == nil {
 		t.Fatal("root write grant admitted")
+	}
+}
+
+func TestNativeSandboxAllowsOnlyNullDeviceWrite(t *testing.T) {
+	_, code, e := sandboxTestRun(t, context.Background(), []string{"null"}, nil, nil)
+	if e != nil || code != 0 {
+		t.Fatalf("null device: code=%d error=%v", code, e)
 	}
 }
