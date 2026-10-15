@@ -16,3 +16,5 @@
 - [Feature status](feature-status.json): machine-readable implementation/evidence index.
 - [Foundation specification](../specs/001-project-foundation/spec.md): user outcomes.
 - [Contributing](../CONTRIBUTING.md), [conduct](../CODE_OF_CONDUCT.md), [security](../SECURITY.md).
+
+- [Site theme specification](../specs/004-site-themes/spec.md) and [verification](../specs/004-site-themes/verification.md).
