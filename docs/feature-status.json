@@ -32,6 +32,12 @@
       "evidence": "inspection-verification.md"
     },
     {
+      "id": "006-json-schemas",
+      "status": "implemented",
+      "spec": "../specs/006-json-schemas/spec.md",
+      "evidence": "json-schema-verification.md"
+    },
+    {
       "id": "jj-adapter",
       "status": "planned",
       "spec": null,

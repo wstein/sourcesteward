@@ -3,7 +3,7 @@
 | Domain | Evidence | Gap |
 | --- | --- | --- |
 | CLI contract | table-driven Go tests, writer failure and cancellation checks | Identity inspection only; no status or mutations |
-| Structured output | exact JSON contract and isolated repeated executions | Schema migration policy needed before additional operations |
+| Structured output | published schema 1 contracts, real CLI output validation and negative invariants | Live schema URLs require approved merge and successful Pages publication |
 | Documentation | local links, assets, SVG and evidence pointers checked offline | External destinations can change; no full accessibility audit |
 | Architecture | forbidden effects/dependency imports checked mechanically | Future adapter/application layers require new constraints |
 | Website | desktop/mobile browser acceptance and exact-SHA CI gate | Initial landing page; no documentation search |
