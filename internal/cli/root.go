@@ -62,7 +62,7 @@ func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) 
 	root := &cobra.Command{
 		Use:           "stw",
 		Short:         "Explainable version-control tools for humans and AI agents",
-		Long:          "SourceSteward — Explainable version-control tools for humans and AI agents.\n\nProvides help, version reporting and bounded read-only native Git/jj identity inspection and inventory, plus reviewable isolated task workspace creation. Evidence-based tidy reference planning is available; cleanup execution and GitButler integration remain planned.",
+		Long:          "SourceSteward — Explainable version-control tools for humans and AI agents.\n\nProvides help, version reporting and bounded read-only native Git/jj identity inspection and inventory, plus reviewable isolated task workspace creation. Evidence-based tidy reference planning is available; authorized local reference cleanup is available; workspace retirement and GitButler integration remain planned.",
 		SilenceErrors: true, SilenceUsage: true,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error { return cmd.Help() },
