@@ -110,6 +110,12 @@ func TestGitTreeAdmissionBounds(t *testing.T) {
 	if err := validateGitTree("100644 blob abc 5\tspaces and\nnewlines\x00"); err != nil {
 		t.Fatal(err)
 	}
+	if err := validateGitTree("100644 blob abc 5\tCase\x00100644 blob abc 5\tcase\x00"); err == nil {
+		t.Fatal("case-aliasing checkout paths admitted")
+	}
+	if err := validateGitTree("100644 blob abc 5\tDir\x00100644 blob abc 5\tdir/file\x00"); err == nil {
+		t.Fatal("case-aliasing file and directory admitted")
+	}
 }
 func gitFixture(t *testing.T, dir string, args ...string) string {
 	t.Helper()
