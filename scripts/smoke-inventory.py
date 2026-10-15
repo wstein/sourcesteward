@@ -5,9 +5,9 @@
 Build bin/stw first. Missing backends, sandbox enforcement, or cases fail acceptance.
 Every CLI observation verifies byte/mode-identical target files, indexes and jj stores.
 """
+import argparse
 import importlib.util
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -20,14 +20,24 @@ helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
 
 
-def acceptance(binary=BINARY):
+CASE_IDS = {
+    'M1': tuple('M1.' + name for name in ('clean', 'dirty-false', 'ref-absent', 'ref-present', 'ancestor-false', 'ancestor-true', 'human', 'error')),
+    'M2': tuple('M2.' + name for name in ('files-workspaces', 'dirty-true', 'literal-filter', 'denied-filters')),
+    'M3': tuple('M3.' + layout + '.' + name for layout in ('standalone', 'colocated') for name in ('ref-absent', 'ref-present', 'ancestor-false', 'ancestor-true')),
+    'M4': tuple('M4.' + layout + '.' + name for layout in ('standalone', 'colocated') for name in ('stored', 'literal-stored', 'disk-unknown', 'clean-unknown', 'staging-unsupported', 'workspaces', 'secondary', 'missing')),
+}
+
+
+def acceptance(binary=BINARY, milestone=None):
+    if milestone is not None and milestone not in CASE_IDS:
+        raise ValueError('Unknown inventory milestone: ' + milestone)
     for backend in ('git', 'jj'):
         if shutil.which(backend) is None:
             raise RuntimeError('Mandatory inventory backend missing: ' + backend)
     if not binary.is_file():
         raise RuntimeError('Build bin/stw before inventory acceptance')
     helpers.check_sandbox()
-    cases = 0
+    completed = set()
     with tempfile.TemporaryDirectory(prefix='stw-inventory-conformance-') as directory:
         root = Path(directory).resolve()
         home = root / 'home'
@@ -41,24 +51,28 @@ def acceptance(binary=BINARY):
             assert result.returncode == 0, ('Fixture setup failed', tool, args, result.stderr)
             return result.stdout.decode().strip()
 
-        def observe(path, args=(), status='ok', predicate=None, value=None, human=False):
-            nonlocal cases
+        def observe(case_id, path, args=(), status='ok', predicate=None, value=None, human=False):
+            group = case_id.split('.')[0]
+            assert case_id in CASE_IDS[group], ('Undeclared acceptance case', case_id)
+            if milestone is not None and group != milestone:
+                return None
+            assert case_id not in completed, ('Repeated acceptance case', case_id)
             before = helpers.snapshot(root)
             result = subprocess.run([str(binary), 'inventory', str(path), *args,
                                      *([] if human else ['--json'])], cwd=root, env=env,
                                     capture_output=True, timeout=20)
-            assert helpers.snapshot(root) == before, ('Inventory changed fixture state', args)
+            assert helpers.snapshot(root) == before, ('Inventory changed fixture state', case_id, args)
             allowed_statuses = (status,) if isinstance(status, str) else status
             try:
                 actual_status = status if human else json.loads(result.stdout)['status']
             except (json.JSONDecodeError, KeyError) as error:
-                raise AssertionError(('Missing inventory result', args, result.returncode,
+                raise AssertionError(('Missing inventory result', case_id, args, result.returncode,
                                       result.stdout, result.stderr)) from error
             assert actual_status in allowed_statuses, (args, result.stdout)
             expected = 0 if actual_status == 'ok' else 1
             assert result.returncode == expected, (args, result.returncode, result.stdout, result.stderr)
             assert result.stderr.count(b'\n') == expected, result.stderr
-            cases += 1
+            completed.add(case_id)
             if human:
                 assert result.stdout.strip(), 'Missing human result'
                 return None
@@ -83,16 +97,16 @@ def acceptance(binary=BINARY):
         setup('git', ['add', '.'], repo)
         setup('git', ['commit', '-qm', 'initial'], repo)
         initial = setup('git', ['rev-parse', 'HEAD'], repo)
-        observe(repo, ['--query', 'clean'], predicate='clean', value='true')
-        observe(repo, ['--query', 'dirty'], predicate='dirty', value='false')
-        observe(repo, ['--query', 'ref-exists', '--ref', 'refs/heads/absent'], predicate='ref-exists', value='false')
-        observe(repo, ['--query', 'ref-exists', '--ref', 'refs/heads/custom-trunk'], predicate='ref-exists', value='true')
+        observe('M1.clean', repo, ['--query', 'clean'], predicate='clean', value='true')
+        observe('M1.dirty-false', repo, ['--query', 'dirty'], predicate='dirty', value='false')
+        observe('M1.ref-absent', repo, ['--query', 'ref-exists', '--ref', 'refs/heads/absent'], predicate='ref-exists', value='false')
+        observe('M1.ref-present', repo, ['--query', 'ref-exists', '--ref', 'refs/heads/custom-trunk'], predicate='ref-exists', value='true')
         (repo / 'tracked.txt').write_text('staged\n')
         setup('git', ['add', 'tracked.txt'], repo)
         setup('git', ['commit', '-qm', 'second'], repo)
         second = setup('git', ['rev-parse', 'HEAD'], repo)
-        observe(repo, ['--query', 'ancestor', '--from', second, '--to', initial], predicate='ancestor', value='false')
-        observe(repo, ['--query', 'ancestor', '--from', initial, '--to', second], predicate='ancestor', value='true')
+        observe('M1.ancestor-false', repo, ['--query', 'ancestor', '--from', second, '--to', initial], predicate='ancestor', value='false')
+        observe('M1.ancestor-true', repo, ['--query', 'ancestor', '--from', initial, '--to', second], predicate='ancestor', value='true')
         linked = root / 'linked'
         setup('git', ['worktree', 'add', '-q', '-b', 'task', str(linked)], repo)
         absent = root / 'missing'
@@ -112,62 +126,73 @@ def acceptance(binary=BINARY):
         for name in unusual:
             (repo / name).write_text('untracked\n')
         (repo / 'ignored.txt').write_text('ignored\n')
-        output = observe(repo, ['--scope', 'staged', '--scope', 'disk', '--scope', 'untracked', '--scope', 'ignored'], status=('ok', 'partial'))
-        paths = {item['path'] for item in output['files']}
-        assert {*unusual, 'tracked.txt', 'ignored.txt'} <= paths, output
-        assert any(item['registration'] == 'missing' for item in output['workspaces']), output
-        assert any(item['path'] == str(linked) for item in output['workspaces']), output
+        output = observe('M2.files-workspaces', repo, ['--scope', 'staged', '--scope', 'disk', '--scope', 'untracked', '--scope', 'ignored'], status=('ok', 'partial'))
+        if output is not None:
+            paths = {item['path'] for item in output['files']}
+            assert {*unusual, 'tracked.txt', 'ignored.txt'} <= paths, output
+            assert any(item['registration'] == 'missing' for item in output['workspaces']), output
+            assert any(item['path'] == str(linked) for item in output['workspaces']), output
         assert not sentinel.exists(), 'Repository-controlled helper executed'
-        observe(repo, ['--query', 'dirty'], predicate='dirty', value='true')
-        filtered = observe(repo, ['--scope', 'untracked', '--path', 'literal[*].txt'], status=('ok', 'partial'))
-        assert [item['path'] for item in filtered['files']] == ['literal[*].txt'], filtered
-        observe(repo, ['--query', 'ref-exists', '--ref', 'refs/heads/custom-trunk'], predicate='ref-exists', value='true', human=True)
-        observe(root / 'not-a-repo', status='error')
+        observe('M2.dirty-true', repo, ['--query', 'dirty'], predicate='dirty', value='true')
+        filtered = observe('M2.literal-filter', repo, ['--scope', 'untracked', '--path', 'literal[*].txt'], status=('ok', 'partial'))
+        if filtered is not None:
+            assert [item['path'] for item in filtered['files']] == ['literal[*].txt'], filtered
+        observe('M1.human', repo, ['--query', 'ref-exists', '--ref', 'refs/heads/custom-trunk'], predicate='ref-exists', value='true', human=True)
+        observe('M1.error', root / 'not-a-repo', status='error')
         setup('git', ['config', 'filter.hostile.clean', str(helper)], repo)
         setup('git', ['config', 'filter.hostile.process', str(helper)], repo)
         (repo / '.gitattributes').write_text('tracked.txt filter=hostile\n')
-        observe(repo, ['--query', 'clean', '--scope', 'disk'], status='partial', predicate='clean', value='unknown')
+        observe('M2.denied-filters', repo, ['--query', 'clean', '--scope', 'disk'], status='partial', predicate='clean', value='unknown')
         assert not sentinel.exists(), 'Repository-controlled clean/process filter executed'
 
         def jj(args, cwd=root):
             return setup('jj', ['--no-pager', '--color=never', *args], cwd)
 
         for colocated in (False, True):
+            layout = 'colocated' if colocated else 'standalone'
             jjrepo = root / ('jj-colocated' if colocated else 'jj-standalone')
             jj(['git', 'init', '--colocate' if colocated else '--no-colocate', str(jjrepo)])
-            observe(jjrepo, ['--query', 'ref-exists', '--ref', 'absent'], predicate='ref-exists', value='false')
+            observe(f'M3.{layout}.ref-absent', jjrepo, ['--query', 'ref-exists', '--ref', 'absent'], predicate='ref-exists', value='false')
             jj(['bookmark', 'create', 'task', '-r', '@'], jjrepo)
-            observe(jjrepo, ['--query', 'ref-exists', '--ref', 'task'], predicate='ref-exists', value='true')
+            observe(f'M3.{layout}.ref-present', jjrepo, ['--query', 'ref-exists', '--ref', 'task'], predicate='ref-exists', value='true')
             parent = jj(['log', '--no-graph', '-r', '@', '-T', 'commit_id'], jjrepo)
             jj(['new'], jjrepo)
             child = jj(['log', '--no-graph', '-r', '@', '-T', 'commit_id'], jjrepo)
-            observe(jjrepo, ['--query', 'ancestor', '--from', child, '--to', parent], predicate='ancestor', value='false')
-            observe(jjrepo, ['--query', 'ancestor', '--from', parent, '--to', child], predicate='ancestor', value='true')
-            observe(jjrepo, ['--scope', 'stored'])
+            observe(f'M3.{layout}.ancestor-false', jjrepo, ['--query', 'ancestor', '--from', child, '--to', parent], predicate='ancestor', value='false')
+            observe(f'M3.{layout}.ancestor-true', jjrepo, ['--query', 'ancestor', '--from', parent, '--to', child], predicate='ancestor', value='true')
+            observe(f'M4.{layout}.stored', jjrepo, ['--scope', 'stored'])
             stored_name = 'literal[*]\nfile.txt'
             (jjrepo / stored_name).write_text('native stored change\n')
             jj(['describe', '-m', 'Stored filename fixture'], jjrepo)
-            stored = observe(jjrepo, ['--scope', 'stored', '--path', stored_name])
-            assert [item['path'] for item in stored['files']] == [stored_name], stored
+            stored = observe(f'M4.{layout}.literal-stored', jjrepo, ['--scope', 'stored', '--path', stored_name])
+            if stored is not None:
+                assert [item['path'] for item in stored['files']] == [stored_name], stored
             (jjrepo / 'unsnapshotted.txt').write_text('unsnapshotted disk edits\n')
-            output = observe(jjrepo, status='partial')
-            assert output['backend'] == 'jj', output
-            assert output['boundary']['limitations'], output
-            observe(jjrepo, ['--query', 'clean'], status='partial', predicate='clean', value='unknown')
-            observe(jjrepo, ['--scope', 'staged'], status='partial')
+            output = observe(f'M4.{layout}.disk-unknown', jjrepo, status='partial')
+            if output is not None:
+                assert output['backend'] == 'jj', output
+                assert output['boundary']['limitations'], output
+            observe(f'M4.{layout}.clean-unknown', jjrepo, ['--query', 'clean'], status='partial', predicate='clean', value='unknown')
+            observe(f'M4.{layout}.staging-unsupported', jjrepo, ['--scope', 'staged'], status='partial')
             secondary = root / ('colocated-secondary' if colocated else 'standalone-secondary')
             jj(['workspace', 'add', '--name', 'secondary', str(secondary)], jjrepo)
-            output = observe(jjrepo, ['--scope', 'stored'])
-            assert {item['name'] for item in output['workspaces']} >= {'default', 'secondary'}, output
-            observe(secondary, ['--scope', 'stored'])
+            output = observe(f'M4.{layout}.workspaces', jjrepo, ['--scope', 'stored'])
+            if output is not None:
+                assert {item['name'] for item in output['workspaces']} >= {'default', 'secondary'}, output
+            observe(f'M4.{layout}.secondary', secondary, ['--scope', 'stored'])
             shutil.rmtree(secondary)
             # Native jj registration records may lack paths; absence must never trigger repair.
-            output = observe(jjrepo, ['--scope', 'stored'])
-            assert 'secondary' in {item['name'] for item in output['workspaces']}, output
-    if cases != 36:
-        raise AssertionError('Mandatory inventory case count differs: ' + str(cases))
-    print(str(cases) + ' native inventory CLI cases passed with byte/mode-identical target state')
+            output = observe(f'M4.{layout}.missing', jjrepo, ['--scope', 'stored'])
+            if output is not None:
+                assert 'secondary' in {item['name'] for item in output['workspaces']}, output
+    selected = (milestone,) if milestone else tuple(CASE_IDS)
+    expected = {case_id for group in selected for case_id in CASE_IDS[group]}
+    assert completed == expected, ('Mandatory inventory cases differ', sorted(expected - completed), sorted(completed - expected))
+    counts = ', '.join(group + '=' + str(len(CASE_IDS[group])) for group in selected)
+    print(str(len(completed)) + ' native inventory CLI cases passed (' + counts + ') with byte/mode-identical target state')
 
 
 if __name__ == '__main__':
-    acceptance()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--milestone', choices=tuple(CASE_IDS), help='Run a bounded milestone; default runs all mandatory cases')
+    acceptance(milestone=parser.parse_args().milestone)
