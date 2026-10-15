@@ -21,7 +21,7 @@
     },
     {
       "id": "004-site-themes",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/004-site-themes/spec.md",
       "evidence": "../specs/004-site-themes/verification.md"
     },

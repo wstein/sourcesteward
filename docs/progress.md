@@ -1,10 +1,13 @@
 # Progress and handoff
 
 ## Current milestone
-004-site-themes is implemented on its topic worktree: a prominent README site link and
-a native system/light/dark Pages selector, with narrow local-script authorization. Source
-checks pass (10 Python and 12 Node cases); browser acceptance, independent source review
-and PR creation are pending. See [theme evidence](../specs/004-site-themes/verification.md).
+004-site-themes passes local source/UI acceptance on its topic worktree: a prominent
+README site link and native system/light/dark Pages selector, with narrow local-script
+authorization. Source checks pass (10 Python and 12 Node cases). Both palettes pass browser
+checks at 375/1280 pixels, with additional tablet checks; keyboard selection, reload and
+system reset work. No-script system-light styling was inspected separately. Real OS dark
+preference/change was not exercised. Independent exact-revision review and PR/CI handoff
+remain coordinator-owned; no publication is claimed. See [theme evidence](../specs/004-site-themes/verification.md).
 
 003-agent-hints is implemented and locally verified on codex/003-agent-hints. Root help
 links to task-specific agent guidance and llms.txt; version/JSON and error contracts are
