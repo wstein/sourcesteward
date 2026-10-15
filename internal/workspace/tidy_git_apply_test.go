@@ -188,3 +188,26 @@ func TestGitTidyRefusesHardlinkedMutableReflogBeforeRecovery(t *testing.T) {
 		t.Fatal("outside hardlink changed")
 	}
 }
+
+func TestGitTidyDetectsUnrelatedSymbolicRefRetargetAtSameOID(t *testing.T) {
+	d, p, c := gitTidyApplyFixture(t)
+	gitFixture(t, d, "update-ref", "refs/remotes/origin/one", c.CommitID)
+	gitFixture(t, d, "update-ref", "refs/remotes/origin/two", c.CommitID)
+	gitFixture(t, d, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/one")
+	o, e := (gitTidyAdapter{}).Observe(context.Background(), d, "HEAD")
+	if e != nil {
+		t.Fatal(e)
+	}
+	p.Expected = o.Expected
+	r, expected, _, e := (gitTidyAdapter{}).PrepareRecovery(context.Background(), p, c)
+	if e != nil {
+		t.Fatal(e)
+	}
+	gitFixture(t, d, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/two")
+	if out, e := (gitTidyAdapter{}).Delete(context.Background(), p, c, r, expected); e == nil || out.Attempted {
+		t.Fatalf("unrelated sameOID symbolic retarget ignored: %+v %v", out, e)
+	}
+	if got := gitFixture(t, d, "rev-parse", c.Name); got != c.CommitID {
+		t.Fatal("target deleted using stale full reference evidence")
+	}
+}
