@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,34 @@ import (
 	"testing"
 	"unicode/utf8"
 )
+
+func TestGitFixtureDoesNotLaunchAutomaticMaintenance(t *testing.T) {
+	trace := filepath.Join(t.TempDir(), "fixture-trace.json")
+	t.Setenv("GIT_TRACE2_EVENT", trace)
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	b, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var event struct {
+			Event string   `json:"event"`
+			Argv  []string `json:"argv"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("invalid Git trace event: %v", err)
+		}
+		if event.Event != "child_start" {
+			continue
+		}
+		for i, arg := range event.Argv {
+			if arg == "maintenance" && i+1 < len(event.Argv) && event.Argv[i+1] == "run" {
+				t.Fatal("fixture commit spawned automatic maintenance, which can outlive setup and invalidate no-write snapshots")
+			}
+		}
+	}
+}
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
