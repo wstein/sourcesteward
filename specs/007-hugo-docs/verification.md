@@ -27,8 +27,7 @@ local runtime reports v0.168.0-e27a6760c5547237f87d353aebe0580feadb20f4.
 ## Independent review and remaining gates
 Independent reviewer inspected f801c06dfccfbfb88168be534b41a508c4907798 and independently
 ran Go/Python/build/HTML checks. One P2 contradiction in old development Website text was
-fixed; reviewer confirmed its resolution. Final integrated-SHA review remains required after the completed003/005/006 dependency integration. Browser QA at
-375/720/768/1280 widths and light/dark/theme keyboard interaction is coordinator-owned.
+fixed; reviewer confirmed its resolution. Final integrated-SHA review and coordinator browser QA are recorded below.
 No source push, PR, merge or publication is claimed by this feature author.
 
 ## Reviewed dependency integration
@@ -45,4 +44,26 @@ validation and runtime-validator exclusion. Public schema source root rejects al
 files/directories and symlinks, not only children of v1. New negative tests for unexpected
 schema-root files and mandatory agent guide/llms source failed before implementation.
 Final generated HTML/schema-byte evidence, browser QA and exact-revision reviewer clearance
-will be recorded after the committed integrated candidate is built. No publication is claimed.
+are recorded below. No publication is claimed.
+
+
+## Final local acceptance (e563a6d376ea9aa4b24455db09f27c50dae26d98)
+Current user-updated main/theme ancestry was merged without rewriting published history.
+The merge changed only three progress-file blank lines relative to reviewed `4e8db2a`.
+Independent reviewer cleared exact `e563a6d` and independently compared full artifact trees:
+all HTML/assets/schema bytes match the `4e8db2a` artifact; only revision.txt changed. Twelve HTML
+pages pass the generated-site validator, and both schemas and llms.txt preserve source bytes.
+
+Coordinator browser QA passed landing, documentation index, JSON contracts and inspect
+reference navigation under /sourcesteward/ in light/dark appearance. Desktop 1280×800,
+mobile 375×812 and intermediate 720/768 widths show no document overflow. Narrow JSON
+contract tables/code remain contained. Shared theme choice survives document navigation;
+keyboard/focus, reload and System reset retain the unchanged feature 004 acceptance evidence.
+The coordinator also fetched both schema URLs over local HTTP: status 200, application/json,
+exact source bytes, and revision.txt matched e563a6d. These are local artifact checks, not
+claims that the new routes are already deployed on public Pages.
+
+Postimplementation analysis maps all 10 functional requirements to implementation/tests and
+records no critical/high gaps. Its one LOW stale optional-llms phrase in data-model.md is
+corrected to match the mandatory production gate. T012 is complete. Coordinator PR/CI
+handoff is pending; no main merge, remote push or publication was performed by this author.

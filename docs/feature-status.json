@@ -33,13 +33,13 @@
     },
     {
       "id": "006-json-schemas",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/006-json-schemas/spec.md",
       "evidence": "json-schema-verification.md"
     },
     {
       "id": "007-hugo-docs",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/007-hugo-docs/spec.md",
       "evidence": "../specs/007-hugo-docs/verification.md"
     },
