@@ -8,3 +8,21 @@
 @media(max-width:900px){.hero{gap:30px}.terminal-label{display:none}.actions{gap:10px}.backend-inner{gap:16px}.invitation{flex-wrap:wrap}.invitation .button{margin-left:86px}}
 @media(max-width:700px){.wrap{width:calc(100% - 40px)}.header{padding-block:20px;align-items:flex-start;gap:16px;flex-wrap:wrap}.wordmark{font-size:25px}.header nav{gap:22px;font-size:12px;margin-left:0}.hero{grid-template-columns:minmax(0,1fr);padding-block:42px 48px;gap:34px}h1{font-size:60px;letter-spacing:-2.5px}.lede{font-size:19px}.desktop{display:none}.support{font-size:14px}.terminal{transform:none}.terminal-body{padding:22px 18px;font-size:12px}.terminal-bar{padding-inline:15px}.backend-inner{grid-template-columns:1fr 1fr;row-gap:25px;padding-block:25px}.backend-inner strong{font-size:20px}.backend-inner>p{align-self:center}.section{padding-top:52px}h2{font-size:30px}.section-intro{font-size:15px}.principles{grid-template-columns:1fr;gap:26px;margin-top:28px}.principles p{margin-top:9px}.section-heading{align-items:start;flex-direction:column;gap:15px}.roadmap-list article{gap:15px;flex-wrap:wrap}.roadmap-list article>div{flex:1;min-width:0}.roadmap-list .pill{font-size:8px;padding-inline:6px}.roadmap-list h3{font-size:18px}.roadmap-list p{font-size:12px}.invitation{gap:16px;margin-top:48px;padding:23px}.invitation>img{width:46px;height:46px}.invitation>div{flex:1;min-width:0}.invitation h2{font-size:22px}.invitation .button{margin-left:0;width:100%}.footer{flex-direction:column;padding-block:28px;gap:12px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+/* Generated public documentation shares the landing palette and local fonts. */
+.docs-page { max-width: 1000px; padding-top: 56px; padding-bottom: 80px; min-height: 65vh; }
+.docs-page h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); overflow-wrap: anywhere; }
+.docs-content { max-width: 78ch; line-height: 1.75; overflow-wrap: anywhere; }
+.docs-content p { margin-block: 1rem; }
+.docs-content li { margin-block: .35rem; }
+.docs-content h2 { margin-top: 2.2rem; font-size: 1.8rem; }
+.docs-content h3 { margin-top: 1.8rem; }
+.docs-content a { text-decoration: underline; text-underline-offset: .2em; }
+.docs-content pre { overflow-x: auto; max-width: 100%; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; font-size: .9rem; }
+.docs-content code { font-size: .92em; }
+.docs-content table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; }
+.docs-content th, .docs-content td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+.docs-index { padding-left: 1.5rem; }
+.docs-index li { margin: .8rem 0; }
+@media (max-width: 600px) { .docs-page { padding-top: 32px; padding-bottom: 48px; } .docs-content pre { padding: 12px; } }
+
+@media (max-width: 1100px) { .header { flex-wrap: wrap; } .header nav { flex-wrap: wrap; gap: 18px; } }
