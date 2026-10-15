@@ -1,7 +1,8 @@
 # JSON schema acceptance
 
 Feature006 is implemented locally on codex/006-json-schemas, stacked on inspection005.
-Independent final review and remote/Pages publication remain pending.
+Independent source review cleared revision98f65dff5dc8be465a2d89e728c0e56fcacab3ce with no
+actionable findings. Remote PR/Pages publication remains pending.
 
 ## Measured evidence
 The initial schema tests failed because the schema files were absent. After implementation,
@@ -16,7 +17,9 @@ inspection dependency 1d8d7c513fa78a08cbb097701e4fe90e7ac23411. `make check` pas
 all Go tests and vet, module verification, ten Python tests, 61 authored-document checks,
 architecture checks and whitespace. `go test -race ./...` passed. Contract fixtures execute
 a freshly built real binary in temporary repositories; no backend code changed in006.
-The following evidence-only update records these checks; final exact-revision review is pending.
+The evidence-only update records these checks. Independent review at98f65df additionally
+ran all contract tests (14 JSON output fixtures, one usage case and18 negative invariants),
+ten Python tests and whitespace checks; all passed.
 
 Real CLI fixtures cover version; attached/detached/unborn HEAD; ordinary/bare/linked Git;
 SHA1/SHA256; Unicode, space and newline paths; invalid UTF8 input; missing/non-repository

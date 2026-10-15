@@ -33,7 +33,7 @@
     },
     {
       "id": "006-json-schemas",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/006-json-schemas/spec.md",
       "evidence": "json-schema-verification.md"
     },
