@@ -151,3 +151,27 @@ func TestGitTidyProtectsExplicitBaseCommitAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestGitTidyObservesUnmatchedDetachedWorkspaceRoots(t *testing.T) {
+	d := fixtureGit(t)
+	gitFixture(t, d, "commit", "--allow-empty", "-qm", "unmatched detached target")
+	target := gitFixture(t, d, "rev-parse", "HEAD")
+	branch := gitFixture(t, d, "symbolic-ref", "--short", "HEAD")
+	gitFixture(t, d, "checkout", "--detach", "HEAD~1")
+	gitFixture(t, d, "branch", "-D", branch)
+	linked := filepath.Join(gitTempDir(t), "unmatched-linked")
+	gitFixture(t, d, "worktree", "add", "--detach", linked, target)
+	o, e := (gitTidyAdapter{}).Observe(context.Background(), d, "HEAD")
+	if e != nil {
+		t.Fatal(e)
+	}
+	found := false
+	for _, path := range o.WorkspacePaths {
+		if path == linked {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("all-registration evidence omitted unmatched detached workspace %s: %+v", linked, o)
+	}
+}
