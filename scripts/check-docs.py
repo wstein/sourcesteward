@@ -9,14 +9,18 @@ from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
+RAW_MAIN = 'https://raw.githubusercontent.com/wstein/sourcesteward/main/'
 
 
 def local_target(root, source, target):
     url = urlsplit(target)
-    if url.scheme or url.netloc or not url.path:
+    if target.startswith(RAW_MAIN):
+        path = (root / unquote(url.path.removeprefix('/wstein/sourcesteward/main/'))).resolve()
+    elif url.scheme or url.netloc or not url.path:
         return
-    path = (source.parent / unquote(url.path)).resolve()
-    if not path.is_relative_to(root.resolve()) or not path.exists():
+    else:
+        path = (source.parent / unquote(url.path)).resolve()
+    if not path.is_relative_to(root.resolve()) or not path.exists() or (target.startswith(RAW_MAIN) and not path.is_file()):
         raise ValueError(f'{source.relative_to(root)}: broken local link {target}')
 
 
@@ -32,6 +36,9 @@ def check_links(root, source):
     for target in re.findall(r'!?\[[^\]]*\]\(([^\s)]+)\)', text):
         local_target(root, source, target)
     for target in re.findall(r'(?:src|href)="([^"]+)"', text):
+        local_target(root, source, target)
+    # Also validate raw-source URLs in CLI string literals and plain-text indexes.
+    for target in re.findall(re.escape(RAW_MAIN) + r'[^\s<>"\')`]+', text):
         local_target(root, source, target)
 
 
@@ -62,11 +69,13 @@ class Page(HTMLParser):
 
 def check(root):
     authored = list(root.glob('*.md'))
+    authored.append(root / 'llms.txt')
     for folder in ('docs', 'brand', 'specs'):
         authored.extend((root / folder).rglob('*.md'))
     authored.append(root / 'docs/index.html')
     authored.extend((root / 'brand').glob('*.html'))
     for source in authored: check_links(root, source)
+    check_links(root, root / 'internal/cli/root.go')
     page = Page()
     page.feed((root / 'docs/index.html').read_text())
     if not (page.has_main and page.has_lang and page.has_viewport):
