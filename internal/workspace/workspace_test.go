@@ -12,15 +12,25 @@ import (
 )
 
 type fakeAdapter struct {
-	snap    Snapshot
-	creates int
-	fail    bool
-	foreign bool
+	snap      Snapshot
+	creates   int
+	fail      bool
+	foreign   bool
+	onObserve func()
+	onCreate  func(MutationPlan)
 }
 
-func (f *fakeAdapter) Observe(context.Context, string, string) (Snapshot, error) { return f.snap, nil }
+func (f *fakeAdapter) Observe(context.Context, string, string) (Snapshot, error) {
+	if f.onObserve != nil {
+		f.onObserve()
+	}
+	return f.snap, nil
+}
 func (f *fakeAdapter) Create(_ context.Context, p MutationPlan) (NativeWorkspace, error) {
 	f.creates++
+	if f.onCreate != nil {
+		f.onCreate(p)
+	}
 	n := NativeWorkspace{Identity: f.snap.Identity, Complete: true, SourceUnchanged: true, Phase: "materialized", Effects: []string{"registered destination"}, Limitations: []string{}}
 	n.Identity.WorkspaceRoot = p.Destination
 	n.Identity.GitDir = filepath.Join(f.snap.Identity.RepositoryDir, "worktrees", p.TaskID)
@@ -32,7 +42,10 @@ func (f *fakeAdapter) Create(_ context.Context, p MutationPlan) (NativeWorkspace
 	return n, nil
 }
 func (f *fakeAdapter) Verify(_ context.Context, p MutationPlan) (NativeWorkspace, error) {
+	hook := f.onCreate
+	f.onCreate = nil
 	n, _ := f.Create(context.Background(), p)
+	f.onCreate = hook
 	f.creates--
 	n.Complete = true
 	if f.foreign {
@@ -254,5 +267,99 @@ func TestMalformedJournalActionsNeverEscapeIntoResults(t *testing.T) {
 	r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true})
 	if r.Status != "error" || len(r.Actions) != 0 {
 		t.Fatalf("malformed journal action escaped: %#v", r)
+	}
+}
+
+func TestJournalPersistenceFailurePreventsNativeAction(t *testing.T) {
+	c, f, o := fixtureCoordinator(t)
+	r := c.plan(context.Background(), o)
+	ops := filepath.Join(o.StateDir, "operations")
+	f.onObserve = func() {
+		if e := os.Chmod(ops, 0755); e != nil {
+			t.Fatal(e)
+		}
+	}
+	defer os.Chmod(ops, 0700)
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, r.Plan.PlanID, true})
+	if r.Status != "error" || f.creates != 0 {
+		t.Fatalf("native executed without secure durable journal: %#v", r)
+	}
+	if _, e := os.Stat(o.Destination); !os.IsNotExist(e) {
+		t.Fatal("destination reserved before journal persistence")
+	}
+}
+func TestTaskStoreFailureAfterNativePreservesPreparedRecovery(t *testing.T) {
+	c, f, o := fixtureCoordinator(t)
+	r := c.plan(context.Background(), o)
+	id := r.Plan.PlanID
+	tasks := filepath.Join(o.StateDir, "tasks")
+	f.onCreate = func(MutationPlan) {
+		if e := os.Chmod(tasks, 0755); e != nil {
+			t.Fatal(e)
+		}
+	}
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true})
+	if r.Status != "partial" || f.creates != 1 {
+		t.Fatalf("lost partial outcome: %#v", r)
+	}
+	known := false
+	for _, a := range r.Actions {
+		if a.Name == "native-effect" {
+			known = true
+		}
+	}
+	if !known {
+		t.Fatal("known native effect omitted")
+	}
+	if _, e := os.Stat(o.Destination); e != nil {
+		t.Fatal("incomplete destination lost")
+	}
+	if e := os.Chmod(tasks, 0700); e != nil {
+		t.Fatal(e)
+	}
+	f.onCreate = nil
+	s, e := openStore(o.StateDir, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var j journal
+	if e = s.read("operations", id, &j); e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
+	if j.Phase != "prepared" {
+		t.Fatalf("earlier durable recovery lost: %s", j.Phase)
+	}
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true})
+	if r.Status != "partial" || f.creates != 1 {
+		t.Fatal("unproven recovery recreated/adopted native destination")
+	}
+}
+func TestCancellationAfterNativeRetainsPartialEffects(t *testing.T) {
+	c, f, o := fixtureCoordinator(t)
+	r := c.plan(context.Background(), o)
+	id := r.Plan.PlanID
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.onCreate = func(p MutationPlan) {
+		if p.DestinationIdentity == nil {
+			t.Fatal("native started before reservation journal")
+		}
+		cancel()
+	}
+	r = c.apply(ctx, ApplyOptions{o.StateDir, id, true})
+	if r.Status != "partial" || f.creates != 1 {
+		t.Fatalf("cancellation lost completed or partial effects: %#v", r)
+	}
+	if len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "canceled" {
+		t.Fatalf("cancellation not explicit: %#v", r.Diagnostics)
+	}
+	if _, e := os.Stat(o.Destination); e != nil {
+		t.Fatal("cancellation removed destination")
+	}
+	f.onCreate = nil
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true})
+	if r.Status != "partial" || f.creates != 1 {
+		t.Fatal("canceled native action was repeated")
 	}
 }
