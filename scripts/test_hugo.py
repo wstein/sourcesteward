@@ -32,6 +32,7 @@ class HugoTests(unittest.TestCase):
             source.mkdir(parents=True)
             (root / 'schemas/v2').mkdir()
             (root / 'schemas/v2/inspect.schema.json').write_text('{}')
+            (root / 'schemas/v2/tidy.schema.json').write_text('{}')
             raw = b'{"$schema":"https://json-schema.org/draft/2020-12/schema"}\n'
             (source / 'version.schema.json').write_bytes(raw)
             (source / 'inspect.schema.json').write_bytes(raw)
@@ -65,7 +66,7 @@ class HugoTests(unittest.TestCase):
             root = Path(directory)
             (root / 'revision.txt').write_text('a'*40+'\n')
             source_root = root / 'source'
-            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json'),'v2':('inspect.schema.json',)}.items():
+            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json'),'v2':('inspect.schema.json', 'tidy.schema.json')}.items():
                 for name in names:
                     source = source_root / 'schemas' / version / name
                     source.parent.mkdir(parents=True,exist_ok=True)
@@ -115,7 +116,7 @@ class HugoTests(unittest.TestCase):
     def test_all_schema_versions_are_required_and_strict(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json'),'v2':('inspect.schema.json',)}.items():
+            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json'),'v2':('inspect.schema.json', 'tidy.schema.json')}.items():
                 for name in names:
                     path = root / 'schemas' / version / name
                     path.parent.mkdir(parents=True,exist_ok=True)

@@ -176,6 +176,8 @@ class DocumentationTests(unittest.TestCase):
                                  (ROOT / 'schemas/v1' / name).read_bytes())
             self.assertEqual((destination / 'schemas/v2/inspect.schema.json').read_bytes(),
                              (ROOT / 'schemas/v2/inspect.schema.json').read_bytes())
+            self.assertEqual((destination / 'schemas/v2/tidy.schema.json').read_bytes(),
+                             (ROOT / 'schemas/v2/tidy.schema.json').read_bytes())
             shutil.rmtree(destination)
             extra = root / 'schemas/v1/private.json'
             extra.write_text('{}')
