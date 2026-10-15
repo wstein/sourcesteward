@@ -186,6 +186,7 @@ def acceptance(binary=BINARY):
             helper.chmod(0o700)
             if group == 'git':
                 hook = source / '.git/hooks/reference-transaction'
+                hook.parent.mkdir(exist_ok=True)
                 shutil.copy2(helper, hook)
                 observe('helper', status=('refused', 'error'))
                 hook.unlink()
