@@ -98,7 +98,7 @@ command core and contracts; it will not grant additional permissions.
 
 ## Draft specification index
 
-- [009-workspace-inventory: Workspace and Worktree Inventory](../specs/009-workspace-inventory/spec.md) — 10/10.
+- [009-workspace-inventory: Workspace, State and Reference Inventory](../specs/009-workspace-inventory/spec.md) — 10/10.
 - [010-isolated-task-workspaces: Isolated Task Workspaces](../specs/010-isolated-task-workspaces/spec.md) — 10/10.
 - [011-workspace-reference-tidy: Workspace and Reference Tidy](../specs/011-workspace-reference-tidy/spec.md) — 10/10.
 - [012-stack-inspection: Stack Inspection and Diffs](../specs/012-stack-inspection/spec.md) — 9/10.
