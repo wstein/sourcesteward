@@ -1,7 +1,7 @@
 # SourceSteward
 
 > Explainable version-control tools for humans and AI agents. The standalone CLI is
-> `stw`; help/version and bounded native Git/jj identity inspection are implemented.
+> `stw`; help/version, native Git/jj identity inspection and qualified inventory are implemented.
 
 Use this index when your task specifically asks you to debug or investigate a problem
 with SourceSteward. Follow links relevant to that task and respect caller instructions,
@@ -41,3 +41,5 @@ from the installed binary; check its version and help first.
 
 - [Native jj contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/008-jj-inspection/contracts/inspect.md): native identity, schema v2, sandbox and stored-state limits.
 - [Native jj verification](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/008-jj-inspection/verification.md): actual acceptance evidence and pending gates.
+
+- [Inventory guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/inventory.md): scopes, literal paths, three-valued predicates and observation limits.

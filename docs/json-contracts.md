@@ -1,6 +1,6 @@
 # CLI JSON contracts
 
-Use `stw version --json` or `stw inspect [PATH] --json` for structured results.
+Use `stw version --json`, `stw inspect [PATH] --json` or `stw inventory [PATH] --json` for structured results.
 `schema_version` identifies the contract independently of the program version.
 
 | Command | Authoritative schema | Stable publication URL |
@@ -93,3 +93,16 @@ standard library has no JSON Schema engine; maintaining a custom engine would ob
 contract under test. The runtime CLI does not import the validator; tests check its dependency
 graph. Downloading pinned Go modules during initial setup is separate from offline schema
 validation after dependencies are cached.
+
+## Inventory schema v1
+
+[Inventory schema](../schemas/v1/inventory.schema.json) has stable publication URL
+[Inventory v1](https://wstein.github.io/sourcesteward/schemas/v1/inventory.schema.json).
+Its `command` discriminator is `inventory`; do not confuse its independent schema v1
+with inspect schema v1/v2. The envelope embeds the selected existing inspection identity
+and typed workspace/reference/base/file observations, completion limits and an optional
+true/false/unknown query. Known false is success (exit 0); required unknown evidence is
+partial (exit 1), while operational failure is error (exit 1). Invalid combinations are
+rejected by offline fixtures. See [inventory](inventory.md) and its
+[normative contract](../specs/009-workspace-inventory/contracts/inventory.md).
+This source change stages the schema for Pages; it does not prove live deployment.
