@@ -127,6 +127,13 @@ def acceptance(binary=BINARY):
             jjrepo = root / ('jj-colocated' if colocated else 'jj-standalone')
             jj(['git', 'init', '--colocate' if colocated else '--no-colocate', str(jjrepo)])
             observe(jjrepo, ['--query', 'ref-exists', '--ref', 'absent'], predicate='ref-exists', value='false')
+            jj(['bookmark', 'create', 'task', '-r', '@'], jjrepo)
+            observe(jjrepo, ['--query', 'ref-exists', '--ref', 'task'], predicate='ref-exists', value='true')
+            parent = jj(['log', '--no-graph', '-r', '@', '-T', 'commit_id'], jjrepo)
+            jj(['new'], jjrepo)
+            child = jj(['log', '--no-graph', '-r', '@', '-T', 'commit_id'], jjrepo)
+            observe(jjrepo, ['--query', 'ancestor', '--from', child, '--to', parent], predicate='ancestor', value='false')
+            observe(jjrepo, ['--query', 'ancestor', '--from', parent, '--to', child], predicate='ancestor', value='true')
             observe(jjrepo, ['--scope', 'stored'])
             (jjrepo / 'unsnapshotted.txt').write_text('unsnapshotted disk edits\n')
             output = observe(jjrepo, status='partial')
@@ -143,7 +150,7 @@ def acceptance(binary=BINARY):
             # Native jj registration records may lack paths; absence must never trigger repair.
             output = observe(jjrepo, ['--scope', 'stored'])
             assert 'secondary' in {item['name'] for item in output['workspaces']}, output
-    if cases != 27:
+    if cases != 33:
         raise AssertionError('Mandatory inventory case count differs: ' + str(cases))
     print(str(cases) + ' native inventory CLI cases passed with byte/mode-identical target state')
 
