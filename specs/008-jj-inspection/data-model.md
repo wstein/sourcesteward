@@ -10,4 +10,4 @@ Existing Git/version schema1 result fields and serialization remain unchanged. S
 
 Evidence retains existing kind/location semantics and deterministic ordering. Operational diagnostic additions: jj-unavailable, jj-version-unsupported, jj-sandbox-unavailable, jj-failed, jj-timeout, jj-output-limit, changed-repository, invalid-metadata, metadata-unreadable, canceled. Diagnostics contain fixed actionable descriptions without raw stderr/config/content. Missing tools after recognized jj ownership remain backend jj/schema2 failures.
 
-There are no state transitions or writes. All results are observations. Invalid UTF-8 cannot be lossily serialized as identity; terminate with a structured error where representable.
+There are no inspected-target state transitions or writes. Private outside-target temporary isolation/probe files may be created and removed as disclosed in the CLI contract. All results are observations. Invalid UTF-8 cannot be lossily serialized as identity; terminate with a structured error where representable.
