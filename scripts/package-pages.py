@@ -17,9 +17,26 @@ def package(root, destination, revision):
     for path in assets.rglob('*'):
         if path.is_symlink() or (path.is_file() and path.suffix not in ('.svg', '.png', '.ico', '.css', '.ttf', '.woff2', '.txt') and path != assets / 'theme.js'):
             raise ValueError('Unexpected or linked site asset: ' + str(path))
+    schemas = root / 'schemas'
+    version = schemas / 'v1'
+    schema_names = ('version.schema.json', 'inspect.schema.json')
+    if schemas.is_symlink() or version.is_symlink() or not schemas.is_dir() or not version.is_dir():
+        raise ValueError('Regular versioned schema directory required')
+    expected = {'v1'} | {'v1/' + name for name in schema_names}
+    actual = set()
+    for path in schemas.rglob('*'):
+        relative = path.relative_to(schemas).as_posix()
+        if path.is_symlink() or relative not in expected or (relative != 'v1' and not path.is_file()):
+            raise ValueError('Unexpected or linked schema source: ' + str(path))
+        actual.add(relative)
+    if actual != expected:
+        raise ValueError('Both schema 1 contracts are required')
     destination.mkdir(parents=True)
     shutil.copyfile(index, destination / 'index.html')
     shutil.copytree(assets, destination / 'assets')
+    (destination / 'schemas/v1').mkdir(parents=True)
+    for name in schema_names:
+        shutil.copyfile(version / name, destination / 'schemas/v1' / name)
     (destination / 'revision.txt').write_text(revision + '\n')
     (destination / '.nojekyll').touch()
 
