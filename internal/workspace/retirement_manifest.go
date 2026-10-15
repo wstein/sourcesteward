@@ -111,8 +111,10 @@ func observeRetirementManifest(ctx context.Context, path string, a retirementMan
 	return m, nil
 }
 
-// Each directory is opened separately after a no-follow identity check. All
-// traversal stays beneath the pinned root, including during concurrent renames.
+// Each directory is opened separately after a no-follow identity check, anchoring
+// traversal to admitted directory objects. Paths are rechecked during removal,
+// but external renames can move an already-open directory outside the root.
+// These sampled checks cannot atomically exclude same-user rename or ABA races.
 func walkRetirementManifest(ctx context.Context, root *os.Root) (RetirementManifest, error) {
 	m := RetirementManifest{Entries: []RetirementEntry{}}
 	aliases := map[string]string{}
