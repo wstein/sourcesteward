@@ -123,7 +123,10 @@ func TestRealGitWorkspaceLifecycleSchema(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	root := t.TempDir()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	source := filepath.Join(root, "source")
 	state := filepath.Join(root, "state")
 	dest := filepath.Join(root, "task")
@@ -182,7 +185,10 @@ func TestRealJJWorkspaceLifecycleSchema(t *testing.T) {
 	s := schema(t, "workspace")
 	for _, colocate := range []bool{false, true} {
 		t.Run(fmt.Sprintf("colocated-%t", colocate), func(t *testing.T) {
-			root := t.TempDir()
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			source := filepath.Join(root, "source")
 			state := filepath.Join(root, "state")
 			dest := filepath.Join(root, "task")
