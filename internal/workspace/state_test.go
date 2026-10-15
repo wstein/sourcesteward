@@ -138,3 +138,21 @@ func TestStoreRejectsRecordDirectoryReplacement(t *testing.T) {
 		t.Fatal("wrote after record directory replacement")
 	}
 }
+
+func TestStoreRejectsLockPathReplacement(t *testing.T) {
+	p := privateDir(t)
+	s, e := openStore(p, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	if e = os.Rename(filepath.Join(p, "lock"), filepath.Join(p, "old-lock")); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(p, "lock"), nil, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.write("plans", "a", map[string]string{"x": "y"}, true); e == nil {
+		t.Fatal("wrote after lock inode replacement")
+	}
+}
