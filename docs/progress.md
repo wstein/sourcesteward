@@ -107,3 +107,9 @@ or independent acceptance is claimed. Planning/tasks/analysis remain pending.
 Stack Inspection and Diffs: draft scenarios, requirements and author quality checks updated.
 Documentation links and whitespace checks passed before PR handoff. No runtime capability
 or independent acceptance is claimed. Planning/tasks/analysis remain pending.
+
+### 013-checkpoint-resume — Toolbelt use-case specification update
+
+Checkpoint, Resume and Selective Undo: draft scenarios, requirements and author quality checks updated.
+Documentation links and whitespace checks passed before PR handoff. No runtime capability
+or independent acceptance is claimed. Planning/tasks/analysis remain pending.
