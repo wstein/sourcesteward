@@ -1,6 +1,12 @@
 # Progress and handoff
 
 ## Current milestone
+006-json-schemas is implemented on codex/006-json-schemas, stacked on inspection005.
+Version and inspection results have JSON Schema2020-12 contracts, real-output validation,
+negative invariant fixtures and verbatim static publication. Source checks and race tests
+pass on the final005 source revision; independent final review and PR publication remain
+pending. See [JSON acceptance](json-schema-verification.md).
+
 005-repository-inspection is implemented and independently verified on codex/005-repository-inspection.
 Identity inspection and conservative managed-backend refusal are bounded by the reviewed
 contract. Source checks, race tests and 10 process cases pass. Independent review cleared source
@@ -47,6 +53,6 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 documentation-only evidence commit will go through the same CI/Pages gate.
 
 ## Next bounded action
-Review bounded identity inspection and its evidence; publish only after independent review.
+Review inspection and schema contracts at the final integrated revision; publish only after independent review. Hugo documentation generation preserves existing branding and versioned schema URLs in feature007.
 Broader status and native backend adapters require separate specifications.
 Cleanup, mutation/recovery, repository migration and MCP remain outside foundation scope.
