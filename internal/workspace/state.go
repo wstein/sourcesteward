@@ -113,6 +113,13 @@ func (s *store) validate() error {
 	if e != nil || st.Mode().Perm() != 0700 || !privateOwner(st) {
 		return failure("unsafe-state", "State directory security changed.")
 	}
+	if s.lock != nil {
+		before, e := s.root.Lstat("lock")
+		after, a := s.lock.Stat()
+		if e != nil || a != nil || !regularPrivate(before) || !os.SameFile(before, after) {
+			return failure("changed-state", "State lock path or identity changed.")
+		}
+	}
 	for name, dir := range s.dirs {
 		before, e := s.root.Lstat(name)
 		after, a := dir.Stat(".")
