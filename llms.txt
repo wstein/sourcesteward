@@ -37,3 +37,4 @@ from the installed binary; check its version and help first.
 
 - [Inspection operation](https://raw.githubusercontent.com/wstein/sourcesteward/main/internal/inspection/inspection.go): bounded identity and detection.
 - [Inspection contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/005-repository-inspection/contracts/inspect.md): output/effects/error scope.
+- [CLI JSON contracts](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/json-contracts.md): structured results and versioned schemas.
