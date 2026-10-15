@@ -85,3 +85,24 @@ func TestGitWorkspaceUsesBaseAttributesNotSourceDisk(t *testing.T) {
 		t.Fatal("source untracked attributes changed")
 	}
 }
+
+func TestGitWorkspaceRefusesFilterDriversNamedLikeAttributeSentinels(t *testing.T) {
+	for _, driver := range []string{"unspecified", "unset", "set"} {
+		t.Run(driver, func(t *testing.T) {
+			d := fixtureGit(t)
+			if err := os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("file filter="+driver+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			gitFixture(t, d, "add", ".gitattributes")
+			gitFixture(t, d, "commit", "-qm", "literal sentinel-named filter")
+			sentinel := filepath.Join(gitTempDir(t), "helper-called")
+			gitFixture(t, d, "config", "filter."+driver+".smudge", "touch '"+sentinel+"'")
+			if _, err := (gitAdapter{}).Observe(context.Background(), d, "HEAD"); err == nil {
+				t.Fatal("attribute sentinel collision admitted executable filter driver")
+			}
+			if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+				t.Fatal("sentinel-named filter executed")
+			}
+		})
+	}
+}
