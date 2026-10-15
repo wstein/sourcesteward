@@ -175,6 +175,8 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 		if err != nil {
 			return failTidy(r, err)
 		}
+		p.Effects = tidyApplyEffects(p)
+		p.RecoveryLimits = tidyApplyRecoveryLimits()
 		p.Digest = tidyPlanDigest(p)
 		if err = validateTidyPlan(p, o.StateDir, p.PlanID); err != nil {
 			return failTidy(r, err)
@@ -192,6 +194,9 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 		r.Actions = append(r.Actions, ActionOutcome{"store-plan", "completed", "Immutable evidence plan stored; no native reference, registration or file was changed."})
 	}
 	r.Status = "ok"
+	if p.PlanID != "" {
+		r.Limitations = append(append([]string{}, observation.Limitations...), p.RecoveryLimits...)
+	}
 	r.Plan = &p
 	return boundedTidy(r)
 }
@@ -333,6 +338,10 @@ func boundedTidy(r TidyResult) TidyResult {
 	switch r.Backend {
 	case "git", "jj", "unknown", "ambiguous", "gitbutler":
 		safe.Backend = r.Backend
+	}
+	if r.Plan != nil && validID(r.Plan.PlanID) && validText(r.Plan.StateDir) && filepath.IsAbs(r.Plan.StateDir) {
+		safe.Limitations = []string{"Recovery journal: " + tidyJournalPointer(*r.Plan)}
+		safe.Actions = []ActionOutcome{{"known-effects", "incomplete", "Known or possible native effects were omitted from bounded output; inspect the durable journal before recovery."}}
 	}
 	safe.Status = "partial"
 	safe.Diagnostics = []Diagnostic{{"result-limit", "Tidy output exceeded its one-MiB or aggregate1024-record bound; no omitted evidence authorizes mutation."}}

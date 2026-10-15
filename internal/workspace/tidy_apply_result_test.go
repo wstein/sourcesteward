@@ -13,6 +13,16 @@ func TestTidyRecoveryBindsLiteralTargetAndPlan(t *testing.T) {
 	if r.Kind != "git-recovery-ref" || !strings.HasPrefix(r.Name, "refs/stw/recovery/"+p.PlanID+"/") || r.CommitID != c.CommitID {
 		t.Fatalf("unbound recovery %+v", r)
 	}
+	p.Backend = "jj"
+	c.Kind = "bookmark"
+	c.ChangeID = strings.Repeat("k", 32)
+	jj := tidyRecoveryFor(p, c)
+	if !strings.HasSuffix(jj.Name, "?") {
+		t.Fatal("jj recovery name could autoexport to Git")
+	}
+	p.Backend = "git"
+	c.Kind = "branch"
+	c.ChangeID = ""
 	c.Name = "refs/heads/topic-other"
 	if tidyRecoveryFor(p, c).Name == r.Name {
 		t.Fatal("target aliases recovery name")
