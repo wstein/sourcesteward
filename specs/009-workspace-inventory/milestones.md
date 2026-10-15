@@ -1,8 +1,9 @@
 # Spec 009 implementation and acceptance milestones
 
-These are bounded implementation/review work items within Spec 009, not changes to
-its functional scope. Each work item uses focused Conventional Commits and receives
-its own PR. The shared contract, plan, tasks and analysis remain prerequisites.
+These are bounded acceptance/review gates within the Spec 009 implementation work
+item, not changes to its functional scope or separate shipping features. Spec 009
+receives its own implementation PR with focused Conventional Commits. The shared
+contract, plan, tasks and analysis remain prerequisites.
 Git and jj retain the same Tier 1 acceptance requirements.
 
 ## Delivery sequence
@@ -16,8 +17,7 @@ Git and jj retain the same Tier 1 acceptance requirements.
 | Integrated handoff | Independent review, full source/schema/race checks and minimum/current conformance | **36 per lane** | All milestones together, plus adapter/unit/schema coverage and every mapped requirement; missing execution blocks acceptance. |
 
 Milestones help review and troubleshooting; they do not permit partial coverage to
-be marked as completed Spec 009. PRs may be stacked where the shared model/CLI is a
-dependency. A milestone is verified only after its actual integrated native tests
+be marked as completed Spec 009. The implementation PR must pass all four gates before acceptance. A milestone is verified only after its actual integrated native tests
 pass and evidence is recorded in the verification record. At this document's
 creation the integrated command was not available and none of these native cases
 had passed; the pre-implementation CLI failed the first query as expected.

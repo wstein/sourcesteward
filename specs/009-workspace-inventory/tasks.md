@@ -22,7 +22,7 @@ Independent test: Git linked + jj standalone/colocated/secondary workspace regis
 Independent test: distinguish staged/disk/stored/untracked/conflict scopes; unsnapshotted jj disk observations remain unknown; target/effect hashes unchanged.
 - [ ] T010 [P] [US2] Add failing Git staged/disk/untracked/conflict/unreadable/concurrent-state tests in internal/inspection/inventory_git_test.go (FR-003/005/008).
 - [ ] T011 [P] [US2] Add failing jj stored-vs-disk/conflict/stale-operation tests in internal/inspection/inventory_jj_test.go (FR-003/005/008).
-- [ ] T012 [US2] Implement fixed read-only Git status observations with no optional locks/helpers/index refresh and freshness sampling in internal/inspection/inventory_git.go (FR-003/005/008).
+- [ ] T012 [US2] Implement fixed read-only Git index/object observations and confined raw file hashing with no optional locks/helpers/index refresh and freshness sampling in internal/inspection/inventory_git.go (FR-003/005/008).
 - [ ] T013 [US2] Implement jj native stored state and explicit disk/staged capability qualifications in internal/inspection/inventory_jj.go (FR-003/005/006).
 
 ## Phase 5 — US3: bounded human/structured contract (P1)
