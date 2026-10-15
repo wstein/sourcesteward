@@ -2,7 +2,10 @@
 package inspection
 
 import (
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -87,5 +90,46 @@ func TestInventoryUnknownIsNotFalse(t *testing.T) {
 	r.partial("another unknown")
 	if r.Status != "error" {
 		t.Fatal("partial masked error")
+	}
+}
+
+func TestInventoryCancellationAndInvalidOptions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := Inventory(ctx, ".", InventoryOptions{})
+	if r.Status != "error" || r.Boundary.Complete || len(r.Diagnostics) == 0 {
+		t.Fatal(r)
+	}
+	r = Inventory(context.Background(), ".", InventoryOptions{Query: "not-a-predicate"})
+	if r.Status != "error" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "invalid-options" {
+		t.Fatal(r)
+	}
+}
+func TestInventoryNormalizesLiteralPaths(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	if e := os.Mkdir(sub, 0700); e != nil {
+		t.Fatal(e)
+	}
+	id := Result{Backend: "git", Repository: &Repository{Worktree: &root}, InputPath: sub}
+	o, e := normalizeInventoryOptions(id, InventoryOptions{Paths: []string{"a/../[x]"}})
+	if e != nil || len(o.Paths) != 1 || o.Paths[0] != "[x]" {
+		t.Fatal(o, e)
+	}
+	old, e := os.Getwd()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Chdir(sub); e != nil {
+		t.Fatal(e)
+	}
+	defer os.Chdir(old)
+	o, e = normalizeInventoryOptions(id, InventoryOptions{Anchor: "cwd", Paths: []string{"../sibling"}})
+	if e != nil || o.Paths[0] != "sibling" {
+		t.Fatal(o, e)
+	}
+	_, e = normalizeInventoryOptions(id, InventoryOptions{Anchor: "cwd", Paths: []string{"../../outside"}})
+	if e == nil {
+		t.Fatal("escaped workspace")
 	}
 }
