@@ -67,6 +67,8 @@ func canonicalSandboxDir(path string) (string, error) {
 // runSandboxed allows only declared directory writes and denies network access.
 // The fixed /dev/null sink admits O_RDWR used by native Git; no directory or
 // persistent data write is granted by this device exception.
+// Granted directory roots themselves remain present: Linux bind mounts protect
+// mount roots, and macOS denies unlinking each literal root while allowing children.
 // Existing linked-worktree metadata is rebound read-only after broad parent
 // grants. Linux bubblewrap does not constrain exec: adapters must admit native
 // configuration/hooks before execution and disclose external-race/ABA limits.
@@ -139,6 +141,7 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 		profile := `(version 1)(allow default)(deny file-write*)(allow file-write-data (literal "/dev/null"))(deny network*)(deny process-exec)(allow process-exec (literal ` + strconv.Quote(bin) + `))`
 		for _, r := range writeRoots {
 			profile += `(allow file-write* (subpath ` + strconv.Quote(r) + `))`
+			profile += `(deny file-write-unlink (literal ` + strconv.Quote(r) + `))`
 		}
 		for _, r := range readOnlyRoots {
 			profile += `(deny file-write* (subpath ` + strconv.Quote(r) + `))`
