@@ -153,6 +153,11 @@ func normalizeInventoryOptions(identity Result, o InventoryOptions) (InventoryOp
 	if identity.JJRepository != nil {
 		root = identity.JJRepository.WorkspaceRoot
 	}
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return o, errors.New("cannot resolve selected workspace path")
+	}
+	root = canonical
 	anchor := root
 	if o.Anchor == "cwd" {
 		cwd, e := os.Getwd()
