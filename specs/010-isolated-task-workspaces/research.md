@@ -54,3 +54,9 @@ execution. Exact experiment/CI evidence belongs in verification.md; operation sa
 
 Native jj source: https://raw.githubusercontent.com/jj-vcs/jj/v0.46.0/cli/src/commands/workspace/add.rs
 uses create_worktree for colocated parents with git.colocate=true; false avoids that subprocess.
+
+## Native jj materialization limit
+Native workspace update-stale rejects operation pinning in both supported versions.
+Only creation is pinned; materialization runs in the owned destination with operation
+checks before and after. External/ABA races are not transactional; unexpected observations
+produce partial effects and manual recovery evidence, never an automatic source update.
