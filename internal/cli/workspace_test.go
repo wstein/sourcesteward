@@ -148,3 +148,11 @@ func TestWorkspaceHelpWithoutBackends(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceHelpLinksImplementedRetirement(t *testing.T) {
+	var out, diagnostic bytes.Buffer
+	code := Run(context.Background(), "test", []string{"workspace", "--help"}, &out, &diagnostic)
+	if code != 0 || !strings.Contains(out.String(), "stw tidy") || strings.Contains(out.String(), "retirement execution remains planned") {
+		t.Fatalf("workspace help must point to implemented retirement: code%d %s %s", code, out.String(), diagnostic.String())
+	}
+}

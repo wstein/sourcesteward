@@ -24,7 +24,7 @@ func workspaceCommand() *cobra.Command {
 	return workspaceCommandWith(workspaceOperations{workspace.PlanCreate, workspace.Apply, workspace.Handoff, workspace.RetirePlan})
 }
 func workspaceCommandWith(operations workspaceOperations) *cobra.Command {
-	family := &cobra.Command{Use: "workspace", Short: "Plan and create isolated native Git or jj task workspaces", Long: "Create isolated task workspaces through reviewable plans and explicit local authorization.\nPlanning writes private state records; applying creates a native workspace and recovery journal.\nHandoff and retirement preparation preserve work; retirement execution remains planned.\nGit and jj are native Tier 1 backends. No fetch, push, setup scripts or automatic cleanup.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
+	family := &cobra.Command{Use: "workspace", Short: "Plan and create isolated native Git or jj task workspaces", Long: "Create isolated task workspaces through reviewable plans and explicit local authorization.\nPlanning writes private state records; applying creates a native workspace and recovery journal.\nHandoff and retirement preparation preserve work; use stw tidy for separately authorized owned retirement.\nGit and jj are native Tier 1 backends. No fetch, push, setup scripts or automatic cleanup.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
 	var p workspace.PlanOptions
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Persist an inspectable isolated-workspace creation plan", Args: cobra.MaximumNArgs(1)}
 	plan.Flags().StringVar(&p.Base, "base", "", "Explicit native base revision")
