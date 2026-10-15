@@ -20,7 +20,9 @@
 
 ## Verification and handoff
 - [x] T011 Run source/generated checks, inspect privacy/link/schema boundaries and record specs/007-hugo-docs/verification.md.
-- [ ] T012 Obtain coordinator browser QA and independent exact-revision review; fix findings before PR handoff.
+- [x] T012 Obtain coordinator browser QA and independent exact-revision review; fix findings before PR handoff.
+
+- [ ] T013 Coordinator opens the reviewed Hugo PR against006 and records PR/CI handoff in specs/007-hugo-docs/verification.md.
 
 Dependencies: T001 release → T002; T003/T004/T006/T008 after tests; T005 after shell;
 T007 after T006; T009 after T004; T010 after T007/T008/T009; T011/T012 last.
