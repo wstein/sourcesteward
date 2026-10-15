@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -136,6 +137,9 @@ func (c coordinator) plan(ctx context.Context, o PlanOptions) Result {
 		return failResult(r, e)
 	}
 	p.Digest = planDigest(p)
+	if e = validatePlan(p, o.StateDir, p.PlanID); e != nil {
+		return failResult(r, e)
+	}
 	if e = s.write("plans", p.PlanID, p, true); e != nil {
 		return failResult(r, e)
 	}
@@ -157,6 +161,9 @@ type journal struct {
 }
 
 func validatePlan(p MutationPlan, state, id string) error {
+	if !validSnapshot(p.Expected) || !validStrings(p.Effects) || !validStrings(p.RecoveryLimits) || !validText(p.Reason) || !validText(p.DestinationParent.Path) || !validText(filepath.Join(p.StateDir, "operations", p.PlanID+".json")) {
+		return failure("invalid-plan", "Stored plan contains malformed native identities, digests or bounded evidence.")
+	}
 	if p.SchemaVersion != 1 || p.PlanID != id || !validID(p.PlanID) || !validID(p.TaskID) || !validID(p.Owner) || p.StateDir != state || p.Digest != planDigest(p) || p.DestinationIdentity != nil || p.Expected.Identity.Backend != p.Backend || p.Expected.BaseSelector == "" || p.Expected.BaseCommit == "" || p.Effects == nil || p.RecoveryLimits == nil {
 		return failure("invalid-plan", "Stored plan is incompatible, modified or not bound to this state store.")
 	}
@@ -303,10 +310,10 @@ func (c coordinator) incomplete(s *store, p MutationPlan, j journal, r Result, e
 	return r
 }
 func (c coordinator) retry(ctx context.Context, s *store, p MutationPlan, j journal, a nativeAdapter, r Result) Result {
-	r.Actions = j.Actions
 	if !validJournal(j, p) {
 		return failResult(r, failure("invalid-state", "Operation journal is incompatible."))
 	}
+	r.Actions = j.Actions
 	if j.Phase != "complete" && j.Phase != "native-created" {
 		r.Status = "partial"
 		r.Diagnostics = []Diagnostic{{"incomplete-operation", "Prior operation may have destination/native effects; automatic adoption or repeated creation is refused."}}
@@ -331,7 +338,7 @@ func (c coordinator) retry(ctx context.Context, s *store, p MutationPlan, j jour
 		return refuse(r, "invalid-ownership", "Task record and journal ownership disagree.")
 	}
 	native, e := a.Verify(ctx, p)
-	if e != nil || !native.Complete || !sameOwner(native.Identity, task.Native) {
+	if e != nil || !native.Complete || !validNativeIdentity(native.Identity) || !sameOwner(native.Identity, task.Native) {
 		return refuse(r, "changed-ownership", "Current native registration does not match durable task ownership.")
 	}
 	task.Native = native.Identity
@@ -371,7 +378,7 @@ func sameOwner(a, b NativeIdentity) bool {
 	return a.Backend == b.Backend && a.RepositoryDir == b.RepositoryDir && a.WorkspaceRoot == b.WorkspaceRoot && a.WorkspaceName == b.WorkspaceName && a.GitDir == b.GitDir
 }
 func validTask(t TaskRecord, p MutationPlan) bool {
-	return t.State == "complete" && t.RecoveryPointer == filepath.Join(p.StateDir, "operations", p.PlanID+".json") && validNativeIdentity(t.Native) && t.SchemaVersion == 1 && t.TaskID == p.TaskID && t.PlanID == p.PlanID && t.Owner == p.Owner && t.Backend == p.Backend && t.Destination == p.Destination && t.BaseCommit == p.Expected.BaseCommit && t.BaseChange == p.Expected.BaseChange && t.Native.Backend == p.Backend && t.Native.WorkspaceRoot == p.Destination && t.Native.RepositoryDir == p.Expected.Identity.RepositoryDir && t.RemainingWork != nil && t.RecoveryLimits != nil
+	return validStrings(t.RemainingWork) && validStrings(t.RecoveryLimits) && t.Inventory == nil && validText(t.RecoveryPointer) && t.State == "complete" && t.RecoveryPointer == filepath.Join(p.StateDir, "operations", p.PlanID+".json") && validNativeIdentity(t.Native) && t.SchemaVersion == 1 && t.TaskID == p.TaskID && t.PlanID == p.PlanID && t.Owner == p.Owner && t.Backend == p.Backend && t.Destination == p.Destination && t.BaseCommit == p.Expected.BaseCommit && t.BaseChange == p.Expected.BaseChange && t.Native.Backend == p.Backend && t.Native.WorkspaceRoot == p.Destination && t.Native.RepositoryDir == p.Expected.Identity.RepositoryDir && t.RemainingWork != nil && t.RecoveryLimits != nil
 }
 
 func nativeEffects(backend string) []string {
@@ -389,8 +396,24 @@ func validJournal(j journal, p MutationPlan) bool {
 	default:
 		return false
 	}
+	for _, a := range j.Actions {
+		if !validText(a.Name) || !validText(a.Status) || !validText(a.Detail) {
+			return false
+		}
+	}
+	for _, d := range j.Diagnostics {
+		if !validText(d.Code) || !validText(d.Message) {
+			return false
+		}
+	}
+	if j.DestinationIdentity != nil && (!validText(j.DestinationIdentity.Path) || j.DestinationIdentity.Path != p.Destination) {
+		return false
+	}
 	if j.Native != nil {
-		if j.Native.Effects == nil || j.Native.Limitations == nil || !validNativeIdentity(j.Native.Identity) {
+		if !validStrings(j.Native.Effects) || !validStrings(j.Native.Limitations) || !validText(j.Native.Phase) {
+			return false
+		}
+		if !validNativeIdentity(j.Native.Identity) && (j.Native.Complete || j.Native.Identity != (NativeIdentity{})) {
 			return false
 		}
 	}
@@ -402,5 +425,60 @@ func validNativeIdentity(n NativeIdentity) bool {
 			return false
 		}
 	}
-	return (n.Backend == "git" || n.Backend == "jj") && filepath.IsAbs(n.RepositoryDir) && filepath.IsAbs(n.WorkspaceRoot)
+	for _, p := range []string{n.RepositoryDir, n.WorkspaceRoot} {
+		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
+			return false
+		}
+	}
+	if n.GitDir != "" && (!filepath.IsAbs(n.GitDir) || filepath.Clean(n.GitDir) != n.GitDir) {
+		return false
+	}
+	if n.Backend == "git" {
+		size := 40
+		if n.ObjectFormat == "sha256" {
+			size = 64
+		} else if n.ObjectFormat != "sha1" {
+			return false
+		}
+		return validAlphabet(n.CommitID, size, "0123456789abcdef") && n.ChangeID == "" && n.OperationID == "" && (n.HeadRef == "" || strings.HasPrefix(n.HeadRef, "refs/heads/"))
+	}
+	return n.Backend == "jj" && validAlphabet(n.CommitID, 40, "0123456789abcdef") && validAlphabet(n.ChangeID, 32, "klmnopqrstuvwxyz") && validAlphabet(n.OperationID, 128, "0123456789abcdef")
+}
+func validSnapshot(s Snapshot) bool {
+	if !validNativeIdentity(s.Identity) || s.BaseSelector == "" || !validText(s.BaseSelector) || !validAlphabet(s.RegistrationDigest, 64, "0123456789abcdef") || !validAlphabet(s.SafetyDigest, 64, "0123456789abcdef") {
+		return false
+	}
+	size := 40
+	if s.Identity.ObjectFormat == "sha256" {
+		size = 64
+	}
+	if !validAlphabet(s.BaseCommit, size, "0123456789abcdef") {
+		return false
+	}
+	if s.Identity.Backend == "git" {
+		return s.BaseChange == "" && validAlphabet(s.ReferenceDigest, 64, "0123456789abcdef")
+	}
+	return validAlphabet(s.BaseChange, 32, "klmnopqrstuvwxyz") && (validAlphabet(s.ReferenceDigest, 64, "0123456789abcdef") || validAlphabet(s.ReferenceDigest, 128, "0123456789abcdef"))
+}
+func validAlphabet(s string, size int, alphabet string) bool {
+	if len(s) != size {
+		return false
+	}
+	for _, c := range s {
+		if !strings.ContainsRune(alphabet, c) {
+			return false
+		}
+	}
+	return true
+}
+func validStrings(values []string) bool {
+	if values == nil || len(values) > observationLimit {
+		return false
+	}
+	for _, s := range values {
+		if !validText(s) {
+			return false
+		}
+	}
+	return true
 }

@@ -71,7 +71,7 @@ func (c coordinator) handoff(ctx context.Context, o Options, retire bool) Result
 		return failResult(r, e)
 	}
 	native, e := a.Verify(ctx, p)
-	if e != nil || !native.Complete || !sameOwner(native.Identity, found.Native) {
+	if e != nil || !native.Complete || !validNativeIdentity(native.Identity) || !sameOwner(native.Identity, found.Native) {
 		return refuse(r, "changed-ownership", "Task native registration is unavailable or foreign; retain it.")
 	}
 	inventory := c.inventory(ctx, path, inspection.InventoryOptions{})
