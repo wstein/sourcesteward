@@ -79,3 +79,21 @@ func TestOmittedInventoryIsPartial(t *testing.T) {
 		t.Fatal("omitted inventory did not disclose partial result")
 	}
 }
+
+func TestBoundedResultCapsSmallAggregatedRecords(t *testing.T) {
+	for _, kind := range []string{"limitations", "actions"} {
+		r := newResult("workspace-apply")
+		r.Status = "ok"
+		for i := 0; i < 1025; i++ {
+			if kind == "limitations" {
+				r.Limitations = append(r.Limitations, "bounded")
+			} else {
+				r.Actions = append(r.Actions, ActionOutcome{"x", "completed", "bounded"})
+			}
+		}
+		r = bounded(r)
+		if r.Status != "partial" || len(r.Limitations) > 1024 || len(r.Actions) > 1024 {
+			t.Fatalf("unbounded record count: %s actions%d limits%d", r.Status, len(r.Actions), len(r.Limitations))
+		}
+	}
+}
