@@ -161,3 +161,102 @@ func TestGitInventoryParsersRejectMalformed(t *testing.T) {
 		}
 	}
 }
+
+func TestGitInventoryNormalizationScopesAndMode(t *testing.T) {
+	d := repo(t)
+	os.WriteFile(filepath.Join(d, "file"), []byte("line\n"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("file text eol=lf\n"), 0600)
+	os.WriteFile(filepath.Join(d, "file"), []byte("line\r\n"), 0600)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}})
+	if r.Status != "partial" || r.Query.Value != "unknown" {
+		t.Fatalf("normalization %+v", r)
+	}
+	r = gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"staged"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("staged %+v", r)
+	}
+	os.Remove(filepath.Join(d, ".gitattributes"))
+	os.WriteFile(filepath.Join(d, "file"), []byte("line\n"), 0700)
+	git(t, d, "config", "core.filemode", "true")
+	r = gitInventory(t, d, InventoryOptions{Query: "dirty", Scopes: []string{"disk"}})
+	if r.Query.Value != "true" {
+		t.Fatalf("mode %+v", r)
+	}
+}
+func TestGitInventoryIndependentScopesAvoidDiskReads(t *testing.T) {
+	d := repo(t)
+	os.WriteFile(filepath.Join(d, "large"), []byte("initial"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	os.WriteFile(filepath.Join(d, "large"), []byte(strings.Repeat("x", outputLimit+1)), 0600)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"staged"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("%+v", r)
+	}
+}
+func TestGitInventoryDeletedParentAndAnnotatedTags(t *testing.T) {
+	d := repo(t)
+	os.Mkdir(filepath.Join(d, "dir"), 0700)
+	os.WriteFile(filepath.Join(d, "dir/file"), []byte("initial"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	git(t, d, "tag", "-am", "tag", "annotated")
+	os.RemoveAll(filepath.Join(d, "dir"))
+	r := gitInventory(t, d, InventoryOptions{Query: "dirty"})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("deleted parent %+v", r)
+	}
+	r = gitInventory(t, d, InventoryOptions{Query: "ancestor", From: "annotated", To: "HEAD"})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("annotated tag %+v", r)
+	}
+}
+func TestGitInventoryRejectsConcurrentReferences(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	id := Inspect(context.Background(), d)
+	n := 0
+	run := func(ctx context.Context, dir string, args ...string) (string, int, error) {
+		for _, arg := range args {
+			if arg == "for-each-ref" {
+				n++
+				if n == 2 {
+					git(t, d, "branch", "racing")
+				}
+			}
+		}
+		return runGit(ctx, dir, args...)
+	}
+	r := inventoryGitRun(context.Background(), id, InventoryOptions{Scopes: []string{"stored"}}, run)
+	if r.Status != "error" || r.Diagnostics[0].Code != "changed-repository" {
+		t.Fatalf("%+v", r)
+	}
+}
+func TestGitInventorySHA256AndConflicts(t *testing.T) {
+	d := t.TempDir()
+	git(t, d, "init", "-q", "--object-format=sha256", "-b", "main")
+	os.WriteFile(filepath.Join(d, "file"), []byte("base\n"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	git(t, d, "checkout", "-qb", "other")
+	os.WriteFile(filepath.Join(d, "file"), []byte("other\n"), 0600)
+	git(t, d, "commit", "-qam", "other")
+	git(t, d, "checkout", "-q", "main")
+	os.WriteFile(filepath.Join(d, "file"), []byte("main\n"), 0600)
+	git(t, d, "commit", "-qam", "main")
+	_, _, e := runGit(context.Background(), d, "merge", "--no-edit", "other")
+	if e != nil {
+		t.Fatal(e)
+	}
+	r := gitInventory(t, d, InventoryOptions{})
+	if r.Status != "ok" || r.Workspaces[0].Conflicts.Value != "true" {
+		t.Fatalf("%+v", r)
+	}
+	for _, ref := range r.References {
+		if ref.CommitID != nil && len(*ref.CommitID) != 64 {
+			t.Fatal("truncated sha256")
+		}
+	}
+}
