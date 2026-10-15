@@ -26,9 +26,12 @@ type TidyCandidate struct {
 	Limitations    []string `json:"limitations"`
 }
 type TidyObservation struct {
-	Expected    Snapshot
-	Candidates  []TidyCandidate
-	Limitations []string
+	// WorkspacePaths contains every registered workspace root, independent of candidate selection.
+	WorkspacePaths         []string
+	WorkspacePathsComplete bool
+	Expected               Snapshot
+	Candidates             []TidyCandidate
+	Limitations            []string
 }
 type TidyPlanRecord struct {
 	SchemaVersion  int             `json:"schema_version"`
