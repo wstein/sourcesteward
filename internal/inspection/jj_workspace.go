@@ -33,6 +33,8 @@ type JJWorkspaceCreation struct {
 
 // ObserveJJWorkspace evaluates one explicit native base without snapshots or config execution.
 func ObserveJJWorkspace(ctx context.Context, path, base string) (JJWorkspaceState, error) {
+	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
+	defer cancel()
 	var state JJWorkspaceState
 	if base == "" || len(base) > 4096 || strings.ContainsRune(base, 0) {
 		return state, errors.New("invalid explicit jj base")
@@ -97,6 +99,42 @@ func ObserveJJWorkspace(ctx context.Context, path, base string) (JJWorkspaceStat
 		return nil
 	})
 	return state, err
+}
+
+// CheckJJWorkspaceTaskAvailable refuses a registered native name without creating a plan or directory.
+func CheckJJWorkspaceTaskAvailable(ctx context.Context, path, name string) error {
+	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
+	defer cancel()
+	if !validJJTaskName(name) {
+		return errors.New("invalid native jj workspace name")
+	}
+	identity := Inspect(ctx, path)
+	if identity.Status != "ok" || identity.JJRepository == nil {
+		return errors.New("supported native jj workspace required")
+	}
+	return withJJSession(ctx, path, identity, func(s jjSession, _, _, _ string) error {
+		return checkJJWorkspaceName(s, path, identity.JJRepository.OperationID, name)
+	})
+}
+func checkJJWorkspaceName(s jjSession, path, op, name string) error {
+	out, e := s.read(path, op, "workspace", "list", "--template", jjInventoryWorkspaces)
+	if e != nil {
+		return e
+	}
+	records, e := jjInventoryRecords(out, 5)
+	if e != nil || len(records) > 1024 {
+		return errors.New("jj workspace registration bound exceeded")
+	}
+	for _, record := range records {
+		n, e := jjString(record[0], false)
+		if e != nil || n == nil {
+			return errors.New("invalid native jj workspace name record")
+		}
+		if *n == name {
+			return errors.New("native jj workspace name is already registered")
+		}
+	}
+	return nil
 }
 
 func validJJTaskName(name string) bool {
@@ -260,6 +298,9 @@ func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceSta
 		if observed != expected.Source {
 			return errJJChanged
 		}
+		if e := checkJJWorkspaceName(s, path, expected.Source.OperationID, name); e != nil {
+			return e
+		}
 		result.Phase = "unknown"
 		result.Effects = []string{"Owned destination files and jj working-copy metadata may be created.", "Shared jj repository/index/operation storage, backing Git objects and refs/jj keep references may be written."}
 		_, code, e := s.workspaceExecute(path, roots, []string{"--ignore-working-copy", "--at-operation=" + expected.Source.OperationID, "workspace", "add", "--name", name, "--revision", expected.BaseCommit, "--sparse-patterns", "full", destination})
@@ -282,6 +323,18 @@ func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceSta
 		p, e := scalarRecord(parents, 1)
 		if e != nil || p[0] != expected.BaseCommit {
 			return errors.New("created jj workspace does not have the expected explicit parent")
+		}
+		destinationDir, e := os.Open(destination)
+		if e != nil {
+			return e
+		}
+		payload, e := destinationDir.ReadDir(2)
+		destinationDir.Close()
+		if e != nil && !errors.Is(e, io.EOF) {
+			return e
+		}
+		if len(payload) != 1 || payload[0].Name() != ".jj" || !payload[0].IsDir() {
+			return errors.New("owned jj destination acquired files before materialization; retain for manual recovery")
 		}
 		// update-stale rejects --at-operation. Sample immediately before and after; never claim a CAS.
 		again, e := jjWorkspaceVerifySession(ctx, s, destination, name, repo)
@@ -345,6 +398,8 @@ func jjWorkspaceVerifySession(ctx context.Context, s jjSession, destination, nam
 
 // VerifyJJWorkspace accepts legitimate progressed task identities while checking stable native registration.
 func VerifyJJWorkspace(ctx context.Context, source, name, destination, repo string) (JJRepository, error) {
+	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
+	defer cancel()
 	var j JJRepository
 	identity := Inspect(ctx, source)
 	if identity.Status != "ok" || identity.JJRepository == nil || identity.JJRepository.RepositoryDir != repo {

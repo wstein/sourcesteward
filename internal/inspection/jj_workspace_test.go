@@ -48,7 +48,19 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(source, "tracked"), []byte("stored\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err = os.WriteFile(filepath.Join(source, ".gitattributes"), []byte("tracked filter=evil\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	native(source, "--config", `user.name="Fixture"`, "--config", `user.email="fixture@localhost"`, "describe", "-m", "base")
+	sentinel := filepath.Join(home, "undeclared-helper-ran")
+	helper := filepath.Join(home, "helper")
+	if err = os.WriteFile(helper, []byte("#!/bin/sh\ntouch '"+sentinel+"'\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	gitConfig := exec.Command("git", "-C", source, "config", "filter.evil.smudge", helper)
+	if out, e := gitConfig.CombinedOutput(); e != nil {
+		t.Fatalf("fixture git config: %v %s", e, out)
+	}
 	base := native(source, "--ignore-working-copy", "log", "-r", "@", "--no-graph", "-T", "commit_id")
 	if err = os.WriteFile(filepath.Join(source, "tracked"), []byte("dirty\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -82,6 +94,13 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if e := CheckJJWorkspaceTaskAvailable(context.Background(), source, "default"); e == nil {
+		t.Fatal("accepted occupied native name")
+	}
+	collision, e := CreateJJWorkspace(context.Background(), source, observed, "default", destination)
+	if e == nil || collision.Phase != "not-started" {
+		t.Fatalf("native name collision mutated: %+v %v", collision, e)
+	}
 	created, err := CreateJJWorkspace(context.Background(), source, observed, "stw-task", destination)
 	if err != nil {
 		t.Fatalf("creation: %+v %v", created, err)
@@ -98,6 +117,9 @@ func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
 		if e != nil || string(b) != want {
 			t.Fatalf("source %s: %q %v", p, b, e)
 		}
+	}
+	if _, e := os.Lstat(sentinel); !os.IsNotExist(e) {
+		t.Fatalf("undeclared helper ran: %v", e)
 	}
 	if _, err = os.Lstat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected colocated Git metadata: %v", err)
