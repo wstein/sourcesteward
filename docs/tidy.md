@@ -30,7 +30,7 @@ a bookmark would not imply abandoning a change. Remote-associated jj bookmarks r
 
 Native Git commit IDs may use SHA1 or SHA256. jj commit, change and operation IDs remain separate.
 Native jj observes pinned stored state without snapshotting; disk cleanliness is not established
-by stored-unsnapshotted state. This WI does not plan workspace retirement or filesystem removal.
+by stored-unsnapshotted state. Workspace retirement and filesystem removal remain later work.
 
 ## Stateless and stored plans
 
@@ -46,7 +46,7 @@ stw tidy plan /path/to/repository --base refs/heads/main --ref refs/heads/finish
 
 The store must be disjoint from repository/workspace metadata and task destinations. Persistence
 writes only disclosed private state records. Store access is the trust boundary; a saved plan
-is still evidence, not authorization. Cleanup execution is deferred to the next WI.
+is still evidence, not authorization. Apply supports authorized local reference deletion with durable recovery; see below.
 
 ## Bounds, output and failures
 
@@ -66,3 +66,39 @@ Writer failures may leave incomplete JSON; always check the exit status and pars
 Observations are samples, not a transaction. External changes and ABA races cannot all be ruled
 out. Later apply must revalidate each action and record durable recovery before effects; remote
 reference deletion, automatic garbage collection, jj abandonment, hooks and network are excluded.
+
+## Authorized local reference cleanup
+
+Create a fresh stored plan, review its candidates and declared recovery/deletion effects, then
+explicitly authorize that exact plan:
+
+```sh
+stw tidy plan /path/to/repository --base refs/heads/main --ref refs/heads/finished-task --state-dir /private/task-state --json
+stw tidy apply --plan GENERATED_PLAN_ID --state-dir /private/task-state --authorize --json
+```
+
+The apply command accepts no repository path, base or replacement targets: it loads the immutable
+plan from the same private store. Omitting `--authorize` produces an operational refusal, including
+structured JSON when requested. A stateless plan cannot be applied. Plans created by the earlier
+planning-only WI lack the reviewed mutation effects and refuse with `replan-required`; generate and
+review a new plan rather than editing a stored record.
+
+Before each eligible action, apply checks the selected base, native tip, references, workspace
+registrations/identities and safety evidence again. A moved tip/base, new workspace or unrelated
+reference/operation change refuses stale proof. Git creates an exact private recovery ref before
+old-OID compare-and-swap deletion. jj creates an exact native recovery bookmark before deleting the
+selected local bookmark, checks its own operation parent and full allowed reference delta, and never
+abandons the underlying change. Remote-associated jj bookmarks remain retained. Neither backend
+fetches, pushes, runs hooks or garbage collects recovery roots.
+
+A durable journal is recorded before native effects. Human/JSON output identifies its location,
+recovery pins, action outcomes and limitations. Recovery roots remain after success and protect
+native committed identities; they do not back up untracked files, restore registrations/files or
+promise a general undo command. Review recovery evidence manually before removing any native pin.
+
+Apply has a sixty-second deadline with the same native-output, record and aggregate bounds as plans.
+Cancellation or failure after native action start may leave partial effects; results report known
+completed/attempted actions and recovery location. An incomplete journal is not permission to retry
+blindly. A completed retry succeeds only after its recorded postconditions are verified. Sampled
+checks cannot exclude every external or ABA race; jj deletion is not an atomic Git-style CAS.
+Workspace registration removal, recursive filesystem removal and jj abandonment are excluded.

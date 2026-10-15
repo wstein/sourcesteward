@@ -133,6 +133,7 @@ Deletion candidates cannot contain workspace blockers or missing native identity
 
 Complete observations, including all-retained plans, exit 0. Operational refusal/error/partial
 results exit 1 and validate against the same schema. Usage/writer failures may not emit complete
-JSON. The schema reserves `tidy-apply` for the next WI; this reservation does not expose an apply
-command or authorize effects. Future incompatible retirement result shapes use a separate schema
+JSON. `tidy-apply` now uses this same unchanged contract. Apply requires a stored plan and explicit
+authorization; action details expose native recovery pins and result limitations identify the durable
+journal location. Refused/partial outcomes must not be treated as completed deletion. Future incompatible retirement result shapes use a separate schema
 version. Existing inspection, inventory, version and workspace schema bytes remain unchanged.

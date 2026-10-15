@@ -20,7 +20,7 @@ evidence-based local cleanup and worktree-aware operations, with native Git/jj s
 No implementation code is copied from those projects.
 
 **Current scope:** help/version, bounded read-only Git/jj identity inspection and qualified workspace/state/reference inventory, reviewable isolated native Git/jj task workspace creation, versioned JSON schemas, specifications, source CI and the project site.
-Evidence-based local reference tidy planning is implemented; cleanup execution, general recovery and native GitButler integration remain planned. See [tidy](docs/tidy.md) for proof and retention limits. See [task workspaces](docs/workspaces.md) for creation, handoff and retirement preparation. Inventory exposes explicit native capability limits; see [inventory](docs/inventory.md).
+Evidence-based local reference tidy planning and explicitly authorized cleanup are implemented; workspace retirement, general recovery and native GitButler integration remain planned. See [tidy](docs/tidy.md) for proof and retention limits. See [task workspaces](docs/workspaces.md) for creation, handoff and retirement preparation. Inventory exposes explicit native capability limits; see [inventory](docs/inventory.md).
 Spec 008 implements native jj inspection; final cross-platform acceptance is tracked in its [verification record](specs/008-jj-inspection/verification.md).
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
