@@ -4,8 +4,8 @@
 006-json-schemas is implemented on codex/006-json-schemas, stacked on inspection005.
 Version and inspection results have JSON Schema2020-12 contracts, real-output validation,
 negative invariant fixtures and verbatim static publication. Source checks and race tests
-pass on the final005 source revision; independent final review and PR publication remain
-pending. See [JSON acceptance](json-schema-verification.md).
+pass on the final005 source revision. Independent review cleared006 source at98f65df;
+coordinator PR publication remains pending. See [JSON acceptance](json-schema-verification.md).
 
 005-repository-inspection is implemented and independently verified on codex/005-repository-inspection.
 Identity inspection and conservative managed-backend refusal are bounded by the reviewed
