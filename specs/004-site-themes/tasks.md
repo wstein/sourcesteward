@@ -16,7 +16,7 @@
 - [x] T007 Run make check and record contrast/source evidence in specs/004-site-themes/verification.md.
 - [x] T008 Complete coordinator browser acceptance and hand off independent review, updating specs/004-site-themes/tasks.md and verification.md.
 - [x] T009 Update docs/progress.md, docs/feature-status.json and docs/README.md with honest status; create focused Conventional Commits.
-- [ ] T010 Coordinator creates PR after acceptance; record handoff in specs/004-site-themes/verification.md.
+- [x] T010 Coordinator creates PR after acceptance; record handoff in specs/004-site-themes/verification.md.
 
 ## Dependencies and strategy
 T001 precedes T002; failing tests precede T004–T006. T003 is independently implementable after review. T007 follows implementation; T008 precedes verified status and PR. MVP is discoverability plus native system/light/dark appearance; backend detection and inspection remain separate features.
