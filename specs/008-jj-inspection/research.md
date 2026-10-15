@@ -32,3 +32,12 @@
 **Decision**: Keep version/Git schema1 files and output unchanged. Selected native jj results use schema2 with `repository:null` and optional `jj_repository`, complete on success and absent on error. Ambiguous/GitButler/pre-selection results remain schema1. No CLI contract-version flag.
 **Rationale**: Existing v1 schema fixes successful backend to Git. Its documented compatibility rules require a new version for backend/result alternatives. Keeping an optional separate typed jj model avoids modifying Git identity fields or serialization.
 **Alternatives**: Widening v1 silently breaks published validation expectations; forcing all Git callers to v2 adds unnecessary migration.
+
+## Template input literals
+**Decision**: Canonical workspace roots are inserted using jj string-literal escaping, not a
+JSON encoder. Escape backslash, quote, newline, carriage return and tab; retain valid Unicode
+literally. Output remains scalar `json(...)` and is decoded as JSON.
+**Rationale**: Tests with unusual paths exposed jj's rejection of JSON Unicode escape syntax;
+the native jjLiteral helper and real fixtures verify the supported literal grammar.
+**Alternatives**: JSON-encoding template inputs confuses two grammars and can reject otherwise
+valid workspace paths. No arbitrary caller template is accepted.

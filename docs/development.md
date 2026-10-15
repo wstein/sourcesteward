@@ -53,7 +53,8 @@ The [agent guide](agent-guide.md) documents current command and output contracts
 main-branch files without fetching them. Installed help remains authoritative for the
 installed version. `make check` validates these repository-owned URL destinations
 offline, including CLI notice links, along with ordinary local documentation links.
-The guidance files remain source documentation and are excluded from the Pages artifact.
+The public agent guide and llms.txt are included in the Pages artifact. Internal AGENTS.md,
+specifications, progress and harness files remain excluded.
 
 ## Specification workflow
 Feature designs live under specs/. The current native jj slice is

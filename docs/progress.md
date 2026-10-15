@@ -14,7 +14,8 @@ remain pending. See [Spec 008 evidence](../specs/008-jj-inspection/verification.
 [PR #8](https://github.com/wstein/sourcesteward/pull/8). Their recorded acceptance covers
 bounded ordinary-Git identity inspection, versioned JSON contracts and pinned Hugo guides/
 command reference. This is merged-source status; deployment evidence remains in each feature's
-verification record. Native jj inspection remains pending Spec 008.
+verification record. Native jj inspection is implemented in Spec 008; final PR/CI handoff
+remains pending.
 
 The Tier 1 policy amendment is prepared for owner review: Git and jj receive equal support
 commitments for explicitly supported capabilities. See [amendment evidence](tier1-policy.md).
@@ -42,8 +43,8 @@ harness and CI. A durable local checkout is available. See [verification](verifi
 
 - Repository/module: wstein/sourcesteward; product: SourceSteward; standalone short CLI: stw.
 - Go 1.27.2 and Cobra v1.10.2; EUPL-1.2 original source/artwork; font licenses retained.
-- Git and jj are Tier 1 peers by policy; bounded ordinary-Git identity reads execute. Native jj
-  inspection is pending Spec 008; GitButler remains a future separately specified integration.
+- Git and jj are Tier 1 peers with bounded native identity inspection implemented. Final
+  Spec 008 handoff is pending; GitButler and broader mutations require separate specifications.
 - Wide navy tie, orange knot and white branch; local family fonts with preserved OFL notices.
 - Static Pages with local assets and same-run exact-SHA checks; no CLI release automation.
 - Weekly Dependabot, community standards, private security reporting and owner review.
