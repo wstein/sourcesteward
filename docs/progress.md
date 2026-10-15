@@ -95,3 +95,9 @@ dependencies. The initial run stopped at the packaging test because this new wor
 had no `.tools/hugo`; rerunning with the existing executable passed all checks.
 All eight drafts passed author structure/quality review. This is not independent
 review, backend feature acceptance or cross-artifact spec/plan/task analysis.
+
+### 009-workspace-inventory — Toolbelt use-case specification update
+
+Workspace, State and Reference Inventory: draft scenarios, requirements and author quality checks updated.
+Documentation links and whitespace checks passed before PR handoff. No runtime capability
+or independent acceptance is claimed. Planning/tasks/analysis remain pending.
