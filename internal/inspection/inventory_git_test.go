@@ -179,6 +179,7 @@ func TestGitInventoryNormalizationScopesAndMode(t *testing.T) {
 	}
 	os.Remove(filepath.Join(d, ".gitattributes"))
 	os.WriteFile(filepath.Join(d, "file"), []byte("line\n"), 0700)
+	os.Chmod(filepath.Join(d, "file"), 0700)
 	git(t, d, "config", "core.filemode", "true")
 	r = gitInventory(t, d, InventoryOptions{Query: "dirty", Scopes: []string{"disk"}})
 	if r.Query.Value != "true" {
