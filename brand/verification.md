@@ -24,8 +24,10 @@
 
 ## Review and publication
 
-Independent review and exact-source CI/Pages verification are pending. Publication will
-use focused Conventional Commits; the revision endpoint binds the live site to checked source.
+Independent review cleared e65220c2677d84a626c6f9ef9bcc43d9e3f26382 with no actionable
+findings and independently passing make check. Asset regeneration produced no differences;
+go test -race ./... also passed. Exact-source CI/Pages verification remains pending.
+Publication uses focused Conventional Commits; revision.txt binds the live site to checked source.
 
 ## Limits
 

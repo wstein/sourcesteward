@@ -6,7 +6,7 @@
 - [x] T004 [US2] Create and inspect small-size review sheet in brand/preview.html.
 - [x] T005 [US3] Update docs/index.html and docs/assets/site.css for navy/orange/white.
 - [x] T006 Run source checks, contrast measurements and desktop/mobile browser acceptance.
-- [ ] T007 Record evidence/progress and obtain independent review of the final source revision.
+- [x] T007 Record evidence/progress and obtain independent review of the final source revision.
 - [ ] T008 Publish atomic Conventional Commits and verify exact-revision CI/Pages and live assets.
 
 T001 precedes T002–T005; acceptance T006 precedes review/publication. Only this branding feature
