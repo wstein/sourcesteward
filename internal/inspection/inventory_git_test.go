@@ -242,6 +242,14 @@ func gitInventorySHA256ConflictFixture(t *testing.T) {
 	t.Helper()
 	d := t.TempDir()
 	git(t, d, "init", "-q", "--object-format=sha256", "-b", "main")
+	// This fixture intentionally performs its conflicting merge through the
+	// production runner, which strips Git-specific identity environment variables.
+	// Set local fixture identity and normalization explicitly; never rely on the
+	// developer or hosted runner's global Git configuration.
+	git(t, d, "config", "user.name", "Test")
+	git(t, d, "config", "user.email", "test@example.invalid")
+	git(t, d, "config", "core.autocrlf", "false")
+	git(t, d, "config", "core.attributesFile", os.DevNull)
 	os.WriteFile(filepath.Join(d, "file"), []byte("base\n"), 0600)
 	git(t, d, "add", ".")
 	git(t, d, "commit", "-qm", "initial")
