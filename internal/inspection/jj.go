@@ -42,89 +42,19 @@ func inspectJJ(ctx context.Context, dir string, r Result) Result {
 		}
 		return r.fail(code, msg)
 	}
-	metadata := r.Evidence[0].Location
-	repository, e := resolveJJRepository(metadata)
+	var observed JJRepository
+	e := withJJSession(ctx, dir, r, func(s jjSession, root, metadata, repository string) error {
+		var e error
+		observed, e = observeJJ(ctx, root, metadata, repository, func(op string, args ...string) (string, error) {
+			return s.read(dir, op, args...)
+		})
+		return e
+	})
 	if e != nil {
-		return fail("invalid-metadata", "cannot resolve valid jj repository metadata")
-	}
-	root := filepath.Dir(metadata)
-	bin, e := exec.LookPath("jj")
-	if e != nil {
-		return fail("jj-unavailable", "jj executable is unavailable; install supported jj 0.45.1 or newer")
-	}
-	bin, e = filepath.Abs(bin)
-	if e != nil {
-		return fail("jj-unavailable", "cannot resolve jj executable")
-	}
-	bin, e = filepath.EvalSymlinks(bin)
-	if e != nil {
-		return fail("jj-unavailable", "cannot resolve jj executable")
-	}
-	tempBase := "/tmp"
-	if runtime.GOOS == "darwin" {
-		tempBase = "/private/tmp"
-	}
-	tempBase, e = filepath.EvalSymlinks(tempBase)
-	if e != nil || within(root, tempBase) || within(repository, tempBase) {
-		return fail("jj-sandbox-unavailable", "no private isolation directory is available outside the inspected repository")
-	}
-	config, e := os.MkdirTemp(tempBase, "stw-jj-inspect-")
-	if e != nil {
-		return fail("jj-sandbox-unavailable", "cannot prepare private jj isolation directory")
-	}
-	defer os.RemoveAll(config)
-	if e := isolateJJConfig(metadata, repository, config); e != nil {
-		return fail("invalid-metadata", "cannot safely isolate jj configuration metadata")
-	}
-	s := jjSession{ctx: ctx, bin: bin, config: config, env: jjEnvironment(config)}
-	switch runtime.GOOS {
-	case "darwin":
-		s.sandbox = "/usr/bin/sandbox-exec"
-	case "linux":
-		s.sandbox, e = exec.LookPath("bwrap")
-	default:
-		e = errors.New("unsupported host")
-	}
-	if e != nil || s.sandbox == "" {
-		return fail("jj-sandbox-unavailable", "native jj inspection requires usable read-only bubblewrap on Linux or sandbox-exec on macOS")
-	}
-	// Probe writes only in our private directory, never in the inspected target.
-	probe := filepath.Join(config, "write-probe")
-	_, code, e := s.execute(dir, "/bin/bash", []string{"--noprofile", "--norc", "-c", "if : > \"$1\"; then exit 42; else exit 0; fi", "stw-probe", probe})
-	if errors.Is(e, errJJOutput) {
-		return fail("jj-output-limit", "jj sandbox output exceeded the inspection limit")
-	}
-	if e != nil || code != 0 {
-		return fail("jj-sandbox-unavailable", "read-only jj sandbox enforcement is unavailable; inspection was refused")
-	}
-	if _, e := os.Lstat(probe); !os.IsNotExist(e) {
-		return fail("jj-sandbox-unavailable", "read-only jj sandbox probe failed; inspection was refused")
-	}
-	version, code, e := s.execute(dir, bin, []string{"--version"})
-	if errors.Is(e, errJJOutput) {
-		return fail("jj-output-limit", "jj version output exceeded the inspection limit")
-	}
-	if e != nil || code != 0 {
-		return fail("jj-sandbox-unavailable", "jj cannot execute in the required read-only sandbox")
-	}
-	fields := strings.Fields(version)
-	if len(fields) != 2 || fields[0] != "jj" || !supportedJJVersion(fields[1]) {
-		return fail("jj-version-unsupported", "inspection requires stable jj 0.45.1 or newer with supported identity interfaces")
-	}
-	query := func(op string, args ...string) (string, error) {
-		v, c, e := s.query(dir, op, args...)
-		if e != nil {
-			return "", e
+		var setup *jjSessionError
+		if errors.As(e, &setup) {
+			return fail(setup.code, setup.message)
 		}
-		if c != 0 {
-			return "", errors.New("native query failed")
-		}
-		if !utf8.ValidString(v) {
-			return "", errors.New("invalid output encoding")
-		}
-		return v, nil
-	}
-	failed := func(e error) Result {
 		if errors.Is(e, errJJOutput) {
 			return fail("jj-output-limit", "jj output exceeded the inspection limit")
 		}
@@ -136,15 +66,105 @@ func inspectJJ(ctx context.Context, dir string, r Result) Result {
 		}
 		return fail("jj-failed", "cannot read stored jj identity safely; check operation heads, workspace state and metadata without automatic repair")
 	}
-	observed, e := observeJJ(ctx, root, metadata, repository, query)
-	if e != nil {
-		return failed(e)
-	}
 	r.Status = "ok"
 	r.Repository = nil
 	r.JJRepository = &observed
 	r.Diagnostics = []Diagnostic{}
 	return r
+}
+
+type jjSessionError struct{ code, message string }
+
+func (e *jjSessionError) Error() string       { return e.message }
+func jjSetupError(code, message string) error { return &jjSessionError{code, message} }
+
+// withJJSession shares mandatory isolation and enforcement across read-only operations.
+// Its callback cannot retain the private config: cleanup always runs before return.
+func withJJSession(ctx context.Context, dir string, r Result, visit func(jjSession, string, string, string) error) error {
+	metadata := r.Evidence[0].Location
+	repository, e := resolveJJRepository(metadata)
+	if e != nil {
+		return jjSetupError("invalid-metadata", "cannot resolve valid jj repository metadata")
+	}
+	root := filepath.Dir(metadata)
+	bin, e := exec.LookPath("jj")
+	if e != nil {
+		return jjSetupError("jj-unavailable", "jj executable is unavailable; install supported jj 0.45.1 or newer")
+	}
+	bin, e = filepath.Abs(bin)
+	if e != nil {
+		return jjSetupError("jj-unavailable", "cannot resolve jj executable")
+	}
+	bin, e = filepath.EvalSymlinks(bin)
+	if e != nil {
+		return jjSetupError("jj-unavailable", "cannot resolve jj executable")
+	}
+	tempBase := "/tmp"
+	if runtime.GOOS == "darwin" {
+		tempBase = "/private/tmp"
+	}
+	tempBase, e = filepath.EvalSymlinks(tempBase)
+	if e != nil || within(root, tempBase) || within(repository, tempBase) {
+		return jjSetupError("jj-sandbox-unavailable", "no private isolation directory is available outside the inspected repository")
+	}
+	config, e := os.MkdirTemp(tempBase, "stw-jj-inspect-")
+	if e != nil {
+		return jjSetupError("jj-sandbox-unavailable", "cannot prepare private jj isolation directory")
+	}
+	defer os.RemoveAll(config)
+	if e := isolateJJConfig(metadata, repository, config); e != nil {
+		return jjSetupError("invalid-metadata", "cannot safely isolate jj configuration metadata")
+	}
+	s := jjSession{ctx: ctx, bin: bin, config: config, env: jjEnvironment(config)}
+	switch runtime.GOOS {
+	case "darwin":
+		s.sandbox = "/usr/bin/sandbox-exec"
+	case "linux":
+		s.sandbox, e = exec.LookPath("bwrap")
+	default:
+		e = errors.New("unsupported host")
+	}
+	if e != nil || s.sandbox == "" {
+		return jjSetupError("jj-sandbox-unavailable", "native jj inspection requires usable read-only bubblewrap on Linux or sandbox-exec on macOS")
+	}
+	// Probe writes only in our private directory, never in the inspected target.
+	probe := filepath.Join(config, "write-probe")
+	_, code, e := s.execute(dir, "/bin/bash", []string{"--noprofile", "--norc", "-c", "if : > \"$1\"; then exit 42; else exit 0; fi", "stw-probe", probe})
+	if errors.Is(e, errJJOutput) {
+		return jjSetupError("jj-output-limit", "jj sandbox output exceeded the inspection limit")
+	}
+	if e != nil || code != 0 {
+		return jjSetupError("jj-sandbox-unavailable", "read-only jj sandbox enforcement is unavailable; inspection was refused")
+	}
+	if _, e := os.Lstat(probe); !os.IsNotExist(e) {
+		return jjSetupError("jj-sandbox-unavailable", "read-only jj sandbox probe failed; inspection was refused")
+	}
+	version, code, e := s.execute(dir, bin, []string{"--version"})
+	if errors.Is(e, errJJOutput) {
+		return jjSetupError("jj-output-limit", "jj version output exceeded the inspection limit")
+	}
+	if e != nil || code != 0 {
+		return jjSetupError("jj-sandbox-unavailable", "jj cannot execute in the required read-only sandbox")
+	}
+	fields := strings.Fields(version)
+	if len(fields) != 2 || fields[0] != "jj" || !supportedJJVersion(fields[1]) {
+		return jjSetupError("jj-version-unsupported", "inspection requires stable jj 0.45.1 or newer with supported identity interfaces")
+	}
+	return visit(s, root, metadata, repository)
+}
+
+func (s jjSession) read(dir, op string, args ...string) (string, error) {
+	v, code, e := s.query(dir, op, args...)
+	if e != nil {
+		return "", e
+	}
+	if code != 0 {
+		return "", errors.New("native query failed")
+	}
+	if !utf8.ValidString(v) {
+		return "", errors.New("invalid output encoding")
+	}
+	return v, nil
 }
 
 // observeJJ keeps native machine-interface sampling testable without executing repository data.
