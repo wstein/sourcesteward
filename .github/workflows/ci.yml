@@ -132,6 +132,7 @@ jobs:
           python3 -B scripts/smoke-jj-inspection.py
           python3 -B scripts/smoke-inventory.py
           python3 -B scripts/smoke-workspaces.py
+          python3 -B scripts/smoke-tidy.py
 
   pages:
     needs: [check, conformance]
