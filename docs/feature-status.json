@@ -8,6 +8,12 @@
       "evidence": "verification.md"
     },
     {
+      "id": "002-wide-tie-brand",
+      "status": "implemented",
+      "spec": "../specs/002-wide-tie-brand/spec.md",
+      "evidence": "../brand/verification.md"
+    },
+    {
       "id": "repository-inspection",
       "status": "planned",
       "spec": null,

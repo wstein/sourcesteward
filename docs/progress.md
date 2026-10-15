@@ -1,6 +1,10 @@
 # Progress and handoff
 
 ## Current milestone
+002-wide-tie-brand is implemented and awaiting publication acceptance.
+The wide tie asset set, navy/orange site, useful README badges and local make build target
+pass source/browser checks. See [branding evidence](../brand/verification.md).
+
 001-project-foundation is complete. The public SourceSteward repository starts with an empty
 commit and focused Conventional Commits for specifications, CLI, community, branding, site,
 harness and CI. A durable local checkout is available. See [verification](verification.md).
@@ -9,7 +13,7 @@ harness and CI. A durable local checkout is available. See [verification](verifi
 - Repository/module: wstein/sourcesteward; product: SourceSteward; standalone short CLI: stw.
 - Go 1.27.2 and Cobra v1.10.2; EUPL-1.2 original source/artwork; font licenses retained.
 - Git-first and jj-ready, with optional GitButler adapters planned; no backend executes yet.
-- Original open branch/guide-rail mark uses the BundleDock/WorkHarbor family palette/fonts.
+- Wide navy tie, orange knot and white branch; local family fonts with preserved OFL notices.
 - Static Pages with local assets and same-run exact-SHA checks; no CLI release automation.
 - Weekly Dependabot, community standards, private security reporting and owner review.
 - Spec Kit workflow and small repository-local harness; no agent scheduler or auto-merge.

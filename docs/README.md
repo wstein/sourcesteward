@@ -9,6 +9,7 @@
 - [Progress](progress.md): current state and next action.
 - [Quality](quality.md): measured checks and known gaps.
 - [Verification](verification.md): foundation acceptance evidence.
+- [Brand assets](../brand/README.md) and [branding verification](../brand/verification.md).
 - [Feature status](feature-status.json): machine-readable implementation/evidence index.
 - [Foundation specification](../specs/001-project-foundation/spec.md): user outcomes.
 - [Contributing](../CONTRIBUTING.md), [conduct](../CODE_OF_CONDUCT.md), [security](../SECURITY.md).
