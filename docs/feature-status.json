@@ -108,6 +108,12 @@
       "status": "planned",
       "spec": "../specs/017-work-transfer/spec.md",
       "evidence": null
+    },
+    {
+      "id": "018-change-editing",
+      "status": "planned",
+      "spec": "../specs/018-change-editing/spec.md",
+      "evidence": null
     }
   ]
 }
