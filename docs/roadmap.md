@@ -1,14 +1,15 @@
 # SourceSteward roadmap
 
-SourceSteward is an early scaffold. Only help and version reporting work today.
+SourceSteward is an early scaffold. Help/version and bounded ordinary-Git identity inspection work today.
 No model, GitButler installation or cloud account is required to run those commands.
 
 ## Foundation — current milestone
 Go/Cobra command parsing, text/JSON version information, Spec Kit workflow, automated
 source checks, original family branding and a GitHub Pages overview.
 
-## Inspect — next specification
-A shared text/JSON view of repository identity, changes, conflicts, branches, upstreams,
+## Inspect — identity implemented, broader status deferred
+Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
+Changes, conflicts, branches, upstreams,
 linked worktrees and interrupted operations. Explicit repository targeting, predictable
 exit codes and bounded output. No writes or implicit fetches.
 

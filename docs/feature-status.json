@@ -26,10 +26,10 @@
       "evidence": "../specs/004-site-themes/verification.md"
     },
     {
-      "id": "repository-inspection",
-      "status": "planned",
-      "spec": null,
-      "evidence": null
+      "id": "005-repository-inspection",
+      "status": "implemented",
+      "spec": "../specs/005-repository-inspection/spec.md",
+      "evidence": "inspection-verification.md"
     },
     {
       "id": "jj-adapter",

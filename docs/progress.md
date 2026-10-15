@@ -1,6 +1,10 @@
 # Progress and handoff
 
 ## Current milestone
+005-repository-inspection is implemented and author-verified on codex/005-repository-inspection.
+Identity inspection and conservative managed-backend refusal are bounded by the reviewed
+contract. Source checks, race tests and 10 process cases pass; independent exact-revision
+source review and coordinator publication remain pending. See [inspection acceptance](inspection-verification.md).
 
 004-site-themes passes local source/UI acceptance on its topic worktree: a prominent
 README site link and native system/light/dark Pages selector, with narrow local-script
@@ -28,7 +32,7 @@ harness and CI. A durable local checkout is available. See [verification](verifi
 
 - Repository/module: wstein/sourcesteward; product: SourceSteward; standalone short CLI: stw.
 - Go 1.27.2 and Cobra v1.10.2; EUPL-1.2 original source/artwork; font licenses retained.
-- Git-first and jj-ready, with optional GitButler adapters planned; no backend executes yet.
+- Git-first and jj-ready, with optional GitButler adapters planned; bounded ordinary-Git identity reads execute; native managed adapters remain planned.
 - Wide navy tie, orange knot and white branch; local family fonts with preserved OFL notices.
 - Static Pages with local assets and same-run exact-SHA checks; no CLI release automation.
 - Weekly Dependabot, community standards, private security reporting and owner review.
@@ -43,7 +47,6 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 documentation-only evidence commit will go through the same CI/Pages gate.
 
 ## Next bounded action
-
-Specify repository inspection and explicit Git/jj/GitButler detection. Define result schemas,
-no-write inspection effects and temporary-repository fixtures before implementing adapters.
+Review bounded identity inspection and its evidence; publish only after independent review.
+Broader status and native backend adapters require separate specifications.
 Cleanup, mutation/recovery, repository migration and MCP remain outside foundation scope.
