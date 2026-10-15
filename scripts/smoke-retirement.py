@@ -150,6 +150,14 @@ def acceptance(binary=BINARY):
                 history = native('jj', ['--ignore-working-copy', 'log', '--no-graph', '-r',
                                         'commit_id(' + json.dumps(clean_task['native']['commit_id']) + ')', '-T', 'commit_id'], source)
                 assert history == clean_task['native']['commit_id'], history
+                recovery_rows = native('jj', ['--ignore-working-copy', 'bookmark', 'list', '--all-remotes', '-T',
+                                               'json(self.name()) ++ "\\n" ++ json(self.remote()) ++ "\\n" ++ if(self.normal_target(), json(self.normal_target().commit_id()), "null") ++ "\\n"'], source)
+                fields = [json.loads(line) for line in recovery_rows.splitlines()]
+                assert len(fields) % 3 == 0, fields
+                roots = [(fields[i], fields[i + 1], fields[i + 2]) for i in range(0, len(fields), 3)
+                         if fields[i].startswith('stw-recovery-')]
+                assert roots and all(remote is None for _, remote, _ in roots), roots
+                assert any(commit == clean_task['native']['commit_id'] for _, _, commit in roots), roots
                 def source_protected(snap):
                     return {key: val for key, val in snap.items()
                             if (not (key == '.jj/repo' or key.startswith('.jj/repo/')) or key in ('.jj/repo/config-id', '.jj/repo/config.toml'))
