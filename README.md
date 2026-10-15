@@ -16,11 +16,12 @@ Inspect state. Understand the plan. Act with confidence.
 SourceSteward is an early Go/Cobra scaffold inspired by the convenience of
 [nvie/git-toolbelt](https://github.com/nvie/git-toolbelt) and the human/agent workflows of
 [GitButler](https://gitbutler.com/). Its planned focus is predictable inspection,
-evidence-based local cleanup and worktree-aware operations, with optional jj and GitButler integration.
+evidence-based local cleanup and worktree-aware operations, with native Git/jj support and separately planned GitButler integration.
 No implementation code is copied from those projects.
 
-**Current scope:** help/version and bounded read-only ordinary-Git identity inspection, specifications, source CI and the project site.
-Status enumeration, cleanup, recovery and native jj/GitButler adapters are planned.
+**Current scope:** help/version and bounded read-only Git/jj identity inspection, versioned JSON schemas, specifications, source CI and the project site.
+Status enumeration, cleanup, recovery and native GitButler integration remain planned.
+Spec 008 implements native jj inspection; final cross-platform acceptance is tracked in its [verification record](specs/008-jj-inspection/verification.md).
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
 [Specification](specs/001-project-foundation/spec.md) ·
@@ -46,8 +47,11 @@ stw --help
 
 The repository/module is `github.com/wstein/sourcesteward`; the executable is `stw`,
 which is invoked directly as `stw`. No Git repository or credentials are needed for help/version.
-Inspection requires Git 2.46+ and reports identity only; recognized managed backends are refused.
-See the [inspection contract](specs/005-repository-inspection/contracts/inspect.md).
+Git inspection requires Git 2.46+. Native jj inspection requires stable jj 0.45.1+ and usable
+read-only bubblewrap on Linux or sandbox-exec on macOS; unavailable enforcement fails safely
+without a Git fallback. Inspection reports stored identity, not file status or disk freshness.
+Git/version retain schema v1; native jj results use schema v2. See the
+[backend contract](docs/backends.md) and [jj inspection contract](specs/008-jj-inspection/contracts/inspect.md).
 No release binaries have been published.
 
 ## Develop with specifications

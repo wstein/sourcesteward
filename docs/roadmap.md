@@ -1,13 +1,13 @@
 # SourceSteward roadmap
 
-SourceSteward is an early version-control toolkit. Help/version and bounded ordinary-Git identity inspection work today.
+SourceSteward is an early version-control toolkit. Help/version and bounded native Git/jj identity inspection are implemented.
 No model, GitButler installation or cloud account is required to run those commands.
 
 ## Foundation — current milestone
 Go/Cobra command parsing, text/JSON version information, Spec Kit workflow, automated
 source checks, original family branding, versioned JSON schemas and Hugo-generated GitHub
-Pages guides/command reference. Git and jj are Tier 1 peers by policy; native jj capability
-acceptance remains pending.
+Pages guides/command reference. Git and jj are Tier 1 peers by policy; native jj final cross-platform
+acceptance is tracked in Spec 008.
 
 ## Inspect — identity implemented, broader status deferred
 Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
@@ -15,12 +15,13 @@ Broader changes, conflicts, branches/bookmarks, upstreams, linked worktrees/work
 interrupted operations remain deferred. Existing inspection has explicit targeting, predictable
 exit codes and bounded output without writes or implicit fetches.
 
-## Spec 008 — native jj identity inspection, next
-Support native inspection of standalone and colocated jj workspaces with separate workspace,
-commit, change and operation identities. Specify minimum/current supported versions, freshness
-limits and compatible schemas. Conformance CI must cover both Git and jj and prove bounded,
-noninteractive execution without working-copy or operation-log writes. Do not infer jj
-capability from detection alone.
+## Spec 008 — native jj identity inspection, implemented candidate
+Native inspection supports standalone, colocated and secondary jj workspaces with separate
+workspace, commit, change and operation identities. Schema v2 preserves published Git/version
+v1 contracts. Usable read-only Linux/macOS sandboxing is mandatory; stored-unsnapshotted
+results disclose unknown disk freshness. Minimum/current conformance and independent effects
+review are required; see the [acceptance record](../specs/008-jj-inspection/verification.md)
+for completed macOS/Linux evidence and final handoff gates.
 
 ## Diagnose
 Explain problems and propose repair options. Repository text is data, never instructions.
@@ -38,7 +39,7 @@ configuration and reflog effects before implementation. Plans do not supply auth
 
 ## Worktrees, jj and GitButler
 The [backend contract](backends.md) makes Git/jj Tier 1 support commitments explicit;
-native jj inspection follows Spec 008 and capability tests. Later lifecycle operations must respect ownership and dirty
+native jj inspection is bounded by Spec 008 and capability tests. Later lifecycle operations must respect ownership and dirty
 state. Detect GitButler capabilities and managed workspaces; use its supported interfaces for
 writes and fail unsupported operations. Parallel GitButler branches share a filesystem and
 runtime; separate worktrees remain the option for isolated checkout/runtime state.

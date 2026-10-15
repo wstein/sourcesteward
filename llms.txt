@@ -1,7 +1,7 @@
 # SourceSteward
 
 > Explainable version-control tools for humans and AI agents. The standalone CLI is
-> `stw`; help/version and bounded ordinary-Git identity inspection are implemented.
+> `stw`; help/version and bounded native Git/jj identity inspection are implemented.
 
 Use this index when your task specifically asks you to debug or investigate a problem
 with SourceSteward. Follow links relevant to that task and respect caller instructions,
@@ -33,8 +33,11 @@ from the installed binary; check its version and help first.
 - [Progress](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/progress.md): current work and next action.
 - [Feature status](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/feature-status.json): implementation and acceptance evidence.
 - [Roadmap](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/roadmap.md): planned operations, not currently available commands.
-- [Backend contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/backends.md): planned Git/jj/GitButler behavior and ownership requirements.
+- [Backend contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/backends.md): Git/jj native support, sandbox prerequisites, version policy and GitButler ownership requirements.
 
 - [Inspection operation](https://raw.githubusercontent.com/wstein/sourcesteward/main/internal/inspection/inspection.go): bounded identity and detection.
 - [Inspection contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/005-repository-inspection/contracts/inspect.md): output/effects/error scope.
 - [CLI JSON contracts](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/json-contracts.md): structured results and versioned schemas.
+
+- [Native jj contract](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/008-jj-inspection/contracts/inspect.md): native identity, schema v2, sandbox and stored-state limits.
+- [Native jj verification](https://raw.githubusercontent.com/wstein/sourcesteward/main/specs/008-jj-inspection/verification.md): actual acceptance evidence and pending gates.

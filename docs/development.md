@@ -1,7 +1,7 @@
 # Development
 
 ## Prerequisites and checks
-Go 1.27.2+, Git, Python 3, Node.js 22+ and pinned Hugo 0.168.0 are required for full development checks.
+Go 1.27.2+, Git 2.46+, Python 3, Node.js 22+ and pinned Hugo 0.168.0 are required for full development checks.
 Node runs dependency-free theme behavior tests; CI selects Node 24. Python stages/checks public documentation and assets; the CLI has no Python dependency. Cobra v1.10.2 is pinned in go.mod/go.sum.
 
 ```sh
@@ -14,6 +14,27 @@ go run ./cmd/stw version --json
 `make check` checks formatting, Go tests, vet, module verification, local documentation links,
 SVG structure, theme behavior/security, site assets and whitespace. It does not create release artifacts or mutate a
 user repository. Tests construct a fresh command for each invocation.
+
+## Git/jj conformance
+Native jj fixture tests require stable jj 0.45.1+ and usable Linux bubblewrap or macOS
+sandbox-exec. No host security restriction is disabled to make a sandbox pass. Hosts without
+usable enforcement fail native inspection safely. Local tests may report explicit missing-tool
+or sandbox skips; they are not conformance acceptance. CI sets `STW_REQUIRE_JJ=1`, so missing
+executables, enforcement or mandatory cases fail instead of being counted as coverage.
+
+Two pinned CI lanes use Git 2.46.0/jj 0.45.1 and Git 2.56.0/jj 0.46.0. Checked official
+artifacts/source hashes are recorded in `scripts/backend-releases.json`. To install one lane
+locally on a supported installer host, run `python3 scripts/install-backends.py minimum`
+(or `current`) and put its ignored `.tools/conformance/<lane>/git/bin` and
+`.tools/conformance/<lane>/jj` directories on PATH. Installation downloads/builds tools;
+it is separate from the offline CLI. Run `python3 scripts/smoke-jj-inspection.py --preflight minimum`,
+then `STW_REQUIRE_JJ=1 go test -count=1 -race ./...` and
+`python3 scripts/smoke-jj-inspection.py`. Use the matching lane name for current versions.
+
+Native inspection leaves target repository/workspace bytes unchanged. It creates and removes
+private temporary isolation/probe files outside the target. Effects fixtures include edited
+files, stale workspaces, divergent operation heads, configuration helpers and attempted
+index/type-file repairs; source checks alone do not establish those guarantees.
 
 ## Build the local CLI
 
@@ -35,9 +56,9 @@ offline, including CLI notice links, along with ordinary local documentation lin
 The guidance files remain source documentation and are excluded from the Pages artifact.
 
 ## Specification workflow
-The completed foundation design is in ../specs/001-project-foundation/ (from the repository
-root: specs/001-project-foundation). Its spec, plan, research, data model, contract, quickstart
-and tasks describe the current milestone. The roadmap describes future work only.
+Feature designs live under specs/. The current native jj slice is
+[Spec 008](../specs/008-jj-inspection/spec.md), with plan, tasks, analysis and verification.
+The roadmap separates implemented inspection from broader future operations.
 
 Project-local Codex skills were installed with:
 
@@ -62,8 +83,9 @@ are generated through the controlled build below; a raw HTTP server over docs/ p
 only the authored landing, not the final generated routes.
 
 A single GitHub Actions workflow checks every PR and push. Its check job builds and
-validates the artifact from the exact run SHA. The deployment job runs only for main
-pushes after that job succeeds, consuming its identical uploaded artifact without
+validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
+lanes must also pass before deployment. The deployment job runs only for main
+pushes after all required jobs succeed, consuming its identical uploaded artifact without
 rebuilding or checking out another revision. Pages uses GitHub Actions as its build source.
 There is no PR/manual-dispatch deployment path, CLI release or Git-tag publication.
 
