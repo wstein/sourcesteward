@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('authored_docs', ROOT / 'scripts/check-docs.py')
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
+package_spec = importlib.util.spec_from_file_location('schema_publication', ROOT / 'scripts/package-pages.py')
+publication = importlib.util.module_from_spec(package_spec)
+package_spec.loader.exec_module(publication)
 
 class Links(HTMLParser):
     def __init__(self):
@@ -53,8 +56,11 @@ def validate(destination,revision,source_root=ROOT):
             if url.fragment and local.suffix == '.html':
                 referenced = checker.Page(theme_script=BASE + 'assets/theme.js'); referenced.feed(local.read_text())
                 if unquote(url.fragment) not in referenced.ids: raise ValueError('Broken generated fragment: ' + target)
-    for source in (source_root / 'schemas/v1').glob('*.schema.json'):
-        if (destination / 'schemas/v1' / source.name).read_bytes() != source.read_bytes(): raise ValueError('Schema bytes changed')
+    sources = publication.schema_sources(source_root)
+    publication.schema_sources(destination)
+    for source in sources:
+        target = destination / 'schemas' / source.relative_to(source_root / 'schemas')
+        if target.read_bytes() != source.read_bytes(): raise ValueError('Schema bytes changed')
     print(f'Generated site checks passed ({len(pages)} HTML pages; revision {revision}).')
 
 if __name__ == '__main__':

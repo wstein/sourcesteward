@@ -6,7 +6,8 @@ Use `stw version --json` or `stw inspect [PATH] --json` for structured results.
 | Command | Authoritative schema | Stable publication URL |
 | --- | --- | --- |
 | `stw version --json` | [version.schema.json](../schemas/v1/version.schema.json) | [Version schema 1](https://wstein.github.io/sourcesteward/schemas/v1/version.schema.json) |
-| `stw inspect --json` | [inspect.schema.json](../schemas/v1/inspect.schema.json) | [Inspection schema 1](https://wstein.github.io/sourcesteward/schemas/v1/inspect.schema.json) |
+| `stw inspect --json` (Git and unselected/ambiguous ownership) | [inspect.schema.json](../schemas/v1/inspect.schema.json) | [Inspection schema 1](https://wstein.github.io/sourcesteward/schemas/v1/inspect.schema.json) |
+| `stw inspect --json` (selected native jj) | [inspect.schema.json](../schemas/v2/inspect.schema.json) | [Native jj inspection schema 2](https://wstein.github.io/sourcesteward/schemas/v2/inspect.schema.json) |
 
 These files use JSON Schema 2020-12. They contain only internal references, so downloaded
 files validate offline with a compatible validator. Site packaging serves the checked-in
@@ -18,8 +19,10 @@ Pages deployment succeeds; source checks alone do not prove live publication.
 Version success exits 0 and emits one JSON object plus a newline, with `schema_version`,
 `name` and `version`. Version usage errors exit 2 and do not emit JSON.
 
-Inspection success exits 0; its `status` is `ok`, `backend` is `git`, `repository` contains
-identity, and `diagnostics` is an empty array. Operational failures exit 1 and emit an
+Git inspection success exits 0; its `status` is `ok`, `backend` is `git`, `repository` contains
+identity, and `diagnostics` is an empty array. Git and version output retain schema 1.
+Recognized native jj ownership selects schema 2 for both success and operational failures;
+callers must dispatch by `schema_version`, rather than guessing from field presence. Operational failures exit 1 and emit an
 inspection result with `status` `error` or `unsupported`, a null `repository`, and a nonempty
 `diagnostics` array. They also write a concise `Error:` diagnostic to stderr. Unsupported
 managed backends retain detection evidence without pretending to be ordinary Git results.
@@ -36,6 +39,30 @@ Object IDs are full lowercase hex, 40 characters for SHA1 or 64 for SHA256. Bare
 have null worktree paths. Paths are opaque JSON strings, not URLs; preserve escaped control
 characters and do not interpolate path or diagnostic strings into shell commands.
 
+## Native jj identity (schema 2)
+
+Selected native jj results always have `backend: "jj"` and `repository: null`. Successful
+results additionally contain `jj_repository` with `workspace_root`, `metadata_dir`,
+`repository_dir`, `workspace_name`, `change_id`, `commit_id`, `operation_id` and `observation`.
+Paths are absolute and retain exact valid UTF-8; workspace names are opaque strings.
+
+Change IDs are full 32-character reverse hex (`k`–`z`); commit IDs are full 40-character
+lowercase hex; operation IDs are full 128-character lowercase hex. These are distinct
+backend identities, not interchangeable Git branches or IDs.
+
+The observation has `working_copy: "stored-unsnapshotted"` and a nonempty `limitation`
+explaining freshness and concurrent-state limits. Inspection does not snapshot edited or
+untracked disk content, update stale workspaces, merge operations or import/export Git
+state. Native execution requires usable read-only sandbox enforcement; unavailable
+enforcement returns `jj-sandbox-unavailable` without an unsandboxed retry. The inspected
+repository is read-only; a private temporary isolation directory outside it may be used.
+
+Operational failures omit `jj_repository` and have nonempty diagnostics; success has empty
+diagnostics. Schema 2 allows additional object members and diagnostic codes but enforces
+these known relationships. Ambiguous ownership and unsupported GitButler remain schema 1.
+See the [native jj contract](../specs/008-jj-inspection/contracts/inspect.md) for effects,
+version and process limits.
+
 ## Compatibility
 
 Consumers must ignore additional object members at every nesting level and handle unknown
@@ -44,7 +71,7 @@ remain stable within schema 1. The schemas intentionally allow extra properties;
 reject compatible producer extensions. New status/backend/HEAD/object-format alternatives or
 incompatible meaning/type changes require a new `schema_version` and a new `schemas/vN/` URL.
 Published old versions remain available. Additive optional fields and new diagnostic codes
-may extend version 1. If exact schema bytes matter, pin a Git revision or checksum as well as
+may extend an existing version. If exact schema bytes matter, pin a Git revision or checksum as well as
 the versioned URL.
 
 ## Verification and dependencies
@@ -53,7 +80,11 @@ the versioned URL.
 metaschemas, prohibits external references/loading, rejects independently authored invalid
 results and validates real CLI output using isolated temporary Git repositories. `make check`
 and CI include these tests. Fixtures cover version, attached/detached/unborn HEAD, SHA1/SHA256,
-bare and linked worktrees, managed workspace refusals and operational failures.
+bare and linked worktrees, managed workspace refusals and operational failures. Native jj
+fixtures validate standalone, colocated and secondary workspaces, nested paths, unsnapshotted
+content and failure results against schema 2. With `STW_REQUIRE_JJ=1`, unavailable jj fails
+instead of skipping these fixtures; mandatory conformance CI uses this setting. Hardcoded
+checksums also protect published v1 schema bytes from accidental changes.
 
 The established [santhosh-tekuri/jsonschema](https://github.com/santhosh-tekuri/jsonschema)
 validator is pinned at v6.0.3 in `go.mod` for tests only, with its dependencies pinned in
