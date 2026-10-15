@@ -1,0 +1,49 @@
+# Implementation Plan: Native jj Identity Inspection
+
+**Branch**: `codex/008-jj-inspection` | **Date**: 2026-10-15 | **Spec**: [spec.md](spec.md)
+
+## Summary
+Extend the existing bounded inspection operation with native jj identity reads. Keep Git behavior and published v1 bytes unchanged. Selected jj results use schema2 because v1 explicitly permits successful Git only. The reviewed Tier 1 policy amendment is integrated as a dependency; this plan does not rewrite governance.
+
+## Technical Context
+**Language/Version**: Existing Go 1.27.2/Cobra 1.10.2; standard library runtime; existing offline JSON Schema validator in tests.
+**Dependencies**: No new runtime module. Git minimum2.46.0, current2.56.0; jj minimum0.45.1/current0.46.0. Store exact supported test versions and installer checksums in a reviewed manifest.
+**Storage**: Read-only local filesystem/backend metadata; no persistent caches or result files. A private temporary isolation/config/probe directory outside the target is created and removed as a disclosed setup effect.
+**Testing**: Tests first, temporary real repositories, bounded runner seam for errors/races, schema validation, snapshots/effect sentinels and required CI conformance.
+**Target Platform**: Initial native jj hosts are Linux with usable bubblewrap and macOS with usable sandbox-exec; unsupported/enforcement-denied hosts fail closed. Mandatory Linux CI real backend versions, local platform evidence recorded separately.
+**Performance/Constraints**: Fixed number of bounded identity invocations, 64KiB output cap per invocation, 10-second whole native-jj operation deadline, cancellation and finite wait; no file-status/history enumeration or general adapter framework.
+**Scope**: Native jj workspace identity, compatible result/rendering/schema publication and Tier 1 conformance only.
+
+## Constitution Check
+I: Same typed result drives human/machine output; no interaction/model/cloud dependency.
+II/III: Inspection has zero intentional writes; preserve ownership, disallow fallback and migration.
+IV: Artifacts and independent analysis precede failing tests/implementation; independent exact-revision review precedes handoff.
+V: Documented native Git/jj interfaces with capability/version checks; preserve native identities and stored-state limits. Current1.0.0 permits this jj integration; integrated1.1.0 strengthens Tier 1 obligations without weakening protections.
+Pre-design gates pass. Post-design gate passes with mandatory enforced read-only sandboxing; implementation fails closed if enforcement or a safe native read is unavailable.
+
+## Project Structure
+```text
+internal/inspection/                discovery, typed model, native jj runner and tests
+internal/cli/inspect.go              rendering only; existing boundary retained
+internal/contracts/                 real CLI schemas and negative contract tests
+schemas/v2/inspect.schema.json       new jj schema; v1 files untouched
+scripts/                            pinned backend installation/conformance and Pages checks
+.github/workflows/ci.yml             mandatory minimum/current conformance jobs
+specs/008-jj-inspection/             reviewed specification/design/tasks/evidence
+```
+
+## Design and Execution
+1. Preserve ordinary Git's detection boundary and output. Discover nearest recognized `.jj` ownership before any ordinary Git HEAD read. `.jj` remains a real directory; validate secondary-workspace repository pointer as bounded UTF-8 text resolving a real shared jj repository directory, without marker symlink traversal. Standalone/noncolocated jj uses `.jj` discovery even without `.git`. Nested unrelated Git ends ancestor lookup. Collect conservative GitButler evidence for colocated Git using bounded read-only metadata (gitfile/common-dir, loose/packed refs) without depending on Git executable availability; ambiguity refuses both. Metadata budget exhaustion/corruption fails closed, never drops evidence. A missing Git executable must not prevent standalone/native jj inspection; no Git identity substitute.
+2. Native jj execution requires an enforced sandbox: Linux bubblewrap with read-only filesystem bindings, private network namespace, dropped capabilities and no host security relaxation; macOS sandbox-exec with all file writes/network denied and process execution restricted to the resolved jj executable. Sandbox unavailable, denied or incompatible yields an actionable error; never retry unsandboxed. jj read commands can rebuild indexes or migrate missing type files, so flags/preflight alone cannot enforce zero writes. Legitimate read-side repairs denied by the sandbox become inspection failures preserving original metadata. Sandbox capability is an explicit supported-host requirement. Native runner uses fixed argv and no shell, empty stdin, explicit `--no-pager --color=never --ignore-working-copy --at-operation=@` for initial operation discovery. Resolve one full operation ID, then pin every remaining read with `--at-operation=<full-id>`. `--ignore-working-copy` suppresses snapshots; operation pinning suppresses automatic divergent-head merging. Neither flag alone proves all effects. Never use `--no-integrate-operation` as a zero-write guarantee.
+3. Use explicit scalar `json(...)` templates supported by both pinned jj versions, never user/default templates, aliases or rendered human output. Query native workspace root and selected workspace name/target plus full commit/change/operation IDs. Bound every response and validate exact record count/types/identifier alphabets. Do not enumerate files, commits or unrelated workspace details in public results. Use a fixed selected-root template `if(stringify(self.root()) == <JSON quoted canonical root>, json(self.name()) ++ "\n" ++ json(self.root()) ++ "\n", "")`; it emits only selected workspace identity while timeout bounds internal iteration. Missing/mismatched recorded root fails explicitly.
+4. Strip inherited JJ_* and GIT_* routing/config/trace injection before setting reviewed deterministic variables. Set `JJ_CONFIG=` and a fresh owned `XDG_CONFIG_HOME`. jj0.46 secure repository/workspace configuration IDs can route to user config despite empty JJ_CONFIG: read only bounded regular 20-hex `.jj/repo/config-id` and `.jj/workspace-config-id`; copy only the corresponding bounded regular opaque `metadata.binpb` from original XDG `jj/repos|workspaces/<id>` into isolated config directories, never config.toml. Absence of an ID needs no copy; legacy/direct/missing/mismatched secure metadata fails closed, never repairs. Reject symlinks; cap each metadata input at64KiB, directory traversal at128entries and pointer chains at8hops. Explicit fixed templates cannot be overridden by repository aliases because configuration text is excluded. Pinned minimum/current conformance must verify this isolation. Enforcement denies helper subprocesses, network and filesystem writes even if repo/workspace config requests them; reject unsafe or unsupported configuration/capability states rather than silently executing helpers. No subprocess stderr/config/file content is exposed. Fixed identity commands must not invoke external diff/merge/signing/watchman/fsmonitor/editor/pager/credential hooks. Test sentinel configurations, not just empty configs.
+5. Compare initial/final operation/workspace identity to detect visible changes; fail changed-repository if inconsistent. Return stored-unsnapshotted qualification on success. Stale working-copy observations are either explicit stored-state results or stable actionable failures, never automatic updates. Concurrent/ABA/metadata-routing limitations remain disclosed; no freshness guarantee.
+6. Result schema1 remains exactly existing Git/version/detection output. Once ownership selects native jj, successes and operational errors use schema2 with backend jj, repository=null and optional jj_repository native identity; ambiguous/GitButler/pre-selection errors remain schema1. Schema2 status is ok/error, success contains complete jj_repository identity and empty diagnostics; failure omits jj_repository and contains nonempty diagnostics. No Git fields are filled with jj identities and no version flag is added.
+7. Publish `schemas/v2/inspect.schema.json` at the project-prefix stable URL while preserving both v1 files byte-for-byte. Update offline schema compiler, package allowlist, symlink/extra-file/byteidentity tests and site checker. Validate real CLI success/error output, plus independent invalid fixtures. Existing usage/writer/cancellation partial-output rules remain.
+8. Conformance jobs install exact pinned backend binaries from verified primary releases with checked hashes (or deterministic checked source builds when necessary). Each job asserts exact versions and enables required real-fixture mode; missing executables or skipped mandatory scenarios fail. Exercise minimum and current Git/jj pair jobs; unit tests additionally probe unsupported versions. No floating latest download. Keep deployment bound to complete same-revision checks.
+
+## Delivery and Review
+Atomic Conventional Commits separate specification, native adapter/tests, schema/publication and CI/docs. Coordinated ownership avoids shared-file edits. Analysis must map every FR/SC to tasks; source review tests semantics and effects, not merely document consistency. Record commands, versions, before/after evidence, skips and unresolved limitations in verification.md and repository handoff records. Open feature PR stacked on the policy PR if it remains unmerged; no automatic main merge.
+
+## Complexity Tracking
+No new runtime dependency, universal backend abstraction, migration or mutation. Schema2 is necessary because published schema1 successful backend is const git. Minimum/current backend installation is justified by Tier 1 conformance rather than relying on runner-preinstalled versions.
