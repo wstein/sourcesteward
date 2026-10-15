@@ -98,6 +98,15 @@ func TestWorkspaceNativePlanAndTaskSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 		valid(t, s, raw)
+		v := value(t, raw).(map[string]any)
+		other := "git"
+		if backend == "git" {
+			other = "jj"
+		}
+		v["backend"] = other
+		if s.Validate(v) == nil {
+			t.Fatalf("accepted mismatched %s native evidence", backend)
+		}
 		for _, field := range []string{"commit_id", "change_id", "operation_id"} {
 			v := value(t, raw).(map[string]any)
 			v["task"].(map[string]any)["native"].(map[string]any)[field] = "invalid-id"
