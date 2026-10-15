@@ -120,7 +120,10 @@ def install_git(pin, destination):
     version = pin['version']
     raw = download('https://www.kernel.org/pub/software/scm/git/git-' + version + '.tar.xz', pin['sha256'])
     destination = safe_destination(destination)
-    destination.mkdir(parents=True, exist_ok=True)
+    # make install must never follow pre-existing child links into other paths.
+    if destination.exists():
+        raise ValueError('Git install prefix must be new; choose a clean toolchain directory')
+    destination.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix='stw-git-build-') as directory:
         source = extract_git(raw, Path(directory), version)
         flags = ['prefix=' + str(destination), 'NO_CURL=YesPlease', 'NO_EXPAT=YesPlease', 'NO_OPENSSL=YesPlease', 'NO_GETTEXT=YesPlease', 'NO_TCLTK=YesPlease', 'NO_PERL=YesPlease', 'NO_PYTHON=YesPlease']

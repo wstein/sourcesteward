@@ -78,6 +78,12 @@ class BackendInstallerTests(unittest.TestCase):
             (root / 'link').symlink_to(root, target_is_directory=True)
             with self.assertRaises(ValueError): backends.safe_destination(root / 'link' / 'jj')
 
+    def test_git_install_refuses_existing_prefix_before_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(backends, 'download', return_value=b'unused'):
+                with self.assertRaises(ValueError):
+                    backends.install_git({'version': '1', 'sha256': '0'*64}, Path(directory).resolve())
+
     def test_manifest_pins_two_toolchain_lanes(self):
         pins = backends.load_pins()
         self.assertEqual(set(pins), {'minimum', 'current'})
