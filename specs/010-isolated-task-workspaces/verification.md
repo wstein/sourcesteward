@@ -110,3 +110,23 @@ Independent scoped review cleared the CI repair and reran all13backend/workflow 
 All43Python tests pass with checked Hugo; documentation and whitespace checks pass.
 Runtime source remains byte-identical to reviewed/tested5e32515. Final-head hosted Linux
 checks are recorded in PR #32's body when complete; superseded runs preserve failure logs.
+
+## Hosted unused-filter admission repair
+
+Both pinned Linux conformance lanes passed at `ad49eb6`; the source job's sandbox
+preflight passed but pristine distro-Git fixtures refused system-wide unused Git LFS
+definitions. GitHub's image installs Git LFS; its
+[package setup](https://github.com/git-lfs/git-lfs/blob/main/debian/postinst) installs
+filters system-wide. No executable hook, active filter or host permission was bypassed.
+
+Test-first source `e5fbaf94f1b5cd7fb9a4a72bea1d7ceb0b1178f7` admits unused definitions
+only after complete bounded native attributes at the selected base. Active committed/
+info/default-global filters and configured sentinel-named drivers refuse before action.
+Helper sentinels remain unexecuted. Independent scoped review cleared that exact source
+and reran four native filter cases (2.756s) with enforced sandbox; minimum/current
+filter race tests passed. Full `make check` (43 Python, 12 theme, 132 docs and all Go
+checks) and `go test -race ./...` pass at that source with mandatory current backends.
+The 45-case native workspace suite passed again in both pinned local lanes at exact
+source e5fbaf9 with enforced sandboxing and no mandatory skips. Final exact-head hosted
+results are recorded in the PR body. Previous source/effects
+evidence remains applicable to unchanged adapters and contracts.
