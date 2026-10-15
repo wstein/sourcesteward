@@ -27,7 +27,7 @@ Independent test: distinguish staged/disk/stored/untracked/conflict scopes; unsn
 
 ## Phase 5 — US3: bounded human/structured contract (P1)
 Independent test: same model human/JSON, errors/schema/regressions, mandatory native versions, malicious helpers and limit/cancellation cases.
-- [ ] T014 [P] [US3] Write failing Cobra parsing/human-JSON/predicate-only known-false exit0/explicit-extra-scope partial-error exit1/syntax exit2 tests in internal/cli/inventory_test.go (FR-007/008/010).
+- [ ] T014 [P] [US3] Write failing Cobra parsing/human-JSON/predicate-only known-false exit0/unknown-query partial-error exit1/unrelated-scope syntax refusal/syntax exit2 tests in internal/cli/inventory_test.go (FR-007/008/010).
 - [ ] T015 [P] [US3] Write failing inventory success/partial/error schema fixtures in internal/contracts/contracts_test.go (FR-007/009).
 - [ ] T016 [US3] Add CLI parsing/rendering from shared result only in internal/cli/inventory.go and register in internal/cli/root.go (FR-007/008).
 - [ ] T017 [US3] Publish new inventory-only schema v1 in schemas/v1/inventory.schema.json and validate actual output fixtures without modifying inspect/version contracts (FR-007/009).
@@ -44,7 +44,7 @@ Independent test: true/false/unknown separate from failure; literal unusual file
 ## Phase 7 — US5: references, integration, bases (P1)
 Independent test: explicit remote samples/base/revision, multiple candidates, no implicit fetch or naming guesses, containment distinct from ancestry and publication.
 - [ ] T024 [P] [US5] Add failing Git remote/upstream/containment/local-only/ambiguous-base tests in internal/inspection/inventory_git_test.go (FR-011/012/013/015).
-- [ ] T025 [P] [US5] Add failing jj bookmark/remote/conflicted-reference/ancestry/base provenance tests in internal/inspection/inventory_jj_test.go (FR-011/012/013/015).
+- [ ] T025 [P] [US5] Add failing jj bookmark/remote/all-upstream-relationships/conflicted-reference/ancestry/base provenance tests in internal/inspection/inventory_jj_test.go (FR-011/012/013/015).
 - [ ] T026 [US5] Implement Git reference/base candidate inventory and sampled reachability in internal/inspection/inventory_git.go; no main/master/origin assumptions (FR-011/012/013/015).
 - [ ] T027 [US5] Implement native jj bookmarks/remote relations/base candidate qualifications and sampled reachability in internal/inspection/inventory_jj.go; alias config remains data, never evaluated (FR-011/012/013/015).
 
