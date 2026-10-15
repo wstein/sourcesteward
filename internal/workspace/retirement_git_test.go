@@ -10,6 +10,10 @@ import (
 )
 
 func gitRetirementFixture(t *testing.T) (string, MutationPlan, TaskRecord) {
+	return gitRetirementFixtureAt(t, false)
+}
+
+func gitRetirementFixtureAt(t *testing.T, nested bool) (string, MutationPlan, TaskRecord) {
 	d := fixtureGit(t)
 	if e := os.WriteFile(filepath.Join(d, "binary"), []byte{0, 255, 128, 7}, 0600); e != nil {
 		t.Fatal(e)
@@ -20,6 +24,9 @@ func gitRetirementFixture(t *testing.T) (string, MutationPlan, TaskRecord) {
 	gitFixture(t, d, "add", ".")
 	gitFixture(t, d, "commit", "-qm", "binary and executable")
 	parent := gitTempDir(t)
+	if nested {
+		parent = filepath.Dir(d)
+	}
 	state := gitTempDir(t)
 	if e := os.Chmod(state, 0700); e != nil {
 		t.Fatal(e)
@@ -155,5 +162,88 @@ func TestGitRetirementSandboxPreservesGrantedRoot(t *testing.T) {
 	}
 	if _, e := os.Stat(root); e != nil {
 		t.Fatal("granted root removed")
+	}
+}
+
+func TestGitRetirementNestedSourceParentPreservesSource(t *testing.T) {
+	d, creation, task := gitRetirementFixtureAt(t, true)
+	before := map[string][]byte{}
+	for _, name := range []string{".git/HEAD", ".git/index", ".git/config", "file", "binary"} {
+		data, e := os.ReadFile(filepath.Join(d, name))
+		if e != nil {
+			t.Fatal(e)
+		}
+		before[name] = data
+	}
+	o, e := (gitRetirementAdapter{}).Observe(context.Background(), d, "HEAD", task, creation)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p := RetirementPlanRecord{SchemaVersion: 2, PlanID: "retire-nested", SourcePath: d, Backend: "git", CreationPlan: creation, Task: task, Expected: o, RemoveRegistration: true, RemoveFiles: task.Destination}
+	r, out, e := (gitRetirementAdapter{}).PrepareRecovery(context.Background(), p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	out, e = (gitRetirementAdapter{}).RemoveRegistration(context.Background(), p, r, *out.Expected)
+	if e != nil || !out.Complete {
+		t.Fatalf("nested removal: %+v %v", out, e)
+	}
+	for name, want := range before {
+		after, e := os.ReadFile(filepath.Join(d, name))
+		if e != nil || string(after) != string(want) {
+			t.Fatalf("source %s changed", name)
+		}
+	}
+	if _, e := os.Stat(o.RegistrationParent.Path); e != nil {
+		t.Fatal("pinned native registration parent removed")
+	}
+}
+
+func TestGitRetirementStalePayloadAfterRecoveryPreservesTarget(t *testing.T) {
+	d, creation, task := gitRetirementFixture(t)
+	o, e := (gitRetirementAdapter{}).Observe(context.Background(), d, "HEAD", task, creation)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p := RetirementPlanRecord{SchemaVersion: 2, PlanID: "retire-stale", SourcePath: d, Backend: "git", CreationPlan: creation, Task: task, Expected: o, RemoveRegistration: true, RemoveFiles: task.Destination}
+	r, out, e := (gitRetirementAdapter{}).PrepareRecovery(context.Background(), p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(task.Destination, "late-user-data"), []byte("keep"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	out, e = (gitRetirementAdapter{}).RemoveRegistration(context.Background(), p, r, *out.Expected)
+	if e == nil || out.Attempted {
+		t.Fatalf("stale target removal attempted %+v %v", out, e)
+	}
+	if data, e := os.ReadFile(filepath.Join(task.Destination, "late-user-data")); e != nil || string(data) != "keep" {
+		t.Fatal("late user data removed")
+	}
+	if got := gitFixture(t, d, "rev-parse", r.Name); got != o.Target.CommitID {
+		t.Fatal("recovery lost after stale refusal")
+	}
+}
+
+func TestGitRetirementParentGrantsProtectNestedSourceAndRegularSibling(t *testing.T) {
+	d, creation, task := gitRetirementFixtureAt(t, true)
+	sibling := filepath.Join(filepath.Dir(task.Destination), "regular-sibling")
+	if e := os.WriteFile(sibling, []byte("keep"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	o, e := (gitRetirementAdapter{}).Observe(context.Background(), d, "HEAD", task, creation)
+	if e != nil {
+		t.Fatal(e)
+	}
+	protected, e := gitRetirementProtection([]PathIdentity{o.DestinationParent, o.RegistrationParent}, []string{task.Destination, o.Target.GitDir})
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, code, e := sandboxTestRun(t, context.Background(), []string{"files", filepath.Join(task.Destination, "declared-write"), filepath.Join(d, "file"), filepath.Join(d, ".git", "config"), filepath.Join(d, ".git", "index"), filepath.Join(d, ".git", "HEAD"), sibling}, []string{o.DestinationParent.Path, o.RegistrationParent.Path}, protected)
+	if e != nil || code != 0 {
+		t.Fatalf("nested source or regular sibling writable: %d %v", code, e)
+	}
+	if data, e := os.ReadFile(sibling); e != nil || string(data) != "keep" {
+		t.Fatal("regular sibling modified")
 	}
 }
