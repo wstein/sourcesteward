@@ -48,7 +48,7 @@ func fixtureCoordinator(t *testing.T) (coordinator, *fakeAdapter, PlanOptions) {
 	os.Mkdir(meta, 0700)
 	state := filepath.Join(base, "state")
 	os.Mkdir(state, 0700)
-	f := &fakeAdapter{snap: Snapshot{Identity: NativeIdentity{Backend: "git", RepositoryDir: meta, WorkspaceRoot: source, GitDir: meta, CommitID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ObjectFormat: "sha1"}, BaseSelector: "HEAD", BaseCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReferenceDigest: "ref", RegistrationDigest: "regs", SafetyDigest: "safe"}}
+	f := &fakeAdapter{snap: Snapshot{Identity: NativeIdentity{Backend: "git", RepositoryDir: meta, WorkspaceRoot: source, GitDir: meta, CommitID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ObjectFormat: "sha1"}, BaseSelector: "HEAD", BaseCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ReferenceDigest: strings.Repeat("1", 64), RegistrationDigest: strings.Repeat("2", 64), SafetyDigest: strings.Repeat("3", 64)}}
 	c := coordinator{inspect: func(context.Context, string) inspection.Result {
 		return inspection.Result{Status: "ok", Backend: "git"}
 	}, adapter: func(string) (nativeAdapter, error) { return f, nil }, inventory: func(context.Context, string, inspection.InventoryOptions) inspection.InventoryResult {
@@ -77,7 +77,7 @@ func TestCoordinatorAuthorizationStaleAndCompletedRetry(t *testing.T) {
 	if r.Status != "ok" || r.Task == nil || f.creates != 1 {
 		t.Fatalf("apply %#v creates%d", r, f.creates)
 	}
-	f.snap.Identity.CommitID = "legitimate user progress"
+	f.snap.Identity.CommitID = strings.Repeat("b", 40)
 	r = c.apply(context.Background(), opts)
 	if r.Status != "ok" || f.creates != 1 {
 		t.Fatalf("retry %#v", r)
