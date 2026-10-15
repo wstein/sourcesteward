@@ -60,3 +60,10 @@ Native workspace update-stale rejects operation pinning in both supported versio
 Only creation is pinned; materialization runs in the owned destination with operation
 checks before and after. External/ABA races are not transactional; unexpected observations
 produce partial effects and manual recovery evidence, never an automatic source update.
+
+## Checkout name admission
+Git checkout admission rejects symlinks, gitlinks and aliased tree names rather than
+materializing an ambiguous checkout. Unicode normalization uses the already pinned
+golang.org/x/text module, promoted to an explicit dependency for its normalization API;
+the standard library has no canonical Unicode normalization facility. This retains
+Unicode filenames while detecting canonical-equivalent and case-equivalent collisions.

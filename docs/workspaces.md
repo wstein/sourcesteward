@@ -54,8 +54,8 @@ fresh disk cleanliness; unknown state is retention evidence, never deletion perm
 
 Observation commands have a ten-second deadline; apply has sixty seconds. Native command output
 is bounded at64KiB, encoded state/results at1MiB and aggregate observations at1,024. Git checkout
-preflight additionally limits tracked entries to1,024 and stored file bytes to64MiB. jj's time bound
-can interrupt materialization with partial effects; this is not a disk-size quota. Paths/base are
+preflight additionally limits tracked leaf entries to1,024, each file to16MiB and total stored file bytes to64MiB. Symlink/gitlink trees, checkout path aliases and unsafe metadata are refused. jj's time bound
+can interrupt materialization with partial effects; this is not a disk-size quota. Native jj source working-copy metadata is limited to16 files, with each sampled metadata/index/config file limited to64KiB; unsupported or oversized evidence refuses creation. Paths/base are
 at most4,096 bytes; task/owner labels use ASCII letters/digits plus `.`, `_`, `-`, start with a
 letter/digit and are at most128bytes. Sampling cannot detect every external race or ABA change.
 
