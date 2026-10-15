@@ -6,7 +6,7 @@ Tests are mandatory under repository policy and requested review/test scope. Wri
 behavior tests before implementation. No source work before independent cross-artifact analysis.
 
 ## Phase 1: Setup
-- [ ] T001 Finalize fixed shared interface and analysis gates in specs/010-isolated-task-workspaces/contracts/interface.md and analysis.md.
+- [x] T001 Finalize fixed shared interface and analysis gates in specs/010-isolated-task-workspaces/contracts/interface.md and analysis.md.
 - [ ] T002 Record native Git/jj argument, helper and sandbox research with exact experiments in specs/010-isolated-task-workspaces/verification.md.
 
 ## Phase 2: Foundation
