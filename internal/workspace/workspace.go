@@ -279,6 +279,9 @@ func (c coordinator) apply(ctx context.Context, o ApplyOptions) Result {
 	for _, effect := range native.Effects {
 		j.Actions = append(j.Actions, ActionOutcome{"native-effect", effectStatus, effect})
 	}
+	if ctx.Err() != nil {
+		e = ctx.Err()
+	}
 	if e != nil || !native.Complete || !native.SourceUnchanged {
 		if e == nil {
 			e = failure("incomplete-native", "Native workspace or source-preservation verification is incomplete.")
@@ -348,7 +351,13 @@ func (c coordinator) retry(ctx context.Context, s *store, p MutationPlan, j jour
 	return r
 }
 func (c coordinator) finalize(ctx context.Context, s *store, p MutationPlan, j journal, a nativeAdapter, r Result) Result {
+	if e := ctx.Err(); e != nil {
+		return c.incomplete(s, p, j, r, e)
+	}
 	native, e := a.Verify(ctx, p)
+	if ctx.Err() != nil {
+		return c.incomplete(s, p, j, r, ctx.Err())
+	}
 	if e != nil || !native.Complete || native.Identity != j.Native.Identity {
 		return c.incomplete(s, p, j, r, failure("verification-failed", "Native registration ownership could not be verified after creation."))
 	}
