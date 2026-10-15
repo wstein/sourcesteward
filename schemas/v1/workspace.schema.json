@@ -391,7 +391,57 @@
             "maxLength": 4096
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "backend": {
+                        "const": "git"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "backend": {
+                        "const": "jj"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "task": {
       "type": "object",
@@ -486,7 +536,49 @@
             "maxLength": 4096
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "native": {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "jj"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "native": {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "inventory": {
       "title": "SourceSteward bounded native Git/jj inventory (schema 1)",
@@ -2319,6 +2411,88 @@
             }
           }
         ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "plan": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              }
+            ]
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "git"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "const": "jj"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "plan": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              }
+            ]
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "backend": {
+                    "const": "jj"
+                  }
+                }
+              }
+            ]
+          }
+        }
       }
     }
   ]
