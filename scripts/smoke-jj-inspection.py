@@ -73,6 +73,33 @@ def preflight(lane):
     print('Exact ' + lane + ' Git/jj versions and enforced read-only sandbox verified')
 
 
+def diagnostic_variants(binary):
+    # These CI-only probes execute true, never jj or inspected repository data.
+    base = [binary, '--ro-bind', '/', '/', '--unshare-net', '--die-with-parent', '--new-session']
+    return {
+        'required': [*base, '--cap-drop', 'ALL', '--', '/usr/bin/true'],
+        'explicit-user': [*base, '--unshare-user', '--cap-drop', 'ALL', '--', '/usr/bin/true'],
+        'setup-capability-diagnostic': [*base, '--', '/usr/bin/true'],
+    }
+
+
+def sandbox_diagnostics():
+    if platform.system() != 'Linux':
+        print('Linux-only namespace diagnostics; no host settings changed')
+        return
+    for name in ('kernel/unprivileged_userns_clone', 'kernel/apparmor_restrict_unprivileged_userns', 'user/max_user_namespaces'):
+        path = Path('/proc/sys') / name
+        print(json.dumps({'setting': name, 'value': path.read_text()[:128].strip() if path.is_file() else 'unavailable'}))
+    binary = shutil.which('bwrap')
+    if binary:
+        for name, command in diagnostic_variants(binary).items():
+            result = subprocess.run(command, capture_output=True, timeout=15)
+            print(json.dumps({'probe': name, 'exit': result.returncode, 'stderr': result.stderr[:2048].decode('utf-8', errors='backslashreplace')}))
+    result = subprocess.run(['sudo', 'journalctl', '-k', '-n', '100', '--no-pager'], capture_output=True, timeout=15)
+    lines = [line for line in result.stdout.decode('utf-8', errors='backslashreplace').splitlines() if 'bwrap' in line and ('apparmor' in line.lower() or 'capable' in line)]
+    print(json.dumps({'kernel_audit_exit': result.returncode, 'bwrap_audit': [line[:1024] for line in lines[-10:]]}))
+
+
 def snapshot(root):
     result = {}
     for parent, directories, files in os.walk(root, followlinks=False):
@@ -151,8 +178,10 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--preflight', choices=('minimum', 'current'))
     mode.add_argument('--sandbox-preflight', action='store_true')
+    mode.add_argument('--sandbox-diagnostics', action='store_true')
     args = parser.parse_args()
-    if args.sandbox_preflight: check_sandbox()
+    if args.sandbox_diagnostics: sandbox_diagnostics()
+    elif args.sandbox_preflight: check_sandbox()
     elif args.preflight: preflight(args.preflight)
     else: acceptance()
 

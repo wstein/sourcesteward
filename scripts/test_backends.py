@@ -112,3 +112,14 @@ class BackendInstallerTests(unittest.TestCase):
                 if passed: smoke.check_sandbox()
                 else:
                     with self.assertRaises(RuntimeError): smoke.check_sandbox()
+
+    def test_namespace_diagnostics_never_execute_jj_or_target_commands(self):
+        variants = smoke.diagnostic_variants('/usr/bin/bwrap')
+        self.assertEqual(len(variants), 3)
+        for command in variants.values():
+            self.assertEqual(command[-1], '/usr/bin/true')
+            self.assertIn('--unshare-net', command)
+            self.assertEqual(command[1:4], ['--ro-bind', '/', '/'])
+        self.assertIn('--unshare-user', variants['explicit-user'])
+        self.assertIn('--cap-drop', variants['explicit-user'])
+        self.assertNotIn('--cap-drop', variants['setup-capability-diagnostic'])
