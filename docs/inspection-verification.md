@@ -54,3 +54,17 @@ filesystem; this limitation is not described as verified platform coverage.
 
 This subsequent documentation-only commit records that clearance; it changes no implementation.
 No branch was pushed or PR created by the implementation agent.
+
+## Integration with merged site themes
+The inspection feature incorporates main revision `d74341a8bb265c9381630fa4ebdac3cd40ad3466`
+without rewriting published commits. Selective documentation conflict resolution retains both
+site-theme and inspection knowledge-map links, feature records and milestone notes. The
+existing future-inspection next action is replaced by this feature's reviewed current action.
+All theme/CI/packaging source files match merged main exactly; inspection source files remain
+unchanged from their independently cleared revision.
+
+The integrated tree passes make check (12 Python cases, 12 Node theme cases, 60 authored
+documents plus Go/module/architecture/whitespace checks), race tests, build and ten process
+cases. Basic site asset/script allowlisting and packaging checks pass in that suite. No browser
+reinspection is claimed: the merged site implementation is byte-identical to reviewed main.
+Independent integration review is pending for this subsequent merge commit.
