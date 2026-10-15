@@ -49,7 +49,7 @@ func failTidy(r TidyResult, err error) TidyResult {
 }
 func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult {
 	r := newTidyResult("tidy-plan")
-	if o.Base == "" || !validText(o.Base) || !validText(o.StateDir) || !validStrings(append([]string{}, o.Refs...)) || o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
+	if o.Base == "" || !validText(o.Base) || !validText(o.StateDir) || len(o.Refs) > observationLimit || (o.Refs != nil && !validStrings(o.Refs)) || o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
 		return refuseTidy(r, "invalid-input", "An explicit bounded base and local reference selection are required; workspace retirement is not supported by this plan contract.")
 	}
 	selected := append([]string{}, o.Refs...)
