@@ -52,6 +52,9 @@ func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error
 	if options.Base == "" {
 		return fmt.Errorf("--base is required")
 	}
+	if len(options.Refs) > 1024 {
+		return fmt.Errorf("--ref exceeds 1024 selectors")
+	}
 	values := append([]string{options.Base}, options.Refs...)
 	if options.StateDir != "" {
 		values = append(values, options.StateDir)
@@ -63,9 +66,6 @@ func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error
 		if value == "" || len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsRune(value, 0) {
 			return fmt.Errorf("tidy paths and selectors require nonempty UTF-8 text of at most 4096 bytes without NUL")
 		}
-	}
-	if len(options.Refs) > 1024 {
-		return fmt.Errorf("--ref exceeds 1024 selectors")
 	}
 	return nil
 }
