@@ -149,3 +149,42 @@ func TestGitTidyRecoveryCollisionAndStaleDeleteRefuse(t *testing.T) {
 		t.Fatal("stale target deleted")
 	}
 }
+
+func TestGitTidyRefusesSymbolicRecoveryAtSameOID(t *testing.T) {
+	d, p, c := gitTidyApplyFixture(t)
+	r, expected, _, e := (gitTidyAdapter{}).PrepareRecovery(context.Background(), p, c)
+	if e != nil {
+		t.Fatal(e)
+	}
+	gitFixture(t, d, "symbolic-ref", r.Name, "refs/heads/keep")
+	if out, e := (gitTidyAdapter{}).Delete(context.Background(), p, c, r, expected); e == nil || out.Attempted {
+		t.Fatalf("symbolic recovery admitted %+v %v", out, e)
+	}
+	if got := gitFixture(t, d, "rev-parse", c.Name); got != c.CommitID {
+		t.Fatal("target deleted without independent recovery root")
+	}
+}
+
+func TestGitTidyRefusesHardlinkedMutableReflogBeforeRecovery(t *testing.T) {
+	d, p, c := gitTidyApplyFixture(t)
+	sentinel := filepath.Join(gitTempDir(t), "outside-reflog")
+	log := filepath.Join(d, ".git", "logs", "refs", "heads", "deletable")
+	if e := os.Link(log, sentinel); e != nil {
+		t.Fatal(e)
+	}
+	before, e := os.ReadFile(sentinel)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, _, out, e := (gitTidyAdapter{}).PrepareRecovery(context.Background(), p, c)
+	if e == nil || out.Attempted {
+		t.Fatalf("hardlinked target log admitted before recovery %+v %v", out, e)
+	}
+	if strings.Contains(gitFixture(t, d, "for-each-ref", "--format=%(refname)"), r.Name) {
+		t.Fatal("native recovery created despite unsafe mutable metadata")
+	}
+	after, e := os.ReadFile(sentinel)
+	if e != nil || string(after) != string(before) {
+		t.Fatal("outside hardlink changed")
+	}
+}

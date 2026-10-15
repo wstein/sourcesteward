@@ -110,13 +110,19 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 	if e != nil {
 		return "", -1, e
 	}
-	for _, roots := range [][]string{writeRoots, readOnlyRoots} {
+	for i, roots := range [][]string{writeRoots, readOnlyRoots} {
 		if len(roots) > 1024 {
 			return "", -1, errors.New("too many sandbox roots")
 		}
 		for _, r := range roots {
-			if _, e := canonicalSandboxDir(r); e != nil {
-				return "", -1, e
+			if i == 0 {
+				if _, e := canonicalSandboxDir(r); e != nil {
+					return "", -1, e
+				}
+			} else {
+				if e := canonicalSandboxReadOnly(r); e != nil {
+					return "", -1, e
+				}
 			}
 		}
 	}
@@ -193,3 +199,21 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 }
 
 var _ io.Writer = (*nativeCapture)(nil)
+
+// Read-only grants may protect an existing canonical regular file as well as a
+// directory. Native packed-ref updates need a writable parent; immutable sibling
+// files are individually protected instead of inheriting that write grant.
+func canonicalSandboxReadOnly(path string) error {
+	if !filepath.IsAbs(path) || len(path) > 4096 || strings.ContainsRune(path, 0) {
+		return errors.New("invalid read-only sandbox root")
+	}
+	resolved, e := filepath.EvalSymlinks(path)
+	if e != nil || resolved != filepath.Clean(path) {
+		return errors.New("read-only sandbox root must be canonical and exist")
+	}
+	st, e := os.Lstat(path)
+	if e != nil || (!st.IsDir() && !st.Mode().IsRegular()) {
+		return errors.New("read-only sandbox root must be an ordinary file or directory")
+	}
+	return nil
+}
