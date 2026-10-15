@@ -197,3 +197,22 @@ func TestHandoffRejectsIncompleteJournalEvidence(t *testing.T) {
 		t.Fatal("accepted noncomplete native ownership")
 	}
 }
+
+func TestTaskOwnershipRejectsForgedRecoveryAndCompletion(t *testing.T) {
+	c, _, o := fixtureCoordinator(t)
+	p := c.plan(context.Background(), o)
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	if r.Status != "ok" {
+		t.Fatal(r.Error())
+	}
+	task := *r.Task
+	task.RecoveryPointer = "/foreign"
+	if validTask(task, *p.Plan) {
+		t.Fatal("accepted foreign recovery record")
+	}
+	task = *r.Task
+	task.State = "incomplete"
+	if validTask(task, *p.Plan) {
+		t.Fatal("accepted noncomplete stored task")
+	}
+}
