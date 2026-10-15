@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 )
 
 type store struct {
@@ -128,13 +129,20 @@ func (s *store) read(kind, id string, value any) error {
 	if e := s.validate(); e != nil {
 		return e
 	}
+	before, e := s.dirs[kind].Lstat(id + ".json")
+	if e != nil {
+		return e
+	}
+	if !regularPrivate(before) || before.Size() > recordLimit {
+		return failure("invalid-state", "Record must be a private bounded single-link regular file.")
+	}
 	f, e := s.dirs[kind].OpenFile(id+".json", os.O_RDONLY|noFollow, 0)
 	if e != nil {
 		return e
 	}
 	defer f.Close()
 	st, e := f.Stat()
-	if e != nil || !regularPrivate(st) || st.Size() > recordLimit {
+	if e != nil || !regularPrivate(st) || !os.SameFile(before, st) || st.Size() > recordLimit {
 		return failure("invalid-state", "Record must be a private bounded single-link regular file.")
 	}
 	b, e := io.ReadAll(io.LimitReader(f, recordLimit+1))
@@ -182,7 +190,7 @@ func checkJSON(d *json.Decoder, depth int) error {
 				return e
 			}
 			k, ok := key.(string)
-			if !ok || seen[k] {
+			if !ok || seen[k] || k != strings.ToLower(k) {
 				return errors.New("duplicate key")
 			}
 			seen[k] = true
