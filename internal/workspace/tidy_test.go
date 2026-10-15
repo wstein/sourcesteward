@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/wstein/sourcesteward/internal/inspection"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -232,5 +233,56 @@ func TestTidyRegisteredSymlinkAliasCannotHideStateOverlap(t *testing.T) {
 	r = c.plan(context.Background(), o)
 	if r.Status != "ok" {
 		t.Fatalf("stateless native evidence unexpectedly rejected %#v", r)
+	}
+}
+
+func TestTidyNativeJJUnreferencedWorkspaceStateOverlap(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("STW_REQUIRE_JJ") == "1" {
+			t.Fatal("mandatory jj executable unavailable")
+		}
+		t.Skip("jj unavailable")
+	}
+	for _, shape := range []string{"standalone", "colocated"} {
+		t.Run(shape, func(t *testing.T) {
+			root := gitTempDir(t)
+			repo := filepath.Join(root, "repo")
+			run := func(dir string, args ...string) string {
+				t.Helper()
+				cmd := exec.Command("jj", args...)
+				cmd.Dir = dir
+				cmd.Env = append(os.Environ(), "JJ_CONFIG=", "JJ_USER=Fixture", "JJ_EMAIL=fixture@example.invalid")
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("native jj fixture %v failed: %v %s", args, err, out)
+				}
+				return string(out)
+			}
+			colocate := "false"
+			if shape == "colocated" {
+				colocate = "true"
+			}
+			run(root, "--config", "git.colocate="+colocate, "git", "init", repo)
+			run(repo, "bookmark", "create", "main")
+			secondary := filepath.Join(root, "unreferenced")
+			run(repo, "workspace", "add", "--name", "unreferenced", secondary)
+			state := filepath.Join(secondary, "private-state")
+			if err := os.Mkdir(state, 0700); err != nil {
+				t.Fatal(err)
+			}
+			before := run(repo, "--ignore-working-copy", "op", "log", "--limit", "1", "--no-graph", "--template", "id")
+			r := PlanTidy(context.Background(), TidyPlanOptions{Path: repo, Base: "main", StateDir: state})
+			if r.Status == "ok" || r.Plan != nil || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "state-overlap" {
+				t.Fatalf("unreferenced native workspace overlap not refused: %#v", r)
+			}
+			entries, err := os.ReadDir(state)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("refused store wrote files", entries, err)
+			}
+			after := run(repo, "--ignore-working-copy", "op", "log", "--limit", "1", "--no-graph", "--template", "id")
+			if before != after {
+				t.Fatal("refusal changed native jj operation")
+			}
+		})
 	}
 }
