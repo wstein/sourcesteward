@@ -1,6 +1,11 @@
 # Progress and handoff
 
 ## Current milestone
+003-agent-hints is implemented and locally verified on codex/003-agent-hints. Root help
+links to task-specific agent guidance and llms.txt; version/JSON and error contracts are
+preserved. Independent review cleared the implementation. Main and remote publication
+remain unchanged. See [agent hints acceptance](agent-hints-verification.md).
+
 002-wide-tie-brand is complete and published.
 The wide tie asset set, navy/orange site, useful README badges and local make build target
 pass source/browser checks and independent review. CI/Pages run 38751223604 passed;

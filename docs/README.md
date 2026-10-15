@@ -12,6 +12,7 @@
 - [Quality](quality.md): measured checks and known gaps.
 - [Verification](verification.md): foundation acceptance evidence.
 - [Brand assets](../brand/README.md) and [branding verification](../brand/verification.md).
+- [Agent hints acceptance](agent-hints-verification.md): source checks and independent review.
 - [Feature status](feature-status.json): machine-readable implementation/evidence index.
 - [Foundation specification](../specs/001-project-foundation/spec.md): user outcomes.
 - [Contributing](../CONTRIBUTING.md), [conduct](../CODE_OF_CONDUCT.md), [security](../SECURITY.md).

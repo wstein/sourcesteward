@@ -28,8 +28,8 @@
 
 ## Phase 6: Polish and handoff
 - [x] T011 Run formatting, `make check`, real help/version examples and `git diff --check`; record actual evidence in `docs/progress.md` and feature evidence.
-- [ ] T012 Obtain independent implementation review, resolve findings and update `docs/feature-status.json` and `specs/003-agent-hints/tasks.md` with verified results.
-- [ ] T013 Make focused Conventional Commits for reviewed source changes; honor task authorization before any publication and preserve current Pages packaging scope.
+- [x] T012 Obtain independent implementation review, resolve findings and update `docs/feature-status.json` and `specs/003-agent-hints/tasks.md` with verified results.
+- [x] T013 Make focused Conventional Commits for reviewed source changes; honor task authorization before any publication and preserve current Pages packaging scope.
 
 ## Dependencies and parallel execution
 T001 → T002 → T003 precede implementation. T004 must fail before T005; T006 follows T005. T007 can run alongside the CLI story after review. T008 must fail before T009/T010; documentation authors coordinate ownership of index/checker files. T011 follows all three stories, then T012 → T013.

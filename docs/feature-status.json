@@ -14,6 +14,12 @@
       "evidence": "../brand/verification.md"
     },
     {
+      "id": "003-agent-hints",
+      "status": "verified",
+      "spec": "../specs/003-agent-hints/spec.md",
+      "evidence": "agent-hints-verification.md"
+    },
+    {
       "id": "repository-inspection",
       "status": "planned",
       "spec": null,
