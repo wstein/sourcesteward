@@ -200,11 +200,19 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 
 		tracked, untracked, conflicts := false, false, false
 		submodules := false
+		rawUnknown := ""
+		selectedRawUnknown := ""
 		for _, v := range parsed {
 			tracked = tracked || v.kind == "tracked" && v.xy != ".." || v.kind == "conflict"
 			untracked = untracked || v.kind == "untracked"
 			conflicts = conflicts || v.kind == "conflict"
 			submodules = submodules || v.submodule
+			if v.unknown != "" {
+				rawUnknown = v.unknown
+				if inventoryPathSelected(v.path, o.Paths) {
+					selectedRawUnknown = v.unknown
+				}
+			}
 		}
 		w.Tracked = known(tracked)
 		if !requiresRaw && !tracked {
@@ -212,6 +220,10 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 		}
 		w.Untracked = known(untracked)
 		w.Conflicts = known(conflicts)
+		if rawUnknown != "" {
+			w.Tracked = unknown(rawUnknown)
+			w.Limitations = append(w.Limitations, rawUnknown)
+		}
 		if transforms {
 			w.Tracked = unknown("configured transformations suppressed; raw comparisons not authoritative")
 			w.Limitations = append(w.Limitations, w.Tracked.Reason)
@@ -223,7 +235,7 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 		if id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
 			currentStatus = parsed
 			s.transforms = transforms
-			if requiresRaw && (transforms || submodules) {
+			if requiresRaw && (transforms || submodules || selectedRawUnknown != "") {
 				statusComplete = false
 				r.partial(w.Tracked.Reason)
 			}
@@ -239,6 +251,9 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 			for _, scope := range o.Scopes {
 				if v.matches(scope) {
 					f := InventoryFile{Path: v.path, OldPath: v.old, Scope: scope, Change: v.change(scope), Limitations: []string{}}
+					if v.unknown != "" {
+						f.Limitations = append(f.Limitations, v.unknown)
+					}
 					if s.transforms && (scope == "tracked" || scope == "disk") {
 						f.Limitations = append(f.Limitations, "configured transformations suppressed; raw comparison")
 					}
@@ -252,18 +267,7 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 			}
 		}
 	}
-	for _, scope := range o.Scopes {
-		if scope == "stored" {
-			files, e := s.storedFiles(dir, id.Repository.Head.OID, o.Paths)
-			if e != nil {
-				return r.fail("git-inventory-failed", e.Error())
-			}
-			if len(r.Files)+len(r.References)+len(r.Workspaces)+len(r.Bases)+len(files) > inventoryRecordLimit {
-				return r.fail("inventory-limit", "inventory record limit exceeded")
-			}
-			r.Files = append(r.Files, files...)
-		}
-	}
+
 	resolve := func(selector string) (*string, error) { return s.resolve(dir, id, refs, selector) }
 	var base, revision *string
 	if o.Base != "" {
@@ -279,6 +283,32 @@ func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run run
 		revision, e = resolve(o.Revision)
 		if e != nil {
 			r.partial("selected revision could not be uniquely resolved")
+		}
+	}
+	for _, scope := range o.Scopes {
+		if scope == "stored" {
+			target := id.Repository.Head.OID
+			if o.Revision != "" {
+				target = revision
+			}
+			if (o.Base != "" && base == nil) || (o.Revision != "" && revision == nil) {
+				r.partial("stored comparison endpoints unavailable")
+				statusComplete = false
+				continue
+			}
+			files, e := s.storedFiles(dir, target, base, o.Paths)
+			if e != nil {
+				if strings.HasPrefix(e.Error(), "unknown stored comparison:") {
+					r.partial(e.Error())
+					statusComplete = false
+					continue
+				}
+				return r.fail("git-inventory-failed", e.Error())
+			}
+			if len(r.Files)+len(r.References)+len(r.Workspaces)+len(r.Bases)+len(files) > inventoryRecordLimit {
+				return r.fail("inventory-limit", "inventory record limit exceeded")
+			}
+			r.Files = append(r.Files, files...)
 		}
 	}
 	if e := s.bases(dir, id, &r); e != nil {
@@ -541,9 +571,13 @@ type gitInventoryStatus struct {
 	kind, path, xy string
 	old            *string
 	submodule      bool
+	unknown        string
 }
 
 func (v gitInventoryStatus) matches(scope string) bool {
+	if v.unknown != "" && (scope == "disk" || scope == "tracked") {
+		return true
+	}
 	switch scope {
 	case "tracked":
 		return v.kind == "tracked" && v.xy != ".." || v.kind == "conflict"
@@ -557,6 +591,9 @@ func (v gitInventoryStatus) matches(scope string) bool {
 	return false
 }
 func (v gitInventoryStatus) change(scope string) string {
+	if v.unknown != "" && (scope == "disk" || scope == "tracked") {
+		return "unknown"
+	}
 	if v.kind != "tracked" {
 		return v.kind
 	}
@@ -619,7 +656,7 @@ func (s gitInventorySession) ancestor(dir, from, to string) (bool, error) {
 	}
 	return c == 0, nil
 }
-func (s gitInventorySession) storedFiles(dir string, oid *string, paths []string) ([]InventoryFile, error) {
+func (s gitInventorySession) storedFiles(dir string, oid, base *string, paths []string) ([]InventoryFile, error) {
 	out := []InventoryFile{}
 	if oid == nil {
 		return out, nil
@@ -633,11 +670,20 @@ func (s gitInventorySession) storedFiles(dir string, oid *string, paths []string
 		return nil, errors.New("invalid stored Git parents")
 	}
 	args := []string{"diff-tree", "--root", "--no-commit-id", "--name-status", "-r", "-z", "-M", "--no-ext-diff", "--no-textconv", *oid}
-	if len(p) > 1 {
-		if !gitInventoryOID(p[1], s.format) {
+	if base == nil && len(p) > 2 {
+		return nil, errors.New("unknown stored comparison: multi-parent revision requires explicit --base")
+	}
+	if base != nil || len(p) > 1 {
+		parent := ""
+		if base != nil {
+			parent = *base
+		} else {
+			parent = p[1]
+		}
+		if !gitInventoryOID(parent, s.format) {
 			return nil, errors.New("invalid stored Git parent")
 		}
-		args = []string{"diff", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", p[1], *oid, "--"}
+		args = []string{"diff", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", parent, *oid, "--"}
 	}
 	raw, c, e := s.command(dir, args...)
 	if e != nil || c != 0 {
@@ -653,7 +699,7 @@ func (s gitInventorySession) storedFiles(dir string, oid *string, paths []string
 			return nil, errors.New("malformed stored Git diff")
 		}
 		i++
-		f := InventoryFile{Path: records[i], Scope: "stored", Limitations: []string{"stored commit delta against first parent, or empty tree for root commits"}}
+		f := InventoryFile{Path: records[i], Scope: "stored", Limitations: []string{"stored revision delta against explicit base, sole parent, or empty tree for root revisions"}}
 		switch code[0] {
 		case 'A':
 			f.Change = "added"
@@ -818,6 +864,15 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 		return nil, "", errors.New("inventory record limit exceeded")
 	}
 	out := []gitInventoryStatus{}
+	var diskRoot *os.Root
+	if rawDisk {
+		var rootErr error
+		diskRoot, rootErr = os.OpenRoot(dir)
+		if rootErr != nil {
+			return nil, "", rootErr
+		}
+		defer diskRoot.Close()
+	}
 	positions := map[string]int{}
 	signature := raw
 	modeRaw, modeCode, modeErr := s.command(dir, "config", "--type=bool", "--get", "core.filemode")
@@ -856,11 +911,8 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 			out = append(out, v)
 			continue
 		}
-		full := filepath.Join(dir, filepath.FromSlash(path))
-		if e := noSymlink(filepath.Dir(full)); e != nil && !os.IsNotExist(e) {
-			return nil, "", errors.New("tracked path has inaccessible or symlinked parent")
-		}
-		st, e := os.Lstat(full)
+
+		st, e := diskRoot.Lstat(path)
 		if os.IsNotExist(e) {
 			v.xy = ".D"
 			signature += "\x00missing:" + path
@@ -872,7 +924,7 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 				if st.Mode()&os.ModeSymlink == 0 {
 					v.xy = ".T"
 				} else {
-					link, e := os.Readlink(full)
+					link, e := diskRoot.Readlink(path)
 					if e != nil {
 						return nil, "", e
 					}
@@ -884,18 +936,28 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 			} else if !st.Mode().IsRegular() {
 				return nil, "", errors.New("tracked disk path is not a regular file")
 			} else {
-				f, e := openMetadata(full)
+				if st.Size() > outputLimit {
+					v.unknown = "tracked disk content exceeds 64 KiB per-file observation limit"
+					signature += "\x00oversize:" + path + ":" + st.ModTime().String()
+					positions[path] = len(out)
+					out = append(out, v)
+					continue
+				}
+				f, e := openGitInventoryDisk(diskRoot, path)
 				if e != nil {
 					return nil, "", e
 				}
-				data, e = io.ReadAll(io.LimitReader(f, outputLimit+1))
+				data, e = readGitInventoryContent(s.ctx, f)
 				after, statErr := f.Stat()
 				f.Close()
 				if e != nil || statErr != nil {
 					return nil, "", errors.New("cannot read tracked disk content")
 				}
 				if len(data) > outputLimit {
-					return nil, "", errors.New("tracked content limit exceeded")
+					v.unknown = "tracked disk content exceeds 64 KiB per-file observation limit"
+					positions[path] = len(out)
+					out = append(out, v)
+					continue
 				}
 				if st.Size() != after.Size() || !st.ModTime().Equal(after.ModTime()) {
 					return nil, "", errors.New("tracked content changed during inventory")
@@ -974,7 +1036,7 @@ func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool) ([]gitInv
 	// Keep index entries for submodule qualification, but omit unchanged normal files.
 	filtered := out[:0]
 	for _, v := range out {
-		if v.xy != ".." || v.submodule {
+		if v.xy != ".." || v.submodule || v.unknown != "" {
 			filtered = append(filtered, v)
 		}
 	}
@@ -1084,4 +1146,27 @@ func (s gitInventorySession) referencePredicate(id Result, o InventoryOptions) I
 		return r.fail("inventory-limit", e.Error())
 	}
 	return r
+}
+
+func readGitInventoryContent(ctx context.Context, f *os.File) ([]byte, error) {
+	data := []byte{}
+	buffer := make([]byte, 4096)
+	for {
+		if e := ctx.Err(); e != nil {
+			return nil, e
+		}
+		n, e := f.Read(buffer)
+		if n > 0 {
+			data = append(data, buffer[:n]...)
+			if len(data) > outputLimit {
+				return data, nil
+			}
+		}
+		if e == io.EOF {
+			return data, nil
+		}
+		if e != nil {
+			return nil, e
+		}
+	}
 }
