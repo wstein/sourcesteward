@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-labelledby="title description">
+<title id="title">SourceSteward</title>
+<desc id="description">Three connected change nodes beside an open curved guide rail, in turquoise on a rounded navy tile.</desc>
+<rect x="0.8" y="0.8" width="62.4" height="62.4" rx="13.28" fill="#0b2545" stroke="#2a4a7a" stroke-width="1.6"/>
+<g fill="none" stroke="#5eead4" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M23 22v20m0-8c0-9 16-2 16-12"/>
+<circle cx="23" cy="18" r="4"/><circle cx="39" cy="18" r="4"/><circle cx="23" cy="46" r="4"/>
+<path d="M49 13c6 10 6 28 0 38" stroke-width="3.2"/>
+</g></svg>
