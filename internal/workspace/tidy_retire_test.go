@@ -265,3 +265,19 @@ func TestRetirementRetryRequiresNativeRecoveryAndRegistrationProof(t *testing.T)
 		})
 	}
 }
+
+type retirementAdapterWithoutPost struct{ retirementAdapter }
+
+func TestRetirementMissingReadOnlyPostCapabilityRefusesBeforeEffects(t *testing.T) {
+	c, f, o := fixtureRetirement(t)
+	r := c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatal(r)
+	}
+	f.plan = r.Retirement.PlanID
+	c.adapter = func(string) (retirementAdapter, error) { return retirementAdapterWithoutPost{f}, nil }
+	r = c.apply(context.Background(), TidyApplyOptions{StateDir: o.StateDir, PlanID: f.plan, Authorize: true})
+	if r.Status == "ok" || f.pins != 0 || f.registrations != 0 {
+		t.Fatalf("missing required verification capability caused native effects: %+v", r)
+	}
+}

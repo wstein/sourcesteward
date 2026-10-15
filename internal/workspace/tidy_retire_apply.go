@@ -120,6 +120,9 @@ func (c retirementCoordinator) apply(ctx context.Context, o TidyApplyOptions) Ti
 	if err != nil {
 		return failTidy(r, err)
 	}
+	if _, ok := a.(retirementPostVerifier); !ok {
+		return refuseTidy(r, "unsupported-capability", "Owned retirement requires read-only native recovery and registration postcondition verification before any effects.")
+	}
 	var j RetirementJournal
 	err = s.read("tidy-retirement-operations", p.PlanID, &j)
 	if err == nil {
