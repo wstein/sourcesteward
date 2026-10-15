@@ -44,13 +44,13 @@
       "evidence": "../specs/007-hugo-docs/verification.md"
     },
     {
-      "id": "gitbutler-adapter",
-      "status": "planned",
-      "spec": null,
-      "evidence": null
+      "id": "008-jj-inspection",
+      "status": "implemented",
+      "spec": "../specs/008-jj-inspection/spec.md",
+      "evidence": "../specs/008-jj-inspection/verification.md"
     },
     {
-      "id": "jj-adapter",
+      "id": "gitbutler-adapter",
       "status": "planned",
       "spec": null,
       "evidence": null
