@@ -65,6 +65,8 @@ func canonicalSandboxDir(path string) (string, error) {
 }
 
 // runSandboxed allows only declared directory writes and denies network access.
+// The fixed /dev/null sink admits O_RDWR used by native Git; no directory or
+// persistent data write is granted by this device exception.
 // Existing linked-worktree metadata is rebound read-only after broad parent
 // grants. Linux bubblewrap does not constrain exec: adapters must admit native
 // configuration/hooks before execution and disclose external-race/ABA limits.
@@ -128,7 +130,7 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 	switch runtime.GOOS {
 	case "darwin":
 		sandbox = "/usr/bin/sandbox-exec"
-		profile := `(version 1)(allow default)(deny file-write*)(deny network*)(deny process-exec)(allow process-exec (literal ` + strconv.Quote(bin) + `))`
+		profile := `(version 1)(allow default)(deny file-write*)(allow file-write-data (literal "/dev/null"))(deny network*)(deny process-exec)(allow process-exec (literal ` + strconv.Quote(bin) + `))`
 		for _, r := range writeRoots {
 			profile += `(allow file-write* (subpath ` + strconv.Quote(r) + `))`
 		}
@@ -144,7 +146,7 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 		if e != nil {
 			return "", -1, errNativeSandboxUnavailable
 		}
-		argv = []string{"--ro-bind", "/", "/", "--unshare-net", "--die-with-parent", "--new-session", "--cap-drop", "ALL"}
+		argv = []string{"--ro-bind", "/", "/", "--dev-bind", "/dev/null", "/dev/null", "--unshare-net", "--die-with-parent", "--new-session", "--cap-drop", "ALL"}
 		for _, r := range writeRoots {
 			argv = append(argv, "--bind", r, r)
 		}
