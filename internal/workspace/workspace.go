@@ -92,6 +92,11 @@ func (c coordinator) plan(ctx context.Context, o PlanOptions) Result {
 	if e != nil {
 		return failResult(r, e)
 	}
+	if identity.Backend == "jj" {
+		if e = inspection.CheckJJWorkspaceTaskAvailable(ctx, source, o.Task); e != nil {
+			return failResult(r, failure("jj-task-unavailable", "Native jj task name is unavailable or cannot be safely checked."))
+		}
+	}
 	snap, e := a.Observe(ctx, source, o.Base)
 	if e != nil {
 		return failResult(r, e)
@@ -216,6 +221,11 @@ func (c coordinator) apply(ctx context.Context, o ApplyOptions) Result {
 	}
 	if !reflect.DeepEqual(current, p.Expected) {
 		return refuse(r, "stale-plan", "Native source, base, references, registrations or safety state changed; create a new plan.")
+	}
+	if p.Backend == "jj" {
+		if e = inspection.CheckJJWorkspaceTaskAvailable(ctx, p.SourcePath, p.TaskID); e != nil {
+			return refuse(r, "jj-task-unavailable", "Native jj task name became unavailable; no destination was reserved.")
+		}
 	}
 	parent, e := destinationParent(p.Destination)
 	if e != nil || parent != p.DestinationParent {
