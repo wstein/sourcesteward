@@ -28,7 +28,7 @@ func (f *fakeTidyAdapter) Observe(context.Context, string, string) (TidyObservat
 func fixtureTidyCoordinator(t *testing.T) (tidyCoordinator, *fakeTidyAdapter, TidyPlanOptions) {
 	t.Helper()
 	old, native, options := fixtureCoordinator(t)
-	f := &fakeTidyAdapter{observation: TidyObservation{Expected: native.snap, Candidates: []TidyCandidate{{Kind: "branch", Name: "refs/heads/topic", CommitID: native.snap.BaseCommit, Decision: "delete", Reason: "integrated", Proof: "native-ancestry", WorkspacePaths: []string{}, Limitations: []string{}}}, Limitations: []string{}}}
+	f := &fakeTidyAdapter{observation: TidyObservation{WorkspacePathsComplete: true, WorkspacePaths: []string{options.Path}, Expected: native.snap, Candidates: []TidyCandidate{{Kind: "branch", Name: "refs/heads/topic", CommitID: native.snap.BaseCommit, Decision: "delete", Reason: "integrated", Proof: "native-ancestry", WorkspacePaths: []string{}, Limitations: []string{}}}, Limitations: []string{}}}
 	return tidyCoordinator{inspect: old.inspect, adapter: func(string) (tidyAdapter, error) { return f, nil }}, f, TidyPlanOptions{Path: options.Path, Base: options.Base, StateDir: options.StateDir}
 }
 func TestTidyPlanStatelessAndImmutableStore(t *testing.T) {
@@ -167,5 +167,47 @@ func TestTidyPrivateStoreCoexistsWithoutChangingLegacyRecords(t *testing.T) {
 	if s, err = openTidyStore(state, true); err == nil {
 		s.Close()
 		t.Fatal("symlink state accepted")
+	}
+}
+
+func TestTidyStateRetainsUnmatchedAndFilteredWorkspacePaths(t *testing.T) {
+	for _, filtered := range []bool{false, true} {
+		c, f, o := fixtureTidyCoordinator(t)
+		stateParent := filepath.Dir(o.StateDir)
+		other := filepath.Join(stateParent, "other-workspace")
+		if err := os.Mkdir(other, 0700); err != nil {
+			t.Fatal(err)
+		}
+		o.StateDir = filepath.Join(other, "private-state")
+		if err := os.Mkdir(o.StateDir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		f.observation.WorkspacePaths = append(f.observation.WorkspacePaths, other)
+		if filtered {
+			o.Refs = []string{"refs/heads/topic"}
+			f.observation.Candidates = append(f.observation.Candidates, TidyCandidate{Kind: "branch", Name: "refs/heads/unselected", CommitID: strings.Repeat("b", 40), Decision: "retain", Reason: "workspace-used", Proof: "none", WorkspacePaths: []string{other}, Limitations: []string{}})
+		}
+		r := c.plan(context.Background(), o)
+		if r.Status == "ok" || r.Plan != nil {
+			t.Fatalf("registered workspace state overlap accepted filtered=%v %#v", filtered, r)
+		}
+		entries, _ := os.ReadDir(o.StateDir)
+		if len(entries) != 0 {
+			t.Fatal("unsafe store wrote files")
+		}
+	}
+}
+
+func TestTidyUnknownWorkspaceRootsCannotPersist(t *testing.T) {
+	c, f, o := fixtureTidyCoordinator(t)
+	f.observation.WorkspacePathsComplete = false
+	r := c.plan(context.Background(), o)
+	if r.Status == "ok" || r.Plan != nil {
+		t.Fatal("unknown workspace roots authorized a store write")
+	}
+	o.StateDir = ""
+	r = c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatalf("bounded stateless evidence should remain usable %#v", r)
 	}
 }

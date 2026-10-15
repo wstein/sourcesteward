@@ -82,6 +82,16 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 	if err = validateTidyObservation(observation, identity.Backend, source, o.Base); err != nil {
 		return failTidy(r, err)
 	}
+	if o.StateDir != "" {
+		if !observation.WorkspacePathsComplete {
+			return failTidy(r, failure("unknown-workspace-path", "Cannot prove state-store disjointness because a registered workspace root is unavailable."))
+		}
+		for _, path := range observation.WorkspacePaths {
+			if overlaps(o.StateDir, path) {
+				return failTidy(r, failure("state-overlap", "Tidy state directory must be disjoint from every registered workspace, including unselected or detached work."))
+			}
+		}
+	}
 	candidates := append([]TidyCandidate{}, observation.Candidates...)
 	if len(selected) > 0 {
 		candidates = []TidyCandidate{}
@@ -101,6 +111,9 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 	}
 	p := TidyPlanRecord{SchemaVersion: 1, SourcePath: source, StateDir: o.StateDir, Backend: identity.Backend, Expected: observation.Expected, SelectedRefs: selected, Candidates: candidates, Effects: []string{}, RecoveryLimits: []string{"Evidence is sampled and nontransactional; external or ABA changes may be missed.", "A plan does not authorize deletion; references, registrations, files and native state are unchanged.", "Only native ancestry is supported; squash-equivalence and forge proof are unavailable and do not authorize deletion."}}
 	r.Limitations = append(r.Limitations, observation.Limitations...)
+	if !observation.WorkspacePathsComplete {
+		r.Limitations = append(r.Limitations, "A native workspace root is unavailable; persistent state-store disjointness cannot be proven.")
+	}
 	r.Limitations = append(r.Limitations, p.RecoveryLimits...)
 	if o.StateDir != "" {
 		p.Effects = []string{"Persist one immutable plan in the explicitly selected private state directory; no native repository effects."}
@@ -183,7 +196,7 @@ func tidyPlanDigest(p TidyPlanRecord) string {
 	return fmt.Sprintf("%x", h)
 }
 func validateTidyObservation(o TidyObservation, backend, source, base string) error {
-	if !validSnapshot(o.Expected) || o.Expected.Identity.Backend != backend || o.Expected.Identity.WorkspaceRoot != source || o.Expected.BaseSelector != base || o.Candidates == nil || !validStrings(o.Limitations) {
+	if !validSnapshot(o.Expected) || o.Expected.Identity.Backend != backend || o.Expected.Identity.WorkspaceRoot != source || o.Expected.BaseSelector != base || o.Candidates == nil || !validTidyPaths(o.WorkspacePaths) || !validStrings(o.Limitations) {
 		return failure("invalid-evidence", "Native tidy observation is incomplete or malformed.")
 	}
 	names := map[string]bool{}
@@ -195,7 +208,7 @@ func validateTidyObservation(o TidyObservation, backend, source, base string) er
 	}
 	probe := newTidyResult("tidy-plan")
 	probe.Plan = &TidyPlanRecord{Expected: o.Expected, Candidates: o.Candidates, SelectedRefs: []string{}, Effects: []string{}, RecoveryLimits: []string{}}
-	probe.Limitations = o.Limitations
+	probe.Limitations = append(append([]string{}, o.Limitations...), o.WorkspacePaths...)
 	if !withinTidyBounds(probe) {
 		return failure("record-limit", "Native tidy observation exceeds bounded complete evidence.")
 	}
@@ -239,7 +252,7 @@ func validateTidyPlan(p TidyPlanRecord, state, id string) error {
 	if p.SchemaVersion != 1 || p.StateDir != state || p.PlanID != id || (id != "" && !validID(id)) || (state == "" && id != "") || !validAlphabet(p.Digest, 64, "0123456789abcdef") || p.Digest != tidyPlanDigest(p) || !filepath.IsAbs(p.SourcePath) || filepath.Clean(p.SourcePath) != p.SourcePath || !validText(p.SourcePath) || !validText(p.StateDir) || !validStrings(p.SelectedRefs) || !validStrings(p.Effects) || !validStrings(p.RecoveryLimits) {
 		return failure("invalid-plan", "Tidy plan is incompatible, modified or not bound to this private store.")
 	}
-	observation := TidyObservation{p.Expected, p.Candidates, []string{}}
+	observation := TidyObservation{Expected: p.Expected, Candidates: p.Candidates, Limitations: []string{}, WorkspacePaths: []string{}}
 	if err := validateTidyObservation(observation, p.Backend, p.SourcePath, p.Expected.BaseSelector); err != nil {
 		return err
 	}
@@ -315,4 +328,18 @@ func boundedTidy(r TidyResult) TidyResult {
 	safe.Status = "partial"
 	safe.Diagnostics = []Diagnostic{{"result-limit", "Tidy output exceeded its one-MiB or aggregate1024-record bound; no omitted evidence authorizes mutation."}}
 	return safe
+}
+
+func validTidyPaths(paths []string) bool {
+	if !validStrings(paths) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, path := range paths {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path || seen[path] {
+			return false
+		}
+		seen[path] = true
+	}
+	return true
 }
