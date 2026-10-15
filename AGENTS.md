@@ -7,8 +7,8 @@ Start with [knowledge map](docs/README.md), [progress](docs/progress.md),
 [architecture](ARCHITECTURE.md), [harness](docs/harness.md) and the active specs/ feature.
 Read .specify/memory/constitution.md before implementation.
 Use the installed Spec Kit flow: constitution → specify → plan → tasks → implement → analyze.
-The foundation scope is CLI help/version, source checks, specs and the Pages website.
-Do not imply planned inspection, cleanup, recovery or jj/GitButler features already work.
+Implemented scope includes CLI help/version, bounded read-only ordinary-Git identity inspection, source checks, specs and the Pages website.
+Do not imply status enumeration, cleanup, recovery or native jj/GitButler adapters already work.
 
 Use Go's standard library first. Cobra is the selected command parser; pin dependencies.
 Write failing behavior tests first. Use temporary repositories for later Git operations.

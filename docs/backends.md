@@ -1,7 +1,8 @@
 # Backend readiness: Git, Jujutsu and GitButler
 
-SourceSteward is jj-ready by design. Foundation implements no repository backend yet.
-Ordinary Git is the first planned adapter; jj and GitButler are optional, explicit integrations.
+SourceSteward is jj-ready by design. `stw inspect` implements bounded ordinary-Git identity inspection (Git 2.46+).
+It detects recognized jj/GitButler evidence and refuses unsupported managed backends.
+Native jj and GitButler adapters are optional future integrations.
 The CLI/application boundary must not assume every workspace is ordinary Git.
 
 ## Capability model
@@ -18,7 +19,9 @@ backend-specific facts in explicit extensions. Never equate a jj change ID with 
 a bookmark with every branch behavior, or an operation log with undoing remote effects.
 
 ## Selection and ownership
-1. Future inspection detects backend metadata and executable capabilities before planning.
+1. Identity inspection detects recognized backend metadata before ordinary-Git HEAD queries.
+   Detection is a heuristic: unregistered GitButler single-branch mode and unknown marker
+   conventions may remain undetected. See the [inspection contract](../specs/005-repository-inspection/contracts/inspect.md).
 2. Use explicit backend selection when detection is ambiguous; do not initialize or migrate.
 3. A colocated jj workspace remains jj-managed. GitButler-managed state remains GitButler-owned.
 4. Advertise only commands supported by the detected backend/version and output contract.

@@ -17,4 +17,5 @@
 - [Foundation specification](../specs/001-project-foundation/spec.md): user outcomes.
 - [Contributing](../CONTRIBUTING.md), [conduct](../CODE_OF_CONDUCT.md), [security](../SECURITY.md).
 
+- [Inspection acceptance](inspection-verification.md): bounded identity/detection verification.
 - [Site theme specification](../specs/004-site-themes/spec.md) and [verification](../specs/004-site-themes/verification.md).

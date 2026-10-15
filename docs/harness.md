@@ -22,7 +22,7 @@ than assuming chat history is complete. Planned features remain planned until ac
 ## Mechanical feedback
 make check verifies command behavior, docs links/assets, feature-status evidence pointers,
 module integrity and whitespace. Architecture checks prohibit repository/network execution
-inside the foundation CLI. CI adds module-tidiness and race checks. Pages deploys only after
+inside the CLI parsing/rendering layer. CI adds module-tidiness and race checks. Pages deploys only after
 same-run checks on the exact main-push SHA. Dependency updates require the same checks.
 
 ## Design evaluation
