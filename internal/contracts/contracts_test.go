@@ -403,7 +403,7 @@ func TestJJInspectionInvariants(t *testing.T) {
 	if err := s.Validate(v); err != nil {
 		t.Fatal(err)
 	}
-	for _, status := range []string{"error", "unsupported"} {
+	for _, status := range []string{"error"} {
 		v := value(t, []byte(jjSeed())).(map[string]any)
 		v["status"] = status
 		delete(v, "jj_repository")
@@ -411,6 +411,11 @@ func TestJJInspectionInvariants(t *testing.T) {
 		if err := s.Validate(v); err != nil {
 			t.Fatal(err)
 		}
+		v["status"] = "unsupported"
+		if s.Validate(v) == nil {
+			t.Fatal("native unsupported status accepted")
+		}
+		v["status"] = "error"
 		v["diagnostics"] = []any{}
 		if s.Validate(v) == nil {
 			t.Fatal("empty error diagnostics accepted")

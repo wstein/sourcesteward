@@ -20,7 +20,6 @@
     "status": {
       "enum": [
         "ok",
-        "unsupported",
         "error"
       ]
     },
