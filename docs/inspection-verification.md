@@ -1,6 +1,6 @@
 # Bounded repository inspection acceptance
 
-Feature: [005](../specs/005-repository-inspection/spec.md). Author implementation evidence, pending independent exact-revision source review and coordinator publication.
+Feature: [005](../specs/005-repository-inspection/spec.md). Implemented and independently verified; coordinator publication remains pending.
 
 ## Failing-first observations
 Initial Go identity/managed/corrupt-reference tests failed because Inspect was undefined. The
@@ -42,4 +42,15 @@ these fixes; foundational operation/CLI/architecture tests have observed failing
 The reviewer reproduced replacement refs hiding a raw blob as a commit. A new failing
 regression reproduced the false success before the runner was fixed with --no-replace-objects.
 Identity validation now checks raw HEAD object identity. Full checks and race/process
-acceptance were rerun after this correction; final reviewer clearance remains pending.
+acceptance were rerun after this correction; final reviewer clearance is recorded below.
+
+## Independent clearance
+Independent review cleared exact source revision `1d8d7c513fa78a08cbb097701e4fe90e7ac23411`
+with no remaining blocking findings. The reviewer independently ran make check (nine Python
+cases and 51 authored documents), race tests, a separate binary build and ten process cases.
+The replacement-object regression was independently observed failing before its fix and
+passing afterward. The optional invalid-UTF8 cwd fixture remains unavailable on this macOS
+filesystem; this limitation is not described as verified platform coverage.
+
+This subsequent documentation-only commit records that clearance; it changes no implementation.
+No branch was pushed or PR created by the implementation agent.

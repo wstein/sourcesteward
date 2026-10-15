@@ -27,7 +27,7 @@
     },
     {
       "id": "005-repository-inspection",
-      "status": "implemented",
+      "status": "verified",
       "spec": "../specs/005-repository-inspection/spec.md",
       "evidence": "inspection-verification.md"
     },

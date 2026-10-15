@@ -1,10 +1,10 @@
 # Progress and handoff
 
 ## Current milestone
-005-repository-inspection is implemented and author-verified on codex/005-repository-inspection.
+005-repository-inspection is implemented and independently verified on codex/005-repository-inspection.
 Identity inspection and conservative managed-backend refusal are bounded by the reviewed
-contract. Source checks, race tests and 10 process cases pass; independent exact-revision
-source review and coordinator publication remain pending. See [inspection acceptance](inspection-verification.md).
+contract. Source checks, race tests and 10 process cases pass. Independent review cleared source
+revision 1d8d7c5; coordinator publication remains pending. See [inspection acceptance](inspection-verification.md).
 
 004-site-themes passes local source/UI acceptance on its topic worktree: a prominent
 README site link and native system/light/dark Pages selector, with narrow local-script

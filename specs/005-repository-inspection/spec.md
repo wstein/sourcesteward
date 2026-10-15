@@ -1,7 +1,7 @@
 # Feature Specification: Bounded Repository Inspection
 
 **Branch**: `codex/005-repository-inspection` | **Created**: 2026-10-15
-**Status**: Reviewed; implementation in progress
+**Status**: Implemented and independently verified
 **Input**: Implement bounded read-only inspection with Git/jj/GitButler detection, analysis and review.
 
 ## User Scenarios & Testing
