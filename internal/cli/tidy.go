@@ -15,7 +15,10 @@ import (
 
 func tidyCommand() *cobra.Command { return tidyCommandWith(workspace.PlanTidy) }
 func tidyCommandWith(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult) *cobra.Command {
-	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files and never contacts a forge.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApplying cleanup and retiring workspaces remain planned.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
+	return tidyCommandWithOperations(run, workspace.ApplyTidy)
+}
+func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult, applyRun func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult) *cobra.Command {
+	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files and never contacts a forge.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nWorkspace retirement remains planned.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
 	var options workspace.TidyPlanOptions
 	var structured bool
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native ancestry and retained local reference candidates", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
@@ -24,29 +27,44 @@ func tidyCommandWith(run func(context.Context, workspace.TidyPlanOptions) worksp
 		}
 		options.Path = workspacePath(args)
 		result := run(cmd.Context(), options)
-		var err error
-		if structured {
-			err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
-		} else {
-			err = renderTidyText(cmd.OutOrStdout(), result)
-		}
-		if err != nil {
-			return runtimeFailure{err}
-		}
-		if err = cmd.Context().Err(); err != nil {
-			return runtimeFailure{err}
-		}
-		if result.Status != "ok" {
-			return runtimeFailure{fmt.Errorf("tidy operation %q: %q", result.Command, result.Status)}
-		}
-		return nil
+		return writeTidyResult(cmd, result, structured)
 	}}
 	plan.Flags().StringVar(&options.Base, "base", "", "Required literal native integration base; no inferred trunk")
 	plan.Flags().StringArrayVar(&options.Refs, "ref", nil, "Select a literal local branch/bookmark name (repeatable; otherwise all bounded local references)")
 	plan.Flags().StringVar(&options.StateDir, "state-dir", "", "Optional existing private mode0700 state directory; omission makes planning stateless")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
-	family.AddCommand(plan)
+	var applyOptions workspace.TidyApplyOptions
+	var applyStructured bool
+	apply := &cobra.Command{Use: "apply", Short: "Apply an authorized stored local reference cleanup plan", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if err := validateWorkspaceCLI("plan", applyOptions.PlanID, "state-dir", applyOptions.StateDir); err != nil {
+			return err
+		}
+		return writeTidyResult(cmd, applyRun(cmd.Context(), applyOptions), applyStructured)
+	}}
+	apply.Flags().StringVar(&applyOptions.PlanID, "plan", "", "Exact generated immutable tidy plan identity")
+	apply.Flags().StringVar(&applyOptions.StateDir, "state-dir", "", "Private store containing the reviewed plan and durable recovery journal")
+	apply.Flags().BoolVar(&applyOptions.Authorize, "authorize", false, "Authorize only the reviewed plan's declared local recovery and reference deletion effects")
+	apply.Flags().BoolVar(&applyStructured, "json", false, "Output one versioned tidy result, including operational refusals and partial effects")
+	family.AddCommand(plan, apply)
 	return family
+}
+func writeTidyResult(cmd *cobra.Command, result workspace.TidyResult, structured bool) error {
+	var err error
+	if structured {
+		err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+	} else {
+		err = renderTidyText(cmd.OutOrStdout(), result)
+	}
+	if err != nil {
+		return runtimeFailure{err}
+	}
+	if err = cmd.Context().Err(); err != nil {
+		return runtimeFailure{err}
+	}
+	if result.Status != "ok" {
+		return runtimeFailure{fmt.Errorf("tidy operation %q: %q", result.Command, result.Status)}
+	}
+	return nil
 }
 func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error {
 	if options.Base == "" {

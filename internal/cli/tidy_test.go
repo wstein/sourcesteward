@@ -93,7 +93,7 @@ func TestTidyCancellationAfterObservation(t *testing.T) {
 }
 func TestTidyHelpWithoutBackends(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	for _, args := range [][]string{{"tidy", "--help"}, {"tidy", "plan", "--help"}} {
+	for _, args := range [][]string{{"tidy", "--help"}, {"tidy", "plan", "--help"}, {"tidy", "apply", "--help"}} {
 		var out, diagnostic bytes.Buffer
 		if code := Run(context.Background(), "dev", args, &out, &diagnostic); code != 0 || out.Len() == 0 || diagnostic.Len() != 0 {
 			t.Fatalf("%q %d %s", args, code, diagnostic.String())
@@ -128,5 +128,80 @@ func TestTidyReferenceCountBeforeSelectorCopy(t *testing.T) {
 	refs[0] = "\x00"
 	if err := validateTidyPlanCLI(nil, workspace.TidyPlanOptions{Base: "HEAD", Refs: refs}); err == nil || err.Error() != "--ref exceeds 1024 selectors" {
 		t.Fatalf("count must be checked before inspecting/copying selectors: %v", err)
+	}
+}
+
+func TestTidyApplyUsageBeforeOperation(t *testing.T) {
+	for _, args := range [][]string{{"apply"}, {"apply", "--plan", "id"}, {"apply", "--state-dir", "/tmp/state"}, {"apply", "extra", "--plan", "id", "--state-dir", "/tmp/state"}, {"apply", "--plan", "../escape", "--state-dir", "/tmp/state"}, {"apply", "--plan", "id", "--state-dir", "/tmp/state", "--ref", "topic"}} {
+		called := false
+		cmd := tidyCommandWithOperations(nil, func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult {
+			called = true
+			return workspace.TidyResult{Status: "ok"}
+		})
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(args)
+		err := cmd.Execute()
+		var failure runtimeFailure
+		if err == nil || errors.As(err, &failure) || called {
+			t.Fatalf("%q err=%v called=%t", args, err, called)
+		}
+	}
+}
+func TestTidyApplyAuthorizationAndStructuredOutcomes(t *testing.T) {
+	for _, authorize := range []bool{false, true} {
+		for _, status := range []string{"ok", "refused", "partial", "error"} {
+			cmd := tidyCommandWithOperations(nil, func(_ context.Context, o workspace.TidyApplyOptions) workspace.TidyResult {
+				if o.PlanID != "plan-id" || o.StateDir != "/tmp/state" || o.Authorize != authorize {
+					t.Fatal(o)
+				}
+				actual := status
+				if !authorize {
+					actual = "refused"
+				}
+				return workspace.TidyResult{SchemaVersion: 1, Command: "tidy-apply", Status: actual, Backend: "git", Actions: []workspace.ActionOutcome{{Name: "recovery", Status: "recorded", Detail: "/tmp/state/operations/tidy-plan-id.json"}}, Diagnostics: []workspace.Diagnostic{}, Limitations: []string{"partial recovery requires review"}}
+			})
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			args := []string{"apply", "--plan", "plan-id", "--state-dir", "/tmp/state", "--json"}
+			if authorize {
+				args = append(args, "--authorize")
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			var failure runtimeFailure
+			if (err != nil) != (!authorize || status != "ok") || (err != nil && !errors.As(err, &failure)) {
+				t.Fatal(err)
+			}
+			var result workspace.TidyResult
+			if e := json.Unmarshal(out.Bytes(), &result); e != nil || result.Command != "tidy-apply" || len(result.Actions) != 1 {
+				t.Fatalf("%s %v", out.String(), e)
+			}
+		}
+	}
+}
+func TestTidyApplyHumanRecoveryAndWriterFailure(t *testing.T) {
+	run := func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult {
+		return workspace.TidyResult{Command: "tidy-apply", Status: "partial", Backend: "jj", Actions: []workspace.ActionOutcome{{Name: "recovery", Status: "prepared", Detail: "literal\nrecovery\x1b"}}, Limitations: []string{"native pin retained"}}
+	}
+	cmd := tidyCommandWithOperations(nil, run)
+	cmd.SilenceUsage = true
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"apply", "--plan", "plan-id", "--state-dir", "/tmp/state", "--authorize"})
+	var failure runtimeFailure
+	if err := cmd.Execute(); !errors.As(err, &failure) {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "recovery") || !strings.Contains(out.String(), "native pin") || strings.ContainsRune(out.String(), '\x1b') {
+		t.Fatal(out.String())
+	}
+	cmd = tidyCommandWithOperations(nil, run)
+	cmd.SetOut(&failOnWrite{fail: 1})
+	cmd.SetArgs([]string{"apply", "--plan", "plan-id", "--state-dir", "/tmp/state", "--authorize"})
+	if err := cmd.Execute(); !errors.As(err, &failure) {
+		t.Fatal(err)
 	}
 }
