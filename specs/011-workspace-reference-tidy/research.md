@@ -54,3 +54,12 @@ the pinned versions. Implementation acceptance still requires actual real-proces
 lanes; research is not shipping evidence. WI3 exact filesystem-removal mechanism requires its
 pre-implementation analysis to verify confinement and failure reporting before enabling removal.
 No extension hooks are configured (.specify/extensions.yml absent).
+
+## Colocated jj mutation execution-context refinement
+Native research found --ignore-working-copy/git.colocate=false insufficient: bookmark mutations in
+an existing colocated workspace can reset source Git HEAD/index. Use reviewed bounded private
+execution context with copied known working-copy metadata and absolute same-repository .jj/repo
+pointer, no .git, no initialization/registration. Preserve source Git/WC bytes and full registration
+list, verify exact operation parent/delta and use unexportable fixed-? recovery bookmarks. No broad
+source Git or repository-parent grants. Actual both-version experiment and conformance evidence
+remain mandatory before acceptance; full source review evaluates private metadata copying.
