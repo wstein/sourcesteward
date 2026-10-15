@@ -64,41 +64,49 @@ func TestJJTidyCandidateSafety(t *testing.T) {
 
 func TestJJTidyNativeReadOnly(t *testing.T) {
 	requireJJ(t)
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo := filepath.Join(root, "repo")
-	jjFixture(t, root, "git", "init", repo)
-	requireJJSandbox(t, repo)
-	if err := os.WriteFile(filepath.Join(repo, "tracked"), []byte("stored\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	jjFixture(t, repo, "describe", "-m", "stored")
-	jjFixture(t, repo, "bookmark", "create", "topic")
-	jjFixture(t, repo, "bookmark", "create", "foobar")
-	jjFixture(t, repo, "bookmark", "create", "stw-recovery-keep")
-	jjFixture(t, repo, "new")
-	jjFixture(t, repo, "bookmark", "create", "main")
-	if err := os.WriteFile(filepath.Join(repo, "unsnapshotted"), []byte("preserve\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	before := snapshot(t, root)
-	got, err := ObserveJJTidy(context.Background(), repo, "main")
-	if err != nil {
-		t.Fatal(err)
-	}
-	decisions := map[string]string{}
-	for _, c := range got.Candidates {
-		decisions[c.Name] = c.Decision
-	}
-	if decisions["topic"] != "delete" || decisions["foobar"] != "delete" || decisions["main"] != "retain" || decisions["stw-recovery-keep"] != "retain" {
-		t.Fatalf("%+v", got)
-	}
-	if !reflect.DeepEqual(before, snapshot(t, root)) {
-		t.Fatal("tidy observation changed repository")
-	}
-	if _, err := ObserveJJTidy(context.Background(), repo, "all()"); err == nil {
-		t.Fatal("accepted revset program")
+	for _, shape := range []string{"standalone", "colocated"} {
+		t.Run(shape, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := filepath.Join(root, "repo")
+			jjFixture(t, root, "--config", "git.colocate="+map[string]string{"standalone": "false", "colocated": "true"}[shape], "git", "init", repo)
+			requireJJSandbox(t, repo)
+			if err := os.WriteFile(filepath.Join(repo, "tracked"), []byte("stored\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			jjFixture(t, repo, "describe", "-m", "stored")
+			jjFixture(t, repo, "bookmark", "create", `"topic?"`)
+			jjFixture(t, repo, "bookmark", "create", "foobar")
+			jjFixture(t, repo, "bookmark", "create", "stw-recovery-keep")
+			jjFixture(t, repo, "new")
+			jjFixture(t, repo, "bookmark", "create", "main")
+			if err := os.WriteFile(filepath.Join(repo, "unsnapshotted"), []byte("preserve\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			before := snapshot(t, root)
+			got, err := ObserveJJTidy(context.Background(), repo, "main")
+			if err != nil {
+				t.Fatal(err)
+			}
+			decisions := map[string]string{}
+			for _, c := range got.Candidates {
+				decisions[c.Name] = c.Decision
+			}
+			wantFoobar := "delete"
+			if shape == "colocated" {
+				wantFoobar = "retain"
+			}
+			if decisions["topic?"] != "delete" || decisions["foobar"] != wantFoobar || decisions["main"] != "retain" || decisions["stw-recovery-keep"] != "retain" {
+				t.Fatalf("%+v", got)
+			}
+			if !reflect.DeepEqual(before, snapshot(t, root)) {
+				t.Fatal("tidy observation changed repository")
+			}
+			if _, err := ObserveJJTidy(context.Background(), repo, "all()"); err == nil {
+				t.Fatal("accepted revset program")
+			}
+		})
 	}
 }
