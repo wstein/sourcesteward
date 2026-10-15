@@ -211,3 +211,26 @@ func TestTidyUnknownWorkspaceRootsCannotPersist(t *testing.T) {
 		t.Fatalf("bounded stateless evidence should remain usable %#v", r)
 	}
 }
+
+func TestTidyRegisteredSymlinkAliasCannotHideStateOverlap(t *testing.T) {
+	c, f, o := fixtureTidyCoordinator(t)
+	parent := filepath.Dir(o.StateDir)
+	alias := filepath.Join(parent, "registered-alias")
+	if err := os.Symlink(parent, alias); err != nil {
+		t.Fatal(err)
+	}
+	f.observation.WorkspacePaths = append(f.observation.WorkspacePaths, alias)
+	r := c.plan(context.Background(), o)
+	if r.Status == "ok" || r.Plan != nil {
+		t.Fatal("symlink registration alias hid state-store overlap")
+	}
+	entries, _ := os.ReadDir(o.StateDir)
+	if len(entries) != 0 {
+		t.Fatal("aliased workspace refusal wrote state")
+	}
+	o.StateDir = ""
+	r = c.plan(context.Background(), o)
+	if r.Status != "ok" {
+		t.Fatalf("stateless native evidence unexpectedly rejected %#v", r)
+	}
+}
