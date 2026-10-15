@@ -51,7 +51,7 @@ creation remains distinguishable from completed and foreign destinations are ret
 - [x] T027 Update ARCHITECTURE.md and AGENTS.md to describe reviewed operation layer and supported mutations without claiming tidy/deletion.
 - [x] T028 Run independent cross-artifact convergence and exact-revision source/safety review; record resolved findings in specs/010-isolated-task-workspaces/analysis.md and verification.md.
 - [x] T029 Run gofmt, make check, race tests, both mandatory native lanes and quickstart scenarios; record actual commands/revisions/gaps in specs/010-isolated-task-workspaces/verification.md.
-- [ ] T030 Update tasks, docs/progress.md and docs/feature-status.json honestly; make focused Conventional Commits and open/attach PR with acceptance evidence.
+- [x] T030 Update tasks, docs/progress.md and docs/feature-status.json honestly; make focused Conventional Commits and open/attach PR with acceptance evidence.
 
 ## Dependencies and parallel work
 T001–002 precede source. T003–006 establish common types/store. US1 adapter tests/implementations
