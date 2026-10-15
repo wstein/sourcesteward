@@ -54,7 +54,7 @@ func TestJJInventoryPredicatesAndOperationPin(t *testing.T) {
 					return "not-json\n", nil
 				}
 				if args[0] == "bookmark" && kind == "true" {
-					return `"branch"` + "\nnull\nfalse\n\"" + commit + "\"\n\"" + change + "\"\nfalse\n[\"" + commit + "\"]\n[]\n", nil
+					return `"branch"` + "\nnull\nfalse\n\"" + commit + "\"\n\"" + change + "\"\nfalse\n[\"" + commit + ":" + change + "\"]\n[]\n", nil
 				}
 				return "", nil
 			}
@@ -139,7 +139,14 @@ func TestJJInventoryPreservesNativeTargetsAndUnicode(t *testing.T) {
 	commit, other := strings.Repeat("a", 40), strings.Repeat("b", 40)
 	change := strings.Repeat("k", 32)
 	row := func(name, remote string, conflict bool, target, changeID string, tracked bool, added, removed []string) string {
-		fields := []any{name, nil, conflict, nil, nil, tracked, added, removed}
+		pairedAdded, pairedRemoved := []string{}, []string{}
+		for _, id := range added {
+			pairedAdded = append(pairedAdded, id+":"+change)
+		}
+		for _, id := range removed {
+			pairedRemoved = append(pairedRemoved, id+":"+change)
+		}
+		fields := []any{name, nil, conflict, nil, nil, tracked, pairedAdded, pairedRemoved}
 		if remote != "" {
 			fields[1] = remote
 		}
@@ -230,5 +237,70 @@ func TestJJInventoryMissingWorkspaceAndHostileConfiguration(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, snapshot(t, root)) {
 		t.Fatal("inventory repaired registration or ran helper")
+	}
+}
+
+func TestJJInventoryTargetChangeIDs(t *testing.T) {
+	commit, change := strings.Repeat("d", 40), strings.Repeat("n", 32)
+	targets, e := jjTargets(json.RawMessage(`["` + commit + `:` + change + `"]`))
+	if e != nil || len(targets) != 1 || targets[0].ChangeID == nil || *targets[0].ChangeID != change {
+		t.Fatalf("lost known native change ID: %#v %v", targets, e)
+	}
+	for _, bad := range []string{`["` + commit + `"]`, `["` + commit + `:bad"]`, `["` + commit + `:` + change + `:extra"]`} {
+		if _, e := jjTargets(json.RawMessage(bad)); e == nil {
+			t.Fatalf("accepted malformed target %s", bad)
+		}
+	}
+}
+
+func TestJJInventoryNativeConflictedBookmarkTargets(t *testing.T) {
+	requireJJ(t)
+	root := t.TempDir()
+	root, _ = filepath.EvalSymlinks(root)
+	repo := filepath.Join(root, "repo")
+	jjFixture(t, root, "git", "init", repo)
+	requireJJSandbox(t, repo)
+	identity := func() string {
+		return strings.TrimSpace(jjFixture(t, repo, "log", "--revisions", "@", "--no-graph", "--template", "self.commit_id()"))
+	}
+	jjFixture(t, repo, "describe", "-m", "base")
+	base := identity()
+	jjFixture(t, repo, "new", base)
+	jjFixture(t, repo, "describe", "-m", "first")
+	first := identity()
+	jjFixture(t, repo, "new", base)
+	jjFixture(t, repo, "describe", "-m", "second")
+	second := identity()
+	jjFixture(t, repo, "bookmark", "create", "topic", "--revision", base)
+	op := strings.TrimSpace(jjFixture(t, repo, "operation", "log", "--limit", "1", "--no-graph", "--template", "self.id()"))
+	jjFixture(t, repo, "--at-operation="+op, "bookmark", "set", "topic", "--revision", first)
+	jjFixture(t, repo, "--at-operation="+op, "bookmark", "set", "topic", "--revision", second)
+	jjFixture(t, repo, "log", "--revisions", "@", "--no-graph", "--template", "self.commit_id()")
+	sampled := Inspect(context.Background(), repo)
+	before := snapshot(t, root)
+	r := inventoryJJ(context.Background(), sampled, InventoryOptions{Scopes: []string{"stored"}})
+	if r.Status != "ok" {
+		t.Fatalf("native conflict inventory: %#v", r)
+	}
+	found := false
+	for _, ref := range r.References {
+		if ref.Name != "topic" || ref.Remote != nil {
+			continue
+		}
+		found = true
+		if ref.CommitID != nil || ref.ChangeID != nil || len(ref.AddedTargets) != 2 || len(ref.RemovedTargets) != 1 {
+			t.Fatalf("lost conflict structure: %#v", ref)
+		}
+		for _, target := range append(append([]InventoryTarget{}, ref.AddedTargets...), ref.RemovedTargets...) {
+			if target.ChangeID == nil || !identifier(*target.ChangeID, 32, "klmnopqrstuvwxyz") {
+				t.Fatalf("lost known target change identity: %#v", target)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("native conflicted bookmark absent: %#v", r)
+	}
+	if !reflect.DeepEqual(before, snapshot(t, root)) {
+		t.Fatal("conflict inventory changed repository")
 	}
 }

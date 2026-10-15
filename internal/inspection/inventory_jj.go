@@ -16,7 +16,7 @@ import (
 )
 
 const jjInventoryWorkspaces = `json(self.name()) ++ "\n" ++ json(self.root()) ++ "\n" ++ json(self.target().commit_id()) ++ "\n" ++ json(self.target().change_id()) ++ "\n" ++ json(self.target().conflict()) ++ "\n"`
-const jjInventoryBookmarks = `json(self.name()) ++ "\n" ++ json(self.remote()) ++ "\n" ++ json(self.conflict()) ++ "\n" ++ json(self.normal_target().commit_id()) ++ "\n" ++ json(self.normal_target().change_id()) ++ "\n" ++ json(self.tracked()) ++ "\n" ++ json(self.added_targets().map(|c| c.commit_id())) ++ "\n" ++ json(self.removed_targets().map(|c| c.commit_id())) ++ "\n"`
+const jjInventoryBookmarks = `json(self.name()) ++ "\n" ++ json(self.remote()) ++ "\n" ++ json(self.conflict()) ++ "\n" ++ if(self.normal_target(), json(self.normal_target().commit_id()), "null") ++ "\n" ++ if(self.normal_target(), json(self.normal_target().change_id()), "null") ++ "\n" ++ json(self.tracked()) ++ "\n" ++ json(self.added_targets().map(|c| stringify(c.commit_id() ++ ":" ++ c.change_id()))) ++ "\n" ++ json(self.removed_targets().map(|c| stringify(c.commit_id() ++ ":" ++ c.change_id()))) ++ "\n"`
 const jjInventoryIDs = `json(self.commit_id()) ++ "\n" ++ json(self.change_id()) ++ "\n"`
 const jjInventoryDiff = `json(self.path()) ++ "\n" ++ json(self.status()) ++ "\n" ++ json(self.source().path()) ++ "\n" ++ json(self.target().conflict()) ++ "\n"`
 
@@ -427,11 +427,12 @@ func jjTargets(v json.RawMessage) ([]InventoryTarget, error) {
 		return nil, errors.New("native target limit exceeded")
 	}
 	out := []InventoryTarget{}
-	for _, id := range ids {
-		if !identifier(id, 40, "0123456789abcdef") {
+	for _, encoded := range ids {
+		id, change, ok := strings.Cut(encoded, ":")
+		if !ok || !identifier(id, 40, "0123456789abcdef") || !identifier(change, 32, "klmnopqrstuvwxyz") {
 			return nil, errors.New("invalid native target identity")
 		}
-		out = append(out, InventoryTarget{CommitID: id})
+		out = append(out, InventoryTarget{CommitID: id, ChangeID: ptr(change)})
 	}
 	return out, nil
 }
@@ -462,13 +463,6 @@ func jjInventoryReferences(out string) ([]InventoryReference, error) {
 		}
 		if conflict {
 			ref.Limitations = append(ref.Limitations, "Conflicted bookmark; added and removed targets are distinct native evidence.")
-		}
-		if commit != nil {
-			for i := range ref.AddedTargets {
-				if ref.AddedTargets[i].CommitID == *commit {
-					ref.AddedTargets[i].ChangeID = change
-				}
-			}
 		}
 		refs = append(refs, ref)
 	}
