@@ -61,7 +61,7 @@ func TestJJInventoryPredicatesAndOperationPin(t *testing.T) {
 			r := observeJJInventory(ctx, identity, InventoryOptions{Query: "ref-exists", Ref: "branch"}, q)
 			switch kind {
 			case "false", "true":
-				if r.Status != "ok" || r.Query == nil || r.Query.Value != kind {
+				if r.Status != "ok" || r.Query == nil || r.Query.Value != kind || r.Query.Reason == "" {
 					t.Fatalf("%#v", r)
 				}
 			default:
