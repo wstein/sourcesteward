@@ -29,8 +29,65 @@ Native update-stale refuses operation pinning; materialization is sampled before
 and is not a transactional compare-and-swap. These are author research observations;
 mandatory executable acceptance and independent source review remain separate gates.
 
-## Current gates
+## Final implementation acceptance
 
-Implementation, source review, schema validation, minimum/current native conformance and
-PR handoff are in progress. No runtime acceptance, hosted CI, merge, release or live
-publication is claimed by this initial record.
+Shipping source `5e32515e65ae4d8ffc41d416900a602d31fd488f` passed independent source/safety
+review with no blocking findings. Reviewer reran exact-head targeted bounded/store/state/
+strict-record/malformed-journal/durability/cancellation/tree safety tests (0.618s) and
+whitespace checks. Final independent convergence confirms 15/15 requirements across 30 tasks,
+zero missing stories and zero critical/high consistency findings. See [analysis](analysis.md).
+
+At that exact source, the integrating author ran:
+
+- `make check` with mandatory current Git/jj and mutation sandbox settings: Go tests/vet/module
+  verification, 42 Python tests, 12 theme tests, 132 authored docs, architecture and whitespace.
+- `go test -race ./...` with mandatory current backends/sandbox: all packages passed.
+- Native conformance author rebuilt `bin/stw` and ran all four smoke scripts in both pinned lanes:
+
+| Suite | Minimum Git 2.46.0 / jj 0.45.1 | Current Git 2.56.0 / jj 0.46.0 |
+| --- | ---: | ---: |
+| Identity inspection | 10 | 10 |
+| Native jj inspection | 6 | 6 |
+| Inventory | 36 | 36 |
+| Isolated workspaces | 45 | 45 |
+
+Commands: `go build -o bin/stw ./cmd/stw`, then `python3 -u -B` with
+`scripts/smoke-inspection.py`, `scripts/smoke-jj-inspection.py`, `scripts/smoke-inventory.py`
+and `scripts/smoke-workspaces.py`. Each lane selected pinned executables through PATH and
+set `STW_REQUIRE_JJ=1 STW_REQUIRE_NATIVE_SANDBOX=1`; enforced macOS sandboxing passed.
+Existing optional invalid-UTF-8 cwd creation is unavailable on macOS and is explicitly
+reported by the legacy inspection suite. No mandatory native case was skipped.
+
+Tests independently preserve source disk/index/config/native working-copy identities, check
+checkout content, helper sentinels, source/linked metadata and network denial. Recovery tests
+cover failed pre-action persistence, post-action store failure, cancellation, incomplete retry
+and foreign retention. Native CLI crash replay is explicitly a simulated incomplete journal;
+it is not claimed as a real killed native process. Real native operations run only in disposable
+repositories. Existing inspect/version/inventory schemas remain unchanged; real Git and
+standalone/colocated jj lifecycle outputs, errors and corrupted stored plans validate offline.
+
+## Reviewed fixes and capability limits
+
+Review-driven tests/fixes cover encoded escaping and aggregate records, semantic malformed
+state, duplicate/case-folded JSON keys, FIFO/hardlink/rename/lock replacement, precise effects,
+exact initial finalization identity, jj name/manager preflight and Unicode checkout aliases.
+Git checkout is detached and locked; helper/hook configuration, symlink/gitlink trees and
+unsupported sparse/promisor/worktree configuration refuse. Limits: 1,024 leaf entries,
+16 MiB per blob, 64 MiB total stored bytes. Unicode normalization reuses already pinned
+x/text v0.14.0 as an explicit dependency; standard library has no canonical normalization API.
+
+jj writes only declared mutable stores/backing objects/refs-jj and owned destination; source
+configuration and working-copy metadata stay read-only. Source metadata admits at most16 files,
+64 KiB per sampled metadata/index/config file. Native add is operation-pinned; destination-only
+update-stale cannot pin operations and uses sampled checks. Its 60-second limit is not a disk
+quota. Linux network/write confinement does not claim executable admission against hostile
+concurrent same-user configuration edits; helper refusal and sampled external/ABA limitations
+are explicit. Missing sandbox capability refuses. No automatic adoption, rollback or deletion.
+
+## PR and hosted gates
+
+This evidence commit follows the reviewed/tested source with documentation/status updates only.
+PR creation/attachment follows; the PR body records its final exact head and hosted Linux
+source/minimum/current checks. Hosted acceptance is pending at record creation, not inferred
+from local macOS evidence. Feature status remains implemented. No owner merge, release,
+manual artifact publication or live schema deployment is performed by this handoff.

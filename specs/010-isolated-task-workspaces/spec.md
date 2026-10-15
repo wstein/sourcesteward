@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/010-isolated-task-workspaces`
 **Created**: 2026-10-15
-**Status**: Planned — design and tasks prepared; independent analysis and implementation pending
+**Status**: Implemented — independently reviewed; local minimum/current acceptance passed; hosted CI and owner review tracked in PR handoff
 **Input**: Native Git worktrees and jj workspaces, with safe handoff and retirement.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 

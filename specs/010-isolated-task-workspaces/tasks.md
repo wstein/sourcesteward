@@ -7,50 +7,50 @@ behavior tests before implementation. No source work before independent cross-ar
 
 ## Phase 1: Setup
 - [x] T001 Finalize fixed shared interface and analysis gates in specs/010-isolated-task-workspaces/contracts/interface.md and analysis.md.
-- [ ] T002 Record native Git/jj argument, helper and sandbox research with exact experiments in specs/010-isolated-task-workspaces/verification.md.
+- [x] T002 Record native Git/jj argument, helper and sandbox research with exact experiments in specs/010-isolated-task-workspaces/verification.md.
 
 ## Phase 2: Foundation
-- [ ] T003 Write failing bounds, secure-path/store, journal durability, lock, rename/symlink ancestor replacement and invalid/foreign evidence tests in internal/workspace/state_test.go and paths_test.go.
-- [ ] T004 Implement shared models and bounded diagnostic/results in internal/workspace/result.go; identifiers are nonempty ASCII `[A-Za-z0-9][A-Za-z0-9._-]*` at most128bytes, paths/base validUTF8 at most4096bytes.
-- [ ] T005 Implement validated directory-descriptor-anchored os.Root/no-follow accesses with identity revalidation on replacement; current-user mode0700 symlink-free disjoint store and no-follow exclusive mode0600 record IO in internal/workspace/state.go and paths.go; reject unknown/duplicate JSON fields and records above1MiB before decode.
-- [ ] T006 Implement immutable plan digest, exclusive cooperative lock, file+directory fsync and pre-action journal state machine in internal/workspace/state.go; fail before native action if durability fails.
+- [x] T003 Write failing bounds, secure-path/store, journal durability, lock, rename/symlink ancestor replacement and invalid/foreign evidence tests in internal/workspace/state_test.go and paths_test.go.
+- [x] T004 Implement shared models and bounded diagnostic/results in internal/workspace/result.go; identifiers are nonempty ASCII `[A-Za-z0-9][A-Za-z0-9._-]*` at most128bytes, paths/base validUTF8 at most4096bytes.
+- [x] T005 Implement validated directory-descriptor-anchored os.Root/no-follow accesses with identity revalidation on replacement; current-user mode0700 symlink-free disjoint store and no-follow exclusive mode0600 record IO in internal/workspace/state.go and paths.go; reject unknown/duplicate JSON fields and records above1MiB before decode.
+- [x] T006 Implement immutable plan digest, exclusive cooperative lock, file+directory fsync and pre-action journal state machine in internal/workspace/state.go; fail before native action if durability fails.
 
 ## Phase 3: US1 — Start an isolated checkout (P1)
 **Independent test**: plan and authorized apply from an explicit base in disposable native Git/jj;
 verify checkout contents/native registration, durable ownership and byte-identical source state.
-- [ ] T007 [P] [US1] Write failing Git create/stale-base/ref/destination/config-hook/filter/race/checkout-limit tests in internal/workspace/git_test.go.
-- [ ] T008 [P] [US1] Write failing native jj create/operation-stale/standalone/colocated/source-unsnapshotted/two-phase tests in internal/workspace/jj_test.go.
-- [ ] T009 [US1] Implement plan creation and stale revalidation in internal/workspace/workspace.go; bind native source/base/reference/config/registration and parent identity, refuse occupied/aliased destinations.
-- [ ] T010 [P] [US1] Implement fixed detached locked full Git checkout at resolved OID with hooks/filter/helper refusal and least-write/no-network sandbox in internal/workspace/git.go and git_sandbox.go; bound tree to1024entries/64MiB stored blobs before action.
-- [ ] T011 [P] [US1] Implement native jj add with source snapshot suppression, operation pin, git.colocate=false and owned destination-only materialization in internal/workspace/jj.go and jj_sandbox.go; never raw Git fallback or source workspace update.
-- [ ] T012 [US1] Implement authorized apply, exclusive0700 destination reservation, prepared journal before native changes and task ownership finalization in internal/workspace/workspace.go; preserve nonzero partial effects on errors.
-- [ ] T013 [US1] Verify reserved destination/native registration/source preservation before completed outcome in internal/workspace/workspace_test.go; never adopt foreign registrations or delete on failure.
+- [x] T007 [P] [US1] Write failing Git create/stale-base/ref/destination/config-hook/filter/race/checkout-limit tests in internal/workspace/git_test.go.
+- [x] T008 [P] [US1] Write failing native jj create/operation-stale/standalone/colocated/source-unsnapshotted/two-phase tests in internal/workspace/jj_test.go.
+- [x] T009 [US1] Implement plan creation and stale revalidation in internal/workspace/workspace.go; bind native source/base/reference/config/registration and parent identity, refuse occupied/aliased destinations.
+- [x] T010 [P] [US1] Implement fixed detached locked full Git checkout at resolved OID with hooks/filter/helper refusal and least-write/no-network sandbox in internal/workspace/git.go and git_sandbox.go; bound tree to1024entries/64MiB stored blobs before action.
+- [x] T011 [P] [US1] Implement native jj add with source snapshot suppression, operation pin, git.colocate=false and owned destination-only materialization in internal/workspace/jj.go and jj_sandbox.go; never raw Git fallback or source workspace update.
+- [x] T012 [US1] Implement authorized apply, exclusive0700 destination reservation, prepared journal before native changes and task ownership finalization in internal/workspace/workspace.go; preserve nonzero partial effects on errors.
+- [x] T013 [US1] Verify reserved destination/native registration/source preservation before completed outcome in internal/workspace/workspace_test.go; never adopt foreign registrations or delete on failure.
 
 ## Phase 4: US3 — Bounded human/agent contract (P1)
 **Independent test**: real CLI success/refusal/cancel/error JSON validates; both native lanes execute
 all mandatory safety cases, reject missing capabilities and preserve unrelated state.
-- [ ] T014 [P] [US3] Write failing CLI syntax/authorization/shared-output/exit-status tests in internal/cli/workspace_test.go.
-- [ ] T015 [P] [US3] Write workspace schema fixture tests including failures/partial effects and old schema regressions in internal/contracts/workspace_test.go.
-- [ ] T016 [US3] Implement Cobra command family and shared result rendering in internal/cli/workspace.go; allow operation package only in scripts/check-architecture.py and its tests.
-- [ ] T017 [US3] Define independent schemas/v1/workspace.schema.json with preserved native identities and complete success/error/result variants; maintain prior contracts unchanged.
-- [ ] T018 [US3] Enforce10second observation/60second apply deadlines,64KiB command output,1MiB encoded records/results and1024 aggregate observations before unbounded allocation in internal/workspace/workspace.go and adapter runners.
-- [ ] T019 [P] [US3] Implement mandatory exact case manifest/native effect snapshots/helper sentinels in scripts/smoke-workspaces.py and scripts/test-smoke-workspaces.py; incomplete or missing execution is failure.
-- [ ] T020 [US3] Run mandatory smoke-workspaces.py in both pinned Git/jj lanes in .github/workflows/ci.yml, retaining all existing conformance gates.
+- [x] T014 [P] [US3] Write failing CLI syntax/authorization/shared-output/exit-status tests in internal/cli/workspace_test.go.
+- [x] T015 [P] [US3] Write workspace schema fixture tests including failures/partial effects and old schema regressions in internal/contracts/workspace_test.go.
+- [x] T016 [US3] Implement Cobra command family and shared result rendering in internal/cli/workspace.go; allow operation package only in scripts/check-architecture.py and its tests.
+- [x] T017 [US3] Define independent schemas/v1/workspace.schema.json with preserved native identities and complete success/error/result variants; maintain prior contracts unchanged.
+- [x] T018 [US3] Enforce10second observation/60second apply deadlines,64KiB command output,1MiB encoded records/results and1024 aggregate observations before unbounded allocation in internal/workspace/workspace.go and adapter runners.
+- [x] T019 [P] [US3] Implement mandatory exact case manifest/native effect snapshots/helper sentinels in scripts/smoke-workspaces.py and scripts/test-smoke-workspaces.py; incomplete or missing execution is failure.
+- [x] T020 [US3] Run mandatory smoke-workspaces.py in both pinned Git/jj lanes in .github/workflows/ci.yml, retaining all existing conformance gates.
 
 ## Phase 5: US2 — Handoff and retirement preparation (P2)
 **Independent test**: handoff/retire-plan revalidate owned native identity without mutation; interrupted
 creation remains distinguishable from completed and foreign destinations are retained.
-- [ ] T021 [P] [US2] Write failing completed-retry/incomplete-registration/materialization/store-failure/cancel/concurrent lock and state ancestor rename/symlink replacement tests in internal/workspace/recovery_test.go.
-- [ ] T022 [P] [US2] Write failing handoff/retire ownership/dirty-unknown/native-identity mismatch/no-delete tests in internal/workspace/handoff_test.go.
-- [ ] T023 [US2] Implement retry reconciliation using journal-proven exact owned identity in internal/workspace/workspace.go and state.go; no automatic rollback, deletion, lock stealing or path-based adoption.
-- [ ] T024 [US2] Implement handoff and retire-plan with native observations, retention evidence/recovery limits and explicit Spec011 delegation in internal/workspace/handoff.go.
-- [ ] T025 [US2] Add human/JSON handoff/retirement and partial-retry CLI fixtures in internal/cli/workspace_test.go and internal/contracts/workspace_test.go.
+- [x] T021 [P] [US2] Write failing completed-retry/incomplete-registration/materialization/store-failure/cancel/concurrent lock and state ancestor rename/symlink replacement tests in internal/workspace/recovery_test.go.
+- [x] T022 [P] [US2] Write failing handoff/retire ownership/dirty-unknown/native-identity mismatch/no-delete tests in internal/workspace/handoff_test.go.
+- [x] T023 [US2] Implement retry reconciliation using journal-proven exact owned identity in internal/workspace/workspace.go and state.go; no automatic rollback, deletion, lock stealing or path-based adoption.
+- [x] T024 [US2] Implement handoff and retire-plan with native observations, retention evidence/recovery limits and explicit Spec011 delegation in internal/workspace/handoff.go.
+- [x] T025 [US2] Add human/JSON handoff/retirement and partial-retry CLI fixtures in internal/cli/workspace_test.go and internal/contracts/workspace_test.go.
 
 ## Phase 6: Review and handoff
-- [ ] T026 [P] Publish capability/authorization/recovery/bounds guide in docs/workspaces.md, docs/backends.md, docs/agent-guide.md and docs/json-contracts.md; add explicit guide/schema Pages allowlist and docs index.
-- [ ] T027 Update ARCHITECTURE.md and AGENTS.md to describe reviewed operation layer and supported mutations without claiming tidy/deletion.
-- [ ] T028 Run independent cross-artifact convergence and exact-revision source/safety review; record resolved findings in specs/010-isolated-task-workspaces/analysis.md and verification.md.
-- [ ] T029 Run gofmt, make check, race tests, both mandatory native lanes and quickstart scenarios; record actual commands/revisions/gaps in specs/010-isolated-task-workspaces/verification.md.
+- [x] T026 [P] Publish capability/authorization/recovery/bounds guide in docs/workspaces.md, docs/backends.md, docs/agent-guide.md and docs/json-contracts.md; add explicit guide/schema Pages allowlist and docs index.
+- [x] T027 Update ARCHITECTURE.md and AGENTS.md to describe reviewed operation layer and supported mutations without claiming tidy/deletion.
+- [x] T028 Run independent cross-artifact convergence and exact-revision source/safety review; record resolved findings in specs/010-isolated-task-workspaces/analysis.md and verification.md.
+- [x] T029 Run gofmt, make check, race tests, both mandatory native lanes and quickstart scenarios; record actual commands/revisions/gaps in specs/010-isolated-task-workspaces/verification.md.
 - [ ] T030 Update tasks, docs/progress.md and docs/feature-status.json honestly; make focused Conventional Commits and open/attach PR with acceptance evidence.
 
 ## Dependencies and parallel work

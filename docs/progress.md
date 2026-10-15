@@ -1,6 +1,25 @@
 # Progress and handoff
 
-## Active work: Spec 009 inventory
+## Active work: Spec 010 isolated task workspaces
+
+Implemented native Git/jj task creation through stored plans and explicit authorization,
+durable ownership/recovery journals, conservative retry, handoff and retirement preparation.
+Plan → tasks → independent analysis preceded test-first implementation in separate core,
+Git, jj, CLI/schema and conformance worktrees. No cleanup/deletion, transfer or agent launch.
+
+Independent source review and final consistency analysis clear source `5e32515`. Full
+`make check`, race tests and both pinned local native lanes pass: 10 inspection, six jj
+inspection, 36 inventory and 45 workspace CLI cases per lane. See
+[verification](../specs/010-isolated-task-workspaces/verification.md) for limits and exact evidence.
+Spec 010 is implemented, not globally verified. PR handoff records hosted Linux minimum/current
+CI at the final head; owner review/merge and live publication remain separate actions.
+Next action: review the implementation PR and its exact-head checks.
+
+Spec 009 design/implementation and Linux fixture repair were merged by the owner through
+PRs #29/#30/#31; local main `e67ae90` passed hosted checks and automatic Pages publication.
+The older Spec 009 snapshots below preserve their original pending gates and are historical.
+
+## Historical Spec 009 implementation handoff
 
 The implementation candidate adds bounded native Git/jj inventory and three-valued
 queries. Plan/tasks/pre-implementation analysis preceded test-first implementation
@@ -168,7 +187,7 @@ Follow-up draft PRs #20–#26 target their predecessors, beginning on original d
 Original PRs #12–#19 were preserved. Next bounded step remains planning Spec 009 and
 generating tasks before cross-artifact analysis; no implementation was performed.
 
-## Current next action
+## Historical Spec 009 next action
 
 Review the Spec 009 two-PR stack (analyzed design, then implementation and evidence)
 and confirm hosted Linux minimum/current checks. Spec 009 is implemented with explicit
@@ -176,7 +195,7 @@ native qualifications; the earlier proposal/planning entries are historical and 
 not override this action. Owner approval/merge and live schema publication are pending.
 Do not start task workspace mutations or tidy from inventory evidence alone.
 
-## Latest integration handoff
+## Historical Spec 009 integration handoff
 
 The owner merged Spec 009 design/implementation PRs #29/#30 into main `9c4f385`.
 The conflict-only rebase preserved the full implementation tree. A Linux-only fixture
