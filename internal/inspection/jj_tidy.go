@@ -11,9 +11,11 @@ import (
 
 // JJTidyState contains bounded native evidence, never apply authorization.
 type JJTidyState struct {
-	Expected    JJWorkspaceState
-	Candidates  []JJTidyCandidate
-	Limitations []string
+	Expected               JJWorkspaceState
+	Candidates             []JJTidyCandidate
+	Limitations            []string
+	WorkspacePaths         []string
+	WorkspacePathsComplete bool
 }
 type JJTidyCandidate struct {
 	Name, CommitID, ChangeID, Decision, Reason, Proof string
@@ -24,7 +26,7 @@ type JJTidyCandidate struct {
 func ObserveJJTidy(ctx context.Context, path, base string) (JJTidyState, error) {
 	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
 	defer cancel()
-	state := JJTidyState{Candidates: []JJTidyCandidate{}, Limitations: []string{"Only native ancestry proves integration; squash-equivalence and forge evidence are unsupported.", "Bookmarks with any remote counterpart are retained to avoid recording deletion intent for later push.", "Stored workspace commit/change targets are protected; disk state is not snapshotted or declared clean.", "Operation and ownership checks are sampled; concurrent or ABA changes may be missed."}}
+	state := JJTidyState{WorkspacePaths: []string{}, WorkspacePathsComplete: true, Candidates: []JJTidyCandidate{}, Limitations: []string{"Only native ancestry proves integration; squash-equivalence and forge evidence are unsupported.", "Bookmarks with any remote counterpart are retained to avoid recording deletion intent for later push.", "Stored workspace commit/change targets are protected; disk state is not snapshotted or declared clean.", "Operation and ownership checks are sampled; concurrent or ABA changes may be missed."}}
 	expected, err := ObserveJJWorkspace(ctx, path, base)
 	if err != nil {
 		return state, err
@@ -54,6 +56,10 @@ func ObserveJJTidy(ctx context.Context, path, base string) (JJTidyState, error) 
 		workspaces, e := jjInventoryWorkspaceRecords(ctx, identity, registrations)
 		if e != nil {
 			return e
+		}
+		state.WorkspacePaths, state.WorkspacePathsComplete = jjTidyWorkspacePaths(workspaces)
+		if !state.WorkspacePathsComplete {
+			state.Limitations = append(state.Limitations, "A native workspace root is unavailable; state-store disjointness cannot be proven.")
 		}
 		target := InventoryTarget{CommitID: expected.BaseCommit, ChangeID: ptr(expected.BaseChange)}
 		state.Candidates, e = jjTidyCandidates(ctx, target, refs, workspaces, func(commit string) (bool, error) {
@@ -91,6 +97,19 @@ func ObserveJJTidy(ctx context.Context, path, base string) (JJTidyState, error) 
 		return state, err
 	}
 	return state, nil
+}
+
+func jjTidyWorkspacePaths(workspaces []InventoryWorkspace) ([]string, bool) {
+	paths, complete := []string{}, true
+	for _, w := range workspaces {
+		if w.Path == nil {
+			complete = false
+		} else {
+			paths = append(paths, *w.Path)
+		}
+	}
+	sort.Strings(paths)
+	return paths, complete
 }
 
 func jjTidyCandidates(ctx context.Context, base InventoryTarget, refs []InventoryReference, workspaces []InventoryWorkspace, ancestor func(string) (bool, error)) ([]JJTidyCandidate, error) {

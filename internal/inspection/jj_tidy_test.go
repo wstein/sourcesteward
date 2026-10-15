@@ -10,6 +10,13 @@ import (
 	"testing"
 )
 
+func TestJJTidyUnavailableWorkspaceRoot(t *testing.T) {
+	paths, complete := jjTidyWorkspacePaths([]InventoryWorkspace{{Path: ptr("/repo")}, {Name: "unknown"}})
+	if complete || !reflect.DeepEqual(paths, []string{"/repo"}) {
+		t.Fatalf("unknown workspace root became complete: %v %v", paths, complete)
+	}
+}
+
 func TestJJTidyCandidateSafety(t *testing.T) {
 	commit, change := strings.Repeat("a", 40), strings.Repeat("k", 32)
 	base := InventoryTarget{strings.Repeat("b", 40), ptr(strings.Repeat("l", 32))}
@@ -82,6 +89,8 @@ func TestJJTidyNativeReadOnly(t *testing.T) {
 			jjFixture(t, repo, "bookmark", "create", "stw-recovery-keep")
 			jjFixture(t, repo, "new")
 			jjFixture(t, repo, "bookmark", "create", "main")
+			secondary := filepath.Join(root, "secondary")
+			jjFixture(t, repo, "workspace", "add", "--name", "unreferenced", secondary)
 			if err := os.WriteFile(filepath.Join(repo, "unsnapshotted"), []byte("preserve\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -89,6 +98,9 @@ func TestJJTidyNativeReadOnly(t *testing.T) {
 			got, err := ObserveJJTidy(context.Background(), repo, "main")
 			if err != nil {
 				t.Fatal(err)
+			}
+			if !got.WorkspacePathsComplete || !reflect.DeepEqual(got.WorkspacePaths, []string{repo, secondary}) {
+				t.Fatalf("incomplete native workspace roots: %+v", got)
 			}
 			decisions := map[string]string{}
 			for _, c := range got.Candidates {

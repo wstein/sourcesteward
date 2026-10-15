@@ -13,7 +13,7 @@ func (jjTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObserv
 	if err != nil {
 		return TidyObservation{}, err
 	}
-	o := TidyObservation{Expected: jjSnapshot(state.Expected), Candidates: []TidyCandidate{}, Limitations: state.Limitations}
+	o := TidyObservation{Expected: jjSnapshot(state.Expected), Candidates: []TidyCandidate{}, Limitations: state.Limitations, WorkspacePaths: state.WorkspacePaths, WorkspacePathsComplete: state.WorkspacePathsComplete}
 	for _, c := range state.Candidates {
 		o.Candidates = append(o.Candidates, TidyCandidate{Kind: "bookmark", Name: c.Name, CommitID: c.CommitID, ChangeID: c.ChangeID, Decision: c.Decision, Reason: c.Reason, Proof: c.Proof, WorkspacePaths: c.WorkspacePaths, Limitations: c.Limitations})
 	}
