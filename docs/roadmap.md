@@ -111,3 +111,5 @@ All eight drafts require planning, tasks and cross-artifact analysis before impl
 The active local Specify pointer selects Spec 009 for the next bounded planning step.
 
 - [017-work-transfer: Selected Work Transfer](../specs/017-work-transfer/spec.md) — 9/10; draft, implementation pending.
+
+- [018-change-editing: Amend, Fix Up and Split Changes](../specs/018-change-editing/spec.md) — 9/10; draft, implementation pending.
