@@ -110,7 +110,8 @@ command core and contracts; it will not grant additional permissions.
 Specs 009 and 010 are implemented and merged; see their
 [009 verification](../specs/009-workspace-inventory/verification.md) and
 [010 verification](../specs/010-isolated-task-workspaces/verification.md).
-Spec 011 is the active delivery: WI1 evidence-only plans, WI2 authorized local
+Spec 011 is the active delivery: WI1 evidence-only plans are implemented with
+[local verification](../specs/011-workspace-reference-tidy/wi1-verification.md); WI2 authorized local
 reference cleanup, then WI3 owned workspace retirement. Each receives planning,
 tasks, independent analysis, implementation, review and its own PR. Registration
 removal, filesystem removal and reference cleanup have distinct effects; jj
