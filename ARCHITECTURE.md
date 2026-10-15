@@ -5,14 +5,17 @@ SourceSteward is a Go CLI with a static project site. Its backend-neutral execut
 ## Current boundaries
 ```text
 cmd/stw → internal/cli → internal/inspection → fixed Git built-ins | sandboxed native jj + read-only metadata
+                       → internal/workspace → fixed native Git/jj creation + private state journal
                        → Cobra + standard library
 scripts/       → source/documentation checks and Pages packaging
 specs/         → acceptance contracts, plans, tasks and evidence pointers
 ```
 cmd owns process cancellation and exit status. internal/cli owns parsing, rendering and the
-single diagnostic boundary. It imports only the reviewed inspection operation, not os, os/exec, filesystem or network adapters.
+single diagnostic boundary. It imports only the reviewed inspection and workspace operations, not os, os/exec, filesystem or network adapters.
 internal/inspection owns local filesystem discovery, typed results, bounded Git plumbing and native jj execution.
-scripts/check-architecture.py mechanically checks the CLI boundary.
+internal/workspace owns the reviewed mutation boundary: secure plan/task records,
+pre-action recovery journals, stale checks and fixed native adapters. CLI does not access
+state files or launch processes. scripts/check-architecture.py mechanically checks this boundary.
 
 ## Planned operation boundary
 ```text
