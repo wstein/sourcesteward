@@ -177,7 +177,27 @@ func bounded(r Result) Result {
 	}
 	r.Plan = nil
 	r.Task = nil
+	for i := range r.Actions {
+		r.Actions[i].Name = shortText(r.Actions[i].Name, 128)
+		r.Actions[i].Status = shortText(r.Actions[i].Status, 32)
+		r.Actions[i].Detail = shortText(r.Actions[i].Detail, 512)
+	}
+	if len(r.Actions) > 1024 {
+		r.Actions = r.Actions[:1024]
+	}
+	r.Limitations = []string{"Output evidence was bounded; inspect durable state before deciding any recovery."}
 	r.Status = "partial"
 	r.Diagnostics = []Diagnostic{{"result-limit", "Workspace output exceeded its one-MiB bound; inspect the durable operation journal."}}
 	return r
+}
+
+func shortText(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	s = s[:n]
+	for !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s + "…"
 }
