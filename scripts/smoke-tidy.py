@@ -78,7 +78,7 @@ def acceptance(binary=BINARY):
                 native('git', ['checkout', '-q', 'trunk'], source)
                 linked = area / 'linked'
                 native('git', ['worktree', 'add', '-q', '-b', 'used', str(linked), first], source)
-                base, used = 'trunk', 'used'
+                base, used = 'refs/heads/trunk', 'used'
             else:
                 native('jj', ['git', 'init', '--colocate' if group == 'jj-colocated' else '--no-colocate', str(source)])
                 (source / 'tracked.txt').write_text('initial\n')
@@ -138,7 +138,11 @@ def acceptance(binary=BINARY):
                 completed.append(case_id)
                 return value
 
+            def ref_name(name):
+                return 'refs/heads/' + name if group == 'git' else name
+
             def candidate(value, name):
+                name = ref_name(name)
                 candidates = {item['name']: item for item in value['plan']['candidates']}
                 assert name in candidates, (name, candidates)
                 return candidates[name]
@@ -156,10 +160,10 @@ def acceptance(binary=BINARY):
             assert workspace_used['decision'] == 'retain' and workspace_used['workspace_paths'], workspace_used
             empty = candidate(observe('empty-retain'), 'unique')
             assert empty['decision'] == 'retain', empty
-            selected = observe('literal-selection', ['--ref', 'literal.name'])
-            assert [item['name'] for item in selected['plan']['candidates']] == ['literal.name'], selected
-            observe('missing-selection', ['--ref', 'absent'], status=('refused', 'error'))
-            observe('duplicate-selection', ['--ref', 'integrated', '--ref', 'integrated'], status=('refused', 'error'))
+            selected = observe('literal-selection', ['--ref', ref_name('literal.name')])
+            assert [item['name'] for item in selected['plan']['candidates']] == [ref_name('literal.name')], selected
+            observe('missing-selection', ['--ref', ref_name('absent')], status=('refused', 'error'))
+            observe('duplicate-selection', ['--ref', ref_name('integrated'), '--ref', ref_name('integrated')], status=('refused', 'error'))
             observe('explicit-base', syntax=True)
             observe('human', mode='human')
             persisted = observe('persisted-plan', ['--state-dir', state], persist=True)
