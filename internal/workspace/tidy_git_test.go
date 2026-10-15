@@ -171,7 +171,7 @@ func TestGitTidyObservesUnmatchedDetachedWorkspaceRoots(t *testing.T) {
 			found = true
 		}
 	}
-	if !found {
+	if !found || !o.WorkspacePathsComplete {
 		t.Fatalf("all-registration evidence omitted unmatched detached workspace %s: %+v", linked, o)
 	}
 }
