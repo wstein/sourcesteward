@@ -31,6 +31,10 @@ func selectRetirementAdapter(backend string) (retirementAdapter, error) {
 	return nil, failure("unsupported-backend", "Owned retirement requires native Git or jj ownership.")
 }
 func observeRetirementSource(ctx context.Context, backend, path, base string) (Snapshot, error) {
+	if backend == "git" {
+		observation, err := (gitTidyAdapter{}).Observe(ctx, path, base)
+		return observation.Expected, err
+	}
 	a, err := selectAdapter(backend)
 	if err != nil {
 		return Snapshot{}, err

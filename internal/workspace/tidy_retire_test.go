@@ -199,3 +199,20 @@ func TestRetirementBadStateNeverCreatesFiles(t *testing.T) {
 		t.Fatal("unsafe source state gained files on refusal")
 	}
 }
+
+func TestRetirementNativeGitPublicLifecycle(t *testing.T) {
+	source, creation, task := gitRetirementFixture(t)
+	r := PlanTidy(context.Background(), TidyPlanOptions{Path: source, Base: "HEAD", StateDir: creation.StateDir, Task: task.TaskID, Owner: task.Owner, RemoveRegistration: true, RemoveFiles: task.Destination})
+	if r.Status != "ok" || r.SchemaVersion != 2 || r.Retirement == nil {
+		t.Fatalf("public native plan %+v", r)
+	}
+	options := TidyApplyOptions{StateDir: creation.StateDir, PlanID: r.Retirement.PlanID, Authorize: true}
+	r = ApplyTidy(context.Background(), options)
+	if r.Status != "ok" {
+		t.Fatalf("public native apply %+v", r)
+	}
+	r = ApplyTidy(context.Background(), options)
+	if r.Status != "ok" {
+		t.Fatalf("public native retry %+v", r)
+	}
+}
