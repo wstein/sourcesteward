@@ -66,3 +66,15 @@ Policy PR #9 and implementation PR #10 were merged by the user; native source/ef
 final artifact analysis are independently cleared. No live schema publication or Pages
 verification is claimed here. Broader status, mutation, recovery, repository migration and
 GitButler integration require separate specifications.
+
+## LazyJJ-inspired roadmap proposal
+
+The [roadmap](roadmap.md#proposed-workflow-features-inspired-by-lazyjj) now prioritizes
+workspace/reference inventory, isolated task workspaces, checkpoints, stack inspection and
+evidence-based tidy for native Git/jj. Restacking and forge coordination remain later
+specifications. Ratings are planning recommendations; none of these capabilities is
+implemented or acceptance-verified. Next feature action: specify a bounded read-only
+workspace/reference inventory, then analyze its plan/tasks before implementation.
+
+This documentation-only update was checked with `python3 scripts/check-docs.py` and
+`git diff --check`; it does not establish runtime or independent-review evidence.

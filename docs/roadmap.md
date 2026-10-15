@@ -45,6 +45,52 @@ state. Detect GitButler capabilities and managed workspaces; use its supported i
 writes and fail unsupported operations. Parallel GitButler branches share a filesystem and
 runtime; separate worktrees remain the option for isolated checkout/runtime state.
 
+## Proposed workflow features inspired by LazyJJ
+
+[LazyJJ-dev/LazyJJ](https://github.com/LazyJJ-dev/LazyJJ) is a jj configuration layer
+for stacks, isolated Claude workspaces, checkpoints and GitHub PR helpers. This is
+separate from Cretezy/lazyjj, the terminal UI. Adopt useful workflows through native
+SourceSteward adapters; installing either project is not a prerequisite.
+
+These are proposals, not implemented commands or approved specifications. Ratings express
+product priority and fit, not measured quality. Command names below are illustrative.
+
+| Proposed capability | Priority | SourceSteward adaptation |
+| --- | --- | --- |
+| Workspace/worktree inventory | 10/10 | List ownership, path, dirty/unknown state, stale metadata and relevant identities; preserve backend-specific facts. |
+| Isolated task workspace lifecycle | 10/10 | Create a Git worktree or native jj workspace, checkpoint work and prepare handoff; explicit ownership and recovery for retirement. |
+| Stack inspection and diff summary | 9/10 | Show revisions, changed files, conflicts and reference relationships in text/JSON; report unknown stack boundaries instead of guessing. |
+| Safe workspace and reference tidy | 10/10 | Plan/apply cleanup using integration and ownership evidence; missing upstreams and empty commits alone never prove disposable work. |
+| Checkpoint and resume evidence | 9/10 | Record backend identities and task context; disclose what is recoverable. jj operation IDs and Git recovery refs have different guarantees. |
+| Conflict diagnosis and handoff | 9/10 | Return affected files/revisions and bounded evidence for any agent or human; preserve unresolved state and avoid automatic model execution. |
+| Local stack restacking | 8/10 | Later history-editing specification with per-backend effects, stale-plan refusal, interruption handling and recovery evidence. |
+| Stacked PR coordination | 8/10 | Later forge adapter: inspect dependencies and preview PR/base updates; pushing, PR creation and comments are separate explicit network effects. |
+| Optional terminal/session integration | 5/10 | Emit useful workspace paths/context first; tmux and agent launchers stay optional and outside the command core. |
+
+### Delivery sequence
+
+1. Specify bounded read-only workspace/reference inventory for both Tier 1 backends.
+   Include stack facts only where a declared base and relationships provide sufficient evidence.
+   Publish compatible schemas and minimum/current conformance fixtures. Do not promise live
+   jj disk status from stored-unsnapshotted identity inspection.
+2. Specify the shared mutation contract: inspectable plans, explicit effects, expected-state
+   validation, ownership/concurrency checks, durable outcomes and operation-specific recovery.
+3. Specify isolated task workspace creation, checkpoint and handoff using that contract.
+   Git and jj receive native implementations and independent conformance evidence; partial
+   capability gaps remain visible. Repository setup scripts and hooks require explicit effect
+   contracts and authorization; never execute them implicitly as workspace setup.
+4. Specify workspace retirement and branch/bookmark tidy. Retain dirty, untracked, active,
+   foreign-owned or uncertain work. Workspace metadata removal and filesystem removal are
+   separate actions; never infer recursive deletion permission from forgetting a workspace.
+5. Specify local restacking, then forge/stack submission separately. Local workflows remain
+   useful without a cloud account, model, tmux or a forge integration.
+
+Each feature follows specify → plan → tasks → analyze → implement → verify/review. Use
+backend-neutral user outcomes with explicit native Git/jj semantics rather than translating
+jj changes into synthetic Git branches. GitButler-managed writes remain deferred until a
+supported native interface is separately specified. No proposal changes existing CLI/schema
+contracts or authorizes history rewriting, external messages, publication or deletion.
+
 ## Deferred
 History editing, remote deletion, publishing automation, a graphical client, agent scheduling
 and MCP integration are outside the foundation. A future MCP interface will reuse the same
