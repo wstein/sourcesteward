@@ -309,3 +309,28 @@ func TestGitInventoryPredicatesIgnoreUnrelatedMissingWorktrees(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestGitInventoryStoredSelectionAndMergeAmbiguity(t *testing.T) {
+	d := repo(t)
+	os.WriteFile(filepath.Join(d, "base"), []byte("base"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	git(t, d, "branch", "base")
+	git(t, d, "checkout", "-qb", "other")
+	os.WriteFile(filepath.Join(d, "other"), []byte("other"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "other")
+	git(t, d, "checkout", "-q", "main")
+	os.WriteFile(filepath.Join(d, "main"), []byte("main"), 0600)
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "main")
+	git(t, d, "merge", "--no-edit", "other")
+	r := gitInventory(t, d, InventoryOptions{Query: "dirty", Scopes: []string{"stored"}})
+	if r.Status != "partial" || r.Query.Value != "unknown" {
+		t.Fatalf("merge ambiguity %+v", r)
+	}
+	r = gitInventory(t, d, InventoryOptions{Scopes: []string{"stored"}, Base: "base", Revision: "other"})
+	if r.Status != "ok" || len(r.Files) != 1 || r.Files[0].Path != "other" {
+		t.Fatalf("explicit stored endpoints %+v", r)
+	}
+}
