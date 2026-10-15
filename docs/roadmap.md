@@ -109,3 +109,5 @@ command core and contracts; it will not grant additional permissions.
 
 All eight drafts require planning, tasks and cross-artifact analysis before implementation.
 The active local Specify pointer selects Spec 009 for the next bounded planning step.
+
+- [017-work-transfer: Selected Work Transfer](../specs/017-work-transfer/spec.md) — 9/10; draft, implementation pending.
