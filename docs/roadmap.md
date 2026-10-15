@@ -9,10 +9,11 @@ source checks, original family branding, versioned JSON schemas and Hugo-generat
 Pages guides/command reference. Git and jj are Tier 1 peers by policy; native jj final cross-platform
 acceptance is tracked in Spec 008.
 
-## Inspect — identity implemented, broader status deferred
+## Inspect and inventory — native evidence with explicit limits
 Current `stw inspect` reports repository/worktree identity, HEAD and recognized backend evidence.
-Broader changes, conflicts, branches/bookmarks, upstreams, linked worktrees/workspaces and
-interrupted operations remain deferred. Existing inspection has explicit targeting, predictable
+`stw inventory` adds registered workspaces/worktrees, native references, explicit bases,
+three-valued predicates and selected file-state scopes with native limitations. Tidy,
+recovery and mutation remain deferred; see the [inventory guide](inventory.md). Existing inspection has explicit targeting, predictable
 exit codes and bounded output without inspected-target writes or implicit fetches. Native jj
 creates and removes private temporary isolation/probe files outside that target.
 
@@ -107,7 +108,8 @@ command core and contracts; it will not grant additional permissions.
 - [015-local-restacking: Local Restacking](../specs/015-local-restacking/spec.md) — 8/10.
 - [016-stacked-pr-coordination: Stacked PR Coordination](../specs/016-stacked-pr-coordination/spec.md) — 8/10.
 
-All eight drafts require planning, tasks and cross-artifact analysis before implementation.
+Spec 009 has an implemented candidate with [verification evidence](../specs/009-workspace-inventory/verification.md).
+The remaining feature drafts require planning, tasks and cross-artifact analysis before implementation.
 The active local Specify pointer selects Spec 009 for the next bounded planning step.
 
 - [017-work-transfer: Selected Work Transfer](../specs/017-work-transfer/spec.md) — 9/10; draft, implementation pending.

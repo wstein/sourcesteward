@@ -22,7 +22,7 @@ Post-design: PASS — safe execution reused, temporary effects disclosed, old sc
 - internal/inspection/inventory_git.go, inventory_jj.go: native observations; jj.go: reusable safe session extraction.
 - internal/inspection/inventory*_test.go: failing behavior/effect tests before implementation.
 - internal/cli/inventory.go, inventory_test.go: Cobra parsing, same-model human/JSON rendering.
-- schemas/v1/inventory.schema.json; internal/contracts/contracts_test.go: new fixtures/validation, existing contracts preserved.
+- schemas/v1/inventory.schema.json; internal/contracts/inventory_test.go: new fixtures/validation, existing contracts preserved.
 - scripts/smoke-inventory.py; .github/workflows/ci.yml: real-process minimum/current gates.
 - docs/backends.md, docs/json-contracts.md, docs/agent-guide.md, docs/progress.md, docs/feature-status.json: honest scope and evidence.
 - specs/009-workspace-inventory/: research, model, contracts, quickstart, tasks, analysis, verification.

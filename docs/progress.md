@@ -1,6 +1,22 @@
 # Progress and handoff
 
-## Current milestone
+## Active work: Spec 009 inventory
+
+The implementation candidate adds bounded native Git/jj inventory and three-valued
+queries. Plan/tasks/pre-implementation analysis preceded test-first implementation
+in separate Git, jj, CLI/schema and conformance worktrees. M1–M4 organize 36 mandatory
+native CLI cases; they are acceptance gates within this implementation work item.
+See [verification](../specs/009-workspace-inventory/verification.md) for exact source,
+review, local results and remaining hosted/owner gates. Later task/workspace mutations,
+tidy, restacking, change editing and forge writes remain planned.
+
+User merged specification PRs #12–#26. Primary main and active implementation worktrees
+were updated onto origin/main 57497b1; completed historical worktrees also run current
+main, with original branches/backups retained. New implementation PRs form a two-part
+stack: analyzed design first, code/tests/evidence second. No owner merge, release or
+live schema publication is performed by this handoff. Historical records follow.
+
+## Previous milestone
 008-jj-inspection implements native standalone, colocated and secondary workspace identity
 with enforced read-only Linux/macOS sandboxing, isolated configuration and schema v2.
 Published Git/version v1 contracts remain unchanged. Independently reviewed native source
