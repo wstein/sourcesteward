@@ -6,7 +6,9 @@ recording durable native recovery before every deletion. Depends on accepted WI1
 No workspace retirement, remote intent changes, forge calls or history abandonment.
 
 ## Design
-Reuse shared secure store, locks, TidyPlanRecord/Result and literal selected refs. Stateless WI1
+Reuse shared secure store, locks, TidyPlanRecord/Result and literal selected refs. WI2-generated plans
+list explicit proposed native recovery/deletion effects; strict versioned effect-template purpose
+validation rejects old WI1 observation-only plans and unknown templates even with authorization. Stateless WI1
 plans cannot apply; stored immutable plan ID/state binding is mandatory. Reobserve relevant source,
 base, refs, registrations, safety and jj operation before every action. Account only for known own
 recovery/deletion effects, never broadly ignore changed refs/operation. Changed state refuses.
