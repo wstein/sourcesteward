@@ -11,7 +11,7 @@ import (
 )
 
 func TestJJWorkspaceNativeCreationPreservesSource(t *testing.T) {
-	if os.Getenv("STW_TEST_JJ_WORKSPACES") != "1" {
+	if os.Getenv("STW_TEST_JJ_WORKSPACES") != "1" && os.Getenv("STW_REQUIRE_JJ") != "1" {
 		t.Skip("explicit native jj workspace test")
 	}
 	bin, err := exec.LookPath("jj")
