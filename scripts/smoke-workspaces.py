@@ -206,6 +206,7 @@ def acceptance(binary=BINARY):
             helper.chmod(0o700)
             if group == 'git':
                 hook = source / '.git/hooks/post-checkout'
+                hook.parent.mkdir(exist_ok=True)
                 shutil.copy2(helper, hook)
                 plan(area / 'helper-target', 'helpers', status=('refused', 'error'))
                 hook.unlink()
