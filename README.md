@@ -11,6 +11,8 @@
 
 Inspect state. Understand the plan. Act with confidence.
 
+[Project website](https://wstein.github.io/sourcesteward/) — overview, approach and roadmap.
+
 SourceSteward is an early Go/Cobra scaffold inspired by the convenience of
 [nvie/git-toolbelt](https://github.com/nvie/git-toolbelt) and the human/agent workflows of
 [GitButler](https://gitbutler.com/). Its planned focus is predictable inspection,

@@ -15,6 +15,53 @@ def load(name, filename):
     return module
 
 class DocumentationTests(unittest.TestCase):
+    def test_theme_script_is_the_only_runtime_script(self):
+        checker = load('checker_theme', 'check-docs.py')
+        allowed = '<script src="assets/theme.js" defer></script>'
+        checker.Page().feed(allowed)
+        forbidden = (
+            '<script>alert(1)</script>',
+            '<script src="assets/theme.js" defer>alert(1)</script>',
+            '<script src="assets/theme.js"></script>',
+            '<script src="https://example.org/theme.js" defer></script>',
+            '<script src="//example.org/theme.js" defer></script>',
+            '<script src="assets/other.js" defer></script>',
+            '<script src="assets/theme.js" defer async></script>',
+            '<script src="assets/theme.js" defer onload="alert(1)"></script>',
+            '<button onclick="alert(1)">Theme</button>',
+            allowed + allowed,
+        )
+        for html in forbidden:
+            with self.subTest(html=html), self.assertRaises(ValueError):
+                checker.Page().feed(html)
+
+    def test_theme_structure_and_prominent_website_link(self):
+        site = (ROOT / 'docs/index.html').read_text()
+        self.assertIn('<label for="theme-select">Theme</label>', site)
+        self.assertIn('id="theme-control" hidden', site)
+        self.assertIn('<script src="assets/theme.js" defer></script>', site)
+        for value in ('system', 'light', 'dark'):
+            self.assertIn('value="' + value + '"', site)
+        intro = (ROOT / 'README.md').read_text().split('SourceSteward is an early')[0]
+        self.assertIn('[Project website](https://wstein.github.io/sourcesteward/)', intro)
+
+    def test_packaging_accepts_only_named_theme_script(self):
+        package = load('package_theme', 'package-pages.py')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets = root / 'docs/assets'
+            assets.mkdir(parents=True)
+            (root / 'docs/index.html').write_text('<html></html>')
+            (assets / 'theme.js').write_text('// local theme')
+            package.package(root, root / 'accepted', 'a' * 40)
+            self.assertTrue((root / 'accepted/assets/theme.js').exists())
+            for path in (assets / 'other.js', assets / 'nested/theme.js'):
+                path.parent.mkdir(exist_ok=True)
+                path.write_text('// unexpected')
+                with self.assertRaises(ValueError):
+                    package.package(root, root / 'rejected', 'a' * 40)
+                path.unlink()
+
     def test_wide_tie_assets_are_flat_and_self_contained(self):
         allowed = {'#0b2545', '#f05032', '#ff8066', '#ffffff', 'none'}
         ns = '{http://www.w3.org/2000/svg}'

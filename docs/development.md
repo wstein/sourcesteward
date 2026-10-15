@@ -1,7 +1,8 @@
 # Development
 
 ## Prerequisites and checks
-Go 1.27.2+, Git and Python 3 are required for development. Python validates documentation
+Go 1.27.2+, Git, Python 3 and Node.js 22+ are required for development.
+Node runs dependency-free theme behavior tests; CI selects Node 24. Python validates documentation
 and assets only; the CLI has no Python dependency. Cobra v1.10.2 is pinned in go.mod/go.sum.
 
 ```sh
@@ -11,7 +12,7 @@ go run ./cmd/stw version --json
 ```
 
 `make check` checks formatting, Go tests, vet, module verification, local documentation links,
-SVG structure, site assets and whitespace. It does not create release artifacts or mutate a
+SVG structure, theme behavior/security, site assets and whitespace. It does not create release artifacts or mutate a
 user repository. Tests construct a fresh command for each invocation.
 
 ## Build the local CLI
@@ -50,7 +51,10 @@ or point `SPECIFY_FEATURE_DIRECTORY` at `specs/001-project-foundation` for the s
 No extension hooks are configured. `specify preset resolve spec-template` resolves the active template.
 
 ## Website
-The site is plain HTML/CSS with local SVG and font assets. Preview with:
+The site is plain HTML/CSS with local SVG and font assets, plus one local theme script.
+The Theme select follows the system by default, or saves Light/Dark locally when storage
+is available. Returning to System clears that preference. Without JavaScript the switch is
+hidden and CSS follows system appearance. No network or package dependency is required. Preview with:
 
 ```sh
 python3 -m http.server 8000 --directory docs
