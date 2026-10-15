@@ -33,8 +33,8 @@ A visitor can follow their system appearance or choose light/dark explicitly.
 
 ## Success Criteria
 - **SC-001**: README link inspection and offline source/packaging tests pass.
-- **SC-002**: Automated theme tests cover first visit, persistence, system changes, invalid values and unavailable storage.
-- **SC-003**: Browser acceptance at 375×812 and 1280×800 covers both palettes, keyboard selection/focus, reload and no-script fallback with no overflow.
+- **SC-002**: Automated theme tests cover first visit, persistence, system reset, invalid values and unavailable storage. CSS delegates system preference changes to the browser; actual dynamic OS changes require separate browser evidence.
+- **SC-003**: Browser acceptance at 375×812 and 1280×800 covers both palettes, keyboard selection/focus and reload without overflow. No-script fallback is inspected separately; record any untested OS preference changes explicitly.
 - **SC-004**: Required source checks and independent review pass before a PR handoff; publication remains outside implementation ownership.
 
 ## Assumptions and Edge Cases

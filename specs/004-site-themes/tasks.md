@@ -14,8 +14,8 @@
 
 ## Verification and handoff
 - [x] T007 Run make check and record contrast/source evidence in specs/004-site-themes/verification.md.
-- [ ] T008 Complete coordinator browser acceptance and independent review, updating specs/004-site-themes/tasks.md and verification.md.
-- [ ] T009 Update docs/progress.md, docs/feature-status.json and docs/README.md with honest status; create focused Conventional Commits.
+- [x] T008 Complete coordinator browser acceptance and hand off independent review, updating specs/004-site-themes/tasks.md and verification.md.
+- [x] T009 Update docs/progress.md, docs/feature-status.json and docs/README.md with honest status; create focused Conventional Commits.
 - [ ] T010 Coordinator creates PR after acceptance; record handoff in specs/004-site-themes/verification.md.
 
 ## Dependencies and strategy

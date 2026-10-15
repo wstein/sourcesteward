@@ -48,10 +48,22 @@ Calculated WCAG relative luminance from authored CSS hex values (rounded ratios)
 The terminal scopes its own palette in both page themes; the branch logo remains unchanged.
 These measurements cover authored solid color combinations, not a browser pixel audit.
 
-## Pending coordinator acceptance
-- Actual browser light/dark/system checks at 375×812 and 1280×800, keyboard focus/selection,
-  reload/persistence, system change and no-script fallback.
-- Independent exact-revision implementation review and any corrections.
-- PR creation and CI; human merge controls eventual Pages publication.
+## Coordinator browser acceptance
+The coordinator inspected implementation candidate `2ba0a577eb92f5307b07a201d28ed5b6123fc9d5`:
 
-Status: implemented, source checked; browser/review/PR acceptance pending.
+- Both light and dark at 375×812 and 1280×800: no horizontal overflow.
+- Additional 720/768 CSS-pixel tablet widths: no overflow; at 720 the header fits and logo remains 42×42.
+- Native keyboard selection (letter d, then Tab) chooses Dark and shows visible focus.
+- Explicit Dark and Light survive reload. System reset removes data-theme and follows the current light OS appearance.
+- An ephemeral no-script HTML copy retaining the original CSS has zero scripts, a hidden/display-none inactive control, readable system-light styling and no overflow at 1280 pixels.
+
+Limit: real OS dark preference and a live OS preference change were not exercised. The CSS
+prefers-color-scheme rule was reviewed; Node state tests prove override removal, not browser
+media-query behavior. These limits remain explicit rather than inferred from stubs.
+
+## Delivery status
+Source and browser acceptance are complete for the tested scope; feature status verified
+means local source/UI acceptance, not publication or exhaustive OS/browser coverage.
+Independent implementation review and PR/CI handoff are owned by the coordinator. No merge
+or Pages deployment is claimed. The next documentation commit records this evidence without
+changing implementation behavior.
