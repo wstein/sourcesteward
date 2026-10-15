@@ -286,7 +286,7 @@
         },
         "reference_digest": {
           "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
+          "pattern": "^([a-f0-9]{64}|[a-f0-9]{128})$"
         },
         "registration_digest": {
           "type": "string",
