@@ -22,7 +22,10 @@ CLI / future MCP → application operation → selected Git | jj | GitButler ada
 ```
 Bounded ordinary-Git identity inspection exists; native jj/GitButler adapters do not. Avoid premature universal interfaces: capabilities, stable
 identities, inspection effects and recovery guarantees are specified before implementation.
-The [backend contract](docs/backends.md) is the design boundary for jj readiness.
+Git and jj are Tier 1 peers with native adapters for supported capabilities; native jj identity
+inspection remains pending Spec 008 acceptance. The [backend contract](docs/backends.md)
+defines ownership-based selection, versions, schema compatibility and conformance evidence.
+Read-only jj acceptance must verify working-copy and operation-log effects independently.
 
 ## Knowledge and execution
 [AGENTS.md](AGENTS.md) is the short entry map. [docs/README.md](docs/README.md) indexes the

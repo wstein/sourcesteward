@@ -5,6 +5,7 @@
 - [Troubleshooting index](../llms.txt): agent-readable documentation, source and tests.
 - [Architecture](../ARCHITECTURE.md): boundaries and planned adapter model.
 - [Development](development.md): prerequisites, checks and site publication.
+- [Tier 1 policy amendment](tier1-policy.md): rationale, compatibility impact and verification.
 - [Backend readiness](backends.md): Git/jj/GitButler capability and effect contracts.
 - [Roadmap](roadmap.md): planned features, explicitly separated from current behavior.
 - [Harness](harness.md): session startup, acceptance feedback and durable handoff.
