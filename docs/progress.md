@@ -1,7 +1,14 @@
 # Progress and handoff
 
 ## Current milestone
-005-repository-inspection, 006-json-schemas and 007-hugo-docs are merged to main through
+008-jj-inspection implements native standalone, colocated and secondary workspace identity
+with enforced read-only Linux/macOS sandboxing, isolated configuration and schema v2.
+Published Git/version v1 contracts remain unchanged. Independently reviewed native source
+949c082 passes both macOS jj versions and mandatory minimum/current Linux conformance at
+3b152f6 (Actions run38777280084). Final documentation/integration review and latest-head CI
+remain pending. See [Spec 008 evidence](../specs/008-jj-inspection/verification.md).
+
+007-hugo-docs are merged to main through
 [PR #7](https://github.com/wstein/sourcesteward/pull/7),
 [PR #6](https://github.com/wstein/sourcesteward/pull/6) and
 [PR #8](https://github.com/wstein/sourcesteward/pull/8). Their recorded acceptance covers
@@ -51,6 +58,7 @@ passed at 1280×800 and 375×812 with no horizontal overflow. Initial Linux CI a
 documentation-only evidence commit will go through the same CI/Pages gate.
 
 ## Next bounded action
-Review the Tier 1 amendment, then specify/analyze/implement native jj identity inspection as
-Spec 008 with compatible schemas and Git/jj conformance CI. Broader status and mutations
-remain separate features. Cleanup, recovery, repository migration and MCP remain deferred.
+Finish exact-revision documentation/integration analysis and review for Spec 008, then confirm
+latest-head CI before handoff. PR #9 carries the Tier 1 policy; PR #10 carries native inspection.
+No merge, deployment or live schema publication is claimed here. Broader status, mutation,
+recovery, repository migration and GitButler integration require separate specifications.
