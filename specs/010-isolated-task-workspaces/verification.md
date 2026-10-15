@@ -91,3 +91,8 @@ PR creation/attachment follows; the PR body records its final exact head and hos
 source/minimum/current checks. Hosted acceptance is pending at record creation, not inferred
 from local macOS evidence. Feature status remains implemented. No owner merge, release,
 manual artifact publication or live schema deployment is performed by this handoff.
+
+Implementation PR [#32](https://github.com/wstein/sourcesteward/pull/32) is open and attached
+to the implementation task. All30tasks are complete; no owner merge was performed. The PR
+body records final exact-head hosted checks as they finish, avoiding a documentation-only
+source commit loop after successful CI.

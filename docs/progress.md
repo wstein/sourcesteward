@@ -13,7 +13,7 @@ inspection, 36 inventory and 45 workspace CLI cases per lane. See
 [verification](../specs/010-isolated-task-workspaces/verification.md) for limits and exact evidence.
 Spec 010 is implemented, not globally verified. PR handoff records hosted Linux minimum/current
 CI at the final head; owner review/merge and live publication remain separate actions.
-Next action: review the implementation PR and its exact-head checks.
+Next action: review [PR #32](https://github.com/wstein/sourcesteward/pull/32) and its exact-head checks.
 
 Spec 009 design/implementation and Linux fixture repair were merged by the owner through
 PRs #29/#30/#31; local main `e67ae90` passed hosted checks and automatic Pages publication.
