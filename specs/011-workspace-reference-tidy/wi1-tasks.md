@@ -23,7 +23,7 @@ Independent test: both output modes share evidence; actual success/error fixture
 ## Review and handoff
 - [x] T013 [P] Document scope/proof/bounds/stateeffects/retention in docs/tidy.md, docs/backends.md, docs/json-contracts.md and publication allowlist; add public schema/guide checks.
 - [x] T014 Run independent source review and final consistency analysis, gofmt, make check, race tests and mandatory minimum/current native lanes; record exact evidence in specs/011-workspace-reference-tidy/wi1-verification.md.
-- [ ] T015 Update scoped progress/status/task evidence, make focused Conventional Commits and open/attach WI1 PR; leave WI2/3 planned in docs/progress.md and docs/feature-status.json.
+- [x] T015 Update scoped progress/status/task evidence, make focused Conventional Commits and open/attach WI1 PR; leave WI2/3 planned in docs/progress.md and docs/feature-status.json.
 
 ## Dependencies and parallel work
 T001 precedes source; T002→T003 establishes shared foundation. Git T004→T006 and jj T005→T007

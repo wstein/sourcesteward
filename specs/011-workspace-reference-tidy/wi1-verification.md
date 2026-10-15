@@ -33,3 +33,7 @@ counterpart retain to avoid recording later push-deletion intent. Observations a
 transactions; external races and ABA changes may be missed. Unknown/noncanonical registration
 roots prevent persisted plans; they never authorize workspace removal. Apply and owned retirement
 remain WI2/WI3, with separate implementation and acceptance gates. No real user refs/files deleted.
+
+WI1 handoff: [PR #36](https://github.com/wstein/sourcesteward/pull/36). Final delta
+review cleared d1d165f independently; four path-safety regressions passed uncached.
+Final integrated TestTidy suite also passed. PR checks and owner merge remain pending.
