@@ -121,3 +121,15 @@ func TestInventoryHelpIsLocal(t *testing.T) {
 		t.Fatalf("%d %s %s", code, out.String(), diagnostic.String())
 	}
 }
+
+func TestInventoryFailureQuotesDiagnostic(t *testing.T) {
+	r := inventoryCLIResult("error", "unknown")
+	r.Diagnostics = []inspection.Diagnostic{{Code: "failure", Message: "repository\x1b[31m\nforged"}}
+	command := inventoryCommandWith(func(context.Context, string, inspection.InventoryOptions) inspection.InventoryResult { return r })
+	command.SetOut(&bytes.Buffer{})
+	command.SetArgs([]string{"--json"})
+	err := command.Execute()
+	if err == nil || strings.ContainsRune(err.Error(), '\x1b') || strings.ContainsRune(err.Error(), '\n') || !strings.Contains(err.Error(), `\x1b`) {
+		t.Fatalf("unsafe diagnostic %v", err)
+	}
+}
