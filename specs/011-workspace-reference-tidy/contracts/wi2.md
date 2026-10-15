@@ -7,6 +7,7 @@ type TidyRecovery struct {
 type TidyNativeOutcome struct {
     Attempted, Complete bool
     Effects, Limitations []string
+    Expected *Snapshot // internal verified native post-action state
 }
 // Add to tidyAdapter for WI2 after independent interface analysis:
 PrepareRecovery(context.Context, TidyPlanRecord, TidyCandidate) (TidyRecovery, Snapshot, TidyNativeOutcome, error)
@@ -60,3 +61,11 @@ binding form the plan-purpose marker and are strictly validated with the plan di
 read-only WI1 or modified templates refuse with replan-required; matching plan shape/digest alone never grants mutation.
 No new required v1 fields or altered old schema bytes. Tests apply a real WI1 observation plan under
 WI2 and require refusal with zero native effects, then generate a new explicit WI2 plan successfully.
+
+## Internal verified post-action snapshot amendment
+TidyNativeOutcome.Expected is internal-only, never a new published result/schema field. An adapter
+may populate it only after full native exact-delta validation proves the permitted own action and
+all unrelated state unchanged. Core performs a fresh Observe and requires exact Expected equality
+before advancing durable journal state or authorizing the next action. Missing/unverified/unequal
+Expected remains partial/refused; never accept an arbitrary postaction state as the new baseline.
+This strengthens the analyzed per-action delta contract without weakening schema v1 compatibility.
