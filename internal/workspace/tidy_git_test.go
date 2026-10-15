@@ -99,3 +99,39 @@ func TestGitTidyLiteralRefsAndMalformedRegistrations(t *testing.T) {
 		t.Fatal("cancellation admitted")
 	}
 }
+
+func TestGitTidyRefusesGraftsAndConfiguredHelpers(t *testing.T) {
+	for _, kind := range []string{"grafts", "hook", "fsmonitor"} {
+		t.Run(kind, func(t *testing.T) {
+			d := fixtureGit(t)
+			sentinel := filepath.Join(gitTempDir(t), "helper-called")
+			switch kind {
+			case "grafts":
+				if e := os.WriteFile(filepath.Join(d, ".git", "info", "grafts"), []byte(gitFixture(t, d, "rev-parse", "HEAD")+"\n"), 0600); e != nil {
+					t.Fatal(e)
+				}
+			case "hook":
+				if e := os.WriteFile(filepath.Join(d, ".git", "hooks", "reference-transaction"), []byte("#!/bin/sh\ntouch '"+sentinel+"'\n"), 0700); e != nil {
+					t.Fatal(e)
+				}
+			case "fsmonitor":
+				gitFixture(t, d, "config", "core.fsmonitor", "touch '"+sentinel+"'")
+			}
+			if _, e := (gitTidyAdapter{}).Observe(context.Background(), d, "HEAD"); e == nil {
+				t.Fatal("unsafe integration evidence admitted")
+			}
+			if _, e := os.Stat(sentinel); !os.IsNotExist(e) {
+				t.Fatal("configured helper executed")
+			}
+		})
+	}
+}
+
+func TestGitTidyMalformedReferenceEvidence(t *testing.T) {
+	oid := "0123456789012345678901234567890123456789"
+	for _, raw := range []string{"refs/heads/x\x00" + oid + "\x00\x00commit\x00", "refs/heads/x\x00bad\x00\x00commit\x00\n", "refs/tags/x\x00" + oid + "\x00\x00commit\x00\n", "refs/heads/x\x00" + oid + "\x00\x00blob\x00\n"} {
+		if _, e := parseGitTidyRefs(raw, "sha1"); e == nil {
+			t.Fatalf("malformed ref admitted %q", raw)
+		}
+	}
+}
