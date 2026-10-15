@@ -12,10 +12,11 @@ repository or access network. Generation order is stable and excludes dynamic ti
 - docs/development.md → /docs/development/
 - docs/backends.md → /docs/backends/
 - docs/roadmap.md → /docs/roadmap/
-- docs/agent-guide.md → /docs/agents/ (only after feature 003 exists)
+- docs/agent-guide.md → /docs/agents/
+- docs/json-contracts.md → /docs/json-contracts/
 
 These are the entire guide allowlist. Other Markdown links point to canonical GitHub
 source, not copied files. Selected source containing Hugo shortcode delimiters `{{<` or
 `{{%` is rejected before staging, even with unsafe HTML disabled. No source shortcode
-is executed. Mandatory schema names become version.schema.json and inspect.schema.json
-when feature 006 is stacked; until then schema absence is explicitly a transitional gap.
+is executed. Mandatory schema names are version.schema.json and inspect.schema.json. Both are
+required in production builds after reviewed feature 006 integration; absence is an error.

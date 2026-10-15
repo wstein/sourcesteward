@@ -18,7 +18,7 @@ func TestCommandDocumentationUsesCommandTreeWithoutExecution(t *testing.T) {
 	for _, doc := range docs {
 		seen[doc.Path] = doc
 	}
-	for _, name := range []string{"stw", "stw help", "stw version"} {
+	for _, name := range []string{"stw", "stw help", "stw inspect", "stw version"} {
 		if _, ok := seen[name]; !ok {
 			t.Fatalf("missing command %q: %#v", name, docs)
 		}
