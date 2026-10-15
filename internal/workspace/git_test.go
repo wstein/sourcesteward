@@ -122,6 +122,28 @@ func TestGitTreeAdmissionBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestGitMetadataPreparationReportsActualContainerCreation(t *testing.T) {
+	d := gitTempDir(t)
+	roots, created, err := gitProtectedMetadata(d)
+	if err != nil || !created || len(roots) != 0 {
+		t.Fatalf("new container: %v %v %v", roots, created, err)
+	}
+	child := filepath.Join(d, "worktrees", "existing")
+	if err := os.Mkdir(child, 0700); err != nil {
+		t.Fatal(err)
+	}
+	roots, created, err = gitProtectedMetadata(d)
+	if err != nil || created || len(roots) != 1 || roots[0] != child {
+		t.Fatalf("existing container protection: %v %v %v", roots, created, err)
+	}
+	if err := os.WriteFile(filepath.Join(d, "worktrees", "foreign-file"), []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, created, err = gitProtectedMetadata(d); err == nil || created {
+		t.Fatal("foreign metadata entry was adopted")
+	}
+}
 func gitFixture(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	c := exec.Command("git", append([]string{"-C", dir}, args...)...)
