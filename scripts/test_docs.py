@@ -54,6 +54,7 @@ class DocumentationTests(unittest.TestCase):
             assets.mkdir(parents=True)
             (root / 'docs/index.html').write_text('<html></html>')
             (assets / 'theme.js').write_text('// local theme')
+            shutil.copytree(ROOT / 'schemas', root / 'schemas')
             package.package(root, root / 'accepted', 'a' * 40)
             self.assertTrue((root / 'accepted/assets/theme.js').exists())
             for path in (assets / 'other.js', assets / 'nested/theme.js'):
