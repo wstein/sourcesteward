@@ -105,6 +105,25 @@ class BackendInstallerTests(unittest.TestCase):
             self.assertNotIn(forbidden, workflow)
         self.assertLess(workflow.index('scripts/smoke-jj-inspection.py --sandbox-preflight'), workflow.index('scripts/install-backends.py'))
 
+    def test_every_native_test_job_installs_and_requires_sandbox_before_tests(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        for name, following, test_command in (('check', 'conformance', 'run: make check'),
+                                              ('conformance', 'pages', 'run: go test -count=1 -race ./...')):
+            with self.subTest(job=name):
+                job = workflow.split('  ' + name + ':\n', 1)[1].split('\n  ' + following + ':\n', 1)[0]
+                self.assertIn("STW_REQUIRE_NATIVE_SANDBOX: '1'", job)
+                setup = job.index('sudo apt-get install --no-install-recommends -y bubblewrap apparmor apparmor-profiles')
+                profile = job.index('python3 -B scripts/activate-sandbox-profile.py')
+                preservation = job.index('test "$before" = "$(sandbox_settings)"')
+                preflight = job.index('scripts/smoke-jj-inspection.py --sandbox-preflight')
+                tests = job.index(test_command)
+                self.assertLess(setup, profile)
+                self.assertLess(profile, preservation)
+                self.assertLess(preservation, preflight)
+                self.assertLess(preflight, tests)
+                for forbidden in ('--privileged', 'apparmor_restrict_unprivileged_userns=0', 'chmod u+s'):
+                    self.assertNotIn(forbidden, job)
+
     def test_sandbox_preflight_requires_denied_write_and_successful_read(self):
         for write_code, read_code, passed in ((0, 0, False), (1, 1, False), (1, 0, True)):
             responses = [SimpleNamespace(returncode=write_code, stderr=b'denied'), SimpleNamespace(returncode=read_code, stderr=b'namespace denied')]
