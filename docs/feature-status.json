@@ -102,6 +102,12 @@
       "status": "planned",
       "spec": "../specs/016-stacked-pr-coordination/spec.md",
       "evidence": null
+    },
+    {
+      "id": "017-work-transfer",
+      "status": "planned",
+      "spec": "../specs/017-work-transfer/spec.md",
+      "evidence": null
     }
   ]
 }
