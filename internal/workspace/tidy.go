@@ -113,6 +113,14 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 		r.Limitations = append(r.Limitations, "A native workspace root is unavailable; persistent state-store disjointness cannot be proven.")
 	}
 	r.Limitations = append(r.Limitations, p.RecoveryLimits...)
+	if o.StateDir == "" {
+		if err = qualifyTidyWorkspaceRoots(ctx, observation.WorkspacePaths, ""); err != nil {
+			if ctx.Err() != nil {
+				return failTidy(r, ctx.Err())
+			}
+			r.Limitations = append(r.Limitations, "At least one registered workspace root is missing or noncanonical; no writable state-store disjointness was proven.")
+		}
+	}
 	if o.StateDir != "" {
 		p.Effects = []string{"Persist one immutable plan in the explicitly selected private state directory; no native repository effects."}
 		if err = disjointTidyStore(p); err != nil {
