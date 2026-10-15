@@ -329,7 +329,7 @@ func (gitAdapter) Create(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	if verifyErr == nil {
 		n.Identity = verified.Identity
 		n.Phase = "registered"
-		if n.Identity.CommitID == p.Expected.BaseCommit && n.Identity.HeadRef == "" {
+		if runErr == nil && code == 0 && n.Identity.CommitID == p.Expected.BaseCommit && n.Identity.HeadRef == "" {
 			n.Complete = true
 			n.Phase = "materialized"
 		}
