@@ -22,7 +22,7 @@
 ## Phase 4: US2 — Effects and observation qualifications (P1)
 **Goal**: Stored identity observations never snapshot, merge operations or repair original metadata.
 **Independent test**: Before/after bytes and helper sentinels remain unchanged for edits, stale workspace, divergent heads, corruption and errors.
-- [ ] T009 [US2] Write failing real-fixture effects/config/env tests in internal/inspection/jj_test.go, including edited/untracked files, stale workspace, divergent operation heads, missing/corrupt index and type files.
+- [ ] T009 [US2] Write failing real-fixture effects/config/env tests in internal/inspection/jj_test.go, including edited/untracked files, stale workspace, divergent operation heads, missing/corrupt index and type files; prove fixed built-ins/config exclusion never invoke helpers rather than claiming Linux sandbox exec denial.
 - [ ] T010 [US2] Pin operation observations and selected workspace identity in internal/inspection/jj.go; detect changed observations, reject malformed output and include working_copy='stored-unsnapshotted' qualification with explicit freshness/concurrency limitation.
 - [ ] T011 [US2] Add stable jj-unavailable/jj-version-unsupported/jj-sandbox-unavailable/jj-failed/jj-timeout/jj-output-limit diagnostics and failure tests in internal/inspection/inspection.go and internal/inspection/jj_test.go; retain ambiguity/GitButler schema1 refusal.
 
