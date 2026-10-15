@@ -14,16 +14,34 @@ import (
 
 // ValidateInventoryOptions validates usage without accessing repository state.
 func ValidateInventoryOptions(o InventoryOptions) error {
-	all := []string{o.Query, o.Ref, o.From, o.To, o.Base, o.Revision, o.Anchor}
-	all = append(all, o.Remotes...)
-	all = append(all, o.Scopes...)
-	all = append(all, o.Paths...)
-	if len(all) > inventoryRecordLimit {
-		return errors.New("too many inventory options")
+	remaining := inventoryRecordLimit - 7
+	for _, count := range []int{len(o.Remotes), len(o.Scopes), len(o.Paths)} {
+		if count > remaining {
+			return errors.New("too many inventory options")
+		}
+		remaining -= count
 	}
-	for _, s := range all {
-		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) || len(s) > outputLimit {
-			return errors.New("invalid inventory option encoding or length")
+	budget := outputLimit
+	validate := func(s string) error {
+		if len(s) > budget {
+			return errors.New("inventory option bytes exceed limit")
+		}
+		budget -= len(s)
+		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
+			return errors.New("invalid inventory option encoding")
+		}
+		return nil
+	}
+	for _, s := range []string{o.Query, o.Ref, o.From, o.To, o.Base, o.Revision, o.Anchor} {
+		if e := validate(s); e != nil {
+			return e
+		}
+	}
+	for _, list := range [][]string{o.Remotes, o.Scopes, o.Paths} {
+		for _, s := range list {
+			if e := validate(s); e != nil {
+				return e
+			}
 		}
 	}
 	if o.Anchor != "" && o.Anchor != "workspace" && o.Anchor != "cwd" {
@@ -117,12 +135,15 @@ func Inventory(ctx context.Context, path string, options InventoryOptions) Inven
 	}
 	if r.Status != "error" {
 		final := Inspect(ctx, path)
+		if ctx.Err() != nil {
+			return inventoryContextFailure(ctx, r)
+		}
 		if final.Status != "ok" || !reflect.DeepEqual(identity, final) {
 			return boundedInventoryFailure(r, "changed-repository", "repository identity or ownership changed during inventory")
 		}
 	}
 	if ctx.Err() != nil {
-		return boundedInventoryFailure(r, "inventory-timeout", "inventory deadline or cancellation prevented final validation")
+		return inventoryContextFailure(ctx, r)
 	}
 	if e = checkInventoryLimits(r); e != nil {
 		return boundedInventoryFailure(r, "inventory-limit", e.Error())
@@ -185,4 +206,11 @@ func normalizeInventoryOptions(identity Result, o InventoryOptions) (InventoryOp
 	o.Paths = normalized
 	o.Anchor = "workspace"
 	return o, nil
+}
+
+func inventoryContextFailure(ctx context.Context, r InventoryResult) InventoryResult {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return boundedInventoryFailure(r, "inventory-timeout", "inventory exceeded its ten-second deadline")
+	}
+	return boundedInventoryFailure(r, "canceled", "inventory canceled")
 }

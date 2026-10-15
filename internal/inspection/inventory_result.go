@@ -2,10 +2,11 @@
 package inspection
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
+	"unicode/utf8"
 )
 
 const inventoryRecordLimit = 1024
@@ -149,13 +150,11 @@ func checkInventoryLimits(r InventoryResult) error {
 	if n > inventoryRecordLimit {
 		return errors.New("inventory record limit exceeded")
 	}
-	raw, e := json.Marshal(r)
-	if e != nil {
-		return e
+	budget := inventoryResultLimit
+	if err := inventoryJSONBudget(reflect.ValueOf(r), &budget); err != nil {
+		return err
 	}
-	if len(raw) > inventoryResultLimit {
-		return errors.New("inventory result byte limit exceeded")
-	}
+
 	return nil
 }
 func inventoryPathSelected(path string, filters []string) bool {
@@ -168,4 +167,98 @@ func inventoryPathSelected(path string, filters []string) bool {
 		}
 	}
 	return false
+}
+
+// inventoryJSONBudget checks a conservative encoded-size bound before encoding allocates.
+// All shipped result fields are fixed typed values; unsupported kinds fail closed.
+func inventoryJSONBudget(v reflect.Value, remaining *int) error {
+	spend := func(n int) error {
+		if n > *remaining {
+			return errors.New("inventory result byte limit exceeded")
+		}
+		*remaining -= n
+		return nil
+	}
+	if !v.IsValid() {
+		return spend(4)
+	}
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return spend(4)
+		}
+		return inventoryJSONBudget(v.Elem(), remaining)
+	case reflect.String:
+		s := v.String()
+		if len(s) > *remaining {
+			return errors.New("inventory result byte limit exceeded")
+		}
+		if !utf8.ValidString(s) {
+			return errors.New("inventory metadata is not valid UTF-8")
+		}
+		if e := spend(2); e != nil {
+			return e
+		}
+		for _, r := range s {
+			n := utf8.RuneLen(r)
+			switch r {
+			case '\b', '\f', '\n', '\r', '\t', '"', '\\':
+				n = 2
+			case '<', '>', '&', '\u2028', '\u2029':
+				n = 6
+			default:
+				if r < 0x20 {
+					n = 6
+				}
+			}
+			if e := spend(n); e != nil {
+				return e
+			}
+		}
+		return nil
+	case reflect.Bool:
+		return spend(5)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return spend(20)
+	case reflect.Slice, reflect.Array:
+		if v.Kind() == reflect.Slice && v.IsNil() {
+			return spend(4)
+		}
+		if e := spend(2); e != nil {
+			return e
+		}
+		for i := 0; i < v.Len(); i++ {
+			if e := spend(1); e != nil {
+				return e
+			}
+			if e := inventoryJSONBudget(v.Index(i), remaining); e != nil {
+				return e
+			}
+		}
+		return nil
+	case reflect.Struct:
+		if e := spend(2); e != nil {
+			return e
+		}
+		typ := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			tag := typ.Field(i).Tag.Get("json")
+			name, _, _ := strings.Cut(tag, ",")
+			if name == "-" {
+				continue
+			}
+			if name == "" {
+				name = typ.Field(i).Name
+			}
+			if e := spend(len(name) + 4); e != nil {
+				return e
+			}
+			if e := inventoryJSONBudget(v.Field(i), remaining); e != nil {
+				return e
+			}
+		}
+		return nil
+	default:
+		return errors.New("unsupported inventory result value")
+	}
 }
