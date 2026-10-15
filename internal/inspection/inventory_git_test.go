@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -348,5 +349,45 @@ func TestGitInventoryOversizedDiskIsUnknown(t *testing.T) {
 	r = gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"absent"}})
 	if r.Status != "ok" || r.Query.Value != "true" {
 		t.Fatalf("unrelated content %+v", r)
+	}
+}
+
+func TestGitInventoryQueriesIgnoreUnselectedNormalizationAndIgnoredFiles(t *testing.T) {
+	d := repo(t)
+	for _, name := range []string{"safe", "other"} {
+		os.WriteFile(filepath.Join(d, name), []byte("clean\n"), 0600)
+	}
+	git(t, d, "add", ".")
+	git(t, d, "commit", "-qm", "initial")
+	os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("other text\n"), 0600)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"safe"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("unrelated normalization %+v", r)
+	}
+	os.WriteFile(filepath.Join(d, ".gitignore"), []byte("ignored/\n"), 0600)
+	os.Mkdir(filepath.Join(d, "ignored"), 0700)
+	for i := 0; i < 1025; i++ {
+		os.WriteFile(filepath.Join(d, "ignored", fmt.Sprint(i)), []byte("i"), 0600)
+	}
+	r = gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"safe"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("unrequested ignored scope %+v", r)
+	}
+}
+
+func TestGitInventoryDiskQueriesIgnoreOtherWorkspaceState(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	linked := filepath.Join(t.TempDir(), "linked")
+	git(t, d, "worktree", "add", "-qb", "topic", linked)
+	os.RemoveAll(linked)
+	r := gitInventory(t, d, InventoryOptions{Query: "clean"})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("%+v", r)
+	}
+	os.WriteFile(filepath.Join(d, "new"), []byte("dirty"), 0600)
+	r = gitInventory(t, d, InventoryOptions{Query: "dirty"})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("%+v", r)
 	}
 }
