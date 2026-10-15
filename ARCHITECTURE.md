@@ -4,13 +4,15 @@ SourceSteward is a Go CLI with a static project site. Its backend-neutral execut
 
 ## Current boundaries
 ```text
-cmd/stw → internal/cli → Cobra + standard library
+cmd/stw → internal/cli → internal/inspection → fixed Git built-ins + read-only metadata
+                       → Cobra + standard library
 scripts/       → source/documentation checks and Pages packaging
 specs/         → acceptance contracts, plans, tasks and evidence pointers
 ```
 cmd owns process cancellation and exit status. internal/cli owns parsing, rendering and the
-single diagnostic boundary. It does not import Git subprocess, filesystem mutation or network
-adapters. scripts/check-architecture.py mechanically checks these foundation boundaries.
+single diagnostic boundary. It imports only the reviewed inspection operation, not os, os/exec, filesystem or network adapters.
+internal/inspection owns local filesystem discovery, typed results and bounded Git plumbing.
+scripts/check-architecture.py mechanically checks the CLI boundary.
 
 ## Planned operation boundary
 ```text
@@ -18,7 +20,7 @@ CLI / future MCP → application operation → selected Git | jj | GitButler ada
                         ↓
                 shared typed result + explicit backend-specific evidence
 ```
-No backend adapter exists yet. Avoid premature universal interfaces: capabilities, stable
+Bounded ordinary-Git identity inspection exists; native jj/GitButler adapters do not. Avoid premature universal interfaces: capabilities, stable
 identities, inspection effects and recovery guarantees are specified before implementation.
 The [backend contract](docs/backends.md) is the design boundary for jj readiness.
 
