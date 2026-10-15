@@ -93,11 +93,20 @@ func ValidateInventoryOptions(o InventoryOptions) error {
 }
 
 // Inventory observes selected native repository state without target writes.
-func Inventory(ctx context.Context, path string, options InventoryOptions) InventoryResult {
+func Inventory(ctx context.Context, path string, options InventoryOptions) (result InventoryResult) {
+	defer func() {
+		if checkInventoryLimits(result) != nil {
+			result = inventoryOverflowFailure(result.Backend, result.Identity.SchemaVersion)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	empty := Result{SchemaVersion: 1, Status: "error", Backend: "unknown", Evidence: []Evidence{}, Diagnostics: []Diagnostic{}}
+	empty := Result{SchemaVersion: 1, Status: "error", Backend: "unknown", Evidence: []Evidence{}, Diagnostics: []Diagnostic{{Code: "inventory-not-started", Message: "Identity inspection was not performed."}}}
 	r := newInventoryResult(empty)
+	if len(path) > outputLimit || !utf8.ValidString(path) || strings.ContainsRune(path, 0) {
+		return r.fail("invalid-path", "inventory path exceeds its byte limit or has invalid encoding")
+	}
 	if err := ValidateInventoryOptions(options); err != nil {
 		return r.fail("invalid-options", err.Error())
 	}
@@ -213,4 +222,18 @@ func inventoryContextFailure(ctx context.Context, r InventoryResult) InventoryRe
 		return boundedInventoryFailure(r, "inventory-timeout", "inventory exceeded its ten-second deadline")
 	}
 	return boundedInventoryFailure(r, "canceled", "inventory canceled")
+}
+
+func inventoryOverflowFailure(backend string, version int) InventoryResult {
+	if backend == "" {
+		backend = "unknown"
+	}
+	if backend != "jj" {
+		version = 1
+	} else {
+		version = 2
+	}
+	identity := Result{SchemaVersion: version, Status: "error", Backend: backend, Evidence: []Evidence{}, Diagnostics: []Diagnostic{{Code: "inventory-limit", Message: "Identity detail omitted because result exceeded bounds."}}}
+	r := newInventoryResult(identity)
+	return r.fail("inventory-limit", "inventory result exceeded its safe byte, encoding or record bound; observations omitted")
 }
