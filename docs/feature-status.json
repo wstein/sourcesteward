@@ -57,9 +57,9 @@
     },
     {
       "id": "009-workspace-inventory",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/009-workspace-inventory/spec.md",
-      "evidence": null
+      "evidence": "../specs/009-workspace-inventory/verification.md"
     },
     {
       "id": "010-isolated-task-workspaces",

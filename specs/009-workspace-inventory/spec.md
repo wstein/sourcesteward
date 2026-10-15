@@ -1,8 +1,8 @@
 # Feature Specification: Workspace, State and Reference Inventory
 
-**Feature Branch**: `codex/009-state-reference-spec` (specification only)
+**Feature Branch**: `codex/009-inventory-implementation`
 **Created**: 2026-10-15
-**Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
+**Status**: Implemented candidate — independent source review cleared; owner review, hosted conformance and merge pending
 **Input**: Show ownership, dirty/stale state and identities.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
