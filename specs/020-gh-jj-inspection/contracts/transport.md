@@ -1,5 +1,7 @@
 # Bounded GitHub transport
 
+Transport mechanism and bounds are superseded by [Spec 022](../../022-bounded-go-gh/spec.md) when the SDK migration lands. Native behavior, CLI options and published JSON contracts remain unchanged. The original implementation decisions below are historical.
+
 Allowed operations are `gh api --hostname HOST --method GET ENDPOINT` with fixed API headers as needed. No response-provided URL, caller-provided endpoint, placeholders, fields, aliases, extension calls, browser, GraphQL or mutation methods are supported.
 
 | Purpose | Explicit endpoint |

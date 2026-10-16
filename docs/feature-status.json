@@ -126,6 +126,12 @@
       "status": "implemented",
       "spec": "../specs/020-gh-jj-inspection/spec.md",
       "evidence": "../specs/020-gh-jj-inspection/verification.md"
+    },
+    {
+      "id": "022-bounded-go-gh",
+      "status": "implemented",
+      "spec": "../specs/022-bounded-go-gh/spec.md",
+      "evidence": "../specs/022-bounded-go-gh/verification.md"
     }
   ]
 }

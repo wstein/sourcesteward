@@ -19,3 +19,6 @@ The compile closure includes the following modules. Their original notices are r
 - golang.org/x/text v0.41.0: [original LICENSE](licenses/golang.org_x_text-LICENSE.txt)
 - gopkg.in/yaml.v3 v3.0.1: [original LICENSE](licenses/gopkg.in_yaml.v3-LICENSE.txt)
 - gopkg.in/yaml.v3 v3.0.1: [original NOTICE](licenses/gopkg.in_yaml.v3-NOTICE.txt)
+- golang.org/x/sys v0.47.0: [original PATENTS](licenses/golang.org_x_sys-PATENTS.txt)
+- golang.org/x/term v0.45.0: [original PATENTS](licenses/golang.org_x_term-PATENTS.txt)
+- golang.org/x/text v0.41.0: [original PATENTS](licenses/golang.org_x_text-PATENTS.txt)

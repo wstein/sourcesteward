@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/022-bounded-go-gh`  
 **Created**: 2026-10-16  
-**Status**: Design for independent analysis  
+**Status**: Implemented; final verification and hosted acceptance tracked separately
 **Input**: Implement the bounded go-gh/v2 transport in a separate PR, preserving Git/jj behavior and JSON contracts.
 
 ## User Scenarios & Testing
