@@ -183,12 +183,20 @@ func classifyURL(original string) pinsURLInfo {
 			info.Problem = "the URL has no host"
 			return info
 		}
-		info.Kind, info.Valid = "url", true
 		path := tail
 		host, port := strings.ToLower(hostport), ""
 		if j := strings.LastIndexByte(host, ':'); j >= 0 && !strings.HasSuffix(host, "]") {
 			host, port = host[:j], host[j+1:]
+			if !allDigits(port) {
+				info.Problem = "the URL has an invalid port"
+				return info
+			}
 		}
+		if family != "file" && (host == "" || strings.ContainsAny(host, "[]:") && !(strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") && len(host) > 2 && !strings.ContainsAny(host[1:len(host)-1], "[]"))) {
+			info.Problem = "the URL has an invalid host"
+			return info
+		}
+		info.Kind, info.Valid = "url", true
 		if port == pinsDefaultPorts[family] {
 			port = ""
 		}
@@ -275,17 +283,17 @@ func pinsMatchRemote(registered pinsURLInfo, remotes []pinsRemote) pinsURLMatch 
 		return unknown
 	}
 	names := map[string]pinsURLInfo{}
+	conflicted := map[string]bool{}
 	var matched []string
 	for _, r := range remotes {
 		info := pinsClassifyURL(r.URL)
-		if _, seen := names[r.Name]; !seen {
+		if prev, seen := names[r.Name]; !seen {
 			names[r.Name] = info
+		} else if prev.Normalized == "" || info.Normalized != prev.Normalized {
+			conflicted[r.Name] = true
 		}
-		if info.Normalized == registered.Normalized {
-			names[r.Name] = info
-			if !slices.Contains(matched, r.Name) {
-				matched = append(matched, r.Name)
-			}
+		if info.Normalized == registered.Normalized && !slices.Contains(matched, r.Name) {
+			matched = append(matched, r.Name)
 		}
 	}
 	report := func(match, name string) pinsURLMatch {
@@ -293,13 +301,13 @@ func pinsMatchRemote(registered pinsURLInfo, remotes []pinsRemote) pinsURLMatch 
 		return pinsURLMatch{Match: match, RemoteName: &name, RemoteURL: &url}
 	}
 	switch {
-	case len(matched) == 1:
+	case len(matched) == 1 && !conflicted[matched[0]]:
 		return report("match", matched[0])
-	case len(matched) > 1:
+	case len(matched) >= 1:
 		return unknown
 	case len(names) == 1:
 		for name, info := range names {
-			if info.Valid && info.Normalized != "" {
+			if !conflicted[name] && info.Valid && info.Normalized != "" {
 				return report("mismatch", name)
 			}
 		}
