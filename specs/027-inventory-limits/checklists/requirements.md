@@ -7,7 +7,7 @@
 ## Content, completeness and readiness
 
 - [x] Focused on user value: ordinary repositories give facts; truncation is honest; submodule checkouts and superprojects are described correctly
-- [x] All mandatory sections completed
+- [ ] All mandatory sections completed (data-model.md was corrupted in the first commit; restored in round 1, re-check after round 2)
 - [x] No unresolved clarification markers remain
 - [x] Requirements are testable and unambiguous: every limit, feed, degradation, text, gitlink and checkout row is a normative table row with an identifier
 - [x] Success criteria are measurable (fixtures with 150 to 5,000 files and 1,100 tags; exact texts)

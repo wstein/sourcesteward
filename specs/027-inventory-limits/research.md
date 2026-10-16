@@ -59,9 +59,9 @@ A listing of changed files omitted at the end can never turn dirty into clean; t
 
 False cannot be proven without looking at the submodule worktree, which would need Spec 021's confinement layer (ownership, symlink and commondir checks) and an index-metadata comparison. That is a different feature (`stw pins`). What can be proven without it is positive evidence: a staged gitlink change is visible in `diff --cached` (measured: `M mods/sub1`, `:160000 160000 <old> <new> M`) and ordinary-file differences are already computed. So `tracked` becomes `true` on positive evidence and stays `unknown` otherwise. Alternatives: reuse pins' dirty-state machinery (rejected for this prerequisite: large surface, new hostile paths; recorded as the follow-up that would let a clean superproject be `false`); treat gitlinks as clean (rejected: false claim).
 
-## Decision 6: content read budget (LIM-11)
+## Decision 6: per-file read (LIM-10) and content read budget (LIM-11)
 
-Without it a repository of 100,000 files of 64 KiB would read 6.4 GB per pass and end in `inventory-timeout`, an `error`, in contradiction with "partial where safe". 256 MiB per pass is about 0.3 s of hashing at 1 GB/s on this machine (SHA-1 throughput not measured separately; the number is a design choice, open to the review). The per-file 64 KiB cap stays (out of scope, listed as a follow-up: files above it make `tracked` unknown, measured on `big`).
+Round 1 counted tracked files above 64 KiB in the maintainer's repositories (`sourcesteward`: a font and an image; `bundledock`: eight), so keeping the 64 KiB per-file cap would leave real repositories `partial` with `tracked` unknown and defeat the purpose. LIM-10 is therefore raised to 16 MiB with chunked hashing (memory stays constant). Without LIM-11 a repository of 100,000 files of 64 KiB would read 6.4 GB per pass and end in `inventory-timeout`, an `error`, in contradiction with "partial where safe". 256 MiB per pass is about 0.3 s of hashing at 1 GB/s on this machine (SHA-1 throughput not measured separately; the number is a design choice, open to the review). Files above LIM-10 stay `unknown` (as `big` does today at 64 KiB, measured).
 
 ## Decision 7: retention and index limits
 
@@ -70,6 +70,10 @@ LIM-7 (100,000 entries, 16 MiB of paths) and LIM-8 (100,000 candidates) are memo
 ## Decision 8: process stop
 
 Stopping a stream early cancels the command context. Go sends SIGKILL to the process; `ls-files`, `check-attr`, `diff` and `for-each-ref` hold no lock when run with `GIT_OPTIONAL_LOCKS=0`, and the verification asserts that no `index.lock` exists and the index bytes and modification time are unchanged after an early stop. Alternative: close the pipe and let SIGPIPE end the process (rejected: a process blocked in a filesystem call would not notice before the deadline).
+
+## Findings of the round 1 reviewer (their measurements, Git 2.56.0 and 2.47.3, repeated by me only where noted)
+
+`check-attr --stdin -z` output is byte-identical to the argument form on both versions and answers each path as it is read, so a writer without a concurrent reader deadlocks. Killing `ls-files --stage`, `--cached`, `diff --cached`, `ls-files --others` and `for-each-ref` after 100 bytes left no `*.lock` and an unchanged index (sha, mtime, size), also with `feature.manyFiles`, split index and untracked cache. `diff --cached` and `ls-files --stage` start no child process with a dirty submodule (`GIT_TRACE=1`). Submodule: the worktree-list entry is the Git directory; `rev-parse --show-toplevel` run from the Git directory gives the checkout; for a linked worktree of a submodule the Git directory is under `worktrees/` and the toplevel is the linked path; a hostile `core.worktree` makes discovery fail there. Sparse checkout: `ls-files --stage` lists skip-worktree entries (tag `S` with `-t`) that are absent from disk, which the current code reports as deleted. The tags quickstart names (`t<N>`) cost about 68 bytes per tag (75,066 bytes for 1,100); the longer names of my fixtures cost 86.
 
 ## Unverified
 
