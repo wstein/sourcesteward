@@ -358,7 +358,6 @@ var pinsAllowlist = []string{
 	"config --local --null --list --no-includes",
 	"config --file <PATH> --null --list --no-includes",
 	// WI3 evidence invocations (research.md), after the registry and validation ones above.
-	"rev-parse HEAD",
 	"cat-file -e <OID>^{commit}",
 	"merge-base <OID> <OID>",
 	"rev-list --count --max-count=10001 <OID>..<OID>",

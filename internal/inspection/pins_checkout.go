@@ -100,7 +100,7 @@ func pinsReadFacts(run *pinsRunner, d pinsSubmoduleDirs) (pinsRepoFacts, error) 
 func pinsReadHead(run *pinsRunner, repo pinsGitRepo) (pinsHead, error) {
 	var h pinsHead
 	call := func(args ...string) (pinsOutput, error) { return run.run(pinsCall{Repo: repo, Args: args}) }
-	rev, err := call("rev-parse", "HEAD")
+	rev, err := call("rev-parse", "--verify", "--quiet", "HEAD")
 	if err != nil {
 		return h, err
 	}
@@ -130,7 +130,7 @@ func pinsReadHead(run *pinsRunner, repo pinsGitRepo) (pinsHead, error) {
 		h.Commit = &oid
 		return h, nil
 	}
-	if h.Detached || h.Branch == nil {
+	if rev.Exit != 1 || h.Detached || h.Branch == nil {
 		return h, errors.New("the submodule HEAD cannot be resolved")
 	}
 	found, err := call("for-each-ref", "--format=%(refname)", "--", ref)
