@@ -470,7 +470,8 @@ func TestPinsAuditEffectSentinelsLeaveTheRepositoryUntouched(t *testing.T) {
 	read := func(p string) (string, time.Time) {
 		b, err := os.ReadFile(p)
 		mustOS(t, err)
-		st, _ := os.Stat(p)
+		st, serr := os.Stat(p)
+		mustOS(t, serr)
 		return string(b), st.ModTime()
 	}
 	b1, m1 := read(idx)
@@ -636,7 +637,8 @@ func TestPinsAuditResampleRechecksTheValidatedDirectories(t *testing.T) {
 		},
 		"configuration replaced by an include": func(t *testing.T, f pinsFixture) {
 			cfg := filepath.Join(f.Super, ".git", "modules", "member", "config")
-			b, _ := os.ReadFile(cfg)
+			b, rerr := os.ReadFile(cfg)
+			mustOS(t, rerr)
 			mustOS(t, os.WriteFile(cfg, append(b, []byte("[include]\n\tpath = /tmp/x\n")...), 0o600))
 		},
 	} {

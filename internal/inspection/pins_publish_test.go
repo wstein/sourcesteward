@@ -226,7 +226,7 @@ func TestPinsPublicationShallowCannotClaimUnreachable(t *testing.T) {
 		t.Fatalf("a cut history is not evidence of absence: %+v %v", p, err)
 	}
 	// A positive stays positive.
-	head, _ := pinsReadHead(run, repo)
+	head := mustHead(t, run, repo)
 	if p, _ = pinsPublish(run, repo, d, facts, *head.Commit); p.Status != "reachable" {
 		t.Fatalf("%+v", p)
 	}

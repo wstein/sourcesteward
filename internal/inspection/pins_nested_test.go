@@ -9,7 +9,7 @@ import (
 func TestPinsNestedSubmodulesAreDetectedFromTheSubmoduleHeadTree(t *testing.T) {
 	c := newPublishCase(t)
 	wt := c.repo.WorkTree
-	head, _ := pinsReadHead(c.run, c.repo)
+	head := mustHead(t, c.run, c.repo)
 	present, err := pinsNestedPresent(c.run, c.repo, head)
 	if err != nil || present {
 		t.Fatalf("no .gitmodules: %v %v", present, err)
@@ -35,7 +35,7 @@ func TestPinsNestedIgnoresASymlinkedGitmodulesAndUnbornHead(t *testing.T) {
 	tree := gitStdin(t, wt, "100644 blob "+gitIn(t, wt, "rev-parse", "HEAD:file.txt")+"\tfile.txt\n120000 blob "+target+"\t.gitmodules\n", "mktree")
 	commit := gitIn(t, wt, "commit-tree", "-p", "HEAD", "-m", "link", tree)
 	git(t, wt, "update-ref", "HEAD", commit)
-	head, _ := pinsReadHead(c.run, c.repo)
+	head := mustHead(t, c.run, c.repo)
 	if present, err := pinsNestedPresent(c.run, c.repo, head); err != nil || present {
 		t.Fatalf("a symlink is not a registration: %v %v", present, err)
 	}
@@ -51,7 +51,7 @@ func TestPinsNestedIgnoresASymlinkedGitmodulesAndUnbornHead(t *testing.T) {
 func TestPinsNestedStartsOnlyAllowlistedGitCommands(t *testing.T) {
 	c := newPublishCase(t)
 	gitLog, _ := pinsSentinels(t)
-	head, _ := pinsReadHead(c.run, c.repo)
+	head := mustHead(t, c.run, c.repo)
 	if _, err := pinsNestedPresent(c.run, c.repo, head); err != nil {
 		t.Fatal(err)
 	}
