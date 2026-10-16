@@ -31,3 +31,14 @@ func pinsFileID(info fs.FileInfo) (pinsDirID, bool) {
 	}
 	return pinsDirID{Dev: uint64(st.Dev), Ino: uint64(st.Ino)}, true
 }
+
+func pinsEffectiveGID() uint32 { return uint32(os.Getegid()) }
+
+// pinsFileGroup reports the owning group of an lstat result.
+func pinsFileGroup(info fs.FileInfo) (uint32, bool) {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return st.Gid, true
+}
