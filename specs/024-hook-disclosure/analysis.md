@@ -78,3 +78,20 @@ Independent reviewer: narrow read-only Opus re-check, revision e558e58, 2026-10-
 | 9 | Low | Null operation sort order | Null sorts last |
 | 10 | Low | `git-config-hooks` range when minimum lane lacks it | Range starts at the lowest supporting lane version |
 | 11 | Low | Double `version` read | Accepted and stated |
+
+## Round 4
+
+Independent reviewer: narrow read-only Opus re-check, revision 7727c5d, 2026-10-16 (one round beyond the three-round limit, authorized by the coordinator). Verdict: NOT READY (one high, four medium, five low findings). The reviewer confirmed the two JSON examples, exit statuses, limits, refusal rows and summary counts field by field. The author applied the resolutions below; they were NOT re-reviewed, so the verdict of record is NOT READY.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | Disagreement rule keeps the lane red forever once the claim is `unverified` | Disagreement exits 1 unless the catalog already states `unverified`/`unknown`; spec, plan DD16, T022/T024 |
+| 2 | Medium | Deciding sentinel set undefined; observers could flip a claim | Deciding sentinels are blocking guards only; partial outcomes go to the disagreement rule |
+| 3 | Medium | Contract bypass rule contradicts the unknown-engine rule | Rewritten: at most one finding of each code per operation |
+| 4 | Medium | US2-6 contradicts FR-008 | Scenario amended |
+| 5 | Medium | No precedence for state `unknown`; data-model note | Precedence in FR-009; data-model note qualified |
+| 6 | Low | Dangling `guards_evaluated` clause | Separate sentence |
+| 7 | Low | Unknown-engine hook defined three ways | One definition in FR-009 used everywhere |
+| 8 | Low | T024 and DD16 lacked the resolution rule | Added |
+| 9 | Low | `backend: jj` too broad | Limited to codes after a `.jj` marker |
+| 10 | Low | Text output notes | Marked abbreviated |

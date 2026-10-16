@@ -88,7 +88,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### OperationHook
 
-`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `unknown` (a configuration hook while the engine is `unknown`), `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same name still counts as `active`) or `absent`. `source` is `hooks-dir`, `config`, `both` or null. `bypassed` is `true`, `false` or `null` per FR-009. `skippable_by` lists exception ids that skip this hook.
+`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `unknown` (a configuration hook while the engine is `unknown`), `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same event still counts as `active` when the engine is `supported`, and as `unknown` otherwise) or `absent`. `source` is `hooks-dir`, `config`, `both` or null. `bypassed` is `true`, `false` or `null` per FR-009; state precedence is in FR-009. `skippable_by` lists exception ids that skip this hook.
 
 ## Finding
 
@@ -103,6 +103,6 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 - `boundary.complete` is true when every examination finished and no limit was exhausted and no resample differed. A hook that is `ignored` or `not-runnable`, an absent directory, an `unknown` claim, or a non-measured evidence level is a valid observation and does not make the result incomplete.
 - `status: "incomplete"` carries the result built so far with `hooks-limit` or `hooks-state-changed`.
 - `status: "refused"` carries an `error.code` from the refusal table, `configuration: null`, empty `hooks`, `operations` and `findings`, and a null `identity` when none could be established.
-- `status: "error"` carries a code from the `error` rows of the spec's refusal table (`hooks-failed`, the jj session codes, or an existing ownership-decision code passed through) and the same empty fields. On the jj path `backend` is `jj` for all of them.
+- `status: "error"` carries a code from the `error` rows of the spec's refusal table (`hooks-failed`, the jj session codes, or an existing ownership-decision code passed through) and the same empty fields. For codes raised after a `.jj` marker was found, `backend` is `jj`.
 - Evidence level derivation: the catalog base level, lowered to `documented` when the detected version is outside the catalog's measured range (`version_covered: false`).
 - `runs_hooks` for a Git-owned repository comes from the `git-*` claims; for a jj-owned workspace from the `jj-*` claims.
