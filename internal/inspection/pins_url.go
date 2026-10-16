@@ -85,7 +85,7 @@ func pinsRedact(raw string) (redacted string, credentials bool) {
 			if user := auth[:at]; strings.Contains(user, ":") || pinsAllowedSchemes[scheme] != "ssh" && pinsAllowedSchemes[scheme] != "git" && pinsAllowedSchemes[scheme] != "file" {
 				cut, credentials = at+1, true
 			}
-		} else if c := strings.IndexByte(auth, ':'); c >= 0 && !allDigits(auth[c+1:]) && strings.Contains(rest[end:], "@") {
+		} else if c := strings.IndexByte(auth, ':'); c >= 0 && strings.Contains(rest[end:], "@") {
 			cut, credentials = strings.LastIndexByte(rest, '@')+1, true
 		}
 		rest = rest[cut:]
@@ -98,15 +98,12 @@ func pinsRedact(raw string) (redacted string, credentials bool) {
 		// transport::address is Git's remote-helper syntax; the address is opaque and may hold anything.
 		return raw[:i] + "::<redacted>", false
 	}
-	// Non-scheme forms: scp-like [user[:password]@]host:path and local paths. Before the first slash the
-	// last '@' ends the userinfo; a colon before it means a password (conservative: `user@host:pw@x` too).
+	// Non-scheme forms: scp-like [user[:password]@]host:path and local paths. The last '@' that has a
+	// colon before it ends the userinfo, wherever slashes fall: Git's own split is by the first colon, so
+	// any slash inside a password must not hide the rest of it. Absolute and ./ ../ paths are exempt.
 	display := raw
-	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, ".") {
-		head := raw
-		if i := strings.IndexByte(raw, '/'); i >= 0 {
-			head = raw[:i]
-		}
-		if at := strings.LastIndexByte(head, '@'); at > 0 && strings.Contains(raw[:at], ":") {
+	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "./") && !strings.HasPrefix(raw, "../") {
+		if at := strings.LastIndexByte(raw, '@'); at > 0 && strings.Contains(raw[:at], ":") {
 			display, credentials = raw[at+1:], true
 		}
 	}

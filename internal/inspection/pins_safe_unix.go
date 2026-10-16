@@ -12,6 +12,9 @@ import (
 // pinsOpenFlags makes a metadata read refuse symlinks and never block on a FIFO.
 const pinsOpenFlags = syscall.O_NONBLOCK | syscall.O_NOFOLLOW
 
+// pinsDirFlags makes an open fail unless the path is a directory.
+const pinsDirFlags = syscall.O_DIRECTORY
+
 func pinsEffectiveUID() uint32 { return uint32(os.Geteuid()) }
 
 // pinsFileOwner reports the owning user of an lstat result.

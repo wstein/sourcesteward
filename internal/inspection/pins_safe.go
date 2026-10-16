@@ -23,7 +23,6 @@ import (
 
 const (
 	pinsPointerLimit   = 4096
-	pinsAlternatesMax  = 64 << 10
 	pinsCommondirLimit = 4096
 )
 
@@ -31,7 +30,10 @@ const (
 type pinsDirID struct{ Dev, Ino uint64 }
 
 // pinsSafetyRefusal refuses one submodule; Code is a finding code of the normative table.
-type pinsSafetyRefusal struct{ Code, Message string }
+type pinsSafetyRefusal struct {
+	Code, Message string
+	limit         bool // an exhausted bound, not a verdict on the submodule: callers turn it into a limit error
+}
 
 func (r *pinsSafetyRefusal) Error() string { return r.Code + ": " + r.Message }
 
@@ -107,7 +109,6 @@ type pinsSubmoduleDirs struct {
 	workRel string // under the superproject worktree
 	gitBase string // the directory gitRel is relative to
 	gitRel  string
-	allowed string // the tree commondir-like references may not leave: modules dir, or <work>/.git in place
 }
 
 // pinsResolved is the outcome of validating one submodule: initialized with validated directories, or
@@ -246,15 +247,20 @@ func (s *pinsSafety) ownedByUser(info fs.FileInfo, what string) *pinsSafetyRefus
 	if uid != s.euid {
 		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is not owned by the effective user"}
 	}
-	// Another user able to write the directory could swap its contents between validation and use.
-	// Group write is accepted only for the effective group (a private-group umask of 002 is common).
+	return s.notWritable(info, what)
+}
+
+// notWritable refuses a directory another user could swap contents in between validation and use. Group
+// write is accepted only for the effective group (a private-group umask of 002 is common). Git creates
+// every directory world-writable under umask 000, which is the usual cause.
+func (s *pinsSafety) notWritable(info fs.FileInfo, what string) *pinsSafetyRefusal {
 	perm := info.Mode().Perm()
 	if perm&0o002 != 0 {
-		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is world-writable (mode " + fmt.Sprintf("%04o", perm) + "); Git creates such directories under umask 000, so use a stricter umask or run chmod o-w on it"}
+		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is world-writable (mode " + fmt.Sprintf("%04o", perm) + "); Git creates such directories under umask 000, so run chmod -R o-w on the submodule or re-clone it under a stricter umask"}
 	}
 	if perm&0o020 != 0 {
 		if g, ok := s.gid(info); !ok || g != s.egid {
-			return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is group-writable (mode " + fmt.Sprintf("%04o", perm) + ") by a group other than the effective group; run chmod g-w on it"}
+			return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is group-writable (mode " + fmt.Sprintf("%04o", perm) + ") by a group other than the effective group; run chmod -R g-w on the submodule or re-clone it under a stricter umask"}
 		}
 	}
 	return nil
@@ -303,11 +309,10 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 		return pinsResolved{}, lstatRefusal("the submodule .git entry", err), nil
 	}
 	dirs := pinsSubmoduleDirs{WorkTree: work, WorkID: mustID(winfo), workRel: spec.Path}
-	var allowed string
 	var ginfo fs.FileInfo
 	switch {
 	case dinfo.IsDir():
-		dirs.InPlace, dirs.GitDir, dirs.gitBase, dirs.gitRel, allowed, ginfo = true, filepath.Join(work, ".git"), l.WorkTree, dotRel, filepath.Join(work, ".git"), dinfo
+		dirs.InPlace, dirs.GitDir, dirs.gitBase, dirs.gitRel, ginfo = true, filepath.Join(work, ".git"), l.WorkTree, dotRel, dinfo
 	case dinfo.Mode().IsRegular():
 		expected, refusal := s.expectedGitDir(spec)
 		if refusal != nil {
@@ -316,8 +321,13 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 		if refusal := s.checkPointer(work, dotRel, expected); refusal != nil {
 			return pinsResolved{}, refusal, nil
 		}
+		if mi, err := pinsLstat(l.GitDir, "modules"); err == nil {
+			if r := s.notWritable(mi, "modules directory"); r != nil {
+				return pinsResolved{}, r, nil
+			}
+		}
 		rel, _ := filepath.Rel(l.GitDir, expected)
-		dirs.GitDir, dirs.gitBase, dirs.gitRel, allowed = expected, l.GitDir, filepath.ToSlash(rel), l.ModulesDir
+		dirs.GitDir, dirs.gitBase, dirs.gitRel = expected, l.GitDir, filepath.ToSlash(rel)
 		ginfo, err = pinsLstat(dirs.gitBase, dirs.gitRel)
 		if errors.Is(err, fs.ErrNotExist) {
 			return pinsResolved{}, unsafePath("the Git directory named by the .git pointer does not exist"), nil
@@ -335,9 +345,8 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 		return pinsResolved{}, r, nil
 	}
 	dirs.GitID = mustID(ginfo)
-	dirs.allowed = allowed
 	if refusal := s.checkGitDirectory(dirs); refusal != nil {
-		if refusal.Code == pinsLimitCode {
+		if refusal.limit {
 			return pinsResolved{}, nil, &pinsLimitError{Kind: "entries"}
 		}
 		return pinsResolved{}, refusal, nil
@@ -402,14 +411,11 @@ func (s *pinsSafety) checkPointer(work, dotRel string, expected string) *pinsSaf
 // pinsEntryLimit bounds the directory entries one validation walks.
 const pinsEntryLimit = 20000
 
-// pinsLimitCode marks an internal refusal that is really an exhausted bound (never shown as a finding).
-const pinsLimitCode = "pins-limit"
-
 // checkGitDirectory is the content check that must pass before any Git process opens the directory and
 // again before the first call (recheck). Git may open HEAD, config, config.worktree, index, packed-refs,
 // shallow, sharedindex.*, the refs, reftable and info trees and the object store; each must be a plain
 // file or directory reached without a symlink, so a FIFO, device or link can neither hang nor redirect
-// Git. commondir is refused outright, and every alternates target is walked like the object store.
+// Git. commondir is refused outright, and any alternates file is refused.
 func (s *pinsSafety) checkGitDirectory(d pinsSubmoduleDirs) *pinsSafetyRefusal {
 	within := func(part string) string { return d.gitRel + "/" + part }
 	for _, part := range []string{"HEAD", "config", "config.worktree", "index", "packed-refs", "shallow"} {
@@ -425,7 +431,7 @@ func (s *pinsSafety) checkGitDirectory(d pinsSubmoduleDirs) *pinsSafetyRefusal {
 		}
 	}
 	budget := s.entryLimit
-	top, r := pinsReadDir(d.gitBase, d.gitRel, "the Git directory", &budget)
+	top, r := s.readDir(d.gitBase, d.gitRel, "the Git directory", &budget)
 	if r != nil {
 		return r
 	}
@@ -435,21 +441,23 @@ func (s *pinsSafety) checkGitDirectory(d pinsSubmoduleDirs) *pinsSafetyRefusal {
 		}
 	}
 	for _, part := range []string{"refs", "reftable", "info"} {
-		if r := pinsWalkTree(d.gitBase, within(part), part, true, &budget); r != nil {
+		if r := s.walkTree(d.gitBase, within(part), part, true, &budget); r != nil {
 			return r
 		}
 	}
-	if r := pinsCheckObjects(d.gitBase, within("objects"), "objects", &budget); r != nil {
+	if r := s.checkObjects(d.gitBase, within("objects"), "objects", &budget); r != nil {
 		return r
 	}
 	if _, err := pinsLstat(d.gitBase, within("commondir")); !errors.Is(err, fs.ErrNotExist) {
 		return unsafePath("the Git directory has a commondir entry, which a submodule never has")
 	}
-	return s.checkAlternates(d, &budget)
+	return s.checkNoAlternates(d)
 }
 
-// pinsReadDir lists a directory below base without following links; a missing directory is empty.
-func pinsReadDir(base, rel, label string, budget *int) ([]fs.DirEntry, *pinsSafetyRefusal) {
+// readDir lists a directory below base without following links; a missing directory is empty. Every
+// directory it lists must pass the writable check, and the open must reach the very directory that was
+// lstat'ed (O_DIRECTORY and O_NOFOLLOW, then the same file).
+func (s *pinsSafety) readDir(base, rel, label string, budget *int) ([]fs.DirEntry, *pinsSafetyRefusal) {
 	info, err := pinsLstat(base, rel)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -460,38 +468,47 @@ func pinsReadDir(base, rel, label string, budget *int) ([]fs.DirEntry, *pinsSafe
 	if !info.IsDir() {
 		return nil, unsafePath("%s is not a directory", label)
 	}
+	if r := s.notWritable(info, "Git directory entry "+label); r != nil {
+		return nil, r
+	}
+	if pinsBeforeOpen != nil {
+		pinsBeforeOpen()
+	}
 	root, err := os.OpenRoot(base)
 	if err != nil {
 		return nil, unsafePath("%s cannot be opened safely", label)
 	}
 	defer root.Close()
-	f, err := root.Open(rel)
+	f, err := root.OpenFile(rel, os.O_RDONLY|pinsOpenFlags|pinsDirFlags, 0)
 	if err != nil {
 		return nil, unsafePath("%s cannot be read safely", label)
 	}
+	defer f.Close()
+	if after, err := f.Stat(); err != nil || !os.SameFile(info, after) {
+		return nil, unsafePath("%s changed while opening", label)
+	}
 	entries, err := f.ReadDir(*budget + 1)
-	f.Close()
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, unsafePath("%s cannot be read safely", label)
 	}
 	*budget -= len(entries)
 	if *budget < 0 {
-		return nil, &pinsSafetyRefusal{Code: pinsLimitCode, Message: label + " has too many entries to validate"}
+		return nil, &pinsSafetyRefusal{Message: label + " has too many entries to validate", limit: true}
 	}
 	return entries, nil
 }
 
-// pinsWalkTree requires rel to be a directory (when present) whose entries are regular files or, when
+// walkTree requires rel to be a directory (when present) whose entries are regular files or, when
 // recursive, directories walked the same way. With recursive false a directory entry is refused.
-func pinsWalkTree(base, rel, label string, recursive bool, budget *int) *pinsSafetyRefusal {
-	entries, r := pinsReadDir(base, rel, "the Git directory entry "+label, budget)
+func (s *pinsSafety) walkTree(base, rel, label string, recursive bool, budget *int) *pinsSafetyRefusal {
+	entries, r := s.readDir(base, rel, "the Git directory entry "+label, budget)
 	if r != nil {
 		return r
 	}
 	for _, e := range entries {
 		switch {
 		case e.IsDir() && recursive:
-			if r := pinsWalkTree(base, rel+"/"+e.Name(), label+"/"+e.Name(), true, budget); r != nil {
+			if r := s.walkTree(base, rel+"/"+e.Name(), label+"/"+e.Name(), true, budget); r != nil {
 				return r
 			}
 		case e.Type().IsRegular():
@@ -502,21 +519,21 @@ func pinsWalkTree(base, rel, label string, recursive bool, budget *int) *pinsSaf
 	return nil
 }
 
-// pinsCheckObjects validates an object store the way Git will read it: info and pack are walked fully, a
+// checkObjects validates the object store the way Git will read it: info and pack are walked fully, a
 // fan-out directory must hold only regular files, and objects/ itself holds directories only.
-func pinsCheckObjects(base, rel, label string, budget *int) *pinsSafetyRefusal {
-	entries, r := pinsReadDir(base, rel, "the Git directory entry "+label, budget)
+func (s *pinsSafety) checkObjects(base, rel, label string, budget *int) *pinsSafetyRefusal {
+	entries, r := s.readDir(base, rel, "the Git directory entry "+label, budget)
 	if r != nil {
 		return r
 	}
 	for _, e := range entries {
 		switch {
 		case e.IsDir() && (e.Name() == "info" || e.Name() == "pack"):
-			if r := pinsWalkTree(base, rel+"/"+e.Name(), label+"/"+e.Name(), true, budget); r != nil {
+			if r := s.walkTree(base, rel+"/"+e.Name(), label+"/"+e.Name(), true, budget); r != nil {
 				return r
 			}
 		case e.IsDir():
-			if r := pinsWalkTree(base, rel+"/"+e.Name(), label+"/"+e.Name(), false, budget); r != nil {
+			if r := s.walkTree(base, rel+"/"+e.Name(), label+"/"+e.Name(), false, budget); r != nil {
 				return r
 			}
 		case e.Type().IsRegular():
@@ -528,61 +545,18 @@ func pinsCheckObjects(base, rel, label string, budget *int) *pinsSafetyRefusal {
 	return nil
 }
 
-// checkAlternates reads objects/info/alternates as data. Each entry must lie strictly inside the allowed
-// tree and be reached from it without a symlink, be a directory owned by the effective user, carry no
-// alternates of its own (refused rather than followed) and pass the same object-store walk as the
-// submodule's own objects.
-func (s *pinsSafety) checkAlternates(d pinsSubmoduleDirs, budget *int) *pinsSafetyRefusal {
-	data, err := pinsReadSmall(d.gitBase, d.gitRel+"/objects/info/alternates", pinsAlternatesMax)
+// checkNoAlternates refuses any non-empty objects/info/alternates. Git resolves each entry by realpath
+// (a symlinked ".." component leaves the tree lexically checked) and trims no carriage return; the audit
+// will not re-implement those semantics, so alternates are unsupported for pins. An empty file has no
+// entries and is accepted.
+func (s *pinsSafety) checkNoAlternates(d pinsSubmoduleDirs) *pinsSafetyRefusal {
+	info, err := pinsLstat(d.gitBase, d.gitRel+"/objects/info/alternates")
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	if err != nil {
-		return unsafePath("the Git directory alternates file cannot be read safely")
-	}
-	objects := filepath.Join(d.GitDir, "objects")
-	for _, line := range bytes.Split(data, []byte("\n")) {
-		entry := strings.TrimSuffix(string(line), "\r")
-		if entry == "" || strings.HasPrefix(entry, "#") {
-			continue
-		}
-		if len(entry) >= 2 && entry[0] == '"' && entry[len(entry)-1] == '"' {
-			entry = entry[1 : len(entry)-1]
-			if strings.Contains(entry, "\\") {
-				return unsafePath("the Git directory alternates entry uses an escape that is not supported")
-			}
-		}
-		if !utf8.ValidString(entry) || strings.ContainsRune(entry, 0) {
-			return unsafePath("the Git directory alternates entry is not valid text")
-		}
-		if !filepath.IsAbs(entry) {
-			entry = filepath.Join(objects, entry)
-		}
-		entry = filepath.Clean(entry)
-		if !pinsConfined(d.allowed, entry) {
-			return unsafePath("the Git directory alternates entry leads outside the allowed tree")
-		}
-		rel, err := filepath.Rel(d.allowed, entry)
-		if err != nil {
-			return unsafePath("the Git directory alternates entry leads outside the allowed tree")
-		}
-		rel = filepath.ToSlash(rel)
-		info, err := pinsLstat(d.allowed, rel)
-		if err != nil {
-			return lstatRefusal("the Git directory alternates entry", err)
-		}
-		if !info.IsDir() {
-			return unsafePath("the Git directory alternates entry is not a directory")
-		}
-		if r := s.ownedByUser(info, "alternates directory"); r != nil {
-			return r
-		}
-		if _, err := pinsLstat(d.allowed, rel+"/info/alternates"); !errors.Is(err, fs.ErrNotExist) {
-			return unsafePath("the Git directory alternates entry has alternates of its own")
-		}
-		if r := pinsCheckObjects(d.allowed, rel, "alternates target", budget); r != nil {
-			return r
-		}
+	const msg = "the Git directory has an objects/info/alternates entry, which is not supported for pins (Git resolves entries by realpath, which the audit does not reimplement)"
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 0 {
+		return unsafePath("%s", msg)
 	}
 	return nil
 }
@@ -641,7 +615,7 @@ func (s *pinsSafety) recheck(d pinsSubmoduleDirs) error {
 		}
 	}
 	if r := s.checkGitDirectory(d); r != nil {
-		if r.Code == pinsLimitCode {
+		if r.limit {
 			return &pinsLimitError{Kind: "entries"}
 		}
 		return errors.New("submodule Git directory changed: " + r.Message)

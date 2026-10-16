@@ -19,7 +19,7 @@ A superproject can record a submodule commit that exists only in one local submo
 
 Every invocation runs with the isolation prefix of `pinsIsolation()` (replace objects, optional locks, literal pathspecs, fsmonitor, hooks path, untracked cache, credential helper, ssh command, every transport switched off by name, gc and maintenance off), `GIT_CONFIG_NOSYSTEM=1`, no inherited `GIT_*` variable and a 5 second deadline. `pins_git_test.go` compares every recorded invocation with these argument shapes.
 
-**Operational note (umask).** Git creates submodule directories with the process umask. Under umask 000, as in this devcontainer, every submodule worktree and Git directory is world-writable and the audit refuses it with `submodule-unsafe-owner`, although the owner is correct; the message names the mode and suggests a stricter umask or `chmod o-w`. A group-writable directory is accepted only for the effective group. `stw pins` documentation (T018) must repeat this.
+**Operational note (umask).** Git creates submodule directories with the process umask. Under umask 000, as in this devcontainer, every submodule worktree and Git directory is world-writable and the audit refuses it with `submodule-unsafe-owner`, although the owner is correct; the check covers the worktree, the modules directory and every directory walked inside the Git directory, and the message names the mode and recommends `chmod -R o-w` or re-cloning under a stricter umask. A group-writable directory is accepted only for the effective group. `stw pins` documentation (T018) must repeat this.
 
 **Owner check coverage (T007).** The environment runs unprivileged and cannot chown, so foreign ownership is exercised through the injected owner seam only; the real extraction is checked against a file the test creates (the effective user) and against `/` (root). Real foreign-owned submodules, macOS and root with `SUDO_UID` are not exercised and are recorded for the verification note of T021.
 
@@ -43,3 +43,5 @@ Not used: `git status`, which can run clean and process filters; the inventory c
 - Git 2.56 `extensions.submodulePathConfig` stores the Git directory under an encoded name (`modules/a%2fb`).
 - `for-each-ref --contains` exits 129 for an absent object or a non-commit; `--count` applies after sorting; a remote's `HEAD` symref is listed and uses a slot.
 - `config --blob HEAD:.gitmodules --null --list --no-includes` and `rev-list --count --max-count=10001 A..B` work on both versions; an absent end exits 128.
+
+**Alternates.** A submodule Git directory with a non-empty `objects/info/alternates` is refused with `submodule-path-unsafe`, never audited: Git resolves entries by realpath and keeps a trailing carriage return, which the audit does not re-implement, so no confinement check could be trusted. Users who share objects through alternates must use another mechanism for the audit (for example a separate clone).

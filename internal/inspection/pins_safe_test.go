@@ -312,12 +312,6 @@ func TestPinsSafeRefusesCommondirAlternatesAndWorktreeLeavingTheAllowedTree(t *t
 	restore := func() { mustOS(t, os.WriteFile(cfg, orig, 0o600)) }
 	check("core.worktree elsewhere", func() { git(t, f.Root, "config", "--file", cfg, "core.worktree", outside) }, restore)
 	check("core.worktree relative escape", func() { git(t, f.Root, "config", "--file", cfg, "core.worktree", "../../../../outside") }, restore)
-	// Confined entries are accepted: an alternate and a commondir inside the modules directory.
-	sibling := filepath.Join(f.Super, ".git", "modules", "sibling")
-	git(t, f.Root, "clone", "-q", "--bare", f.Sub, sibling)
-	writeFile(t, alt, filepath.Join(sibling, "objects")+"\n")
-	mustResolve(t, s, spec)
-	rmAll(t, alt)
 	// core.worktree unset is fine: Git is always told the validated worktree explicitly.
 	git(t, f.Root, "config", "--file", cfg, "--unset", "core.worktree")
 	mustResolve(t, s, spec)

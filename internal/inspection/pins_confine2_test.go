@@ -16,69 +16,6 @@ import (
 	"time"
 )
 
-// objectsTargetFixture builds a superproject whose member is main-worktree style and returns the modules
-// directory, the member alternates file and a sibling bare repository `b`.
-func objectsTargetFixture(t *testing.T) (f pinsFixture, s *pinsSafety, mods, alt, sib string) {
-	t.Helper()
-	f = newPinsFixture(t)
-	s = safetyFor(t, f.Super)
-	mods = filepath.Join(f.Super, ".git", "modules")
-	sib = filepath.Join(mods, "b")
-	git(t, f.Root, "clone", "-q", "--bare", f.Sub, sib)
-	alt = filepath.Join(mods, "member", "objects", "info", "alternates")
-	return
-}
-
-func TestPinsConfineAlternatesTargetContentsAreWalked(t *testing.T) {
-	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
-	f, s, mods, alt, sib := objectsTargetFixture(t)
-	outside := filepath.Join(f.Root, "outside-pack")
-	mkdirs(t, outside)
-	writeFile(t, filepath.Join(outside, "x.pack"), "p")
-	pack := filepath.Join(sib, "objects", "pack")
-	// Healthy sibling passes.
-	writeFile(t, alt, filepath.Join(sib, "objects")+"\n")
-	mustResolve(t, s, spec)
-	// A symlinked pack file inside the target.
-	mustSymlink(t, filepath.Join(outside, "x.pack"), filepath.Join(pack, "evil.pack"))
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	rmAll(t, filepath.Join(pack, "evil.pack"))
-	// A FIFO in the target pack directory refuses without hanging.
-	mustMkfifo(t, filepath.Join(pack, "fifo.pack"))
-	start := time.Now()
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	if time.Since(start) > 2*time.Second {
-		t.Fatal("hung on a FIFO")
-	}
-	rmAll(t, filepath.Join(pack, "fifo.pack"))
-	// A symlinked loose-object directory and a symlinked loose object (one level below the fan-out).
-	mustSymlink(t, outside, filepath.Join(sib, "objects", "ab"))
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	rmAll(t, filepath.Join(sib, "objects", "ab"))
-	mkdirs(t, filepath.Join(sib, "objects", "cd"))
-	mustSymlink(t, filepath.Join(outside, "x.pack"), filepath.Join(sib, "objects", "cd", "rest"))
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	rmAll(t, filepath.Join(sib, "objects", "cd"))
-	mustResolve(t, s, spec)
-	// The modules directory itself is never a valid alternate.
-	writeFile(t, alt, mods+"\n")
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-}
-
-func TestPinsConfineInPlaceAlternatesTargetContentsAreWalked(t *testing.T) {
-	f, member := inPlaceFixture(t)
-	s := safetyFor(t, f.Super)
-	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
-	target := filepath.Join(member, ".git", "x", "objects")
-	mkdirs(t, filepath.Join(target, "pack"))
-	outside := filepath.Join(f.Root, "o")
-	writeFile(t, outside, "p")
-	writeFile(t, filepath.Join(member, ".git", "objects", "info", "alternates"), target+"\n")
-	mustResolve(t, s, spec)
-	mustSymlink(t, outside, filepath.Join(target, "pack", "evil.pack"))
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-}
-
 func TestPinsConfineReftableSharedIndexAndFanOutAreChecked(t *testing.T) {
 	f := newPinsFixture(t)
 	s := safetyFor(t, f.Super)
@@ -122,15 +59,6 @@ func TestPinsConfineEntryBudgetIsALimitNotAnUnsafePath(t *testing.T) {
 	var limit *pinsLimitError
 	if refusal != nil || !errors.As(err, &limit) || limit.Kind != "entries" {
 		t.Fatalf("want an entries limit, got refusal=%v err=%v", refusal, err)
-	}
-}
-
-func TestPinsConfineAlternatesQuotedEscapeIsRefused(t *testing.T) {
-	f, s, _, alt, sib := objectsTargetFixture(t)
-	_ = f
-	writeFile(t, alt, "\""+filepath.Join(sib, "objects")+"\\n\"\n")
-	if msg := mustRefuse(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"}, "submodule-path-unsafe"); !strings.Contains(msg, "escape") {
-		t.Fatal(msg)
 	}
 }
 
@@ -278,5 +206,182 @@ func TestPinsRefusesWorldWritableDirectoriesWithAnActionableMessage(t *testing.T
 		if !strings.Contains(msg, want) {
 			t.Errorf("message %q lacks %q", msg, want)
 		}
+	}
+}
+
+// Under umask 000 every directory Git creates is world-writable; chmod-ing only the worktree and the top
+// of the Git directory is not enough, because Git can be raced through any directory it reads.
+func TestPinsWritableCheckCoversEveryWalkedDirectoryAndTheModulesDirectory(t *testing.T) {
+	old := syscall.Umask(0)
+	f := newPinsFixture(t)
+	syscall.Umask(old)
+	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
+	s := safetyFor(t, f.Super)
+	gd := filepath.Join(f.Super, ".git", "modules", "member")
+	for _, d := range []string{filepath.Join(f.Super, "member"), gd} {
+		mustOS(t, os.Chmod(d, 0o755))
+	}
+	msg := mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	for _, want := range []string{"chmod -R", "umask"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message %q lacks %q", msg, want)
+		}
+	}
+	// Fix the whole submodule tree but leave the modules directory itself world-writable.
+	for _, d := range []string{gd, filepath.Join(f.Super, "member")} {
+		if out, err := exec.Command("chmod", "-R", "o-w", d).CombinedOutput(); err != nil {
+			t.Fatalf("%s %v", out, err)
+		}
+	}
+	mods := filepath.Join(f.Super, ".git", "modules")
+	mustOS(t, os.Chmod(mods, 0o777))
+	mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	mustOS(t, os.Chmod(mods, 0o755))
+	mustResolve(t, s, spec)
+	// One deep directory is enough to refuse.
+	deep := filepath.Join(gd, "refs", "heads")
+	mustOS(t, os.Chmod(deep, 0o777))
+	mustRefuse(t, s, spec, "submodule-unsafe-owner")
+}
+
+func TestPinsConfineCommitGraphChainIsWalked(t *testing.T) {
+	f := newPinsFixture(t)
+	s := safetyFor(t, f.Super)
+	gd := filepath.Join(f.Super, ".git", "modules", "member")
+	dir := filepath.Join(gd, "objects", "info", "commit-graphs")
+	mkdirs(t, dir)
+	writeFile(t, filepath.Join(dir, "commit-graph-chain"), "x\n")
+	mustResolve(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"})
+	mustSymlink(t, filepath.Join(gd, "config"), filepath.Join(dir, "graph-"+strings.Repeat("a", 40)+".graph"))
+	mustRefuse(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"}, "submodule-path-unsafe")
+}
+
+func TestPinsRecheckConvertsAnExhaustedWalkBudgetToALimit(t *testing.T) {
+	f := newPinsFixture(t)
+	s := safetyFor(t, f.Super)
+	dirs := mustResolve(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"})
+	s.entryLimit = 3
+	var limit *pinsLimitError
+	if err := s.recheck(dirs); !errors.As(err, &limit) || limit.Kind != "entries" || limit.Error() == "" || !strings.Contains(limit.Error(), "entries") {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestPinsReadDirRefusesADirectorySwappedForALinkBeforeOpen(t *testing.T) {
+	base := pinsRealDir(t)
+	mkdirs(t, filepath.Join(base, "d"), filepath.Join(base, "other"))
+	writeFile(t, filepath.Join(base, "other", "evil"), "x")
+	defer func() { pinsBeforeOpen = nil }()
+	pinsBeforeOpen = func() {
+		mustOS(t, os.Remove(filepath.Join(base, "d")))
+		mustSymlink(t, filepath.Join(base, "other"), filepath.Join(base, "d"))
+	}
+	s := &pinsSafety{owner: pinsFileOwner, euid: pinsEffectiveUID(), gid: pinsFileGroup, egid: pinsEffectiveGID(), entryLimit: 10}
+	budget := 10
+	if entries, r := s.readDir(base, "d", "test", &budget); r == nil {
+		t.Fatalf("a swapped directory was listed: %v", entries)
+	}
+}
+
+// partialClone returns a blob-less clone whose single missing blob forces a lazy fetch, and that blob.
+func partialClone(t *testing.T, f pinsFixture) (clone, blob string) {
+	t.Helper()
+	git(t, f.Sub, "config", "uploadpack.allowFilter", "true")
+	git(t, f.Sub, "config", "uploadpack.allowAnySHA1InWant", "true")
+	clone = filepath.Join(f.Root, "partial")
+	git(t, f.Root, "-c", "protocol.file.allow=always", "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+f.Sub, clone)
+	return clone, gitIn(t, f.Sub, "rev-parse", "HEAD:file.txt")
+}
+
+func controlLazyFetch(clone, blob string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, "git", "cat-file", "-p", blob)
+	c.Dir = clone
+	c.WaitDelay = time.Second
+	c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	_ = c.Run()
+}
+
+func isolatedLazyFetch(t *testing.T, clone, blob string) {
+	t.Helper()
+	run := newPinsRunner(context.Background())
+	run.env = func(env []string) []string {
+		kept := env[:0:0]
+		for _, e := range env {
+			if !strings.HasPrefix(e, "GIT_NO_LAZY_FETCH=") {
+				kept = append(kept, e)
+			}
+		}
+		return kept
+	}
+	if _, err := run.run(pinsCall{Repo: pinsGitRepo{GitDir: filepath.Join(clone, ".git"), WorkTree: clone}, Args: []string{"cat-file", "-p", blob}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPinsProtocolIsolationBlocksFtpsAndHelperTransports(t *testing.T) {
+	f := newPinsFixture(t)
+	clone, blob := partialClone(t, f)
+	// A recording remote helper for helper::address. fd:: cannot be observed: Git runs its built-in helper
+	// before any PATH stub, and the runner passes no extra descriptor, so it is not covered here.
+	bin, logs := t.TempDir(), t.TempDir()
+	log := filepath.Join(logs, "helper.log")
+	for _, name := range []string{"git-remote-pinshelper"} {
+		writeFile(t, filepath.Join(bin, name), "#!/bin/sh\nprintf '%s\\n' \""+name+" $*\" >> '"+log+"'\nexit 1\n")
+		mustOS(t, os.Chmod(filepath.Join(bin, name), 0o755))
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	logged := func() bool { b, _ := os.ReadFile(log); return len(b) > 0 }
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	hits := make(chan struct{}, 100)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			hits <- struct{}{}
+			c.Close()
+		}
+	}()
+	for _, tc := range []struct {
+		name, url, protocol string
+		contacted           func() bool
+	}{
+		{"ftps", "ftps://" + ln.Addr().String() + "/r", "ftps", func() bool {
+			select {
+			case <-hits:
+				return true
+			case <-time.After(time.Second):
+				return false
+			}
+		}},
+		{"helper", "pinshelper::addr", "pinshelper", logged},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			git(t, clone, "config", "remote.origin.url", tc.url)
+			git(t, clone, "config", "protocol."+tc.protocol+".allow", "always")
+			rmAll(t, log)
+			for len(hits) > 0 {
+				<-hits
+			}
+			controlLazyFetch(clone, blob)
+			if !tc.contacted() {
+				t.Skipf("control: this Git did not use the %s transport; isolation cannot be proven here", tc.name)
+			}
+			rmAll(t, log)
+			for len(hits) > 0 {
+				<-hits
+			}
+			isolatedLazyFetch(t, clone, blob)
+			if len(hits) > 0 || logged() {
+				t.Fatalf("the %s remote was contacted through lazy fetch", tc.name)
+			}
+		})
 	}
 }
