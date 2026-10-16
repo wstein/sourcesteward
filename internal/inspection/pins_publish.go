@@ -2,6 +2,7 @@
 package inspection
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -60,27 +61,35 @@ func pinsPublish(run *pinsRunner, repo pinsGitRepo, d pinsSubmoduleDirs, facts p
 		p.Reason = "the pinned commit is not in the submodule repository (absent object or not a commit)"
 		return p, nil
 	}
-	out, err := run.run(pinsCall{Repo: repo, Args: []string{"for-each-ref", "--contains", pin, fmt.Sprintf("--count=%d", pinsRefQuery), "--format=%(refname)%09%(symref)", "refs/remotes/"}})
+	// The records end with a NUL so only the ones that can be named are retained (the first 17 real refs
+	// show that 16 are not all), instead of charging the shared 1 MiB budget for all 64.
+	raw, real := 0, 0
+	keep := func(rec []byte) bool {
+		rec = bytes.TrimPrefix(rec, []byte("\n"))
+		if len(rec) == 0 { // the newline Git prints after the last record
+			return false
+		}
+		raw++
+		if _, sym, _ := bytes.Cut(rec, []byte("\t")); len(sym) > 0 {
+			return false
+		}
+		real++
+		return real <= pinsMaxRemoteRefs+1
+	}
+	out, err := run.run(pinsCall{Repo: repo, Keep: keep, Args: []string{"for-each-ref", "--contains", pin, fmt.Sprintf("--count=%d", pinsRefQuery), "--format=%(refname)%09%(symref)%00", "refs/remotes/"}})
 	if err != nil {
 		return p, err
 	}
 	if out.Exit != 0 {
 		return p, errors.New("cannot list the remote-tracking refs containing the pin")
 	}
-	raw, kept := 0, 0
-	for _, line := range strings.Split(strings.TrimSuffix(string(out.Stdout), "\n"), "\n") {
-		if line == "" {
+	kept := real
+	for _, rec := range bytes.Split(out.Stdout, []byte{0}) {
+		ref, _, _ := strings.Cut(strings.TrimPrefix(string(rec), "\n"), "\t")
+		if ref == "" || !strings.HasPrefix(ref, "refs/remotes/") || len(p.Refs) >= pinsMaxRemoteRefs {
 			continue
 		}
-		raw++
-		ref, symref, _ := strings.Cut(line, "\t")
-		if symref != "" || !strings.HasPrefix(ref, "refs/remotes/") {
-			continue
-		}
-		kept++
-		if kept <= pinsMaxRemoteRefs {
-			p.Refs = append(p.Refs, PinsRemoteRef{Remote: boundPinsMessage(pinsRemoteOfRef(ref, facts.Remotes)), Ref: boundPinsMessage(ref)})
-		}
+		p.Refs = append(p.Refs, PinsRemoteRef{Remote: boundPinsMessage(pinsRemoteOfRef(ref, facts.Remotes)), Ref: boundPinsMessage(ref)})
 	}
 	p.Truncated = kept > pinsMaxRemoteRefs || raw >= pinsRefQuery
 	switch {

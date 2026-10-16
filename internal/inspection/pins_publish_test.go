@@ -184,7 +184,7 @@ func TestPinsPublicationStartsOnlyAllowlistedGitCommands(t *testing.T) {
 	c := newPublishCase(t)
 	gitLog, _ := pinsSentinels(t)
 	c.publish(t, c.f.Pin)
-	requireAllowlisted(t, gitLog(), "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/")
+	requireAllowlisted(t, gitLog(), "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref)%00 refs/remotes/")
 }
 
 func TestPinsPublicationChecksTheObjectBeforeAskingForContainment(t *testing.T) {
@@ -250,5 +250,21 @@ func TestPinsPublicationGraftsAreNeverHonored(t *testing.T) {
 	_, rel := relationOf(t, c.run, c.repo, c.dirs, local)
 	if rel.Relation != "behind" { // HEAD is the pin, an ancestor of the local commit once grafts are ignored
 		t.Fatalf("%+v", rel)
+	}
+}
+
+func TestPinsPublicationRetainsOnlyTheRefsItCanName(t *testing.T) {
+	c := newPublishCase(t)
+	wt := c.repo.WorkTree
+	for i := 0; i < 50; i++ {
+		git(t, wt, "update-ref", fmt.Sprintf("refs/remotes/origin/%s%02d", strings.Repeat("r", 150), i), c.f.Pin)
+	}
+	c.run.budget.retained = 0
+	p := c.publish(t, c.f.Pin)
+	if len(p.Refs) != 16 || !p.Truncated {
+		t.Fatalf("%d %v", len(p.Refs), p.Truncated)
+	}
+	if c.run.budget.retained > 17*200 {
+		t.Fatalf("charged the shared budget for refs it cannot name: %d bytes", c.run.budget.retained)
 	}
 }
