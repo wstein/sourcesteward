@@ -35,6 +35,9 @@ const (
 	ReposCodeMemberFailed           = "member-failed"
 	ReposCodeInventoryNotStarted    = "inventory-not-started"
 	ReposCodeOutputLimit            = "output-limit"
+	ReposCodeChangedRepository      = "changed-repository"
+	ReposCodeInventoryTimeout       = "inventory-timeout"
+	ReposCodeCanceled               = "canceled"
 )
 
 // ReposOptions configures the multi-repository inventory operation.

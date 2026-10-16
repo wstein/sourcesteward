@@ -13,7 +13,7 @@ import (
 )
 
 // discoverSubmodules handles Stage S4 discovery for explicit Git parents.
-func discoverSubmodules(ctx context.Context, entries *[]ReposEntry, inspectFn inspectFunc, inventoryFn inventoryFunc, run runner) {
+func discoverSubmodules(ctx context.Context, entries *[]ReposEntry, inspections *[]Result, inspectFn inspectFunc, run runner) {
 	parentCount := len(*entries)
 	seenPaths := make(map[string]bool)
 	for _, e := range *entries {
@@ -345,46 +345,44 @@ func discoverSubmodules(ctx context.Context, entries *[]ReposEntry, inspectFn in
 					Code:    cand.errCode,
 					Message: cand.errMsg,
 				}
+				*inspections = append(*inspections, Result{Status: "error"})
 			} else if cand.isError {
 				subEntry.Status = "error"
 				subEntry.Error = &ReposError{
 					Code:    cand.errCode,
 					Message: cand.errMsg,
 				}
+				*inspections = append(*inspections, Result{Status: "error"})
 			} else {
-				// Initialize and inventory surviving submodule entry
+				// Stage S4: Identity inspection of discovered submodule candidate
 				insp := inspectFn(ctx, absP)
+				*inspections = append(*inspections, insp)
 				subEntry.Backend = insp.Backend
 				if insp.Status == "error" {
 					subEntry.Status = "error"
-					subEntry.Error = &ReposError{
-						Code:    insp.Diagnostics[0].Code,
-						Message: insp.Diagnostics[0].Message,
+					code := "inspection-failed"
+					msg := "identity inspection failed"
+					if len(insp.Diagnostics) > 0 {
+						code = insp.Diagnostics[0].Code
+						msg = insp.Diagnostics[0].Message
 					}
+					subEntry.Error = &ReposError{Code: code, Message: msg}
 				} else {
-					inv := inventoryFn(ctx, absP, InventoryOptions{})
-					subEntry.Inventory = &inv
-					if inv.Status == "ok" {
-						subEntry.Status = "ok"
-					} else if inv.Status == "partial" {
-						subEntry.Status = "partial"
-						msg := "inventory status partial"
-						if len(inv.Boundary.Limitations) > 0 {
-							msg = inv.Boundary.Limitations[0]
+					// FR-008: After the identity inspection, its worktree must equal the expected path
+					wtMatches := false
+					if insp.Repository != nil && insp.Repository.Worktree != nil {
+						if filepath.Clean(*insp.Repository.Worktree) == filepath.Clean(absP) {
+							wtMatches = true
 						}
+					}
+					if !wtMatches {
+						subEntry.Status = "error"
 						subEntry.Error = &ReposError{
-							Code:    ReposCodeInventoryPartial,
-							Message: msg,
+							Code:    ReposCodePathUnsafe,
+							Message: "submodule worktree does not match expected path",
 						}
 					} else {
-						subEntry.Status = "error"
-						code := "inventory-failed"
-						msg := "inventory failed"
-						if len(inv.Diagnostics) > 0 {
-							code = inv.Diagnostics[0].Code
-							msg = inv.Diagnostics[0].Message
-						}
-						subEntry.Error = &ReposError{Code: code, Message: msg}
+						subEntry.Status = "ok"
 					}
 				}
 			}
