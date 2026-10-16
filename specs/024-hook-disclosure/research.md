@@ -4,6 +4,8 @@
 
 WorkHarbor enforces secret scanning, commit-message linting and formatting through Git hooks: `core.hooksPath` points at a tracked `.githooks` directory holding `pre-commit`, `commit-msg` and `pre-push`. A maintainer is considering jj. jj does not run Git hooks as far as its documentation says, so a commit made with jj could bypass every guard without any warning, and nothing in `jj status` or `git status` says so. SourceSteward can answer, read-only, which guards exist, whether they are safe, and whether the owning backend's operation runs them, and it must say how well established that answer is.
 
+> **Scope note (after the scope reduction).** Measurements 5 (directory and interpreter details beyond `access`), 8 (worktree-level levels), 9 (included files beyond the unparseable-include case), 10 (configuration hooks beyond detection), 11 (templates) and 17 belong to deferred scope and are kept as evidence for the later hook-hygiene specification. Measurements 1 to 4, 6, 7, 12, 13, 15 and 16 support the retained scope. The `--no-verify` matrix is carried as `documented` until a lane records it.
+
 ## Decisions and alternatives
 
 ### Command name (recorded choice)
@@ -24,7 +26,7 @@ The motivating guards run on those two operations, and a closed pair keeps the r
 
 ### Global and system configuration are in scope as read-through (chosen)
 
-Git applies system and global `core.hooksPath` and `hook.*` to the user's later command, and a global hooks directory is a common setup. Omitting them would report a guard as absent that Git runs, which is the wrong kind of mistake for a disclosure. The command therefore reads configuration through `git config --show-scope --show-origin`, lists every level, and marks the effective value. It reports the origin file path only for repository-level values and only the scope for system and global values; the values themselves are reported as read and can contain home-directory paths. Alternatives rejected: ignoring non-repository levels (silently wrong); reading configuration files directly in Go (include and `includeIf` semantics would drift from Git); applying the caller's `GIT_CONFIG_*` environment (the existing runner removes `GIT_*` so reports are reproducible; the command only names the variables it did not apply).
+Git applies system and global `core.hooksPath` to the user's later command, and a global hooks directory is a common setup. Omitting them would report a guard as absent that Git runs, which is the wrong kind of mistake for a disclosure. The command reads `core.hooksPath` through `git config --show-scope` and reports the effective (last) value with the scope that set it; the values can contain home-directory paths, and the origin file is not reported. Alternatives rejected: ignoring non-repository levels (silently wrong); reading configuration files directly in Go (include semantics would drift from Git); applying the caller's `GIT_CONFIG_*` environment (the existing runner removes `GIT_*`; the report notes that it did not apply them). Listing every level with its origin and an `overridden` flag was cut from this slice and deferred.
 
 ### Evidence model (chosen)
 
@@ -34,13 +36,13 @@ Every claim has a level: `measured`, `documented` or `unverified`, and the repor
 
 The measurements below were made once, with Git 2.56.0, in scratch repositories. The spec ships the Git claims as `documented` and promotes them when the conformance lane (FR-017) has recorded them on 2.46.0 and 2.56.0. Alternative: label them `measured` now. Rejected: the constitution requires conformance CI and recorded acceptance evidence, and the minimum lane was not measured.
 
-### Reading hooks: lstat of fixed names, never open (chosen)
+### Reading hooks: lstat of six fixed names, never open (chosen)
 
-Only the 28 catalog names are examined with `lstat`, `readlink` and `access(X_OK)`; no hook path is opened. Directory listing (bounded, 256 entries) happens only for a directory inside the worktree root, the Git directory or the common Git directory, to find misnamed hooks, because listing a hostile `core.hooksPath` such as `/` would disclose unrelated names. Alternatives rejected: `git hook list` (needs a newer Git than the minimum lane and prints advice to standard error; not measured on 2.46; it also depends on executable checks the command performs itself); reading shebang lines to detect missing interpreters (violates "never read hook contents"); dry-running a hook (executes it).
+Only the six operation hook names are examined with `lstat`, `readlink` and `access(X_OK)`; nothing is opened, so the source scan can forbid every open in the hooks files. Cut and deferred: the 28-name catalog, a bounded listing of a confined directory to find misnamed hooks, ownership, permission and symlink-outside facts, and tracking. Alternatives rejected: `git hook list` (needs a newer Git than the minimum lane and prints advice to standard error; not measured on 2.46); reading shebang lines to detect missing interpreters (violates "never read hook contents"); dry-running a hook (executes it).
 
-### Configuration hooks (chosen)
+### Configuration hooks are detected, not evaluated (chosen)
 
-Git 2.56.0 honors `hook.<name>.event` and `hook.<name>.command`; they run in addition to directory hooks and still run when `core.hooksPath` is the null device (measurements 10). The command reads events and enabled state with `git config -z --show-scope --show-origin --get-regexp '^hook\..*\.(event|enabled)$'` and the presence of `.command` keys with `--show-scope --name-only`, and never reads or reports command text, which is configuration that may hold secrets. The Git version that introduced the feature is unverified; below the measured range the `engine` field is `unknown` rather than guessing.
+Git 2.56.0 honors `hook.<name>.event` and `hook.<name>.command`; they run in addition to directory hooks and still run when `core.hooksPath` is the null device (measurement 10). Evaluating them needs an engine-version claim, enabled-state handling and per-key scopes, which produced most of the defects found in review rounds 3 to 5. This slice reads event names only (`config -z --get-regexp '^hook\..*\.event$'`); if one names an operation hook it raises `config-hooks-not-evaluated`, never reads or reports command text and never claims guards from them. Evaluation is deferred.
 
 ### jj in a colocated workspace: Git facts through read-only Git (chosen)
 
@@ -90,20 +92,20 @@ All run with `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1` and a private `
 
 ## Process allowlist (normative)
 
-The command starts only these Git invocations, each through the existing runner (isolation prefix, `GIT_*` removed, optional locks, prompts, lazy fetch and pager disabled; `HOME` and `XDG_CONFIG_HOME` kept), with a 5-second bound and the existing 64 KiB stream cap. A runner-recording test pins this list. Contracts and tests refer to it.
+The command starts only these Git invocations, each through the existing runner (isolation prefix, `GIT_*` removed, optional locks, prompts, lazy fetch and pager disabled; `HOME` and `XDG_CONFIG_HOME` kept), with a 5-second bound and the existing 64 KiB stream cap. A runner-recording test pins this list.
 
-- Ownership decision, reused unchanged from `Inspect` for Git-owned and GitButler paths: `version`, `rev-parse --path-format=absolute --absolute-git-dir`, `--git-common-dir`, `--is-bare-repository`, `--show-toplevel`, `--show-object-format`, the GitButler `for-each-ref` probe, `symbolic-ref --quiet HEAD` and the other HEAD reads `Inspect` makes (`readHead`, run twice). The review reported the exact `readHead` argument list; the implementation test records whatever it is, and nothing outside this list may be added.
-- jj-owned workspaces: no Inspect Git reads. `version` and the Git reads below run only when a `.git` entry exists. The hooks operation makes its own `version` read on every Git-using path (on the Git-owned path `Inspect` already ran one; the second is accepted because `Inspect` does not return the version).
+- Ownership decision, reused unchanged from `Inspect` for paths with no `.jj` marker: the reads `Inspect` makes (`version`, the `rev-parse` identity reads, the GitButler `for-each-ref` probe, the HEAD reads). The implementation test records the exact list; nothing outside it and the list below may be added.
+- `version`: one read by the hooks operation on every Git-using path (on the Git-owned path `Inspect` already ran one; the second is accepted because `Inspect` does not return the version).
+- jj-owned workspaces: no `Inspect` Git reads; the reads below run only when a `.git` entry exists.
 - Gate: `rev-parse --path-format=absolute --absolute-git-dir` before and after the configuration reads (it applies Git's ownership check).
-- Configuration: `config --show-scope --show-origin -z --get-regexp '^core\.hookspath$'`; `config --type=bool --get extensions.worktreeConfig`; `config -z --show-scope --show-origin --get-regexp '^hook\..*\.(event|enabled)$'`; `config -z --show-scope --name-only --get-regexp '^hook\..*\.command$'` (key names only, so command text is never read). Exit status 1 means unset only after the gate passed.
+- Configuration: `config --show-scope -z --get-regexp '^core\.hookspath$'`; `config -z --get-regexp '^hook\..*\.event$'`. Exit status 1 means unset only after the gate passed.
 - Resolution: `rev-parse --path-format=absolute --git-path hooks` (not run for an empty effective value; failure for a non-empty value is state `invalid`).
-- Tracking: `--literal-pathspecs ls-files -z --full-name -- <catalog names under the hooks directory, relative to the worktree root>`, run from the worktree root, only when the directory is inside the worktree.
 
-Not used: `git hook` (any subcommand), `git commit`, `git push`, `git status`, `git config --edit`, `git var`, any command that can run a hook, filter, helper or alias, and any fetch. For jj only the existing sandbox probe and `--version` run (no identity queries).
+Not used: `git hook` (any subcommand), `git commit`, `git push`, `git status`, `git ls-files`, `git var`, any command that can run a hook, filter, helper or alias, and any fetch. For jj only the existing sandbox probe and `--version` run (no identity queries).
 
 ## Not measured, therefore unverified
 
-- The 28-name hook catalog against the 2.46.0 and 2.56.0 documentation (the only manual on the author's host is a Git 2.47.3 `githooks(5)`); everything about jj: whether `jj commit` or `jj git push` runs any Git hook in a colocated or non-colocated repository, on 0.45.1 or 0.46.0; whether a `reference-transaction` hook fires on export.
+- That the six catalog names exist and behave as documented on Git 2.46.0 (the only manual on the author's host is a Git 2.47.3 `githooks(5)`); everything about jj: whether `jj commit` or `jj git push` runs any Git hook in a colocated or non-colocated repository, on 0.45.1 or 0.46.0; whether a `reference-transaction` hook fires on export.
 - All Git behavior on 2.46.0, including the version that introduced configuration hooks and `config --show-scope` output format differences.
 - Behavior on macOS and on filesystems without an executable bit.
 - Whether `reference-transaction` aborts an operation when it exits non-zero (documented in `githooks(5)`, not measured).
