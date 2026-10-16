@@ -2,7 +2,7 @@
 
 ## Active work: Spec 020 shared hosting inspection
 
-Analyzed design and shared Go operations now provide `stw hosting repo|pr|ci` and an optional jj-only `gh jj` entry point. Local resolution, explicit PR/CI reads, independent schema and private extension conformance are implemented. Source review and exact acceptance evidence are tracked in [Spec 020 verification](../specs/020-gh-jj-inspection/verification.md). Linux hosted minimum/current acceptance remains a handoff gate until CI executes. No live extension installation, release, API write or BundleDock deletion is authorized by these observations.
+Analyzed design and shared Go operations now provide `stw hosting repo|pr|ci` and an optional jj-only `gh jj` entry point. Local resolution, explicit PR/CI reads, independent schema and private extension conformance are implemented. Source review and exact acceptance evidence are tracked in [Spec 020 verification](../specs/020-gh-jj-inspection/verification.md). [PR #40](https://github.com/wstein/sourcesteward/pull/40) is open for review; local source/race and both jj version hosting-conformance lanes pass. Linux hosted minimum/current acceptance remains a handoff gate until CI executes. No live extension installation, release, API write or BundleDock deletion is authorized by these observations.
 
 ## Earlier work: Spec 011 workspace and reference tidy
 
