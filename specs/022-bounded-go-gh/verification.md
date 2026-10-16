@@ -34,7 +34,7 @@ Final independent consistency analysis clears source 296298c; low stale sentence
 
 ## Notice-only follow-up
 
-All six source/minimum/current checks on b6edd4a passed in [PR CI 38888310316](https://github.com/wstein/sourcesteward/actions/runs/38888310316) and push CI 38888303686; Pages correctly skipped for the topic branch. No CI or reviewer findings were reported.
+All six source/minimum/current checks on b6edd4a passed in [PR CI 38888310316](https://github.com/wstein/sourcesteward/actions/runs/38888310316) and push CI 38888303686; Pages correctly skipped for the topic branch. CI reported no findings, but independent team review of b6edd4a was NOT CLEAR (three reviewers): one high (the smoke used the keyring credential and live network), several medium (result-code change, evidence Git version, commit hygiene) and several low findings. All were fixed forward in later commits or decided by the owner (H62:a, H63:a).
 
 Repeated dependency notices were consolidated: 18 files/401 lines become 7 files/189 lines. Each MIT copyright is retained with one whitespace-equivalent permission/disclaimer text; Go BSD and patent copies were byte-identical and now shared once. Distinct safeexec, timezone and YAML license/NOTICE contents remain byte-identical. The version-to-license inventory remains explicit. No production code, safety test, schema, module pin or workflow changed.
 
@@ -48,4 +48,4 @@ Earlier pending CI/merge statements above are historical handoff snapshots.
 
 ## Post-merge review follow-up
 
-Independent review of b6edd4a was not clear; the fixes land in a follow-up PR (Refs #41). The binary smoke is now hermetic: dispatched cases use an unresolvable host and assert `hosting-api-unavailable`. It has not been re-run in that form in this worktree because jj is unavailable; a re-run on the pinned jj lanes is pending.
+Independent review of b6edd4a was not clear; the fixes land in a follow-up PR (Refs #41), not in merged PR 41. The binary smoke is now hermetic: dispatched cases use an unresolvable host and assert `hosting-api-unavailable` with `boundary.network` false. The independent reviewer ran it in a scratch copy with jj 0.46.0 and all 28 cases passed. jj 0.45.1 and the Linux lanes remain for CI to prove.
