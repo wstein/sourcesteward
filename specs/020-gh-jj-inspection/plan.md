@@ -1,6 +1,6 @@
 # Implementation Plan: Shared GitHub inspection and gh jj entry point
 
-Transport mechanism and bounds are superseded by [Spec 022](../022-bounded-go-gh/spec.md) when the SDK migration lands. Native behavior, CLI options and published JSON contracts remain unchanged. The original implementation decisions below are historical.
+Transport mechanism and bounds are superseded by [Spec 022](../022-bounded-go-gh/spec.md) when the SDK migration lands. Native behavior, CLI options and published JSON contracts remain unchanged except the Spec 022 authentication-refusal result (`hosting-api-unavailable`, `network=false`, before any request) and new HTTP failure messages. The original implementation decisions below are historical.
 
 **Branch**: `codex/020-gh-jj-inspection` | **Date**: 2026-10-16 | **Spec**: [spec.md](spec.md)
 

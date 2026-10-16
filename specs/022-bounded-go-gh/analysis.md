@@ -8,4 +8,4 @@ Implementation may proceed after these design corrections. Native Git/jj and pub
 
 ## Final consistency analysis
 
-Independent sdk_analysis reviewed source296298c and found no blocking/high/medium issues or dropped contracts. Native adapters, schemas and existing CLI fixtures remain unchanged against ee86751; SDK success/error fixture coverage and documented limitations align. Two low stale wording/path findings were corrected in final evidence. Full integrated verification and hosted acceptance remain separate gates.
+Independent sdk_analysis reviewed source 296298c and found no blocking/high/medium issues or dropped contracts. Native adapters, schemas and existing CLI fixtures remain unchanged against ee86751; SDK success/error fixture coverage and documented limitations align. Two low stale wording/path findings were corrected in final evidence. Full integrated verification and hosted acceptance remain separate gates.
