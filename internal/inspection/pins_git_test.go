@@ -361,7 +361,7 @@ var pinsAllowlist = []string{
 	"cat-file -e <OID>^{commit}",
 	"merge-base <OID> <OID>",
 	"rev-list --count --max-count=10001 <OID>..<OID> --",
-	"for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/",
+	"for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref)%00 refs/remotes/",
 	"ls-tree HEAD .gitmodules",
 	"diff-index --cached --no-ext-diff --no-textconv -z <OID> --",
 	"ls-files --stage --debug -z",
