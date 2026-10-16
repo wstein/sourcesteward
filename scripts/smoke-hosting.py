@@ -3,8 +3,11 @@
 """Mandatory binary hosting conformance; disposable fixtures and denied authentication.
 
 Build bin/stw and bin/gh-jj/gh-jj first. Actual gh dispatch is exercised through a
-private extension directory; no user installation or network call. Positive SDK/API
-conformance runs in Go tests against injected HTTP and real native backends.
+private extension directory. Real gh sets GH_PATH to itself, so dispatched PR/CI
+cases target an unresolvable, credential-free Enterprise host (*.invalid): the real
+`gh auth token` finds no credential and no HTTP request is ever made. Direct stw
+cases use a fake gh that refuses authentication. Positive SDK/API conformance runs
+in Go tests against injected HTTP and real native backends.
 """
 import importlib.util
 import json
@@ -20,6 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location('jj_smoke', ROOT / 'scripts/smoke-jj-inspection.py')
 helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
+
+
+# Dispatch reaches the real gh and its keyring; this host has no credential and cannot resolve.
+HERMETIC = ('--repo', 'example/project', '--host', 'hermetic.invalid')
 
 
 def acceptance():
@@ -73,7 +80,7 @@ sys.exit(1) # Prove safe auth refusal before any SDK HTTP can execute.
             assert result.returncode == 0, ('setup', tool, args, result.stderr)
             return result.stdout.decode().strip()
 
-        def observe(command, path, options=(), expected=0, network=False, actual_dispatch=False):
+        def observe(command, path, options=(), expected=0, network=False, actual_dispatch=False, code=None):
             nonlocal cases
             before = helpers.snapshot(fixtures)
             prior_calls = audit.read_bytes() if audit.exists() else b''
@@ -92,6 +99,8 @@ sys.exit(1) # Prove safe auth refusal before any SDK HTTP can execute.
             assert output['boundary']['complete'] == (expected == 0), output
             assert output['boundary']['network'] == network, output
             assert all(isinstance(output[key], list) for key in ('candidates', 'checks', 'statuses', 'diagnostics')), output
+            if code is not None:
+                assert output['diagnostics'] and output['diagnostics'][0]['code'] == code, output
             if expected == 0:
                 assert output['repository']['owner'] == 'example' and output['repository']['name'] == 'project', output
             cases += 1
@@ -105,8 +114,8 @@ sys.exit(1) # Prove safe auth refusal before any SDK HTTP can execute.
         setup('git', ['-C', str(git), 'worktree', 'add', '-b', 'task', str(linked)])
         for path in (git, linked):
             observe(['repo'], path)
-            observe(['pr', '42'], path, expected=1)
-            observe(['ci', '42'], path, expected=1)
+            observe(['pr', '42'], path, expected=1, code='hosting-api-unavailable')
+            observe(['ci', '42'], path, expected=1, code='hosting-api-unavailable')
         observe(['repo'], git, expected=1, actual_dispatch=True)
         standalone = fixtures / 'standalone'
         colocated = fixtures / 'colocated'
@@ -123,21 +132,22 @@ sys.exit(1) # Prove safe auth refusal before any SDK HTTP can execute.
                 assert regular[key] == dispatched[key], (key, regular, dispatched)
             assert regular['backend'] == 'jj', regular
             assert regular['identity']['jj_repository']['observation']['working_copy'] == 'stored-unsnapshotted', regular
-            observe(['pr', '42'], path, expected=1)
-            ci = observe(['ci', '42'], path, expected=1)
-            observe(['pr', '42'], path, expected=1, actual_dispatch=True)
-            observe(['ci', '42'], path, expected=1, actual_dispatch=True)
+            observe(['pr', '42'], path, expected=1, code='hosting-api-unavailable')
+            ci = observe(['ci', '42'], path, expected=1, code='hosting-api-unavailable')
+            observe(['pr', '42'], path, expected=1, actual_dispatch=True, code='hosting-api-unavailable', options=HERMETIC)
+            observe(['ci', '42'], path, expected=1, actual_dispatch=True, code='hosting-api-unavailable', options=HERMETIC)
             assert ci['backend'] == 'jj' and ci['diagnostics'][0]['code'] == 'hosting-api-unavailable', ci
         setup('git', ['-C', str(git), 'remote', 'add', 'fork', 'https://github.com/another/fork.git'])
         observe(['repo'], git, expected=1)
         observe(['repo'], git, options=('--remote', 'custom'))
         observe(['repo'], fixtures / 'missing', expected=1)
         calls = [json.loads(line) for line in audit.read_text().splitlines()]
-        # gh extension dispatch sets GH_PATH to itself; its isolated empty auth
-        # profile refuses directly. Only the ten direct stw calls hit fake gh.
+        # gh extension dispatch sets GH_PATH to the real gh, which never sees the fake.
+        # Dispatched cases use HERMETIC (unresolvable host, no credential), so only
+        # the ten direct stw calls reach the fake gh.
         assert len(calls) == 10 and all(call == ['auth', 'token', '--hostname', 'github.com'] for call in calls), calls
     assert cases == 28, ('Mandatory hosting case count changed', cases)
-    print(str(cases) + ' native binary hosting/extension cases passed with byte/mode-identical fixture state and audited auth refusal; positive SDK reads are separate Go conformance')
+    print(str(cases) + ' native binary hosting/extension cases passed with byte/mode-identical fixture state; direct cases audited against a fake gh, dispatched cases hermetic on an unresolvable host; positive SDK reads are separate Go conformance')
 
 
 if __name__ == '__main__':
