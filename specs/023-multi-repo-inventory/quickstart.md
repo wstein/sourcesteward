@@ -18,12 +18,13 @@ stw repos super lib notrepo --submodules; echo "status $?"
 stw repos super lib notrepo --submodules --json
 ```
 
-Expected: entries for `super`, `lib`, `notrepo`, then `super/member1` (discovered, `origin: "submodule"`). `super` is `partial` (stale worktree `wt-gone`, counted as `stale` in its facts), `lib` is `ok` with `dirty: true`, `notrepo` is `error` (`not-repository`), overall `partial`, exit 1.
+Expected: entries for `super`, `lib`, `notrepo`, then `super/member1` (discovered, `origin: "submodule"`). `super` is `partial` (stale worktree `wt-gone`, counted as `stale`, and the registered gitlink), `lib` is `ok` with `dirty: true`, `notrepo` is `error` (`not-repository`), `super/member1` is inventoried with `dirty: unknown` (a submodule checkout), overall `partial`, exit 1.
 
 Other cases:
 
-- `stw repos super super/member1/.` includes a duplicate path: the second is `duplicate-repository`.
-- `stw repos super/member1/sub` (a subdirectory): `not-repository-root`.
+- `stw repos super super/.` lists the same path twice: the second is `duplicate-repository`. `stw repos super wt-super` (main plus its linked worktree) is also `duplicate-repository`.
+- `stw repos super super/member1` is not a duplicate: the submodule is its own repository and the entry carries `contained_in`.
+- `mkdir super/member1/sub && stw repos super/member1/sub` (a subdirectory): `not-repository-root`; a missing directory is `invalid-path`.
 - `git clone super clone` without `--recurse-submodules`, then `stw repos clone --submodules`: `clone/member1` is `skipped` with `submodule-uninitialized`.
 - Replace `super/member1` by a symlink to `sub1` and rerun with `--submodules`: `path-unsafe`.
 - With jj installed: `jj git init jjrepo`, then `stw repos jjrepo lib`: `jjrepo` has `dirty: unknown`.

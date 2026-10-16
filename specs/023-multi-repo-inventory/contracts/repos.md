@@ -22,59 +22,359 @@ The normative table is in [spec.md](../spec.md#exit-status-normative): 0 overall
 | Backend | Inventory entry | `--submodules` |
 | --- | --- | --- |
 | Git (worktree, linked worktree, bare) | supported (existing inventory) | supported |
-| jj (standalone, colocated, secondary workspace) | supported (existing inventory; requires the inventory's sandbox) | `not-applicable`, stated |
+| jj (standalone, colocated, secondary workspace) | supported (existing inventory with the `stored` scope only, requires the inventory's sandbox; dirty state `unknown`) | `not-applicable`, stated |
 | GitButler, ambiguous | entry `error` (`unsupported-backend`, `ambiguous-backend`) | no |
 
-Dirty state of jj members is `unknown` (disk freshness needs a snapshot); this is a backend difference, not an equivalence claim.
+Dirty state of jj members is `unknown` (disk freshness needs a snapshot); a Git superproject with registered gitlinks and a bare repository are `partial` under the Git default scopes; these are backend or inherited differences, not equivalence claims.
 
 ## Human output
 
 ```text
 SourceSteward repos: partial (3 entries)
 effects: read-only, no network, no fetch, no repository writes
-[0] /w/app  git  ok  head main aa..  dirty=true  workspaces 2 (stale 0, foreign 0)
-[1] /w/lib  git  ok  head detached bb..  dirty=false  workspaces 1
-[2] /w/app/vendor/lib  submodule of [0]  skipped  submodule-uninitialized
-summary: ok 2, partial 0, error 0, skipped 1; dirty 1; stale workspaces 0; foreign 0
-limitations: no ahead/behind, publication or task-ownership facts
+[0] /w/lib  git  ok       head main aaaaaaa  dirty=true  workspaces 1
+[1] /w/app  git  partial  head main bbbbbbb  dirty=unknown  workspaces 1
+      inventory-partial: submodule disk state excluded to avoid recursive helpers
+[2] vendor/lib  submodule of [1]  skipped  submodule-uninitialized
+summary: ok 1, partial 1, error 0, skipped 1; dirty 1; stale 0; foreign 0; conflicted refs 0
+limitations: no ahead/behind, publication or task-ownership facts; submodule dirty state unknown
 ```
 
-Names and paths are escaped; at most 16 attention workspaces are listed per entry with a "+N more" line; output is bounded.
+Names and paths are escaped. An *attention workspace* is one that is stale, foreign or unverified; at most 16 are listed per entry from the embedded inventory, then a "+N more" line. The text is bounded by construction (at most 16 entries, 16 lines each, each line escaped and truncated to 512 bytes, so below 256 KiB), tested in T004.
 
 ## JSON
 
-One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; every non-null `inventory` also validates against the published `inventory.schema.json`. Example (compact; abbreviated object ids are full 40-character ids in real output):
+One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; every non-null `inventory` also validates against the published `inventory.schema.json`. Example:
 
 ```json
-{"schema_version":1,"command":"repos","status":"ok","input_paths":["/w/app"],"submodules_requested":true,
- "boundary":{"complete":true,"freshness":"sampled-nontransactional",
-  "effects":{"network":false,"fetch":false,"repository_writes":false,"hooks":false,"private_temporary_files_for_jj":true},
-  "limits":{"max_entries":16,"max_path_bytes":4096,"per_repository_seconds":10,"total_seconds":60,"parallelism":4,"max_output_bytes":8388608,"gitmodules_bytes":65536},
-  "limitations":["No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them."]},
- "entries":[
-  {"index":0,"path":"/w/app","resolved_path":"/w/app","origin":"explicit","parent":null,"status":"ok","error":null,"backend":"git",
-   "discovery":{"requested":true,"status":"ok","submodules":1,"ignored":0,"reason":""},"duplicate_of":null,"contained_in":null,
-   "facts":{"head_state":"attached","head_ref":"refs/heads/main","head_commit_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","change_id":null,
-    "dirty":{"value":"false","reason":""},"conflicted_references":0,"workspaces":{"total":1,"stale":0,"foreign":0,"unverified":0}},
-   "inventory":{"schema_version":1,"command":"inventory","status":"ok","backend":"git","input_path":"/w/app",
-    "identity":{"schema_version":1,"status":"ok","backend":"git","input_path":"/w/app","evidence":[],"repository":{"git_dir":"/w/app/.git","common_dir":"/w/app/.git","worktree":"/w/app","bare":false,"linked_worktree":false,"object_format":"sha1","head":{"state":"attached","ref":"refs/heads/main","oid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"diagnostics":[]},
-    "boundary":{"complete":true,"freshness":"sampled-nontransactional","limitations":[],"limits":{"deadline_seconds":10,"command_bytes":65536,"result_bytes":1048576,"records":1024}},
-    "workspaces":[{"path":"/w/app","name":"/w/app","manager":"git","registration":"present","task_owner":"unknown","commit_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","change_id":null,"operation_id":null,"tracked":{"value":"false","reason":""},"untracked":{"value":"false","reason":""},"conflicts":{"value":"unknown","reason":"conflict state not observed"},"limitations":[]}],
-    "references":[],"bases":[],"files":[],"query":null,"diagnostics":[]}},
-  {"index":1,"path":"vendor/lib","resolved_path":"/w/app/vendor/lib","origin":"submodule","parent":0,"status":"skipped","error":{"code":"submodule-uninitialized","message":"registered submodule has no checkout"},"backend":"unknown",
-   "discovery":{"requested":true,"status":"not-applicable","submodules":0,"ignored":0,"reason":"nested submodules are not traversed"},"duplicate_of":null,"contained_in":0,"facts":null,"inventory":null}],
- "summary":{"entries":2,"by_status":{"ok":1,"partial":0,"error":0,"skipped":1},"by_backend":{"git":1,"jj":0,"other":0},"dirty":{"true":0,"false":1,"unknown":0},"stale_workspaces":0,"foreign_workspaces":0,"unverified_workspaces":0,"conflicted_references":0,"skipped_uninitialized":1,"discovery_not_applicable":1,"inventories_omitted":0},
- "diagnostics":[]}
+{
+ "schema_version": 1,
+ "command": "repos",
+ "status": "partial",
+ "input_paths": [
+  "/w/lib",
+  "/w/app"
+ ],
+ "submodules_requested": true,
+ "boundary": {
+  "complete": false,
+  "freshness": "sampled-nontransactional",
+  "effects": {
+   "network": false,
+   "fetch": false,
+   "repository_writes": false,
+   "hooks": false,
+   "private_temporary_files_for_jj": true
+  },
+  "limits": {
+   "max_entries": 16,
+   "max_path_bytes": 4096,
+   "max_discovery_candidates": 64,
+   "per_repository_seconds": 10,
+   "total_seconds": 60,
+   "parallelism": 4,
+   "max_output_bytes": 8388608,
+   "gitmodules_bytes": 65536
+  },
+  "limitations": [
+   "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
+   "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+   "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
+  ]
+ },
+ "entries": [
+  {
+   "index": 0,
+   "path": "/w/lib",
+   "path_encoding": "utf8",
+   "resolved_path": "/w/lib",
+   "origin": "explicit",
+   "parent": null,
+   "status": "ok",
+   "error": null,
+   "backend": "git",
+   "discovery": {
+    "requested": true,
+    "status": "ok",
+    "submodules": 0,
+    "ignored": 0,
+    "deduplicated": 0,
+    "reason": ""
+   },
+   "duplicate_of": null,
+   "contained_in": null,
+   "facts": {
+    "head_state": "attached",
+    "head_ref": "refs/heads/main",
+    "head_commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "change_id": null,
+    "dirty": {
+     "value": "true",
+     "reason": ""
+    },
+    "conflicted_references": 0,
+    "workspaces": {
+     "total": 1,
+     "stale": 0,
+     "foreign": 0,
+     "unverified": 0
+    }
+   },
+   "inventory": {
+    "schema_version": 1,
+    "command": "inventory",
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/w/lib",
+    "identity": {
+     "schema_version": 1,
+     "status": "ok",
+     "backend": "git",
+     "input_path": "/w/lib",
+     "evidence": [],
+     "repository": {
+      "git_dir": "/w/lib/.git",
+      "common_dir": "/w/lib/.git",
+      "worktree": "/w/lib",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+       "state": "attached",
+       "ref": "refs/heads/main",
+       "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+     },
+     "diagnostics": []
+    },
+    "boundary": {
+     "complete": true,
+     "freshness": "sampled-nontransactional",
+     "limitations": [
+      "Sampled observations are not transactional; concurrent and ABA changes may be missed."
+     ],
+     "limits": {
+      "deadline_seconds": 10,
+      "command_bytes": 65536,
+      "result_bytes": 1048576,
+      "records": 1024
+     }
+    },
+    "workspaces": [
+     {
+      "path": "/w/lib",
+      "name": "/w/lib",
+      "manager": "git",
+      "registration": "present",
+      "task_owner": "unknown",
+      "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "change_id": null,
+      "operation_id": null,
+      "tracked": {
+       "value": "false",
+       "reason": ""
+      },
+      "untracked": {
+       "value": "true",
+       "reason": ""
+      },
+      "conflicts": {
+       "value": "false",
+       "reason": ""
+      },
+      "limitations": []
+     }
+    ],
+    "references": [],
+    "bases": [],
+    "files": [],
+    "query": null,
+    "diagnostics": []
+   },
+   "notes": []
+  },
+  {
+   "index": 1,
+   "path": "/w/app",
+   "path_encoding": "utf8",
+   "resolved_path": "/w/app",
+   "origin": "explicit",
+   "parent": null,
+   "status": "partial",
+   "error": {
+    "code": "inventory-partial",
+    "message": "submodule disk state excluded to avoid recursive helpers"
+   },
+   "backend": "git",
+   "discovery": {
+    "requested": true,
+    "status": "ok",
+    "submodules": 1,
+    "ignored": 0,
+    "deduplicated": 0,
+    "reason": ""
+   },
+   "duplicate_of": null,
+   "contained_in": null,
+   "facts": {
+    "head_state": "attached",
+    "head_ref": "refs/heads/main",
+    "head_commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "change_id": null,
+    "dirty": {
+     "value": "unknown",
+     "reason": "submodule disk state excluded to avoid recursive helpers"
+    },
+    "conflicted_references": 0,
+    "workspaces": {
+     "total": 1,
+     "stale": 0,
+     "foreign": 0,
+     "unverified": 0
+    }
+   },
+   "inventory": {
+    "schema_version": 1,
+    "command": "inventory",
+    "status": "partial",
+    "backend": "git",
+    "input_path": "/w/app",
+    "identity": {
+     "schema_version": 1,
+     "status": "ok",
+     "backend": "git",
+     "input_path": "/w/app",
+     "evidence": [],
+     "repository": {
+      "git_dir": "/w/app/.git",
+      "common_dir": "/w/app/.git",
+      "worktree": "/w/app",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+       "state": "attached",
+       "ref": "refs/heads/main",
+       "oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+     },
+     "diagnostics": []
+    },
+    "boundary": {
+     "complete": false,
+     "freshness": "sampled-nontransactional",
+     "limitations": [
+      "Sampled observations are not transactional; concurrent and ABA changes may be missed.",
+      "submodule disk state excluded to avoid recursive helpers"
+     ],
+     "limits": {
+      "deadline_seconds": 10,
+      "command_bytes": 65536,
+      "result_bytes": 1048576,
+      "records": 1024
+     }
+    },
+    "workspaces": [
+     {
+      "path": "/w/app",
+      "name": "/w/app",
+      "manager": "git",
+      "registration": "present",
+      "task_owner": "unknown",
+      "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "change_id": null,
+      "operation_id": null,
+      "tracked": {
+       "value": "unknown",
+       "reason": "submodule disk state excluded to avoid recursive helpers"
+      },
+      "untracked": {
+       "value": "false",
+       "reason": ""
+      },
+      "conflicts": {
+       "value": "false",
+       "reason": ""
+      },
+      "limitations": [
+       "submodule disk state excluded to avoid recursive helpers"
+      ]
+     }
+    ],
+    "references": [],
+    "bases": [],
+    "files": [],
+    "query": null,
+    "diagnostics": []
+   },
+   "notes": []
+  },
+  {
+   "index": 2,
+   "path": "vendor/lib",
+   "path_encoding": "utf8",
+   "resolved_path": "/w/app/vendor/lib",
+   "origin": "submodule",
+   "parent": 1,
+   "status": "skipped",
+   "error": {
+    "code": "submodule-uninitialized",
+    "message": "registered submodule has no checkout"
+   },
+   "backend": "unknown",
+   "discovery": {
+    "requested": true,
+    "status": "not-applicable",
+    "submodules": 0,
+    "ignored": 0,
+    "deduplicated": 0,
+    "reason": "nested submodules are not traversed"
+   },
+   "duplicate_of": null,
+   "contained_in": 1,
+   "facts": null,
+   "inventory": null,
+   "notes": []
+  }
+ ],
+ "summary": {
+  "entries": 3,
+  "by_status": {
+   "ok": 1,
+   "partial": 1,
+   "error": 0,
+   "skipped": 1
+  },
+  "by_backend": {
+   "git": 2,
+   "jj": 0,
+   "other": 1
+  },
+  "dirty": {
+   "true": 1,
+   "false": 0,
+   "unknown": 1
+  },
+  "stale_workspaces": 0,
+  "foreign_workspaces": 0,
+  "unverified_workspaces": 0,
+  "conflicted_references": 0,
+  "skipped_uninitialized": 1,
+  "discovery_not_applicable": 1,
+  "inventories_omitted": 0
+ },
+ "diagnostics": []
+}
 ```
 
-Exit status for this example: 0. The first entry's embedded `inventory` was validated against `schemas/v1/inventory.schema.json` with the existing contract test helper while writing this spec (Git 2.56.0 era schema, offline); the whole example is validated against `repos.schema.json` by task T002.
+Exit status for this example: 1 (overall `partial`: a repository with a registered gitlink is always `partial` under Git's default inventory scopes). Both embedded `inventory` objects were validated against `schemas/v1/inventory.schema.json` with the existing contract test helper while writing this spec (offline, run in a throwaway test that was not committed); the whole example is validated against `repos.schema.json` by task T002. Values of the embedded inventories follow the code's behavior (known `false` conflicts, the sampling limitation always present); they were not copied from a real run, which the implementation's smoke test provides.
 
 ## Effects
 
 - Reads: each member's repository and worktree metadata as inventory does; the superproject's HEAD `.gitmodules` blob and index entries for discovery; `.git` pointer files of discovered members; `Lstat` of path components.
 - Writes: none to any repository. jj inventories create and remove the inventory's private temporary files outside the target (inherited, disclosed in `boundary.effects`).
 - Network, fetch, hooks, filters, helpers, editors, prompts: none.
-- Processes: Git and jj processes of the inventory operation per member (inherited), plus the three Git discovery invocations of the plan, each through the existing isolated runner. Explicit-path validation, duplicate and nesting checks, `.git` pointer checks and uninitialized skips start no process.
+- Processes: per explicit and discovered entry one identity inspection (the existing `Inspect`: Git or jj processes as that operation starts them), then the inventory operation's processes (inherited). With `--submodules`, only for a parent whose identity is Git-owned: `ls-tree -z -l HEAD -- .gitmodules`, `config --blob HEAD:.gitmodules --null --list --no-includes`, and at most 64 `ls-files --stage -z -- ':(literal)<path>'`, each through the existing isolated runner. Path validation, duplicate and nesting checks, `.git` pointer checks and uninitialized skips start no process. No Git discovery process runs in a jj-owned, GitButler or ambiguous parent.
 
 ## Compatibility
 
