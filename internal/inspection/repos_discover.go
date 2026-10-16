@@ -329,6 +329,7 @@ func discoverSubmodules(ctx context.Context, entries *[]ReposEntry, inspections 
 				Path:         cand.relPath,
 				ResolvedPath: &absP,
 				Origin:       "submodule",
+				Backend:      "unknown",
 				Parent:       &parentIdx,
 				Discovery: ReposDiscovery{
 					Requested: false,
