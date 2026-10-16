@@ -60,14 +60,17 @@ func (a *pinsAuditor) examineOne(re pinsResolvedEntry, reg pinsRegistry) error {
 		} else if a.parent.Err() != nil {
 			return err // cancellation
 		} else {
-			// A submodule whose repository cannot be read is unknown with the reason, not a failed audit.
-			reason := "evidence could not be read: " + boundPinsMessage(err.Error())
-			if sub.Publication.Status == "unknown" {
-				sub.Publication.Reason = reason
-			}
-			if sub.Checkout.Dirty.Reason == "not evaluated" {
-				sub.Checkout.Dirty.Reason = reason
-			}
+			// A repository that cannot be read is not audited: the submodule is refused, which is machine
+			// readable and an error finding, and no field keeps an observation that was never made (spec
+			// question: no dedicated code exists, submodule-path-unsafe is the nearest).
+			msg := "the submodule repository could not be read: " + boundPinsMessage(err.Error())
+			fresh := newPinsSubmodule(re.Entry)
+			fresh.URL.Configured, fresh.URL.HasCredentials = sub.URL.Configured, sub.URL.HasCredentials
+			fresh.Checkout.State = "refused"
+			fresh.Refusal = &PinsRefusal{Code: "submodule-path-unsafe", Message: boundPinsMessage(msg)}
+			fresh.Checkout.Dirty.Reason, fresh.Publication.Reason = "submodule refused", "submodule refused"
+			sub = fresh
+			pending = append(pending, pinsPendingFinding{"submodule-path-unsafe", msg})
 		}
 	}
 	a.r.Submodules = append(a.r.Submodules, sub)
