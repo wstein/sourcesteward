@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	pinsNoEvidenceMessage  = "submodule evidence is not implemented in this revision"
 	pinsJJMessage          = "jj has no Git submodule model; run this in a Git-owned checkout"
 	pinsButlerMessage      = "GitButler-managed workspaces have no supported submodule audit; run this in a Git-owned checkout"
 	pinsAmbiguousMessage   = "ownership markers conflict (jj and GitButler); resolve the ownership before auditing pins"
@@ -44,6 +43,7 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 	}
 	fail := func(message string) PinsResult {
 		r.Status, r.Error = "error", &PinsError{Code: "pins-failed", Message: message}
+		r.Identity, r.Submodules, r.Findings = nil, []PinsSubmodule{}, []PinsFinding{}
 		return finish()
 	}
 	refuse := func(backend, code, message string) PinsResult {
@@ -113,6 +113,11 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 	if identity.Repository != nil && identity.Repository.Bare {
 		return refuse("git", "bare-repository", pinsBareMessage)
 	}
-	// Later work items replace this with registry, checkout and publication evidence.
-	return fail(pinsNoEvidenceMessage)
+	if err := pinsAudit(ctx, abs, identity, &r); err != nil {
+		if ctx.Err() != nil {
+			return fail("pins canceled")
+		}
+		return fail("cannot audit the submodule pins: " + err.Error())
+	}
+	return finish()
 }

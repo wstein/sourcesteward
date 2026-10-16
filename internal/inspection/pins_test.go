@@ -191,7 +191,7 @@ func TestPinsOtherRefusalsUseOnlyGitDetectionProcesses(t *testing.T) {
 		})
 	}
 }
-func TestPinsGitOwnedWorktreeReportsMissingEvidence(t *testing.T) {
+func TestPinsGitOwnedWorktreeWithoutSubmodulesIsComplete(t *testing.T) {
 	main := repo(t)
 	git(t, main, "commit", "-q", "--allow-empty", "-m", "initial")
 	linked := filepath.Join(t.TempDir(), "linked")
@@ -202,10 +202,10 @@ func TestPinsGitOwnedWorktreeReportsMissingEvidence(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, jjLog := pinsSentinels(t)
 			r := Pins(context.Background(), PinsOptions{Path: dir})
-			if r.Status != "error" || r.Backend != "git" || r.Error == nil || r.Error.Code != "pins-failed" || r.Error.Message != "submodule evidence is not implemented in this revision" {
+			if r.Status != "ok" || r.Backend != "git" || r.Error != nil {
 				t.Fatalf("%+v", r)
 			}
-			if r.Boundary.Complete || r.Identity != nil || len(r.Submodules) != 0 || r.Submodules == nil || r.Findings == nil || r.InputPath != dir {
+			if !r.Boundary.Complete || r.Identity == nil || r.Identity.Status != "ok" || len(r.Submodules) != 0 || r.Submodules == nil || r.Findings == nil || r.InputPath != dir {
 				t.Fatalf("%+v", r)
 			}
 			if jjLog() != nil {
