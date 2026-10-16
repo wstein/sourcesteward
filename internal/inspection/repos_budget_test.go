@@ -121,3 +121,40 @@ func TestReposJSONBudgetSeparatesEncodingFromSize(t *testing.T) {
 		t.Fatalf("encoding %v / size %v must be distinguishable", enc, size)
 	}
 }
+
+// The omission itself adds bytes (an error, notes, a changed status). When the inventories that were kept
+// leave less room than that, the final re-check must drop them too, or the result exceeds the bound.
+func TestReposOutputBudgetFinalRecheckAfterOmissionGrowth(t *testing.T) {
+	build := func(keep int) ReposResult {
+		entries := []ReposEntry{reposBudgetEntry(0, "ok", "", reposBudgetInventory(keep))}
+		for i := 1; i < 5; i++ {
+			entries = append(entries, reposBudgetEntry(i, "ok", "", reposBudgetInventory(5<<20)))
+		}
+		return ReposResult{Status: "ok", Boundary: ReposBoundary{Limitations: []string{}}, Diagnostics: []Diagnostic{}, Entries: entries}
+	}
+	// The largest first inventory that still fits when the others are absent.
+	fits := func(n int) bool {
+		r := build(n)
+		for i := 1; i < len(r.Entries); i++ {
+			r.Entries[i].Inventory = nil
+		}
+		return ReposCheckJSONBudget(r) == nil
+	}
+	lo, hi := 0, 9<<20
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fits(mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	res := build(lo)
+	applyOutputBudget(&res)
+	if err := ReposCheckJSONBudget(res); err != nil {
+		t.Fatalf("result exceeds the bound after omission: %v", err)
+	}
+	if res.Status != "error" || res.Summary.InventoriesOmitted != 5 {
+		t.Fatalf("status %s omitted %d", res.Status, res.Summary.InventoriesOmitted)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -146,4 +147,34 @@ func TestReposDataModelInvariants(t *testing.T) {
 		e0 := entries[0].(map[string]any)
 		e0["backend"] = "mercurial"
 	}))
+}
+
+// The contract must state the limits `repos` inherits from the single-repository inventory and the
+// consequence for the exit status, and the refusals `--submodules` inherits from the pin audit.
+func TestReposContractDisclosesInheritedLimits(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(root(t), "specs/023-multi-repo-inventory/contracts/repos.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, want := range []string{
+		"## Inherited limits",
+		"cannot safely observe content attributes",
+		"64 KiB",
+		"inventory record limit exceeded",
+		"1,024",
+		"git-inventory-failed",
+		"exit status 1",
+		"alternates",
+		"commondir",
+		"discovery is not recursive",
+		"submodule is uninitialized",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("contract does not state %q", want)
+		}
+	}
+	if strings.Contains(text, "nested submodules are not traversed") || strings.Contains(text, "registered submodule has no checkout") {
+		t.Error("contract example still carries wording the command does not emit")
+	}
 }

@@ -39,3 +39,16 @@ func TestCommandDocumentationUsesCommandTreeWithoutExecution(t *testing.T) {
 		}
 	}
 }
+
+// The generated command reference lists `stw repos` (the generator walks the real Cobra tree).
+func TestCommandReferenceListsRepos(t *testing.T) {
+	for _, doc := range CommandReference() {
+		if doc.Path == "stw repos" {
+			if !strings.Contains(doc.Usage, "repos PATH...") || !strings.Contains(doc.Flags, "--submodules") || !strings.Contains(doc.Flags, "--json") || !strings.Contains(doc.Long, "Exit statuses") {
+				t.Fatalf("incomplete reference entry: %+v", doc)
+			}
+			return
+		}
+	}
+	t.Fatal("stw repos is missing from the generated command reference")
+}
