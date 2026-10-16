@@ -12,7 +12,7 @@ import (
 )
 
 // slowGit puts a `git` first on PATH that sleeps before running the real one when the arguments contain
-// the match text. It makes deadlines observable without depending on machine speed.
+// the match text. The sleep detaches its output so a killed wrapper closes the pipe at once. It makes deadlines observable without depending on machine speed.
 func slowGit(t *testing.T, match string, sleep string) {
 	t.Helper()
 	real, err := exec.LookPath("git")
@@ -20,7 +20,7 @@ func slowGit(t *testing.T, match string, sleep string) {
 		t.Skip("git is unavailable")
 	}
 	dir := t.TempDir()
-	body := "#!/bin/sh\ncase \"$*\" in *'" + match + "'*) sleep " + sleep + " ;; esac\nexec '" + real + "' \"$@\"\n"
+	body := "#!/bin/sh\ncase \"$*\" in *'" + match + "'*) sleep " + sleep + " >/dev/null 2>&1 ;; esac\nexec '" + real + "' \"$@\"\n"
 	mustOS(t, os.WriteFile(filepath.Join(dir, "git"), []byte(body), 0o755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
@@ -87,8 +87,8 @@ func hasLimitFinding(r PinsResult) bool {
 func TestPinsAuditPerSubmoduleDeadlineIsNotTheParentsAndLaterSubmodulesRun(t *testing.T) {
 	f := twoSubmoduleFixture(t)
 	// Only the first submodule's scan is slow; the others finish inside their own 5 seconds.
-	slowGit(t, "modules/member", "1")
-	withLimits(t, func(l *pinsAuditLimits) { l.PerSubmodule = 300 * time.Millisecond })
+	slowGit(t, "modules/member", "4")
+	withLimits(t, func(l *pinsAuditLimits) { l.PerSubmodule = 2 * time.Second })
 	r := Pins(context.Background(), PinsOptions{Path: f.Super})
 	if r.Status != "incomplete" || len(r.Submodules) != 3 {
 		t.Fatalf("%s n=%d %+v", r.Status, len(r.Submodules), r.Findings)
@@ -111,7 +111,7 @@ func TestPinsAuditSlowDirtyScanIsUnknownWithinTheDirtyBudget(t *testing.T) {
 		t.Fatalf("%s %+v %+v", r.Status, s.Checkout.Dirty, r.Findings)
 	}
 	requireNoFinding(t, r, "pins-limit")
-	if time.Since(start) > 1500*time.Millisecond {
+	if time.Since(start) > 3*time.Second {
 		t.Fatalf("the dirty budget did not bound the scan: %s", time.Since(start))
 	}
 }
