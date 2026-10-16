@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -385,9 +386,9 @@ func TestReposDeduplication(t *testing.T) {
 
 	commonDir := filepath.Join(resolved1, ".git")
 
-	inspectCount := 0
+	var inspectCount atomic.Int32 // workers call the fakes concurrently
 	fakeInspect := func(ctx context.Context, path string) Result {
-		inspectCount++
+		inspectCount.Add(1)
 		wt := path
 		return Result{
 			Status:  "ok",
@@ -399,9 +400,9 @@ func TestReposDeduplication(t *testing.T) {
 			},
 		}
 	}
-	inventoryCount := 0
+	var inventoryCount atomic.Int32
 	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		inventoryCount++
+		inventoryCount.Add(1)
 		return InventoryResult{Status: "ok", Backend: "git"}
 	}
 
@@ -439,13 +440,13 @@ func TestReposDeduplication(t *testing.T) {
 	}
 
 	// Inventory was only run for entry 0!
-	if inventoryCount != 1 {
-		t.Errorf("expected exactly 1 inventory run, got %d", inventoryCount)
+	if inventoryCount.Load() != 1 {
+		t.Errorf("expected exactly 1 inventory run, got %d", inventoryCount.Load())
 	}
 
 	// Inspect was NOT run for identical explicit path (only for dir1 and dir2)
-	if inspectCount != 2 {
-		t.Errorf("expected 2 inspect calls (not for identical path), got %d", inspectCount)
+	if inspectCount.Load() != 2 {
+		t.Errorf("expected 2 inspect calls (not for identical path), got %d", inspectCount.Load())
 	}
 }
 
