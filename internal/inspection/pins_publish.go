@@ -237,7 +237,7 @@ func pinsNestedPresent(run *pinsRunner, repo pinsGitRepo, head pinsHead) (bool, 
 	if head.Unborn || head.Commit == nil {
 		return false, nil
 	}
-	out, err := run.run(pinsCall{Repo: repo, Args: []string{"ls-tree", "HEAD", ".gitmodules"}})
+	out, err := run.run(pinsCall{Repo: repo, Args: []string{"ls-tree", *head.Commit, ".gitmodules"}})
 	if err != nil {
 		return false, err
 	}

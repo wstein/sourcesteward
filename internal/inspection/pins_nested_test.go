@@ -55,7 +55,7 @@ func TestPinsNestedStartsOnlyAllowlistedGitCommands(t *testing.T) {
 	if _, err := pinsNestedPresent(c.run, c.repo, head); err != nil {
 		t.Fatal(err)
 	}
-	requireAllowlisted(t, gitLog(), "ls-tree HEAD .gitmodules")
+	requireAllowlisted(t, gitLog(), "ls-tree <OID> .gitmodules")
 }
 
 func TestPinsSubmoduleBackendMarkers(t *testing.T) {
