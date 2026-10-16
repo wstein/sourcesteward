@@ -513,3 +513,25 @@ func TestPinsFailedResultNeverKeepsAnIdentity(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func longPaths(n, comps int) []string {
+	paths := make([]string, n)
+	for i := range paths {
+		parts := make([]string, comps)
+		for j := range parts {
+			parts[j] = fmt.Sprintf("%s%03d%03d", strings.Repeat("x", 190), i, j)
+		}
+		paths[i] = strings.Join(parts, "/")
+	}
+	return paths
+}
+
+func TestPinsAuditEarlyBoundStillCarriesTheIdentity(t *testing.T) {
+	dir, oid := newBareSuper(t)
+	gitlink(t, dir, oid, longPaths(256, 19)...) // about 3.7 KB each: enumeration exceeds the 1 MiB budget
+	git(t, dir, "commit", "-qm", "long")
+	r := auditOf(t, dir)
+	if r.Status != "incomplete" || r.Identity == nil || r.Identity.Status != "ok" || r.Identity.Backend != "git" {
+		t.Fatalf("%s identity=%v findings=%+v", r.Status, r.Identity, r.Findings)
+	}
+}

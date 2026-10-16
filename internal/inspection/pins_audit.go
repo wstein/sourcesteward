@@ -134,6 +134,8 @@ func pinsAudit(ctx context.Context, abs string, identity Result, r *PinsResult) 
 			a.superBrnch = &b
 		}
 	}
+	// An incomplete result carries the identity even when a bound stops the audit early; a failure clears it.
+	r.Identity = &identity
 	err := a.audit(abs, identity)
 	if err != nil {
 		if msg, ok := a.limitText(err); ok {
@@ -146,7 +148,6 @@ func pinsAudit(ctx context.Context, abs string, identity Result, r *PinsResult) 
 }
 
 func (a *pinsAuditor) audit(abs string, identity Result) error {
-	r := a.r
 	layout, err := newPinsSuperLayout(a.run, abs)
 	if err != nil {
 		return err
@@ -168,7 +169,6 @@ func (a *pinsAuditor) audit(abs string, identity Result) error {
 	if err != nil {
 		return err
 	}
-	r.Identity = &identity
 	if reg.Gitmodules.Modified {
 		a.add("gitmodules-modified", nil, "the registration source differs: the HEAD .gitmodules is not a regular file, or the staged or worktree .gitmodules differs from it; registration is read from the HEAD blob")
 	}
