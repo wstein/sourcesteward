@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -356,7 +357,24 @@ var pinsAllowlist = []string{
 	"config --file - --null --list --no-includes",
 	"config --local --null --list --no-includes",
 	"config --file <PATH> --null --list --no-includes",
+	// WI3 evidence invocations (research.md), after the registry and validation ones above.
+	"rev-parse HEAD",
+	"cat-file -e <OID>^{commit}",
+	"merge-base <OID> <OID>",
+	"rev-list --count --max-count=10001 <OID>..<OID>",
+	"for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/",
+	"ls-tree HEAD .gitmodules",
+	"diff-index --cached --no-ext-diff --no-textconv HEAD",
+	"ls-files --stage --debug -z",
+	"ls-files --others --exclude-standard -z",
+	"symbolic-ref -q <REMOTE-REF>",
+	"rev-parse --verify --quiet <REMOTE-REF>",
 }
+
+var (
+	pinsOIDToken       = regexp.MustCompile(`[0-9a-f]{64}|[0-9a-f]{40}`)
+	pinsRemoteRefToken = regexp.MustCompile(`refs/remotes/[^ ]+`)
+)
 
 // pinsShape reduces one recorded invocation to its allowlist shape and reports whether the explicit
 // repository flags were present.
@@ -381,6 +399,7 @@ func pinsShape(t *testing.T, line string) (shape string, explicit bool) {
 		if f[i] == "--" && i+1 < len(f) {
 			f[i+1] = "<REF>"
 		}
+		f[i] = pinsRemoteRefToken.ReplaceAllString(pinsOIDToken.ReplaceAllString(f[i], "<OID>"), "<REMOTE-REF>")
 	}
 	return strings.Join(f, " "), explicit
 }

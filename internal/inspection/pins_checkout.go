@@ -29,6 +29,9 @@ type pinsRepoFacts struct {
 	Shallow bool
 	Partial bool
 	Remotes []pinsRemote
+	// FileMode and Symlinks are core.fileMode and core.symlinks of the repository's own configuration,
+	// both true when unset; the dirty comparison needs them to read the recorded mode.
+	FileMode, Symlinks bool
 }
 
 // pinsRelation is the comparison of two commits; Ahead counts the subject's commits the reference lacks
@@ -43,12 +46,12 @@ type pinsRelation struct {
 // pinsReadFacts reads the submodule's own configuration once (remotes, partial clone) and notes a
 // shallow file. The configuration read is the same filtered `config --local` shape as the remote URLs.
 func pinsReadFacts(run *pinsRunner, d pinsSubmoduleDirs) (pinsRepoFacts, error) {
-	var facts pinsRepoFacts
+	facts := pinsRepoFacts{FileMode: true, Symlinks: true}
 	repo := pinsGitRepo{GitDir: d.GitDir, WorkTree: d.WorkTree}
 	out, err := run.run(pinsCall{Repo: repo, Args: []string{"config", "--local", "--null", "--list", "--no-includes"}, Keep: func(rec []byte) bool {
 		k, _, _ := strings.Cut(string(rec), "\n")
 		k = strings.ToLower(k)
-		return strings.HasPrefix(k, "remote.") && (strings.HasSuffix(k, ".url") || strings.HasSuffix(k, ".promisor") || strings.HasSuffix(k, ".partialclonefilter")) || strings.HasPrefix(k, "extensions.partialclone")
+		return strings.HasPrefix(k, "remote.") && (strings.HasSuffix(k, ".url") || strings.HasSuffix(k, ".promisor") || strings.HasSuffix(k, ".partialclonefilter")) || strings.HasPrefix(k, "extensions.partialclone") || k == "core.filemode" || k == "core.symlinks"
 	}})
 	if err != nil {
 		return facts, err
@@ -59,6 +62,14 @@ func pinsReadFacts(run *pinsRunner, d pinsSubmoduleDirs) (pinsRepoFacts, error) 
 	for _, kv := range parsePinsConfig(out.Stdout) {
 		key := strings.ToLower(kv.Key)
 		switch {
+		case key == "core.filemode" || key == "core.symlinks":
+			if b := pinsParseBool(kv); b != nil {
+				if key == "core.filemode" {
+					facts.FileMode = *b
+				} else {
+					facts.Symlinks = *b
+				}
+			}
 		case strings.HasPrefix(key, "extensions.partialclone"):
 			facts.Partial = facts.Partial || kv.HasValue && kv.Value != ""
 		case strings.HasSuffix(key, ".promisor"):
