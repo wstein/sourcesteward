@@ -79,9 +79,11 @@ func TestPinsReadSmallRefusesAFileSwappedBeforeOpen(t *testing.T) {
 	// Replaced by a different regular file: the identity check stops it.
 	rmAll(t, filepath.Join(dir, "f"))
 	writeFile(t, filepath.Join(dir, "f"), "ok")
+	// The new file is created while the old one still exists and then renamed
+	// over it, so the two never share an inode (remove-then-create may reuse it).
 	pinsBeforeOpen = func() {
-		mustOS(t, os.Remove(filepath.Join(dir, "f")))
-		writeFile(t, filepath.Join(dir, "f"), "swapped")
+		writeFile(t, filepath.Join(dir, "f.new"), "swapped")
+		mustRename(t, filepath.Join(dir, "f.new"), filepath.Join(dir, "f"))
 	}
 	if b, err := pinsReadSmall(dir, "f", 100); err == nil {
 		t.Fatalf("a swapped file was read: %q", b)
