@@ -127,7 +127,7 @@ func pinsSections(kvs []pinsConfigKV) map[string]*pinsSection {
 	m := map[string]*pinsSection{}
 	for _, kv := range kvs {
 		name, variable, ok := splitSubmoduleKey(kv.Key)
-		if !ok {
+		if !ok || !kv.HasValue {
 			continue
 		}
 		s := m[name]
@@ -327,10 +327,12 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 		return parsePinsConfig(out.Stdout), true, nil
 	}
 	var base []pinsConfigKV
+	basePresent := false
 	g := &reg.Gitmodules
 	switch {
 	case reg.HeadUnborn:
 		g.Source = "none"
+		basePresent = g.StagedKind != "absent"
 		if g.StagedKind == "regular" {
 			kvs, ok, err := readBlob(":.gitmodules")
 			if err != nil {
@@ -346,7 +348,7 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 			g.RegistrationUnknown = true
 		}
 	case g.HeadKind == "regular":
-		g.Source = "head"
+		g.Source, basePresent = "head", true
 		kvs, ok, err := readBlob("HEAD:.gitmodules")
 		if err != nil {
 			return reg, err
@@ -359,9 +361,9 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 	case g.HeadKind == "absent":
 		g.Source = "head"
 	default: // symlink, gitlink: the blob is not read
-		g.Source, g.RegistrationUnknown = "head", true
+		g.Source, basePresent, g.RegistrationUnknown = "head", true, true
 	}
-	if !reg.HeadUnborn && g.HeadKind != "absent" && g.HeadKind != "regular" {
+	if g.RegistrationUnknown || (!reg.HeadUnborn && g.HeadKind != "absent" && g.HeadKind != "regular") {
 		g.Modified = true
 	}
 	// Object names compare absent as empty, so an unborn HEAD with a staged blob differs too.
@@ -374,7 +376,7 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 			stagedKVs = kvs
 		}
 	}
-	if g.Worktree, err = pinsWorktreeGitmodules(run, l, repo, base); err != nil {
+	if g.Worktree, err = pinsWorktreeGitmodules(run, l, repo, base, basePresent, !g.RegistrationUnknown); err != nil {
 		return reg, err
 	}
 	g.Modified = g.Modified || g.StagedDiffers || g.Worktree != "same"
@@ -403,11 +405,15 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 		name, variable, _ := splitSubmoduleKey(kv.Key)
 		switch variable {
 		case "url":
-			hasURL[name] = true
+			if kv.HasValue && kv.Value != "" {
+				hasURL[name] = true
+			}
 		case "active":
 			activeCfg[name] = pinsParseBool(kv)
 		case "gitdir":
-			gitdirCfg[name] = kv.Value
+			if kv.HasValue && kv.Value != "" {
+				gitdirCfg[name] = kv.Value
+			}
 		}
 	}
 
@@ -421,7 +427,7 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 		seen := map[string]bool{}
 		for _, n := range names {
 			s := sections[n]
-			if s.path == nil {
+			if s.path == nil || *s.path == "" {
 				continue
 			}
 			if staged {
@@ -492,12 +498,12 @@ func hasActive(m map[string]*bool, name string) bool { _, ok := m[name]; return 
 // pinsWorktreeGitmodules compares the worktree .gitmodules with the registration baseline. It lstats the
 // file, never follows a symlink, reads a regular file with a bounded no-follow open and hands the bytes
 // to Git on standard input, so Git never opens the worktree path (no race and no filter).
-func pinsWorktreeGitmodules(run *pinsRunner, l pinsSuperLayout, repo pinsGitRepo, base []pinsConfigKV) (string, error) {
+func pinsWorktreeGitmodules(run *pinsRunner, l pinsSuperLayout, repo pinsGitRepo, base []pinsConfigKV, basePresent, baseKnown bool) (string, error) {
 	info, err := pinsLstat(l.WorkTree, ".gitmodules")
 	var link *pinsSymlinkError
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		if len(base) == 0 {
+		if !basePresent {
 			return "same", nil
 		}
 		return "absent", nil
@@ -519,7 +525,7 @@ func pinsWorktreeGitmodules(run *pinsRunner, l pinsSuperLayout, repo pinsGitRepo
 	if out.Exit != 0 {
 		return "unreadable", nil
 	}
-	if sameConfig(parsePinsConfig(out.Stdout), base) {
+	if basePresent && baseKnown && sameConfig(parsePinsConfig(out.Stdout), base) {
 		return "same", nil
 	}
 	return "different", nil
