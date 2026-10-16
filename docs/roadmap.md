@@ -3,7 +3,23 @@
 SourceSteward is an early version-control toolkit. Help/version, bounded native Git/jj identity inspection, qualified inventory, isolated task workspace creation and bounded local reference/workspace tidy are implemented.
 No model, GitButler installation or cloud account is required to run those commands.
 
-## Foundation — current milestone
+## Implemented command families
+
+The [command catalog](commands.md) contains worked examples, effects and prerequisites.
+Current commands are `help`, `version`, `inspect`, `inventory`, `workspace plan/apply`,
+`workspace handoff/retire-plan`, `tidy plan/apply`, `hosting repo/pr/ci` and the optional
+jj-only `gh jj repo/pr/ci` extension. PR/CI reads require authenticated GitHub access;
+local inspection and workspace/tidy workflows do not require a cloud account.
+
+## Planned features — no current command implementation
+
+Specs 012–019 cover stack inspection/diffs, checkpoint/resume, conflict diagnosis and
+integration preflight, restacking, stacked PR coordination/writes, work transfer,
+change editing and upstream synchronization. Native GitButler integration is also
+planned. Current inventory, bounded recovery evidence and PR/CI reads do not implement
+those broader features. The following design directions retain those distinctions.
+
+## Implemented foundation
 Go/Cobra command parsing, text/JSON version information, Spec Kit workflow, automated
 source checks, original family branding, versioned JSON schemas and Hugo-generated GitHub
 Pages guides/command reference. Git and jj are Tier 1 peers by policy; native jj final cross-platform
@@ -24,7 +40,7 @@ results disclose unknown disk freshness. Minimum/current conformance and indepen
 review are required; see the [acceptance record](../specs/008-jj-inspection/verification.md)
 for completed macOS/Linux evidence and final handoff gates.
 
-## Diagnose
+## Diagnose — planned
 Explain problems and propose repair options. Repository text is data, never instructions.
 Report unsupported states and uncertainty instead of inventing a successful diagnosis.
 

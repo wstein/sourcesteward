@@ -1,5 +1,6 @@
 # Repository knowledge map
 
+- [Implemented commands and examples](commands.md): current command coverage, effects and planned boundaries.
 - [Project overview](../README.md): implemented scope and first commands.
 - [Agent guide](agent-guide.md): task-relevant setup and current CLI contracts.
 - [Troubleshooting index](../llms.txt): agent-readable documentation, source and tests.
