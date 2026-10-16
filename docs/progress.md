@@ -1,6 +1,10 @@
 # Progress and handoff
 
-## Active work: Spec 011 workspace and reference tidy
+## Active work: Spec 020 shared hosting inspection
+
+Analyzed design and shared Go operations now provide `stw hosting repo|pr|ci` and an optional jj-only `gh jj` entry point. Local resolution, explicit PR/CI reads, independent schema and private extension conformance are implemented. Source review and exact acceptance evidence are tracked in [Spec 020 verification](../specs/020-gh-jj-inspection/verification.md). Linux hosted minimum/current acceptance remains a handoff gate until CI executes. No live extension installation, release, API write or BundleDock deletion is authorized by these observations.
+
+## Earlier work: Spec 011 workspace and reference tidy
 
 Spec 009 inventory and Spec 010 isolated workspace creation, handoff and retirement
 preflight are merged. Spec 010 source and fixture follow-ups landed through PRs

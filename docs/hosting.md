@@ -43,7 +43,7 @@ CI samples checks and commit statuses at the PR's exact head SHA, then rechecks
 head/base identities. Missing permissions, malformed or incomplete pages, moved
 heads and exhausted bounds produce incomplete error results. No aggregate passing
 CI, required-check satisfaction, review approval or merge eligibility is inferred.
-Evidence is sampled rather than transactional. Limits are 30 seconds total,
+Evidence is sampled rather than transactional. API text reflects gh's response processing and is not a byte-for-byte raw HTTP capture. Limits are 30 seconds total,
 1 MiB per subprocess output/final JSON result, 10 pages per collection and 1000
 combined CI records. Native inspection retains its tighter bounds.
 

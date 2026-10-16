@@ -9,40 +9,40 @@
 
 ## Phase 2: Foundation
 
-- [ ] T002 Define shared Options/Result and ValidateOptions in internal/hosting/hosting.go, with schema_version1, nullable observation objects, non-null arrays, explicit complete/network boundaries and usage validation; begin with failing tests in internal/hosting/hosting_test.go (FR-001, FR-008, FR-010).
+- [X] T002 Define shared Options/Result and ValidateOptions in internal/hosting/hosting.go, with schema_version1, nullable observation objects, non-null arrays, explicit complete/network boundaries and usage validation; begin with failing tests in internal/hosting/hosting_test.go (FR-001, FR-008, FR-010).
 
 ## Phase 3: US1 — Local repository resolution (P1, MVP)
 
 **Independent test**: Temporary Git/worktree and native colocated/standalone/secondary jj resolve unchanged local state with gh absent; ambiguity and wrong ownership refuse.
 
-- [ ] T003 [P] [US1] Add failing native remote tests then implement inspection.Remotes(ctx, identity Result) RemoteResult in internal/inspection/remotes.go and internal/inspection/remotes_test.go, preserving native sandbox/config isolation, bounded fetch/push observations and before/after identity/remote consistency (FR-002, FR-004).
-- [ ] T004 [US1] Add failing URL/selection tests then implement local resolution in internal/hosting/resolve.go and internal/hosting/resolve_test.go: host defaults github.com, explicit host is validated, no origin/main assumption, owner/name and remote selectors, deduplication/provenance, credential/query/fragment rejection and incomplete/ambiguous refusal (FR-003, FR-004).
+- [X] T003 [P] [US1] Add failing native remote tests then implement inspection.Remotes(ctx, identity Result) RemoteResult in internal/inspection/remotes.go and internal/inspection/remotes_test.go, preserving native sandbox/config isolation, bounded fetch/push observations and before/after identity/remote consistency (FR-002, FR-004).
+- [X] T004 [US1] Add failing URL/selection tests then implement local resolution in internal/hosting/resolve.go and internal/hosting/resolve_test.go: host defaults github.com, explicit host is validated, no origin/main assumption, owner/name and remote selectors, deduplication/provenance, credential/query/fragment rejection and incomplete/ambiguous refusal (FR-003, FR-004).
 
 ## Phase 4: US2 — Explicit PR inspection (P1)
 
 **Independent test**: Fake gh records only fixed GET paths; numbered PR identity validates; authentication/missing/malformed/cancelled evidence refuses without exposing secrets.
 
-- [ ] T005 [P] [US2] Add failing transport process tests then implement bounded neutral-cwd gh adapter in internal/hosting/gh.go and internal/hosting/gh_test.go; support initial tested gh 2.102.0 compatibility, 30-second total deadline, 1 MiB stdout/stderr limits, trusted executable resolution, sanitized environment and declared user auth inputs (FR-006, FR-007, FR-008).
-- [ ] T006 [US2] Add failing numbered PR tests then implement internal/hosting/pr.go and internal/hosting/pr_test.go, requiring positive explicit number, matching base repository and full head/base SHA, owner/name head/base repository strings, bounded sanitized diagnostics and no heuristic mapping (FR-005, FR-010, FR-011).
+- [X] T005 [P] [US2] Add failing transport process tests then implement bounded neutral-cwd gh adapter in internal/hosting/gh.go and internal/hosting/gh_test.go; support initial tested gh 2.102.0 compatibility, 30-second total deadline, 1 MiB stdout/stderr limits, trusted executable resolution, sanitized environment and declared user auth inputs (FR-006, FR-007, FR-008).
+- [X] T006 [US2] Add failing numbered PR tests then implement internal/hosting/pr.go and internal/hosting/pr_test.go, requiring positive explicit number, matching base repository and full head/base SHA, owner/name head/base repository strings, bounded sanitized diagnostics and no heuristic mapping (FR-005, FR-010, FR-011).
 
 ## Phase 5: US3 — Exact-head CI inspection (P1)
 
 **Independent test**: Deterministic paginated checks/statuses at exact PR head preserve individual evidence; moved heads, duplicate IDs, inaccessible data and limit exhaustion refuse completeness.
 
-- [ ] T007 [US3] Add failing CI tests then implement internal/hosting/ci.go and internal/hosting/ci_test.go: fixed exact-SHA endpoints, manual at most 10 pages per collection and 1000 combined records, duplicate/shape/total checks, final PR identity resample, partial evidence with complete=false on failure and no merge/pass aggregate (FR-008, FR-009).
+- [X] T007 [US3] Add failing CI tests then implement internal/hosting/ci.go and internal/hosting/ci_test.go: fixed exact-SHA endpoints, manual at most 10 pages per collection and 1000 combined records, duplicate/shape/total checks, final PR identity resample, partial evidence with complete=false on failure and no merge/pass aggregate (FR-008, FR-009).
 
 ## Phase 6: US4 — Shared CLI/schema and conformance (P1)
 
 **Independent test**: Shared normalized JSON/human observations through both entry points; extension rejects Git; real gh dispatch works in isolated private installation; old schemas remain valid.
 
-- [ ] T008 [P] [US4] Add failing command tests then implement shared parsing/rendering in internal/cli/hosting.go and internal/cli/hosting_test.go plus thin cancellation entry point cmd/gh-jj/main.go; preserve exit0/1/2 and escaped human text with no CLI process/network execution (FR-001, FR-002, FR-010).
-- [ ] T009 [P] [US4] Define schemas/v1/hosting.schema.json and real success/error fixtures in internal/cli/testdata/; validate offline complete output including retained partial failures, nullability, error diagnostics and 1 MiB final serialization bound while regressing existing published contracts (FR-008, FR-010).
-- [ ] T010 [US4] Add make extension -> bin/gh-jj/gh-jj in Makefile; document optional local directory installation and extension-name collision in docs/hosting.md, without installing in the real user profile or creating release automation (FR-011).
-- [ ] T011 [US4] Extend scripts/check-architecture.py and native conformance scripts/CI to cover both command entry points, minimum/current Git/jj ownership/effect sentinels and real gh dispatch in temporary GH_CONFIG_DIR; mandatory missing tools/execution block acceptance rather than skip (FR-004, FR-012).
+- [X] T008 [P] [US4] Add failing command tests then implement shared parsing/rendering in internal/cli/hosting.go and internal/cli/hosting_test.go plus thin cancellation entry point cmd/gh-jj/main.go; preserve exit0/1/2 and escaped human text with no CLI process/network execution (FR-001, FR-002, FR-010).
+- [X] T009 [P] [US4] Define schemas/v1/hosting.schema.json and real success/error fixtures in internal/cli/testdata/; validate offline complete output including retained partial failures, nullability, error diagnostics and 1 MiB final serialization bound while regressing existing published contracts (FR-008, FR-010).
+- [X] T010 [US4] Add make extension -> bin/gh-jj/gh-jj in Makefile; document optional local directory installation and extension-name collision in docs/hosting.md, without installing in the real user profile or creating release automation (FR-011).
+- [X] T011 [US4] Extend scripts/check-architecture.py and native conformance scripts/CI to cover both command entry points, minimum/current Git/jj ownership/effect sentinels and real gh dispatch in temporary GH_CONFIG_DIR; mandatory missing tools/execution block acceptance rather than skip (FR-004, FR-012).
 
 ## Phase 7: Review and handoff
 
-- [ ] T012 Run quickstart scenarios and independent source/security/contract review, fix findings, run make check plus race/native conformance, and record exact actual evidence and remaining hosted gates in specs/020-gh-jj-inspection/verification.md (FR-012, SC-001–SC-004).
+- [X] T012 Run quickstart scenarios and independent source/security/contract review, fix findings, run make check plus race/native conformance, and record exact actual evidence and remaining hosted gates in specs/020-gh-jj-inspection/verification.md (FR-012, SC-001–SC-004).
 - [ ] T013 Update ARCHITECTURE.md, docs/README.md, docs/json-contracts.md, docs/agent-guide.md, docs/progress.md, docs/feature-status.json and llms.txt with bounded implemented capabilities and deferred release/mutation scope; commit focused Conventional Commits and open a PR without merge/release/live installation or remote mutation (FR-010, FR-011).
 
 ## Dependencies and execution order
