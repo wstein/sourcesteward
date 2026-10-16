@@ -159,9 +159,9 @@
     },
     {
       "id": "023-multi-repo-inventory",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/023-multi-repo-inventory/spec.md",
-      "evidence": null
+      "evidence": "../specs/023-multi-repo-inventory/verification.md"
     }
   ]
 }
