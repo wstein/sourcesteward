@@ -5,10 +5,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
+	ghapi "github.com/cli/go-gh/v2/pkg/api"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,11 +25,16 @@ const maxRecords = 1000
 type boundedBuffer struct {
 	data     bytes.Buffer
 	overflow bool
+	limit    int
 }
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
 	n := len(p)
-	left := maxBytes - b.data.Len()
+	limit := b.limit
+	if limit == 0 {
+		limit = maxBytes
+	}
+	left := limit - b.data.Len()
 	if n > left {
 		b.overflow = true
 		p = p[:left]
@@ -37,6 +46,7 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 type ghAPI struct {
 	executable, dir, host string
 	env                   []string
+	client                *http.Client
 }
 
 func ghEnvironment() []string {
@@ -60,6 +70,12 @@ func inside(path, root string) bool {
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 func newGH(ctx context.Context, target, host string) (*ghAPI, func(), error) {
+	return newGHWithTransport(ctx, target, host, nil)
+}
+func newGHWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*ghAPI, func(), error) {
+	if !validHost(host) {
+		return nil, func() {}, errors.New("invalid selected API host")
+	}
 	canonicalTarget, targetErr := filepath.EvalSymlinks(target)
 	if targetErr == nil {
 		target = canonicalTarget
@@ -114,6 +130,16 @@ func newGH(ctx context.Context, target, host string) (*ghAPI, func(), error) {
 		cleanup()
 		return nil, func() {}, errors.New("hosting reads require GitHub CLI 2.102.0 or newer")
 	}
+	token, err := api.token(ctx)
+	if err != nil {
+		cleanup()
+		return nil, func() {}, err
+	}
+	api.client, err = newSDKClient(host, token, dir, rt)
+	if err != nil {
+		cleanup()
+		return nil, func() {}, errors.New("cannot initialize bounded hosting transport")
+	}
 	return api, cleanup, nil
 }
 func supportedGH(s string) bool {
@@ -127,12 +153,17 @@ func supportedGH(s string) bool {
 	return e == nil && f == nil && g == nil && (a > 2 || (a == 2 && (b > 102 || (b == 102 && c >= 0))))
 }
 func (api *ghAPI) run(ctx context.Context, args ...string) ([]byte, error) {
+	return api.runLimited(ctx, maxBytes, args...)
+}
+func (api *ghAPI) runLimited(parent context.Context, limit int, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, api.executable, args...)
 	cmd.Dir = api.dir
 	cmd.Env = api.env
 	cmd.Stdin = strings.NewReader("")
 	cmd.WaitDelay = time.Second
-	var out, errout boundedBuffer
+	out, errout := boundedBuffer{limit: limit}, boundedBuffer{limit: limit}
 	cmd.Stdout = &out
 	cmd.Stderr = &errout
 	err := cmd.Run()
@@ -147,11 +178,128 @@ func (api *ghAPI) run(ctx context.Context, args ...string) ([]byte, error) {
 	}
 	return out.data.Bytes(), nil
 }
-func (api *ghAPI) get(ctx context.Context, endpoint string) ([]byte, error) {
-	if !strings.HasPrefix(endpoint, "repos/") || strings.ContainsAny(endpoint, "{}\r\n") {
-		return nil, fmt.Errorf("invalid fixed API endpoint")
+func (api *ghAPI) token(parent context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	raw, err := api.runLimited(ctx, 16*1024, "auth", "token", "--hostname", api.host)
+	if err != nil {
+		return "", errors.New("gh authentication unavailable; check selected-host credentials")
 	}
-	return api.run(ctx, "api", "--hostname", api.host, "--method", "GET", endpoint, "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28")
+	token := strings.TrimSuffix(string(raw), "\n")
+	if len(token) == 0 {
+		return "", errors.New("gh authentication returned an invalid token")
+	}
+	for _, b := range []byte(token) {
+		if b < 33 || b > 126 {
+			return "", errors.New("gh authentication returned an invalid token")
+		}
+	}
+	return token, nil
+}
+
+var fixedEndpoint = regexp.MustCompile(`^repos/[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*/(pulls/[1-9][0-9]*|commits/[0-9a-f]{40}/(check-runs|statuses)\?per_page=100&page=([1-9]|10))$`)
+
+func apiDestination(host string) (string, string) {
+	if host == "github.com" || strings.HasSuffix(host, ".ghe.com") {
+		return "api." + host, "/"
+	}
+	return host, "/api/v3/"
+}
+
+var errBodyLimit = errors.New("hosting response exceeded the one MiB limit")
+
+type cappedBody struct {
+	io.ReadCloser
+	remaining int
+}
+
+func (b *cappedBody) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if b.remaining == 0 {
+		var probe [1]byte
+		n, e := b.ReadCloser.Read(probe[:])
+		if n > 0 {
+			return 0, errBodyLimit
+		}
+		return 0, e
+	}
+	if len(p) > b.remaining {
+		p = p[:b.remaining]
+	}
+	n, e := b.ReadCloser.Read(p)
+	b.remaining -= n
+	return n, e
+}
+
+type guardedTransport struct {
+	next         http.RoundTripper
+	host, prefix string
+}
+
+func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !fixedEndpoint.MatchString(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
+		if req.URL.RawQuery != "" {
+			return "?" + req.URL.RawQuery
+		}
+		return ""
+	}()) {
+		return nil, errors.New("hosting request refused outside fixed read-only destination")
+	}
+	res, err := t.next.RoundTrip(req)
+	if err != nil {
+		return nil, errors.New("hosting HTTP read failed")
+	}
+	if res == nil || res.Body == nil {
+		return nil, errors.New("hosting HTTP response is unavailable")
+	}
+	if enc := res.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
+		res.Body.Close()
+		return nil, errors.New("compressed hosting responses are unsupported")
+	}
+	if res.ContentLength > maxBytes {
+		res.Body.Close()
+		return nil, errBodyLimit
+	}
+	res.Body = &cappedBody{ReadCloser: res.Body, remaining: maxBytes}
+	return res, nil
+}
+func newSDKClient(host, token, dir string, rt http.RoundTripper) (*http.Client, error) {
+	destination, prefix := apiDestination(host)
+	if rt == nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.DisableCompression = true
+		rt = transport
+	}
+	return ghapi.NewHTTPClient(ghapi.ClientOptions{Host: host, APIHost: destination, AuthToken: token, Transport: guardedTransport{next: rt, host: destination, prefix: prefix}, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("hosting redirects are unsupported") }, LogIgnoreEnv: true, CacheDir: dir, SkipDefaultHeaders: true, Headers: map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "SourceSteward"}})
+}
+func (api *ghAPI) get(ctx context.Context, endpoint string) ([]byte, error) {
+	if !fixedEndpoint.MatchString(endpoint) {
+		return nil, errors.New("invalid fixed API endpoint")
+	}
+	host, prefix := apiDestination(api.host)
+	u := url.URL{Scheme: "https", Host: host, Path: prefix + strings.SplitN(endpoint, "?", 2)[0]}
+	if _, query, ok := strings.Cut(endpoint, "?"); ok {
+		u.RawQuery = query
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, errors.New("cannot prepare hosting read")
+	}
+	res, err := api.client.Do(req)
+	if err != nil {
+		return nil, errors.New("hosting HTTP read failed; check selected-host authentication, access and rate limits")
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
+	if err != nil || len(body) > maxBytes {
+		return nil, errors.New("hosting response exceeded its bounds or could not be read")
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, errors.New("hosting HTTP read failed; check selected-host authentication, access and rate limits")
+	}
+	return body, nil
 }
 
 // Resolve existing symlinks even when a final credential file or directory is absent.
