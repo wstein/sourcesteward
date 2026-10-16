@@ -13,32 +13,57 @@ Inspect state. Understand the plan. Act with confidence.
 
 [Project website](https://wstein.github.io/sourcesteward/) — overview, approach and roadmap.
 
-SourceSteward is an early Go/Cobra scaffold inspired by the convenience of
+SourceSteward is a pre-release Go/Cobra toolkit inspired by the convenience of
 [nvie/git-toolbelt](https://github.com/nvie/git-toolbelt) and the human/agent workflows of
-[GitButler](https://gitbutler.com/). Its planned focus is predictable inspection,
+[GitButler](https://gitbutler.com/). Its focus is predictable inspection,
 evidence-based local cleanup and worktree-aware operations, with native Git/jj support and separately planned GitButler integration.
 No implementation code is copied from those projects.
 
-**Current scope:** help/version, bounded read-only Git/jj identity inspection and qualified workspace/state/reference inventory, reviewable isolated native Git/jj task workspace creation, versioned JSON schemas, specifications, source CI and the project site.
-Evidence-based local reference tidy planning and explicitly authorized cleanup are implemented; owned task retirement is implemented through separate reviewed plans and explicit authorization; general recovery and native GitButler integration remain planned. See [tidy](docs/tidy.md) for proof and retention limits. See [task workspaces](docs/workspaces.md) for creation, handoff and retirement preparation. Inventory exposes explicit native capability limits; see [inventory](docs/inventory.md).
-Shared read-only GitHub repository/PR/CI inspection is available through `stw hosting` and the optional `gh jj` entry point; see [GitHub inspection](docs/hosting.md).
-Spec 008 implements native jj inspection; final cross-platform acceptance is tracked in its [verification record](specs/008-jj-inspection/verification.md).
+**Implemented:** native Git/jj inspection and inventory, isolated task workspace creation,
+owned-workspace handoff/retirement, evidence-based local branch/bookmark tidy, and
+read-only GitHub repository/PR/CI inspection. Git and jj are Tier 1 peers; colocated
+repositories use native jj. All data commands have human and versioned JSON output.
+
+**Planned:** stack inspection/diffs, checkpoint/resume, conflict diagnosis, restacking,
+stacked PR writes, work transfer, change editing, upstream synchronization and native
+GitButler integration. Bounded recovery evidence is not automatic restoration.
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
 [Specification](specs/001-project-foundation/spec.md) ·
 [Plan](specs/001-project-foundation/plan.md) · [Tasks](specs/001-project-foundation/tasks.md)
 
-## Try the scaffold
+## Try SourceSteward
 
 Requires Go 1.27.2 or later. From the repository root:
 
 ```sh
-go run ./cmd/stw --help
-go run ./cmd/stw version
-go run ./cmd/stw version --json
-go run ./cmd/stw inspect --json
-go run ./cmd/stw inventory --json
+make build
+./bin/stw --help
+./bin/stw version --json
+./bin/stw inspect . --json
+./bin/stw inventory . --json
+./bin/stw inventory . --query dirty --scope disk --scope untracked --json
+./bin/stw hosting repo . --json
 ```
+
+Or run any command from source with `go run ./cmd/stw`, for example
+`go run ./cmd/stw inventory . --json`.
+
+| Implemented commands | Purpose and guide |
+| --- | --- |
+| `help`, `version` | Help at every command level; human/JSON version |
+| `inspect`, `inventory` | [Native identity, workspaces, references, file scopes and state queries](docs/inventory.md) |
+| `workspace plan`, `workspace apply` | [Review and create isolated Git worktrees/jj workspaces](docs/workspaces.md) |
+| `workspace handoff`, `workspace retire-plan` | [Describe owned work and prepare retirement without deleting it](docs/workspaces.md) |
+| `tidy plan`, `tidy apply` | [Review/apply local reference cleanup or separately selected owned-workspace retirement](docs/tidy.md) |
+| `hosting repo`, `hosting pr`, `hosting ci` | [Resolve locally; read an explicitly numbered GitHub PR and exact-head CI](docs/hosting.md) |
+| `gh jj repo`, `gh jj pr`, `gh jj ci` | [Optional jj-only gh extension sharing hosting operations](docs/hosting.md) |
+
+See [all commands and worked examples](docs/commands.md) for workspace creation,
+cleanup, PR/CI inspection and extension setup. Workspace/tidy apply requires a stored
+plan, fresh checks and explicit `--authorize`. Planning may write private state;
+retirement registration and filesystem removal are separate selections. No implicit
+fetch, push, setup script or automatic cleanup runs.
 
 To install the development CLI with Go:
 
