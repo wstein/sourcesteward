@@ -535,3 +535,46 @@ func TestPinsAuditEarlyBoundStillCarriesTheIdentity(t *testing.T) {
 		t.Fatalf("%s identity=%v findings=%+v", r.Status, r.Identity, r.Findings)
 	}
 }
+
+// The baseline for the consistency check is taken before enumeration reads anything, and the registry is
+// read from the HEAD object name it resolved, not from the moving name HEAD.
+func TestPinsAuditDetectsChangeDuringEnumeration(t *testing.T) {
+	for name, change := range map[string]func(t *testing.T, f pinsFixture){
+		"HEAD": func(t *testing.T, f pinsFixture) { git(t, f.Super, "commit", "--allow-empty", "-qm", "moved") },
+		"index": func(t *testing.T, f pinsFixture) {
+			writeFile(t, filepath.Join(f.Super, "staged.txt"), "x")
+			git(t, f.Super, "add", "staged.txt")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newPinsFixture(t)
+			pinsAfterHead = func() { pinsAfterHead = nil; change(t, f) }
+			t.Cleanup(func() { pinsAfterHead = nil })
+			r := auditOf(t, f.Super)
+			if r.Status != "incomplete" {
+				t.Fatalf("%s %+v", r.Status, r.Findings)
+			}
+			requireFinding(t, r, "pins-state-changed", "error", "")
+		})
+	}
+}
+
+func TestPinsRegistryReadsTheResolvedHeadObjectNotTheName(t *testing.T) {
+	f := newPinsFixture(t)
+	old := gitIn(t, f.Super, "rev-parse", "HEAD")
+	pinsAfterHead = func() {
+		pinsAfterHead = nil
+		gitlink(t, f.Super, strings.Repeat("ab", 20), "other")
+		git(t, f.Super, "commit", "-qm", "moved")
+	}
+	t.Cleanup(func() { pinsAfterHead = nil })
+	reg := registryOf(t, f.Super)
+	if reg.HeadCommit == nil || *reg.HeadCommit != old {
+		t.Fatalf("%v", reg.HeadCommit)
+	}
+	for _, e := range reg.Entries {
+		if e.Path == "other" && e.GitlinkInHead {
+			t.Fatal("the registry read a HEAD that moved after it was resolved")
+		}
+	}
+}

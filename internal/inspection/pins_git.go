@@ -200,6 +200,9 @@ func wantRecord(rec []byte) bool {
 	return bytes.HasSuffix(rec, []byte("\t.gitmodules"))
 }
 
+// pinsAfterHead is a test seam that runs right after the superproject HEAD is resolved.
+var pinsAfterHead func()
+
 // pinsEnumerate reads the registry of the superproject. A *pinsLimitError means a bound was exhausted.
 func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 	repo := pinsGitRepo{GitDir: l.GitDir, WorkTree: l.WorkTree}
@@ -218,6 +221,9 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 			return reg, errors.New("unexpected HEAD object name")
 		}
 		reg.HeadCommit = &oid
+		if pinsAfterHead != nil {
+			pinsAfterHead()
+		}
 	case 1:
 		// Exit 1 is also what a corrupt ref gives. Unborn means HEAD names a branch that does not exist:
 		// symbolic-ref resolves it and for-each-ref finds neither the ref nor a broken one (which it
@@ -256,7 +262,7 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 	if reg.HeadUnborn {
 		reg.Gitmodules.HeadKind = "unborn"
 	} else {
-		out, err := call(wantRecord, "ls-tree", "-r", "-z", "--full-tree", "HEAD")
+		out, err := call(wantRecord, "ls-tree", "-r", "-z", "--full-tree", *reg.HeadCommit)
 		if err != nil {
 			return reg, err
 		}
@@ -349,7 +355,7 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 		}
 	case g.HeadKind == "regular":
 		g.Source, basePresent = "head", true
-		kvs, ok, err := readBlob("HEAD:.gitmodules")
+		kvs, ok, err := readBlob(*reg.HeadCommit + ":.gitmodules")
 		if err != nil {
 			return reg, err
 		}
