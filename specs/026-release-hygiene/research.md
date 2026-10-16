@@ -66,3 +66,7 @@ Environment: Go 1.27.2 linux/arm64, Git 2.56.0, Python 3.13.5, run 2026-10-16 in
 **Evidence classes.** CI exists for linux/amd64 only. Requiring CI for all platforms would block the release on workflow work; `local-recorded` and `manual` evidence is acceptable but never labeled as CI (consistent with Spec 021).
 
 **Waivable reproducibility.** Not verifying is acceptable if said so; claiming without checking is not.
+
+## Conventions reusable by smill (follow-up note)
+
+For a later specification in `wstein/sheetmill` (not part of this feature, nothing there is changed): the `Version` variable in `internal/cli` set with `-X <module>/internal/cli.Version=<version>` (already present in `smill`); the `v`-prefixed version format; `<tool>_<version>_<os>_<arch>.tar.gz` names; an unsigned `SHA256SUMS` in `sha256sum -c` format; the platforms linux amd64/arm64 and darwin arm64; `CGO_ENABLED=0 -trimpath -buildvcs=false` with a local toolchain equal to `go.mod` and no fetch; and the rule that build, tag, publication and consumer activation each need explicit user authorization that automation never grants. Observation: the `smill` stamp test runs `go build`, whereas this feature's stamp test uses `go test`.
