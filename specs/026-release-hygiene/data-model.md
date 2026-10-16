@@ -35,6 +35,7 @@ Gate ids and waivability are defined once in the [spec gate table](spec.md#relea
 | `reason` | string \| null | `evidence-missing` when not included |
 | `evidence` | string[] | classes found in the record |
 | `execution` | `run` \| `not-run` \| `n/a` | `verify` only; `not-run` for a foreign platform |
+| `stamp` | `execution` \| `none` | `verify` only; the stamp is verified only by running the binary (build information shows no `-ldflags` under `-trimpath`); never stored in the manifest |
 
 ### Effects
 
@@ -42,7 +43,7 @@ Gate ids and waivability are defined once in the [spec gate table](spec.md#relea
 | --- | --- | --- |
 | `linked_binary` | boolean | false for `plan` |
 | `network` | boolean | false always for `plan`, `build`, `verify` |
-| `wrote` | string[] | paths, relative; empty for `plan` |
+| `wrote` | string[] | paths in the repository checkout, relative; empty for `plan` (temporary directories and caches are not listed) |
 | `commands` | string[] | argument vectors that were run, bounded to 50 |
 
 ## ReleaseManifest (`release-manifest.json`, `manifest_schema: 1`)
@@ -69,7 +70,6 @@ Gate ids and waivability are defined once in the [spec gate table](spec.md#relea
 | `binary_sha256` | string | reproducibility subject |
 | `archive` | string | file name |
 | `archive_sha256` | string | listed in `SHA256SUMS` |
-| `stamp_verified` | `execution` \| `none` | the stamp is verified only by running the binary; build information cannot show `-ldflags` under `-trimpath` |
 
 ## ReadinessRecord
 

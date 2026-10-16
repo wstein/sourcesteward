@@ -48,3 +48,21 @@ Independent reviewer: read-only Opus review, revision 6870cf8 (rebased on origin
 | 11 | Medium | Quickstart order | Section 0 and a `plan --final` step |
 | 12 | Medium | arm64 lanes | `lane` matrix; hosting smokes excluded on arm64 in G04 |
 | 13-19 | Low | Synopsis `[--anchor]`; T002 code; `plan` GOCACHE; DD order and duplicate risk; extra assertions in T008/T014/T016; record-commit push stated as routine documentation push that never authorizes A2/A3; constructed environment for every export process | Applied |
+
+## Round 3
+
+Independent reviewer: read-only Opus confirmation review, revision b2bd3cb, 2026-10-16. Verdict: NOT READY (2 high, 8 medium, several low). All Round 2 resolutions were found applied; the findings below are new or residual. They were resolved in the following commit. The three-round limit is reached, so **this resolution has not been re-reviewed**; the coordinator should run one more confirmation pass.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | `plan --final` before the tag cannot pass G13, G11 and G14 | Split: `--final` (before the tag: A1 and A2, pre-publication smokes, post-release items may be pending) and `--complete` (after publication: A3, section 8); quickstart order, R5, T022 |
+| 2 | High | Replace refs and grafts defeat the tree export and ancestry | `GIT_NO_REPLACE_OBJECTS=1`, `info/grafts` gives `export-unsafe`, fixtures in T006 |
+| 3 | Medium | `build` gate set differs between table, contract and T014 | One set: G01 to G07, G09, G13 (A1), G02 and G03 from the record |
+| 4 | Medium | Stale `archive` in DD5 and Effects | Replaced; Effects list completed; `git archive` and `git status` never run |
+| 5 | Medium | `--commit` default inconsistent | Header commit when a record exists, otherwise `--commit` required |
+| 6 | Medium | Record commit definition ambiguous | `HEAD`; record and notes read from `HEAD`'s tree; differing working-tree file is `record-incomplete` |
+| 7 | Medium | Notes absent during `plan`/`build` | `not-run` with reason `no notes`; `release-notes-missing` under `--final` |
+| 8 | Medium | Commit agreement only for `ci` entries | All evidence classes; `manual` records the anchor |
+| 9 | Medium | Hostile tree entries and bounds | `export-unsafe` for `..`, `.git`, absolute, duplicate or case-colliding names, 20,000 entries, 256 MiB; `O_EXCL` |
+| 10 | Medium | `stamp_verified` in an anchored manifest cannot be set | Removed from the manifest; `stamp` in the verify result |
+| Lows | Low | Status line, R5 pointer, `wrote` wording, G08 under final, T002 wording, misspelled-variable and `modules-unverified`/`compile-failed` fixtures (T014a), quote escaping, quickstart record path | Applied. Not changed: S4 creates its repository with the smoke environment, which the verify design already limits to an allowlist; add `GIT_CONFIG_*` isolation during implementation |

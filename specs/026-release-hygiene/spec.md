@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/026-release-hygiene`
 **Created**: 2026-10-16
-**Status**: Draft — revised after independent analysis round 1; implementation pending
+**Status**: Draft — revised after independent analysis rounds 1 to 3; round 3 findings resolved but not re-reviewed; implementation pending
 **Input**: What must be true before a first `stw` release build, and how is a release produced and verified reproducibly and safely? This specification covers the stamped version, the build recipe, release platforms, evidence classes, release gates, the readiness record, the approval model and post-release verification. It does not build, tag, publish or activate anything.
 
 ## User Scenarios & Testing
@@ -177,7 +177,7 @@ Gates apply to the **code commit**. Codes are defined once in the [code table](#
 
 | Gate | Requirement | Waivable |
 | --- | --- | --- |
-| G01 | the code commit resolves and exports safely; whenever a record is read, `--commit` (default: the record header's code commit, not `HEAD`) equals the header commit, the A1 commit and the commit of every `ci` evidence entry | no |
+| G01 | the code commit resolves and exports safely; whenever a record exists, the code commit is the record header's commit (no `--commit` default of `HEAD`; without a record `--commit` is required) and it equals the A1 commit and the commit of every evidence entry of every class (`manual` entries also record the verified `SHA256SUMS` anchor). Git plumbing runs with replace objects disabled; a repository with `info/grafts` or a tree with duplicate, case-colliding, `.git`, `..` or absolute entry names, or beyond 20,000 entries or 256 MiB, is `export-unsafe` | no |
 | G02 | `make check` and `go test -race ./...` green on the code commit (`ci`, linux/amd64); the script checks the record's assertion (run URL, conclusion, commit), a reviewer cross-checks it with `gh run view` outside the script | no |
 | G03 | conformance `minimum` and `current` green on the code commit (`ci`, linux/amd64); record-asserted and cross-checked like G02 | no |
 | G04 | per extra platform: `go test`, the smoke scripts (hosting smokes excluded on arm64) and the `minimum` and `current` Git and jj lanes (`ci` or `local-recorded`). A platform without it is dropped; G04 then `pass`es with the dropped platforms listed, and the notes (G10) must name each dropped platform | no |
@@ -187,22 +187,22 @@ Gates apply to the **code commit**. Codes are defined once in the [code table](#
 | G08 | stamp test passes pre-build under the exact flag; `verify` build information of every binary matches the manifest | no |
 | G09 | toolchain, environment, module and compile checks of the dry run pass | no |
 | G10 | release notes exist with the [contracted sections](contracts/readiness-record.md) | no |
-| G11 | the readiness record has no `pending` entry and lists what was not run; the record commit descends from the code commit and its diff touches only `docs/releases/` | no |
+| G11 | the readiness record has no `pending` entry except the post-release items (A3, A4, section 8) before `--complete`, and lists what was not run; the record commit is `HEAD`, descends from the code commit and its diff touches only `docs/releases/`; record and notes are read from `HEAD`'s tree and the working-tree files must be identical | no |
 | G12 | two independent builds give equal binary SHA-256 per released platform | yes, by a recorded user authorization; the notes then say reproducibility was not verified |
-| G13 | A1 recorded before the build, A2 before the tag and its push, A3 before publication | no |
-| G14 | the anchor and checksums match (the manifest is listed in `SHA256SUMS`) and the [smoke table](#smoke-tests-normative) passes by execution on every released platform; the executed `version --json` verifies the stamp | no |
+| G13 | A1 recorded before the build, A2 before the tag and its push (required by `--final`), A3 before publication (required by `--complete`) | no |
+| G14 | the anchor and checksums match (the manifest is listed in `SHA256SUMS`) and the [smoke table](#smoke-tests-normative) passes by execution on every released platform; the executed `version --json` verifies the stamp. `--final` requires this on the built files before publication, `--complete` also on the downloaded files | no |
 
 ### Gate evaluation by command (normative)
 
-`E` evaluated; `-` not evaluated, reported `not-run` with a reason. Without a record, G02, G03, G04 and G13 are `not-run` with the reason `no record` in `plan`; under `--final` that is `record-incomplete`. A `not-run` gate never makes `plan` exit 1, but `plan --final` and the final record require every gate `pass` or `waived`.
+`E` evaluated; `-` not evaluated, reported `not-run` with a reason. Without a record, G02, G03, G04 and G13 are `not-run` with the reason `no record` in `plan`; under `--final` that is `record-incomplete`. Without notes, the notes part of G05, G06 and G10 is `not-run` with reason `no notes` outside `--final` and `release-notes-missing` under `--final`. A `not-run` gate never makes `plan` exit 1. `plan --final` (before the tag) requires G01 to G14 `pass` or `waived` with the post-release items allowed to be pending; `plan --complete` (after publication) additionally requires A3 and section 8 and is the check for the final record.
 
-| Gate | `plan` | `plan --final` | `build` (before building) | `verify` |
+| Gate | `plan` | `plan --final` / `--complete` | `build` (before building) | `verify` |
 | --- | --- | --- | --- | --- |
 | G01 | E | E | E | `--rebuild` only |
-| G02, G03 | E (record) | E | E | - |
+| G02, G03 | E (record) | E | E (record) | - |
 | G04 | E (record) | E | E, per requested platform | - |
 | G05, G06, G07 | E | E | E | - |
-| G08 | stamp test only | E | stamp test | E (build information) |
+| G08 | stamp test only | stamp test; build information from the recorded `verify` result | stamp test | E (build information) |
 | G09 | E | E | E | `--rebuild` only |
 | G10, G11 | - | E | - | - |
 | G12 | - | E | - | `--rebuild` only |

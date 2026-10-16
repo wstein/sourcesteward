@@ -6,13 +6,13 @@ Unset `STW_RELEASE_VERSION` in normal shells; only step 2 sets it.
 
 ## 0. Order of a release (each marked step needs the named approval)
 
-1. `plan` on the code commit; 2. A1 authorization, recorded in a copy of `docs/releases/TEMPLATE-readiness.md` (uncommitted) ; 3. `build`; `verify`; G12; 4. commit the record and notes as the record commit (a local commit; pushing it is a routine repository push of documentation, but the repository's own rules for pushes apply and a push never authorizes A2 or A3); 5. `plan --final`; 6. A2: tag at the code commit and push it; 7. A3: publish; 8. verify the downloaded files; 9. A4 per consumer.
+1. `plan` on the code commit; 2. A1 authorization, recorded in a copy of `docs/releases/TEMPLATE-readiness.md` at the default record path (uncommitted); 3. `build`; `verify`; G12; 4. commit the record and notes as the record commit (a local commit; pushing it is a routine repository push of documentation, but the repository's own rules for pushes apply and a push never authorizes A2 or A3); 5. `plan --final` (A1 and A2 recorded, pre-publication smokes done); 6. A2 (recorded first): tag at the code commit and push it; 7. A3: publish; 8. verify the downloaded files, record section 8 and commit it; 9. `plan --complete`; 10. A4 per consumer.
 
 ## 1. Check readiness without building
 
 ```sh
 make check
-python3 scripts/release.py plan --version v0.1.0 --commit "$(git rev-parse HEAD)"   # before a record exists; with a record omit --commit
+python3 scripts/release.py plan --version v0.1.0 --commit "$(git rev-parse HEAD)"   # --commit is required until a record exists
 python3 scripts/release.py plan --version v0.1.0 --json | python3 -m json.tool
 ```
 
@@ -65,10 +65,11 @@ Same commands as step 4 with `sha256sum -c SHA256SUMS --ignore-missing` and the 
 ## 6. Final check
 
 ```sh
-python3 scripts/release.py plan --version v0.1.0 --final
+python3 scripts/release.py plan --version v0.1.0 --final      # before the tag
+python3 scripts/release.py plan --version v0.1.0 --complete   # after publication and section 8
 ```
 
-The record commit must descend from the code commit and change only `docs/releases/`.
+The record commit (`HEAD`) must descend from the code commit and change only `docs/releases/`.
 
 ## 7. Record
 
