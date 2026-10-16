@@ -92,20 +92,20 @@ type ReposBoundary struct {
 
 // ReposEffects discloses side effects of the multi-repository inspection.
 type ReposEffects struct {
-	Network                     bool `json:"network"`
-	Fetch                       bool `json:"fetch"`
-	RepositoryWrites            bool `json:"repository_writes"`
-	Hooks                       bool `json:"hooks"`
+	Network                    bool `json:"network"`
+	Fetch                      bool `json:"fetch"`
+	RepositoryWrites           bool `json:"repository_writes"`
+	Hooks                      bool `json:"hooks"`
 	PrivateTemporaryFilesForJJ bool `json:"private_temporary_files_for_jj"`
 }
 
 // ReposDefaultEffects returns the normative effects object for repos.
 func ReposDefaultEffects() ReposEffects {
 	return ReposEffects{
-		Network:                     false,
-		Fetch:                       false,
-		RepositoryWrites:            false,
-		Hooks:                       false,
+		Network:                    false,
+		Fetch:                      false,
+		RepositoryWrites:           false,
+		Hooks:                      false,
 		PrivateTemporaryFilesForJJ: true,
 	}
 }
@@ -138,20 +138,20 @@ func ReposDefaultLimits() ReposLimits {
 
 // ReposEntry represents one explicit or discovered repository member.
 type ReposEntry struct {
-	Index        int             `json:"index"`
-	Path         string          `json:"path"`
-	ResolvedPath *string         `json:"resolved_path"`
-	Origin       string          `json:"origin"` // "explicit", "submodule"
-	Parent       *int            `json:"parent"`
-	Status       string          `json:"status"` // "ok", "partial", "error", "skipped"
-	Error        *ReposError     `json:"error"`
-	Backend      string          `json:"backend"`
-	Discovery    ReposDiscovery  `json:"discovery"`
-	DuplicateOf  *int            `json:"duplicate_of"`
-	ContainedIn  *int            `json:"contained_in"`
-	Facts        *ReposFacts     `json:"facts"`
+	Index        int              `json:"index"`
+	Path         string           `json:"path"`
+	ResolvedPath *string          `json:"resolved_path"`
+	Origin       string           `json:"origin"` // "explicit", "submodule"
+	Parent       *int             `json:"parent"`
+	Status       string           `json:"status"` // "ok", "partial", "error", "skipped"
+	Error        *ReposError      `json:"error"`
+	Backend      string           `json:"backend"`
+	Discovery    ReposDiscovery   `json:"discovery"`
+	DuplicateOf  *int             `json:"duplicate_of"`
+	ContainedIn  *int             `json:"contained_in"`
+	Facts        *ReposFacts      `json:"facts"`
 	Inventory    *InventoryResult `json:"inventory"`
-	Notes        []string        `json:"notes"`
+	Notes        []string         `json:"notes"`
 }
 
 // ReposError contains error details for an entry or diagnostic.
@@ -172,12 +172,12 @@ type ReposDiscovery struct {
 
 // ReposFacts aggregates high-level repository facts extracted from an inventory.
 type ReposFacts struct {
-	HeadState            string              `json:"head_state"`
-	HeadRef              *string             `json:"head_ref"`
-	HeadCommitID         *string             `json:"head_commit_id"`
-	ChangeID             *string             `json:"change_id"`
-	Dirty                ReposDirty          `json:"dirty"`
-	ConflictedReferences int                 `json:"conflicted_references"`
+	HeadState            string               `json:"head_state"`
+	HeadRef              *string              `json:"head_ref"`
+	HeadCommitID         *string              `json:"head_commit_id"`
+	ChangeID             *string              `json:"change_id"`
+	Dirty                ReposDirty           `json:"dirty"`
+	ConflictedReferences int                  `json:"conflicted_references"`
 	Workspaces           ReposWorkspacesFacts `json:"workspaces"`
 }
 

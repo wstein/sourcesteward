@@ -19,10 +19,10 @@ func reposCommand() *cobra.Command { return reposCommandWith(inspection.Repos) }
 func reposCommandWith(run func(context.Context, inspection.ReposOptions) inspection.ReposResult) *cobra.Command {
 	var jsonOutput, submodules bool
 	command := &cobra.Command{
-		Use:   "repos PATH... [--submodules] [--json]",
-		Short: "Inventory and aggregate facts over multiple repositories in an isolated bounded envelope",
-		Long:  "Bounded read-only multi-repository inventory across Git and jj repositories.\nDiscovers direct submodule paths with --submodules without recursion.\nExit statuses: 0 overall ok, 1 partial or error result, 2 usage error.",
-		Args:  cobra.MinimumNArgs(1),
+		Use:          "repos PATH... [--submodules] [--json]",
+		Short:        "Inventory and aggregate facts over multiple repositories in an isolated bounded envelope",
+		Long:         "Bounded read-only multi-repository inventory across Git and jj repositories.\nDiscovers direct submodule paths with --submodules without recursion.\nExit statuses: 0 overall ok, 1 partial or error result, 2 usage error.",
+		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options := inspection.ReposOptions{
