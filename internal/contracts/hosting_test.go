@@ -118,6 +118,7 @@ func TestRealHostingPRAndCIContracts(t *testing.T) {
 	// Independent fixed transport fixture: no authentication, real network or writes.
 	script := `#!/bin/sh
 case "$*" in
+ --version) printf '%s\n' 'gh version 2.102.0' ;;
  *'/pulls/42'*) printf '%s\n' '{"number":42,"title":"Fixture","html_url":"https://github.com/example/project/pull/42","state":"open","draft":false,"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ref":"task","repo":{"full_name":"example/fork"}},"base":{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","ref":"trunk","repo":{"full_name":"example/project"}}}' ;;
  *'/check-runs?'*) printf '%s\n' '{"total_count":0,"check_runs":[]}' ;;
  *'/statuses?'*) printf '%s\n' '[]' ;;
