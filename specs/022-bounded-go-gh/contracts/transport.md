@@ -4,7 +4,7 @@ The Spec 020 CLI and published JSON contracts are unchanged. This contract repla
 
 ## Selection and authentication
 
-Native ownership and explicit repository selection execute before network initialization. Local `repo` resolution never authenticates. Remote reads retain trusted gh >=2.102.0 preflight, configuration/symlink refusal and external neutral cwd. Authentication is `gh auth token --hostname HOST`, executed with capped stdout/stderr and inherited cancellation; raw errors/tokens are never rendered.
+Native ownership and explicit repository selection execute before network initialization. Local `repo` resolution never authenticates. Remote reads retain trusted gh >=2.102.0 preflight, configuration/symlink refusal and external neutral cwd. Authentication is `gh auth token --hostname HOST`, executed with 16 KiB-capped stdout/stderr and inherited cancellation; raw errors/tokens are never rendered. Tokens must be nonempty visible ASCII on one line, allowing an optional trailing newline.
 
 ## SDK configuration and request allowance
 

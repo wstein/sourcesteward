@@ -16,7 +16,7 @@
 Goal: preserve selected-host credentials and existing native operation evidence.
 Independent test: authenticated fixed HTTP fixtures yield equivalent PR/CI Result fields.
 
-- [ ] T003 [US1] Write failing selected-host routing/auth/preflight tests in internal/hosting/transport_test.go, including bounded neutral-cwd gh auth token --hostname HOST and local repo mode without gh.
+- [ ] T003 [US1] Write failing selected-host routing/auth/preflight tests in internal/hosting/transport_test.go, including 16 KiB-capped token validation and neutral-cwd gh auth token --hostname HOST and local repo mode without gh.
 - [ ] T004 [US1] Implement explicit SDK HTTP construction and bounded gh authentication in internal/hosting/transport.go; preserve apiReader and native operations in internal/hosting/operations.go.
 
 ## Phase 4: US2 — Bounded transport effects
@@ -24,7 +24,7 @@ Independent test: authenticated fixed HTTP fixtures yield equivalent PR/CI Resul
 Goal: refuse excess, wrong destinations and credential leakage under cancellation/concurrency.
 Independent test: instrumented transports prove exact request count, bytes, closure and safe diagnostics.
 
-- [ ] T005 [US2] Write failing raw/normalized success/error body, cancellation, redirect, endpoint/config refusal and concurrent token-isolation tests in internal/hosting/transport_test.go; enforce 1,048,576 bytes plus one sentinel per body.
+- [ ] T005 [US2] Write failing raw/normalized success/error body, cancellation, redirect, identity/compressed-response refusal, endpoint/config refusal and concurrent token-isolation tests in internal/hosting/transport_test.go; enforce 1,048,576 bytes plus one sentinel per body.
 - [ ] T006 [US2] Implement guarded fixed GET/HTTPS request allowance, body closure/caps and safe errors in internal/hosting/transport.go; preserve 30 seconds, 10 pages and 1000 records in internal/hosting/operations.go.
 
 ## Phase 5: US3 — Tier 1 and JSON compatibility
@@ -32,7 +32,7 @@ Independent test: instrumented transports prove exact request count, bytes, clos
 Goal: preserve real native Git/jj operations, shared CLI behavior and published schemas.
 Independent test: both pinned backend lanes perform in-process fake HTTP PR/CI and native effects checks; executable fixtures retain dispatch/auth refusal coverage.
 
-- [ ] T007 [P] [US3] Write failing shared-operation CLI/schema fixtures in internal/cli/hosting_test.go and internal/contracts/contracts_test.go using injected HTTP rather than canned Results; retain unchanged schema assertions.
+- [ ] T007 [P] [US3] Write failing shared-operation CLI/schema fixtures in internal/cli/hosting_test.go and internal/contracts/hosting_test.go using injected HTTP rather than canned Results; retain unchanged schema assertions.
 - [ ] T008 [US3] Add InspectWithTransport in internal/hosting/operations.go and unexported CLI injection in internal/cli/hosting.go; adapt contract success fixtures without production endpoint overrides.
 - [ ] T009 [US3] Adapt scripts/smoke-hosting.py and native tests in internal/hosting for real Git/jj fake-HTTP PR/CI success/effect conformance plus real binary/private-extension local/auth-refusal checks; preserve minimum/current CI lanes in .github/workflows/ci.yml.
 
