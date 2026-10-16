@@ -108,7 +108,10 @@ func pinsIsolation() []string {
 }
 
 func pinsEnvironment() []string {
-	return append(gitEnvironment(), "LC_ALL=C", "GIT_PROTOCOL_FROM_USER=0", "GIT_CONFIG_NOSYSTEM=1")
+	return append(gitEnvironment(), "LC_ALL=C", "GIT_PROTOCOL_FROM_USER=0", "GIT_CONFIG_NOSYSTEM=1",
+		// An empty allow-list forbids every transport, including ones the per-name overrides do not list
+		// (ftp, ftps, fd and any <helper>::address).
+		"GIT_ALLOW_PROTOCOL=")
 }
 
 // scanCounter counts stderr toward the same scan allowance as stdout and keeps its first bytes.
