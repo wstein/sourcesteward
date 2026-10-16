@@ -23,8 +23,7 @@ Text fields are bounded and are data. Codes, statuses, limits, the facts derivat
 | Field | Type | Notes |
 | --- | --- | --- |
 | `index` | integer | position in `entries` |
-| `path` | string | as given or as registered (relative to the parent root for submodules); a non-UTF-8 discovered path is shown escaped (`\xNN`) |
-| `path_encoding` | `utf8` \| `escaped` | `escaped` only for refused discovered paths |
+| `path` | string | as given or as registered (relative to the parent root for submodules); always valid UTF-8 (lexically invalid registered paths never become entries) |
 | `resolved_path` | string \| null | symlink-resolved absolute path; null when it cannot be resolved |
 | `origin` | `explicit` \| `submodule` | |
 | `parent` | integer \| null | index of the superproject entry for `submodule` |
@@ -36,15 +35,15 @@ Text fields are bounded and are data. Codes, statuses, limits, the facts derivat
 | `contained_in` | integer \| null | index of a listed repository whose root contains this one |
 | `facts` | Facts \| null | null unless an inventory was observed (spec, Entry status) |
 | `inventory` | InventoryResult \| null | embedded existing inventory object (validated by `inventory.schema.json`); null when not run, omitted or skipped |
-| `notes` | string[] | secondary causes (see error precedence), caveats such as the submodule worktree record; bounded |
+| `notes` | string[] | secondary causes (see error precedence), caveats such as the submodule worktree record; bounded; each note is `"<code>: <message>"` |
 
-`Discovery`: `{requested: boolean, status: "not-requested" | "ok" | "not-applicable" | "failed" | "limit", submodules: integer, ignored: integer, deduplicated: integer, reason: string}`. `submodules` counts entries added; `ignored` counts `.gitmodules` paths that are not gitlinks or failed the query; `deduplicated` counts paths not added because already listed. `not-applicable` is used for non-Git backends and for submodule entries themselves (no recursion).
+`Discovery`: `{requested: boolean, status: "not-requested" | "ok" | "not-applicable" | "failed" | "limit", submodules: integer, ignored: integer, deduplicated: integer, reason: string}`. `submodules` counts entries added; `ignored` counts `.gitmodules` paths that are lexically invalid, are not gitlinks or failed the query (lexically invalid ones are also named in the parent's `notes`); `deduplicated` counts paths not added because already listed. `not-applicable` is used for non-Git parents, for explicit entries that failed identity or an entry check (no discovery ran), and for submodule entries themselves (no recursion); `not-requested` when `--submodules` is absent.
 
 `Facts`: `{head_state: "attached"|"detached"|"unborn"|"jj-workspace", head_ref: string|null, head_commit_id: string|null, change_id: string|null, dirty: {value: "true"|"false"|"unknown", reason: string}, conflicted_references: integer, workspaces: {total, stale, foreign, unverified}}`, derived per the spec table.
 
 ## Summary
 
-`{entries, by_status: {ok, partial, error, skipped}, by_backend: {git, jj, other}, dirty: {true, false, unknown}, stale_workspaces, foreign_workspaces, unverified_workspaces, conflicted_references, skipped_uninitialized, discovery_not_applicable, inventories_omitted}`, all integers, computed from `entries`.
+`{entries, by_status: {ok, partial, error, skipped}, by_backend: {git, jj, other}, dirty: {true, false, unknown}, stale_workspaces, foreign_workspaces, unverified_workspaces, conflicted_references, skipped_uninitialized, discovery_not_applicable (explicit entries only) (explicit entries only), inventories_omitted}`, all integers, computed from `entries`.
 
 ## Invariants
 

@@ -21,7 +21,7 @@ Rationale. `inventory` takes one PATH, its schema pins `identity`, `workspaces`,
 
 ## Decision 3: concurrency
 
-Sequential: worst case 16 x 10 s = 160 s, beyond any sensible total. Unbounded parallelism: a process storm (every Git inventory starts many Git processes and every jj inventory a sandbox). Chosen: 4 workers, results slotted by index, so completion order never leaks. Worst case with 16 entries is 4 rounds of 10 s = 40 s, under the 60 s total deadline. Code reading: `internal/inspection` has no package-level mutable state apart from sentinel errors (searched for package `var` declarations), so concurrent calls share nothing in Go; a `-race` test is still required. Whether concurrent jj inventories sharing one repository (two workspaces of one repo) interfere is **unverified** (no jj here); duplicate detection from the identity inspection (Decision 6) removes the same-repository case before any inventory runs, and the conformance task runs two jj members in parallel. Rating: parallel 4 = 4/5, sequential = 2/5, unbounded = 1/5.
+Sequential: worst case 16 x 10 s = 160 s, beyond any sensible total. Unbounded parallelism: a process storm (every Git inventory starts many Git processes and every jj inventory a sandbox). Chosen: 4 workers per parallel stage, results slotted by index, so completion order never leaks. Each identity, discovery and inventory call has its own 10 s deadline. Worst case with 16 entries is two parallel stages of 4 rounds of up to 10 s each plus sequential discovery, which can exceed the 60 s total; the total deadline then ends the run and unfinished entries are reported (`inventory-timeout`, `inventory-not-started`). Typical members take well under a second (not measured by the author). Code reading: `internal/inspection` has no package-level mutable state apart from sentinel errors (searched for package `var` declarations), so concurrent calls share nothing in Go; a `-race` test is still required. Whether concurrent jj inventories sharing one repository (two workspaces of one repo) interfere is **unverified** (no jj here); duplicate detection from the identity inspection (Decision 6) removes the same-repository case before any inventory runs, and the conformance task runs two jj members in parallel. Rating: parallel 4 = 4/5, sequential = 2/5, unbounded = 1/5.
 
 ## Decision 4: facts, and no ahead/behind
 
@@ -29,7 +29,7 @@ The inventory result has no ahead/behind counts (searched `internal/inspection/i
 
 ## Decision 5: embedded size
 
-A single inventory can be 1 MiB. 16 of them is 16 MiB in memory and output. Chosen: 8 MiB bound with omission of later entries' embedded inventory (facts kept, `inventory-limit`). Rejected: shrinking inventories (changes their contract), a facts-only default (loses the point of reusing inventory), lowering to 4 entries (too few for the motivating workspace plus submodules). Rating of chosen: 4/5.
+A single inventory can be 1 MiB. 16 of them is 16 MiB in memory and output. Chosen: 8 MiB bound with omission of later entries' embedded inventory (facts kept, code `output-limit`). Rejected: shrinking inventories (changes their contract), a facts-only default (loses the point of reusing inventory), lowering to 4 entries (too few for the motivating workspace plus submodules). Rating of chosen: 4/5.
 
 ## Decision 6: duplicate and nesting identity
 
