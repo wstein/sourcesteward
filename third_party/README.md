@@ -21,7 +21,7 @@ any future full binary distribution, including existing Cobra/schema dependencie
 | github.com/mattn/go-isatty | v0.0.20 | [MIT](licenses/MIT.txt) |
 | github.com/muesli/termenv | v0.16.0 | [MIT](licenses/MIT.txt) |
 | github.com/rivo/uniseg | v0.4.7 | [MIT](licenses/MIT.txt) |
-| github.com/thlib/go-timezone-local | v0.0.8 | [Unlicense](licenses/Unlicense.txt) |
+| github.com/thlib/go-timezone-local | v0.0.8 | [Unlicense](licenses/Unlicense.txt); upstream is dual-licensed Unlicense OR Apache-2.0 and SourceSteward relies on the Unlicense, so no Apache text is retained |
 | golang.org/x/sys | v0.47.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | golang.org/x/term | v0.45.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | golang.org/x/text | v0.41.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
