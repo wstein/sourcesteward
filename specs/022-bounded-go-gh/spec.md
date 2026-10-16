@@ -37,7 +37,8 @@ Git and jj callers receive compatible human/JSON results and unchanged native re
 
 **Acceptance Scenarios**:
 1. **Given** a Git or supported jj workspace, **When** remote inspection succeeds through fake HTTP, **Then** schemas and local effects match Spec 020 qualifications; `gh jj` still refuses Git ownership.
-2. **Given** malformed/moved/paginated PR/CI evidence, **When** inspected, **Then** existing result codes/completeness behavior remain intact.
+2. **Given** malformed/moved/paginated PR/CI evidence, **When** inspected, **Then** existing result codes/completeness behavior remain intact, except the authentication-refusal change below.
+   Authentication failure now occurs in preflight, before any request: `hosting-api-unavailable`, `boundary.network=false` (previously `hosting-pr-failed`, `network=true`). HTTP read failures use new messages.
 3. **Given** the migration, **When** checked, **Then** published schema bytes, native adapters and CLI option/result shapes are unchanged.
 
 ## Requirements

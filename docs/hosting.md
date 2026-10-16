@@ -80,3 +80,5 @@ Source tests install only in disposable private configuration directories.
 
 Release distribution, ARM64 release artifacts and automatic installation remain
 separate work. Hosting mutations and stacked PR publication remain [Spec 016](../specs/016-stacked-pr-coordination/spec.md).
+
+Authentication failure is detected in preflight, before any request, and reports `hosting-api-unavailable` with `boundary.network=false` (previously `hosting-pr-failed`, `network=true`). HTTP read failures use new messages.

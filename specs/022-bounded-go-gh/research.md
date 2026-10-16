@@ -38,6 +38,6 @@ Production links only the SDK API package and its compile closure, recorded with
 deduplicated MIT/BSD terms, original copyright notices and other upstream notices in [dependency provenance](../../third_party/README.md).
 The SDK is MIT licensed. It brings HTTP formatting/configuration/terminal helpers
 into the compile graph even with logging disabled. No source is vendored.
-The module graph upgrades x/text from v0.14.0 to v0.41.0; Go1.27.2 meets SDK Go1.25
+The module graph upgrades x/text from v0.14.0 to v0.41.0; Go 1.27.2 meets SDK Go 1.25
 requirements. The larger dependency closure is accepted for the requested official
 SDK integration; owned bounded decoding is retained rather than convenience APIs.
