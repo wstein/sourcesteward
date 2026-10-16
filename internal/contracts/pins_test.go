@@ -2,6 +2,10 @@
 package contracts_test
 
 import (
+	"encoding/json"
+	"reflect"
+
+	"github.com/wstein/sourcesteward/internal/inspection"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -180,5 +184,32 @@ func TestPinsSchemaInvariants(t *testing.T) {
 				t.Fatal("invalid pins result accepted")
 			}
 		})
+	}
+}
+
+// The Go result type and its finalization must reproduce each schema-valid fixture exactly.
+func TestPinsResultRoundTripsAndFinalizesFixtures(t *testing.T) {
+	s := schema(t, "pins")
+	for _, name := range []string{"success", "incomplete", "refused", "error"} {
+		var r inspection.PinsResult
+		if err := json.Unmarshal(pinsFixture(t, name), &r); err != nil {
+			t.Fatal(err)
+		}
+		r.Finalize()
+		raw, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		valid(t, s, raw)
+		var got, want any
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(pinsFixture(t, name), &want); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s fixture changed by the Go result:\n%s", name, raw)
+		}
 	}
 }
