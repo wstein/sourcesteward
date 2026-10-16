@@ -329,3 +329,31 @@ func TestPinsRunnerEnforcesAPerInvocationDeadline(t *testing.T) {
 		t.Fatalf("default per-invocation deadline %v, want 5s (FR-011)", got)
 	}
 }
+
+func TestPinsConfineForeignOwnerOnIntermediatesAndConfiguredGitDirComponents(t *testing.T) {
+	f := newPinsFixture(t)
+	l, run := layoutFor(t, f.Super)
+	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
+	for _, target := range []string{
+		filepath.Join(f.Super, ".git", "modules"),
+		filepath.Join(f.Super, ".git", "modules", "member", "config"),
+		filepath.Join(f.Super, ".git", "modules", "member", "refs"),
+	} {
+		targetInfo, err := os.Lstat(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := newPinsSafety(l, run)
+		s.owner = func(info fs.FileInfo) (uint32, bool) {
+			if os.SameFile(info, targetInfo) {
+				return s.euid + 1, true
+			}
+			return pinsFileOwner(info)
+		}
+		mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	}
+	// ConfiguredGitDir with a .git component inside modules/ is refused even when PathConfig is enabled.
+	l.PathConfig = true
+	badGitDir := ".git/modules/a/.git/b"
+	mustRefuse(t, newPinsSafety(l, run), pinsSubmoduleSpec{Path: "member", Name: "member", ConfiguredGitDir: &badGitDir}, "submodule-path-unsafe")
+}

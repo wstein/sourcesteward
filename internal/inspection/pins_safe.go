@@ -240,6 +240,14 @@ func pinsConfined(root, p string) bool {
 }
 
 func (s *pinsSafety) ownedByUser(info fs.FileInfo, what string) *pinsSafetyRefusal {
+	return s.notWritable(info, what, "the submodule")
+}
+
+// notWritable refuses a directory or file owned by another user or writable by others so nothing can be
+// swapped in between validation and use. Group write is accepted only for the effective group (a
+// private-group umask of 002 is common). Git creates every directory world-writable under umask 000, which
+// is the usual cause.
+func (s *pinsSafety) notWritable(info fs.FileInfo, what, fix string) *pinsSafetyRefusal {
 	uid, ok := s.owner(info)
 	if !ok {
 		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the owner of the submodule " + what + " cannot be determined"}
@@ -247,13 +255,6 @@ func (s *pinsSafety) ownedByUser(info fs.FileInfo, what string) *pinsSafetyRefus
 	if uid != s.euid {
 		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is not owned by the effective user"}
 	}
-	return s.notWritable(info, what, "the submodule")
-}
-
-// notWritable refuses a directory another user could swap contents in between validation and use. Group
-// write is accepted only for the effective group (a private-group umask of 002 is common). Git creates
-// every directory world-writable under umask 000, which is the usual cause.
-func (s *pinsSafety) notWritable(info fs.FileInfo, what, fix string) *pinsSafetyRefusal {
 	perm := info.Mode().Perm()
 	if perm&0o002 != 0 {
 		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is world-writable (mode " + fmt.Sprintf("%04o", perm) + "); Git creates such directories under umask 000, so run chmod -R o-w " + fix + " or re-clone it under a stricter umask"}
@@ -402,6 +403,10 @@ func (s *pinsSafety) expectedGitDir(spec pinsSubmoduleSpec) (string, *pinsSafety
 		v = filepath.Clean(v)
 		if !pinsConfined(l.ModulesDir, v) {
 			return "", unsafePath("the configured submodule gitdir is not confined under the modules directory")
+		}
+		rel, _ := filepath.Rel(l.ModulesDir, v)
+		if msg := pinsComponentProblem("configured gitdir", filepath.ToSlash(rel)); msg != "" {
+			return "", unsafePath("%s", msg)
 		}
 		return v, nil
 	}
