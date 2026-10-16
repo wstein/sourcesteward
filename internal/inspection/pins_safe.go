@@ -18,8 +18,8 @@ import (
 // Everything a submodule says about itself is untrusted data: its path, its .git pointer, the Git
 // directory it names and the files in that directory. This file decides, without following a symlink and
 // without starting a Git process against an unvalidated location, whether a submodule may be examined.
-// Only after the worktree and the Git directory are confined does the single Git process of this file
-// run (a config --file read of core.worktree).
+// Only after the worktree and the Git directory are confined and owned by the effective user does the
+// single Git process of this file run (a config --file read of core.worktree).
 
 const (
 	pinsPointerLimit   = 4096
@@ -116,14 +116,17 @@ type pinsResolved struct {
 	Uninitialized bool
 }
 
-// pinsSafety validates submodule locations.
+// pinsSafety validates submodule locations. owner and euid are seams: tests inject a foreign owner
+// because an unprivileged test cannot chown.
 type pinsSafety struct {
 	layout pinsSuperLayout
 	run    *pinsRunner
+	owner  func(fs.FileInfo) (uint32, bool)
+	euid   uint32
 }
 
 func newPinsSafety(layout pinsSuperLayout, run *pinsRunner) *pinsSafety {
-	return &pinsSafety{layout: layout, run: run}
+	return &pinsSafety{layout: layout, run: run, owner: pinsFileOwner, euid: pinsEffectiveUID()}
 }
 
 type pinsSymlinkError struct{ Path string }
@@ -224,6 +227,17 @@ func pinsConfined(root, p string) bool {
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+func (s *pinsSafety) ownedByUser(info fs.FileInfo, what string) *pinsSafetyRefusal {
+	uid, ok := s.owner(info)
+	if !ok {
+		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the owner of the submodule " + what + " cannot be determined"}
+	}
+	if uid != s.euid {
+		return &pinsSafetyRefusal{Code: "submodule-unsafe-owner", Message: "the submodule " + what + " is not owned by the effective user"}
+	}
+	return nil
+}
+
 func lstatRefusal(what string, err error) *pinsSafetyRefusal {
 	var link *pinsSymlinkError
 	switch {
@@ -254,6 +268,9 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 		return pinsResolved{}, lstatRefusal("the submodule path", err), nil
 	case !winfo.IsDir():
 		return pinsResolved{}, unsafePath("the submodule path is not a directory"), nil
+	}
+	if r := s.ownedByUser(winfo, "worktree"); r != nil {
+		return pinsResolved{}, r, nil
 	}
 	dotRel := spec.Path + "/.git"
 	dinfo, err := pinsLstat(l.WorkTree, dotRel)
@@ -291,6 +308,9 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 		}
 	default:
 		return pinsResolved{}, unsafePath("the submodule .git entry is neither a file nor a directory"), nil
+	}
+	if r := s.ownedByUser(ginfo, "git directory"); r != nil {
+		return pinsResolved{}, r, nil
 	}
 	dirs.GitID = mustID(ginfo)
 	if refusal := s.checkGitDirectory(dirs, allowed); refusal != nil {

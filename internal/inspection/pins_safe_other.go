@@ -5,7 +5,10 @@ package inspection
 
 import "io/fs"
 
-// Directory identity is Unix-only (Spec 021, DD3). Elsewhere it reports "unknown".
+// The ownership check and directory identity are Unix-only (Spec 021, DD3). Elsewhere they report
+// "unknown", so every submodule is refused rather than trusted.
 const pinsOpenFlags = 0
 
+func pinsEffectiveUID() uint32                 { return 0 }
+func pinsFileOwner(fs.FileInfo) (uint32, bool) { return 0, false }
 func pinsFileID(fs.FileInfo) (pinsDirID, bool) { return pinsDirID{}, false }

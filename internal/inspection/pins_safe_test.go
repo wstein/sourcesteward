@@ -5,6 +5,7 @@ package inspection
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,9 @@ import (
 //   - The machine runs Git 2.56.0. The minimum, Git 2.46, is not available, so everything touching
 //     extensions.submodulePathConfig (and its encoded name `x%2fy`) only runs on Git 2.56 and skips on
 //     an older Git; linked-worktree, in-place and pointer cases are version independent.
+//   - Tests run as an unprivileged user and cannot chown. Foreign ownership is therefore exercised only
+//     through the injected owner seam; the real owner extraction is exercised against a root-owned
+//     directory where one exists. Real foreign-owned submodules, macOS and root (SUDO_UID) are NOT exercised.
 
 func layoutFor(t *testing.T, superRoot string) (pinsSuperLayout, *pinsRunner) {
 	t.Helper()
@@ -376,4 +380,80 @@ func TestPinsSafeRecheckDetectsReplacedGitDirectory(t *testing.T) {
 	if err := s.recheck(dirs); err == nil {
 		t.Fatal("a replaced Git directory must fail the recheck")
 	}
+}
+
+// ---- T007: ownership --------------------------------------------------------------------------
+
+func TestPinsOwnerCheckAcceptsEffectiveUserRealFiles(t *testing.T) {
+	f := newPinsFixture(t)
+	s := safetyFor(t, f.Super) // default seam: real lstat owner against the real effective user
+	mustResolve(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"})
+}
+
+func TestPinsOwnerExtractionReadsTheRealOwner(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: no directory is foreign to the effective user")
+	}
+	info, err := os.Lstat("/")
+	if err != nil {
+		t.Skip(err)
+	}
+	uid, ok := pinsFileOwner(info)
+	if !ok {
+		t.Fatal("the owner of a real directory must be readable on a Unix host")
+	}
+	if uid == pinsEffectiveUID() {
+		t.Skipf("/ is owned by the effective user here (uid %d)", uid)
+	}
+}
+
+func TestPinsOwnerCheckRefusesBeforeAnyGitProcess(t *testing.T) {
+	f := newPinsFixture(t)
+	l, run := layoutFor(t, f.Super)
+	started := noProcessPath(t) // every git/jj/sh start through PATH is recorded and fails
+	me := pinsEffectiveUID()
+	member := filepath.Join(f.Super, "member")
+	gitdir := filepath.Join(f.Super, ".git", "modules", "member")
+	foreign := func(path string) *pinsSafety {
+		s := newPinsSafety(l, run)
+		s.euid = me
+		s.owner = func(info fs.FileInfo) (uint32, bool) {
+			real, ok := pinsFileOwner(info)
+			if p, err := os.Lstat(path); err == nil && os.SameFile(p, info) {
+				return me + 1, true
+			}
+			return real, ok
+		}
+		return s
+	}
+	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
+	for name, path := range map[string]string{"worktree": member, "git directory": gitdir} {
+		msg := mustRefuse(t, foreign(path), spec, "submodule-unsafe-owner")
+		if !strings.Contains(strings.ToLower(msg), name) {
+			t.Errorf("message %q does not name the %s", msg, name)
+		}
+	}
+	// The owner cannot be determined: refuse, fail closed.
+	s := newPinsSafety(l, run)
+	s.owner = func(fs.FileInfo) (uint32, bool) { return 0, false }
+	mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	if got := started(); len(got) != 0 {
+		t.Fatalf("a process started before the ownership decision: %v", got)
+	}
+}
+
+func TestPinsOwnerCheckAppliesToInPlaceGitDirectory(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Root, "clone", "-q", f.Sub, filepath.Join(f.Super, "legacy"))
+	l, run := layoutFor(t, f.Super)
+	s := newPinsSafety(l, run)
+	dotgit := filepath.Join(f.Super, "legacy", ".git")
+	s.owner = func(info fs.FileInfo) (uint32, bool) {
+		real, ok := pinsFileOwner(info)
+		if p, err := os.Lstat(dotgit); err == nil && os.SameFile(p, info) {
+			return real + 1, true
+		}
+		return real, ok
+	}
+	mustRefuse(t, s, pinsSubmoduleSpec{Path: "legacy", Name: "legacy"}, "submodule-unsafe-owner")
 }
