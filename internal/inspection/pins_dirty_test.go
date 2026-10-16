@@ -348,6 +348,8 @@ func TestPinsDirtyAFileNamedHEADDoesNotConfuseRevisionArguments(t *testing.T) {
 	}
 	requireDirty(t, got, "absent", "present", "")
 	// The comparison of two commits is not confused by a file named like one of them either.
+	writeFile(t, filepath.Join(wt, f.Pin+".."+oid), "x")
+	writeFile(t, filepath.Join(wt, oid+".."+f.Pin), "x")
 	rel, err := pinsRelate(run, repo, facts, oid, f.Pin)
 	if err != nil || rel.Relation != "ahead" {
 		t.Fatalf("%+v %v", rel, err)
