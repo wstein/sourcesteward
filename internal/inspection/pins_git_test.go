@@ -161,7 +161,7 @@ func TestPinsRegistryHeadGitmodulesNotRegularMeansUnknownRegistration(t *testing
 			reg := registryOf(t, d)
 			e := entryAt(t, reg, "real")
 			g := reg.Gitmodules
-			if !g.RegistrationUnknown || !g.Modified || g.HeadKind != kind {
+			if !g.RegistrationUnknown || !g.Modified || g.HeadKind != kind || g.Worktree == "same" {
 				t.Fatalf("%+v", g)
 			}
 			if e.OrphanGitlink || e.Name != nil || e.GitmodulesEntry {
@@ -642,5 +642,39 @@ func TestPinsRegistryLinkedWorktreeWithSubmodulePathConfigIsRefusedDistinctly(t 
 	_, refusal, err := newPinsSafety(l, run).resolve(pinsSubmoduleSpec{Path: "slashy", Name: *e.Name, ConfiguredGitDir: e.ConfiguredGitDir})
 	if err != nil || refusal == nil || refusal.Code != "submodule-path-unsafe" || !strings.Contains(refusal.Message, "not confined under the modules directory") {
 		t.Fatalf("%v %v", refusal, err)
+	}
+}
+
+func TestPinsRegistryEmptyOrValuelessGitmodulesAndWorktreePresence(t *testing.T) {
+	d, oid := newBareSuper(t)
+	gm := filepath.Join(d, ".gitmodules")
+	// 1. No .gitmodules in HEAD, but an empty .gitmodules file appears in the worktree -> "different".
+	writeFile(t, gm, "# comment only\n")
+	if g := registryOf(t, d).Gitmodules; g.Worktree != "different" || !g.Modified {
+		t.Fatalf("untracked empty .gitmodules in worktree: %+v", g)
+	}
+	// 2. Commit the empty .gitmodules to HEAD, then delete it from the worktree -> "absent".
+	git(t, d, "add", ".gitmodules")
+	git(t, d, "commit", "-qm", "empty gitmodules")
+	rmAll(t, gm)
+	if g := registryOf(t, d).Gitmodules; g.Worktree != "absent" || !g.Modified {
+		t.Fatalf("deleted empty .gitmodules in worktree: %+v", g)
+	}
+	// 3. Valueless or empty path/url/branch/gitdir keys must not fabricate phantom entries or activity.
+	writeFile(t, gm, "[submodule \"no-path\"]\n\tpath\n\turl = https://example.invalid/np\n[submodule \"empty-path\"]\n\tpath =\n\turl = https://example.invalid/ep\n[submodule \"real\"]\n\tpath = real\n\turl\n\tbranch\n")
+	gitlink(t, d, oid, "real")
+	git(t, d, "add", ".gitmodules")
+	git(t, d, "commit", "-qm", "valueless keys")
+	// Inject valueless submodule.real.url and submodule.real.gitdir into .git/config.
+	cfgPath := filepath.Join(d, ".git", "config")
+	origCfg, _ := os.ReadFile(cfgPath)
+	writeFile(t, cfgPath, string(origCfg)+"[submodule \"real\"]\n\turl\n\tgitdir\n")
+	reg := registryOf(t, d)
+	if len(reg.Entries) != 1 || reg.Total != 1 {
+		t.Fatalf("want only 'real', got %+v", reg.Entries)
+	}
+	e := entryAt(t, reg, "real")
+	if e.URL != nil || e.Branch != nil || e.ConfiguredGitDir != nil || e.Active == nil || *e.Active {
+		t.Fatalf("valueless url/branch/gitdir must be ignored: %+v", e)
 	}
 }
