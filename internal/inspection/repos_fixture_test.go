@@ -2,33 +2,23 @@
 package inspection
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
 // reposHermetic keeps a test independent of the developer's HOME and global Git configuration. System
 // configuration cannot be neutralized for Inspect and Inventory (their runner drops every GIT_ variable);
 // the fixtures themselves are created with GIT_CONFIG_NOSYSTEM by git().
-func reposHermetic(t *testing.T) {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-}
+func reposHermetic(t *testing.T) { t.Helper(); pinsIsolateHome(t) }
 
 // reposTempDir returns a symlink-free temporary directory, so expectations do not depend on a symlinked
 // TMPDIR (macOS /var, /tmp).
-func reposTempDir(t *testing.T) string {
-	t.Helper()
-	d, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
+func reposTempDir(t *testing.T) string { t.Helper(); return pinsRealDir(t) }
 
 // reposNewRepo creates a Git repository with one commit at dir (created when absent).
 func reposNewRepo(t *testing.T, dir string) string {
@@ -89,4 +79,98 @@ func atoiPrefix(s string) int {
 		n = n*10 + int(c-'0')
 	}
 	return n
+}
+
+// reposGitlinks registers submodules without checking them out: .gitmodules entries (name, path) plus
+// gitlinks in the index, committed. The result is a superproject whose submodules are all uninitialized.
+func reposGitlinks(t *testing.T, repo string, namePath ...[2]string) {
+	t.Helper()
+	reposRegister(t, repo, true, namePath...)
+}
+
+// reposRegister writes .gitmodules entries (name, path) and, when link is set, a gitlink per path.
+func reposRegister(t *testing.T, repo string, link bool, namePath ...[2]string) {
+	t.Helper()
+	oid := gitIn(t, repo, "rev-parse", "HEAD")
+	for _, np := range namePath {
+		git(t, repo, "config", "-f", ".gitmodules", "submodule."+np[0]+".path", np[1])
+		git(t, repo, "config", "-f", ".gitmodules", "submodule."+np[0]+".url", "../src")
+		if link {
+			git(t, repo, "update-index", "--add", "--cacheinfo", "160000,"+oid+","+np[1])
+		}
+	}
+	git(t, repo, "add", ".gitmodules")
+	git(t, repo, "commit", "-qm", "register submodules")
+}
+
+// reposRun runs the real operation.
+func reposRun(paths []string, submodules bool) ReposResult {
+	return Repos(context.Background(), ReposOptions{Paths: paths, Submodules: submodules})
+}
+
+// reposEntry returns the entry with the given reported path.
+func reposEntry(t *testing.T, res ReposResult, path string) ReposEntry {
+	t.Helper()
+	for _, e := range res.Entries {
+		if e.Path == path {
+			return e
+		}
+	}
+	t.Fatalf("no entry %q in %v", path, reposPaths(res))
+	return ReposEntry{}
+}
+
+func reposPaths(res ReposResult) []string {
+	var p []string
+	for _, e := range res.Entries {
+		p = append(p, e.Path)
+	}
+	return p
+}
+
+// reposCountingRunner counts the Git processes started through the discovery runner.
+func reposCountingRunner(n *atomic.Int32) reposNewRunner {
+	return func(ctx context.Context) *pinsRunner {
+		r := newReposRunner(ctx)
+		r.env = func(env []string) []string { n.Add(1); return env }
+		return r
+	}
+}
+
+// reposRunWith runs the operation with the real inspection and inventory and the given seams.
+func reposRunWith(paths []string, inspect inspectFunc, newRunner reposNewRunner) ReposResult {
+	if inspect == nil {
+		inspect = Inspect
+	}
+	if newRunner == nil {
+		newRunner = newReposRunner
+	}
+	return reposWithRunner(context.Background(), ReposOptions{Paths: paths, Submodules: true}, inspect, Inventory, newRunner)
+}
+
+// reposRecordingInspect records every path whose identity is inspected.
+func reposRecordingInspect(paths *[]string, mu interface {
+	Lock()
+	Unlock()
+}) inspectFunc {
+	return func(ctx context.Context, p string) Result {
+		mu.Lock()
+		*paths = append(*paths, p)
+		mu.Unlock()
+		return Inspect(ctx, p)
+	}
+}
+
+// reposGitStdin runs git with standard input, for plumbing such as mktree.
+func reposGitStdin(t *testing.T, dir, stdin string, args ...string) string {
+	t.Helper()
+	c := exec.Command("git", args...)
+	c.Dir = dir
+	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+	c.Stdin = strings.NewReader(stdin)
+	b, err := c.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %s %v", args, b, err)
+	}
+	return string(b)
 }
