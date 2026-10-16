@@ -144,6 +144,12 @@
       "status": "planned",
       "spec": "../specs/025-pr-merge-state/spec.md",
       "evidence": null
+    },
+    {
+      "id": "024-hook-disclosure",
+      "status": "planned",
+      "spec": "../specs/024-hook-disclosure/spec.md",
+      "evidence": null
     }
   ]
 }
