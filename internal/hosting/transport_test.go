@@ -180,7 +180,10 @@ func TestSDKResponseBoundsAndRedaction(t *testing.T) {
 		{"raw", strings.Repeat("x", maxBytes+1), "", 200},
 		{"normalized", strings.Repeat("\x00", maxBytes/2+1), "", 200},
 		{"error", strings.Repeat("secret", maxBytes), "", 403},
+		{"small-403", `{"message":"secret-token-text"}`, "", 403},
 		{"compressed", "secret", "gzip", 200},
+		{"identity-then-gzip", "secret", "identity, gzip", 200},
+		{"mixed-case", "secret", "GZip", 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
@@ -189,6 +192,9 @@ func TestSDKResponseBoundsAndRedaction(t *testing.T) {
 				res := response(tc.code, tc.body)
 				if tc.encoding != "" {
 					res.Header.Set("Content-Encoding", tc.encoding)
+				}
+				if tc.name == "identity-then-gzip" {
+					res.Header["Content-Encoding"] = []string{"identity", "gzip"}
 				}
 				return res, nil
 			}))
@@ -346,6 +352,36 @@ func TestCappedBodyStopsAfterOverflow(t *testing.T) {
 	}
 }
 
+func TestEmptyFirstContentEncodingStillRejectsLaterValue(t *testing.T) {
+	rt := guardedTransport{host: "api.github.com", prefix: "/", next: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		res := response(200, "{}")
+		res.Header["Content-Encoding"] = []string{"", "gzip"}
+		return res, nil
+	})}
+	req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/a/b/pulls/1", nil)
+	if res, err := rt.RoundTrip(req); err == nil {
+		res.Body.Close()
+		t.Fatal("later gzip value accepted")
+	}
+	for _, ok := range [][]string{nil, {""}, {"identity"}, {" Identity "}} {
+		res := response(200, "{}")
+		res.Header["Content-Encoding"] = ok
+		rt.next = roundTripFunc(func(*http.Request) (*http.Response, error) { return res, nil })
+		got, err := rt.RoundTrip(req)
+		if err != nil {
+			t.Fatalf("%q rejected: %v", ok, err)
+		}
+		got.Body.Close()
+	}
+}
+
+func TestProductionTransportDisablesCompressionAndBoundsHeaders(t *testing.T) {
+	tr := newHTTPTransport()
+	if !tr.DisableCompression || tr.MaxResponseHeaderBytes != 32*1024 || tr.TLSHandshakeTimeout == 0 {
+		t.Fatalf("unsafe production transport: %#v", tr)
+	}
+}
+
 func TestAuthenticationCancellationAndStderrLimit(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
 		{"cancel", "sleep 30"}, {"stderr", "head -c 16385 /dev/zero >&2; echo fixturetoken"}, {"failed", "echo secret >&2; exit 1"},
@@ -355,7 +391,10 @@ func TestAuthenticationCancellationAndStderrLimit(t *testing.T) {
 			exe := filepath.Join(d, "gh")
 			os.WriteFile(exe, []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ];then echo 'gh version 2.102.0';exit 0;fi\n"+tc.body+"\n"), 0700)
 			t.Setenv("GH_PATH", exe)
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.Background(), func() {}
+			if tc.name == "cancel" {
+				ctx, cancel = context.WithTimeout(ctx, 50*time.Millisecond)
+			}
 			defer cancel()
 			start := time.Now()
 			_, cleanup, e := newGHWithTransport(ctx, t.TempDir(), "github.com", roundTripFunc(func(*http.Request) (*http.Response, error) { t.Fatal("network before authentication"); return nil, nil }))
@@ -372,6 +411,13 @@ func TestSDKExplicitOptionsIgnoreGhOverrides(t *testing.T) {
 	t.Setenv("GH_CONFIG_DIR", d)
 	t.Setenv("GH_DEBUG", "api")
 	t.Setenv("GH_HOST", "evil.test")
+	reader, writer, e := os.Pipe()
+	if e != nil {
+		t.Fatal(e)
+	}
+	original := os.Stderr
+	os.Stderr = writer
+	t.Cleanup(func() { os.Stderr = original })
 	client, e := newSDKClient("github.com", "fixturetoken", t.TempDir(), roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Host != "api.github.com" || r.Header.Get("Authorization") != "token fixturetoken" {
 			t.Fatal("SDK override admitted")
@@ -382,8 +428,15 @@ func TestSDKExplicitOptionsIgnoreGhOverrides(t *testing.T) {
 		t.Fatal(e)
 	}
 	api := &ghAPI{host: "github.com", client: client}
-	if _, e = api.get(context.Background(), "repos/a/b/pulls/1"); e != nil {
+	_, e = api.get(context.Background(), "repos/a/b/pulls/1")
+	os.Stderr = original
+	writer.Close()
+	logged, _ := io.ReadAll(reader)
+	if e != nil {
 		t.Fatal(e)
+	}
+	if len(logged) != 0 {
+		t.Fatalf("GH_DEBUG=api logged %d bytes of request/credential data", len(logged))
 	}
 }
 
