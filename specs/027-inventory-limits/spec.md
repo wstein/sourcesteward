@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/027-inventory-limits`
 **Created**: 2026-10-16
-**Status**: Draft — revised after independent analysis round 1; implementation not started
+**Status**: Draft — three independent analysis rounds done, last verdict NOT READY (1 high); round 3 resolutions applied but not re-reviewed; implementation not started
 **Input**: A follow-up to Spec 009 that makes `stw inventory` useful on ordinary Git repositories. Decision by the maintainer (2026-10-16): fix the inventory prerequisite before `stw repos` (Spec 023) ships.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
@@ -55,7 +55,7 @@ A caller inventories a submodule checkout or a repository created with `--separa
 
 1. **Given** a clean submodule checkout, **When** inventory runs in it, **Then** the workspace record has the checkout path, `tracked` is `false` and `untracked` is `false` (today `tracked` is `"true"`).
 2. **Given** a modified tracked file and an untracked file inside the checkout, **When** inventory runs, **Then** both are reported with their checkout-relative paths.
-3. **Given** inventory run in a linked worktree of a submodule, **When** the main entry is the Git directory, **Then** the existing identity inspection of that entry gives the main checkout and CK-1 describes it. **Given** an entry whose checkout cannot be identified (no usable `core.worktree`, a hostile one), **Then** CK-2: registration `present`, all observations `unknown` with the Git-directory reason, status `partial`, and no `ls-files`, `diff` or disk read is made for it.
+3. **Given** inventory run in the main checkout or in a linked worktree of a submodule or of a `--separate-git-dir` repository, **When** the main entry is the Git directory, **Then** CK-1 describes the main checkout (from the inspected identity when it is non-linked, otherwise from `inspect(entry)`). **Given** a run from a linked worktree whose main checkout cannot be identified (no usable `core.worktree`, or a candidate that fails the existing checks), **Then** CK-2: registration `present`, all observations `unknown` with the Git-directory reason, status `partial`, and no `ls-files`, `diff` or disk read is made for it.
 4. **Given** a bare repository or an ordinary repository, **When** inventory runs, **Then** the records are unchanged.
 
 ### User Story 4 — Report dirty ordinary files in a superproject (Priority: P1)
@@ -114,7 +114,7 @@ Tier 1 statement: Git inventory changes as specified; jj inventory is unchanged 
 - **FR-012**: The total deadline stays 10 seconds; each streamed command also observes the caller's context; an exceeded deadline remains `inventory-timeout`.
 - **FR-013**: Failing tests precede implementation. Real-Git fixtures at the scales above, hostile fixtures with effect sentinels, schema validation of real outputs, the Git minimum lane, and `go test -race -count=3 -shuffle=on`. Tests do not depend on inode reuse, mtime ties, umask (TestMain sets 022), TMPDIR symlinks or global Git configuration.
 - **FR-014**: List the Spec 023 artifacts that must change when this lands (tracked in [plan.md](plan.md) and tasks, not changed by this spec).
-- **FR-015**: Skip-worktree entries are not compared and not reported deleted (SP-1); with `core.symlinks=false` symlink entries are `unknown` (SP-2). GL-4's "authoritative" evidence depends on this.
+- **FR-015**: Skip-worktree entries absent on disk are not compared and not reported deleted; present ones are compared like any other (SP-1); with `core.symlinks=false` symlink entries are `unknown` (SP-2). GL-4's "authoritative" evidence depends on this.
 - **FR-016**: The query run rule QR-1 governs how listing truncation affects `status`, `boundary.complete` and the exit status; clean/dirty are computed from the candidate count.
 
 ### Normative tables

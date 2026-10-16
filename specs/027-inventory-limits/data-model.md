@@ -16,8 +16,8 @@ The published result model does not change (inventory schema v1, COMPAT-1). This
 ## Assembly order (Git adapter)
 
 1. Filter configuration, worktree registrations (buffered), reference scan (FEED-1) and remote names; DEG-6 on overflow.
-2. Per workspace entry: apply CK-1, CK-2 or CK-3, then the existing path, ownership and identity checks on the (possibly substituted) path.
-3. Per checked workspace: attribute paths and check (FEED-2, FEED-3) only when raw comparison is requested; two index passes (FEED-4, SP-1, SP-2) with FEED-5 and FEED-6 inside each; per-pass state is the changed-entry list, the signature, the gitlink flag and path set, the `outsideFilter` flag (DEG-13) and the counters for LIM-7, LIM-8, LIM-10 and LIM-11. Only the inspected workspace retains candidates; other workspaces keep the flags needed for `tracked`, `untracked` and `conflicts`. Apply GL-1 to GL-5, DEG-5, DEG-7, DEG-8.
+2. Per workspace entry: apply CK-1, CK-2 or CK-3, then the existing path, ownership and identity checks on the (possibly substituted) path; a candidate `W` that fails any of them reverts the entry to CK-2 (registration `present`, observations `unknown`, TXT-7), not to the existing missing/foreign outcomes, which apply only to entries that were not substituted.
+3. Per checked workspace, the inspected workspace first (its content budget is charged before any other workspace's, LIM-11): attribute paths and check (FEED-2, FEED-3) only when raw comparison is requested; two index passes (FEED-4, SP-1, SP-2) with FEED-5 and FEED-6 inside each; per-pass state is the changed-entry list, the signature, the gitlink flag and path set, the `outsideFilter` flag (DEG-13) and the counters for LIM-7, LIM-8, LIM-10 and LIM-11. Only the inspected workspace retains candidates; other workspaces keep the flags needed for `tracked`, `untracked` and `conflicts`. Apply GL-1 to GL-5, DEG-5, DEG-7, DEG-8.
 4. For the inspected workspace the changed-entry list becomes candidates (scope matching and filters as today), bounded by LIM-8.
 5. Stored comparison (FEED-7) adds candidates under the same rules.
 6. Bases and the `clean`/`dirty`/`ref-exists`/`ancestor` predicates are evaluated on the candidate count and the complete reference scan, before any truncation (QR-1).
@@ -27,7 +27,7 @@ The published result model does not change (inventory schema v1, COMPAT-1). This
 
 **Reference predicates** (`--query ref-exists|ancestor`) take the separate early path (`referencePredicate`): it uses the FEED-1 stream and LIM-9 (DEG-6), evaluates the predicate on the complete scan, returns references by FS-1 with `W = 0`, `Bs = 0` and no files, and applies QR-1 (truncation noted in `boundary.limitations`, status unchanged). It reads no workspace, so CK and GL do not apply.
 
-**CK order**: step 2 runs for every entry before the query-scope skip of the existing loop; the skip then compares against the substituted path. A `clean`/`dirty` query is `unknown` (partial) unless the inspected worktree's entry was matched and observed.
+**CK order**: step 2 runs for every entry before the query-scope skip of the existing loop; the skip then compares against the substituted path. A `clean`/`dirty` query whose selected scopes need disk or index observation (`needsDisk`) is `unknown` (partial) unless the inspected worktree's entry was matched and observed; a stored-only query, including one on a bare repository, is unaffected.
 
 ## Invariants
 
@@ -35,7 +35,7 @@ The published result model does not change (inventory schema v1, COMPAT-1). This
 - `len(files) + len(references) + nested + len(workspaces) + len(bases) <= 1024` for every Git result.
 - A truncation disclosure is present if and only if records were omitted. In a plain run it comes with `partial` and `complete=false`; in a query run with a known predicate it comes with `ok`/`true` (QR-1).
 - A predicate value is never derived from a returned listing: `dirty`/`clean` use the candidate count, reference predicates the complete scan.
-- `tracked: "true"` is produced only from a staged difference or an authoritative ordinary-file difference (a compared, non-skip-worktree, non-gitlink path, no transformation, no unknown tracked path), never from the absence of a file in the Git directory (CK).
+- `tracked: "true"` is produced only from a staged difference or an authoritative ordinary-file difference (a compared non-gitlink path, including a skip-worktree path that is present on disk, with no transformation and no unknown tracked path), never from the absence of a file in the Git directory (CK).
 - No streamed command runs in a directory other than the working directory of a validated workspace (or, for CK, the `inspect()` of the entry), and no caller path is passed as an argument beginning with `-`: FEED-3 uses standard input; FEED-6 keeps `--literal-pathspecs` and `--`.
 - All repository text is data and appears only in existing string fields, JSON-encoded.
 
