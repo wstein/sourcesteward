@@ -5,7 +5,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Record pre-implementation cross-artifact analysis and requirement coverage in specs/020-gh-jj-inspection/analysis.md; resolve findings before code and preserve independent review provenance.
+- [X] T001 Record pre-implementation cross-artifact analysis and requirement coverage in specs/020-gh-jj-inspection/analysis.md; resolve findings before code and preserve independent review provenance.
 
 ## Phase 2: Foundation
 

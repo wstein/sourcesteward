@@ -35,3 +35,11 @@ Repository resolution performs native bounded identity/configuration reads and d
 Thirty-second whole-operation deadline; existing tighter native bounds retained. Maximum 1 MiB per subprocess and final result, 10 pages per collection, 1000 combined CI records. Cancellation or exceeded/inconsistent/missing evidence yields incomplete error. CI samples exact PR head, reads both collections, resamples head and refuses moved identity. Successful sampled evidence cannot prove a transaction, future CI outcome, required-check satisfaction, review approval or merge eligibility.
 
 No release artifact or installation claim is made by implementing this source entry point. Users already using another `gh jj` extension must choose their installed implementation; no automatic replacement is performed.
+
+## Selection rules after independent analysis
+
+- Native ownership and complete native remote enumeration are required in every mode. Failure to enumerate is not bypassed by `--repo`.
+- `--repo OWNER/NAME` without `--remote` may select a repository absent from local remotes. Its provenance is explicit caller selection; no local association is claimed.
+- Combined `--repo` and `--remote` must agree with the selected remote's unambiguous host/owner/name. Missing, malformed or conflicting selected remote evidence refuses.
+- Well-formed remotes for a different host are ignored for selected-host resolution. Unsupported/malformed URLs are excluded with a bounded generic limitation, never echoed with credentials. Automatic or remote-based resolution refuses malformed selected-host URLs rather than asserting complete selection. An explicit repository without a remote selector does not depend on URL interpretation, after complete native enumeration.
+- Distinct fetch/push repository identities remain distinct candidates; duplicate identities do not create ambiguity. No credential-bearing URL is included in result data.
