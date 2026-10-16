@@ -231,3 +231,24 @@ func TestPinsPublicationShallowCannotClaimUnreachable(t *testing.T) {
 		t.Fatalf("%+v", p)
 	}
 }
+
+// --no-replace-objects covers refs/replace only; info/grafts rewrites parents too, and with it a local
+// commit could be made to look contained in a remote-tracking ref.
+func TestPinsPublicationGraftsAreNeverHonored(t *testing.T) {
+	c := newPublishCase(t)
+	wt := c.repo.WorkTree
+	local := commitIn(t, wt, "local-only")
+	git(t, wt, "reset", "-q", "--hard", c.f.Pin)
+	writeFile(t, filepath.Join(c.repo.GitDir, "info", "grafts"), c.f.Pin+" "+local+"\n")
+	if out := git(t, wt, "-c", "advice.graftFileDeprecated=false", "rev-list", "--count", "refs/remotes/origin/main"); strings.TrimSpace(out) != "2" {
+		t.Skipf("this Git does not honor info/grafts (%s): nothing to defend", strings.TrimSpace(out))
+	}
+	p := c.publish(t, local)
+	if p.Status != "unreachable" {
+		t.Fatalf("a graft made a local commit look published: %+v", p)
+	}
+	_, rel := relationOf(t, c.run, c.repo, c.dirs, local)
+	if rel.Relation != "behind" { // HEAD is the pin, an ancestor of the local commit once grafts are ignored
+		t.Fatalf("%+v", rel)
+	}
+}

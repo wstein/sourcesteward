@@ -137,7 +137,7 @@ func TestPinsIsolationListIsExactlyTheDocumentedOne(t *testing.T) {
 		t.Fatalf("isolation prefix changed:\n got %v\nwant %v", got, want)
 	}
 	env := strings.Join(pinsEnvironment(), "\n")
-	for _, w := range []string{"GIT_CONFIG_NOSYSTEM=1", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "LC_ALL=C"} {
+	for _, w := range []string{"GIT_CONFIG_NOSYSTEM=1", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "LC_ALL=C", "GIT_GRAFT_FILE=/dev/null"} {
 		if !strings.Contains(env, w) {
 			t.Errorf("environment lacks %s", w)
 		}
