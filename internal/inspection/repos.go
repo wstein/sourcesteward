@@ -374,6 +374,19 @@ func verifyIdentityUnchanged(prior Result, inv InventoryResult) bool {
 	}
 }
 
+// reposRaise records a cause that makes the entry an error. An earlier cause (a failed discovery, say) is not
+// overwritten: the causes go through the precedence rule and the loser becomes a note (FR-012).
+func reposRaise(entry *ReposEntry, e ReposError) {
+	entry.Status = "error"
+	if entry.Error == nil {
+		entry.Error = &e
+		return
+	}
+	primary, notes := ReposResolveCauses([]ReposError{*entry.Error, e})
+	entry.Error = &primary
+	entry.Notes = append(entry.Notes, notes...)
+}
+
 func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspections []Result, inventoryFn inventoryFunc, b reposBounds) {
 	var validIndices []int
 	for i := range entries {
@@ -386,23 +399,17 @@ func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Contex
 		entry := &entries[i]
 
 		if callerCtx.Err() != nil {
-			entry.Status = "error"
-			entry.Error = &ReposError{Code: ReposCodeCanceled, Message: "operation canceled before start"}
+			reposRaise(entry, ReposError{Code: ReposCodeCanceled, Message: "operation canceled before start"})
 			return
 		}
 		if totalCtx.Err() != nil {
-			entry.Status = "error"
-			entry.Error = &ReposError{Code: ReposCodeInventoryNotStarted, Message: "deadline exceeded before inventory started"}
+			reposRaise(entry, ReposError{Code: ReposCodeInventoryNotStarted, Message: "deadline exceeded before inventory started"})
 			return
 		}
 
 		defer func() {
 			if r := recover(); r != nil {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    ReposCodeMemberFailed,
-					Message: fmt.Sprintf("worker panic during inventory: %v", r),
-				}
+				reposRaise(entry, ReposError{Code: ReposCodeMemberFailed, Message: fmt.Sprintf("worker panic during inventory: %v", r)})
 			}
 		}()
 
@@ -424,11 +431,7 @@ func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Contex
 		// Compare identity if both identities have status "ok"
 		if i < len(inspections) && inspections[i].Status == "ok" && inv.Identity.Status == "ok" {
 			if !verifyIdentityUnchanged(inspections[i], inv) {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    ReposCodeChangedRepository,
-					Message: "repository identity changed during inventory",
-				}
+				reposRaise(entry, ReposError{Code: ReposCodeChangedRepository, Message: "repository identity changed during inventory"})
 				entry.Inventory = nil
 				entry.Facts = nil
 				return
