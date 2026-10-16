@@ -65,13 +65,23 @@ func runCLIWithHosting(ctx context.Context, version string, args []string, stdou
 		return report(stderr, *helpError, 1)
 	}
 	if err != nil {
-		var failure runtimeFailure
-		if errors.As(err, &failure) {
-			return report(stderr, err, 1)
-		}
-		return report(stderr, err, 2)
+		return exitStatus(stderr, err)
 	}
 	return 0
+}
+
+// exitStatus maps a command error to its documented status: runtime failures 1, the typed strict
+// findings error 3 (checked before the fallback), anything else a usage error 2.
+func exitStatus(stderr io.Writer, err error) int {
+	var failure runtimeFailure
+	if errors.As(err, &failure) {
+		return report(stderr, err, 1)
+	}
+	var strict strictFindingsError
+	if errors.As(err, &strict) {
+		return report(stderr, err, 3)
+	}
+	return report(stderr, err, 2)
 }
 
 func report(stderr io.Writer, err error, code int) int {
@@ -132,7 +142,7 @@ func newRootWithHosting(version string, stdout, stderr io.Writer, operation host
 		},
 	}
 	versionCommand.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), hostingCommandWith(false, operation))
+	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), pinsCommand(), hostingCommandWith(false, operation))
 	root.SetHelpCommand(&cobra.Command{
 		Use: "help [command]", Short: "Help about a command", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
