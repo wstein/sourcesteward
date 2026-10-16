@@ -66,7 +66,8 @@ func TestReposDiscoverConfirmsAllCandidatesWithOneIndexQuery(t *testing.T) {
 	res := reposRun([]string{repo}, true)
 	_ = res
 	if n := reposShimDiscoveryCalls(t, log, "ls-files --stage -z -- p0"); n != 1 {
-		b, _ := os.ReadFile(log); t.Fatalf("%d ls-files calls for 64 candidates, want 1\n%.1500s", n, b)
+		b, _ := os.ReadFile(log)
+		t.Fatalf("%d ls-files calls for 64 candidates, want 1\n%.1500s", n, b)
 	}
 	if time.Since(start) > 8*time.Second {
 		t.Fatalf("slow index queries accumulated: %v", time.Since(start))
