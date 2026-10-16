@@ -74,7 +74,7 @@ func newPinsSuperLayout(run *pinsRunner, root string) (pinsSuperLayout, error) {
 		return pinsSuperLayout{}, errors.New("unexpected modules location reported by Git")
 	}
 	l := pinsSuperLayout{WorkTree: root, GitDir: gitDir, ModulesDir: filepath.Join(gitDir, "modules")}
-	cfg, err := run.run(pinsCall{Repo: pinsGitRepo{GitDir: gitDir, WorkTree: root}, Args: []string{"config", "--bool", "--get", "extensions.submodulePathConfig"}})
+	cfg, err := run.run(pinsCall{Repo: pinsGitRepo{GitDir: gitDir, WorkTree: root}, Args: []string{"config", "--no-includes", "--bool", "--get", "extensions.submodulePathConfig"}})
 	if err != nil {
 		return pinsSuperLayout{}, err
 	}

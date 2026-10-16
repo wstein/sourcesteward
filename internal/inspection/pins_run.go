@@ -237,6 +237,9 @@ func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, scanned *in
 					if i < 0 {
 						break
 					}
+					if i > pinsRecordLimit {
+						return fail(&pinsLimitError{Kind: "record"})
+					}
 					if keep(pending[:i]) {
 						if e := retain(pending[:i+1]); e != nil {
 							return fail(e)
