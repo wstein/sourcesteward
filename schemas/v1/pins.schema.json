@@ -101,7 +101,19 @@
             "const": "git"
           },
           "identity": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "ok"
+              },
+              "backend": {
+                "const": "git"
+              }
+            },
+            "required": [
+              "status",
+              "backend"
+            ]
           },
           "error": {
             "type": "null"
@@ -167,7 +179,19 @@
             "const": "git"
           },
           "identity": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "ok"
+              },
+              "backend": {
+                "const": "git"
+              }
+            },
+            "required": [
+              "status",
+              "backend"
+            ]
           },
           "error": {
             "type": "null"
@@ -276,6 +300,102 @@
       "if": {
         "properties": {
           "status": {
+            "const": "refused"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "maxItems": 0
+          },
+          "summary": {
+            "properties": {
+              "submodules": {
+                "const": 0
+              },
+              "errors": {
+                "const": 0
+              },
+              "warnings": {
+                "const": 0
+              },
+              "infos": {
+                "const": 0
+              },
+              "publication": {
+                "properties": {
+                  "reachable": {
+                    "const": 0
+                  },
+                  "unreachable": {
+                    "const": 0
+                  },
+                  "unknown": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "maxItems": 0
+          },
+          "summary": {
+            "properties": {
+              "submodules": {
+                "const": 0
+              },
+              "errors": {
+                "const": 0
+              },
+              "warnings": {
+                "const": 0
+              },
+              "infos": {
+                "const": 0
+              },
+              "publication": {
+                "properties": {
+                  "reachable": {
+                    "const": 0
+                  },
+                  "unreachable": {
+                    "const": 0
+                  },
+                  "unknown": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
             "const": "error"
           }
         },
@@ -286,7 +406,10 @@
       "then": {
         "properties": {
           "backend": {
-            "const": "git"
+            "enum": [
+              "git",
+              "unknown"
+            ]
           },
           "identity": {
             "type": "null"
@@ -1305,7 +1428,11 @@
               ],
               "properties": {
                 "code": {
-                  "type": "string"
+                  "enum": [
+                    "submodule-path-unsafe",
+                    "submodule-unsafe-owner",
+                    "submodule-unsupported-backend"
+                  ]
                 },
                 "message": {
                   "type": "string"
@@ -1343,7 +1470,36 @@
             ]
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "path_encoding": {
+                "const": "escaped"
+              }
+            },
+            "required": [
+              "path_encoding"
+            ]
+          },
+          "then": {
+            "properties": {
+              "refusal": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "submodule-path-unsafe"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        }
+      ]
     },
     "checkout": {
       "type": "object",
@@ -1558,6 +1714,25 @@
             "properties": {
               "reason": {
                 "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "reachable"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reachable_from": {
+                "minItems": 1
               }
             }
           }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -48,6 +49,13 @@ func TestPinsFindingTableMatchesSchema(t *testing.T) {
 	}
 	var doc struct {
 		Defs struct {
+			Submodule struct {
+				Properties struct {
+					FindingCodes struct {
+						Items struct{ Enum []string }
+					} `json:"finding_codes"`
+				}
+			}
 			Finding struct {
 				OneOf []struct {
 					Properties struct {
@@ -67,8 +75,19 @@ func TestPinsFindingTableMatchesSchema(t *testing.T) {
 			got[code] = alternative.Properties.Severity.Const
 		}
 	}
-	if !reflect.DeepEqual(got, wantPinsFindings) {
-		t.Fatalf("schema findings differ: %v", got)
+	want := map[string]string{}
+	for _, code := range PinsFindingCodes() {
+		want[code], _ = PinsFindingSeverity(code)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("schema findings differ from the Go table: %v", got)
+	}
+	listed := append([]string(nil), doc.Defs.Submodule.Properties.FindingCodes.Items.Enum...)
+	all := PinsFindingCodes()
+	sort.Strings(listed)
+	sort.Strings(all)
+	if !reflect.DeepEqual(listed, all) {
+		t.Fatalf("finding_codes enum differs from the Go table: %v", listed)
 	}
 }
 func TestValidatePinsOptions(t *testing.T) {

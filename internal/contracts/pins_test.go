@@ -39,7 +39,7 @@ func pinsObject(t *testing.T, name string) map[string]any {
 }
 func TestPinsSchemaFixtures(t *testing.T) {
 	s := schema(t, "pins")
-	for name, status := range map[string]string{"success": "ok", "incomplete": "incomplete", "refused": "refused", "error": "error"} {
+	for name, status := range map[string]string{"success": "ok", "mixed": "ok", "incomplete": "incomplete", "refused": "refused", "error": "error"} {
 		valid(t, s, pinsFixture(t, name))
 		if got := pinsObject(t, name)["status"]; got != status {
 			t.Fatalf("%s fixture has status %v", name, got)
@@ -107,7 +107,8 @@ func TestPinsSchemaRefusalTable(t *testing.T) {
 		{"refused", "unsupported-backend", "git", false}, {"refused", "ambiguous-backend", "jj", false},
 		{"refused", "bare-repository", "unknown", false}, {"refused", "not-repository", "git", false},
 		{"refused", "pins-failed", "git", false}, {"error", "unsupported-backend", "jj", false},
-		{"error", "pins-failed", "jj", false}, {"refused", "other", "git", false},
+		{"error", "pins-failed", "unknown", true},
+		{"error", "pins-failed", "jj", false}, {"error", "pins-failed", "ambiguous", false}, {"refused", "other", "git", false},
 	} {
 		v := pinsObject(t, "refused")
 		v["status"], v["backend"] = tc.status, tc.backend
@@ -123,6 +124,30 @@ func TestPinsSchemaInvariants(t *testing.T) {
 		name, fixture string
 		mutate        func(map[string]any)
 	}{
+		{"refusal-code-any-string", "mixed", func(v map[string]any) {
+			v["submodules"].([]any)[0].(map[string]any)["refusal"].(map[string]any)["code"] = "anything"
+		}},
+		{"escaped-path-without-refusal", "mixed", func(v map[string]any) { v["submodules"].([]any)[0].(map[string]any)["refusal"] = nil }},
+		{"escaped-path-wrong-refusal", "mixed", func(v map[string]any) {
+			v["submodules"].([]any)[0].(map[string]any)["refusal"].(map[string]any)["code"] = "submodule-unsafe-owner"
+		}},
+		{"ok-identity-null", "success", func(v map[string]any) { v["identity"] = nil }},
+		{"ok-identity-error-status", "success", func(v map[string]any) {
+			i := v["identity"].(map[string]any)
+			i["status"], i["repository"] = "error", nil
+			i["diagnostics"] = []any{map[string]any{"code": "git-failed", "message": "m"}}
+		}},
+		{"ok-identity-not-git", "success", func(v map[string]any) { v["identity"].(map[string]any)["backend"] = "jj" }},
+		{"incomplete-identity-error-status", "incomplete", func(v map[string]any) { v["identity"].(map[string]any)["status"] = "error" }},
+		{"refused-with-findings", "refused", func(v map[string]any) { v["findings"] = pinsObject(t, "success")["findings"] }},
+		{"error-with-findings", "error", func(v map[string]any) { v["findings"] = pinsObject(t, "success")["findings"] }},
+		{"refused-with-counts", "refused", func(v map[string]any) { v["summary"].(map[string]any)["errors"] = 1 }},
+		{"error-with-publication-counts", "error", func(v map[string]any) {
+			v["summary"].(map[string]any)["publication"].(map[string]any)["unknown"] = 1
+		}},
+		{"reachable-without-refs", "success", func(v map[string]any) {
+			v["submodules"].([]any)[0].(map[string]any)["publication"].(map[string]any)["reachable_from"] = []any{}
+		}},
 		{"version", "success", func(v map[string]any) { v["schema_version"] = 2 }},
 		{"command", "success", func(v map[string]any) { v["command"] = "inventory" }},
 		{"null-submodules", "success", func(v map[string]any) { v["submodules"] = nil }},
@@ -192,7 +217,7 @@ func TestPinsSchemaInvariants(t *testing.T) {
 // The Go result type and its finalization must reproduce each schema-valid fixture exactly.
 func TestPinsResultRoundTripsAndFinalizesFixtures(t *testing.T) {
 	s := schema(t, "pins")
-	for _, name := range []string{"success", "incomplete", "refused", "error"} {
+	for _, name := range []string{"success", "mixed", "incomplete", "refused", "error"} {
 		var r inspection.PinsResult
 		if err := json.Unmarshal(pinsFixture(t, name), &r); err != nil {
 			t.Fatal(err)
@@ -248,5 +273,28 @@ func TestPinsOperationResultsValidateAgainstSchema(t *testing.T) {
 		if r.Error == nil || r.Error.Code != want {
 			t.Fatalf("%s: %+v", name, r)
 		}
+	}
+}
+
+func TestPinsMixedFixtureCoversRefusedEscapedUninitializedAndUnknown(t *testing.T) {
+	valid(t, schema(t, "pins"), pinsFixture(t, "mixed"))
+	var r inspection.PinsResult
+	if err := json.Unmarshal(pinsFixture(t, "mixed"), &r); err != nil {
+		t.Fatal(err)
+	}
+	var escaped, refused, uninitialized, unknown bool
+	for _, s := range r.Submodules {
+		escaped = escaped || s.PathEncoding == "escaped"
+		refused = refused || s.Refusal != nil
+		uninitialized = uninitialized || s.Checkout.State == "uninitialized"
+		unknown = unknown || s.Publication.Status == "unknown"
+	}
+	if !escaped || !refused || !uninitialized || !unknown {
+		t.Fatal("mixed fixture lacks a required case")
+	}
+}
+func TestPublishedErrorFixtureHasRealisticMessage(t *testing.T) {
+	if strings.Contains(string(pinsFixture(t, "error")), "not implemented") {
+		t.Fatal("published error fixture holds the stub message")
 	}
 }
