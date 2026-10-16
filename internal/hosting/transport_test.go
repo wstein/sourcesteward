@@ -88,3 +88,41 @@ func TestGHTransportBoundsAndCancellation(t *testing.T) {
 		t.Fatal("canceled read accepted")
 	}
 }
+func TestGHTransportIgnoresTargetTemporaryDirectoryAndSuppressesNotifiers(t *testing.T) {
+	d := t.TempDir()
+	exe := filepath.Join(d, "gh")
+	body := `#!/bin/sh
+[ "$GH_NO_UPDATE_NOTIFIER" = "1" ] || exit 7
+[ "$GH_NO_EXTENSION_UPDATE_NOTIFIER" = "1" ] || exit 8
+[ "$GH_TELEMETRY" = "0" ] || exit 9
+[ -z "$DEBUG" ] || exit 10
+echo 'gh version 2.102.0'
+`
+	os.WriteFile(exe, []byte(body), 0700)
+	t.Setenv("GH_PATH", exe)
+	target := t.TempDir()
+	t.Setenv("TMPDIR", target)
+	t.Setenv("DEBUG", "api")
+	before, _ := os.ReadDir(target)
+	api, cleanup, e := newGH(context.Background(), target, "github.com")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer cleanup()
+	after, _ := os.ReadDir(target)
+	if len(before) != len(after) || inside(api.dir, target) {
+		t.Fatal("temporary execution wrote target")
+	}
+}
+func TestGHTransportRejectsRepositoryAuthConfiguration(t *testing.T) {
+	d := t.TempDir()
+	exe := filepath.Join(d, "gh")
+	os.WriteFile(exe, []byte("#!/bin/sh\necho 'gh version 2.102.0'\n"), 0700)
+	t.Setenv("GH_PATH", exe)
+	target := t.TempDir()
+	t.Setenv("GH_CONFIG_DIR", target)
+	if _, cleanup, e := newGH(context.Background(), target, "github.com"); e == nil {
+		cleanup()
+		t.Fatal("repository configuration accepted")
+	}
+}
