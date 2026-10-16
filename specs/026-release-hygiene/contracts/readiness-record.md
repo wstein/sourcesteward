@@ -1,6 +1,6 @@
 # Contract: release readiness record and release notes
 
-Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`, committed on branch `codex/release-<version>` (rooted at the code commit; see the release contract). Both are checked by `python3 scripts/check-docs.py` for links (when committed) and are read by `release.py` from `HEAD`'s tree, not from the export of the code commit. A template lives at `docs/releases/TEMPLATE-readiness.md` (WI6). The record states what happened; `pending` placeholders other than the manual post-release items are rejected by `plan --final`. `release.py` parses only the fenced `json` block under `Machine record` ([data-model.md](../data-model.md#machinerecord-fenced-json-block-of-the-readiness-record-record_schema-1)); the prose sections are for people and the reviewer.
+Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`, committed on branch `codex/release-<version>` (rooted at the code commit; see the release contract). Both are checked by `python3 scripts/check-docs.py` for links (when committed) and are read by `release.py` from `HEAD`'s tree, not from the export of the code commit. A template lives at `docs/releases/TEMPLATE-readiness.md` (WI6); it has no rows for A3 and A4, which are added in the record commit that precedes their step. The record states what happened; `pending` placeholders other than the manual post-release items are rejected by `plan --final`. `release.py` parses only the fenced `json` block under `Machine record` ([data-model.md](../data-model.md#machinerecord-fenced-json-block-of-the-readiness-record-record_schema-1)); the prose sections are for people and the reviewer.
 
 ## Readiness record sections (in order)
 
@@ -16,6 +16,16 @@ Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`, 
 10. **Open issues**.
 
 Every evidence entry of every class records the code commit; `manual` entries also record the verified `SHA256SUMS` anchor.
+
+## Reviewer checklist
+
+Checked by the reviewer, not by `release.py`, before the tag (and before A3 and A4 for their steps):
+1. G02, G03, G04: the `ci` entries (run URL, workflow, job, conclusion, commit) match the actual runs (`gh run view`); per-platform evidence entries name the code commit.
+2. G05: the feature ids in the notes all have status `implemented` or `verified` in `docs/feature-status.json`; no hidden or planned feature is described.
+3. G10: the notes have the sections below.
+4. G12: two builds, two output directories, equal `binary_sha256`, hosts recorded; or a waiver with a verbatim user quote.
+5. G14: every PrePublication entry has `verify: pass`, `buildinfo: pass`, `stamp: execution`, the anchor equal to the header anchor, and a `local-recorded` or `manual` class; `pins` is absent from `--help`.
+6. G13: each `quote` matches the user's actual message; A3 and A4 are recorded before their steps.
 
 ## Release notes sections
 

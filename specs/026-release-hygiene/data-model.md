@@ -46,13 +46,14 @@ The manifest never claims a stamp verification: nothing in `build` executes the 
 
 | Entry | Fields |
 | --- | --- |
-| PlatformEntry | `platform`, `included` (boolean), `evidence`: `[{class, commit, reference, date, anchor}]` (`anchor` required for `manual`) |
-| GateEntry | `id`, `outcome` (`pass`, `fail`, `not-run`, `waived`), `evidence_class` (or `null`), `reference`, `reason` (for `not-run` and `waived`) |
+| PlatformEntry | `platform`, `included` (boolean), `evidence`: `[EvidenceEntry]` |
+| EvidenceEntry | `class` (`ci`, `local-recorded`, `manual`), `gate` (`G02`, `G03`, `G04`, `G14`), `commit` (the code commit), `reference`, `date`; for `ci` also `workflow`, `job`, `conclusion`; for `manual` also `anchor`. G02 and G03 are `ci` entries on the `linux/amd64` platform entry |
+| GateEntry | `id`, `outcome` (`pass`, `fail`, `not-run`, `waived`), `evidence_class` (or `null`), `reference` (for G02 and G03 the matching EvidenceEntry), `reason` (for `not-run` and `waived`) |
 | ReproEntry | `platform`, `outcome` (`match`, `mismatch`, `waived`, `not-run`), `binary_sha256`: two hashes, `hosts`: one or two host strings |
-| Approval | `id` (`A1`..`A4` or `waiver:G12`), `date`, `who` (who relayed it), `quote` (verbatim), `commit`, `version`, `platforms`, `tag` (A2/A3) |
+| Approval | `id` (`A1`..`A4` or `waiver:G12`), `date`, `who` (who relayed it), `quote` (verbatim), `commit`, `version`, `platforms`, `tag` (A2, A3), `files` and `destination` (A3), `consumer` (A4). A3 and A4 are absent at `--final` |
 | PrePublication | `platform`, `verify` (`pass`, `fail`, `not-run`), `buildinfo` (`pass`, `fail`), `stamp` (`execution`, `none`), `host`, `evidence_class`, `anchor` |
 
-`plan --final` requires `status: ready`, and computes G01 and G05 to G11 itself while taking G02 to G04 and G12 to G14 from the recorded entries. It checks: all evidence and A1 commits equal `code_commit`; every included platform has a passing PrePublication entry whose `anchor` equals `anchor`; `reproducibility` is `match` (equal hashes) or `waived` with a waiver approval; A1 and A2 quotes contain the version, every platform (A1) or the tag (A2), and at least 12 hex characters of the commit.
+`plan --final` requires `status: ready` and evaluates G01, G09, G11 and the A1 and A2 quote checks (A1: version, every platform and at least 12 hex characters of the commit; A2: tag and commit); the A1 and evidence commits must equal `code_commit`. Everything else in the block is checked by the reviewer: the checklist in the [record contract](contracts/readiness-record.md#reviewer-checklist).
 
 ## Example (abbreviated, `plan --final` report lines)
 
