@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
+	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
 func TestHostingCommandsShareOptions(t *testing.T) {
@@ -84,5 +85,18 @@ func TestGHJJHelpIsLocalAndBoundedSurface(t *testing.T) {
 	var out, diag bytes.Buffer
 	if code := RunGHJJ(context.Background(), "test", []string{"workspace"}, &out, &diag); code != 2 {
 		t.Fatalf("%d %s", code, diag.String())
+	}
+}
+
+func TestHostingHumanRetainsNativeJJIdentityAndQualification(t *testing.T) {
+	var out bytes.Buffer
+	r := hosting.Result{Kind: "repo", Status: "ok", Backend: "jj", Identity: &inspection.Result{Backend: "jj", JJRepository: &inspection.JJRepository{ChangeID: "change", CommitID: "commit", OperationID: "operation", Observation: inspection.JJObservation{WorkingCopy: "stored-unsnapshotted", Limitation: "Disk freshness is unknown; no snapshot."}}}}
+	if e := renderHosting(&out, r); e != nil {
+		t.Fatal(e)
+	}
+	for _, want := range []string{"change", "commit", "operation", "stored-unsnapshotted", "Disk freshness is unknown"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %q: %s", want, out.String())
+		}
 	}
 }

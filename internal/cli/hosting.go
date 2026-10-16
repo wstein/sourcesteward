@@ -94,6 +94,15 @@ func hostingLeaf(kind string, requireJJ bool, run hostingOperation) *cobra.Comma
 func renderHosting(w io.Writer, r hosting.Result) error {
 	var text strings.Builder
 	fmt.Fprintf(&text, "Hosting: %q status=%q backend=%q\nObserved: %q\nComplete: %t; network reads: %t\n", r.Kind, r.Status, r.Backend, r.ObservedAt, r.Boundary.Complete, r.Boundary.Network)
+	if r.Identity != nil {
+		if v := r.Identity.JJRepository; v != nil {
+			fmt.Fprintf(&text, "Native jj: workspace=%q change=%q commit=%q operation=%q\nWorking copy: %q\nNative limitation: %q\n", v.WorkspaceRoot, v.ChangeID, v.CommitID, v.OperationID, v.Observation.WorkingCopy, v.Observation.Limitation)
+		}
+		if v := r.Identity.Repository; v != nil {
+			fmt.Fprintf(&text, "Native Git: head=%q ref=%q commit=%q bare=%t linked-worktree=%t\n", v.Head.State, hostingNullable(v.Head.Ref), hostingNullable(v.Head.OID), v.Bare, v.LinkedWorktree)
+		}
+	}
+
 	if r.Repository != nil {
 		v := r.Repository
 		fmt.Fprintf(&text, "Repository: %q/%q/%q selection=%q\n", v.Host, v.Owner, v.Name, v.Selection)
