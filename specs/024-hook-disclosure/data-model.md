@@ -27,7 +27,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 - `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants (no hook entry and no directory is opened); the last two disclose process use (`git_processes` is true if any Git process started; `jj_processes` is true only for a jj-owned workspace and covers only the sandbox probe and `--version`). Git reads in a jj workspace run outside the jj sandbox.
 - `limits`: `{deadline_seconds: 10, git_process_seconds: 5, stream_bytes: 65536, result_bytes: 262144, value_bytes: 4096}`, the spec's limits table.
 - `complete`: boolean; false for `refused`, `error` and `incomplete`.
-- `notes`: empty for `refused` and `error` results; otherwise fixed strings: hook contents are never read (a missing interpreter or a self-disabling script is not detected); per-command overrides and the caller's `GIT_*` environment are not detected or applied; when `core.hooksPath` is set (state not `default`), hooks in the default directory are inert and not examined; on the jj path, the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns.
+- `notes`: empty for `refused` and `error` results; otherwise fixed strings: hook contents are never read (a missing interpreter or a self-disabling script is not detected); per-command overrides and the caller's `GIT_*` environment are not detected or applied; when `core.hooksPath` is set (state not `default`), hooks in the default directory are inert and not examined; on the jj path when a Git process ran, the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns (with no Git process the Git member is null and `jj-push` is not covered).
 
 ## Configuration
 
@@ -35,7 +35,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 | --- | --- | --- |
 | `hooks_path` | HooksPath | |
 | `directory` | `{path, kind}` \| null | null when no directory hook can run (state other than `default` and `configured`); `kind` is `directory` or `symlink` (to a directory) |
-| `config_hooks_detected` | boolean | true when a `hook.*.event` value names one of the six operation hooks |
+| `config_hooks_detected` | boolean | true when a `hook.*.event` value names one of the six operation hooks or a `hook.*.event` key is valueless |
 
 ### HooksPath
 
@@ -89,5 +89,5 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 - `status: "incomplete"` carries the result built so far with `hooks-limit` or `hooks-state-changed`.
 - `status: "refused"` carries an `error.code` from the `refused` rows of the spec's refusal table, `configuration: null`, empty `hooks`, `operations` and `findings`, and a null `identity` when none could be established.
 - `status: "error"` carries a code from the `error` rows of the refusal table and the same empty fields. For codes raised after a `.jj` marker was found, `backend` is `jj`.
-- Evidence level derivation: the catalog base level, lowered to `documented` when a detected version is outside the catalog's measured range (`version_covered: false`).
+- Evidence level derivation: the catalog base level, lowered to `documented` when FR-008's coverage rule fails (`version_covered: false`).
 - `runs_hooks` for a Git-owned repository comes from the `git-*` claims; for a jj-owned workspace from the `jj-*` claims.
