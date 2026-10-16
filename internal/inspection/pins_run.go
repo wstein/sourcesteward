@@ -22,14 +22,22 @@ const (
 	// pinsRecordLimit bounds one NUL-terminated record (a path is at most 4096 bytes in practice).
 	pinsRecordLimit = 64 << 10
 	pinsStderrKeep  = 4096
+	// pinsCallDeadline bounds one invocation (FR-011: 5 seconds per submodule); the caller's context
+	// carries the 30 second total. It makes a Git process that blocks on a FIFO a limit, not a hang.
+	pinsCallDeadline = 5 * time.Second
 )
 
 // pinsLimitError reports an exhausted bound; callers turn it into the pins-limit finding.
-type pinsLimitError struct{ Kind string } // "retained" or "scan"
+type pinsLimitError struct{ Kind string } // "retained", "scan", "record" or "deadline"
 
 func (e *pinsLimitError) Error() string {
-	if e.Kind == "scan" {
+	switch e.Kind {
+	case "scan":
 		return "Git output exceeded the scan allowance"
+	case "record":
+		return "a Git output record exceeded its length limit"
+	case "deadline":
+		return "a Git invocation exceeded its deadline"
 	}
 	return "Git output exceeded the retained-output budget"
 }
@@ -68,13 +76,17 @@ type pinsOutput struct {
 }
 
 type pinsRunner struct {
-	ctx    context.Context
-	budget *pinsBudget
-	scan   int
+	ctx     context.Context
+	budget  *pinsBudget
+	scan    int
+	timeout time.Duration
+	// env adjusts the process environment; tests use it to prove protocol isolation does not depend on
+	// GIT_NO_LAZY_FETCH.
+	env func([]string) []string
 }
 
 func newPinsRunner(ctx context.Context) *pinsRunner {
-	return &pinsRunner{ctx: ctx, budget: &pinsBudget{limit: pinsRetainBudget}, scan: pinsScanAllowance}
+	return &pinsRunner{ctx: ctx, budget: &pinsBudget{limit: pinsRetainBudget}, scan: pinsScanAllowance, timeout: pinsCallDeadline}
 }
 
 // pinsIsolation neutralizes hooks, fsmonitor, optional locks, prompts, credential helpers, remote
@@ -86,13 +98,17 @@ func pinsIsolation() []string {
 	return []string{
 		"--no-replace-objects", "--no-optional-locks", "--literal-pathspecs",
 		"-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.untrackedCache=false",
-		"-c", "credential.helper=", "-c", "protocol.allow=never", "-c", "core.sshCommand=/bin/false",
+		"-c", "credential.helper=", "-c", "core.sshCommand=/bin/false",
+		// protocol.allow only sets the default: an explicit protocol.<name>.allow=always in repository
+		// configuration overrides it, so every transport is switched off by name.
+		"-c", "protocol.allow=never", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never",
+		"-c", "protocol.ssh.allow=never", "-c", "protocol.git.allow=never", "-c", "protocol.http.allow=never", "-c", "protocol.https.allow=never",
 		"-c", "gc.auto=0", "-c", "maintenance.auto=false",
 	}
 }
 
 func pinsEnvironment() []string {
-	return append(gitEnvironment(), "LC_ALL=C", "GIT_PROTOCOL_FROM_USER=0")
+	return append(gitEnvironment(), "LC_ALL=C", "GIT_PROTOCOL_FROM_USER=0", "GIT_CONFIG_NOSYSTEM=1")
 }
 
 // scanCounter counts stderr toward the same scan allowance as stdout and keeps its first bytes.
@@ -123,7 +139,7 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 	if err := r.ctx.Err(); err != nil {
 		return pinsOutput{}, err
 	}
-	ctx, cancel := context.WithCancel(r.ctx)
+	ctx, cancel := context.WithTimeout(r.ctx, r.timeout)
 	defer cancel()
 	args := pinsIsolation()
 	if call.Repo.GitDir != "" {
@@ -138,6 +154,9 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 		c.Dir = call.Repo.WorkTree
 	}
 	c.Env = pinsEnvironment()
+	if r.env != nil {
+		c.Env = r.env(c.Env)
+	}
 	c.Stdin = bytes.NewReader(call.Stdin)
 	c.WaitDelay = time.Second
 	scanned := 0
@@ -154,6 +173,9 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 	waitErr := c.Wait()
 	if err := r.ctx.Err(); err != nil {
 		return pinsOutput{}, err
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return pinsOutput{}, &pinsLimitError{Kind: "deadline"}
 	}
 	errs.mu.Lock()
 	over := errs.over
@@ -223,7 +245,7 @@ func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, scanned *in
 					pending = pending[i+1:]
 				}
 				if len(pending) > pinsRecordLimit {
-					return fail(&pinsLimitError{Kind: "retained"})
+					return fail(&pinsLimitError{Kind: "record"})
 				}
 			}
 		}

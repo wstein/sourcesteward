@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -120,5 +121,62 @@ func TestPinsRunnerFeedsStdin(t *testing.T) {
 		Args: []string{"config", "--file", "-", "--null", "--list", "--no-includes"}, Stdin: []byte("[submodule \"x\"]\n\tpath = y\n")})
 	if err != nil || string(out.Stdout) != "submodule.x.path\ny\x00" {
 		t.Fatalf("%q %v", out.Stdout, err)
+	}
+}
+
+func TestPinsIsolationListIsExactlyTheDocumentedOne(t *testing.T) {
+	want := []string{
+		"--no-replace-objects", "--no-optional-locks", "--literal-pathspecs",
+		"-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.untrackedCache=false",
+		"-c", "credential.helper=", "-c", "core.sshCommand=/bin/false",
+		"-c", "protocol.allow=never", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never",
+		"-c", "protocol.ssh.allow=never", "-c", "protocol.git.allow=never", "-c", "protocol.http.allow=never", "-c", "protocol.https.allow=never",
+		"-c", "gc.auto=0", "-c", "maintenance.auto=false",
+	}
+	if got := pinsIsolation(); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("isolation prefix changed:\n got %v\nwant %v", got, want)
+	}
+	env := strings.Join(pinsEnvironment(), "\n")
+	for _, w := range []string{"GIT_CONFIG_NOSYSTEM=1", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "LC_ALL=C"} {
+		if !strings.Contains(env, w) {
+			t.Errorf("environment lacks %s", w)
+		}
+	}
+}
+
+func TestPinsRunnerNeverHonorsReplaceObjects(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Sub, "commit", "--allow-empty", "-qm", "replacement")
+	repl := gitIn(t, f.Sub, "rev-parse", "HEAD")
+	member := filepath.Join(f.Super, "member")
+	git(t, member, "fetch", "-q", "origin")
+	git(t, member, "replace", f.Pin, repl)
+	out, err := newPinsRunner(context.Background()).run(pinsCall{Repo: memberRepo(f), Args: []string{"cat-file", "-p", f.Pin}})
+	if err != nil || strings.Contains(string(out.Stdout), "replacement") || !strings.Contains(string(out.Stdout), "sub one") {
+		t.Fatalf("a replace ref was honored: %q %v", out.Stdout, err)
+	}
+	if plain := git(t, member, "cat-file", "-p", f.Pin); !strings.Contains(plain, "replacement") {
+		t.Fatalf("control: plain Git must honor the replace ref: %q", plain)
+	}
+}
+
+func TestPinsRunnerDoesNotRefreshTheIndex(t *testing.T) {
+	f := newPinsFixture(t)
+	member := filepath.Join(f.Super, "member")
+	idx := filepath.Join(f.Super, ".git", "modules", "member", "index")
+	// Touch a tracked file so a refreshing command would rewrite the index.
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(member, "file.txt"), old, old)
+	before, _ := os.ReadFile(idx)
+	st, _ := os.Stat(idx)
+	for _, args := range [][]string{{"ls-files", "--stage", "--debug", "-z"}, {"diff-index", "--cached", "--no-ext-diff", "--no-textconv", "HEAD"}, {"ls-files", "--others", "--exclude-standard", "-z"}} {
+		if _, err := newPinsRunner(context.Background()).run(pinsCall{Repo: memberRepo(f), Args: args}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, _ := os.ReadFile(idx)
+	st2, _ := os.Stat(idx)
+	if string(before) != string(after) || !st.ModTime().Equal(st2.ModTime()) {
+		t.Fatal("the index was rewritten")
 	}
 }

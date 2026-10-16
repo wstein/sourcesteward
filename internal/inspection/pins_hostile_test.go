@@ -51,7 +51,7 @@ var hostileHooks = []string{"pre-commit", "prepare-commit-msg", "commit-msg", "p
 
 // plant configures hostile behaviour in the repository at gitDir (worktree workTree). It writes the
 // repository's own config file and hooks directory, exactly where untrusted content would.
-func (h hostile) plant(t *testing.T, gitDir, workTree string) {
+func (h hostile) plant(t *testing.T, gitDir, workTree string, includes bool) {
 	t.Helper()
 	cfg := filepath.Join(gitDir, "config")
 	set := func(key, value string) {
@@ -91,7 +91,9 @@ func (h hostile) plant(t *testing.T, gitDir, workTree string) {
 	}
 	included := filepath.Join(h.dir, "included-"+filepath.Base(gitDir)+".cfg")
 	writeFile(t, included, "[core]\n\tfsmonitor = "+h.script(t, "included-fsmonitor")+"\n")
-	set("include.path", included)
+	if includes { // a submodule configuration with an include is refused outright (see pins_confine_test.go)
+		set("include.path", included)
+	}
 	// Attributes select the filter and diff driver for every path, from the worktree and from info/.
 	writeFile(t, filepath.Join(gitDir, "info", "attributes"), "* filter=evil diff=evil merge=evil\n")
 	if workTree != "" {
@@ -162,8 +164,8 @@ func TestPinsHostileConfigurationNeverExecutes(t *testing.T) {
 	memberGit := filepath.Join(f.Super, ".git", "modules", "member")
 	// A tracked file that really differs in the submodule, and a stat-dirty one in both repositories.
 	writeFile(t, filepath.Join(member, "file.txt"), "changed\n")
-	h.plant(t, memberGit, member)
-	h.plant(t, filepath.Join(f.Super, ".git"), f.Super)
+	h.plant(t, memberGit, member, false)
+	h.plant(t, filepath.Join(f.Super, ".git"), f.Super, true)
 	h.hostileGlobalConfig(t)
 	statDirty(t, f.Super)
 	statDirty(t, member)
@@ -223,12 +225,12 @@ func TestPinsHostileSubmodulesAreRefusedAndOthersStillReported(t *testing.T) {
 	// 1. A .git pointer to a hostile repository outside the superproject.
 	outside := filepath.Join(f.Root, "outside-gitdir")
 	git(t, f.Root, "clone", "-q", "--bare", f.Sub, outside)
-	h.plant(t, outside, "")
+	h.plant(t, outside, "", true)
 	writeFile(t, filepath.Join(f.Super, "pointer", ".git"), "gitdir: "+outside+"\n")
 	// 2. A symlinked submodule directory leading to a repository with a valid-looking .git.
 	mkdirs(t, elsewhere)
 	git(t, f.Root, "clone", "-q", f.Sub, filepath.Join(elsewhere, "clone"))
-	h.plant(t, filepath.Join(elsewhere, "clone", ".git"), filepath.Join(elsewhere, "clone"))
+	h.plant(t, filepath.Join(elsewhere, "clone", ".git"), filepath.Join(elsewhere, "clone"), true)
 	os.RemoveAll(filepath.Join(f.Super, "linked"))
 	if err := os.Symlink(filepath.Join(elsewhere, "clone"), filepath.Join(f.Super, "linked")); err != nil {
 		t.Fatal(err)
@@ -287,5 +289,47 @@ func TestPinsHostileSubmodulesAreRefusedAndOthersStillReported(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestPinsProtocolIsolationBlocksExtLazyFetch proves the audit cannot be made to run a command through a
+// transport: a partial clone whose remote is an ext:: URL, with protocol.ext.allow=always in its own
+// configuration, would run `sh -c touch ...` on any lazy fetch. The runner's environment is stripped of
+// GIT_NO_LAZY_FETCH here so only the per-protocol overrides protect it.
+func TestPinsProtocolIsolationBlocksExtLazyFetch(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Sub, "config", "uploadpack.allowFilter", "true")
+	git(t, f.Sub, "config", "uploadpack.allowAnySHA1InWant", "true")
+	partial := filepath.Join(f.Root, "partial")
+	git(t, f.Root, "-c", "protocol.file.allow=always", "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+f.Sub, partial)
+	blob := gitIn(t, f.Sub, "rev-parse", "HEAD:file.txt")
+	marker := filepath.Join(f.Root, "PWNED")
+	git(t, partial, "config", "remote.origin.url", "ext::sh -c touch% "+marker)
+	git(t, partial, "config", "protocol.ext.allow", "always")
+
+	c := exec.Command("git", "cat-file", "-p", blob)
+	c.Dir = partial
+	c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	_ = c.Run()
+	if _, err := os.Stat(marker); err != nil {
+		t.Skipf("control: this Git did not lazy-fetch through ext:: (%v); the fixture cannot prove isolation here", err)
+	}
+	os.Remove(marker)
+
+	run := newPinsRunner(context.Background())
+	run.env = func(env []string) []string {
+		kept := env[:0:0]
+		for _, e := range env {
+			if !strings.HasPrefix(e, "GIT_NO_LAZY_FETCH=") {
+				kept = append(kept, e)
+			}
+		}
+		return kept
+	}
+	if _, err := run.run(pinsCall{Repo: pinsGitRepo{GitDir: filepath.Join(partial, ".git"), WorkTree: partial}, Args: []string{"cat-file", "-p", blob}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("an ext:: remote was executed through lazy fetch")
 	}
 }

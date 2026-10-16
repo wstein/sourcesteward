@@ -12,3 +12,6 @@ const pinsOpenFlags = 0
 func pinsEffectiveUID() uint32                 { return 0 }
 func pinsFileOwner(fs.FileInfo) (uint32, bool) { return 0, false }
 func pinsFileID(fs.FileInfo) (pinsDirID, bool) { return pinsDirID{}, false }
+
+func pinsEffectiveGID() uint32                 { return 0 }
+func pinsFileGroup(fs.FileInfo) (uint32, bool) { return 0, false }
