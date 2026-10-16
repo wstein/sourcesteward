@@ -106,6 +106,10 @@ type pinsSubmoduleDirs struct {
 	WorkID   pinsDirID
 	GitID    pinsDirID
 
+	// cfg identifies config and config.worktree as validated, so a rewrite after the validation shows at the
+	// recheck (the content check itself runs only once).
+	cfg [2]pinsFileFP
+
 	workRel string // under the superproject worktree
 	gitBase string // the directory gitRel is relative to
 	gitRel  string
@@ -378,6 +382,7 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 	if refusal, err := s.checkConfiguration(dirs); refusal != nil || err != nil {
 		return pinsResolved{}, refusal, err
 	}
+	dirs.cfg = s.configIdentity(dirs)
 	return pinsResolved{Dirs: &dirs}, nil, nil
 }
 
@@ -647,6 +652,28 @@ func (s *pinsSafety) checkConfiguration(d pinsSubmoduleDirs) (*pinsSafetyRefusal
 	return nil, nil
 }
 
+// pinsFileFP identifies a file by device, inode, size and modification time; absent files compare equal.
+type pinsFileFP struct {
+	Present bool
+	ID      pinsDirID
+	Size    int64
+	Mtime   int64
+}
+
+func (s *pinsSafety) configIdentity(d pinsSubmoduleDirs) [2]pinsFileFP {
+	var out [2]pinsFileFP
+	for i, name := range []string{"config", "config.worktree"} {
+		info, err := pinsLstat(d.gitBase, d.gitRel+"/"+name)
+		if err != nil {
+			out[i] = pinsFileFP{Present: !errors.Is(err, fs.ErrNotExist)} // unreadable counts as changed later
+			continue
+		}
+		id, _ := pinsFileID(info)
+		out[i] = pinsFileFP{Present: true, ID: id, Size: info.Size(), Mtime: info.ModTime().UnixNano()}
+	}
+	return out
+}
+
 // recheck verifies that both directories are still the ones that were validated: same path, same device
 // and inode, still not symlinks.
 func (s *pinsSafety) recheck(d pinsSubmoduleDirs) error {
@@ -667,6 +694,9 @@ func (s *pinsSafety) recheck(d pinsSubmoduleDirs) error {
 			return &pinsLimitError{Kind: "entries"}
 		}
 		return errors.New("submodule Git directory changed: " + r.Message)
+	}
+	if s.configIdentity(d) != d.cfg {
+		return errors.New("submodule Git configuration changed after validation")
 	}
 	return nil
 }
