@@ -17,21 +17,23 @@ stw pins [PATH] [--json] [--strict]
 
 | Status | Meaning |
 | --- | --- |
-| 0 | Result produced and complete; findings do not change this without `--strict` |
-| 1 | Operational failure, refusal (jj, GitButler, bare, ambiguous), incomplete result, or cancellation |
+| 0 | Complete result; findings do not change this without `--strict` |
+| 1 | Refusal, operational failure, cancellation or an incomplete result, with or without `--strict` |
 | 2 | Usage error |
-| 3 | `--strict` and at least one `error` finding in a complete result |
+| 3 | `--strict`, a complete result and at least one `error` finding |
 
-An incomplete result exits 1 even without `--strict`, because completeness is not optional for an audit.
+Precedence: 2, then 1, then 3, then 0. An incomplete result exits 1 even with error findings, because completeness is not optional for an audit; `pins-limit` and `pins-state-changed` therefore never reach status 3.
 
 ## Backend capability
 
 | Backend | `stw pins` |
 | --- | --- |
 | Git (worktree, linked worktree) | Supported |
-| jj (standalone, colocated, secondary) | Refused with `backend_unsupported`: jj has no Git submodule model; use a Git-owned checkout |
-| GitButler-managed | Refused |
-| Bare Git repository | Refused with `bare_repository` |
+| jj (standalone, colocated, secondary) | Refused with `unsupported-backend`: jj has no Git submodule model; use a Git-owned checkout |
+| GitButler-managed | Refused with `unsupported-backend` |
+| Conflicting ownership markers | Refused with `ambiguous-backend` |
+| Bare Git repository | Refused with `bare-repository` |
+| Not a repository | Refused with `not-repository` |
 
 ## Human output
 
@@ -47,8 +49,8 @@ workharbor   pin c27fc9e…  checkout 54a002f… (diverged, ahead 0, behind 12) 
   publication: UNREACHABLE (no remote-tracking ref contains it)
 
 findings: 1 error, 1 warning
-  error    workharbor  pin_unpublished: local evidence shows no remote contains the pin
-  warning  workharbor  checkout_differs_from_pin
+  error    workharbor  pin-unpublished: local evidence shows no remote contains the pin
+  warning  workharbor  checkout-differs-from-pin
 note: remote-tracking refs may be stale; no fetch was made
 ```
 
@@ -62,15 +64,15 @@ One `PinsResult` object per invocation, validated by `schemas/v1/pins.schema.jso
 {"schema_version":1,"command":"pins","status":"refused","backend":"jj",
  "input_path":".","boundary":{"effects":{"network":false,"fetch":false,"writes":false,"hooks":false},"complete":false},
  "submodules":[],"findings":[],
- "error":{"code":"backend_unsupported","message":"jj has no Git submodule model; run this in a Git-owned checkout"}}
+ "error":{"code":"unsupported-backend","message":"jj has no Git submodule model; run this in a Git-owned checkout"}}
 ```
 
 ## Effects
 
-- Reads: superproject object database, index file, `.gitmodules`, each validated submodule Git directory, `FETCH_HEAD` metadata.
+- Reads: superproject object database, index file, `.gitmodules` blobs and worktree file (never through a symlink), each validated submodule worktree and Git directory, `FETCH_HEAD` metadata.
 - Writes: none. No lock file remains. Index bytes and modification time are unchanged.
 - Network, fetch, clone, `submodule init` and `submodule update`: none.
-- Processes: only the fixed, isolated Git invocations listed in the research record, with no hook, filter, helper, alias, fsmonitor, textconv or external diff.
+- Processes: only the fixed, isolated Git invocations listed in the research record, with no hook, clean or process filter, helper, alias, fsmonitor, textconv or external diff. Ownership detection and every refusal start no process.
 
 ## Compatibility
 
