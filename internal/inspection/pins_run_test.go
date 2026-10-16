@@ -131,7 +131,7 @@ func TestPinsIsolationListIsExactlyTheDocumentedOne(t *testing.T) {
 		"-c", "credential.helper=", "-c", "core.sshCommand=/bin/false",
 		"-c", "protocol.allow=never", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never",
 		"-c", "protocol.ssh.allow=never", "-c", "protocol.git.allow=never", "-c", "protocol.http.allow=never", "-c", "protocol.https.allow=never",
-		"-c", "gc.auto=0", "-c", "maintenance.auto=false",
+		"-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "core.commitGraph=false",
 	}
 	if got := pinsIsolation(); strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("isolation prefix changed:\n got %v\nwant %v", got, want)
