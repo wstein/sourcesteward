@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/inspection"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type apiReader interface {
@@ -162,7 +163,7 @@ func readPR(ctx context.Context, api apiReader, repo *Repository, number int) (*
 		Head   *apiRef `json:"head"`
 		Base   *apiRef `json:"base"`
 	}
-	if json.Unmarshal(raw, &p) != nil || p.Number == nil || *p.Number != number || p.Title == nil || p.URL == nil || p.State == nil || p.Draft == nil || p.Head == nil || p.Base == nil {
+	if !utf8.Valid(raw) || json.Unmarshal(raw, &p) != nil || p.Number == nil || *p.Number != number || p.Title == nil || p.URL == nil || p.State == nil || p.Draft == nil || p.Head == nil || p.Base == nil {
 		return nil, errors.New("PR response is missing required evidence")
 	}
 	for _, ref := range []*apiRef{p.Head, p.Base} {
@@ -188,7 +189,7 @@ func readCI(ctx context.Context, api apiReader, r *Result) error {
 			Total *int               `json:"total_count"`
 			Rows  *[]json.RawMessage `json:"check_runs"`
 		}
-		if json.Unmarshal(raw, &response) != nil || response.Total == nil || response.Rows == nil || *response.Total < 0 || *response.Total > maxRecords || len(*response.Rows) > 100 {
+		if !utf8.Valid(raw) || json.Unmarshal(raw, &response) != nil || response.Total == nil || response.Rows == nil || *response.Total < 0 || *response.Total > maxRecords || len(*response.Rows) > 100 {
 			return errors.New("check-run collection is missing, invalid or exceeds its bounds")
 		}
 		if total < 0 {
@@ -228,7 +229,7 @@ func readCI(ctx context.Context, api apiReader, r *Result) error {
 			return e
 		}
 		var rows []json.RawMessage
-		if json.Unmarshal(raw, &rows) != nil || rows == nil || len(rows) > 100 {
+		if !utf8.Valid(raw) || json.Unmarshal(raw, &rows) != nil || rows == nil || len(rows) > 100 {
 			return errors.New("commit-status collection is missing or invalid")
 		}
 		for _, row := range rows {
@@ -263,7 +264,7 @@ func decodeCheck(raw []byte, sha string) (Check, error) {
 		HeadSHA    *string         `json:"head_sha"`
 		URL        *string         `json:"html_url"`
 	}
-	if json.Unmarshal(raw, &p) != nil || p.ID == nil || *p.ID <= 0 || p.Name == nil || p.Status == nil || p.HeadSHA == nil || *p.HeadSHA != sha || p.URL == nil || len(p.Conclusion) == 0 {
+	if !utf8.Valid(raw) || json.Unmarshal(raw, &p) != nil || p.ID == nil || *p.ID <= 0 || p.Name == nil || p.Status == nil || p.HeadSHA == nil || *p.HeadSHA != sha || p.URL == nil || len(p.Conclusion) == 0 {
 		return Check{}, errors.New("check-run required fields or head identity are invalid")
 	}
 	var conclusion *string
@@ -280,7 +281,7 @@ func decodeStatus(raw []byte) (CommitStatus, error) {
 		Description json.RawMessage `json:"description"`
 		URL         json.RawMessage `json:"target_url"`
 	}
-	if json.Unmarshal(raw, &p) != nil || p.ID == nil || *p.ID <= 0 || p.Context == nil || p.State == nil || len(p.Description) == 0 || len(p.URL) == 0 {
+	if !utf8.Valid(raw) || json.Unmarshal(raw, &p) != nil || p.ID == nil || *p.ID <= 0 || p.Context == nil || p.State == nil || len(p.Description) == 0 || len(p.URL) == 0 {
 		return CommitStatus{}, errors.New("commit-status required fields are invalid")
 	}
 	var desc, url *string
