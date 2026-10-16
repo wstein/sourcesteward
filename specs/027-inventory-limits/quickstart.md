@@ -35,7 +35,7 @@ stw inventory . --json | python3 -c 'import json,sys; r=json.load(sys.stdin); pr
 stw inventory . --query ref-exists --ref refs/tags/t1100 --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["query"]["value"])'
 ```
 
-Expected: `partial`, at most about 510 references (tags cost two records each), the TXT-2 limitation naming the omitted count; then `ok true`.
+Expected: `partial`, at most about 510 references (tags cost two records each, tags are omitted first), the TXT-2 limitation naming the omitted count; then `ok true`.
 
 ```sh
 # A submodule checkout and a gitlink-bearing superproject.
@@ -49,7 +49,7 @@ git checkout -q -- s
 stw inventory . --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["workspaces"][0]["tracked"])'
 ```
 
-Expected: `True false` (before: the path ends with `.git/modules/mods/lib` and `tracked` is `true`); then `ok true ['submodule disk state not observed; tracked is true from staged or ordinary-file evidence only']`; then `partial` and `tracked` unknown with `submodule disk state excluded to avoid recursive helpers`.
+Expected: `True false` (before: the path ends with `.git/modules/mods/lib` and `tracked` is `true`); then `partial true ['submodule disk state not observed; tracked is true from staged or ordinary-file evidence only']` (partial because the submodule worktree is unobserved; `stw inventory . --query dirty --json` gives `ok` and `true`); then `partial` and `tracked` unknown with `submodule disk state excluded to avoid recursive helpers`.
 
 ```sh
 # Effects: nothing changes.
