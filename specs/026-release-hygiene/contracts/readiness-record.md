@@ -11,7 +11,7 @@ Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`. 
 5. **Reproducibility**: per platform `match`, `mismatch`, `waived` or `not-run`, the two binary hashes and the two build directories.
 6. **Approvals**: A1 to A4 and any waiver with date, who relayed it, the verbatim authorization and the named values. An A1 quote contains the version, every platform and at least 12 hex characters of the code commit. An entry exists only after the user gave it. Control characters are removed before printing and fields are truncated at 2,000 bytes.
 7. **Not run**: every check that was skipped, with reason (mandatory, may be `none`).
-8. **Post-release verification**: S1 to S5 per platform with host and outcome; the Mac mini entry for darwin/arm64 is `manual`.
+8. **Post-release verification**: S1 to S5 per platform on the downloaded files with host and outcome; the Mac mini entry for darwin/arm64 is `manual`. This section and A3/A4 may be `pending` for `--final` and must be complete for `--complete`. Every evidence entry of every class records the code commit; `manual` entries also record the verified `SHA256SUMS` anchor. A `|` or newline in a quote is escaped (quotes are given in fenced blocks).
 9. **Open issues**.
 
 ## Release notes sections
