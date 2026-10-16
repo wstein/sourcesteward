@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/wstein/sourcesteward/internal/hosting"
 )
 
 type versionInformation struct {
@@ -30,10 +31,29 @@ Are you an AI? Use these resources ONLY IF your task specifically asks you to:
 
 // Run is the sole diagnostic/exit boundary. Each call owns a fresh command tree.
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) int {
+	return runCLI(ctx, version, args, stdout, stderr, false)
+}
+
+// RunGHJJ is the optional gh extension entry point, sharing operations and diagnostics.
+func RunGHJJ(ctx context.Context, version string, args []string, stdout, stderr io.Writer) int {
+	return runCLI(ctx, version, args, stdout, stderr, true)
+}
+func runCLI(ctx context.Context, version string, args []string, stdout, stderr io.Writer, extension bool) int {
 	if err := ctx.Err(); err != nil {
 		return report(stderr, err, 1)
 	}
 	root, helpError := newRoot(version, stdout, stderr)
+	if extension {
+		root.Use = "gh-jj"
+		root.Short = "SourceSteward read-only Jujutsu/GitHub inspection (gh jj)"
+		root.Long = "SourceSteward — gh jj. Native jj repository resolution and explicit read-only PR/CI inspection."
+		for _, command := range root.Commands() {
+			if command.Name() != "help" && command.Name() != "version" {
+				root.RemoveCommand(command)
+			}
+		}
+		root.AddCommand(hostingCommands(true, hosting.Inspect)...)
+	}
 	root.SetArgs(args)
 	err := root.ExecuteContext(ctx)
 	if *helpError != nil {
@@ -104,7 +124,7 @@ func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) 
 		},
 	}
 	versionCommand.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand())
+	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), hostingCommand())
 	root.SetHelpCommand(&cobra.Command{
 		Use: "help [command]", Short: "Help about a command", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
