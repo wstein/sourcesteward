@@ -249,3 +249,30 @@ func TestPinsFinalizeNeverEmitsNullArrays(t *testing.T) {
 		}
 	}
 }
+
+func TestPinsRejectsInvalidUTF8InsteadOfReplacingIt(t *testing.T) {
+	r := NewPinsResult(".")
+	r.Status, r.Backend = "ok", "git"
+	r.Submodules = []PinsSubmodule{{Path: "bad\xffpath", PathEncoding: "utf8"}}
+	if err := r.Finalize(); err == nil {
+		t.Fatal("Finalize accepted a non-UTF-8 path")
+	}
+	if raw, err := json.Marshal(r); err == nil {
+		t.Fatalf("marshal replaced invalid bytes silently: %s", raw)
+	}
+	// The escaped form is valid text and encodes unchanged.
+	r.Submodules[0].Path, r.Submodules[0].PathEncoding = `bad\xffpath`, "escaped"
+	if err := r.Finalize(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(r)
+	if err != nil || !strings.Contains(string(raw), `bad\\xffpath`) {
+		t.Fatalf("%s %v", raw, err)
+	}
+	// Strings nested in pointers and identity are checked as well.
+	bad := "\xff"
+	r.Submodules[0].URL.Configured = &bad
+	if _, err := json.Marshal(r); err == nil {
+		t.Fatal("nested pointer string accepted")
+	}
+}
