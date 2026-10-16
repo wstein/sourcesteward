@@ -38,7 +38,7 @@ class HugoTests(unittest.TestCase):
             (source / 'inspect.schema.json').write_bytes(raw)
             (source / 'inventory.schema.json').write_bytes(raw)
             (source / 'workspace.schema.json').write_bytes(raw)
-            (source / 'tidy.schema.json').write_bytes(raw)
+            (source / 'tidy.schema.json', 'hosting.schema.json').write_bytes(raw)
             destination = root / 'public'
             destination.mkdir()
             pages.copy_schemas(root,destination,required=True)
@@ -66,7 +66,7 @@ class HugoTests(unittest.TestCase):
             root = Path(directory)
             (root / 'revision.txt').write_text('a'*40+'\n')
             source_root = root / 'source'
-            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json'),'v2':('inspect.schema.json', 'tidy.schema.json')}.items():
+            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json'),'v2':('inspect.schema.json', 'tidy.schema.json')}.items():
                 for name in names:
                     source = source_root / 'schemas' / version / name
                     source.parent.mkdir(parents=True,exist_ok=True)
@@ -116,7 +116,7 @@ class HugoTests(unittest.TestCase):
     def test_all_schema_versions_are_required_and_strict(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json'),'v2':('inspect.schema.json', 'tidy.schema.json')}.items():
+            for version, names in {'v1':('version.schema.json','inspect.schema.json','inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json'),'v2':('inspect.schema.json', 'tidy.schema.json')}.items():
                 for name in names:
                     path = root / 'schemas' / version / name
                     path.parent.mkdir(parents=True,exist_ok=True)
