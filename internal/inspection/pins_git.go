@@ -520,3 +520,30 @@ func sameConfig(a, b []pinsConfigKV) bool {
 	}
 	return true
 }
+
+// pinsResolvedEntry pairs a registry entry with the outcome of validating its directories. A refusal
+// refuses only this submodule; the others are still resolved.
+type pinsResolvedEntry struct {
+	Entry    pinsEntry
+	Resolved pinsResolved
+	Refusal  *pinsSafetyRefusal
+}
+
+// pinsResolveAll validates every entry independently. An unregistered gitlink has no name, so its path
+// stands in for the Git directory name, as Git itself does by default. A non-nil error is operational
+// (cancellation, a bound) and stops the audit.
+func pinsResolveAll(s *pinsSafety, reg pinsRegistry) ([]pinsResolvedEntry, error) {
+	out := make([]pinsResolvedEntry, 0, len(reg.Entries))
+	for _, e := range reg.Entries {
+		spec := pinsSubmoduleSpec{Path: e.Path, Name: e.Path, ConfiguredGitDir: e.ConfiguredGitDir}
+		if e.Name != nil {
+			spec.Name = *e.Name
+		}
+		res, refusal, err := s.resolve(spec)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pinsResolvedEntry{Entry: e, Resolved: res, Refusal: refusal})
+	}
+	return out, nil
+}
