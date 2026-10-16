@@ -4,6 +4,7 @@ package hosting
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/wstein/sourcesteward/internal/inspection"
 	"strings"
 	"testing"
@@ -135,5 +136,90 @@ func TestOversizedResultAndMalformedUTF8Refuse(t *testing.T) {
 	r = inspect(context.Background(), ".", Options{Kind: "pr", Number: 3}, d)
 	if r.Status != "error" {
 		t.Fatal("malformed UTF-8 silently replaced")
+	}
+}
+func TestCIPaginationBoundsAndIdentityRevalidation(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	checks := func(n int) []json.RawMessage {
+		out := []json.RawMessage{}
+		for i := 0; i < n; i++ {
+			b, _ := json.Marshal(Check{ID: int64(i + 1), Name: "ci", Status: "completed", Conclusion: nil, HeadSHA: sha, URL: ""})
+			var fields map[string]any
+			json.Unmarshal(b, &fields)
+			fields["head_sha"] = sha
+			fields["html_url"] = ""
+			b, _ = json.Marshal(fields)
+			out = append(out, b)
+		}
+		return out
+	}
+	checkResponse := func(total int, rows []json.RawMessage) []byte {
+		b, _ := json.Marshal(map[string]any{"total_count": total, "check_runs": rows})
+		return b
+	}
+	for _, name := range []string{"changed-total", "duplicate-status", "combined-overflow", "unproven-status-exhaustion", "changed-head-repository", "changed-base-sha"} {
+		t.Run(name, func(t *testing.T) {
+			prCalls := 0
+			statusPage := 0
+			d := fixtureDeps(func(_ context.Context, p string) ([]byte, error) {
+				if strings.Contains(p, "pulls/") {
+					prCalls++
+					raw := prJSON(sha)
+					if prCalls > 1 {
+						switch name {
+						case "changed-head-repository":
+							raw = []byte(strings.Replace(string(raw), "fork/b", "other/b", 1))
+						case "changed-base-sha":
+							raw = []byte(strings.Replace(string(raw), strings.Repeat("b", 40), strings.Repeat("c", 40), 1))
+						}
+					}
+					return raw, nil
+				}
+				if strings.Contains(p, "check-runs") {
+					switch name {
+					case "changed-total":
+						if strings.HasSuffix(p, "&page=1") {
+							return checkResponse(101, checks(100)), nil
+						}
+						return checkResponse(102, checks(1)), nil
+					case "combined-overflow":
+						page := 1
+						fmt.Sscanf(p[strings.LastIndex(p, "page=")+5:], "%d", &page)
+						rows := checks(100)
+						for i := range rows {
+							var f map[string]any
+							json.Unmarshal(rows[i], &f)
+							f["id"] = (page-1)*100 + i + 1
+							rows[i], _ = json.Marshal(f)
+						}
+						return checkResponse(1000, rows), nil
+					default:
+						return checkResponse(0, []json.RawMessage{}), nil
+					}
+				}
+				statusPage++
+				n := 0
+				switch name {
+				case "duplicate-status", "unproven-status-exhaustion":
+					n = 100
+				case "combined-overflow":
+					n = 1
+				}
+				rows := []map[string]any{}
+				for i := 0; i < n; i++ {
+					id := (statusPage-1)*100 + i + 1
+					if name == "duplicate-status" {
+						id = i + 1
+					}
+					rows = append(rows, map[string]any{"id": id, "context": "legacy", "state": "pending", "description": nil, "target_url": nil})
+				}
+				b, _ := json.Marshal(rows)
+				return b, nil
+			})
+			r := inspect(context.Background(), ".", Options{Kind: "ci", Number: 3}, d)
+			if r.Status != "error" || r.Boundary.Complete {
+				t.Fatalf("accepted %s %+v", name, r)
+			}
+		})
 	}
 }
