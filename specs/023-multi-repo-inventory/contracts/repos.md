@@ -25,6 +25,19 @@ The normative table is in [spec.md](../spec.md#exit-status-normative): 0 overall
 | jj (standalone, colocated, secondary workspace) | supported (existing inventory with the `stored` scope only, requires the inventory's sandbox; dirty state `unknown`) | `not-applicable`, stated |
 | GitButler, ambiguous | entry `error` (`unsupported-backend`, `ambiguous-backend`) | no |
 
+## Inherited limits
+
+`repos` embeds the single-repository inventory unchanged, so it inherits that operation's limits, and their effect on the exit status is part of this contract:
+
+- **Content attributes.** The Git inventory reads attributes for every cached path with one `check-attr` call whose output is capped at 64 KiB. A repository with roughly 150 to 400 tracked files (depending on path length) therefore yields the entry error `git-inventory-failed` with the message `cannot safely observe content attributes`, even without any `.gitattributes`.
+- **Record limit.** More than 1,024 aggregate inventory records yields `git-inventory-failed` with the message `inventory record limit exceeded` (or the inventory's own `inventory-limit`).
+- **jj output.** A jj inventory fails with `jj-output-limit` when any single jj command prints more than 64 KiB (code reading, not yet measured: jj is absent from the authoring container).
+- **Always partial.** A repository with registered gitlinks and a bare repository are `partial` under the default Git scopes; a stale linked worktree makes its repository `partial`.
+
+Such an entry is `error` or `partial` with the cause on the entry, and the run ends with exit status 1; the other members are unaffected. Exit status 0 therefore means every member was fully observed. A workspace of large or submodule-bearing repositories mostly ends with exit status 1; lifting these limits is a change to single-repository inventory and a separate specification. Whether to fix that prerequisite first, or to cut `--submodules`, is an open maintainer decision (analysis, round 5).
+
+`--submodules` also inherits the submodule pin audit's refusals (Spec 021 safety layer): a submodule is refused with `path-unsafe`, before any process runs in it, when its path or Git directory goes through a symlink, its `.git` pointer is not exactly the expected Git directory, the Git directory or its configuration is owned by another user or writable by others, its `core.worktree` or an include differs, or it has a `commondir` entry or a non-empty `objects/info/alternates` file. A submodule that borrows objects through alternates is therefore not inventoried by `repos`.
+
 Dirty state of jj members is `unknown` (disk freshness needs a snapshot); a Git superproject with registered gitlinks and a bare repository are `partial` under the Git default scopes; these are backend or inherited differences, not equivalence claims.
 
 ## Human output
@@ -79,6 +92,7 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
   "limitations": [
    "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
    "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+   "Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
    "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
   ]
  },
@@ -326,16 +340,16 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
    "status": "skipped",
    "error": {
     "code": "submodule-uninitialized",
-    "message": "registered submodule has no checkout"
+    "message": "submodule is uninitialized"
    },
    "backend": "unknown",
    "discovery": {
-    "requested": true,
+    "requested": false,
     "status": "not-applicable",
     "submodules": 0,
     "ignored": 0,
     "deduplicated": 0,
-    "reason": "nested submodules are not traversed"
+    "reason": "discovery is not recursive"
    },
    "duplicate_of": null,
    "contained_in": 1,
@@ -381,7 +395,7 @@ Exit status for this example: 1 (overall `partial`: a repository with a register
 - Reads: each member's repository and worktree metadata as inventory does; the superproject's HEAD `.gitmodules` blob and index entries for discovery; `.git` pointer files of discovered members; `Lstat` of path components.
 - Writes: none to any repository. jj inventories create and remove the inventory's private temporary files outside the target (inherited, disclosed in `boundary.effects`).
 - Network, fetch, hooks, filters, helpers, editors, prompts: none.
-- Processes: per explicit and discovered entry one identity inspection (the existing `Inspect`: Git or jj processes as that operation starts them), then the inventory operation's processes (inherited). With `--submodules`, only for a parent whose identity is Git-owned and that passed the root and duplicate checks: `ls-tree -z -l HEAD -- .gitmodules`, `config --blob <oid from the ls-tree record> --null --list --no-includes`, and at most 64 `ls-files --stage -z -- ':(literal)<path>'`, each through the existing isolated runner. Path validation, duplicate and nesting checks, `.git` pointer checks and uninitialized skips start no process. No Git discovery process runs in a jj-owned, GitButler or ambiguous parent.
+- Processes: per explicit and discovered entry one identity inspection (the existing `Inspect`: Git or jj processes as that operation starts them), then the inventory operation's processes (inherited). With `--submodules`, only for a parent whose identity is Git-owned, is not bare, has a born HEAD and passed the root and duplicate checks: `rev-parse --path-format=absolute --git-dir --git-path modules`, `config --bool --get extensions.submodulePathConfig`, `ls-tree -z -l HEAD -- .gitmodules`, `config --blob <oid from the ls-tree record> --null --list --no-includes`, at most 64 `ls-files --stage -z -- <path>` (global `--literal-pathspecs`) and, only for a submodule that passed the confinement checks, a `config --file <Git directory>/config --null --list --no-includes` read, each through the pin audit's isolated runner (hooks, credential helpers, every transport and system configuration off), each call under its own 10-second deadline. Path validation, duplicate and nesting checks, `.git` pointer checks and uninitialized skips start no process. No Git discovery process runs in a jj-owned, GitButler or ambiguous parent.
 
 ## Compatibility
 
