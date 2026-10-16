@@ -15,7 +15,7 @@ Make the Git inventory adapter scale with the repository instead of with the 64 
 **Target Platform**: linux amd64/arm64 and darwin arm64 code paths (the streaming helper has no platform-specific code). CI evidence is ubuntu-24.04 amd64 only.
 **Project Type**: CLI with a shared operation layer; the change is inside `internal/inspection`.
 **Performance Goals**: 5,000 tracked files in well under the 10-second deadline (the measured cost of the proposed reads is tens of milliseconds, research Measurement 2); 50,000 files in about a second.
-**Constraints**: no hook, filter, helper, network, prompt or write; no index refresh or lock; bounded memory (on the order of 100 to 200 MiB at the extremes of LIM-7 to LIM-9); contracts unchanged.
+**Constraints**: no hook, filter, helper, network, prompt or write; no index refresh or lock; bounded memory (below about 100 MiB at the extremes of LIM-7 to LIM-9, derived in the contract); contracts unchanged.
 **Scale/Scope**: single repository inventory, Git only.
 
 ## Constitution Check
@@ -53,13 +53,13 @@ docs/progress.md, docs/feature-status.json
 5. **Query run rule QR-1**: a truncated supporting listing does not change a known predicate's `status`, `complete` or exit (otherwise `--query dirty` on a dirty repository would exit 1), and predicates use the candidate count, not the listing.
 6. **Checkout entry by identity** (CK, research Decision 4): `inspect()` of the entry (the existing function, already used for every entry) gives the checkout; no new repository-controlled path is read.
 7. **Positive evidence for gitlinks** (GL, research Decision 5); no submodule is opened. A clean superproject stays `partial`; `stw pins` or a future spec supplies the negative proof.
-8. **Per-file read raised to 16 MiB with chunked hashing (LIM-10) and a per-pass budget (LIM-11)**, so real repositories with a few larger files give facts and huge ones degrade instead of timing out (round 1 finding 7: two tracked files over 64 KiB in `sourcesteward`, eight in `bundledock`).
+8. **Per-file read raised to 16 MiB with chunked hashing (LIM-10) and a per-run budget (LIM-11)**, so real repositories with a few larger files give facts and huge ones degrade instead of timing out (round 1 finding 7: two tracked files over 64 KiB in `sourcesteward`, eight in `bundledock`).
 9. **Early stop** by context cancellation with a no-lock, no-process assertion in tests.
 10. **jj untouched**; shared helpers (`checkInventoryLimits`, `inventoryJSONBudget`) are reused unchanged, only Git calls the new fit helper.
 
 ## Risks
 
-- A truncated listing is read as complete by a consumer: mitigated by `partial`, `boundary.complete=false` and verbatim TXT strings; case-Q exceptions are narrow and tested.
+- A truncated listing is read as complete by a consumer: mitigated by `partial`, `boundary.complete=false` and verbatim TXT strings; QR-1 exceptions are narrow and tested.
 - Substituting the checkout path changes a value consumers may have keyed on (COMPAT-3): documented; Spec 023's root-workspace rule matches the workspace whose path equals the identity's worktree (read from the 023 branch, spec US3-6), which CK-1 makes true for a submodule checkout, so the change helps it.
 - The 10-second deadline remains for pathological repositories (cold cache, millions of files): the index limit and content budget degrade first, the deadline is the backstop and stays an `error`.
 - `check-attr --stdin -z` on Git 2.46.0 is unverified (2.47.3 and 2.56.0 verified); the minimum lane in CI is the check.
@@ -86,7 +86,7 @@ Not changed by this spec (maintainer scope decision). When this lands, Spec 023 
 ## Open questions (with recommendations)
 
 1. Fair share when both sections overflow: half each, as specified. Recommendation: keep; revisit with consumer evidence.
-2. Resolved by round 1: the per-file read is raised to 16 MiB in this spec (COMPAT-10) because the stated goal is not met on real repositories otherwise. Remaining question: is 16 MiB per file and 256 MiB per pass the right ceiling? Recommendation: keep, measure cold-cache I/O in the verification.
+2. Resolved by round 1: the per-file read is raised to 16 MiB in this spec (COMPAT-10) because the stated goal is not met on real repositories otherwise. Remaining question: is 16 MiB per file and 256 MiB per run the right ceiling? Recommendation: keep, measure cold-cache I/O in the verification.
 3. Observe submodule worktree state to prove `false` for clean superprojects? Recommendation: do not in this prerequisite; use `stw pins` (Spec 021) or a later spec that reuses its confinement layer.
 4. Make the references limit a partial listing even when the scan allowance is exceeded? Recommendation: no; a listing cut at an unknown point could make a predicate lie (DEG-6).
 5. Should the jj adapter get the same treatment? Recommendation: yes, as a separate spec once jj can be measured in the authoring environment.

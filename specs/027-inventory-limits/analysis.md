@@ -29,3 +29,23 @@ Independent reviewer: read-only Opus review, revision a90c67f87487ca55de7a631655
 | 17 | Medium | SC-002 coverage gaps | DEG-10 to DEG-14, BUF, CLI exit and handoff and jj tests added to T006, T007, T013 |
 | 18 | Medium | COMPAT-8 inaccurate | Corrected and a handoff test added |
 | 19-32 | Low | DEG-2 missing, per-command deadline wording, TXT-4 reuse, invalid record code, memory bound, process claim, refs patterns, CK-2 rationale, stderr, DEG-3 ignored, worktree threshold, 023 8 MiB row, tag bytes, checklist | Applied (DEG-2 and DEG-14 added, TXT-10, patterns in FEED-1, CK via `inspect(entry)`, wording fixes, 023 row, checklist unchecked) |
+
+## Round 2
+
+Independent reviewer: read-only Opus review, revision f659417beb5c8a051febfface2f1f84ef4ae6e44, 2026-10-16, Git 2.56.0 and 2.47.3. Verdict: NOT READY (4 high, 8 medium, 8 low). Round 1 resolutions were confirmed except as listed (findings 5, 6, 7 below were partial). The reviewer's measurements are theirs; the author applied the resolutions and they are re-reviewed in round 3.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | `--separate-git-dir` falls into CK-2 (`inspect(entry)` fails there) | CK-1 takes `W` from `inspect(entry)` or from the non-linked inspected identity; research Decision 4, FR-006, T009 aligned |
+| 2 | High | Query scope skip precedes CK; `clean` answers true with nothing observed | CK applied before the skip; clean/dirty `unknown` unless the inspected checkout entry was observed; T009 query cases |
+| 3 | High | SP-1 gives a false clean for a present modified skip-worktree file | SP-1 exempts only entries absent on disk; present ones are compared; test added. Supersedes round 1 resolution 15 |
+| 4 | High | SC-001 fixture cannot be `ok` (records per ref) | 200 branches and 200 tags |
+| 5 | Medium | `-t` record format has four head fields, tag `M` | FEED-4 specifies H, S, M and `invalid-metadata`; T006 |
+| 6 | Medium | LIM-11 per workspace times worktrees | Per run, counted in the first pass; second pass compares the same paths |
+| 7 | Medium | Blob header length source | `st.Size()` plus read-length and after-stat check in LIM-10 |
+| 8 | Medium | Reference-predicate early path unspecified | Data-model paragraph; T008 |
+| 9 | Medium | DEG-7 predicates for FEED-6/7 | DEG-7 states the rule |
+| 10 | Medium | Hostile `core.worktree` claim false | Corrected in contract and research; CK-2 never prints `W`; T009 reworded |
+| 11 | Medium | Stale 16 MiB / tens of MiB, underived memory bound | Research and plan corrected; bound derived in the contract |
+| 12 | Medium | Edge case says sparse is untouched | Replaced by SP-1 reference |
+| 13-20 | Low | Checklist, COMPAT/TXT ranges, coverage rows, case-Q wording, `stopped` return and stdin adapter, two-records note, `{scope}` words, FR ordering | Applied |
