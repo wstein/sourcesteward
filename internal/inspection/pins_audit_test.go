@@ -675,3 +675,26 @@ func TestPinsAuditResultWithinOneMiBIsUntouched(t *testing.T) {
 		t.Fatalf("%s %d", r.Status, len(r.Submodules))
 	}
 }
+
+func TestPinsAuditFindingMessagesAreAccurate(t *testing.T) {
+	f := newPinsFixture(t)
+	commitIn(t, filepath.Join(f.Super, "member"), "two")
+	git(t, f.Super, "add", "member")
+	r := auditOf(t, f.Super)
+	if m := findingOf(r, "checkout-differs-from-pin", "member").Message; !strings.Contains(m, "ahead of the pin") {
+		t.Fatal(m)
+	}
+	m := findingOf(r, "staged-pin-differs", "member").Message
+	if !strings.Contains(m, "publication") || !strings.Contains(m, "HEAD pin") {
+		t.Fatalf("the staged pin's publication is not evaluated and the message must say so: %s", m)
+	}
+	// With an unborn HEAD the registration comes from the staged blob and the message must not claim the HEAD blob.
+	d := pinsRealDir(t)
+	git(t, d, "init", "-q", "-b", "main")
+	git(t, d, "-c", "protocol.file.allow=always", "submodule", "add", "-q", f.Sub, "member")
+	r = auditOf(t, d)
+	g := findingOf(r, "gitmodules-modified", "")
+	if g == nil || !strings.Contains(g.Message, "staged") || strings.Contains(g.Message, "read from the HEAD blob") {
+		t.Fatalf("%+v", g)
+	}
+}

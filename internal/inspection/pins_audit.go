@@ -172,7 +172,13 @@ func (a *pinsAuditor) audit(abs string, identity Result) error {
 		return err
 	}
 	if reg.Gitmodules.Modified {
-		a.add("gitmodules-modified", nil, "the registration source differs: the HEAD .gitmodules is not a regular file, or the staged or worktree .gitmodules differs from it; registration is read from the HEAD blob")
+		source := "registration is read from the HEAD blob"
+		if reg.Gitmodules.Source == "staged" {
+			source = "HEAD is unborn, so registration is read from the staged blob"
+		} else if reg.Gitmodules.Source == "none" {
+			source = "no readable registration source exists"
+		}
+		a.add("gitmodules-modified", nil, "the registration source differs: .gitmodules is not a regular file, or the staged or worktree copy differs from the baseline; "+source)
 	}
 	for _, re := range resolved {
 		if a.total.Err() != nil {
