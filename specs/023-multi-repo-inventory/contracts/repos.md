@@ -40,7 +40,7 @@ summary: ok 1, partial 1, error 0, skipped 1; dirty 1; stale 0; foreign 0; confl
 limitations: no ahead/behind, publication or task-ownership facts; submodule dirty state unknown
 ```
 
-Names and paths are escaped. An *attention workspace* is one that is stale, foreign or unverified; at most 16 are listed per entry from the embedded inventory, then a "+N more" line. The text is bounded by construction (at most 16 entries, 16 lines each, each line escaped and truncated to 512 bytes, so below 256 KiB), tested in T004.
+Names and paths are escaped. An *attention workspace* is one that is stale, foreign or unverified; at most 16 are listed per entry from the embedded inventory, then a "+N more" line. The text is bounded by construction (at most 16 entries, at most 24 lines each (header, error, notes, 16 attention workspaces and the "+N more" line), each line escaped and truncated to 512 bytes, so below 256 KiB), tested in T004.
 
 ## JSON
 
@@ -86,7 +86,6 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
   {
    "index": 0,
    "path": "/w/lib",
-   "path_encoding": "utf8",
    "resolved_path": "/w/lib",
    "origin": "explicit",
    "parent": null,
@@ -187,7 +186,15 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
     ],
     "references": [],
     "bases": [],
-    "files": [],
+    "files": [
+     {
+      "path": "f.txt",
+      "old_path": null,
+      "scope": "untracked",
+      "change": "untracked",
+      "limitations": []
+     }
+    ],
     "query": null,
     "diagnostics": []
    },
@@ -196,7 +203,6 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
   {
    "index": 1,
    "path": "/w/app",
-   "path_encoding": "utf8",
    "resolved_path": "/w/app",
    "origin": "explicit",
    "parent": null,
@@ -307,12 +313,13 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
     "query": null,
     "diagnostics": []
    },
-   "notes": []
+   "notes": [
+    "inventory-partial: submodule disk state excluded to avoid recursive helpers"
+   ]
   },
   {
    "index": 2,
    "path": "vendor/lib",
-   "path_encoding": "utf8",
    "resolved_path": "/w/app/vendor/lib",
    "origin": "submodule",
    "parent": 1,
@@ -360,14 +367,14 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
   "unverified_workspaces": 0,
   "conflicted_references": 0,
   "skipped_uninitialized": 1,
-  "discovery_not_applicable": 1,
+  "discovery_not_applicable": 0,
   "inventories_omitted": 0
  },
  "diagnostics": []
 }
 ```
 
-Exit status for this example: 1 (overall `partial`: a repository with a registered gitlink is always `partial` under Git's default inventory scopes). Both embedded `inventory` objects were validated against `schemas/v1/inventory.schema.json` with the existing contract test helper while writing this spec (offline, run in a throwaway test that was not committed); the whole example is validated against `repos.schema.json` by task T002. Values of the embedded inventories follow the code's behavior (known `false` conflicts, the sampling limitation always present); they were not copied from a real run, which the implementation's smoke test provides.
+Exit status for this example: 1 (overall `partial`: a repository with a registered gitlink is always `partial` under Git's default inventory scopes). Both embedded `inventory` objects were validated against `schemas/v1/inventory.schema.json` with the existing contract test helper while writing this spec (offline, run in a throwaway test that was not committed); the whole example is validated against `repos.schema.json` by task T002. Values of the embedded inventories follow the code's behavior (known `false` conflicts, the sampling limitation always present, an untracked file recorded in `files`); they were not copied from a real run, which the implementation's smoke test provides.
 
 ## Effects
 
