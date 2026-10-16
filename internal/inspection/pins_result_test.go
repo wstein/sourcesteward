@@ -289,3 +289,21 @@ func TestPinsFindingMessageEscapesInvalidBytesInsteadOfReplacingThem(t *testing.
 		t.Fatal(err)
 	}
 }
+
+func TestPinsEscapedTextKeepsABackslashUnambiguous(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain":       "plain",
+		`a\xff`:       `a\xff`, // valid text is never rewritten
+		"a\xff":       `a\xff`,
+		"a\\b\xff":    `a\\b\xff`, // once escaping applies, a literal backslash is doubled
+		"\xff\\xff":   `\xff\\xff`,
+		"caf\xe9\xff": `caf\xe9\xff`,
+	} {
+		if got := pinsDisplay(in); got != want {
+			t.Errorf("pinsDisplay(%q) = %q, want %q", in, got, want)
+		}
+		if got := boundPinsMessage(in); got != want {
+			t.Errorf("boundPinsMessage(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
