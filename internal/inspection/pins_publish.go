@@ -88,6 +88,10 @@ func pinsPublish(run *pinsRunner, repo pinsGitRepo, d pinsSubmoduleDirs, facts p
 		p.Status = "reachable"
 	case raw >= pinsRefQuery:
 		p.Status, p.Reason = "unknown", "too many symbolic remote-tracking refs to decide"
+	case facts.Shallow:
+		// A cut history can hide the connection between a remote-tracking ref and an older pin that
+		// was fetched on its own (git submodule update --depth 1): absence of containment proves nothing.
+		p.Status, p.Reason = "unknown", "shallow repository: the history is cut, so containment cannot be decided"
 	default:
 		p.Status = "unreachable"
 	}
