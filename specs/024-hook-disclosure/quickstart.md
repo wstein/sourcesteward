@@ -18,16 +18,15 @@ git config core.hooksPath .githooks
 
 stw hooks
 stw hooks --json
-stw hooks --strict; echo "status $?"
 ```
 
-Expected: backend `git`; effective hooks path `.githooks` from the local configuration; `pre-commit`, `commit-msg` and `pre-push` active and tracked; for `commit` and `push` `runs_hooks: yes`, no bypass finding, `hooks-tracked` as an info finding; status 0 with and without `--strict`. Make a commit and push to a local bare remote and compare `sentinel` with the report; nothing in `stw hooks` itself writes `sentinel`.
+Expected: backend `git`; effective hooks path `.githooks` from the local configuration; `pre-commit`, `commit-msg` and `pre-push` active; for `commit` and `push` `runs_hooks: yes`, no bypass finding, status 0. Make a commit and push to a local bare remote and compare `sentinel` with the report; nothing in `stw hooks` itself writes `sentinel`.
 
 ## Silent disablement
 
 - `chmod -x .githooks/pre-commit`: `hook-ignored`, `pre-commit` is `ignored`.
 - `git config core.hooksPath /dev/null`: `hooks-path-null-device`, no directory hook active; `git config core.hooksPath nowhere`: `hooks-dir-absent`.
-- `git config extensions.worktreeConfig true`, then in a linked worktree `git config --worktree core.hooksPath /dev/null`: `hooks-path-overridden` there.
+- `git config hook.mine.event pre-commit`: `config-hooks-not-evaluated` (the configuration hook is not evaluated).
 
 ## A colocated jj workspace (needs jj and its read-only sandbox)
 
@@ -36,14 +35,14 @@ cd "$work" && jj git init --colocate jjrepo && cd jjrepo
 git config core.hooksPath .githooks   # reuse hooks created as above
 cp -r ../repo/.githooks .
 stw hooks
-stw hooks --strict; echo "status $?"
+stw hooks --json | jq '.findings[].code'
 ```
 
-Expected: backend `jj`; `jj commit` stated as `runs_hooks: no` at evidence level `documented`; `jj git push` as `runs_hooks: unknown` at `unverified`; `guards-bypassed-on-backend` (error), `guards-may-be-bypassed` and `backend-hook-behavior-unverified` (warnings); `--strict` exits 3. After the conformance lane has recorded a measurement (verification note), the levels follow the recorded catalog.
+Expected: backend `jj`; `jj commit` stated as `runs_hooks: no` at evidence level `documented`; `jj git push` as `runs_hooks: unknown` at `unverified`; `guards-bypassed-on-backend` (error), `guards-may-be-bypassed` and `backend-hook-behavior-unverified` (warnings); the exit status is 0 (findings never change it; read the JSON). After the conformance lane has recorded a measurement (verification note), the levels follow the recorded catalog.
 
 ## Measure jj yourself
 
-`scripts/smoke-hooks.py` (conformance, after approval to build `bin/stw`) runs the J0 to J7 procedure of the spec. By hand: make the three hooks above write a sentinel, run `jj commit -m x` and `jj git push --bookmark b` against a local bare remote, and check whether `sentinel` exists. Plain Git in the same directory is the positive control.
+`scripts/smoke-hooks.py` (conformance, after approval to build `bin/stw`) runs the reduced procedure (J0, J2, J2b, J3, J4, J7) of the spec. By hand: make the three hooks above write a sentinel, run `jj commit -m x` and `jj git push --bookmark b` against a local bare remote, and check whether `sentinel` exists. Plain Git in the same directory is the positive control.
 
 ## What the output does not prove
 
