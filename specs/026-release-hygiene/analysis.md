@@ -28,3 +28,23 @@ Independent reviewer: read-only Opus review, revision 47070ae, 2026-10-16, with 
 | 16 | Medium | Git inherits user configuration | Isolated Git invocation in the recipe |
 | 17 | Medium | G01 tested only with fakes | Real temporary-repository tests (T006) |
 | 18 | Low | Smaller items | Fixed: cgo wording, archive wording, smill name row, T021 tag, T022 status rule, manifest `env`, quickstart identity and `shasum`, S4 method, `STW_RELEASE_VERSION` note, scan wording, quote sanitizing. Not changed: `TestVersionCommandUsesStamp` stays parameter-level; the `cmd/stw` wiring is covered by S1 and S2 (executed) |
+
+## Round 2
+
+Independent reviewer: read-only Opus review, revision 6870cf8 (rebased on origin/main), 2026-10-16, with probes of `git archive` and of an export under the recipe environment. Verdict: NOT READY, 3 high, 9 medium, 7 low. Measured by the reviewer: `git archive` ran a repository-local smudge filter, honored `export-ignore` and rewrote `export-subst`; an export without `.git` passes `go vet ./cmd/stw` and `go test ./internal/cli` under the recipe environment; `check-docs.py` does not validate anchors (checked by hand).
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | `git archive` applies filters and attributes | Export from tree objects (`ls-tree`, `cat-file --batch`), `export-unsafe` code, recipe, DD12, T006 fixtures |
+| 2 | High | Evaluated commit not tied to the record | G01 requires `--commit` (default: record header) equal to header, A1 and every `ci` entry; tests in T008 |
+| 3 | High | Notes and record not in the export | Notes and record read from the checkout (`--notes`), docs scans on the export, record commit ancestry and `docs/releases/`-only diff in G11 |
+| 4 | Medium | Manifest not covered by the anchor | `SHA256SUMS` lists the manifest; tampered-manifest test |
+| 5 | Medium | G02/G03 self-attested | Declared record-asserted with a reviewer cross-check; "code commit" wording |
+| 6 | Medium | G09 before A1 | A1 and `release-exists` first, before any `go` command |
+| 7 | Medium | `verify --rebuild` rows and output | Evaluation table rows, `.rebuild` directory, effects |
+| 8 | Medium | G04 dropped outcome | `pass` with the dropped list; notes must name them |
+| 9 | Medium | Missing record | `not-run` with reason `no record`; `record-incomplete` under `--final` |
+| 10 | Medium | Stamp code ownership | `stamp-*` codes under G08 (test) and G14 (execution) |
+| 11 | Medium | Quickstart order | Section 0 and a `plan --final` step |
+| 12 | Medium | arm64 lanes | `lane` matrix; hosting smokes excluded on arm64 in G04 |
+| 13-19 | Low | Synopsis `[--anchor]`; T002 code; `plan` GOCACHE; DD order and duplicate risk; extra assertions in T008/T014/T016; record-commit push stated as routine documentation push that never authorizes A2/A3; constructed environment for every export process | Applied |
