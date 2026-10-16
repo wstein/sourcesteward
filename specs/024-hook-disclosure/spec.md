@@ -197,7 +197,7 @@ Codes are append-only within `schema_version: 1`. Severities are fixed. `--stric
 | `config-hook-incomplete` | error | a configuration hook has an event and no command; Git fails the operation (measured by the review) |
 | `hooks-limit` | error | a bound was exhausted; result incomplete |
 | `hooks-state-changed` | error | state changed during the report; result incomplete |
-| `guards-may-be-bypassed` | warning | an active blocking guard exists for an operation whose backend claim is `runs_hooks: unknown`, or a configuration hook with an unknown engine exists for the operation under any claim; it may appear together with `guards-bypassed-on-backend` on one operation |
+| `guards-may-be-bypassed` | warning | an active blocking guard exists for an operation whose backend claim is `runs_hooks: unknown`, or an unknown-engine blocking configuration hook exists for the operation under any claim; it may appear together with `guards-bypassed-on-backend` on one operation |
 | `backend-hook-behavior-unverified` | warning | a claim used in this result is not `measured` for the detected version |
 | `hooks-dir-absent` | warning | the effective hooks directory does not exist; no directory hook runs |
 | `hooks-path-null-device` | warning | `core.hooksPath` is the null device; no directory hook runs |
