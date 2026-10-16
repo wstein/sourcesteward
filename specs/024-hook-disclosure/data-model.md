@@ -20,11 +20,11 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ## Identity
 
-`{root, git_dir, git_version, jj_version, colocated}`. `root` is the worktree or workspace root. `git_dir` is the absolute Git directory (Git-owned and colocated jj; null otherwise). `git_version` is set when a Git process ran, `jj_version` when the jj session ran. `colocated` is `true` or `false` for jj and null for Git.
+`{root, git_dir, common_dir, git_version, jj_version, colocated}`. `root` is the worktree or workspace root. `git_dir` and `common_dir` are the absolute Git directory and common Git directory (Git-owned and colocated jj; null otherwise; they differ in a linked worktree). `git_version` is set when a Git process ran, `jj_version` when the jj session ran. `colocated` is `true` when a jj workspace has a `.git` entry at its root (directory or gitfile), `false` otherwise, and null for Git.
 
 ## Boundary
 
-- `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants; the last two disclose process use (`git_processes` is false for a non-colocated jj workspace and for the process-free refusals; `jj_processes` is true only for a jj-owned workspace).
+- `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants (`hook_paths_opened` means no hook entry is opened; the confined hooks directory itself is opened once for the bounded listing); the last two disclose process use (`git_processes` is false for a non-colocated jj workspace and for the ambiguous refusal; `jj_processes` is true only for a jj-owned workspace and then covers only the sandbox probe and `--version`). Git reads in a colocated jj workspace run outside the jj sandbox.
 - `limits`: the keys and values of the spec's limits table: `{deadline_seconds: 10, git_process_seconds: 5, stream_bytes: 65536, result_bytes: 262144, directory_entries: 256, unrecognized_names: 16, config_hooks: 64, value_bytes: 4096}`.
 - `complete`: boolean; false for `refused`, `error` and `incomplete`.
 - `notes`: fixed strings, at least: the content of hooks is never read, so a missing interpreter or a self-disabling script is not detected; per-command overrides are not detected; the caller environment is not applied.
@@ -41,15 +41,15 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### HooksPath
 
-`state`: `default` (unset; `<git-dir>/hooks` of the common directory), `configured`, `null-device`, `empty`, `absent`, `not-directory`, `unreadable`, `not-applicable` (jj workspace without a colocated Git directory). `effective_value` (string or null; the last value), `resolved_directory` (absolute path from Git, or null), `levels`: array of `{scope, value, origin}` in precedence order, `scope` one of `system`, `global`, `local`, `worktree`; `origin` is the file path for `local` and `worktree` and null for `system` and `global`. `overridden`: true when more than one level set a value and the values differ.
+`state`: `default` (unset; `<git-dir>/hooks` of the common directory), `configured`, `null-device`, `empty`, `absent`, `not-directory`, `unreadable` (the directory lacks search permission for the real user), `invalid` (a valueless key, or a value Git cannot expand), `not-applicable` (jj workspace without a `.git` entry). `effective_value` (string or null; the last value), `resolved_directory` (absolute path from Git, or null), `levels`: at most 16 `{scope, value, origin}` records in precedence order, `scope` one of `system`, `global`, `local`, `worktree`; `origin` is the file path for `local` and `worktree` and null for `system` and `global`; `levels_truncated` is a boolean. `overridden`: true when more than one level set a value and the values differ.
 
 ### Directory
 
-`{path, kind, resolves_to, inside_repository, owner_is_effective_user, group_writable, world_writable, entries_scanned, unrecognized_names, unrecognized_truncated}`. `kind` is `directory`, `symlink` (a symlink to a directory) or `other`. `resolves_to` is the resolved real path (null when the directory is not a symlink). `inside_repository` is true when the resolved directory lies inside the worktree or the Git directory. `entries_scanned` is 0 when the directory is not confined (it is then not listed). `unrecognized_names` holds at most 16 escaped names.
+`{path, kind, resolves_to, inside_repository, owner_is_effective_user, group_writable, world_writable, entries_scanned, unrecognized_names, unrecognized_truncated}`. `kind` is `directory`, `symlink` (a symlink to a directory) or `other`. `resolves_to` is the resolved real path (null when the directory is not a symlink). `inside_repository` is true when the resolved directory lies inside a confinement root (worktree root, Git directory or common Git directory). `entries_scanned` is 0 when the directory is not confined (it is then not listed). `unrecognized_names` holds at most 16 escaped names.
 
 ### ConfigHooks
 
-`{engine, entries, truncated}`. `engine`: `supported` (the detected Git version is within a measured range that the evidence catalog lists as honoring configuration hooks) or `unknown`. `entries`: `{name, events, enabled, scope}` with `enabled` true, false or null (unset), at most 64, sorted by name. The command text is never reported.
+`{engine, evidence, entries, truncated}`. `engine`: `supported` (the detected Git version is within the measured range of the claim `git-config-hooks`) or `unknown`; `evidence` is an Evidence object for that claim. `entries`: `{name, events, enabled, command_present, scopes}` with `enabled` true, false or null (unset), `command_present` a boolean, `scopes` the sorted scopes of the entry's keys, at most 64 entries sorted by name. The command text is never read or reported. Entries count as active guards only when `engine` is `supported`.
 
 ## HookEntry
 
@@ -58,8 +58,8 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 | `name` | string | a catalog name |
 | `hook_scope` | `client` \| `server` | from the catalog |
 | `kind` | `file` \| `symlink` \| `directory` \| `other` | from `lstat` of the entry in the effective directory |
-| `state` | `active` \| `ignored` \| `not-runnable` | per FR-007 |
-| `executable_for_user` | boolean \| null | `access(X_OK)` for the effective user |
+| `state` | `active` \| `ignored` \| `not-runnable` | per FR-007, in that order of evaluation |
+| `executable_for_user` | boolean \| null | `access(X_OK)` for the real user, as Git checks |
 | `mode` | string | octal permission bits, for example `0755` |
 | `size` | integer | bytes from `lstat`; the content is not read |
 | `owner_is_effective_user` | boolean | |
@@ -73,6 +73,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 | --- | --- | --- |
 | `operation` | `commit` \| `push` | |
 | `command` | string | the backend command the claim is about, from the evidence catalog |
+| `guards_evaluated` | boolean | false when no Git configuration applies (jj workspace without a `.git` entry); then `hooks` is empty and the counts are 0 |
 | `claim_id` | string | evidence catalog claim |
 | `runs_hooks` | `yes` \| `no` \| `unknown` | |
 | `evidence` | Evidence | |
@@ -83,11 +84,11 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### Evidence
 
-`{level, version_covered, detected_version, measured_range, sources}`. `level` is `measured`, `documented` or `unverified` (definitions in FR-010). `detected_version` is the Git or jj version string or null. `measured_range` is `{min, max}` or null when nothing was measured. `sources` is `{kind, reference}`[], `kind` is `documentation` or `measurement`.
+`{level, version_covered, detected_versions, measured_range, sources}`. `level` is `measured`, `documented` or `unverified` (definitions in FR-010). `detected_versions` is `{git, jj}` with a version string or null per member of the claim's backend tuple. `measured_range` is `{git, jj}` with `{min, max}` or null, or null when nothing was measured. `sources` is `{kind, reference}`[], `kind` is `documentation` or `measurement`.
 
 ### OperationHook
 
-`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty` or `absent`, so directory hooks cannot run; a configuration hook of the same name still counts as `active`) or `absent`. `source` is `hooks-dir`, `config` or null. `bypassed` is `true`, `false` or `null` per FR-009. `skippable_by` lists exception ids that skip this hook.
+`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same name still counts as `active`) or `absent`. `source` is `hooks-dir`, `config` or null. `bypassed` is `true`, `false` or `null` per FR-009. `skippable_by` lists exception ids that skip this hook.
 
 ## Finding
 
