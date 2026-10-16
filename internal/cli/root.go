@@ -142,7 +142,7 @@ func newRootWithHosting(version string, stdout, stderr io.Writer, operation host
 		},
 	}
 	versionCommand.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), pinsCommand(), hostingCommandWith(false, operation))
+	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), pinsCommand(), reposCommand(), hostingCommandWith(false, operation))
 	root.SetHelpCommand(&cobra.Command{
 		Use: "help [command]", Short: "Help about a command", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -12,7 +12,7 @@
 
 - [X] T002 [FR-001, FR-012, SC-004] Failing contract tests, then schemas/v1/repos.schema.json, internal/cli/testdata/repos-*.json (ok, partial, error, skipped, omitted inventory, duplicate) and internal/contracts/repos_test.go: fixtures validate offline, invariants of the data model are enforced (null arrays rejected, `ok` with error rejected), every embedded inventory validates against inventory.schema.json, existing fixtures stay valid.
 - [X] T003 [FR-003, FR-012, FR-013, US5] Failing tests, then internal/inspection/repos_result.go: types, code and limit constants (one place), `ValidateReposOptions` (usage errors: 0 or more than 16 paths, empty, NUL, invalid UTF-8, more than 4,096 bytes), the overall-status rule (including a run of only `partial` entries, which is `partial`, and only failed entries, which is `error`), error-code precedence with `notes`, JSON size estimate.
-- [ ] T004 [FR-001, FR-014, US5] Failing CLI tests, then internal/cli/repos.go and registration: argument handling, text and JSON from one result, exit mapping 0/1/2 with the precedence of the spec, no stdin read, no process started by the CLI package; `make check` architecture test unchanged.
+- [X] T004 [FR-001, FR-014, US5] Failing CLI tests, then internal/cli/repos.go and registration: argument handling, text and JSON from one result, exit mapping 0/1/2 with the precedence of the spec, no stdin read, no process started by the CLI package; `make check` architecture test unchanged.
 
 ## WI2 — Paths, duplicates, nesting
 
