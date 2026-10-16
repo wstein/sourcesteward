@@ -2,7 +2,9 @@
 package inspection
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -248,8 +250,9 @@ func pinsSeverityRank(s string) int {
 
 // Finalize makes the result deterministic and self-consistent: arrays are never null, submodules are
 // sorted by path bytes, findings by severity, submodule path and code, and the summary, per-submodule
-// finding codes, completeness and status follow from the findings. It is idempotent.
-func (r *PinsResult) Finalize() {
+// finding codes, completeness and status follow from the findings. It is idempotent and returns an
+// error when any string is not valid UTF-8.
+func (r *PinsResult) Finalize() error {
 	if r.Submodules == nil {
 		r.Submodules = []PinsSubmodule{}
 	}
@@ -320,4 +323,42 @@ func (r *PinsResult) Finalize() {
 			r.Status = "incomplete"
 		}
 	}
+	return validPinsText(reflect.ValueOf(*r))
+}
+
+// validPinsText fails on any string that is not valid UTF-8. encoding/json would silently replace
+// such bytes with U+FFFD; a repository-derived path must instead be refused or shown escaped.
+func validPinsText(v reflect.Value) error {
+	switch v.Kind() {
+	case reflect.String:
+		if !utf8.ValidString(v.String()) {
+			return errors.New("pins result holds a string that is not valid UTF-8")
+		}
+	case reflect.Pointer, reflect.Interface:
+		if !v.IsNil() {
+			return validPinsText(v.Elem())
+		}
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if err := validPinsText(v.Field(i)); err != nil {
+				return err
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			if err := validPinsText(v.Index(i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// MarshalJSON refuses invalid UTF-8 so it can never become a replacement character silently.
+func (r PinsResult) MarshalJSON() ([]byte, error) {
+	if err := validPinsText(reflect.ValueOf(r)); err != nil {
+		return nil, err
+	}
+	type plain PinsResult
+	return json.Marshal(plain(r))
 }

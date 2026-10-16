@@ -3,6 +3,8 @@ package inspection
 
 import (
 	"context"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,7 +44,10 @@ func pinsSentinels(t *testing.T) (gitLog func() []string, jjLog func() []string)
 }
 
 // noProcessPath makes every executable lookup fail except recording sentinels, so any process started
-// by name is observable. It returns the sentinel log.
+// by name through PATH is observable. It returns the sentinel log. Its limits are explicit: a process
+// started by absolute path, by a Go library that does not consult PATH, or work done in-process is NOT
+// seen. TestPinsOwnershipFilesImportNoProcessPackage and the failing injected runner are the second
+// line of defense for the same claim.
 func noProcessPath(t *testing.T) func() []string {
 	t.Helper()
 	dir, log := t.TempDir(), filepath.Join(t.TempDir(), "started.log")
@@ -107,6 +112,15 @@ func TestPinsJJAndAmbiguousOwnershipStartNoProcess(t *testing.T) {
 			d := colocated(t)
 			mkdirs(t, filepath.Join(d, "a", "b"))
 			return filepath.Join(d, "a", "b")
+		}, "jj", "unsupported-backend"},
+		{"symlinked-path", func(t *testing.T) string {
+			d := colocated(t)
+			mkdirs(t, filepath.Join(d, "a", "b"))
+			link := filepath.Join(t.TempDir(), "link")
+			if err := os.Symlink(filepath.Join(d, "a", "b"), link); err != nil {
+				t.Fatal(err)
+			}
+			return link
 		}, "jj", "unsupported-backend"},
 		{"jj-and-gitbutler-markers", func(t *testing.T) string {
 			d := colocated(t)
@@ -200,7 +214,7 @@ func TestPinsGitOwnedWorktreeReportsMissingEvidence(t *testing.T) {
 		})
 	}
 }
-func TestPinsDefaultsInputPathAndRejectsInvalidInput(t *testing.T) {
+func TestPinsDefaultsInputPath(t *testing.T) {
 	d := t.TempDir()
 	mkdirs(t, filepath.Join(d, ".jj"))
 	t.Chdir(d)
@@ -209,10 +223,84 @@ func TestPinsDefaultsInputPathAndRejectsInvalidInput(t *testing.T) {
 	if r.InputPath != "." {
 		t.Fatalf("input path %q", r.InputPath)
 	}
-	for _, path := range []string{"a\x00b", "\xff", filepath.Join(d, "missing")} {
+}
+func TestPinsMissingOrNonDirectoryPathIsNotRepository(t *testing.T) {
+	d := t.TempDir()
+	file := filepath.Join(d, "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(d, "missing"), file} {
+		started := noProcessPath(t)
+		requireRefusal(t, Pins(context.Background(), PinsOptions{Path: path}), "unknown", "not-repository")
+		if started() != nil {
+			t.Fatal("a process started")
+		}
+	}
+}
+func TestPinsInvalidEncodingIsAnEarlyFailureWithUnknownBackend(t *testing.T) {
+	for _, path := range []string{"a\x00b", "\xff"} {
 		r := Pins(context.Background(), PinsOptions{Path: path})
-		if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || r.Boundary.Complete {
+		if r.Status != "error" || r.Backend != "unknown" || r.Error == nil || r.Error.Code != "pins-failed" || r.Boundary.Complete {
 			t.Fatalf("%q: %+v", path, r)
+		}
+	}
+	// A resolved path that is not valid UTF-8 (through a symlink) is refused the same way.
+	d := t.TempDir()
+	bad := filepath.Join(d, "dir\xff")
+	if err := os.Mkdir(bad, 0o700); err != nil {
+		t.Skip("file system rejects non-UTF-8 names")
+	}
+	link := filepath.Join(d, "link")
+	if err := os.Symlink(bad, link); err != nil {
+		t.Fatal(err)
+	}
+	r := Pins(context.Background(), PinsOptions{Path: link})
+	if r.Status != "error" || r.Backend != "unknown" || r.Error == nil || r.Error.Message != "the resolved pins path is not valid UTF-8" {
+		t.Fatalf("%+v", r)
+	}
+}
+func TestPinsEarlyFailuresNeverClaimGit(t *testing.T) {
+	d := t.TempDir()
+	mkdirs(t, filepath.Join(d, ".jj"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := Pins(ctx, PinsOptions{Path: d})
+	if r.Status != "error" || r.Backend != "unknown" || r.Error == nil || r.Error.Message != "pins canceled" {
+		t.Fatalf("%+v", r)
+	}
+	// An unreadable ownership marker must not label the directory as Git either.
+	u := t.TempDir()
+	mkdirs(t, filepath.Join(u, ".jj"))
+	if err := os.WriteFile(filepath.Join(u, ".git"), []byte("not a gitfile"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r = Pins(context.Background(), PinsOptions{Path: u})
+	if r.Status != "error" || r.Backend != "unknown" {
+		t.Fatalf("%+v", r)
+	}
+}
+func TestPinsCancellationDuringIdentityDetection(t *testing.T) {
+	d := repo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	r := pins(ctx, PinsOptions{Path: d}, func(c context.Context, _ string, _ ...string) (string, int, error) {
+		cancel()
+		return "", -1, c.Err()
+	})
+	if r.Status != "error" || r.Error == nil || r.Error.Message != "pins canceled" || r.Backend != "unknown" {
+		t.Fatalf("%+v", r)
+	}
+}
+func TestPinsOwnershipFilesImportNoProcessPackage(t *testing.T) {
+	for _, name := range []string{"pins.go", "detection.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), name, nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, spec := range file.Imports {
+			if spec.Path.Value == `"os/exec"` {
+				t.Fatalf("%s imports os/exec; process start belongs to the Git runner only", name)
+			}
 		}
 	}
 }
@@ -222,7 +310,7 @@ func TestPinsCanceledContextIsAnError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	r := Pins(ctx, PinsOptions{Path: d})
-	if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || !strings.Contains(r.Error.Message, "canceled") {
+	if r.Status != "error" || r.Backend != "unknown" || r.Error == nil || r.Error.Code != "pins-failed" || !strings.Contains(r.Error.Message, "canceled") {
 		t.Fatalf("%+v", r)
 	}
 }

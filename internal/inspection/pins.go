@@ -3,18 +3,21 @@ package inspection
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"unicode/utf8"
 )
 
 const (
-	pinsNoEvidenceMessage = "submodule evidence is not implemented in this revision"
-	pinsJJMessage         = "jj has no Git submodule model; run this in a Git-owned checkout"
-	pinsButlerMessage     = "GitButler-managed workspaces have no supported submodule audit; run this in a Git-owned checkout"
-	pinsAmbiguousMessage  = "ownership markers conflict (jj and GitButler); resolve the ownership before auditing pins"
-	pinsBareMessage       = "a bare repository has no worktree to compare with its submodule pins"
-	pinsNoRepoMessage     = "no Git repository at the path"
+	pinsNoEvidenceMessage  = "submodule evidence is not implemented in this revision"
+	pinsJJMessage          = "jj has no Git submodule model; run this in a Git-owned checkout"
+	pinsButlerMessage      = "GitButler-managed workspaces have no supported submodule audit; run this in a Git-owned checkout"
+	pinsAmbiguousMessage   = "ownership markers conflict (jj and GitButler); resolve the ownership before auditing pins"
+	pinsBareMessage        = "a bare repository has no worktree to compare with its submodule pins"
+	pinsNoRepoMessage      = "no Git repository at the path"
+	pinsNoDirectoryMessage = "no Git repository at the path: it does not exist or is not a directory"
 )
 
 // Pins audits the submodule pins of a Git superproject without writes, network or fetch.
@@ -29,17 +32,23 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 	if shown == "" {
 		shown = "."
 	}
+	// The backend stays unknown until ownership is decided, so an early failure never claims Git.
 	r := NewPinsResult(shown)
-	r.Backend = "git"
+	finish := func() PinsResult {
+		if err := r.Finalize(); err != nil {
+			r.Status, r.Submodules, r.Findings = "error", []PinsSubmodule{}, []PinsFinding{}
+			r.Error = &PinsError{Code: "pins-failed", Message: err.Error()}
+			_ = r.Finalize()
+		}
+		return r
+	}
 	fail := func(message string) PinsResult {
 		r.Status, r.Error = "error", &PinsError{Code: "pins-failed", Message: message}
-		r.Finalize()
-		return r
+		return finish()
 	}
 	refuse := func(backend, code, message string) PinsResult {
 		r.Status, r.Backend, r.Error = "refused", backend, &PinsError{Code: code, Message: message}
-		r.Finalize()
-		return r
+		return finish()
 	}
 	if err := ValidatePinsOptions(options); err != nil {
 		return fail(err.Error())
@@ -51,11 +60,20 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 	if err == nil {
 		abs, err = filepath.EvalSymlinks(abs)
 	}
-	if err != nil || !utf8.ValidString(abs) {
+	if errors.Is(err, fs.ErrNotExist) {
+		return refuse("unknown", "not-repository", pinsNoDirectoryMessage)
+	}
+	if err != nil {
 		return fail("cannot access the pins path")
 	}
+	if !utf8.ValidString(abs) {
+		return fail("the resolved pins path is not valid UTF-8")
+	}
 	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
-		return fail("the pins path must be an accessible directory")
+		if err == nil || errors.Is(err, fs.ErrNotExist) {
+			return refuse("unknown", "not-repository", pinsNoDirectoryMessage)
+		}
+		return fail("cannot access the pins path")
 	}
 	var markers Result
 	if _, err := ancestors(abs, &markers); err != nil {
@@ -90,6 +108,8 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 		}
 		return fail("cannot establish repository identity: " + identity.Error())
 	}
+	// Ownership is established: the backend is Git from here on.
+	r.Backend = "git"
 	if identity.Repository != nil && identity.Repository.Bare {
 		return refuse("git", "bare-repository", pinsBareMessage)
 	}
