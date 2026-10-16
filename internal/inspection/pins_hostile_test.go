@@ -5,10 +5,12 @@ package inspection
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -336,4 +338,85 @@ func TestPinsProtocolIsolationBlocksExtLazyFetch(t *testing.T) {
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("an ext:: remote was executed through lazy fetch")
 	}
+}
+
+// A promisor remote whose URL is an ext:: helper must never be started: missing objects are not fetched.
+func TestPinsHostilePromisorExtRemoteNeverRuns(t *testing.T) {
+	f := newPinsFixture(t)
+	h := newHostile(t)
+	member := filepath.Join(f.Super, "member")
+	cfg := filepath.Join(f.Super, ".git", "modules", "member", "config")
+	url := "ext::" + h.script(t, "ext-remote")
+	git(t, h.dir, "config", "--file", cfg, "remote.origin.url", url)
+	git(t, h.dir, "config", "--file", cfg, "remote.origin.promisor", "true")
+	git(t, h.dir, "config", "--file", cfg, "remote.origin.partialclonefilter", "tree:0")
+	git(t, h.dir, "config", "--file", cfg, "extensions.partialclone", "origin")
+	git(t, h.dir, "config", "--file", cfg, "core.repositoryformatversion", "1")
+	// A pin whose commit the repository lacks is exactly what would trigger a lazy fetch.
+	gitlink(t, f.Super, strings.Repeat("cd", 20), "member")
+	git(t, f.Super, "commit", "-qm", "absent pin")
+	writeFile(t, filepath.Join(member, "untracked"), "x")
+	rmAll(t, h.log)
+	r := Pins(context.Background(), PinsOptions{Path: f.Super})
+	if r.Status == "error" || r.Status == "refused" {
+		t.Fatalf("%+v", r.Error)
+	}
+	if got := h.executed(); len(got) != 0 {
+		t.Fatalf("the ext:: promisor remote ran: %v", got)
+	}
+	requireFinding(t, r, "pin-object-absent", "error", "member")
+}
+
+// A FIFO where Git reads ignore rules must be bounded by the dirty budget, not hang the audit.
+func TestPinsHostileFIFOIgnoreFilesAreBoundedByTheDirtyBudget(t *testing.T) {
+	for name, plant := range map[string]func(t *testing.T, f pinsFixture){
+		".gitignore": func(t *testing.T, f pinsFixture) {
+			mustOS(t, syscall.Mkfifo(filepath.Join(f.Super, "member", ".gitignore"), 0o600))
+		},
+		"core.excludesFile": func(t *testing.T, f pinsFixture) {
+			fifo := filepath.Join(f.Root, "excludes")
+			mustOS(t, syscall.Mkfifo(fifo, 0o600))
+			git(t, f.Root, "config", "--file", filepath.Join(f.Super, ".git", "modules", "member", "config"), "core.excludesFile", fifo)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newPinsFixture(t)
+			plant(t, f)
+			withLimits(t, func(l *pinsAuditLimits) { l.Dirty = pinsDirtyBudget{Entries: 20000, Time: 400 * time.Millisecond} })
+			start := time.Now()
+			r := Pins(context.Background(), PinsOptions{Path: f.Super})
+			if time.Since(start) > 4*time.Second {
+				t.Fatal("the audit hung on a FIFO")
+			}
+			if r.Status != "ok" {
+				t.Fatalf("%s %+v", r.Status, r.Findings)
+			}
+		})
+	}
+}
+
+// An index of more than 20,000 entries exhausts the entry budget: unknown, never pins-limit.
+func TestPinsDirtyIndexBeyondTwentyThousandEntriesIsUnknownNotALimit(t *testing.T) {
+	f := newPinsFixture(t)
+	_, repo, _ := validatedMember(t, f)
+	wt := repo.WorkTree
+	blob := gitHash(t, wt, "x\n")
+	var in strings.Builder
+	for i := 0; i < 20500; i++ {
+		fmt.Fprintf(&in, "100644 %s\t\"bulk/f%05d\"\n", blob, i)
+	}
+	gitStdin(t, wt, strings.ReplaceAll(in.String(), "\"", ""), "update-index", "--add", "--index-info")
+	git(t, wt, "commit", "-qm", "bulk")
+	var names strings.Builder
+	for i := 0; i < 20500; i++ {
+		fmt.Fprintf(&names, "bulk/f%05d\x00", i)
+	}
+	gitStdin(t, wt, names.String(), "update-index", "--skip-worktree", "-z", "--stdin")
+	settleIndex(t, repo.GitDir)
+	r := Pins(context.Background(), PinsOptions{Path: f.Super})
+	s := subOf(t, r, "member")
+	if r.Status == "error" || s.Checkout.Dirty.Tracked != "unknown" || !strings.Contains(s.Checkout.Dirty.Reason, "budget") {
+		t.Fatalf("%s %+v", r.Status, s.Checkout.Dirty)
+	}
+	requireNoFinding(t, r, "pins-limit")
 }
