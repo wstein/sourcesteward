@@ -2,11 +2,13 @@
 
 Dry-run steps change nothing outside the Go build cache. Steps marked **needs approval** build or publish and must not be run without the user's explicit authorization (AGENTS.md).
 
+Unset `STW_RELEASE_VERSION` in normal shells; only step 2 sets it.
+
 ## 1. Check readiness without building
 
 ```sh
 make check
-python3 scripts/release.py plan --version v0.1.0
+python3 scripts/release.py plan --version v0.1.0 --commit "$(git rev-parse HEAD)"
 python3 scripts/release.py plan --version v0.1.0 --json | python3 -m json.tool
 ```
 
@@ -26,11 +28,12 @@ Expected: the first passes, the second fails with `stamp-missing`.
 
 ```sh
 go mod download            # network; separate and visible
-python3 scripts/release.py build --version v0.1.0 --record docs/releases/v0.1.0-readiness.md --platforms linux/amd64,linux/arm64,darwin/arm64
-python3 scripts/release.py verify dist/release/v0.1.0
+python3 scripts/release.py build --version v0.1.0 --commit <code-commit> --record docs/releases/v0.1.0-readiness.md --platforms linux/amd64,linux/arm64,darwin/arm64
+# record the printed SHA-256 of SHA256SUMS as the trust anchor, then:
+python3 scripts/release.py verify dist/release/v0.1.0 --anchor <sha256>
 ```
 
-For G12 repeat the build from a second clone in another directory and compare `binary_sha256` values in the two manifests.
+For G12 run `verify --rebuild` (another export, another directory, empty `GOCACHE`) or repeat the build on a second host and compare `binary_sha256` values; record whether both builds ran on one host.
 
 ## 4. Verify downloaded files on the Mac mini (darwin arm64, manual evidence)
 
@@ -39,11 +42,13 @@ Use a new empty directory and a temporary repository only.
 ```sh
 work=$(mktemp -d) && cd "$work"
 # copy or download the three release files for darwin/arm64 here
-shasum -a 256 -c SHA256SUMS --ignore-missing
+# first compare the SHA-256 of SHA256SUMS with the anchor in the readiness record
+shasum -a 256 SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing   # --ignore-missing is unverified on macOS; otherwise compare by eye
 tar -xzf stw_v0.1.0_darwin_arm64.tar.gz
 ./stw version; ./stw version --json
 ./stw --help | head -20
-git init -q repo && git -C repo commit -q --allow-empty -m one
+git init -q repo && git -C repo -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m one
 ./stw inspect repo --json
 ```
 

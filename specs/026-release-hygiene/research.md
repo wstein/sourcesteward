@@ -28,14 +28,17 @@ Environment: Go 1.27.2 linux/arm64, Git 2.56.0, Python 3.13.5, run 2026-10-16 in
 | Backend artifacts per platform | `scripts/backend-releases.json` | jj artifacts for `linux-amd64` and `darwin-arm64` only |
 | CI platform | `.github/workflows/ci.yml` | `ubuntu-24.04` for `check`, `conformance` (`minimum`, `current`) and `pages` |
 | Repository visibility | `gh repo view wstein/sourcesteward --json visibility` | `PUBLIC` |
-| Build information shows build settings | `go version -m $(command -v gofmt)` (Go's own tool) | lists `-trimpath=true`, `CGO_ENABLED=0`, `GOARCH`, `GOOS`, `GOARM64`; `-ldflags` appears when passed (documented; not measured for `stw`) |
+| Build information shows build settings | `go version -m $(command -v gofmt)` (Go's own tool); reviewer: `go version -m` on a linked test binary | lists `-trimpath=true`, `CGO_ENABLED`, `GOARCH`, `GOOS`, `GOARM64`; under `-trimpath` there is no `-ldflags` entry (reviewer), without it the entry shows the flag text; `-buildvcs=false` leaves no `vcs` keys (reviewer) |
+| Empty module cache with `GOPROXY=off` | reviewer | `go list`, `go vet`, `go mod verify` exit 1 ("module lookup disabled") and may create `GOMODCACHE/cache` |
+| `git status` writes | reviewer, scratch repository | `git status --porcelain` rewrote `.git/index` after a timestamp change; `git --no-optional-locks status` did not |
+| Python anchors | reviewer | `re.match(...$)` accepts `v0.1.0\n`; `re.fullmatch` does not |
 | The `smill` convention | `/workspaces/Anchorage/sheetmill` `internal/cli/cli.go`, `docs/cli.md` | `Version = "dev"`, stamp `v0.1.0` with `v`, `-trimpath`, "distribution builds need separate approval", no tags |
 
 ## Not measured (unverified)
 
 - Byte-identical binaries from two builds (needs a build; gate G12 after approval).
 - That Go's linker adds an ad-hoc signature to darwin/arm64 binaries and how Gatekeeper treats a downloaded archive.
-- That `-X <import path>.Version` behaves identically in `go build` as in `go test` (documented behavior; `smill` has a stamp test that builds).
+- That `-X <import path>.Version` behaves identically in `go build` as in `go test` (documented behavior; `smill` has a stamp test that builds). The reviewer measured it for `go test` on `internal/cli.Version`.
 - Hosted `ubuntu-24.04-arm` and macOS arm64 runners for this repository, `sandbox-exec` and Git source builds on them.
 - Archive byte stability across hosts.
 - Whether a linked test binary counts as an "artifact build" for AGENTS.md; this spec treats `go test` as routine, with DD5's fallback.
