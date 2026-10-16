@@ -11,7 +11,7 @@ import (
 )
 
 func TestReposDiscoverGitmodulesBlobValidation(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -106,7 +106,7 @@ func TestReposDiscoverGitmodulesBlobValidation(t *testing.T) {
 }
 
 func TestReposDiscoverConfigParsing(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	sub1Dir := filepath.Join(repoDir, "sub 1")
 	sub2Dir := filepath.Join(repoDir, "sub.two")
@@ -193,7 +193,7 @@ func TestReposDiscoverConfigParsing(t *testing.T) {
 }
 
 func TestReposDiscoverHostileAndSafety(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func TestReposDiscoverHostileAndSafety(t *testing.T) {
 }
 
 func TestReposDiscoverCandidateLimit(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -314,7 +314,7 @@ func TestReposDiscoverCandidateLimit(t *testing.T) {
 }
 
 func TestReposDiscoverNonGitParentNotApplicable(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	jjDir := filepath.Join(tempDir, "jj-repo")
 	if err := os.Mkdir(jjDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -361,7 +361,7 @@ func TestReposDiscoverNonGitParentNotApplicable(t *testing.T) {
 }
 
 func TestReposDiscoverPointerOutsideModules(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	subDir := filepath.Join(repoDir, "sub")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
@@ -424,7 +424,7 @@ func TestReposDiscoverPointerOutsideModules(t *testing.T) {
 }
 
 func TestReposDiscoverInplaceGitDirAccepted(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	subDir := filepath.Join(repoDir, "sub")
 	subGitDir := filepath.Join(subDir, ".git")
@@ -483,7 +483,7 @@ func TestReposDiscoverInplaceGitDirAccepted(t *testing.T) {
 }
 
 func TestReposDiscoverDeduplicatedSubmodule(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	subDir := filepath.Join(repoDir, "sub")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
@@ -545,7 +545,7 @@ func TestReposDiscoverDeduplicatedSubmodule(t *testing.T) {
 }
 
 func TestReposDiscoverStagedOnlyAndStagedRemoved(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "super")
 	if err := os.Mkdir(repoDir, 0o755); err != nil {
 		t.Fatal(err)

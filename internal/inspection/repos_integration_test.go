@@ -11,7 +11,8 @@ import (
 )
 
 func TestReposIntegrationRealRepositories(t *testing.T) {
-	tempRoot := t.TempDir()
+	reposHermetic(t)
+	tempRoot := reposTempDir(t)
 
 	// 1. Clean repo with linked worktree
 	r1 := filepath.Join(tempRoot, "r1")
