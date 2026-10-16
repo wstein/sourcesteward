@@ -63,7 +63,7 @@ the cause on each entry; exit 0 means every member was fully observed. Lifting t
 a change to single-repository inventory and a separate specification.
 
 Other bounds of `repos` itself: 16 entries in total (explicit plus discovered), 64 candidate
-paths per `.gitmodules`, 4 workers, 10 seconds per call, 60 seconds in total (unfinished
+paths per `.gitmodules`, 4 workers, 10 seconds per identity inspection or inventory call and one 10-second bound per parent for submodule discovery, 60 seconds in total (unfinished
 entries report `inventory-timeout` or `inventory-not-started`) and 8 MiB of JSON (later
 entries drop their embedded inventory and carry `output-limit`).
 

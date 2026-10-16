@@ -20,7 +20,7 @@ Add `stw repos`, a read-only command that expands an explicit path list (and opt
 
 **Project Type**: CLI with a shared operation layer.
 
-**Performance Goals**: see the limits table in the spec (16 entries, 4 workers, 10 s per member, 60 s total, 8 MiB).
+**Performance Goals**: see the limits table in the spec (16 entries, 4 workers, 10 s per call, one 10 s bound per parent for discovery, 60 s total, 8 MiB).
 
 **Constraints**: no network, fetch, write, hook or helper; no recursion into nested submodules; no change to existing contracts.
 
