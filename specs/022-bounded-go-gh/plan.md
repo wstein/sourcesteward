@@ -12,7 +12,7 @@ Replace only the hosting API subprocess transport with official go-gh/v2 HTTP mi
 - Dependency: pinned go-gh/v2 v2.16.2; go.mod/go.sum and license footprint reviewed.
 - Runtime: selected-host gh >=2.102.0 remains required for remote reads; local reads stay independent.
 - Storage: no new persistent state; existing neutral temporary directory is cleaned.
-- Bounds: operation 30 seconds; raw and normalized HTTP bodies each 1 MiB plus one sentinel; subprocess buffers 1 MiB; existing pagination/record bounds.
+- Bounds: operation 30 seconds; raw and normalized HTTP bodies each 1 MiB plus one sentinel; version subprocess buffers 1 MiB; auth stdout/stderr 16 KiB with visible-ASCII single-line tokens; existing pagination/record bounds.
 - Tests: Go unit/integration/schema tests, native Git/jj fixtures, Python process smoke, race/module/docs checks; no live network fixtures.
 - Unknowns: none; [research](research.md) records pinned evaluation decisions.
 
@@ -38,7 +38,7 @@ Post-design: PASS with the same conditions. The official SDK is justified for Gi
 2. Baseline plus failing auth/HTTP boundary tests; SDK implementation in isolated worktree.
 3. Parallel adapter/schema/native fixture conversion after frozen interface; failing tests before edits.
 4. Integrate, independent adversarial review, resolve findings, full source/race/native checks and durable acceptance record.
-5. Focused Conventional Commits and separate PR. No live API, extension install, release or deletion.
+5. Focused Conventional Commits and separate PR. No live API, user-profile extension install, release or deletion. Private disposable fixture installation remains permitted.
 
 ## Interface
 
