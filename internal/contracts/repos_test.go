@@ -167,6 +167,7 @@ func TestReposContractDisclosesInheritedLimits(t *testing.T) {
 		"exit status 1",
 		"alternates",
 		"commondir",
+		"umask 000",
 		"discovery is not recursive",
 		"submodule is uninitialized",
 	} {
