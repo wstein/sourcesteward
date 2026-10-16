@@ -223,3 +223,14 @@ func TestCIPaginationBoundsAndIdentityRevalidation(t *testing.T) {
 		})
 	}
 }
+
+func TestUnavailableAPIReportsNoNetworkAttempt(t *testing.T) {
+	d := fixtureDeps(func(context.Context, string) ([]byte, error) { t.Fatal("unexpected API request"); return nil, nil })
+	d.api = func(context.Context, string, string) (apiReader, func(), error) {
+		return nil, func() {}, fmt.Errorf("fixture unavailable")
+	}
+	r := inspect(context.Background(), ".", Options{Kind: "pr", Number: 3}, d)
+	if r.Status != "error" || r.Boundary.Network {
+		t.Fatalf("preflight is not a network request: %+v", r)
+	}
+}

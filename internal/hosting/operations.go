@@ -102,7 +102,6 @@ func inspect(parent context.Context, path string, o Options, d dependencies) (r 
 		r.Boundary.Complete = true
 		return r
 	}
-	r.Boundary.Network = true
 	target := remote.Identity.InputPath
 	if remote.Identity.Repository != nil && remote.Identity.Repository.Bare {
 		target = remote.Identity.Repository.GitDir
@@ -118,6 +117,7 @@ func inspect(parent context.Context, path string, o Options, d dependencies) (r 
 		return r.fail("hosting-api-unavailable", e.Error())
 	}
 	defer cleanup()
+	r.Boundary.Network = true
 	pr, e := readPR(ctx, api, selected, o.Number)
 	if e != nil {
 		return r.fail("hosting-pr-failed", e.Error())
