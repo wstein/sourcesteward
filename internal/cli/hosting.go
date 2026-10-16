@@ -37,7 +37,7 @@ func hostingLeaf(kind string, requireJJ bool, run hostingOperation) *cobra.Comma
 	}
 	command := &cobra.Command{
 		Use: use, Short: map[string]string{"repo": "Resolve local GitHub repository candidates without network", "pr": "Read one explicitly numbered GitHub pull request", "ci": "Read checks and commit statuses at one PR's exact head"}[kind],
-		Long: "Read-only SourceSteward hosting inspection. Local ownership selects native Git or jj; gh jj requires jj.\nRepository resolution has no network effect. PR/CI use authenticated gh 2.102.0+ API reads.\nNo push, fetch, PR edit, merge or CI rerun. A complete sample does not establish merge eligibility.\nLimits: 30 seconds total, 1 MiB output, 10 pages per collection and 1000 CI records.\nGit/jj versions and enforced read-only sandbox requirements follow stw inspect.\nOperational errors include JSON observations with --json and exit 1; usage errors exit 2.",
+		Long: "Read-only SourceSteward hosting inspection. Local ownership selects native Git or jj; gh jj requires jj.\nRepository resolution has no network effect. PR/CI use bounded go-gh HTTP reads with gh 2.102.0+ authentication.\nNo push, fetch, PR edit, merge or CI rerun. A complete sample does not establish merge eligibility.\nLimits: 30 seconds total, 1 MiB output, 10 pages per collection and 1000 CI records.\nGit/jj versions and enforced read-only sandbox requirements follow stw inspect.\nOperational errors include JSON observations with --json and exit 1; usage errors exit 2.",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if kind == "repo" {
 				return cobra.MaximumNArgs(1)(cmd, args)

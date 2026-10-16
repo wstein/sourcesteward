@@ -39,10 +39,15 @@ func RunGHJJ(ctx context.Context, version string, args []string, stdout, stderr 
 	return runCLI(ctx, version, args, stdout, stderr, true)
 }
 func runCLI(ctx context.Context, version string, args []string, stdout, stderr io.Writer, extension bool) int {
+	return runCLIWithHosting(ctx, version, args, stdout, stderr, extension, hosting.Inspect)
+}
+
+// runCLIWithHosting keeps HTTP fixture injection private to the shared command boundary.
+func runCLIWithHosting(ctx context.Context, version string, args []string, stdout, stderr io.Writer, extension bool, operation hostingOperation) int {
 	if err := ctx.Err(); err != nil {
 		return report(stderr, err, 1)
 	}
-	root, helpError := newRoot(version, stdout, stderr)
+	root, helpError := newRootWithHosting(version, stdout, stderr, operation)
 	if extension {
 		root.Use = "gh-jj"
 		root.Short = "SourceSteward read-only Jujutsu/GitHub inspection (gh jj)"
@@ -52,7 +57,7 @@ func runCLI(ctx context.Context, version string, args []string, stdout, stderr i
 				root.RemoveCommand(command)
 			}
 		}
-		root.AddCommand(hostingCommands(true, hosting.Inspect)...)
+		root.AddCommand(hostingCommands(true, operation)...)
 	}
 	root.SetArgs(args)
 	err := root.ExecuteContext(ctx)
@@ -76,6 +81,9 @@ func report(stderr io.Writer, err error, code int) int {
 }
 
 func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) {
+	return newRootWithHosting(version, stdout, stderr, hosting.Inspect)
+}
+func newRootWithHosting(version string, stdout, stderr io.Writer, operation hostingOperation) (*cobra.Command, *error) {
 	if version == "" {
 		version = "dev"
 	}
@@ -124,7 +132,7 @@ func newRoot(version string, stdout, stderr io.Writer) (*cobra.Command, *error) 
 		},
 	}
 	versionCommand.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), hostingCommand())
+	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), hostingCommandWith(false, operation))
 	root.SetHelpCommand(&cobra.Command{
 		Use: "help [command]", Short: "Help about a command", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
