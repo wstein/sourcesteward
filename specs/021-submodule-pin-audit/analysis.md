@@ -58,3 +58,10 @@ Independent reviewer: narrow read-only Opus re-check, revision 06b7bb7, 2026-10-
 | 8 | Low | Superseded resolutions in the round-1 table | Marked as superseded by round 2 |
 
 The reviewer's note that the schema (T002) should be settled after findings 5 to 7 is met by these edits. Implementation of WI1 may start. Spec 021 is ready for implementation as specified; each work item still needs its own independent code review before merge.
+
+## Implementation review follow-up
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | Low | T016 says non-UTF-8 identity strings are escaped per field, never the whole result, but the shared native identity rejects a non-UTF-8 superproject branch | Recorded exception in the spec.md edge cases (whole-result `pins-failed`, null identity, tested); T016 amended. Everything the audit itself reads is escaped per field |
+| 2 | Low | No finding code for a submodule whose repository cannot be read | Refused with `submodule-path-unsafe` and an explicit message (spec.md edge cases); a dedicated code is an open question for a later schema revision |
