@@ -26,10 +26,12 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 			Command:       "repos",
 			Status:        "error",
 			Boundary: ReposBoundary{
-				Freshness: "sampled-nontransactional",
-				Effects:   ReposDefaultEffects(),
-				Limits:    ReposDefaultLimits(),
+				Freshness:   "sampled-nontransactional",
+				Effects:     ReposDefaultEffects(),
+				Limits:      ReposDefaultLimits(),
+				Limitations: []string{},
 			},
+			InputPaths:  []string{},
 			Diagnostics: []Diagnostic{{Code: "invalid-options", Message: err.Error()}},
 			Entries:     []ReposEntry{},
 		}
@@ -85,7 +87,8 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 				"Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected.",
 			},
 		},
-		Entries: entries,
+		Entries:     entries,
+		Diagnostics: []Diagnostic{},
 	}
 
 	// Apply output budget (drops oversized inventories to output-limit)
@@ -182,7 +185,9 @@ func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context
 
 		insp := inspectFn(callCtx, *entry.ResolvedPath)
 		inspections[i] = insp
-		entry.Backend = insp.Backend
+		if insp.Backend != "" {
+			entry.Backend = insp.Backend
+		}
 
 		if insp.Status == "error" {
 			entry.Status = "error"

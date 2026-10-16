@@ -18,9 +18,10 @@ func prepareExplicitEntries(paths []string, submodulesRequested bool) []ReposEnt
 
 	for i, p := range paths {
 		entry := ReposEntry{
-			Index:  i,
-			Path:   p,
-			Origin: "explicit",
+			Index:   i,
+			Path:    p,
+			Origin:  "explicit",
+			Backend: "unknown",
 			Discovery: ReposDiscovery{
 				Requested: submodulesRequested,
 				Status:    "not-requested",
