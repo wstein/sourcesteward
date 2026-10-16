@@ -8,6 +8,6 @@ spec.loader.exec_module(architecture)
 class ArchitectureTests(unittest.TestCase):
     def test_operation_boundary(self):
         prefix='github.com/wstein/sourcesteward/'
-        architecture.validate([prefix+'internal/cli '+prefix+'internal/inspection'+' '+prefix+'internal/workspace'])
+        architecture.validate([prefix+'internal/cli '+prefix+'internal/inspection'+' '+prefix+'internal/workspace'+' '+prefix+'internal/hosting'])
         for dependency in ('os', 'os/exec', 'net/http', prefix+'internal/unreviewed'):
             with self.assertRaises(ValueError): architecture.validate([prefix+'internal/cli '+dependency])

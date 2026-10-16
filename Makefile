@@ -1,6 +1,6 @@
 GO ?= go
 
-.PHONY: build check test fmt vet docs-check
+.PHONY: build extension check test fmt vet docs-check
 check:
 	@test -z "$$(gofmt -l cmd internal)" || { echo 'Run make fmt'; exit 1; }
 	$(GO) test ./...
@@ -15,6 +15,11 @@ check:
 build:
 	mkdir -p bin
 	$(GO) build -o bin/stw ./cmd/stw
+
+# Optional local gh extension directory; no user-profile installation.
+extension:
+	mkdir -p bin/gh-jj
+	$(GO) build -o bin/gh-jj/gh-jj ./cmd/gh-jj
 
 test:
 	$(GO) test ./...
