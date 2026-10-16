@@ -369,6 +369,7 @@ func pinsSubcommand(args []string) string {
 }
 
 func TestPinsRegistryReadsConfiguredGitDirWithSubmodulePathConfig(t *testing.T) {
+	requireSubmodulePathConfig(t)
 	f := newPinsFixture(t)
 	git(t, f.Super, "config", "core.repositoryformatversion", "1")
 	git(t, f.Super, "config", "extensions.submodulePathConfig", "true")

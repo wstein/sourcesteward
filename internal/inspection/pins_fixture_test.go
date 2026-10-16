@@ -3,7 +3,9 @@ package inspection
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -69,5 +71,28 @@ func writeFile(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// requireSubmodulePathConfig skips, before any fixture is touched, on a Git older than 2.56, which has no
+// extensions.submodulePathConfig (the CI minimum lane runs Git 2.46).
+func requireSubmodulePathConfig(t *testing.T) {
+	t.Helper()
+	out, err := exec.Command("git", "--version").Output()
+	if err != nil {
+		t.Skip("git is unavailable")
+	}
+	f := strings.Fields(string(out))
+	if len(f) < 3 {
+		t.Skipf("unrecognized git version %q", out)
+	}
+	v := strings.SplitN(f[2], ".", 3)
+	major, _ := strconv.Atoi(v[0])
+	minor := 0
+	if len(v) > 1 {
+		minor, _ = strconv.Atoi(v[1])
+	}
+	if major < 2 || major == 2 && minor < 56 {
+		t.Skipf("Git %s has no extensions.submodulePathConfig (2.56): exercised on the current Git lane only", f[2])
 	}
 }
