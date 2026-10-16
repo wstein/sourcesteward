@@ -40,6 +40,6 @@
   },
   "error": {
     "code": "pins-failed",
-    "message": "submodule evidence is not implemented in this revision"
+    "message": "Git failed while reading the superproject index"
   }
 }

@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "command": "pins",
+  "status": "ok",
+  "backend": "git",
+  "input_path": "/repo",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "diagnostics": []
+  },
+  "boundary": {
+    "effects": {
+      "network": false,
+      "fetch": false,
+      "writes": false,
+      "hooks": false
+    },
+    "limits": {
+      "max_submodules": 256,
+      "per_submodule_seconds": 5,
+      "total_seconds": 30,
+      "max_output_bytes": 1048576,
+      "max_remote_refs": 16,
+      "max_count": 10000,
+      "dirty_scan_seconds": 3,
+      "dirty_scan_entries": 20000
+    },
+    "complete": true,
+    "staleness": "Remote-tracking refs are local records; no fetch was made."
+  },
+  "submodules": [
+    {
+      "path": "a\\xff",
+      "path_encoding": "escaped",
+      "name": null,
+      "registration": {
+        "gitlink_in_head": true,
+        "gitlink_in_index": true,
+        "gitmodules_entry": false,
+        "active": null
+      },
+      "url": {
+        "configured": null,
+        "has_credentials": false,
+        "remote_name": null,
+        "remote_url": null,
+        "match": "unknown"
+      },
+      "pin": {
+        "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "index_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "staged_differs": false
+      },
+      "checkout": {
+        "state": "refused",
+        "head_commit": null,
+        "branch": null,
+        "detached": false,
+        "relation_to_pin": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false,
+        "dirty": {
+          "tracked": "unknown",
+          "untracked": "unknown",
+          "reason": "submodule refused"
+        }
+      },
+      "publication": {
+        "status": "unknown",
+        "reason": "submodule refused",
+        "reachable_from": [],
+        "truncated": false,
+        "last_fetch": null
+      },
+      "tracking": {
+        "ref": null,
+        "relation": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false
+      },
+      "nested": {
+        "present": false
+      },
+      "refusal": {
+        "code": "submodule-path-unsafe",
+        "message": "submodule path is not valid UTF-8"
+      },
+      "finding_codes": [
+        "submodule-path-unsafe"
+      ]
+    },
+    {
+      "path": "b-uninit",
+      "path_encoding": "utf8",
+      "name": "b-uninit",
+      "registration": {
+        "gitlink_in_head": true,
+        "gitlink_in_index": true,
+        "gitmodules_entry": true,
+        "active": true
+      },
+      "url": {
+        "configured": null,
+        "has_credentials": false,
+        "remote_name": null,
+        "remote_url": null,
+        "match": "unknown"
+      },
+      "pin": {
+        "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "index_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "staged_differs": false
+      },
+      "checkout": {
+        "state": "uninitialized",
+        "head_commit": null,
+        "branch": null,
+        "detached": false,
+        "relation_to_pin": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false,
+        "dirty": {
+          "tracked": "unknown",
+          "untracked": "unknown",
+          "reason": "submodule is not initialized"
+        }
+      },
+      "publication": {
+        "status": "unknown",
+        "reason": "submodule is not initialized",
+        "reachable_from": [],
+        "truncated": false,
+        "last_fetch": null
+      },
+      "tracking": {
+        "ref": null,
+        "relation": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false
+      },
+      "nested": {
+        "present": false
+      },
+      "refusal": null,
+      "finding_codes": [
+        "submodule-uninitialized"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "code": "submodule-path-unsafe",
+      "severity": "error",
+      "submodule": "a\\xff",
+      "message": "submodule path is not valid UTF-8"
+    },
+    {
+      "code": "remote-refs-may-be-stale",
+      "severity": "info",
+      "submodule": null,
+      "message": "Remote-tracking refs are local records; no fetch was made."
+    },
+    {
+      "code": "submodule-uninitialized",
+      "severity": "info",
+      "submodule": "b-uninit",
+      "message": "submodule has no checkout"
+    }
+  ],
+  "summary": {
+    "submodules": 2,
+    "errors": 1,
+    "warnings": 0,
+    "infos": 2,
+    "publication": {
+      "reachable": 0,
+      "unreachable": 0,
+      "unknown": 2
+    }
+  },
+  "error": null
+}
