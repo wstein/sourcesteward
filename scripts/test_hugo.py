@@ -15,6 +15,7 @@ class HugoTests(unittest.TestCase):
         self.assertNotIn('docs/harness.md', pages.GUIDES)
         self.assertEqual(pages.GUIDES['docs/json-contracts.md'][0], 'json-contracts')
         self.assertEqual(pages.GUIDES['docs/tidy.md'][0], 'tidy')
+        self.assertEqual(pages.GUIDES['docs/commands.md'][0], 'commands')
         source = ROOT / 'docs/development.md'
         transformed = pages.guide_markdown(ROOT, source, '[Backend](backends.md) [Harness](harness.md)')
         self.assertIn('/sourcesteward/docs/backends/', transformed)
