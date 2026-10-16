@@ -216,7 +216,7 @@ func TestPinsTextShowsEvidenceAndEscapesRepositoryData(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"SourceSteward pins:", "(git, HEAD aaaaaaa…)", "effects: read-only, no network, no fetch", "workharbor", "pin ccccccc…", "checkout ddddddd… (diverged, ahead 1, behind 12)", "UNREACHABLE (no remote-tracking ref contains it)", "reachable from", "truncated", "unknown (submodule is not initialized)", "uninitialized", "findings: 1 error, 1 warning, 1 info", "error    workharbor  pin-unpublished", "note: remote-tracking refs may be stale; no fetch was made", "dirty"} {
+	for _, want := range []string{"SourceSteward pins:", "(git, HEAD aaaaaaa…)", "effects: read-only, no network, no fetch", "workharbor", "pin ccccccc…", "checkout ddddddd… (diverged, ahead 1, behind 12)", "UNREACHABLE (no remote-tracking ref contains it)", "reachable from origin/", "truncated", "unknown (submodule is not initialized)", "uninitialized", "findings: 1 error, 1 warning, 1 info", "error    workharbor  pin-unpublished", "note: remote-tracking refs may be stale; no fetch was made", "dirty"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q in:\n%s", want, text)
 		}
