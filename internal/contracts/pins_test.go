@@ -2,7 +2,9 @@
 package contracts_test
 
 import (
+	"context"
 	"encoding/json"
+	"os/exec"
 	"reflect"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
@@ -210,6 +212,41 @@ func TestPinsResultRoundTripsAndFinalizesFixtures(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("%s fixture changed by the Go result:\n%s", name, raw)
+		}
+	}
+}
+
+// Real operation results, not only fixtures, must satisfy the schema.
+func TestPinsOperationResultsValidateAgainstSchema(t *testing.T) {
+	s := schema(t, "pins")
+	jj, empty, bare, repo, butler := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	run := func(dir string, args ...string) {
+		t.Helper()
+		c := exec.Command("git", args...)
+		c.Dir = dir
+		c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(jj, ".jj"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	run(bare, "init", "-q", "--bare")
+	run(repo, "init", "-q")
+	run(butler, "init", "-q")
+	if err := os.MkdirAll(filepath.Join(butler, ".git", "gitbutler"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{jj: "unsupported-backend", empty: "not-repository", bare: "bare-repository", repo: "pins-failed", butler: "unsupported-backend"} {
+		r := inspection.Pins(context.Background(), inspection.PinsOptions{Path: name})
+		raw, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		valid(t, s, raw)
+		if r.Error == nil || r.Error.Code != want {
+			t.Fatalf("%s: %+v", name, r)
 		}
 	}
 }
