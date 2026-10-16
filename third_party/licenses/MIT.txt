@@ -1,6 +1,13 @@
 MIT License
 
 Copyright (c) 2022 Ayman Bagabas
+Copyright (c) 2021 GitHub Inc.
+Copyright (c) 2017 Dmitri Shuralyov
+Copyright (c) 2020 Henrique Vicente
+Copyright (c) 2013 Lucas Beyer
+Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
+Copyright (c) 2019 Christian Muehlhaeuser
+Copyright (c) 2019 Oliver Kuederle
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -31,3 +31,11 @@ At integrated source296298c (subsequent changes are evidence-only), the followin
 - `git diff --exit-code ee86751 -- schemas internal/cli/testdata internal/inspection` passes: published schemas, JSON fixtures and native adapters are byte-identical.
 
 Final independent consistency analysis clears source296298c; low stale sentence/task-path corrections are included in this handoff. [PR41](https://github.com/wstein/sourcesteward/pull/41) is separate from merged PR40. Hosted exact-head CI, including pinned Linux Git2.46.0/jj0.45.1 and Git2.56.0/jj0.46.0 conformance, remains pending at source handoff. This local evidence does not substitute for those CI lanes. No owner merge or release was performed.
+
+## Notice-only follow-up
+
+All six source/minimum/current checks on b6edd4a passed in [PR CI38888310316](https://github.com/wstein/sourcesteward/actions/runs/38888310316) and push CI38888303686; Pages correctly skipped for the topic branch. No CI or reviewer findings were reported.
+
+Repeated dependency notices were consolidated:18 files/401 lines become7 files/189 lines. Each MIT copyright is retained with one whitespace-equivalent permission/disclaimer text; Go BSD and patent copies were byte-identical and now shared once. Distinct safeexec, timezone and YAML license/NOTICE contents remain byte-identical. The version-to-license inventory remains explicit. No production code, safety test, schema, module pin or workflow changed.
+
+The follow-up passed attribution comparison against every original notice, `make check` with the same current-jj/native environment as above, documentation checks and `git diff --check`. Hosted CI for the new notice-only head is checked at PR handoff; the earlier green source evidence is unchanged.
