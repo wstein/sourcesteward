@@ -167,6 +167,17 @@ retirement authority. Both versions remain available and the v1 schema's exact b
 a regression checksum. Additional object members remain compatible; new incompatible semantics or
 field types require another version. See [tidy](tidy.md) for native coupled/separate effects.
 
+## Pin audit (v1, planned)
+
+`stw pins --json` (planned, hidden until the final work item of
+[Spec 021](../specs/021-submodule-pin-audit/spec.md)) will emit one `PinsResult` with `schema_version: 1`
+and `command: "pins"`, validated by `schemas/v1/pins.schema.json` (added by the first work item; the
+file does not exist yet). Its `status` is `ok`, `incomplete`, `refused` or `error`; refusals and
+operational failures keep the same envelope. Finding codes and refusal codes are fixed by the
+specification and append-only within schema 1; it is an independent contract and existing schemas keep
+their bytes. Exit status 3 (`--strict` with error findings in a complete result) is documented in
+[pins](pins.md), which also holds the finding and refusal tables.
+
 ## Hosting observations (v1)
 
 [hosting.schema.json](../schemas/v1/hosting.schema.json) is a separate contract shared by `stw hosting` and `gh jj`. It retains native identity, candidates, explicit hosting selection, PR head/base identities, individual CI checks/statuses, diagnostics, sample time and bounded completeness/network effects. Errors may occur before any remote read; missing evidence is never empty successful CI. Existing version/inspection/inventory/workspace/tidy schemas retain their bytes and meanings. See [hosting](hosting.md).

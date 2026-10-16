@@ -33,4 +33,6 @@
 
 - [Evidence-based tidy](tidy.md): native local reference plans, proof and retention limits.
 
+- [Submodule pin audit](pins.md): planned read-only `stw pins` evidence, findings, exit statuses and limits.
+
 - [GitHub inspection and gh jj](hosting.md): shared native ownership, local resolution and explicit read-only PR/CI observations.
