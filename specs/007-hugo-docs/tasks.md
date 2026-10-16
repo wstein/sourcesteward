@@ -34,4 +34,4 @@ worktree author performs edits sequentially. Deliver US1 first, then reference a
 - [x] T014 Amend US4/FR011–012 and the plan for complete implemented command coverage and effect distinctions.
 - [x] T015 Refresh README, landing, command catalog, roadmap and agent guidance; add the catalog to the fixed public guide allowlist.
 - [x] T016 Check actual command/flag examples, full source checks and generated links/schemas; inspect responsive/theme presentation and record evidence.
-- [ ] T017 Make focused documentation/site commits and open a PR; preserve historical acceptance and distinguish pending hosted publication.
+- [x] T017 Make focused documentation/site commits and open a PR; preserve historical acceptance and distinguish pending hosted publication.

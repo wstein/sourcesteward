@@ -5,7 +5,7 @@
 README and Pages now expose all implemented command families and practical examples;
 planned Specs 012–019 and GitButler integration remain separate. The public catalog and
 Spec 007 US4 amendment distinguish local reads, stored plans, authorized local apply and
-GitHub reads. Source/generated/browser validation and PR handoff are tracked in
+GitHub reads. Full local checks, generated-site/link/schema validation and responsive browser checks pass. [PR42](https://github.com/wstein/sourcesteward/pull/42) is open; hosted CI and merge/main publication remain pending. Evidence is tracked in
 [Spec 007 verification](../specs/007-hugo-docs/verification.md).
 
 ## Earlier work: Spec 022 bounded go-gh transport
