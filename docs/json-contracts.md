@@ -109,6 +109,19 @@ rejected by offline fixtures. See [inventory](inventory.md) and its
 [normative contract](../specs/009-workspace-inventory/contracts/inventory.md).
 This source change stages the schema for Pages; it does not prove live deployment.
 
+## Repos schema v1
+
+[Repos schema](../schemas/v1/repos.schema.json) is independently versioned for `stw repos`; its
+`command` discriminator is `repos`. One result holds an entry per explicit path and discovered
+submodule, each with status, backend, an error object, discovery counts, derived facts and the
+unchanged embedded inventory (also valid against the inventory schema), plus a summary, the
+boundary (effects, limits, limitations) and diagnostics. Entry statuses are `ok`, `partial`,
+`error` and `skipped`; the overall status follows the entries (exit 0 only when every entry is
+`ok` or `skipped`, exit 2 for usage errors with no JSON). Inherited inventory limits apply to each
+member and are listed in the contract. Offline tests validate real command output and the
+fixtures. See [multi-repository inventory](repos.md) and its
+[normative contract](../specs/023-multi-repo-inventory/contracts/repos.md).
+
 ## Workspace schema v1
 
 [Workspace schema](../schemas/v1/workspace.schema.json) is independently versioned and staged
