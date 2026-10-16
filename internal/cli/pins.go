@@ -175,7 +175,7 @@ func renderPinsText(w io.Writer, r inspection.PinsResult) error {
 		case "reachable":
 			refs := make([]string, 0, len(s.Publication.ReachableFrom))
 			for _, ref := range s.Publication.ReachableFrom {
-				refs = append(refs, escapePinsText(ref.Remote)+" "+escapePinsText(ref.Ref))
+				refs = append(refs, escapePinsText(strings.TrimPrefix(ref.Ref, "refs/remotes/")))
 			}
 			suffix := ""
 			if s.Publication.Truncated {
