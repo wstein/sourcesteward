@@ -28,6 +28,16 @@ Date: 2026-10-16. All design unknowns resolved; implementation evidence is separ
 
 ## Pinned evidence and sources
 
-Prior evaluation: `/private/tmp/sourcesteward-go-gh-evaluation/docs/evaluations/go-gh-v2.md`; six probe groups and race/vet/module verification passed, with no live API or real keyring calls. SDK source inspected at v2.16.2: [options](https://github.com/cli/go-gh/blob/v2.16.2/pkg/api/client_options.go), [HTTP](https://github.com/cli/go-gh/blob/v2.16.2/pkg/api/http_client.go), [REST](https://github.com/cli/go-gh/blob/v2.16.2/pkg/api/rest_client.go), [auth](https://github.com/cli/go-gh/blob/v2.16.2/pkg/auth/auth.go), [subprocess](https://github.com/cli/go-gh/blob/v2.16.2/gh.go). Research establishes design choices, not migration acceptance or live Enterprise/keyring compatibility.
+Prior local evaluation (branch codex/021-go-gh-evaluation, commit97f26ca, docs/evaluations/go-gh-v2.md); six probe groups and race/vet/module verification passed, with no live API or real keyring calls. SDK source inspected at v2.16.2: [options](https://github.com/cli/go-gh/blob/v2.16.2/pkg/api/client_options.go), [HTTP](https://github.com/cli/go-gh/blob/v2.16.2/pkg/api/http_client.go), [REST](https://github.com/cli/go-gh/blob/v2.16.2/pkg/api/rest_client.go), [auth](https://github.com/cli/go-gh/blob/v2.16.2/pkg/auth/auth.go), [subprocess](https://github.com/cli/go-gh/blob/v2.16.2/gh.go). Research establishes design choices, not migration acceptance or live Enterprise/keyring compatibility.
 
 HTTP content encoding is restricted to identity: disable automatic decompression and refuse compressed responses so raw-body bounds remain observable. Skip SDK default headers, supply fixed Accept/API-version/User-Agent headers, and keep any SDK cache directory inside the neutral temporary directory while caching remains disabled.
+
+## Dependency and license footprint
+
+Production links only the SDK API package and its compile closure, recorded with
+original MIT/BSD and other upstream notices in [dependency provenance](../../third_party/README.md).
+The SDK is MIT licensed. It brings HTTP formatting/configuration/terminal helpers
+into the compile graph even with logging disabled. No source is vendored.
+The module graph upgrades x/text from v0.14.0 to v0.41.0; Go1.27.2 meets SDK Go1.25
+requirements. The larger dependency closure is accepted for the requested official
+SDK integration; owned bounded decoding is retained rather than convenience APIs.
