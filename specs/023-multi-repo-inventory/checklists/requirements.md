@@ -24,4 +24,4 @@
 
 ## Notes
 
-The author review is not independent analysis; see analysis.md. jj behavior is unverified in the authoring container.
+The author review is not independent analysis; see analysis.md. jj behavior is unverified in the authoring container. Round 1 of independent review is recorded in analysis.md.
