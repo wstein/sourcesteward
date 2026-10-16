@@ -34,7 +34,7 @@ Final independent consistency analysis clears source 296298c; low stale sentence
 
 ## Notice-only follow-up
 
-All six source/minimum/current checks on b6edd4a passed in [PR CI 38888310316](https://github.com/wstein/sourcesteward/actions/runs/38888310316) and push CI 38888303686; Pages correctly skipped for the topic branch. CI reported no findings, but independent team review of b6edd4a was NOT CLEAR (three reviewers): one high (the smoke used the keyring credential and live network), several medium (result-code change, evidence Git version, commit hygiene) and several low findings. All were fixed forward in later commits or decided by the owner (H62:a, H63:a).
+All six source/minimum/current checks on b6edd4a passed in [PR CI 38888310316](https://github.com/wstein/sourcesteward/actions/runs/38888310316) and push CI 38888303686; Pages correctly skipped for the topic branch. CI reported no findings, but independent team review of b6edd4a was NOT CLEAR (three reviewers): one high (the smoke used the keyring credential and live network), several medium (result-code change, evidence Git version, commit hygiene) and several low findings. All were fixed forward in the post-merge follow-up (below) or decided by the owner (H62:a, H63:a).
 
 Repeated dependency notices were consolidated: 18 files/401 lines become 7 files/189 lines. Each MIT copyright is retained with one whitespace-equivalent permission/disclaimer text; Go BSD and patent copies were byte-identical and now shared once. Distinct safeexec, timezone and YAML license/NOTICE contents remain byte-identical. The version-to-license inventory remains explicit. No production code, safety test, schema, module pin or workflow changed.
 
