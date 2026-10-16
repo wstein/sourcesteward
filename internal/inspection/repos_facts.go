@@ -269,15 +269,7 @@ func reposRefreshAfterOmission(res *ReposResult) {
 // "<code>: <message>". Facts stay (they were derived before the omission).
 func omitEntryInventory(entry *ReposEntry, message string) {
 	entry.Inventory = nil
-	limit := ReposError{Code: ReposCodeOutputLimit, Message: message}
-	entry.Status = "error"
-	if entry.Error == nil {
-		entry.Error = &limit
-		return
-	}
-	primary, notes := ReposResolveCauses([]ReposError{*entry.Error, limit})
-	entry.Error = &primary
-	entry.Notes = append(entry.Notes, notes...)
+	reposRaise(entry, ReposError{Code: ReposCodeOutputLimit, Message: message})
 }
 
 func countOmittedInventories(entries []ReposEntry) int {

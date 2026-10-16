@@ -111,6 +111,10 @@ func TestReposDiscoveryHonorsTheTotalDeadline(t *testing.T) {
 	if e.Error == nil || e.Error.Code != ReposCodeInventoryTimeout || !strings.Contains(e.Error.Message, "total deadline of 60 seconds") {
 		t.Fatalf("%+v %+v", e.Discovery, e.Error)
 	}
+	// The later inventory-not-started does not overwrite the discovery cause: it goes to the notes.
+	if !strings.Contains(strings.Join(e.Notes, "\n"), "inventory-not-started: ") {
+		t.Fatalf("displaced cause missing from notes: %q", e.Notes)
+	}
 }
 
 // A real parent failure keeps what was learned before it: ignored paths and their notes.
