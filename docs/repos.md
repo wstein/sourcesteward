@@ -81,7 +81,7 @@ a `.git` pointer that names exactly the expected Git directory, ownership by the
 user, no write access for others, and consistent `core.worktree`. A submodule that fails
 is `path-unsafe`; an uninitialized one is `skipped` and does not change the exit status.
 A submodule whose Git directory has `objects/info/alternates` or a `commondir` entry is
-refused too, so a submodule that borrows objects through alternates is not inventoried.
+refused too, so a submodule that borrows objects through alternates is not inventoried. Directories writable by others are refused everywhere, including an empty uninitialized submodule directory: Git creates such directories under `umask 000`, and they are `path-unsafe` (the message names the `chmod -R o-w` fix) instead of `skipped`.
 
 ## Not provided
 
