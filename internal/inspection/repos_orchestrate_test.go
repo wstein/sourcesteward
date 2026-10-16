@@ -24,6 +24,15 @@ func TestReposOrchestrationMaxWorkers(t *testing.T) {
 		paths = append(paths, p)
 	}
 
+	// Each stage holds its first four callers until all four are inside, so the peak must be exactly the
+	// bound: fewer workers would never gather four, more would exceed it.
+	var inspectArrived, invArrived int32
+	gather := func(arrived *int32) {
+		atomic.AddInt32(arrived, 1)
+		for deadline := time.Now().Add(3 * time.Second); atomic.LoadInt32(arrived) < int32(ReposParallelism) && time.Now().Before(deadline); {
+			time.Sleep(time.Millisecond)
+		}
+	}
 	var inspectCurrent, inspectMax int32
 	fakeInspect := func(ctx context.Context, path string) Result {
 		c := atomic.AddInt32(&inspectCurrent, 1)
@@ -33,7 +42,8 @@ func TestReposOrchestrationMaxWorkers(t *testing.T) {
 				break
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		gather(&inspectArrived)
+		time.Sleep(5 * time.Millisecond)
 		atomic.AddInt32(&inspectCurrent, -1)
 		wt := path
 		return Result{
@@ -56,7 +66,8 @@ func TestReposOrchestrationMaxWorkers(t *testing.T) {
 				break
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		gather(&invArrived)
+		time.Sleep(5 * time.Millisecond)
 		atomic.AddInt32(&invCurrent, -1)
 		wt := path
 		return InventoryResult{
@@ -81,11 +92,15 @@ func TestReposOrchestrationMaxWorkers(t *testing.T) {
 	if len(res.Entries) != 8 {
 		t.Fatalf("expected 8 entries, got %d", len(res.Entries))
 	}
-	if inspectMax > int32(ReposParallelism) {
-		t.Errorf("inspect max concurrent workers exceeded limit %d: got %d", ReposParallelism, inspectMax)
+	if got := atomic.LoadInt32(&inspectMax); got != 4 {
+		t.Errorf("identity inspection peak concurrency %d, want exactly 4", got)
 	}
-	if invMax > int32(ReposParallelism) {
-		t.Errorf("inventory max concurrent workers exceeded limit %d: got %d", ReposParallelism, invMax)
+	if got := atomic.LoadInt32(&invMax); got != 4 {
+		t.Errorf("inventory peak concurrency %d, want exactly 4", got)
+	}
+	limits := res.Boundary.Limits
+	if limits.Parallelism != 4 || limits.TotalSeconds != 60 || limits.PerRepositorySeconds != 10 || limits.MaxOutputBytes != 8388608 || limits.MaxEntries != 16 || limits.MaxDiscoveryCandidates != 64 || limits.GitmodulesBytes != 65536 || limits.MaxPathBytes != 4096 {
+		t.Errorf("boundary limits are not the normative table: %+v", limits)
 	}
 }
 
