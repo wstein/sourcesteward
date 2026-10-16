@@ -6,17 +6,17 @@ Independent reviewer: read-only Opus review, revision 642bfa4, 2026-10-16. Appli
 
 | # | Severity | Finding | Resolution |
 | --- | --- | --- | --- |
-| 1 | High | Shared `modules/` rule refuses every submodule of a linked worktree | Plan DD2 uses `rev-parse --git-path modules`; spec US5-4 and edge cases; T006 linked-worktree fixture |
-| 2 | High | `git status` can run clean and process filters | Plan DD5 reuses the inventory comparison; FR-010, US3-1; T010, T012 filter sentinels |
+| 1 | High | Shared `modules/` rule refuses every submodule of a linked worktree | Plan DD2 uses `rev-parse --git-path modules` (refined in round 2 to the absolute path and the configured gitdir); spec US5-4 and edge cases; T006 linked-worktree fixture |
+| 2 | High | `git status` can run clean and process filters | Superseded by round 2 (no inventory comparison): plan DD5 decides dirty state from metadata; FR-010, US3-1; T010, T012 filter sentinels |
 | 3 | High | Explicit `--git-dir` bypasses `safe.directory`; `submodule-unsafe-owner` could never fire | Plan DD3 and FR-010 check ownership in the audit; US3-3; T007 |
 | 4 | High | SC-005 and T018 assume lanes that CI does not have | SC-005 and FR-016 limited to existing ubuntu-24.04 lanes; arm64 and darwin recorded as local evidence; T020, T021 |
 | 5 | Medium | Refusal codes differ across artifacts and from the existing vocabulary | One normative refusal table in the spec, kebab-case like `unsupported-backend` |
 | 6 | Medium | Finding codes and severities differ between spec and data model | Normative table in the spec (19 codes); the data model refers to it |
 | 7 | Medium | Exit status precedence unclear; docs not updated | FR-014 and contract precedence 2, 1, 3, 0; T005, T018 |
 | 8 | Medium | `core.worktree`, `commondir`, alternates and swap-after-validation | FR-009, DD2, T006, T010 |
-| 9 | Medium | 64 KiB runner cap, unbounded ref scan, per-side counts | DD4 and DD6 (streaming runner, `for-each-ref --contains --count=17`, two capped `rev-list` calls); FR-005, FR-011; T008, T011, T013 |
+| 9 | Medium | 64 KiB runner cap, unbounded ref scan, per-side counts | DD4 and DD6 (streaming runner, `for-each-ref --contains`, two capped `rev-list` calls; `--count` raised to 64 in round 2); FR-005, FR-011; T008, T011, T013 |
 | 10 | Medium | Source of `.gitmodules` unspecified | FR-017 and DD1; US4-3; T008 |
-| 11 | Medium | Ownership detection may run sandboxed jj; no jj sentinel; jj-managed submodules | FR-002 and DD7 (markers only, no process); SC-003; T004, T015, T020 |
+| 11 | Medium | Ownership detection may run sandboxed jj; no jj sentinel; jj-managed submodules | Superseded by round 2 for the process claim (only jj and ambiguity refuse without a process); SC-003; T004, T015, T020 |
 | 12 | Medium | DD2 contradicted T006 on in-place `.git` directories | DD11 |
 | 13 | Low | Non-UTF-8 paths cannot be JSON | Edge cases: refused with `submodule-path-unsafe` |
 | 14 | Low | `complete` semantics unclear | Data model completeness rules |
@@ -44,4 +44,17 @@ Also done: `url-mismatch` is named in T009, and the Git measurements of this rou
 
 ## Round 3
 
-Pending: a narrow independent re-check of the Round 2 resolutions and the cross-artifact consistency. Implementation does not start before it returns `READY`.
+Independent reviewer: narrow read-only Opus re-check, revision 06b7bb7, 2026-10-16. Verdict: READY. All eleven round-2 resolutions were confirmed in the cited artifacts and the cross-artifact consistency checks agreed. The reviewer measured the new dirty-state design in a scratch repository on Git 2.56.0 and 2.47.3: `ls-files --stage --debug -z` prints each NUL-ended record followed by five lines (ctime, mtime, device and inode, owner, size and flags) and parses; `diff-index --cached HEAD` reads no worktree content; neither command ran a clean-filter sentinel or changed the index; the racy rule is implementable from that output. It had eight documentation findings, all resolved without blocking WI1:
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | Medium | Research list still named `--count=17` and the inventory comparison and omitted several invocations | Research now holds the normative process allowlist |
+| 2 | Medium | The `--debug` format may change | Plan DD5 and T012: fail-safe parser (unparseable means `unknown`) and a format-pinning test on both Git lanes |
+| 3 | Medium | Entry flags ignored (skip-worktree and others) | Spec US2-3, plan DD5, T012: those entries are `unknown`, with fixtures |
+| 4 | Low | Comparison rules unspecified (ctime, inode, size modulo 2^32, `core.fileMode`, gitlinks, smudged entries, unborn HEAD) | Plan DD5 states the fixed rules |
+| 5 | Low | Dirty-scan budget missing from limits | `dirty_scan_seconds` and `dirty_scan_entries` in the data model and the contract example |
+| 6 | Low | FR-009 named no code for an unconfined gitdir | `submodule-path-unsafe` with a distinct message |
+| 7 | Low | `complete` for refused and error results and summary key names unstated | Data model states both |
+| 8 | Low | Superseded resolutions in the round-1 table | Marked as superseded by round 2 |
+
+The reviewer's note that the schema (T002) should be settled after findings 5 to 7 is met by these edits. Implementation of WI1 may start. Spec 021 is ready for implementation as specified; each work item still needs its own independent code review before merge.

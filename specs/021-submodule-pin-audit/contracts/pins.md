@@ -63,7 +63,7 @@ One `PinsResult` object per invocation, validated by `schemas/v1/pins.schema.jso
 ```json
 {"schema_version":1,"command":"pins","status":"refused","backend":"jj","input_path":".","identity":null,
  "boundary":{"effects":{"network":false,"fetch":false,"writes":false,"hooks":false},
-  "limits":{"max_submodules":256,"per_submodule_seconds":5,"total_seconds":30,"max_output_bytes":1048576,"max_remote_refs":16,"max_count":10000},
+  "limits":{"max_submodules":256,"per_submodule_seconds":5,"total_seconds":30,"max_output_bytes":1048576,"max_remote_refs":16,"max_count":10000,"dirty_scan_seconds":3,"dirty_scan_entries":20000},
   "complete":false,
   "staleness":"Remote-tracking refs are local records; no fetch was made."},
  "submodules":[],"findings":[],
@@ -76,7 +76,7 @@ One `PinsResult` object per invocation, validated by `schemas/v1/pins.schema.jso
 - Reads: superproject object database, index file, `.gitmodules` blobs and worktree file (never through a symlink), each validated submodule worktree and Git directory, `FETCH_HEAD` metadata.
 - Writes: none. No lock file remains. Index bytes and modification time are unchanged.
 - Network, fetch, clone, `submodule init` and `submodule update`: none.
-- Processes: only the fixed, isolated Git invocations listed in the research record, with no hook, clean or process filter, helper, alias, fsmonitor, textconv or external diff. A jj or ambiguous refusal starts no process. Other refusals use only the existing detection's Git processes and never start jj or a submodule command.
+- Processes: only the fixed, isolated Git invocations of the process allowlist in the research record, with no hook, clean or process filter, helper, alias, fsmonitor, textconv or external diff. A jj or ambiguous refusal starts no process. Other refusals use only the existing detection's Git processes and never start jj or a submodule command.
 
 ## Compatibility
 
