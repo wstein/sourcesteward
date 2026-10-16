@@ -2,7 +2,9 @@
 package inspection
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -266,5 +268,64 @@ func TestPinsPublicationRetainsOnlyTheRefsItCanName(t *testing.T) {
 	}
 	if c.run.budget.retained > 17*200 {
 		t.Fatalf("charged the shared budget for refs it cannot name: %d bytes", c.run.budget.retained)
+	}
+}
+
+// craftedCommitGraph writes a commit-graph and makes it claim that `child` has no parent.
+func craftedCommitGraph(t *testing.T, wt, gitDir, child string) {
+	t.Helper()
+	git(t, wt, "commit-graph", "write", "--reachable")
+	path := filepath.Join(gitDir, "objects", "info", "commit-graph")
+	b, err := os.ReadFile(path)
+	mustOS(t, err)
+	n := int(b[6])
+	chunk := func(id string) int {
+		for i := 0; i < n; i++ {
+			e := 8 + i*12
+			if string(b[e:e+4]) == id {
+				var off uint64
+				for _, c := range b[e+4 : e+12] {
+					off = off<<8 | uint64(c)
+				}
+				return int(off)
+			}
+		}
+		t.Fatalf("no %s chunk", id)
+		return 0
+	}
+	oidl, cdat := chunk("OIDL"), chunk("CDAT")
+	raw, err := hex.DecodeString(child)
+	mustOS(t, err)
+	pos := -1
+	for i := 0; oidl+i*len(raw)+len(raw) <= cdat; i++ {
+		if bytes.Equal(b[oidl+i*len(raw):oidl+(i+1)*len(raw)], raw) {
+			pos = i
+		}
+	}
+	if pos < 0 {
+		t.Fatal("commit not in the graph")
+	}
+	p1 := cdat + pos*(len(raw)+16) + len(raw)
+	copy(b[p1:p1+4], []byte{0x70, 0, 0, 0}) // GRAPH_PARENT_NONE
+	mustOS(t, os.Chmod(path, 0o644))
+	mustOS(t, os.WriteFile(path, b, 0o644))
+}
+
+func TestPinsPublicationCommitGraphIsNeverTrusted(t *testing.T) {
+	c := newPublishCase(t)
+	wt := c.repo.WorkTree
+	tip := commitIn(t, wt, "two")
+	git(t, wt, "update-ref", "refs/remotes/origin/main", tip)
+	craftedCommitGraph(t, wt, c.repo.GitDir, tip)
+	// Control: plain Git trusts the forged graph and loses the connection.
+	if out := git(t, wt, "for-each-ref", "--contains", c.f.Pin, "--format=%(refname)", "refs/remotes/origin/main"); strings.TrimSpace(out) != "" {
+		t.Skipf("this Git does not use the forged graph (%q): nothing to defend", out)
+	}
+	if p := c.publish(t, c.f.Pin); p.Status != "reachable" {
+		t.Fatalf("a forged commit-graph changed the answer: %+v", p)
+	}
+	_, rel := relationOf(t, c.run, c.repo, c.dirs, c.f.Pin)
+	if rel.Relation != "behind" && rel.Relation != "ahead" && rel.Relation != "same" {
+		t.Fatalf("%+v", rel)
 	}
 }

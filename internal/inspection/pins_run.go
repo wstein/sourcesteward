@@ -118,6 +118,8 @@ func pinsIsolation() []string {
 		"-c", "protocol.allow=never", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never",
 		"-c", "protocol.ssh.allow=never", "-c", "protocol.git.allow=never", "-c", "protocol.http.allow=never", "-c", "protocol.https.allow=never",
 		"-c", "gc.auto=0", "-c", "maintenance.auto=false",
+		// A stale or crafted commit-graph can change --contains, merge-base and rev-list answers.
+		"-c", "core.commitGraph=false",
 	}
 }
 
