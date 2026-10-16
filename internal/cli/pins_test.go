@@ -271,3 +271,26 @@ func TestPinsCanceledContextIsRuntimeFailure(t *testing.T) {
 	}
 }
 func pinsInt(n int) *int { return &n }
+
+func TestPinsTextShowsTheStagedPinWhenItDiffers(t *testing.T) {
+	r := inspection.NewPinsResult(".")
+	r.Backend = "git"
+	r.Identity = &inspection.Result{SchemaVersion: 1, Status: "ok", Backend: "git"}
+	s := inspection.PinsSubmodule{Path: "m", PathEncoding: "utf8"}
+	s.Pin = inspection.PinsPin{HeadCommit: pinsPtr(strings.Repeat("1", 40)), IndexCommit: pinsPtr(strings.Repeat("2", 40)), StagedDiffers: true}
+	s.Checkout = inspection.PinsCheckout{State: "uninitialized", RelationToPin: "unknown"}
+	added := inspection.PinsSubmodule{Path: "n", PathEncoding: "utf8"}
+	added.Pin = inspection.PinsPin{IndexCommit: pinsPtr(strings.Repeat("3", 40)), StagedDiffers: true}
+	added.Checkout = inspection.PinsCheckout{State: "uninitialized", RelationToPin: "unknown"}
+	r.Submodules = []inspection.PinsSubmodule{s, added}
+	r.Finalize()
+	var out bytes.Buffer
+	if err := renderPinsText(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"pin 1111111…  staged 2222222…", "pin none  staged 3333333…"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %q in:\n%s", want, out.String())
+		}
+	}
+}

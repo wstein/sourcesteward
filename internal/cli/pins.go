@@ -159,6 +159,9 @@ func renderPinsText(w io.Writer, r inspection.PinsResult) error {
 			continue
 		}
 		fmt.Fprintf(&text, "%s  pin %s  ", path, pinsAbbrev(s.Pin.HeadCommit))
+		if s.Pin.StagedDiffers {
+			fmt.Fprintf(&text, "staged %s  ", pinsAbbrev(s.Pin.IndexCommit))
+		}
 		if s.Checkout.State == "uninitialized" {
 			text.WriteString("uninitialized\n")
 		} else {

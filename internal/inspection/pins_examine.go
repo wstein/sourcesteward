@@ -29,6 +29,18 @@ func newPinsSubmodule(e pinsEntry) PinsSubmodule {
 	return s
 }
 
+func pinsRelationPhrase(relation string) string {
+	switch relation {
+	case "ahead":
+		return "ahead of"
+	case "diverged":
+		return "diverged from"
+	case "unrelated":
+		return "unrelated to"
+	}
+	return relation // behind
+}
+
 func pinsSameOID(a, b *string) bool {
 	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
@@ -84,7 +96,7 @@ func (a *pinsAuditor) evidence(run *pinsRunner, re pinsResolvedEntry, sub *PinsS
 		note("entry-without-gitlink", "the .gitmodules entry has no gitlink in HEAD or the index")
 	}
 	if sub.Pin.StagedDiffers {
-		note("staged-pin-differs", "the staged pin differs from the pin recorded at HEAD")
+		note("staged-pin-differs", "the staged pin differs from the pin recorded at HEAD; publication is evaluated for the HEAD pin (the staged pin only when HEAD has none), so the staged pin is not shown to be published")
 	}
 	refuse := func(code, msg string) {
 		sub.Checkout.State = "refused"
@@ -147,7 +159,7 @@ func (a *pinsAuditor) evidence(run *pinsRunner, re pinsResolvedEntry, sub *PinsS
 		}
 		sub.Checkout.RelationToPin, sub.Checkout.Ahead, sub.Checkout.Behind, sub.Checkout.Capped = rel.Relation, rel.Ahead, rel.Behind, rel.Capped
 		if rel.Relation != "same" && rel.Relation != "unknown" {
-			note("checkout-differs-from-pin", "the checkout is "+rel.Relation+" the pin recorded at HEAD")
+			note("checkout-differs-from-pin", "the checkout is "+pinsRelationPhrase(rel.Relation)+" the pin recorded at HEAD")
 		}
 	}
 
