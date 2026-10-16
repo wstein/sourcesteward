@@ -19,7 +19,7 @@ stw pins [PATH] [--json] [--strict]
 | --- | --- |
 | 0 | Complete result; findings do not change this without `--strict` |
 | 1 | Refusal, operational failure, cancellation or an incomplete result, with or without `--strict` |
-| 2 | Usage error |
+| 2 | Usage error, including a path argument that is not valid for the platform; standard output stays empty |
 | 3 | `--strict`, a complete result and at least one `error` finding; one line on standard error names the count, standard output carries the full result |
 
 Precedence: 2, then 1, then 3, then 0. An incomplete result exits 1 even with error findings, because completeness is not optional for an audit; `pins-limit` and `pins-state-changed` therefore never reach status 3.

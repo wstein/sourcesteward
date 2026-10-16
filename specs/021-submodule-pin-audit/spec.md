@@ -74,7 +74,8 @@ Humans and agents use the same result, and the Tier 1 backends state their capab
 1. **Given** a Git-owned superproject, **When** `stw pins [PATH] [--json]` runs, **Then** human output and schema-versioned JSON come from one result and the command exits 0 even when findings exist.
 2. **Given** `--strict` and a complete result with an error finding, **When** the command runs, **Then** the full result is still emitted and the exit status is 3; without error findings it is 0.
 3. **Given** a jj-owned workspace, including a colocated repository, **When** `stw pins` runs, **Then** it refuses with `unsupported-backend`, states that jj has no submodule model, and starts no Git submodule command. Ambiguous ownership, GitButler-managed workspaces and bare repositories also refuse (see the refusal table).
-4. **Given** a linked Git worktree of the superproject, **When** `stw pins` runs there, **Then** its submodules, which Git keeps under that worktree's own `modules` directory, are audited like those of the main worktree.
+4. **Given** a path argument whose bytes cannot be a path, **When** `stw pins` runs, **Then** it is a usage error: exit status 2 with empty standard output.
+5. **Given** a linked Git worktree of the superproject, **When** `stw pins` runs there, **Then** its submodules, which Git keeps under that worktree's own `modules` directory, are audited like those of the main worktree.
 
 ### Edge Cases
 
@@ -116,8 +117,8 @@ Humans and agents use the same result, and the Tier 1 backends state their capab
 | `unsupported-backend` | `refused` | `jj` or `gitbutler` | jj-owned (including colocated and secondary) or GitButler-managed workspace; message names the capability gap |
 | `ambiguous-backend` | `refused` | `ambiguous` | ownership markers conflict |
 | `bare-repository` | `refused` | `git` | no worktree to compare |
-| `not-repository` | `refused` | `unknown` | no repository at the path |
-| `pins-failed` | `error` | `git` | an operational failure such as a failed Git invocation or cancellation |
+| `not-repository` | `refused` | `unknown` | no repository at the path, including a path that does not exist or is not a directory |
+| `pins-failed` | `error` | `git` or `unknown` | an operational failure such as a failed Git invocation, an unreadable path or cancellation; `git` only once Git ownership has been established, `unknown` for a failure before ownership is decided |
 
 ### Findings (normative)
 
