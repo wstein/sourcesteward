@@ -598,7 +598,7 @@ func TestPinsAuditUnbornSubmoduleWithAWorktreeFileNamedHEAD(t *testing.T) {
 	}
 }
 
-// One submodule whose evidence cannot be read is unknown with a reason; it never fails the whole audit.
+// One submodule whose evidence cannot be read is refused with a reason; it never fails the whole audit.
 func TestPinsAuditUnreadableEvidenceIsUnknownForThatSubmoduleOnly(t *testing.T) {
 	f := newPinsFixture(t)
 	git(t, f.Super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", f.Sub, "second")
@@ -610,9 +610,12 @@ func TestPinsAuditUnreadableEvidenceIsUnknownForThatSubmoduleOnly(t *testing.T) 
 		t.Fatalf("%s %+v", r.Status, r.Error)
 	}
 	m := subOf(t, r, "member")
-	if m.Publication.Status != "unknown" || !strings.Contains(m.Publication.Reason, "could not be read") || m.Checkout.Dirty.Reason == "" {
+	if m.Checkout.State != "refused" || m.Refusal == nil || m.Refusal.Code != "submodule-path-unsafe" || !strings.Contains(m.Refusal.Message, "could not be read") ||
+		m.Publication.Status != "unknown" || m.Checkout.HeadCommit != nil || m.Nested.Present || m.Tracking.Relation != "unknown" {
 		t.Fatalf("%+v", m)
 	}
+	// Machine readable, and an error finding, so --strict does not pass over an unaudited submodule.
+	requireFinding(t, r, "submodule-path-unsafe", "error", "member")
 	if s := subOf(t, r, "second"); s.Publication.Status != "reachable" {
 		t.Fatalf("%+v", s.Publication)
 	}
