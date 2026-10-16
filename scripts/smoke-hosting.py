@@ -83,11 +83,14 @@ print(json.dumps(value))
         def observe(command, path, options=(), expected=0, network=False, actual_dispatch=False):
             nonlocal cases
             before = helpers.snapshot(fixtures)
+            prior_calls = audit.read_bytes() if audit.exists() else b''
             if actual_dispatch:
                 args = [tools['gh'], 'jj', *command, str(path), *options, '--json']
             else:
                 args = [str(binaries[0]), 'hosting', *command, str(path), *options, '--json']
-            result = subprocess.run(args, cwd=root, env=api_env if network else env, capture_output=True, timeout=45)
+            result = subprocess.run(args, cwd=root, env=api_env, capture_output=True, timeout=45)
+            if not network:
+                assert (audit.read_bytes() if audit.exists() else b'') == prior_calls, ('local resolution launched gh API', args)
             assert helpers.snapshot(fixtures) == before, ('hosting changed native state', args)
             assert result.returncode == expected, (args, result.returncode, result.stdout, result.stderr)
             output = json.loads(result.stdout)
