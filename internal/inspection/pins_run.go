@@ -80,8 +80,8 @@ func newPinsRunner(ctx context.Context) *pinsRunner {
 // pinsIsolation neutralizes hooks, fsmonitor, optional locks, prompts, credential helpers, remote
 // transports, replace objects and inherited repository selection (the GIT_* variables are dropped by
 // gitEnvironment). Clean and process filters, external diff and textconv are not reachable through the
-// allowlisted commands, which never read or compare worktree content; pinsFilterOverrides adds the
-// filter overrides for a repository whose configuration names filters.
+// allowlisted commands, which never read or compare worktree content (diff-index runs with --no-ext-diff
+// --no-textconv); pins_hostile_test.go proves this with planted filters on stat-dirty files.
 func pinsIsolation() []string {
 	return []string{
 		"--no-replace-objects", "--no-optional-locks", "--literal-pathspecs",
