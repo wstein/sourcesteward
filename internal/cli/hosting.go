@@ -95,6 +95,9 @@ func renderHosting(w io.Writer, r hosting.Result) error {
 	var text strings.Builder
 	fmt.Fprintf(&text, "Hosting: %q status=%q backend=%q\nObserved: %q\nComplete: %t; network reads: %t\n", r.Kind, r.Status, r.Backend, r.ObservedAt, r.Boundary.Complete, r.Boundary.Network)
 	if r.Identity != nil {
+		for _, diagnostic := range r.Identity.Diagnostics {
+			fmt.Fprintf(&text, "Native diagnostic: %q %q\n", diagnostic.Code, diagnostic.Message)
+		}
 		if v := r.Identity.JJRepository; v != nil {
 			fmt.Fprintf(&text, "Native jj: workspace=%q change=%q commit=%q operation=%q\nWorking copy: %q\nNative limitation: %q\n", v.WorkspaceRoot, v.ChangeID, v.CommitID, v.OperationID, v.Observation.WorkingCopy, v.Observation.Limitation)
 		}

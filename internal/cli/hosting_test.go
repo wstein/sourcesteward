@@ -100,3 +100,14 @@ func TestHostingHumanRetainsNativeJJIdentityAndQualification(t *testing.T) {
 		}
 	}
 }
+
+func TestHostingHumanPreservesNativeFailureDiagnostics(t *testing.T) {
+	var out bytes.Buffer
+	r := hosting.Result{Kind: "repo", Status: "error", Backend: "jj", Identity: &inspection.Result{Status: "error", Backend: "jj", Diagnostics: []inspection.Diagnostic{{Code: "jj-unavailable", Message: "Install supported jj\x1b[31m; no Git fallback."}}}}
+	if err := renderHosting(&out, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "jj-unavailable") || !strings.Contains(out.String(), "Install supported jj") || strings.Contains(out.String(), "\x1b") {
+		t.Fatalf("native diagnosis lost or unsafe: %q", out.String())
+	}
+}
