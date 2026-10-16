@@ -360,10 +360,10 @@ var pinsAllowlist = []string{
 	// WI3 evidence invocations (research.md), after the registry and validation ones above.
 	"cat-file -e <OID>^{commit}",
 	"merge-base <OID> <OID>",
-	"rev-list --count --max-count=10001 <OID>..<OID>",
+	"rev-list --count --max-count=10001 <OID>..<OID> --",
 	"for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/",
 	"ls-tree HEAD .gitmodules",
-	"diff-index --cached --no-ext-diff --no-textconv HEAD",
+	"diff-index --cached --no-ext-diff --no-textconv -z <OID> --",
 	"ls-files --stage --debug -z",
 	"ls-files --others --exclude-standard -z",
 	"symbolic-ref -q <REMOTE-REF>",

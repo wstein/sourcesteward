@@ -4,6 +4,7 @@ package inspection
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,6 +281,9 @@ func TestPinsDirtyBudgetYieldsUnknownNeverALimit(t *testing.T) {
 	}
 	git(t, c.wt, "add", "-A")
 	git(t, c.wt, "commit", "-qm", "more")
+	var herr error
+	c.head, herr = pinsReadHead(c.run, pinsGitRepo{GitDir: c.dirs.GitDir, WorkTree: c.wt})
+	mustOS(t, herr)
 	settleIndex(t, c.dirs.GitDir)
 	got := c.stateWith(t, pinsDirtyBudget{Entries: 3, Time: time.Minute})
 	if got.Tracked != "unknown" || !strings.Contains(got.Reason, "budget") {
@@ -302,7 +306,7 @@ func TestPinsDirtyStartsOnlyAllowlistedGitCommands(t *testing.T) {
 	c := newDirtyCase(t, f)
 	gitLog, _ := pinsSentinels(t)
 	c.state(t)
-	requireAllowlisted(t, gitLog(), "diff-index --cached --no-ext-diff --no-textconv HEAD", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z")
+	requireAllowlisted(t, gitLog(), "diff-index --cached --no-ext-diff --no-textconv -z <OID> --", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z")
 }
 
 func TestPinsDirtyCancellationIsAnErrorNotAnAnswer(t *testing.T) {
@@ -312,5 +316,39 @@ func TestPinsDirtyCancellationIsAnErrorNotAnAnswer(t *testing.T) {
 	c.run = newPinsRunner(ctx)
 	if _, err := pinsDirtyState(c.run, c.dirs, c.facts, c.head, pinsDefaultDirtyBudget); err == nil {
 		t.Fatal("cancellation was reported as an answer")
+	}
+}
+
+func TestPinsDirtyManyStagedFilesStillDecideByTheFirstRecord(t *testing.T) {
+	c := newDirtyCase(t, newPinsFixture(t))
+	for i := 0; i < 700; i++ { // the plain diff-index output would exceed the 64 KiB record limit
+		writeFile(t, filepath.Join(c.wt, "staged", strings.Repeat("n", 90)+fmt.Sprint(i)), "x")
+	}
+	git(t, c.wt, "add", "-A")
+	settleIndex(t, c.dirs.GitDir)
+	requireDirty(t, c.state(t), "present", "absent", "")
+}
+
+func TestPinsDirtyAFileNamedHEADDoesNotConfuseRevisionArguments(t *testing.T) {
+	f := newPinsFixture(t)
+	run, repo, d := validatedMember(t, f)
+	wt := repo.WorkTree
+	writeFile(t, filepath.Join(wt, "HEAD"), "x")
+	git(t, wt, "add", "HEAD")
+	git(t, wt, "commit", "-qm", "a file named HEAD")
+	head, _ := pinsReadHead(run, repo)
+	oid := *head.Commit
+	writeFile(t, filepath.Join(wt, oid), "same name as the commit")
+	settleIndex(t, repo.GitDir)
+	facts, _ := pinsReadFacts(run, d)
+	got, err := pinsDirtyState(run, d, facts, head, pinsDefaultDirtyBudget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireDirty(t, got, "absent", "present", "")
+	// The comparison of two commits is not confused by a file named like one of them either.
+	rel, err := pinsRelate(run, repo, facts, oid, f.Pin)
+	if err != nil || rel.Relation != "ahead" {
+		t.Fatalf("%+v %v", rel, err)
 	}
 }
