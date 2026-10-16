@@ -1,0 +1,207 @@
+{
+ "schema_version": 1,
+ "command": "repos",
+ "status": "ok",
+ "input_paths": [
+  "/w/lib"
+ ],
+ "submodules_requested": true,
+ "boundary": {
+  "complete": true,
+  "freshness": "sampled-nontransactional",
+  "effects": {
+   "network": false,
+   "fetch": false,
+   "repository_writes": false,
+   "hooks": false,
+   "private_temporary_files_for_jj": true
+  },
+  "limits": {
+   "max_entries": 16,
+   "max_path_bytes": 4096,
+   "max_discovery_candidates": 64,
+   "per_repository_seconds": 10,
+   "total_seconds": 60,
+   "parallelism": 4,
+   "max_output_bytes": 8388608,
+   "gitmodules_bytes": 65536
+  },
+  "limitations": [
+   "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
+   "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+   "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
+  ]
+ },
+ "entries": [
+  {
+   "index": 0,
+   "path": "/w/lib",
+   "resolved_path": "/w/lib",
+   "origin": "explicit",
+   "parent": null,
+   "status": "ok",
+   "error": null,
+   "backend": "git",
+   "discovery": {
+    "requested": true,
+    "status": "ok",
+    "submodules": 1,
+    "ignored": 0,
+    "deduplicated": 0,
+    "reason": ""
+   },
+   "duplicate_of": null,
+   "contained_in": null,
+   "facts": {
+    "head_state": "attached",
+    "head_ref": "refs/heads/main",
+    "head_commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "change_id": null,
+    "dirty": {
+     "value": "true",
+     "reason": ""
+    },
+    "conflicted_references": 0,
+    "workspaces": {
+     "total": 1,
+     "stale": 0,
+     "foreign": 0,
+     "unverified": 0
+    }
+   },
+   "inventory": {
+    "schema_version": 1,
+    "command": "inventory",
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/w/lib",
+    "identity": {
+     "schema_version": 1,
+     "status": "ok",
+     "backend": "git",
+     "input_path": "/w/lib",
+     "evidence": [],
+     "repository": {
+      "git_dir": "/w/lib/.git",
+      "common_dir": "/w/lib/.git",
+      "worktree": "/w/lib",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+       "state": "attached",
+       "ref": "refs/heads/main",
+       "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+     },
+     "diagnostics": []
+    },
+    "boundary": {
+     "complete": true,
+     "freshness": "sampled-nontransactional",
+     "limitations": [
+      "Sampled observations are not transactional; concurrent and ABA changes may be missed."
+     ],
+     "limits": {
+      "deadline_seconds": 10,
+      "command_bytes": 65536,
+      "result_bytes": 1048576,
+      "records": 1024
+     }
+    },
+    "workspaces": [
+     {
+      "path": "/w/lib",
+      "name": "/w/lib",
+      "manager": "git",
+      "registration": "present",
+      "task_owner": "unknown",
+      "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "change_id": null,
+      "operation_id": null,
+      "tracked": {
+       "value": "false",
+       "reason": ""
+      },
+      "untracked": {
+       "value": "true",
+       "reason": ""
+      },
+      "conflicts": {
+       "value": "false",
+       "reason": ""
+      },
+      "limitations": []
+     }
+    ],
+    "references": [],
+    "bases": [],
+    "files": [
+     {
+      "path": "f.txt",
+      "old_path": null,
+      "scope": "untracked",
+      "change": "untracked",
+      "limitations": []
+     }
+    ],
+    "query": null,
+    "diagnostics": []
+   },
+   "notes": []
+  },
+  {
+   "index": 1,
+   "path": "vendor/lib",
+   "resolved_path": "/w/app/vendor/lib",
+   "origin": "submodule",
+   "parent": 0,
+   "status": "skipped",
+   "error": {
+    "code": "submodule-uninitialized",
+    "message": "registered submodule has no checkout"
+   },
+   "backend": "unknown",
+   "discovery": {
+    "requested": true,
+    "status": "not-applicable",
+    "submodules": 0,
+    "ignored": 0,
+    "deduplicated": 0,
+    "reason": "nested submodules are not traversed"
+   },
+   "duplicate_of": null,
+   "contained_in": 0,
+   "facts": null,
+   "inventory": null,
+   "notes": []
+  }
+ ],
+ "summary": {
+  "entries": 2,
+  "by_status": {
+   "ok": 1,
+   "partial": 0,
+   "error": 0,
+   "skipped": 1
+  },
+  "by_backend": {
+   "git": 1,
+   "jj": 0,
+   "other": 1
+  },
+  "dirty": {
+   "true": 1,
+   "false": 0,
+   "unknown": 0
+  },
+  "stale_workspaces": 0,
+  "foreign_workspaces": 0,
+  "unverified_workspaces": 0,
+  "conflicted_references": 0,
+  "skipped_uninitialized": 1,
+  "discovery_not_applicable": 0,
+  "inventories_omitted": 0
+ },
+ "diagnostics": []
+}
