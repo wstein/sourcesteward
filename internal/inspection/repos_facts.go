@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"path/filepath"
+	"strings"
 )
 
 // deriveFacts derives ReposFacts from the embedded inventory of an entry.
@@ -99,16 +100,33 @@ func deriveFacts(entry *ReposEntry) *ReposFacts {
 	// 4. Workspaces counts
 	facts.Workspaces.Total = len(inv.Workspaces)
 	for _, ws := range inv.Workspaces {
-		if ws.Registration == "missing" {
+		switch ReposWorkspaceKind(ws, entry.Backend) {
+		case "stale":
 			facts.Workspaces.Stale++
-		} else if ws.Manager != "" && ws.Manager != entry.Backend {
+		case "foreign":
 			facts.Workspaces.Foreign++
-		} else if ws.Registration == "unknown" {
+		case "unverified":
 			facts.Workspaces.Unverified++
 		}
 	}
 
 	return facts
+}
+
+// ReposWorkspaceKind classifies one workspace record of an entry with the given backend for the facts and
+// for the text rendering, so both count the same: "stale" (registration missing), "foreign" (a manager
+// other than the entry's backend; a record without manager is never foreign), "unverified" (registration
+// unknown and not foreign) or "" (nothing to report).
+func ReposWorkspaceKind(ws InventoryWorkspace, backend string) string {
+	switch {
+	case ws.Registration == "missing":
+		return "stale"
+	case ws.Manager != "" && ws.Manager != backend:
+		return "foreign"
+	case ws.Registration == "unknown":
+		return "unverified"
+	}
+	return ""
 }
 
 // deriveSummary computes the aggregated ReposSummary across all entries.
@@ -162,8 +180,33 @@ func deriveSummary(entries []ReposEntry) ReposSummary {
 	return summary
 }
 
-// applyOutputBudget ensures the result fits within ReposMaxOutputBytes (8 MiB).
+// scrubReposStrings makes every string this operation composes valid UTF-8 and at most ReposMessageLimit
+// bytes. Paths are validated earlier; messages and notes may carry repository text, and one of them must
+// never make the whole result unencodable. Embedded inventories are not touched.
+func scrubReposStrings(res *ReposResult) {
+	for i := range res.Diagnostics {
+		res.Diagnostics[i].Message = reposClean(res.Diagnostics[i].Message)
+	}
+	for i := range res.Boundary.Limitations {
+		res.Boundary.Limitations[i] = reposClean(res.Boundary.Limitations[i])
+	}
+	for i := range res.Entries {
+		e := &res.Entries[i]
+		e.Discovery.Reason = reposClean(e.Discovery.Reason)
+		if e.Error != nil {
+			e.Error.Message = reposClean(e.Error.Message)
+		}
+		for j := range e.Notes {
+			e.Notes[j] = reposClean(e.Notes[j])
+		}
+	}
+}
+
+// applyOutputBudget ensures the result fits within ReposMaxOutputBytes (8 MiB). Only the size bound omits
+// an embedded inventory: later inventories are dropped once the bound is reached, and if the content around
+// the inventories alone exceeds it, every embedded inventory is dropped.
 func applyOutputBudget(res *ReposResult) {
+	scrubReposStrings(res)
 	if err := ReposCheckJSONBudget(*res); err == nil {
 		return
 	}
@@ -183,50 +226,58 @@ func applyOutputBudget(res *ReposResult) {
 		if orig == nil {
 			continue
 		}
-
 		if omitting {
-			omitEntryInventory(entry)
+			omitEntryInventory(entry, "embedded inventory omitted to respect result size limit")
 			continue
 		}
-
-		// Try including this inventory
 		entry.Inventory = orig
 		if err := ReposCheckJSONBudget(*res); err != nil {
+			entry.Inventory = nil
+			if isReposEncodingError(err) {
+				omitEntryInventory(entry, "embedded inventory omitted because it cannot be encoded as JSON")
+				continue
+			}
 			omitting = true
-			omitEntryInventory(entry)
+			omitEntryInventory(entry, "embedded inventory omitted to respect result size limit")
 		}
 	}
+	reposRefreshAfterOmission(res)
 
-	// Recompute summary
-	res.Summary = deriveSummary(res.Entries)
-	res.Summary.InventoriesOmitted = countOmittedInventories(res.Entries)
-	res.Status = ReposOverallStatus(res.Entries)
-	res.Boundary.Complete = (res.Status == "ok")
-
-	// Final re-check: if still failing budget, omit EVERY entry's inventory
+	// Final re-check: the content around the inventories alone exceeds the bound, so no inventory stays.
 	if err := ReposCheckJSONBudget(*res); err != nil {
 		for i := range res.Entries {
 			entry := &res.Entries[i]
-			omitEntryInventory(entry)
+			if entry.Inventory != nil {
+				omitEntryInventory(entry, "embedded inventory omitted to respect result size limit")
+			}
 		}
-		res.Summary = deriveSummary(res.Entries)
-		res.Summary.InventoriesOmitted = countOmittedInventories(res.Entries)
+		reposRefreshAfterOmission(res)
 		res.Status = "error"
 		res.Boundary.Complete = false
 	}
 }
 
-func omitEntryInventory(entry *ReposEntry) {
+func reposRefreshAfterOmission(res *ReposResult) {
+	res.Summary = deriveSummary(res.Entries)
+	res.Summary.InventoriesOmitted = countOmittedInventories(res.Entries)
+	res.Status = ReposOverallStatus(res.Entries)
+	res.Boundary.Complete = res.Status == "ok"
+}
+
+// omitEntryInventory drops an embedded inventory. The entry has no usable inventory any more, so it is an
+// error entry; the output-limit cause follows the precedence rule, and the loser becomes a note formatted
+// "<code>: <message>". Facts stay (they were derived before the omission).
+func omitEntryInventory(entry *ReposEntry, message string) {
 	entry.Inventory = nil
-	if entry.Status == "error" {
-		entry.Notes = append(entry.Notes, ReposCodeOutputLimit)
-	} else {
-		entry.Status = "error"
-		entry.Error = &ReposError{
-			Code:    ReposCodeOutputLimit,
-			Message: "embedded inventory omitted to respect result size limit",
-		}
+	limit := ReposError{Code: ReposCodeOutputLimit, Message: message}
+	entry.Status = "error"
+	if entry.Error == nil {
+		entry.Error = &limit
+		return
 	}
+	primary, notes := ReposResolveCauses([]ReposError{*entry.Error, limit})
+	entry.Error = &primary
+	entry.Notes = append(entry.Notes, notes...)
 }
 
 func countOmittedInventories(entries []ReposEntry) int {
@@ -234,12 +285,12 @@ func countOmittedInventories(entries []ReposEntry) int {
 	for _, e := range entries {
 		if e.Error != nil && e.Error.Code == ReposCodeOutputLimit {
 			count++
-		} else {
-			for _, n := range e.Notes {
-				if n == ReposCodeOutputLimit {
-					count++
-					break
-				}
+			continue
+		}
+		for _, n := range e.Notes {
+			if strings.HasPrefix(n, ReposCodeOutputLimit+": ") {
+				count++
+				break
 			}
 		}
 	}

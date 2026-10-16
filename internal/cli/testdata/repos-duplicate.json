@@ -30,6 +30,7 @@
   "limitations": [
    "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
    "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+   "Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
    "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
   ]
  },
@@ -160,16 +161,16 @@
    "status": "error",
    "error": {
     "code": "duplicate-repository",
-    "message": "repository already listed at index 0"
+    "message": "same repository as an earlier entry"
    },
    "backend": "git",
    "discovery": {
     "requested": false,
-    "status": "not-applicable",
+    "status": "not-requested",
     "submodules": 0,
     "ignored": 0,
     "deduplicated": 0,
-    "reason": "duplicate entry"
+    "reason": ""
    },
    "duplicate_of": 0,
    "contained_in": null,

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,8 +18,8 @@ import (
 // reposRealFixture is a hermetic set of real Git repositories exercising every entry shape that does
 // not need jj: ok, partial, error without a backend, invalid path, skipped and path-unsafe submodules.
 type reposRealFixture struct {
-	dir                         string
-	clean, super, uninit, plain string
+	dir                                 string
+	clean, linked, super, uninit, plain string
 }
 
 func reposRealGit(t *testing.T, dir string, args ...string) {
@@ -56,6 +57,8 @@ func newReposRealFixture(t *testing.T) reposRealFixture {
 		return p
 	}
 	f.clean = init("clean")
+	f.linked = filepath.Join(base, "linked")
+	reposRealGit(t, f.clean, "worktree", "add", "-q", "-b", "wt", f.linked)
 	sub := init("sub")
 	f.super = init("super")
 	reposRealGit(t, f.super, "submodule", "add", "-q", sub, "s1")
@@ -75,6 +78,21 @@ func newReposRealFixture(t *testing.T) reposRealFixture {
 	}
 	f.plain = filepath.Join(base, "plain")
 	if err := os.Mkdir(f.plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Submodule validation refuses directories writable by others, and Git creates them that way under
+	// umask 000. Fix the modes instead of the process umask, so the fixture is independent of it.
+	err = filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.Type()&fs.ModeSymlink != 0 {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		return os.Chmod(p, info.Mode().Perm()&^0o022)
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -127,4 +145,43 @@ func TestReposUsageErrorResultValidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	valid(t, schema(t, "repos"), raw)
+}
+
+// TestReposFixtureEntriesMatchRealOutput keeps the hand-written fixtures honest: the error, discovery,
+// backend and notes of entries without an inventory equal what the command prints for the same case.
+func TestReposFixtureEntriesMatchRealOutput(t *testing.T) {
+	f := newReposRealFixture(t)
+	run := func(args ...string) []map[string]any {
+		var out, diag bytes.Buffer
+		cli.Run(context.Background(), "test", append([]string{"repos"}, append(args, "--json")...), &out, &diag)
+		var doc struct {
+			Entries []map[string]any `json:"entries"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
+			t.Fatalf("%v: %s %s", err, out.String(), diag.String())
+		}
+		return doc.Entries
+	}
+	find := func(entries []map[string]any, status string) map[string]any {
+		for _, e := range entries {
+			if e["status"] == status && e["inventory"] == nil {
+				return e
+			}
+		}
+		t.Fatalf("no %s entry without inventory in %v", status, entries)
+		return nil
+	}
+	same := func(name string, real, fixture map[string]any) {
+		t.Helper()
+		for _, k := range []string{"backend", "error", "discovery", "notes", "origin", "facts", "inventory"} {
+			r, _ := json.Marshal(real[k])
+			x, _ := json.Marshal(fixture[k])
+			if !bytes.Equal(r, x) {
+				t.Errorf("%s: field %s differs\n real:    %v\n fixture: %v", name, k, real[k], fixture[k])
+			}
+		}
+	}
+	same("skipped", find(run("--submodules", f.uninit), "skipped"), reposObject(t, "skipped")["entries"].([]any)[1].(map[string]any))
+	same("duplicate", find(run(f.clean, f.linked), "error"), reposObject(t, "duplicate")["entries"].([]any)[1].(map[string]any))
+	same("not-repository-root", find(run(filepath.Join(f.clean, "subdir")), "error"), reposObject(t, "error")["entries"].([]any)[0].(map[string]any))
 }

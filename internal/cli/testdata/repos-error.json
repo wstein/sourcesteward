@@ -29,6 +29,7 @@
   "limitations": [
    "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
    "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+   "Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
    "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
   ]
  },
@@ -42,16 +43,16 @@
    "status": "error",
    "error": {
     "code": "not-repository-root",
-    "message": "path is not a repository root"
+    "message": "path is inside a repository but not its root"
    },
-   "backend": "unknown",
+   "backend": "git",
    "discovery": {
     "requested": false,
-    "status": "not-applicable",
+    "status": "not-requested",
     "submodules": 0,
     "ignored": 0,
     "deduplicated": 0,
-    "reason": "entry is not a repository root"
+    "reason": ""
    },
    "duplicate_of": null,
    "contained_in": null,
@@ -69,9 +70,9 @@
    "skipped": 0
   },
   "by_backend": {
-   "git": 0,
+   "git": 1,
    "jj": 0,
-   "other": 1
+   "other": 0
   },
   "dirty": {
    "true": 0,
@@ -83,7 +84,7 @@
   "unverified_workspaces": 0,
   "conflicted_references": 0,
   "skipped_uninitialized": 0,
-  "discovery_not_applicable": 1,
+  "discovery_not_applicable": 0,
   "inventories_omitted": 0
  },
  "diagnostics": []
