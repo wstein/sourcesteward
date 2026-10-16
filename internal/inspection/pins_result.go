@@ -390,3 +390,48 @@ func (r PinsResult) MarshalJSON() ([]byte, error) {
 	type plain PinsResult
 	return json.Marshal(plain(r))
 }
+
+// boundOutput enforces max_output_bytes on the marshalled result (FR-011), not only on retained Git output:
+// the largest prefix of submodules (and their findings) that fits is kept, and a global pins-limit
+// finding says how many were omitted, which also makes the result incomplete.
+func (r *PinsResult) boundOutput() {
+	max := r.Boundary.Limits.MaxOutputBytes - 16 // room for the encoder's newline
+	size := func() int {
+		if err := r.Finalize(); err != nil {
+			return 0
+		}
+		b, err := json.Marshal(*r)
+		if err != nil {
+			return 0
+		}
+		return len(b)
+	}
+	if size() <= max {
+		return
+	}
+	all, findings := r.Submodules, r.Findings
+	fit := func(k int) bool {
+		kept := map[string]bool{}
+		for _, s := range all[:k] {
+			kept[s.Path] = true
+		}
+		r.Submodules, r.Findings = append([]PinsSubmodule(nil), all[:k]...), nil
+		for _, f := range findings {
+			if f.Submodule == nil || kept[*f.Submodule] {
+				r.Findings = append(r.Findings, f)
+			}
+		}
+		_ = r.AddFinding("pins-limit", nil, fmt.Sprintf("the result exceeds the %d byte output bound; %d of %d submodules are listed", r.Boundary.Limits.MaxOutputBytes, k, len(all)))
+		return size() <= max
+	}
+	lo, hi := 0, len(all)-1 // the full list does not fit
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fit(mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	fit(lo)
+}
