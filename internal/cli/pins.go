@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -33,12 +34,17 @@ func pinsCommandWith(run func(context.Context, inspection.PinsOptions) inspectio
 		Use: "pins [PATH]", Short: "Audit the submodule pins of a Git superproject without writes",
 		Long: "Report what each submodule pin records, what is checked out and whether the pinned commit is\ncontained in a remote-tracking ref the local repository already knows.\nRead-only: no network, fetch, hook, prompt or write; remote-tracking refs may be stale.\nGit worktrees are supported; jj, GitButler, ambiguous and bare repositories are refused.\nExit statuses: 0 complete result; 1 refusal, failure, cancellation or incomplete result;\n2 usage error; 3 with --strict, a complete result and at least one error finding.",
 		Args: cobra.MaximumNArgs(1),
+		// A usage error must leave standard output empty, even when the command runs outside the root.
+		SilenceUsage: true, SilenceErrors: true,
 		// Hidden until the final work item of Spec 021 completes conformance evidence and unhides it,
 		// so a partial stack never advertises a half feature.
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options := inspection.PinsOptions{}
 			if len(args) == 1 {
+				if args[0] == "" {
+					return errors.New("path must not be empty; omit it to audit the current directory")
+				}
 				options.Path = args[0]
 			}
 			if err := inspection.ValidatePinsOptions(options); err != nil {
@@ -123,7 +129,6 @@ func pinsAbbrev(oid *string) string {
 	}
 	return escapePinsText(*oid)
 }
-func pinsCount(n int, singular string) string { return fmt.Sprintf("%d %s", n, singular) }
 
 func renderPinsText(w io.Writer, r inspection.PinsResult) error {
 	// Render into one buffer so formatting has no effects and a writer error ends the command.
@@ -184,7 +189,7 @@ func renderPinsText(w io.Writer, r inspection.PinsResult) error {
 		}
 	}
 	if len(r.Submodules) > 0 || len(r.Findings) > 0 {
-		fmt.Fprintf(&text, "\nfindings: %s, %s, %s\n", pinsCount(r.Summary.Errors, "error"), pinsCount(r.Summary.Warnings, "warning"), pinsCount(r.Summary.Infos, "info"))
+		fmt.Fprintf(&text, "\nfindings: %s, %s, %s\n", fmt.Sprintf("%d error", r.Summary.Errors), fmt.Sprintf("%d warning", r.Summary.Warnings), fmt.Sprintf("%d info", r.Summary.Infos))
 	}
 	for _, f := range r.Findings {
 		subject := "-"

@@ -54,25 +54,28 @@ func TestPinsCommandStaysHiddenUntilTheFinalWorkItem(t *testing.T) {
 	}
 }
 func TestPinsUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
-	for _, args := range [][]string{{"one", "two"}, {"--bogus"}, {"--json=maybe"}, {"--strict=maybe"}, {"a\x00b"}} {
+	for _, args := range [][]string{{"one", "two"}, {"--bogus"}, {"--json=maybe"}, {"--strict=maybe"}, {"a\x00b"}, {"\xff"}, {""}, {"--json", "a", "b"}} {
 		called := false
 		command := pinsCommandWith(func(context.Context, inspection.PinsOptions) inspection.PinsResult {
 			called = true
 			return pinsCLIResult("ok", 0, 0)
 		})
 		command.SetArgs(args)
-		command.SetOut(&bytes.Buffer{})
+		var stdout bytes.Buffer
+		command.SetOut(&stdout)
 		command.SetErr(&bytes.Buffer{})
 		err := command.ExecuteContext(context.Background())
 		var runtime runtimeFailure
 		var strict strictFindingsError
-		if err == nil || errors.As(err, &runtime) || errors.As(err, &strict) || called {
-			t.Fatalf("%q: err=%v called=%t", args, err, called)
+		if err == nil || errors.As(err, &runtime) || errors.As(err, &strict) || called || stdout.Len() != 0 {
+			t.Fatalf("%q: err=%v called=%t stdout=%q", args, err, called, stdout.String())
 		}
 	}
-	var out, diagnostic bytes.Buffer
-	if code := Run(context.Background(), "dev", []string{"pins", "one", "two"}, &out, &diagnostic); code != 2 {
-		t.Fatalf("exit %d", code)
+	for _, args := range [][]string{{"pins", "one", "two"}, {"pins", "--bogus"}, {"pins", "--json", "a", "b"}, {"pins", "", "--json"}} {
+		var out, diagnostic bytes.Buffer
+		if code := Run(context.Background(), "dev", args, &out, &diagnostic); code != 2 || out.Len() != 0 {
+			t.Fatalf("%q: exit %d stdout %q", args, code, out.String())
+		}
 	}
 }
 func TestPinsPathAndFlags(t *testing.T) {
