@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "command": "pins",
+  "status": "error",
+  "backend": "git",
+  "input_path": "/repo",
+  "identity": null,
+  "boundary": {
+    "effects": {
+      "network": false,
+      "fetch": false,
+      "writes": false,
+      "hooks": false
+    },
+    "limits": {
+      "max_submodules": 256,
+      "per_submodule_seconds": 5,
+      "total_seconds": 30,
+      "max_output_bytes": 1048576,
+      "max_remote_refs": 16,
+      "max_count": 10000,
+      "dirty_scan_seconds": 3,
+      "dirty_scan_entries": 20000
+    },
+    "complete": false,
+    "staleness": "Remote-tracking refs are local records; no fetch was made."
+  },
+  "submodules": [],
+  "findings": [],
+  "summary": {
+    "submodules": 0,
+    "errors": 0,
+    "warnings": 0,
+    "infos": 0,
+    "publication": {
+      "reachable": 0,
+      "unreachable": 0,
+      "unknown": 0
+    }
+  },
+  "error": {
+    "code": "pins-failed",
+    "message": "submodule evidence is not implemented in this revision"
+  }
+}

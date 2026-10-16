@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "command": "pins",
+  "status": "incomplete",
+  "backend": "git",
+  "input_path": "/repo",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "diagnostics": []
+  },
+  "boundary": {
+    "effects": {
+      "network": false,
+      "fetch": false,
+      "writes": false,
+      "hooks": false
+    },
+    "limits": {
+      "max_submodules": 256,
+      "per_submodule_seconds": 5,
+      "total_seconds": 30,
+      "max_output_bytes": 1048576,
+      "max_remote_refs": 16,
+      "max_count": 10000,
+      "dirty_scan_seconds": 3,
+      "dirty_scan_entries": 20000
+    },
+    "complete": false,
+    "staleness": "Remote-tracking refs are local records; no fetch was made."
+  },
+  "submodules": [
+    {
+      "path": "bundledock",
+      "path_encoding": "utf8",
+      "name": "bundledock",
+      "registration": {
+        "gitlink_in_head": true,
+        "gitlink_in_index": true,
+        "gitmodules_entry": true,
+        "active": true
+      },
+      "url": {
+        "configured": "https://example.invalid/bundledock.git",
+        "has_credentials": false,
+        "remote_name": "origin",
+        "remote_url": "https://example.invalid/bundledock.git",
+        "match": "match"
+      },
+      "pin": {
+        "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "index_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "staged_differs": false
+      },
+      "checkout": {
+        "state": "initialized",
+        "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": null,
+        "detached": true,
+        "relation_to_pin": "same",
+        "ahead": 0,
+        "behind": 0,
+        "capped": false,
+        "dirty": {
+          "tracked": "absent",
+          "untracked": "absent",
+          "reason": ""
+        }
+      },
+      "publication": {
+        "status": "reachable",
+        "reason": "",
+        "reachable_from": [
+          {
+            "remote": "origin",
+            "ref": "refs/remotes/origin/main"
+          }
+        ],
+        "truncated": false,
+        "last_fetch": null
+      },
+      "tracking": {
+        "ref": null,
+        "relation": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false
+      },
+      "nested": {
+        "present": false
+      },
+      "refusal": null,
+      "finding_codes": []
+    }
+  ],
+  "findings": [
+    {
+      "code": "pins-limit",
+      "severity": "error",
+      "submodule": null,
+      "message": "the total deadline of 30 seconds was exhausted; the result is incomplete"
+    },
+    {
+      "code": "remote-refs-may-be-stale",
+      "severity": "info",
+      "submodule": null,
+      "message": "Remote-tracking refs are local records; no fetch was made."
+    }
+  ],
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0,
+    "infos": 1,
+    "publication": {
+      "reachable": 1,
+      "unreachable": 0,
+      "unknown": 0
+    }
+  },
+  "error": null
+}

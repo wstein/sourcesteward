@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "command": "pins",
+  "status": "ok",
+  "backend": "git",
+  "input_path": "/repo",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "diagnostics": []
+  },
+  "boundary": {
+    "effects": {
+      "network": false,
+      "fetch": false,
+      "writes": false,
+      "hooks": false
+    },
+    "limits": {
+      "max_submodules": 256,
+      "per_submodule_seconds": 5,
+      "total_seconds": 30,
+      "max_output_bytes": 1048576,
+      "max_remote_refs": 16,
+      "max_count": 10000,
+      "dirty_scan_seconds": 3,
+      "dirty_scan_entries": 20000
+    },
+    "complete": true,
+    "staleness": "Remote-tracking refs are local records; no fetch was made."
+  },
+  "submodules": [
+    {
+      "path": "bundledock",
+      "path_encoding": "utf8",
+      "name": "bundledock",
+      "registration": {
+        "gitlink_in_head": true,
+        "gitlink_in_index": true,
+        "gitmodules_entry": true,
+        "active": true
+      },
+      "url": {
+        "configured": "https://example.invalid/bundledock.git",
+        "has_credentials": false,
+        "remote_name": "origin",
+        "remote_url": "https://example.invalid/bundledock.git",
+        "match": "match"
+      },
+      "pin": {
+        "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "index_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "staged_differs": false
+      },
+      "checkout": {
+        "state": "initialized",
+        "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": null,
+        "detached": true,
+        "relation_to_pin": "same",
+        "ahead": 0,
+        "behind": 0,
+        "capped": false,
+        "dirty": {
+          "tracked": "absent",
+          "untracked": "absent",
+          "reason": ""
+        }
+      },
+      "publication": {
+        "status": "reachable",
+        "reason": "",
+        "reachable_from": [
+          {
+            "remote": "origin",
+            "ref": "refs/remotes/origin/main"
+          }
+        ],
+        "truncated": false,
+        "last_fetch": null
+      },
+      "tracking": {
+        "ref": null,
+        "relation": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false
+      },
+      "nested": {
+        "present": false
+      },
+      "refusal": null,
+      "finding_codes": []
+    },
+    {
+      "path": "workharbor",
+      "path_encoding": "utf8",
+      "name": "workharbor",
+      "registration": {
+        "gitlink_in_head": true,
+        "gitlink_in_index": true,
+        "gitmodules_entry": true,
+        "active": true
+      },
+      "url": {
+        "configured": "https://example.invalid/workharbor.git",
+        "has_credentials": false,
+        "remote_name": "origin",
+        "remote_url": "https://example.invalid/workharbor.git",
+        "match": "match"
+      },
+      "pin": {
+        "head_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "index_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "staged_differs": false
+      },
+      "checkout": {
+        "state": "initialized",
+        "head_commit": "cccccccccccccccccccccccccccccccccccccccc",
+        "branch": null,
+        "detached": true,
+        "relation_to_pin": "diverged",
+        "ahead": 1,
+        "behind": 12,
+        "capped": false,
+        "dirty": {
+          "tracked": "absent",
+          "untracked": "absent",
+          "reason": ""
+        }
+      },
+      "publication": {
+        "status": "unreachable",
+        "reason": "",
+        "reachable_from": [],
+        "truncated": false,
+        "last_fetch": null
+      },
+      "tracking": {
+        "ref": null,
+        "relation": "unknown",
+        "ahead": null,
+        "behind": null,
+        "capped": false
+      },
+      "nested": {
+        "present": false
+      },
+      "refusal": null,
+      "finding_codes": [
+        "checkout-differs-from-pin",
+        "pin-unpublished"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "code": "pin-unpublished",
+      "severity": "error",
+      "submodule": "workharbor",
+      "message": "local evidence shows no remote contains the pin"
+    },
+    {
+      "code": "checkout-differs-from-pin",
+      "severity": "warning",
+      "submodule": "workharbor",
+      "message": "checkout is diverged from the pin"
+    },
+    {
+      "code": "remote-refs-may-be-stale",
+      "severity": "info",
+      "submodule": null,
+      "message": "Remote-tracking refs are local records; no fetch was made."
+    }
+  ],
+  "summary": {
+    "submodules": 2,
+    "errors": 1,
+    "warnings": 1,
+    "infos": 1,
+    "publication": {
+      "reachable": 1,
+      "unreachable": 1,
+      "unknown": 0
+    }
+  },
+  "error": null
+}
