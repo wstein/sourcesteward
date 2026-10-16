@@ -366,13 +366,14 @@ var pinsAllowlist = []string{
 	"diff-index --cached --no-ext-diff --no-textconv -z <OID> --",
 	"ls-files --stage --debug -z",
 	"ls-files --others --exclude-standard -z",
-	"symbolic-ref -q <REMOTE-REF>",
-	"rev-parse --verify --quiet <REMOTE-REF>",
+	"symbolic-ref -q refs/remotes/<REMOTE>/HEAD",
+	"rev-parse --verify --quiet refs/remotes/<REMOTE>/<BRANCH>^{commit}",
 }
 
 var (
-	pinsOIDToken       = regexp.MustCompile(`[0-9a-f]{64}|[0-9a-f]{40}`)
-	pinsRemoteRefToken = regexp.MustCompile(`refs/remotes/[^ ]+`)
+	pinsOIDToken      = regexp.MustCompile(`[0-9a-f]{64}|[0-9a-f]{40}`)
+	pinsRemoteHeadTok = regexp.MustCompile(`^refs/remotes/.+/HEAD$`)
+	pinsRemoteTipTok  = regexp.MustCompile(`^refs/remotes/[^ ]+/[^ /]+\^\{commit\}$`)
 )
 
 // pinsShape reduces one recorded invocation to its allowlist shape and reports whether the explicit
@@ -398,7 +399,13 @@ func pinsShape(t *testing.T, line string) (shape string, explicit bool) {
 		if f[i] == "--" && i+1 < len(f) {
 			f[i+1] = "<REF>"
 		}
-		f[i] = pinsRemoteRefToken.ReplaceAllString(pinsOIDToken.ReplaceAllString(f[i], "<OID>"), "<REMOTE-REF>")
+		f[i] = pinsOIDToken.ReplaceAllString(f[i], "<OID>")
+		switch {
+		case pinsRemoteHeadTok.MatchString(f[i]):
+			f[i] = "refs/remotes/<REMOTE>/HEAD"
+		case pinsRemoteTipTok.MatchString(f[i]):
+			f[i] = "refs/remotes/<REMOTE>/<BRANCH>^{commit}"
+		}
 	}
 	return strings.Join(f, " "), explicit
 }
