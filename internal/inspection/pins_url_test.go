@@ -73,14 +73,14 @@ func TestPinsURLRedactsCredentials(t *testing.T) {
 }
 
 func TestPinsURLSchemeValidation(t *testing.T) {
-	valid := []string{"https://example.com/x.git", "http://example.com/x", "ssh://git@example.com/x", "git://example.com/x", "git+ssh://example.com/x", "ssh+git://example.com/x", "file:///srv/x", "git@github.com:o/r.git", "/srv/x", "./x", "../x", "sibling"}
+	valid := []string{"https://example.com/x.git", "http://example.com/x", "ssh://git@example.com/x", "git://example.com/x", "git+ssh://example.com/x", "ssh+git://example.com/x", "file:///srv/x", "git@github.com:o/r.git", "/srv/x", "./x", "../x", "sibling", "https://[::1]/x", "https://[::1]:443/x", "https://[::1]:8443/x"}
 	for _, raw := range valid {
 		if i := pinsClassifyURL(raw); !i.Valid || i.Problem != "" {
 			t.Errorf("%q should be valid: %+v", raw, i)
 		}
 	}
 	problems := map[string]string{}
-	for _, raw := range []string{"ext::sh -c touch", "fd::7", "ftp://example.com/x", "javascript://example.com/x", "-oProxyCommand=x", "--upload-pack=x", "https://exa\x01mple.com", "https://example.com/a\nb", "https://example.com/\xff", "", "https://example.com/" + strings.Repeat("a", 5000), "https://", "://x"} {
+	for _, raw := range []string{"ext::sh -c touch", "fd::7", "ftp://example.com/x", "javascript://example.com/x", "-oProxyCommand=x", "--upload-pack=x", "https://exa\x01mple.com", "https://example.com/a\nb", "https://example.com/\xff", "", "https://example.com/" + strings.Repeat("a", 5000), "https://", "://x", "https://example.com:/x", "https://example.com:notaport/x", "https://[::1]:notaport/x", "https://[]/x", "https://[::1/x", "https://::1/x"} {
 		i := pinsClassifyURL(raw)
 		if i.Valid || i.Problem == "" {
 			t.Errorf("%q should be invalid: %+v", raw, i)
@@ -147,6 +147,8 @@ func TestPinsURLMatchRemote(t *testing.T) {
 		{"equal among others", []pinsRemote{r("fork", "https://example.com/me/r"), r("origin", "https://EXAMPLE.com/o/r.git")}, "match", "origin"},
 		{"several equal", []pinsRemote{r("a", "https://example.com/o/r"), r("b", "https://example.com/o/r.git")}, "unknown", ""},
 		{"one remote with two equal urls is one remote", []pinsRemote{r("a", "https://example.com/o/r"), r("a", "https://example.com/o/r.git")}, "match", "a"},
+		{"one remote with conflicting urls is unknown", []pinsRemote{r("a", "https://example.com/o/r"), r("a", "https://example.com/other/r")}, "unknown", ""},
+		{"sole remote with conflicting non-matching urls is unknown", []pinsRemote{r("a", "https://example.com/x/r"), r("a", "https://example.com/y/r")}, "unknown", ""},
 		{"sole remote differs", []pinsRemote{r("origin", "https://example.com/other/r")}, "mismatch", "origin"},
 		{"several remotes none equal", []pinsRemote{r("a", "https://example.com/x/r"), r("b", "https://example.com/y/r")}, "unknown", ""},
 		{"no remotes", nil, "unknown", ""},
