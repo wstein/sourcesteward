@@ -42,3 +42,12 @@ The exact source→slug allowlist is recorded in contracts/site.md. Source short
 openers are rejected before Hugo receives Markdown, avoiding built-in remote embeds.
 Final feature-006 integration requires both public version and inspect schemas.
 The explicit allowlist includes docs/json-contracts.md as the fifth public guide.
+
+## Command coverage amendment (2026-10-16)
+
+Update existing README/landing content from the registered Cobra command tree; add
+one authored public command catalog to the explicit guide allowlist. Rebase its
+landing links through the existing fixed Pages base. Preserve branding/theme and
+generated reference ownership. Reconcile planned roadmap/spec status and disclose
+observation, plan-store, local apply and network effects. Validate source links,
+Cobra examples, public artifacts and mobile/desktop presentation before PR handoff.
