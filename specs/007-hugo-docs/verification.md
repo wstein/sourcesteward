@@ -95,3 +95,34 @@ rebased branch tree was verified byte-identical to its reviewed head before push
 review evidence still applies to the merged content. The commit IDs cited above that resolve
 (`0cd52d3`, `4e8db2a`, `ab30b4d`, `e563a6d`, `f801c06`) are pre-rebase branch commits and
 are not in main's history (checked 2026-10-15); other cited IDs belong to deleted branches.
+
+## Implemented command coverage amendment (2026-10-16)
+
+Documentation-only worktree codex/023-command-documentation starts from main dfd6035
+(merged PR41). README/Pages now enumerate every registered command family; one new
+authored command guide supplies practical examples and effect/authorization limits.
+Planned Specs012–019 and GitButler remain explicitly unavailable. The landing no longer
+claims jj and cleanup are merely planned. Spec007 US4/FR011–012 and tasks record this
+maintenance scope. Historical T013 is closed: Hugo PR8 merged on2026-10-15.
+
+Validation passed:
+
+- `make check` with Homebrew Git2.54.0, pinned jj0.46.0, STW_REQUIRE_JJ=1,
+  GOMODCACHE=/private/tmp/stw-sdk-mod-cache and GOCACHE=/private/tmp/stw-go-cache:
+  Go tests/vet/module verification,57 Python cases,12 theme cases,docs176,
+  architecture and whitespace. No runtime operation/schema/Go module changed.
+- Cobra metadata comparison: all16 registered non-root paths represented in README,
+  public catalog and landing.25 example invocations parse through help-only mode;
+  no repository callback, mutation, authentication or extension install executed.
+- Pinned Hugo0.168.0 package/check-site builds30 HTML pages; source links rebase
+  under /sourcesteward/, schema files retain exact bytes, and private source stays
+  excluded. The initial preview carries baseline revision dfd6035 and is not a
+  deployed artifact; final committed-source packaging is checked before handoff.
+- Browser:1280px dark desktop has six two-column command cards;375px light mobile
+  has single-column cards. documentElement.scrollWidth equals innerWidth on both.
+  New guide navigation succeeds and its375px page also has no horizontal overflow;
+  light theme persists across navigation. Temporary viewport override restored.
+
+Author source/content review found no remaining command/effect mismatch. Independent
+human review, hosted CI and deployment of merged main remain PR/publication gates;
+no independent reviewer acceptance or live Pages publication is claimed here.

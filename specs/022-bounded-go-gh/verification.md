@@ -39,3 +39,9 @@ All six source/minimum/current checks on b6edd4a passed in [PR CI38888310316](ht
 Repeated dependency notices were consolidated:18 files/401 lines become7 files/189 lines. Each MIT copyright is retained with one whitespace-equivalent permission/disclaimer text; Go BSD and patent copies were byte-identical and now shared once. Distinct safeexec, timezone and YAML license/NOTICE contents remain byte-identical. The version-to-license inventory remains explicit. No production code, safety test, schema, module pin or workflow changed.
 
 The follow-up passed attribution comparison against every original notice, `make check` with the same current-jj/native environment as above, documentation checks and `git diff --check`. Hosted CI for the new notice-only head is checked at PR handoff; the earlier green source evidence is unchanged.
+
+## Merged status (2026-10-16)
+
+PR41 is merged into main (this documentation refresh starts at dfd6035). All six
+final-head checks for0825640 passed in PR CI38891155861 and push CI38891151895.
+Earlier pending CI/merge statements above are historical handoff snapshots.

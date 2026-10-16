@@ -20,7 +20,7 @@ internal specs/progress/harness files stay unpublished, and revision.txt identif
 ## Requirements
 - FR001: Pin official Hugo v0.168.0, verify downloaded release archives against committed SHA256 values, and reject a mismatched runtime version.
 - FR002: Use repository-owned templates without remote Hugo modules, themes, Sass, Node dependencies, external assets or runtime services.
-- FR003: Keep current landing content and navy/orange/white identity, local fonts, favicon and accessible theme selector; generated pages use the same styles/script.
+- FR003: Keep landing content accurate to implemented scope and preserve navy/orange/white identity, local fonts, favicon and accessible theme selector; generated pages use the same styles/script.
 - FR004: Render an explicit public-guide allowlist; do not recursively publish docs/, specs/, .git/ or arbitrary repository files.
 - FR005: Derive CLI reference from Cobra metadata; do not execute command Run/RunE callbacks or inspect the working repository during generation.
 - FR006: Serve schemas/v1/*.schema.json unchanged when present, rejecting symlinks and unexpected files. Both schema files and all selected public guides are mandatory after feature 006 integration.
@@ -28,6 +28,16 @@ internal specs/progress/harness files stay unpublished, and revision.txt identif
 - FR008: CI checks and builds the exact source SHA; deployment uploads the identical checked artifact, preserving revision.txt proof. No automatic merges.
 - FR009: Source Markdown has one owner; public navigation and links resolve correctly under /sourcesteward/.
 - FR010: Tests begin failing, cover allowlisting, symlinks, URL rewriting, offline assets, generated command drift and artifact revision/schema integrity; record source and browser verification.
+
+- FR011: README, landing page and public command catalog enumerate every implemented command family, including native Git/jj workspace/tidy and optional gh jj hosting, with links to generated reference and operation guides.
+- FR012: Examples disclose local observation, private plan-state writes, explicitly authorized apply effects and authenticated network reads. Separate planned capabilities from bounded implemented behavior; no implicit deletion, automatic restoration or forge-write claim.
+
+## US4 — Keep implemented scope discoverable (2026-10-16 amendment)
+A human sees all currently registered command families rather than an obsolete scaffold-only summary.
+Acceptance: README and Pages show help/version, inspect/inventory, all workspace/tidy leaves,
+hosting repo/pr/ci and the optional jj-only extension; examples use supported flags and
+explicit placeholders. Planned Specs012–019 and GitButler remain separate. Local guide links
+resolve to generated Pages routes; public-source allowlisting and schema bytes remain intact.
 
 ## Success criteria and exclusions
 All local source checks and generated-site checks pass. Independent review and browser
