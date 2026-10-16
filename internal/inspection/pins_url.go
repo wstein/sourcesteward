@@ -68,10 +68,20 @@ func allDigits(s string) bool {
 	return s != ""
 }
 
-// pinsRedact removes credentials and the query and fragment from a URL text. It is conservative: a
-// delimiter inside what looks like a password (`user:pa#ss@host`, `user:pa/ss@host`) must not hide the
-// rest of the password, so a colon that is not a port followed later by '@' counts as userinfo.
-func pinsRedact(raw string) (redacted string, credentials bool) {
+// hasColon reports a colon in a userinfo-like text, including its percent-encoded form.
+func hasColon(s string) bool {
+	return strings.Contains(s, ":") || strings.Contains(strings.ToLower(s), "%3a")
+}
+
+// pinsRedact removes credentials and the query and fragment from a URL text. exact is false when the cut
+// is a conservative guess (a delimiter or an unencoded '@' inside what looks like userinfo): the display
+// is safe but the remainder is a guess, so it must never be used for comparison.
+//
+// Rules: the standard split is at the last '@' of the authority. Beyond it, any colon that precedes a
+// later '@' in what remains (or in an empty authority) means everything up to the last '@' is userinfo,
+// because an unencoded '@' or '/' in a username or password would otherwise hide the rest of it.
+func pinsRedact(raw string) (redacted string, credentials, exact bool) {
+	exact = true
 	if i := strings.Index(raw, "://"); i > 0 && isSchemeName(raw[:i]) {
 		scheme := strings.ToLower(raw[:i])
 		rest := raw[i+3:]
@@ -81,44 +91,55 @@ func pinsRedact(raw string) (redacted string, credentials bool) {
 		}
 		auth := rest[:end]
 		cut := 0
+		family := pinsAllowedSchemes[scheme]
 		if at := strings.LastIndexByte(auth, '@'); at >= 0 {
-			if user := auth[:at]; strings.Contains(user, ":") || pinsAllowedSchemes[scheme] != "ssh" && pinsAllowedSchemes[scheme] != "git" && pinsAllowedSchemes[scheme] != "file" {
+			if user := auth[:at]; hasColon(user) || family != "ssh" && family != "git" && family != "file" {
 				cut, credentials = at+1, true
 			}
-		} else if c := strings.IndexByte(auth, ':'); c >= 0 && strings.Contains(rest[end:], "@") {
-			cut, credentials = strings.LastIndexByte(rest, '@')+1, true
 		}
 		rest = rest[cut:]
+		if at := strings.LastIndexByte(rest, '@'); at >= 0 && hasColon(rest[:at]) {
+			rest, credentials, exact = rest[at+1:], true, false
+		}
 		if q := strings.IndexAny(rest, "?#"); q >= 0 {
 			rest = rest[:q]
 		}
-		return raw[:i+3] + rest, credentials
+		return raw[:i+3] + rest, credentials, exact
 	}
 	if i := strings.Index(raw, "::"); i > 0 && isSchemeName(raw[:i]) {
 		// transport::address is Git's remote-helper syntax; the address is opaque and may hold anything.
-		return raw[:i] + "::<redacted>", false
+		return raw[:i] + "::<redacted>", false, true
 	}
 	// Non-scheme forms: scp-like [user[:password]@]host:path and local paths. The last '@' that has a
 	// colon before it ends the userinfo, wherever slashes fall: Git's own split is by the first colon, so
 	// any slash inside a password must not hide the rest of it. Absolute and ./ ../ paths are exempt.
 	display := raw
 	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "./") && !strings.HasPrefix(raw, "../") {
-		if at := strings.LastIndexByte(raw, '@'); at > 0 && strings.Contains(raw[:at], ":") {
+		if at := strings.LastIndexByte(raw, '@'); at > 0 && hasColon(raw[:at]) {
 			display, credentials = raw[at+1:], true
+			exact = !strings.Contains(raw[:at], "/")
 		}
 	}
 	if q := strings.IndexAny(display, "?#"); q >= 0 {
 		display = display[:q]
 	}
-	return display, credentials
+	return display, credentials, exact
 }
 
 func pinsClassifyURL(original string) pinsURLInfo {
+	info := classifyURL(original)
+	if _, _, exact := pinsRedact(strings.TrimSpace(original)); !exact {
+		info.Normalized = "" // a conservative cut shows a safe form but is only a guess: never comparable
+	}
+	return info
+}
+
+func classifyURL(original string) pinsURLInfo {
 	info := pinsURLInfo{Kind: "invalid"}
 	show := func(s string) string { return boundPinsMessage(s) }
 	raw := strings.TrimSpace(original)
 	// Redaction first and independent of validity: a malformed URL must not leak a credential either.
-	redacted, creds := pinsRedact(raw)
+	redacted, creds, _ := pinsRedact(raw)
 	info.HasCredentials = creds
 	invalid := func(shown, problem string) pinsURLInfo {
 		info.Redacted, info.Problem = show(shown), problem

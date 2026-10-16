@@ -280,7 +280,7 @@ func TestPinsURLRedactionSweep(t *testing.T) {
 	prefixes := []string{"", "https://", "http://", "ssh://", "git://", "file://", "https:/", ".", "x/"}
 	shapes := []string{
 		"user:%s@host:path", "user:pa/%s@host:path", "user:%s/x@host:path", "a:b/%s@c", "user:pa#%s@host/x",
-		"user:pa?%s@host/x", "user:1234/%s@host/x", "user:%s@host/x?private_token=%s", "user:%s@host:/p@x", "u:p@h:%s@x/y",
+		"user:pa?%s@host/x", "john@ex.com:%s/x@h/o", "u@:%s/@h", "user:1234/%s@host/x", "user:%s@host/x?private_token=%s", "user:%s@host:/p@x", "u:p@h:%s@x/y",
 	}
 	n := 0
 	for _, p := range prefixes {
@@ -295,5 +295,47 @@ func TestPinsURLRedactionSweep(t *testing.T) {
 	}
 	if n < 50 {
 		t.Fatalf("only %d shapes", n)
+	}
+}
+
+func TestPinsURLRedactionWithAtSignInTheUsername(t *testing.T) {
+	const secret = "SECRETvalue"
+	for _, tmpl := range []string{
+		"https://john@ex.com:%s/x@github.com/o/r",
+		"https://john@ex.com:ab/%s@github.com/o/r",
+		"https://a@b@c:%s/x@h",
+		"https://u@:%s/@h",
+		"ssh://john@ex.com:ab/%s@h/r",
+		"https:///u:%s@h",
+		"ssh://u%%3A%s@h/r",
+		"git://u%%3a%s@h/r",
+		"u%%3A%s@host:path",
+		"git://john@ex.com:%s/x@h/o",
+		"http://x@y:%s/@z/p",
+		"file://a@b:%s/@c",
+		"https://me@mail.example.org:%s/p@q",
+		"ssh://git@h:22/%s@x/r",
+		"https://:%s@/x@h",
+	} {
+		raw := strings.ReplaceAll(strings.ReplaceAll(tmpl, "%%", "\x01"), "%s", secret)
+		raw = strings.ReplaceAll(raw, "\x01", "%")
+		i := pinsClassifyURL(raw)
+		if strings.Contains(i.Redacted, secret) || strings.Contains(i.Normalized, secret) || strings.Contains(i.Problem, secret) || !i.HasCredentials {
+			t.Errorf("%q: %+v", raw, i)
+		}
+	}
+}
+
+func TestPinsURLConservativeRedactionIsNeverComparable(t *testing.T) {
+	a, b := pinsClassifyURL("https://a:8443/p@x/r"), pinsClassifyURL("https://b:8443/q@x/r")
+	if a.Normalized != "" || b.Normalized != "" || a.Redacted == "" || !a.HasCredentials {
+		t.Fatalf("%+v %+v", a, b)
+	}
+	if m := pinsMatchRemote(a, []pinsRemote{{Name: "o", URL: "https://b:8443/q@x/r"}}); m.Match != "unknown" {
+		t.Fatalf("a guess must not match: %+v", m)
+	}
+	// An exact standard cut stays comparable.
+	if c := pinsClassifyURL("https://u:pw@example.com/o/r"); c.Normalized != "https://example.com/o/r" {
+		t.Fatalf("%+v", c)
 	}
 }
