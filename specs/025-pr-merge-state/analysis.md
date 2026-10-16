@@ -62,3 +62,23 @@ Independent reviewer: read-only Opus review, revision 5fa4c12, 2026-10-16, with 
 | 15 | Low | `observed` definition too narrow | Covers combinations the row names |
 | 16 | Low | CI read with no known context | Not read (`not-needed`); `required-checks-unknown` carries the gap |
 | 17 | Low | `merged` missing from resample list | Added to FR-010 |
+
+## Round 3
+
+Independent reviewer: narrow read-only Opus re-check, revision fb46ecd, 2026-10-16 (artifact reading and comparison with the hosting schema and fixtures; no live API calls). Verdict: NOT READY (3 high, 4 medium, 6 low). Round-2 resolutions 1, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15 and 16 confirmed; 2, 3 and 7 introduced new defects; 12 and 17 were only partly carried into plan and tasks. The contract JSON example was confirmed valid against the data model (arithmetic, order, request sum, summaries equal templates). All findings were resolved in the artifacts after the review; the resolutions below were **not** re-reviewed because the loop ends after three rounds.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | `review-required`: first row fired when `reviews` was skipped; bound 0 with R incomplete undecided | Row order: bound 0 and R complete first (no item, `reviews` skipped); unknown row only when `reviews` was needed and not `ok` or no bound; bound 0 with R incomplete counts as no bound |
+| 2 | High | Degradation rule suppressed items that readable sources prove | Rewritten: every other row is still produced from readable sources; only the degraded source's contribution is omitted |
+| 3 | High | Resample failure vs 404 rule; single outcome for two-read sources | Data model: first `ok` then failed resample gives outcome `failed`, `source-failed`, class kept, `incomplete`; Degradation rule names the exceptions; T010 |
+| 4 | Medium | `classic-protection-unreadable` wording, reasons, example fields | Template "may apply"; all reasons listed; contract example lists the seven fields |
+| 5 | Medium | `rule_limit` null for a known absence | Empty array (`none`) when `branch-rules` is `ok` with no limit; null only when not `ok`; examples updated |
+| 6 | Medium | `unreadable` vs a decisive readable record | A readable `failing` or `pending` record wins (`waits`, `inferred`); `unreadable` only when nothing readable is worse than `successful` |
+| 7 | Medium | No human form for error results or null parameters in fixed lines | Error line set added; null renders `unknown` in fixed lines too |
+| 8 | Low | `required-checks-unknown` reason picked a skipped source | First source in table order whose outcome prevents completeness |
+| 9 | Low | `dependency-unavailable` impossible for `branch-rules-unreadable` | Removed from its reasons |
+| 10 | Low | Template and detail table order | Moved to the Items order |
+| 11 | Low | Plan and T010 omitted tie-break and `merged` | Added |
+| 12 | Low | Plan summary "no existing contract changes" | Reworded |
+| 13 | Low | US5-2 ignored other review rows | Qualified |
