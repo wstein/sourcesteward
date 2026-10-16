@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "kind": "ci",
+  "status": "error",
+  "backend": "git",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "diagnostics": []
+  },
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "project",
+    "selection": "unique-candidate"
+  },
+  "candidates": [
+    {
+      "remote": "upstream",
+      "host": "github.com",
+      "owner": "example",
+      "name": "project"
+    }
+  ],
+  "pull_request": {
+    "number": 42,
+    "title": "Example PR",
+    "url": "https://github.com/example/project/pull/42",
+    "state": "open",
+    "draft": false,
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "head_ref": "feature",
+    "base_ref": "main",
+    "head_repository": "example/fork",
+    "base_repository": "example/project"
+  },
+  "checks": [
+    {
+      "id": 1,
+      "name": "test",
+      "status": "queued",
+      "conclusion": null,
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": ""
+    }
+  ],
+  "statuses": [
+    {
+      "id": 2,
+      "context": "lint",
+      "state": "success",
+      "description": "Done",
+      "url": ""
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "hosting-head-moved",
+      "message": "PR head changed during observation."
+    }
+  ],
+  "boundary": {
+    "complete": false,
+    "network": true,
+    "max_pages": 10,
+    "max_records": 1000,
+    "max_bytes": 1048576,
+    "timeout_seconds": 30,
+    "limitations": [
+      "Sampled evidence; no transaction or remote existence verification."
+    ]
+  },
+  "observed_at": "2026-10-16T12:00:00Z"
+}
