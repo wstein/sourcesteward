@@ -343,6 +343,15 @@ func (r *PinsResult) Finalize() error {
 	return validPinsText(reflect.ValueOf(*r))
 }
 
+// failWhole turns the result into an operational error: empty lists, no identity (the schema allows
+// one only for ok and incomplete results) and a bounded message.
+func (r *PinsResult) failWhole(message string) {
+	r.Status, r.Identity = "error", nil
+	r.Submodules, r.Findings = []PinsSubmodule{}, []PinsFinding{}
+	r.Error = &PinsError{Code: "pins-failed", Message: boundPinsMessage(message)}
+	_ = r.Finalize()
+}
+
 // validPinsText fails on any string that is not valid UTF-8. encoding/json would silently replace
 // such bytes with U+FFFD; a repository-derived path must instead be refused or shown escaped.
 func validPinsText(v reflect.Value) error {

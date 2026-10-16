@@ -35,16 +35,13 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 	r := NewPinsResult(shown)
 	finish := func() PinsResult {
 		if err := r.Finalize(); err != nil {
-			r.Status, r.Submodules, r.Findings = "error", []PinsSubmodule{}, []PinsFinding{}
-			r.Error = &PinsError{Code: "pins-failed", Message: err.Error()}
-			_ = r.Finalize()
+			r.failWhole(err.Error())
 		}
 		return r
 	}
 	fail := func(message string) PinsResult {
-		r.Status, r.Error = "error", &PinsError{Code: "pins-failed", Message: message}
-		r.Identity, r.Submodules, r.Findings = nil, []PinsSubmodule{}, []PinsFinding{}
-		return finish()
+		r.failWhole(message)
+		return r
 	}
 	refuse := func(backend, code, message string) PinsResult {
 		r.Status, r.Backend, r.Error = "refused", backend, &PinsError{Code: code, Message: message}

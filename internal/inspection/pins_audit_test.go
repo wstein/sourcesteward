@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -480,5 +481,35 @@ func TestPinsAuditEffectSentinelsLeaveTheRepositoryUntouched(t *testing.T) {
 		if matches, _ := filepath.Glob(filepath.Join(p, "*.lock")); len(matches) != 0 {
 			t.Fatalf("lock files remain: %v", matches)
 		}
+	}
+}
+
+func TestPinsAuditNonUTF8BranchIsEscapedPerFieldNotRefusedWhole(t *testing.T) {
+	f := newPinsFixture(t)
+	member := filepath.Join(f.Super, "member")
+	git(t, member, "checkout", "-q", "-b", "br\xff")
+	git(t, member, "remote", "add", "caf\xe9", "https://example.invalid/x.git")
+	settleIndexOf(t, f)
+	r := auditOf(t, f.Super)
+	if r.Status != "ok" || r.Error != nil || r.Identity == nil {
+		t.Fatalf("one hostile branch must not fail the whole result: %+v", r.Error)
+	}
+	s := subOf(t, r, "member")
+	if s.Checkout.Branch == nil || *s.Checkout.Branch != `br\xff` {
+		t.Fatalf("%v", s.Checkout.Branch)
+	}
+	if _, err := json.Marshal(r); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPinsFailedResultNeverKeepsAnIdentity(t *testing.T) {
+	r := NewPinsResult(".")
+	id := Result{Status: "ok", Backend: "git"}
+	r.Identity, r.Status = &id, "ok"
+	r.Findings = []PinsFinding{{Code: "pins-limit", Severity: "error", Message: "bad \xff"}}
+	r.failWhole("result holds invalid text")
+	if r.Identity != nil || r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || len(r.Findings) != 0 || len(r.Submodules) != 0 {
+		t.Fatalf("%+v", r)
 	}
 }

@@ -114,7 +114,8 @@ func pinsReadHead(run *pinsRunner, repo pinsGitRepo) (pinsHead, error) {
 		if !strings.HasPrefix(ref, "refs/") || strings.ContainsAny(ref, "\n\x00") {
 			return h, errors.New("HEAD names an unexpected symbolic reference")
 		}
-		branch := strings.TrimPrefix(ref, "refs/heads/")
+		// Git allows any bytes in a branch name; the result carries an escaped form, never fails whole.
+		branch := pinsDisplay(strings.TrimPrefix(ref, "refs/heads/"))
 		h.Branch = &branch
 	case 1:
 		h.Detached = true

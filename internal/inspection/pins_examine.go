@@ -143,7 +143,7 @@ func (a *pinsAuditor) evidence(run *pinsRunner, re pinsResolvedEntry, sub *PinsS
 	}
 
 	m := pinsMatchRemote(info, facts.Remotes)
-	sub.URL.Match, sub.URL.RemoteName, sub.URL.RemoteURL = m.Match, m.RemoteName, m.RemoteURL
+	sub.URL.Match, sub.URL.RemoteName, sub.URL.RemoteURL = m.Match, pinsDisplayPtr(m.RemoteName), pinsDisplayPtr(m.RemoteURL)
 	if m.Match == "mismatch" {
 		note("url-mismatch", "the registered URL differs from the URL of the submodule's own remote")
 	}

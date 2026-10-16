@@ -68,6 +68,14 @@ func pinsFingerprintIndex(l pinsSuperLayout) (pinsIndexFingerprint, error) {
 	return fp, nil
 }
 
+func pinsDisplayPtr(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	d := pinsDisplay(*s)
+	return &d
+}
+
 func pinsDisplay(s string) string {
 	if utf8.ValidString(s) && !strings.ContainsRune(s, 0) {
 		return s
