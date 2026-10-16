@@ -9,10 +9,10 @@ Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`, 
 3. **Platforms**: one row per candidate platform with `included`, evidence classes and references.
 4. **Gates**: G01 to G14 with outcome, evidence class, reference (run URL, command and output excerpt, or record section) and date. `not-run` and `waived` rows carry a reason; a waiver names the user's verbatim quote.
 5. **Reproducibility**: per platform `match`, `mismatch`, `waived` or `not-run`, the two binary hashes, the two output directories and whether the builds ran on one host or two.
-6. **Approvals**: A1 to A4 and any waiver with date, who relayed it, the verbatim authorization and the named values. An A1 quote contains the version, every platform and at least 12 hex characters of the code commit. An entry exists only after the user gave it. Quotes are given in fenced blocks; a `|` or newline needs no escaping there.
+6. **Approvals**: A1 to A4 and any waiver with date, who relayed it, the verbatim authorization and the named values. An A1 quote contains the version, every platform and at least 12 hex characters of the code commit. An entry exists only after the user gave it. The `quote` in the machine block is canonical; prose may repeat it, and the reviewer compares it with the user's message.
 7. **Pre-publication verification**: per platform the `verify` outcome, build information outcome, executed stamp (`execution` or `none`), host, evidence class (`local-recorded` or `manual`, never `ci`) and the verified anchor, on the built files before publication.
 8. **Not run**: every check that was skipped, with reason (mandatory, may be `none`).
-9. **Post-release verification (manual)**: S1 to S5 per platform on the downloaded files with host and outcome; the Mac mini entry for darwin/arm64 is `manual`. Recorded by hand in a later record commit and checked by the reviewer; A3 and A4 are recorded in section 6 the same way. No script mode requires these items.
+9. **Post-release verification (manual)**: S1 to S5 per platform on the downloaded files with host and outcome; the Mac mini entry for darwin/arm64 is `manual`. Recorded by hand in a later record commit after publication and checked by the reviewer. A3 and A4 are not after-the-fact items: they are recorded in section 6 in a record commit before publication or activation. No script mode requires these items.
 10. **Open issues**.
 
 Every evidence entry of every class records the code commit; `manual` entries also record the verified `SHA256SUMS` anchor.

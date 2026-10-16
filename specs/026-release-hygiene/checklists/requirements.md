@@ -17,7 +17,7 @@
 
 ## Constitution alignment
 
-- [x] I. Human and JSON output from one result for the script; `stw` contracts unchanged
+- [x] I. `stw` contracts unchanged; the internal script prints text only
 - [x] II. A plan (dry run) precedes the consequential build; no plan authorizes
 - [x] III. No silent publish; no overwrite; limits of recovery stated
 - [x] IV. Failing tests first; Git and jj lanes are release gates; non-runs recorded

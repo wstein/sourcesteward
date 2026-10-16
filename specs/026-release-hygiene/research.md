@@ -41,7 +41,7 @@ Environment: Go 1.27.2 linux/arm64, Git 2.56.0, Python 3.13.5, run 2026-10-16 in
 - That `-X <import path>.Version` behaves identically in `go build` as in `go test` (documented behavior; `smill` has a stamp test that builds). The reviewer measured it for `go test` on `internal/cli.Version`.
 - Hosted `ubuntu-24.04-arm` and macOS arm64 runners for this repository, `sandbox-exec` and Git source builds on them.
 - Archive byte stability across hosts.
-- Whether a linked test binary counts as an "artifact build" for AGENTS.md; this spec treats `go test` as routine, with DD5's fallback.
+- Whether a linked test binary counts as an "artifact build": decided 2026-10-16 (FR-005); it does not.
 
 ## Decisions and alternatives
 
