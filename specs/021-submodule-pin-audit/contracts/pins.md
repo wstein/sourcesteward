@@ -20,7 +20,7 @@ stw pins [PATH] [--json] [--strict]
 | 0 | Complete result; findings do not change this without `--strict` |
 | 1 | Refusal, operational failure, cancellation or an incomplete result, with or without `--strict` |
 | 2 | Usage error |
-| 3 | `--strict`, a complete result and at least one `error` finding |
+| 3 | `--strict`, a complete result and at least one `error` finding; one line on standard error names the count, standard output carries the full result |
 
 Precedence: 2, then 1, then 3, then 0. An incomplete result exits 1 even with error findings, because completeness is not optional for an audit; `pins-limit` and `pins-state-changed` therefore never reach status 3.
 
@@ -61,9 +61,13 @@ Names, paths, URLs and refs have control characters escaped. Output is bounded; 
 One `PinsResult` object per invocation, validated by `schemas/v1/pins.schema.json`. A refusal:
 
 ```json
-{"schema_version":1,"command":"pins","status":"refused","backend":"jj",
- "input_path":".","boundary":{"effects":{"network":false,"fetch":false,"writes":false,"hooks":false},"complete":false},
+{"schema_version":1,"command":"pins","status":"refused","backend":"jj","input_path":".","identity":null,
+ "boundary":{"effects":{"network":false,"fetch":false,"writes":false,"hooks":false},
+  "limits":{"max_submodules":256,"per_submodule_seconds":5,"total_seconds":30,"max_output_bytes":1048576,"max_remote_refs":16,"max_count":10000},
+  "complete":false,
+  "staleness":"Remote-tracking refs are local records; no fetch was made."},
  "submodules":[],"findings":[],
+ "summary":{"submodules":0,"errors":0,"warnings":0,"infos":0,"publication":{"reachable":0,"unreachable":0,"unknown":0}},
  "error":{"code":"unsupported-backend","message":"jj has no Git submodule model; run this in a Git-owned checkout"}}
 ```
 
@@ -72,7 +76,7 @@ One `PinsResult` object per invocation, validated by `schemas/v1/pins.schema.jso
 - Reads: superproject object database, index file, `.gitmodules` blobs and worktree file (never through a symlink), each validated submodule worktree and Git directory, `FETCH_HEAD` metadata.
 - Writes: none. No lock file remains. Index bytes and modification time are unchanged.
 - Network, fetch, clone, `submodule init` and `submodule update`: none.
-- Processes: only the fixed, isolated Git invocations listed in the research record, with no hook, clean or process filter, helper, alias, fsmonitor, textconv or external diff. Ownership detection and every refusal start no process.
+- Processes: only the fixed, isolated Git invocations listed in the research record, with no hook, clean or process filter, helper, alias, fsmonitor, textconv or external diff. A jj or ambiguous refusal starts no process. Other refusals use only the existing detection's Git processes and never start jj or a submodule command.
 
 ## Compatibility
 

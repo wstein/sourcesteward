@@ -27,11 +27,12 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `path` | string | repository-relative, as recorded; entries whose path is not valid UTF-8 are refused |
+| `path` | string | repository-relative, as recorded; a path that is not valid UTF-8 is shown escaped (`\xNN`) and the entry is refused |
+| `path_encoding` | `utf8` \| `escaped` | `escaped` only for refused non-UTF-8 entries |
 | `name` | string \| null | `.gitmodules` name when registered |
 | `registration` | `{gitlink_in_head, gitlink_in_index, gitmodules_entry, active}` | booleans; `active` null when unknown |
 | `url` | `{configured, has_credentials, remote_name, remote_url, match}` | URLs redacted; `match` is `match`, `mismatch` or `unknown` |
-| `pin` | `{head_commit, index_commit, staged_differs}` | commits null when the source lacks the gitlink |
+| `pin` | `{head_commit, index_commit, staged_differs}` | commits null when the source lacks the gitlink, and `head_commit` null with an unborn superproject HEAD |
 | `checkout` | Checkout | see below |
 | `publication` | Publication | see below |
 | `tracking` | `{ref, relation, ahead, behind, capped}` | ref from `.gitmodules` `branch` or the remote default; `relation` is `equal`, `behind`, `ahead`, `diverged` or `unknown` |
@@ -41,7 +42,7 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 
 ### Checkout
 
-`state` (`initialized`, `uninitialized`, `refused`), `head_commit`, `branch` (null when detached), `detached`, `relation_to_pin` (`same`, `ahead`, `behind`, `diverged`, `unrelated`, `unknown`), `ahead` and `behind` (integers capped at 10,000, or null), `capped` (boolean), and `dirty` with `tracked` and `untracked`, each `present`, `absent` or `unknown`.
+`state` (`initialized`, `uninitialized`, `refused`), `head_commit`, `branch` (null when detached), `detached`, `relation_to_pin` (`same`, `ahead`, `behind`, `diverged`, `unrelated`, `unknown`), `ahead` and `behind` (integers capped at 10,000, or null), `capped` (boolean), and `dirty` with `tracked`, `untracked` (each `present`, `absent` or `unknown`) and `reason` (text whenever either is `unknown`: racily clean or mtime-only difference, or dirty-scan budget exceeded).
 
 ### Publication
 
