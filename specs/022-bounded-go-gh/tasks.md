@@ -40,7 +40,7 @@ Independent test: both pinned backend lanes perform in-process fake HTTP PR/CI a
 
 - [x] T010 [P] Update transport truth in docs/hosting.md, ARCHITECTURE.md and specs/022-bounded-go-gh/verification.md; document caller proxy trust, compressed-response refusal and limits without claiming live keyring/Enterprise acceptance.
 - [x] T011 Independently review integrated internal/hosting transport and all fixture changes; record findings/fixes in specs/022-bounded-go-gh/verification.md and rerun affected tests.
-- [x] T012 Run make check, go test -race ./..., go mod verify, git diff --check and both native lanes; record exact commands/results and schema byte comparison in specs/022-bounded-go-gh/verification.md.
+- [x] T012 Run make check, go test -race ./..., go mod verify, `git diff --check` (worktree and `HEAD~1`; `git diff --check origin/main...HEAD` flags the intentional Markdown hard breaks in specs/022-bounded-go-gh/spec.md lines 3-4, as in spec 020) and both native lanes; record exact commands/results and schema byte comparison in specs/022-bounded-go-gh/verification.md.
 - [x] T013 Reconcile tasks/evidence, docs/progress.md and docs/feature-status.json; make focused Conventional Commits and open the separate source PR with exact-head CI gaps recorded.
 
 ## Dependencies and parallel work
