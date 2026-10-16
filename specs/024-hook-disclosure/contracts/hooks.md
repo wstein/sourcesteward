@@ -42,7 +42,7 @@ jj sandbox or version problems and the error codes of the existing ownership dec
 
 - When `guards_evaluated` is false no bypass finding is raised.
 - One bypass finding per operation, `subject` null, naming the active guards (bounded): `guards-bypassed-on-backend` when `runs_hooks` is `no`, `guards-may-be-bypassed` when it is `unknown`. None when `runs_hooks` is `yes`.
-- `backend-hook-behavior-unverified` once (operation null) when any operation claim used in the result has a level other than `measured` after the version-coverage rule.
+- `backend-hook-behavior-unverified` once (operation null) when any claim used in the result (including `git-config-hooks` when configuration hooks exist) has a level other than `measured` after the version-coverage rule.
 - `no-active-guards` once when `guards_active` is 0 for both operations.
 - Directory and file findings (`hook-symlink-outside`, `hook-unsafe-permissions`, `hook-unsafe-owner`) carry `subject` `directory` or the hook name.
 
@@ -114,7 +114,8 @@ One `HooksResult` per invocation, validated by `schemas/v1/hooks.schema.json`. A
    "directory_entries": 256,
    "unrecognized_names": 16,
    "config_hooks": 64,
-   "value_bytes": 4096
+   "value_bytes": 4096,
+   "level_records": 16
   },
   "complete": true,
   "notes": [
@@ -376,7 +377,7 @@ A refusal:
 ```json
 {"schema_version":1,"command":"hooks","status":"refused","backend":"gitbutler","input_path":"/work/butler","identity":null,
  "boundary":{"effects":{"network":false,"writes":false,"hooks_executed":false,"hook_contents_read":false,"hook_paths_opened":false,"git_processes":true,"jj_processes":false},
-  "limits":{"deadline_seconds":10,"git_process_seconds":5,"stream_bytes":65536,"result_bytes":262144,"directory_entries":256,"unrecognized_names":16,"config_hooks":64,"value_bytes":4096},
+  "limits":{"deadline_seconds":10,"git_process_seconds":5,"stream_bytes":65536,"result_bytes":262144,"directory_entries":256,"unrecognized_names":16,"config_hooks":64,"value_bytes":4096,"level_records":16},
   "complete":false,"notes":[]},
  "configuration":null,"hooks":[],"operations":[],"findings":[],
  "summary":{"errors":0,"warnings":0,"infos":0,"hooks_present":0,"guards_active":0,"guards_bypassed":0},

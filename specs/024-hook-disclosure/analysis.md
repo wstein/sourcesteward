@@ -38,3 +38,25 @@ Independent reviewer: read-only Opus review, revision 4983930e, 2026-10-16, with
 | 26 | Low | Text example inconsistent with JSON | Example rewritten |
 | 27 | Low | Edge cases without a task | Assigned in T008, T010; inert default hooks not examined, stated |
 | 28 | Low | Untagged tasks | Tagged |
+
+## Round 2
+
+Independent reviewer: read-only Opus review, revision f1074da, 2026-10-16, with scratch repositories on Git 2.56.0 and the jj CLI reference; jj not run. Verdict: NOT READY (one high, six medium, eight low findings). The reviewer confirmed the ownership gate, the record layout of `--show-scope --show-origin -z --get-regexp` (valueless key `key NUL`, empty value `key LF NUL`), the linked-worktree paths, `--literal-pathspecs ls-files` from the worktree root, the 28-name catalog count, and that the jj path runs only the probe and `--version`.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | Conformance decision rule undefined for `unknown`, cross-fixture flips, relative `core.hooksPath` false negative | Spec procedure: per-fixture, per-claim rule (`unknown` recorded, never fails), only colocated fixtures J1 to J3 and J2b decide the claims, disagreement leaves `unverified`, absolute-path variant J2b |
+| 2 | Medium | Colocated missing or old Git: `hooks-failed` versus `git-unavailable` | `git-unavailable` or `git-failed` everywhere |
+| 3 | Medium | Limits key for level records missing | `level_records: 16` in data model and both examples |
+| 4 | Medium | `jj-output-limit` unlisted | Added to FR-006 and the refusal table |
+| 5 | Medium | `git-config-hooks` level inconsistent | One level, `unverified`; example agrees |
+| 6 | Medium | T011 and research still read command text; `--name-only` lacked `--show-scope` | Rewritten to the two reads; scope added |
+| 7 | Medium | No Git version source on the Git-owned path | One `version` read on every Git-using path |
+| 8 | Medium | Unknown-engine configuration hooks vanish from guard logic | State `unknown` in operations, `guards-may-be-bypassed` raised, `no-active-guards` suppressed |
+| 9 | Low-medium | Nested `.jj` markers and `managed` sorting | Innermost marker captured first; T016 test |
+| 10 | Low | jj-push Git version is stw's `PATH` Git | Stated in the plan and notes |
+| 11 | Low | Quickstart J-range; SC-006 | J0 to J7; J0 and J7 required |
+| 12 | Low | Derivation wording | Aligned ("a claim used in the result") |
+| 13 | Low | `directory` null list; `config_hooks` for `not-applicable` | Both defined |
+| 14 | Low | Round-1 passages not updated (plan summary, research listing roots, status line) | Updated |
+| 15 | Low | Sentinel path delivery | Absolute path baked into hooks |

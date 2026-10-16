@@ -43,7 +43,7 @@ Expected: backend `jj`; `jj commit` stated as `runs_hooks: no` at evidence level
 
 ## Measure jj yourself
 
-`scripts/smoke-hooks.py` (conformance, after approval to build `bin/stw`) runs the J0 to J6 procedure of the spec. By hand: make the three hooks above write a sentinel, run `jj commit -m x` and `jj git push --bookmark b` against a local bare remote, and check whether `sentinel` exists. Plain Git in the same directory is the positive control.
+`scripts/smoke-hooks.py` (conformance, after approval to build `bin/stw`) runs the J0 to J7 procedure of the spec. By hand: make the three hooks above write a sentinel, run `jj commit -m x` and `jj git push --bookmark b` against a local bare remote, and check whether `sentinel` exists. Plain Git in the same directory is the positive control.
 
 ## What the output does not prove
 
