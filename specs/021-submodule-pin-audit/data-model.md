@@ -7,9 +7,9 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 | Field | Type | Notes |
 | --- | --- | --- |
 | `status` | `ok` \| `incomplete` \| `refused` \| `error` | `ok` only when `boundary.complete` is true |
-| `backend` | `git` \| `jj` \| `gitbutler` \| `ambiguous` \| `unknown` | selected by native ownership markers |
+| `backend` | `git` \| `jj` \| `gitbutler` \| `ambiguous` \| `unknown` | selected by native ownership; `unknown` until ownership is decided, so an early failure never claims Git |
 | `input_path` | string | as given, bounded |
-| `identity` | existing native identity result | superproject root, Git directory, HEAD commit and reference; null on refusal |
+| `identity` | existing native identity result | superproject root, Git directory, HEAD commit and reference; always null for `refused` and `error` results, and an `ok` or `incomplete` result carries an identity with `status` ok and backend git |
 | `boundary` | Boundary | effects, limits, completeness, staleness note |
 | `submodules` | Submodule[] | sorted by path bytes; empty array when none |
 | `findings` | Finding[] | sorted by severity, submodule path, code |
@@ -61,5 +61,5 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 - `boundary.complete` is true when every direct submodule was either examined or explicitly refused, and no limit was exhausted and no resample differed. An `unknown` observation, an uninitialized submodule or an absent pinned object is a valid observation and does not make the result incomplete.
 - `boundary.complete` is false, and `status` is `incomplete`, when `pins-limit` or `pins-state-changed` was raised.
 - A submodule with `refusal` still appears, with only the fields that were safe to read. Its refusal is an error-severity finding and does not by itself make the result incomplete.
-- `status: "refused"` carries an `error.code` from the refusal table, an empty `submodules` array and a null `identity` when none could be established.
-- `status: "error"` carries `pins-failed` and the same empty fields.
+- `status: "refused"` carries an `error.code` from the refusal table, an empty `submodules` array, no findings and a null `identity`.
+- `status: "error"` carries `pins-failed` and the same empty fields; its backend is `git` only once Git ownership was established, otherwise `unknown`.
