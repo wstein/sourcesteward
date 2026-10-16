@@ -1,5 +1,28 @@
 # Pre-implementation analysis
 
+## Scope reduction proposal
+
+Source: round 5 part B (independent Opus review of revision 9ce514c), at the coordinator's request. **Not applied.** The maintainer decides.
+
+**Recommendation.** Reduce to the smallest feature that answers the motivating question: for a WorkHarbor-shaped repository, which commit and push hooks would Git run from the effective `core.hooksPath`, and do `jj commit` and `jj git push` run them, at which evidence level. Keep the jj claims `jj-commit: no` at `documented` and `jj-push: unknown` at `unverified`, ship with a reduced conformance procedure, and defer hook hygiene (safety, provenance, inventory) to a later spec.
+
+**Retained core.**
+- FR-001 without `--strict`; FR-002, FR-005, FR-006 (ownership dispatch, ownership gate, discovered-directory check, jj probe and `--version` only).
+- FR-003 reduced to the effective value and its scope from the one `--get-regexp` read, plus `rev-parse --git-path hooks`.
+- FR-004 reduced to `lstat`, `readlink` and `access` on the six operation hooks (`pre-commit`, `prepare-commit-msg`, `commit-msg`, `post-commit`, `pre-push`, `reference-transaction`).
+- FR-007 classification order; FR-009 with states `active`, `ignored`, `not-runnable`, `disabled-by-path`, `absent` (no `unknown`, no `source`); FR-010, FR-011, FR-012 (isolation), FR-013 (reduced limits), FR-014, FR-015, FR-016 with statuses 0, 1 and 2, FR-018, FR-019.
+- Findings kept: `guards-bypassed-on-backend`, `guards-may-be-bypassed` (active guard under an `unknown` claim only), `backend-hook-behavior-unverified`, `hooks-dir-absent`, `hooks-path-null-device`, `hooks-path-empty`, `hooks-dir-unusable`, `hooks-path-invalid`, `hook-ignored`, `hook-not-runnable`, `hooks-limit`, `hooks-state-changed`, `workspace-has-no-git-configuration`, `no-active-guards` (only when `guards_evaluated`), plus one new `config-hooks-not-evaluated`.
+
+**Cut or defer.**
+- FR-008 whole (configuration-hook engine, claim `git-config-hooks`, state `unknown`, source `both`, precedence, the unknown-engine definition). Replace with one key-names read of `hook.*.event`; if a value names one of the six operation hooks, raise `config-hooks-not-evaluated` and suppress `no-active-guards`. This removes the area where rounds 3 to 5 kept finding defects.
+- `--strict` and exit status 3 (removes the Spec 021 dependency and the shared error type); caller-environment reporting (replace with a fixed note); level reporting (`levels`, origins, 16-record cap, `overridden`, `extensions.worktreeConfig`); the 28-name catalog, confined listing and its open helper, unrecognized names, confinement roots, directory ownership, permission and symlink-outside facts; tracking.
+- Stories and scenarios: US1-6, US1-7, US3-3, US3-4, US3-6, US4-2; US2-4 reduced (non-colocated gives `guards_evaluated: false` and `workspace-has-no-git-configuration`; no special secondary measurement).
+- Findings removed: `hook-symlink-outside`, `hook-unsafe-permissions`, `hook-unsafe-owner`, `hooks-path-overridden`, `config-hooks-present`, `config-hook-incomplete`, `hooks-outside-repository`, `hooks-tracked`, `hook-name-unrecognized`, `caller-environment-overrides`.
+- Data-model fields removed: HooksPath `levels`, `levels_truncated`, `overridden` (keep `effective_scope`); Configuration `worktree_config_enabled`, `caller_environment` (ConfigHooks becomes `config_hooks_detected`); Directory facts beyond `path` and `kind`; HookEntry `hook_scope`, `size`, owner, writability, `symlink.target_inside_repository`, `tracked`; OperationHook `source` and state `unknown`; limits `directory_entries`, `unrecognized_names`, `config_hooks`, `level_records`. With no directory listing, the source scan can forbid every open in `hooks_*.go`.
+- Tasks: cut T010, T013, T027; replace T011 with the one-read presence check; reduce T005 (no strict, no `root.go` change), T007 (effective value, scope and gate; keep valueless/empty, include and global fixtures), T008, T009, T012, T015, T017, T018, T022, T024. 27 tasks become 23, with WI2 about half its size.
+
+**Minimum conformance.** Shipping the two claims at `documented` and `unverified` is honest without measurement. The constitution still requires a smoke step on the minimum and current Git and jj lanes: in a colocated WorkHarbor fixture it asserts the three guards active, both claims at exactly those levels, `bypassed` true and null, and the effect sentinels (no hook ran, nothing written, jj working copy and operation log unchanged). To ever state `measured`, add the reduced procedure J0 (plain-Git control, also measuring the Git `yes` claims), J2 and J2b (relative and absolute `core.hooksPath`), J3 (`jj commit`), J4 (`jj git push` to a local bare remote with the remote-holds-the-commit precondition) and J7 (in-fixture control); deciding sentinels `pre-commit`, `commit-msg` (J3) and `pre-push` (J4); exit 2 for an invalid control or precondition, exit 1 only when a deciding outcome contradicts a `yes` or `no` claim, otherwise record and exit 0; promotion is a manual T024 edit. Drop J1, J5, J6, the `--no-verify` matrix and the configuration-hook sentinel. The reviewer recommends including this reduced procedure because `jj-push` is the most decision-relevant unknown.
+
 ## Round 0
 
 Author draft, 2026-10-16. No independent review has run yet. Facts the draft relies on were measured with Git 2.56.0 in scratch repositories (research.md, Git measurements 1 to 14) and read from the official jj documentation (research.md, documentation evidence). Nothing about jj behavior was measured: jj is not installed in the author's environment, and the jj claims are `documented` or `unverified` by construction.
@@ -95,3 +118,24 @@ Independent reviewer: narrow read-only Opus re-check, revision 7727c5d, 2026-10-
 | 8 | Low | T024 and DD16 lacked the resolution rule | Added |
 | 9 | Low | `backend: jj` too broad | Limited to codes after a `.jj` marker |
 | 10 | Low | Text output notes | Marked abbreviated |
+
+## Round 5
+
+Independent reviewer: read-only Opus review, revision 9ce514c, 2026-10-16, part A (narrow verification) and part B (scope reduction, recorded at the top of this file). Part A verdict: NOT READY (no critical or high; five medium and nine low findings; the reviewer withheld READY because round-4 #7 was recorded as resolved but had not landed everywhere). The author applied the resolutions below; they were NOT re-reviewed, so the verdict of record is NOT READY. The reviewer notes that under a strict reading of "READY unless critical or high" the verdict would be READY with five mediums to fix.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | Medium | Unknown-engine trigger defined loosely in FR-008, contract rules, data model, DD10, T011 | One definition (FR-009) referenced; contract line merged |
+| 2 | Medium | T022 lacked the exit-0 escape clause and exit 2 for a failed control | Added |
+| 3 | Medium | "Any sentinel" versus deciding sentinels | "deciding sentinel" |
+| 4 | Medium | Disabled configuration hooks counted as guards | Only enabled entries count; disabled is `absent` |
+| 5 | Medium | `no-active-guards` fired for unevaluated workspaces | Requires `guards_evaluated` |
+| 6 | Low | FR-009 sentence broken by an edit | Rewritten |
+| 7 | Low | `source` with non-winning contributors | Lists winning contributors only |
+| 8 | Low | Duplicated phrase in T024 | Removed |
+| 9 | Low | US5-1 ignored the exit-0 rules | Exception added |
+| 10 | Low | Notes list broken and incomplete | Rewritten with conditions |
+| 11 | Low | J2b missing from J7 | J7 names J2b |
+| 12 | Low | J5 sources indistinguishable | Split into J5a and J5b |
+| 13 | Low | Lane pairing for `jj-push` | Pairs stated |
+| 14 | Low | Meaning of `tracked` in colocated jj | Stated in contract and data model |
