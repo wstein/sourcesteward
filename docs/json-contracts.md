@@ -153,3 +153,7 @@ Publish/validate against the independent v2 URL; do not reinterpret a reference 
 retirement authority. Both versions remain available and the v1 schema's exact bytes are checked by
 a regression checksum. Additional object members remain compatible; new incompatible semantics or
 field types require another version. See [tidy](tidy.md) for native coupled/separate effects.
+
+## Hosting observations (v1)
+
+[hosting.schema.json](../schemas/v1/hosting.schema.json) is a separate contract shared by `stw hosting` and `gh jj`. It retains native identity, candidates, explicit hosting selection, PR head/base identities, individual CI checks/statuses, diagnostics, sample time and bounded completeness/network effects. Errors may occur before any remote read; missing evidence is never empty successful CI. Existing version/inspection/inventory/workspace/tidy schemas retain their bytes and meanings. See [hosting](hosting.md).

@@ -150,3 +150,7 @@ combined removal requires both selections; jj forgetting preserves files and sep
 files removal rechecks a complete physical manifest. Unknown/dirty/foreign/current state retains work.
 Retirement results use schema 2 with nullable/absent early `retirement` and `plan: null`; reference tidy
 continues to use schema 1. Read [tidy](tidy.md) for effects, bounds, recovery and sampled race limits.
+
+## GitHub inspection
+
+Use `stw hosting repo|pr|ci` or the optional `gh jj repo|pr|ci` entry point. The extension requires native jj ownership. Start with `repo --json`; select ambiguous hosting context explicitly. PR/CI add bounded authenticated network reads; JSON completeness and exact head evidence do not authorize mutation or prove merge eligibility. See [hosting](hosting.md) and [Spec 020](../specs/020-gh-jj-inspection/spec.md).

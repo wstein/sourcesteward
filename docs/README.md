@@ -29,3 +29,5 @@
 - [Task workspaces](workspaces.md): reviewable isolated Git/jj creation and retained handoffs.
 
 - [Evidence-based tidy](tidy.md): native local reference plans, proof and retention limits.
+
+- [GitHub inspection and gh jj](hosting.md): shared native ownership, local resolution and explicit read-only PR/CI observations.

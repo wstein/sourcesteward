@@ -15,6 +15,7 @@ BASE = '/sourcesteward/'
 GUIDES = {
     'docs/tidy.md': ('tidy', 'Evidence-based tidy'),
     'docs/workspaces.md': ('workspaces', 'Task workspaces'),
+    'docs/hosting.md': ('hosting', 'GitHub inspection and gh jj'),
     'docs/inventory.md': ('inventory', 'Inventory'),
     'docs/development.md': ('development', 'Development'),
     'docs/backends.md': ('backends', 'Backend readiness'),
