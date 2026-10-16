@@ -125,3 +125,21 @@ func TestReposTextWorkspaceClassificationMatchesFacts(t *testing.T) {
 		t.Error("a healthy workspace is not an attention line")
 	}
 }
+
+// Each boundary limitation is its own line, so the long residual-race disclosure is not cut off by the
+// 512-byte line bound of a joined line.
+func TestReposTextRendersOneLimitationPerLine(t *testing.T) {
+	r := reposCLIResult("ok")
+	long := "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
+	r.Boundary.Limitations = []string{strings.Repeat("a", 300), strings.Repeat("b", 300), long}
+	out := renderRepos(t, r)
+	lines := 0
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "limitations: ") {
+			lines++
+		}
+	}
+	if lines != 3 || !strings.Contains(out, "limitations: "+long+"\n") {
+		t.Fatalf("limitations are not one per line:\n%s", out)
+	}
+}
