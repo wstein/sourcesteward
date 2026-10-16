@@ -85,7 +85,7 @@ Humans and agents use the same result, and the Tier 1 backends state their capab
 - More than 256 submodules; output beyond 1 MiB; a subprocess producing more than its scan allowance; per-submodule and total deadlines; cancellation.
 - A submodule HEAD, the superproject HEAD or its index changing while the audit runs.
 - A `.gitmodules` that is a symlink, unreadable, modified in the worktree or different in the index.
-- Several remotes in one submodule. "The remote the submodule uses" means the remote whose normalized URL equals the registered URL; when none or several match, the match is `unknown` and publication still considers every remote-tracking ref, naming which remote each ref belongs to.
+- Several remotes in one submodule. "The remote the submodule uses" means the remote whose normalized URL equals the registered URL; when several remotes match, the match is `unknown`. When none matches and the submodule has exactly one remote whose URL can be compared, the match is `mismatch` (both URLs, redacted); with no remote, several remotes or an incomparable URL (relative, unsupported or invalid) it is `unknown`. An invalid or unsupported URL scheme has no finding code of its own: it appears only as `match: unknown` with the sanitized URL and a diagnostic. Publication still considers every remote-tracking ref, naming which remote each ref belongs to.
 - A submodule that is itself jj-managed or GitButler-managed is refused individually with `submodule-unsupported-backend`; the others are still audited.
 
 ## Requirements

@@ -31,7 +31,7 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 | `path_encoding` | `utf8` \| `escaped` | `escaped` only for refused non-UTF-8 entries |
 | `name` | string \| null | `.gitmodules` name when registered |
 | `registration` | `{gitlink_in_head, gitlink_in_index, gitmodules_entry, active}` | booleans; `active` null when unknown |
-| `url` | `{configured, has_credentials, remote_name, remote_url, match}` | URLs redacted; `match` is `match`, `mismatch` or `unknown` |
+| `url` | `{configured, has_credentials, remote_name, remote_url, match}` | `configured` is the `.gitmodules` value, redacted (credentials, query and fragment removed); `match` is `match`, `mismatch` or `unknown`; an invalid or unsupported URL scheme is `unknown` with the sanitized URL and a diagnostic, and has no finding code (the published code list does not change) |
 | `pin` | `{head_commit, index_commit, staged_differs}` | commits null when the source lacks the gitlink, and `head_commit` null with an unborn superproject HEAD |
 | `checkout` | Checkout | see below |
 | `publication` | Publication | see below |
