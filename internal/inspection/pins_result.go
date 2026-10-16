@@ -229,7 +229,7 @@ func (r *PinsResult) AddFinding(code string, submodule *string, message string) 
 	return nil
 }
 
-// boundPinsMessage keeps messages plain text: NUL is dropped and invalid UTF-8 bytes are shown as \xNN,
+// boundPinsMessage keeps messages plain text: NUL is dropped and invalid UTF-8 bytes are shown as \xNN (and then a literal backslash as \\),
 // the same escaped form used for non-UTF-8 paths, never as a silent U+FFFD replacement.
 func boundPinsMessage(s string) string {
 	s = strings.ReplaceAll(s, "\x00", "")
@@ -239,6 +239,8 @@ func boundPinsMessage(s string) string {
 			r, size := utf8.DecodeRuneInString(s[i:])
 			if r == utf8.RuneError && size == 1 {
 				fmt.Fprintf(&b, `\x%02x`, s[i])
+			} else if r == '\\' {
+				b.WriteString(`\\`) // a literal backslash is doubled, so \xNN always means a byte
 			} else {
 				b.WriteString(s[i : i+size])
 			}
