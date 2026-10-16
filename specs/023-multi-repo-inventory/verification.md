@@ -1,8 +1,12 @@
 # Verification: Multi-repository inventory
 
-**Status: implemented, not verified.** Source checks and the Git lane of the acceptance script passed locally. The jj lane, the foreign-owner case, the hosted minimum and current lanes and an independent re-review of the round-5 fixes have not run, so nothing here is acceptance (SC-002 and SC-005 stay open) and no release, tag or publication is implied. The maintainer decision on the usefulness assessment is also open (analysis.md).
+**Status: implemented in source, recorded as `planned` in docs/feature-status.json, not verified.** Source checks and the Git lane of the acceptance script passed locally. The jj lane, the foreign-owner case, the hosted minimum and current lanes and an independent re-review of the round-5 fixes have not run, so nothing here is acceptance (SC-002 and SC-005 stay open) and no release, tag or publication is implied. The maintainer decision on the usefulness assessment is also open (analysis.md).
 
 Source revision checked: `29f7b1c` (branch `codex/023-multi-repo-inventory`, PR #49); the documentation, tasks, analysis and this file were committed after it and change no code.
+
+## Before the status can change
+
+`docs/feature-status.json` keeps this feature `planned` until: (1) the jj lane and the foreign-owner case of `smoke-repos.py` have passed (T016), (2) an independent reviewer has re-reviewed the fixes with the code executed, (3) the hosted minimum and current lanes are green, and (4) the single-repository inventory prerequisite (Spec 027) has landed, as decided by the maintainer before `stw repos` ships.
 
 ## Environment
 
