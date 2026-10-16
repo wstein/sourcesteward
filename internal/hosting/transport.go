@@ -272,9 +272,13 @@ func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if res == nil || res.Body == nil {
 		return nil, errors.New("hosting HTTP response is unavailable")
 	}
-	if enc := res.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
-		res.Body.Close()
-		return nil, errors.New("compressed hosting responses are unsupported")
+	for _, value := range res.Header.Values("Content-Encoding") {
+		for _, enc := range strings.Split(value, ",") {
+			if enc = strings.ToLower(strings.TrimSpace(enc)); enc != "" && enc != "identity" {
+				res.Body.Close()
+				return nil, errors.New("compressed hosting responses are unsupported")
+			}
+		}
 	}
 	if res.ContentLength > maxBytes {
 		res.Body.Close()
