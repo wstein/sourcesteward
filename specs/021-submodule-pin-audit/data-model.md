@@ -32,7 +32,7 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 | `name` | string \| null | `.gitmodules` name when registered |
 | `registration` | `{gitlink_in_head, gitlink_in_index, gitmodules_entry, active}` | booleans; `active` null when unknown |
 | `url` | `{configured, has_credentials, remote_name, remote_url, match}` | `configured` is the `.gitmodules` value, redacted (credentials, query and fragment removed); `match` is `match`, `mismatch` or `unknown`; an invalid or unsupported URL scheme is `unknown` with the sanitized URL and a diagnostic, and has no finding code (the published code list does not change) |
-| `pin` | `{head_commit, index_commit, staged_differs}` | commits null when the source lacks the gitlink, and `head_commit` null with an unborn superproject HEAD |
+| `pin` | `{head_commit, index_commit, staged_differs}` (`staged_differs` is true when the two differ, including a staged-only pin, a removed pin and a conflicted gitlink; with an unborn superproject HEAD every submodule raises `staged-pin-differs`) | commits null when the source lacks the gitlink, and `head_commit` null with an unborn superproject HEAD |
 | `checkout` | Checkout | see below |
 | `publication` | Publication | see below |
 | `tracking` | `{ref, relation, ahead, behind, capped}` | ref from `.gitmodules` `branch` or the remote default; `relation` is `equal`, `behind`, `ahead`, `diverged` or `unknown` |
@@ -46,7 +46,7 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 
 ### Publication
 
-`status` (`reachable`, `unreachable`, `unknown`), `reason` (text when `unknown`), `reachable_from` (at most 16 entries of `{remote, ref}`), `truncated` (boolean), `last_fetch` (RFC 3339 time or null, advisory).
+`status` (`reachable`, `unreachable`, `unknown`), `reason` (text when `unknown`), `reachable_from` (at most 16 entries of `{remote, ref}`; `ref` is the full refname such as `refs/remotes/origin/main`, the text output shows `origin/main`; publication refers to the HEAD pin, or the staged pin when HEAD records none), `truncated` (boolean), `last_fetch` (RFC 3339 time or null, advisory).
 
 ## Finding
 
