@@ -24,7 +24,7 @@ ValidateOptions(Options) error
 Inspect(context.Context, string, Options) Result
 ```
 
-Concrete exported types and JSON fields are defined in [data-model](../data-model.md). CLI imports hosting/inspection result types only; no os/exec, filesystem inspection or network adapter in parsing/rendering. `cmd` owns cancellation and exit status. Structured output is one bounded JSON object/newline; successful results exit 0. Operational errors exit 1 with schema-valid error observation plus concise stderr. Usage errors exit 2 with no JSON. Writer/process failures may leave partial output; consumers must check both JSON validity and exit status.
+Concrete exported types and JSON fields are defined in [data-model](../data-model.md). CLI imports hosting/inspection result types only; no os/exec, filesystem inspection or network adapter in parsing/rendering. `cmd` owns cancellation and exit status. Structured output is one bounded JSON object/newline; successful results exit 0. Operational errors exit 1 with schema-valid error observation plus concise stderr. Usage errors exit 2 with no JSON. Pre-dispatch cancellation may return only the process diagnostic; writer/process failures may leave partial output; consumers must check both JSON validity and exit status.
 
 Human output renders control characters safely. Raw repository/remote/API/subprocess strings are never shell snippets or untrusted error bodies. JSON preserves data using normal escaping, with no silent truncation of successful results.
 

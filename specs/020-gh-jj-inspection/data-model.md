@@ -39,7 +39,7 @@ CommitStatus: positive int64 `id`; string `context`, `state`, `description`, `ur
 
 ## Boundary
 
-Bool `complete`, `network`; integer `max_pages`=10, `max_records`=1000, `max_bytes`=1048576, `timeout_seconds`=30; string array `limitations`. Network means PR/CI remote reads were requested/attempted, not that all succeeded. Native local identity limitations remain nested and human-visible. No persistent state transition or application authorization exists in this feature.
+Bool `complete`, `network`; integer `max_pages`=10, `max_records`=1000, `max_bytes`=1048576, `timeout_seconds`=30; string array `limitations`. Network means the first PR API read was attempted, not that it or every collection succeeded. Native/selection/gh preflight failures before that point report false. Native local identity limitations remain nested and human-visible. No persistent state transition or application authorization exists in this feature.
 
 ## Native remote observation boundary
 
