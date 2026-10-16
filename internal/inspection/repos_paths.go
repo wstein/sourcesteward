@@ -6,10 +6,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 type inspectFunc func(ctx context.Context, path string) Result
 type inventoryFunc func(ctx context.Context, path string, o InventoryOptions) InventoryResult
+
+// resolveReposPath returns the absolute, symlink-free path Git reports for p. The working directory is
+// resolved too (os.Getwd honors a symlinked $PWD), so a relative path and a path through a symlinked parent
+// compare equal to the root the identity inspection returns.
+func resolveReposPath(p string) (string, error) {
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", err
+	}
+	if r, err = filepath.Abs(r); err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(r)
+}
 
 // prepareExplicitEntries implements Stage S1: process-free structural validation of explicit paths.
 func prepareExplicitEntries(paths []string, submodulesRequested bool) []ReposEntry {
@@ -47,18 +62,7 @@ func prepareExplicitEntries(paths []string, submodulesRequested bool) []ReposEnt
 		}
 		seenExplicit[p] = i
 
-		// Check for leading dash (e.g. passed after --)
-		if strings.HasPrefix(p, "-") {
-			entry.Status = "error"
-			entry.Error = &ReposError{
-				Code:    "invalid-path",
-				Message: "repository path must not start with '-'",
-			}
-			entries[i] = entry
-			continue
-		}
-
-		st, err := os.Lstat(p)
+		resolved, err := resolveReposPath(p)
 		if err != nil {
 			entry.Status = "error"
 			entry.Error = &ReposError{
@@ -68,61 +72,25 @@ func prepareExplicitEntries(paths []string, submodulesRequested bool) []ReposEnt
 			entries[i] = entry
 			continue
 		}
-
-		if st.Mode()&os.ModeSymlink != 0 {
-			resolved, err := filepath.EvalSymlinks(p)
-			if err != nil {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    "invalid-path",
-					Message: "cannot resolve repository symlink target",
-				}
-				entries[i] = entry
-				continue
+		if st, err := os.Stat(resolved); err != nil || !st.IsDir() {
+			entry.Status = "error"
+			entry.Error = &ReposError{
+				Code:    "invalid-path",
+				Message: "repository path is not an accessible directory",
 			}
-			resolvedSt, err := os.Stat(resolved)
-			if err != nil || !resolvedSt.IsDir() {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    "invalid-path",
-					Message: "repository symlink target must be an accessible directory",
-				}
-				entries[i] = entry
-				continue
-			}
-			abs, err := filepath.Abs(resolved)
-			if err != nil {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    "invalid-path",
-					Message: "cannot determine absolute path for symlink target",
-				}
-				entries[i] = entry
-				continue
-			}
-			entry.ResolvedPath = &abs
-		} else {
-			if !st.IsDir() {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    "invalid-path",
-					Message: "repository path is a file, not a directory",
-				}
-				entries[i] = entry
-				continue
-			}
-			abs, err := filepath.Abs(p)
-			if err != nil {
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    "invalid-path",
-					Message: "cannot determine absolute path for repository",
-				}
-				entries[i] = entry
-				continue
-			}
-			entry.ResolvedPath = &abs
+			entries[i] = entry
+			continue
 		}
+		if !utf8.ValidString(resolved) {
+			entry.Status = "error"
+			entry.Error = &ReposError{
+				Code:    "invalid-path",
+				Message: "resolved repository path is not valid UTF-8",
+			}
+			entries[i] = entry
+			continue
+		}
+		entry.ResolvedPath = &resolved
 
 		entries[i] = entry
 	}

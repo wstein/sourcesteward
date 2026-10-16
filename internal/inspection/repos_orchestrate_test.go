@@ -13,7 +13,7 @@ import (
 )
 
 func TestReposOrchestrationMaxWorkers(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	var paths []string
 	for i := 0; i < 8; i++ {
 		p := filepath.Join(tempDir, fmt.Sprintf("repo%d", i))
@@ -89,7 +89,7 @@ func TestReposOrchestrationMaxWorkers(t *testing.T) {
 }
 
 func TestReposOrchestrationOrderStability(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	var paths []string
 	for i := 0; i < 6; i++ {
 		p := filepath.Join(tempDir, fmt.Sprintf("repo%d", i))
@@ -147,7 +147,7 @@ func TestReposOrchestrationOrderStability(t *testing.T) {
 }
 
 func TestReposOrchestrationPanicRecovery(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	p0 := filepath.Join(tempDir, "repo0")
 	p1 := filepath.Join(tempDir, "repo1")
 	p2 := filepath.Join(tempDir, "repo2")
@@ -224,7 +224,7 @@ func TestReposOrchestrationPanicRecovery(t *testing.T) {
 }
 
 func TestReposOrchestrationChangedRepository(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	p0 := filepath.Join(tempDir, "repo0")
 	if err := os.Mkdir(p0, 0o755); err != nil {
 		t.Fatal(err)
@@ -292,7 +292,7 @@ func TestReposOrchestrationChangedRepository(t *testing.T) {
 }
 
 func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	p0 := filepath.Join(tempDir, "repo0")
 	p1 := filepath.Join(tempDir, "repo1")
 	for _, p := range []string{p0, p1} {
@@ -355,7 +355,7 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 }
 
 func TestReposOrchestrationDeadlineInsideInventoryInspect(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	p0 := filepath.Join(tempDir, "repo0")
 	if err := os.Mkdir(p0, 0o755); err != nil {
 		t.Fatal(err)
@@ -406,7 +406,7 @@ func TestReposOrchestrationDeadlineInsideInventoryInspect(t *testing.T) {
 }
 
 func TestReposOutputBudgetDropsLaterInventories(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	var paths []string
 	for i := 0; i < 3; i++ {
 		p := filepath.Join(tempDir, fmt.Sprintf("repo%d", i))
@@ -499,7 +499,7 @@ func TestReposOutputBudgetDropsLaterInventories(t *testing.T) {
 }
 
 func TestReposOrchestrationRace(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	var paths []string
 	for i := 0; i < 8; i++ {
 		p := filepath.Join(tempDir, fmt.Sprintf("race%d", i))
@@ -549,7 +549,7 @@ func TestReposOrchestrationRace(t *testing.T) {
 }
 
 func TestReposOutputBudgetFailingFinalRecheck(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	p0 := filepath.Join(tempDir, "repo0")
 	if err := os.Mkdir(p0, 0o755); err != nil {
 		t.Fatal(err)

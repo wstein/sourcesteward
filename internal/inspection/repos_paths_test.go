@@ -11,7 +11,7 @@ import (
 )
 
 func TestReposPathValidationS1(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 
 	// 1. Missing path
 	missingPath := filepath.Join(tempDir, "missing")
@@ -77,7 +77,7 @@ func TestReposPathValidationS1(t *testing.T) {
 }
 
 func TestReposSymlinkResolution(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	targetDir := filepath.Join(tempDir, "real-repo")
 	if err := os.Mkdir(targetDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestReposSymlinkResolution(t *testing.T) {
 }
 
 func TestReposNotRepositoryRoot(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	repoDir := filepath.Join(tempDir, "repo")
 	subDir := filepath.Join(repoDir, "subdir")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
@@ -192,7 +192,7 @@ func TestReposNotRepositoryRoot(t *testing.T) {
 }
 
 func TestReposUnsupportedAndAmbiguousBackends(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	gbDir := filepath.Join(tempDir, "gb-repo")
 	ambDir := filepath.Join(tempDir, "amb-repo")
 	if err := os.Mkdir(gbDir, 0o755); err != nil {
@@ -240,7 +240,7 @@ func TestReposUnsupportedAndAmbiguousBackends(t *testing.T) {
 }
 
 func TestReposBareRepositoryAndMissingGit(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	bareDir := filepath.Join(tempDir, "bare.git")
 	missingGitDir := filepath.Join(tempDir, "repo-no-git")
 	if err := os.Mkdir(bareDir, 0o755); err != nil {
@@ -305,7 +305,7 @@ func TestReposBareRepositoryAndMissingGit(t *testing.T) {
 }
 
 func TestReposMixedGitAndJJScopes(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	gitDir := filepath.Join(tempDir, "git-repo")
 	jjDir := filepath.Join(tempDir, "jj-repo")
 	if err := os.Mkdir(gitDir, 0o755); err != nil {
@@ -371,7 +371,7 @@ func TestReposMixedGitAndJJScopes(t *testing.T) {
 }
 
 func TestReposDeduplication(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	dir1 := filepath.Join(tempDir, "repo1")
 	dir2 := filepath.Join(tempDir, "repo2") // linked worktree of repo1
 	if err := os.Mkdir(dir1, 0o755); err != nil {
@@ -451,7 +451,7 @@ func TestReposDeduplication(t *testing.T) {
 }
 
 func TestReposJJDeduplication(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	ws1 := filepath.Join(tempDir, "ws1")
 	ws2 := filepath.Join(tempDir, "ws2")
 	if err := os.Mkdir(ws1, 0o755); err != nil {
@@ -508,7 +508,7 @@ func TestReposJJDeduplication(t *testing.T) {
 }
 
 func TestReposSubmoduleInLinkedWorktreeNotDuplicate(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	subMain := filepath.Join(tempDir, "main-wt", "sub")
 	subLinked := filepath.Join(tempDir, "linked-wt", "sub")
 	if err := os.MkdirAll(subMain, 0o755); err != nil {
@@ -567,7 +567,7 @@ func TestReposSubmoduleInLinkedWorktreeNotDuplicate(t *testing.T) {
 }
 
 func TestReposContainment(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := reposTempDir(t)
 	parentDir := filepath.Join(tempDir, "workspace")
 	nestedDir := filepath.Join(parentDir, "inner")
 	siblingDir := filepath.Join(parentDir + "-other") // sibling prefix, NOT inside
