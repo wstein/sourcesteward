@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlsplit
 
 BASE = '/sourcesteward/'
 GUIDES = {
+    'docs/commands.md': ('commands', 'Implemented commands and examples'),
     'docs/tidy.md': ('tidy', 'Evidence-based tidy'),
     'docs/workspaces.md': ('workspaces', 'Task workspaces'),
     'docs/hosting.md': ('hosting', 'GitHub inspection and gh jj'),
@@ -123,6 +124,8 @@ def package(root, destination, revision, hugo=None, require_schemas=True):
         # Home remains authored HTML; only exact local URL attributes are rebased.
         home = re.sub(r'(href|src)="assets/',r'\1="' + BASE + 'assets/',index.read_text())
         home = home.replace('href="docs/"','href="' + BASE + 'docs/"')
+        for source, (slug, _) in GUIDES.items():
+            home = home.replace('href="' + Path(source).name + '"', 'href="' + BASE + 'docs/' + slug + '/"')
         # A trusted repo-owned layout, never source Markdown as a template.
         (stage / 'layouts/index.html').write_text(home)
         content = stage / 'content'
