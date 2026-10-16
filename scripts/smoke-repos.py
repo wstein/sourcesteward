@@ -134,6 +134,7 @@ def acceptance(binary=BINARY, want_jj=None):
             before = snapshot(base / 'work')
             result = stw(args, environment)
             assert snapshot(base / 'work') == before, ('repos changed the fixture tree', args)
+            assert not list(sentinels.iterdir()), ('an effect sentinel fired', args, sorted(path.name for path in sentinels.iterdir()))
             assert result.returncode == expected_exit, (args, result.returncode, result.stdout[:2000], result.stderr)
             if expected_exit == 2:
                 assert result.stdout == b'', ('usage error printed output', result.stdout)
@@ -187,13 +188,28 @@ def acceptance(binary=BINARY, want_jj=None):
         for hook in ('pre-commit', 'post-checkout', 'post-merge', 'reference-transaction', 'fsmonitor-watchman'):
             (hooks / hook).write_text('#!/bin/sh\nprintf hook > "' + str(sentinels) + '/hook-' + hook + '"\n')
             (hooks / hook).chmod(0o700)
-        for key, value in (('core.fsmonitor', str(helper)), ('core.hooksPath', str(hooks)), ('filter.hostile.clean', str(helper)),
-                           ('filter.hostile.smudge', str(helper)), ('filter.hostile.process', str(helper)),
-                           ('diff.hostile.textconv', str(helper)), ('diff.external', str(helper)), ('alias.inventory', '!' + str(helper)),
-                           ('credential.helper', '!' + str(helper)), ('core.pager', str(helper)), ('core.editor', str(helper)),
-                           ('gpg.program', str(helper)), ('core.sshCommand', str(helper)), ('remote.origin.url', 'sentinel::origin'),
-                           ('remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')):
-            run('git', ['config', key, value], hostile)
+        def plant(repo, include=False):
+            """Hostile repository-controlled configuration, set after the fixture was created."""
+            settings = [('core.fsmonitor', str(helper)), ('core.hooksPath', str(hooks)), ('filter.hostile.clean', str(helper)),
+                        ('filter.hostile.smudge', str(helper)), ('filter.hostile.process', str(helper)),
+                        ('diff.hostile.textconv', str(helper)), ('diff.external', str(helper)), ('alias.inventory', '!' + str(helper)),
+                        ('credential.helper', '!' + str(helper)), ('core.pager', str(helper)), ('core.editor', str(helper)),
+                        ('gpg.program', str(helper)), ('core.sshCommand', str(helper)), ('remote.origin.url', 'sentinel::origin'),
+                        ('remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')]
+            if include:
+                # An included file is read by Git for the superproject's own commands; it is refused
+                # (path-unsafe) in a submodule's configuration, so only the superproject carries one.
+                (tools / 'included.cfg').write_text('[core]\n\tfsmonitor = ' + str(helper) + '\n')
+                settings.append(('include.path', str(tools / 'included.cfg')))
+            (repo / '.gitattributes').write_text('*.txt filter=hostile diff=hostile\n')
+            for key, value in settings:
+                run('git', ['config', key, value], repo)
+
+        plant(hostile)
+        # The superproject and its initialized submodule are hostile too, so the discovery runner and the
+        # inspection and inventory of the discovered member are sentinel-covered.
+        plant(super_, include=True)
+        plant(super_ / 'vendor' / 'lib')
         (hostile / 'f.txt').write_text('modified so that a stat-dirty file needs the filter\n')
 
         missing = root / 'does-not-exist'
