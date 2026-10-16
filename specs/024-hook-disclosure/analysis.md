@@ -60,3 +60,21 @@ Independent reviewer: read-only Opus review, revision f1074da, 2026-10-16, with 
 | 13 | Low | `directory` null list; `config_hooks` for `not-applicable` | Both defined |
 | 14 | Low | Round-1 passages not updated (plan summary, research listing roots, status line) | Updated |
 | 15 | Low | Sentinel path delivery | Absolute path baked into hooks |
+
+## Round 3
+
+Independent reviewer: narrow read-only Opus re-check, revision e558e58, 2026-10-16 (a first attempt was cut off by a rate limit and re-run). Verdict: NOT READY (two high, three medium, six low findings). Round-2 items 2, 3, 6, 9, 11, 13, 14 and 15 were confirmed landed; limits keys and the colocated JSON example were confirmed field by field. The author applied the resolutions below; per the guide's three-round limit they were NOT re-reviewed, so the verdict of record is NOT READY with these resolutions pending an independent check.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | Unknown-engine configuration hooks not carried into FR-009, contract rules, findings table, T015 | FR-009 (state `unknown`, `bypassed: null`), findings table, contract derivation rules, T015; both bypass findings may co-occur |
+| 2 | High | Conformance rule self-contradictory; `jj-push` has no deciding step; `unknown` never resolves | Deciding steps J3 and J4 in J1, J2, J2b; disagreement exit 1 and `unverified`; consistent outcomes resolve `unknown` in T024; T022 and T024 carry it |
+| 3 | Medium | Error codes in data model incomplete | Refers to the refusal table `error` rows |
+| 4 | Medium | Directory and configuration hook sharing an event | Source `both`; active beats `disabled-by-path` |
+| 5 | Medium | `backend` on jj path for Git-prefixed codes | `jj` on the jj path stated in the refusal table |
+| 6 | Low | T006 code list | Extended |
+| 7 | Low | Note about PATH Git absent | Added to data model and example |
+| 8 | Low | Refusal example notes | Notes empty for refused and error results |
+| 9 | Low | Null operation sort order | Null sorts last |
+| 10 | Low | `git-config-hooks` range when minimum lane lacks it | Range starts at the lowest supporting lane version |
+| 11 | Low | Double `version` read | Accepted and stated |

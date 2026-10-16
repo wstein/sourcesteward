@@ -14,7 +14,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 | `configuration` | Configuration \| null | null for `refused` and `error` |
 | `hooks` | HookEntry[] | present catalog names only, sorted by name; empty array when none |
 | `operations` | Operation[] | exactly `commit` then `push` when `configuration` is non-null, else empty |
-| `findings` | Finding[] | sorted by severity (error, warning, info), operation, subject, code |
+| `findings` | Finding[] | sorted by severity (error, warning, info), then operation (`commit`, `push`, null last), subject, code |
 | `summary` | Summary | counts |
 | `error` | `{code, message}` \| null | refusals and operational failures only |
 
@@ -27,7 +27,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 - `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants (`hook_paths_opened` means no hook entry is opened; the confined hooks directory itself is opened once for the bounded listing); the last two disclose process use (`git_processes` is false for a non-colocated jj workspace and for the ambiguous refusal; `jj_processes` is true only for a jj-owned workspace and then covers only the sandbox probe and `--version`). Git reads in a colocated jj workspace run outside the jj sandbox.
 - `limits`: the keys and values of the spec's limits table: `{deadline_seconds: 10, git_process_seconds: 5, stream_bytes: 65536, result_bytes: 262144, directory_entries: 256, unrecognized_names: 16, config_hooks: 64, value_bytes: 4096, level_records: 16}`.
 - `complete`: boolean; false for `refused`, `error` and `incomplete`.
-- `notes`: fixed strings, at least: the content of hooks is never read, so a missing interpreter or a self-disabling script is not detected; per-command overrides are not detected; the caller environment is not applied.
+- `notes`: empty for `refused` and `error` results; otherwise fixed strings, at least the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns, and: the content of hooks is never read, so a missing interpreter or a self-disabling script is not detected; per-command overrides are not detected; the caller environment is not applied.
 
 ## Configuration
 
@@ -88,7 +88,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### OperationHook
 
-`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `unknown` (a configuration hook while the engine is `unknown`), `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same name still counts as `active`) or `absent`. `source` is `hooks-dir`, `config` or null. `bypassed` is `true`, `false` or `null` per FR-009. `skippable_by` lists exception ids that skip this hook.
+`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `unknown` (a configuration hook while the engine is `unknown`), `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same name still counts as `active`) or `absent`. `source` is `hooks-dir`, `config`, `both` or null. `bypassed` is `true`, `false` or `null` per FR-009. `skippable_by` lists exception ids that skip this hook.
 
 ## Finding
 
@@ -103,6 +103,6 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 - `boundary.complete` is true when every examination finished and no limit was exhausted and no resample differed. A hook that is `ignored` or `not-runnable`, an absent directory, an `unknown` claim, or a non-measured evidence level is a valid observation and does not make the result incomplete.
 - `status: "incomplete"` carries the result built so far with `hooks-limit` or `hooks-state-changed`.
 - `status: "refused"` carries an `error.code` from the refusal table, `configuration: null`, empty `hooks`, `operations` and `findings`, and a null `identity` when none could be established.
-- `status: "error"` carries `hooks-failed` or a reused jj code and the same empty fields.
+- `status: "error"` carries a code from the `error` rows of the spec's refusal table (`hooks-failed`, the jj session codes, or an existing ownership-decision code passed through) and the same empty fields. On the jj path `backend` is `jj` for all of them.
 - Evidence level derivation: the catalog base level, lowered to `documented` when the detected version is outside the catalog's measured range (`version_covered: false`).
 - `runs_hooks` for a Git-owned repository comes from the `git-*` claims; for a jj-owned workspace from the `jj-*` claims.
