@@ -46,8 +46,10 @@ def acceptance():
                 del env[key]
         env.update(GIT_AUTHOR_NAME='Hosting Tester', GIT_AUTHOR_EMAIL='hosting@example.org',
                    GIT_COMMITTER_NAME='Hosting Tester', GIT_COMMITTER_EMAIL='hosting@example.org',
-                   GH_CONFIG_DIR=str(home / 'gh'), GH_PROMPT_DISABLED='1')
-        extension = home / 'gh/extensions/gh-jj'
+                   GH_CONFIG_DIR=str(home / 'gh'), XDG_DATA_HOME=str(home / 'data'),
+                   XDG_STATE_HOME=str(home / 'state'), GH_PROMPT_DISABLED='1',
+                   GH_NO_UPDATE_NOTIFIER='1', GH_NO_EXTENSION_UPDATE_NOTIFIER='1')
+        extension = home / 'data/gh/extensions/gh-jj'
         extension.mkdir(parents=True)
         shutil.copy2(binaries[1], extension / 'gh-jj')
         fake = root / 'fake-tools'
@@ -93,6 +95,7 @@ print(json.dumps(value))
                 assert (audit.read_bytes() if audit.exists() else b'') == prior_calls, ('local resolution launched gh API', args)
             assert helpers.snapshot(fixtures) == before, ('hosting changed native state', args)
             assert result.returncode == expected, (args, result.returncode, result.stdout, result.stderr)
+            assert result.stdout.strip(), ('missing structured result', args, result.returncode, result.stderr)
             output = json.loads(result.stdout)
             assert output['schema_version'] == 1 and output['status'] == ('ok' if expected == 0 else 'error'), output
             assert output['boundary']['complete'] == (expected == 0), output
