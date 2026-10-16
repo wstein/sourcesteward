@@ -23,12 +23,18 @@ func TestPinsURLRedactsCredentials(t *testing.T) {
 		{"https://user:pa#ss@host/x", "https://host/x", true},
 		{"https://user:pa/ss@host/x", "https://host/x", true},
 		{"user:s3cret@host:repo.git", "host:repo.git", true},
-		{"user:s3cret@host:/path@x", "host:/path@x", true},
+		{"user:s3cret@host:/path@x", "x", true},
 		{"host:path?private_token=s3cret", "host:path", false},
 		{"/local/path?private_token=s3cret", "/local/path", false},
 		{"./rel#frag", "./rel", false},
 		{"user@host:s3cret@x", "x", true},
-		{"https://example.com:8443/a@b", "https://example.com:8443/a@b", false},
+		{"https://example.com:8443/a@b", "https://b", true}, // conservative: ":digits" then "@" may be a password
+		{"user:pa/s3cret@host:path", "host:path", true},
+		{"user:s3cret/x@host:path", "host:path", true},
+		{"a:b/s3cret@c", "c", true},
+		{".user:s3cret@host:x", "host:x", true},
+		{"https:/user:s3cret@host/x", "host/x", true},
+		{"https://user:1234/s3cret@host/x", "https://host/x", true},
 		{"http://a:b@c:d@host/x", "http://host/x", true},
 		{"HTTPS://U:secret@Example.com/Path", "HTTPS://Example.com/Path", true},
 		{"ssh://git:secret@example.com/x.git", "ssh://example.com/x.git", true},
@@ -264,5 +270,30 @@ func TestPinsNetworkSentinelIsNeverContacted(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("an ext:: URL was executed")
+	}
+}
+
+// TestPinsURLRedactionSweep asserts that a secret placed in many positions of many URL shapes never
+// survives into the displayed or the comparison form.
+func TestPinsURLRedactionSweep(t *testing.T) {
+	const secret = "S3cr3tValue"
+	prefixes := []string{"", "https://", "http://", "ssh://", "git://", "file://", "https:/", ".", "x/"}
+	shapes := []string{
+		"user:%s@host:path", "user:pa/%s@host:path", "user:%s/x@host:path", "a:b/%s@c", "user:pa#%s@host/x",
+		"user:pa?%s@host/x", "user:1234/%s@host/x", "user:%s@host/x?private_token=%s", "user:%s@host:/p@x", "u:p@h:%s@x/y",
+	}
+	n := 0
+	for _, p := range prefixes {
+		for _, sh := range shapes {
+			raw := p + strings.ReplaceAll(sh, "%s", secret)
+			i := pinsClassifyURL(raw)
+			n++
+			if strings.Contains(i.Redacted, secret) || strings.Contains(i.Normalized, secret) || strings.Contains(i.Problem, secret) {
+				t.Errorf("%q leaks: %+v", raw, i)
+			}
+		}
+	}
+	if n < 50 {
+		t.Fatalf("only %d shapes", n)
 	}
 }

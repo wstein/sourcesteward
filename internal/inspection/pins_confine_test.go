@@ -90,46 +90,54 @@ func TestPinsConfineSymlinkedCommondirAndAlternatesReproducer(t *testing.T) {
 	mustRefuse(t, safetyFor(t, f.Super), pinsSubmoduleSpec{Path: "member", Name: "member"}, "submodule-path-unsafe")
 }
 
-func TestPinsConfineAlternatesTargetsAreCheckedWithoutFollowingLinks(t *testing.T) {
+// Alternates are unsupported: Git resolves each entry by realpath (so a symlinked '..' component leaves
+// the tree) and trims no '\r', semantics the audit will not re-implement. Any non-empty alternates file
+// refuses the submodule, and no Git process may run in the refused directory.
+func TestPinsConfineAnyAlternatesAreRefusedWithoutRunningGit(t *testing.T) {
 	f := newPinsFixture(t)
-	s := safetyFor(t, f.Super)
 	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
 	mods := filepath.Join(f.Super, ".git", "modules")
 	alt := filepath.Join(mods, "member", "objects", "info", "alternates")
-	sib := filepath.Join(mods, "sibling")
+	sib := filepath.Join(mods, "b")
 	git(t, f.Root, "clone", "-q", "--bare", f.Sub, sib)
-	// A sibling's objects are inside the allowed tree and pass every check.
-	writeFile(t, alt, filepath.Join(sib, "objects")+"\n")
-	mustResolve(t, s, spec)
-	// A symlinked alternate directory inside the tree is not followed.
-	mustSymlink(t, filepath.Join(f.Root, "sub", ".git", "objects"), filepath.Join(mods, "linkobjs"))
-	writeFile(t, alt, filepath.Join(mods, "linkobjs")+"\n")
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	// A symlinked parent component inside the tree is not followed either.
-	mustSymlink(t, sib, filepath.Join(mods, "linkparent"))
-	writeFile(t, alt, filepath.Join(mods, "linkparent", "objects")+"\n")
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	// Nested alternates in the target are refused.
-	writeFile(t, filepath.Join(sib, "objects", "info", "alternates"), filepath.Join(f.Sub, ".git", "objects")+"\n")
-	writeFile(t, alt, filepath.Join(sib, "objects")+"\n")
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	rmAll(t, filepath.Join(sib, "objects", "info", "alternates"))
-	mustResolve(t, s, spec)
-	// A missing target is refused: Git would silently ignore it, an audit should not.
-	writeFile(t, alt, filepath.Join(mods, "absent", "objects")+"\n")
-	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	// A target owned by someone else is refused.
-	writeFile(t, alt, filepath.Join(sib, "objects")+"\n")
-	l, run := layoutFor(t, f.Super)
-	foreign := newPinsSafety(l, run)
-	real := foreign.owner
-	foreign.owner = func(i fs.FileInfo) (uint32, bool) {
-		if p, err := os.Lstat(filepath.Join(sib, "objects")); err == nil && os.SameFile(p, i) {
-			return foreign.euid + 1, true
+	outside := filepath.Join(f.Root, "outside")
+	git(t, f.Root, "clone", "-q", "--bare", f.Sub, outside)
+	mustSymlink(t, outside, filepath.Join(mods, "c"))
+	nested := filepath.Join(mods, "n")
+	git(t, f.Root, "clone", "-q", "--bare", f.Sub, nested)
+	writeFile(t, filepath.Join(nested, "objects", "info", "alternates"), filepath.Join(sib, "objects")+"\n")
+	gitLog, _ := pinsSentinels(t)
+	s := safetyFor(t, f.Super)
+	before := len(gitLog())
+	for name, content := range map[string]string{
+		"sibling objects":        filepath.Join(sib, "objects") + "\n",
+		"modules directory":      mods + "\n",
+		"symlinked dot-dot form": filepath.Join(mods, "c", "..", "b", "objects") + "\n",
+		"carriage return suffix": filepath.Join(sib, "objects") + "\r\n",
+		"nested chain":           filepath.Join(nested, "objects") + "\n",
+		"quoted":                 "\"" + filepath.Join(sib, "objects") + "\"\n",
+		"comment only":           "# nothing\n",
+		"outside":                filepath.Join(outside, "objects") + "\n",
+	} {
+		writeFile(t, alt, content)
+		if msg := mustRefuse(t, s, spec, "submodule-path-unsafe"); !strings.Contains(msg, "alternates") || !strings.Contains(msg, "not supported") {
+			t.Errorf("%s: %s", name, msg)
 		}
-		return real(i)
 	}
-	mustRefuse(t, foreign, spec, "submodule-unsafe-owner")
+	if got := gitLog()[before:]; len(got) != 0 {
+		t.Fatalf("Git ran although alternates exist: %v", got)
+	}
+	// An empty file is no entry and is accepted; removing the file restores acceptance.
+	writeFile(t, alt, "")
+	mustResolve(t, s, spec)
+	rmAll(t, alt)
+	mustResolve(t, s, spec)
+	// A symlinked, FIFO or unreadable alternates file is refused too.
+	mustSymlink(t, filepath.Join(sib, "config"), alt)
+	mustRefuse(t, s, spec, "submodule-path-unsafe")
+	rmAll(t, alt)
+	mustMkfifo(t, alt)
+	mustRefuse(t, s, spec, "submodule-path-unsafe")
 }
 
 func TestPinsConfineCommondirIsRefusedAndUnreadableFailsClosed(t *testing.T) {

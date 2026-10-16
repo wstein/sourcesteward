@@ -28,7 +28,7 @@ const (
 )
 
 // pinsLimitError reports an exhausted bound; callers turn it into the pins-limit finding.
-type pinsLimitError struct{ Kind string } // "retained", "scan", "record" or "deadline"
+type pinsLimitError struct{ Kind string } // "retained", "scan", "record", "deadline" or "entries"
 
 func (e *pinsLimitError) Error() string {
 	switch e.Kind {
@@ -38,6 +38,8 @@ func (e *pinsLimitError) Error() string {
 		return "a Git output record exceeded its length limit"
 	case "deadline":
 		return "a Git invocation exceeded its deadline"
+	case "entries":
+		return "a Git directory has more entries than can be validated"
 	}
 	return "Git output exceeded the retained-output budget"
 }
