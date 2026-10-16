@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/026-release-hygiene`
 **Created**: 2026-10-16
-**Status**: Draft — revised after independent analysis rounds 1 to 3; round 3 findings resolved but not re-reviewed; implementation pending
+**Status**: Draft — revised after independent analysis rounds 1 to 3; confirmation round 4 READY with later cuts and clarifications applied; implementation pending
 **Input**: What must be true before a first `stw` release build, and how is a release produced and verified reproducibly and safely? This specification covers the stamped version, the build recipe, release platforms, evidence classes, release gates, the readiness record, the approval model and post-release verification. It does not build, tag, publish or activate anything.
 
 ## User Scenarios & Testing
@@ -17,9 +17,9 @@ A maintainer or agent wants to know whether a given commit satisfies every preco
 
 **Acceptance Scenarios**:
 
-1. **Given** a commit whose toolchain, modules, notices, docs and help satisfy the gates that `plan` can evaluate, **When** `release.py plan --version v0.1.0` runs, **Then** it reports every gate (gates that need a build, approval or post-release evidence as `not-run` per the [gate evaluation table](#gate-evaluation-by-command-normative)), writes only the [listed effects](contracts/release.md#effects), uses no network and exits 0.
+1. **Given** a commit whose toolchain, modules, notices, docs and help satisfy the gates that `plan` can evaluate, **When** `release.py plan --version v0.1.0` runs, **Then** it reports every gate (gates that need a build, approval or post-release evidence as `not-run` per the [gate evaluation table](#gate-evaluation-by-command-normative)), writes only the [listed effects](contracts/release.md#effects), uses no network and exits 0. Output is human-readable text only; the script is internal tooling, not a product command.
 2. **Given** a commit violating one gate, **When** the dry run runs, **Then** it exits 1 and names that gate's code from the [code table](#codes-normative); all other gates are still reported.
-3. **Given** a platform without evidence of its required class, **When** the dry run runs with `--record`, **Then** it reports `evidence-missing` for that platform, the platform is not part of the plan and `build --platforms` naming it is refused with exit 1.
+3. **Given** a platform without evidence of its required class, **When** the dry run runs with `--record`, **Then** it reports `evidence-missing` for that platform, the platform is not part of the plan and `build --platforms` naming it fails with exit 1 (`evidence-missing`).
 4. **Given** the dry run, **When** it completes, **Then** its output states that it did not link a distributable binary, so it proves neither the effect of the linker flags nor reproducibility.
 
 ### User Story 2 — A release binary states its version, and an unstamped one cannot pass (Priority: P1)
@@ -73,16 +73,6 @@ A maintainer checks checksums and runs smoke tests of the downloaded or built bi
 2. **Given** a binary for another platform, **When** `verify` runs, **Then** it checks checksum and build information (`GOOS`, `GOARCH`, `CGO_ENABLED`, `-trimpath`) only and reports `execution: not-run`; its stamp stays unverified until the matching host (the Mac mini for darwin arm64) runs it and records manual evidence, which gate G14 requires before publication.
 3. **Given** a tampered archive, **When** `verify` runs, **Then** it fails with `checksum-mismatch`.
 
-### User Story 6 — Share conventions with `smill` without coupling (Priority: P3)
-
-The `smill` release in the separate repository `wstein/sheetmill` can follow the same conventions later.
-
-**Independent Test**: The [convention table](#shared-conventions-with-smill-normative) is complete and contains no sheetmill implementation detail; a follow-up note exists.
-
-**Acceptance Scenarios**:
-
-1. **Given** the convention table, **When** a maintainer writes the sheetmill spec, **Then** every row states a choice that can be copied or consciously changed.
-
 ## Edge Cases
 
 - The record and notes cannot live in the commit they describe (a commit cannot contain its own hash). The build therefore uses a **code commit** named in A1 and exported from its tree objects into a fresh directory; uncommitted or ignored files in the checkout never reach the build. The readiness record and notes are committed afterwards in a **record commit** (documentation only) and are read from the checkout. The tag (A2) points at the code commit. CI evidence for G02 and G03 refers to the code commit; a later documentation-only record commit has its own, unrelated CI runs.
@@ -109,19 +99,19 @@ The `smill` release in the separate repository `wstein/sheetmill` can follow the
 - **FR-002**: The version is stamped through one linker variable, `github.com/wstein/sourcesteward/internal/cli.Version`, defaulting to `dev`. Both `cmd/stw` and `cmd/gh-jj` pass it to the command runner; the existing `version` parameter and `schemas/v1/version.schema.json` are unchanged. The stamp format is the [version format](#version-format-normative).
 - **FR-003**: A Go test, skipped unless `STW_RELEASE_VERSION` is set, fails when `cli.Version` differs from that value or does not match the version format. The recipe runs it under the exact linker flag before building.
 - **FR-004**: The build uses only the [recipe table](#build-recipe-normative): pinned toolchain equal to the `go` line of `go.mod`, `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, module mode `readonly`, `GOPROXY=off`, `GOWORK=off`, `GOENV=off`, an empty `GOFLAGS`, no stripping, a fresh empty `GOCACHE`, and an export of the code commit named in A1 built from tree objects (`git ls-tree` and `git cat-file`, never `git archive`, which applies repository-local filters and attributes, measured by the reviewer).
-- **FR-005**: `scripts/release.py` provides `plan`, `build` and `verify` as in [contracts/release.md](contracts/release.md). `plan` is the dry run: it links no distributable binary, uses no network and has only the effects listed in the contract (Go build cache, temporary directories, and the stamp test's temporary test binary). `build` and `verify --rebuild` are builds and require approval A1. The script never tags, pushes, publishes or activates.
+- **FR-005**: `scripts/release.py` provides `plan`, `build` and `verify` as in [contracts/release.md](contracts/release.md); it needs Python 3.12 or newer (the `tarfile` `data` filter; measured Python 3.13.5 here). **Classification (normative)**: under the exception of the umbrella `AGENTS.md` for routine source tests, formatting checks, vet and test compiler verification, the dry run (`plan`: Git plumbing, `go list`, `go vet`, `go mod verify`, `check-docs.py`) and the stamp test (`go test`, which links a temporary test binary that is deleted) are **not** release builds and need no approval. Only `build` (and any second `build` for G12) produce distributable files and require approval A1. `plan` links no distributable binary, uses no network and has only the effects listed in the contract. The script never tags, pushes, publishes or activates. Existing `go build -o bin/stw` steps in `ci.yml` are non-distributed test builds.
 - **FR-006**: Output files are `stw_<version>_<os>_<arch>.tar.gz` archives, `SHA256SUMS` (the format `sha256sum -c` reads) and `release-manifest.json`, only under `dist/release/<version>/`. Archives contain the binary, `LICENSE`, `third_party/` and a short `README`. Archive metadata is normalized (sorted entries, zero owner, fixed modification time from the commit time, fixed modes). An SBOM is optional; if produced it is an additional file and never a gate.
 - **FR-007**: Signing status is stated, not implied: `SHA256SUMS` is unsigned; binaries are not signed or notarized by SourceSteward; no attestation is produced in this feature. The release notes and `docs/releasing.md` say so, with the consequence (integrity against corruption, not authenticity against a compromised publication account).
 - **FR-008**: Every release satisfies each row of the [gate table](#release-gates-normative). A gate's outcome is `pass`, `fail`, `not-run` or `waived` (waiver only where the table allows it, with the user's verbatim authorization recorded like an approval). Which command evaluates which gate is fixed by the [gate evaluation table](#gate-evaluation-by-command-normative). A release with a `fail` or a `not-run` gate in the final record is not ready.
 - **FR-009**: A release readiness record per release at `docs/releases/<version>-readiness.md`, in the form of [contracts/readiness-record.md](contracts/readiness-record.md), lists exact versions, platforms, evidence class and outcome per gate, approvals, and what was not run. Release notes at `docs/releases/<version>.md` follow the same contract.
 - **FR-010**: Evidence is classified by the [evidence table](#evidence-classes-normative). Local or manual evidence is never described as CI evidence.
 - **FR-011**: Approvals follow the [approval table](#approvals-normative). `release.py build` refuses without an A1 entry in the readiness record whose verbatim quote contains the version, every requested platform and at least 12 hexadecimal characters of the code commit; this stops accidents and is not an authorization mechanism, because whoever writes the record can write the entry. The reviewer of the record compares it with the user's actual message. No workflow, schedule, push, merge, bot or local commit starts a build, a tag, a publication or an activation.
-- **FR-012**: Reproducibility is claimed for the binaries only, for the recorded toolchain, platform set and hosts. The check compares binary SHA-256 values between two builds, each from its own tree-object export in a different directory with its own empty `GOCACHE` (gate G12); whether both ran on one host or two is recorded and the claim is limited to that. Archive bytes are normalized but not claimed identical across hosts (compressor output, unverified).
-- **FR-013**: Verification follows the [smoke table](#smoke-tests-normative) on every released platform, before publication on the built files and after publication on the downloaded files; darwin arm64 is verified on the Mac mini as manual evidence recorded in the readiness record. Checks that rely on files from the same directory (`SHA256SUMS`, manifest) are anchored by a hash recorded outside it (the record), and nothing is executed without the anchor. Archive extraction accepts only the exact member names, regular files, with a size limit of 128 MiB.
+- **FR-012**: Reproducibility is claimed for the binaries only, for the recorded toolchain, platform set and hosts. G12 compares the `binary_sha256` values of two `build` runs, each from its own tree-object export in a different output directory (`--out`) with its own empty `GOCACHE`; the second run is a build under A1. Whether both ran on one host or two is recorded and the claim is limited to that. Archive bytes are normalized but not claimed identical across hosts (compressor output, unverified). G12 is waivable only with a recorded user quote.
+- **FR-013**: Verification follows the [smoke table](#smoke-tests-normative) on every released platform before publication on the built files (`verify`, recorded in the pre-publication verification section) and after publication on the downloaded files (recorded by hand in the post-release section and checked by the reviewer; no script mode requires it). Darwin arm64 is verified on the Mac mini as manual evidence using the shell commands of the quickstart. Checks that rely on files from the same directory (`SHA256SUMS`, manifest) are anchored by a hash recorded outside it, and nothing is executed without the anchor. Archive extraction accepts only regular files and directory members of the expected names, with a size limit of 128 MiB.
 - **FR-014**: Nothing in this feature adds, unhides or changes a user command, JSON schema or exit status of `stw`. `stw` has no `--version` flag (cobra is configured without one, `stw version` is the interface); this feature does not add one.
-- **FR-015**: Capability statement (constitution V): the release platforms are supported only with passing Git and jj conformance lanes for that platform (Git 2.46.0 minimum and 2.56.0 current, jj 0.45.1 minimum and 0.46.0 current, as pinned in `scripts/backend-releases.json`). A failed or missing Git or jj lane blocks that platform equally. No backend equivalence is implied. jj on a platform requires its sandbox (bubblewrap on Linux, `sandbox-exec` on macOS).
-- **FR-016**: Conventions in the [convention table](#shared-conventions-with-smill-normative) are stated for reuse. A follow-up specification in `wstein/sheetmill` is required to adopt them; this feature changes nothing there.
-- **FR-017**: `release.py` output is bounded and non-interactive: no prompt, no pager; at most 200 report lines in human mode; `--json` renders the same result.
+- **FR-015**: Capability statement (constitution V): a release platform is supported only with passing Git and jj conformance for that platform (Git 2.46.0 minimum and 2.56.0 current, jj 0.45.1 minimum and 0.46.0 current, as pinned in `scripts/backend-releases.json`). Constitution IV ("each supported backend capability MUST have conformance CI"): capability CI on linux/amd64 for both lanes, plus recorded per-platform evidence for the other platforms (`ci` or `local-recorded`), satisfies it for this release; darwin/arm64 ships on `local-recorded` plus `manual` evidence with a CI lane as a follow-up (decided 2026-10-16). A failed or missing Git or jj lane blocks that platform equally. No backend equivalence is implied. jj on a platform requires its sandbox (bubblewrap on Linux, `sandbox-exec` on macOS).
+- **FR-016**: `docs/releasing.md` carries one paragraph of conventions reusable by `smill` (`wstein/sheetmill`): the `Version` variable in `internal/cli` set with `-X`, the `v`-prefixed version format, `<tool>_<version>_<os>_<arch>.tar.gz` names, an unsigned `SHA256SUMS`, the same platforms, `CGO_ENABLED=0 -trimpath -buildvcs=false` with a local toolchain equal to `go.mod`, and the approval rule. Adoption is a separate follow-up specification in that repository; this feature changes nothing there.
+- **FR-017**: `release.py` is non-interactive (no prompt, no pager) and prints human-readable text, one line per gate or platform. It has no JSON mode and no published schema; `release-manifest.json` is its only machine-readable output.
 
 ### Release platforms (normative)
 
@@ -155,11 +145,11 @@ The `smill` release in the separate repository `wstein/sheetmill` can follow the
 | Module mode | `GOFLAGS=` empty, `-mod=readonly`, `GOPROXY=off`, `GOWORK=off`, `GOENV=off`; no `GO*` variable is inherited | no fetch; `go.mod`/`go.sum` unchanged; no per-user `go env -w` effect |
 | Linker | `-ldflags "-X github.com/wstein/sourcesteward/internal/cli.Version=<version>"`; no `-s -w` | stamp only; debuggable |
 | Microarchitecture | `GOAMD64=v1`, `GOARM64=v8.0` | the defaults, pinned explicitly |
-| Source | exact tree of the code commit written to a fresh directory from `git ls-tree -r -z` and `git cat-file --batch`: regular files only, modes 0644/0755, symlinks and gitlinks refused (`export-unsafe`) | traceability; ignored files, filters, `export-ignore` and `export-subst` cannot change the source |
-| Caches | `GOMODCACHE` resolved from the caller's `go env` and passed as an absolute path (never inferred from `HOME`); `GOCACHE` a fresh empty temporary directory for `build` | offline modules; independent builds |
-| Git | `git --no-optional-locks -c core.fsmonitor=false` with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, absolute path | no user configuration or hook program runs |
+| Source | exact tree of the code commit written to a fresh directory from `git ls-tree -r -z` and `git cat-file --batch`: regular files only, modes 0644/0755, created with `O_EXCL`; symlinks, gitlinks, duplicate or case-colliding names and `.git`, `..` or absolute path components are refused (`export-unsafe`); a repository with `info/grafts` is refused (`export-unsafe`) | traceability; ignored files, filters, `export-ignore`, `export-subst`, replace refs and grafts cannot change the source |
+| Caches | `GOMODCACHE` resolved from the caller's `go env` and passed as an absolute path (never inferred from `HOME`); `GOCACHE` a fresh empty temporary directory for `build`; `STW_RELEASE_VERSION` is set only in the environment of the stamp-test process | offline modules; independent builds |
+| Git | `git --no-optional-locks -c core.fsmonitor=false` with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_NO_REPLACE_OBJECTS=1`, absolute path; `-c safe.directory` is never passed | no user configuration, hook program or replace ref applies |
 | Time | `SOURCE_DATE_EPOCH` = commit time, used for archive metadata only | normalized archives |
-| Output | `dist/release/<version>/` (git-ignored via `/dist/`) | no overwrite (`release-exists`) |
+| Output | `dist/release/<version>/` or the directory given by `--out` (under the git-ignored `/dist/`) | no overwrite (`release-exists`) |
 | Binary targets | `./cmd/stw` only; `cmd/gh-jj` and `cmd/stw-docs` are not released | scope |
 
 ### Evidence classes (normative)
@@ -177,7 +167,7 @@ Gates apply to the **code commit**. Codes are defined once in the [code table](#
 
 | Gate | Requirement | Waivable |
 | --- | --- | --- |
-| G01 | the code commit resolves and exports safely; whenever a record exists, the code commit is the record header's commit (no `--commit` default of `HEAD`; without a record `--commit` is required) and it equals the A1 commit and the commit of every evidence entry of every class (`manual` entries also record the verified `SHA256SUMS` anchor). Git plumbing runs with replace objects disabled; a repository with `info/grafts` or a tree with duplicate, case-colliding, `.git`, `..` or absolute entry names, or beyond 20,000 entries or 256 MiB, is `export-unsafe` | no |
+| G01 | the code commit resolves and exports safely; whenever a record exists, the code commit is the record header's commit (without a record `--commit` is required) and it equals the A1 commit and the commit of every evidence entry of every class (`manual` entries also record the verified `SHA256SUMS` anchor); Git plumbing runs with the isolated configuration of the recipe table | no |
 | G02 | `make check` and `go test -race ./...` green on the code commit (`ci`, linux/amd64); the script checks the record's assertion (run URL, conclusion, commit), a reviewer cross-checks it with `gh run view` outside the script | no |
 | G03 | conformance `minimum` and `current` green on the code commit (`ci`, linux/amd64); record-asserted and cross-checked like G02 | no |
 | G04 | per extra platform: `go test`, the smoke scripts (hosting smokes excluded on arm64) and the `minimum` and `current` Git and jj lanes (`ci` or `local-recorded`). A platform without it is dropped; G04 then `pass`es with the dropped platforms listed, and the notes (G10) must name each dropped platform | no |
@@ -187,39 +177,38 @@ Gates apply to the **code commit**. Codes are defined once in the [code table](#
 | G08 | stamp test passes pre-build under the exact flag; `verify` build information of every binary matches the manifest | no |
 | G09 | toolchain, environment, module and compile checks of the dry run pass | no |
 | G10 | release notes exist with the [contracted sections](contracts/readiness-record.md) | no |
-| G11 | the readiness record has no `pending` entry except the post-release items (A3, A4, section 8) before `--complete`, and lists what was not run; the record commit is `HEAD`, descends from the code commit and its diff touches only `docs/releases/`; record and notes are read from `HEAD`'s tree and the working-tree files must be identical | no |
-| G12 | two independent builds give equal binary SHA-256 per released platform | yes, by a recorded user authorization; the notes then say reproducibility was not verified |
-| G13 | A1 recorded before the build, A2 before the tag and its push (required by `--final`), A3 before publication (required by `--complete`) | no |
-| G14 | the anchor and checksums match (the manifest is listed in `SHA256SUMS`) and the [smoke table](#smoke-tests-normative) passes by execution on every released platform; the executed `version --json` verifies the stamp. `--final` requires this on the built files before publication, `--complete` also on the downloaded files | no |
+| G11 | the readiness record has no `pending` entry except the manual post-release items (A3, A4, post-release verification); it lists what was not run; the record commit is `HEAD` on branch `codex/release-<version>`, descends from the code commit, and the diff from the code commit to `HEAD` touches only `docs/releases/`; record and notes are read from `HEAD`'s tree and the working-tree files must be identical | no |
+| G12 | two builds give equal binary SHA-256 per released platform (recorded in the record's JSON block and compared by `plan --final`) | yes, only with a recorded user quote; the notes then say reproducibility was not verified |
+| G13 | A1 recorded before the build and A2 before the tag and its push (checked by `plan --final`). A3 and A4 are recorded by hand in the same approvals section and checked by the reviewer; no script mode requires them | no |
+| G14 | pre-publication: the anchor and checksums match (the manifest is listed in `SHA256SUMS`) and the [smoke table](#smoke-tests-normative) passes by execution on every released platform's built files; the executed `version --json` verifies the stamp. The same checks on the downloaded files are the manual post-release verification | no |
 
 ### Gate evaluation by command (normative)
 
-`E` evaluated; `-` not evaluated, reported `not-run` with a reason. Without a record, G02, G03, G04 and G13 are `not-run` with the reason `no record` in `plan`; under `--final` that is `record-incomplete`. Without notes, the notes part of G05, G06 and G10 is `not-run` with reason `no notes` outside `--final` and `release-notes-missing` under `--final`. A `not-run` gate never makes `plan` exit 1. `plan --final` (before the tag) requires G01 to G14 `pass` or `waived` with the post-release items allowed to be pending; `plan --complete` (after publication) additionally requires A3 and section 8 and is the check for the final record.
+`E` evaluated; `-` not evaluated, reported `not-run` with a reason. `plan --final` is the only mode that reads the whole record; it runs before the tag on branch `codex/release-<version>` with the record commit as `HEAD`. Without a record, G02, G03, G04 and G13 are `not-run` with reason `no record` in `plan`, and `record-incomplete` under `--final`. Without notes, the notes part of G05, G06 and G10 is `not-run` (`no notes`) outside `--final` and `release-notes-missing` under it. A `not-run` gate never makes `plan` exit 1; under `--final` every gate must be `pass` or `waived`. The post-release items (A3, A4, post-release verification) are not gates of any mode.
 
-| Gate | `plan` | `plan --final` / `--complete` | `build` (before building) | `verify` |
+| Gate | `plan` | `plan --final` | `build` (before building) | `verify` |
 | --- | --- | --- | --- | --- |
-| G01 | E | E | E | `--rebuild` only |
+| G01 | E | E | E | - |
 | G02, G03 | E (record) | E | E (record) | - |
 | G04 | E (record) | E | E, per requested platform | - |
 | G05, G06, G07 | E | E | E | - |
-| G08 | stamp test only | stamp test; build information from the recorded `verify` result | stamp test | E (build information) |
-| G09 | E | E | E | `--rebuild` only |
+| G08 | stamp test only | stamp test; recorded `verify` results | stamp test | E (build information) |
+| G09 | E | E | E | - |
 | G10, G11 | - | E | - | - |
-| G12 | - | E | - | `--rebuild` only |
-| G13 | A1 if present | E | A1 (first, before any `go` command) | `--rebuild`: A1 |
-| G14 | - | E | - | E |
+| G12 | - | E (recorded values) | - | - |
+| G13 | A1 if present | A1 and A2 | A1 (first, before any `go` command) | - |
+| G14 | - | E (recorded pre-publication verification) | - | E |
 
 ### Codes (normative)
 
-All codes are kebab-case. "Exit" is the process status; `1` is a gate failure reported in the result, `2` a usage error with empty standard output and no JSON, `3` a refusal reported in the result with `status: refused`.
+All codes are kebab-case. "Exit" is the process status; `1` is a gate failure reported in the output, `2` a usage error with empty standard output, `3` a refusal.
 
 | Code | Gate or origin | Exit |
 | --- | --- | --- |
-| `version-invalid` | argument | 2 |
-| `platform-unsupported` | argument | 2 |
+| `version-invalid`, `commit-required` (no `--commit` and no record), `platform-unsupported` | argument | 2 |
 | `commit-unresolved` | G01 | 1 |
-| `commit-mismatch` | G01 (code commit differs from A1) | 1 |
-| `unsupported-checkout` | G01 (jj workspace without a Git view) | 3 |
+| `commit-mismatch` | G01 (`--commit`, record header, A1 or an evidence entry names a different commit) | 1 |
+| `unsupported-checkout` | G01 (jj workspace without a Git view; a checkout Git reports as foreign-owned (`dubious ownership` under the isolated configuration); a shallow clone, where ancestry cannot be decided) | 3 |
 | `check-failed` | G02 | 1 |
 | `conformance-failed` | G03 | 1 |
 | `evidence-missing` | G04 | 1 for `build --platforms`; for `plan` a dropped platform |
@@ -228,12 +217,12 @@ All codes are kebab-case. "Exit" is the process status; `1` is a gate failure re
 | `notices-incomplete` | G07 | 1 |
 | `stamp-missing`, `stamp-mismatch` | G08 (stamp test) and G14 (executed `version --json`) | 1 |
 | `buildinfo-mismatch` | G08 (`verify`) | 1 |
-| `export-unsafe` | G01 (symlink, gitlink or non-regular entry in the tree) | 1 |
+| `export-unsafe` | G01 (tree entry or repository state refused by the Source row of the recipe table) | 1 |
 | `toolchain-mismatch`, `go-env-unsafe`, `modules-unverified` (`go mod verify` fails), `modules-unavailable` (module missing in the offline cache), `compile-failed` | G09 | 1 |
 | `release-notes-missing` | G10 | 1 |
 | `record-incomplete` | G11, and any gate needing a record under `--final` | 1 |
 | `reproducibility-mismatch` | G12 | 1 |
-| `approval-missing` | G13: gate failure under `plan --final`; refusal in `build` and `verify --rebuild` | 1 / 3 |
+| `approval-missing` | G13: gate failure under `plan --final`; refusal in `build` | 1 / 3 |
 | `release-exists` | `build` (output directory non-empty or tag exists locally) | 3 |
 | `trust-anchor-missing` | G14 (`verify` without anchor and without `--no-execute`) | 3 |
 | `checksum-mismatch`, `smoke-failed` | G14 | 1 |
@@ -242,8 +231,8 @@ All codes are kebab-case. "Exit" is the process status; `1` is a gate failure re
 
 | Step | Name | Needs explicit user authorization naming | Never authorized by |
 | --- | --- | --- | --- |
-| A1 | Build (including any rebuild for G12) | code commit, version, platforms | push, merge, schedule, bot, local commit, this specification, a passing dry run |
-| A2 | Tag: creation and push of the named tag | tag name and commit | A1, a successful build |
+| A1 | Build (including a second build for G12) | code commit, version, platforms | push, merge, schedule, bot, local commit, this specification, a passing dry run |
+| A2 | Tag: creation and push of the named tag | tag name and commit | A1, a successful build, a passing `plan --final`, a push of the record commit |
 | A3 | Publication: upload to a release or any public location; the release is created with `gh release create --verify-tag` so that it never creates a missing tag | tag, files, destination | A1, A2 |
 | A4 | Consumer activation (Anchorage devcontainer, BundleDock catalog/lock, any pin) | consumer, version | A1 to A3 |
 
@@ -259,25 +248,9 @@ An authorization covers the named values only; a changed commit needs a new one.
 | S4 | `stw inspect <temp repository> --json` | exits 0 in a fresh temporary Git repository; the output is one JSON object with `schema_version`, `backend` equal to `git` and a 40-hex HEAD (checked with the Python standard library, no schema validator) |
 | S5 | `stw inspect <temp jj repository> --json` | only where jj and its sandbox exist: valid result or a documented `jj-sandbox-unavailable` refusal; recorded either way |
 
-### Shared conventions with `smill` (normative)
-
-| Convention | Value |
-| --- | --- |
-| Version variable | `Version` in `internal/cli`, default `dev`, set with `-X <module>/internal/cli.Version=<version>` |
-| Version format | the [version format](#version-format-normative), `v` included |
-| Version output | `<product or tool name> <version>` text (`SourceSteward v0.1.0`, `smill v0.1.0`), with each tool's existing JSON contract unchanged |
-| Platforms | linux amd64/arm64, darwin arm64 |
-| Archive name | `<tool>_<version>_<os>_<arch>.tar.gz` |
-| Checksums | `SHA256SUMS`, `sha256sum -c` format, unsigned unless stated |
-| Build flags | `CGO_ENABLED=0 -trimpath -buildvcs=false`, local toolchain equal to `go.mod`, no fetch |
-| Approval rule | build, tag, publication and consumer activation each need explicit authorization; automation never grants it |
-| Gate vocabulary | the kebab-case code values of the code table where they apply |
-
-Follow-up (not part of this feature): a specification in `wstein/sheetmill`. Observation only: `smill` already has `cli.Version` and a stamp test that runs `go build`; this feature's stamp test uses `go test` to avoid producing a binary.
-
 ## Key Entities
 
-- **Release plan**: result of the dry run, one entry per gate and platform.
+- **Dry-run report**: human-readable output of `plan`, one line per gate and platform.
 - **Release manifest**: machine-readable record of one build (`release-manifest.json`).
 - **Readiness record**: human-readable record of gates, evidence, approvals and omissions.
 - **Evidence entry**: one row of evidence with a class.
@@ -289,15 +262,32 @@ Follow-up (not part of this feature): a specification in `wstein/sheetmill`. Obs
 - **SC-002**: The dry run reports every gate; one fixture per gate G01 to G14 that `plan` can evaluate yields that gate's code and exit 1 and the clean fixture exits 0; a real-run snapshot test on a fixture module in a temporary repository shows the working tree and `.git` unchanged and only the listed effects.
 - **SC-003**: No workflow or Make target reachable from `push`, `pull_request`, `schedule` or `make check` can build release archives, tag or publish (scan test).
 - **SC-004**: `release.py build` with a fake runner refuses without A1 (exit 3), uses exactly the recipe environment and arguments, and refuses an existing output directory.
-- **SC-005**: `release.py verify` detects a tampered archive, an unstamped binary, a wrong-platform build information and a missing `SHA256SUMS` entry.
+- **SC-005**: `release.py verify` detects a tampered archive, a tampered manifest, a wrong-platform build information, a missing `SHA256SUMS` entry and an executed binary whose version is not the release version.
 - **SC-006**: The notices inventory covers the whole closure of `./cmd/stw` (today fails for Cobra and pflag; fixed by WI3).
-- **SC-007**: A completed readiness record exists for the first release with every gate `pass` or `waived`, checks that were not run listed, and the Mac mini manual evidence for darwin/arm64 if that platform ships.
-- **SC-008**: Reproducibility is recorded as `match`, `mismatch` or `waived` for each platform; it is never stated without that record.
+- **SC-007**: A readiness record exists for the first release on branch `codex/release-<version>` with `plan --final` passing (every gate `pass` or `waived`), checks that were not run listed, the Mac mini manual evidence for darwin/arm64 if that platform ships, and the post-release verification recorded by hand.
+- **SC-008**: Reproducibility is recorded as `match`, `mismatch` or `waived` for each platform and is never stated without that record.
 
 ## Scope and Dependencies
 
-In scope: stamp, recipe, platforms, evidence, gates, record, approvals, dry run, verification, convention list.
+In scope: stamp, recipe, platforms, evidence, gates, record, approvals, dry run, verification, one paragraph of reusable conventions.
 
 Out of scope: running any real build, tag, publication or activation; signing, notarization, attestations (follow-ups); package managers; Windows; darwin/amd64; the `gh-jj` extension and Docker images; BundleDock and Anchorage integration beyond the A4 rule; automatic changelog generation; a `stw --version` flag; any change of `stw` commands or schemas; the sheetmill specification.
 
 Dependencies: Spec 021 (the `pins` command stays hidden; a release must not wait for it), Spec 024 and 025 (not required, planned status excluded from notes by G05), the existing conformance lanes. Constitution Scope: release automation needs a later specification; this feature is that specification for a manual, approval-gated recipe. The script automates the build steps only after A1 and never tags, pushes, publishes or activates.
+
+## Resolved decisions (2026-10-16, Werner Stein)
+
+- First version is `v0.1.0`.
+- darwin/arm64 ships with `local-recorded` plus `manual` Mac mini evidence; a CI lane for it is a follow-up.
+- Reproducibility (G12) may be waived only with a recorded user quote.
+- No signing or notarization for the first release; attestations are a later follow-up.
+- The linked `go test` binary of the stamp test is not an artifact build (routine under the umbrella `AGENTS.md`).
+- The release record commit is pushed under routine documentation push rules; a push never authorizes A2 or A3.
+- `pins` stays hidden and does not gate the release.
+
+## Open questions
+
+- How a tag is created in a jj-owned checkout (not specified; the maintainer chooses the method after A2).
+- Linux arm64 needs jj artifacts and a CI job (WI5); if not done, the platform is dropped from the first release.
+- A macOS CI lane (`sandbox-exec`, Git source builds on hosted runners) is unverified and deferred.
+- `ci.yml` runs the `check` job (including `test_release.py` through `make check`) on linux/amd64 only; the arm64 job does not run it, and that gap is accepted.
