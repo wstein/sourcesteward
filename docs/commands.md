@@ -13,6 +13,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw help`, `stw --help`, `stw version` | Discover commands and version | No repository or credentials required |
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
+| `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -48,6 +49,19 @@ Examples below use `stw` on PATH (`go install ./cmd/stw`), or replace it with
 Check the query value and qualifications, not just the exit code. Reference selectors
 are literal native names/identities, not arbitrary Git expressions or jj revsets.
 See [inventory](inventory.md) for ancestry, paths, scopes and backend limits.
+
+## Inventory several repositories
+
+```sh
+stw repos ~/work/app ~/work/lib
+stw repos ~/work/umbrella --submodules --json
+```
+
+One result lists every path in argument order with its status, backend, error, derived facts
+and the embedded `stw inventory` result. Exit 0 means every member was fully observed; exit 1
+means a member is partial or failed, with the cause on its entry (large repositories, gitlinks and
+stale worktrees commonly are, because the limits of single-repository inventory apply to each
+member). See [multi-repository inventory](repos.md).
 
 ## Create an isolated task workspace
 

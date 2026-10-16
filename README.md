@@ -19,7 +19,7 @@ SourceSteward is a pre-release Go/Cobra toolkit inspired by the convenience of
 evidence-based local cleanup and worktree-aware operations, with native Git/jj support and separately planned GitButler integration.
 No implementation code is copied from those projects.
 
-**Implemented:** native Git/jj inspection and inventory, isolated task workspace creation,
+**Implemented:** native Git/jj inspection and inventory (also across several repositories with `stw repos`), isolated task workspace creation,
 owned-workspace handoff/retirement, evidence-based local branch/bookmark tidy, and
 read-only GitHub repository/PR/CI inspection. Git and jj are Tier 1 peers; colocated
 repositories use native jj. All data commands have human and versioned JSON output.
@@ -53,6 +53,7 @@ Or run any command from source with `go run ./cmd/stw`, for example
 | --- | --- |
 | `help`, `version` | Help at every command level; human/JSON version |
 | `inspect`, `inventory` | [Native identity, workspaces, references, file scopes and state queries](docs/inventory.md) |
+| `repos` | [Inventory up to 16 Git/jj repositories and direct submodules in one bounded read-only run](docs/repos.md) |
 | `workspace plan`, `workspace apply` | [Review and create isolated Git worktrees/jj workspaces](docs/workspaces.md) |
 | `workspace handoff`, `workspace retire-plan` | [Describe owned work and prepare retirement without deleting it](docs/workspaces.md) |
 | `tidy plan`, `tidy apply` | [Review/apply local reference cleanup or separately selected owned-workspace retirement](docs/tidy.md) |
