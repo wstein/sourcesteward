@@ -132,6 +132,12 @@
       "status": "implemented",
       "spec": "../specs/022-bounded-go-gh/spec.md",
       "evidence": "../specs/022-bounded-go-gh/verification.md"
+    },
+    {
+      "id": "021-submodule-pin-audit",
+      "status": "planned",
+      "spec": "../specs/021-submodule-pin-audit/spec.md",
+      "evidence": null
     }
   ]
 }
