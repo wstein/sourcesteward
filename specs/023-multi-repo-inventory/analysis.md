@@ -1,5 +1,15 @@
 # Pre-implementation analysis
 
+## Usefulness assessment
+
+Written after round 4 (independent reviewer on revision 1bdcb49, real `stw` built in a scratch directory, Git 2.56.0; jj not run). The maintainer decides; no scope change has been applied.
+
+**Walk-through of the motivating case.** Fixture: an umbrella superproject with two initialized submodules and a linked worktree, a repository with a dirty file and a dirty linked worktree, a repository with a stale linked worktree. Five places are dirty (both submodules, the umbrella's linked worktree, the plain repository and its linked worktree). `stw repos umbrella dirtyrepo stalerepo --submodules` would report: umbrella `partial` ("submodule disk state excluded to avoid recursive helpers", `dirty` unknown, the linked worktree's edit invisible); `dirtyrepo` `ok`, `dirty: true` (its dirty linked worktree appears in no fact); `stalerepo` `partial` (stale 1); both submodules `ok` with `dirty` unknown (the inventory's only workspace record is the submodule's Git directory and already says `tracked: "true"` for a clean submodule, an existing defect of `stw inventory` on submodule checkouts); overall `partial`, exit 1. The summary reads ok 3, partial 2, dirty true 1, false 1, unknown 3, stale 1: it finds 1 of the 5 dirty places. Linked worktrees listed explicitly become `duplicate-repository` errors. At Anchorage scale (inferred, not run) any member with roughly 150 to 400 tracked files fails with `git-inventory-failed` because the one `check-attr` call exceeds the runner's 64 KiB output cap, so most real members would be `error` with no facts, and the exit status would always be 1.
+
+**What one run adds today:** a single envelope in which a failed member cannot be lost, duplicate and containment detection, automatic listing of submodule paths, and stale/foreign totals (already inside each inventory). It does not answer "what is dirty" or "what is ahead/behind" for this case.
+
+**Recommendation: do a small prerequisite first, and reduce scope.** (1) Prerequisite, a follow-up to Spec 009, in priority order: (a) bound or batch the `check-attr` read so repositories of a few hundred files are not `error` (without this most real members have no facts); (b) for a submodule checkout, describe the checkout rather than its Git directory (fixes today's false `tracked: "true"`); (c) for a gitlink-bearing superproject report `tracked: true` when ordinary files changed and keep `unknown` only where `false` cannot be proven. (2) Reduce 023: the `--submodules` half (US3, FR-006, FR-008 discovery, FR-009, WI3, the `skipped` status, the `discovery` fields, `path-unsafe`) adds a hostile-path surface and a third of the spec and currently yields `dirty` unknown for every submodule; Spec 021's `stw pins` already answers the submodule half better (per-submodule dirty state from index metadata, checkout ahead/behind versus the pin, publication, uninitialized submodules, linked-worktree superprojects) but not the superproject's own state, standalone repositories, worktree registrations or jj. Combined use would be `stw repos <roots>` plus `stw pins <umbrella>`. (3) Cheapest change inside 023 without touching inventory: derive `workspaces.dirty` and `workspaces.dirty_unknown` over every non-missing workspace record (excluding submodule entries), list dirty workspaces among the attention workspaces, treat a root `files` record as positive dirty evidence when `tracked` is unknown, and optionally treat an explicitly listed linked worktree as an alias of the kept entry instead of an error. Shipping as is would be honest but would mostly return `partial`, `unknown` and `error` on a realistic workspace.
+
 ## Round 0
 
 Author draft, 2026-10-16. Not independent. Independent review rounds are recorded below as they complete.
@@ -57,9 +67,21 @@ Independent reviewer: read-only Opus review, revision 49efc031b68f4625181a02614a
 
 | # | Severity | Finding | Resolution |
 | --- | --- | --- | --- |
-| 1 | High | Post-inventory identity comparison is invalid for `error` inventories (no repository identity); would relabel inner `Inspect` timeouts as `changed-repository` | FR-008 and plan DD3: compare only `ok` and `partial` inventories; a mismatch nulls inventory and facts; T010 adds the inner-timeout case |
+| 1 | High | Post-inventory identity comparison is invalid for `error` inventories (no repository identity); would relabel inner `Inspect` timeouts as `changed-repository` | FR-008 and plan DD3: compare only `ok` and `partial` inventories; a mismatch nulls inventory and facts; T010 adds the inner-timeout case. **Superseded by round 4 finding M1**: error inventories usually do keep an identity, so the comparison applies whenever the embedded identity status is `ok` |
 | 2 | Medium | data-model still said `inventory-limit` for omission | `output-limit` |
 | 3 | Medium | plan DD6, research Decision 8 and contract Effects still used `HEAD:.gitmodules` | Blob id from `ls-tree` everywhere (research keeps the measured form with a note) |
 | 4 | Medium | Omission of an `error` inventory undefined | Entry status table: keep inherited code, add `output-limit` to `notes`, facts null, counted in `inventories_omitted` |
 | 5 | Medium | SC-001 lacked the jj scope qualification | Added |
 | 6-11 | Low | Duplicate phrase and explicit-only wording; bare repository gate; T016 tags; jj operation-id comparison marked unverified; timeout grammar and message alignment; `notes` format of `inventory-partial` and of ignored paths | Applied |
+
+## Round 4
+
+Independent reviewer: read-only Opus review, revision 1bdcb49f178aea7c9eee9489b8943949944b8bfc, 2026-10-16, with a `stw` binary built by the reviewer in a scratch directory, Git 2.56.0; jj not available. Part A (verification and consistency) verdict: NOT READY (1 high, 3 medium, 7 low); the round-3 resolutions were confirmed applied. Part B is the usefulness assessment at the top of this file. The author applied the Part A resolutions below; they have not been re-reviewed.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | The inherited-limits disclosure named the wrong cause: the Git inventory fails on a 64 KiB `check-attr` output cap, at roughly 150 to 400 tracked files, with no attributes involved (measured: 400 short-path files ok, 250 files with 60-byte paths error, a 442-file tree error) | Spec inherited-limits section, research Decision 12, plan risks, T013 fixture corrected; the round-1 attribution to attribute content is marked wrong |
+| M1 | Medium | "Error inventories carry no repository identity" is false: `git-inventory-failed` embeds a valid identity | FR-008, plan DD3: compare whenever the embedded identity status is `ok`; identity-less errors are skipped |
+| M2 | Medium | The omission paragraph split the inventory/facts table | Paragraph moved below the table |
+| M3 | Medium | `changed-repository` had two behaviours (inventory's own versus raised by `repos`) | Separate table row for the `repos`-side comparison (both null) |
+| 5 | Low | Data-model omission invariant lacked the error-inventory exception; T010 missing FR-008; DD7 summary wording; `inventory-partial` message could be the informational base-candidate limitation; contract Effects missing "validated"; `discovery_not_applicable` definition; quickstart entry path | Applied |
