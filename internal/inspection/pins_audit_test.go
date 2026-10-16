@@ -270,12 +270,16 @@ func TestPinsAuditStartsOnlyAllowlistedPinsCommands(t *testing.T) {
 	var mine []string
 	prefix := strings.Join(pinsIsolation(), " ")
 	for _, l := range gitLog() {
-		if strings.HasPrefix(l, prefix) {
+		switch {
+		case strings.HasPrefix(l, prefix):
 			mine = append(mine, l)
+		case strings.HasPrefix(l, "--no-replace-objects -c core.fsmonitor=false "): // the existing identity detection
+		default:
+			t.Errorf("a Git call bypassed the isolation prefix: %s", l)
 		}
 	}
 	requireAllowlisted(t, mine, "rev-parse --verify --quiet HEAD", "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref)%00 refs/remotes/",
-		"diff-index --cached --no-ext-diff --no-textconv -z <OID> --", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z", "ls-tree HEAD .gitmodules", "symbolic-ref -q <REMOTE-REF>")
+		"diff-index --cached --no-ext-diff --no-textconv -z <OID> --", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z", "ls-tree HEAD .gitmodules", "symbolic-ref -q refs/remotes/<REMOTE>/HEAD")
 }
 
 func TestPinsAuditHostileConfigurationNeverExecutes(t *testing.T) {

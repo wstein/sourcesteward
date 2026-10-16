@@ -139,7 +139,7 @@ func TestPinsTrackingStartsOnlyAllowlistedGitCommands(t *testing.T) {
 	c := newPublishCase(t)
 	gitLog, _ := pinsSentinels(t)
 	c.track(t, c.f.Pin, nil, nil)
-	requireAllowlisted(t, gitLog(), "symbolic-ref -q <REMOTE-REF>", "rev-parse --verify --quiet <REMOTE-REF>")
+	requireAllowlisted(t, gitLog(), "symbolic-ref -q refs/remotes/<REMOTE>/HEAD", "rev-parse --verify --quiet refs/remotes/<REMOTE>/<BRANCH>^{commit}")
 }
 
 func TestPinsTrackingCappedCountsAreFlagged(t *testing.T) {
