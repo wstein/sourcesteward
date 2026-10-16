@@ -41,6 +41,7 @@ jj sandbox or version problems and the error codes of the existing ownership dec
 ## Derivation rules
 
 - When `guards_evaluated` is false no bypass finding is raised.
+- `guards-may-be-bypassed` is also raised for an operation with an unknown-engine configuration hook, under any `runs_hooks`; both bypass codes may appear on one operation. `no-active-guards` is not raised while such a hook exists.
 - One bypass finding per operation, `subject` null, naming the active guards (bounded): `guards-bypassed-on-backend` when `runs_hooks` is `no`, `guards-may-be-bypassed` when it is `unknown`. None when `runs_hooks` is `yes`.
 - `backend-hook-behavior-unverified` once (operation null) when any claim used in the result (including `git-config-hooks` when configuration hooks exist) has a level other than `measured` after the version-coverage rule.
 - `no-active-guards` once when `guards_active` is 0 for both operations.
@@ -121,6 +122,7 @@ One `HooksResult` per invocation, validated by `schemas/v1/hooks.schema.json`. A
   "notes": [
    "Hook contents are never read, so a missing interpreter or a script that disables itself is not detected.",
    "Per-command overrides and the caller environment are not applied or detected.",
+   "The Git version used for jj-push coverage is the Git on the PATH of stw, which may differ from the Git jj spawns.",
    "jj hook behavior is reported at the stated evidence level; the conformance lane establishes it."
   ]
  },
