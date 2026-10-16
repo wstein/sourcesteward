@@ -18,7 +18,12 @@ func TestPinsURLRedactsCredentials(t *testing.T) {
 		{"https://user:secret@example.com/a/b.git", "https://example.com/a/b.git", true},
 		{"https://secrettoken@example.com/x", "https://example.com/x", true},
 		{"https://:secret@example.com", "https://example.com", true},
-		{"https://user:secret@example.com:8443/x?y=1#f", "https://example.com:8443/x?y=1#f", true},
+		{"https://user:secret@example.com:8443/x?y=1#f", "https://example.com:8443/x", true},
+		{"https://example.com/x?private_token=abc123", "https://example.com/x", false},
+		{"https://user:pa#ss@host/x", "https://host/x", true},
+		{"https://user:pa/ss@host/x", "https://host/x", true},
+		{"user:s3cret@host:repo.git", "host:repo.git", true},
+		{"https://example.com:8443/a@b", "https://example.com:8443/a@b", false},
 		{"http://a:b@c:d@host/x", "http://host/x", true},
 		{"HTTPS://U:secret@Example.com/Path", "HTTPS://Example.com/Path", true},
 		{"ssh://git:secret@example.com/x.git", "ssh://example.com/x.git", true},
@@ -33,7 +38,7 @@ func TestPinsURLRedactsCredentials(t *testing.T) {
 		if info.Redacted != tc.want || info.HasCredentials != tc.creds {
 			t.Errorf("%q: redacted %q creds=%v, want %q %v", tc.raw, info.Redacted, info.HasCredentials, tc.want, tc.creds)
 		}
-		if strings.Contains(info.Redacted, "secret") {
+		if strings.Contains(info.Redacted, "secret") || strings.Contains(info.Redacted, "s3cret") || strings.Contains(info.Redacted, "ss@") {
 			t.Errorf("%q leaks a secret: %q", tc.raw, info.Redacted)
 		}
 	}
@@ -41,6 +46,13 @@ func TestPinsURLRedactsCredentials(t *testing.T) {
 	for _, raw := range []string{"ext::sh -c 'echo secret'", "fd::17/secret", "-oProxyCommand=secret", "https://us\ner:secret@host/x", "https://user:secret@host/\xff", "weird://u:secret@host/x"} {
 		if r := pinsClassifyURL(raw).Redacted; strings.Contains(r, "secret") {
 			t.Errorf("%q leaks: %q", raw, r)
+		}
+	}
+	// Surrounding whitespace is invalid, and the credential is still redacted.
+	for _, raw := range []string{" https://u:secret@host/x", "https://u:secret@host/x ", "\thttps://u:secret@host/x\n", "u:secret@host:r.git "} {
+		i := pinsClassifyURL(raw)
+		if i.Valid || strings.Contains(i.Redacted, "secret") || !strings.Contains(i.Problem, "whitespace") {
+			t.Errorf("%q: %+v", raw, i)
 		}
 	}
 	long := "https://user:secret@example.com/" + strings.Repeat("a", 5000)

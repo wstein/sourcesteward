@@ -59,30 +59,72 @@ func splitAuthority(rest string) (userinfo string, hasUser bool, hostport, tail 
 	return "", false, auth, tail
 }
 
-func pinsClassifyURL(raw string) pinsURLInfo {
-	info := pinsURLInfo{Kind: "invalid"}
-	show := func(s string) string { return boundPinsMessage(s) }
-	invalid := func(redacted, problem string) pinsURLInfo {
-		info.Redacted, info.Problem = show(redacted), problem
-		return info
+func allDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
 	}
-	// Redaction first and independent of validity: a malformed URL must not leak a credential either.
-	redacted := raw
+	return s != ""
+}
+
+// pinsRedact removes credentials and the query and fragment from a URL text. It is conservative: a
+// delimiter inside what looks like a password (`user:pa#ss@host`, `user:pa/ss@host`) must not hide the
+// rest of the password, so a colon that is not a port followed later by '@' counts as userinfo.
+func pinsRedact(raw string) (redacted string, credentials bool) {
 	if i := strings.Index(raw, "://"); i > 0 && isSchemeName(raw[:i]) {
 		scheme := strings.ToLower(raw[:i])
-		user, hasUser, hostport, tail := splitAuthority(raw[i+3:])
-		if hasUser && (strings.Contains(user, ":") || scheme == "https" || scheme == "http" || scheme == "ftp" || scheme == "ftps" || pinsAllowedSchemes[scheme] == "") {
-			info.HasCredentials = true
-			redacted = raw[:i+3] + hostport + tail
+		rest := raw[i+3:]
+		end := strings.IndexAny(rest, "/?#")
+		if end < 0 {
+			end = len(rest)
 		}
-	} else if i := strings.Index(raw, "::"); i > 0 && isSchemeName(raw[:i]) {
+		auth := rest[:end]
+		cut := 0
+		if at := strings.LastIndexByte(auth, '@'); at >= 0 {
+			if user := auth[:at]; strings.Contains(user, ":") || pinsAllowedSchemes[scheme] != "ssh" && pinsAllowedSchemes[scheme] != "git" && pinsAllowedSchemes[scheme] != "file" {
+				cut, credentials = at+1, true
+			}
+		} else if c := strings.IndexByte(auth, ':'); c >= 0 && !allDigits(auth[c+1:]) && strings.Contains(rest[end:], "@") {
+			cut, credentials = strings.LastIndexByte(rest, '@')+1, true
+		}
+		rest = rest[cut:]
+		if q := strings.IndexAny(rest, "?#"); q >= 0 {
+			rest = rest[:q]
+		}
+		return raw[:i+3] + rest, credentials
+	}
+	if i := strings.Index(raw, "::"); i > 0 && isSchemeName(raw[:i]) {
 		// transport::address is Git's remote-helper syntax; the address is opaque and may hold anything.
-		redacted = raw[:i] + "::<redacted>"
+		return raw[:i] + "::<redacted>", false
+	}
+	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, ".") {
+		if at := strings.LastIndexByte(raw, '@'); at > 0 && strings.Contains(raw[:at], ":") && !strings.Contains(raw[:at], "/") {
+			return raw[at+1:], true // scp-like with a password: user:secret@host:path
+		}
+	}
+	return raw, false
+}
+
+func pinsClassifyURL(original string) pinsURLInfo {
+	info := pinsURLInfo{Kind: "invalid"}
+	show := func(s string) string { return boundPinsMessage(s) }
+	raw := strings.TrimSpace(original)
+	// Redaction first and independent of validity: a malformed URL must not leak a credential either.
+	redacted, creds := pinsRedact(raw)
+	info.HasCredentials = creds
+	invalid := func(shown, problem string) pinsURLInfo {
+		info.Redacted, info.Problem = show(shown), problem
+		return info
+	}
+	if i := strings.Index(raw, "::"); i > 0 && isSchemeName(raw[:i]) && !strings.Contains(raw, "://") {
 		info.Scheme = strings.ToLower(raw[:i])
 	}
 	switch {
-	case raw == "":
+	case raw == "" && original == "":
 		return invalid("", "the URL is empty")
+	case raw != original:
+		return invalid(redacted, "the URL has leading or trailing whitespace")
 	case len(raw) > pinsURLLimit:
 		return invalid(redacted, "the URL exceeds its length limit")
 	case !utf8.ValidString(raw):
@@ -97,6 +139,8 @@ func pinsClassifyURL(raw string) pinsURLInfo {
 	case info.Scheme != "":
 		return invalid(redacted, "the URL uses Git's remote-helper syntax, which is never run")
 	}
+	// Everything below works on the redacted text, so no comparison form can carry a credential or query.
+	raw = redacted
 	info.Redacted = show(redacted)
 	if i := strings.Index(raw, "://"); i > 0 && isSchemeName(raw[:i]) {
 		scheme := strings.ToLower(raw[:i])
@@ -113,9 +157,6 @@ func pinsClassifyURL(raw string) pinsURLInfo {
 		}
 		info.Kind, info.Valid = "url", true
 		path := tail
-		if q := strings.IndexAny(path, "?#"); q >= 0 {
-			path = path[:q]
-		}
 		host, port := strings.ToLower(hostport), ""
 		if j := strings.LastIndexByte(host, ':'); j >= 0 && !strings.HasSuffix(host, "]") {
 			host, port = host[:j], host[j+1:]
