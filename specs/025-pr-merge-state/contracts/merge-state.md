@@ -32,7 +32,7 @@ May be waiting on:
 Context:
   [observed] strict-required-status-checks: A rule requires the head to be up to date with the base. (sources: branch-protection)
   [observed] auto-merge: Auto-merge is enabled with method rebase. (sources: pull-request)
-  [observed] merge-methods: Merge methods not excluded by readable sources: rebase; rule limit: none. (sources: repository, branch-protection)
+  [observed] merge-methods: Merge methods not excluded by readable sources: rebase; rule limit: none. (sources: repository, branch-rules, branch-protection)
   [observed] linear-history-required: A rule requires linear history. (sources: branch-protection)
   [observed] administrators-included: Rules apply to administrators: true. (sources: branch-protection)
 Sources: pull-request ok; repository ok; base-branch ok; branch-protection ok; branch-rules ok; compare ok; check-runs ok; commit-statuses ok; reviews skipped (not-needed)
@@ -238,6 +238,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
     "rule_limit": [],
     "sources": [
      "repository",
+     "branch-rules",
      "branch-protection"
     ]
    },
@@ -248,6 +249,12 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
       "allow_merge_commit",
       "allow_squash_merge",
       "allow_rebase_merge"
+     ]
+    },
+    {
+     "source": "branch-rules",
+     "fields": [
+      "parameters.allowed_merge_methods"
      ]
     },
     {

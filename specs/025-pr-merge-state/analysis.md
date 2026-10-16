@@ -82,3 +82,24 @@ Independent reviewer: narrow read-only Opus re-check, revision fb46ecd, 2026-10-
 | 11 | Low | Plan and T010 omitted tie-break and `merged` | Added |
 | 12 | Low | Plan summary "no existing contract changes" | Reworded |
 | 13 | Low | US5-2 ignored other review rows | Qualified |
+
+## Round 4
+
+Independent reviewer: read-only Opus review, revision 95b8c4d, 2026-10-16. Verdict: READY (0 critical, 0 high, 3 medium, 9 low). The round-3 resolutions were confirmed. All twelve findings below were resolved in the artifacts (not only here) after the review and committed afterwards; those edits were not re-reviewed.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | Medium | `canceled` inside the failed-resample rule | FR-010 and the data model's two-read rule exclude `canceled`; cancellation at any point is `error` with `hosting-canceled`; T010 case |
+| 2 | Medium | Resample of an unreadable `base-branch` | Requested only when its first read was `ok`; otherwise the first outcome stays; T010 case |
+| 3 | Medium | Guard vs builder responsibilities | Plan decision 3 and T003 limit the guard to a structured parser and coarse classes; ref grammar belongs to the builder (T009 ref-grammar table) |
+| 4 | Low | Degradation rule scope | First sentence scoped to the absorbing-item rows; T007 asserts other rows are still produced |
+| 5 | Low | Resample sentence in the Source field list | Moved into its own two-read rule |
+| 6 | Low | `dependency-unavailable` for classic protection | Removed; reason comes from `branch-protection` (or `base-branch` when it was not `ok`) |
+| 7 | Low | `review-required.detail.required` null | Data model says null when no bound is known; T007 rows |
+| 8 | Low | merge-methods sources and field count | `branch-rules` added to examples; spec uses the three merge-method fields consistently |
+| 9 | Low | `head-behind-base` template with unknown counts | Conditional wording in the data model; T007 |
+| 10 | Low | Stream of the `Error:` line | Named: standard error; standard output also carries it in text mode only |
+| 11 | Low | Null `head.repo` in decoder table | Added to T009 |
+| 12 | Low | US2-3 wording | "a `401` or a non-rate-limit `403`" |
+
+Also recorded (coordinator request): T002 and plan decision 3 state that the body is read under its cap before the status is mapped, so an oversized error body on a `404` is classed `too-large`.

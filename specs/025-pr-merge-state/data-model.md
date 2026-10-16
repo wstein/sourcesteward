@@ -66,7 +66,7 @@ Order: the order of the Items table, then `subject` by bytes, then `detail.app_i
 | `auto-merge-method-not-allowed` | `method`, `excluded_by` (source id) |
 | `administrators-included` | `enabled` (boolean) |
 | `classic-protection-unreadable` | `unreadable` (array of `strict`, `enforce_admins`, `required_reviews`, `conversation_resolution`, `linear_history`, `signatures`, `lock_branch`) |
-| `review-required` | `required` (known lower bound or value, or `null`), `required_complete` (boolean), `approvals`, `changes_requested` (non-negative integers, or `null` when `reviews` was not `ok`), `origin` |
+| `review-required` | `required` (known lower bound or value; `null` when no bound is known), `required_complete` (boolean), `approvals`, `changes_requested` (non-negative integers, or `null` when `reviews` was not `ok`), `origin` |
 | `merge-queue-required` | `merge_method` (string or `null`) |
 | `rulesets-apply` | `rulesets` (at most 50 of `{id, source_type, source, rule_types[]}`; `id` integer, others bounded text) |
 | `rule-not-evaluated` | `rule_type` (bounded text), `origin` |
@@ -83,7 +83,7 @@ Order: the order of the Items table, then `subject` by bytes, then `detail.app_i
 | `required-check` | Required status context {subject}: {state}. |
 | `required-checks-unknown` | The set of required status contexts is not fully known. |
 | `strict-required-status-checks` | A rule requires the head to be up to date with the base. |
-| `head-behind-base` | The head is {behind_by} commits behind the base branch tip; strict rule: {strict}. |
+| `head-behind-base` | The head is {behind_by} commits behind the base branch tip; strict rule: {strict}. (when `behind_by` is null: Whether the head is behind the base branch tip is not known; strict rule: {strict}.) |
 | `auto-merge` | Auto-merge is enabled with method {method}. |
 | `merge-methods` | Merge methods not excluded by readable sources: {allowed}; rule limit: {rule_limit}. |
 | `auto-merge-method-not-allowed` | Auto-merge method {method} is excluded by {excluded_by}. |
@@ -112,11 +112,13 @@ A null parameter renders as `unknown`, in templates and in the fixed lines (a nu
 | Sources | `Sources: {id} {outcome}[ ({reason})]; …` |
 | Completeness | `Complete: {yes or no}. Network reads: {requests_made} of at most {max_requests}.` |
 | Notice | `Notice: ` followed by the constant `notice` |
-| Error result | Header and GitHub lines are omitted when `pull_request` is null; the lines printed are `Error: {diagnostic code}: {message}`, the Sources line, the Completeness line and the Notice |
+| Error result | Header and GitHub lines are omitted when `pull_request` is null; the lines printed are the first diagnostic as `Error: {diagnostic code}: {message}` (on standard error as for the other hosting leaves, and also on standard output only when `--json` is absent so that the text form is self-contained; JSON mode prints the JSON object on standard output and the `Error:` line on standard error), the Sources line, the Completeness line and the Notice |
 
 ## Source
 
-`id` (source id), `outcome` (`ok`, `denied`, `not-found`, `rate-limited`, `failed`, `skipped`), `failure_class` (`unauthorized`, `forbidden`, `not-found`, `rate-limited`, `other-http`, `too-large`, `malformed`, `transport`, `canceled`, or `null`), `requests` (integer, requests made for this source), When a source is read twice (`pull-request`, `base-branch`) and the first read is `ok` but the resample fails with any class, the outcome is `failed`, the reason `source-failed`, the class is kept and the status is `incomplete`. `reason` (reason enum or `null`; non-null for `skipped`, `denied`, `not-found`, `rate-limited` and `failed` outcomes (`failed` uses `source-failed`, a dependency skip uses `dependency-unavailable`), `null` for `ok`). Outcome mapping from the failure class: `unauthorized` and `forbidden` give `denied`; `not-found` gives `not-found`; `rate-limited` gives `rate-limited`; every other class gives `failed`.
+`id` (source id), `outcome` (`ok`, `denied`, `not-found`, `rate-limited`, `failed`, `skipped`), `failure_class` (`unauthorized`, `forbidden`, `not-found`, `rate-limited`, `other-http`, `too-large`, `malformed`, `transport`, `canceled`, or `null`), `requests` (integer, requests made for this source), `reason` (reason enum or `null`; non-null for `skipped`, `denied`, `not-found`, `rate-limited` and `failed` outcomes (`failed` uses `source-failed`, a dependency skip uses `dependency-unavailable`), `null` for `ok`). Outcome mapping from the failure class: `unauthorized` and `forbidden` give `denied`; `not-found` gives `not-found`; `rate-limited` gives `rate-limited`; every other class except `canceled` gives `failed`; `canceled` is never a source outcome, it ends the operation as `error` with `hosting-canceled`.
+
+**Two-read sources (rule)**: when `pull-request` or `base-branch` is read twice and the first read is `ok` but the resample fails with any class except `canceled`, the outcome becomes `failed`, the reason `source-failed`, the class is kept and the status is `incomplete`. The `base-branch` resample is not requested when its first read was not `ok`.
 
 ## Summary
 
