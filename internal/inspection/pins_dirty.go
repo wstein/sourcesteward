@@ -439,7 +439,9 @@ func (s *pinsDirtyScan) call(args []string, each func([]byte, bool) error) (out 
 		if limit.Kind == "deadline" {
 			return out, pinsBudgetReason, nil
 		}
-		return out, limit.Error(), nil
+		// The scan allowance, the record length and the retained budget are bounds of the audit (FR-011),
+		// not of the dirty scan: they reach the caller as pins-limit.
+		return out, "", err
 	}
 	return out, "", err
 }

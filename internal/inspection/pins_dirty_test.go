@@ -4,6 +4,7 @@ package inspection
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -350,5 +351,17 @@ func TestPinsDirtyAFileNamedHEADDoesNotConfuseRevisionArguments(t *testing.T) {
 	rel, err := pinsRelate(run, repo, facts, oid, f.Pin)
 	if err != nil || rel.Relation != "ahead" {
 		t.Fatalf("%+v %v", rel, err)
+	}
+}
+
+// Only the dirty-scan budget (3 seconds, 20,000 entries) yields unknown; an exhausted scan allowance is a
+// bound of the audit (FR-011) and must reach the caller as a limit.
+func TestPinsDirtyScanAllowanceIsALimitNotUnknown(t *testing.T) {
+	c := newDirtyCase(t, newPinsFixture(t))
+	c.run.scan = 50
+	_, err := pinsDirtyState(c.run, c.dirs, c.facts, c.head, pinsDefaultDirtyBudget)
+	var limit *pinsLimitError
+	if !errors.As(err, &limit) || limit.Kind != "scan" {
+		t.Fatalf("%v", err)
 	}
 }
