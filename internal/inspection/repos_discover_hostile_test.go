@@ -367,3 +367,21 @@ func TestReposDiscoverPanicIsRecoveredPerParent(t *testing.T) {
 		t.Fatalf("panicked parents %d, discovered submodules %d: %v", panicked, ok, reposPaths(res))
 	}
 }
+
+// Discovery asks Git for the superproject layout again; if the Git directory it reports is not the one the
+// identity inspection reported, nothing is discovered from it.
+func TestReposDiscoverRefusesASuperprojectWhoseGitDirChanged(t *testing.T) {
+	f := newReposHostileFixture(t)
+	inspect := func(ctx context.Context, p string) Result {
+		r := Inspect(ctx, p)
+		if p == f.super {
+			r.Repository.GitDir = filepath.Join(f.super, ".git", "modules", "s2")
+		}
+		return r
+	}
+	res := reposRunWith([]string{f.super}, inspect, nil)
+	d := res.Entries[0].Discovery
+	if d.Status != "failed" || !strings.Contains(d.Reason, "differs from the inspected identity") || len(res.Entries) != 1 {
+		t.Fatalf("discovery %+v entries %v", d, reposPaths(res))
+	}
+}

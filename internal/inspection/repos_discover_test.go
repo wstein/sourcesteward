@@ -490,3 +490,45 @@ func TestReposDiscoverSortsByPathBytesNotRegistrationOrder(t *testing.T) {
 		t.Fatalf("order %v, want %v", got, want)
 	}
 }
+
+// Two names sharing one path use the lowest name, as the submodule pin audit does; the Git directory must
+// then be the one that name implies, otherwise the submodule is refused rather than guessed.
+func TestReposDiscoverNamesSharingAPathUseTheLowestName(t *testing.T) {
+	reposHermetic(t)
+	for _, tc := range []struct {
+		other  string
+		wantOK bool
+	}{{"zzz", true}, {"aaa", false}} {
+		super := reposSuper(t, filepath.Join(reposTempDir(t), "super"), "s1")
+		git(t, super, "config", "-f", ".gitmodules", "submodule."+tc.other+".path", "s1")
+		git(t, super, "add", ".gitmodules")
+		git(t, super, "commit", "-qm", "second name for s1")
+		e := reposEntry(t, reposRun([]string{super}, true), "s1")
+		if tc.wantOK != (e.Status == "ok") || (!tc.wantOK && (e.Error == nil || e.Error.Code != "path-unsafe")) {
+			t.Errorf("other name %q: %+v %+v", tc.other, e, e.Error)
+		}
+	}
+}
+
+// A registered path may name a directory with many files (not a gitlink), carry a value-less key, or not be
+// valid UTF-8: none is an entry or a failure; each is counted in discovery.ignored and named in the notes.
+func TestReposDiscoverIgnoresDirectoriesValuelessKeysAndNonUTF8Paths(t *testing.T) {
+	reposHermetic(t)
+	repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+	for i := 0; i < 1500; i++ {
+		writeFile(t, filepath.Join(repo, "bigdir", fmt.Sprintf("f%04d", i)), "x\n")
+	}
+	git(t, repo, "add", "bigdir")
+	gitmodules := "[submodule \"big\"]\n\tpath = bigdir\n[submodule \"valueless\"]\n\tpath\n[submodule \"binary\"]\n\tpath = bad\xffname\n"
+	writeFile(t, filepath.Join(repo, ".gitmodules"), gitmodules)
+	git(t, repo, "add", ".gitmodules")
+	git(t, repo, "commit", "-qm", "odd registration")
+	parent := reposRun([]string{repo}, true).Entries[0]
+	if parent.Discovery.Status != "ok" || parent.Discovery.Submodules != 0 || parent.Discovery.Ignored != 2 {
+		t.Fatalf("discovery %+v notes %q", parent.Discovery, parent.Notes)
+	}
+	joined := strings.Join(parent.Notes, "\n")
+	if !strings.Contains(joined, "discovery-ignored: bigdir") || !strings.Contains(joined, `discovery-ignored: bad\xffname`) {
+		t.Fatalf("notes %q", parent.Notes)
+	}
+}

@@ -671,3 +671,17 @@ func TestReposOutputBudgetFailingFinalRecheck(t *testing.T) {
 		t.Fatalf("result must be within 8 MiB, got error: %v", err)
 	}
 }
+
+// The timeout mapping against real repositories: a per-call deadline that fires inside the real identity
+// inspection is an inventory-timeout naming the per-call bound, and the other members are unaffected.
+func TestReposRealRepositoryPerCallDeadlineIsInventoryTimeout(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	repo := reposNewRepo(t, filepath.Join(base, "repo"))
+	setReposTimeouts(t, time.Minute, time.Millisecond)
+	res := Repos(context.Background(), ReposOptions{Paths: []string{repo}})
+	e := res.Entries[0]
+	if e.Status != "error" || e.Error == nil || e.Error.Code != ReposCodeInventoryTimeout || !strings.Contains(e.Error.Message, "per-call deadline of 10 seconds") {
+		t.Fatalf("%+v %+v", e, e.Error)
+	}
+}
