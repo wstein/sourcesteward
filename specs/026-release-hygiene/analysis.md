@@ -86,3 +86,19 @@ Narrow independent review (read-only Opus) of revision e404404: NOT READY, 2 hig
 | 7 | Medium | Code commit need not be reviewed or on `main` | G01 requires an ancestor of `origin/main` (`commit-not-on-main`); merging the branch needs its own authorization |
 | 8 | Medium | Quote duplicated in prose and JSON | The JSON `quote` is canonical |
 | 9-16 | Low | Checklist wording, research fallback bullet, "record header" wording, `--out` vs FR-006, `status: ready`, computed vs recorded gates, existing tag check, SC tags on tasks, quickstart effects wording, old task numbers | Applied |
+
+## Round 5
+
+Independent confirmation of revision adee7d1 (coordinator): READY, 0 critical or high, 6 medium and 10 low findings, all applied afterwards and not re-reviewed.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Medium | Mac mini manual smoke listed as a G04 condition | It is G14 pre-publication evidence (platform table, FR-001) |
+| M2 | Medium | `build` gate preconditions unclear | `build` refuses (exit 1) unless G02, G03 and G04 per requested platform are recorded `pass`; only the notes parts of G05 and G06 may be `not-run` |
+| M3 | Medium | Order: CI evidence and A1 before the build | Quickstart step 0 to 3 and R1 commit them on the release branch before `build` |
+| M4 | Medium | Machine block lacked CI fields | EvidenceEntry with `gate`, `commit`, `workflow`, `job`, `conclusion`; G02 and G03 point at it |
+| M5 | Medium | Decision 6 scope | Verbatim reply "1-5 ja, 6 routine", scoped to `codex/release-*` branches; never authorizes A2, A3, A4, tag, release or merge |
+| M6 | Medium | Record edited after `--final` | Quickstart order completes the record before step 5; the trailing "Record" section removed |
+| L7-L16 | Low | "record header" wording; `origin/main` missing; A3/A4 absent at `--final`; Approval fields; `released`/`abandoned` status; R-numbering and R7 dependency; Status line; macOS-safe comparison and `pins` check | Applied |
+
+Cuts applied on the maintainer's direction (Werner, "im Zweifelsfall aufweichen"): no `make release-plan`; `plan --final` reduced to G01, G09, G11 and the A1 and A2 quote checks, with G02 to G04 evidence, G05 ids, G10, G12 and the recorded G14 values moved to a reviewer checklist in the record contract (so the round 5 suggestion to require `stamp: execution` by script is a checklist item instead); hostile-tree fixtures in T006 collapsed to one test per class; the `smill` paragraph moved from `docs/releasing.md` to a follow-up note in research.md; the reproducibility comparison task removed (G12 is a checklist item). Tasks were renumbered again (T001 to T020, R1 to R7); earlier rounds cite older numbering.
