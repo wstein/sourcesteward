@@ -1,6 +1,6 @@
 # Hosting transport contract
 
-The Spec 020 CLI and published JSON contracts are unchanged. This contract replaces only its API subprocess implementation.
+The Spec 020 CLI and published JSON contracts are unchanged, except authentication refusal now reports `hosting-api-unavailable` with `boundary.network=false` (before any request); HTTP read failures use new messages. This contract replaces only its API subprocess implementation.
 
 ## Selection and authentication
 

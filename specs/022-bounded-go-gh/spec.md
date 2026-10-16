@@ -31,7 +31,7 @@ A caller gets a bounded failure rather than unbounded buffering, unintended dest
 
 ### User Story 3 — Retain Tier 1 and published contracts (Priority: P1)
 
-Git and jj callers receive compatible human/JSON results and unchanged native read-only guarantees.
+Git and jj callers receive compatible human/JSON results (except the authentication-refusal result above) and unchanged native read-only guarantees.
 
 **Independent Test**: Real temporary native Git/jj repositories with fake HTTP transport exercise PR/CI operations, both CLI adapters and offline schemas; process tests cover extension dispatch and authentication refusal.
 
@@ -44,7 +44,7 @@ Git and jj callers receive compatible human/JSON results and unchanged native re
 ## Requirements
 
 - **FR-001**: Pin `github.com/cli/go-gh/v2` v2.16.2 and justify its dependency/license footprint; use `api.NewHTTPClient` with owned status/body handling, not unbounded REST convenience decoding.
-- **FR-002**: Preserve `apiReader`, Options/Result, native Git/jj discovery/effects, command behavior, pagination/resampling and existing published schemas.
+- **FR-002**: Preserve `apiReader`, Options/Result, native Git/jj discovery/effects, command behavior, pagination/resampling and existing published schemas, except authentication refusal now reports `hosting-api-unavailable` with `boundary.network=false` (before any request).
 - **FR-003**: Retain trusted gh executable/version/configuration checks and neutral execution directory. Resolve credentials through context-bound, 16 KiB-capped stdout/stderr for `gh auth token --hostname HOST`; accept only a nonempty visible-ASCII single-line token with an optional trailing newline; never use unbounded SDK auth or subprocess helpers.
 - **FR-004**: Explicitly set trusted Host, APIHost, AuthToken and Transport; disable SDK cache/logging/environment logging. Derive canonical GitHub/Enterprise/ghe.com API routing from validated selected host, never response/repository URLs or API overrides.
 - **FR-005**: Allow only generated fixed PR/check/status GET requests over HTTPS to the selected API origin; refuse redirects and malformed methods/paths/query selections before sending credentials.
