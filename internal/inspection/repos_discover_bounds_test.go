@@ -208,3 +208,43 @@ func TestReposDiscoveryPoolWidthIsFour(t *testing.T) {
 		t.Fatalf("peak discovery concurrency %d, want exactly 4", peak)
 	}
 }
+
+// changed-repository raised after a failed discovery keeps the discovery cause in the notes.
+func TestReposChangedRepositoryDoesNotOverwriteADiscoveryCause(t *testing.T) {
+	reposHermetic(t)
+	repo := reposSuper(t, filepath.Join(reposTempDir(t), "super"), "s1")
+	reposGitShim(t, "case \"$*\" in *ls-tree*) exit 1;; esac")
+	other := "2222222222222222222222222222222222222222"
+	inventory := func(ctx context.Context, p string, o InventoryOptions) InventoryResult {
+		inv := Inventory(ctx, p, o)
+		if inv.Identity.Repository != nil {
+			inv.Identity.Repository.Head.OID = &other
+		}
+		return inv
+	}
+	res := reposWithRunner(context.Background(), ReposOptions{Paths: []string{repo}, Submodules: true}, Inspect, inventory, newReposRunner)
+	e := res.Entries[0]
+	if e.Error == nil || e.Error.Code != ReposCodeChangedRepository || e.Inventory != nil {
+		t.Fatalf("%+v %+v", e.Error, e.Inventory)
+	}
+	if !strings.Contains(strings.Join(e.Notes, "\n"), "discovery-failed: ") {
+		t.Fatalf("discovery cause lost: %q", e.Notes)
+	}
+}
+
+// The per-call bound passed to the operation applies to the identity inspection of discovered and explicit
+// entries alike: a blocked inspection ends at that bound, not at a fixed ten seconds.
+func TestReposIdentityInspectionHonorsTheCallBound(t *testing.T) {
+	p := reposTempDir(t)
+	slow := func(ctx context.Context, path string) Result {
+		<-ctx.Done()
+		return Result{Status: "error", Diagnostics: []Diagnostic{{Code: "canceled", Message: "operation canceled"}}}
+	}
+	start := time.Now()
+	e := reposShort(context.Background(), ReposOptions{Paths: []string{p}}, slow, func(context.Context, string, InventoryOptions) InventoryResult {
+		return InventoryResult{Status: "ok"}
+	}, time.Minute, 100*time.Millisecond).Entries[0]
+	if time.Since(start) > 3*time.Second || e.Error == nil || e.Error.Code != ReposCodeInventoryTimeout {
+		t.Fatalf("%v %+v", time.Since(start), e.Error)
+	}
+}
