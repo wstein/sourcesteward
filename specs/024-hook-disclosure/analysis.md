@@ -1,8 +1,8 @@
 # Pre-implementation analysis
 
-## Scope reduction proposal
+## Scope reduction applied
 
-Source: round 5 part B (independent Opus review of revision 9ce514c), at the coordinator's request. **Not applied.** The maintainer decides.
+Source: round 5 part B (independent Opus review of revision 9ce514c). The maintainer decided to apply it, including the reduced conformance procedure (J0, J2, J2b, J3, J4, J7; deciding sentinels `pre-commit`, `commit-msg`, `pre-push`). Applied in commits 0c7b52d (spec), beb6e14 (plan, research, data model, contract) and the tasks commit that follows; the proposal text below is kept as the record of what was cut. Differences from the proposal: FR numbers were renumbered (FR-001 to FR-016); `effective_scope` replaces the level list; the kept finding set is the one in the spec's findings table (15 codes); tasks were renumbered T001 to T024 and every task keeps its FR, US or SC tags. Rounds 1 to 5 below refer to the pre-reduction numbering. Findings of rounds 1 to 5 about cut scope are closed by removal.
 
 **Recommendation.** Reduce to the smallest feature that answers the motivating question: for a WorkHarbor-shaped repository, which commit and push hooks would Git run from the effective `core.hooksPath`, and do `jj commit` and `jj git push` run them, at which evidence level. Keep the jj claims `jj-commit: no` at `documented` and `jj-push: unknown` at `unverified`, ship with a reduced conformance procedure, and defer hook hygiene (safety, provenance, inventory) to a later spec.
 

@@ -12,15 +12,15 @@
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable and describe observable outcomes
 - [x] All acceptance scenarios and edge cases are defined
-- [x] Scope is clearly bounded: read-only, `commit` and `push`, client-side hooks, no hook content
-- [x] Dependencies and assumptions identified: existing ownership, Git runner and jj sandbox session; Spec 021 for the shared exit status
+- [x] Scope is clearly bounded: read-only, `commit` and `push`, six hook names, no hook content; deferred items listed in the spec
+- [x] Dependencies and assumptions identified: existing ownership, Git runner and jj sandbox session; no dependency on Spec 021
 
 ## Constitution alignment
 
-- [x] I. One contract for humans and agents: text and JSON from one result, no prompts
+- [x] I. One contract for humans and agents: text and JSON from one result, no prompts, exit statuses 0, 1, 2
 - [x] II. Evidence only; every claim carries an evidence level; nothing authorizes an action
 - [x] III. No mutation; hooks never skipped, installed or edited by the command
-- [x] IV. Failing tests first; hostile, concurrent and limit cases; a conformance procedure that measures the jj claim
+- [x] IV. Failing tests first; hostile, concurrent and limit cases; a reduced conformance procedure that measures the jj claim
 - [x] V. Tier 1: Git and jj supported with different, stated semantics; jj behavior marked unverified until measured; GitButler explicitly unsupported
 
 ## Notes
