@@ -152,20 +152,22 @@ func (a *pinsAuditor) audit(abs string, identity Result) error {
 	if err != nil {
 		return err
 	}
+	// The baseline comes first: whatever changes after this point, including during enumeration, shows at the
+	// resample. The HEAD baseline is the object name the registry itself resolved.
+	indexBefore, err := pinsFingerprintIndex(layout)
+	if err != nil {
+		return err
+	}
 	reg, err := pinsEnumerate(a.run, layout)
 	if err != nil {
 		return err
 	}
+	headBefore := ""
+	if reg.HeadCommit != nil {
+		headBefore = *reg.HeadCommit
+	}
 	a.safety = newPinsSafety(layout, a.run)
 	resolved, err := pinsResolveAll(a.safety, reg)
-	if err != nil {
-		return err
-	}
-	headBefore, err := a.superHead(layout)
-	if err != nil {
-		return err
-	}
-	indexBefore, err := pinsFingerprintIndex(layout)
 	if err != nil {
 		return err
 	}
