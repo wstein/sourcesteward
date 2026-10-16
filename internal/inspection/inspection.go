@@ -17,7 +17,13 @@ import (
 
 // Inspect reads native identity only, without modifying repository state.
 func Inspect(ctx context.Context, path string) Result { return inspect(ctx, path, runGit) }
-func inspect(ctx context.Context, path string, run runner) (result Result) {
+func inspect(ctx context.Context, path string, run runner) Result {
+	return inspectOwned(ctx, path, run, false)
+}
+
+// inspectOwned is inspect with an optional guarantee that no jj process can start: when noJJ is set,
+// jj metadata is reported as a change of ownership instead of being inspected through jj.
+func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) (result Result) {
 	defer func() {
 		if ctx.Err() != nil {
 			result = result.fail("canceled", "inspection canceled")
@@ -59,6 +65,9 @@ func inspect(ctx context.Context, path string, run runner) (result Result) {
 		return r.fail(err.Error(), "cannot inspect backend metadata")
 	}
 	jj := len(r.Evidence) > 0
+	if jj && noJJ {
+		return r.fail("changed-repository", "jj metadata appeared while ownership was being decided")
+	}
 	if jj {
 		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 			r.SchemaVersion = 2
