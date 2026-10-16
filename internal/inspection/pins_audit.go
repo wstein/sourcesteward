@@ -222,17 +222,29 @@ func (a *pinsAuditor) resample(l pinsSuperLayout, head string, index pinsIndexFi
 	if fp != index {
 		a.add("pins-state-changed", nil, "the superproject index changed during the audit")
 	}
-	for _, s := range a.r.Submodules {
-		before, ok := a.heads[s.Path]
-		if !ok {
+	for _, ex := range a.dirs {
+		p := ex.path
+		// Revalidate before any Git process reads the submodule again: a replaced or reconfigured
+		// directory must not be trusted for the sample.
+		if err := a.safety.recheck(ex.dirs); err != nil {
+			if _, lim := err.(*pinsLimitError); lim {
+				return err
+			}
+			a.add("pins-state-changed", &p, "the submodule directories or configuration changed during the audit")
 			continue
 		}
-		cur, err := a.currentSubmoduleHead(s.Path)
+		cur, err := a.currentSubmoduleHead(p)
 		if err != nil {
-			return err
+			if a.parent.Err() != nil {
+				return err
+			}
+			if _, ok := a.limitText(err); ok {
+				return err
+			}
+			a.add("pins-state-changed", &p, "the submodule HEAD can no longer be read")
+			continue
 		}
-		if cur != before {
-			p := s.Path
+		if cur != a.heads[p] {
 			a.add("pins-state-changed", &p, "the submodule HEAD changed during the audit")
 		}
 	}

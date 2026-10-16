@@ -122,7 +122,6 @@ func (a *pinsAuditor) evidence(run *pinsRunner, re pinsResolvedEntry, sub *PinsS
 		return nil
 	}
 	repo := pinsGitRepo{GitDir: dirs.GitDir, WorkTree: dirs.WorkTree}
-	a.dirs = append(a.dirs, pinsExamined{path: sub.Path, dirs: dirs})
 	sub.Checkout.State = "initialized"
 	a.anyEval = true
 
@@ -135,6 +134,7 @@ func (a *pinsAuditor) evidence(run *pinsRunner, re pinsResolvedEntry, sub *PinsS
 		return err
 	}
 	sub.Checkout.HeadCommit, sub.Checkout.Branch, sub.Checkout.Detached = head.Commit, head.Branch, head.Detached
+	a.dirs = append(a.dirs, pinsExamined{path: sub.Path, dirs: dirs})
 	if head.Commit != nil {
 		a.heads[sub.Path] = *head.Commit
 	} else {

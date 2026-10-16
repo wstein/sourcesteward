@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -609,5 +610,41 @@ func TestPinsAuditUnreadableEvidenceIsUnknownForThatSubmoduleOnly(t *testing.T) 
 	}
 	if s := subOf(t, r, "second"); s.Publication.Status != "reachable" {
 		t.Fatalf("%+v", s.Publication)
+	}
+}
+
+func TestPinsAuditResampleRechecksTheValidatedDirectories(t *testing.T) {
+	for name, swap := range map[string]func(t *testing.T, f pinsFixture){
+		"git directory replaced": func(t *testing.T, f pinsFixture) {
+			gd := filepath.Join(f.Super, ".git", "modules", "member")
+			bak := gd + ".bak"
+			mustOS(t, os.Rename(gd, bak))
+			out, err := exec.Command("cp", "-a", bak, gd).CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s %v", out, err)
+			}
+		},
+		"configuration rewritten": func(t *testing.T, f pinsFixture) {
+			cfg := filepath.Join(f.Super, ".git", "modules", "member", "config")
+			b, err := os.ReadFile(cfg)
+			mustOS(t, err)
+			mustOS(t, os.WriteFile(cfg, append(b, []byte("[core]\n\tfsmonitor = /bin/true\n")...), 0o600))
+		},
+		"configuration replaced by an include": func(t *testing.T, f pinsFixture) {
+			cfg := filepath.Join(f.Super, ".git", "modules", "member", "config")
+			b, _ := os.ReadFile(cfg)
+			mustOS(t, os.WriteFile(cfg, append(b, []byte("[include]\n\tpath = /tmp/x\n")...), 0o600))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newPinsFixture(t)
+			pinsBeforeResample = func() { swap(t, f) }
+			t.Cleanup(func() { pinsBeforeResample = nil })
+			r := auditOf(t, f.Super)
+			if r.Status != "incomplete" {
+				t.Fatalf("%s %+v", r.Status, r.Findings)
+			}
+			requireFinding(t, r, "pins-state-changed", "error", "member")
+		})
 	}
 }
