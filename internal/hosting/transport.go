@@ -76,19 +76,24 @@ func newGH(ctx context.Context, target, host string) (*ghAPI, func(), error) {
 	if err != nil || inside(executable, target) {
 		return nil, func() {}, errors.New("gh executable must be outside the inspected repository")
 	}
-	for _, key := range []string{"GH_CONFIG_DIR", "XDG_CONFIG_HOME", "HOME"} {
-		configured := os.Getenv(key)
+	configRoot := os.Getenv("GH_CONFIG_DIR")
+	if configRoot == "" {
+		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+			configRoot = filepath.Join(xdg, "gh")
+		} else {
+			configRoot = filepath.Join(os.Getenv("HOME"), ".config", "gh")
+		}
+	}
+	for _, configured := range []string{os.Getenv("HOME"), os.Getenv("XDG_CONFIG_HOME"), configRoot, filepath.Join(configRoot, "hosts.yml"), filepath.Join(configRoot, "config.yml")} {
 		if configured == "" {
 			continue
 		}
-		resolved, err := filepath.EvalSymlinks(configured)
-		if err != nil {
-			resolved, err = filepath.Abs(configured)
-		}
+		resolved, err := resolveConfigurationPath(configured, 0)
 		if err != nil || inside(resolved, target) {
 			return nil, func() {}, errors.New("gh authentication configuration must be outside the inspected repository")
 		}
 	}
+
 	base, err := filepath.EvalSymlinks("/tmp")
 	if err != nil || inside(base, target) {
 		return nil, func() {}, errors.New("cannot establish an external neutral temporary directory")
@@ -147,4 +152,36 @@ func (api *ghAPI) get(ctx context.Context, endpoint string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid fixed API endpoint")
 	}
 	return api.run(ctx, "api", "--hostname", api.host, "--method", "GET", endpoint, "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28")
+}
+
+// Resolve existing symlinks even when a final credential file or directory is absent.
+// EvalSymlinks alone cannot classify a dangling repository-linked config path.
+func resolveConfigurationPath(path string, depth int) (string, error) {
+	if depth > 40 || !filepath.IsAbs(path) {
+		return "", errors.New("invalid configuration path")
+	}
+	path = filepath.Clean(path)
+	parts := strings.Split(strings.TrimPrefix(path, string(filepath.Separator)), string(filepath.Separator))
+	current := string(filepath.Separator)
+	for i, part := range parts {
+		current = filepath.Join(current, part)
+		st, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			return filepath.Join(append([]string{current}, parts[i+1:]...)...), nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if st.Mode()&os.ModeSymlink != 0 {
+			linked, err := os.Readlink(current)
+			if err != nil {
+				return "", err
+			}
+			if !filepath.IsAbs(linked) {
+				linked = filepath.Join(filepath.Dir(current), linked)
+			}
+			return resolveConfigurationPath(filepath.Join(append([]string{linked}, parts[i+1:]...)...), depth+1)
+		}
+	}
+	return current, nil
 }

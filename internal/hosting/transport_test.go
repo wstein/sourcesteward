@@ -126,3 +126,42 @@ func TestGHTransportRejectsRepositoryAuthConfiguration(t *testing.T) {
 		t.Fatal("repository configuration accepted")
 	}
 }
+func TestGHTransportRejectsLinkedCredentialFilesBeforeExecution(t *testing.T) {
+	for _, which := range []string{"default-root", "xdg-root", "hosts.yml", "config.yml", "missing-parent"} {
+		t.Run(which, func(t *testing.T) {
+			d := t.TempDir()
+			target := filepath.Join(d, "target")
+			os.Mkdir(target, 0700)
+			home := filepath.Join(d, "home")
+			os.Mkdir(home, 0700)
+			marker := filepath.Join(d, "executed")
+			exe := filepath.Join(d, "gh")
+			os.WriteFile(exe, []byte("#!/bin/sh\ntouch '"+marker+"'\necho 'gh version 2.102.0'\n"), 0700)
+			t.Setenv("GH_PATH", exe)
+			t.Setenv("HOME", home)
+			t.Setenv("XDG_CONFIG_HOME", "")
+			t.Setenv("GH_CONFIG_DIR", "")
+			switch which {
+			case "default-root":
+				os.Mkdir(filepath.Join(home, ".config"), 0700)
+				os.Symlink(target, filepath.Join(home, ".config", "gh"))
+			case "xdg-root":
+				t.Setenv("XDG_CONFIG_HOME", home)
+				os.Symlink(target, filepath.Join(home, "gh"))
+			case "hosts.yml", "config.yml":
+				t.Setenv("GH_CONFIG_DIR", home)
+				os.Symlink(filepath.Join(target, "secret"), filepath.Join(home, which))
+			case "missing-parent":
+				os.Symlink(target, filepath.Join(home, "linked"))
+				t.Setenv("GH_CONFIG_DIR", filepath.Join(home, "linked", "not-created"))
+			}
+			if _, cleanup, e := newGH(context.Background(), target, "github.com"); e == nil {
+				cleanup()
+				t.Fatal("linked config accepted")
+			}
+			if _, e := os.Stat(marker); !os.IsNotExist(e) {
+				t.Fatal("gh ran before config refusal")
+			}
+		})
+	}
+}
