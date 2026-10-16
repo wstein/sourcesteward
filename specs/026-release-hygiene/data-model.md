@@ -52,7 +52,7 @@ The manifest never claims a stamp verification: nothing in `build` executes the 
 | Approval | `id` (`A1`..`A4` or `waiver:G12`), `date`, `who` (who relayed it), `quote` (verbatim), `commit`, `version`, `platforms`, `tag` (A2/A3) |
 | PrePublication | `platform`, `verify` (`pass`, `fail`, `not-run`), `buildinfo` (`pass`, `fail`), `stamp` (`execution`, `none`), `host`, `evidence_class`, `anchor` |
 
-`plan --final` checks: all evidence and A1 commits equal `code_commit`; every included platform has a passing PrePublication entry whose `anchor` equals `anchor`; `reproducibility` is `match` (equal hashes) or `waived` with a waiver approval; A1 and A2 quotes contain the version, every platform (A1) or the tag (A2), and at least 12 hex characters of the commit.
+`plan --final` requires `status: ready`, and computes G01 and G05 to G11 itself while taking G02 to G04 and G12 to G14 from the recorded entries. It checks: all evidence and A1 commits equal `code_commit`; every included platform has a passing PrePublication entry whose `anchor` equals `anchor`; `reproducibility` is `match` (equal hashes) or `waived` with a waiver approval; A1 and A2 quotes contain the version, every platform (A1) or the tag (A2), and at least 12 hex characters of the commit.
 
 ## Example (abbreviated, `plan --final` report lines)
 

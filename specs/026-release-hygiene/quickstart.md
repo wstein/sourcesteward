@@ -2,13 +2,13 @@
 
 `release.py` needs Python 3.12 or newer. The Mac mini steps below use plain shell commands, not the script.
 
-Dry-run steps change nothing outside the Go build cache. Steps marked **needs approval** build or publish and must not be run without the user's explicit authorization (AGENTS.md).
+Dry-run steps have only the effects listed in the [release contract](contracts/release.md#effects). Steps marked **needs approval** build or publish and must not be run without the user's explicit authorization (AGENTS.md).
 
 Unset `STW_RELEASE_VERSION` in normal shells; only step 2 sets it.
 
 ## 0. Order of a release (each marked step needs the named approval)
 
-1. `plan --commit <sha>`; 2. **A1** authorization, recorded in a copy of `docs/releases/TEMPLATE-readiness.md` at the default record path on branch `codex/release-<version>` (rooted at the code commit); 3. `build`, a second `build` into another `--out` for G12, `verify`; 4. fill the record and notes and commit them on that branch (routine documentation push rules; a push never authorizes A2 or A3); 5. `plan --final`; 6. **A2**: tag at the code commit and push it; 7. **A3**: publish with `gh release create --verify-tag`; 8. verify the downloaded files by hand (steps 4 and 5 below), record the post-release verification, A3 and A4 in a second record commit and merge the branch; 9. **A4** per consumer.
+1. `plan --commit <sha>`; 2. **A1** authorization, recorded in a copy of `docs/releases/TEMPLATE-readiness.md` at the default record path on branch `codex/release-<version>` (rooted at the code commit, which must already be on `main`; the branch or bookmark is created by the maintainer's method); 3. `build`, a second `build` into another `--out` for G12, `verify`; 4. copy the built files by hand to a host of each released platform and verify them there (step 3b), fill the record and notes, record **A2** and commit them on that branch (routine documentation push rules; a push never authorizes A2 or A3); 5. `plan --final`; 6. only if it passes, create the tag at the code commit and push it; 7. record **A3** in a record commit, then publish with `gh release create --verify-tag`; 8. verify the downloaded files by hand (steps 4 and 5 below) and record the post-release verification in a further record commit; merging the branch to `main` needs its own user authorization; 9. record **A4** before each activation.
 
 ## 1. Check readiness without building
 
@@ -39,6 +39,10 @@ python3 scripts/release.py verify dist/release/v0.1.0 --anchor <sha256>
 ```
 
 For G12 run a second `build --out dist/release/v0.1.0-second` (another export and an empty `GOCACHE`; also a build under A1), ideally on a second host, compare the `binary_sha256` values of the two manifests and record whether both builds ran on one host.
+
+## 3b. Pre-publication check on each platform (manual, `local-recorded`)
+
+Copy `dist/release/v0.1.0/` by hand (for example `scp`) to a host of each released platform, then run the shell commands of step 4 on those built files. Record host, `uname -sm`, the anchor you compared and the outcome as the platform's pre-publication verification. This evidence is never `ci`.
 
 ## 4. Verify downloaded files on the Mac mini (darwin arm64, manual evidence)
 

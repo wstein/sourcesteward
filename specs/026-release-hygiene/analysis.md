@@ -66,3 +66,23 @@ Independent reviewer: read-only Opus confirmation review, revision b2bd3cb, 2026
 | 9 | Medium | Hostile tree entries and bounds | `export-unsafe` for `..`, `.git`, absolute, duplicate or case-colliding names, 20,000 entries, 256 MiB; `O_EXCL` |
 | 10 | Medium | `stamp_verified` in an anchored manifest cannot be set | Removed from the manifest; `stamp` in the verify result |
 | Lows | Low | Status line, R5 pointer, `wrote` wording, G08 under final, T002 wording, misspelled-variable and `modules-unverified`/`compile-failed` fixtures (T014a), quote escaping, quickstart record path | Applied. Not changed: S4 creates its repository with the smoke environment, which the verify design already limits to an allowlist; add `GIT_CONFIG_*` isolation during implementation |
+
+## Round 4 and narrow review of the cuts
+
+Round 4 (coordinator, confirmation of revision 76e9449): READY, 0 critical or high, 5 medium and 12 low findings. The medium findings were: undefined pre-publication evidence for `plan --final`; A4 not checked by any mode; no release branch rule; constitution IV conformance wording; open questions and the dry-run classification. Resolved by the pre-publication verification record section, A3 and A4 as reviewer-checked approvals, branch `codex/release-<version>`, FR-015 and FR-005, and the spec's Resolved decisions and Open questions. The coordinator also directed cuts (no `verify --rebuild`, no `--complete`, no JSON or `tool_schema` or line bound for `release.py`, no spec-table parser, the `smill` table reduced to one paragraph, a JSON machine block in the record, no export entry or size bounds), and recorded decisions by the maintainer on 2026-10-16.
+
+Superseded by these cuts: round 1 `stamp_verified` in the manifest and `verify --rebuild`; round 3 `plan --complete`, the 20,000-entry and 256 MiB export bounds, and the PlanResult JSON. Task numbers cited in rounds 1 to 3 (T011a, T014a, T015, T018, T022) refer to the earlier numbering.
+
+Narrow independent review (read-only Opus) of revision e404404: NOT READY, 2 high, 6 medium, 8 low. All were resolved in the following commit and **not re-reviewed**.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | `plan --final` needed A2, which was obtained only after it | A2 is recorded in a record commit before `plan --final`; the tag is created only after it passes (approvals, quickstart, R2, R3) |
+| 2 | High | A3 recorded after publication | A3 and A4 are recorded before their steps; only post-release verification is after the fact (G13, record contract, R4 to R6) |
+| 3 | Medium | Round 4 not recorded | This section |
+| 4 | Medium | Branch rule fails with a detached `HEAD` in colocated jj | G11 checks `refs/heads/codex/release-<version>` resolves to `HEAD`; creation method left to the maintainer |
+| 5 | Medium | No pre-publication procedure for linux hosts | Quickstart step 3b and R2: built files copied by hand, `local-recorded` |
+| 6 | Medium | T023 inside WI6 conflicted with G11 | T023 limited to `implemented`; R7 marks `verified` on `main` after R5 |
+| 7 | Medium | Code commit need not be reviewed or on `main` | G01 requires an ancestor of `origin/main` (`commit-not-on-main`); merging the branch needs its own authorization |
+| 8 | Medium | Quote duplicated in prose and JSON | The JSON `quote` is canonical |
+| 9-16 | Low | Checklist wording, research fallback bullet, "record header" wording, `--out` vs FR-006, `status: ready`, computed vs recorded gates, existing tag check, SC tags on tasks, quickstart effects wording, old task numbers | Applied |
