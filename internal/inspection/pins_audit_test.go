@@ -725,9 +725,15 @@ func TestPinsAuditSuperprojectNonUTF8BranchIsAWholeResultFailureWithoutIdentity(
 // identity no longer describes the pins and the result must not claim it does.
 func TestPinsAuditDetectsHeadMovingBetweenIdentityAndEnumeration(t *testing.T) {
 	for name, move := range map[string]func(t *testing.T, f pinsFixture){
-		"new commit":    func(t *testing.T, f pinsFixture) { git(t, f.Super, "commit", "--allow-empty", "-qm", "moved") },
-		"other branch":  func(t *testing.T, f pinsFixture) { git(t, f.Super, "checkout", "-q", "-b", "other") },
-		"detached HEAD": func(t *testing.T, f pinsFixture) { git(t, f.Super, "checkout", "-q", "--detach") },
+		"new commit": func(t *testing.T, f pinsFixture) { git(t, f.Super, "commit", "--allow-empty", "-qm", "moved") },
+		// These two move only HEAD: a checkout would also rewrite the index and be caught by its fingerprint.
+		"other branch": func(t *testing.T, f pinsFixture) {
+			git(t, f.Super, "branch", "other")
+			git(t, f.Super, "symbolic-ref", "HEAD", "refs/heads/other")
+		},
+		"detached HEAD": func(t *testing.T, f pinsFixture) {
+			git(t, f.Super, "update-ref", "--no-deref", "HEAD", gitIn(t, f.Super, "rev-parse", "HEAD"))
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newPinsFixture(t)
