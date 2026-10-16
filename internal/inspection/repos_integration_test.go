@@ -3,6 +3,7 @@ package inspection
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,22 +110,34 @@ func TestReposIntegrationRealRepositories(t *testing.T) {
 		Submodules: true,
 	})
 
-	if len(res.Entries) < len(paths) {
-		t.Fatalf("expected at least %d entries, got %d", len(paths), len(res.Entries))
+	if len(res.Entries) != len(paths)+1 {
+		t.Fatalf("expected %d entries (the explicit paths and the discovered submodule), got %d: %v", len(paths)+1, len(res.Entries), reposPaths(res))
 	}
 
-	// Verify each embedded inventory matches standalone Inventory call
+	// Every embedded inventory equals the single-repository inventory for the same path (SC-001). The
+	// comparison is on the marshalled documents, not on a few fields.
 	for _, entry := range res.Entries {
 		if entry.Inventory == nil {
+			t.Errorf("entry %q has no inventory", entry.Path)
 			continue
 		}
-		expectedInv := Inventory(context.Background(), *entry.ResolvedPath, InventoryOptions{})
-		if entry.Inventory.Status != expectedInv.Status {
-			t.Errorf("entry %q inventory status mismatch: embedded=%s, standalone=%s", entry.Path, entry.Inventory.Status, expectedInv.Status)
+		want, _ := json.Marshal(Inventory(context.Background(), *entry.ResolvedPath, InventoryOptions{}))
+		got, _ := json.Marshal(entry.Inventory)
+		if string(got) != string(want) {
+			t.Errorf("entry %q: embedded inventory differs from Inventory\n got:  %.300s\n want: %.300s", entry.Path, got, want)
 		}
-		if entry.Inventory.Backend != expectedInv.Backend {
-			t.Errorf("entry %q backend mismatch: %s vs %s", entry.Path, entry.Inventory.Backend, expectedInv.Backend)
-		}
+	}
+
+	// The discovered submodule is an entry after all explicit ones, with the caveat in its notes.
+	sub := res.Entries[len(paths)]
+	if sub.Path != "sub" || sub.Origin != "submodule" || sub.Parent == nil || *sub.Parent != 5 || sub.Status != "ok" || sub.Backend != "git" || sub.Error != nil {
+		t.Errorf("discovered submodule entry: %+v %+v", sub, sub.Error)
+	}
+	if sub.Facts == nil || sub.Facts.Dirty.Value != "unknown" || len(sub.Notes) != 1 || !strings.Contains(sub.Notes[0], "dirty is unknown") {
+		t.Errorf("submodule facts/notes: %+v %q", sub.Facts, sub.Notes)
+	}
+	if res.Entries[5].Discovery.Status != "ok" || res.Entries[5].Discovery.Submodules != 1 {
+		t.Errorf("parent discovery: %+v", res.Entries[5].Discovery)
 	}
 
 	// Specific member assertions:
@@ -161,16 +174,27 @@ func TestReposIntegrationRealRepositories(t *testing.T) {
 	if res.Entries[6].Status != "error" {
 		t.Errorf("r6Attr expected error, got %s", res.Entries[6].Status)
 	}
-	if res.Entries[6].Error == nil || !strings.Contains(res.Entries[6].Error.Code, "git-inventory-failed") {
-		t.Errorf("r6Attr expected git-inventory-failed, got %+v", res.Entries[6].Error)
+	// Inherited limit (disclosed in the contract): one check-attr call over all tracked paths is capped.
+	if e := res.Entries[6].Error; e == nil || e.Code != "git-inventory-failed" || e.Message != "cannot safely observe content attributes" {
+		t.Errorf("r6Attr expected the inherited check-attr failure, got %+v", e)
+	}
+	if res.Entries[6].Inventory == nil || res.Entries[6].Inventory.Status != "error" || res.Entries[6].Facts != nil {
+		t.Errorf("r6Attr: an error inventory is embedded as returned, with no facts: %+v", res.Entries[6])
 	}
 
 	// r7Limit (> 1024 files) -> error (git-inventory-failed or inventory-limit)
 	if res.Entries[7].Status != "error" {
 		t.Errorf("r7Limit expected error, got %s", res.Entries[7].Status)
 	}
-	if res.Entries[7].Error == nil || (!strings.Contains(res.Entries[7].Error.Code, "git-inventory-failed") && !strings.Contains(res.Entries[7].Error.Code, "inventory-limit")) {
-		t.Errorf("r7Limit expected git-inventory-failed or inventory-limit, got %+v", res.Entries[7].Error)
+	// Inherited limit: more than 1,024 aggregate records.
+	if e := res.Entries[7].Error; e == nil || e.Code != "git-inventory-failed" || e.Message != "inventory record limit exceeded" {
+		t.Errorf("r7Limit expected the inherited record limit, got %+v", e)
+	}
+	if e := res.Entries[1].Error; e == nil || e.Code != "inventory-partial" || e.Message != "one or more registered workspace paths are unavailable" {
+		t.Errorf("r2 expected the stale-worktree cause, got %+v", e)
+	}
+	if e := res.Entries[5].Error; e == nil || e.Code != "inventory-partial" || e.Message != "submodule disk state excluded to avoid recursive helpers" {
+		t.Errorf("r5Super expected the gitlink cause, got %+v", e)
 	}
 
 	// Overall status must be partial (qualified observations, some ok, some partial, some error)
