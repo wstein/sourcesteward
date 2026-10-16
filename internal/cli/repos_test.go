@@ -42,13 +42,13 @@ func reposCLIResult(status string) inspection.ReposResult {
 
 func TestReposUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
 	for _, args := range [][]string{
-		{},                           // 0 paths
-		{"--bogus"},                  // unknown flag
-		{"--json=maybe"},             // invalid flag syntax
-		{"--submodules=maybe"},       // invalid flag syntax
-		{"a\x00b"},                   // null byte
-		{""},                         // empty path
-		{"\xff"},                     // invalid UTF-8
+		{},                     // 0 paths
+		{"--bogus"},            // unknown flag
+		{"--json=maybe"},       // invalid flag syntax
+		{"--submodules=maybe"}, // invalid flag syntax
+		{"a\x00b"},             // null byte
+		{""},                   // empty path
+		{"\xff"},               // invalid UTF-8
 	} {
 		called := false
 		command := reposCommandWith(func(context.Context, inspection.ReposOptions) inspection.ReposResult {
