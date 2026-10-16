@@ -702,3 +702,16 @@ func TestPinsAuditFindingMessagesAreAccurate(t *testing.T) {
 		t.Fatalf("%+v", g)
 	}
 }
+
+// Recorded exception (spec.md edge cases): the shared identity rejects a non-UTF-8 superproject branch.
+func TestPinsAuditSuperprojectNonUTF8BranchIsAWholeResultFailureWithoutIdentity(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Super, "checkout", "-q", "-b", "br\xff")
+	r := auditOf(t, f.Super)
+	if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || r.Identity != nil {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := json.Marshal(r); err != nil {
+		t.Fatal(err)
+	}
+}
