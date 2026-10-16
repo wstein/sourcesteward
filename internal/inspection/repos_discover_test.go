@@ -472,3 +472,21 @@ func TestReposDiscoverInPlaceGitDirectoryIsAccepted(t *testing.T) {
 		t.Fatalf("in-place Git directory: %+v %+v", e, e.Error)
 	}
 }
+
+// Candidates are sorted by path bytes, whatever order the names and paths come in (names reversed against
+// paths, more than one map bucket).
+func TestReposDiscoverSortsByPathBytesNotRegistrationOrder(t *testing.T) {
+	reposHermetic(t)
+	repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+	var np [][2]string
+	var want []string
+	for i := 0; i < 14; i++ {
+		np = append(np, [2]string{fmt.Sprintf("n%02d", i), fmt.Sprintf("p%02d", 13-i)})
+		want = append(want, fmt.Sprintf("p%02d", i))
+	}
+	reposGitlinks(t, repo, np...)
+	res := reposRun([]string{repo}, true)
+	if got := reposPaths(res)[1:]; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("order %v, want %v", got, want)
+	}
+}

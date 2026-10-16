@@ -270,3 +270,100 @@ func TestReposRunnerUsesTheIsolationAndPerCallBound(t *testing.T) {
 		t.Fatalf("discovery isolation incomplete: %s", got)
 	}
 }
+
+// After the identity inspection, the checkout and the Git directory Git reported must be the validated ones;
+// anything else is path-unsafe and runs no inventory (FR-008).
+func TestReposDiscoverPostInspectionChecks(t *testing.T) {
+	for name, alter := range map[string]func(r *Result, f reposHostileFixture){
+		"another worktree": func(r *Result, f reposHostileFixture) { w := f.s2; r.Repository.Worktree = &w },
+		"no worktree":      func(r *Result, f reposHostileFixture) { r.Repository.Worktree = nil },
+		"another git dir": func(r *Result, f reposHostileFixture) {
+			r.Repository.GitDir = filepath.Join(f.super, ".git", "modules", "s2")
+		},
+		"not Git": func(r *Result, f reposHostileFixture) { r.Backend = "jj"; r.Repository = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newReposHostileFixture(t)
+			inspect := func(ctx context.Context, p string) Result {
+				r := Inspect(ctx, p)
+				if p == f.s1 {
+					alter(&r, f)
+				}
+				return r
+			}
+			inventoried := false
+			var mu sync.Mutex
+			inventory := func(ctx context.Context, p string, o InventoryOptions) InventoryResult {
+				if p == f.s1 {
+					mu.Lock()
+					inventoried = true
+					mu.Unlock()
+				}
+				return Inventory(ctx, p, o)
+			}
+			res := reposWithRunner(context.Background(), ReposOptions{Paths: []string{f.super}, Submodules: true}, inspect, inventory, newReposRunner)
+			e := reposEntry(t, res, "s1")
+			if e.Status != "error" || e.Error == nil || e.Error.Code != "path-unsafe" || e.Inventory != nil || inventoried {
+				t.Fatalf("%+v %+v inventoried=%v", e, e.Error, inventoried)
+			}
+		})
+	}
+}
+
+// A submodule whose directories are replaced between validation and the end of its identity inspection is
+// refused (the safety layer's recheck compares device and inode).
+func TestReposDiscoverRecheckDetectsReplacementDuringInspection(t *testing.T) {
+	f := newReposHostileFixture(t)
+	inspect := func(ctx context.Context, p string) Result {
+		r := Inspect(ctx, p)
+		if p == f.s1 {
+			gd := filepath.Join(f.super, ".git", "modules", "s1")
+			if err := os.Rename(gd, gd+".old"); err != nil {
+				t.Error(err)
+			}
+			if err := os.CopyFS(gd, os.DirFS(gd+".old")); err != nil { // same content, new inode
+				t.Error(err)
+			}
+		}
+		return r
+	}
+	res := reposWithRunner(context.Background(), ReposOptions{Paths: []string{f.super}, Submodules: true}, inspect, Inventory, newReposRunner)
+	e := reposEntry(t, res, "s1")
+	if e.Status != "error" || e.Error == nil || e.Error.Code != "path-unsafe" || !strings.Contains(e.Error.Message, "changed") && !strings.Contains(e.Error.Message, "replaced") {
+		t.Fatalf("%+v %+v", e, e.Error)
+	}
+}
+
+// A panic while discovering one parent is recovered into that parent (member-failed, partial, inventory
+// kept); the other parents are discovered normally.
+func TestReposDiscoverPanicIsRecoveredPerParent(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	boom := reposSuper(t, filepath.Join(base, "boom"), "s1")
+	fine := reposSuper(t, filepath.Join(base, "fine"), "s1")
+	// The runner factory does not know which parent it serves; the first call panics.
+	var calls int
+	var mu sync.Mutex
+	res := reposRunWith([]string{boom, fine}, nil, func(ctx context.Context) *pinsRunner {
+		mu.Lock()
+		calls++
+		first := calls == 1
+		mu.Unlock()
+		if first {
+			panic("boom")
+		}
+		return newReposRunner(ctx)
+	})
+	var panicked, ok int
+	for _, e := range res.Entries {
+		if e.Origin == "explicit" && e.Error != nil && e.Error.Code == "member-failed" && e.Status == "partial" && e.Discovery.Status == "failed" && e.Inventory != nil {
+			panicked++
+		}
+		if e.Origin == "submodule" && e.Status == "ok" {
+			ok++
+		}
+	}
+	if panicked != 1 || ok != 1 {
+		t.Fatalf("panicked parents %d, discovered submodules %d: %v", panicked, ok, reposPaths(res))
+	}
+}
