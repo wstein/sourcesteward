@@ -20,13 +20,13 @@ stw pins --json
 stw pins --strict; echo "status $?"
 ```
 
-Expected: `member` reports a pin whose commit is `unreachable`, the finding `pin_unpublished` at error severity, status 0 without `--strict` and 3 with it. Push the submodule commit (`git -C member push origin HEAD:main`), run again, and publication becomes `reachable` only after the remote-tracking ref has been updated by the push; `stw pins` never fetches.
+Expected: `member` reports a pin whose commit is `unreachable`, the finding `pin-unpublished` at error severity, status 0 without `--strict` and 3 with it. Push the submodule commit (`git -C member push origin HEAD:main`), run again, and publication becomes `reachable` only after the remote-tracking ref has been updated by the push; `stw pins` never fetches.
 
 ## Other cases
 
-- Stage a different pin (`git -C member checkout <other>` then `git add member`) and edit nothing else: `staged_pin_differs`.
-- Leave a submodule uninitialized (`git clone` without `--recurse-submodules`): `submodule_uninitialized`, publication `unknown`.
-- Make a jj colocated checkout of the superproject: `stw pins` refuses with `backend_unsupported`.
+- Stage a different pin (`git -C member checkout <other>` then `git add member`) and edit nothing else: `staged-pin-differs`.
+- Leave a submodule uninitialized (`git clone` without `--recurse-submodules`): `submodule-uninitialized`, publication `unknown`.
+- Make a jj colocated checkout of the superproject: `stw pins` refuses with `unsupported-backend`.
 
 ## What the output does not prove
 
