@@ -1,6 +1,6 @@
 # Contract: release readiness record and release notes
 
-Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`. Both are checked by `python3 scripts/check-docs.py` for links. A template lives at `docs/releases/TEMPLATE-readiness.md` (WI6). Entries use the vocabulary of the spec; the record states what happened, not what is planned, except in the `pending` placeholders that `plan --final` rejects.
+Files: `docs/releases/<version>-readiness.md` and `docs/releases/<version>.md`. Both are checked by `python3 scripts/check-docs.py` for links (when committed) and are read by `release.py` from the checkout, not from the export of the code commit. A template lives at `docs/releases/TEMPLATE-readiness.md` (WI6). Entries use the vocabulary of the spec; the record states what happened, not what is planned, except in the `pending` placeholders that `plan --final` rejects.
 
 ## Readiness record sections (in order)
 

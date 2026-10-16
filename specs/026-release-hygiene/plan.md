@@ -57,12 +57,10 @@ scripts/backend-releases.json        # linux-arm64 jj artifacts (WI5)
 - **DD8 No release workflow.** No `release.yml`. A later spec may add a `workflow_dispatch`-only workflow whose run still needs A1. Scan test (SC-003) enforces the absence in the meantime.
 - **DD9 Notices closure check.** `plan` computes `go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}}{{end}}{{end}}' ./cmd/stw` for each shipped target (16 modules on each of the three targets, measured; Windows would add `mousetrap`) and requires each module in the union in `third_party/README.md`, plus a row for the Go standard library and runtime (BSD-3, `licenses/BSD-3-Go.txt` exists). The README title is generalized from "Hosting SDK" to the full binary closure in WI3.
 - **DD10 Hidden commands.** One list, `hidden_commands` in `scripts/release-gates.json` (today `["pins"]`). A Go test in `internal/cli` asserts that the list equals the set of commands with `Hidden == true` in the real root and that neither the root help nor any listed help contains them. `plan` scans `docs/`, `README.md`, `llms.txt` and the release notes for `stw <name>` of each listed name. Unhiding a command (Spec 021 WI5) updates the list in the same change, which is the visible review point.
-- **DD12 Code commit and record commit.** The build exports the A1 code commit with `git archive`; the record and notes are committed afterwards. This removes the circularity between a record naming a commit and the commit containing the record, and makes ignored or untracked files irrelevant. The tag points at the code commit.
-- **DD11 Platform evidence.** The readiness record's platform table is the only place where evidence classes are declared per release; `plan --record` reads it.
+- **DD11 Platform evidence.** The readiness record's platform table is the only place where evidence classes are declared per release; `plan` reads it whenever the record exists.
+- **DD12 Code commit and record commit.** The build exports the exact tree of the A1 code commit from tree objects (`git archive` applies `.git/config` filters and `info/attributes`, measured by the reviewer, so it is not used); the record and notes are committed afterwards, and `plan --final` checks that the record commit descends from the code commit and touches only `docs/releases/`. This removes the circularity between a record naming a commit and the commit containing the record, and makes ignored or untracked files irrelevant. The tag points at the code commit.
 
 ## Risks
-
-- **Approval check is advisory** (DD7); **a record cannot name its own commit** (DD12).
 
 - **Reproducibility is unverified** until an approved double build (G12). Go documents that `-trimpath`, a fixed toolchain and cgo off give reproducible binaries; the claim is not measured here. Mitigation: waivable gate, honest notes.
 - **Archive bytes** can differ across hosts (compressor). Mitigation: claim binaries only.

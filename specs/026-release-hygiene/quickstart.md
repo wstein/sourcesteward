@@ -4,11 +4,15 @@ Dry-run steps change nothing outside the Go build cache. Steps marked **needs ap
 
 Unset `STW_RELEASE_VERSION` in normal shells; only step 2 sets it.
 
+## 0. Order of a release (each marked step needs the named approval)
+
+1. `plan` on the code commit; 2. A1 authorization, recorded in a copy of `docs/releases/TEMPLATE-readiness.md` (uncommitted) ; 3. `build`; `verify`; G12; 4. commit the record and notes as the record commit (a local commit; pushing it is a routine repository push of documentation, but the repository's own rules for pushes apply and a push never authorizes A2 or A3); 5. `plan --final`; 6. A2: tag at the code commit and push it; 7. A3: publish; 8. verify the downloaded files; 9. A4 per consumer.
+
 ## 1. Check readiness without building
 
 ```sh
 make check
-python3 scripts/release.py plan --version v0.1.0 --commit "$(git rev-parse HEAD)"
+python3 scripts/release.py plan --version v0.1.0 --commit "$(git rev-parse HEAD)"   # before a record exists; with a record omit --commit
 python3 scripts/release.py plan --version v0.1.0 --json | python3 -m json.tool
 ```
 
@@ -58,6 +62,14 @@ Record: the output of `uname -sm` and `sw_vers`, whether macOS quarantined or bl
 
 Same commands as step 4 with `sha256sum -c SHA256SUMS --ignore-missing` and the `linux_arm64` archive.
 
-## 6. Record
+## 6. Final check
+
+```sh
+python3 scripts/release.py plan --version v0.1.0 --final
+```
+
+The record commit must descend from the code commit and change only `docs/releases/`.
+
+## 7. Record
 
 Fill `docs/releases/v0.1.0-readiness.md`: host, versions, outcomes, and everything not run. Evidence from a local host is `local-recorded` or `manual`, never `ci`.
