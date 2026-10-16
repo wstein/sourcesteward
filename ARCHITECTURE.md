@@ -4,14 +4,15 @@ SourceSteward is a Go CLI with a static project site. Its backend-neutral execut
 
 ## Current boundaries
 ```text
-cmd/stw → internal/cli → internal/inspection → fixed Git built-ins | sandboxed native jj + read-only metadata
+cmd/stw | cmd/gh-jj → internal/cli → internal/inspection → fixed Git built-ins | sandboxed native jj + read-only metadata
                        → internal/workspace → fixed native Git/jj creation + private state journal
+                       → internal/hosting → native remote evidence + bounded gh API GET reads
                        → Cobra + standard library
 scripts/       → source/documentation checks and Pages packaging
 specs/         → acceptance contracts, plans, tasks and evidence pointers
 ```
 cmd owns process cancellation and exit status. internal/cli owns parsing, rendering and the
-single diagnostic boundary. It imports only the reviewed inspection and workspace operations, not os, os/exec, filesystem or network adapters.
+single diagnostic boundary. It imports only the reviewed inspection, workspace and hosting operations, not os, os/exec, filesystem or network adapters.
 internal/inspection owns local filesystem discovery, typed results, bounded Git plumbing and native jj execution.
 internal/workspace owns the reviewed mutation boundary: secure plan/task records,
 pre-action recovery journals, stale checks and fixed native adapters. CLI does not access
@@ -41,3 +42,5 @@ implementation work, and [progress](docs/progress.md) records handoffs. [Harness
 defines the feedback loop. Website packaging stages an explicit public-guide allowlist, generated Cobra reference,
 local assets and versioned schemas through repo-owned Hugo templates. Internal knowledge
 files stay outside the artifact; revision.txt identifies the exact checked source SHA. No release automation or agent scheduler is installed.
+
+The optional gh-jj executable delegates through the same CLI/operation boundary as stw. Hosting repository resolution is local; explicit PR/CI inspection adds bounded GitHub reads through caller-owned gh authentication. See [hosting](docs/hosting.md). No Rust library/FFI, API writes or automatic extension installation is introduced.

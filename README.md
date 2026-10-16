@@ -21,6 +21,7 @@ No implementation code is copied from those projects.
 
 **Current scope:** help/version, bounded read-only Git/jj identity inspection and qualified workspace/state/reference inventory, reviewable isolated native Git/jj task workspace creation, versioned JSON schemas, specifications, source CI and the project site.
 Evidence-based local reference tidy planning and explicitly authorized cleanup are implemented; owned task retirement is implemented through separate reviewed plans and explicit authorization; general recovery and native GitButler integration remain planned. See [tidy](docs/tidy.md) for proof and retention limits. See [task workspaces](docs/workspaces.md) for creation, handoff and retirement preparation. Inventory exposes explicit native capability limits; see [inventory](docs/inventory.md).
+Shared read-only GitHub repository/PR/CI inspection is available through `stw hosting` and the optional `gh jj` entry point; see [GitHub inspection](docs/hosting.md).
 Spec 008 implements native jj inspection; final cross-platform acceptance is tracked in its [verification record](specs/008-jj-inspection/verification.md).
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
