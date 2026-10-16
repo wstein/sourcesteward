@@ -648,3 +648,30 @@ func TestPinsAuditResampleRechecksTheValidatedDirectories(t *testing.T) {
 		})
 	}
 }
+
+func TestPinsAuditResultBeyondOneMiBIsBoundedAndIncomplete(t *testing.T) {
+	dir, oid := newBareSuper(t)
+	gitlink(t, dir, oid, longPaths(256, 7)...) // about 1.4 KB each: the result is larger than the Git output
+	git(t, dir, "commit", "-qm", "long")
+	r := auditOf(t, dir)
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != "incomplete" || r.Boundary.Complete || len(raw) > 1<<20 || len(r.Submodules) == 0 || len(r.Submodules) >= 256 || r.Identity == nil {
+		t.Fatalf("%s %d bytes, %d submodules", r.Status, len(raw), len(r.Submodules))
+	}
+	requireFinding(t, r, "pins-limit", "error", "")
+	if r.Summary.Submodules != len(r.Submodules) {
+		t.Fatalf("%+v", r.Summary)
+	}
+}
+
+func TestPinsAuditResultWithinOneMiBIsUntouched(t *testing.T) {
+	dir, oid := newBareSuper(t)
+	gitlink(t, dir, oid, longPaths(100, 7)...)
+	git(t, dir, "commit", "-qm", "long")
+	if r := auditOf(t, dir); r.Status != "ok" || len(r.Submodules) != 100 {
+		t.Fatalf("%s %d", r.Status, len(r.Submodules))
+	}
+}

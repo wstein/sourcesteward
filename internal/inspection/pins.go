@@ -116,5 +116,6 @@ func pins(ctx context.Context, options PinsOptions, run runner) PinsResult {
 		}
 		return fail("cannot audit the submodule pins: " + err.Error())
 	}
+	r.boundOutput()
 	return finish()
 }
