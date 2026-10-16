@@ -103,6 +103,9 @@ func inspect(parent context.Context, path string, o Options, d dependencies) (r 
 	}
 	r.Boundary.Network = true
 	target := remote.Identity.InputPath
+	if remote.Identity.Repository != nil && remote.Identity.Repository.Bare {
+		target = remote.Identity.Repository.GitDir
+	}
 	if remote.Identity.Repository != nil && remote.Identity.Repository.Worktree != nil {
 		target = *remote.Identity.Repository.Worktree
 	}

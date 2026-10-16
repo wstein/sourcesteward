@@ -48,18 +48,22 @@ func ghEnvironment() []string {
 			continue
 		}
 		switch upper {
-		case "GH_REPO", "GH_HOST", "GH_DEBUG", "GH_PAGER", "PAGER", "BROWSER", "GH_BROWSER", "EDITOR", "VISUAL", "GH_EDITOR", "GH_FORCE_TTY", "GH_PROMPT_DISABLED", "GH_ACCESSIBLE_PROMPTER", "CLICOLOR_FORCE", "FORCE_COLOR":
+		case "DEBUG", "GH_NO_UPDATE_NOTIFIER", "GH_NO_EXTENSION_UPDATE_NOTIFIER", "GH_TELEMETRY", "GH_REPO", "GH_HOST", "GH_DEBUG", "GH_PAGER", "PAGER", "BROWSER", "GH_BROWSER", "EDITOR", "VISUAL", "GH_EDITOR", "GH_FORCE_TTY", "GH_PROMPT_DISABLED", "GH_ACCESSIBLE_PROMPTER", "CLICOLOR_FORCE", "FORCE_COLOR":
 			continue
 		}
 		env = append(env, e)
 	}
-	return append(env, "GH_PROMPT_DISABLED=1", "GH_PAGER=cat", "PAGER=cat", "NO_COLOR=1", "TERM=dumb")
+	return append(env, "GH_NO_UPDATE_NOTIFIER=1", "GH_NO_EXTENSION_UPDATE_NOTIFIER=1", "GH_TELEMETRY=0", "GH_PROMPT_DISABLED=1", "GH_PAGER=cat", "PAGER=cat", "NO_COLOR=1", "TERM=dumb")
 }
 func inside(path, root string) bool {
 	rel, e := filepath.Rel(root, path)
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 func newGH(ctx context.Context, target, host string) (*ghAPI, func(), error) {
+	canonicalTarget, targetErr := filepath.EvalSymlinks(target)
+	if targetErr == nil {
+		target = canonicalTarget
+	}
 	executable := os.Getenv("GH_PATH")
 	var err error
 	if executable == "" {
@@ -72,7 +76,24 @@ func newGH(ctx context.Context, target, host string) (*ghAPI, func(), error) {
 	if err != nil || inside(executable, target) {
 		return nil, func() {}, errors.New("gh executable must be outside the inspected repository")
 	}
-	dir, err := os.MkdirTemp("", "sourcesteward-hosting-")
+	for _, key := range []string{"GH_CONFIG_DIR", "XDG_CONFIG_HOME", "HOME"} {
+		configured := os.Getenv(key)
+		if configured == "" {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(configured)
+		if err != nil {
+			resolved, err = filepath.Abs(configured)
+		}
+		if err != nil || inside(resolved, target) {
+			return nil, func() {}, errors.New("gh authentication configuration must be outside the inspected repository")
+		}
+	}
+	base, err := filepath.EvalSymlinks("/tmp")
+	if err != nil || inside(base, target) {
+		return nil, func() {}, errors.New("cannot establish an external neutral temporary directory")
+	}
+	dir, err := os.MkdirTemp(base, "sourcesteward-hosting-")
 	if err != nil {
 		return nil, func() {}, errors.New("cannot prepare neutral gh execution directory")
 	}
