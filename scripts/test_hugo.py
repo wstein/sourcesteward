@@ -38,7 +38,8 @@ class HugoTests(unittest.TestCase):
             (source / 'inspect.schema.json').write_bytes(raw)
             (source / 'inventory.schema.json').write_bytes(raw)
             (source / 'workspace.schema.json').write_bytes(raw)
-            (source / 'tidy.schema.json', 'hosting.schema.json').write_bytes(raw)
+            (source / 'tidy.schema.json').write_bytes(raw)
+            (source / 'hosting.schema.json').write_bytes(raw)
             destination = root / 'public'
             destination.mkdir()
             pages.copy_schemas(root,destination,required=True)
