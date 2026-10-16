@@ -192,9 +192,8 @@ func renderReposText(w io.Writer, r inspection.ReposResult) error {
 		r.Summary.Dirty.True, r.Summary.StaleWorkspaces, r.Summary.ForeignWorkspaces, r.Summary.ConflictedReferences)
 	b.WriteString(escapeReposLine(summaryLine) + "\n")
 
-	if len(r.Boundary.Limitations) > 0 {
-		limLine := "limitations: " + strings.Join(r.Boundary.Limitations, "; ")
-		b.WriteString(escapeReposLine(limLine) + "\n")
+	for _, limitation := range r.Boundary.Limitations {
+		b.WriteString(escapeReposLine("limitations: "+limitation) + "\n")
 	}
 
 	_, err := io.WriteString(w, b.String())

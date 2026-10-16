@@ -50,10 +50,11 @@ effects: read-only, no network, no fetch, no repository writes
       inventory-partial: submodule disk state excluded to avoid recursive helpers
 [2] vendor/lib  submodule of [1]  skipped  submodule-uninitialized
 summary: ok 1, partial 1, error 0, skipped 1; dirty 1; stale 0; foreign 0; conflicted refs 0
-limitations: no ahead/behind, publication or task-ownership facts; submodule dirty state unknown
+limitations: No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.
+limitations: Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).
 ```
 
-Names and paths are escaped. An *attention workspace* is one that is stale, foreign or unverified; at most 16 are listed per entry from the embedded inventory, then a "+N more" line. The text is bounded by construction (at most 16 entries, at most 24 lines each (header, error, notes, 16 attention workspaces and the "+N more" line), each line escaped and truncated to 512 bytes, so below 256 KiB), tested in T004.
+Names and paths are escaped. Each boundary limitation is printed on its own `limitations:` line. An *attention workspace* is one that is stale, foreign or unverified; at most 16 are listed per entry from the embedded inventory, then a "+N more" line. The text is bounded by construction (at most 16 entries, at most 24 lines each (header, error, notes, 16 attention workspaces and the "+N more" line), each line escaped and truncated to 512 bytes, so below 256 KiB), tested in T004.
 
 ## JSON
 
