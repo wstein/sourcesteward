@@ -27,7 +27,7 @@ type reposNewRunner func(ctx context.Context) *pinsRunner
 
 func newReposRunner(ctx context.Context) *pinsRunner {
 	r := newPinsRunner(ctx)
-	r.timeout = reposCallTimeout
+	r.timeout = defaultReposBounds.call
 	return r
 }
 
@@ -80,7 +80,7 @@ func reposMapError(callerCtx, totalCtx context.Context, err error) (code, messag
 // discoverSubmodules is stage S4. Parents are examined concurrently (at most ReposParallelism at a time);
 // the merge into the entry list is sequential in parent order, so concurrency never changes the result.
 // It returns the added entries that still need an identity inspection.
-func discoverSubmodules(callerCtx, totalCtx context.Context, entries *[]ReposEntry, inspections *[]Result, newRunner reposNewRunner) []reposPendingSub {
+func discoverSubmodules(callerCtx, totalCtx context.Context, entries *[]ReposEntry, inspections *[]Result, newRunner reposNewRunner, b reposBounds) []reposPendingSub {
 	parentCount := len(*entries)
 	var work []int
 	for i := 0; i < parentCount; i++ {
@@ -97,7 +97,7 @@ func discoverSubmodules(callerCtx, totalCtx context.Context, entries *[]ReposEnt
 	}
 	results := make([]reposParentDiscovery, parentCount)
 	runWorkerPool(work, ReposParallelism, func(i int) {
-		results[i] = discoverParent(callerCtx, totalCtx, newRunner, *(*entries)[i].ResolvedPath, (*inspections)[i])
+		results[i] = discoverParent(callerCtx, totalCtx, newRunner, b, *(*entries)[i].ResolvedPath, (*inspections)[i])
 	})
 
 	seenPaths := make(map[string]bool)
@@ -165,7 +165,7 @@ func discoverSubmodules(callerCtx, totalCtx context.Context, entries *[]ReposEnt
 
 // discoverParent reads the registration of one Git parent and confines every candidate. It is the unit of
 // work of the pool: a panic is recovered into this parent's discovery, never into the process.
-func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunner, root string, insp Result) (d reposParentDiscovery) {
+func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunner, b reposBounds, root string, insp Result) (d reposParentDiscovery) {
 	defer func() {
 		if r := recover(); r != nil {
 			d = reposParentDiscovery{status: "failed", reason: "worker panic during discovery",
