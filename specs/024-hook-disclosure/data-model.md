@@ -27,7 +27,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 - `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants (`hook_paths_opened` means no hook entry is opened; the confined hooks directory itself is opened once for the bounded listing); the last two disclose process use (`git_processes` is false for a non-colocated jj workspace and for the ambiguous refusal; `jj_processes` is true only for a jj-owned workspace and then covers only the sandbox probe and `--version`). Git reads in a colocated jj workspace run outside the jj sandbox.
 - `limits`: the keys and values of the spec's limits table: `{deadline_seconds: 10, git_process_seconds: 5, stream_bytes: 65536, result_bytes: 262144, directory_entries: 256, unrecognized_names: 16, config_hooks: 64, value_bytes: 4096, level_records: 16}`.
 - `complete`: boolean; false for `refused`, `error` and `incomplete`.
-- `notes`: empty for `refused` and `error` results; otherwise fixed strings, at least the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns, and: the content of hooks is never read, so a missing interpreter or a self-disabling script is not detected; per-command overrides are not detected; the caller environment is not applied.
+- `notes`: empty for `refused` and `error` results; otherwise fixed strings: the content of hooks is never read, so a missing interpreter or a self-disabling script is not detected; per-command overrides are not detected; the caller environment is not applied; on the jj path, the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns; when `core.hooksPath` is set, hooks in the default directory are inert and not examined. `tracked` means present in the Git index.
 
 ## Configuration
 
@@ -49,7 +49,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### ConfigHooks
 
-`{engine, evidence, entries, truncated}`. `engine`: `supported` (the detected Git version is within the measured range of the claim `git-config-hooks`) or `unknown`; `evidence` is an Evidence object for that claim. `entries`: `{name, events, enabled, command_present, scopes}` with `enabled` true, false or null (unset), `command_present` a boolean, `scopes` the sorted scopes of the entry's keys, at most 64 entries sorted by name. The command text is never read or reported. Entries count as active guards when `engine` is `supported`; when it is `unknown` they appear in the matching operation with state `unknown`. For `not-applicable` hooks path state: `{engine: unknown, evidence: null, entries: [], truncated: false}`.
+`{engine, evidence, entries, truncated}`. `engine`: `supported` (the detected Git version is within the measured range of the claim `git-config-hooks`) or `unknown`; `evidence` is an Evidence object for that claim. `entries`: `{name, events, enabled, command_present, scopes}` with `enabled` true, false or null (unset), `command_present` a boolean, `scopes` the sorted scopes of the entry's keys, at most 64 entries sorted by name. The command text is never read or reported. Only enabled entries count; a disabled entry is state `absent`. Enabled entries count as active guards when `engine` is `supported`; when `unknown`, an unknown-engine blocking configuration hook (spec FR-009) appears in its operation with state `unknown`. For `not-applicable` hooks path state: `{engine: unknown, evidence: null, entries: [], truncated: false}`.
 
 ## HookEntry
 
@@ -88,7 +88,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### OperationHook
 
-`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `unknown` (a configuration hook while the engine is `unknown`), `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same event still counts as `active` when the engine is `supported`, and as `unknown` otherwise) or `absent`. `source` is `hooks-dir`, `config`, `both` or null. `bypassed` is `true`, `false` or `null` per FR-009; state precedence is in FR-009. `skippable_by` lists exception ids that skip this hook.
+`{name, role, state, source, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `unknown` (a configuration hook while the engine is `unknown`), `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`, so directory hooks cannot run; a configuration hook of the same event still counts as `active` when the engine is `supported`, and as `unknown` otherwise) or `absent`. `source` is `hooks-dir`, `config`, `both` or null and lists only contributors whose own state equals the winning state. `bypassed` is `true`, `false` or `null` per FR-009; state precedence is in FR-009. `skippable_by` lists exception ids that skip this hook.
 
 ## Finding
 

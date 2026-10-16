@@ -41,10 +41,9 @@ jj sandbox or version problems and the error codes of the existing ownership dec
 ## Derivation rules
 
 - When `guards_evaluated` is false no bypass finding is raised.
-- `guards-may-be-bypassed` is also raised for an operation with an unknown-engine configuration hook, under any `runs_hooks`; both bypass codes may appear on one operation. `no-active-guards` is not raised while such a hook exists.
 - At most one finding of each bypass code per operation, `subject` null, naming the affected hooks (bounded): `guards-bypassed-on-backend` when `runs_hooks` is `no` and an active blocking guard exists; `guards-may-be-bypassed` when `runs_hooks` is `unknown` and an active blocking guard exists, or when an unknown-engine blocking configuration hook (spec FR-009) exists under any `runs_hooks`. Active guards alone raise nothing when `runs_hooks` is `yes`. Findings are derived from the OperationHook rows (`bypassed` true or null).
 - `backend-hook-behavior-unverified` once (operation null) when any claim used in the result (including `git-config-hooks` when configuration hooks exist) has a level other than `measured` after the version-coverage rule.
-- `no-active-guards` once when `guards_active` is 0 for both operations.
+- `no-active-guards` once when `guards_evaluated` is true, `guards_active` is 0 for both operations and no unknown-engine blocking configuration hook exists. Both bypass codes may appear on one operation.
 - Directory and file findings (`hook-symlink-outside`, `hook-unsafe-permissions`, `hook-unsafe-owner`) carry `subject` `directory` or the hook name.
 
 ## Human output
@@ -56,7 +55,7 @@ SourceSteward hooks: /work/harbor (jj colocated, jj 0.46.0, git 2.56.0)
 effects: read-only, hooks never executed, hook contents never read
 
 hooks path: .githooks -> /work/harbor/.githooks (local config)
-hooks present: commit-msg, pre-commit, pre-push (all active, tracked)
+hooks present: commit-msg, pre-commit, pre-push (all active; tracked means present in the Git index, in colocated jj the parent of the working-copy commit)
 
 commit via "jj commit": runs hooks? no (documented, not measured for jj 0.46.0)
   pre-commit            active   BYPASSED
