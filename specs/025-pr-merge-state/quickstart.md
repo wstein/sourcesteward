@@ -13,29 +13,31 @@ The incident fixture is a strict, linear-history, rebase-only base branch with t
 
 ## Optional live read-only check (temporary repositories only)
 
+Choose any open pull request of a public repository you can read, and substitute its owner, name and number. Pull request 112 of `wstein/bundledock`, measured on 2026-10-16, merged at 13:11:59Z and now yields only `pull-request-closed`, so it is not a stable example.
+
 ```sh
 work=$(mktemp -d) && cd "$work"
 git init -q repo && cd repo
-git remote add origin https://github.com/wstein/bundledock.git
-stw hosting merge-state 112
-stw hosting merge-state 112 --json
+git remote add origin https://github.com/OWNER/NAME.git
+stw hosting merge-state NUMBER
+stw hosting merge-state NUMBER --json
 ```
 
-Pull request 112 of `wstein/bundledock` was open on 2026-10-16 (it will have changed). With an admin token the design expects `required-check` `check` as `successful`, `strict-required-status-checks`, `linear-history-required`, `administrators-included`, `merge-methods` (rebase only) as `info`, no `head-behind-base` (0 behind) and `blocked-unexplained` as `unknown`, because GitHub reported `blocked` while every readable condition was satisfied. With a read-only token the design expects `classic-protection-unreadable` (`unknown`, `not-found-ambiguous`) and `merge-methods` `unknown` with reason `repository-setting-hidden`, and never a statement that no protection exists.
+The design expects, for a read-only token on a branch with classic protection, `classic-protection-unreadable` (`unknown`, `not-found-ambiguous`) and `merge-methods` `unknown` with reason `repository-setting-hidden`, and never a statement that no protection exists; with an admin token the classic fields are read. When GitHub reports `blocked` and nothing readable explains it, `blocked-unexplained` appears as `unknown`.
 
 A jj variant, in another temporary directory:
 
 ```sh
 jj git init --colocate repo-jj && cd repo-jj
-jj git remote add origin https://github.com/wstein/bundledock.git
-stw hosting merge-state 112
-gh jj merge-state 112
+jj git remote add origin https://github.com/OWNER/NAME.git
+stw hosting merge-state NUMBER
+gh jj merge-state NUMBER
 ```
 
 ## Checks to run on any output
 
 - No output line outside the labelled "GitHub reports" line and the fixed notice says the pull request is mergeable, ready, can merge or will merge; `verdict` is `not-asserted`.
-- `stw hosting merge-state 112 --json | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["verdict"]=="not-asserted"; assert all(i["reason"] is not None for i in r["items"] if i["confidence"]=="unknown")'`.
+- `stw hosting merge-state NUMBER --json | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["verdict"]=="not-asserted"; assert all(i["reason"] is not None for i in r["items"] if i["confidence"]=="unknown")'`.
 - `git -C "$work/repo" status --porcelain` and `git -C "$work/repo" for-each-ref` print the same before and after; nothing is fetched.
 - A wrong number (`stw hosting merge-state 99999999`) exits 1 with `merge-state-pr-failed` and no items; `stw hosting merge-state 0` exits 2 with no JSON.
 

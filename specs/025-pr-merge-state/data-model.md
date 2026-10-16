@@ -27,11 +27,11 @@ Types live in `internal/hosting` beside the Spec 020 types and reuse the native 
 
 ## PullRequestState
 
-`number` (positive integer), `state` (`open` or `closed`), `merged` (boolean), `draft` (boolean), `head_sha` and `base_sha` (40-hex), `head_ref` and `base_ref` (bounded text), `head_repository` and `base_repository` (`owner/name`, validated like Spec 020), `auto_merge` (`{method: merge|squash|rebase}` or `null`; an unrecognized method string makes the read a shape failure). Titles, URLs and logins are deliberately not carried.
+`number` (positive integer), `state` (`open` or `closed`), `merged` (boolean), `draft` (boolean), `head_sha` and `base_sha` (40-hex), `head_ref` and `base_ref` (bounded text), `base_repository` (`owner/name`, validated like Spec 020) and `head_repository` (the same, or `null` when GitHub reports no head repository), `auto_merge` (`{method: merge|squash|rebase|null}` or `null`; an unrecognized method string gives `method` `null`, never a read failure). Titles, URLs and logins are deliberately not carried.
 
 ## GitHubReported
 
-`mergeable` (boolean or `null`), `mergeable_state` (string of at most 32 characters, escaped when rendered), `computed` (boolean, false when `mergeable` is null). Labelled in human output as "GitHub reports". Used by the Items table only where it names these fields.
+`mergeable` (boolean or `null`), `mergeable_state` (string of at most 32 characters, escaped when rendered), `computed` (boolean, false when `mergeable` is null). Taken from the first pull request read. Labelled in human output as "GitHub reports". Used by the Items table only where it names these fields.
 
 ## BaseBranch
 
@@ -46,7 +46,7 @@ Types live in `internal/hosting` beside the Spec 020 types and reuse the native 
 | `effect` | `waits` \| `may-wait` \| `info` | |
 | `confidence` | `observed` \| `inferred` \| `unknown` | |
 | `reason` | reason enum or `null` | non-null if and only if `confidence` is `unknown`; also non-null for no other confidence |
-| `summary` | string | fixed template per code with escaped parameters, at most 512 bytes |
+| `summary` | string | the fixed template of the code (below) with escaped parameters, at most 512 bytes; no other text |
 | `detail` | object | keys per the table below; no other keys |
 | `evidence` | `{source, fields[]}`[] | one to eight entries; `source` is a source id, `fields` the field names read from it |
 
@@ -61,8 +61,8 @@ Order: the order of the Items table, then `subject` by bytes. `waits` is never `
 | `required-check` | `state` (`pending`, `failing`, `missing`, `successful`, `neutral-or-skipped`, `unreadable`), `origin` (array of `branch-protection`, `base-branch`, `branch-rules`), `app_id` (integer or `null`), `matches` (integer: number of matching records) |
 | `strict-required-status-checks`, `linear-history-required`, `conversation-resolution-required` | `origin` (array as above) |
 | `head-behind-base` | `behind_by`, `ahead_by` (non-negative integers), `strict` (boolean or `null`) |
-| `auto-merge` | `method` |
-| `merge-methods` | `allowed` (array of methods, or `null` when unknown), `sources` (array of source ids that contributed) |
+| `auto-merge` | `method` (`merge`, `squash`, `rebase` or `null`) |
+| `merge-methods` | `allowed` (array of methods, or `null` when unknown), `rule_limit` (array of methods from a rule, or `null`), `sources` (array of source ids that contributed) |
 | `auto-merge-method-not-allowed` | `method`, `excluded_by` (source id) |
 | `administrators-included` | `enabled` (boolean) |
 | `classic-protection-unreadable` | `unreadable` (array of `strict`, `enforce_admins`, `required_reviews`, `conversation_resolution`, `linear_history`, `signatures`, `lock_branch`) |
@@ -71,9 +71,36 @@ Order: the order of the Items table, then `subject` by bytes. `waits` is never `
 | `rulesets-apply` | `rulesets` (at most 50 of `{id, source_type, source, rule_types[]}`; `id` integer, others bounded text) |
 | `rule-not-evaluated` | `rule_type` (bounded text), `origin` |
 
+### Summary templates (normative; parameters in braces are escaped data)
+
+| Code | Template |
+| --- | --- |
+| `pull-request-closed` | The pull request is {closed or merged}. |
+| `draft` | The pull request is a draft. |
+| `merge-conflict` | GitHub reports that the head conflicts with the base. |
+| `mergeability-not-computed` | GitHub has not computed mergeability yet. |
+| `required-check` | Required status context {subject}: {state}. |
+| `required-checks-unknown` | The set of required status contexts is not fully known. |
+| `strict-required-status-checks` | A rule requires the head to be up to date with the base. |
+| `head-behind-base` | The head is {behind_by} commits behind the base branch tip; strict rule: {strict}. |
+| `auto-merge` | Auto-merge is enabled with method {method}. |
+| `merge-methods` | Merge methods not excluded by readable sources: {allowed}; rule limit: {rule_limit}. |
+| `auto-merge-method-not-allowed` | Auto-merge method {method} is excluded by {excluded_by}. |
+| `linear-history-required` | A rule requires linear history. |
+| `administrators-included` | Rules apply to administrators: {enabled}. |
+| `classic-protection-unreadable` | Classic branch protection exists but its details are not readable: {unreadable}. |
+| `review-required` | Reviews required: {required}; approvals counted: {approvals}; changes requested: {changes_requested}. Reviewer eligibility is not evaluated. |
+| `conversation-resolution-required` | A rule requires resolved conversations; REST does not expose their state. |
+| `merge-queue-required` | A merge queue rule applies; queue state is not read. |
+| `rulesets-apply` | {n} rulesets apply to the base branch. |
+| `rule-not-evaluated` | Rule {subject} applies and is not evaluated by this command. |
+| `blocked-unexplained` | GitHub reports a blocking state that the readable evidence does not explain. |
+
+The unknown-confidence variants append the reason as fixed text from the Reasons table. Human output prints only these summaries, the labelled GitHub line, source lines and the fixed notice.
+
 ## Source
 
-`id` (source id), `outcome` (`ok`, `denied`, `not-found`, `rate-limited`, `failed`, `skipped`), `failure_class` (`unauthorized`, `forbidden`, `not-found`, `rate-limited`, `other-http`, `too-large`, `malformed`, `transport`, `canceled`, or `null`), `requests` (integer, requests made for this source), `reason` (reason enum or `null`; non-null for `skipped`, `denied`, `not-found` and `rate-limited` outcomes, `null` for `ok`). Outcome mapping from the failure class: `unauthorized` and `forbidden` give `denied`; `not-found` gives `not-found`; `rate-limited` gives `rate-limited`; every other class gives `failed`.
+`id` (source id), `outcome` (`ok`, `denied`, `not-found`, `rate-limited`, `failed`, `skipped`), `failure_class` (`unauthorized`, `forbidden`, `not-found`, `rate-limited`, `other-http`, `too-large`, `malformed`, `transport`, `canceled`, or `null`), `requests` (integer, requests made for this source), `reason` (reason enum or `null`; non-null for `skipped`, `denied`, `not-found`, `rate-limited` and `failed` outcomes (`failed` uses `source-failed`, a dependency skip uses `dependency-unavailable`), `null` for `ok`). Outcome mapping from the failure class: `unauthorized` and `forbidden` give `denied`; `not-found` gives `not-found`; `rate-limited` gives `rate-limited`; every other class gives `failed`.
 
 ## Summary
 
@@ -87,7 +114,7 @@ Order: the order of the Items table, then `subject` by bytes. `waits` is never `
 
 - `status: "ok"` requires `boundary.complete: true`: every source has an outcome in `ok`, `denied`, `not-found` or `skipped`, the resample matched and no bound was exhausted. `denied` and `not-found` outcomes keep the result complete and produce `unknown` items.
 - `status: "incomplete"` carries at least one of `merge-state-changed`, `merge-state-limit`, `merge-state-source-failed`; items derived before the problem are kept; an item that depends on a `failed` or `rate-limited` source is `unknown` with reason `source-failed` or `rate-limited`.
-- `status: "error"` has `items: []`, `pull_request` null unless the first read succeeded and a later preflight (for example cancellation) failed, and `boundary.complete: false`.
+- `status: "error"` has `items: []` and `boundary.complete: false`. This is the normative rule for the null fields: `pull_request`, `github_reported` and `base_branch` are `null` unless the first pull request read succeeded and a later failure (cancellation, deadline, output limit) ended the operation, in which case the values already read are kept.
 - Every item with confidence `observed` or `inferred` has at least one evidence entry whose source outcome is `ok`. No item is ever derived from a `denied`, `not-found` or `failed` outcome except as `unknown`; absence is never produced from such an outcome.
 - A `closed` pull request has the single item `pull-request-closed` and every other source `skipped` with reason `skipped-not-open`, except `pull-request` and its resample.
 - `verdict` and `notice` are constants in every status.
