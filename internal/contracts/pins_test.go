@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -259,18 +260,22 @@ func TestPinsOperationResultsValidateAgainstSchema(t *testing.T) {
 	}
 	run(bare, "init", "-q", "--bare")
 	run(repo, "init", "-q")
+	// A real audit result, with an uninitialized gitlink, must satisfy the schema too.
+	run(repo, "-c", "user.name=T", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x")
+	run(repo, "update-index", "--add", "--cacheinfo", "160000,"+strings.Repeat("a", 40)+",ghost")
+	run(repo, "-c", "user.name=T", "-c", "user.email=t@e.invalid", "commit", "-q", "-m", "gitlink")
 	run(butler, "init", "-q")
 	if err := os.MkdirAll(filepath.Join(butler, ".git", "gitbutler"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{jj: "unsupported-backend", empty: "not-repository", bare: "bare-repository", repo: "pins-failed", butler: "unsupported-backend"} {
+	for name, want := range map[string]string{jj: "unsupported-backend", empty: "not-repository", bare: "bare-repository", repo: "", butler: "unsupported-backend"} {
 		r := inspection.Pins(context.Background(), inspection.PinsOptions{Path: name})
 		raw, err := json.Marshal(r)
 		if err != nil {
 			t.Fatal(err)
 		}
 		valid(t, s, raw)
-		if r.Error == nil || r.Error.Code != want {
+		if want == "" && (r.Error != nil || r.Status != "ok" || len(r.Submodules) != 1) || want != "" && (r.Error == nil || r.Error.Code != want) {
 			t.Fatalf("%s: %+v", name, r)
 		}
 	}
@@ -296,5 +301,44 @@ func TestPinsMixedFixtureCoversRefusedEscapedUninitializedAndUnknown(t *testing.
 func TestPublishedErrorFixtureHasRealisticMessage(t *testing.T) {
 	if strings.Contains(string(pinsFixture(t, "error")), "not implemented") {
 		t.Fatal("published error fixture holds the stub message")
+	}
+}
+
+// The incident result (a pin only a local checkout has) must satisfy the schema with every evidence field set.
+func TestPinsIncidentResultValidatesAgainstSchema(t *testing.T) {
+	// The audit refuses world-writable submodule directories, which Git creates under umask 000.
+	defer syscall.Umask(syscall.Umask(0o022))
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	run := func(dir string, args ...string) {
+		t.Helper()
+		c := exec.Command("git", append([]string{"-c", "protocol.file.allow=always", "-c", "user.name=T", "-c", "user.email=t@e.invalid"}, args...)...)
+		c.Dir = dir
+		c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	sub, super := filepath.Join(root, "sub"), filepath.Join(root, "super")
+	for _, d := range []string{sub, super} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		run(d, "init", "-q", "-b", "main")
+		run(d, "commit", "-q", "--allow-empty", "-m", "one")
+	}
+	run(super, "submodule", "add", "-q", sub, "member")
+	run(super, "commit", "-qm", "add")
+	run(filepath.Join(super, "member"), "commit", "-q", "--allow-empty", "-m", "local only")
+	run(super, "add", "member")
+	run(super, "commit", "-qm", "pin")
+	r := inspection.Pins(context.Background(), inspection.PinsOptions{Path: super})
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid(t, schema(t, "pins"), raw)
+	if r.Status != "ok" || len(r.Submodules) != 1 || r.Submodules[0].Publication.Status != "unreachable" || r.Summary.Errors != 1 {
+		t.Fatalf("%s", raw)
 	}
 }
