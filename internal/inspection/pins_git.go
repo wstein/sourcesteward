@@ -219,6 +219,24 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 		}
 		reg.HeadCommit = &oid
 	case 1:
+		// Exit 1 is also what a corrupt ref gives. Unborn means HEAD names a branch that does not exist:
+		// symbolic-ref resolves it and for-each-ref finds neither the ref nor a broken one (which it
+		// reports on standard error).
+		sym, err := call(nil, "symbolic-ref", "-q", "HEAD")
+		if err != nil {
+			return reg, err
+		}
+		ref := strings.TrimSpace(string(sym.Stdout))
+		if sym.Exit != 0 || !strings.HasPrefix(ref, "refs/") || strings.ContainsAny(ref, "\n\x00") {
+			return reg, errors.New("HEAD is neither a commit nor an unborn branch")
+		}
+		found, err := call(nil, "for-each-ref", "--format=%(refname)", "--", ref)
+		if err != nil {
+			return reg, err
+		}
+		if found.Exit != 0 || len(found.Stdout) != 0 || found.Stderr != "" {
+			return reg, errors.New("HEAD names a branch ref that exists but cannot be resolved")
+		}
 		reg.HeadUnborn = true
 	default:
 		return reg, errors.New("cannot read the superproject HEAD")
@@ -323,6 +341,9 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 			} else {
 				g.RegistrationUnknown = true
 			}
+		} else if g.StagedKind != "absent" {
+			// A staged .gitmodules that is a symlink, a gitlink or in conflict is not read.
+			g.RegistrationUnknown = true
 		}
 	case g.HeadKind == "regular":
 		g.Source = "head"
@@ -403,11 +424,15 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 			if s.path == nil {
 				continue
 			}
-			e := entry(*s.path)
 			if staged {
-				e.StagedGitmodulesEntry = true
+				// Only a path that already has a gitlink or a HEAD registration: a registration found
+				// only in the staged blob is not an entry and does not count toward the cap.
+				if e := byPath[*s.path]; e != nil {
+					e.StagedGitmodulesEntry = true
+				}
 				continue
 			}
+			e := entry(*s.path)
 			if seen[*s.path] {
 				e.AmbiguousName = true
 				continue

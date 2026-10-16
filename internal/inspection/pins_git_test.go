@@ -263,8 +263,10 @@ func TestPinsRegistryWorktreeGitmodulesNeverFollowedAndDifferenceReported(t *tes
 	if !reg.Gitmodules.StagedDiffers || !reg.Gitmodules.Modified || reg.Gitmodules.Worktree != "different" {
 		t.Fatalf("%+v", reg.Gitmodules)
 	}
-	if e := entryAt(t, reg, "extra"); !e.StagedGitmodulesEntry || e.GitmodulesEntry || e.OrphanGitlink || e.EntryWithoutGitlink {
-		t.Fatalf("a path only in the staged blob: %+v", e)
+	for _, e := range reg.Entries {
+		if e.Path == "extra" {
+			t.Fatalf("a path registered only in the staged blob is not an entry: %+v", e)
+		}
 	}
 }
 
@@ -388,5 +390,183 @@ func TestPinsRegistryReadsConfiguredGitDirWithSubmodulePathConfig(t *testing.T) 
 	res, refusal, err := newPinsSafety(l, run).resolve(pinsSubmoduleSpec{Path: e.Path, Name: *e.Name, ConfiguredGitDir: e.ConfiguredGitDir})
 	if err != nil || refusal != nil || res.Dirs == nil || res.Dirs.GitDir != filepath.Join(l.ModulesDir, "x%2fy") {
 		t.Fatalf("%+v %v %v", res, refusal, err)
+	}
+}
+
+func enumerateErr(t *testing.T, super string) error {
+	t.Helper()
+	run := newPinsRunner(context.Background())
+	l, err := newPinsSuperLayout(run, super)
+	if err != nil {
+		return err
+	}
+	_, err = pinsEnumerate(run, l)
+	return err
+}
+
+func TestPinsRegistryUnbornNeedsAMissingBranchRefNotACorruptOne(t *testing.T) {
+	d := pinsRealDir(t)
+	pinsIsolateHome(t)
+	git(t, d, "init", "-q", "-b", "main")
+	if err := enumerateErr(t, d); err != nil {
+		t.Fatalf("a missing branch ref is unborn: %v", err)
+	}
+	ref := filepath.Join(d, ".git", "refs", "heads", "main")
+	writeFile(t, ref, "garbage\n")
+	if err := enumerateErr(t, d); err == nil {
+		t.Fatal("a corrupt branch ref is not an unborn HEAD")
+	}
+	os.Remove(ref)
+	// A detached HEAD that does not resolve is corruption too.
+	writeFile(t, filepath.Join(d, ".git", "HEAD"), "garbage\n")
+	if err := enumerateErr(t, d); err == nil {
+		t.Fatal("an unreadable HEAD is not an unborn HEAD")
+	}
+}
+
+func TestPinsRegistryUnbornWithUnreadableStagedGitmodulesIsUnknownRegistration(t *testing.T) {
+	for _, kind := range []string{"gitlink", "conflict"} {
+		t.Run(kind, func(t *testing.T) {
+			pinsIsolateHome(t)
+			d := pinsRealDir(t)
+			git(t, d, "init", "-q", "-b", "main")
+			oid := gitHash(t, d, "x")
+			if kind == "gitlink" {
+				gitStdin(t, d, "160000 "+oid+"\t.gitmodules\x00", "update-index", "--add", "-z", "--index-info")
+			} else {
+				gitStdin(t, d, "100644 "+oid+" 1\t.gitmodules\x00100644 "+oid+" 2\t.gitmodules\x00", "update-index", "--add", "-z", "--index-info")
+			}
+			gitlink(t, d, "1111111111111111111111111111111111111111", "real")
+			reg := registryOf(t, d)
+			if !reg.Gitmodules.RegistrationUnknown || entryAt(t, reg, "real").OrphanGitlink {
+				t.Fatalf("%+v %+v", reg.Gitmodules, reg.Entries)
+			}
+			if kind == "conflict" && !reg.Gitmodules.StagedDiffers {
+				t.Fatal("a conflicted staged .gitmodules differs")
+			}
+		})
+	}
+}
+
+func TestPinsRegistryStagedOnlyRegistrationRules(t *testing.T) {
+	f := newPinsFixture(t)
+	// A staged submodule addition (gitlink and .gitmodules both staged) is not an orphan.
+	git(t, f.Super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", f.Sub, "added")
+	reg := registryOf(t, f.Super)
+	e := entryAt(t, reg, "added")
+	if e.OrphanGitlink || !e.StagedGitmodulesEntry || e.GitmodulesEntry || !e.GitlinkInIndex || e.GitlinkInHead || !reg.Gitmodules.StagedDiffers {
+		t.Fatalf("%+v", e)
+	}
+	// A path registered only in the staged blob with no gitlink anywhere is dropped and not counted.
+	git(t, f.Super, "config", "-f", ".gitmodules", "submodule.phantom.path", "phantom")
+	git(t, f.Super, "config", "-f", ".gitmodules", "submodule.phantom.url", "https://example.invalid/p")
+	git(t, f.Super, "add", ".gitmodules")
+	reg = registryOf(t, f.Super)
+	for _, x := range reg.Entries {
+		if x.Path == "phantom" {
+			t.Fatalf("a staged-only registration without a gitlink must be dropped: %+v", x)
+		}
+	}
+	if reg.Total != 2 || len(reg.Entries) != 2 {
+		t.Fatalf("total %d entries %d", reg.Total, len(reg.Entries))
+	}
+}
+
+func TestPinsRegistryReadsConfigurationWithoutIncludes(t *testing.T) {
+	f := newPinsFixture(t)
+	inc := filepath.Join(f.Root, "inc.cfg")
+	writeFile(t, inc, "[submodule \"injected\"]\n\tpath = injected\n\turl = https://example.invalid/i\n[submodule \"member\"]\n\tactive = false\n")
+	// In the local configuration: an include must not import activity or names.
+	git(t, f.Super, "config", "include.path", inc)
+	reg := registryOf(t, f.Super)
+	if a := entryAt(t, reg, "member").Active; a == nil || !*a {
+		t.Fatalf("an included file changed activity: %v", a)
+	}
+	// In the HEAD .gitmodules blob: an absolute include.
+	git(t, f.Super, "config", "--unset", "include.path")
+	git(t, f.Super, "config", "-f", ".gitmodules", "include.path", inc)
+	git(t, f.Super, "add", ".gitmodules")
+	git(t, f.Super, "commit", "-qm", "include")
+	reg = registryOf(t, f.Super)
+	if len(reg.Entries) != 1 {
+		t.Fatalf("an include in the registration blob imported entries: %+v", reg.Entries)
+	}
+	if reg.Gitmodules.Worktree != "same" {
+		t.Fatalf("the worktree comparison must not follow the include either: %+v", reg.Gitmodules)
+	}
+	// And in a submodule's own remotes.
+	member := filepath.Join(f.Super, "member")
+	git(t, member, "config", "--file", filepath.Join(f.Super, ".git", "modules", "member", "config"), "include.path", filepath.Join(f.Root, "rem.cfg"))
+	writeFile(t, filepath.Join(f.Root, "rem.cfg"), "[remote \"injected\"]\n\turl = https://example.invalid/r\n")
+	remotes, err := pinsReadRemotes(newPinsRunner(context.Background()), memberRepo(f))
+	if err != nil || len(remotes) != 1 || remotes[0].Name != "origin" {
+		t.Fatalf("%v %v", remotes, err)
+	}
+	// The layout read of the extension flag disables includes too.
+	writeFile(t, filepath.Join(f.Root, "ext.cfg"), "[extensions]\n\tsubmodulePathConfig = true\n")
+	git(t, f.Super, "config", "include.path", filepath.Join(f.Root, "ext.cfg"))
+	if l, err := newPinsSuperLayout(newPinsRunner(context.Background()), f.Super); err != nil || l.PathConfig {
+		t.Fatalf("%+v %v", l, err)
+	}
+}
+
+func TestPinsRegistryConflictAmbiguousAndBoolean(t *testing.T) {
+	d, oid := newBareSuper(t)
+	gitlink(t, d, oid, "shared")
+	git(t, d, "config", "-f", ".gitmodules", "submodule.a.path", "shared")
+	git(t, d, "config", "-f", ".gitmodules", "submodule.b.path", "shared")
+	git(t, d, "add", ".gitmodules")
+	git(t, d, "commit", "-qm", "two names")
+	e := entryAt(t, registryOf(t, d), "shared")
+	if !e.AmbiguousName || str(e.Name) != "a" {
+		t.Fatalf("%+v", e)
+	}
+	// A conflicted staged .gitmodules differs from HEAD.
+	blob := gitHash(t, d, "[submodule \"a\"]\n\tpath = other\n")
+	gitStdin(t, d, "100644 "+blob+" 1\t.gitmodules\x00100644 "+blob+" 2\t.gitmodules\x00", "update-index", "--force-remove", "-z", "--index-info")
+	reg := registryOf(t, d)
+	if reg.Gitmodules.StagedKind != "conflict" || !reg.Gitmodules.StagedDiffers {
+		t.Fatalf("%+v", reg.Gitmodules)
+	}
+	for in, want := range map[string]*bool{"true": ptrBool(true), "yes": ptrBool(true), "on": ptrBool(true), "1": ptrBool(true), "false": ptrBool(false), "no": ptrBool(false), "off": ptrBool(false), "0": ptrBool(false), "": ptrBool(false), "maybe": nil, "2": nil} {
+		got := pinsParseBool(pinsConfigKV{Value: in, HasValue: true})
+		if (got == nil) != (want == nil) || got != nil && *got != *want {
+			t.Errorf("bool %q: %v want %v", in, got, want)
+		}
+	}
+	if got := pinsParseBool(pinsConfigKV{}); got == nil || !*got {
+		t.Error("a valueless key is true")
+	}
+}
+
+func ptrBool(b bool) *bool { return &b }
+
+func TestPinsRegistryLinkedWorktreeWithSubmodulePathConfigIsRefusedDistinctly(t *testing.T) {
+	requireSubmodulePathConfig(t)
+	f := newPinsFixture(t)
+	git(t, f.Super, "config", "core.repositoryformatversion", "1")
+	git(t, f.Super, "config", "extensions.submodulePathConfig", "true")
+	git(t, f.Super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", "--name", "x/y", f.Sub, "slashy")
+	git(t, f.Super, "commit", "-qm", "slashy")
+	wt := filepath.Join(f.Root, "linked")
+	git(t, f.Super, "worktree", "add", "-q", wt)
+	// Git 2.56 itself cannot create the submodule in a linked worktree with this extension (it resolves the
+	// configured gitdir against the linked worktree's .git file); a hand-made pointer is refused with the
+	// distinct "not confined" message because that value leaves the worktree's modules directory.
+	mkdirs(t, filepath.Join(wt, "slashy"))
+	writeFile(t, filepath.Join(wt, "slashy", ".git"), "gitdir: ../../super/.git/modules/x%2fy\n")
+	run := newPinsRunner(context.Background())
+	l, err := newPinsSuperLayout(run, wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := pinsEnumerate(run, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := entryAt(t, reg, "slashy")
+	_, refusal, err := newPinsSafety(l, run).resolve(pinsSubmoduleSpec{Path: "slashy", Name: *e.Name, ConfiguredGitDir: e.ConfiguredGitDir})
+	if err != nil || refusal == nil || refusal.Code != "submodule-path-unsafe" || !strings.Contains(refusal.Message, "not confined under the modules directory") {
+		t.Fatalf("%v %v", refusal, err)
 	}
 }

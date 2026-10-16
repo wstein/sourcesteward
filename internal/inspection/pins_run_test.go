@@ -180,3 +180,28 @@ func TestPinsRunnerDoesNotRefreshTheIndex(t *testing.T) {
 		t.Fatal("the index was rewritten")
 	}
 }
+
+func TestPinsRunnerReportsAnOverlongRecordAsItsOwnLimit(t *testing.T) {
+	f := newPinsFixture(t)
+	_, err := newPinsRunner(context.Background()).run(pinsCall{Repo: pinsGitRepo{GitDir: filepath.Join(f.Super, ".git"), WorkTree: f.Super},
+		Args: []string{"config", "--file", "-", "--null", "--list"}, Stdin: []byte("[a]\n\tb = " + strings.Repeat("x", pinsRecordLimit+10) + "\n"),
+		Keep: func([]byte) bool { return true }})
+	var limit *pinsLimitError
+	if !errors.As(err, &limit) || limit.Kind != "record" {
+		t.Fatalf("want a record limit, got %v", err)
+	}
+}
+
+func TestPinsRunnerStderrCountsTowardTheScanAllowance(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "git"), "#!/bin/sh\nyes 'noise noise noise' | head -c 200000 >&2\nsleep 1\n")
+	os.Chmod(filepath.Join(dir, "git"), 0o755)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	run := newPinsRunner(context.Background())
+	run.scan = 1000
+	_, err := run.run(pinsCall{Dir: dir, Args: []string{"rev-parse", "HEAD"}})
+	var limit *pinsLimitError
+	if !errors.As(err, &limit) || limit.Kind != "scan" {
+		t.Fatalf("stderr noise must hit the scan allowance: %v", err)
+	}
+}
