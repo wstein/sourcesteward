@@ -38,3 +38,27 @@ Independent reviewer: read-only Opus review, revision 651bc36, 2026-10-16, with 
 | 30 | Low | Review with null `user` | Shape failure of the `reviews` source |
 | 31 | Low | Example evidence incomplete | Contract example adds the `base-branch` entry and `rule_limit` |
 | 32 | Low | Quickstart example stale | Quickstart uses a placeholder pull request |
+
+## Round 2
+
+Independent reviewer: read-only Opus review, revision 5fa4c12, 2026-10-16, with fresh read-only measurements on `cli/cli` and `cli/go-gh` (compare `page=2` correct for ahead 3, ahead 1, identical and behind-only; ruleset-only branches report `protected` true and `protection.enabled` false). Verdict: NOT READY (3 high, 5 medium, 9 low). Round-1 resolutions were confirmed present except 17 and 22 (partial) and 4, 19, 20, which later findings showed contradicted or undecidable.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | Contract examples did not follow the normative summary templates; human output had non-allowlisted lines | Data model gains the fixed human lines table and `branch-rules-unreadable` template; both contract examples regenerated from the templates |
+| 2 | High | One 404 had two status outcomes | Decided: any optional-source 404 is outcome `not-found`, reason `not-found-ambiguous`, result stays complete; only the pull request reads treat 404 as failure; Degradation rule |
+| 3 | High | Degradation rule unsatisfiable for rows with no unknown variant | Per-source absorbing-item table; new item `branch-rules-unreadable`; information rows over a degraded source are not produced |
+| 4 | Medium | Worst-state order and competition counting undefined | Total order `failing`, `pending`, `missing`, `neutral-or-skipped`, `successful`; competition counted after the per-context and per-app reductions |
+| 5 | Medium | Detail keys not nullable for degraded items | `behind_by`, `ahead_by`, `required`, `approvals`, `changes_requested` nullable; null renders as `unknown` |
+| 6 | Medium | `ref-unsupported` vs `dependency-unavailable` | `ref-unsupported` takes precedence for sources carrying the base ref and the items they feed; T007 row |
+| 7 | Medium | R incomplete when classic or rules unreadable | R complete rule mirrors the Required-set rule; lower-bound shortfall stays conclusive; `required_complete` detail key |
+| 8 | Medium | Plan order contradicted the protection skip and repository dependency | Plan decision 4 reordered: `repository` always, `base-branch` before `branch-protection` with the skip |
+| 9 | Low | Plan "50 rule entries" | 50 distinct rulesets |
+| 10 | Low | `files` is absent on page 2, not empty | research M11; decoder must not require `files` |
+| 11 | Low | check-suites open question unlisted | Added to Unverified and untestable |
+| 12 | Low | Equal-subject ordering | Tie-break by `detail.app_id`, null first |
+| 13 | Low | Status line stale | Updated |
+| 14 | Low | Review row order downgraded a conclusive shortfall | Shortfall row precedes `changes_requested` |
+| 15 | Low | `observed` definition too narrow | Covers combinations the row names |
+| 16 | Low | CI read with no known context | Not read (`not-needed`); `required-checks-unknown` carries the gap |
+| 17 | Low | `merged` missing from resample list | Added to FR-010 |

@@ -50,7 +50,7 @@ Types live in `internal/hosting` beside the Spec 020 types and reuse the native 
 | `detail` | object | keys per the table below; no other keys |
 | `evidence` | `{source, fields[]}`[] | one to eight entries; `source` is a source id, `fields` the field names read from it |
 
-Order: the order of the Items table, then `subject` by bytes. `waits` is never `unknown`; `may-wait` is `observed` or `unknown`; `info` may have any confidence.
+Order: the order of the Items table, then `subject` by bytes, then `detail.app_id` (null first). `waits` is never `unknown`; `may-wait` is `observed` or `unknown`; `info` may have any confidence.
 
 ### Detail keys per code
 
@@ -60,13 +60,14 @@ Order: the order of the Items table, then `subject` by bytes. `waits` is never `
 | `draft`, `merge-conflict`, `mergeability-not-computed`, `required-checks-unknown`, `blocked-unexplained` | none (empty object) |
 | `required-check` | `state` (`pending`, `failing`, `missing`, `successful`, `neutral-or-skipped`, `unreadable`), `origin` (array of `branch-protection`, `base-branch`, `branch-rules`), `app_id` (integer or `null`), `matches` (integer: number of matching records) |
 | `strict-required-status-checks`, `linear-history-required`, `conversation-resolution-required` | `origin` (array as above) |
-| `head-behind-base` | `behind_by`, `ahead_by` (non-negative integers), `strict` (boolean or `null`) |
+| `head-behind-base` | `behind_by`, `ahead_by` (non-negative integers, or `null` when `compare` was not `ok`), `strict` (boolean or `null`) |
 | `auto-merge` | `method` (`merge`, `squash`, `rebase` or `null`) |
 | `merge-methods` | `allowed` (array of methods, or `null` when unknown), `rule_limit` (array of methods from a rule, or `null`), `sources` (array of source ids that contributed) |
 | `auto-merge-method-not-allowed` | `method`, `excluded_by` (source id) |
 | `administrators-included` | `enabled` (boolean) |
 | `classic-protection-unreadable` | `unreadable` (array of `strict`, `enforce_admins`, `required_reviews`, `conversation_resolution`, `linear_history`, `signatures`, `lock_branch`) |
-| `review-required` | `required`, `approvals`, `changes_requested` (non-negative integers), `origin` |
+| `review-required` | `required` (known lower bound or value, or `null`), `required_complete` (boolean), `approvals`, `changes_requested` (non-negative integers, or `null` when `reviews` was not `ok`), `origin` |
+| `branch-rules-unreadable` | `unreadable` (array of `required_checks`, `strict`, `reviews`, `linear_history`, `merge_queue`, `conversation_resolution`, `merge_methods`, `other_rules`) |
 | `merge-queue-required` | `merge_method` (string or `null`) |
 | `rulesets-apply` | `rulesets` (at most 50 of `{id, source_type, source, rule_types[]}`; `id` integer, others bounded text) |
 | `rule-not-evaluated` | `rule_type` (bounded text), `origin` |
@@ -83,20 +84,34 @@ Order: the order of the Items table, then `subject` by bytes. `waits` is never `
 | `required-checks-unknown` | The set of required status contexts is not fully known. |
 | `strict-required-status-checks` | A rule requires the head to be up to date with the base. |
 | `head-behind-base` | The head is {behind_by} commits behind the base branch tip; strict rule: {strict}. |
+| `branch-rules-unreadable` | Branch rules are not readable: {unreadable}. |
 | `auto-merge` | Auto-merge is enabled with method {method}. |
 | `merge-methods` | Merge methods not excluded by readable sources: {allowed}; rule limit: {rule_limit}. |
 | `auto-merge-method-not-allowed` | Auto-merge method {method} is excluded by {excluded_by}. |
 | `linear-history-required` | A rule requires linear history. |
 | `administrators-included` | Rules apply to administrators: {enabled}. |
 | `classic-protection-unreadable` | Classic branch protection exists but its details are not readable: {unreadable}. |
-| `review-required` | Reviews required: {required}; approvals counted: {approvals}; changes requested: {changes_requested}. Reviewer eligibility is not evaluated. |
+| `review-required` | Reviews required: {required}{ or more}; approvals counted: {approvals}; changes requested: {changes_requested}. Reviewer eligibility is not evaluated. |
 | `conversation-resolution-required` | A rule requires resolved conversations; REST does not expose their state. |
 | `merge-queue-required` | A merge queue rule applies; queue state is not read. |
 | `rulesets-apply` | {n} rulesets apply to the base branch. |
 | `rule-not-evaluated` | Rule {subject} applies and is not evaluated by this command. |
 | `blocked-unexplained` | GitHub reports a blocking state that the readable evidence does not explain. |
 
-The unknown-confidence variants append the reason as fixed text from the Reasons table. Human output prints only these summaries, the labelled GitHub line, source lines and the fixed notice.
+A null parameter renders as `unknown`; " or more" is added only when `required_complete` is false. An `unknown` item appends ` Reason: {reason}.` with the reason code. Human output consists only of these summaries and the **fixed lines** below.
+
+### Fixed human lines (normative)
+
+| Line | Form |
+| --- | --- |
+| Header | `Merge state: #{number} {owner}/{name} ({state}, {draft or not a draft})` |
+| GitHub line | `GitHub reports: mergeable={mergeable} mergeable_state={mergeable_state} (GitHub's summary, not a conclusion)` |
+| Group headings | `Waiting on:`, `May be waiting on:`, `Context:`; an empty group prints `  (none)` |
+| Item | `  [{confidence}] {code}{ "subject"}: {summary} (sources: {source ids})` |
+| No waiting item | `No waiting condition was found in the evidence read.` |
+| Sources | `Sources: {id} {outcome}[ ({reason})]; …` |
+| Completeness | `Complete: {yes or no}. Network reads: {requests_made} of at most {max_requests}.` |
+| Notice | `Notice: ` followed by the constant `notice` |
 
 ## Source
 
