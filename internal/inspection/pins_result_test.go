@@ -276,3 +276,16 @@ func TestPinsRejectsInvalidUTF8InsteadOfReplacingIt(t *testing.T) {
 		t.Fatal("nested pointer string accepted")
 	}
 }
+
+func TestPinsFindingMessageEscapesInvalidBytesInsteadOfReplacingThem(t *testing.T) {
+	r := NewPinsResult(".")
+	if err := r.AddFinding("submodule-dirty", nil, "a\xffb\x00c"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Findings[0].Message; got != `a\xffbc` {
+		t.Fatalf("%q", got)
+	}
+	if err := r.Finalize(); err != nil {
+		t.Fatal(err)
+	}
+}

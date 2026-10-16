@@ -4,6 +4,7 @@ package inspection
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -227,8 +228,24 @@ func (r *PinsResult) AddFinding(code string, submodule *string, message string) 
 	r.Findings = append(r.Findings, PinsFinding{Code: code, Severity: severity, Submodule: submodule, Message: boundPinsMessage(message)})
 	return nil
 }
+
+// boundPinsMessage keeps messages plain text: NUL is dropped and invalid UTF-8 bytes are shown as \xNN,
+// the same escaped form used for non-UTF-8 paths, never as a silent U+FFFD replacement.
 func boundPinsMessage(s string) string {
-	s = strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "�")
+	s = strings.ReplaceAll(s, "\x00", "")
+	if !utf8.ValidString(s) {
+		var b strings.Builder
+		for i := 0; i < len(s); {
+			r, size := utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && size == 1 {
+				fmt.Fprintf(&b, `\x%02x`, s[i])
+			} else {
+				b.WriteString(s[i : i+size])
+			}
+			i += size
+		}
+		s = b.String()
+	}
 	if len(s) <= pinsMessageLimit {
 		return s
 	}
@@ -335,6 +352,8 @@ func validPinsText(v reflect.Value) error {
 			return errors.New("pins result holds a string that is not valid UTF-8")
 		}
 	case reflect.Pointer, reflect.Interface:
+		// Identity is walked too. Later work items fill it from repository-derived names: they must escape
+		// or refuse a non-UTF-8 identity string per field so one bad ref never fails the whole result.
 		if !v.IsNil() {
 			return validPinsText(v.Elem())
 		}
