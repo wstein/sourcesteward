@@ -19,8 +19,8 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 ## Boundary
 
 - `effects`: `{network: false, fetch: false, writes: false, hooks: false}`, always present with these values.
-- `limits`: `{max_submodules: 256, per_submodule_seconds: 5, total_seconds: 30, max_output_bytes: 1048576, max_remote_refs: 16, max_count: 10000}`.
-- `complete`: boolean.
+- `limits`: `{max_submodules: 256, per_submodule_seconds: 5, total_seconds: 30, max_output_bytes: 1048576, max_remote_refs: 16, max_count: 10000, dirty_scan_seconds: 3, dirty_scan_entries: 20000}`.
+- `complete`: boolean; always false for `refused` and `error` results.
 - `staleness`: fixed text stating that remote-tracking refs are local records and no fetch was made.
 
 ## Submodule
@@ -54,7 +54,7 @@ All text fields are bounded and rendered as data. Commit identities are full obj
 
 ## Summary
 
-`submodules`, counts of `error`, `warning` and `info` findings, and counts of publication status (`reachable`, `unreachable`, `unknown`).
+`{submodules, errors, warnings, infos, publication: {reachable, unreachable, unknown}}`, all integers.
 
 ## State and completeness rules
 

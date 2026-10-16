@@ -10,13 +10,13 @@ A superproject can record a submodule commit that exists only in one local submo
 
 **No fetch (chosen).** A fetch writes refs and uses the network, which the read-only contract forbids. The result states that evidence may be stale and gives an advisory freshness time.
 
-**Plumbing and fixed formats (chosen).** `ls-tree -z`, `ls-files -s -z`, `config --blob HEAD:.gitmodules --null --list --no-includes`, `rev-parse --git-path modules`, `for-each-ref --contains <pin> --count=17 refs/remotes/`, and two `rev-list --count --max-count=10001` calls (one per side), all with the isolation prefix. Tracked-change detection reuses the inventory comparison instead of `status`, which can run clean and process filters. *Rejected*: `git submodule status` and `git submodule foreach`, which can run configured commands and mix human output with state.
+**Plumbing and fixed formats (chosen), and the normative process allowlist.** The audit starts only these Git invocations, each with the isolation prefix, explicit `--git-dir` and `--work-tree` where a submodule is involved, and optional locks disabled. Contracts and tests refer to this list.
 
-**Validated Git directory, not the pointer (chosen).** A hostile `.git` file can point anywhere. Reading it as data and requiring the target at the path Git itself reports for the worktree in use removes that class of attack. Git keeps `modules` per worktree: measured with a linked worktree, `rev-parse --git-path modules` is `.git/modules` in the main worktree and `.git/worktrees/<id>/modules` in the linked one, and the submodule's `.git` file read `gitdir: ../../super/.git/worktrees/wt/modules/member`. An explicit `--git-dir` also makes Git skip its own `safe.directory` check, so the audit checks ownership itself. *Rejected*: trusting `git -C submodule` and its own discovery.
+- Superproject: `rev-parse --path-format=absolute --git-dir --git-path modules`, `rev-parse HEAD`, `ls-tree -r -z HEAD` (gitlinks), `ls-files --stage -z`, `config --blob HEAD:.gitmodules --null --list --no-includes` and the same for `:.gitmodules`, `config` reads of `extensions.submodulePathConfig` and `submodule.<name>.gitdir`.
+- Per submodule: `rev-parse HEAD`, `symbolic-ref -q HEAD`, `cat-file -e <pin>^{commit}`, `merge-base <pin> HEAD`, two `rev-list --count --max-count=10001` calls (one per side), `for-each-ref --contains <pin> --count=64 --format=... refs/remotes/`, `ls-tree HEAD .gitmodules` (nested detection), `config` reads of the remote URLs.
+- Dirty state: `diff-index --cached --no-ext-diff --no-textconv HEAD`, `ls-files --stage --debug -z` (streamed, compared with `lstat` in Go) and a bounded `ls-files --others --exclude-standard -z`.
 
-**Untracked scan bounded to presence (chosen).** A full untracked listing can be unbounded and slow. Presence is what a reviewer needs; counts are not promised.
-
-**Direct submodules only (chosen).** Recursion makes the bounds multiplicative. Nested submodules are reported and left for a later specification.
+Not used: `git status`, which can run clean and process filters; the inventory comparison, which is a poor fit; `git submodule` subcommands and `foreach`, which can run configured commands and mix human output with state; any fetch, ls-remote or clone.
 
 **Names (recorded choice).** Result statuses `incomplete` and `refused` and the code `pins-failed` differ from inventory's `partial`, inspect's `unsupported` and `git-inventory-failed`. They describe an audit that must say whether it examined everything and are kept consistent within this contract. Refusal and finding codes follow the existing kebab-case vocabulary.
 
