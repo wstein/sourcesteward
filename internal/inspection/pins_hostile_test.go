@@ -62,13 +62,13 @@ func (h hostile) plant(t *testing.T, gitDir, workTree string, includes bool) {
 	for _, name := range hostileHooks {
 		p := filepath.Join(hooks, name)
 		writeFile(t, p, "#!/bin/sh\nprintf '%s\\n' 'hook:"+name+"' >> '"+h.log+"'\nexit 0\n")
-		os.Chmod(p, 0o755)
+		mustOS(t, os.Chmod(p, 0o755))
 	}
 	hooksPath := filepath.Join(h.dir, "evil-hooks-"+filepath.Base(gitDir))
 	for _, name := range hostileHooks {
 		p := filepath.Join(hooksPath, name)
 		writeFile(t, p, "#!/bin/sh\nprintf '%s\\n' 'hookspath:"+name+"' >> '"+h.log+"'\nexit 0\n")
-		os.Chmod(p, 0o755)
+		mustOS(t, os.Chmod(p, 0o755))
 	}
 	set("core.hooksPath", hooksPath)
 	set("core.fsmonitor", h.script(t, "fsmonitor"))
@@ -108,7 +108,7 @@ func statDirty(t *testing.T, workTree string) {
 	filepath.WalkDir(workTree, func(p string, d os.DirEntry, err error) error {
 		if err == nil && d.Type().IsRegular() && !strings.Contains(p, "/.git") {
 			old := time.Now().Add(-time.Hour)
-			os.Chtimes(p, old, old)
+			mustOS(t, os.Chtimes(p, old, old))
 		}
 		return nil
 	})
@@ -117,12 +117,16 @@ func statDirty(t *testing.T, workTree string) {
 // hostileGlobalConfig puts the same planted behaviour in the user's global configuration.
 func (h hostile) hostileGlobalConfig(t *testing.T) {
 	t.Helper()
+	pinsIsolateHome(t) // never write a hostile configuration into the real home directory
 	home := os.Getenv("HOME")
+	if !strings.HasPrefix(home, os.TempDir()) {
+		t.Fatalf("HOME %q is not a temporary directory", home)
+	}
 	writeFile(t, filepath.Join(home, ".gitconfig"), "[core]\n\tfsmonitor = "+h.script(t, "global-fsmonitor")+"\n\thooksPath = "+filepath.Join(h.dir, "evil-hooks-global")+"\n[filter \"evil\"]\n\tclean = "+h.script(t, "global-clean")+"\n[credential]\n\thelper = !"+h.script(t, "global-credential")+"\n")
 	for _, name := range hostileHooks {
 		p := filepath.Join(h.dir, "evil-hooks-global", name)
 		writeFile(t, p, "#!/bin/sh\nprintf '%s\\n' 'global-hook:"+name+"' >> '"+h.log+"'\n")
-		os.Chmod(p, 0o755)
+		mustOS(t, os.Chmod(p, 0o755))
 	}
 }
 
@@ -187,7 +191,7 @@ func TestPinsHostileConfigurationNeverExecutes(t *testing.T) {
 			t.Fatalf("control did not run %q (ran: %q): the fixture is not hostile enough", want, ran)
 		}
 	}
-	os.Remove(h.log)
+	rmAll(t, h.log)
 	statDirty(t, f.Super)
 	statDirty(t, member)
 
@@ -231,7 +235,7 @@ func TestPinsHostileSubmodulesAreRefusedAndOthersStillReported(t *testing.T) {
 	mkdirs(t, elsewhere)
 	git(t, f.Root, "clone", "-q", f.Sub, filepath.Join(elsewhere, "clone"))
 	h.plant(t, filepath.Join(elsewhere, "clone", ".git"), filepath.Join(elsewhere, "clone"), true)
-	os.RemoveAll(filepath.Join(f.Super, "linked"))
+	rmAll(t, filepath.Join(f.Super, "linked"))
 	if err := os.Symlink(filepath.Join(elsewhere, "clone"), filepath.Join(f.Super, "linked")); err != nil {
 		t.Fatal(err)
 	}
@@ -239,8 +243,8 @@ func TestPinsHostileSubmodulesAreRefusedAndOthersStillReported(t *testing.T) {
 	git(t, f.Root, "config", "--file", filepath.Join(f.Super, ".git", "modules", "worktreecfg", "config"), "core.worktree", elsewhere)
 	// 4. An in-place .git directory whose alternates lead outside.
 	git(t, f.Root, "clone", "-q", f.Sub, filepath.Join(f.Super, "inplace-alt-tmp"))
-	os.RemoveAll(filepath.Join(f.Super, "inplace-alt"))
-	os.Rename(filepath.Join(f.Super, "inplace-alt-tmp"), filepath.Join(f.Super, "inplace-alt"))
+	rmAll(t, filepath.Join(f.Super, "inplace-alt"))
+	mustOS(t, os.Rename(filepath.Join(f.Super, "inplace-alt-tmp"), filepath.Join(f.Super, "inplace-alt")))
 	writeFile(t, filepath.Join(f.Super, "inplace-alt", ".git", "objects", "info", "alternates"), outside+"/objects\n")
 	h.hostileGlobalConfig(t)
 
@@ -314,7 +318,7 @@ func TestPinsProtocolIsolationBlocksExtLazyFetch(t *testing.T) {
 	if _, err := os.Stat(marker); err != nil {
 		t.Skipf("control: this Git did not lazy-fetch through ext:: (%v); the fixture cannot prove isolation here", err)
 	}
-	os.Remove(marker)
+	rmAll(t, marker)
 
 	run := newPinsRunner(context.Background())
 	run.env = func(env []string) []string {

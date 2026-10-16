@@ -215,13 +215,13 @@ func TestPinsSafeRefusesSymlinkedGitFileAndGitDirectoryParts(t *testing.T) {
 	// .git as a symlink.
 	dotgit := filepath.Join(f.Super, "member", ".git")
 	saved, _ := os.ReadFile(dotgit)
-	os.Remove(dotgit)
+	rmAll(t, dotgit)
 	if err := os.Symlink(elsewhere, dotgit); err != nil {
 		t.Fatal(err)
 	}
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(dotgit)
-	os.WriteFile(dotgit, saved, 0o600)
+	rmAll(t, dotgit)
+	mustOS(t, os.WriteFile(dotgit, saved, 0o600))
 	mustResolve(t, s, spec)
 	// A symlinked part inside the Git directory.
 	gd := filepath.Join(f.Super, ".git", "modules", "member")
@@ -235,13 +235,13 @@ func TestPinsSafeRefusesSymlinkedGitFileAndGitDirectoryParts(t *testing.T) {
 			t.Fatal(err)
 		}
 		mustRefuse(t, s, spec, "submodule-path-unsafe")
-		os.Remove(orig)
-		os.Rename(hold, orig)
+		rmAll(t, orig)
+		mustOS(t, os.Rename(hold, orig))
 	}
 	mustResolve(t, s, spec)
 	// A symlinked modules directory.
 	mods := filepath.Join(f.Super, ".git", "modules")
-	os.Rename(mods, mods+".held")
+	mustOS(t, os.Rename(mods, mods+".held"))
 	if err := os.Symlink(mods+".held", mods); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestPinsSafeRefusesPointerOutsideOrUnexpected(t *testing.T) {
 	}
 	// The correct pointer in both relative and absolute spelling resolves.
 	for _, ok := range []string{"gitdir: ../.git/modules/member\n", "gitdir: " + filepath.Join(f.Super, ".git", "modules", "member") + "\n"} {
-		os.WriteFile(dotgit, []byte(ok), 0o600)
+		mustOS(t, os.WriteFile(dotgit, []byte(ok), 0o600))
 		mustResolve(t, s, spec)
 	}
 }
@@ -298,18 +298,18 @@ func TestPinsSafeRefusesCommondirAlternatesAndWorktreeLeavingTheAllowedTree(t *t
 		t.Logf("%s: %s", name, msg)
 	}
 	commondir := filepath.Join(gd, "commondir")
-	check("commondir outside", func() { writeFile(t, commondir, outside+"\n") }, func() { os.Remove(commondir) })
-	check("commondir relative escape", func() { writeFile(t, commondir, "../../../../outside\n") }, func() { os.Remove(commondir) })
+	check("commondir outside", func() { writeFile(t, commondir, outside+"\n") }, func() { rmAll(t, commondir) })
+	check("commondir relative escape", func() { writeFile(t, commondir, "../../../../outside\n") }, func() { rmAll(t, commondir) })
 	alt := filepath.Join(gd, "objects", "info", "alternates")
-	check("alternates outside", func() { writeFile(t, alt, outside+"/objects\n") }, func() { os.Remove(alt) })
-	check("alternates relative escape", func() { writeFile(t, alt, "# c\n../../../../../../outside\n") }, func() { os.Remove(alt) })
-	check("alternates quoted outside", func() { writeFile(t, alt, "\""+outside+"\"\n") }, func() { os.Remove(alt) })
+	check("alternates outside", func() { writeFile(t, alt, outside+"/objects\n") }, func() { rmAll(t, alt) })
+	check("alternates relative escape", func() { writeFile(t, alt, "# c\n../../../../../../outside\n") }, func() { rmAll(t, alt) })
+	check("alternates quoted outside", func() { writeFile(t, alt, "\""+outside+"\"\n") }, func() { rmAll(t, alt) })
 	check("alternates symlink", func() {
-		os.Symlink(outside, alt)
-	}, func() { os.Remove(alt) })
+		mustOS(t, os.Symlink(outside, alt))
+	}, func() { rmAll(t, alt) })
 	cfg := filepath.Join(gd, "config")
 	orig, _ := os.ReadFile(cfg)
-	restore := func() { os.WriteFile(cfg, orig, 0o600) }
+	restore := func() { mustOS(t, os.WriteFile(cfg, orig, 0o600)) }
 	check("core.worktree elsewhere", func() { git(t, f.Root, "config", "--file", cfg, "core.worktree", outside) }, restore)
 	check("core.worktree relative escape", func() { git(t, f.Root, "config", "--file", cfg, "core.worktree", "../../../../outside") }, restore)
 	// Confined entries are accepted: an alternate and a commondir inside the modules directory.
@@ -317,7 +317,7 @@ func TestPinsSafeRefusesCommondirAlternatesAndWorktreeLeavingTheAllowedTree(t *t
 	git(t, f.Root, "clone", "-q", "--bare", f.Sub, sibling)
 	writeFile(t, alt, filepath.Join(sibling, "objects")+"\n")
 	mustResolve(t, s, spec)
-	os.Remove(alt)
+	rmAll(t, alt)
 	// core.worktree unset is fine: Git is always told the validated worktree explicitly.
 	git(t, f.Root, "config", "--file", cfg, "--unset", "core.worktree")
 	mustResolve(t, s, spec)
@@ -348,7 +348,7 @@ func TestPinsSafeRecheckDetectsReplacedDirectories(t *testing.T) {
 	}
 	// Replace the worktree directory by an identical copy: same path, different inode.
 	w := filepath.Join(f.Super, "member")
-	os.Rename(w, w+".old")
+	mustOS(t, os.Rename(w, w+".old"))
 	mkdirs(t, w)
 	if err := os.Rename(filepath.Join(w+".old", ".git"), filepath.Join(w, ".git")); err != nil {
 		t.Fatal(err)
@@ -357,8 +357,8 @@ func TestPinsSafeRecheckDetectsReplacedDirectories(t *testing.T) {
 		t.Fatal("a replaced worktree directory must fail the recheck")
 	}
 	// A directory replaced by a symlink also fails.
-	os.RemoveAll(w)
-	os.Symlink(f.Root, w)
+	rmAll(t, w)
+	mustOS(t, os.Symlink(f.Root, w))
 	if err := s.recheck(dirs); err == nil {
 		t.Fatal("a symlink must fail the recheck")
 	}
@@ -369,17 +369,17 @@ func TestPinsSafeRecheckDetectsReplacedGitDirectory(t *testing.T) {
 	s := safetyFor(t, f.Super)
 	dirs := mustResolve(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"})
 	gd := dirs.GitDir
-	os.Rename(gd, gd+".old")
+	mustOS(t, os.Rename(gd, gd+".old"))
 	if err := os.Rename(gd+".old", gd+".new"); err != nil {
 		t.Fatal(err)
 	}
-	os.Rename(gd+".new", gd) // same directory moved back: identity unchanged
+	mustOS(t, os.Rename(gd+".new", gd)) // same directory moved back: identity unchanged
 	if err := s.recheck(dirs); err != nil {
 		t.Fatalf("an unchanged directory must pass: %v", err)
 	}
 	mkdirs(t, gd+".copy")
-	os.RemoveAll(gd)
-	os.Rename(gd+".copy", gd)
+	rmAll(t, gd)
+	mustOS(t, os.Rename(gd+".copy", gd))
 	if err := s.recheck(dirs); err == nil {
 		t.Fatal("a replaced Git directory must fail the recheck")
 	}
@@ -394,20 +394,45 @@ func TestPinsOwnerCheckAcceptsEffectiveUserRealFiles(t *testing.T) {
 }
 
 func TestPinsOwnerExtractionReadsTheRealOwner(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("running as root: no directory is foreign to the effective user")
-	}
-	info, err := os.Lstat("/")
+	// A file this test creates belongs to the effective user.
+	own := filepath.Join(t.TempDir(), "own")
+	writeFile(t, own, "x")
+	info, err := os.Lstat(own)
 	if err != nil {
-		t.Skip(err)
+		t.Fatal(err)
 	}
-	uid, ok := pinsFileOwner(info)
-	if !ok {
-		t.Fatal("the owner of a real directory must be readable on a Unix host")
+	if uid, ok := pinsFileOwner(info); !ok || uid != uint32(os.Geteuid()) || pinsEffectiveUID() != uint32(os.Geteuid()) {
+		t.Fatalf("owner of a created file: uid %d ok=%v, effective %d", uid, ok, os.Geteuid())
 	}
-	if uid == pinsEffectiveUID() {
-		t.Skipf("/ is owned by the effective user here (uid %d)", uid)
+	// The root directory belongs to root on every supported Unix host.
+	root, err := os.Lstat("/")
+	if err != nil {
+		t.Fatal(err)
 	}
+	if uid, ok := pinsFileOwner(root); !ok || uid != 0 {
+		t.Fatalf("owner of /: uid %d ok=%v", uid, ok)
+	}
+}
+
+func TestPinsOwnerUnknownFailsClosedEvenForRoot(t *testing.T) {
+	f := newPinsFixture(t)
+	l, run := layoutFor(t, f.Super)
+	s := newPinsSafety(l, run)
+	s.euid = 0 // an unknown owner reported as 0 must not match the effective user 0
+	s.owner = func(fs.FileInfo) (uint32, bool) { return 0, false }
+	mustRefuse(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"}, "submodule-unsafe-owner")
+}
+
+func TestPinsConfigurationThatCannotBeReadFailsClosed(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode 000 file")
+	}
+	f := newPinsFixture(t)
+	s := safetyFor(t, f.Super)
+	cfg := filepath.Join(f.Super, ".git", "modules", "member", "config")
+	mustOS(t, os.Chmod(cfg, 0))
+	defer os.Chmod(cfg, 0o600)
+	mustRefuse(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"}, "submodule-path-unsafe")
 }
 
 func TestPinsOwnerCheckRefusesBeforeAnyGitProcess(t *testing.T) {

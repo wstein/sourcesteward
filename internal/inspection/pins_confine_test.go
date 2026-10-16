@@ -66,7 +66,7 @@ func TestPinsConfineInPlaceAllowedTreeIsOnlyItsOwnGitDirectory(t *testing.T) {
 		if msg := mustRefuse(t, s, spec, "submodule-path-unsafe"); !strings.Contains(msg, "alternates") {
 			t.Errorf("%s: %s", name, msg)
 		}
-		os.Remove(alt)
+		rmAll(t, alt)
 	}
 	// commondir is refused wherever it points: a submodule Git directory never legitimately has one.
 	cd := filepath.Join(member, ".git", "commondir")
@@ -76,7 +76,7 @@ func TestPinsConfineInPlaceAllowedTreeIsOnlyItsOwnGitDirectory(t *testing.T) {
 			t.Errorf("%s: %s", name, msg)
 		}
 	}
-	os.Remove(cd)
+	rmAll(t, cd)
 	mustResolve(t, s, spec)
 }
 
@@ -113,7 +113,7 @@ func TestPinsConfineAlternatesTargetsAreCheckedWithoutFollowingLinks(t *testing.
 	writeFile(t, filepath.Join(sib, "objects", "info", "alternates"), filepath.Join(f.Sub, ".git", "objects")+"\n")
 	writeFile(t, alt, filepath.Join(sib, "objects")+"\n")
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(filepath.Join(sib, "objects", "info", "alternates"))
+	rmAll(t, filepath.Join(sib, "objects", "info", "alternates"))
 	mustResolve(t, s, spec)
 	// A missing target is refused: Git would silently ignore it, an audit should not.
 	writeFile(t, alt, filepath.Join(mods, "absent", "objects")+"\n")
@@ -140,13 +140,13 @@ func TestPinsConfineCommondirIsRefusedAndUnreadableFailsClosed(t *testing.T) {
 	cd := filepath.Join(gd, "commondir")
 	writeFile(t, cd, ".\n")
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(cd)
+	rmAll(t, cd)
 	mustSymlink(t, gd, cd)
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(cd)
+	rmAll(t, cd)
 	mustMkfifo(t, cd)
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(cd)
+	rmAll(t, cd)
 	mustResolve(t, s, spec)
 }
 
@@ -161,11 +161,11 @@ func TestPinsConfineConfigWorktreeAndIncludes(t *testing.T) {
 	cw := filepath.Join(gd, "config.worktree")
 	git(t, f.Root, "config", "--file", cw, "core.worktree", elsewhere)
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(cw)
+	rmAll(t, cw)
 	// A symlinked config.worktree.
 	mustSymlink(t, filepath.Join(gd, "config"), cw)
 	mustRefuse(t, s, spec, "submodule-path-unsafe")
-	os.Remove(cw)
+	rmAll(t, cw)
 	// include and includeIf keys import configuration the audit has not read.
 	cfg := filepath.Join(gd, "config")
 	orig, _ := os.ReadFile(cfg)
@@ -174,7 +174,7 @@ func TestPinsConfineConfigWorktreeAndIncludes(t *testing.T) {
 		if msg := mustRefuse(t, s, spec, "submodule-path-unsafe"); !strings.Contains(msg, "include") {
 			t.Errorf("%s: %s", kv[0], msg)
 		}
-		os.WriteFile(cfg, orig, 0o600)
+		mustOS(t, os.WriteFile(cfg, orig, 0o600))
 	}
 	mustResolve(t, s, spec)
 }
@@ -186,8 +186,8 @@ func TestPinsConfineGitDirectoryEntriesMustBePlainFilesAndDirectories(t *testing
 	outside := filepath.Join(f.Root, "outside")
 	mkdirs(t, outside)
 	type mutate func(path string)
-	fifo := func(p string) { os.RemoveAll(p); mustMkfifo(t, p) }
-	link := func(p string) { os.RemoveAll(p); mustSymlink(t, outside, p) }
+	fifo := func(p string) { rmAll(t, p); mustMkfifo(t, p) }
+	link := func(p string) { rmAll(t, p); mustSymlink(t, outside, p) }
 	for name, c := range map[string]struct {
 		rel string
 		do  mutate
@@ -228,9 +228,9 @@ func TestPinsConfineGitDirectoryEntriesMustBePlainFilesAndDirectories(t *testing
 			if time.Since(start) > 2*time.Second {
 				t.Fatal("refusal took until the deadline")
 			}
-			os.RemoveAll(p)
+			rmAll(t, p)
 			if saved != nil {
-				os.WriteFile(p, saved, 0o600)
+				mustOS(t, os.WriteFile(p, saved, 0o600))
 			}
 		})
 	}
@@ -270,7 +270,7 @@ func TestPinsConfineRecheckRevalidatesGitDirectoryContents(t *testing.T) {
 	if err := s.recheck(dirs); err == nil {
 		t.Fatal("a config replaced by a symlink after validation must fail the recheck")
 	}
-	os.Remove(cfg)
+	rmAll(t, cfg)
 	mustRename(t, cfg+".held", cfg)
 	writeFile(t, filepath.Join(gd, "commondir"), ".\n")
 	if err := s.recheck(dirs); err == nil {
@@ -288,23 +288,23 @@ func TestPinsConfineRefusesWritableSubmoduleDirectories(t *testing.T) {
 		fi, _ := os.Stat(dir)
 		orig := fi.Mode().Perm()
 		// World-writable: refused.
-		os.Chmod(dir, orig|0o002)
+		mustOS(t, os.Chmod(dir, orig|0o002))
 		mustRefuse(t, newPinsSafety(l, run), spec, "submodule-unsafe-owner")
 		// Group-writable by the effective group: allowed (private-group umask 002 is common).
-		os.Chmod(dir, orig&^0o002|0o020)
+		mustOS(t, os.Chmod(dir, orig&^0o002|0o020))
 		mustResolve(t, newPinsSafety(l, run), spec)
 		// Group-writable by a foreign group: refused.
 		s := newPinsSafety(l, run)
 		s.gid = func(fs.FileInfo) (uint32, bool) { return s.egid + 1, true }
 		mustRefuse(t, s, spec, "submodule-unsafe-owner")
-		os.Chmod(dir, orig)
+		mustOS(t, os.Chmod(dir, orig))
 	}
 }
 
 func TestPinsRunnerEnforcesAPerInvocationDeadline(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "git"), "#!/bin/sh\nsleep 30\n")
-	os.Chmod(filepath.Join(dir, "git"), 0o755)
+	mustOS(t, os.Chmod(filepath.Join(dir, "git"), 0o755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	run := newPinsRunner(context.Background())
 	run.timeout = 300 * time.Millisecond

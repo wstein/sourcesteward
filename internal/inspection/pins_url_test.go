@@ -209,6 +209,7 @@ func TestPinsNetworkSentinelIsNeverContacted(t *testing.T) {
 	}
 	// Re-arm: a fresh sentinel for the audited run.
 	log, _ = networkSentinel(t)
+	gitLog, _ := pinsSentinels(t)
 	marker := filepath.Join(f.Root, "executed")
 	hostile := []string{"sentinel://host/repo", "ext::sh -c 'touch " + marker + "'", "https://user:secret@sentinel.invalid/x"}
 	git(t, f.Super, "config", "-f", ".gitmodules", "submodule.member.url", hostile[0])
@@ -219,6 +220,7 @@ func TestPinsNetworkSentinelIsNeverContacted(t *testing.T) {
 	git(t, member, "remote", "add", "extra", hostile[1])
 	git(t, member, "remote", "add", "creds", hostile[2])
 
+	fixtureCalls := len(gitLog())
 	run := newPinsRunner(context.Background())
 	l, err := newPinsSuperLayout(run, f.Super)
 	if err != nil {
@@ -242,6 +244,7 @@ func TestPinsNetworkSentinelIsNeverContacted(t *testing.T) {
 		t.Fatalf("%v %v", remotes, err)
 	}
 	_ = pinsMatchRemote(info, remotes)
+	requireAllowlisted(t, gitLog()[fixtureCalls:])
 	if got := log(); len(got) != 0 {
 		t.Fatalf("a remote helper was contacted: %v", got)
 	}
