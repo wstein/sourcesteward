@@ -19,30 +19,28 @@ The table of statuses, diagnostics and exit codes is normative in [spec.md](../s
 
 ## Human output
 
-Rendered from the same result, bounded, with every control character escaped. A header, GitHub's own report, then three groups, then sources and notices:
+Rendered from the same result, bounded, with every control character escaped. Only the fixed lines and item summaries of the data model (normative) appear:
 
 ```text
 Merge state: #112 example/project (open, not a draft)
-Head f709f8b… behind base tip cccccc0… by 3; base branch main
 GitHub reports: mergeable=true mergeable_state=behind (GitHub's summary, not a conclusion)
-
 Waiting on:
-  [observed] required-check "check": pending (check-runs, branch-protection)
-  [observed] head-behind-base: 3 commits behind; strict rule applies (compare, branch-protection)
+  [observed] required-check "check": Required status context check: pending. (sources: branch-protection, base-branch, check-runs)
+  [observed] head-behind-base: The head is 3 commits behind the base branch tip; strict rule: true. (sources: compare, branch-protection)
 May be waiting on:
   (none)
 Context:
-  [observed] auto-merge: enabled, method rebase (pull-request)
-  [observed] merge-methods: rebase only (repository, branch-protection)
-  [observed] strict-required-status-checks, linear-history-required, administrators-included (branch-protection)
-
-Sources: pull-request ok; repository ok; base-branch ok; branch-protection ok; branch-rules ok;
-  compare ok; check-runs ok; commit-statuses ok; reviews skipped (not-needed)
+  [observed] strict-required-status-checks: A rule requires the head to be up to date with the base. (sources: branch-protection)
+  [observed] auto-merge: Auto-merge is enabled with method rebase. (sources: pull-request)
+  [observed] merge-methods: Merge methods not excluded by readable sources: rebase; rule limit: unknown. (sources: repository, branch-protection)
+  [observed] linear-history-required: A rule requires linear history. (sources: branch-protection)
+  [observed] administrators-included: Rules apply to administrators: true. (sources: branch-protection)
+Sources: pull-request ok; repository ok; base-branch ok; branch-protection ok; branch-rules ok; compare ok; check-runs ok; commit-statuses ok; reviews skipped (not-needed)
 Complete: yes. Network reads: 10 of at most 50.
 Notice: Sampled evidence; it does not assert that the pull request can be merged or will merge, and it authorizes nothing.
 ```
 
-An `unknown` item prints its reason, for example `[unknown] classic-protection-unreadable: protection details are not readable with this token (not-found-ambiguous)`. With no `waits` and no `may-wait` items the "Waiting on" group reads `No waiting condition was found in the evidence read.` followed by the notice; outside the fixed notice and the labelled GitHub line the text never uses the words mergeable, ready, will merge or can merge. This wording is a tested invariant (SC-003).
+An `unknown` item prints its template with the appended reason, for example `[unknown] classic-protection-unreadable: Classic branch protection exists but its details are not readable: strict, enforce_admins. Reason: not-found-ambiguous. (sources: base-branch, branch-protection)`. With no `waits` and no `may-wait` items the fixed line `No waiting condition was found in the evidence read.` is printed after the groups; outside the fixed notice and the labelled GitHub line the text never uses the words mergeable, ready, will merge or can merge. This wording is a tested invariant (SC-003).
 
 ## JSON
 
@@ -124,7 +122,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "waits",
    "confidence": "observed",
    "reason": null,
-   "summary": "Required status context is pending at the head.",
+   "summary": "Required status context check: pending.",
    "detail": {
     "state": "pending",
     "origin": [
@@ -164,7 +162,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "info",
    "confidence": "observed",
    "reason": null,
-   "summary": "The base branch requires the head to be up to date before required checks count.",
+   "summary": "A rule requires the head to be up to date with the base.",
    "detail": {
     "origin": [
      "branch-protection"
@@ -185,7 +183,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "waits",
    "confidence": "observed",
    "reason": null,
-   "summary": "The head is 3 commits behind the base branch tip and a strict rule applies.",
+   "summary": "The head is 3 commits behind the base branch tip; strict rule: true.",
    "detail": {
     "behind_by": 3,
     "ahead_by": 1,
@@ -213,7 +211,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "info",
    "confidence": "observed",
    "reason": null,
-   "summary": "Auto-merge is enabled with the rebase method.",
+   "summary": "Auto-merge is enabled with method rebase.",
    "detail": {
     "method": "rebase"
    },
@@ -232,7 +230,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "info",
    "confidence": "observed",
    "reason": null,
-   "summary": "Only the rebase merge method is allowed by readable sources.",
+   "summary": "Merge methods not excluded by readable sources: rebase; rule limit: unknown.",
    "detail": {
     "allowed": [
      "rebase"
@@ -266,7 +264,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "info",
    "confidence": "observed",
    "reason": null,
-   "summary": "The base branch requires linear history.",
+   "summary": "A rule requires linear history.",
    "detail": {
     "origin": [
      "branch-protection"
@@ -287,7 +285,7 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "info",
    "confidence": "observed",
    "reason": null,
-   "summary": "The rules are enforced for administrators.",
+   "summary": "Rules apply to administrators: true.",
    "detail": {
     "enabled": true
    },
