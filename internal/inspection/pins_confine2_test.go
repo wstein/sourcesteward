@@ -385,3 +385,116 @@ func TestPinsProtocolIsolationBlocksFtpsAndHelperTransports(t *testing.T) {
 		})
 	}
 }
+
+func chmodNonDirs(t *testing.T, root string, mode func(os.FileInfo) os.FileMode) {
+	t.Helper()
+	mustOS(t, filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type().IsRegular() {
+			fi, _ := d.Info()
+			return os.Chmod(p, mode(fi))
+		}
+		return nil
+	}))
+}
+
+func TestPinsWritableCheckCoversEveryPathComponent(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", "--name", "x/y", f.Sub, "dir/sub")
+	git(t, f.Super, "commit", "-qm", "nested")
+	s := safetyFor(t, f.Super)
+	spec := pinsSubmoduleSpec{Path: "dir/sub", Name: "x/y"}
+	mustResolve(t, s, spec)
+	mods := filepath.Join(f.Super, ".git", "modules")
+	for name, d := range map[string]string{"parent of a nested path": filepath.Join(f.Super, "dir"), "name directory a/": filepath.Join(mods, "x")} {
+		old, _ := os.Stat(d)
+		mustOS(t, os.Chmod(d, 0o777))
+		mustRefuse(t, s, spec, "submodule-unsafe-owner")
+		mustOS(t, os.Chmod(d, old.Mode().Perm()))
+		_ = name
+	}
+	mustOS(t, os.Chmod(mods, 0o777))
+	if msg := mustRefuse(t, s, spec, "submodule-unsafe-owner"); !strings.Contains(msg, ".git/modules") || !strings.Contains(msg, "chmod -R o-w") {
+		t.Fatal(msg)
+	}
+}
+
+func TestPinsWritableCheckCoversFilesUnderUmask000(t *testing.T) {
+	old := syscall.Umask(0)
+	f := newPinsFixture(t)
+	syscall.Umask(old)
+	spec := pinsSubmoduleSpec{Path: "member", Name: "member"}
+	gd := filepath.Join(f.Super, ".git", "modules", "member")
+	// Fix every directory but leave the files as Git created them (0666): still refused.
+	for _, root := range []string{filepath.Join(f.Super, ".git", "modules"), filepath.Join(f.Super, "member")} {
+		mustOS(t, filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err == nil && d.IsDir() {
+				return os.Chmod(p, 0o755)
+			}
+			return err
+		}))
+	}
+	s := safetyFor(t, f.Super)
+	mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	// Each fixed-list file on its own.
+	chmodNonDirs(t, gd, func(fi os.FileInfo) os.FileMode { return fi.Mode().Perm() &^ 0o022 })
+	mustResolve(t, s, spec)
+	for _, name := range []string{"HEAD", "config", "index", "packed-refs", "shallow", "config.worktree"} {
+		p := filepath.Join(gd, name)
+		created := false
+		if _, err := os.Stat(p); err != nil {
+			writeFile(t, p, "x")
+			created = true
+		}
+		fi, _ := os.Stat(p)
+		mustOS(t, os.Chmod(p, fi.Mode().Perm()|0o002))
+		if name == "config.worktree" || name == "shallow" || name == "packed-refs" || name == "index" {
+			// these may be unparseable as written; only the refusal reason matters
+			if _, refusal, _ := s.resolve(spec); refusal == nil {
+				t.Errorf("%s world-writable accepted", name)
+			}
+		} else {
+			mustRefuse(t, s, spec, "submodule-unsafe-owner")
+		}
+		if created {
+			rmAll(t, p)
+		} else {
+			mustOS(t, os.Chmod(p, fi.Mode().Perm()&^0o022))
+		}
+	}
+	// A world-writable empty alternates file and a world-writable walked regular entry (a ref).
+	alt := filepath.Join(gd, "objects", "info", "alternates")
+	writeFile(t, alt, "")
+	mustOS(t, os.Chmod(alt, 0o666))
+	mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	rmAll(t, alt)
+	ref := filepath.Join(gd, "refs", "heads", "main")
+	if _, err := os.Stat(ref); err == nil {
+		mustOS(t, os.Chmod(ref, 0o666))
+		mustRefuse(t, s, spec, "submodule-unsafe-owner")
+	}
+}
+
+func TestPinsFixtureUnderUmask002Resolves(t *testing.T) {
+	old := syscall.Umask(0o002)
+	defer syscall.Umask(old)
+	f := newPinsFixture(t)
+	mustResolve(t, safetyFor(t, f.Super), pinsSubmoduleSpec{Path: "member", Name: "member"})
+}
+
+func TestPinsReadDirRefusesAnotherRealDirectoryRenamedIntoPlace(t *testing.T) {
+	base := pinsRealDir(t)
+	mkdirs(t, filepath.Join(base, "d"), filepath.Join(base, "other"))
+	defer func() { pinsBeforeOpen = nil }()
+	pinsBeforeOpen = func() {
+		mustRename(t, filepath.Join(base, "d"), filepath.Join(base, "d.old"))
+		mustRename(t, filepath.Join(base, "other"), filepath.Join(base, "d"))
+	}
+	s := &pinsSafety{owner: pinsFileOwner, euid: pinsEffectiveUID(), gid: pinsFileGroup, egid: pinsEffectiveGID(), entryLimit: 10}
+	budget := 10
+	if _, r := s.readDir(base, "d", "test", &budget); r == nil || !strings.Contains(r.Message, "changed while opening") {
+		t.Fatalf("%v", r)
+	}
+}
