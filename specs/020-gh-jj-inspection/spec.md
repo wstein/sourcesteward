@@ -1,5 +1,7 @@
 # Feature Specification: Shared GitHub inspection and gh jj entry point
 
+Transport mechanism and bounds are superseded by [Spec 022](../022-bounded-go-gh/spec.md) when the SDK migration lands. Native behavior, CLI options and published JSON contracts remain unchanged. The original implementation decisions below are historical.
+
 **Feature Branch**: `codex/020-gh-jj-inspection`  
 **Created**: 2026-10-16  
 **Status**: Draft for analyzed implementation  

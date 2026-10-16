@@ -6,7 +6,7 @@ SourceSteward is a Go CLI with a static project site. Its backend-neutral execut
 ```text
 cmd/stw | cmd/gh-jj → internal/cli → internal/inspection → fixed Git built-ins | sandboxed native jj + read-only metadata
                        → internal/workspace → fixed native Git/jj creation + private state journal
-                       → internal/hosting → native remote evidence + bounded gh API GET reads
+                       → internal/hosting → native remote evidence + bounded go-gh HTTP GET reads
                        → Cobra + standard library
 scripts/       → source/documentation checks and Pages packaging
 specs/         → acceptance contracts, plans, tasks and evidence pointers
@@ -43,4 +43,4 @@ defines the feedback loop. Website packaging stages an explicit public-guide all
 local assets and versioned schemas through repo-owned Hugo templates. Internal knowledge
 files stay outside the artifact; revision.txt identifies the exact checked source SHA. No release automation or agent scheduler is installed.
 
-The optional gh-jj executable delegates through the same CLI/operation boundary as stw. Hosting repository resolution is local; explicit PR/CI inspection adds bounded GitHub reads through caller-owned gh authentication. See [hosting](docs/hosting.md). No Rust library/FFI, API writes or automatic extension installation is introduced.
+The optional gh-jj executable delegates through the same CLI/operation boundary as stw. Hosting repository resolution is local; explicit PR/CI inspection adds bounded GitHub reads through caller-owned bounded gh authentication and the pinned official go-gh/v2 HTTP client. Raw and normalized bodies are bounded, redirects refuse, and native discovery never uses SDK Git helpers. See [hosting](docs/hosting.md). No Rust library/FFI, API writes or automatic extension installation is introduced.

@@ -32,8 +32,9 @@ Fork head/base repositories remain separate identities. PR numbers are explicit;
 there is no automatic branch/bookmark-to-PR inference in this feature.
 
 PR/CI reads require GitHub CLI 2.102.0 or newer and the caller's existing
-host-specific authentication. SourceSteward invokes fixed `gh api` GET requests
-outside the inspected repository. No editor, pager, git credential helper, fetch,
+host-specific authentication. SourceSteward retrieves a token with bounded
+`gh auth token --hostname HOST` execution outside the inspected repository, then
+uses the pinned official go-gh/v2 HTTP client for fixed HTTPS GET requests. No editor, pager, git credential helper, fetch,
 push, API mutation or CI rerun is requested. Authentication configuration linked
 inside the inspected target is refused. Tokens and raw subprocess/API error bodies
 are not included in diagnostics. Native jj retains enforced read-only sandboxing,
@@ -43,9 +44,16 @@ CI samples checks and commit statuses at the PR's exact head SHA, then rechecks
 head/base identities. Missing permissions, malformed or incomplete pages, moved
 heads and exhausted bounds produce incomplete error results. No aggregate passing
 CI, required-check satisfaction, review approval or merge eligibility is inferred.
-Evidence is sampled rather than transactional. API text reflects gh's response processing and is not a byte-for-byte raw HTTP capture. Limits are 30 seconds total,
-1 MiB per subprocess output/final JSON result, 10 pages per collection and 1000
-combined CI records. Native inspection retains its tighter bounds.
+Evidence is sampled rather than transactional. API text reflects the SDK's JSON sanitization and is not a byte-for-byte raw HTTP
+capture. Limits are 30 seconds total; 16 KiB for each authentication stdout/stderr
+buffer; 1 MiB for each raw HTTP body, sanitized HTTP body, version-subprocess
+buffer and final JSON result; 10 pages per collection; and 1000 combined CI records.
+HTTP body limits include error responses, with at most one extra detection byte.
+Redirects and compressed responses are refused. Automatic decompression, SDK
+cache/logging, repository/API-host overrides and socket configuration are disabled.
+GitHub uses api.github.com; ghe.com tenancy uses api.HOST; other Enterprise hosts
+use HOST/api/v3. Caller-configured HTTP proxies remain trusted caller infrastructure.
+Live Enterprise and real-keyring acceptance are separate from offline fixtures. Native inspection retains its tighter bounds.
 
 All data commands offer human and `--json` output. Success exits 0, operational
 failure exits 1 with a structured error observation, and usage errors exit 2.
