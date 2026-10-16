@@ -41,6 +41,8 @@ func TestPinsCompareEntryDecidesFromMetadataOnly(t *testing.T) {
 		{"inode only", func(_ *pinsIndexEntry, s **pinsStatData, _ *pinsCompareConfig) { (*s).Ino = 10 }, "unknown", "inode"},
 		{"device only", func(_ *pinsIndexEntry, s **pinsStatData, _ *pinsCompareConfig) { (*s).Dev = 8 }, "unknown", "device"},
 		{"owner only", func(_ *pinsIndexEntry, s **pinsStatData, _ *pinsCompareConfig) { (*s).UID = 0 }, "unknown", "owner"},
+		{"group only", func(_ *pinsIndexEntry, s **pinsStatData, _ *pinsCompareConfig) { (*s).GID = 0 }, "unknown", "owner"},
+		{"change time seconds only", func(_ *pinsIndexEntry, s **pinsStatData, _ *pinsCompareConfig) { (*s).CtimeSec = 99 }, "unknown", "change time"},
 		{"inode is compared modulo 2^32", func(_ *pinsIndexEntry, s **pinsStatData, _ *pinsCompareConfig) { (*s).Ino = 9 + 1<<32 }, "absent", ""},
 		{"racily clean (same instant as the index)", func(_ *pinsIndexEntry, _ **pinsStatData, c *pinsCompareConfig) {
 			c.IndexMtimeSec, c.IndexMtimeNsec = 100, 2

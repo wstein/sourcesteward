@@ -30,6 +30,10 @@ var pinsLimits = pinsAuditLimits{Retain: pinsRetainBudget, Scan: pinsScanAllowan
 // pinsBeforeResample is a test seam that runs after the evidence is gathered and before the resample.
 var pinsBeforeResample func()
 
+// pinsAfterResolve is a test seam that runs after the submodule directories are validated and before
+// any evidence is read.
+var pinsAfterResolve func()
+
 type pinsIndexFingerprint struct {
 	Size  int64
 	Mtime int64
@@ -170,6 +174,9 @@ func (a *pinsAuditor) audit(abs string, identity Result) error {
 	resolved, err := pinsResolveAll(a.safety, reg)
 	if err != nil {
 		return err
+	}
+	if pinsAfterResolve != nil {
+		pinsAfterResolve()
 	}
 	if reg.Gitmodules.Modified {
 		source := "registration is read from the HEAD blob"

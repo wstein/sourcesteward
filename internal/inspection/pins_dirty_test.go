@@ -94,7 +94,13 @@ func TestPinsDirtyTrackedChanges(t *testing.T) {
 			settleIndex(t, c.dirs.GitDir)
 		}, "present", ""},
 		{"staged deletion", func(t *testing.T, c dirtyCase) { git(t, c.wt, "rm", "-q", "file.txt"); settleIndex(t, c.dirs.GitDir) }, "present", ""},
-		{"same size, new content", func(t *testing.T, c dirtyCase) { writeFile(t, filepath.Join(c.wt, "file.txt"), "ONE\n") }, "unknown", "modification time"},
+		{"same size, new content", func(t *testing.T, c dirtyCase) {
+			p := filepath.Join(c.wt, "file.txt")
+			writeFile(t, p, "ONE\n")
+			// A coarse clock could give the rewrite the old timestamp: fix it far from the index entry.
+			past := time.Date(2001, 2, 3, 4, 5, 6, 0, time.UTC)
+			mustOS(t, os.Chtimes(p, past, past))
+		}, "unknown", "modification time"},
 		{"touched only", func(t *testing.T, c dirtyCase) {
 			old := time.Now().Add(-time.Hour)
 			mustOS(t, os.Chtimes(filepath.Join(c.wt, "file.txt"), old, old))
@@ -109,10 +115,12 @@ func TestPinsDirtyTrackedChanges(t *testing.T) {
 			mustOS(t, err)
 			data, err := os.ReadFile(p)
 			mustOS(t, err)
-			mustOS(t, os.Remove(p))
-			mustOS(t, os.WriteFile(p, data, 0o644))
-			mustOS(t, os.Chtimes(p, info.ModTime(), info.ModTime()))
-		}, "unknown", "change time"},
+			// Create the copy before the original goes away, so the inode cannot be reused.
+			tmp := p + ".new"
+			mustOS(t, os.WriteFile(tmp, data, 0o644))
+			mustOS(t, os.Chtimes(tmp, info.ModTime(), info.ModTime()))
+			mustOS(t, os.Rename(tmp, p))
+		}, "unknown", "inode"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newDirtyCase(t, newPinsFixture(t))
@@ -198,8 +206,8 @@ func TestPinsDirtySmudgedEntryIsUnknown(t *testing.T) {
 		t.Fatalf("the fixture did not produce a smudged entry:\n%s", out)
 	}
 	settleIndex(t, repo.GitDir)
-	facts, _ := pinsReadFacts(run, d)
-	head, _ := pinsReadHead(run, repo)
+	facts := mustFacts(t, run, d)
+	head := mustHead(t, run, repo)
 	got, err := pinsDirtyState(run, d, facts, head, pinsDefaultDirtyBudget)
 	if err != nil || got.Tracked != "unknown" || !strings.Contains(got.Reason, "smudged") {
 		t.Fatalf("%+v %v", got, err)
@@ -240,8 +248,8 @@ func TestPinsDirtyDecidesLargeFilesAndTextAttributesWithoutReadingContent(t *tes
 	git(t, wt, "-c", "core.autocrlf=true", "add", "-A")
 	git(t, wt, "commit", "-qm", "files")
 	settleIndex(t, repo.GitDir)
-	facts, _ := pinsReadFacts(run, d)
-	head, _ := pinsReadHead(run, repo)
+	facts := mustFacts(t, run, d)
+	head := mustHead(t, run, repo)
 	got, err := pinsDirtyState(run, d, facts, head, pinsDefaultDirtyBudget)
 	if err != nil {
 		t.Fatal(err)
@@ -258,8 +266,10 @@ func TestPinsDirtyFilterSentinelsNeverRunAndTheIndexIsUntouched(t *testing.T) {
 	statDirty(t, c.wt)
 	settleIndex(t, c.dirs.GitDir)
 	idx := filepath.Join(c.dirs.GitDir, "index")
-	before, _ := os.ReadFile(idx)
-	st, _ := os.Stat(idx)
+	before, rerr := os.ReadFile(idx)
+	mustOS(t, rerr)
+	st, serr := os.Stat(idx)
+	mustOS(t, serr)
 	got := c.state(t)
 	if got.Tracked != "unknown" {
 		t.Fatalf("%+v", got)
@@ -267,8 +277,10 @@ func TestPinsDirtyFilterSentinelsNeverRunAndTheIndexIsUntouched(t *testing.T) {
 	if ran := h.executed(); len(ran) != 0 {
 		t.Fatalf("planted commands ran: %v", ran)
 	}
-	after, _ := os.ReadFile(idx)
-	st2, _ := os.Stat(idx)
+	after, rerr2 := os.ReadFile(idx)
+	mustOS(t, rerr2)
+	st2, serr2 := os.Stat(idx)
+	mustOS(t, serr2)
 	if !bytes.Equal(before, after) || !st.ModTime().Equal(st2.ModTime()) {
 		t.Fatal("the index changed")
 	}
@@ -337,11 +349,11 @@ func TestPinsDirtyAFileNamedHEADDoesNotConfuseRevisionArguments(t *testing.T) {
 	writeFile(t, filepath.Join(wt, "HEAD"), "x")
 	git(t, wt, "add", "HEAD")
 	git(t, wt, "commit", "-qm", "a file named HEAD")
-	head, _ := pinsReadHead(run, repo)
+	head := mustHead(t, run, repo)
 	oid := *head.Commit
 	writeFile(t, filepath.Join(wt, oid), "same name as the commit")
 	settleIndex(t, repo.GitDir)
-	facts, _ := pinsReadFacts(run, d)
+	facts := mustFacts(t, run, d)
 	got, err := pinsDirtyState(run, d, facts, head, pinsDefaultDirtyBudget)
 	if err != nil {
 		t.Fatal(err)
@@ -398,4 +410,22 @@ func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testi
 	if calls > 200 {
 		t.Fatalf("the deadline was consulted %d times: it is not checked per path component", calls)
 	}
+}
+
+func mustHead(t *testing.T, run *pinsRunner, repo pinsGitRepo) pinsHead {
+	t.Helper()
+	h, err := pinsReadHead(run, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func mustFacts(t *testing.T, run *pinsRunner, d pinsSubmoduleDirs) pinsRepoFacts {
+	t.Helper()
+	f, err := pinsReadFacts(run, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
 }

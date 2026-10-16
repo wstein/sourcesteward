@@ -207,7 +207,7 @@ func TestPinsCheckoutShallowCannotClaimUnrelatedOrDiverged(t *testing.T) {
 	if err != nil || !facts.Shallow {
 		t.Fatalf("%+v %v", facts, err)
 	}
-	head, _ := pinsReadHead(run, repo)
+	head := mustHead(t, run, repo)
 	rel, err := pinsRelate(run, repo, facts, *head.Commit, other)
 	if err != nil || rel.Relation != "unknown" || !strings.Contains(rel.Reason, "shallow") {
 		t.Fatalf("%+v %v", rel, err)
@@ -230,7 +230,7 @@ func TestPinsCheckoutPartialCloneIsDetectedAndNeverFetches(t *testing.T) {
 	if err != nil || !facts.Partial || facts.Shallow {
 		t.Fatalf("%+v %v", facts, err)
 	}
-	head, _ := pinsReadHead(run, repo)
+	head := mustHead(t, run, repo)
 	rel, err := pinsRelate(run, repo, facts, *head.Commit, f.Pin)
 	if err != nil || rel.Relation != "ahead" || *rel.Ahead != 1 {
 		t.Fatalf("%+v %v (c2=%s)", rel, err, c2)

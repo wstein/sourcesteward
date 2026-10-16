@@ -167,15 +167,19 @@ func TestPinsRunnerDoesNotRefreshTheIndex(t *testing.T) {
 	// Touch a tracked file so a refreshing command would rewrite the index.
 	old := time.Now().Add(-time.Hour)
 	mustOS(t, os.Chtimes(filepath.Join(member, "file.txt"), old, old))
-	before, _ := os.ReadFile(idx)
-	st, _ := os.Stat(idx)
+	before, rerr := os.ReadFile(idx)
+	mustOS(t, rerr)
+	st, serr := os.Stat(idx)
+	mustOS(t, serr)
 	for _, args := range [][]string{{"ls-files", "--stage", "--debug", "-z"}, {"diff-index", "--cached", "--no-ext-diff", "--no-textconv", "HEAD"}, {"ls-files", "--others", "--exclude-standard", "-z"}} {
 		if _, err := newPinsRunner(context.Background()).run(pinsCall{Repo: memberRepo(f), Args: args}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	after, _ := os.ReadFile(idx)
-	st2, _ := os.Stat(idx)
+	after, rerr2 := os.ReadFile(idx)
+	mustOS(t, rerr2)
+	st2, serr2 := os.Stat(idx)
+	mustOS(t, serr2)
 	if string(before) != string(after) || !st.ModTime().Equal(st2.ModTime()) {
 		t.Fatal("the index was rewritten")
 	}

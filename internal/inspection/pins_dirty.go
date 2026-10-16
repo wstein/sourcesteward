@@ -304,6 +304,9 @@ type pinsDirtyBudget struct {
 	Time    time.Duration
 }
 
+// pinsScanHook is a test seam that runs once the first index entry of a scan has been parsed.
+var pinsScanHook func()
+
 // pinsNow is the clock of the dirty scan; tests move it.
 var pinsNow = time.Now
 
@@ -563,6 +566,9 @@ func (s *pinsDirtyScan) worktree() error {
 	ended := false // the scan stopped on its own: present found or the budget ran out
 	out, bound, err := s.call([]string{"ls-files", "--stage", "--debug", "-z"}, func(rec []byte, last bool) error {
 		return parser.feed(rec, last, func(e pinsIndexEntry) error {
+			if s.entries == 0 && pinsScanHook != nil {
+				pinsScanHook()
+			}
 			s.entries++
 			if s.entries > s.budget.Entries || pinsNow().After(s.deadline) {
 				ended = true
