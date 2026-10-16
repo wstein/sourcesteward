@@ -23,6 +23,11 @@ func TestPinsURLRedactsCredentials(t *testing.T) {
 		{"https://user:pa#ss@host/x", "https://host/x", true},
 		{"https://user:pa/ss@host/x", "https://host/x", true},
 		{"user:s3cret@host:repo.git", "host:repo.git", true},
+		{"user:s3cret@host:/path@x", "host:/path@x", true},
+		{"host:path?private_token=s3cret", "host:path", false},
+		{"/local/path?private_token=s3cret", "/local/path", false},
+		{"./rel#frag", "./rel", false},
+		{"user@host:s3cret@x", "x", true},
 		{"https://example.com:8443/a@b", "https://example.com:8443/a@b", false},
 		{"http://a:b@c:d@host/x", "http://host/x", true},
 		{"HTTPS://U:secret@Example.com/Path", "HTTPS://Example.com/Path", true},
@@ -81,6 +86,15 @@ func TestPinsURLSchemeValidation(t *testing.T) {
 	}
 	if got := pinsClassifyURL("ext::sh -c touch").Scheme; got != "ext" {
 		t.Errorf("transport name %q", got)
+	}
+}
+
+func TestPinsURLNormalizedFormsCarryNoCredentialsOrQueries(t *testing.T) {
+	for _, raw := range []string{"user:s3cret@host:/path@x", "host:path?private_token=s3cret", "/local/path?private_token=s3cret", "https://u:s3cret@h/x?private_token=s3cret"} {
+		i := pinsClassifyURL(raw)
+		if strings.Contains(i.Normalized, "s3cret") || strings.Contains(i.Redacted, "s3cret") || strings.Contains(i.Normalized, "?") {
+			t.Errorf("%q: %+v", raw, i)
+		}
 	}
 }
 

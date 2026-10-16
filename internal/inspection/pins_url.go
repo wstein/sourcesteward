@@ -98,12 +98,22 @@ func pinsRedact(raw string) (redacted string, credentials bool) {
 		// transport::address is Git's remote-helper syntax; the address is opaque and may hold anything.
 		return raw[:i] + "::<redacted>", false
 	}
+	// Non-scheme forms: scp-like [user[:password]@]host:path and local paths. Before the first slash the
+	// last '@' ends the userinfo; a colon before it means a password (conservative: `user@host:pw@x` too).
+	display := raw
 	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, ".") {
-		if at := strings.LastIndexByte(raw, '@'); at > 0 && strings.Contains(raw[:at], ":") && !strings.Contains(raw[:at], "/") {
-			return raw[at+1:], true // scp-like with a password: user:secret@host:path
+		head := raw
+		if i := strings.IndexByte(raw, '/'); i >= 0 {
+			head = raw[:i]
+		}
+		if at := strings.LastIndexByte(head, '@'); at > 0 && strings.Contains(raw[:at], ":") {
+			display, credentials = raw[at+1:], true
 		}
 	}
-	return raw, false
+	if q := strings.IndexAny(display, "?#"); q >= 0 {
+		display = display[:q]
+	}
+	return display, credentials
 }
 
 func pinsClassifyURL(original string) pinsURLInfo {
