@@ -19,6 +19,8 @@ A superproject can record a submodule commit that exists only in one local submo
 
 Every invocation runs with the isolation prefix of `pinsIsolation()` (replace objects, optional locks, literal pathspecs, fsmonitor, hooks path, untracked cache, credential helper, ssh command, every transport switched off by name, gc and maintenance off), `GIT_CONFIG_NOSYSTEM=1`, no inherited `GIT_*` variable and a 5 second deadline. `pins_git_test.go` compares every recorded invocation with these argument shapes.
 
+**Operational note (umask).** Git creates submodule directories with the process umask. Under umask 000, as in this devcontainer, every submodule worktree and Git directory is world-writable and the audit refuses it with `submodule-unsafe-owner`, although the owner is correct; the message names the mode and suggests a stricter umask or `chmod o-w`. A group-writable directory is accepted only for the effective group. `stw pins` documentation (T018) must repeat this.
+
 **Owner check coverage (T007).** The environment runs unprivileged and cannot chown, so foreign ownership is exercised through the injected owner seam only; the real extraction is checked against a file the test creates (the effective user) and against `/` (root). Real foreign-owned submodules, macOS and root with `SUDO_UID` are not exercised and are recorded for the verification note of T021.
 
 Not used: `git status`, which can run clean and process filters; the inventory comparison, which is a poor fit; `git submodule` subcommands and `foreach`, which can run configured commands and mix human output with state; any fetch, ls-remote or clone.
