@@ -50,4 +50,4 @@ Text fields are bounded and are data. Codes, statuses, limits, the facts derivat
 - `entries[i].index == i`; `parent` and `duplicate_of` point to smaller indexes; `contained_in` may point to any index.
 - `status` `ok` implies `error` null and `inventory` non-null with inventory status `ok`; `partial` has an `error` (`inventory-partial`, `discovery-failed` or `discovery-limit`) and, unless the cause is discovery only, an inventory with status `partial`.
 - `error.code` is from the spec's error-code table or the inventory's vocabulary.
-- `inventory` and `facts` per entry status follow the table in the spec (Entry status); an entry failing the identity inspection or an entry check never runs an inventory, so `inventory` and `facts` are null; omission (`output-limit`) nulls `inventory` and keeps `facts`.
+- `inventory` and `facts` per entry status follow the table in the spec (Entry status); an entry failing the identity inspection or an entry check never runs an inventory, so `inventory` and `facts` are null; omission (`output-limit`) nulls `inventory` and keeps `facts`, except that an omitted error inventory keeps its inherited code and has null `facts`.

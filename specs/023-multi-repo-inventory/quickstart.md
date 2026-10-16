@@ -18,7 +18,7 @@ stw repos super lib notrepo --submodules; echo "status $?"
 stw repos super lib notrepo --submodules --json
 ```
 
-Expected: entries for `super`, `lib`, `notrepo`, then `super/member1` (discovered, `origin: "submodule"`). `super` is `partial` (stale worktree `wt-gone`, counted as `stale`, and the registered gitlink), `lib` is `ok` with `dirty: true`, `notrepo` is `error` (`not-repository`), `super/member1` is inventoried with `dirty: unknown` (a submodule checkout), overall `partial`, exit 1.
+Expected: entries for `super`, `lib`, `notrepo`, then `member1` (path relative to its parent, resolved `super/member1`; discovered, `origin: "submodule"`). `super` is `partial` (stale worktree `wt-gone`, counted as `stale`, and the registered gitlink), `lib` is `ok` with `dirty: true`, `notrepo` is `error` (`not-repository`), `member1` is inventoried with `dirty: unknown` (a submodule checkout), overall `partial`, exit 1.
 
 Other cases:
 
