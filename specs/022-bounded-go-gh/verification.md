@@ -4,7 +4,7 @@
 
 Baseline main ee86751 passed `PATH=/private/tmp/stw-jj-research/0.46.0:/opt/homebrew/bin:$PATH GOCACHE=/private/tmp/stw-go-cache STW_REQUIRE_JJ=1 make check` on macOS with Git 2.54.0 and jj 0.46.0. This is baseline evidence only.
 
-Independent pre-code analysis and resolved design findings are recorded in [analysis](analysis.md). Implementation, final review and hosted CI acceptance remain pending.
+Independent pre-code analysis and resolved design findings are recorded in [analysis](analysis.md). This paragraph records the baseline snapshot; implementation/review and subsequent acceptance are recorded below.
 
 ## Test-first implementation and independent review
 
@@ -18,4 +18,16 @@ Independent sdk_review cleared integrated transport86fa008, CLIec1c034, native f
 
 Published schemas and internal/cli/testdata JSON remain byte-for-byte unchanged against main ee86751. Native adapters, Options/Result and business apiReader operations remain unchanged except the HTTP fixture seam. Positive remote acceptance uses real native operations, the SDK and fake HTTP; actual process/private extension acceptance covers local behavior and authentication refusal (28 cases), without live network.
 
-Full integrated make check, race suite, current binary smoke and hosted minimum/current Linux CI remain pending at this snapshot. No real-keyring/Enterprise/live GitHub compatibility claim, release, user-profile extension installation or deletion is made.
+Current binary smoke passed all28 cases using the final core and integrated sources. Full integrated make check/race pass; hosted minimum/current Linux CI remains a separate pending handoff gate. No real-keyring/Enterprise/live GitHub compatibility claim, release, user-profile extension installation or deletion is made.
+
+## Final local acceptance and PR handoff
+
+At integrated source296298c (subsequent changes are evidence-only), the following passed on macOS with Homebrew Git2.54.0, gh2.102.0 and pinned jj0.46.0:
+
+- `PATH=/private/tmp/stw-jj-research/0.46.0:/opt/homebrew/bin:$PATH GOMODCACHE=/private/tmp/stw-sdk-mod-cache GOCACHE=/private/tmp/stw-go-cache STW_REQUIRE_JJ=1 make check`: all Go tests/vet/module integrity, 57 Python tests, 12 theme cases, docs175, architecture and whitespace. An earlier overlapping run loaded the obsolete pre-migration gh-api contract fixture and failed; the final integrated run includes its SDK replacement and passes.
+- Same environment, `go test -count=1 -race ./...`: all packages pass.
+- `make build extension` and `python3 -B scripts/smoke-hosting.py`:28 real native binary/private-extension cases pass; byte/mode-identical state and authentication refusal audited. Local test executables stay ignored.
+- Same Go/cache/native environment with jj0.45.1: `go test -count=1 -race ./internal/cli ./internal/contracts ./internal/hosting -run 'TestHostingSDKEntryPoints|TestRealHostingPRAndCIContracts|TestRealJJHostingContracts|TestSDK|TestAuthentication|TestConcurrentHosts'` passes. Minimum-jj final binary smoke also passed in the compatibility worktree.
+- `git diff --exit-code ee86751 -- schemas internal/cli/testdata internal/inspection` passes: published schemas, JSON fixtures and native adapters are byte-identical.
+
+Final independent consistency analysis clears source296298c; low stale sentence/task-path corrections are included in this handoff. [PR41](https://github.com/wstein/sourcesteward/pull/41) is separate from merged PR40. Hosted exact-head CI, including pinned Linux Git2.46.0/jj0.45.1 and Git2.56.0/jj0.46.0 conformance, remains pending at source handoff. This local evidence does not substitute for those CI lanes. No owner merge or release was performed.
