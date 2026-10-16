@@ -19,6 +19,11 @@ var (
 
 // reposSubmoduleDirtyNote qualifies the embedded inventory of a submodule (US3-6): Git reports a
 // submodule's Git directory, not its checkout, as its worktree.
+const (
+	reposSamplingPrefix  = "Sampled observations are not transactional"
+	reposMaxPartialNotes = 16
+)
+
 const reposSubmoduleDirtyNote = "submodule: dirty is unknown, because Git reports the submodule's Git directory, not its checkout, as its worktree"
 
 // Repos executes the multi-repository inventory operation across explicit and discovered members.
@@ -435,21 +440,31 @@ func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Contex
 				entry.Status = "ok"
 			}
 		case "partial":
+			// Limitation 0 is the fixed sampling statement every inventory carries; it says nothing
+			// about why this one is partial. The message is the first remaining limitation that is not
+			// a base-candidate remark (informational on ordinary clones).
+			lims := inv.Boundary.Limitations
+			if len(lims) > 0 && strings.HasPrefix(lims[0], reposSamplingPrefix) {
+				lims = lims[1:]
+			}
 			msg := "inventory status partial"
-			if len(inv.Boundary.Limitations) > 0 {
-				for _, lim := range inv.Boundary.Limitations {
-					if !strings.HasPrefix(lim, "multiple base candidates") {
-						msg = lim
-						break
-					}
+			for _, lim := range lims {
+				if !strings.HasPrefix(lim, "multiple base candidates") {
+					msg = lim
+					break
 				}
 			}
+			msg = reposClean(msg)
 			invErr := ReposError{
 				Code:    ReposCodeInventoryPartial,
 				Message: msg,
 			}
-			for _, lim := range inv.Boundary.Limitations {
-				entry.Notes = append(entry.Notes, "inventory-partial: "+lim)
+			for i, lim := range lims {
+				if i == reposMaxPartialNotes {
+					entry.Notes = append(entry.Notes, fmt.Sprintf("inventory-partial: %d more limitations omitted", len(lims)-i))
+					break
+				}
+				entry.Notes = append(entry.Notes, reposClean("inventory-partial: "+lim))
 			}
 			if entry.Error != nil {
 				primary, notes := ReposResolveCauses([]ReposError{*entry.Error, invErr})

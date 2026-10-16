@@ -326,6 +326,32 @@ func ReposCheckJSONBudget(r ReposResult) error {
 	return reposJSONBudget(reflect.ValueOf(r), &budget)
 }
 
+// reposEncodingError reports a value that cannot be encoded as JSON (invalid UTF-8, an unsupported type);
+// it is distinct from the size bound, which is the only reason to omit an inventory.
+type reposEncodingError struct{ msg string }
+
+func (e *reposEncodingError) Error() string { return e.msg }
+
+func isReposEncodingError(err error) bool {
+	var enc *reposEncodingError
+	return errors.As(err, &enc)
+}
+
+// reposClean returns s as valid UTF-8 of at most ReposMessageLimit bytes, cut at a rune boundary.
+func reposClean(s string) string {
+	if !utf8.ValidString(s) {
+		s = strings.ToValidUTF8(s, "\uFFFD")
+	}
+	if len(s) <= ReposMessageLimit {
+		return s
+	}
+	cut := ReposMessageLimit - len("...")
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
+}
+
 func reposJSONBudget(v reflect.Value, remaining *int) error {
 	spend := func(n int) error {
 		if n > *remaining {
@@ -349,7 +375,7 @@ func reposJSONBudget(v reflect.Value, remaining *int) error {
 			return errors.New("repos result byte limit exceeded")
 		}
 		if !utf8.ValidString(s) {
-			return errors.New("repos metadata is not valid UTF-8")
+			return &reposEncodingError{"repos metadata is not valid UTF-8"}
 		}
 		if e := spend(2); e != nil {
 			return e
@@ -414,6 +440,6 @@ func reposJSONBudget(v reflect.Value, remaining *int) error {
 		}
 		return nil
 	default:
-		return errors.New("unsupported repos result value")
+		return &reposEncodingError{"unsupported repos result value"}
 	}
 }

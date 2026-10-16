@@ -29,7 +29,7 @@ func TestReposSchemaFixtures(t *testing.T) {
 		"ok":                "ok",
 		"partial":           "partial",
 		"error":             "error",
-		"skipped":           "ok",
+		"skipped":           "partial",
 		"omitted-inventory": "partial",
 		"duplicate":         "partial",
 	} {

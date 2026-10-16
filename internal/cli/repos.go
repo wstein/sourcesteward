@@ -57,35 +57,52 @@ func reposCommandWith(run func(context.Context, inspection.ReposOptions) inspect
 	return command
 }
 
+// escapeReposLine makes repository text safe for a terminal line: control characters, newlines, U+2028 and
+// format characters become escapes, invalid UTF-8 bytes become \xNN. The line is cut at 512 bytes after
+// escaping, between whole escaped characters, so it is never split inside a rune or an escape.
 func escapeReposLine(s string) string {
-	var b strings.Builder
+	const limit = 512
+	var pieces []string
+	total := 0
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
+		var p string
 		switch {
 		case r == utf8.RuneError && size == 1:
-			fmt.Fprintf(&b, `\x%02x`, s[i])
+			p = fmt.Sprintf(`\x%02x`, s[i])
 		case r == '\\':
-			b.WriteString(`\\`)
+			p = `\\`
 		case r == '\n':
-			b.WriteString(`\n`)
+			p = `\n`
 		case r == '\r':
-			b.WriteString(`\r`)
+			p = `\r`
 		case r == '\t':
-			b.WriteString(`\t`)
+			p = `\t`
 		case r < 0x20 || r == 0x7f:
-			fmt.Fprintf(&b, `\x%02x`, r)
+			p = fmt.Sprintf(`\x%02x`, r)
 		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r):
-			fmt.Fprintf(&b, `\u%04x`, r)
+			p = fmt.Sprintf(`\u%04x`, r)
 		default:
-			b.WriteRune(r)
+			p = s[i : i+size]
 		}
+		pieces = append(pieces, p)
+		total += len(p)
 		i += size
 	}
-	res := b.String()
-	if len(res) > 512 {
-		return res[:509] + "..."
+	var b strings.Builder
+	if total <= limit {
+		for _, p := range pieces {
+			b.WriteString(p)
+		}
+		return b.String()
 	}
-	return res
+	for _, p := range pieces {
+		if b.Len()+len(p) > limit-len("...") {
+			break
+		}
+		b.WriteString(p)
+	}
+	return b.String() + "..."
 }
 
 func reposAbbrevOID(oid *string) string {
@@ -149,26 +166,18 @@ func renderReposText(w io.Writer, r inspection.ReposResult) error {
 		if entry.Inventory != nil && linesRendered < 24 {
 			attentionCount := 0
 			for _, ws := range entry.Inventory.Workspaces {
-				isStale := ws.Registration == "missing"
-				isForeign := ws.Manager != entry.Backend && ws.Registration != "missing"
-				isUnverified := ws.Registration == "unknown" && !isForeign
-
-				if isStale || isForeign || isUnverified {
-					attentionCount++
-					if attentionCount <= 16 && linesRendered < 24 {
-						kind := "unverified"
-						if isStale {
-							kind = "stale"
-						} else if isForeign {
-							kind = "foreign"
-						}
-						name := ws.Name
-						if ws.Path != nil && *ws.Path != "" {
-							name = *ws.Path
-						}
-						b.WriteString(escapeReposLine(fmt.Sprintf("      workspace %s (%s)", name, kind)) + "\n")
-						linesRendered++
+				kind := inspection.ReposWorkspaceKind(ws, entry.Backend)
+				if kind == "" {
+					continue
+				}
+				attentionCount++
+				if attentionCount <= 16 && linesRendered < 24 {
+					name := ws.Name
+					if ws.Path != nil && *ws.Path != "" {
+						name = *ws.Path
 					}
+					b.WriteString(escapeReposLine(fmt.Sprintf("      workspace %s (%s)", name, kind)) + "\n")
+					linesRendered++
 				}
 			}
 			if attentionCount > 16 && linesRendered < 24 {

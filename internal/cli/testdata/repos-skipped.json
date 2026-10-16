@@ -1,13 +1,13 @@
 {
  "schema_version": 1,
  "command": "repos",
- "status": "ok",
+ "status": "partial",
  "input_paths": [
   "/w/lib"
  ],
  "submodules_requested": true,
  "boundary": {
-  "complete": true,
+  "complete": false,
   "freshness": "sampled-nontransactional",
   "effects": {
    "network": false,
@@ -29,6 +29,7 @@
   "limitations": [
    "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
    "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+   "Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
    "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
   ]
  },
@@ -39,8 +40,11 @@
    "resolved_path": "/w/lib",
    "origin": "explicit",
    "parent": null,
-   "status": "ok",
-   "error": null,
+   "status": "partial",
+   "error": {
+    "code": "inventory-partial",
+    "message": "submodule disk state excluded to avoid recursive helpers"
+   },
    "backend": "git",
    "discovery": {
     "requested": true,
@@ -148,7 +152,9 @@
     "query": null,
     "diagnostics": []
    },
-   "notes": []
+   "notes": [
+    "inventory-partial: submodule disk state excluded to avoid recursive helpers"
+   ]
   },
   {
    "index": 1,
@@ -159,16 +165,16 @@
    "status": "skipped",
    "error": {
     "code": "submodule-uninitialized",
-    "message": "registered submodule has no checkout"
+    "message": "submodule is uninitialized"
    },
    "backend": "unknown",
    "discovery": {
-    "requested": true,
+    "requested": false,
     "status": "not-applicable",
     "submodules": 0,
     "ignored": 0,
     "deduplicated": 0,
-    "reason": "nested submodules are not traversed"
+    "reason": "discovery is not recursive"
    },
    "duplicate_of": null,
    "contained_in": 0,
@@ -180,8 +186,8 @@
  "summary": {
   "entries": 2,
   "by_status": {
-   "ok": 1,
-   "partial": 0,
+   "ok": 0,
+   "partial": 1,
    "error": 0,
    "skipped": 1
   },

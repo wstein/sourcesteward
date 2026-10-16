@@ -294,3 +294,39 @@ func TestReposDeriveSummary(t *testing.T) {
 		t.Errorf("expected 1 discovery_not_applicable for explicit entries, got %d", summary.DiscoveryNotApplicable)
 	}
 }
+
+func TestReposWorkspaceKind(t *testing.T) {
+	for _, tc := range []struct {
+		manager, registration, backend, want string
+	}{
+		{"git", "missing", "git", "stale"},
+		{"jj", "missing", "git", "stale"}, // stale and foreign: stale only, never both
+		{"jj", "unknown", "git", "foreign"},
+		{"jj", "present", "git", "foreign"},
+		{"", "unknown", "git", "unverified"}, // no manager: never foreign
+		{"", "present", "git", ""},
+		{"git", "unknown", "git", "unverified"},
+		{"git", "present", "git", ""},
+		{"git", "present", "jj", "foreign"},
+	} {
+		got := ReposWorkspaceKind(InventoryWorkspace{Manager: tc.manager, Registration: tc.registration}, tc.backend)
+		if got != tc.want {
+			t.Errorf("manager %q registration %q backend %q: %q, want %q", tc.manager, tc.registration, tc.backend, got, tc.want)
+		}
+	}
+}
+
+// Facts count stale, foreign and unverified workspaces exactly once each.
+func TestReposFactsWorkspaceCountsAreExclusive(t *testing.T) {
+	entry := &ReposEntry{Backend: "git", Status: "ok", Inventory: &InventoryResult{Workspaces: []InventoryWorkspace{
+		{Manager: "git", Registration: "missing"},
+		{Manager: "jj", Registration: "missing"},
+		{Manager: "jj", Registration: "unknown"},
+		{Manager: "", Registration: "unknown"},
+		{Manager: "git", Registration: "present"},
+	}}}
+	w := deriveFacts(entry).Workspaces
+	if w.Total != 5 || w.Stale != 2 || w.Foreign != 1 || w.Unverified != 1 {
+		t.Fatalf("%+v", w)
+	}
+}
