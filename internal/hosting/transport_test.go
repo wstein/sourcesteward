@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGHTransportNeutralBoundedAndRedacted(t *testing.T) {
@@ -300,5 +301,128 @@ func TestSDKRawLimitBeforeShrinkingNormalization(t *testing.T) {
 	api := &ghAPI{client: client, host: "github.com"}
 	if _, e = api.get(context.Background(), "repos/a/b/pulls/1"); e == nil {
 		t.Fatal("raw cap lost when SDK shrank response")
+	}
+}
+
+type closeSpy struct {
+	io.Reader
+	closed bool
+}
+
+func (s *closeSpy) Close() error { s.closed = true; return nil }
+func TestSDKGuardClosesPartialErrorResponseAndRejectsHiddenEffects(t *testing.T) {
+	spy := &closeSpy{Reader: strings.NewReader("secret")}
+	calls := 0
+	guard := guardedTransport{host: "api.github.com", prefix: "/", next: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{Body: spy}, io.ErrUnexpectedEOF
+	})}
+	req, _ := http.NewRequest("GET", "https://api.github.com/repos/a/b/pulls/1", nil)
+	if _, e := guard.RoundTrip(req); e == nil || !spy.closed {
+		t.Fatal("partial error response body not closed")
+	}
+	for _, alter := range []func(*http.Request){func(r *http.Request) { r.Body = io.NopCloser(strings.NewReader("data")) }, func(r *http.Request) { r.Host = "evil.test" }, func(r *http.Request) { r.ContentLength = 1 }, func(r *http.Request) { r.URL.ForceQuery = true }} {
+		r, _ := http.NewRequest("GET", "https://api.github.com/repos/a/b/pulls/1", nil)
+		alter(r)
+		if _, e := guard.RoundTrip(r); e == nil {
+			t.Fatal("hidden request effect accepted")
+		}
+	}
+	if calls != 1 {
+		t.Fatal("invalid request reached transport")
+	}
+}
+func TestCappedBodyStopsAfterOverflow(t *testing.T) {
+	b := &cappedBody{ReadCloser: io.NopCloser(strings.NewReader("12345")), remaining: 1}
+	p := make([]byte, 1)
+	if n, e := b.Read(p); n != 1 || e != nil {
+		t.Fatal(n, e)
+	}
+	if n, e := b.Read(p); n != 0 || e != errBodyLimit {
+		t.Fatal(n, e)
+	}
+	if n, e := b.Read(p); n != 0 || e != errBodyLimit {
+		t.Fatal("overflow not terminal", n, e)
+	}
+}
+
+func TestAuthenticationCancellationAndStderrLimit(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"cancel", "sleep 30"}, {"stderr", "head -c 16385 /dev/zero >&2; echo fixturetoken"}, {"failed", "echo secret >&2; exit 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := t.TempDir()
+			exe := filepath.Join(d, "gh")
+			os.WriteFile(exe, []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ];then echo 'gh version 2.102.0';exit 0;fi\n"+tc.body+"\n"), 0700)
+			t.Setenv("GH_PATH", exe)
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			_, cleanup, e := newGHWithTransport(ctx, t.TempDir(), "github.com", roundTripFunc(func(*http.Request) (*http.Response, error) { t.Fatal("network before authentication"); return nil, nil }))
+			defer cleanup()
+			if e == nil || strings.Contains(e.Error(), "secret") || time.Since(start) > 3*time.Second {
+				t.Fatalf("unbounded authentication %v", e)
+			}
+		})
+	}
+}
+func TestSDKExplicitOptionsIgnoreGhOverrides(t *testing.T) {
+	d := t.TempDir()
+	os.WriteFile(filepath.Join(d, "config.yml"), []byte("http_unix_socket: /missing/socket\ngithub.com:\n  api_host: relay.example\n"), 0600)
+	t.Setenv("GH_CONFIG_DIR", d)
+	t.Setenv("GH_DEBUG", "api")
+	t.Setenv("GH_HOST", "evil.test")
+	client, e := newSDKClient("github.com", "fixturetoken", t.TempDir(), roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host != "api.github.com" || r.Header.Get("Authorization") != "token fixturetoken" {
+			t.Fatal("SDK override admitted")
+		}
+		return response(200, "{}"), nil
+	}))
+	if e != nil {
+		t.Fatal(e)
+	}
+	api := &ghAPI{host: "github.com", client: client}
+	if _, e = api.get(context.Background(), "repos/a/b/pulls/1"); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestConcurrentHostsKeepAuthenticationIsolated(t *testing.T) {
+	d := t.TempDir()
+	exe := filepath.Join(d, "gh")
+	script := `#!/bin/sh
+if [ "$1" = "--version" ];then echo 'gh version 2.102.0';exit 0;fi
+[ "$1 $2 $3" = "auth token --hostname" ] || exit 1
+case "$4" in github.com) echo fixturepublic;;company.ghe.com) echo fixtureenterprise;;*) exit 1;;esac
+`
+	if e := os.WriteFile(exe, []byte(script), 0700); e != nil {
+		t.Fatal(e)
+	}
+	t.Setenv("GH_PATH", exe)
+	targets := []string{t.TempDir(), t.TempDir()}
+	errs := make(chan error, 2)
+	for i, host := range []string{"github.com", "company.ghe.com"} {
+		go func(i int, host string) {
+			token := "fixturepublic"
+			if i == 1 {
+				token = "fixtureenterprise"
+			}
+			api, cleanup, e := newGHWithTransport(context.Background(), targets[i], host, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host != "api."+host || r.Header.Get("Authorization") != "token "+token {
+					return nil, io.ErrUnexpectedEOF
+				}
+				return response(200, "{}"), nil
+			}))
+			defer cleanup()
+			if e == nil {
+				_, e = api.get(context.Background(), "repos/a/b/pulls/1")
+			}
+			errs <- e
+		}(i, host)
+	}
+	for i := 0; i < 2; i++ {
+		if e := <-errs; e != nil {
+			t.Fatal("concurrent credentials crossed hosts", e)
+		}
 	}
 }

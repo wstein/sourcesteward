@@ -7,6 +7,7 @@ import (
 	"errors"
 	ghapi "github.com/cli/go-gh/v2/pkg/api"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -135,6 +136,15 @@ func newGHWithTransport(ctx context.Context, target, host string, rt http.RoundT
 		cleanup()
 		return nil, func() {}, err
 	}
+	var owned *http.Transport
+	if rt == nil {
+		owned = newHTTPTransport()
+		rt = owned
+	}
+	if owned != nil {
+		previous := cleanup
+		cleanup = func() { owned.CloseIdleConnections(); previous() }
+	}
 	api.client, err = newSDKClient(host, token, dir, rt)
 	if err != nil {
 		cleanup()
@@ -211,9 +221,13 @@ var errBodyLimit = errors.New("hosting response exceeded the one MiB limit")
 type cappedBody struct {
 	io.ReadCloser
 	remaining int
+	overflow  bool
 }
 
 func (b *cappedBody) Read(p []byte) (int, error) {
+	if b.overflow {
+		return 0, errBodyLimit
+	}
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -221,6 +235,7 @@ func (b *cappedBody) Read(p []byte) (int, error) {
 		var probe [1]byte
 		n, e := b.ReadCloser.Read(probe[:])
 		if n > 0 {
+			b.overflow = true
 			return 0, errBodyLimit
 		}
 		return 0, e
@@ -239,7 +254,7 @@ type guardedTransport struct {
 }
 
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !fixedEndpoint.MatchString(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
+	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !fixedEndpoint.MatchString(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
 		if req.URL.RawQuery != "" {
 			return "?" + req.URL.RawQuery
 		}
@@ -249,6 +264,9 @@ func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	res, err := t.next.RoundTrip(req)
 	if err != nil {
+		if res != nil && res.Body != nil {
+			res.Body.Close()
+		}
 		return nil, errors.New("hosting HTTP read failed")
 	}
 	if res == nil || res.Body == nil {
@@ -265,12 +283,13 @@ func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	res.Body = &cappedBody{ReadCloser: res.Body, remaining: maxBytes}
 	return res, nil
 }
+func newHTTPTransport() *http.Transport {
+	return &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext, ForceAttemptHTTP2: true, MaxIdleConns: 100, IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 10 * time.Second, ExpectContinueTimeout: time.Second, MaxResponseHeaderBytes: 32 * 1024, DisableCompression: true}
+}
 func newSDKClient(host, token, dir string, rt http.RoundTripper) (*http.Client, error) {
 	destination, prefix := apiDestination(host)
 	if rt == nil {
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.DisableCompression = true
-		rt = transport
+		rt = newHTTPTransport()
 	}
 	return ghapi.NewHTTPClient(ghapi.ClientOptions{Host: host, APIHost: destination, AuthToken: token, Transport: guardedTransport{next: rt, host: destination, prefix: prefix}, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("hosting redirects are unsupported") }, LogIgnoreEnv: true, CacheDir: dir, SkipDefaultHeaders: true, Headers: map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "SourceSteward"}})
 }
