@@ -43,7 +43,7 @@
 ## Phase 7: Review and handoff
 
 - [X] T012 Run quickstart scenarios and independent source/security/contract review, fix findings, run make check plus race/native conformance, and record exact actual evidence and remaining hosted gates in specs/020-gh-jj-inspection/verification.md (FR-012, SC-001–SC-004).
-- [ ] T013 Update ARCHITECTURE.md, docs/README.md, docs/json-contracts.md, docs/agent-guide.md, docs/progress.md, docs/feature-status.json and llms.txt with bounded implemented capabilities and deferred release/mutation scope; commit focused Conventional Commits and open a PR without merge/release/live installation or remote mutation (FR-010, FR-011).
+- [X] T013 Update ARCHITECTURE.md, docs/README.md, docs/json-contracts.md, docs/agent-guide.md, docs/progress.md, docs/feature-status.json and llms.txt with bounded implemented capabilities and deferred release/mutation scope; commit focused Conventional Commits and open a PR without merge/release/live installation or remote mutation (FR-010, FR-011).
 
 ## Dependencies and execution order
 

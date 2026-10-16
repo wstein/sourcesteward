@@ -22,3 +22,7 @@ Recorded failing behavior tests before native remote, hosting types, transport, 
 No live authenticated GitHub API smoke, push, fetch, PR mutation, CI rerun, extension installation in the user profile, release artifact upload or BundleDock live deletion was performed. Local test builds were explicitly approved after automatic approval review initially rejected them. `jj` remains a version-checked native runtime dependency; no jj Rust library/FFI or new Go library dependency is added. Native jj exposes active remotes and omits empty sections/non-UTF-8 remote names; this is not raw configuration inventory. Config/path sampling and read evidence are not transactional and cannot exclude every concurrent/ABA change.
 
 Linux hosted minimum/current conformance remains required acceptance evidence until the PR CI executes. Source implementation and local test success do not constitute a release/distribution claim. ARM64 release binaries and remote publication plans remain separate work.
+
+## PR handoff
+
+Opened [PR #40](https://github.com/wstein/sourcesteward/pull/40) for owner review. All 13 implementation tasks are completed locally; hosted minimum/current acceptance is still a separate pending CI gate. No merge or release was performed. The owner explicitly chose to retain bounded gh api and evaluate the official SDK separately.
