@@ -13,8 +13,39 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/wstein/sourcesteward/internal/hosting"
 )
+
+// validateHostingSchema checks the exact bytes printed by the CLI against the published schema.
+func validateHostingSchema(t *testing.T, raw []byte) {
+	t.Helper()
+	const id = "https://wstein.github.io/sourcesteward/schemas/v1/hosting.schema.json"
+	file, err := os.ReadFile(filepath.Join("..", "..", "schemas", "v1", "hosting.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := jsonschema.NewCompiler()
+	if err = c.AddResource(id, doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Validate(value); err != nil {
+		t.Fatalf("printed JSON violates the published schema: %s\n%v", raw, err)
+	}
+}
 
 type hostingHTTPFixture func(*http.Request) (*http.Response, error)
 
@@ -27,6 +58,9 @@ func TestHostingSDKEntryPoints(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("GH_CONFIG_DIR", filepath.Join(home, "gh"))
 	t.Setenv("XDG_CONFIG_HOME", home)
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"} {
+		t.Setenv(name, "")
+	}
 	t.Setenv("JJ_CONFIG", "")
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "gitconfig"))
@@ -117,6 +151,7 @@ func TestHostingSDKEntryPoints(t *testing.T) {
 							}
 							return
 						}
+						validateHostingSchema(t, out.Bytes())
 						var result hosting.Result
 						if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 							t.Fatal(err)
