@@ -139,3 +139,17 @@ Independent reviewer: read-only Opus review, revision 9ce514c, 2026-10-16, part 
 | 12 | Low | J5 sources indistinguishable | Split into J5a and J5b |
 | 13 | Low | Lane pairing for `jj-push` | Pairs stated |
 | 14 | Low | Meaning of `tracked` in colocated jj | Stated in contract and data model |
+
+## Round 6 (reduced scope)
+
+Independent reviewer: read-only Opus review of the reduced artifacts, revision 8d4c652, 2026-10-16, with Git 2.56.0 re-measurements and the jj documentation (git-compatibility, CLI reference, changelog). Verdict: READY (no critical or high; six medium and seventeen low findings). The reviewer re-confirmed the record layouts, the `rev-parse --git-path hooks` cases, the ownership gate behavior, the classification order, the `hook.*.event` output, that the two JSON examples match the data model field by field, and that the 15 finding codes agree across artifacts. The author applied the resolutions below.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | Medium | Nested `.jj` markers: `managed` sorts `Evidence[0]` | Plan DD1 and T004: probe-only session gets innermost-first evidence; test |
+| 2 | Medium | Cross-lane rule not checkable by the script | Script rules are within-lane; cross-lane comparison is the manual T022 step |
+| 3 | Medium | J0 both control and deciding step | J0 is a control and a measurement; failure is exit 2 only |
+| 4 | Medium | `hooks-failed` unreachable on the Git path | Refusal row, T007 clarify per path |
+| 5 | Medium | `jj-push` coverage with null Git version or cross pairs | FR-008: null member or unmeasured pair is not covered |
+| 6 | Medium | Cut-scope leftovers in research.md | Four passages rewritten |
+| 7 to 23 | Low | `-z` in FR-004; path validation before `ancestors`; race between `ancestors` and `Inspect`; temp directory disclosure; `git_processes` rule; valueless event key; FR-010 tag; unfixtured edge cases; `skippable_by`; scan glob; gate output equality; quickstart warning; fresh-repository `hooks-dir-absent`; notes condition; status line; checklist wording; pre-release versions | Applied in the spec, plan, data model, contract, tasks, quickstart and checklist |

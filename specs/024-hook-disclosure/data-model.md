@@ -24,10 +24,10 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ## Boundary
 
-- `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants (no hook entry and no directory is opened); the last two disclose process use (`git_processes` is false for a jj workspace with no `.git` entry and for the ambiguous refusal; `jj_processes` is true only for a jj-owned workspace and covers only the sandbox probe and `--version`). Git reads in a jj workspace run outside the jj sandbox.
+- `effects`: `{network: false, writes: false, hooks_executed: false, hook_contents_read: false, hook_paths_opened: false, git_processes: bool, jj_processes: bool}`. The first five are constants (no hook entry and no directory is opened); the last two disclose process use (`git_processes` is true if any Git process started; `jj_processes` is true only for a jj-owned workspace and covers only the sandbox probe and `--version`). Git reads in a jj workspace run outside the jj sandbox.
 - `limits`: `{deadline_seconds: 10, git_process_seconds: 5, stream_bytes: 65536, result_bytes: 262144, value_bytes: 4096}`, the spec's limits table.
 - `complete`: boolean; false for `refused`, `error` and `incomplete`.
-- `notes`: empty for `refused` and `error` results; otherwise fixed strings: hook contents are never read (a missing interpreter or a self-disabling script is not detected); per-command overrides and the caller's `GIT_*` environment are not detected or applied; hooks in the default directory are inert while `core.hooksPath` is set and are not examined; on the jj path, the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns.
+- `notes`: empty for `refused` and `error` results; otherwise fixed strings: hook contents are never read (a missing interpreter or a self-disabling script is not detected); per-command overrides and the caller's `GIT_*` environment are not detected or applied; when `core.hooksPath` is set (state not `default`), hooks in the default directory are inert and not examined; on the jj path, the Git version used for `jj-push` coverage is the one on stw's `PATH`, which may differ from the Git jj spawns.
 
 ## Configuration
 
@@ -73,7 +73,7 @@ All text fields are bounded (4,096 bytes) and rendered as data. A field is `null
 
 ### OperationHook
 
-`{name, role, state, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`) or `absent`. `bypassed` is `true`, `false` or `null` per FR-007. `skippable_by` lists exception ids that skip this hook.
+`{name, role, state, bypassed, skippable_by}`. `role` is `blocking` or `observer`. `state` is `active`, `ignored`, `not-runnable`, `disabled-by-path` (the hooks path state is `null-device`, `empty`, `absent`, `not-directory`, `unreadable` or `invalid`) or `absent`. `bypassed` is `true`, `false` or `null` per FR-007. `skippable_by` lists only `no-verify` for `pre-commit`, `commit-msg` and `pre-push` on the Git claims, and is empty otherwise; the other exceptions apply to every hook and are listed on the operation.
 
 ## Finding
 
