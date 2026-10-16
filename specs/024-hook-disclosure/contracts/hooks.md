@@ -341,7 +341,7 @@ A refusal:
 ## Effects
 
 - Reads: Git configuration through the allowlisted `git config` and `git rev-parse` reads; `lstat`, `readlink` and `access(X_OK)` (real user) for the six hook names. For jj, only the existing sandbox probe and `--version`.
-- Writes: none. No lock file remains. The jj working copy and operation log are unchanged.
+- Writes: none to the repository, the Git directory, the configuration or the jj repository. On the jj path the existing session creates and removes a private temporary directory outside the repository. No lock file remains. The jj working copy and operation log are unchanged.
 - Opens: no hook entry, no directory and no hook content is opened or read.
 - Executes: no hook, configuration hook command, `git hook`, filter, helper or alias. Only the fixed Git invocations of the process allowlist in the research record and, for a jj-owned workspace, the existing sandbox probe and `--version`. Ambiguous ownership refuses before any process starts. GitButler, bare and not-a-repository refusals use only the existing Git detection and start no jj process and no hooks-specific Git read.
 - Network: none.

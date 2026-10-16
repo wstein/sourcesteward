@@ -6,7 +6,7 @@
 
 ## Content, completeness and readiness
 
-- [x] Focused on user value: finding guards that are missing, disabled, unsafe or bypassed by the backend in use
+- [x] Focused on user value: finding guards that are missing, disabled or bypassed by the backend in use
 - [x] All mandatory sections completed
 - [x] No unresolved clarification markers remain
 - [x] Requirements are testable and unambiguous

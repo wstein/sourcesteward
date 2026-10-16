@@ -20,7 +20,7 @@ stw hooks
 stw hooks --json
 ```
 
-Expected: backend `git`; effective hooks path `.githooks` from the local configuration; `pre-commit`, `commit-msg` and `pre-push` active; for `commit` and `push` `runs_hooks: yes`, no bypass finding, status 0. Make a commit and push to a local bare remote and compare `sentinel` with the report; nothing in `stw hooks` itself writes `sentinel`.
+Expected: backend `git`; effective hooks path `.githooks` from the local configuration; `pre-commit`, `commit-msg` and `pre-push` active; for `commit` and `push` `runs_hooks: yes`, no bypass finding, `backend-hook-behavior-unverified` as a warning until the lane has promoted the Git claims, status 0. Make a commit and push to a local bare remote and compare `sentinel` with the report; nothing in `stw hooks` itself writes `sentinel`.
 
 ## Silent disablement
 
