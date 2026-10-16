@@ -1,0 +1,1568 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/pins.schema.json",
+  "title": "SourceSteward submodule pin audit (schema 1)",
+  "description": "Read-only audit of what each Git submodule pin records, what is checked out and whether the pinned commit is contained in a local remote-tracking ref. No network or fetch is made, so publication evidence may be stale. Finding codes are append-only within schema_version 1; added properties are compatible extensions. Usage and writer failures may not emit complete JSON.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "backend",
+    "input_path",
+    "identity",
+    "boundary",
+    "submodules",
+    "findings",
+    "summary",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "pins"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "incomplete",
+        "refused",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "git",
+        "jj",
+        "gitbutler",
+        "ambiguous",
+        "unknown"
+      ]
+    },
+    "input_path": {
+      "type": "string"
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/git_identity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "boundary": {
+      "$ref": "#/$defs/boundary"
+    },
+    "submodules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/submodule"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/error_object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "identity": {
+            "type": "object"
+          },
+          "error": {
+            "type": "null"
+          },
+          "findings": {
+            "not": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "pins-limit",
+                      "pins-state-changed"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "incomplete"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "identity": {
+            "type": "object"
+          },
+          "error": {
+            "type": "null"
+          },
+          "findings": {
+            "contains": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "pins-limit",
+                    "pins-state-changed"
+                  ]
+                }
+              },
+              "required": [
+                "code"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "incomplete"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "refused"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "type": "null"
+          },
+          "submodules": {
+            "maxItems": 0
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "enum": [
+                  "unsupported-backend",
+                  "ambiguous-backend",
+                  "bare-repository",
+                  "not-repository"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "refused"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "identity": {
+            "type": "null"
+          },
+          "submodules": {
+            "maxItems": 0
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "const": "pins-failed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "const": "unsupported-backend"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "jj",
+              "gitbutler"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "const": "ambiguous-backend"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "ambiguous"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "const": "bare-repository"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "git"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "const": "not-repository"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "unknown"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "git_identity": {
+      "title": "SourceSteward inspection result (schema 1)",
+      "description": "Success and operational failure results. Usage and writer failures may not emit JSON. Unknown object properties and diagnostic codes are compatible extensions.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status",
+        "backend",
+        "input_path",
+        "evidence",
+        "repository",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unsupported",
+            "error"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj",
+            "gitbutler",
+            "ambiguous",
+            "unknown"
+          ]
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Absolute path when available; empty if input cannot be represented or resolved."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/evidence"
+          }
+        },
+        "repository": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/git_identity/$defs/repository"
+            }
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/diagnostic"
+          }
+        }
+      },
+      "$defs": {
+        "head": {
+          "type": "object",
+          "required": [
+            "state",
+            "ref",
+            "oid"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "attached",
+                "detached",
+                "unborn"
+              ]
+            },
+            "ref": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^refs/heads/.+"
+                }
+              ]
+            },
+            "oid": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "attached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "detached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "null"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "unborn"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "repository": {
+          "type": "object",
+          "required": [
+            "git_dir",
+            "common_dir",
+            "worktree",
+            "bare",
+            "linked_worktree",
+            "object_format",
+            "head"
+          ],
+          "properties": {
+            "git_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "common_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worktree": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bare": {
+              "type": "boolean"
+            },
+            "linked_worktree": {
+              "type": "boolean"
+            },
+            "object_format": {
+              "enum": [
+                "sha1",
+                "sha256"
+              ]
+            },
+            "head": {
+              "$ref": "#/$defs/git_identity/$defs/head"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "bare": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "worktree": {
+                    "type": "null"
+                  },
+                  "linked_worktree": {
+                    "const": false
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "worktree": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha1"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{40}$",
+                            "minLength": 40,
+                            "maxLength": 40
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha256"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$",
+                            "minLength": 64,
+                            "maxLength": 64
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "kind",
+            "location"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "jj-metadata",
+                "gitbutler-metadata",
+                "gitbutler-reference"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              },
+              "repository": {
+                "$ref": "#/$defs/git_identity/$defs/repository"
+              },
+              "diagnostics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "repository": {
+                "type": "null"
+              },
+              "diagnostics": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unsupported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "enum": [
+                  "jj",
+                  "gitbutler",
+                  "ambiguous"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "finding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "severity",
+            "submodule",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "pin-unpublished",
+                "gitlink-without-entry",
+                "url-has-credentials",
+                "submodule-path-unsafe",
+                "submodule-unsafe-owner",
+                "pins-limit",
+                "pins-state-changed",
+                "pin-object-absent"
+              ]
+            },
+            "severity": {
+              "const": "error"
+            },
+            "submodule": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "severity",
+            "submodule",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "submodule-unsupported-backend",
+                "staged-pin-differs",
+                "checkout-differs-from-pin",
+                "submodule-dirty",
+                "url-mismatch",
+                "entry-without-gitlink",
+                "gitmodules-modified"
+              ]
+            },
+            "severity": {
+              "const": "warning"
+            },
+            "submodule": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "severity",
+            "submodule",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "submodule-uninitialized",
+                "pin-behind-tracking",
+                "nested-submodules-present",
+                "remote-refs-may-be-stale"
+              ]
+            },
+            "severity": {
+              "const": "info"
+            },
+            "submodule": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "error_object": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "unsupported-backend",
+            "ambiguous-backend",
+            "bare-repository",
+            "not-repository",
+            "pins-failed"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "effects",
+        "limits",
+        "complete",
+        "staleness"
+      ],
+      "properties": {
+        "effects": {
+          "type": "object",
+          "required": [
+            "network",
+            "fetch",
+            "writes",
+            "hooks"
+          ],
+          "properties": {
+            "network": {
+              "const": false
+            },
+            "fetch": {
+              "const": false
+            },
+            "writes": {
+              "const": false
+            },
+            "hooks": {
+              "const": false
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "required": [
+            "max_submodules",
+            "per_submodule_seconds",
+            "total_seconds",
+            "max_output_bytes",
+            "max_remote_refs",
+            "max_count",
+            "dirty_scan_seconds",
+            "dirty_scan_entries"
+          ],
+          "properties": {
+            "max_submodules": {
+              "const": 256
+            },
+            "per_submodule_seconds": {
+              "const": 5
+            },
+            "total_seconds": {
+              "const": 30
+            },
+            "max_output_bytes": {
+              "const": 1048576
+            },
+            "max_remote_refs": {
+              "const": 16
+            },
+            "max_count": {
+              "const": 10000
+            },
+            "dirty_scan_seconds": {
+              "const": 3
+            },
+            "dirty_scan_entries": {
+              "const": 20000
+            }
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "staleness": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "submodules",
+        "errors",
+        "warnings",
+        "infos",
+        "publication"
+      ],
+      "properties": {
+        "submodules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "infos": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "publication": {
+          "type": "object",
+          "required": [
+            "reachable",
+            "unreachable",
+            "unknown"
+          ],
+          "properties": {
+            "reachable": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unreachable": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unknown": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "submodule": {
+      "type": "object",
+      "required": [
+        "path",
+        "path_encoding",
+        "name",
+        "registration",
+        "url",
+        "pin",
+        "checkout",
+        "publication",
+        "tracking",
+        "nested",
+        "refusal",
+        "finding_codes"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "path_encoding": {
+          "enum": [
+            "utf8",
+            "escaped"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registration": {
+          "type": "object",
+          "required": [
+            "gitlink_in_head",
+            "gitlink_in_index",
+            "gitmodules_entry",
+            "active"
+          ],
+          "properties": {
+            "gitlink_in_head": {
+              "type": "boolean"
+            },
+            "gitlink_in_index": {
+              "type": "boolean"
+            },
+            "gitmodules_entry": {
+              "type": "boolean"
+            },
+            "active": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "url": {
+          "type": "object",
+          "required": [
+            "configured",
+            "has_credentials",
+            "remote_name",
+            "remote_url",
+            "match"
+          ],
+          "properties": {
+            "configured": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "has_credentials": {
+              "type": "boolean"
+            },
+            "remote_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "remote_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "match": {
+              "enum": [
+                "match",
+                "mismatch",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "pin": {
+          "type": "object",
+          "required": [
+            "head_commit",
+            "index_commit",
+            "staged_differs"
+          ],
+          "properties": {
+            "head_commit": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "index_commit": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "staged_differs": {
+              "type": "boolean"
+            }
+          }
+        },
+        "checkout": {
+          "$ref": "#/$defs/checkout"
+        },
+        "publication": {
+          "$ref": "#/$defs/publication"
+        },
+        "tracking": {
+          "type": "object",
+          "required": [
+            "ref",
+            "relation",
+            "ahead",
+            "behind",
+            "capped"
+          ],
+          "properties": {
+            "ref": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "relation": {
+              "enum": [
+                "equal",
+                "behind",
+                "ahead",
+                "diverged",
+                "unknown"
+              ]
+            },
+            "ahead": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "behind": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "capped": {
+              "type": "boolean"
+            }
+          }
+        },
+        "nested": {
+          "type": "object",
+          "required": [
+            "present"
+          ],
+          "properties": {
+            "present": {
+              "type": "boolean"
+            }
+          }
+        },
+        "refusal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finding_codes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "pin-unpublished",
+              "gitlink-without-entry",
+              "url-has-credentials",
+              "submodule-path-unsafe",
+              "submodule-unsafe-owner",
+              "pins-limit",
+              "pins-state-changed",
+              "pin-object-absent",
+              "submodule-unsupported-backend",
+              "staged-pin-differs",
+              "checkout-differs-from-pin",
+              "submodule-dirty",
+              "url-mismatch",
+              "entry-without-gitlink",
+              "gitmodules-modified",
+              "submodule-uninitialized",
+              "pin-behind-tracking",
+              "nested-submodules-present",
+              "remote-refs-may-be-stale"
+            ]
+          }
+        }
+      }
+    },
+    "checkout": {
+      "type": "object",
+      "required": [
+        "state",
+        "head_commit",
+        "branch",
+        "detached",
+        "relation_to_pin",
+        "ahead",
+        "behind",
+        "capped",
+        "dirty"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "initialized",
+            "uninitialized",
+            "refused"
+          ]
+        },
+        "head_commit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detached": {
+          "type": "boolean"
+        },
+        "relation_to_pin": {
+          "enum": [
+            "same",
+            "ahead",
+            "behind",
+            "diverged",
+            "unrelated",
+            "unknown"
+          ]
+        },
+        "ahead": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "behind": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capped": {
+          "type": "boolean"
+        },
+        "dirty": {
+          "type": "object",
+          "required": [
+            "tracked",
+            "untracked",
+            "reason"
+          ],
+          "properties": {
+            "tracked": {
+              "enum": [
+                "present",
+                "absent",
+                "unknown"
+              ]
+            },
+            "untracked": {
+              "enum": [
+                "present",
+                "absent",
+                "unknown"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "tracked": {
+                        "const": "unknown"
+                      }
+                    },
+                    "required": [
+                      "tracked"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "untracked": {
+                        "const": "unknown"
+                      }
+                    },
+                    "required": [
+                      "untracked"
+                    ]
+                  }
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "required": [
+        "status",
+        "reason",
+        "reachable_from",
+        "truncated",
+        "last_fetch"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "reachable",
+            "unreachable",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reachable_from": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "required": [
+              "remote",
+              "ref"
+            ],
+            "properties": {
+              "remote": {
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "last_fetch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
