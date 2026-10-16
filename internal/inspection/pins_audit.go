@@ -30,6 +30,9 @@ var pinsLimits = pinsAuditLimits{Retain: pinsRetainBudget, Scan: pinsScanAllowan
 // pinsBeforeResample is a test seam that runs after the evidence is gathered and before the resample.
 var pinsBeforeResample func()
 
+// pinsBeforeEnumerate is a test seam that runs after the layout is known and before the registry is read.
+var pinsBeforeEnumerate func()
+
 // pinsAfterResolve is a test seam that runs after the submodule directories are validated and before
 // any evidence is read.
 var pinsAfterResolve func()
@@ -162,6 +165,9 @@ func (a *pinsAuditor) audit(abs string, identity Result) error {
 	if err != nil {
 		return err
 	}
+	if pinsBeforeEnumerate != nil {
+		pinsBeforeEnumerate()
+	}
 	reg, err := pinsEnumerate(a.run, layout)
 	if err != nil {
 		return err
@@ -169,6 +175,9 @@ func (a *pinsAuditor) audit(abs string, identity Result) error {
 	headBefore := ""
 	if reg.HeadCommit != nil {
 		headBefore = *reg.HeadCommit
+	}
+	if err := a.compareIdentity(layout, identity, headBefore); err != nil {
+		return err
 	}
 	a.safety = newPinsSafety(layout, a.run)
 	resolved, err := pinsResolveAll(a.safety, reg)
@@ -278,4 +287,37 @@ func (a *pinsAuditor) currentSubmoduleHead(path string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// compareIdentity checks that the identity read before the audit still describes HEAD now: the same
+// object and the same branch. The branch read here also feeds the "." tracking branch, so a stale copy is
+// never used.
+func (a *pinsAuditor) compareIdentity(l pinsSuperLayout, identity Result, head string) error {
+	out, err := a.run.run(pinsCall{Repo: pinsGitRepo{GitDir: l.GitDir, WorkTree: l.WorkTree}, Args: []string{"symbolic-ref", "-q", "HEAD"}})
+	if err != nil {
+		return err
+	}
+	var ref *string
+	if out.Exit == 0 {
+		r := strings.TrimSpace(string(out.Stdout))
+		ref = &r
+	}
+	a.superBrnch = nil
+	if ref != nil {
+		if b, ok := strings.CutPrefix(*ref, "refs/heads/"); ok {
+			a.superBrnch = &b
+		}
+	}
+	if identity.Repository == nil {
+		return nil
+	}
+	h := identity.Repository.Head
+	was := ""
+	if h.OID != nil {
+		was = *h.OID
+	}
+	if was != head || (h.Ref == nil) != (ref == nil) || h.Ref != nil && *h.Ref != *ref {
+		a.add("pins-state-changed", nil, "HEAD or its branch changed between the identification and the registry read, so the identity does not describe these pins")
+	}
+	return nil
 }

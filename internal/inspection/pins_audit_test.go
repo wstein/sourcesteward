@@ -717,3 +717,40 @@ func TestPinsAuditSuperprojectNonUTF8BranchIsAWholeResultFailureWithoutIdentity(
 		t.Fatal(err)
 	}
 }
+
+// The identity is read before the audit; if HEAD or its branch moves before the registry is read, the
+// identity no longer describes the pins and the result must not claim it does.
+func TestPinsAuditDetectsHeadMovingBetweenIdentityAndEnumeration(t *testing.T) {
+	for name, move := range map[string]func(t *testing.T, f pinsFixture){
+		"new commit":    func(t *testing.T, f pinsFixture) { git(t, f.Super, "commit", "--allow-empty", "-qm", "moved") },
+		"other branch":  func(t *testing.T, f pinsFixture) { git(t, f.Super, "checkout", "-q", "-b", "other") },
+		"detached HEAD": func(t *testing.T, f pinsFixture) { git(t, f.Super, "checkout", "-q", "--detach") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newPinsFixture(t)
+			pinsBeforeEnumerate = func() { pinsBeforeEnumerate = nil; move(t, f) }
+			t.Cleanup(func() { pinsBeforeEnumerate = nil })
+			r := auditOf(t, f.Super)
+			if r.Status != "incomplete" || r.Identity == nil {
+				t.Fatalf("%s %+v", r.Status, r.Findings)
+			}
+			requireFinding(t, r, "pins-state-changed", "error", "")
+		})
+	}
+}
+
+func TestPinsAuditStableHeadBetweenIdentityAndEnumerationIsNotAChange(t *testing.T) {
+	f := newPinsFixture(t)
+	r := auditOf(t, f.Super)
+	requireNoFinding(t, r, "pins-state-changed")
+	// The dot branch follows the branch read after the identity, not the identity's copy.
+	git(t, memberOf(f), "update-ref", "refs/remotes/origin/work", f.Pin)
+	git(t, f.Super, "checkout", "-q", "-b", "work")
+	editGitmodules(t, f, "submodule.member.branch", ".")
+	pinsBeforeEnumerate = func() { pinsBeforeEnumerate = nil; git(t, f.Super, "checkout", "-q", "-b", "elsewhere") }
+	t.Cleanup(func() { pinsBeforeEnumerate = nil })
+	r = auditOf(t, f.Super)
+	if tr := subOf(t, r, "member").Tracking; tr.Ref == nil || *tr.Ref != "refs/remotes/origin/elsewhere" {
+		t.Fatalf("the dot branch used a stale branch: %+v", tr)
+	}
+}
