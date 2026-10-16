@@ -50,3 +50,16 @@ Independent reviewer: read-only Opus review, revision c75bc7269ad5563e94d3a9d892
 | 11-21 | Low | Edge-case wording; `.git` entry kinds; lexical failures as `ignored` (not entries, so `path_encoding` removed); blob id passed to `config --blob`; value-less keys; provisional pointer rule; `discovery_not_applicable` counts explicit entries; facts-only fallback replaced by all-`output-limit`; per-entry line bound 24; `inventory-not-started` marked new; `notes` format; status line; leading-dash path needs `--` | Applied in spec, data model, contract, plan and tasks |
 
 The author did not accept the reviewer's low-severity suggestion that the 8 MiB estimate always fits (16 inventories of up to 1 MiB each exceed it); the budget omission is kept.
+
+## Round 3
+
+Independent reviewer: read-only Opus review, revision 49efc031b68f4625181a02614ab7d18fca958259, 2026-10-16, Git 2.56.0; jj not available. Verdict: NOT READY (1 high, 4 medium, 6 low). All round-2 resolutions were confirmed except as listed. The guide's limit of three rounds is reached; the resolutions below were applied by the author and have not been re-reviewed.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | Post-inventory identity comparison is invalid for `error` inventories (no repository identity); would relabel inner `Inspect` timeouts as `changed-repository` | FR-008 and plan DD3: compare only `ok` and `partial` inventories; a mismatch nulls inventory and facts; T010 adds the inner-timeout case |
+| 2 | Medium | data-model still said `inventory-limit` for omission | `output-limit` |
+| 3 | Medium | plan DD6, research Decision 8 and contract Effects still used `HEAD:.gitmodules` | Blob id from `ls-tree` everywhere (research keeps the measured form with a note) |
+| 4 | Medium | Omission of an `error` inventory undefined | Entry status table: keep inherited code, add `output-limit` to `notes`, facts null, counted in `inventories_omitted` |
+| 5 | Medium | SC-001 lacked the jj scope qualification | Added |
+| 6-11 | Low | Duplicate phrase and explicit-only wording; bare repository gate; T016 tags; jj operation-id comparison marked unverified; timeout grammar and message alignment; `notes` format of `inventory-partial` and of ignored paths | Applied |
