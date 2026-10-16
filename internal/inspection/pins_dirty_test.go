@@ -299,7 +299,7 @@ func TestPinsDirtyBudgetYieldsUnknownNeverALimit(t *testing.T) {
 	mustOS(t, herr)
 	settleIndex(t, c.dirs.GitDir)
 	got := c.stateWith(t, pinsDirtyBudget{Entries: 3, Time: time.Minute})
-	if got.Tracked != "unknown" || !strings.Contains(got.Reason, "budget") {
+	if got.Tracked != "unknown" || got.Reason != pinsBudgetReason {
 		t.Fatalf("entries: %+v", got)
 	}
 	got = c.stateWith(t, pinsDirtyBudget{Entries: 20000, Time: time.Nanosecond})
@@ -404,8 +404,8 @@ func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testi
 	}
 	t.Cleanup(func() { pinsNow = old })
 	got := c.state(t)
-	if got.Tracked != "unknown" || !strings.Contains(got.Reason, "budget") {
-		t.Fatalf("%+v", got)
+	if got.Tracked != "unknown" || got.Reason != pinsBudgetReason {
+		t.Fatalf("the walk must stop with exactly the budget reason: %+v", got)
 	}
 	if calls > 200 {
 		t.Fatalf("the deadline was consulted %d times: it is not checked per path component", calls)

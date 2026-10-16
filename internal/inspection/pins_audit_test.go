@@ -757,3 +757,52 @@ func TestPinsAuditStableHeadBetweenIdentityAndEnumerationIsNotAChange(t *testing
 		t.Fatalf("the dot branch used a stale branch: %+v", tr)
 	}
 }
+
+func TestPinsAuditSubmoduleHeadUnreadableAtTheResampleIsAStateChange(t *testing.T) {
+	f := newPinsFixture(t)
+	pinsBeforeResample = func() {
+		mustOS(t, os.WriteFile(filepath.Join(f.Super, ".git", "modules", "member", "refs", "heads", "main"), []byte("garbage\n"), 0o600))
+	}
+	t.Cleanup(func() { pinsBeforeResample = nil })
+	r := auditOf(t, f.Super)
+	fd := findingOf(r, "pins-state-changed", "member")
+	if r.Status != "incomplete" || fd == nil || !strings.Contains(fd.Message, "can no longer be read") {
+		t.Fatalf("%s %+v", r.Status, r.Findings)
+	}
+}
+
+func TestPinsRegistryReadsGitmodulesFromTheResolvedHeadObject(t *testing.T) {
+	f := newPinsFixture(t)
+	pinsAfterHead = func() {
+		pinsAfterHead = nil
+		writeFile(t, filepath.Join(f.Super, ".gitmodules"), "[submodule \"member\"]\n\tpath = member\n\turl = https://example.invalid/new.git\n[submodule \"extra\"]\n\tpath = extra\n\turl = https://example.invalid/extra.git\n")
+		git(t, f.Super, "add", ".gitmodules")
+		git(t, f.Super, "commit", "-qm", "moved gitmodules")
+	}
+	t.Cleanup(func() { pinsAfterHead = nil })
+	reg := registryOf(t, f.Super)
+	e := entryAt(t, reg, "member")
+	if e.URL == nil || strings.Contains(*e.URL, "example.invalid") {
+		t.Fatalf("the registry read a .gitmodules newer than the HEAD it resolved: %v", e.URL)
+	}
+	for _, x := range reg.Entries {
+		if x.Path == "extra" {
+			t.Fatal("an entry from a later .gitmodules appeared")
+		}
+	}
+}
+
+func TestPinsAuditMismatchedNonUTF8RemoteNameIsEscapedNotFatal(t *testing.T) {
+	f := newPinsFixture(t)
+	member := memberOf(f)
+	git(t, member, "remote", "remove", "origin")
+	git(t, member, "remote", "add", "caf\xe9", "https://example.invalid/other.git")
+	r := auditOf(t, f.Super)
+	if r.Status == "error" {
+		t.Fatalf("a hostile remote name failed the whole result: %+v", r.Error)
+	}
+	s := subOf(t, r, "member")
+	if s.URL.Match != "mismatch" || s.URL.RemoteName == nil || *s.URL.RemoteName != `caf\xe9` {
+		t.Fatalf("%+v", s.URL)
+	}
+}
