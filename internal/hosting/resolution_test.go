@@ -33,3 +33,16 @@ func TestRemoteResolution(t *testing.T) {
 		t.Fatalf("explicit withoutremotes %+v %v", r, e)
 	}
 }
+func TestUnsupportedRemoteExclusionAndEmptyQueryRefusal(t *testing.T) {
+	for _, raw := range []string{"/local/repo", "file:///local/repo", "bob@gitlab.com:a/b", "https://gitlab.com/a/b"} {
+		c, e := parseRemote("other", raw, "github.com")
+		if e != nil || c != nil {
+			t.Fatalf("unrelated %q %+v %v", raw, c, e)
+		}
+	}
+	for _, raw := range []string{"https://github.com/a/b?", "https://github.com/a/b#", "git://github.com/a/b"} {
+		if _, e := parseRemote("origin", raw, "github.com"); e == nil {
+			t.Fatalf("accepted %q", raw)
+		}
+	}
+}

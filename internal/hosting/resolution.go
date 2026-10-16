@@ -12,6 +12,9 @@ func parseRemote(remote, raw, host string) (*Candidate, error) {
 	if raw == "" || strings.IndexFunc(raw, unicode.IsControl) >= 0 {
 		return nil, errors.New("malformed remote URL")
 	}
+	if !strings.Contains(strings.ToLower(raw), strings.ToLower(host)) {
+		return nil, nil
+	}
 	var h, p string
 	if strings.HasPrefix(raw, "git@") && !strings.Contains(raw, "://") {
 		after := strings.TrimPrefix(raw, "git@")
@@ -32,7 +35,7 @@ func parseRemote(remote, raw, host string) (*Candidate, error) {
 		if u.Scheme != "https" && u.Scheme != "ssh" {
 			return nil, errors.New("unsupported selected-host remote URL")
 		}
-		if u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || u.Port() != "" || u.Opaque != "" {
+		if u.RawQuery != "" || u.ForceQuery || strings.Contains(raw, "#") || u.Fragment != "" || u.RawPath != "" || u.Port() != "" || u.Opaque != "" {
 			return nil, errors.New("malformed selected-host remote URL")
 		}
 		if u.User != nil && (u.Scheme != "ssh" || u.User.Username() != "git" || u.User.String() != "git") {

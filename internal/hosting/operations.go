@@ -30,7 +30,7 @@ func Inspect(ctx context.Context, path string, o Options) Result {
 	}, api: func(ctx context.Context, path, host string) (apiReader, func(), error) { return newGH(ctx, path, host) }})
 }
 func newResult(kind string) Result {
-	return Result{SchemaVersion: 1, Kind: kind, Status: "error", Backend: "unknown", Candidates: []Candidate{}, Checks: []Check{}, Statuses: []CommitStatus{}, Diagnostics: []inspection.Diagnostic{}, ObservedAt: time.Now().UTC().Format(time.RFC3339), Boundary: Boundary{MaxPages: maxPages, MaxRecords: maxRecords, MaxBytes: maxBytes, TimeoutSeconds: 30, Limitations: []string{"Sampled evidence is not a transaction, required-check policy or merge eligibility.", "Only active native remotes are observed; repository existence is not verified by local resolution."}}}
+	return Result{SchemaVersion: 1, Kind: kind, Status: "error", Backend: "unknown", Candidates: []Candidate{}, Checks: []Check{}, Statuses: []CommitStatus{}, Diagnostics: []inspection.Diagnostic{}, ObservedAt: time.Now().UTC().Format(time.RFC3339), Boundary: Boundary{MaxPages: maxPages, MaxRecords: maxRecords, MaxBytes: maxBytes, TimeoutSeconds: 30, Limitations: []string{"Sampled evidence is not a transaction, required-check policy or merge eligibility.", "Only active native remotes are observed; repository existence is not verified by local resolution.", "Unsupported or unrelated-host remote URLs are excluded; credential-bearing URLs are never exposed."}}}
 }
 func (r *Result) fail(code, msg string) Result {
 	r.Status = "error"
