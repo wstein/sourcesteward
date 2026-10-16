@@ -1,0 +1,208 @@
+// SPDX-License-Identifier: EUPL-1.2
+package inspection
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+type publishCase struct {
+	run   *pinsRunner
+	repo  pinsGitRepo
+	dirs  pinsSubmoduleDirs
+	facts pinsRepoFacts
+	f     pinsFixture
+}
+
+func newPublishCase(t *testing.T) publishCase {
+	t.Helper()
+	f := newPinsFixture(t)
+	run, repo, d := validatedMember(t, f)
+	return publishCase{run: run, repo: repo, dirs: d, f: f}
+}
+
+func (c *publishCase) publish(t *testing.T, pin string) pinsPublication {
+	t.Helper()
+	facts, err := pinsReadFacts(c.run, c.dirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.facts = facts
+	p, err := pinsPublish(c.run, c.repo, c.dirs, facts, pin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func refNames(p pinsPublication) []string {
+	var out []string
+	for _, r := range p.Refs {
+		out = append(out, r.Remote+" "+r.Ref)
+	}
+	return out
+}
+
+func TestPinsPublicationReachableFromARemoteTrackingRef(t *testing.T) {
+	c := newPublishCase(t)
+	p := c.publish(t, c.f.Pin)
+	// origin/HEAD is a symref that also contains the pin: it must not appear or use a slot.
+	if p.Status != "reachable" || p.Truncated || p.Reason != "" || strings.Join(refNames(p), ",") != "origin refs/remotes/origin/main" {
+		t.Fatalf("%+v", p)
+	}
+}
+
+func TestPinsPublicationUnreachableWhenOnlyLocalRefsContainThePin(t *testing.T) {
+	c := newPublishCase(t)
+	local := commitIn(t, c.repo.WorkTree, "local-only")
+	git(t, c.repo.WorkTree, "branch", "local-branch")
+	git(t, c.repo.WorkTree, "tag", "local-tag")
+	git(t, c.repo.WorkTree, "tag", "-a", "-m", "annotated", "local-annotated")
+	p := c.publish(t, local)
+	if p.Status != "unreachable" || len(p.Refs) != 0 || p.Reason != "" || p.Truncated {
+		t.Fatalf("local branches and tags must never count: %+v", p)
+	}
+	// The published ancestor stays reachable.
+	if p := c.publish(t, c.f.Pin); p.Status != "reachable" {
+		t.Fatalf("%+v", p)
+	}
+}
+
+func TestPinsPublicationAbsentOrNonCommitObjectIsUnknown(t *testing.T) {
+	c := newPublishCase(t)
+	for name, oid := range map[string]string{
+		"absent": strings.Repeat("ab", 20),
+		"blob":   gitIn(t, c.repo.WorkTree, "rev-parse", "HEAD:file.txt"),
+		"tree":   gitIn(t, c.repo.WorkTree, "rev-parse", "HEAD^{tree}"),
+	} {
+		p := c.publish(t, oid)
+		if p.Status != "unknown" || p.Reason == "" || !p.ObjectAbsent || len(p.Refs) != 0 {
+			t.Fatalf("%s: %+v", name, p)
+		}
+	}
+}
+
+func TestPinsPublicationForkOnlyContainment(t *testing.T) {
+	c := newPublishCase(t)
+	wt := c.repo.WorkTree
+	local := commitIn(t, wt, "fork-only")
+	git(t, wt, "remote", "add", "fork", "https://example.invalid/fork.git")
+	git(t, wt, "update-ref", "refs/remotes/fork/topic", local)
+	p := c.publish(t, local)
+	if p.Status != "reachable" || strings.Join(refNames(p), ",") != "fork refs/remotes/fork/topic" {
+		t.Fatalf("%+v", p)
+	}
+}
+
+func TestPinsPublicationMultiRemoteNamesEachRefsRemote(t *testing.T) {
+	c := newPublishCase(t)
+	wt := c.repo.WorkTree
+	git(t, wt, "remote", "add", "fork", "https://example.invalid/fork.git")
+	git(t, wt, "remote", "add", "team/a", "https://example.invalid/team-a.git")
+	for _, ref := range []string{"refs/remotes/fork/main", "refs/remotes/team/a/release/1.0", "refs/remotes/stray/x"} {
+		git(t, wt, "update-ref", ref, c.f.Pin)
+	}
+	p := c.publish(t, c.f.Pin)
+	want := "fork refs/remotes/fork/main,origin refs/remotes/origin/main,stray refs/remotes/stray/x,team/a refs/remotes/team/a/release/1.0"
+	if p.Status != "reachable" || strings.Join(refNames(p), ",") != want {
+		t.Fatalf("%v", refNames(p))
+	}
+}
+
+func TestPinsPublicationNamesAtMostSixteenRefsAndFlagsTruncation(t *testing.T) {
+	c := newPublishCase(t)
+	wt := c.repo.WorkTree
+	for i := 0; i < 15; i++ { // origin/main makes 16 real refs
+		git(t, wt, "update-ref", fmt.Sprintf("refs/remotes/origin/b%02d", i), c.f.Pin)
+	}
+	p := c.publish(t, c.f.Pin)
+	if p.Status != "reachable" || len(p.Refs) != 16 || p.Truncated {
+		t.Fatalf("exactly 16 is not truncated: %d %v", len(p.Refs), p.Truncated)
+	}
+	git(t, wt, "update-ref", "refs/remotes/origin/zzz", c.f.Pin)
+	p = c.publish(t, c.f.Pin)
+	if len(p.Refs) != 16 || !p.Truncated {
+		t.Fatalf("%d %v", len(p.Refs), p.Truncated)
+	}
+	// Symbolic refs filtered out do not use up the 16.
+	for i := 0; i < 20; i++ {
+		git(t, wt, "symbolic-ref", fmt.Sprintf("refs/remotes/origin/AAA%02d", i), "refs/remotes/origin/main")
+	}
+	p = c.publish(t, c.f.Pin)
+	if len(p.Refs) != 16 || !p.Truncated {
+		t.Fatalf("symbolic refs used up slots: %d %v", len(p.Refs), p.Truncated)
+	}
+	for _, r := range p.Refs {
+		if strings.Contains(r.Ref, "AAA") || strings.HasSuffix(r.Ref, "/HEAD") {
+			t.Fatalf("symbolic ref listed: %v", r)
+		}
+	}
+}
+
+func TestPinsPublicationNonUTF8RefIsEscapedPerFieldNotRefused(t *testing.T) {
+	c := newPublishCase(t)
+	// Git accepts non-UTF-8 bytes in a ref name; the result must carry an escaped form, never fail whole.
+	bad := filepath.Join(c.repo.GitDir, "refs", "remotes", "origin", "caf\xe9")
+	mustOS(t, os.WriteFile(bad, []byte(c.f.Pin+"\n"), 0o600))
+	p := c.publish(t, c.f.Pin)
+	found := false
+	for _, r := range p.Refs {
+		found = found || r.Ref == `refs/remotes/origin/caf\xe9`
+	}
+	if !found {
+		t.Fatalf("%v", refNames(p))
+	}
+}
+
+func TestPinsPublicationLastFetchIsAdvisoryAndReadOnly(t *testing.T) {
+	c := newPublishCase(t)
+	if p := c.publish(t, c.f.Pin); p.LastFetch != nil {
+		t.Fatalf("no FETCH_HEAD, no time: %v", *p.LastFetch)
+	}
+	fh := filepath.Join(c.repo.GitDir, "FETCH_HEAD")
+	writeFile(t, fh, "ignored\n")
+	when := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	mustOS(t, os.Chtimes(fh, when, when))
+	p := c.publish(t, c.f.Pin)
+	if p.LastFetch == nil || *p.LastFetch != "2026-01-02T03:04:05Z" {
+		t.Fatalf("%v", p.LastFetch)
+	}
+	// A symlinked FETCH_HEAD is never followed.
+	rmAll(t, fh)
+	mustOS(t, os.Symlink("/etc/hostname", fh))
+	if p := c.publish(t, c.f.Pin); p.LastFetch != nil {
+		t.Fatalf("followed a symlink: %v", *p.LastFetch)
+	}
+}
+
+func TestPinsPublicationStartsOnlyAllowlistedGitCommands(t *testing.T) {
+	c := newPublishCase(t)
+	gitLog, _ := pinsSentinels(t)
+	c.publish(t, c.f.Pin)
+	requireAllowlisted(t, gitLog(), "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/")
+}
+
+func TestPinsPublicationChecksTheObjectBeforeAskingForContainment(t *testing.T) {
+	c := newPublishCase(t)
+	gitLog, _ := pinsSentinels(t)
+	c.publish(t, strings.Repeat("cd", 20))
+	for _, l := range gitLog() {
+		if strings.Contains(l, "for-each-ref") {
+			t.Fatalf("containment asked for an absent object (exit 129 would look like a failure): %s", l)
+		}
+	}
+}
+
+func TestPinsPublicationCancellationIsAnError(t *testing.T) {
+	c := newPublishCase(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := pinsPublish(newPinsRunner(ctx), c.repo, c.dirs, pinsRepoFacts{}, c.f.Pin); err == nil {
+		t.Fatal("cancellation became an answer")
+	}
+}
