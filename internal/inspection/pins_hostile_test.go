@@ -135,7 +135,7 @@ func (h hostile) hostileGlobalConfig(t *testing.T) {
 func allowlisted(t *testing.T, run *pinsRunner, repo pinsGitRepo, pin string) {
 	t.Helper()
 	calls := [][]string{
-		{"rev-parse", "HEAD"},
+		{"rev-parse", "--verify", "--quiet", "HEAD"},
 		{"symbolic-ref", "-q", "HEAD"},
 		{"cat-file", "-e", pin + "^{commit}"},
 		{"merge-base", pin, "HEAD"},

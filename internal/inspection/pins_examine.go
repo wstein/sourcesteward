@@ -43,11 +43,20 @@ func (a *pinsAuditor) examineOne(re pinsResolvedEntry, reg pinsRegistry) error {
 	var pending []pinsPendingFinding
 	err := a.evidence(&srun, re, &sub, &pending)
 	if err != nil {
-		msg, ok := a.limitText(err)
-		if !ok {
-			return err
+		if msg, ok := a.limitText(err); ok {
+			pending = append(pending, pinsPendingFinding{"pins-limit", "the evidence for this submodule is incomplete: " + msg})
+		} else if a.parent.Err() != nil {
+			return err // cancellation
+		} else {
+			// A submodule whose repository cannot be read is unknown with the reason, not a failed audit.
+			reason := "evidence could not be read: " + boundPinsMessage(err.Error())
+			if sub.Publication.Status == "unknown" {
+				sub.Publication.Reason = reason
+			}
+			if sub.Checkout.Dirty.Reason == "not evaluated" {
+				sub.Checkout.Dirty.Reason = reason
+			}
 		}
-		pending = append(pending, pinsPendingFinding{"pins-limit", "the evidence for this submodule is incomplete: " + msg})
 	}
 	a.r.Submodules = append(a.r.Submodules, sub)
 	path := sub.Path

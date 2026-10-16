@@ -273,7 +273,7 @@ func TestPinsAuditStartsOnlyAllowlistedPinsCommands(t *testing.T) {
 			mine = append(mine, l)
 		}
 	}
-	requireAllowlisted(t, mine, "rev-parse HEAD", "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/",
+	requireAllowlisted(t, mine, "rev-parse --verify --quiet HEAD", "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/",
 		"diff-index --cached --no-ext-diff --no-textconv HEAD", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z", "ls-tree HEAD .gitmodules", "symbolic-ref -q <REMOTE-REF>")
 }
 
@@ -576,5 +576,38 @@ func TestPinsRegistryReadsTheResolvedHeadObjectNotTheName(t *testing.T) {
 		if e.Path == "other" && e.GitlinkInHead {
 			t.Fatal("the registry read a HEAD that moved after it was resolved")
 		}
+	}
+}
+
+func TestPinsAuditUnbornSubmoduleWithAWorktreeFileNamedHEAD(t *testing.T) {
+	f := newPinsFixture(t)
+	member := filepath.Join(f.Super, "member")
+	git(t, member, "checkout", "-q", "--orphan", "fresh")
+	writeFile(t, filepath.Join(member, "HEAD"), "x")
+	settleIndexOf(t, f)
+	r := auditOf(t, f.Super)
+	s := subOf(t, r, "member")
+	if r.Status != "ok" || s.Checkout.State != "initialized" || s.Checkout.HeadCommit != nil || s.Checkout.Branch == nil || *s.Checkout.Branch != "fresh" {
+		t.Fatalf("%s %+v", r.Status, s.Checkout)
+	}
+}
+
+// One submodule whose evidence cannot be read is unknown with a reason; it never fails the whole audit.
+func TestPinsAuditUnreadableEvidenceIsUnknownForThatSubmoduleOnly(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", f.Sub, "second")
+	git(t, f.Super, "commit", "-qm", "second")
+	mustOS(t, os.WriteFile(filepath.Join(f.Super, ".git", "modules", "member", "refs", "heads", "main"), []byte("not-an-object-name\n"), 0o600))
+	settleIndex(t, filepath.Join(f.Super, ".git", "modules", "second"))
+	r := auditOf(t, f.Super)
+	if r.Status != "ok" || !r.Boundary.Complete || r.Error != nil {
+		t.Fatalf("%s %+v", r.Status, r.Error)
+	}
+	m := subOf(t, r, "member")
+	if m.Publication.Status != "unknown" || !strings.Contains(m.Publication.Reason, "could not be read") || m.Checkout.Dirty.Reason == "" {
+		t.Fatalf("%+v", m)
+	}
+	if s := subOf(t, r, "second"); s.Publication.Status != "reachable" {
+		t.Fatalf("%+v", s.Publication)
 	}
 }
