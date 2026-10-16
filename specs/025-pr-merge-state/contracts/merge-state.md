@@ -32,7 +32,7 @@ May be waiting on:
 Context:
   [observed] strict-required-status-checks: A rule requires the head to be up to date with the base. (sources: branch-protection)
   [observed] auto-merge: Auto-merge is enabled with method rebase. (sources: pull-request)
-  [observed] merge-methods: Merge methods not excluded by readable sources: rebase; rule limit: unknown. (sources: repository, branch-protection)
+  [observed] merge-methods: Merge methods not excluded by readable sources: rebase; rule limit: none. (sources: repository, branch-protection)
   [observed] linear-history-required: A rule requires linear history. (sources: branch-protection)
   [observed] administrators-included: Rules apply to administrators: true. (sources: branch-protection)
 Sources: pull-request ok; repository ok; base-branch ok; branch-protection ok; branch-rules ok; compare ok; check-runs ok; commit-statuses ok; reviews skipped (not-needed)
@@ -40,7 +40,7 @@ Complete: yes. Network reads: 10 of at most 50.
 Notice: Sampled evidence; it does not assert that the pull request can be merged or will merge, and it authorizes nothing.
 ```
 
-An `unknown` item prints its template with the appended reason, for example `[unknown] classic-protection-unreadable: Classic branch protection exists but its details are not readable: strict, enforce_admins. Reason: not-found-ambiguous. (sources: base-branch, branch-protection)`. With no `waits` and no `may-wait` items the fixed line `No waiting condition was found in the evidence read.` is printed after the groups; outside the fixed notice and the labelled GitHub line the text never uses the words mergeable, ready, will merge or can merge. This wording is a tested invariant (SC-003).
+An `unknown` item prints its template with the appended reason, for example `[unknown] classic-protection-unreadable: Classic branch protection may apply but its details are not readable: strict, enforce_admins, required_reviews, conversation_resolution, linear_history, signatures, lock_branch. Reason: not-found-ambiguous. (sources: base-branch, branch-protection)`. With no `waits` and no `may-wait` items the fixed line `No waiting condition was found in the evidence read.` is printed after the groups; outside the fixed notice and the labelled GitHub line the text never uses the words mergeable, ready, will merge or can merge. This wording is a tested invariant (SC-003).
 
 ## JSON
 
@@ -230,12 +230,12 @@ One `MergeStateResult` per invocation, validated by `schemas/v1/merge-state.sche
    "effect": "info",
    "confidence": "observed",
    "reason": null,
-   "summary": "Merge methods not excluded by readable sources: rebase; rule limit: unknown.",
+   "summary": "Merge methods not excluded by readable sources: rebase; rule limit: none.",
    "detail": {
     "allowed": [
      "rebase"
     ],
-    "rule_limit": null,
+    "rule_limit": [],
     "sources": [
      "repository",
      "branch-protection"

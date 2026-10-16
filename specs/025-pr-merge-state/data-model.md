@@ -62,15 +62,15 @@ Order: the order of the Items table, then `subject` by bytes, then `detail.app_i
 | `strict-required-status-checks`, `linear-history-required`, `conversation-resolution-required` | `origin` (array as above) |
 | `head-behind-base` | `behind_by`, `ahead_by` (non-negative integers, or `null` when `compare` was not `ok`), `strict` (boolean or `null`) |
 | `auto-merge` | `method` (`merge`, `squash`, `rebase` or `null`) |
-| `merge-methods` | `allowed` (array of methods, or `null` when unknown), `rule_limit` (array of methods from a rule, or `null`), `sources` (array of source ids that contributed) |
+| `merge-methods` | `allowed` (array of methods, or `null` when unknown), `rule_limit` (array of methods from a rule; empty when `branch-rules` is `ok` and sets no limit; `null` only when `branch-rules` is not `ok`), `sources` (array of source ids that contributed) |
 | `auto-merge-method-not-allowed` | `method`, `excluded_by` (source id) |
 | `administrators-included` | `enabled` (boolean) |
 | `classic-protection-unreadable` | `unreadable` (array of `strict`, `enforce_admins`, `required_reviews`, `conversation_resolution`, `linear_history`, `signatures`, `lock_branch`) |
 | `review-required` | `required` (known lower bound or value, or `null`), `required_complete` (boolean), `approvals`, `changes_requested` (non-negative integers, or `null` when `reviews` was not `ok`), `origin` |
-| `branch-rules-unreadable` | `unreadable` (array of `required_checks`, `strict`, `reviews`, `linear_history`, `merge_queue`, `conversation_resolution`, `merge_methods`, `other_rules`) |
 | `merge-queue-required` | `merge_method` (string or `null`) |
 | `rulesets-apply` | `rulesets` (at most 50 of `{id, source_type, source, rule_types[]}`; `id` integer, others bounded text) |
 | `rule-not-evaluated` | `rule_type` (bounded text), `origin` |
+| `branch-rules-unreadable` | `unreadable` (array of `required_checks`, `strict`, `reviews`, `linear_history`, `merge_queue`, `conversation_resolution`, `merge_methods`, `other_rules`) |
 
 ### Summary templates (normative; parameters in braces are escaped data)
 
@@ -84,21 +84,21 @@ Order: the order of the Items table, then `subject` by bytes, then `detail.app_i
 | `required-checks-unknown` | The set of required status contexts is not fully known. |
 | `strict-required-status-checks` | A rule requires the head to be up to date with the base. |
 | `head-behind-base` | The head is {behind_by} commits behind the base branch tip; strict rule: {strict}. |
-| `branch-rules-unreadable` | Branch rules are not readable: {unreadable}. |
 | `auto-merge` | Auto-merge is enabled with method {method}. |
 | `merge-methods` | Merge methods not excluded by readable sources: {allowed}; rule limit: {rule_limit}. |
 | `auto-merge-method-not-allowed` | Auto-merge method {method} is excluded by {excluded_by}. |
 | `linear-history-required` | A rule requires linear history. |
 | `administrators-included` | Rules apply to administrators: {enabled}. |
-| `classic-protection-unreadable` | Classic branch protection exists but its details are not readable: {unreadable}. |
+| `classic-protection-unreadable` | Classic branch protection may apply but its details are not readable: {unreadable}. |
 | `review-required` | Reviews required: {required}{ or more}; approvals counted: {approvals}; changes requested: {changes_requested}. Reviewer eligibility is not evaluated. |
 | `conversation-resolution-required` | A rule requires resolved conversations; REST does not expose their state. |
 | `merge-queue-required` | A merge queue rule applies; queue state is not read. |
 | `rulesets-apply` | {n} rulesets apply to the base branch. |
 | `rule-not-evaluated` | Rule {subject} applies and is not evaluated by this command. |
+| `branch-rules-unreadable` | Branch rules are not readable: {unreadable}. |
 | `blocked-unexplained` | GitHub reports a blocking state that the readable evidence does not explain. |
 
-A null parameter renders as `unknown`; " or more" is added only when `required_complete` is false. An `unknown` item appends ` Reason: {reason}.` with the reason code. Human output consists only of these summaries and the **fixed lines** below.
+A null parameter renders as `unknown`, in templates and in the fixed lines (a null `mergeable` prints `mergeable=unknown`), and an empty array renders as `none`; " or more" is added only when `required_complete` is false. An `unknown` item appends ` Reason: {reason}.` with the reason code. Human output consists only of these summaries and the **fixed lines** below.
 
 ### Fixed human lines (normative)
 
@@ -112,10 +112,11 @@ A null parameter renders as `unknown`; " or more" is added only when `required_c
 | Sources | `Sources: {id} {outcome}[ ({reason})]; …` |
 | Completeness | `Complete: {yes or no}. Network reads: {requests_made} of at most {max_requests}.` |
 | Notice | `Notice: ` followed by the constant `notice` |
+| Error result | Header and GitHub lines are omitted when `pull_request` is null; the lines printed are `Error: {diagnostic code}: {message}`, the Sources line, the Completeness line and the Notice |
 
 ## Source
 
-`id` (source id), `outcome` (`ok`, `denied`, `not-found`, `rate-limited`, `failed`, `skipped`), `failure_class` (`unauthorized`, `forbidden`, `not-found`, `rate-limited`, `other-http`, `too-large`, `malformed`, `transport`, `canceled`, or `null`), `requests` (integer, requests made for this source), `reason` (reason enum or `null`; non-null for `skipped`, `denied`, `not-found`, `rate-limited` and `failed` outcomes (`failed` uses `source-failed`, a dependency skip uses `dependency-unavailable`), `null` for `ok`). Outcome mapping from the failure class: `unauthorized` and `forbidden` give `denied`; `not-found` gives `not-found`; `rate-limited` gives `rate-limited`; every other class gives `failed`.
+`id` (source id), `outcome` (`ok`, `denied`, `not-found`, `rate-limited`, `failed`, `skipped`), `failure_class` (`unauthorized`, `forbidden`, `not-found`, `rate-limited`, `other-http`, `too-large`, `malformed`, `transport`, `canceled`, or `null`), `requests` (integer, requests made for this source), When a source is read twice (`pull-request`, `base-branch`) and the first read is `ok` but the resample fails with any class, the outcome is `failed`, the reason `source-failed`, the class is kept and the status is `incomplete`. `reason` (reason enum or `null`; non-null for `skipped`, `denied`, `not-found`, `rate-limited` and `failed` outcomes (`failed` uses `source-failed`, a dependency skip uses `dependency-unavailable`), `null` for `ok`). Outcome mapping from the failure class: `unauthorized` and `forbidden` give `denied`; `not-found` gives `not-found`; `rate-limited` gives `rate-limited`; every other class gives `failed`.
 
 ## Summary
 
