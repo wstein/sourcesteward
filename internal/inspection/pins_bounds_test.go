@@ -40,7 +40,7 @@ func TestPinsAuditCancelledDuringEvidenceIsAFailureNeverALimit(t *testing.T) {
 	pinsBeforeResample = cancel
 	t.Cleanup(func() { pinsBeforeResample = nil })
 	r := Pins(ctx, PinsOptions{Path: f.Super})
-	if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || !strings.Contains(r.Error.Message, "canceled") || r.Identity != nil {
+	if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || r.Error.Message != "pins canceled" || r.Identity != nil {
 		t.Fatalf("%s %+v", r.Status, r.Error)
 	}
 	for _, fd := range r.Findings {
@@ -54,7 +54,7 @@ func TestPinsAuditCancelledMidSubmoduleIsAFailureNeverALimit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(400*time.Millisecond, cancel)
 	r := Pins(ctx, PinsOptions{Path: f.Super})
-	if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || !strings.Contains(r.Error.Message, "canceled") {
+	if r.Status != "error" || r.Error == nil || r.Error.Code != "pins-failed" || r.Error.Message != "pins canceled" {
 		t.Fatalf("%s %+v %+v", r.Status, r.Error, r.Findings)
 	}
 }
@@ -123,4 +123,52 @@ func TestPinsAuditDirtyScanAllowanceReachesTheResultAsALimit(t *testing.T) {
 	if r.Status != "incomplete" || !hasLimitFinding(r) {
 		t.Fatalf("%s %+v", r.Status, r.Findings)
 	}
+}
+
+// The caller's own deadline is the caller giving up: a failure, never one of the audit's bounds.
+func TestPinsAuditCallersDeadlineIsAFailureNotALimit(t *testing.T) {
+	f := newPinsFixture(t)
+	slowGit(t, "ls-files --stage --debug", "2")
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	r := Pins(ctx, PinsOptions{Path: f.Super})
+	if r.Status != "error" || r.Error == nil || r.Error.Message != "pins canceled" || len(r.Findings) != 0 {
+		t.Fatalf("%s %+v %+v", r.Status, r.Error, r.Findings)
+	}
+}
+
+// The 30 second total also bounds the evidence of a submodule that is still running, not only the gaps.
+func TestPinsAuditTotalDeadlineStopsARunningSubmodule(t *testing.T) {
+	f := newPinsFixture(t)
+	slowGit(t, "ls-files --stage --debug", "5")
+	withLimits(t, func(l *pinsAuditLimits) {
+		l.Total = 500 * time.Millisecond
+		l.PerSubmodule = time.Minute
+		l.Dirty = pinsDirtyBudget{Entries: 20000, Time: time.Minute}
+	})
+	start := time.Now()
+	r := Pins(context.Background(), PinsOptions{Path: f.Super})
+	if r.Status != "incomplete" || !hasLimitFinding(r) || time.Since(start) > 3*time.Second {
+		t.Fatalf("%s after %s %+v", r.Status, time.Since(start), r.Findings)
+	}
+}
+
+func TestPinsAuditSameSizeIndexRewriteIsAStateChange(t *testing.T) {
+	f := newPinsFixture(t)
+	idx := filepath.Join(f.Super, ".git", "index")
+	pinsBeforeResample = func() {
+		info, err := os.Stat(idx)
+		mustOS(t, err)
+		b, err := os.ReadFile(idx)
+		mustOS(t, err)
+		b[len(b)-1] ^= 0xff // same size; the audit never parses the superproject index again
+		mustOS(t, os.WriteFile(idx, b, 0o600))
+		mustOS(t, os.Chtimes(idx, info.ModTime(), info.ModTime()))
+	}
+	t.Cleanup(func() { pinsBeforeResample = nil })
+	r := auditOf(t, f.Super)
+	if r.Status != "incomplete" {
+		t.Fatalf("%s %+v", r.Status, r.Findings)
+	}
+	requireFinding(t, r, "pins-state-changed", "error", "")
 }
