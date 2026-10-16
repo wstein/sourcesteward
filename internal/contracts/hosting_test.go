@@ -84,6 +84,8 @@ func TestRealHostingCLIOutputs(t *testing.T) {
 	}{
 		{[]string{"hosting", "repo", repo, "--json"}, 0},
 		{[]string{"hosting", "repo", filepath.Join(home, "missing"), "--json"}, 1},
+		{[]string{"hosting", "pr", "42", filepath.Join(home, "missing"), "--json"}, 1},
+		{[]string{"hosting", "ci", "42", filepath.Join(home, "missing"), "--json"}, 1},
 		{[]string{"hosting", "pr", "0", repo, "--json"}, 2},
 	} {
 		var out, diag bytes.Buffer
@@ -190,5 +192,18 @@ func TestRealJJHostingContracts(t *testing.T) {
 		if v["backend"] != "jj" {
 			t.Fatalf("wrong native identity: %s", &out)
 		}
+	}
+}
+
+func TestHostingEarlyErrorsMayHaveNoNetworkEffects(t *testing.T) {
+	s := schema(t, "hosting")
+	for _, kind := range []string{"pr", "ci"} {
+		v := value(t, hostingFixture(t)).(map[string]any)
+		v["kind"] = kind
+		v["status"] = "error"
+		v["boundary"].(map[string]any)["complete"] = false
+		v["diagnostics"] = []any{map[string]any{"code": "hosting-native-failed", "message": "Native ownership could not be established."}}
+		raw, _ := json.Marshal(v)
+		valid(t, s, raw)
 	}
 }
