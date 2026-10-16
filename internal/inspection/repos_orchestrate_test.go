@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func TestReposOrchestrationMaxWorkers(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: paths,
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 8 {
 		t.Fatalf("expected 8 entries, got %d", len(res.Entries))
@@ -134,7 +135,7 @@ func TestReposOrchestrationOrderStability(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: paths,
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	for i, entry := range res.Entries {
 		if entry.Path != paths[i] {
@@ -195,7 +196,7 @@ func TestReposOrchestrationPanicRecovery(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: []string{p0, p1, p2},
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(res.Entries))
@@ -271,7 +272,7 @@ func TestReposOrchestrationChangedRepository(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: []string{p0},
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(res.Entries))
@@ -311,7 +312,7 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 		return Result{Status: "error", Diagnostics: []Diagnostic{{Code: "canceled", Message: "context canceled"}}}
 	}, func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
 		return InventoryResult{Status: "error"}
-	}, runGit)
+	}, newReposRunner)
 
 	if len(resCancel.Entries) > 0 {
 		entry := resCancel.Entries[0]
@@ -320,9 +321,10 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 		}
 	}
 
-	// 2. Underlying timeout mapping: canceled -> inventory-timeout with bound message
-	deadlineCtx, dCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer dCancel()
+	// 2. Underlying timeout mapping: canceled -> inventory-timeout with bound message, when the repos
+	// total deadline (not the caller's) fired.
+	setReposTimeouts(t, 20*time.Millisecond, time.Minute)
+	deadlineCtx := context.Background()
 
 	var startedCount int32
 	fakeInspectSlow := func(ctx context.Context, path string) Result {
@@ -338,7 +340,7 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 		Paths: []string{p0, p1},
 	}, fakeInspectSlow, func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
 		return InventoryResult{Status: "ok"}
-	}, runGit)
+	}, newReposRunner)
 
 	if len(resTimeout.Entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(resTimeout.Entries))
@@ -348,9 +350,48 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 		if entry.Status != "error" {
 			t.Errorf("expected error status on timeout, got %s", entry.Status)
 		}
-		if entry.Error == nil || (entry.Error.Code != ReposCodeInventoryTimeout && entry.Error.Code != ReposCodeInventoryNotStarted) {
-			t.Errorf("expected inventory-timeout or inventory-not-started, got %+v", entry.Error)
+		if entry.Error == nil || entry.Error.Code != ReposCodeInventoryTimeout || !strings.Contains(entry.Error.Message, "total deadline of 60 seconds") {
+			t.Errorf("expected inventory-timeout naming the total deadline, got %+v", entry.Error)
 		}
+	}
+}
+
+// setReposTimeouts shortens the total and per-call bounds for one test.
+func setReposTimeouts(t *testing.T, total, call time.Duration) {
+	t.Helper()
+	oldTotal, oldCall := reposTotalTimeout, reposCallTimeout
+	reposTotalTimeout, reposCallTimeout = total, call
+	t.Cleanup(func() { reposTotalTimeout, reposCallTimeout = oldTotal, oldCall })
+}
+
+// L3: the caller's own deadline or cancellation is `canceled`, with a message that does not claim the
+// 60-second bound; only the repos deadline (or a per-call deadline) is an inventory-timeout.
+func TestReposCallerDeadlineIsCanceledNotTimeout(t *testing.T) {
+	p0 := reposTempDir(t)
+	slow := func(ctx context.Context, path string) Result {
+		<-ctx.Done()
+		return Result{Status: "error", Diagnostics: []Diagnostic{{Code: "canceled", Message: "operation canceled"}}}
+	}
+	inv := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
+		return InventoryResult{Status: "ok"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	e := reposWithRunner(ctx, ReposOptions{Paths: []string{p0}}, slow, inv, newReposRunner).Entries[0]
+	if e.Error == nil || e.Error.Code != ReposCodeCanceled || strings.Contains(e.Error.Message, "60 seconds") {
+		t.Fatalf("caller deadline: %+v", e.Error)
+	}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	go func() { time.Sleep(20 * time.Millisecond); cancel2() }()
+	e = reposWithRunner(ctx2, ReposOptions{Paths: []string{p0}}, slow, inv, newReposRunner).Entries[0]
+	if e.Error == nil || e.Error.Code != ReposCodeCanceled {
+		t.Fatalf("caller cancel: %+v", e.Error)
+	}
+	// A per-call deadline inside the total is an inventory-timeout naming the 10-second bound.
+	setReposTimeouts(t, time.Minute, 20*time.Millisecond)
+	e = reposWithRunner(context.Background(), ReposOptions{Paths: []string{p0}}, slow, inv, newReposRunner).Entries[0]
+	if e.Error == nil || e.Error.Code != ReposCodeInventoryTimeout || !strings.Contains(e.Error.Message, "per-call deadline of 10 seconds") {
+		t.Fatalf("per-call deadline: %+v", e.Error)
 	}
 }
 
@@ -390,7 +431,7 @@ func TestReposOrchestrationDeadlineInsideInventoryInspect(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: []string{p0},
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(res.Entries))
@@ -463,7 +504,7 @@ func TestReposOutputBudgetDropsLaterInventories(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: paths,
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(res.Entries))
@@ -541,7 +582,7 @@ func TestReposOrchestrationRace(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: paths,
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 8 {
 		t.Fatalf("expected 8 entries, got %d", len(res.Entries))
@@ -596,7 +637,7 @@ func TestReposOutputBudgetFailingFinalRecheck(t *testing.T) {
 
 	res := reposWithRunner(context.Background(), ReposOptions{
 		Paths: []string{p0},
-	}, fakeInspect, fakeInventory, runGit)
+	}, fakeInspect, fakeInventory, newReposRunner)
 
 	if len(res.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(res.Entries))

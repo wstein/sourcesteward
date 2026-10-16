@@ -10,16 +10,27 @@ import (
 	"time"
 )
 
+// The normative bounds as durations. They are variables only so that tests can exercise an expired
+// deadline without waiting a minute; nothing else assigns them.
+var (
+	reposTotalTimeout = ReposTotalSeconds * time.Second
+	reposCallTimeout  = ReposPerRepositorySeconds * time.Second
+)
+
+// reposSubmoduleDirtyNote qualifies the embedded inventory of a submodule (US3-6): Git reports a
+// submodule's Git directory, not its checkout, as its worktree.
+const reposSubmoduleDirtyNote = "submodule: dirty is unknown, because Git reports the submodule's Git directory, not its checkout, as its worktree"
+
 // Repos executes the multi-repository inventory operation across explicit and discovered members.
 func Repos(ctx context.Context, o ReposOptions) ReposResult {
-	return reposWithRunner(ctx, o, Inspect, Inventory, runGit)
+	return reposWithRunner(ctx, o, Inspect, Inventory, newReposRunner)
 }
 
 func repos(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc) ReposResult {
-	return reposWithRunner(ctx, o, inspectFn, inventoryFn, runGit)
+	return reposWithRunner(ctx, o, inspectFn, inventoryFn, newReposRunner)
 }
 
-func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc, run runner) ReposResult {
+func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc, newRunner reposNewRunner) ReposResult {
 	if err := ValidateReposOptions(o); err != nil {
 		return ReposResult{
 			SchemaVersion: 1,
@@ -37,7 +48,7 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 		}
 	}
 
-	totalCtx, totalCancel := context.WithTimeout(ctx, ReposTotalSeconds*time.Second)
+	totalCtx, totalCancel := context.WithTimeout(ctx, reposTotalTimeout)
 	defer totalCancel()
 
 	// Stage S1: Structural validation of explicit paths
@@ -47,12 +58,19 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 	inspections := inspectExplicitParallel(ctx, totalCtx, entries, inspectFn)
 
 	// Stage S3: Deterministic validation of explicit entries (root equality, duplicates)
-	validateExplicitEntries(entries, inspections)
+	ids := validateExplicitEntries(entries, inspections)
 	computeContainment(entries)
 
-	// Stage S4: Submodule discovery for surviving Git parents
+	// Stage S4: Submodule discovery for surviving Git parents, then identity inspection of the added
+	// entries through the same pool and per-call deadlines as the explicit ones.
 	if o.Submodules {
-		discoverSubmodules(totalCtx, &entries, &inspections, inspectFn, run)
+		pending := discoverSubmodules(ctx, totalCtx, &entries, &inspections, newRunner)
+		indices := make([]int, len(pending))
+		for i, p := range pending {
+			indices[i] = p.index
+		}
+		inspectIndices(ctx, totalCtx, entries, inspections, indices, inspectFn)
+		verifyDiscoveredSubmodules(entries, inspections, pending, ids)
 		computeContainment(entries)
 	}
 
@@ -63,6 +81,9 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 	for i := range entries {
 		if entries[i].Inventory != nil && (entries[i].Status == "ok" || entries[i].Status == "partial") {
 			entries[i].Facts = deriveFacts(&entries[i])
+			if entries[i].Origin == "submodule" {
+				entries[i].Notes = append(entries[i].Notes, reposSubmoduleDirtyNote)
+			}
 		}
 	}
 
@@ -84,6 +105,7 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 			Limitations: []string{
 				"No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
 				"Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
+				"Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
 				"Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected.",
 			},
 		},
@@ -128,21 +150,16 @@ func runWorkerPool(indices []int, limit int, fn func(idx int)) {
 	wg.Wait()
 }
 
+// mapTimeoutError maps an inherited cancellation or timeout diagnostic to the repos codes (FR-012): the
+// caller's own cancellation or deadline stays `canceled`, a fired total deadline and a fired per-call
+// deadline are `inventory-timeout` with the bound that fired. Any other code is inherited unchanged.
 func mapTimeoutError(callerCtx context.Context, totalCtx context.Context, callCtx context.Context, diag Diagnostic) (code string, message string) {
 	if diag.Code != "canceled" && diag.Code != "jj-timeout" && diag.Code != ReposCodeInventoryTimeout {
 		return diag.Code, diag.Message
 	}
-	// Caller explicitly canceled
-	if callerCtx.Err() != nil && callerCtx.Err() == context.Canceled {
-		return ReposCodeCanceled, "caller canceled operation"
-	}
-	// Total deadline fired
-	if totalCtx.Err() != nil {
-		return ReposCodeInventoryTimeout, fmt.Sprintf("total deadline of %d seconds exceeded", ReposTotalSeconds)
-	}
-	// Per-call deadline fired
-	if callCtx.Err() != nil && callCtx.Err() == context.DeadlineExceeded {
-		return ReposCodeInventoryTimeout, fmt.Sprintf("per-call deadline of %d seconds exceeded", ReposPerRepositorySeconds)
+	if callerCtx.Err() != nil || totalCtx.Err() != nil {
+		code, message = reposMapError(callerCtx, totalCtx, nil)
+		return code, message
 	}
 	return ReposCodeInventoryTimeout, fmt.Sprintf("per-call deadline of %d seconds exceeded", ReposPerRepositorySeconds)
 }
@@ -155,11 +172,17 @@ func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context
 			validIndices = append(validIndices, i)
 		}
 	}
+	inspectIndices(callerCtx, totalCtx, entries, inspections, validIndices, inspectFn)
+	return inspections
+}
 
+// inspectIndices runs the identity inspection of the given entries on the bounded pool, each under its own
+// per-call deadline inside the total, with panic recovery and timeout mapping.
+func inspectIndices(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspections []Result, validIndices []int, inspectFn inspectFunc) {
 	runWorkerPool(validIndices, ReposParallelism, func(i int) {
 		entry := &entries[i]
 
-		if callerCtx.Err() != nil && callerCtx.Err() == context.Canceled {
+		if callerCtx.Err() != nil {
 			entry.Status = "error"
 			entry.Error = &ReposError{Code: ReposCodeCanceled, Message: "operation canceled before start"}
 			return
@@ -180,7 +203,7 @@ func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context
 			}
 		}()
 
-		callCtx, callCancel := context.WithTimeout(totalCtx, ReposPerRepositorySeconds*time.Second)
+		callCtx, callCancel := context.WithTimeout(totalCtx, reposCallTimeout)
 		defer callCancel()
 
 		insp := inspectFn(callCtx, *entry.ResolvedPath)
@@ -199,12 +222,43 @@ func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context
 			entry.Error = &ReposError{Code: code, Message: msg}
 		}
 	})
-
-	return inspections
 }
 
-func validateExplicitEntries(entries []ReposEntry, inspections []Result) {
-	seenNative := make(map[string]int)
+// reposIdentityIndex remembers the native repository identity of every admitted entry in expansion order,
+// so a later entry for the same repository (Git common directory; jj repository directory) is a duplicate.
+type reposIdentityIndex struct{ seen map[string]int }
+
+func nativeIdentity(insp Result) string {
+	switch insp.Backend {
+	case "git":
+		if insp.Repository != nil {
+			return "git:" + filepath.Clean(insp.Repository.CommonDir)
+		}
+	case "jj":
+		if insp.JJRepository != nil {
+			return "jj:" + filepath.Clean(insp.JJRepository.RepositoryDir)
+		}
+	}
+	return ""
+}
+
+// admit records entry's identity, or marks it a duplicate of the earlier entry with the same identity.
+func (x *reposIdentityIndex) admit(entry *ReposEntry, insp Result) {
+	id := nativeIdentity(insp)
+	if id == "" {
+		return
+	}
+	if prev, exists := x.seen[id]; exists {
+		entry.Status = "error"
+		entry.Error = &ReposError{Code: ReposCodeDuplicateRepository, Message: "same repository as an earlier entry"}
+		entry.DuplicateOf = &prev
+		return
+	}
+	x.seen[id] = entry.Index
+}
+
+func validateExplicitEntries(entries []ReposEntry, inspections []Result) *reposIdentityIndex {
+	ids := &reposIdentityIndex{seen: make(map[string]int)}
 
 	for i := range entries {
 		entry := &entries[i]
@@ -249,32 +303,9 @@ func validateExplicitEntries(entries []ReposEntry, inspections []Result) {
 		}
 
 		// Native repository identity deduplication (FR-005)
-		var nativeID string
-		switch insp.Backend {
-		case "git":
-			if insp.Repository != nil {
-				nativeID = "git:" + filepath.Clean(insp.Repository.CommonDir)
-			}
-		case "jj":
-			if insp.JJRepository != nil {
-				nativeID = "jj:" + filepath.Clean(insp.JJRepository.RepositoryDir)
-			}
-		}
-
-		if nativeID != "" {
-			if prevIdx, exists := seenNative[nativeID]; exists {
-				dupIdx := prevIdx
-				entry.Status = "error"
-				entry.Error = &ReposError{
-					Code:    ReposCodeDuplicateRepository,
-					Message: "same repository as an earlier entry",
-				}
-				entry.DuplicateOf = &dupIdx
-				continue
-			}
-			seenNative[nativeID] = entry.Index
-		}
+		ids.admit(entry, insp)
 	}
+	return ids
 }
 
 func verifyIdentityUnchanged(prior Result, inv InventoryResult) bool {
@@ -346,7 +377,7 @@ func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Contex
 	runWorkerPool(validIndices, ReposParallelism, func(i int) {
 		entry := &entries[i]
 
-		if callerCtx.Err() != nil && callerCtx.Err() == context.Canceled {
+		if callerCtx.Err() != nil {
 			entry.Status = "error"
 			entry.Error = &ReposError{Code: ReposCodeCanceled, Message: "operation canceled before start"}
 			return
@@ -377,7 +408,7 @@ func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Contex
 			return
 		}
 
-		callCtx, callCancel := context.WithTimeout(totalCtx, ReposPerRepositorySeconds*time.Second)
+		callCtx, callCancel := context.WithTimeout(totalCtx, reposCallTimeout)
 		defer callCancel()
 
 		inv := inventoryFn(callCtx, *entry.ResolvedPath, opts)

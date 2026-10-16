@@ -7,594 +7,468 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
-func TestReposDiscoverGitmodulesBlobValidation(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	if err := os.Mkdir(repoDir, 0o755); err != nil {
+// These tests run discovery against real Git repositories: registration is read by the isolation runner and
+// every submodule location is confined by the Spec 021 safety layer, so a fake runner would prove little.
+
+func TestReposDiscoverRegisteredSubmodulesInByteOrder(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "b", "a-b", "a/z", "my.sub dir")
+	res := reposRun([]string{super}, true)
+	var got []string
+	for _, e := range res.Entries[1:] {
+		got = append(got, e.Path)
+		if e.Origin != "submodule" || e.Parent == nil || *e.Parent != 0 || e.Status != "ok" || e.Error != nil || e.Backend != "git" {
+			t.Fatalf("submodule entry %+v", e)
+		}
+	}
+	want := []string{"a-b", "a/z", "b", "my.sub dir"} // sorted by path bytes: '-' < '/' < letters
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("order %q, want %q", got, want)
+	}
+	parent := res.Entries[0]
+	if parent.Discovery.Status != "ok" || parent.Discovery.Submodules != 4 || parent.Discovery.Ignored != 0 {
+		t.Fatalf("parent discovery %+v", parent.Discovery)
+	}
+	// The embedded inventory of a discovered entry equals the single-repository inventory (SC-001).
+	sub := res.Entries[1]
+	again := Inventory(context.Background(), *sub.ResolvedPath, InventoryOptions{})
+	if sub.Inventory == nil || sub.Inventory.Status != again.Status || sub.Inventory.Identity.Repository.GitDir != again.Identity.Repository.GitDir {
+		t.Fatalf("inventory differs from Inventory: %+v", sub.Inventory)
+	}
+}
+
+func TestReposDiscoverSubmoduleNotesCarryDirtyCaveat(t *testing.T) {
+	reposHermetic(t)
+	super := reposSuper(t, filepath.Join(reposTempDir(t), "super"), "s1")
+	e := reposRun([]string{super}, true).Entries[1]
+	found := false
+	for _, n := range e.Notes {
+		found = found || strings.Contains(n, "dirty") && strings.Contains(n, "unknown")
+	}
+	if !found || e.Facts == nil || e.Facts.Dirty.Value != "unknown" {
+		t.Fatalf("US3-6: dirty must be unknown with the caveat in notes: %+v / %+v", e.Facts, e.Notes)
+	}
+}
+
+func TestReposDiscoverUninitializedSubmoduleIsSkippedWithoutProcess(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1")
+	clone := filepath.Join(base, "clone")
+	git(t, base, "clone", "-q", super, clone) // submodules are not checked out: s1 is an empty directory
+	var seen []string
+	var mu sync.Mutex
+	res := reposRunWith([]string{clone}, reposRecordingInspect(&seen, &mu), nil)
+	e := reposEntry(t, res, "s1")
+	if e.Status != "skipped" || e.Error == nil || e.Error.Code != "submodule-uninitialized" || e.Inventory != nil || e.Facts != nil {
+		t.Fatalf("uninitialized submodule: %+v", e)
+	}
+	if len(seen) != 1 || seen[0] != clone {
+		t.Fatalf("a process-level inspection ran inside the skipped member: %v", seen)
+	}
+	if res.Summary.SkippedUninitialized != 1 {
+		t.Fatalf("summary %+v", res.Summary)
+	}
+}
+
+func TestReposDiscoverRegistrationParsing(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	repo := reposNewRepo(t, filepath.Join(base, "super"))
+	reposGitlinks(t, repo,
+		[2]string{"my.dotted name", "dir with space"},
+		[2]string{"nl", "line\nbreak"},
+		[2]string{"glob", "x[ab]*"},
+		[2]string{"shared-a", "shared"},
+		[2]string{"shared-b", "shared"},
+		[2]string{"relink", "old"},
+	)
+	// The last path of a name wins (Git uses the last value); a value-less key is ignored.
+	git(t, repo, "config", "-f", ".gitmodules", "--add", "submodule.relink.path", "new")
+	git(t, repo, "config", "-f", ".gitmodules", "submodule.nopath.url", "x")
+	oid := gitIn(t, repo, "rev-parse", "HEAD")
+	git(t, repo, "update-index", "--add", "--cacheinfo", "160000,"+oid+",new")
+	git(t, repo, "add", ".gitmodules")
+	git(t, repo, "commit", "-qm", "relink")
+	res := reposRun([]string{repo}, true)
+	var got []string
+	for _, e := range res.Entries[1:] {
+		got = append(got, e.Path)
+		if e.Status != "skipped" {
+			t.Fatalf("%q: %+v", e.Path, e)
+		}
+	}
+	want := []string{"dir with space", "line\nbreak", "new", "shared", "x[ab]*"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("paths %q, want %q", got, want)
+	}
+	parent := res.Entries[0]
+	// "old" has no gitlink at all: ignored, and named in the notes.
+	if parent.Discovery.Ignored != 0 {
+		t.Fatalf("ignored %d notes %q", parent.Discovery.Ignored, parent.Notes)
+	}
+}
+
+func TestReposDiscoverIgnoresInvalidAndUnconfirmedPaths(t *testing.T) {
+	reposHermetic(t)
+	repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+	reposRegister(t, repo, false,
+		[2]string{"parent", "../escape"},
+		[2]string{"abs", "/abs/path"},
+		[2]string{"dash", "-opt"},
+		[2]string{"dots", "a/../b"},
+		[2]string{"empty", "a//b"},
+		[2]string{"ghost-entry", "ghost"}, // registered without a gitlink
+	)
+	reposGitlinks(t, repo, [2]string{"ok", "fine"})
+	res := reposRun([]string{repo}, true)
+	parent := res.Entries[0]
+	if len(res.Entries) != 2 || res.Entries[1].Path != "fine" {
+		t.Fatalf("entries %v", reposPaths(res))
+	}
+	if parent.Discovery.Ignored != 6 {
+		t.Fatalf("ignored %d, want 6; notes %q", parent.Discovery.Ignored, parent.Notes)
+	}
+	for _, want := range []string{"discovery-ignored: ../escape", "discovery-ignored: /abs/path", "discovery-ignored: -opt", "discovery-ignored: a/../b", "discovery-ignored: a//b", "discovery-ignored: ghost"} {
+		ok := false
+		for _, n := range parent.Notes {
+			ok = ok || n == want
+		}
+		if !ok {
+			t.Errorf("missing note %q in %q", want, parent.Notes)
+		}
+	}
+}
+
+func TestReposDiscoverNoteEscapesHostilePath(t *testing.T) {
+	reposHermetic(t)
+	repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+	long := "/" + strings.Repeat("é", 400)
+	reposRegister(t, repo, false, [2]string{"ctl", "\x1b[31m/red"}, [2]string{"long", long})
+	parent := reposRun([]string{repo}, true).Entries[0]
+	for _, n := range parent.Notes {
+		if !strings.HasPrefix(n, "discovery-ignored: ") || strings.ContainsAny(n, "\x1b\n") || len(n) > 300 {
+			t.Fatalf("unescaped or unbounded note %q", n)
+		}
+	}
+	if parent.Discovery.Ignored != 2 || len(parent.Notes) != 2 {
+		t.Fatalf("ignored %d notes %q", parent.Discovery.Ignored, parent.Notes)
+	}
+}
+
+// C2: a [submodule] section without a subsection yields the key submodule.path, which is no registration
+// and must not panic.
+func TestReposDiscoverSectionWithoutSubsection(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1")
+	f, err := os.OpenFile(filepath.Join(super, ".gitmodules"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Fprint(f, "[submodule]\n\tpath = suba\n[submodule \"\"]\n\tpath = subb\n")
+	f.Close()
+	git(t, super, "add", ".gitmodules")
+	git(t, super, "commit", "-qm", "odd sections")
+	res := reposRun([]string{super}, true)
+	if len(res.Entries) != 2 || res.Entries[1].Path != "s1" || res.Entries[0].Discovery.Status != "ok" {
+		t.Fatalf("entries %v discovery %+v", reposPaths(res), res.Entries[0].Discovery)
+	}
+}
 
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-
+func TestReposDiscoverRefusesUnreadableOrIrregularGitmodules(t *testing.T) {
+	reposHermetic(t)
 	for _, tc := range []struct {
-		name       string
-		lsTreeOut  string
-		wantStatus string // "ok" or "failed"
-		wantCode   string
+		name  string
+		setup func(t *testing.T, repo string) bool
 	}{
-		{
-			name:       "valid 100644 blob",
-			lsTreeOut:  "100644 blob abcdef1234567890 50\t.gitmodules\x00",
-			wantStatus: "ok",
-		},
-		{
-			name:       "symlink 120000 blob",
-			lsTreeOut:  "120000 blob abcdef1234567890 50\t.gitmodules\x00",
-			wantStatus: "failed",
-			wantCode:   ReposCodeDiscoveryFailed,
-		},
-		{
-			name:       "tree mode 040000",
-			lsTreeOut:  "040000 tree abcdef1234567890 -\t.gitmodules\x00",
-			wantStatus: "failed",
-			wantCode:   ReposCodeDiscoveryFailed,
-		},
-		{
-			name:       "oversized blob > 64 KiB",
-			lsTreeOut:  "100644 blob abcdef1234567890 65537\t.gitmodules\x00",
-			wantStatus: "failed",
-			wantCode:   ReposCodeDiscoveryFailed,
-		},
-		{
-			name:       "missing .gitmodules in HEAD",
-			lsTreeOut:  "",
-			wantStatus: "ok",
-		},
+		{"symlink blob (mode 120000)", func(t *testing.T, repo string) bool {
+			// update-index refuses to add it, so build the tree by hand with git mktree. Git's own
+			// `config --blob` would parse such a blob, which is why the mode check is mandatory.
+			blob := strings.TrimSpace(reposHashObject(t, repo, "[submodule \"x\"]\n\tpath = x\n"))
+			f := gitIn(t, repo, "rev-parse", "HEAD:f")
+			tree := strings.TrimSpace(reposGitStdin(t, repo, "120000 blob "+blob+"\t.gitmodules\n100644 blob "+f+"\tf\n", "mktree"))
+			commit := strings.TrimSpace(git(t, repo, "-c", "user.name=T", "-c", "user.email=t@example.org", "commit-tree", tree, "-p", "HEAD", "-m", "symlink .gitmodules"))
+			git(t, repo, "update-ref", "HEAD", commit)
+			return true
+		}},
+		{"tree", func(t *testing.T, repo string) bool {
+			writeFile(t, filepath.Join(repo, ".gitmodules", "inner"), "x\n")
+			git(t, repo, "add", ".gitmodules/inner")
+			return false
+		}},
+		{"oversized blob", func(t *testing.T, repo string) bool {
+			writeFile(t, filepath.Join(repo, ".gitmodules"), strings.Repeat("# padding\n", 7000))
+			git(t, repo, "add", ".gitmodules")
+			return false
+		}},
+		{"gitlink", func(t *testing.T, repo string) bool {
+			git(t, repo, "update-index", "--add", "--cacheinfo", "160000,"+gitIn(t, repo, "rev-parse", "HEAD")+",.gitmodules")
+			return false
+		}},
+		{"malformed configuration", func(t *testing.T, repo string) bool {
+			writeFile(t, filepath.Join(repo, ".gitmodules"), "[submodule \"x\n")
+			git(t, repo, "add", ".gitmodules")
+			return false
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeInspect := func(ctx context.Context, path string) Result {
-				wt := resolvedRepo
-				return Result{
-					Status:  "ok",
-					Backend: "git",
-					Repository: &Repository{
-						GitDir:    filepath.Join(resolvedRepo, ".git"),
-						CommonDir: filepath.Join(resolvedRepo, ".git"),
-						Worktree:  &wt,
-					},
-				}
+			repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+			if !tc.setup(t, repo) {
+				git(t, repo, "commit", "-qm", "odd .gitmodules")
 			}
-			fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-				return InventoryResult{Status: "ok", Backend: "git"}
-			}
-
-			fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-				if len(args) >= 3 && args[0] == "ls-tree" {
-					return tc.lsTreeOut, 0, nil
-				}
-				if len(args) >= 2 && args[0] == "config" {
-					return "", 0, nil
-				}
-				return "", 0, nil
-			}
-
-			res := reposWithRunner(context.Background(), ReposOptions{
-				Paths:      []string{repoDir},
-				Submodules: true,
-			}, fakeInspect, fakeInventory, fakeRunner)
-
-			if len(res.Entries) == 0 {
-				t.Fatalf("expected at least 1 entry")
-			}
+			res := reposRun([]string{repo}, true)
 			parent := res.Entries[0]
-			if parent.Discovery.Status != tc.wantStatus {
-				t.Errorf("discovery status = %s, want %s", parent.Discovery.Status, tc.wantStatus)
+			if len(res.Entries) != 1 || parent.Discovery.Status != "failed" || parent.Discovery.Submodules != 0 {
+				t.Fatalf("entries %v discovery %+v", reposPaths(res), parent.Discovery)
 			}
-			if tc.wantCode != "" {
-				if parent.Status != "partial" {
-					t.Errorf("parent status = %s, want partial", parent.Status)
-				}
-				if parent.Error == nil || parent.Error.Code != tc.wantCode {
-					t.Errorf("parent error = %v, want code %s", parent.Error, tc.wantCode)
-				}
+			if parent.Status != "partial" || parent.Error == nil || parent.Error.Code != "discovery-failed" {
+				t.Fatalf("parent %+v %+v", parent.Status, parent.Error)
+			}
+			if parent.Inventory == nil {
+				t.Fatal("a failed discovery must not remove the parent's own inventory")
 			}
 		})
 	}
 }
 
-func TestReposDiscoverConfigParsing(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	sub1Dir := filepath.Join(repoDir, "sub 1")
-	sub2Dir := filepath.Join(repoDir, "sub.two")
-	for _, d := range []string{repoDir, sub1Dir, sub2Dir} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
+func reposHashObject(t *testing.T, repo, content string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "blob")
+	writeFile(t, p, content)
+	return git(t, repo, "hash-object", "-w", p)
+}
 
-	_, _ = filepath.EvalSymlinks(repoDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := path
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(path, ".git"),
-				CommonDir: filepath.Join(path, ".git"),
-				Worktree:  &wt,
-			},
-		}
+// H5: a failing ls-tree is a failed discovery, not an empty registration.
+func TestReposDiscoverFailedReadIsNotEmpty(t *testing.T) {
+	reposHermetic(t)
+	super := reposSuper(t, filepath.Join(reposTempDir(t), "super"), "s1")
+	tree := gitIn(t, super, "rev-parse", "HEAD^{tree}") // ls-tree HEAD cannot read the root tree
+	if err := os.Remove(filepath.Join(super, ".git", "objects", tree[:2], tree[2:])); err != nil {
+		t.Fatal(err)
 	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
+	parent := reposRun([]string{super}, true).Entries[0]
+	if parent.Discovery.Status != "failed" || parent.Discovery.Reason == "" {
+		t.Fatalf("discovery %+v", parent.Discovery)
 	}
-
-	// Config output with:
-	// - name with dots: submodule.name.with.dots.path
-	// - path with spaces: sub 1
-	// - overriding previous value: submodule.a.path = old, then submodule.a.path = sub 1 (last wins)
-	// - two names sharing the same path: submodule.b.path = sub 1 (shares path with a)
-	// - valueless key (skipped)
-	configOut := "submodule.a.path\nold\x00" +
-		"submodule.a.path\nsub 1\x00" +
-		"submodule.b.path\nsub 1\x00" +
-		"submodule.name.with.dots.path\nsub.two\x00" +
-		"submodule.novalue.path\n\x00"
-
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
-		}
-		if len(args) >= 2 && args[0] == "config" {
-			return configOut, 0, nil
-		}
-		if len(args) >= 3 && args[0] == "ls-files" {
-			path := args[len(args)-1]
-			path = strings.TrimPrefix(path, ":(literal)")
-			return fmt.Sprintf("160000 1111111111111111111111111111111111111111 0\t%s\x00", path), 0, nil
-		}
-		return "", 0, nil
+	causes := parent.Notes
+	if parent.Error != nil {
+		causes = append(causes, parent.Error.Code+": ")
 	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	if len(res.Entries) < 1 {
-		t.Fatalf("expected entries")
-	}
-	parent := res.Entries[0]
-	if parent.Discovery.Status != "ok" {
-		t.Errorf("parent discovery status = %s, want ok", parent.Discovery.Status)
-	}
-
-	// 2 submodules discovered: "sub 1" and "sub.two"
-	if parent.Discovery.Submodules != 2 {
-		t.Errorf("discovered submodules count = %d, want 2", parent.Discovery.Submodules)
-	}
-	if len(res.Entries) != 3 {
-		t.Fatalf("total entries = %d, want 3 (parent + 2 submodules)", len(res.Entries))
-	}
-
-	// Discovered entries must have Origin == "submodule", Parent == 0
-	e1, e2 := res.Entries[1], res.Entries[2]
-	if e1.Origin != "submodule" || e1.Parent == nil || *e1.Parent != 0 {
-		t.Errorf("e1 origin/parent mismatch: %+v", e1)
-	}
-	if e2.Origin != "submodule" || e2.Parent == nil || *e2.Parent != 0 {
-		t.Errorf("e2 origin/parent mismatch: %+v", e2)
+	if !strings.Contains(strings.Join(causes, "\n"), "discovery-failed") {
+		t.Fatalf("discovery-failed not reported: %+v %q", parent.Error, parent.Notes)
 	}
 }
 
-func TestReposDiscoverHostileAndSafety(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	if err := os.Mkdir(repoDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := resolvedRepo
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(resolvedRepo, ".git"),
-				CommonDir: filepath.Join(resolvedRepo, ".git"),
-				Worktree:  &wt,
-			},
+func TestReposDiscoverNothingToDiscoverStartsNoProcess(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	unborn := filepath.Join(base, "unborn")
+	git(t, base, "init", "-q", "-b", "main", unborn)
+	bareSrc := reposNewRepo(t, filepath.Join(base, "bare-src"))
+	bare := filepath.Join(base, "bare.git")
+	git(t, base, "clone", "-q", "--bare", bareSrc, bare)
+	plain := reposNewRepo(t, filepath.Join(base, "plain"))
+	for name, path := range map[string]string{"unborn HEAD": unborn, "bare repository": bare, "no .gitmodules": plain} {
+		var n atomic.Int32
+		res := reposRunWith([]string{path}, nil, reposCountingRunner(&n))
+		d := res.Entries[0].Discovery
+		if d.Status != "ok" || d.Submodules != 0 || d.Ignored != 0 {
+			t.Errorf("%s: discovery %+v", name, d)
 		}
-	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
-	}
-
-	// Hostile paths:
-	// - ".."
-	// - "/absolute"
-	// - "-leading-dash"
-	// - "a/../b"
-	configOut := "submodule.dotdot.path\n..\x00" +
-		"submodule.abs.path\n/etc/passwd\x00" +
-		"submodule.dash.path\n-flag\x00" +
-		"submodule.traversal.path\na/../b\x00"
-
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
+		if name != "no .gitmodules" && n.Load() != 0 {
+			t.Errorf("%s: %d discovery processes started", name, n.Load())
 		}
-		if len(args) >= 2 && args[0] == "config" {
-			return configOut, 0, nil
-		}
-		return "", 0, nil
-	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	parent := res.Entries[0]
-	// All hostile paths must be ignored, none added as entries
-	if parent.Discovery.Ignored != 4 {
-		t.Errorf("ignored count = %d, want 4", parent.Discovery.Ignored)
-	}
-	if len(res.Entries) != 1 {
-		t.Fatalf("total entries = %d, want 1 (parent only)", len(res.Entries))
 	}
 }
 
-func TestReposDiscoverCandidateLimit(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	if err := os.Mkdir(repoDir, 0o755); err != nil {
+func TestReposDiscoverSkipsParentsThatFailedEntryChecks(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1")
+	if err := os.Mkdir(filepath.Join(super, "dir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := resolvedRepo
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(resolvedRepo, ".git"),
-				CommonDir: filepath.Join(resolvedRepo, ".git"),
-				Worktree:  &wt,
-			},
-		}
+	var n atomic.Int32
+	res := reposRunWith([]string{filepath.Join(super, "dir"), super, super}, nil, reposCountingRunner(&n))
+	if res.Entries[0].Error == nil || res.Entries[0].Error.Code != "not-repository-root" || res.Entries[0].Discovery.Status != "not-applicable" {
+		t.Fatalf("subdirectory: %+v", res.Entries[0])
 	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
+	if res.Entries[2].DuplicateOf == nil || res.Entries[2].Discovery.Status != "not-applicable" {
+		t.Fatalf("duplicate: %+v", res.Entries[2])
 	}
-
-	// 65 distinct candidates (> 64)
-	var sb strings.Builder
-	for i := 0; i < 65; i++ {
-		sb.WriteString(fmt.Sprintf("submodule.sub%d.path\nsub%d\x00", i, i))
+	// Only the surviving parent runs discovery: layout (2 calls), ls-tree, config, ls-files, and the
+	// safety layer's own configuration read of the one submodule.
+	if got := reposPaths(res); len(got) != 4 || got[3] != "s1" {
+		t.Fatalf("entries %v", got)
 	}
-
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
-		}
-		if len(args) >= 2 && args[0] == "config" {
-			return sb.String(), 0, nil
-		}
-		return "", 0, nil
-	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	parent := res.Entries[0]
-	if parent.Discovery.Status != "limit" {
-		t.Errorf("parent discovery status = %s, want limit", parent.Discovery.Status)
-	}
-	if parent.Status != "partial" {
-		t.Errorf("parent status = %s, want partial", parent.Status)
-	}
-	if parent.Error == nil || parent.Error.Code != ReposCodeDiscoveryLimit {
-		t.Errorf("parent error = %v, want code %s", parent.Error, ReposCodeDiscoveryLimit)
-	}
-	if len(res.Entries) != 1 {
-		t.Fatalf("total entries = %d, want 1 (none added on discovery-limit)", len(res.Entries))
+	if n.Load() == 0 {
+		t.Fatal("the surviving parent must run discovery")
 	}
 }
 
-func TestReposDiscoverNonGitParentNotApplicable(t *testing.T) {
-	tempDir := reposTempDir(t)
-	jjDir := filepath.Join(tempDir, "jj-repo")
-	if err := os.Mkdir(jjDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedJJ, _ := filepath.EvalSymlinks(jjDir)
-
+func TestReposDiscoverNotApplicableToNonGitParentsRunsNoProcess(t *testing.T) {
+	jjDir := reposTempDir(t)
 	fakeInspect := func(ctx context.Context, path string) Result {
-		return Result{
-			Status:  "ok",
-			Backend: "jj",
-			JJRepository: &JJRepository{
-				WorkspaceRoot: resolvedJJ,
-				RepositoryDir: filepath.Join(resolvedJJ, ".jj", "repo"),
-			},
-		}
+		return Result{Status: "ok", Backend: "jj", JJRepository: &JJRepository{WorkspaceRoot: path, RepositoryDir: filepath.Join(path, ".jj", "repo")}}
 	}
 	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
 		return InventoryResult{Status: "ok", Backend: "jj"}
 	}
-
-	runnerCalled := false
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		runnerCalled = true
-		return "", 0, nil
-	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{jjDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	if runnerCalled {
-		t.Fatalf("Git runner must not be called for non-Git parent discovery")
-	}
-
-	if len(res.Entries) != 1 {
-		t.Fatalf("expected 1 entry")
-	}
-	parent := res.Entries[0]
-	if parent.Discovery.Status != "not-applicable" {
-		t.Errorf("parent discovery status = %s, want not-applicable", parent.Discovery.Status)
+	var n atomic.Int32
+	res := reposWithRunner(context.Background(), ReposOptions{Paths: []string{jjDir}, Submodules: true}, fakeInspect, fakeInventory, reposCountingRunner(&n))
+	if n.Load() != 0 || res.Entries[0].Discovery.Status != "not-applicable" || res.Summary.DiscoveryNotApplicable != 1 {
+		t.Fatalf("processes %d discovery %+v", n.Load(), res.Entries[0].Discovery)
 	}
 }
 
-func TestReposDiscoverPointerOutsideModules(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	subDir := filepath.Join(repoDir, "sub")
-	if err := os.MkdirAll(subDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create pointer file pointing OUTSIDE superproject modules dir
-	outsideDir := filepath.Join(tempDir, "outside", "modules", "sub")
-	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(subDir, ".git"), []byte("gitdir: "+outsideDir+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := resolvedRepo
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(resolvedRepo, ".git"),
-				CommonDir: filepath.Join(resolvedRepo, ".git"),
-				Worktree:  &wt,
-			},
-		}
-	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
-	}
-
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
-		}
-		if len(args) >= 2 && args[0] == "config" {
-			return "submodule.sub.path\nsub\x00", 0, nil
-		}
-		if len(args) >= 3 && args[0] == "ls-files" {
-			return "160000 1111111111111111111111111111111111111111 0\tsub\x00", 0, nil
-		}
-		return "", 0, nil
-	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	if len(res.Entries) != 2 {
-		t.Fatalf("expected 2 entries (parent + submodule), got %d", len(res.Entries))
-	}
-
+func TestReposDiscoverIsNotRecursive(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1")
+	res := reposRun([]string{super}, true)
 	sub := res.Entries[1]
-	if sub.Status != "error" || sub.Error == nil || sub.Error.Code != ReposCodePathUnsafe {
-		t.Errorf("submodule expected error path-unsafe, got %+v", sub)
+	if sub.Discovery.Requested || sub.Discovery.Status != "not-applicable" || sub.Discovery.Reason != "discovery is not recursive" {
+		t.Fatalf("discovery of a submodule: %+v", sub.Discovery)
 	}
 }
 
-func TestReposDiscoverInplaceGitDirAccepted(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	subDir := filepath.Join(repoDir, "sub")
-	subGitDir := filepath.Join(subDir, ".git")
-	if err := os.MkdirAll(subGitDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-	resolvedSub, _ := filepath.EvalSymlinks(subDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := resolvedRepo
-		if path == resolvedSub {
-			wt = resolvedSub
-		}
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(wt, ".git"),
-				CommonDir: filepath.Join(wt, ".git"),
-				Worktree:  &wt,
-			},
-		}
-	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
-	}
-
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
-		}
-		if len(args) >= 2 && args[0] == "config" {
-			return "submodule.sub.path\nsub\x00", 0, nil
-		}
-		if len(args) >= 3 && args[0] == "ls-files" {
-			return "160000 1111111111111111111111111111111111111111 0\tsub\x00", 0, nil
-		}
-		return "", 0, nil
-	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	if len(res.Entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(res.Entries))
-	}
-
-	sub := res.Entries[1]
-	if sub.Status != "ok" {
-		t.Errorf("in-place gitdir expected ok, got %s", sub.Status)
-	}
-}
-
-func TestReposDiscoverDeduplicatedSubmodule(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	subDir := filepath.Join(repoDir, "sub")
-	if err := os.MkdirAll(subDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-	resolvedSub, _ := filepath.EvalSymlinks(subDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := resolvedRepo
-		if path == resolvedSub {
-			wt = resolvedSub
-		}
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(wt, ".git"),
-				CommonDir: filepath.Join(wt, ".git"),
-				Worktree:  &wt,
-			},
-		}
-	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
-	}
-
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if dir != resolvedRepo && dir != repoDir {
-			return "", 0, nil
-		}
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
-		}
-		if len(args) >= 2 && args[0] == "config" {
-			return "submodule.sub.path\nsub\x00", 0, nil
-		}
-		if len(args) >= 3 && args[0] == "ls-files" {
-			return "160000 1111111111111111111111111111111111111111 0\tsub\x00", 0, nil
-		}
-		return "", 0, nil
-	}
-
-	// Both repoDir and subDir are passed explicitly!
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir, subDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	if len(res.Entries) != 2 {
-		t.Fatalf("expected exactly 2 entries (subDir not duplicated), got %d", len(res.Entries))
-	}
-
-	parent := res.Entries[0]
-	if parent.Discovery.Deduplicated != 1 {
-		t.Errorf("expected deduplicated 1, got %d", parent.Discovery.Deduplicated)
-	}
-}
-
+// Registration is read from HEAD and confirmed in the index: a staged-only submodule is not discovered, and
+// a staged removal is ignored (counted), not discovered.
 func TestReposDiscoverStagedOnlyAndStagedRemoved(t *testing.T) {
-	tempDir := reposTempDir(t)
-	repoDir := filepath.Join(tempDir, "super")
-	if err := os.Mkdir(repoDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedRepo, _ := filepath.EvalSymlinks(repoDir)
-
-	fakeInspect := func(ctx context.Context, path string) Result {
-		wt := resolvedRepo
-		return Result{
-			Status:  "ok",
-			Backend: "git",
-			Repository: &Repository{
-				GitDir:    filepath.Join(resolvedRepo, ".git"),
-				CommonDir: filepath.Join(resolvedRepo, ".git"),
-				Worktree:  &wt,
-			},
-		}
-	}
-	fakeInventory := func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
-		return InventoryResult{Status: "ok", Backend: "git"}
-	}
-
-	// Case 1: staged-removed:
-	// in HEAD .gitmodules, but ls-files returns empty (staged removal)
-	fakeRunner := func(ctx context.Context, dir string, args ...string) (string, int, error) {
-		if len(args) >= 3 && args[0] == "ls-tree" {
-			return "100644 blob 1234567890abcdef 100\t.gitmodules\x00", 0, nil
-		}
-		if len(args) >= 2 && args[0] == "config" {
-			return "submodule.removed.path\nremoved\x00", 0, nil
-		}
-		if len(args) >= 3 && args[0] == "ls-files" {
-			// Removed from index!
-			return "", 0, nil
-		}
-		return "", 0, nil
-	}
-
-	res := reposWithRunner(context.Background(), ReposOptions{
-		Paths:      []string{repoDir},
-		Submodules: true,
-	}, fakeInspect, fakeInventory, fakeRunner)
-
-	parent := res.Entries[0]
-	if parent.Discovery.Ignored != 1 {
-		t.Errorf("staged-removed expected ignored 1, got %d", parent.Discovery.Ignored)
-	}
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1")
+	src := reposNewRepo(t, filepath.Join(base, "src2"))
+	git(t, super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", src, "staged-only") // not committed
+	git(t, super, "rm", "-qf", "s1")                                                                // staged removal
+	res := reposRun([]string{super}, true)
 	if len(res.Entries) != 1 {
-		t.Errorf("total entries expected 1, got %d", len(res.Entries))
+		t.Fatalf("entries %v", reposPaths(res))
+	}
+	if d := res.Entries[0].Discovery; d.Status != "ok" || d.Submodules != 0 || d.Ignored != 1 {
+		t.Fatalf("discovery %+v notes %q", d, res.Entries[0].Notes)
+	}
+}
+
+func TestReposDiscoverBoundsOnCandidatesAndEntries(t *testing.T) {
+	reposHermetic(t)
+	mk := func(n int) string {
+		repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+		var np [][2]string
+		for i := 0; i < n; i++ {
+			np = append(np, [2]string{fmt.Sprintf("n%02d", i), fmt.Sprintf("p%02d", i)})
+		}
+		reposGitlinks(t, repo, np...)
+		return repo
+	}
+	for _, tc := range []struct {
+		n          int
+		wantStatus string
+		wantEntry  int
+		wantCode   string
+	}{
+		{15, "ok", 16, ""},                  // one parent plus fifteen: exactly the cap
+		{16, "limit", 1, "discovery-limit"}, // seventeen entries: none of the submodules is added
+		{64, "limit", 1, "discovery-limit"}, // still within 64 candidates, over the entry cap
+		{65, "limit", 1, "discovery-limit"}, // more than 64 distinct candidates
+	} {
+		repo := mk(tc.n)
+		res := reposRun([]string{repo}, true)
+		d := res.Entries[0].Discovery
+		if d.Status != tc.wantStatus || len(res.Entries) != tc.wantEntry || d.Submodules != map[bool]int{true: 15, false: 0}[tc.n == 15] {
+			t.Errorf("%d candidates: discovery %+v entries %d", tc.n, d, len(res.Entries))
+		}
+		if tc.wantCode != "" && (res.Entries[0].Error == nil || res.Entries[0].Error.Code != tc.wantCode || res.Entries[0].Status != "partial") {
+			t.Errorf("%d candidates: %+v", tc.n, res.Entries[0].Error)
+		}
+	}
+}
+
+// A submodule path equal to an explicit path is not added again (deduplicated); a submodule that is the same
+// repository as an earlier entry under another path is a duplicate-repository (FR-005, M1).
+func TestReposDiscoverDeduplicatesByPathAndIdentity(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1", "s2")
+	byPath := reposRun([]string{super, filepath.Join(super, "s1")}, true)
+	if got := reposPaths(byPath); len(got) != 3 || got[2] != "s2" {
+		t.Fatalf("entries %v", got)
+	}
+	if d := byPath.Entries[0].Discovery; d.Deduplicated != 1 || d.Submodules != 1 {
+		t.Fatalf("discovery %+v", d)
+	}
+	// A linked worktree of s2 is the same repository as the discovered s2 (same common directory).
+	wt := filepath.Join(base, "s2-linked")
+	git(t, filepath.Join(super, "s2"), "worktree", "add", "-q", "-b", "extra", wt)
+	res := reposRun([]string{wt, super}, true)
+	e := reposEntry(t, res, "s2")
+	if e.Status != "error" || e.Error == nil || e.Error.Code != "duplicate-repository" || e.DuplicateOf == nil || *e.DuplicateOf != 0 {
+		t.Fatalf("discovered submodule duplicate of an earlier worktree: %+v %+v", e, e.Error)
+	}
+	if e.Inventory != nil {
+		t.Fatal("a duplicate runs no inventory")
+	}
+}
+
+// H2: the submodules of a linked worktree live under <git-dir>/worktrees/<id>/modules.
+func TestReposDiscoverFromLinkedWorktreeSuperproject(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "super"), "s1")
+	linked := filepath.Join(base, "linked")
+	git(t, super, "worktree", "add", "-q", "-b", "wt", linked)
+	git(t, linked, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q")
+	res := reposRun([]string{linked}, true)
+	e := reposEntry(t, res, "s1")
+	if e.Status != "ok" || e.Error != nil || e.Inventory == nil {
+		t.Fatalf("submodule of a linked worktree: %+v %+v", e, e.Error)
+	}
+	if !strings.Contains(e.Inventory.Identity.Repository.GitDir, filepath.Join("worktrees", "linked", "modules", "s1")) {
+		t.Fatalf("unexpected Git directory %q", e.Inventory.Identity.Repository.GitDir)
+	}
+	// The same submodule of the main worktree is a different repository, not a duplicate (US6).
+	both := reposRun([]string{super, linked}, true)
+	for _, e := range both.Entries {
+		if e.Error != nil && e.Error.Code == "duplicate-repository" && e.Origin == "submodule" {
+			t.Fatalf("submodules of two worktrees must not be duplicates: %+v", e)
+		}
+	}
+}
+
+func TestReposDiscoverFromGitfileSuperproject(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	super := reposSuper(t, filepath.Join(base, "origin"), "s1")
+	moved := filepath.Join(base, "moved")
+	git(t, base, "clone", "-q", "--separate-git-dir", filepath.Join(base, "gitdir"), super, moved)
+	git(t, moved, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q")
+	e := reposEntry(t, reposRun([]string{moved}, true), "s1")
+	if e.Status != "ok" || e.Error != nil {
+		t.Fatalf("submodule of a gitfile superproject: %+v %+v", e, e.Error)
+	}
+}
+
+// An old-style submodule keeps its Git directory in place.
+func TestReposDiscoverInPlaceGitDirectoryIsAccepted(t *testing.T) {
+	reposHermetic(t)
+	base := reposTempDir(t)
+	src := reposNewRepo(t, filepath.Join(base, "src"))
+	super := reposNewRepo(t, filepath.Join(base, "super"))
+	git(t, base, "clone", "-q", src, filepath.Join(super, "inplace"))
+	git(t, super, "-c", "protocol.file.allow=always", "submodule", "add", "-q", src, "inplace")
+	git(t, super, "commit", "-qm", "adopt")
+	if fi, err := os.Stat(filepath.Join(super, "inplace", ".git")); err != nil || !fi.IsDir() {
+		t.Skip("this Git version absorbs the Git directory")
+	}
+	e := reposEntry(t, reposRun([]string{super}, true), "inplace")
+	if e.Status != "ok" || e.Error != nil {
+		t.Fatalf("in-place Git directory: %+v %+v", e, e.Error)
 	}
 }

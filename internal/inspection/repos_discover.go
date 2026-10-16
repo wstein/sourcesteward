@@ -3,8 +3,8 @@ package inspection
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -12,383 +12,371 @@ import (
 	"unicode/utf8"
 )
 
-// discoverSubmodules handles Stage S4 discovery for explicit Git parents.
-func discoverSubmodules(ctx context.Context, entries *[]ReposEntry, inspections *[]Result, inspectFn inspectFunc, run runner) {
+// Submodule discovery (Spec 023 FR-006, FR-008, FR-009).
+//
+// Everything the superproject says about its submodules is untrusted data. Registration is read with a
+// minimal set of Git calls made through the Spec 021 isolation runner (pinsRunner); confinement of each
+// candidate - paths, the .git pointer, the Git directory, ownership, alternates and commondir - is decided by
+// the Spec 021 safety layer (pinsSafety) before any process runs in the submodule. Consequently a submodule
+// that Spec 021 refuses is refused here too; in particular a submodule with objects/info/alternates or a
+// commondir entry is path-unsafe and `repos --submodules` does not inventory it.
+
+// reposNewRunner creates the isolated runner of one discovery. Each Git invocation has its own per-call
+// deadline inside the context of the run.
+type reposNewRunner func(ctx context.Context) *pinsRunner
+
+func newReposRunner(ctx context.Context) *pinsRunner {
+	r := newPinsRunner(ctx)
+	r.timeout = reposCallTimeout
+	return r
+}
+
+// reposCandidate is one registered submodule path after confirmation and safety checks.
+type reposCandidate struct {
+	rel, abs   string
+	kind       string // "ok", "skipped", "unsafe"
+	code, msg  string
+	dirs       *pinsSubmoduleDirs
+	safety     *pinsSafety
+	parentRoot string
+}
+
+// reposParentDiscovery is the data outcome of discovery for one parent; it never touches an entry.
+type reposParentDiscovery struct {
+	status     string // "ok", "failed", "limit"
+	reason     string
+	err        *ReposError
+	ignored    int
+	notes      []string
+	candidates []reposCandidate
+}
+
+// reposPendingSub is a discovered entry whose identity is inspected next and then checked against the
+// directories that were validated.
+type reposPendingSub struct {
+	index int
+	cand  reposCandidate
+}
+
+// reposMapError reports the timeout code for an error of an identity, discovery or inventory call, or an
+// empty code when err is no timeout or cancellation. A caller whose own context ended always gets
+// `canceled`, never a timeout of the repos deadline.
+func reposMapError(callerCtx, totalCtx context.Context, err error) (code, message string) {
+	switch {
+	case callerCtx.Err() == context.DeadlineExceeded:
+		return ReposCodeCanceled, "caller deadline exceeded"
+	case callerCtx.Err() != nil:
+		return ReposCodeCanceled, "caller canceled operation"
+	case totalCtx.Err() != nil:
+		return ReposCodeInventoryTimeout, fmt.Sprintf("total deadline of %d seconds exceeded", ReposTotalSeconds)
+	}
+	var limit *pinsLimitError
+	if errors.As(err, &limit) && limit.Kind == "deadline" {
+		return ReposCodeInventoryTimeout, fmt.Sprintf("per-call deadline of %d seconds exceeded", ReposPerRepositorySeconds)
+	}
+	return "", ""
+}
+
+// discoverSubmodules is stage S4. Parents are examined concurrently (at most ReposParallelism at a time);
+// the merge into the entry list is sequential in parent order, so concurrency never changes the result.
+// It returns the added entries that still need an identity inspection.
+func discoverSubmodules(callerCtx, totalCtx context.Context, entries *[]ReposEntry, inspections *[]Result, newRunner reposNewRunner) []reposPendingSub {
 	parentCount := len(*entries)
+	var work []int
+	for i := 0; i < parentCount; i++ {
+		entry := &(*entries)[i]
+		if !entry.Discovery.Requested {
+			continue
+		}
+		// Discovery runs only for explicit parents that passed root and duplicate checks and are Git-owned.
+		if entry.Origin != "explicit" || entry.Status == "error" || entry.DuplicateOf != nil || entry.Backend != "git" || entry.ResolvedPath == nil || (*inspections)[i].Repository == nil {
+			entry.Discovery.Status = "not-applicable"
+			continue
+		}
+		work = append(work, i)
+	}
+	results := make([]reposParentDiscovery, parentCount)
+	runWorkerPool(work, ReposParallelism, func(i int) {
+		results[i] = discoverParent(callerCtx, totalCtx, newRunner, *(*entries)[i].ResolvedPath, (*inspections)[i])
+	})
+
 	seenPaths := make(map[string]bool)
 	for _, e := range *entries {
 		if e.ResolvedPath != nil {
 			seenPaths[filepath.Clean(*e.ResolvedPath)] = true
 		}
 	}
-
-	for i := 0; i < parentCount; i++ {
-		entry := &(*entries)[i]
-		if !entry.Discovery.Requested {
+	var pending []reposPendingSub
+	for _, i := range work {
+		entry, d := &(*entries)[i], results[i]
+		entry.Discovery.Ignored = d.ignored
+		entry.Notes = append(entry.Notes, d.notes...)
+		if d.status != "ok" {
+			entry.Discovery.Status, entry.Discovery.Reason = d.status, d.reason
+			entry.Status, entry.Error = "partial", d.err
 			continue
 		}
-
-		// Discovery runs only for explicit parents that passed root and duplicate checks and are Git-owned
-		if entry.Origin != "explicit" || entry.Status == "error" || entry.DuplicateOf != nil || entry.Backend != "git" || entry.ResolvedPath == nil {
-			entry.Discovery.Status = "not-applicable"
-			continue
-		}
-
-		parentRoot := *entry.ResolvedPath
-		parentGitDir := filepath.Join(parentRoot, ".git")
-		if entry.Inventory != nil && entry.Inventory.Identity.Repository != nil {
-			parentGitDir = entry.Inventory.Identity.Repository.GitDir
-		}
-
-		// 1. Check HEAD .gitmodules blob via ls-tree -z -l HEAD -- .gitmodules
-		lsOut, code, err := run(ctx, parentRoot, "ls-tree", "-z", "-l", "HEAD", "--", ".gitmodules")
-		if err != nil || code != 0 {
-			// Unborn HEAD or command failure
-			entry.Discovery.Status = "ok"
-			continue
-		}
-
-		lsOut = strings.TrimRight(lsOut, "\x00")
-		if lsOut == "" {
-			entry.Discovery.Status = "ok"
-			continue
-		}
-
-		// Parse ls-tree output: <mode> <type> <object> <size>\t<file>
-		tabIdx := strings.IndexByte(lsOut, '\t')
-		if tabIdx == -1 {
-			entry.Discovery.Status = "failed"
-			entry.Discovery.Reason = "malformed ls-tree output"
-			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryFailed, Message: "malformed ls-tree output for .gitmodules"}
-			continue
-		}
-
-		metaFields := strings.Fields(lsOut[:tabIdx])
-		if len(metaFields) < 4 {
-			entry.Discovery.Status = "failed"
-			entry.Discovery.Reason = "malformed ls-tree metadata"
-			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryFailed, Message: "malformed ls-tree metadata for .gitmodules"}
-			continue
-		}
-
-		mode := metaFields[0]
-		blobOID := metaFields[2]
-		sizeStr := metaFields[3]
-
-		// Mode check: regular file only (100644 or 100755)
-		if mode != "100644" && mode != "100755" {
-			entry.Discovery.Status = "failed"
-			entry.Discovery.Reason = fmt.Sprintf("invalid .gitmodules mode: %s", mode)
-			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryFailed, Message: fmt.Sprintf(".gitmodules is not a regular file (mode %s)", mode)}
-			continue
-		}
-
-		// Size check: at most 64 KiB
-		size, err := strconv.Atoi(sizeStr)
-		if err != nil || size > ReposGitmodulesBytes {
-			entry.Discovery.Status = "failed"
-			entry.Discovery.Reason = "oversized .gitmodules blob"
-			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryFailed, Message: ".gitmodules exceeds maximum size of 64 KiB"}
-			continue
-		}
-
-		// 2. Parse config --blob <oid> --null --list --no-includes
-		cfgOut, code, err := run(ctx, parentRoot, "config", "--blob", blobOID, "--null", "--list", "--no-includes")
-		if err != nil || code != 0 {
-			entry.Discovery.Status = "failed"
-			entry.Discovery.Reason = "cannot parse .gitmodules blob"
-			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryFailed, Message: "cannot parse .gitmodules config blob"}
-			continue
-		}
-
-		// Collect last path per submodule name
-		nameToPath := make(map[string]string)
-		items := strings.Split(cfgOut, "\x00")
-		for _, item := range items {
-			if item == "" {
-				continue
-			}
-			newlineIdx := strings.IndexByte(item, '\n')
-			if newlineIdx == -1 {
-				continue
-			}
-			k := item[:newlineIdx]
-			v := item[newlineIdx+1:]
-			lowerK := strings.ToLower(k)
-			if strings.HasPrefix(lowerK, "submodule.") && strings.HasSuffix(lowerK, ".path") {
-				subName := k[len("submodule.") : len(k)-len(".path")]
-				if v != "" {
-					nameToPath[subName] = v
-				}
-			}
-		}
-
-		// Deduplicate candidate paths across names
-		distinctPathsMap := make(map[string]bool)
-		for _, p := range nameToPath {
-			distinctPathsMap[p] = true
-		}
-
-		// Candidate limit check (64)
-		if len(distinctPathsMap) > ReposMaxDiscoveryCandidates {
-			entry.Discovery.Status = "limit"
-			entry.Discovery.Reason = fmt.Sprintf("candidate paths exceed limit of %d", ReposMaxDiscoveryCandidates)
-			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryLimit, Message: fmt.Sprintf("submodule candidates exceed limit of %d", ReposMaxDiscoveryCandidates)}
-			continue
-		}
-
-		var candidatePaths []string
-		for p := range distinctPathsMap {
-			candidatePaths = append(candidatePaths, p)
-		}
-		sort.Strings(candidatePaths)
-
-		// 3. Confirm each candidate path and check safety
-		type candidateEntry struct {
-			relPath   string
-			absPath   string
-			isSkipped bool
-			isError   bool
-			errCode   string
-			errMsg    string
-		}
-
-		var validCandidates []candidateEntry
-
-		for _, p := range candidatePaths {
-			// Lexical check
-			if !isLexicallyValidSubmodulePath(p) {
-				entry.Discovery.Ignored++
-				entry.Notes = append(entry.Notes, fmt.Sprintf("discovery-ignored: lexically invalid path %q", p))
-				continue
-			}
-
-			// Index confirmation with ls-files --stage -z -- ':(literal)<path>'
-			filesOut, code, err := run(ctx, parentRoot, "ls-files", "--stage", "-z", "--", ":(literal)"+p)
-			if err != nil || code != 0 || filesOut == "" {
-				entry.Discovery.Ignored++
-				continue
-			}
-			filesOut = strings.TrimRight(filesOut, "\x00")
-			fTabIdx := strings.IndexByte(filesOut, '\t')
-			if fTabIdx == -1 {
-				entry.Discovery.Ignored++
-				continue
-			}
-			fMeta := strings.Fields(filesOut[:fTabIdx])
-			if len(fMeta) < 3 || fMeta[0] != "160000" || filesOut[fTabIdx+1:] != p {
-				entry.Discovery.Ignored++
-				continue
-			}
-
-			// Submodule path resolution and containment check
-			fullSubPath := filepath.Join(parentRoot, filepath.FromSlash(p))
-			absSubPath, err := filepath.Abs(fullSubPath)
-			if err != nil {
-				entry.Discovery.Ignored++
-				continue
-			}
-
-			// Check if already listed (deduplicated)
-			cleanSubPath := filepath.Clean(absSubPath)
-			resolvedCandidate, err := filepath.EvalSymlinks(cleanSubPath)
-			if seenPaths[cleanSubPath] || (err == nil && seenPaths[filepath.Clean(resolvedCandidate)]) {
+		var kept []reposCandidate
+		for _, c := range d.candidates {
+			if seenPaths[c.abs] {
 				entry.Discovery.Deduplicated++
 				continue
 			}
-
-			// Symlink safety check on path components below parentRoot
-			relClean := filepath.Clean(filepath.FromSlash(p))
-			parts := strings.Split(relClean, string(filepath.Separator))
-			curr := parentRoot
-			isSafe := true
-			for _, part := range parts {
-				curr = filepath.Join(curr, part)
-				st, err := os.Lstat(curr)
-				if err != nil {
-					break
-				}
-				if st.Mode()&os.ModeSymlink != 0 {
-					isSafe = false
-					break
-				}
-			}
-
-			if !isSafe {
-				validCandidates = append(validCandidates, candidateEntry{
-					relPath: p,
-					absPath: absSubPath,
-					isError: true,
-					errCode: ReposCodePathUnsafe,
-					errMsg:  "symlink in submodule path",
-				})
-				continue
-			}
-
-			// Check filesystem state of .git
-			gitEntry := filepath.Join(absSubPath, ".git")
-			st, err := os.Lstat(gitEntry)
-			if err != nil {
-				// Uninitialized submodule directory
-				validCandidates = append(validCandidates, candidateEntry{
-					relPath:   p,
-					absPath:   absSubPath,
-					isSkipped: true,
-					errCode:   ReposCodeSubmoduleUninitialized,
-					errMsg:    "submodule is uninitialized",
-				})
-				continue
-			}
-
-			if st.Mode()&os.ModeSymlink != 0 || st.Mode()&os.ModeNamedPipe != 0 || st.Mode()&os.ModeSocket != 0 {
-				validCandidates = append(validCandidates, candidateEntry{
-					relPath: p,
-					absPath: absSubPath,
-					isError: true,
-					errCode: ReposCodePathUnsafe,
-					errMsg:  ".git is a symlink or special file",
-				})
-				continue
-			}
-
-			if st.Mode().IsRegular() {
-				// Pointer file check
-				ptrData, err := os.ReadFile(gitEntry)
-				if err != nil || len(ptrData) > ReposMaxPathBytes {
-					validCandidates = append(validCandidates, candidateEntry{
-						relPath: p,
-						absPath: absSubPath,
-						isError: true,
-						errCode: ReposCodePathUnsafe,
-						errMsg:  "cannot read .git pointer file",
-					})
-					continue
-				}
-				ptrContent := strings.TrimSpace(string(ptrData))
-				if !strings.HasPrefix(ptrContent, "gitdir:") {
-					validCandidates = append(validCandidates, candidateEntry{
-						relPath: p,
-						absPath: absSubPath,
-						isError: true,
-						errCode: ReposCodePathUnsafe,
-						errMsg:  "invalid .git pointer format",
-					})
-					continue
-				}
-				ptrTarget := strings.TrimSpace(ptrContent[len("gitdir:"):])
-				var absTarget string
-				if filepath.IsAbs(ptrTarget) {
-					absTarget = filepath.Clean(ptrTarget)
-				} else {
-					absTarget = filepath.Clean(filepath.Join(filepath.Dir(gitEntry), ptrTarget))
-				}
-				modulesDir := filepath.Clean(filepath.Join(parentGitDir, "modules"))
-				if !strings.HasPrefix(absTarget, modulesDir+string(filepath.Separator)) && absTarget != modulesDir {
-					validCandidates = append(validCandidates, candidateEntry{
-						relPath: p,
-						absPath: absSubPath,
-						isError: true,
-						errCode: ReposCodePathUnsafe,
-						errMsg:  ".git pointer targets location outside superproject modules directory",
-					})
-					continue
-				}
-			}
-
-			validCandidates = append(validCandidates, candidateEntry{
-				relPath: p,
-				absPath: absSubPath,
-			})
+			kept = append(kept, c)
 		}
-
-		// Check 16-entry cap across total entries
-		if len(*entries)+len(validCandidates) > ReposMaxEntries {
+		if len(*entries)+len(kept) > ReposMaxEntries {
 			entry.Discovery.Status = "limit"
 			entry.Discovery.Reason = fmt.Sprintf("total entries would exceed limit of %d", ReposMaxEntries)
 			entry.Status = "partial"
-			entry.Error = &ReposError{Code: ReposCodeDiscoveryLimit, Message: fmt.Sprintf("total entries would exceed limit of %d", ReposMaxEntries)}
+			entry.Error = &ReposError{Code: ReposCodeDiscoveryLimit, Message: entry.Discovery.Reason}
 			continue
 		}
-
 		entry.Discovery.Status = "ok"
-		entry.Discovery.Submodules = len(validCandidates)
-
-		// Append new submodule entries
+		entry.Discovery.Submodules = len(kept)
 		parentIdx := entry.Index
-		for _, cand := range validCandidates {
-			subIdx := len(*entries)
-			absP := cand.absPath
-			subEntry := ReposEntry{
-				Index:        subIdx,
-				Path:         cand.relPath,
-				ResolvedPath: &absP,
+		for _, c := range kept {
+			abs := c.abs
+			sub := ReposEntry{
+				Index:        len(*entries),
+				Path:         c.rel,
+				ResolvedPath: &abs,
 				Origin:       "submodule",
-				Backend:      "unknown",
 				Parent:       &parentIdx,
-				Discovery: ReposDiscovery{
-					Requested: false,
-					Status:    "not-applicable",
-					Reason:    "discovery is not recursive",
-				},
-				Notes: []string{},
+				Backend:      "unknown",
+				Discovery:    ReposDiscovery{Status: "not-applicable", Reason: "discovery is not recursive"},
+				Notes:        []string{},
 			}
-			seenPaths[filepath.Clean(absP)] = true
-
-			if cand.isSkipped {
-				subEntry.Status = "skipped"
-				subEntry.Error = &ReposError{
-					Code:    cand.errCode,
-					Message: cand.errMsg,
-				}
-				*inspections = append(*inspections, Result{Status: "error"})
-			} else if cand.isError {
-				subEntry.Status = "error"
-				subEntry.Error = &ReposError{
-					Code:    cand.errCode,
-					Message: cand.errMsg,
-				}
-				*inspections = append(*inspections, Result{Status: "error"})
-			} else {
-				// Stage S4: Identity inspection of discovered submodule candidate
-				insp := inspectFn(ctx, absP)
-				*inspections = append(*inspections, insp)
-				subEntry.Backend = insp.Backend
-				if insp.Status == "error" {
-					subEntry.Status = "error"
-					code := "inspection-failed"
-					msg := "identity inspection failed"
-					if len(insp.Diagnostics) > 0 {
-						code = insp.Diagnostics[0].Code
-						msg = insp.Diagnostics[0].Message
-					}
-					subEntry.Error = &ReposError{Code: code, Message: msg}
-				} else {
-					// FR-008: After the identity inspection, its worktree must equal the expected path
-					wtMatches := false
-					if insp.Repository != nil && insp.Repository.Worktree != nil {
-						if filepath.Clean(*insp.Repository.Worktree) == filepath.Clean(absP) {
-							wtMatches = true
-						}
-					}
-					if !wtMatches {
-						subEntry.Status = "error"
-						subEntry.Error = &ReposError{
-							Code:    ReposCodePathUnsafe,
-							Message: "submodule worktree does not match expected path",
-						}
-					} else {
-						subEntry.Status = "ok"
-					}
-				}
+			seenPaths[abs] = true
+			switch c.kind {
+			case "skipped":
+				sub.Status, sub.Error = "skipped", &ReposError{Code: c.code, Message: c.msg}
+			case "unsafe":
+				sub.Status, sub.Error = "error", &ReposError{Code: c.code, Message: c.msg}
+			default:
+				sub.Status = "ok"
+				pending = append(pending, reposPendingSub{index: sub.Index, cand: c})
 			}
+			*entries = append(*entries, sub)
+			*inspections = append(*inspections, Result{Status: "error"})
+		}
+	}
+	return pending
+}
 
-			*entries = append(*entries, subEntry)
+// discoverParent reads the registration of one Git parent and confines every candidate. It is the unit of
+// work of the pool: a panic is recovered into this parent's discovery, never into the process.
+func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunner, root string, insp Result) (d reposParentDiscovery) {
+	defer func() {
+		if r := recover(); r != nil {
+			d = reposParentDiscovery{status: "failed", reason: "worker panic during discovery",
+				err: &ReposError{Code: ReposCodeMemberFailed, Message: fmt.Sprintf("worker panic during discovery: %v", r)}}
+		}
+	}()
+	failed := func(err error, reason string) reposParentDiscovery {
+		if code, msg := reposMapError(callerCtx, totalCtx, err); code != "" {
+			return reposParentDiscovery{status: "failed", reason: msg, err: &ReposError{Code: code, Message: msg}}
+		}
+		return reposParentDiscovery{status: "failed", reason: reason, err: &ReposError{Code: ReposCodeDiscoveryFailed, Message: reason}}
+	}
+	repo := insp.Repository
+	// A bare repository has no checkout and an unborn HEAD no registration: nothing to discover, no process.
+	if repo.Bare || repo.Head.State == "unborn" {
+		return reposParentDiscovery{status: "ok"}
+	}
+	run := newRunner(totalCtx)
+	layout, err := newPinsSuperLayout(run, root)
+	if err != nil {
+		return failed(err, "cannot read the superproject Git directory layout")
+	}
+	if want, err := filepath.EvalSymlinks(repo.GitDir); err != nil || filepath.Clean(want) != filepath.Clean(layout.GitDir) {
+		return failed(nil, "the superproject Git directory differs from the inspected identity")
+	}
+
+	// 1. The HEAD .gitmodules blob must be a small regular file.
+	ls, err := run.run(pinsCall{Dir: root, Args: []string{"ls-tree", "-z", "-l", "HEAD", "--", ".gitmodules"}})
+	if err != nil {
+		return failed(err, "cannot read the HEAD .gitmodules entry")
+	}
+	if ls.Exit != 0 {
+		return failed(nil, "git ls-tree failed for .gitmodules")
+	}
+	record := strings.TrimRight(string(ls.Stdout), "\x00")
+	if record == "" {
+		return reposParentDiscovery{status: "ok"}
+	}
+	meta, name, found := strings.Cut(record, "\t")
+	fields := strings.Fields(meta)
+	if !found || len(fields) != 4 || name != ".gitmodules" {
+		return failed(nil, "malformed ls-tree output for .gitmodules")
+	}
+	mode, blob, sizeText := fields[0], fields[2], fields[3]
+	if mode != "100644" && mode != "100755" {
+		return failed(nil, fmt.Sprintf(".gitmodules is not a regular file (mode %s)", mode))
+	}
+	if size, err := strconv.Atoi(sizeText); err != nil || size > ReposGitmodulesBytes {
+		return failed(nil, ".gitmodules exceeds maximum size of 64 KiB")
+	}
+
+	// 2. Registered paths: the last value per name; names sharing a path use the lowest name.
+	cfg, err := run.run(pinsCall{Dir: root, Args: []string{"config", "--blob", blob, "--null", "--list", "--no-includes"}})
+	if err != nil {
+		return failed(err, "cannot parse the .gitmodules blob")
+	}
+	if cfg.Exit != 0 {
+		return failed(nil, "cannot parse the .gitmodules blob")
+	}
+	namePath := map[string]string{}
+	for _, kv := range parsePinsConfig(cfg.Stdout) {
+		if n, variable, ok := splitSubmoduleKey(kv.Key); ok && variable == "path" && kv.HasValue && kv.Value != "" {
+			namePath[n] = kv.Value
+		}
+	}
+	names := make([]string, 0, len(namePath))
+	for n := range namePath {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	pathName := map[string]string{}
+	for _, n := range names {
+		if _, dup := pathName[namePath[n]]; !dup {
+			pathName[namePath[n]] = n
+		}
+	}
+	paths := make([]string, 0, len(pathName))
+	for p := range pathName {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	if len(paths) > ReposMaxDiscoveryCandidates {
+		reason := fmt.Sprintf("submodule candidates exceed limit of %d", ReposMaxDiscoveryCandidates)
+		return reposParentDiscovery{status: "limit", reason: reason, err: &ReposError{Code: ReposCodeDiscoveryLimit, Message: reason}}
+	}
+
+	// extensions.submodulePathConfig lets the local configuration name a Git directory per submodule.
+	configured := map[string]string{}
+	if layout.PathConfig {
+		local, err := run.run(pinsCall{Dir: root, Args: []string{"config", "--local", "--null", "--list", "--no-includes"}, Keep: func(rec []byte) bool {
+			k, _, _ := strings.Cut(string(rec), "\n")
+			_, variable, ok := splitSubmoduleKey(k)
+			return ok && variable == "gitdir"
+		}})
+		if err != nil {
+			return failed(err, "cannot read the superproject configuration")
+		}
+		if local.Exit != 0 {
+			return failed(nil, "cannot read the superproject configuration")
+		}
+		for _, kv := range parsePinsConfig(local.Stdout) {
+			if n, variable, ok := splitSubmoduleKey(kv.Key); ok && variable == "gitdir" && kv.HasValue {
+				configured[n] = kv.Value
+			}
+		}
+	}
+
+	// 3. Confirm each path in the index and confine it.
+	safety := newPinsSafety(layout, run)
+	d.status = "ok"
+	ignore := func(p string) {
+		d.ignored++
+		d.notes = append(d.notes, "discovery-ignored: "+reposEscapePath(p))
+	}
+	for _, p := range paths {
+		if !isLexicallyValidSubmodulePath(p) {
+			ignore(p)
+			continue
+		}
+		out, err := run.run(pinsCall{Dir: root, Args: []string{"ls-files", "--stage", "-z", "--", p}, Keep: func(rec []byte) bool {
+			return strings.HasPrefix(string(rec), "160000 ")
+		}})
+		var limit *pinsLimitError
+		switch {
+		case errors.As(err, &limit) && limit.Kind != "deadline":
+			ignore(p) // a directory with too many files is no gitlink
+			continue
+		case err != nil:
+			return failed(err, "cannot confirm a registered path in the index")
+		case out.Exit != 0:
+			return failed(nil, "git ls-files failed")
+		}
+		if !reposIsGitlink(out.Stdout, p) {
+			ignore(p)
+			continue
+		}
+		spec := pinsSubmoduleSpec{Path: p, Name: pathName[p]}
+		if g, ok := configured[spec.Name]; ok {
+			spec.ConfiguredGitDir = &g
+		}
+		abs := filepath.Join(layout.WorkTree, filepath.FromSlash(p))
+		res, refusal, err := safety.resolve(spec)
+		switch {
+		case err != nil:
+			return failed(err, "cannot validate a submodule location")
+		case refusal != nil:
+			d.candidates = append(d.candidates, reposCandidate{rel: p, abs: abs, kind: "unsafe", code: ReposCodePathUnsafe, msg: refusal.Message})
+		case res.Uninitialized:
+			d.candidates = append(d.candidates, reposCandidate{rel: p, abs: abs, kind: "skipped", code: ReposCodeSubmoduleUninitialized, msg: "submodule is uninitialized"})
+		default:
+			d.candidates = append(d.candidates, reposCandidate{rel: p, abs: abs, kind: "ok", dirs: res.Dirs, safety: safety, parentRoot: root})
+		}
+	}
+	return d
+}
+
+// reposIsGitlink reports whether the kept ls-files records name exactly path as a gitlink.
+func reposIsGitlink(out []byte, path string) bool {
+	for _, rec := range strings.Split(string(out), "\x00") {
+		meta, name, ok := strings.Cut(rec, "\t")
+		if f := strings.Fields(meta); ok && len(f) == 3 && f[0] == "160000" && name == path {
+			return true
+		}
+	}
+	return false
+}
+
+// reposEscapePath makes a repository-supplied path safe for a note: no control characters, valid UTF-8 and a
+// bounded length (cut at a rune boundary).
+func reposEscapePath(p string) string {
+	q := strconv.QuoteToASCII(p)
+	q = q[1 : len(q)-1]
+	const limit = 256
+	if len(q) > limit {
+		cut := limit
+		for cut > 0 && !utf8.RuneStart(q[cut]) {
+			cut--
+		}
+		q = q[:cut] + "..."
+	}
+	return q
+}
+
+// verifyDiscoveredSubmodules is the post-check of FR-008 after the identity inspection: the checkout and
+// the Git directory Git reported must be the ones that were validated, and the directories must still be the
+// validated ones. A submodule that is the same repository as an earlier entry is a duplicate (FR-005).
+func verifyDiscoveredSubmodules(entries []ReposEntry, inspections []Result, pending []reposPendingSub, ids *reposIdentityIndex) {
+	for _, p := range pending {
+		entry := &entries[p.index]
+		if entry.Status == "error" {
+			continue
+		}
+		insp := inspections[p.index]
+		unsafe := func(msg string) {
+			entry.Status = "error"
+			entry.Error = &ReposError{Code: ReposCodePathUnsafe, Message: msg}
+		}
+		repo := insp.Repository
+		switch {
+		case insp.Backend != "git" || repo == nil || repo.Worktree == nil:
+			unsafe("submodule is not a Git checkout of its own")
+		case filepath.Clean(*repo.Worktree) != filepath.Clean(p.cand.dirs.WorkTree):
+			unsafe("submodule worktree does not match expected path")
+		case filepath.Clean(repo.GitDir) != filepath.Clean(p.cand.dirs.GitDir):
+			unsafe("submodule Git directory does not match the validated location")
+		default:
+			if err := p.cand.safety.recheck(*p.cand.dirs); err != nil {
+				unsafe("submodule directories changed after validation: " + err.Error())
+				continue
+			}
+			ids.admit(entry, insp)
 		}
 	}
 }
@@ -403,8 +391,7 @@ func isLexicallyValidSubmodulePath(p string) bool {
 	if strings.HasSuffix(p, "/") || strings.ContainsRune(p, 0) {
 		return false
 	}
-	parts := strings.Split(p, "/")
-	for _, part := range parts {
+	for _, part := range strings.Split(p, "/") {
 		if part == "" || part == "." || part == ".." {
 			return false
 		}
