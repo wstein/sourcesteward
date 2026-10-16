@@ -500,3 +500,37 @@ func TestPinsReadDirRefusesAnotherRealDirectoryRenamedIntoPlace(t *testing.T) {
 		t.Fatalf("%v", r)
 	}
 }
+
+func TestPinsRecheckSeesASameSizeInPlaceConfigRewrite(t *testing.T) {
+	f := newPinsFixture(t)
+	s := safetyFor(t, f.Super)
+	d := mustResolve(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"})
+	cfg := filepath.Join(d.GitDir, "config")
+	info, err := os.Stat(cfg)
+	mustOS(t, err)
+	b, err := os.ReadFile(cfg)
+	mustOS(t, err)
+	time.Sleep(30 * time.Millisecond)
+	b[len(b)-2] ^= 0x01 // same size, and the modification time is put back below
+	mustOS(t, os.WriteFile(cfg, b, 0o600))
+	mustOS(t, os.Chtimes(cfg, info.ModTime(), info.ModTime()))
+	if err := s.recheck(d); err == nil {
+		t.Fatal("a same-size rewrite with the old modification time passed the recheck")
+	}
+}
+
+func TestPinsConfigIdentityFailsOnAnyErrorButAbsence(t *testing.T) {
+	f := newPinsFixture(t)
+	s := safetyFor(t, f.Super)
+	d := mustResolve(t, s, pinsSubmoduleSpec{Path: "member", Name: "member"})
+	if _, err := s.configIdentity(d); err != nil {
+		t.Fatalf("a missing config.worktree is fine: %v", err)
+	}
+	d.gitRel += "/HEAD" // HEAD is a file, so config below it fails with ENOTDIR, not ENOENT
+	if _, err := s.configIdentity(d); err == nil {
+		t.Fatal("an unreadable configuration compared equal")
+	}
+	if err := s.recheck(d); err == nil {
+		t.Fatal("recheck passed an unreadable configuration")
+	}
+}
