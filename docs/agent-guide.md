@@ -70,6 +70,11 @@ The version command's JSON output contains no guidance notice or human prose.
 | 0 | Successful help, version or inspection output | Read standard output; standard error is empty. |
 | 1 | Runtime failure, including cancellation or output write failure | Read standard error; output may be incomplete after a write failure. |
 | 2 | Invalid command, flag, argument or help topic | Correct the invocation using installed help. |
+| 3 | Only `stw pins --strict`: a complete result with at least one error finding | Read the full result on standard output; standard error has one line with the error count. |
+
+Status 3 belongs to the planned `stw pins` command (see below) and appears only once that command
+ships. Its precedence is 2, then 1, then 3, then 0: an incomplete result exits 1 even when it has
+error findings. See [pins](pins.md).
 
 Failures use the single-line `Error: ...` diagnostic on standard error when that stream
 can be written. Usage failures produce no standard output. Do not treat partial output
@@ -168,3 +173,15 @@ continues to use schema 1. Read [tidy](tidy.md) for effects, bounds, recovery an
 ## GitHub inspection
 
 Use `stw hosting repo|pr|ci` or the optional `gh jj repo|pr|ci` entry point. The extension requires native jj ownership. Start with `repo --json`; select ambiguous hosting context explicitly. PR/CI add bounded authenticated network reads; JSON completeness and exact head evidence do not authorize mutation or prove merge eligibility. See [hosting](hosting.md) and [Spec 020](../specs/020-gh-jj-inspection/spec.md).
+
+## Submodule pin audit
+
+`stw pins [PATH] --json` (planned, [Spec 021](../specs/021-submodule-pin-audit/spec.md); hidden until
+its final work item, so check `stw --help` first) reports for a Git superproject each submodule's
+pin, staged pin, checkout, dirty state and whether the pin is contained in a local remote-tracking
+ref. Use `--json` and dispatch on `schema_version`; use `--strict` to turn error findings into exit
+status 3 while still reading the full result from standard output. Without `--strict`, findings exit 0.
+Never treat status 1, an `incomplete`, `refused` or `error` result, or `unknown` publication as a pass.
+`unreachable` means only that local remote-tracking refs do not contain the pin; no fetch is made, so
+it does not prove the remote lacks the commit. jj and GitButler workspaces are refused; do not
+substitute raw Git. Read [pins](pins.md) before acting on a finding.

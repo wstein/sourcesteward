@@ -130,3 +130,12 @@ manifest/identity revalidation and confined entry removal. Recovery pins retain 
 no jj abandonment, remote deletion, broad prune or garbage collection is implied. Full jj stored/disk
 equality, including one-integrated-parent empty-WC proof where applicable, establishes freshness;
 stored-unsnapshotted inspection alone remains insufficient. See [tidy](tidy.md) for limits.
+
+## Submodule pin audit capability
+
+`stw pins` (planned, [Spec 021](../specs/021-submodule-pin-audit/spec.md); hidden until its final
+work item) is a read-only audit of Git submodule pins. Git is supported, including linked
+worktrees. jj and GitButler are explicitly unsupported for submodules: jj has no Git submodule
+model, so a jj-owned workspace, even a colocated one, is refused with `unsupported-backend` and
+never falls back to Git. No equivalence between a Git gitlink and any jj or GitButler concept is
+claimed. See [pins](pins.md) for evidence, findings and refusals.
