@@ -274,7 +274,7 @@ func TestPinsAuditStartsOnlyAllowlistedPinsCommands(t *testing.T) {
 		}
 	}
 	requireAllowlisted(t, mine, "rev-parse --verify --quiet HEAD", "cat-file -e <OID>^{commit}", "for-each-ref --contains <OID> --count=64 --format=%(refname)%09%(symref) refs/remotes/",
-		"diff-index --cached --no-ext-diff --no-textconv HEAD", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z", "ls-tree HEAD .gitmodules", "symbolic-ref -q <REMOTE-REF>")
+		"diff-index --cached --no-ext-diff --no-textconv -z <OID> --", "ls-files --stage --debug -z", "ls-files --others --exclude-standard -z", "ls-tree HEAD .gitmodules", "symbolic-ref -q <REMOTE-REF>")
 }
 
 func TestPinsAuditHostileConfigurationNeverExecutes(t *testing.T) {

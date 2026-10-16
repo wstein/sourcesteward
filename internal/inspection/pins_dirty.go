@@ -469,12 +469,12 @@ func pinsDirtyState(run *pinsRunner, d pinsSubmoduleDirs, facts pinsRepoFacts, h
 
 // staged compares the index with the HEAD tree by object name; the first difference is enough.
 func (s *pinsDirtyScan) staged() error {
-	if s.head.Unborn {
+	if s.head.Unborn || s.head.Commit == nil {
 		s.downgrade(&s.tracked, "unborn HEAD: staged changes cannot be compared")
 		return nil
 	}
 	found := false
-	out, bound, err := s.call([]string{"diff-index", "--cached", "--no-ext-diff", "--no-textconv", "HEAD"}, func(rec []byte, _ bool) error {
+	out, bound, err := s.call([]string{"diff-index", "--cached", "--no-ext-diff", "--no-textconv", "-z", *s.head.Commit, "--"}, func(rec []byte, _ bool) error {
 		if len(rec) > 0 {
 			found = true
 			return errPinsStop

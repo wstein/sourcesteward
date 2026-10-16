@@ -146,7 +146,7 @@ func pinsReadHead(run *pinsRunner, repo pinsGitRepo) (pinsHead, error) {
 
 // pinsCount counts `exclude..include` with a cap: at most 10,001 commits are walked.
 func pinsCount(run *pinsRunner, repo pinsGitRepo, exclude, include string) (n int, capped bool, ok bool, err error) {
-	out, err := run.run(pinsCall{Repo: repo, Args: []string{"rev-list", "--count", fmt.Sprintf("--max-count=%d", pinsCountCap+1), exclude + ".." + include}})
+	out, err := run.run(pinsCall{Repo: repo, Args: []string{"rev-list", "--count", fmt.Sprintf("--max-count=%d", pinsCountCap+1), exclude + ".." + include, "--"}})
 	if err != nil {
 		return 0, false, false, err
 	}
