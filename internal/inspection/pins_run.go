@@ -69,12 +69,24 @@ type pinsCall struct {
 	// Keep selects which NUL-terminated stdout records are retained; nil retains everything. A dropped
 	// record still counts toward the scan allowance.
 	Keep func(record []byte) bool
+	// Each streams the NUL-terminated stdout records (and a final unterminated tail, last=true) to a
+	// callback that must not retain them; nothing is retained and the retained budget is untouched, so
+	// an index of any length can be scanned in constant memory. The callback returns errPinsStop to end
+	// the process early without an error, or any other error to end it and return that error. It
+	// replaces Keep.
+	Each func(record []byte, last bool) error
+	// Timeout shortens the invocation deadline for this call; it never extends the runner's default.
+	Timeout time.Duration
 }
 
+// errPinsStop is returned by a streaming callback that has seen enough.
+var errPinsStop = errors.New("stop streaming")
+
 type pinsOutput struct {
-	Stdout []byte
-	Stderr string // first bytes only, for diagnostics
-	Exit   int
+	Stdout  []byte
+	Stderr  string // first bytes only, for diagnostics
+	Exit    int
+	Stopped bool // a streaming callback ended the process early; Exit is then meaningless
 }
 
 type pinsRunner struct {
@@ -144,7 +156,11 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 	if err := r.ctx.Err(); err != nil {
 		return pinsOutput{}, err
 	}
-	ctx, cancel := context.WithTimeout(r.ctx, r.timeout)
+	timeout := r.timeout
+	if call.Timeout > 0 && call.Timeout < timeout {
+		timeout = call.Timeout
+	}
+	ctx, cancel := context.WithTimeout(r.ctx, timeout)
 	defer cancel()
 	args := pinsIsolation()
 	if call.Repo.GitDir != "" {
@@ -174,7 +190,11 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 	if err := c.Start(); err != nil {
 		return pinsOutput{}, err
 	}
-	kept, readErr := r.consume(pipe, call.Keep, &scanned, errs, cancel)
+	kept, readErr := r.consume(pipe, call.Keep, call.Each, &scanned, errs, cancel)
+	stopped := errors.Is(readErr, errPinsStop)
+	if stopped {
+		readErr = nil
+	}
 	waitErr := c.Wait()
 	if err := r.ctx.Err(); err != nil {
 		return pinsOutput{}, err
@@ -192,7 +212,10 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 	if readErr != nil {
 		return pinsOutput{}, readErr
 	}
-	out := pinsOutput{Stdout: kept, Stderr: stderr}
+	out := pinsOutput{Stdout: kept, Stderr: stderr, Stopped: stopped}
+	if stopped {
+		return out, nil
+	}
 	if waitErr == nil {
 		return out, nil
 	}
@@ -206,7 +229,7 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 
 // consume reads stdout incrementally. It stops the process as soon as the scan allowance or the shared
 // retained budget is exhausted.
-func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, scanned *int, errs *scanCounter, cancel context.CancelFunc) ([]byte, error) {
+func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, each func([]byte, bool) error, scanned *int, errs *scanCounter, cancel context.CancelFunc) ([]byte, error) {
 	var kept, pending []byte
 	buf := make([]byte, 32<<10)
 	retain := func(b []byte) error {
@@ -231,7 +254,25 @@ func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, scanned *in
 			if over {
 				return fail(&pinsLimitError{Kind: "scan"})
 			}
-			if keep == nil {
+			if each != nil {
+				pending = append(pending, buf[:n]...)
+				for {
+					i := bytes.IndexByte(pending, 0)
+					if i < 0 {
+						break
+					}
+					if i > pinsRecordLimit {
+						return fail(&pinsLimitError{Kind: "record"})
+					}
+					if e := each(pending[:i], false); e != nil {
+						return fail(e)
+					}
+					pending = pending[i+1:]
+				}
+				if len(pending) > pinsRecordLimit {
+					return fail(&pinsLimitError{Kind: "record"})
+				}
+			} else if keep == nil {
 				if e := retain(buf[:n]); e != nil {
 					return fail(e)
 				}
@@ -258,7 +299,12 @@ func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, scanned *in
 			}
 		}
 		if err != nil {
-			if len(pending) > 0 && keep != nil && keep(pending) {
+			if each != nil && len(pending) > 0 {
+				if e := each(pending, true); e != nil {
+					return fail(e)
+				}
+			}
+			if len(pending) > 0 && each == nil && keep != nil && keep(pending) {
 				if e := retain(pending); e != nil {
 					return fail(e)
 				}
