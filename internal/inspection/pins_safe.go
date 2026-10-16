@@ -382,7 +382,10 @@ func (s *pinsSafety) resolve(spec pinsSubmoduleSpec) (pinsResolved, *pinsSafetyR
 	if refusal, err := s.checkConfiguration(dirs); refusal != nil || err != nil {
 		return pinsResolved{}, refusal, err
 	}
-	dirs.cfg = s.configIdentity(dirs)
+	var cerr error
+	if dirs.cfg, cerr = s.configIdentity(dirs); cerr != nil {
+		return pinsResolved{}, unsafePath("the Git directory configuration cannot be inspected safely"), nil
+	}
 	return pinsResolved{Dirs: &dirs}, nil, nil
 }
 
@@ -652,26 +655,36 @@ func (s *pinsSafety) checkConfiguration(d pinsSubmoduleDirs) (*pinsSafetyRefusal
 	return nil, nil
 }
 
-// pinsFileFP identifies a file by device, inode, size and modification time; absent files compare equal.
+// pinsFileFP identifies a file by device, inode, size, modification and change time; absent files compare
+// equal. The change time catches a same-size in-place rewrite whose modification time was put back.
 type pinsFileFP struct {
 	Present bool
 	ID      pinsDirID
 	Size    int64
 	Mtime   int64
+	Ctime   int64
 }
 
-func (s *pinsSafety) configIdentity(d pinsSubmoduleDirs) [2]pinsFileFP {
+// configIdentity fingerprints config and config.worktree. Only absence is a value; any other error
+// (an unreadable entry, a changed path component) is returned, never compared as an empty value.
+func (s *pinsSafety) configIdentity(d pinsSubmoduleDirs) ([2]pinsFileFP, error) {
 	var out [2]pinsFileFP
 	for i, name := range []string{"config", "config.worktree"} {
 		info, err := pinsLstat(d.gitBase, d.gitRel+"/"+name)
-		if err != nil {
-			out[i] = pinsFileFP{Present: !errors.Is(err, fs.ErrNotExist)} // unreadable counts as changed later
+		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
+		if err != nil {
+			return out, fmt.Errorf("cannot inspect %s: %w", name, err)
+		}
 		id, _ := pinsFileID(info)
-		out[i] = pinsFileFP{Present: true, ID: id, Size: info.Size(), Mtime: info.ModTime().UnixNano()}
+		fp := pinsFileFP{Present: true, ID: id, Size: info.Size(), Mtime: info.ModTime().UnixNano()}
+		if st, ok := pinsStatOf(info); ok {
+			fp.Ctime = st.CtimeSec*1e9 + st.CtimeNsec
+		}
+		out[i] = fp
 	}
-	return out
+	return out, nil
 }
 
 // recheck verifies that both directories are still the ones that were validated: same path, same device
@@ -695,8 +708,8 @@ func (s *pinsSafety) recheck(d pinsSubmoduleDirs) error {
 		}
 		return errors.New("submodule Git directory changed: " + r.Message)
 	}
-	if s.configIdentity(d) != d.cfg {
-		return errors.New("submodule Git configuration changed after validation")
+	if cur, err := s.configIdentity(d); err != nil || cur != d.cfg {
+		return errors.New("submodule Git configuration changed or cannot be inspected after validation")
 	}
 	return nil
 }

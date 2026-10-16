@@ -130,7 +130,7 @@ func (a *pinsAuditor) evidence(run *pinsRunner, re pinsResolvedEntry, sub *PinsS
 		if _, lim := err.(*pinsLimitError); lim {
 			return err
 		}
-		refuse("submodule-path-unsafe", "the submodule directories changed after validation")
+		refuse("submodule-path-unsafe", "the submodule directories or configuration changed after validation")
 		return nil
 	}
 	repo := pinsGitRepo{GitDir: dirs.GitDir, WorkTree: dirs.WorkTree}
