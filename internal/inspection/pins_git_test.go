@@ -242,19 +242,19 @@ func TestPinsRegistryWorktreeGitmodulesNeverFollowedAndDifferenceReported(t *tes
 	// A symlink is reported and never followed, even when its target holds identical bytes.
 	target := filepath.Join(f.Root, "same-bytes")
 	writeFile(t, target, string(orig))
-	os.Remove(gm)
+	rmAll(t, gm)
 	if err := os.Symlink(target, gm); err != nil {
 		t.Fatal(err)
 	}
 	check("symlink", true)
 	// Absent and unreadable.
-	os.Remove(gm)
+	rmAll(t, gm)
 	check("absent", true)
 	if os.Geteuid() != 0 {
 		writeFile(t, gm, string(orig))
-		os.Chmod(gm, 0)
+		mustOS(t, os.Chmod(gm, 0))
 		check("unreadable", true)
-		os.Chmod(gm, 0o600)
+		mustOS(t, os.Chmod(gm, 0o600))
 	}
 	// A staged difference is reported against the HEAD blob.
 	writeFile(t, gm, string(orig)+"[submodule \"extra\"]\n\tpath = extra\n\turl = https://example.invalid/e\n")
@@ -340,34 +340,108 @@ func TestPinsRegistryRetainedBudgetIsAPinsLimit(t *testing.T) {
 	}
 }
 
-func TestPinsRegistryStartsOnlyAllowlistedGitCommands(t *testing.T) {
-	f := newPinsFixture(t)
-	gitLog, _ := pinsSentinels(t)
-	registryOf(t, f.Super)
-	allowed := map[string]bool{"rev-parse": true, "ls-tree": true, "ls-files": true, "config": true}
-	for _, line := range gitLog() {
-		sub := pinsSubcommand(strings.Fields(line))
-		if !allowed[sub] {
-			t.Errorf("command outside the process allowlist: %s", line)
+// pinsAllowlist is the normative process allowlist of specs/021-submodule-pin-audit/research.md, as the
+// argument shape after the isolation prefix and the explicit --git-dir/--work-tree. A path after --file is
+// shown as <PATH> and the symbolic ref as <REF>.
+var pinsAllowlist = []string{
+	"rev-parse --path-format=absolute --git-dir --git-path modules",
+	"config --no-includes --bool --get extensions.submodulePathConfig",
+	"rev-parse --verify --quiet HEAD",
+	"symbolic-ref -q HEAD",
+	"for-each-ref --format=%(refname) -- <REF>",
+	"ls-tree -r -z --full-tree HEAD",
+	"ls-files --stage -z",
+	"config --blob HEAD:.gitmodules --null --list --no-includes",
+	"config --blob :.gitmodules --null --list --no-includes",
+	"config --file - --null --list --no-includes",
+	"config --local --null --list --no-includes",
+	"config --file <PATH> --null --list --no-includes",
+}
+
+// pinsShape reduces one recorded invocation to its allowlist shape and reports whether the explicit
+// repository flags were present.
+func pinsShape(t *testing.T, line string) (shape string, explicit bool) {
+	t.Helper()
+	prefix := strings.Join(pinsIsolation(), " ") + " "
+	rest, ok := strings.CutPrefix(line, prefix)
+	if !ok {
+		t.Fatalf("invocation does not begin with the isolation prefix: %s", line)
+	}
+	f := strings.Fields(rest)
+	if len(f) > 0 && strings.HasPrefix(f[0], "--git-dir=") {
+		explicit, f = true, f[1:]
+		if len(f) > 0 && strings.HasPrefix(f[0], "--work-tree=") {
+			f = f[1:]
 		}
-		if sub != "rev-parse" && !strings.Contains(line, "--git-dir=") {
+	}
+	for i := range f {
+		if f[i] == "--file" && i+1 < len(f) && f[i+1] != "-" {
+			f[i+1] = "<PATH>"
+		}
+		if f[i] == "--" && i+1 < len(f) {
+			f[i+1] = "<REF>"
+		}
+	}
+	return strings.Join(f, " "), explicit
+}
+
+func requireAllowlisted(t *testing.T, lines []string, wantSeen ...string) {
+	t.Helper()
+	allowed := map[string]bool{}
+	for _, a := range pinsAllowlist {
+		allowed[a] = true
+	}
+	seen := map[string]bool{}
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		shape, explicit := pinsShape(t, line)
+		if !allowed[shape] {
+			t.Errorf("invocation outside the process allowlist: %s", shape)
+		}
+		seen[shape] = true
+		if !explicit && shape != pinsAllowlist[0] && shape != pinsAllowlist[11] {
 			t.Errorf("no explicit --git-dir: %s", line)
+		}
+	}
+	for _, w := range wantSeen {
+		if !seen[w] {
+			t.Errorf("expected invocation never ran: %s (saw %v)", w, seen)
 		}
 	}
 }
 
-// pinsSubcommand returns the Git subcommand of a recorded invocation, skipping the isolation prefix.
-func pinsSubcommand(args []string) string {
-	for i := 0; i < len(args); i++ {
-		switch {
-		case args[i] == "-c":
-			i++
-		case strings.HasPrefix(args[i], "-"):
-		default:
-			return args[i]
-		}
+func TestPinsRegistryStartsOnlyAllowlistedGitCommands(t *testing.T) {
+	f := newPinsFixture(t)
+	gitLog, _ := pinsSentinels(t)
+	run := newPinsRunner(context.Background())
+	l, err := newPinsSuperLayout(run, f.Super)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return ""
+	reg, err := pinsEnumerate(run, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := pinsResolveAll(newPinsSafety(l, run), reg)
+	if err != nil || resolved[0].Resolved.Dirs == nil {
+		t.Fatalf("%+v %v", resolved, err)
+	}
+	if _, err := pinsReadRemotes(run, pinsGitRepo{GitDir: resolved[0].Resolved.Dirs.GitDir, WorkTree: resolved[0].Resolved.Dirs.WorkTree}); err != nil {
+		t.Fatal(err)
+	}
+	requireAllowlisted(t, gitLog(), pinsAllowlist[0], pinsAllowlist[1], pinsAllowlist[2], pinsAllowlist[5], pinsAllowlist[6], pinsAllowlist[7],
+		pinsAllowlist[9], pinsAllowlist[10], pinsAllowlist[11])
+}
+
+func TestPinsRegistryUnbornStartsOnlyAllowlistedGitCommands(t *testing.T) {
+	pinsIsolateHome(t)
+	d := pinsRealDir(t)
+	git(t, d, "init", "-q", "-b", "main")
+	gitLog, _ := pinsSentinels(t)
+	registryOf(t, d)
+	requireAllowlisted(t, gitLog(), pinsAllowlist[2], pinsAllowlist[3], pinsAllowlist[4])
 }
 
 func TestPinsRegistryReadsConfiguredGitDirWithSubmodulePathConfig(t *testing.T) {
@@ -416,7 +490,7 @@ func TestPinsRegistryUnbornNeedsAMissingBranchRefNotACorruptOne(t *testing.T) {
 	if err := enumerateErr(t, d); err == nil {
 		t.Fatal("a corrupt branch ref is not an unborn HEAD")
 	}
-	os.Remove(ref)
+	rmAll(t, ref)
 	// A detached HEAD that does not resolve is corruption too.
 	writeFile(t, filepath.Join(d, ".git", "HEAD"), "garbage\n")
 	if err := enumerateErr(t, d); err == nil {

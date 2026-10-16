@@ -96,3 +96,17 @@ func requireSubmodulePathConfig(t *testing.T) {
 		t.Skipf("Git %s has no extensions.submodulePathConfig (2.56): exercised on the current Git lane only", f[2])
 	}
 }
+
+// mustOS fails the test on a fixture error instead of silently building a different fixture.
+func mustOS(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// rmAll removes a path (a link is removed, never followed); a missing path is fine.
+func rmAll(t *testing.T, path string) {
+	t.Helper()
+	mustOS(t, os.RemoveAll(path))
+}

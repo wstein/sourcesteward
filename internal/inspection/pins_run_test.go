@@ -166,7 +166,7 @@ func TestPinsRunnerDoesNotRefreshTheIndex(t *testing.T) {
 	idx := filepath.Join(f.Super, ".git", "modules", "member", "index")
 	// Touch a tracked file so a refreshing command would rewrite the index.
 	old := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(member, "file.txt"), old, old)
+	mustOS(t, os.Chtimes(filepath.Join(member, "file.txt"), old, old))
 	before, _ := os.ReadFile(idx)
 	st, _ := os.Stat(idx)
 	for _, args := range [][]string{{"ls-files", "--stage", "--debug", "-z"}, {"diff-index", "--cached", "--no-ext-diff", "--no-textconv", "HEAD"}, {"ls-files", "--others", "--exclude-standard", "-z"}} {
@@ -195,7 +195,7 @@ func TestPinsRunnerReportsAnOverlongRecordAsItsOwnLimit(t *testing.T) {
 func TestPinsRunnerStderrCountsTowardTheScanAllowance(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "git"), "#!/bin/sh\nyes 'noise noise noise' | head -c 200000 >&2\nsleep 1\n")
-	os.Chmod(filepath.Join(dir, "git"), 0o755)
+	mustOS(t, os.Chmod(filepath.Join(dir, "git"), 0o755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	run := newPinsRunner(context.Background())
 	run.scan = 1000
