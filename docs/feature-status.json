@@ -150,6 +150,12 @@
       "status": "planned",
       "spec": "../specs/024-hook-disclosure/spec.md",
       "evidence": null
+    },
+    {
+      "id": "026-release-hygiene",
+      "status": "planned",
+      "spec": "../specs/026-release-hygiene/spec.md",
+      "evidence": null
     }
   ]
 }
