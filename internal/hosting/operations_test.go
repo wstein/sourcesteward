@@ -88,3 +88,52 @@ func TestAPIRefusesMissingAndForeignIdentity(t *testing.T) {
 		}
 	}
 }
+func TestCIIncompleteEvidenceRetainsOnlyObservedRecords(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	check := `{"id":1,"name":"ci","status":"queued","conclusion":null,"head_sha":"` + sha + `","html_url":""}`
+	for name, response := range map[string]string{"missing": "{}", "null": "null", "wronghead": `{"total_count":1,"check_runs":[` + strings.Replace(check, sha, strings.Repeat("b", 40), 1) + `]}`, "duplicate": `{"total_count":2,"check_runs":[` + check + `,` + check + `]}`, "overflowtotal": `{"total_count":1001,"check_runs":[]}`, "prematureempty": `{"total_count":1,"check_runs":[]}`} {
+		t.Run(name, func(t *testing.T) {
+			d := fixtureDeps(func(_ context.Context, p string) ([]byte, error) {
+				if strings.Contains(p, "pulls/") {
+					return prJSON(sha), nil
+				}
+				return []byte(response), nil
+			})
+			r := inspect(context.Background(), ".", Options{Kind: "ci", Number: 3}, d)
+			if r.Status != "error" || r.Boundary.Complete || len(r.Diagnostics) == 0 {
+				t.Fatalf("%+v", r)
+			}
+		})
+	}
+	d := fixtureDeps(func(_ context.Context, p string) ([]byte, error) {
+		switch {
+		case strings.Contains(p, "pulls/"):
+			return prJSON(sha), nil
+		case strings.Contains(p, "check-runs"):
+			return []byte(`{"total_count":1,"check_runs":[` + check + `]}`), nil
+		default:
+			return []byte(`null`), nil
+		}
+	})
+	r := inspect(context.Background(), ".", Options{Kind: "ci", Number: 3}, d)
+	if r.Status != "error" || len(r.Checks) != 1 || len(r.Statuses) != 0 {
+		t.Fatalf("partial evidence %+v", r)
+	}
+}
+func TestOversizedResultAndMalformedUTF8Refuse(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	large := strings.Replace(string(prJSON(sha)), `"title":"title"`, `"title":"`+strings.Repeat("x", maxBytes)+`"`, 1)
+	d := fixtureDeps(func(context.Context, string) ([]byte, error) { return []byte(large), nil })
+	r := inspect(context.Background(), ".", Options{Kind: "pr", Number: 3}, d)
+	encoded, _ := json.Marshal(r)
+	if r.Status != "error" || len(encoded) > maxBytes {
+		t.Fatalf("unbounded result %d", len(encoded))
+	}
+	raw := append([]byte{}, prJSON(sha)...)
+	raw = []byte(strings.Replace(string(raw), `"title":"title"`, "\"title\":\"\xff\"", 1))
+	d = fixtureDeps(func(context.Context, string) ([]byte, error) { return raw, nil })
+	r = inspect(context.Background(), ".", Options{Kind: "pr", Number: 3}, d)
+	if r.Status != "error" {
+		t.Fatal("malformed UTF-8 silently replaced")
+	}
+}
