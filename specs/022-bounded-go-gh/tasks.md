@@ -32,7 +32,7 @@ Independent test: instrumented transports prove exact request count, bytes, clos
 Goal: preserve real native Git/jj operations, shared CLI behavior and published schemas.
 Independent test: both pinned backend lanes perform in-process fake HTTP PR/CI and native effects checks; executable fixtures retain dispatch/auth refusal coverage.
 
-- [x] T007 [P] [US3] Write failing shared-operation CLI/schema fixtures in internal/cli/hosting_test.go and internal/contracts/hosting_test.go using injected HTTP rather than canned Results; retain unchanged schema assertions.
+- [x] T007 [P] [US3] Write failing shared-operation CLI/schema fixtures in internal/cli/hosting_transport_test.go and internal/contracts/hosting_test.go using injected HTTP rather than canned Results; retain unchanged schema assertions.
 - [x] T008 [US3] Add InspectWithTransport in internal/hosting/operations.go and unexported CLI injection in internal/cli/hosting.go; adapt contract success fixtures without production endpoint overrides.
 - [x] T009 [US3] Adapt scripts/smoke-hosting.py and native operation/schema/effect tests in internal/contracts/hosting_test.go for real Git/jj fake-HTTP PR/CI success/effect conformance plus real binary/private-extension local/auth-refusal checks; preserve minimum/current CI lanes in .github/workflows/ci.yml.
 
@@ -40,8 +40,8 @@ Independent test: both pinned backend lanes perform in-process fake HTTP PR/CI a
 
 - [x] T010 [P] Update transport truth in docs/hosting.md, ARCHITECTURE.md and specs/022-bounded-go-gh/verification.md; document caller proxy trust, compressed-response refusal and limits without claiming live keyring/Enterprise acceptance.
 - [x] T011 Independently review integrated internal/hosting transport and all fixture changes; record findings/fixes in specs/022-bounded-go-gh/verification.md and rerun affected tests.
-- [ ] T012 Run make check, go test -race ./..., go mod verify, git diff --check and both native lanes; record exact commands/results and schema byte comparison in specs/022-bounded-go-gh/verification.md.
-- [ ] T013 Reconcile tasks/evidence, docs/progress.md and docs/feature-status.json; make focused Conventional Commits and open the separate source PR with exact-head CI gaps recorded.
+- [x] T012 Run make check, go test -race ./..., go mod verify, git diff --check and both native lanes; record exact commands/results and schema byte comparison in specs/022-bounded-go-gh/verification.md.
+- [x] T013 Reconcile tasks/evidence, docs/progress.md and docs/feature-status.json; make focused Conventional Commits and open the separate source PR with exact-head CI gaps recorded.
 
 ## Dependencies and parallel work
 

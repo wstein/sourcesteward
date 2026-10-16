@@ -4,7 +4,7 @@
 
 Spec 020 shared hosting inspection merged in [PR #40](https://github.com/wstein/sourcesteward/pull/40) at main ee86751. Spec 022 replaces only the API subprocess transport with pinned official go-gh/v2 HTTP middleware and owned bounded decoding. Native Git/jj operations, both CLI entry points and published schema/fixture bytes remain unchanged. Bounded gh authentication remains required for explicit remote reads; local resolution stays offline.
 
-Plan/tasks/independent analysis preceded implementation in separate transport and compatibility worktrees. Independent integrated source review clears the migration, including destination/lifecycle guards and concurrent host authentication. [Spec 022 verification](../specs/022-bounded-go-gh/verification.md) tracks exact local results and pending hosted CI. No live API/keyring acceptance, user-profile installation, release or deletion is implied.
+Plan/tasks/independent analysis preceded implementation in separate transport and compatibility worktrees. Independent integrated source review clears the migration, including destination/lifecycle guards and concurrent host authentication. [Spec 022 verification](../specs/022-bounded-go-gh/verification.md) tracks passing full local checks/race, both jj-version SDK fixtures,28 binary cases and pending hosted CI. [PR41](https://github.com/wstein/sourcesteward/pull/41) is the separate transport handoff. No live API/keyring acceptance, user-profile installation, release or deletion is implied.
 
 ## Earlier work: Spec 011 workspace and reference tidy
 
