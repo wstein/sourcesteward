@@ -45,7 +45,7 @@ effects: read-only, no network, no fetch
 
 bundledock   pin 5d3f37c…  checkout 5d3f37c… (same)  clean
   publication: reachable from origin/main
-workharbor   pin c27fc9e…  checkout 54a002f… (diverged, ahead 0, behind 12)  clean
+workharbor   pin c27fc9e…  checkout 54a002f… (diverged, ahead 3, behind 12)  clean
   publication: UNREACHABLE (no remote-tracking ref contains it)
 
 findings: 1 error, 1 warning
