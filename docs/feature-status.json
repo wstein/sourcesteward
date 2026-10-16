@@ -162,6 +162,12 @@
       "status": "planned",
       "spec": "../specs/023-multi-repo-inventory/spec.md",
       "evidence": null
+    },
+    {
+      "id": "027-inventory-limits",
+      "status": "planned",
+      "spec": "../specs/027-inventory-limits/spec.md",
+      "evidence": null
     }
   ]
 }
