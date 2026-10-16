@@ -126,3 +126,8 @@ Validation passed:
 Author source/content review found no remaining command/effect mismatch. Independent
 human review, hosted CI and deployment of merged main remain PR/publication gates;
 no independent reviewer acceptance or live Pages publication is claimed here.
+
+Opened [PR42](https://github.com/wstein/sourcesteward/pull/42) with focused CLI-guide,
+Pages and spec/evidence commits. Committed-source package/check-site passed for
+916ac59 (30 pages, unchanged schemas). The handoff update changes only internal
+spec/progress records; hosted exact-head CI and merge/main publication remain pending.
