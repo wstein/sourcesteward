@@ -37,3 +37,18 @@
 **Decision**: Add the executable source and local build/documentation path, not an extension release or live user installation workflow.
 **Rationale**: SourceSteward repository name does not follow gh's default gh-* extension discovery convention; local directory installation needs a correctly named executable/directory and deserves explicit docs. `make extension` may build `bin/gh-jj/gh-jj`; `gh extension install ./bin/gh-jj` is documented, and isolated temporary GH_CONFIG_DIR fixture installation verifies actual gh dispatch. Stable AMD64/ARM64 assets and distribution are later authorized work, not implied by an entry point.
 **Primary source**: [creating GitHub CLI extensions](https://docs.github.com/en/github-cli/github-cli/creating-github-cli-extensions), inspected 2026-10-16. This feature makes no claim that `gh extension install wstein/sourcesteward` works.
+
+## Official go-gh SDK evaluation deferred by owner
+
+The owner chose to keep the reviewed bounded gh api adapter in this PR and evaluate
+`github.com/cli/go-gh/v2` separately. Official stable v2.16.2 was inspected: REST
+clients provide context-aware requests and configurable transport; subprocess
+ExecContext buffers output without this feature's cap, and TokenForHost may shell
+out for system-keyring authentication. A future SDK adapter must retain explicit
+hosting selection, bounded auth/response/error handling, redacted diagnostics and
+configuration-path checks. It must not use repository.Current() to replace native
+jj ownership or context resolution. No SDK dependency was added here.
+
+Sources: [go-gh](https://github.com/cli/go-gh), [REST API](https://pkg.go.dev/github.com/cli/go-gh/v2/pkg/api), [authentication](https://pkg.go.dev/github.com/cli/go-gh/v2/pkg/auth).
+
+SDK follow-up should inspect APIHost configuration resolution, context/bounds for keyring fallback, response/error-body limits, redirects and text sanitization. These are transport-contract questions rather than reasons to replace native Git/jj discovery with implicit Git-only context.
