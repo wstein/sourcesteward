@@ -304,6 +304,12 @@ type pinsDirtyBudget struct {
 	Time    time.Duration
 }
 
+// pinsNow is the clock of the dirty scan; tests move it.
+var pinsNow = time.Now
+
+// errPinsBudget ends a tracked-file walk when the dirty-scan time budget passed.
+var errPinsBudget = errors.New("dirty-scan budget exceeded")
+
 var pinsDefaultDirtyBudget = pinsDirtyBudget{Entries: 20000, Time: 3 * time.Second}
 
 const pinsBudgetReason = "dirty-scan budget exceeded (3 seconds or 20,000 entries)"
@@ -331,10 +337,16 @@ func pinsIndexPathProblem(p string) string {
 // pinsTrackedStat lstats a tracked path below the worktree without following a symlink at any component.
 // A nil result with no error means the file is not there as the index recorded it (missing, or below a
 // component that is no longer a directory); dirs caches the directories already verified.
-func pinsTrackedStat(root *os.Root, path string, dirs map[string]bool) (*pinsStatData, error) {
+func pinsTrackedStat(root *os.Root, path string, dirs map[string]bool, expired func() bool) (*pinsStatData, error) {
 	parts := strings.Split(path, "/")
+	end := 0
 	for i := range parts[:len(parts)-1] {
-		prefix := strings.Join(parts[:i+1], "/")
+		if expired() {
+			return nil, errPinsBudget
+		}
+		end += len(parts[i])
+		prefix := path[:end]
+		end++ // the slash
 		ok, seen := dirs[prefix]
 		if !seen {
 			info, err := root.Lstat(prefix)
@@ -552,7 +564,7 @@ func (s *pinsDirtyScan) worktree() error {
 	out, bound, err := s.call([]string{"ls-files", "--stage", "--debug", "-z"}, func(rec []byte, last bool) error {
 		return parser.feed(rec, last, func(e pinsIndexEntry) error {
 			s.entries++
-			if s.entries > s.budget.Entries || time.Now().After(s.deadline) {
+			if s.entries > s.budget.Entries || pinsNow().After(s.deadline) {
 				ended = true
 				s.downgrade(&s.tracked, pinsBudgetReason)
 				return errPinsStop
@@ -564,7 +576,11 @@ func (s *pinsDirtyScan) worktree() error {
 			var st *pinsStatData
 			if e.Flags&(pinsFlagSkipWorktree|pinsFlagAssumeUnchanged|pinsFlagIntentToAdd) == 0 && e.Stage == 0 && e.Mode != "160000" {
 				var serr error
-				if st, serr = pinsTrackedStat(root, e.Path, dirs); serr != nil {
+				if st, serr = pinsTrackedStat(root, e.Path, dirs, func() bool { return pinsNow().After(s.deadline) }); errors.Is(serr, errPinsBudget) {
+					ended = true
+					s.downgrade(&s.tracked, pinsBudgetReason)
+					return errPinsStop
+				} else if serr != nil {
 					s.downgrade(&s.tracked, "a tracked file cannot be inspected: "+serr.Error())
 					return nil
 				}

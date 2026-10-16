@@ -365,3 +365,35 @@ func TestPinsDirtyScanAllowanceIsALimitNotUnknown(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testing.T) {
+	c := newDirtyCase(t, newPinsFixture(t))
+	deep := strings.Repeat("d/", 1500) + "f"
+	writeFile(t, filepath.Join(c.wt, deep), "x")
+	git(t, c.wt, "add", "-A")
+	git(t, c.wt, "commit", "-qm", "deep")
+	var err error
+	c.head, err = pinsReadHead(c.run, pinsGitRepo{GitDir: c.dirs.GitDir, WorkTree: c.wt})
+	mustOS(t, err)
+	settleIndex(t, c.dirs.GitDir)
+	requireDirty(t, c.state(t), "absent", "absent", "")
+
+	// Time passes while one path is walked: the walk stops with the budget reason.
+	calls := 0
+	old := pinsNow
+	pinsNow = func() time.Time {
+		calls++
+		if calls > 20 {
+			return time.Now().Add(time.Hour)
+		}
+		return time.Now()
+	}
+	t.Cleanup(func() { pinsNow = old })
+	got := c.state(t)
+	if got.Tracked != "unknown" || !strings.Contains(got.Reason, "budget") {
+		t.Fatalf("%+v", got)
+	}
+	if calls > 200 {
+		t.Fatalf("the deadline was consulted %d times: it is not checked per path component", calls)
+	}
+}
