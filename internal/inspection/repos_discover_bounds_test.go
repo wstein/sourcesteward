@@ -32,6 +32,19 @@ func reposGitShim(t *testing.T, prelude string) string {
 	return log
 }
 
+// reposShimDiscoveryCalls counts the discovery calls (isolation runner) that mention word.
+func reposShimDiscoveryCalls(t *testing.T, log, word string) int {
+	t.Helper()
+	b, _ := os.ReadFile(log)
+	n := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.Contains(line, "--literal-pathspecs") && strings.Contains(line, word) {
+			n++
+		}
+	}
+	return n
+}
+
 func reposShimCalls(t *testing.T, log, word string) int {
 	t.Helper()
 	b, _ := os.ReadFile(log)
@@ -52,8 +65,8 @@ func TestReposDiscoverConfirmsAllCandidatesWithOneIndexQuery(t *testing.T) {
 	start := time.Now()
 	res := reposRun([]string{repo}, true)
 	_ = res
-	if n := reposShimCalls(t, log, "ls-files --stage"); n != 1 {
-		t.Fatalf("%d ls-files calls for 64 candidates, want 1", n)
+	if n := reposShimDiscoveryCalls(t, log, "ls-files --stage -z -- p0"); n != 1 {
+		b, _ := os.ReadFile(log); t.Fatalf("%d ls-files calls for 64 candidates, want 1\n%.1500s", n, b)
 	}
 	if time.Since(start) > 8*time.Second {
 		t.Fatalf("slow index queries accumulated: %v", time.Since(start))

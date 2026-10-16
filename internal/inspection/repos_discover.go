@@ -172,18 +172,32 @@ func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunne
 				err: &ReposError{Code: ReposCodeMemberFailed, Message: fmt.Sprintf("worker panic during discovery: %v", r)}}
 		}
 	}()
+	// All of this parent's Git calls share ONE per-call bound inside the total (FR-013): a parent with many
+	// candidates cannot spend more than that, whatever the number of calls.
+	parentCtx, parentCancel := context.WithTimeout(totalCtx, b.call)
+	defer parentCancel()
 	failed := func(err error, reason string) reposParentDiscovery {
-		if code, msg := reposMapError(callerCtx, totalCtx, err); code != "" {
-			return reposParentDiscovery{status: "failed", reason: msg, err: &ReposError{Code: code, Message: msg}}
+		// What was learned before the failure (ignored paths and their notes) is kept.
+		out := reposParentDiscovery{status: "failed", ignored: d.ignored, notes: d.notes}
+		code, msg := reposMapError(callerCtx, totalCtx, err)
+		if code == "" && err != nil && parentCtx.Err() != nil {
+			code, msg = ReposCodeInventoryTimeout, fmt.Sprintf("per-call deadline of %d seconds exceeded", ReposPerRepositorySeconds)
 		}
-		return reposParentDiscovery{status: "failed", reason: reason, err: &ReposError{Code: ReposCodeDiscoveryFailed, Message: reason}}
+		if code == "" {
+			code, msg = ReposCodeDiscoveryFailed, reason
+		}
+		out.reason, out.err = msg, &ReposError{Code: code, Message: msg}
+		return out
 	}
 	repo := insp.Repository
 	// A bare repository has no checkout and an unborn HEAD no registration: nothing to discover, no process.
 	if repo.Bare || repo.Head.State == "unborn" {
 		return reposParentDiscovery{status: "ok"}
 	}
-	run := newRunner(totalCtx)
+	run := newRunner(parentCtx)
+	if run.timeout > b.call {
+		run.timeout = b.call
+	}
 	layout, err := newPinsSuperLayout(run, root)
 	if err != nil {
 		return failed(err, "cannot read the superproject Git directory layout")
@@ -280,25 +294,36 @@ func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunne
 		d.ignored++
 		d.notes = append(d.notes, "discovery-ignored: "+reposEscapePath(p))
 	}
+	var valid []string
 	for _, p := range paths {
 		if !isLexicallyValidSubmodulePath(p) {
 			ignore(p)
 			continue
 		}
-		out, err := run.run(pinsCall{Dir: root, Args: []string{"ls-files", "--stage", "-z", "--", p}, Keep: func(rec []byte) bool {
+		valid = append(valid, p)
+	}
+	// One index query confirms every candidate: a record with mode 160000 and exactly that path.
+	gitlinks := map[string]bool{}
+	if len(valid) > 0 {
+		args := append([]string{"ls-files", "--stage", "-z", "--"}, valid...)
+		out, err := run.run(pinsCall{Dir: root, Args: args, Keep: func(rec []byte) bool {
 			return strings.HasPrefix(string(rec), "160000 ")
 		}})
-		var limit *pinsLimitError
 		switch {
-		case errors.As(err, &limit) && limit.Kind != "deadline":
-			ignore(p) // a directory with too many files is no gitlink
-			continue
 		case err != nil:
-			return failed(err, "cannot confirm a registered path in the index")
+			return failed(err, "cannot confirm the registered paths in the index")
 		case out.Exit != 0:
 			return failed(nil, "git ls-files failed")
 		}
-		if !reposIsGitlink(out.Stdout, p) {
+		for _, rec := range strings.Split(string(out.Stdout), "\x00") {
+			meta, name, ok := strings.Cut(rec, "\t")
+			if f := strings.Fields(meta); ok && len(f) == 3 && f[0] == "160000" {
+				gitlinks[name] = true
+			}
+		}
+	}
+	for _, p := range valid {
+		if !gitlinks[p] {
 			ignore(p)
 			continue
 		}
@@ -310,7 +335,19 @@ func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunne
 		res, refusal, err := safety.resolve(spec)
 		switch {
 		case err != nil:
-			return failed(err, "cannot validate a submodule location")
+			// A failure of the whole discovery (cancellation, a deadline) ends it; a limit or error inside
+			// this one submodule is this submodule's own entry and leaves its siblings alone.
+			var limit *pinsLimitError
+			switch {
+			case parentCtx.Err() != nil:
+				return failed(err, "cannot validate a submodule location")
+			case errors.As(err, &limit) && limit.Kind == "entries":
+				d.candidates = append(d.candidates, reposCandidate{rel: p, abs: abs, kind: "unsafe", code: ReposCodeDiscoveryLimit, msg: "the submodule Git directory has too many entries to validate"})
+			case errors.As(err, &limit) && limit.Kind == "deadline":
+				return failed(err, "cannot validate a submodule location")
+			default:
+				d.candidates = append(d.candidates, reposCandidate{rel: p, abs: abs, kind: "unsafe", code: ReposCodePathUnsafe, msg: "the submodule location cannot be validated: " + err.Error()})
+			}
 		case refusal != nil:
 			d.candidates = append(d.candidates, reposCandidate{rel: p, abs: abs, kind: "unsafe", code: ReposCodePathUnsafe, msg: refusal.Message})
 		case res.Uninitialized:
