@@ -6,7 +6,7 @@
 
 ## Phase 1: Analysis
 
-- [ ] T001 [Process, SC-002] Record independent cross-artifact analysis in specs/023-multi-repo-inventory/analysis.md and resolve every critical, high and medium finding before code.
+- [X] T001 [Process, SC-002] Record independent cross-artifact analysis in specs/023-multi-repo-inventory/analysis.md and resolve every critical, high and medium finding before code.
 
 ## WI1 — Contract, types and command skeleton
 
