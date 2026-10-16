@@ -148,3 +148,47 @@ esac
 	}
 	valid(t, s, out.Bytes())
 }
+
+func TestRealJJHostingContracts(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("STW_REQUIRE_JJ") == "1" {
+			t.Fatal("mandatory jj unavailable")
+		}
+		t.Skip("jj unavailable outside mandatory conformance")
+	}
+	s := schema(t, "hosting")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("JJ_CONFIG", "")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "gitconfig"))
+	jj := func(args ...string) {
+		t.Helper()
+		c := exec.Command("jj", args...)
+		if raw, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("jj setup: %v %s", err, raw)
+		}
+	}
+	root := t.TempDir()
+	standalone := filepath.Join(root, "standalone")
+	colocated := filepath.Join(root, "colocated")
+	secondary := filepath.Join(root, "secondary")
+	jj("git", "init", "--no-colocate", standalone)
+	jj("git", "init", "--colocate", colocated)
+	for _, path := range []string{standalone, colocated} {
+		jj("-R", path, "git", "remote", "add", "custom", "https://github.com/example/project.git")
+	}
+	jj("-R", standalone, "workspace", "add", "--name", "secondary", secondary)
+	for _, path := range []string{standalone, colocated, secondary} {
+		var out, diag bytes.Buffer
+		code := cli.Run(context.Background(), "test", []string{"hosting", "repo", path, "--json"}, &out, &diag)
+		if code != 0 {
+			t.Fatalf("jj hosting exit=%d: %s %s", code, &out, &diag)
+		}
+		valid(t, s, out.Bytes())
+		v := value(t, out.Bytes()).(map[string]any)
+		if v["backend"] != "jj" {
+			t.Fatalf("wrong native identity: %s", &out)
+		}
+	}
+}
