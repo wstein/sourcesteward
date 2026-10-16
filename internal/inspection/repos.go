@@ -5,10 +5,14 @@ import "context"
 
 // Repos executes the multi-repository inventory operation across explicit and discovered members.
 func Repos(ctx context.Context, o ReposOptions) ReposResult {
-	return repos(ctx, o, Inspect, Inventory)
+	return reposWithRunner(ctx, o, Inspect, Inventory, runGit)
 }
 
 func repos(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc) ReposResult {
+	return reposWithRunner(ctx, o, inspectFn, inventoryFn, runGit)
+}
+
+func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc, run runner) ReposResult {
 	if err := ValidateReposOptions(o); err != nil {
 		return ReposResult{
 			SchemaVersion: 1,
@@ -28,6 +32,11 @@ func repos(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventory
 	inspectExplicitEntries(ctx, entries, inspectFn)
 	computeContainment(entries)
 	inventoryEntries(ctx, entries, inventoryFn)
+
+	if o.Submodules {
+		discoverSubmodules(ctx, &entries, inspectFn, inventoryFn, run)
+		computeContainment(entries)
+	}
 
 	overallStatus := ReposOverallStatus(entries)
 
