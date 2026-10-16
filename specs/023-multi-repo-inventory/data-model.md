@@ -43,11 +43,11 @@ Text fields are bounded and are data. Codes, statuses, limits, the facts derivat
 
 ## Summary
 
-`{entries, by_status: {ok, partial, error, skipped}, by_backend: {git, jj, other}, dirty: {true, false, unknown}, stale_workspaces, foreign_workspaces, unverified_workspaces, conflicted_references, skipped_uninitialized, discovery_not_applicable (explicit entries only) (explicit entries only), inventories_omitted}`, all integers, computed from `entries`.
+`{entries, by_status: {ok, partial, error, skipped}, by_backend: {git, jj, other}, dirty: {true, false, unknown}, stale_workspaces, foreign_workspaces, unverified_workspaces, conflicted_references, skipped_uninitialized, discovery_not_applicable (explicit entries only), inventories_omitted}`, all integers, computed from `entries`.
 
 ## Invariants
 
 - `entries[i].index == i`; `parent` and `duplicate_of` point to smaller indexes; `contained_in` may point to any index.
 - `status` `ok` implies `error` null and `inventory` non-null with inventory status `ok`; `partial` has an `error` (`inventory-partial`, `discovery-failed` or `discovery-limit`) and, unless the cause is discovery only, an inventory with status `partial`.
 - `error.code` is from the spec's error-code table or the inventory's vocabulary.
-- `inventory` and `facts` per entry status follow the table in the spec (Entry status); an entry failing the identity inspection or an entry check never runs an inventory, so `inventory` and `facts` are null; omission (`inventory-limit`) nulls `inventory` and keeps `facts`.
+- `inventory` and `facts` per entry status follow the table in the spec (Entry status); an entry failing the identity inspection or an entry check never runs an inventory, so `inventory` and `facts` are null; omission (`output-limit`) nulls `inventory` and keeps `facts`.
