@@ -206,3 +206,28 @@ func TestPinsPublicationCancellationIsAnError(t *testing.T) {
 		t.Fatal("cancellation became an answer")
 	}
 }
+
+func TestPinsPublicationShallowCannotClaimUnreachable(t *testing.T) {
+	f := newPinsFixture(t)
+	git(t, f.Sub, "config", "uploadpack.allowAnySHA1InWant", "true")
+	c2 := commitIn(t, f.Sub, "two")
+	commitIn(t, f.Sub, "three")
+	dst, repo := cloneIn(t, f.Sub, "--depth", "1", "--branch", "main")
+	// What `git submodule update --depth 1` does for an older pin: fetch it by name, shallow.
+	git(t, dst, "fetch", "-q", "--depth", "1", "origin", c2)
+	run := newPinsRunner(context.Background())
+	d := pinsSubmoduleDirs{GitDir: repo.GitDir, WorkTree: repo.WorkTree, gitBase: dst, gitRel: ".git"}
+	facts, err := pinsReadFacts(run, d)
+	if err != nil || !facts.Shallow {
+		t.Fatalf("%+v %v", facts, err)
+	}
+	p, err := pinsPublish(run, repo, d, facts, c2)
+	if err != nil || p.Status != "unknown" || !strings.Contains(p.Reason, "shallow") || p.ObjectAbsent {
+		t.Fatalf("a cut history is not evidence of absence: %+v %v", p, err)
+	}
+	// A positive stays positive.
+	head, _ := pinsReadHead(run, repo)
+	if p, _ = pinsPublish(run, repo, d, facts, *head.Commit); p.Status != "reachable" {
+		t.Fatalf("%+v", p)
+	}
+}
