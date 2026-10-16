@@ -49,3 +49,5 @@ from the installed binary; check its version and help first.
 - [Tidy guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/tidy.md): native ancestry reference plans, retained uncertainty, optional private state and authorized local cleanup and separately selected owned workspace retirement with durable recovery.
 
 - [GitHub inspection](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/hosting.md): shared stw/gh-jj read-only repository, PR and exact-head CI contracts.
+
+- [Submodule pin audit](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/pins.md): planned read-only `stw pins` Git submodule evidence, findings, exit status 3 and limits.

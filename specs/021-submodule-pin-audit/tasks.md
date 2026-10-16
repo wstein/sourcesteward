@@ -35,7 +35,7 @@
 
 ## WI4 — Documentation and contract publication
 
-- [ ] T018 [P] [FR-015] Write docs/pins.md (command, evidence, findings, exit statuses, limits, what a finding does and does not prove); update docs/backends.md (Git supported, jj and GitButler unsupported for submodules), docs/agent-guide.md (exit status 3 and the precedence), docs/json-contracts.md, README scope line, docs/README.md knowledge map and llms.txt; keep `python3 scripts/check-docs.py` passing.
+- [X] T018 [P] [FR-015] Write docs/pins.md (command, evidence, findings, exit statuses, limits, what a finding does and does not prove); update docs/backends.md (Git supported, jj and GitButler unsupported for submodules), docs/agent-guide.md (exit status 3 and the precedence), docs/json-contracts.md, README scope line, docs/README.md knowledge map and llms.txt; keep `python3 scripts/check-docs.py` passing.
 - [ ] T019 [P] Ensure the generated command reference includes `stw pins` through cmd/stw-docs and the existing docs tests; do not run a site build without approval.
 
 ## WI5 — Conformance and acceptance evidence
