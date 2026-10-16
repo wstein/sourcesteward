@@ -185,3 +185,58 @@ func TestReposFixtureEntriesMatchRealOutput(t *testing.T) {
 	same("duplicate", find(run(f.clean, f.linked), "error"), reposObject(t, "duplicate")["entries"].([]any)[1].(map[string]any))
 	same("not-repository-root", find(run(filepath.Join(f.clean, "subdir")), "error"), reposObject(t, "error")["entries"].([]any)[0].(map[string]any))
 }
+
+// Every error code `repos` itself raises must produce a schema-valid result. The base is a real result
+// (so the embedded inventory and facts are real); each case sets the entry to the shape the data model
+// prescribes for that code.
+func TestReposEveryCodeShapeValidatesAgainstTheSchema(t *testing.T) {
+	f := newReposRealFixture(t)
+	var out, diag bytes.Buffer
+	cli.Run(context.Background(), "test", []string{"repos", f.clean, "--json"}, &out, &diag)
+	var base inspection.ReposResult
+	if err := json.Unmarshal(out.Bytes(), &base); err != nil {
+		t.Fatal(err)
+	}
+	repos := schema(t, "repos")
+	for _, tc := range []struct {
+		code, status       string
+		keepInv, keepFacts bool
+	}{
+		{"output-limit", "error", false, true},
+		{"discovery-failed", "partial", true, true},
+		{"discovery-limit", "partial", true, true},
+		{"inventory-timeout", "error", false, false},
+		{"inventory-not-started", "error", false, false},
+		{"canceled", "error", false, false},
+		{"member-failed", "error", false, false},
+		{"changed-repository", "error", false, false},
+		{"path-unsafe", "error", false, false},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			res := base
+			res.Entries = append([]inspection.ReposEntry(nil), base.Entries...)
+			e := res.Entries[0]
+			e.Status, e.Error = tc.status, &inspection.ReposError{Code: tc.code, Message: tc.code + " message"}
+			if !tc.keepInv {
+				e.Inventory = nil
+			}
+			if !tc.keepFacts {
+				e.Facts = nil
+			}
+			if tc.code == "output-limit" {
+				res.Summary.InventoriesOmitted = 1
+			}
+			res.Entries[0] = e
+			res.Status = "error"
+			if tc.status == "partial" {
+				res.Status = "partial"
+			}
+			res.Boundary.Complete = false
+			raw, err := json.Marshal(res)
+			if err != nil {
+				t.Fatal(err)
+			}
+			valid(t, repos, raw)
+		})
+	}
+}
