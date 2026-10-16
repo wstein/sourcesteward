@@ -14,7 +14,7 @@ Recorded failing behavior tests before native remote, hosting types, transport, 
 - Native remote tests passed with jj 0.45.1 and 0.46.0; full inspection suite and vet passed in the native author lane.
 - Shared CLI/hosting tests and actual native hosting schema outputs passed; transport and CI negative fixtures passed race checks in the core lane.
 - Current jj 0.46.0 native/private-extension conformance: 22 cases passed with byte/mode-identical fixture state and fixed GET-only fake API reads. Actual gh dispatch used disposable private config/data/state, never the user's installed extension profile.
-- Minimum jj 0.45.1 native/private-extension conformance also passed all 22 cases. Local Git was Homebrew Git 2.54.0; minimum Git remains a hosted CI gate.
+- Minimum jj 0.45.1 native/private-extension conformance also passed all 22 cases. Local Git was Homebrew Git 2.56.0; minimum Git remains a hosted CI gate.
 - Integrated make check and go test -race ./... passed with native current jj and required sandbox; after the final small network-attempt reporting correction, focused hosting race tests and final integrated make check passed. Refreshed binaries passed all 22 cases again on each supported jj version. CI workflow actionlint passed. Documentation checks, all seven Hugo/schema-publication fixtures and twelve documentation tests passed.
 
 ## Limits
