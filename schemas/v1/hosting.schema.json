@@ -998,17 +998,6 @@
             }
           }
         }
-      },
-      "else": {
-        "properties": {
-          "boundary": {
-            "properties": {
-              "network": {
-                "const": true
-              }
-            }
-          }
-        }
       }
     },
     {
@@ -1029,6 +1018,13 @@
         "properties": {
           "pull_request": {
             "type": "object"
+          },
+          "boundary": {
+            "properties": {
+              "network": {
+                "const": true
+              }
+            }
           }
         }
       }
