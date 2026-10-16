@@ -138,6 +138,12 @@
       "status": "planned",
       "spec": "../specs/021-submodule-pin-audit/spec.md",
       "evidence": null
+    },
+    {
+      "id": "025-pr-merge-state",
+      "status": "planned",
+      "spec": "../specs/025-pr-merge-state/spec.md",
+      "evidence": null
     }
   ]
 }
