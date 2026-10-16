@@ -1,50 +1,6 @@
 # Data model: Release hygiene
 
-Gate ids and waivability are defined once in the [spec gate table](spec.md#release-gates-normative) and codes and exit statuses in the [code table](spec.md#codes-normative); `scripts/release-gates.json` mirrors them and a test compares the two. Platforms, evidence classes, approvals and smoke ids are defined in the spec and not repeated here. All text fields are bounded (at most 2,000 bytes) and are data.
-
-## PlanResult (`release.py plan --json`, `tool_schema: 1`, not a `schemas/v1` file)
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `tool_schema` | integer | `1` |
-| `command` | string | `plan`, `build` or `verify` |
-| `version` | string | as given |
-| `commit` | string \| null | full 40-hex code commit |
-| `status` | `pass` \| `fail` \| `refused` | `refused` for exit 3 only; usage errors (exit 2) produce no JSON |
-| `gates` | Gate[] | one per gate id, sorted by id |
-| `platforms` | PlatformResult[] | exactly the three candidate platforms of the platform table (`darwin/arm64`, `linux/amd64`, `linux/arm64`), sorted; out-of-scope platforms are never listed |
-| `effects` | Effects | what ran and what was written |
-| `error` | `{code, message}` \| null | refusals only |
-
-### Gate
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | string | `G01`..`G14` |
-| `outcome` | `pass` \| `fail` \| `not-run` \| `waived` | |
-| `codes` | string[] | codes from the spec code table; empty on pass |
-| `evidence` | string \| null | evidence class or `null` |
-| `detail` | string | bounded |
-
-### PlatformResult
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `platform` | string | `linux/amd64`, ... |
-| `included` | boolean | false for a platform without required evidence |
-| `reason` | string \| null | `evidence-missing` when not included |
-| `evidence` | string[] | classes found in the record |
-| `execution` | `run` \| `not-run` \| `n/a` | `verify` only; `not-run` for a foreign platform |
-| `stamp` | `execution` \| `none` | `verify` only; the stamp is verified only by running the binary (build information shows no `-ldflags` under `-trimpath`); never stored in the manifest |
-
-### Effects
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `linked_binary` | boolean | false for `plan` |
-| `network` | boolean | false always for `plan`, `build`, `verify` |
-| `wrote` | string[] | paths in the repository checkout, relative; empty for `plan` (temporary directories and caches are not listed) |
-| `commands` | string[] | argument vectors that were run, bounded to 50 |
+Gate ids and waivability are defined once in the [spec gate table](spec.md#release-gates-normative) and codes and exit statuses in the [code table](spec.md#codes-normative); `scripts/release-gates.json` is the single machine-readable source for gate ids, codes, waivable flags and `hidden_commands`, and a test checks it against the code table. Platforms, evidence classes, approvals and smoke ids are defined in the spec and not repeated here. Text fields are data: control characters are removed before printing and each field is truncated at 2,000 bytes with a trailing `…`. `release.py` prints text only; the two JSON documents below are the manifest it writes and the machine block of the record it reads.
 
 ## ReleaseManifest (`release-manifest.json`, `manifest_schema: 1`)
 
@@ -71,30 +27,43 @@ Gate ids and waivability are defined once in the [spec gate table](spec.md#relea
 | `archive` | string | file name |
 | `archive_sha256` | string | listed in `SHA256SUMS` |
 
-## ReadinessRecord
+The manifest never claims a stamp verification: nothing in `build` executes the binary, and the manifest is anchored by `SHA256SUMS`. Stamp verification is reported by `verify` and recorded in the record.
 
-Markdown with fixed sections, defined in [contracts/readiness-record.md](contracts/readiness-record.md). Entries: Gate row (id, outcome, evidence class, reference, date), Approval row (A-id, date, who, verbatim quote, named values), Platform row, NotRun list.
+## MachineRecord (fenced `json` block of the readiness record, `record_schema: 1`)
 
-## Example JSON
+| Field | Type | Notes |
+| --- | --- | --- |
+| `record_schema` | integer | `1` |
+| `version` | string | version format |
+| `code_commit` | string | 40-hex |
+| `status` | `draft` \| `ready` \| `released` \| `abandoned` | |
+| `anchor` | string \| null | SHA-256 of `SHA256SUMS` from `build` |
+| `platforms` | PlatformEntry[] | candidate platforms |
+| `gates` | GateEntry[] | `G01`..`G14` |
+| `reproducibility` | ReproEntry[] | per released platform |
+| `approvals` | Approval[] | `A1` to `A4`, waivers |
+| `prepublication` | PrePublication[] | per released platform |
+
+| Entry | Fields |
+| --- | --- |
+| PlatformEntry | `platform`, `included` (boolean), `evidence`: `[{class, commit, reference, date, anchor}]` (`anchor` required for `manual`) |
+| GateEntry | `id`, `outcome` (`pass`, `fail`, `not-run`, `waived`), `evidence_class` (or `null`), `reference`, `reason` (for `not-run` and `waived`) |
+| ReproEntry | `platform`, `outcome` (`match`, `mismatch`, `waived`, `not-run`), `binary_sha256`: two hashes, `hosts`: one or two host strings |
+| Approval | `id` (`A1`..`A4` or `waiver:G12`), `date`, `who` (who relayed it), `quote` (verbatim), `commit`, `version`, `platforms`, `tag` (A2/A3) |
+| PrePublication | `platform`, `verify` (`pass`, `fail`, `not-run`), `buildinfo` (`pass`, `fail`), `stamp` (`execution`, `none`), `host`, `evidence_class`, `anchor` |
+
+`plan --final` checks: all evidence and A1 commits equal `code_commit`; every included platform has a passing PrePublication entry whose `anchor` equals `anchor`; `reproducibility` is `match` (equal hashes) or `waived` with a waiver approval; A1 and A2 quotes contain the version, every platform (A1) or the tag (A2), and at least 12 hex characters of the commit.
+
+## Example (abbreviated, `plan --final` report lines)
+
+```text
+G07 fail notices-incomplete  github.com/spf13/cobra v1.10.2 has no entry in third_party/README.md
+G09 pass
+platform linux/amd64 included (ci)
+platform linux/arm64 dropped evidence-missing
+plan: fail (1 gate)
+```
 
 ```json
-{
-  "tool_schema": 1,
-  "command": "plan",
-  "version": "v0.1.0",
-  "commit": "0123456789abcdef0123456789abcdef01234567",
-  "status": "fail",
-  "gates": [
-    {"id": "G07", "outcome": "fail", "codes": ["notices-incomplete"], "evidence": null, "detail": "github.com/spf13/cobra v1.10.2 has no entry in third_party/README.md"},
-    {"id": "G09", "outcome": "pass", "codes": [], "evidence": "local-recorded", "detail": "go1.27.2"}
-  ],
-  "platforms": [
-    {"platform": "darwin/arm64", "included": false, "reason": "evidence-missing", "evidence": [], "execution": "n/a"},
-    {"platform": "linux/amd64", "included": true, "reason": null, "evidence": ["ci"], "execution": "n/a"},
-    {"platform": "linux/arm64", "included": false, "reason": "evidence-missing", "evidence": [], "execution": "n/a"}
-  ],
-  "effects": {"linked_binary": false, "network": false, "wrote": [], "commands": ["go version"]},
-  "error": null
-}
+{"record_schema":1,"version":"v0.1.0","code_commit":"0123456789abcdef0123456789abcdef01234567","status":"draft","anchor":null,"platforms":[{"platform":"linux/amd64","included":true,"evidence":[{"class":"ci","commit":"0123456789abcdef0123456789abcdef01234567","reference":"run URL","date":"2026-10-20","anchor":null}]}],"gates":[{"id":"G09","outcome":"pass","evidence_class":null,"reference":"go1.27.2","reason":null}],"reproducibility":[],"approvals":[],"prepublication":[]}
 ```
-(Gate list abbreviated; a real result has all fourteen.)
