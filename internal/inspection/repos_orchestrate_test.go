@@ -338,7 +338,6 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 
 	// 2. Underlying timeout mapping: canceled -> inventory-timeout with bound message, when the repos
 	// total deadline (not the caller's) fired.
-	setReposTimeouts(t, 20*time.Millisecond, time.Minute)
 	deadlineCtx := context.Background()
 
 	var startedCount int32
@@ -351,11 +350,11 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 		}
 	}
 
-	resTimeout := reposWithRunner(deadlineCtx, ReposOptions{
+	resTimeout := reposShort(deadlineCtx, ReposOptions{
 		Paths: []string{p0, p1},
 	}, fakeInspectSlow, func(ctx context.Context, path string, o InventoryOptions) InventoryResult {
 		return InventoryResult{Status: "ok"}
-	}, newReposRunner)
+	}, 20*time.Millisecond, time.Minute)
 
 	if len(resTimeout.Entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(resTimeout.Entries))
@@ -371,12 +370,9 @@ func TestReposOrchestrationTimeoutsAndMapping(t *testing.T) {
 	}
 }
 
-// setReposTimeouts shortens the total and per-call bounds for one test.
-func setReposTimeouts(t *testing.T, total, call time.Duration) {
-	t.Helper()
-	oldTotal, oldCall := reposTotalTimeout, reposCallTimeout
-	reposTotalTimeout, reposCallTimeout = total, call
-	t.Cleanup(func() { reposTotalTimeout, reposCallTimeout = oldTotal, oldCall })
+// reposShort runs the operation with shortened total and per-call bounds.
+func reposShort(ctx context.Context, o ReposOptions, inspect inspectFunc, inventory inventoryFunc, total, call time.Duration) ReposResult {
+	return reposWithBounds(ctx, o, inspect, inventory, newReposRunner, reposBounds{total: total, call: call})
 }
 
 // L3: the caller's own deadline or cancellation is `canceled`, with a message that does not claim the
@@ -403,8 +399,7 @@ func TestReposCallerDeadlineIsCanceledNotTimeout(t *testing.T) {
 		t.Fatalf("caller cancel: %+v", e.Error)
 	}
 	// A per-call deadline inside the total is an inventory-timeout naming the 10-second bound.
-	setReposTimeouts(t, time.Minute, 20*time.Millisecond)
-	e = reposWithRunner(context.Background(), ReposOptions{Paths: []string{p0}}, slow, inv, newReposRunner).Entries[0]
+	e = reposShort(context.Background(), ReposOptions{Paths: []string{p0}}, slow, inv, time.Minute, 20*time.Millisecond).Entries[0]
 	if e.Error == nil || e.Error.Code != ReposCodeInventoryTimeout || !strings.Contains(e.Error.Message, "per-call deadline of 10 seconds") {
 		t.Fatalf("per-call deadline: %+v", e.Error)
 	}
@@ -678,8 +673,7 @@ func TestReposRealRepositoryPerCallDeadlineIsInventoryTimeout(t *testing.T) {
 	reposHermetic(t)
 	base := reposTempDir(t)
 	repo := reposNewRepo(t, filepath.Join(base, "repo"))
-	setReposTimeouts(t, time.Minute, time.Millisecond)
-	res := Repos(context.Background(), ReposOptions{Paths: []string{repo}})
+	res := reposShort(context.Background(), ReposOptions{Paths: []string{repo}}, Inspect, Inventory, time.Minute, time.Millisecond)
 	e := res.Entries[0]
 	if e.Status != "error" || e.Error == nil || e.Error.Code != ReposCodeInventoryTimeout || !strings.Contains(e.Error.Message, "per-call deadline of 10 seconds") {
 		t.Fatalf("%+v %+v", e, e.Error)

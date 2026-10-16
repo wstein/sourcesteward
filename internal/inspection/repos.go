@@ -10,12 +10,11 @@ import (
 	"time"
 )
 
-// The normative bounds as durations. They are variables only so that tests can exercise an expired
-// deadline without waiting a minute; nothing else assigns them.
-var (
-	reposTotalTimeout = ReposTotalSeconds * time.Second
-	reposCallTimeout  = ReposPerRepositorySeconds * time.Second
-)
+// reposBounds are the normative deadlines as durations. Production uses defaultReposBounds; tests pass
+// shorter ones through reposWithBounds so that an expired deadline needs no minute of waiting.
+type reposBounds struct{ total, call time.Duration }
+
+var defaultReposBounds = reposBounds{total: ReposTotalSeconds * time.Second, call: ReposPerRepositorySeconds * time.Second}
 
 // reposSubmoduleDirtyNote qualifies the embedded inventory of a submodule (US3-6): Git reports a
 // submodule's Git directory, not its checkout, as its worktree.
@@ -36,6 +35,10 @@ func repos(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventory
 }
 
 func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc, newRunner reposNewRunner) ReposResult {
+	return reposWithBounds(ctx, o, inspectFn, inventoryFn, newRunner, defaultReposBounds)
+}
+
+func reposWithBounds(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc, newRunner reposNewRunner, b reposBounds) ReposResult {
 	if err := ValidateReposOptions(o); err != nil {
 		return ReposResult{
 			SchemaVersion: 1,
@@ -53,14 +56,14 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 		}
 	}
 
-	totalCtx, totalCancel := context.WithTimeout(ctx, reposTotalTimeout)
+	totalCtx, totalCancel := context.WithTimeout(ctx, b.total)
 	defer totalCancel()
 
 	// Stage S1: Structural validation of explicit paths
 	entries := prepareExplicitEntries(o.Paths, o.Submodules)
 
 	// Stage S2: Identity inspection (Inspect) of explicit entries, parallel (max 4 workers)
-	inspections := inspectExplicitParallel(ctx, totalCtx, entries, inspectFn)
+	inspections := inspectExplicitParallel(ctx, totalCtx, entries, inspectFn, b)
 
 	// Stage S3: Deterministic validation of explicit entries (root equality, duplicates)
 	ids := validateExplicitEntries(entries, inspections)
@@ -69,18 +72,18 @@ func reposWithRunner(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 	// Stage S4: Submodule discovery for surviving Git parents, then identity inspection of the added
 	// entries through the same pool and per-call deadlines as the explicit ones.
 	if o.Submodules {
-		pending := discoverSubmodules(ctx, totalCtx, &entries, &inspections, newRunner)
+		pending := discoverSubmodules(ctx, totalCtx, &entries, &inspections, newRunner, b)
 		indices := make([]int, len(pending))
 		for i, p := range pending {
 			indices[i] = p.index
 		}
-		inspectIndices(ctx, totalCtx, entries, inspections, indices, inspectFn)
+		inspectIndices(ctx, totalCtx, entries, inspections, indices, inspectFn, b)
 		verifyDiscoveredSubmodules(entries, inspections, pending, ids)
 		computeContainment(entries)
 	}
 
 	// Stage S5: Inventory of surviving entries, parallel (max 4 workers)
-	inventoryEntriesParallel(ctx, totalCtx, entries, inspections, inventoryFn)
+	inventoryEntriesParallel(ctx, totalCtx, entries, inspections, inventoryFn, b)
 
 	// Stage S6: Derive facts & summary
 	for i := range entries {
@@ -169,7 +172,7 @@ func mapTimeoutError(callerCtx context.Context, totalCtx context.Context, callCt
 	return ReposCodeInventoryTimeout, fmt.Sprintf("per-call deadline of %d seconds exceeded", ReposPerRepositorySeconds)
 }
 
-func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspectFn inspectFunc) []Result {
+func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspectFn inspectFunc, b reposBounds) []Result {
 	inspections := make([]Result, len(entries))
 	var validIndices []int
 	for i := range entries {
@@ -177,13 +180,13 @@ func inspectExplicitParallel(callerCtx context.Context, totalCtx context.Context
 			validIndices = append(validIndices, i)
 		}
 	}
-	inspectIndices(callerCtx, totalCtx, entries, inspections, validIndices, inspectFn)
+	inspectIndices(callerCtx, totalCtx, entries, inspections, validIndices, inspectFn, b)
 	return inspections
 }
 
 // inspectIndices runs the identity inspection of the given entries on the bounded pool, each under its own
 // per-call deadline inside the total, with panic recovery and timeout mapping.
-func inspectIndices(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspections []Result, validIndices []int, inspectFn inspectFunc) {
+func inspectIndices(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspections []Result, validIndices []int, inspectFn inspectFunc, b reposBounds) {
 	runWorkerPool(validIndices, ReposParallelism, func(i int) {
 		entry := &entries[i]
 
@@ -208,7 +211,7 @@ func inspectIndices(callerCtx context.Context, totalCtx context.Context, entries
 			}
 		}()
 
-		callCtx, callCancel := context.WithTimeout(totalCtx, reposCallTimeout)
+		callCtx, callCancel := context.WithTimeout(totalCtx, b.call)
 		defer callCancel()
 
 		insp := inspectFn(callCtx, *entry.ResolvedPath)
@@ -371,7 +374,7 @@ func verifyIdentityUnchanged(prior Result, inv InventoryResult) bool {
 	}
 }
 
-func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspections []Result, inventoryFn inventoryFunc) {
+func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Context, entries []ReposEntry, inspections []Result, inventoryFn inventoryFunc, b reposBounds) {
 	var validIndices []int
 	for i := range entries {
 		if entries[i].Status != "error" && entries[i].Status != "skipped" && entries[i].ResolvedPath != nil {
@@ -413,7 +416,7 @@ func inventoryEntriesParallel(callerCtx context.Context, totalCtx context.Contex
 			return
 		}
 
-		callCtx, callCancel := context.WithTimeout(totalCtx, reposCallTimeout)
+		callCtx, callCancel := context.WithTimeout(totalCtx, b.call)
 		defer callCancel()
 
 		inv := inventoryFn(callCtx, *entry.ResolvedPath, opts)
