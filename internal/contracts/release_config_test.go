@@ -2,6 +2,7 @@
 package contracts_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -405,4 +406,165 @@ func TestReleaseSchemaInterpreterAgreesWithTheSchemaLibrary(t *testing.T) {
 		c.mutate(doc)
 		check(c.name, doc)
 	}
+}
+
+// ---- stw release check --json (schemas/v1/release-check.schema.json) ----
+
+func checkRepo(t *testing.T, files map[string][]byte) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "init", "-q", "-b", "main")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	for name, data := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func exampleFile(t *testing.T, name string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(releaseSpecFile(t, "examples/"+name+".release.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func checkJSON(t *testing.T, result release.CheckResult) []byte {
+	t.Helper()
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestReleaseCheckResultsMatchTheirSchema(t *testing.T) {
+	s := schema(t, "release-check")
+	ctx := context.Background()
+	overlap := strings.Replace(string(exampleFile(t, "go-cli")), `paths = ["docs/**", "README.md", "llms.txt"]`, `paths = ["scripts/**"]`, 1)
+	cases := map[string]release.CheckResult{
+		"valid":      release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.toml": exampleFile(t, "go-cli")})}),
+		"findings":   release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.toml": []byte("a.b = 1\n")})}),
+		"overlap":    release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.toml": []byte(overlap), "scripts/release-package.sh": []byte("x")})}),
+		"info only":  release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.json": withUnusedBuild(t)})}),
+		"missing":    release.Check(ctx, release.CheckOptions{Path: checkRepo(t, nil)}),
+		"products":   release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.zlib.toml": exampleFile(t, "mirror-zlib"), ".stw/release.busybox.toml": exampleFile(t, "mirror-busybox")})}),
+		"unknown":    release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.toml": exampleFile(t, "go-cli")}), Product: "x"}),
+		"not a repo": release.Check(ctx, release.CheckOptions{Path: t.TempDir()}),
+		"bad path":   release.Check(ctx, release.CheckOptions{Path: filepath.Join(t.TempDir(), "missing")}),
+	}
+	for name, result := range cases {
+		if e := s.Validate(value(t, checkJSON(t, result))); e != nil {
+			t.Errorf("%s: %v\n%s", name, e, checkJSON(t, result))
+		}
+	}
+	if cases["valid"].Status != "ok" || cases["findings"].Status != "findings" || cases["info only"].Status != "ok" || cases["missing"].Status != "refused" || cases["bad path"].Status != "error" {
+		t.Fatalf("the cases no longer cover every status: valid=%s findings=%s info=%s missing=%s bad=%s %v", cases["valid"].Status, cases["findings"].Status, cases["info only"].Status, cases["missing"].Status, cases["bad path"].Status, cases["info only"].Findings)
+	}
+	// The normalized model is itself a valid contract.
+	configSchema := schema(t, "release-config")
+	for _, name := range releaseExamples {
+		product := map[string]string{"oci-bundle": "toolbox", "mirror-zlib": "zlib", "mirror-busybox": "busybox"}[name]
+		file := ".stw/release.toml"
+		if product != "" {
+			file = ".stw/release." + product + ".toml"
+		}
+		result := release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{file: exampleFile(t, name)})})
+		if result.Contract == nil {
+			t.Fatalf("%s: %+v", name, result.Findings)
+		}
+		raw, err := json.Marshal(result.Contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e := configSchema.Validate(value(t, raw)); e != nil {
+			t.Errorf("normalized %s: %v", name, e)
+		}
+	}
+}
+
+func withUnusedBuild(t *testing.T) []byte {
+	doc := releaseExample(t, "go-cli")
+	extra := copyJSON(firstBuild(doc)).(map[string]any)
+	extra["id"] = "spare"
+	doc["build"] = append(arr(doc["build"]), extra)
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestReleaseCheckSchemaRejectsInconsistentResults(t *testing.T) {
+	s := schema(t, "release-check")
+	ctx := context.Background()
+	ok := release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.toml": exampleFile(t, "go-cli")})})
+	refused := release.Check(ctx, release.CheckOptions{Path: checkRepo(t, nil)})
+	findings := release.Check(ctx, release.CheckOptions{Path: checkRepo(t, map[string][]byte{".stw/release.toml": []byte("a.b = 1\n")})})
+	mutate := func(base release.CheckResult, edit func(map[string]any)) []byte {
+		var doc map[string]any
+		if err := json.Unmarshal(checkJSON(t, base), &doc); err != nil {
+			t.Fatal(err)
+		}
+		edit(doc)
+		raw, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	cases := []struct {
+		name string
+		base release.CheckResult
+		edit func(map[string]any)
+	}{
+		{"unknown command", ok, func(d map[string]any) { d["command"] = "release-plan" }},
+		{"wrong schema version", ok, func(d map[string]any) { d["schema_version"] = 2 }},
+		{"unknown status", ok, func(d map[string]any) { d["status"] = "maybe" }},
+		{"ok with an error object", ok, func(d map[string]any) { d["error"] = map[string]any{"code": "x", "message": "y"} }},
+		{"refused without an error", refused, func(d map[string]any) { d["error"] = nil }},
+		{"refused with a contract", refused, func(d map[string]any) { d["contract"] = map[string]any{} }},
+		{"findings status without errors", findings, func(d map[string]any) { d["summary"] = map[string]any{"errors": 0, "infos": 0} }},
+		{"ok with an error finding", ok, func(d map[string]any) {
+			d["findings"] = []any{map[string]any{"code": "x", "severity": "error", "pointer": "", "message": "m"}}
+		}},
+		{"finding severity", findings, func(d map[string]any) { d["findings"].([]any)[0].(map[string]any)["severity"] = "fatal" }},
+		{"finding without a pointer", findings, func(d map[string]any) { delete(d["findings"].([]any)[0].(map[string]any), "pointer") }},
+		{"source enum", ok, func(d map[string]any) { d["source"] = "index" }},
+		{"commit source without commit", ok, func(d map[string]any) { d["source"] = "commit" }},
+		{"missing boundary", ok, func(d map[string]any) { delete(d, "boundary") }},
+		{"network effect true", ok, func(d map[string]any) { d["boundary"].(map[string]any)["effects"].(map[string]any)["network"] = true }},
+		{"writes effect true", ok, func(d map[string]any) { d["boundary"].(map[string]any)["effects"].(map[string]any)["writes"] = true }},
+		{"project command effect true", ok, func(d map[string]any) {
+			d["boundary"].(map[string]any)["effects"].(map[string]any)["project_commands"] = true
+		}},
+		{"processes enum", ok, func(d map[string]any) {
+			d["boundary"].(map[string]any)["effects"].(map[string]any)["processes"] = "any"
+		}},
+		{"missing summary", ok, func(d map[string]any) { delete(d, "summary") }},
+		{"negative summary", ok, func(d map[string]any) { d["summary"].(map[string]any)["errors"] = -1 }},
+		{"null findings", ok, func(d map[string]any) { d["findings"] = nil }},
+	}
+	for _, c := range cases {
+		if s.Validate(value(t, mutate(c.base, c.edit))) == nil {
+			t.Errorf("%s was accepted", c.name)
+		}
+	}
+	// Unknown properties are additive extensions of a result schema.
+	extended := mutate(ok, func(d map[string]any) { d["future"] = true })
+	valid(t, s, extended)
 }

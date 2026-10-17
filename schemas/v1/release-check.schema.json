@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/release-check.schema.json",
+  "title": "SourceSteward release contract check (schema 1)",
+  "description": "Result of stw release check --json: the lint of the project release contract files of one repository, read from the working tree or one commit. The command writes nothing, uses no network and starts no project command. Finding codes are append-only within schema_version 1; added properties are compatible extensions. Usage errors do not emit JSON.",
+  "type": "object",
+  "required": ["schema_version", "command", "status", "backend", "input_path", "source", "contract", "findings", "summary", "boundary", "error"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "command": {"const": "release-check"},
+    "status": {"enum": ["ok", "findings", "refused", "error"]},
+    "backend": {"type": "string", "minLength": 1},
+    "input_path": {"type": "string"},
+    "root": {"type": "string"},
+    "source": {"enum": ["worktree", "commit"]},
+    "commit": {"type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"},
+    "contract": {"type": ["object", "null"], "description": "The normalized model when exactly one contract file was linted and it is valid; otherwise null. See products for each file."},
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "product", "contract"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "product": {"type": "string"},
+          "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "contract": {"type": ["object", "null"]}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 101,
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "pointer", "message"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+          "severity": {"enum": ["error", "info"]},
+          "pointer": {"type": "string"},
+          "message": {"type": "string"},
+          "file": {"type": "string"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["errors", "infos"],
+      "properties": {"errors": {"type": "integer", "minimum": 0}, "infos": {"type": "integer", "minimum": 0}}
+    },
+    "boundary": {
+      "type": "object",
+      "required": ["effects", "limits", "complete"],
+      "properties": {
+        "effects": {
+          "type": "object",
+          "required": ["network", "writes", "processes", "project_commands"],
+          "properties": {
+            "network": {"const": false},
+            "writes": {"const": false},
+            "processes": {"enum": ["detection", "detection+reads"]},
+            "project_commands": {"const": false}
+          }
+        },
+        "limits": {
+          "type": "object",
+          "required": ["max_bytes", "max_findings"],
+          "properties": {"max_bytes": {"type": "integer", "minimum": 1}, "max_findings": {"type": "integer", "minimum": 1}}
+        },
+        "complete": {"type": "boolean"}
+      }
+    },
+    "error": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {"code": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "message": {"type": "string"}}
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"source": {"const": "commit"}}, "required": ["source"]}, "then": {"required": ["commit"]}},
+    {"if": {"properties": {"status": {"const": "ok"}}, "required": ["status"]}, "then": {"properties": {"error": {"type": "null"}, "findings": {"items": {"properties": {"severity": {"const": "info"}}}}, "summary": {"properties": {"errors": {"const": 0}}}}}},
+    {"if": {"properties": {"status": {"const": "findings"}}, "required": ["status"]}, "then": {"properties": {"error": {"type": "null"}, "summary": {"properties": {"errors": {"minimum": 1}}}}}},
+    {"if": {"properties": {"status": {"enum": ["refused", "error"]}}, "required": ["status"]}, "then": {"properties": {"error": {"type": "object"}, "contract": {"type": "null"}}}}
+  ]
+}

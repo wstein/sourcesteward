@@ -171,7 +171,7 @@ class DocumentationTests(unittest.TestCase):
             shutil.copytree(ROOT / 'schemas', root / 'schemas')
             destination = root / 'output'
             package.copy_schemas(root, destination)
-            for name in ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json', 'release-config.schema.json'):
+            for name in ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json', 'release-config.schema.json', 'release-check.schema.json'):
                 self.assertEqual((destination / 'schemas/v1' / name).read_bytes(),
                                  (ROOT / 'schemas/v1' / name).read_bytes())
             self.assertEqual((destination / 'schemas/v2/inspect.schema.json').read_bytes(),
