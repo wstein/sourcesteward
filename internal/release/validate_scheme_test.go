@@ -75,6 +75,17 @@ func schemeCases() []semanticCase {
 		{name: "order group of starred digits", example: "mirror-zlib", mutate: zlibWith(strings.Replace(zlibPattern, "(?P<minor>[0-9]{1,9})", "(?P<minor>[0-9]*)", 1)), want: []string{"scheme-invalid /version/order/1", "scheme-invalid " + tp}, msg: "empty string"},
 		{name: "template with braces around nothing", example: "oci-bundle", mutate: set("toolbox/{version}{}", "version", "tag_template"), want: []string{"scheme-invalid /version/tag_template"}, msg: "exactly once"},
 		{name: "literal outside the allowed characters", example: "mirror-zlib", mutate: zlibWith(strings.Replace(zlibPattern, "zlib-v", "zlib@v", 1), set("zlib@v{version}", "version", "tag_template")), want: []string{"schema-violation /version/tag_template", "scheme-invalid " + tp}, msg: "may use only"},
+		{name: "template prefix with a dot-dot segment", example: "oci-bundle", mutate: both(set("../x/{version}", "version", "tag_template"), zlibToolbox("^\\.\\./x/")), want: []string{"scheme-invalid /version/tag_template"}, msg: "start with a letter or digit"},
+		{name: "template prefix with a dot segment", example: "oci-bundle", mutate: both(set("a/./{version}", "version", "tag_template"), zlibToolbox("^a/\\./")), want: []string{"scheme-invalid /version/tag_template"}, msg: "start with a letter or digit"},
+		{name: "template prefix starting with a dash", example: "oci-bundle", mutate: both(set("-x/{version}", "version", "tag_template"), zlibToolbox("^-x/")), want: []string{"scheme-invalid /version/tag_template"}, msg: "start with a letter or digit"},
+		{name: "template prefix with an empty segment", example: "oci-bundle", mutate: both(set("a//{version}", "version", "tag_template"), zlibToolbox("^a//")), want: []string{"scheme-invalid /version/tag_template"}, msg: "start with a letter or digit"},
+		{name: "template with a leading slash", example: "oci-bundle", mutate: both(set("/a{version}", "version", "tag_template"), zlibToolbox("^/a")), want: []string{"scheme-invalid /version/tag_template"}, msg: "start with a letter or digit"},
+		{name: "version group starting with a dot", example: "mirror-zlib", mutate: zlibWith(`^zlib-v(?P<version>\.(?P<major>[0-9]{1,9}))$`, set(strs("major"), "version", "order")), want: []string{"scheme-invalid " + tp}, msg: "must start with a letter or digit"},
+		{name: "version group starting with a dash", example: "mirror-zlib", mutate: zlibWith(`^zlib-v(?P<version>-(?P<major>[0-9]{1,9}))$`, set(strs("major"), "version", "order")), want: []string{"scheme-invalid " + tp}, msg: "must start with a letter or digit"},
+		{name: "version group that may start with an underscore", example: "mirror-zlib", mutate: zlibWith(`^zlib-v(?P<version>[0-9_](?P<major>[0-9]{1,9}))$`, set(strs("major"), "version", "order")), want: []string{"scheme-invalid " + tp}, msg: "must start with a letter or digit"},
+		{name: "version group whose optional head may be dots", example: "mirror-zlib", mutate: zlibWith(`^zlib-v(?P<version>\.?(?P<major>[0-9]{1,9}))$`, set(strs("major"), "version", "order")), want: []string{"scheme-invalid " + tp}, msg: "must start with a letter or digit"},
+		{name: "version group starting with a letter alternative", example: "mirror-zlib", mutate: zlibWith(`^zlib-v(?P<version>(?:a|b)(?P<major>[0-9]{1,9}))$`, set(strs("major"), "version", "order"))},
+		{name: "version group starting with a digit class", example: "mirror-zlib", mutate: zlibWith(`^zlib-v(?P<version>[0-9a-zA-Z](?P<major>[0-9]{1,9}))$`, set(strs("major"), "version", "order"))},
 		{name: "file_pattern does not compile", example: "polyglot", mutate: set("(", "version", "file_pattern"), want: []string{"scheme-invalid /version/file_pattern"}, msg: "does not compile"},
 		{name: "file_pattern without a group", example: "polyglot", mutate: set(`version: "[0-9.]+"`, "version", "file_pattern"), want: []string{"scheme-invalid /version/file_pattern"}, msg: "exactly one capture group"},
 		{name: "file_pattern with two groups", example: "polyglot", mutate: set(`(version): "([0-9.]+)"`, "version", "file_pattern"), want: []string{"scheme-invalid /version/file_pattern"}, msg: "exactly one capture group"},
@@ -137,4 +148,9 @@ func allowlistCases() []semanticCase {
 		{name: "pattern with a question mark", example: "go-cli", mutate: withPattern("a?b"), want: []string{invalid}},
 		{name: "pattern naming a .git directory", example: "go-cli", mutate: withPattern(".git/**"), want: []string{invalid}},
 	}
+}
+
+// zlibToolbox rewrites the toolbox pattern so its literal prefix is the given expression.
+func zlibToolbox(prefix string) func(*testing.T, map[string]any) {
+	return set(prefix+`(?P<version>(?P<year>[0-9]{4})\.(?P<month>0[1-9]|1[0-2])\.(?P<day>0[1-9]|[12][0-9]|3[01]))$`, "version", "tag_pattern")
 }
