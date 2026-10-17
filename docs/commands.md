@@ -138,7 +138,7 @@ gh jj ci 42 /path/to/jj-workspace --repo owner/project --json
 
 ## Planned features — not commands available today
 
-Stack inspection/diffs (Spec 012), checkpoint/resume (013), conflict diagnosis/preflight
+Stack inspection/plan (Spec 012), checkpoint/resume (013), conflict diagnosis/preflight
 (014), local restacking (015), stacked PR coordination/writes (016), work transfer
 (017), amend/fixup/split editing (018), upstream synchronization (019) and native
 GitButler integration remain planned. Current inventory, recovery evidence and

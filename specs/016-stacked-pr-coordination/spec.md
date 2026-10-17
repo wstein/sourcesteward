@@ -89,6 +89,7 @@ A caller receives the same evidence in human and structured output without hidde
 ## Assumptions
 
 - Depends on Specs 010 and 012; does not automatically restack or resolve conflicts.
+- Spec 012 (reworked 2026-10-17) reads pull requests and native stack membership and prints advisory steps; this spec owns every remote effect of the catalog in `specs/012-stack-inspection/contracts/later-effects.md` (push, link, unstack, sync, merge), through GitHub native stack semantics and the bounded transport. FR-006 is unchanged for the first slice.
 - Remote reads/writes require caller credentials and task authorization; no model, forge or account is required for local features.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
