@@ -177,7 +177,7 @@ A caller can see which effects a stack workflow would need and that none is part
 | `base-mismatch` | remote | `notice`, observed; `unknown` with `trunk-ref-unknown` | The pull request base ref differs from the expected one: the parent layer's head ref while the parent pull request is open, otherwise the trunk ref of `--base`. A merged parent makes the trunk ref expected. |
 | `stack-link-missing` | remote | `action`, observed | At least two adjacent layers have open linked pull requests chained by base ref and at least one of them has no `stack` object; none of them contradicts another (`stack-split` takes precedence). |
 | `stack-split` | remote | `notice`, observed | Linked layers belong to two or more different native stack numbers; the numbers are listed. |
-| `stack-member-not-local` | remote | `notice`, observed | A native stack read from `stacks/N` lists an open or merged pull request with no linked local layer; numbers listed, at most 32. |
+| `stack-member-not-local` | remote | `notice`, observed | A native stack read from `stacks/N` lists an **open** pull request with no linked local layer (merged or closed members are history, not drift); numbers listed, at most 32. |
 | `stack-order-differs` | remote | `notice`, observed | The native stack positions of linked layers are not increasing in local layer order. |
 | `native-stack-managed` | remote | `info`, observed | A linked pull request carries a `stack` object; `detail` has number, position and size. GitHub retargets and rebases native stack members on merge (measured); `plan` never proposes a local rebase for that rewrite. |
 | `parent-merged-child-stale` | remote | `action`, `inferred` (observed when `layer-applied-in-base` already proves rebase) | The pull request of layer k is merged, layer k's commits are still in the range (not contained in the base commit), and k+1 exists. `detail.parent_merge` is `rebase` (patch equivalence), `merge` (merge commit with two parents) or `rewritten` (merge commit has one parent: rebase or squash, not distinguishable); `detail.native_stack` is the linked pull request's `stack` presence. A parent merged with a merge commit that the base already contains produces no finding. |
@@ -185,7 +185,7 @@ A caller can see which effects a stack workflow would need and that none is part
 
 ### Linkage rule (normative)
 
-A layer's candidates are the pull requests from the `pull-requests-by-head` source for each of the layer's reference names, restricted to head repository equal to the selected repository (fork heads are not read; disclosed). One candidate per layer is chosen: the single open one; if none is open, the single merged one; if none, the single closed one; otherwise the layer is ambiguous or missing. `link` is `verified` when `head.sha` equals the layer tip commit, else `name-matched`. Findings that compare commits (`head-sha-differs`, `parent-merged-child-stale`) use the linked pull request in both cases and carry the link quality in `detail`.
+A layer's candidates are the pull requests from the `pull-requests-by-head` source for each of the layer's reference names, restricted to head repository equal to the selected repository (fork heads are not read; disclosed). One candidate per layer is chosen: the single open one; if none is open, the single merged one; if none, the single closed one; otherwise the layer is ambiguous or missing. A request that returns five records (a full page) has an incomplete candidate list: the layer is `pull-request-ambiguous` with `truncated` true, no candidate is chosen, `pull-request-missing` is never reported for it, and the result is `incomplete` with `stack-limit`. `link` is `verified` when `head.sha` equals the layer tip commit, else `name-matched`. Findings that compare commits (`head-sha-differs`, `parent-merged-child-stale`) use the linked pull request in both cases and carry the link quality in `detail`.
 
 ### Remote sources table (normative)
 
@@ -193,7 +193,7 @@ Paths are relative to the selected API origin; `O`, `N` are validated owner and 
 
 | Source id | Request | Fields used | Measured |
 | --- | --- | --- | --- |
-| `pull-requests-by-head` | `repos/O/N/pulls?head=O:REF&state=all&per_page=5` (one request per reference name, at most 20) | per item `number`, `state`, `merged_at`, `draft`, `head.ref`, `head.sha`, `head.repo.full_name`, `base.ref`, `base.sha`, `merge_commit_sha`, `stack.{number,position,size}` (absent when unstacked) | list items carry `stack` (M4); the `head=` filter and refs containing `/` are unverified |
+| `pull-requests-by-head` | `repos/O/N/pulls?head=O:REF&state=all&per_page=5` (one request per reference name, at most 20) | per item `number`, `state`, `merged_at`, `draft`, `head.ref`, `head.sha`, `head.repo.full_name`, `base.ref`, `base.sha`, `merge_commit_sha`, `stack.{number,position,size}` (absent when unstacked) | list items carry `stack` (M4); the `head=` filter measured (M4a); refs containing `/` are unverified |
 | `native-stack` | `repos/O/N/stacks/K` (one per distinct `K`, at most 8) | `number`, `open`, `base.ref`, ordered `pull_requests[].{number,state,merged_at,head.ref,head.sha,base.ref,base.sha}` | M5 (closed three-member stack); an open stack is unverified |
 | `pull-requests-resample` | the `pull-requests-by-head` requests again | as above, compared with the first read | derived |
 
@@ -204,7 +204,7 @@ Paths are relative to the selected API origin; `O`, `N` are validated owner and 
 | Behavior | Owner | Where `stw` stands |
 | --- | --- | --- |
 | Create, extend or dissolve a native stack (`gh stack submit`, `link`, `unstack`) | GitHub, through `gh stack` semantics | prints the `link` line as an advisory step; a later Spec 016 work item may perform it through the bounded transport after measuring the write endpoints |
-| Retarget and rebase native stack members after a merge, atomic stack merge | GitHub (measured, M3) | observes; `native-stack-managed`; no `rebase` step; `fetch` and `observe` only |
+| Retarget and rebase native stack members after a merge, atomic stack merge | GitHub. Measured (M3): the force-push that rebases the child onto the new trunk is native-stack specific; the retarget of the child (`automatic_base_change_succeeded`) happens for plain chains too when the head branch is deleted on merge, and the spike had that setting on, so it is not evidence of native behavior | observes; `native-stack-managed`; no `rebase` step; `fetch` and `observe` only |
 | Choose or enforce the merge method, branch protection, merge queue | the maintainer and GitHub | never decides; Spec 025 explains waiting conditions |
 | Local rewrite of a non-native chain or jj stack after a parent landed | the maintainer, with the printed plan | prints; Spec 015 may later execute with recovery evidence |
 | Conflict prediction | Spec 014 | not predicted: a merge simulation writes objects (M10), so a real rebase reveals conflicts |
@@ -240,7 +240,7 @@ A reference name used in a printed command or request must be at most 200 bytes,
 | LIM-1 | 30 seconds total; 5 seconds per Git or jj process; cancellation honoured |
 | LIM-2 | at most 500 commits in the range and 32 layers (the GitHub maximum stack size is unverified; the bound is ours) |
 | LIM-3 | at most 20 reference names resolved to pull requests (more is `stack-limit` for the remote part only) and at most 8 distinct native stacks, so that two reads of every name plus the stack reads (2 x 20 + 8 = 48) stay within LIM-4 |
-| LIM-4 | at most 50 remote requests, 1 MiB per response, 5 pages per collection, 500 records per collection |
+| LIM-4 | at most 50 remote requests and 1 MiB per response. The fixed shapes of the Remote sources table are single requests (`per_page=5`, no paging); a full page is handled by the Linkage rule, and page and record limits apply only to a future paged shape |
 | LIM-5 | at most 400 findings, 64 plan steps, 8 reference names per layer, 20 fork-point refs |
 | LIM-6 | result at most 1 MiB; each Git or jj process output is read with the runner's scan allowance (the 64 KiB retained-output cap of the shared runner is not relied on) |
 
@@ -252,6 +252,8 @@ A reference name used in a printed command or request must be at most 200 bytes,
 | `incomplete` | `stack-limit`, `stack-changed`, `stack-remote-failed` (a remote source `failed` or was `rate-limited`, or a remote source was `denied` or unavailable, or the repository or credentials could not be selected: the `hosting-repository-selection`, `hosting-invalid-remote`, `hosting-api-unavailable` codes may accompany it) | Local layers and findings are retained; `boundary.complete` is `false`. | 1 |
 | `error` | `not-repository`, `ambiguous-backend`, `unsupported-backend`, `jj-sandbox-unavailable`, `jj-timeout`, `git-failed`, `changed-repository`, `invalid-path` (existing meanings); `stack-ref-invalid`, `stack-ref-ambiguous`, `stack-ambiguous-topology`, `stack-no-common-base`, `stack-canceled` | No usable stack; `layers` empty; `boundary.complete` is `false`. | 1 |
 | usage error | — | Invalid arguments or flag combination; no JSON. | 2 |
+
+Spec 025 FR-007 treats a denied or not-found optional source as a complete observation; here the remote evidence is the point of `--pull-requests`, so a denied, not-found, rate-limited or failed remote source gives `incomplete` (local part retained) and the findings that needed it are `unknown`. The two specs deliberately differ because 025 answers a question about one pull request while 012 reports a comparison that is incomplete without the remote side.
 
 There is no strict exit status in this slice: findings never change the exit status (open question 4).
 
@@ -281,6 +283,7 @@ There is no strict exit status in this slice: findings never change the exit sta
 | FR-005 (no snapshot, checkout change, fetch or external helper) | kept: FR-005, FR-015 |
 | FR-006 to FR-009 (Tier 1, human and JSON, limits, acceptance evidence) | kept: FR-003, FR-013, FR-011, FR-016 |
 | FR-003, FR-011 (aggregate and per-revision diff summaries, stored versus disk diffs), FR-010, FR-012 (path-filtered changed-file queries, rename and deletion kinds) | **withdrawn from this spec**: GitHub (`gh pr diff`, the files view) and Git or jj (`git diff --stat`, `jj diff --stat`) already provide stored-history diffs per layer; live disk and index observations are Spec 009 queries. A future `stack diff` would need its own specification (open question 1). |
+| SC-001 to SC-004 (acceptance per backend, safety fixtures, schema validity, requirement traceability) | kept in substance as SC-001, SC-004, SC-005 and SC-007; SC-002 and SC-003 of this version are new (merge shapes, native-stack fixtures) |
 | First-draft US1 acceptance scenarios | kept as User Story 1 |
 | First-draft US2 and US4 | withdrawn with the items above |
 | First-draft US3 (bounded agent contract) | kept as User Story 4 |
