@@ -1067,3 +1067,34 @@ func TestGitInventoryFilterDriversNamedLikeAttributeStatesAreTransformations(t *
 		}
 	}
 }
+
+// A smudge-only driver never runs when files are compared, so it does not make comparisons non-authoritative.
+func TestGitInventorySmudgeOnlyDriverKeepsComparisonsAuthoritative(t *testing.T) {
+	isolatedHome(t)
+	d := manyFilesRepo(t, 3, "")
+	git(t, d, "config", "filter.sm.smudge", "cat")
+	os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("d000/file00001.txt filter=sm\n"), 0o644)
+	os.WriteFile(filepath.Join(d, "d000", "file00001.txt"), []byte("edited\n"), 0o644)
+	r := gitInventory(t, d, InventoryOptions{})
+	w := r.Workspaces[0]
+	if r.Status != "ok" || w.Tracked.Value != "true" || strings.Contains(w.Tracked.Reason, "transformations") {
+		t.Fatalf("%s %+v", r.Status, w)
+	}
+}
+
+// The error for a workspace root that cannot be opened names no path.
+func TestWorkspaceRootOpenFailureNamesNoPath(t *testing.T) {
+	isolatedHome(t)
+	d := manyFilesRepo(t, 2, "")
+	openInventoryRoot = func(string) (*os.Root, error) {
+		return nil, &os.PathError{Op: "open", Path: "/home/user/secret-workspace", Err: os.ErrPermission}
+	}
+	t.Cleanup(func() { openInventoryRoot = os.OpenRoot })
+	id := Inspect(context.Background(), d)
+	b := defaultInventoryBounds()
+	s := gitInventorySession{ctx: context.Background(), run: runGit, format: "sha1", stream: newStreamGit(b), bounds: b}
+	_, _, err := s.workspaceStatus(gitStatusOptions{dir: id.InputPath, rawDisk: true, scopes: []string{"disk"}, cutoff: -1})
+	if err == nil || err.Error() != "cannot open the workspace for comparison" {
+		t.Fatalf("%v", err)
+	}
+}

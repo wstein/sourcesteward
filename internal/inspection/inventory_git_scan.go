@@ -670,6 +670,9 @@ func readTrackedLink(root *os.Root, path string) (string, error) {
 	return link, nil
 }
 
+// openInventoryRoot is a test seam for the workspace root open.
+var openInventoryRoot = os.OpenRoot
+
 // inventoryBeforeHash is a test seam: it runs after a tracked file was opened and before it is hashed.
 var inventoryBeforeHash func(path string)
 
@@ -725,7 +728,7 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 		var diskRoot *os.Root
 		if o.rawDisk {
 			var rootErr error
-			diskRoot, rootErr = os.OpenRoot(dir)
+			diskRoot, rootErr = openInventoryRoot(dir)
 			if rootErr != nil { // the error names the path: keep it out of the result
 				return nil, c.meta, errors.New("cannot open the workspace for comparison")
 			}
