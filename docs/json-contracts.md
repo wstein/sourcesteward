@@ -107,6 +107,14 @@ true/false/unknown query. Known false is success (exit 0); required unknown evid
 partial (exit 1), while operational failure is error (exit 1). Invalid combinations are
 rejected by offline fixtures. See [inventory](inventory.md) and its
 [normative contract](../specs/009-workspace-inventory/contracts/inventory.md).
+Spec 027 keeps this schema byte-identical (the `boundary.limits` constants too) and changes Git
+behavior within it: repositories that returned `error` for size now return `ok` or `partial` with
+verbatim truncation notes in `boundary.limitations`; a submodule or separate-Git-directory
+checkout is described by its checkout path (the old value was the Git directory); `tracked` of a
+gitlink-bearing workspace can be `true`; `command_bytes` names the largest unit held at once.
+Consumers must read `status` and `boundary.complete`, not infer "too large" from `error`. The
+compatibility table is in the
+[Spec 027 contract](../specs/027-inventory-limits/contracts/inventory-limits.md).
 This source change stages the schema for Pages; it does not prove live deployment.
 
 ## Repos schema v1

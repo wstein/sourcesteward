@@ -20,6 +20,8 @@ File: path, old_path(nullable), scope enum, change=added|modified|deleted|rename
 Query: predicate, value=true|false|unknown, reason, evidence (list of strings). Clean/dirty only known if every requested relevant scope is complete; dirty false is not inferred from unavailable evidence. Native full identities appear in evidence; ambiguous revisions produce unknown/refusal, never arbitrary selection.
 Diagnostics reuse code/message fields. Unknown observations not necessary for requested scope (e.g. task_owner) do not themselves force partial. Required unavailable evidence does: status=partial, boundary.complete=false. Cancellation, timeout, malformed native output, missing backend, unsafe ownership and limit exceedance yield error/complete=false; retain only explicitly qualified observations, never silently truncate and claim complete. Existing error renderer emits one structured result and operational exit1. Known false exits0, partial/unknown exits1, syntax exits2. No boolean exit-code overloading.
 
+> Amended for the Git adapter by [Spec 027](../../027-inventory-limits/contracts/inventory-limits.md): streamed reads, limits, degradation, checkout description and gitlink rules. The 64 KiB native-output and 1,024-record statements below describe the original contract; Spec 027 states what they mean now.
+
 ## Go boundary
 
 `Inventory(ctx context.Context, path string, options InventoryOptions) InventoryResult` lives in internal/inspection.
