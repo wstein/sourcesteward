@@ -33,7 +33,7 @@ Layers (bottom first):
 Findings:
   [action] [observed] layer-applied-in-base (layer 1): All 1 commits of layer 1 are already in the base as equivalent patches. (git-cherry)
   [notice] [observed] stack-behind-base: The stack is based 1 commit(s) behind the base. (git-range)
-Plan (advisory; nothing was executed, and a plan authorizes nothing):
+Plan (advisory; nothing was executed, and a plan authorizes nothing; native stack status not checked):
   s1  git rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2
   s2  git rebase --onto s2 eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa s3   (after s1)
 Complete: yes. Network reads: none.
@@ -216,6 +216,7 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
    {
     "id": "s1",
     "kind": "rebase",
+    "note": null,
     "layer": 2,
     "findings": [
      "layer-applied-in-base"
@@ -235,13 +236,15 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
     "expected": {
      "layer_tip": "eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa",
      "old_parent_tip": "5758b572620f6940ef3b8292408c97f91ece4f8b",
-     "new_parent": "main"
+     "new_parent": "main",
+     "new_parent_commit_id": "adcdcf6554c91c0553bf92e74a68e035970e9bd1"
     },
     "requires": []
    },
    {
     "id": "s2",
     "kind": "rebase",
+    "note": null,
     "layer": 3,
     "findings": [
      "layer-applied-in-base"
@@ -261,13 +264,15 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
     "expected": {
      "layer_tip": "88da0eb74325695bbfd47adb9d3771cde353bc28",
      "old_parent_tip": "eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa",
-     "new_parent": "s2"
+     "new_parent": "s2",
+     "new_parent_commit_id": null
     },
     "requires": [
      "s1"
     ]
    }
-  ]
+  ],
+  "native_checked": false
  },
  "remote": null,
  "diagnostics": [],
@@ -276,7 +281,8 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
   "network": false,
   "freshness": "sampled",
   "limitations": [
-   "Remote-tracking refs may be stale; nothing was fetched."
+   "Remote-tracking refs may be stale; nothing was fetched.",
+   "Native stack status was not checked; if GitHub manages this stack it rewrites member branches after a merge, so fetch and run stack plan --pull-requests before running any rebase step."
   ],
   "limits": {
    "deadline_seconds": 30,

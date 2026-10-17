@@ -153,7 +153,8 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Field | Type | Notes |
 | --- | --- | --- |
 | `advisory` | boolean | constant `true` |
-| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous` or `unsafe-name` |
+| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` or `unsafe-name` |
+| `native_checked` | boolean | `true` only when `--pull-requests` read the native stack state; `false` otherwise (the boundary then carries the native-stack limitation of the Plan rules) |
 | `steps` | Step[] | at most 64, ordered |
 
 ### Step
@@ -162,14 +163,15 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | --- | --- | --- |
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
+| `note` | `run-again` \| `stale-base` \| `null` | fixed text for `observe` steps; `null` otherwise |
 | `layer` | integer or `null` | layer the step rewrites; `null` for `fetch`, `link` and `observe` |
 | `findings` | string[] | codes that cause the step |
-| `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite`, `link` is `remote-write` |
+| `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree), `link` is `remote-write` |
 | `performed_by` | `maintainer` \| `gh-stack` | `gh-stack` only for `link` |
 | `argv` | string[] or `null` | the program and arguments; `null` for `observe` and for an unprintable step |
 | `display` | string or `null` | `argv` with each element single-quoted where needed, at most 1024 bytes; `null` when `argv` is `null` |
 | `environment` | `{name, value}`[] | only `link`: `GH_REPO` |
-| `expected` | object | `{layer_tip, old_parent_tip, new_parent}` commit ids or names as applicable (`rebase`); `{remote}` (`fetch`); `{numbers}` (`link`); empty for `observe` |
+| `expected` | object | `rebase`: `{layer_tip, old_parent_tip, new_parent, new_parent_commit_id}` (commit ids; `new_parent` a name; `new_parent_commit_id` the sampled base commit for the first rebase step, `null` for later ones); `fetch`: `{remote}`; `link`: `{numbers}`; empty for `observe` |
 | `requires` | string[] | ids of earlier steps |
 
 Invariants: `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step.
@@ -180,4 +182,4 @@ Invariants: `rebase` steps are consecutive layers bottom up with each `requires`
 
 ## Schema notes
 
-`stack.schema.json` is self-contained (no cross-file reference); identity definitions are copies guarded by a drift test; per-code `detail` and the invariants above that JSON Schema can express (`reason` non-null iff `unknown`, `plan` null iff mode `show`, `argv` null iff `display` null) are expressed with `if/then`; the remaining invariants are enforced by Go tests over every fixture. `hosting.schema.json`, `inventory.schema.json` and all other schemas are compared byte for byte against the base.
+`stack.schema.json` is self-contained (no cross-file reference); identity definitions are copies guarded by a drift test; per-code `detail` and the invariants above that JSON Schema can express (`reason` non-null iff `unknown`, `plan` null when mode is `show` or status is `error`, non-null otherwise, `argv` null iff `display` null) are expressed with `if/then`; the remaining invariants are enforced by Go tests over every fixture. `hosting.schema.json`, `inventory.schema.json` and all other schemas are compared byte for byte against the base.
