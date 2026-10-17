@@ -104,7 +104,6 @@ Source `outcome` is `ok`, `denied`, `not-found`, `rate-limited`, `failed` or `sk
 | `layer-checked-out-elsewhere` | `worktrees` (string[], at most 8) |
 | `capability-unavailable` | `capability` (`patch-equivalence`) |
 | `layer-conflicted`, `layer-immutable` | `commits` (commit id[], at most 8) |
-| `layer-ref-deleted` | `refs` (string[], deleted remote bookmark names, at most 8) |
 | `pull-request-missing` | `refs` (string[] looked up) |
 | `pull-request-ambiguous` | `numbers` (integer[], at most 5), `truncated` (boolean, true when the page was full) |
 | `pull-request-closed-unmerged` | `number` |
@@ -137,7 +136,6 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `capability-unavailable` | {capability} is not available for jj; pull request evidence can supply it. |
 | `layer-conflicted` | Layer {layer} contains conflicted commits. |
 | `layer-immutable` | Layer {layer} contains immutable commits. |
-| `layer-ref-deleted` | Layer {layer} contains commits whose remote bookmarks were deleted: {refs}; they have probably landed. |
 | `pull-request-missing` | No pull request from this repository was found for layer {layer} ({refs}). |
 | `pull-request-ambiguous` | Layer {layer} has several candidate pull requests: {numbers}. |
 | `pull-request-closed-unmerged` | The pull request for layer {layer} is closed and not merged. |
@@ -156,7 +154,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Field | Type | Notes |
 | --- | --- | --- |
 | `advisory` | boolean | constant `true` |
-| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `layer-ref-deleted`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name` |
+| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name` |
 | `native_checked` | boolean | `true` only under the exact condition of the Plan rules (remote section present and the pull request and native stack sources `ok`); `false` otherwise, including `--pull-requests` with a failed remote read (the boundary then carries the native-stack limitation) |
 | `steps` | Step[] | at most 64, ordered |
 
@@ -166,7 +164,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | --- | --- | --- |
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
-| `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `diverged-undecided` \| `null` | fixed text for `observe` steps; `null` otherwise |
+| `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `diverged-undecided` \| `landed-undetectable` \| `null` | fixed text for `observe` steps; `null` otherwise |
 | `layer` | integer or `null` | layer the step rewrites or describes; `null` for `fetch`, `link` and the `run-again` observe; set for every other `observe` (one step per affected layer, ordered by layer index bottom first) |
 | `findings` | string[] | codes that cause the step |
 | `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit with its uncommitted edits and every bookmark or commit descending from the moved change), `link` is `remote-write` (pushes unpushed commits, fast-forward only) |
@@ -181,7 +179,7 @@ Invariants: `rebase` steps are consecutive layers bottom up with each `requires`
 
 ## Boundary
 
-`complete` (boolean; false for `incomplete` and `error`), `network` (boolean; true if and only if at least one remote request was made), `freshness` (`sampled`), `limitations` (string[], fixed statements such as "remote-tracking refs may be stale; nothing was fetched"), `limits` (`deadline_seconds`, `commits`, `layers`, `findings`, `steps`, `requests`, `result_bytes`).
+`complete` (boolean; false for `incomplete` and `error`), `network` (boolean; true if and only if at least one remote request was made), `freshness` (`sampled`), `limitations` (string[], fixed statements, for jj always including `jj-landed-layer-undetectable`: "a layer that landed remotely and whose bookmark jj deleted on fetch cannot be detected; check the pull requests before running a printed jj step", and such as "remote-tracking refs may be stale; nothing was fetched"), `limits` (`deadline_seconds`, `commits`, `layers`, `findings`, `steps`, `requests`, `result_bytes`).
 
 ## Schema notes
 

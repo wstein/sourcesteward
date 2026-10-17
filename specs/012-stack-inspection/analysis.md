@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 to 4 resolved in the artifacts; round 5 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 to 5 resolved in the artifacts; round 6 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -91,3 +91,19 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: 6331f5a. 
 | L2 | Low | `after_fetch` not echoed | Field in the result and the JSON example |
 | L3 | Low | jj deleted bookmark after remote merge | Finding `layer-ref-deleted` and a plan block at that layer; no `jj rebase` step moves the landed commit |
 | L4 | Low | `native-rewrite-pending` had no way out | Text points to GitHub's own stack handling |
+
+### Round 5
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: 14b51b6. Verdict: NOT READY (2 high, 2 medium, 6 low). The orchestrator chose to simplify both High items by removing evidence-hungry advice.
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| H1 | High | `git cherry` omits merge commits, so the `push-needed` proof could drop a collaborator's merge | `push-needed` removed; a diverged upstream always gives `diverged-undecided` with counts of upstream-only and local-only commits (merge commits counted) and no remedy; `Upstream.ahead_by`/`behind_by` added; `cherry LAYER UPSTREAM` removed from the allowlist; the statement that no advice can drop another person's commit is kept; L2 recomputes its own evidence. Supersedes the round 4 H1 rule (also resolves round 5 M1) |
+| H2 | High | `layer-ref-deleted` cannot be derived on jj (no allowed read records the deletion) | Finding removed; stated jj gap `jj-landed-layer-undetectable` (boundary limitation on every jj result, Capability table); when `--pull-requests` shows a merged member and `stack-behind-base` is the only trigger the plan is one `observe` `landed-undetectable` with no jj rebase; scenario 8b, T017 and T029 updated; measurement entry M14. Supersedes the round 4 L3 resolution |
+| M2 | Med | Upstream-based native wording survived | US3.4, R5 and the D9 row follow the pull request head relation |
+| L1 | Low | Stale-base per layer unspecified | One `observe` per affected layer, bottom first, for groups 2 (`object-unreachable`) and 3 |
+| L2 | Low | Group 6 used a nonexistent relation `none` and could end empty | Upstream absent, `same`, `ahead` or `gone` allowed; `behind`/`diverged` go to group 4 and `unknown` to group 2 |
+| L3 | Low | Allowlist lacked the upstream reads | `%(upstream:track)`, `rev-parse` of the upstream commit and the two `rev-list --count` reads added |
+| L4 | Low | T029 used a merged PR's head for `object-unreachable` | Open-pull-request head fixture; the spike head only shows that a merged head is never required |
+| L5 | Low | FR-006 map omitted 8a and 8b | Added |
+| L6 | Low | `object-unreachable` text unconditional | "if you have fetched (stw cannot verify)" |
