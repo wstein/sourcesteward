@@ -231,7 +231,7 @@ Every `rebase` step records `expected`: the layer tip, the old parent tip, the n
 
 ### Argument rules (normative)
 
-A reference name used in a printed command or request must be at most 200 bytes, valid UTF-8, components separated by `/`, each matching `[A-Za-z0-9._-]+` with no leading `.` or `-`, no `..`, no `.lock` suffix. Other names are shown (escaped) in observations but make dependent printed steps and remote requests unprintable or `skipped` (`unsafe-name`). Printed Git `rebase` commands use full 40-hex (SHA-1) or 64-hex (SHA-256) commit ids for `O` and `--` is not needed because names are validated.
+A reference name used in a printed command or request must be at most 200 bytes, valid UTF-8, components separated by `/`, each matching `[A-Za-z0-9._-]+` with no leading `.` or `-`, no `..`, no `.lock` suffix. Other names are shown (escaped) in observations but make dependent printed steps and remote requests unprintable or `skipped` (`unsafe-name`). In printed jj commands a name is a revset, not a plain argument: a trailing `-` or `+` (allowed by the grammar above) is an operator there, so every name is written as a double-quoted revset string literal (`"name"`, which the grammar above makes free of quotes and backslashes), and change ids are written as given by jj; the exact literal form is unverified until T002. Printed Git `rebase` commands use full 40-hex (SHA-1) or 64-hex (SHA-256) commit ids for `O` and `--` is not needed because names are validated.
 
 ### Limits table (normative)
 
