@@ -488,7 +488,10 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 			// check-attr prints "unset" and "unspecified" both for those states and for a literal value of
 			// that name, which Git passes to a driver of that name: a configured driver counts either way
 			// (a driver named "unset" next to a real unset attribute is a conservative false positive).
-			// For text, eol, ident and working-tree-encoding a literal "unset" has no silent effect in Git:
+			// The attributes consulted are those gitattributes(5) lists as changing content between the working tree
+			// and the index: filter, text, eol, the legacy crlf (it converts like text), ident and
+			// working-tree-encoding; binary and -text are the unset state of text and need no query. For the
+			// non-filter ones a literal "unset" has no silent effect in Git:
 			// it is ignored or, for an encoding, an error, never a clean comparison of transformed content.
 			if attr == "filter" {
 				if s.filterNames["filter."+value] {
@@ -503,7 +506,7 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 			}
 		}
 		return nil
-	}, "check-attr", "--stdin", "-z", "filter", "text", "eol", "ident", "working-tree-encoding")
+	}, "check-attr", "--stdin", "-z", "filter", "text", "eol", "crlf", "ident", "working-tree-encoding")
 	if reason, ok := streamReason(serr, "disk comparison"); ok {
 		return false, reason, nil
 	}

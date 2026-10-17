@@ -1098,3 +1098,41 @@ func TestWorkspaceRootOpenFailureNamesNoPath(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// Every attribute Git consults when it compares a working copy to the index must be queried. The legacy
+// crlf attribute converts like text: with `* crlf` or `crlf=input` a CRLF working copy is clean for Git, so
+// the inventory must not claim that it differs. The expected outcome is Git's own (diff --quiet).
+func TestGitInventoryAgreesWithGitForTheLegacyCrlfAttribute(t *testing.T) {
+	isolatedHome(t)
+	for _, tc := range []struct {
+		name, attributes string
+		converts         bool
+	}{
+		{"set", "d000/file00001.txt crlf\n", true},
+		{"input", "d000/file00001.txt crlf=input\n", true},
+		{"macro", "[attr]winlike crlf\nd000/file00001.txt winlike\n", true},
+		{"unset", "d000/file00001.txt -crlf\n", false},
+		{"literal unset", "d000/file00001.txt crlf=unset\n", false},
+		{"binary macro", "d000/file00001.txt binary\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := manyFilesRepo(t, 3, "")
+			os.WriteFile(filepath.Join(d, ".gitattributes"), []byte(tc.attributes), 0o644)
+			os.WriteFile(filepath.Join(d, "d000", "file00001.txt"), []byte("content 1\r\n"), 0o644)
+			gitClean := exec.Command("git", "-c", "core.autocrlf=false", "diff", "--quiet")
+			gitClean.Dir = d
+			gitClean.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+			if clean := gitClean.Run() == nil; clean != tc.converts {
+				t.Fatalf("fixture: git reports clean=%v, the case expects conversion=%v", clean, tc.converts)
+			}
+			r := gitInventory(t, d, InventoryOptions{})
+			w := r.Workspaces[0]
+			if tc.converts && (r.Status != "partial" || w.Tracked.Value != "unknown" || !strings.Contains(w.Tracked.Reason, "transformations")) {
+				t.Fatalf("Git sees no change but the inventory claims one: %s %+v", r.Status, w)
+			}
+			if !tc.converts && (r.Status != "ok" || w.Tracked.Value != "true") {
+				t.Fatalf("Git sees the change and no conversion applies: %s %+v", r.Status, w)
+			}
+		})
+	}
+}
