@@ -78,3 +78,7 @@ Independent reviewer: read-only Opus review (general-purpose agent, commands all
 | 3 | Medium | Spec/checklist/contract say 023 is not changed | FR-014, Scope, checklist and contract heading corrected |
 | 4 | Medium | T004/US1-2 record count | Three records; US1-2 reworded |
 | 5-8 | Low | FR-007 vs GL-3; output order; memory bound; stale headers | Applied (retained path bytes capped at 32 MiB per pass) |
+
+## Round 5
+
+Independent reviewer: read-only Opus review, revision 80fccd4e4d3d72a1d412ed3ee083bc5c0fd5b712, 2026-10-17. Verdict: READY (0 critical, 0 high, 4 medium, 4 low). Round 4 resolutions confirmed except the memory bound and the WI5/WI7 split (partly). Resolutions applied after the review: the repos_test.go change moved to WI7 with the 023 contract rewrite; the planned 023 "Always partial" narrowing replaced by the GL-4 statement; "Spec 023 changes" removed from the out-of-scope list; the 32 MiB retained-path cap made part of LIM-8, DEG-2, the bounds struct and T007; the memory worst case stated honestly; repos_facts_test.go, contract line 37 and docs/commands.md line 63 added to the table.

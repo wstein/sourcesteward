@@ -23,12 +23,12 @@ Constants marked "schema" appear in `boundary.limits` and keep their value (sche
 | LIM-5 | Returned records (schema `records`) | 1,024 | workspaces + references + bases + files + nested targets and upstreams of references, as in Spec 009 |
 | LIM-6 | Result bytes (schema `result_bytes`) | 1,048,576 | encoded result, as in Spec 009 |
 | LIM-7 | Index read per workspace | 100,000 entries and 8 MiB of path bytes | per streamed `ls-files` read of one workspace; 8 MiB of paths makes the `check-attr` output (about five path copies plus 109 bytes per path) fit LIM-3 |
-| LIM-8 | Retained file candidates | 100,000 per comparison pass of the inspected workspace | applied identically in both passes; other workspaces keep only the flags needed for their own `tracked`, `untracked` and `conflicts`, never records |
+| LIM-8 | Retained file candidates | 100,000 records and 32 MiB of path bytes per comparison pass of the inspected workspace | applied identically in both passes; other workspaces keep only the flags needed for their own `tracked`, `untracked` and `conflicts`, never records |
 | LIM-9 | Scanned references | 20,000 | references under `refs/heads`, `refs/remotes` and `refs/tags` (the only namespaces the adapter keeps; FEED-1 names them as patterns so other namespaces such as `refs/pull` are not scanned) parsed and kept before the listing share is applied |
 | LIM-10 | Content read per file | 16 MiB | raised from 64 KiB (COMPAT-10); content is hashed in chunks and never held whole; the blob header length is `st.Size()` from `Lstat`, the bytes read must equal it and the size and modification time after reading must equal those before, otherwise the existing `tracked content changed during inventory` failure (`changed-repository`); a larger file is `unknown` |
 | LIM-11 | Content read budget | 256 MiB per run | total bytes read for disk comparison, counted in the first comparison pass of every workspace, the inspected workspace first and the others in `worktree list` order; the second pass of a workspace compares exactly the paths the first pass compared (so the signatures stay comparable) and is not counted again, hence at most twice the budget is read. A workspace reached after exhaustion has its content comparison skipped (DEG-8) |
 
-Time: there is no per-command deadline; every streamed command observes the caller's context and the total deadline (LIM-1), so a command that prints nothing and blocks ends with the deadline (`inventory-timeout`). Memory: retained data is bounded by LIM-7, LIM-8 and LIM-9 plus one 64 KiB record; the retained data (candidates of the first pass of the inspected workspace at about 0.3 KiB each, scanned references at about 0.7 KiB each, the index paths, 8 MiB) stays below about 100 MiB because retained candidate path bytes are capped at 32 MiB per pass (beyond that candidates are counted like LIM-8, DEG-2); the second pass keeps only its signature and counters; streams are never retained.
+Time: there is no per-command deadline; every streamed command observes the caller's context and the total deadline (LIM-1), so a command that prints nothing and blocks ends with the deadline (`inventory-timeout`). Memory: retained data is bounded by LIM-7, LIM-8 and LIM-9 plus one 64 KiB record; the retained data (candidates of the first pass of the inspected workspace at about 0.3 KiB each, scanned references at about 0.7 KiB each, the index paths, 8 MiB) stays below about 100 MiB for realistic reference names (reference-name bytes are bounded only by LIM-3 and LIM-4, so the worst case with hostile names is higher and is bounded by the deadline) because retained candidate path bytes are capped at 32 MiB per pass (beyond that candidates are counted like LIM-8, DEG-2); the second pass keeps only its signature and counters; streams are never retained.
 
 ## Git commands (normative allowlist)
 
@@ -53,7 +53,7 @@ Terms: *plain run* and *query run* are defined by QR-1. Wherever a row says "par
 | ID | Situation | Result |
 | --- | --- | --- |
 | DEG-1 | File records for the selected scopes exceed the file share (FS-1) | The first records in path order (then scope order) are returned, the rest omitted and counted: partial, TXT-1 |
-| DEG-2 | LIM-8 is exceeded in a pass | Further candidates are counted, not kept; the listing is DEG-1 with "at least" in TXT-1. Both passes apply the same rule so the pass signatures stay comparable |
+| DEG-2 | LIM-8 (count or path bytes) is exceeded in a pass | Further candidates are counted, not kept; the listing is DEG-1 with "at least" in TXT-1. Both passes apply the same rule so the pass signatures stay comparable |
 | DEG-3 | The untracked listing (not the ignored listing) reaches LIM-8 | The command is stopped; `untracked` is `true` (a record was seen); DEG-2 applies to the listing. An ignored listing reaching LIM-8 is stopped and treated as DEG-2 without any `untracked` statement |
 | DEG-4 | Reference records exceed the reference share (FS-1) | References are returned in kind order local, remote, tag and name order within a kind, whole references while their cost fits; the rest omitted: partial, TXT-2. `ref-exists`, `ancestor`, base candidates, upstream and remote resolution use the complete scanned list |
 | DEG-5a | A workspace index exceeds LIM-7 | Disk comparison of that workspace is not performed: `tracked` is `unknown` with TXT-3 (also in its `limitations`), `conflicts` is `unknown` with TXT-3, no `tracked`/`disk` file records, partial for the inspected workspace. The pass signature is the digest of the bytes read up to the abort plus the marker `aborted:index-limit`; both passes abort at the same entry. Staged and untracked observations are independent and proceed |
@@ -150,7 +150,7 @@ Read-only as Spec 009. Streamed commands add: bounded memory (one record, 64 KiB
 | COMPAT-11 | Skip-worktree entries are no longer reported as deleted (SP-1); entries under `core.symlinks=false` are `unknown` (SP-2) | value correction | Sparse checkouts stop reporting hundreds of false `deleted` records |
 | COMPAT-12 | QR-1: a query run with a known predicate stays `ok`/`complete=true` when a supporting listing is truncated | behavior, narrowing a Spec 009 sentence | The truncation is in `boundary.limitations` only |
 
-## Spec 023 consequences (applied by the implementation, WI2, WI3, WI5, WI7)
+## Spec 023 consequences (applied by the implementation, WI2, WI3, WI7)
 
 Listed per artifact in [plan.md](../plan.md#spec-023-follow-up).
 
