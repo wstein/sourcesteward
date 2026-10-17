@@ -163,10 +163,10 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | --- | --- | --- |
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
-| `note` | `run-again` \| `stale-base` \| `reconcile-upstream` \| `null` | fixed text for `observe` steps; `null` otherwise |
+| `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `push-needed` \| `diverged-undecided` \| `null` | fixed text for `observe` steps; `null` otherwise |
 | `layer` | integer or `null` | layer the step rewrites; `null` for `fetch`, `link` and `observe` |
 | `findings` | string[] | codes that cause the step |
-| `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit and carries uncommitted edits), `link` is `remote-write` (pushes unpushed commits, fast-forward only) |
+| `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit with its uncommitted edits and every bookmark or commit descending from the moved change), `link` is `remote-write` (pushes unpushed commits, fast-forward only) |
 | `performed_by` | `maintainer` \| `gh-stack` | `gh-stack` only for `link` |
 | `argv` | string[] or `null` | the program and arguments; `null` for `observe` and for an unprintable step |
 | `display` | string or `null` | `argv` with each element single-quoted where needed, at most 1024 bytes; `null` when `argv` is `null` |

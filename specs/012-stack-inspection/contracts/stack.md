@@ -4,7 +4,7 @@
 
 ```text
 stw stack show [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] [--host HOST] [--remote NAME]] [--json]
-stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] [--host HOST] [--remote NAME]] [--json]
+stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] [--host HOST] [--remote NAME]] [--after-fetch] [--json]
 ```
 
 `PATH` defaults to the current directory. `--base` and `--tip` are required and each names one reference; `--tip` is a local branch or jj bookmark, `--base` may also be a remote-tracking branch or a tracked remote bookmark. `--repo`, `--host` and `--remote` are valid only with `--pull-requests` and follow Spec 020 (host default `github.com`, remote text never selects a credential host, `--repo` never overrides ownership, `--repo` and `--remote` must agree). The commands accept no other flags, never prompt, open an editor or pager, or read input. No `gh jj` entry point exists for them.
@@ -14,6 +14,7 @@ stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] 
 | `--base REF` | the reference the stack is based on; required |
 | `--tip REF` | the top layer of the stack; required |
 | `--pull-requests` | also read the pull requests and native stacks of the layers from GitHub (network effect, disclosed) |
+| `--after-fetch` | `plan` only: the caller declares a fetch was just done; not verified; a still-missing object becomes the terminating note `object-unreachable` |
 | `--json` | emit one `StackResult` object, including `incomplete` and `error` results |
 
 ## Exit status
@@ -40,7 +41,7 @@ Complete: yes. Network reads: none.
 Notice: Sampled advisory evidence; stw ran none of the printed commands and a plan authorizes nothing.
 ```
 
-Remote evidence adds, per layer, `PR #N (open, stack 10 position 2 of 3, verified)` or `(name-matched)`, a `Native stacks:` line, and its sources line (`pull-requests-by-head ok; native-stack ok`), in the shape of the Spec 025 source summary. Findings in the human list are ordered `action`, `notice`, `info`, and within a severity by the Findings table order. An `unknown` finding prints its summary with the appended reason. With no `action` or `notice` finding the text says only that none was found in the evidence read, never that the stack is correct. A `link` step prints the environment hint and the label `performed by gh stack, not by stw`; a `fetch` step prints `git fetch REMOTE` or `jj git fetch --remote REMOTE`; an `observe` step prints, by note: `run-again` "run `stw stack plan` again after the fetch"; `stale-base` "--base does not contain the merge commit of a merged pull request; update or fetch --base and run again"; `reconcile-upstream` "a local branch differs from its upstream; reconcile it (Git: rebase onto the upstream or a lease-protected push; jj: the tracked bookmark); stw does not decide".
+Remote evidence adds, per layer, `PR #N (open, stack 10 position 2 of 3, verified)` or `(name-matched)`, a `Native stacks:` line, and its sources line (`pull-requests-by-head ok; native-stack ok`), in the shape of the Spec 025 source summary. Findings in the human list are ordered `action`, `notice`, `info`, and within a severity by the Findings table order. An `unknown` finding prints its summary with the appended reason. With no `action` or `notice` finding the text says only that none was found in the evidence read, never that the stack is correct. A `link` step prints the environment hint and the label `performed by gh stack, not by stw`; a `fetch` step prints `git fetch REMOTE` or `jj git fetch --remote REMOTE`; an `observe` step prints, by note: `run-again` "run `stw stack plan` again after the fetch"; `stale-base` "--base does not contain the merge commit of a merged pull request; update or fetch --base and run again"; `object-unreachable` "an object is still missing after the fetch; it is not reachable from a fetched branch (deleted branch, fork head or unmerged merge commit); the layer is not treated as landed"; `take-upstream` "GitHub rewrote this branch; take the upstream, saving local-only commits first"; `native-rewrite-pending` "GitHub has not rewritten this native stack branch yet, or could not; run again later"; `upstream-ahead` "the upstream has commits this branch lacks; integrate them before restacking"; `push-needed` "this branch was rewritten locally; publishing needs a lease-protected push (later effect)"; `diverged-undecided` "this branch and its upstream diverged and the tip does not descend from --base; stw does not decide".
 
 ## JSON
 
