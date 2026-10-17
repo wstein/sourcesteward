@@ -176,6 +176,22 @@ func TestSchemaFindingsAreInNumericIndexOrder(t *testing.T) {
 }
 
 // Two branches of a schema may report the same problem; it is reported once.
+func TestSchemaFindingsAreSortedEvenWhenVisitedOutOfOrder(t *testing.T) {
+	findings := validateConfigSchema(decodeJSON(t, `{"version":{"scheme":"pattern","source":"nope"}}`))
+	var versionAt, sourceAt = -1, -1
+	for i, f := range findings {
+		switch f.Pointer {
+		case "/version":
+			versionAt = i
+		case "/version/source":
+			sourceAt = i
+		}
+	}
+	if versionAt < 0 || sourceAt < 0 || versionAt > sourceAt {
+		t.Fatalf("the missing-property finding at /version is visited after /version/source but sorts before it: %s", schemaCodes(findings))
+	}
+}
+
 func TestSchemaWalkerReportsAFindingOnce(t *testing.T) {
 	root := map[string]any{"allOf": []any{
 		map[string]any{"required": []any{"a"}},
