@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 to 6 resolved in the artifacts; round 7 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 to 7 resolved in the artifacts; round 8 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -125,3 +125,17 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: 67d72e2. 
 | L8 | Low | `gone` listed as detection; gone layer gets no hint; quickstart jj text | Table corrected; boundary limitation for a not-dropped `gone` layer; quickstart updated |
 | I1 | Info | R1 said no jj binary | Reworded to the measured facts |
 | I2 | Info | Allowlist said base and tip read once | Read at the first read and again at the resample |
+
+### Round 7
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: 3b6bf3d. Verdict: NOT READY, no High (1 medium, 3 low, 3 info).
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Med | Group 4(a) fired for a merged lower member that is not a local layer, so the group 5 jj guard (`landed-undetectable`) was unreachable | (a) requires the merged lower member to be a linked local layer; a bookmark-less merged member goes to group 5; the precedence sentence is explicit (groups 2 to 5 in order, guard inside group 5) and the contradictory parenthetical is removed; T029 and scenario 8b cover it |
+| L1 | Low | Squash outcome content dependent | Capability table states both outcomes; T017 tests both |
+| L2 | Low | T029 not updated | Exact head-in-range trigger, plain-chain jj case and merged-head-outside-range case |
+| L3 | Low | Round 6 measurements not recorded | Research M15; cited from the Capability table and plan R1 |
+| I1 | Info | Unreachable clause "or a linked merged layer" | Removed; the guard is native-only |
+| I2 | Info | gone/unknown verified on files backend only | Stated in M15 (reftable could not build the state) |
+| I3 | Info | Several merged heads in different layers | One `landed-undetectable` observe per affected layer, bottom first |
