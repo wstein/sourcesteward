@@ -24,7 +24,7 @@ os = "linux"
 arch = "amd64"
 output = "dist/release/stw_{version_number}_linux_amd64.tar.gz"
 runner = "ubuntu-24.04"
-smoke_argv = ["sh", "scripts/release-smoke.sh", "{version}"]
+smoke_argv = ["sh", "scripts/release-smoke.sh", "{version}", "{artifact}"]
 
 [[target]]
 id = "linux-arm64"
@@ -35,7 +35,7 @@ os = "linux"
 arch = "arm64"
 output = "dist/release/stw_{version_number}_linux_arm64.tar.gz"
 runner = "ubuntu-24.04-arm"
-smoke_argv = ["sh", "scripts/release-smoke.sh", "{version}"]
+smoke_argv = ["sh", "scripts/release-smoke.sh", "{version}", "{artifact}"]
 
 [[target]]
 id = "darwin-arm64"
@@ -46,7 +46,7 @@ os = "darwin"
 arch = "arm64"
 output = "dist/release/stw_{version_number}_darwin_arm64.tar.gz"
 runner = "macos-15"
-smoke_argv = ["sh", "scripts/release-smoke.sh", "{version}"]
+smoke_argv = ["sh", "scripts/release-smoke.sh", "{version}", "{artifact}"]
 
 [outputs]
 checksums = "SHA256SUMS"

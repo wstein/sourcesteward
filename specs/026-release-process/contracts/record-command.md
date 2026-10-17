@@ -3,7 +3,7 @@
 ## Command
 
 ```text
-stw release record --commit C --version V --from DIR [--repository OWNER/NAME] [--run-id N --run-attempt N] [PATH] [--write | --check FILE] [--json]
+stw release record --commit C --version V --from DIR [--repository OWNER/NAME] [--run-id N --run-attempt N] [PATH] [--product NAME] [--write | --check FILE] [--json]
 ```
 
 Builds the canonical release record ([record.md](record.md)) from the downloaded build output. It never builds, contacts a network, or executes anything downloaded.
@@ -14,17 +14,18 @@ Builds the canonical release record ([record.md](record.md)) from the downloaded
 | `--version V` | validated against the contract's scheme |
 | `--from DIR` | directory with `SHA256SUMS`, `build-manifest.json` and the file artifacts (downloaded draft assets); regular files only |
 | `--repository`, `--run-id`, `--run-attempt` | default to the values in the verified manifest; if given they must equal it (`artifact-mismatch` otherwise) |
-| `--write` | create `docs/releases/<version>.json` in the working tree; refuse (`output-exists`) if a different file exists; an identical file is a no-op |
+| `--product NAME` | the product (required when several exist) |
+| `--write` | create the product's record file (`docs/releases/<version>.json`, or `docs/releases/<product>/<version>.json`) in the working tree; refuse (`output-exists`) if a different file exists; an identical file is a no-op |
 | `--check FILE` | exit 3 with `record-not-canonical` or `record-invalid` unless FILE is exactly what `record` would produce |
 | none of the two | print the record to standard output |
 
 ## Procedure
 
-Read the contract at C; parse `build-manifest.json` against its schema; recompute each file's SHA-256 and size from `DIR` and compare with `SHA256SUMS` and with the manifest (any difference is `artifact-mismatch`); require the manifest's `commit`, `version` and `config_sha256` (SHA-256 of the contract blob at C) to match; for `oci-image` targets take digests from the manifest's copy of the build result and hash `lock_file` and `tool_list_file` from C's tree (`null` when not declared); assemble, order and canonically encode.
+Read the contract at C; parse `build-manifest.json` against its schema; recompute each file's SHA-256 and size from `DIR` and compare with `SHA256SUMS` and with the manifest (any difference is `artifact-mismatch`); require the manifest's `commit`, `version` and `config_sha256` (SHA-256 of the contract blob at C) to match; for `oci-image` targets take digests from the manifest's copy of the build result and hash `lock_file` and `tool_list_file` from C's tree (`null` when not declared); assemble, order and canonically encode with the hand-written, schema-ordered encoder (a generic JSON encoder is not used: its escaping and ordering differ from the canonical form). The repository, signer, `url_template`, `tag`, `project`, `product` and image `tags` are computed from the contract and the verified manifest, never taken from flags other than `--repository`, which must equal the manifest's value. A `fetch` build's declaration and `lock_files` hashes come from the manifest and are not part of the record.
 
 ## Exit status
 
-0 printed, written or checked equal; 1 refusal or operational failure (`output-exists`, `commit-unresolved`, `unsupported-backend`, `release-limit`, `canceled`); 2 usage; 3 `--check` found a difference or the inputs disagree (`artifact-mismatch`, `record-invalid`, `record-not-canonical`). Precedence 2, 1, 3, 0.
+0 printed, written or checked equal; 1 refusal or operational failure (`output-exists`, `commit-unresolved`, `product-required`, `unsupported-backend`, `release-limit`, `canceled`); 2 usage; 3 `--check` found a difference or the inputs disagree (`artifact-mismatch`, `record-invalid`, `record-not-canonical`). Precedence 2, 1, 3, 0.
 
 ## Backend capability
 
@@ -36,7 +37,7 @@ Human: a header (commit, version, number of assets), the effects line, `wrote do
 
 ## Effects
 
-Reads: contract and blobs at C, files in DIR (streamed, at most 2 GiB each, 64 files). Writes: with `--write`, exactly one new file created with `O_EXCL` and mode 0644 in an existing `docs/releases/` (the directory is created with a refusal if a file occupies the name); no staging, no commit; nothing else. Network: none. Processes: fixed isolated Git reads. Recovery: the written file is new, so nothing is overwritten; deleting it undoes the effect (constitution III).
+Reads: contract and blobs at C, files in DIR (streamed, at most 2 GiB each, 64 files). Writes: with `--write`, exactly one new file created with `O_EXCL` and mode 0644. Every path component under the repository root is opened without following symlinks (`openat` with `O_NOFOLLOW`); the directories `docs/releases/` and `docs/releases/<product>/` are created if absent, and a symlink or non-directory in the way refuses with `output-exists`; no staging, no commit; nothing else. Network: none. Processes: fixed isolated Git reads. Recovery: the written file is new, so nothing is overwritten; deleting it undoes the effect (constitution III).
 
 ## Compatibility
 

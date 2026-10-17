@@ -2,7 +2,7 @@
 
 Everything in sections 1 to 3 runs in temporary repositories only, needs no network and no GitHub access, and builds nothing. The `stw release` commands exist only after the work items named in each section; the Git commands in section 2 were run while writing this specification (Git 2.56.0). Sections 4 and 5 describe the owner's real procedure; nothing there is run by the specification, and each step needs the owner's explicit approval.
 
-## 1. Lint a contract (after WI2)
+## 1. Lint a contract (after WI1)
 
 ```sh
 work=$(mktemp -d) && cd "$work" && git init -q -b main repo && cd repo
@@ -45,23 +45,27 @@ Fixtures for the files in `./assets` are produced by the test helper (`SHA256SUM
 
 ## 4. The owner's release (needs explicit approval at every numbered step, none is automated)
 
-1. Choose C: a commit on `main` that CI ran on (normally the tip after a merge) and a version greater than every existing tag and release of the track.
+1. Choose C: a commit on `main` that CI ran on (normally the tip after a merge) and a version greater than every existing tag and release of the product.
 2. `stw release plan C --version V --online` must show verdict `pass`.
 3. Approve the build in your task context, then `stw release dispatch --commit C --version V` (prints the plan and `plan_id`), then `stw release dispatch ... --apply <plan_id>`. This starts one CI build, attests the files and keeps a **draft** release. Nothing is tagged or published. Do not publish the draft in the web UI (it would create a lightweight tag).
 4. Download the draft assets into a directory; `stw release record --commit C --version V --from DIR --write`; commit `docs/releases/V.json` plus the release notes as commit D on a branch; open a pull request; review the hashes against the draft; merge (a rebase merge is fine).
-5. Approve the tag, then push an **annotated** tag `V` on D yourself: `git tag -a V -m "..." D && git push origin V`. The publish workflow verifies (`stw release verify V --online` on the downloaded draft) and publishes; there is no build.
+5. Approve the tag (approving the tag push approves the publication it triggers), then push an **annotated** tag `V` on D yourself: `git tag -a V -m "..." D && git push origin V`. The publish workflow verifies (`stw release verify V --online` on the downloaded draft) and publishes; there is no build.
 6. Verify a download: `gh attestation verify <file> --repo <owner/name> --signer-workflow <owner/name>/.github/workflows/release-build.yml`, and `sha256sum -c SHA256SUMS`.
 7. Consumer activation (devcontainer pin, catalog, lock) is a separate step with its own authorization.
 
-If something fails before step 5, delete the draft by hand and use the next version; never delete and re-create a tag.
+If something fails before step 5, delete the draft by hand and use the next version; never delete and re-create a tag. In input mode 2 (build once on an existing tag) and for the bootstrap release the tag precedes the record: merge the record commit R, then run the publish workflow with `workflow_dispatch` (inputs `tag` and `record_commit`).
 
-## 5. Owner settings (click path, documentation only; the tool never changes settings)
+For a repository with several products add `--product NAME` to every command (or let the tag select it); the mirror example shows `zlib-v1.3.2` selecting the `zlib` product.
 
-- Tag ruleset: Settings, Rules, Rulesets, New ruleset, New tag ruleset. Name it for the release tags, Enforcement `Active`, target `Include by pattern` with the tag pattern (`v*`), enable "Restrict deletions" and "Block force pushes", leave "Restrict creations" off (or restrict creations to yourself in the bypass list). Create it before the first tag.
+## Owner settings click path
+
+Documentation only; the tool never changes settings.
+
+- Tag ruleset (**required** before the first release): Settings, Rules, Rulesets, New ruleset, New tag ruleset. Name it for the release tags, Enforcement `Active`, target `Include by pattern` with each product's tag pattern (`v*`; `zlib-v*`, ...), enable "Restrict creations", "Restrict updates", "Restrict deletions" and "Block force pushes", and put yourself in the bypass list so only you can create release tags. The publish workflow runs the workflow file of the pushed tag commit, so this ruleset (not the workflow) keeps a non-owner from tagging a crafted commit. Create it before the first tag; a tag cannot be protected retroactively.
 - Immutable releases: Settings, General, Releases, enable "Immutable releases" (the setting's name and effects with drafts are unverified; check it before relying on it).
 - `release` environment: Settings, Environments. Decision D4: no required reviewer rule; the workflows name `environment: release` and GitHub creates it unprotected on first use.
 - Optional: a repository variable is not used by these workflows.
 
-## 6. Rehearsal checklist for the unverified GitHub behavior (before the first real release)
+## Rehearsal checklist for the unverified GitHub behavior (before the first real release)
 
-Run once with a throwaway version label and delete the artifacts afterward: dispatch the build workflow for a commit that is not the tip of `main`; confirm the draft exists with the assets, that the web view shows it as untagged, that `releases/tags/{tag}` does not list it, that the releases list does, that assets download by id, and that `gh attestation verify` verifies a downloaded file against the build workflow. Record the observations in the verification note; if any contradicts research items 1 to 3, switch to the workflow-artifact fallback before WI10.
+Run once with a throwaway version label (a draft is deleted by hand afterward; nothing is tagged): dispatch the build workflow for a commit that is not the tip of `main`; confirm the draft exists with the assets, that the web view shows it as untagged, that `releases/tags/{tag}` does not list it, that the releases list does, that assets download by id, and that `gh attestation verify` verifies a downloaded file against the build workflow. Record the observations in the verification note; if any contradicts research items 1 to 3, switch to the workflow-artifact fallback before WI10.

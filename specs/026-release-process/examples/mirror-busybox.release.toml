@@ -1,0 +1,56 @@
+# Worked example 5 (file .stw/release.busybox.toml): one product of a multi-product source mirror.
+# A fetch build assembles upstream sources; the network effect is declared; the command is another tool.
+schema_version = 1
+
+[project]
+name = "BundleDock third-party sources"
+product = "busybox"
+
+[version]
+scheme = "pattern"
+source = "input"
+tag_template = "busybox-v{version}"
+tag_pattern = '^busybox-v(?P<version>(?P<major>[0-9]{1,9})\.(?P<minor>[0-9]{1,9})(?:\.(?P<patch>[0-9]{1,9}))?)$'
+order = ["major", "minor", "patch"]
+
+[[build]]
+id = "fetch"
+scope = "once"
+argv = ["bdock", "tools", "sources", "fetch", "--component", "busybox", "--version", "{version_number}", "--out", "{out_dir}"]
+network = "fetch"
+network_hosts = ["busybox.net"]
+lock_files = ["sources/busybox.lock.json"]
+timeout_seconds = 1800
+
+[[target]]
+id = "sources"
+kind = "file"
+group = "sources"
+build = "fetch"
+os = "any"
+arch = "any"
+output = "dist/release/busybox-{version_number}-sources.tar.gz"
+
+[[target]]
+id = "sources-manifest"
+kind = "file"
+role = "manifest"
+group = "sources"
+build = "fetch"
+os = "any"
+arch = "any"
+output = "dist/release/busybox-{version_number}-sources.manifest.json"
+
+[outputs]
+checksums = "SHA256SUMS"
+
+[reproducibility]
+policy = "required"
+source_date_epoch = "commit-time"
+
+[allowlist]
+paths = ["docs/**"]
+
+[ci]
+workflows = ["ci.yml"]
+release_workflow = ".github/workflows/release-build.yml"
