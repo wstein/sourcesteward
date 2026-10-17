@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
@@ -120,7 +119,7 @@ func Check(ctx context.Context, opts CheckOptions) CheckResult {
 	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
-	root, backend, owner := detectOwner(ctx, input)
+	root, backend, owner := detectOwner(ctx, input, opts.Commit != "")
 	r.Backend, r.Root = backend, root
 	if owner != nil {
 		if owner.refused {
@@ -256,23 +255,27 @@ type ownerProblem struct {
 
 // detectOwner decides the backend by ownership (never by executable availability) and returns
 // the repository root. The order is jj, GitButler, ambiguous, bare, not a repository.
-func detectOwner(ctx context.Context, path string) (root, backend string, problem *ownerProblem) {
+func detectOwner(ctx context.Context, path string, forCommit bool) (root, backend string, problem *ownerProblem) {
 	res := inspection.Inspect(ctx, path)
 	backend = res.Backend
 	switch {
 	case res.Backend == "ambiguous":
 		return "", backend, &ownerProblem{true, "ambiguous-backend", "the repository has both jj and GitButler metadata; the backend cannot be chosen"}
 	case res.Backend == "gitbutler":
-		root = findGitRoot(res.InputPath)
-		if root == "" {
-			return "", backend, &ownerProblem{true, "not-repository", "cannot find the root of the GitButler-managed repository"}
+		root, err := gitToplevel(ctx, res.InputPath)
+		if err != nil || root == "" {
+			return "", backend, &ownerProblem{false, "git-failed", "cannot find the root of the GitButler-managed repository"}
 		}
 		return root, backend, nil
 	case res.Status == "ok" && res.JJRepository != nil:
 		return res.JJRepository.WorkspaceRoot, "jj", nil
 	case res.Status == "ok" && res.Repository != nil:
 		if res.Repository.Bare || res.Repository.Worktree == nil {
-			return "", backend, &ownerProblem{true, "bare-repository", "a bare repository has no working tree to lint; use a checkout or --commit from one"}
+			if forCommit {
+				// A commit is read from the object store; no working tree is needed.
+				return res.Repository.GitDir, "git", nil
+			}
+			return "", backend, &ownerProblem{true, "bare-repository", "a bare repository has no working tree to lint; pass --commit to read a commit, or use a checkout"}
 		}
 		return *res.Repository.Worktree, "git", nil
 	}
@@ -281,21 +284,6 @@ func detectOwner(ctx context.Context, path string) (root, backend string, proble
 		code, message = res.Diagnostics[0].Code, res.Diagnostics[0].Message
 	}
 	return "", backend, &ownerProblem{code == "not-repository", code, message}
-}
-
-// findGitRoot walks up from dir to the directory that holds a .git entry.
-func findGitRoot(dir string) string {
-	for dir != "" {
-		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
-	return ""
 }
 
 // finalizeCheck derives the status, the summary and the escaped text from the collected data.
