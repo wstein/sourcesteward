@@ -181,7 +181,7 @@ func TestReposFactsDerivationJJ(t *testing.T) {
 	}
 }
 
-func TestReposFactsSubmoduleDirtyUnknown(t *testing.T) {
+func TestReposFactsSubmoduleCheckoutNotIdentifiedIsUnknown(t *testing.T) {
 	wt := "/path/to/super/sub"
 	entry := ReposEntry{
 		Index:        1,
@@ -193,7 +193,7 @@ func TestReposFactsSubmoduleDirtyUnknown(t *testing.T) {
 		Inventory: &InventoryResult{
 			Status:  "ok",
 			Backend: "git",
-			// A submodule's Git inventory reports worktree as git dir, so no workspace matches resolved root
+			// The inventory could not identify the checkout (Spec 027 CK-2), so no workspace matches the resolved root
 			Workspaces: []InventoryWorkspace{
 				{
 					Path: func() *string { p := "/path/to/super/.git/modules/sub"; return &p }(),

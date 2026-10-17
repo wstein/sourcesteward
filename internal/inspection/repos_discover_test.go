@@ -43,16 +43,19 @@ func TestReposDiscoverRegisteredSubmodulesInByteOrder(t *testing.T) {
 	}
 }
 
-func TestReposDiscoverSubmoduleNotesCarryDirtyCaveat(t *testing.T) {
+func TestReposDiscoverSubmoduleFactsDescribeTheCheckout(t *testing.T) {
 	reposHermetic(t)
 	super := reposSuper(t, filepath.Join(reposTempDir(t), "super"), "s1")
 	e := reposRun([]string{super}, true).Entries[1]
-	found := false
-	for _, n := range e.Notes {
-		found = found || strings.Contains(n, "dirty") && strings.Contains(n, "unknown")
+	if e.Facts == nil || e.Facts.Dirty.Value != "false" || len(e.Notes) != 0 {
+		t.Fatalf("Spec 027 CK-1: a clean submodule checkout is clean, without a caveat: %+v / %+v", e.Facts, e.Notes)
 	}
-	if !found || e.Facts == nil || e.Facts.Dirty.Value != "unknown" {
-		t.Fatalf("US3-6: dirty must be unknown with the caveat in notes: %+v / %+v", e.Facts, e.Notes)
+	if err := os.WriteFile(filepath.Join(super, "s1", "scratch.txt"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e = reposRun([]string{super}, true).Entries[1]
+	if e.Facts == nil || e.Facts.Dirty.Value != "true" {
+		t.Fatalf("an untracked file inside the checkout is dirty: %+v", e.Facts)
 	}
 }
 

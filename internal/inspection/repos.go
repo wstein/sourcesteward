@@ -16,14 +16,10 @@ type reposBounds struct{ total, call time.Duration }
 
 var defaultReposBounds = reposBounds{total: ReposTotalSeconds * time.Second, call: ReposPerRepositorySeconds * time.Second}
 
-// reposSubmoduleDirtyNote qualifies the embedded inventory of a submodule (US3-6): Git reports a
-// submodule's Git directory, not its checkout, as its worktree.
 const (
 	reposSamplingPrefix  = "Sampled observations are not transactional"
 	reposMaxPartialNotes = 16
 )
-
-const reposSubmoduleDirtyNote = "submodule: dirty is unknown, because Git reports the submodule's Git directory, not its checkout, as its worktree"
 
 // Repos executes the multi-repository inventory operation across explicit and discovered members.
 func Repos(ctx context.Context, o ReposOptions) ReposResult {
@@ -89,9 +85,6 @@ func reposWithBounds(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 	for i := range entries {
 		if entries[i].Inventory != nil && (entries[i].Status == "ok" || entries[i].Status == "partial") {
 			entries[i].Facts = deriveFacts(&entries[i])
-			if entries[i].Origin == "submodule" {
-				entries[i].Notes = append(entries[i].Notes, reposSubmoduleDirtyNote)
-			}
 		}
 	}
 
@@ -112,7 +105,6 @@ func reposWithBounds(ctx context.Context, o ReposOptions, inspectFn inspectFunc,
 			Limits:    ReposDefaultLimits(),
 			Limitations: []string{
 				"No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
-				"Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
 				"Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
 				"Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected.",
 			},

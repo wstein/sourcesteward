@@ -58,7 +58,7 @@ func deriveFacts(entry *ReposEntry) *ReposFacts {
 	if rootWs == nil {
 		facts.Dirty.Value = "unknown"
 		if entry.Origin == "submodule" {
-			facts.Dirty.Reason = "submodule checkout has no matching workspace record"
+			facts.Dirty.Reason = "submodule checkout not identified in the inventory"
 		} else if inv.Identity.Repository != nil && inv.Identity.Repository.Bare {
 			facts.Dirty.Reason = "bare repository has no root workspace"
 		} else {

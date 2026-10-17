@@ -349,21 +349,36 @@ func TestGitInventoryStoredSelectionAndMergeAmbiguity(t *testing.T) {
 }
 
 func TestGitInventoryOversizedDiskIsUnknown(t *testing.T) {
+	isolatedHome(t)
 	d := repo(t)
 	os.WriteFile(filepath.Join(d, "large"), []byte("small"), 0600)
 	git(t, d, "add", ".")
 	git(t, d, "commit", "-qm", "initial")
+	// A file above the per-file bound is unknown; the bound is injected so no huge file is needed.
+	small := defaultInventoryBounds()
+	small.FileBytes = outputLimit
 	os.WriteFile(filepath.Join(d, "large"), []byte(strings.Repeat("x", outputLimit+1)), 0600)
-	r := gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}})
+	r := gitInventoryWith(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}}, small)
 	if r.Status != "partial" || r.Query.Value != "unknown" {
 		t.Fatalf("%+v", r)
 	}
-	r = gitInventory(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"absent"}})
+	r = gitInventoryWith(t, d, InventoryOptions{Query: "clean", Scopes: []string{"disk"}, Paths: []string{"absent"}}, small)
 	if r.Status != "ok" || r.Query.Value != "true" {
 		t.Fatalf("unrelated content %+v", r)
 	}
+	// With the production bound the same file is compared (LIM-10 is 16 MiB), and a larger one is unknown (TXT-11).
+	r = gitInventory(t, d, InventoryOptions{Query: "dirty", Scopes: []string{"disk"}})
+	if r.Status != "ok" || r.Query.Value != "true" {
+		t.Fatalf("64 KiB+1 file %+v", r)
+	}
+	f, _ := os.Create(filepath.Join(d, "large"))
+	f.Truncate(17 << 20)
+	f.Close()
+	r = gitInventory(t, d, InventoryOptions{Scopes: []string{"disk"}})
+	if r.Status != "partial" || r.Workspaces[0].Tracked.Reason != "tracked disk content exceeds 16 MiB per-file observation limit" {
+		t.Fatalf("%+v", r.Workspaces[0])
+	}
 }
-
 func TestGitInventoryQueriesIgnoreUnselectedNormalizationAndIgnoredFiles(t *testing.T) {
 	d := repo(t)
 	for _, name := range []string{"safe", "other"} {
