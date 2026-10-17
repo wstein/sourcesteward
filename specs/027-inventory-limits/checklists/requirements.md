@@ -7,12 +7,12 @@
 ## Content, completeness and readiness
 
 - [x] Focused on user value: ordinary repositories give facts; truncation is honest; submodule checkouts and superprojects are described correctly
-- [ ] All mandatory sections completed (data-model.md was corrupted in the first commit; restored in round 1, re-check after round 2)
+- [x] All mandatory sections completed (data-model.md was corrupted in the first commit; restored in round 1 and re-read in rounds 2 to 4)
 - [x] No unresolved clarification markers remain
 - [x] Requirements are testable and unambiguous: every limit, feed, degradation, text, gitlink and checkout row is a normative table row with an identifier
 - [x] Success criteria are measurable (fixtures with 150 to 5,000 files and 1,100 tags; exact texts)
 - [x] All acceptance scenarios and edge cases are defined
-- [x] Scope is clearly bounded: Git adapter only; jj, submodule worktree observation and Spec 023 are out of scope
+- [x] Scope is clearly bounded: Git adapter only; jj, submodule worktree observation and Spec 023's scope are out of scope (its pinned limits and caveats are updated in WI2, WI3, WI5, WI7)
 - [x] Dependencies and assumptions identified: Spec 009, Spec 021 design (not code)
 - [x] Compatibility stated per change (COMPAT-1 to COMPAT-12); no schema change
 

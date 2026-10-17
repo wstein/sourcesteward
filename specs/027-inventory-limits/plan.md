@@ -68,24 +68,24 @@ docs/progress.md, docs/feature-status.json
 
 ## Spec 023 follow-up
 
-Spec 023 (`stw repos`) is merged (main f91c1e0) and consumes `Inventory` unchanged. The implementation of this spec includes the following 023 edits, in its own commits (WI7 in tasks.md), because the merged tests and documents pin the old limits:
+Spec 023 (`stw repos`) is merged (main f91c1e0) and consumes `Inventory` unchanged. Its tests, goldens and texts pin the old limits and the old submodule caveat, so this spec's implementation changes them, **in the work item whose behavior change breaks them** (so every work item ends with `make check` green); WI7 holds only the remaining text and documentation edits. Locations were found by searching the merged tree and re-checked by the round 4 reviewer.
 
-| Artifact | Location | Change |
-| --- | --- | --- |
-| `internal/inspection/repos_integration_test.go` | lines 84-100 (fixtures r6Attr, r7Limit), 168-196 (assertions) | r6Attr (400 files, 160-byte paths) and r7Limit (more than 1,024 files) stop being `git-inventory-failed`: they become `ok` with facts (clean fixtures). Replace the "inherited limit" assertions with ok/facts assertions; keep r5Super (`inventory-partial`, text TXT-9) |
-| `internal/inspection/repos_budget_test.go` | lines 34, 52 | Uses a synthetic `git-inventory-failed` entry for the output budget; stays valid (no change expected, re-run) |
-| `internal/inspection/repos_facts_test.go`, `repos_real_test.go`, `repos_partial_test.go` | submodule and gitlink facts | Re-run; where a test pins `dirty: unknown` for a submodule checkout or for a gitlink superproject, update per CK-1/GL-4 |
-| `specs/023-multi-repo-inventory/contracts/repos.md` | "Inherited limits" (lines 28-35, 41), example at lines 50, 392 | Replace the content-attributes and record-limit bullets with the new limits and degradation (reference contracts/inventory-limits.md); keep the jj bullet; "Always partial" narrows to a clean gitlink-bearing superproject and a bare repository; line 392 wording follows |
-| `specs/023-multi-repo-inventory/spec.md` | US3-6 (line 53), the inherited-limits section (line 179), SC-001 (line 216), entry-status table row for `git-inventory-failed` (line 147) | A submodule entry's `dirty` can be derived from its root workspace record (CK-1); large repositories give facts; the error row keeps `git-inventory-failed` for other causes |
-| `specs/023-multi-repo-inventory/research.md` | Decision 12 (lines 70-77) | Mark the Git-directory, 64 KiB and 1,024-record findings as fixed by Spec 027; keep the measurements as history |
-| `specs/023-multi-repo-inventory/plan.md` | risk at line 76, open question 5 (line 88), facts derivation | Risk and question answered |
-| `specs/023-multi-repo-inventory/data-model.md`, `tasks.md` (T011, T013) | facts derivation for `workspaces.dirty`; fixture expectations | Dirty derivation may use `tracked: true` of gitlink-bearing superprojects and submodule checkouts; T013 expectations for the 400-file and 1,030-file members change from error to ok |
-| `specs/023-multi-repo-inventory/spec.md` and `data-model.md` | the 8 MiB embedding budget and `output-limit` | Inventories can be close to 1 MiB each (up to about 1,023 records), so `output-limit` omissions become more frequent; re-measure and state it |
-| `specs/023-multi-repo-inventory/analysis.md`, `verification.md` | usefulness assessment; unverified list | Note the prerequisite is delivered |
-| `docs/repos.md` | lines 32, 47-59 (inherited limits, Git directory note) | Update to the new behavior |
-| `docs/agent-guide.md` | line 137 ("64 KiB attribute output, 1,024 records") | Update |
-| `docs/commands.md`, `docs/backends.md` | repos paragraph; "64 KiB per-command output bound" | Update |
-| `scripts/smoke-repos` or the repos smoke, if any pins the old errors | (grep at implementation time) | Update |
+| When | Artifact | Location | Change |
+| --- | --- | --- | --- |
+| WI2 | `internal/inspection/repos_integration_test.go` | lines 84-100 (fixtures r6Attr, r7Limit), 168-196 | r6Attr (400 files, 160-byte paths) and r7Limit (more than 1,024 files) become `ok` with facts; remove the "inherited limit" assertions; keep r5Super (`inventory-partial`, TXT-9) |
+| WI3 | `internal/inspection/repos_integration_test.go` | line 136 | a discovered submodule's `dirty` is no longer `unknown` (CK-1): assert the derived value; the note assertion is removed with the note |
+| WI3 | `internal/inspection/repos_discover_test.go` | `TestReposDiscoverSubmoduleNotesCarryDirtyCaveat`, lines 44-56 | removed or rewritten to assert there is no dirty caveat |
+| WI3 | `internal/inspection/repos.go` | `reposSubmoduleDirtyNote` (lines 19-26, appended at line 93) and the boundary limitation at line 115 ("Submodule checkouts: dirty state is unknown...") | remove the per-entry note and the limitation (they would contradict a known `dirty`); `repos_facts.go:61` keeps its reason text for the case where no workspace matches (CK-2) and is reworded to "checkout not identified" |
+| WI3 | `internal/cli/testdata/repos-{ok,partial,error,skipped,duplicate,omitted-inventory}.json` | the boundary limitation line | regenerate the goldens from the new limitation list |
+| WI3 | `scripts/smoke-repos.py` | line 250 | assert the derived `dirty` value for the clean submodule and no caveat note |
+| WI3 | `specs/023-multi-repo-inventory/contracts/repos.md` | lines 54 and 95 (text and JSON examples with the dirty-unknown limitation) | remove from the examples |
+| WI5 | `internal/contracts/repos_test.go` | `TestReposContractDisclosesInheritedLimits`, lines 154-166 | update the required phrases to the new "Inherited limits" text (it pins "cannot safely observe content attributes", "64 KiB", "inventory record limit exceeded", "1,024", "git-inventory-failed"); done together with the contract text edit |
+| WI7 | `specs/023-multi-repo-inventory/contracts/repos.md` | "Inherited limits" (lines 28-35, 41), example at line 392 | replace the content-attribute and record-limit bullets with the new limits and degradation (reference contracts/inventory-limits.md); keep the jj bullet; "Always partial" narrows to a clean gitlink-bearing superproject and a bare repository |
+| WI7 | `specs/023-multi-repo-inventory/spec.md` | US3-6 (line 53), inherited-limits section (line 179), SC-001 (line 216), entry-status row (line 147) | submodule `dirty` derived from the root workspace record; large repositories give facts |
+| WI7 | `specs/023-multi-repo-inventory/research.md` | Decision 12 (lines 70-77) | findings marked fixed by Spec 027; measurements kept as history |
+| WI7 | `specs/023-multi-repo-inventory/plan.md`, `data-model.md`, `tasks.md` (T011, T013), `analysis.md`, `verification.md` | risk at line 76, open question 5 (line 88); facts derivation: the dirty note and limitation are removed and `workspaces.dirty` uses `tracked: true` of submodule checkouts and gitlink-bearing superprojects; fixture expectations | updated; the 8 MiB embedding budget and `output-limit` frequency re-measured and stated |
+| WI7 | `docs/repos.md` | lines 32, 47-59 | updated |
+| WI7 | `docs/agent-guide.md`, `docs/commands.md`, `docs/backends.md`, `docs/README.md` (line 30), `llms.txt` (line 47) | inherited-limit wording | updated |
 
 ## Open questions (with recommendations)
 
