@@ -43,7 +43,7 @@ Not used: `git status`, which can run clean and process filters; the inventory c
 - `rev-parse --git-path modules` is relative in a main worktree; `--path-format=absolute` is needed.
 - Git 2.56 `extensions.submodulePathConfig` stores the Git directory under an encoded name (`modules/a%2fb`).
 - `for-each-ref --contains` exits 129 for an absent object or a non-commit; `--count` applies after sorting; a remote's `HEAD` symref is listed and uses a slot.
-- `config --blob HEAD:.gitmodules --null --list --no-includes` and `rev-list --count --max-count=10001 A..B` work on both versions; an absent end exits 128.
+- `config --blob HEAD:.gitmodules --null --list --no-includes` and `rev-list --count --max-count=10001 A..B` work on both versions; an absent end exits 128. *(Superseded for `.gitmodules`: `config --blob` fails on the byte 0xFF where `char` is signed, so the code reads the blob with `cat-file blob` and parses it with `config --file -`; see the 021 research note.)*
 
 **Alternates.** A submodule Git directory with a non-empty `objects/info/alternates` is refused with `submodule-path-unsafe`, never audited: Git resolves entries by realpath and keeps a trailing carriage return, which the audit does not re-implement, so no confinement check could be trusted. Users who share objects through alternates must use another mechanism for the audit (for example a separate clone).
 

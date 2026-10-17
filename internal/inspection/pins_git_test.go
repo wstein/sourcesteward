@@ -50,7 +50,7 @@ func str(p *string) string {
 // gitStdin runs a fixture Git command with standard input (the fixture helper has none).
 func gitStdin(t *testing.T, dir, input string, args ...string) string {
 	t.Helper()
-	c := exec.Command("git", append([]string{"-c", "maintenance.auto=false"}, args...)...)
+	c := exec.Command("git", append([]string{"-c", "maintenance.auto=false", "-c", "gc.auto=0"}, args...)...)
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=T", "GIT_AUTHOR_EMAIL=t@e.invalid", "GIT_COMMITTER_NAME=T", "GIT_COMMITTER_EMAIL=t@e.invalid")
 	c.Stdin = strings.NewReader(input)

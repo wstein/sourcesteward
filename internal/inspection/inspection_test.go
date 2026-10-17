@@ -46,7 +46,7 @@ func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	// Fixture writes must finish before no-write snapshots start. Automatic
 	// maintenance can leave a detached child changing repository lock files.
-	c := exec.Command("git", append([]string{"-c", "maintenance.auto=false"}, args...)...)
+	c := exec.Command("git", append([]string{"-c", "maintenance.auto=false", "-c", "gc.auto=0"}, args...)...)
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.invalid", "GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.invalid")
 	b, e := c.CombinedOutput()

@@ -24,7 +24,7 @@ type reposRealFixture struct {
 
 func reposRealGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	c := exec.Command("git", append([]string{"-C", dir, "-c", "protocol.file.allow=always", "-c", "user.name=Tester", "-c", "user.email=test@example.org"}, args...)...)
+	c := exec.Command("git", append([]string{"-C", dir, "-c", "protocol.file.allow=always", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "user.name=Tester", "-c", "user.email=test@example.org"}, args...)...)
 	if raw, err := c.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %s %v", args, raw, err)
 	}
