@@ -133,3 +133,20 @@ Coordinator confirmation review: READY. One medium and six low findings, fixed b
 | L4 | Low | `--published`, `--signer-workflow-file`, `--source-ref` shown as nested | Shown as independently optional in the spec row and verify.md synopsis |
 | L5 | Low | verify.md steps 2 and 7 and the flag row garbled | Rewritten; override stated alongside the defaults |
 | L6 | Low | workflow.md showed `--product "$PRODUCT"` unconditionally | Shown as `[--product "$PRODUCT"]` with a note: passed only when non-empty |
+
+## Decision log: owner decisions of 2026-10-17
+
+Recorded from the owner's reply on pull request sourcesteward#56. **No further review round was run on these edits**; they are author edits applied after round 4 and have not been independently re-checked.
+
+| # | Decision | Where applied |
+| --- | --- | --- |
+| 1 | Constitution amendment **not decided**: the owner reads the text first; it stays a proposal; WI6 to WI11 stay blocked | spec notice and D10 (a), constitution-amendment-proposal.md header, bootstrap.md preconditions, tasks authorization boundary |
+| 2 | `tag_commit` stays omitted from the record; `verify --json` reports it | spec D10 (b), DD14 unchanged |
+| 3 | Toolbox-bundle blockers solved **before wave 2** (binding): restartable calver counter via a `pattern` product (new `monotonicity = "non-decreasing"`), registry auth as a workflow-owned login step with no secret in the contract, moving aliases `stable`/`latest` removed from the record | spec D10 (c), FR-028, version table, config.md field and schema, example 2 (now `pattern`), examples.md, workflow.md posture (one named secret, login step only), bootstrap.md wave table and preconditions, tasks T049 to T052, plan DD36, research DD36 |
+| 4 | Reproducibility workflow dispatch-only; a schedule only with explicit owner approval | spec D10 (d), FR-017 unchanged |
+| 5 | Retention: draft release for the single build, workflow artifacts as fallback; rehearsal in a disposable repository before WI10, only with explicit owner approval | spec D10 (e), quickstart rehearsal, bootstrap.md, T045 |
+| 6 | Owner-only actor checks fail closed in organizations: accepted, recorded as a known limit | spec D10 (f), workflow.md known limitations (unchanged) |
+| 7 | Keep `build` (modes `ci`, `promote`, `local-verify`) and `verify --published` | spec D10 (g); `local-verify` stays the first cut candidate only with an owner re-decision |
+| 8 | Tag ruleset (creation restricted to the owner) is a REQUIRED precondition before the first tag; an owner-applied setting that `stw` may only report | spec D11, FR-028, release-plan.md advisory (`tag-ruleset`), bootstrap.md preconditions, quickstart readiness step 0, T043, T045, T052 |
+
+Mechanical re-check by the author only: example 2 (now a `pattern` product) validates against the updated config schema together with the other five contracts, and its tag pattern was run in Go (`toolbox/2026.10.15-b98.1`, `-b1` and the bare date match; extra components and another prefix do not). Open questions 3 to 7 of the earlier handoff are closed; the amendment and the unverified GitHub behavior remain open.
