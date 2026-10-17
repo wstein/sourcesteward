@@ -203,6 +203,44 @@ func wantRecord(rec []byte) bool {
 // pinsAfterHead is a test seam that runs right after the superproject HEAD is resolved.
 var pinsAfterHead func()
 
+var errPinsBlobTooLarge = errors.New("blob exceeds its size limit")
+
+// pinsConfigFromObject parses a configuration stored in a Git object (such as <commit>:.gitmodules or
+// :.gitmodules for the index). It never uses `git config --blob`: on Git built with a signed char (x86_64)
+// that command rejects a blob holding the byte 0xFF, which is legal in a path. The bytes are read with
+// `cat-file blob`, bounded by limit, and parsed from standard input by `config --file -`, which handles
+// them. The bool is false when the object is absent, too large or not a valid configuration.
+func pinsConfigFromObject(run *pinsRunner, repo pinsGitRepo, dir, object string, limit int) ([]pinsConfigKV, bool, error) {
+	var data []byte
+	out, err := run.run(pinsCall{Repo: repo, Dir: dir, Args: []string{"cat-file", "blob", object}, Each: func(rec []byte, last bool) error {
+		if len(data)+len(rec)+1 > limit {
+			return errPinsBlobTooLarge
+		}
+		data = append(data, rec...)
+		if !last {
+			data = append(data, 0)
+		}
+		return nil
+	}})
+	if errors.Is(err, errPinsBlobTooLarge) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if out.Exit != 0 {
+		return nil, false, nil
+	}
+	cfg, err := run.run(pinsCall{Repo: repo, Dir: dir, Args: []string{"config", "--file", "-", "--null", "--list", "--no-includes"}, Stdin: data})
+	if err != nil {
+		return nil, false, err
+	}
+	if cfg.Exit != 0 {
+		return nil, false, nil
+	}
+	return parsePinsConfig(cfg.Stdout), true, nil
+}
+
 // pinsEnumerate reads the registry of the superproject. A *pinsLimitError means a bound was exhausted.
 func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 	repo := pinsGitRepo{GitDir: l.GitDir, WorkTree: l.WorkTree}
@@ -323,14 +361,7 @@ func pinsEnumerate(run *pinsRunner, l pinsSuperLayout) (pinsRegistry, error) {
 
 	// Registration comes from the HEAD blob; with an unborn HEAD only the staged blob exists.
 	readBlob := func(rev string) ([]pinsConfigKV, bool, error) {
-		out, err := call(nil, "config", "--blob", rev, "--null", "--list", "--no-includes")
-		if err != nil {
-			return nil, false, err
-		}
-		if out.Exit != 0 {
-			return nil, false, nil
-		}
-		return parsePinsConfig(out.Stdout), true, nil
+		return pinsConfigFromObject(run, repo, "", rev, pinsGitmodulesLimit)
 	}
 	var base []pinsConfigKV
 	basePresent := false
