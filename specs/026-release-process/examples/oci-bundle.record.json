@@ -1,0 +1,66 @@
+{
+  "assets": [
+    {
+      "build": "toolbox-image",
+      "group": "bundle",
+      "index_digest": "sha256:1bc04b5291c26a46d918139138b992d2de976d6851d0893b0476b85bfbdfc6e6",
+      "kind": "oci-image",
+      "lock": {
+        "path": "bundles/toolbox/tools.lock.json",
+        "sha256": "0c030586945fe504b604ecc2e875c38ede400cd5cd73da9730302162e6b02c6f"
+      },
+      "platforms": [
+        {
+          "arch": "amd64",
+          "manifest_digest": "sha256:5861314d7fccb39c2192173240eab44fa35ca66426201ca2acd0630a6258dd51",
+          "os": "linux"
+        },
+        {
+          "arch": "arm64",
+          "manifest_digest": "sha256:f69162950f235e3cdbbad33f1f912d1a504be90d8a37d002c735d6f3e3882265",
+          "os": "linux"
+        }
+      ],
+      "repository": "ghcr.io/wstein/bundledock-toolbox",
+      "role": "artifact",
+      "source_offer": "docs/source-offer.md",
+      "tags": [
+        "2026.10.15-b98.1"
+      ],
+      "target": "toolbox",
+      "tool_list": {
+        "path": "bundles/toolbox/tools.json",
+        "sha256": "f9d35d43770d39092a663e665e82ae1d84a9e0da3d0d10c407acada6a40cd281"
+      }
+    }
+  ],
+  "attestation": {
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "provider": "github-artifact-attestation",
+    "signer_workflow": "wstein/bundledock/.github/workflows/release-bundle.yml"
+  },
+  "build": {
+    "run_attempt": 1,
+    "run_id": 12345678901,
+    "stw_version": "v0.1.0",
+    "workflow": ".github/workflows/release-bundle.yml"
+  },
+  "checksums": {
+    "name": "SHA256SUMS",
+    "sha256": "92260a141794b435df6dacae4a019097ba8fc8f2207719415f5b16507c59952b",
+    "size": 412
+  },
+  "commit": "4e7f3b62e29abc3b6014b68eb9b7ddfce9c9b702",
+  "kind": "release-record",
+  "manifest": {
+    "name": "build-manifest.json",
+    "sha256": "2bfeb0b1af4a95a43120c6d8c692a16117f3f775bb142e109916fa49026a2897",
+    "size": 2210
+  },
+  "project": "BundleDock toolbox",
+  "repository": "wstein/bundledock",
+  "schema_version": 1,
+  "source_date_epoch": 1760000000,
+  "tag": "toolbox/2026.10.15-b98.1",
+  "version": "2026.10.15-b98.1"
+}

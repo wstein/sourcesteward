@@ -1,0 +1,107 @@
+{
+  "assets": [
+    {
+      "arch": "any",
+      "build": "tools",
+      "group": "tools",
+      "kind": "file",
+      "name": "workharbor-tools_0.3.0.pyz",
+      "os": "any",
+      "role": "artifact",
+      "sha256": "d83041cda4add4d96975dcac8cc3cc9d098fa8a3b4e91e78f5a29cdaecc4eecc",
+      "size": 1000000,
+      "target": "tools",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "build": "web-image",
+      "group": "web",
+      "index_digest": "sha256:2b3c7eb4af8107b0312f61467bd6e957ec500024f702f67b3304e4dc14c3c626",
+      "kind": "oci-image",
+      "lock": null,
+      "platforms": [
+        {
+          "arch": "amd64",
+          "manifest_digest": "sha256:a430e950a146c43f180512258d01aa223fd8f70259ac990a562afe7dff5fdb74",
+          "os": "linux"
+        }
+      ],
+      "repository": "ghcr.io/wstein/workharbor-web",
+      "role": "artifact",
+      "source_offer": null,
+      "tags": [
+        "v0.3.0"
+      ],
+      "target": "web-image",
+      "tool_list": null
+    },
+    {
+      "arch": "amd64",
+      "build": "web",
+      "group": "web",
+      "kind": "file",
+      "name": "workharbor-web_0.3.0_linux_amd64.tar.gz",
+      "os": "linux",
+      "role": "artifact",
+      "sha256": "9f7e6244e83e78650ba3e5f976b00a765cbe66d00d7c77c08439414b5510aae9",
+      "size": 1000000,
+      "target": "web-linux-amd64",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "arch": "arm64",
+      "build": "whr",
+      "group": "cli",
+      "kind": "file",
+      "name": "whr_0.3.0_darwin_arm64.tar.gz",
+      "os": "darwin",
+      "role": "artifact",
+      "sha256": "10b63f03213a10de74e9d25f136bcd7d9f712d72424f26032bd8b869efc21c8a",
+      "size": 1000000,
+      "target": "whr-darwin-arm64",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "arch": "amd64",
+      "build": "whr",
+      "group": "cli",
+      "kind": "file",
+      "name": "whr_0.3.0_linux_amd64.tar.gz",
+      "os": "linux",
+      "role": "artifact",
+      "sha256": "cadb1ada10d3f2067b64b37dd588f9ebb762ecef2188cbc64dbf9b12f0cfe966",
+      "size": 1000000,
+      "target": "whr-linux-amd64",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    }
+  ],
+  "attestation": {
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "provider": "github-artifact-attestation",
+    "signer_workflow": "wstein/workharbor/.github/workflows/release-build.yml"
+  },
+  "build": {
+    "run_attempt": 1,
+    "run_id": 12345678901,
+    "stw_version": "v0.1.0",
+    "workflow": ".github/workflows/release-build.yml"
+  },
+  "checksums": {
+    "name": "SHA256SUMS",
+    "sha256": "e9b54104b0eabf574fbe8b96276d5a1be5258c51ed8fc8540c2addc1751a5698",
+    "size": 412
+  },
+  "commit": "4e7f3b62e29abc3b6014b68eb9b7ddfce9c9b702",
+  "kind": "release-record",
+  "manifest": {
+    "name": "build-manifest.json",
+    "sha256": "2c9db97ead64072fc553f96da6ab905cc66e4a30b3415718230268acb428b48a",
+    "size": 2210
+  },
+  "project": "WorkHarbor",
+  "repository": "wstein/workharbor",
+  "schema_version": 1,
+  "source_date_epoch": 1760000000,
+  "tag": "v0.3.0",
+  "version": "v0.3.0"
+}

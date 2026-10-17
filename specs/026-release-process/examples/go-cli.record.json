@@ -1,0 +1,72 @@
+{
+  "assets": [
+    {
+      "arch": "arm64",
+      "build": "cli",
+      "group": "cli",
+      "kind": "file",
+      "name": "stw_0.2.0_darwin_arm64.tar.gz",
+      "os": "darwin",
+      "role": "artifact",
+      "sha256": "15c67c8231ff592fc8de54fc19c8d661f502189d6b003c748851edfd93a4b0d9",
+      "size": 1000000,
+      "target": "darwin-arm64",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "arch": "amd64",
+      "build": "cli",
+      "group": "cli",
+      "kind": "file",
+      "name": "stw_0.2.0_linux_amd64.tar.gz",
+      "os": "linux",
+      "role": "artifact",
+      "sha256": "898f6071345796e3364588c704b5113ae18aa09f5ba29b276307c3ea0ea2de67",
+      "size": 1000000,
+      "target": "linux-amd64",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "arch": "arm64",
+      "build": "cli",
+      "group": "cli",
+      "kind": "file",
+      "name": "stw_0.2.0_linux_arm64.tar.gz",
+      "os": "linux",
+      "role": "artifact",
+      "sha256": "4fdde1ad9bf9ce47c4f04bc2fc157180632b1cad2e96f46cb919fbfbe7b38017",
+      "size": 1000000,
+      "target": "linux-arm64",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    }
+  ],
+  "attestation": {
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "provider": "github-artifact-attestation",
+    "signer_workflow": "wstein/sourcesteward/.github/workflows/release-build.yml"
+  },
+  "build": {
+    "run_attempt": 1,
+    "run_id": 12345678901,
+    "stw_version": "v0.1.0",
+    "workflow": ".github/workflows/release-build.yml"
+  },
+  "checksums": {
+    "name": "SHA256SUMS",
+    "sha256": "ec6b3035ee7705f40f16f0cb4ea4a8c68dfee14f543b397ea2cf2fe49bd4f3b0",
+    "size": 412
+  },
+  "commit": "4e7f3b62e29abc3b6014b68eb9b7ddfce9c9b702",
+  "kind": "release-record",
+  "manifest": {
+    "name": "build-manifest.json",
+    "sha256": "45f713c9aaf5cfaa4e3403c14ee2b403f44b0fd13a64bc247d2b22d9e33e2d9b",
+    "size": 2210
+  },
+  "project": "SourceSteward",
+  "repository": "wstein/sourcesteward",
+  "schema_version": 1,
+  "source_date_epoch": 1760000000,
+  "tag": "v0.2.0",
+  "version": "v0.2.0"
+}

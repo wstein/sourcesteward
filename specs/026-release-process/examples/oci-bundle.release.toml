@@ -1,0 +1,47 @@
+# Worked example 2: an OCI bundle with calendar versions. Promote adds a tag to the same digest.
+schema_version = 1
+
+[project]
+name = "BundleDock toolbox"
+
+[version]
+scheme = "calver"
+tag_prefix = "toolbox/"
+source = "input"
+
+[[build]]
+id = "toolbox-image"
+scope = "once"
+argv = ["sh", "scripts/build-bundle.sh", "toolbox", "{commit12}", "{out_dir}/toolbox-result.json"]
+env_inherit = ["PATH", "HOME", "TMPDIR", "DOCKER_HOST"]
+timeout_seconds = 3600
+
+[[target]]
+id = "toolbox"
+kind = "oci-image"
+group = "bundle"
+build = "toolbox-image"
+repository = "ghcr.io/wstein/bundledock-toolbox"
+platforms = ["linux/amd64", "linux/arm64"]
+staging_tag = "staging-{commit12}"
+result_file = "dist/release/toolbox-result.json"
+lock_file = "bundles/toolbox/tools.lock.json"
+tool_list_file = "bundles/toolbox/tools.json"
+source_offer = "docs/source-offer.md"
+
+[promote]
+argv = ["crane", "tag", "{repository}@{digest}", "{version}"]
+
+[outputs]
+checksums = "SHA256SUMS"
+
+[reproducibility]
+policy = "best-effort"
+source_date_epoch = "commit-time"
+
+[allowlist]
+paths = ["docs/**"]
+
+[ci]
+workflows = ["ci.yml"]
+release_workflow = ".github/workflows/release-bundle.yml"
