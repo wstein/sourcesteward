@@ -37,6 +37,9 @@ func checkVersion(v Version) []Finding {
 	if templateOK && !prefixSegmentsOK(prefix) {
 		invalid("/version/tag_template", "every segment of the literal prefix of tag_template must start with a letter or digit")
 	}
+	if templateOK && !refTextOK(prefix, suffix) {
+		invalid("/version/tag_template", "the literal prefix and suffix of tag_template must keep tag names valid git ref names: no .., no component ending in . or .lock")
+	}
 	if v.TagTemplate != "" && !templateOK {
 		invalid("/version/tag_template", "tag_template must contain {version} exactly once and no other brace")
 	}
@@ -173,6 +176,8 @@ func versionGroupProblem(group *syntax.Regexp) string {
 		return "the version group may match the empty string"
 	case max < 0 || max > maxVersionLength:
 		return fmt.Sprintf("the version group may match more than %d characters", maxVersionLength)
+	case !refShapeOK(group):
+		return "the version group could produce a tag that is not a valid git ref name: it may match .., end with a dot, or repeat a dot class"
 	}
 	return ""
 }
@@ -361,4 +366,148 @@ func firstRunes(re *syntax.Regexp) (ok, nullable bool) {
 		return allOK, anyNullable
 	}
 	return true, true
+}
+
+// refTextOK mirrors the part of git check-ref-format that literal tag text can break (the other
+// rules are excluded by the character sets): no "..", and no component, once the text is
+// followed by "/" or ends the tag, that ends in "." or ".lock". The prefix is followed by the
+// version, so its last component is still open; the suffix ends the tag.
+func refTextOK(prefix, suffix string) bool {
+	if strings.Contains(prefix, "..") || strings.Contains(suffix, "..") {
+		return false
+	}
+	closed := func(component string) bool {
+		return !strings.HasSuffix(component, ".") && !strings.HasSuffix(component, ".lock")
+	}
+	parts := strings.Split(prefix, "/")
+	for _, component := range parts[:len(parts)-1] {
+		if !closed(component) {
+			return false
+		}
+	}
+	if suffix == "" {
+		return true
+	}
+	parts = strings.Split(suffix, "/")
+	for _, component := range parts {
+		// The first component of the suffix continues the version; it is closed only by a slash
+		// or the end of the tag, and both apply here.
+		if component != "" && !closed(component) {
+			return false
+		}
+	}
+	return true
+}
+
+// refShapeOK reports that the expression cannot match ".." and cannot end with a dot, so the
+// version cannot break a tag name by itself. A version ending in ".lock" cannot be excluded
+// from the expression and is left to git when the tag is created.
+func refShapeOK(re *syntax.Regexp) bool {
+	if canEdgeDot(re, true) {
+		return false
+	}
+	return !dotDotPossible(re)
+}
+
+// canEdgeDot reports whether some match starts (or, reversed, ends) with a dot, and whether the
+// expression can match the empty string.
+func canEdgeDot(re *syntax.Regexp, reverse bool) bool {
+	can, _ := edgeDot(re, reverse)
+	return can
+}
+
+func edgeDot(re *syntax.Regexp, reverse bool) (can, nullable bool) {
+	switch re.Op {
+	case syntax.OpLiteral:
+		if len(re.Rune) == 0 {
+			return false, true
+		}
+		r := re.Rune[0]
+		if reverse {
+			r = re.Rune[len(re.Rune)-1]
+		}
+		return r == '.', false
+	case syntax.OpCharClass:
+		for i := 0; i+1 < len(re.Rune); i += 2 {
+			if re.Rune[i] <= '.' && '.' <= re.Rune[i+1] {
+				return true, false
+			}
+		}
+		return false, false
+	case syntax.OpAnyChar, syntax.OpAnyCharNotNL:
+		return true, false
+	case syntax.OpCapture, syntax.OpPlus:
+		return edgeDot(re.Sub[0], reverse)
+	case syntax.OpStar, syntax.OpQuest:
+		c, _ := edgeDot(re.Sub[0], reverse)
+		return c, true
+	case syntax.OpRepeat:
+		c, n := edgeDot(re.Sub[0], reverse)
+		return c, n || re.Min == 0
+	case syntax.OpConcat:
+		subs := re.Sub
+		for i := range subs {
+			sub := subs[i]
+			if reverse {
+				sub = subs[len(subs)-1-i]
+			}
+			c, n := edgeDot(sub, reverse)
+			if c {
+				can = true
+			}
+			if !n {
+				return can, false
+			}
+		}
+		return can, true
+	case syntax.OpAlternate:
+		for _, sub := range re.Sub {
+			c, n := edgeDot(sub, reverse)
+			can, nullable = can || c, nullable || n
+		}
+		return can, nullable
+	}
+	return false, true
+}
+
+// dotDotPossible reports whether the expression can match two dots in a row: inside a literal,
+// across two neighbours (skipping parts that can match nothing), or by repeating something that
+// can both start and end with a dot.
+func dotDotPossible(re *syntax.Regexp) bool {
+	switch re.Op {
+	case syntax.OpLiteral:
+		return strings.Contains(string(re.Rune), "..")
+	case syntax.OpStar, syntax.OpPlus:
+		return repeatsDot(re.Sub[0]) || dotDotPossible(re.Sub[0])
+	case syntax.OpRepeat:
+		return re.Max != 1 && repeatsDot(re.Sub[0]) || dotDotPossible(re.Sub[0])
+	case syntax.OpConcat:
+		for i, a := range re.Sub {
+			if dotDotPossible(a) {
+				return true
+			}
+			if !canEdgeDot(a, true) {
+				continue
+			}
+			for _, b := range re.Sub[i+1:] {
+				if canEdgeDot(b, false) {
+					return true
+				}
+				if _, nullable := edgeDot(b, false); !nullable {
+					break
+				}
+			}
+		}
+		return false
+	}
+	for _, sub := range re.Sub {
+		if dotDotPossible(sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func repeatsDot(inner *syntax.Regexp) bool {
+	return canEdgeDot(inner, false) && canEdgeDot(inner, true)
 }
