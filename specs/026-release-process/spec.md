@@ -38,7 +38,7 @@ A maintainer or agent edits `.stw/release.toml` and wants to know whether it is 
 1. **Given** a valid TOML file in the [strict profile](contracts/config.md#strict-toml-profile-normative), **When** `check` runs, **Then** it exits 0 and prints the normalized model (`--json`: a check result).
 2. **Given** dotted keys, inline tables, split tables, a duplicate key, YAML, or both `release.toml` and `release.json`, **When** `check` runs, **Then** each is a distinct finding (`profile-violation` or `config-ambiguous`) and the exit status is 3.
 3. **Given** an allowlist pattern that covers `.stw/`, `.github/`, a declared build input, the version file or a readiness file, **When** `check` runs, **Then** it fails with `allowlist-overlaps-input`.
-4. **Given** any input, **When** `check` runs, **Then** nothing is written and no process runs other than the existing ownership detection (and the fixed `git cat-file` reads with `--commit`); no project command runs.
+4. **Given** any input, **When** `check` runs, **Then** nothing is written and no process runs other than the existing ownership detection (and the fixed `git rev-parse --verify`, `ls-tree -z` and `cat-file` reads with `--commit`); no project command runs.
 
 ### User Story 2 - Know whether a commit may be built, or a tag published (Priority: P1)
 
@@ -176,7 +176,7 @@ A Go CLI, an OCI bundle with calendar versions, a polyglot project with several 
 
 | Command | Purpose | Network | Writes | Starts |
 | --- | --- | --- | --- | --- |
-| `stw release check [PATH] [--product NAME] [--commit SHA]` | lint the contract(s) | none | none | the existing ownership detection; with `--commit` the fixed `git cat-file` reads |
+| `stw release check [PATH] [--product NAME] [--commit SHA]` | lint the contract(s) | none | none | the existing ownership detection; with `--commit` the fixed `git rev-parse --verify`, `ls-tree -z` and `cat-file` reads |
 | `stw release plan <commit\|tag> [--product NAME] [--version V] [--for build\|publish] [--record-commit R] [--online] [--with-drafts] [--repo OWNER/NAME]` | explain gates and what would be built or verified | only with `--online` (GETs) | none | `git` or the jj read-only runner; with `--online` the hosting reads |
 | `stw release verify <tag> [--product NAME] [--record-commit R] [--published] [--signer-workflow-file PATH] [--source-ref REF] [--artifacts DIR] [--online] [--with-drafts] [--repo OWNER/NAME]` | publish gates: diff, record, artifacts, attestations | only with `--online` | none | as `plan`; with `--online` and artifacts `gh attestation verify` |
 | `stw release record --commit C --version V --from DIR [--product NAME] [--repo OWNER/NAME] [--signer-workflow-file PATH] [--run-id N --run-attempt N] [--write \| --check FILE]` | write the canonical record | none | with `--write`: one new file | `git` (read C's tree) |

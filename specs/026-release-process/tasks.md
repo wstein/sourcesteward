@@ -76,7 +76,7 @@
 ## WI9 - Documentation, contracts publication and status
 
 - [ ] T040 [P] [FR-013, FR-015, FR-019] Write docs/release.md (concepts, contract, record, commands, gates, what each proves and does not), docs/releasing.md (owner procedure, settings click path, rehearsal checklist, failure handling), update docs/commands.md, docs/backends.md (per-backend capability), docs/json-contracts.md, docs/agent-guide.md (exit status 3 meaning for the release commands), docs/README.md, llms.txt, README scope line; keep `python3 scripts/check-docs.py` passing.
-- [ ] T041 [P] [FR-015, FR-023] Extend scripts/package-pages.py `SCHEMA_PATHS` with the ten schemas; ensure the generated command reference includes `stw release` through cmd/stw-docs; do not run a site build without approval.
+- [ ] T041 [P] [FR-015, FR-023] Publish the schemas: move `release-config` and `release-check` from `UNPUBLISHED_SCHEMAS` into `SCHEMAS` in scripts/package-pages.py (owner decision: they are not published before this item) and add the other eight; ensure the generated command reference includes `stw release` through cmd/stw-docs; do not run a site build without approval.
 - [ ] T042 [FR-019] Update docs/feature-status.json (`026-release-process`), docs/progress.md and docs/roadmap.md only with real evidence; status stays `planned` until acceptance.
 
 ## WI10 - `stw` bootstrap release preparation (needs owner approval before any run or tag)

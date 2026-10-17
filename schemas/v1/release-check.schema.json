@@ -10,11 +10,11 @@
     "command": {"const": "release-check"},
     "status": {"enum": ["ok", "findings", "refused", "error"]},
     "backend": {"type": "string", "minLength": 1},
-    "input_path": {"type": "string"},
+    "input_path": {"type": "string", "description": "Repository text in this result (paths, pointers, messages, file names) is escaped: control characters, invalid UTF-8, format characters and the backslash itself are written as \\n, \\xNN, \\u{...} and \\\\, so a literal backslash and an escape sequence can look alike."},
     "root": {"type": "string"},
     "source": {"enum": ["worktree", "commit"]},
     "commit": {"type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"},
-    "contract": {"type": ["object", "null"], "description": "The normalized model when exactly one contract file was linted and it is valid; otherwise null. See products for each file."},
+    "contract": {"type": ["object", "null"], "description": "The normalized model when exactly one contract file was linted and it is valid; otherwise null. See products for each file. Strings of the model are not backslash-escaped, but C1 controls, format characters (such as bidirectional overrides) and line separators are written as \\u{...}, so a literal \\u{...} text and such a character can look alike."},
     "products": {
       "type": "array",
       "items": {
@@ -37,9 +37,9 @@
         "properties": {
           "code": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
           "severity": {"enum": ["error", "info"]},
-          "pointer": {"type": "string"},
-          "message": {"type": "string"},
-          "file": {"type": "string"}
+          "pointer": {"type": "string", "description": "Escaped repository text (see input_path)."},
+          "message": {"type": "string", "description": "Escaped repository text (see input_path)."},
+          "file": {"type": "string", "description": "Escaped repository text (see input_path)."}
         }
       }
     },
