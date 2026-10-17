@@ -13,6 +13,9 @@ type Finding struct {
 	Message  string `json:"message"`
 	File     string `json:"file,omitempty"`
 	line     int
+	// scope lists the product ids a discovery finding is about, each as |id| (the default product
+	// is ||); empty means every product.
+	scope string
 }
 
 const (

@@ -168,7 +168,8 @@ func Check(ctx context.Context, opts CheckOptions) CheckResult {
 		return refuse("config-missing", "no .stw/release.toml or .stw/release.json")
 	}
 	if opts.Product != "" {
-		findings = nil // findings about other files are not about this product
+		// Findings about other products' files are not about this product.
+		findings = DiscoveryFindingsFor(findings, opts.Product)
 	}
 	var contracts []*Contract
 	var contractFiles []string

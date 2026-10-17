@@ -242,3 +242,16 @@ func TestReleaseFindingsExitStatusAndMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestReleaseCheckProductAmbiguityExitsThree(t *testing.T) {
+	zlib := releaseExample(t, "mirror-zlib")
+	for name, files := range map[string]map[string][]byte{
+		"two files for the product": {".stw/release.zlib.toml": zlib, ".stw/release.zlib.json": []byte("{}")},
+		"default mixed with named":  {".stw/release.toml": releaseExample(t, "go-cli"), ".stw/release.zlib.toml": zlib},
+	} {
+		status, out, _ := runRelease(t, "check", "--product", "zlib", releaseRepo(t, files))
+		if status != 3 || !strings.Contains(out, "config-ambiguous") {
+			t.Errorf("%s: %d %s", name, status, out)
+		}
+	}
+}
