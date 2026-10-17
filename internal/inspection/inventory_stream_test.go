@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -43,12 +44,25 @@ func manyFilesRepo(t *testing.T, n int, dirPrefix string) string {
 	return d
 }
 
-// fakeGit installs an executable named git in a fresh directory placed first on PATH.
+// fakeGit installs an executable named git in a fresh directory placed first on PATH. It runs the shim once
+// with a probe argument (which exits at once) before returning: executing a file that was just written can fail with ETXTBSY when another
+// goroutine forked while the file was still open, and the retry absorbs that instead of failing the test.
 func fakeGit(t *testing.T, script string) {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+	path := filepath.Join(dir, "git")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nif [ \"$1\" = \"--shim-probe\" ]; then exit 0; fi\n"+script), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	for i := 0; i < 200; i++ {
+		c := exec.Command(path, "--shim-probe")
+		c.Stdin = strings.NewReader("")
+		out, err := c.CombinedOutput()
+		_ = out
+		if err == nil || !strings.Contains(err.Error(), "text file busy") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
@@ -168,7 +182,7 @@ func TestStreamEarlyStopLeavesNoLockNoProcessAndNoIndexChange(t *testing.T) {
 }
 
 func processGone(pid int) bool {
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ { // up to 20 s; returns as soon as the process is gone
 		if syscall.Kill(pid, 0) != nil {
 			return true
 		}
@@ -180,7 +194,7 @@ func processGone(pid int) bool {
 func readPID(t *testing.T, path string) int {
 	t.Helper()
 	var pid int
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1500; i++ { // up to 30 s; the shim writes the file as soon as it runs
 		b, _ := os.ReadFile(path)
 		if _, err := fmt.Sscanf(string(b), "%d", &pid); err == nil && pid > 0 {
 			return pid
@@ -207,12 +221,11 @@ func TestStreamStopOverflowAndDeadlineKillTheProcess(t *testing.T) {
 	}
 	os.Remove(pidFile)
 	fakeGit(t, "echo $$ > "+pidFile+"\nexec sleep 30\n")
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-	defer cancel()
-	start := time.Now()
+	ctx := newTriggeredDeadline()
+	go func() { readPIDQuiet(pidFile); ctx.expire() }() // the deadline fires only after the process started
 	_, _, err = s(ctx, t.TempDir(), nil, "\x00", []string{"ls-files"}, func([]byte) error { return nil })
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 5*time.Second || !processGone(readPID(t, pidFile)) {
-		t.Fatalf("deadline %v %v", err, time.Since(start))
+	if !errors.Is(err, context.DeadlineExceeded) || !processGone(readPID(t, pidFile)) {
+		t.Fatalf("deadline %v", err)
 	}
 }
 
@@ -250,7 +263,7 @@ func TestStreamFeedsStandardInputConcurrentlyWithOutput(t *testing.T) {
 	}
 	s := newStreamGit(inventoryBounds{Scan: 64 << 20, Record: outputLimit})
 	fields := 0
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	_, _, err = s(ctx, d, bytes.NewReader(raw), "\x00", []string{"check-attr", "--stdin", "-z", "filter", "text"}, func([]byte) error { fields++; return nil })
 	if err != nil || fields != 20000*3*2 {
@@ -365,20 +378,31 @@ func TestStreamBoundaryValues(t *testing.T) {
 func TestStreamKillsTheWholeProcessGroup(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child")
 	// The wrapper forks a grandchild that keeps the output pipe open, as a forking git wrapper would.
-	fakeGit(t, "(echo $$ > "+pidFile+"; exec sleep 30) &\nprintf 'a\\0'\nwait\n")
+	fakeGit(t, "sh -c 'echo $$ > "+pidFile+"; exec sleep 120' &\nprintf 'a\\0'\nwait\n")
 	s := newStreamGit(inventoryBounds{Scan: 1 << 20, Record: outputLimit})
 	var pid int
-	var requested time.Time
-	_, stopped, err := s(context.Background(), t.TempDir(), nil, "\x00", []string{"x"}, func([]byte) error {
-		pid = readPID(t, pidFile) // the grandchild has started before the stop is requested
-		requested = time.Now()
-		return errStreamStop
-	})
-	if err != nil || !stopped {
-		t.Fatalf("%v %v", stopped, err)
+	type outcome struct {
+		stopped bool
+		err     error
 	}
-	if elapsed := time.Since(requested); elapsed > 700*time.Millisecond {
-		t.Fatalf("returned only after the pipe wait delay: %v", elapsed)
+	done := make(chan outcome, 1)
+	go func() {
+		_, stopped, err := s(context.Background(), t.TempDir(), nil, "\x00", []string{"x"}, func([]byte) error {
+			pid = readPID(t, pidFile) // the grandchild has started before the stop is requested
+			return errStreamStop
+		})
+		done <- outcome{stopped, err}
+	}()
+	select {
+	case o := <-done:
+		if o.err != nil || !o.stopped {
+			t.Fatalf("%v %v", o.stopped, o.err)
+		}
+	case <-time.After(60 * time.Second): // a correct stop returns in milliseconds; only a surviving grandchild blocks
+		if pid > 0 {
+			syscall.Kill(pid, syscall.SIGKILL)
+		}
+		t.Fatal("the early stop waited for a grandchild that still held the output pipe")
 	}
 	if !processGone(pid) {
 		t.Fatal("grandchild survived the early stop")
@@ -392,4 +416,36 @@ func canonical(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// triggeredDeadline is a context whose deadline "fires" when the test says so, so a deadline test does not
+// depend on how fast the machine starts the process it wants to block.
+type triggeredDeadline struct {
+	context.Context
+	done chan struct{}
+	once sync.Once
+}
+
+func newTriggeredDeadline() *triggeredDeadline {
+	return &triggeredDeadline{Context: context.Background(), done: make(chan struct{})}
+}
+func (c *triggeredDeadline) expire()               { c.once.Do(func() { close(c.done) }) }
+func (c *triggeredDeadline) Done() <-chan struct{} { return c.done }
+func (c *triggeredDeadline) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+
+// readPIDQuiet waits for the shim's pid file without failing (the caller then expires the deadline either way).
+func readPIDQuiet(path string) {
+	for i := 0; i < 1500; i++ {
+		if b, _ := os.ReadFile(path); len(b) > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }

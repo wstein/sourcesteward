@@ -49,6 +49,10 @@ func txtRefsTruncated(n int) string {
 
 const txtResultTrimmed = "listing trimmed to fit the 1 MiB result bound"
 
+// withCause keeps the underlying error (for example a failed process start under memory pressure) in the
+// message instead of hiding it behind a generic text.
+func withCause(msg string, err error) error { return fmt.Errorf("%s: %w", msg, err) }
+
 // nativeFormatError marks native output that is not valid (DEG-14): invalid-metadata.
 type nativeFormatError struct{ msg string }
 
@@ -186,7 +190,7 @@ func (s gitInventorySession) scanReferences(dir string, keep bool) (refs []Inven
 	case err != nil:
 		c, m := scanFailure(err)
 		if c == "git-inventory-failed" {
-			m = "cannot enumerate Git references"
+			m = "cannot enumerate Git references: " + err.Error()
 		}
 		return nil, "", c, m
 	case exit != 0:
@@ -446,7 +450,7 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 		if errors.As(serr, &format) || errors.Is(serr, errStreamUnterminated) {
 			return false, "", serr
 		}
-		return false, "", errors.New("cannot safely observe content attribute usage")
+		return false, "", withCause("cannot safely observe content attribute usage", serr)
 	}
 	if tooLarge {
 		return false, txtIndexLimit, nil
@@ -490,7 +494,7 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 		return false, reason, nil
 	}
 	if serr != nil {
-		return false, "", errors.New("cannot safely observe content attributes")
+		return false, "", withCause("cannot safely observe content attributes", serr)
 	}
 	if decisive || stopped {
 		return true, "", nil
@@ -843,7 +847,7 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 			if errors.As(err, &format) || errors.As(err, &changed) || errors.Is(err, errStreamUnterminated) || s.ctx.Err() != nil {
 				return nil, c.meta, err
 			}
-			return nil, c.meta, errors.New("cannot observe Git index")
+			return nil, c.meta, withCause("cannot observe Git index", err)
 		}
 		if abort == "" && exit != 0 {
 			return nil, c.meta, errors.New("cannot observe Git index")
@@ -899,7 +903,7 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 			if errors.As(err, &format) || errors.Is(err, errStreamUnterminated) || s.ctx.Err() != nil {
 				return nil, c.meta, err
 			}
-			return nil, c.meta, errors.New("cannot observe staged Git files")
+			return nil, c.meta, withCause("cannot observe staged Git files", err)
 		} else {
 			if exit != 0 {
 				return nil, c.meta, errors.New("cannot observe staged Git files")
@@ -963,7 +967,7 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 			if errors.As(err, &format) || errors.Is(err, errStreamUnterminated) || s.ctx.Err() != nil {
 				return nil, c.meta, err
 			}
-			return nil, c.meta, errors.New("cannot enumerate native Git untracked/ignored paths")
+			return nil, c.meta, withCause("cannot enumerate native Git untracked/ignored paths", err)
 		}
 		if !stopped && exit != 0 {
 			return nil, c.meta, errors.New("cannot enumerate native Git untracked/ignored paths")
