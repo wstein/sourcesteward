@@ -647,6 +647,9 @@ func readTrackedLink(root *os.Root, path string) (string, error) {
 	return link, nil
 }
 
+// inventoryBeforeHash is a test seam: it runs after a tracked file was opened and before it is hashed.
+var inventoryBeforeHash func(path string)
+
 // hashDisk hashes git-style (blob header from the stat size) and checks the bytes read.
 func hashDisk(ctx context.Context, f *os.File, size int64, h hash.Hash) error {
 	fmt.Fprintf(h, "blob %d%c", size, 0)
@@ -829,6 +832,9 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 					v.unknown = "tracked disk content could not be safely opened"
 					c.add(v)
 					return nil
+				}
+				if inventoryBeforeHash != nil {
+					inventoryBeforeHash(path)
 				}
 				e = hashDisk(s.ctx, f, size, h)
 				after, statErr := f.Stat()
