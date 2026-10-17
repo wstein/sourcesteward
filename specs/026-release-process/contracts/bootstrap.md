@@ -37,7 +37,7 @@ Each adoption is a separate change in that repository under its own instructions
 
 ## Preconditions (binding)
 
-- **Tag ruleset (D11).** Before the first tag of any product (including `v0.1.0`) the owner has applied a tag ruleset that restricts creation, update and deletion of that product's tag pattern to the owner. It is a repository setting; `stw` only reports its state as an advisory in `plan --online` (`present`, `absent`, `unknown`) and never changes it. T043 puts the check on the readiness list; the real bootstrap tag (and any first tag) does not proceed while the advisory is `absent` **or** `unknown` (confirm the setting by hand); the rehearsal in a disposable repository does not need the ruleset.
+- **Tag ruleset (D11).** Before the first tag of any product (including `v0.1.0`) the owner has applied a tag ruleset that restricts creation, update and deletion of that product's tag pattern to the owner. It is a repository setting; `stw` only reports its state as an advisory in `plan --online` (`present`, `partial`, `absent`, `unknown`) and never changes it. T043 puts the check on the readiness list; the real bootstrap tag (and any first tag) does not proceed while the advisory is anything but `present` (`partial`, `absent`, `unknown`) (confirm the setting by hand); the rehearsal in a disposable repository does not need the ruleset.
 - **Rehearsal (D10 e).** A rehearsal of the draft and attestation behavior happens in a disposable repository before WI10, only with the owner's explicit approval.
 - **Constitution (D10 a).** The owner decided the amendment on 2026-10-17 and pull request sourcesteward#58 applies it; WI6 to WI11, including the bootstrap workflow, start only after that PR is merged.
 

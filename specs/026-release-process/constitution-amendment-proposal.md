@@ -1,8 +1,8 @@
-# PROPOSAL (not applied): constitution amendment for release automation
+# Constitution amendment for release automation (decided by the owner; applied in PR #58, in effect after merge)
 
 > **Decided by the owner on 2026-10-17; applied in pull request sourcesteward#58. Until that PR is merged the constitution text is unchanged and WI6 to WI11 stay blocked.**
 >
-> **Status: proposal for Werner Stein. The constitution (`.specify/memory/constitution.md`) is not edited by this feature.** Governance requires an explicit rationale, an impact assessment and owner review. Until the owner applies, changes or rejects this text, Spec 026 may implement only WI1 to WI5 (read-only commands and disclosed read-only reads). Implementation of `dispatch`, `build`, the workflows and the bootstrap release (WI6 to WI11) waits.
+> **Status: decided by Werner Stein on 2026-10-17; the text below is the proposal that pull request sourcesteward#58 applies. It takes effect in the constitution when #58 is merged; this feature itself does not edit the constitution.** The rationale and impact assessment are kept for the record.
 
 ## Rationale
 
@@ -27,6 +27,6 @@ Constitution 1.1.0, Scope and Constraints, lists "push/merge/release automation"
 - **Sibling repositories**: `sheetmill` and `bundledock` have their own recorded owner decisions for tag-driven workflows; this amendment governs SourceSteward only (Governance: "This constitution governs SourceSteward only").
 - **Alternatives considered**: (a) no amendment, treat the specification as the exception - weaker and invites per-feature drift; (b) a patch-level clarification only - the new conditions are constraints, not clarifications; (c) amend only the Scope sentence - leaves the release rules unspecified for later features (package channels, specs 028 and later).
 
-## Decision requested
+## Decision
 
-Apply as written, apply with changes, or reject (in which case WI6 to WI11 are re-planned as a separately authorized, non-automated recipe, as in the earlier draft). Recommendation: apply as written before WI6 starts.
+The owner decided on 2026-10-17 to apply the amendment; pull request sourcesteward#58 applies it. The alternatives that were offered (apply with changes, or reject and re-plan WI6 to WI11 as a non-automated recipe) were not chosen.
