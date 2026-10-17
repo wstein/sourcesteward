@@ -67,3 +67,35 @@ Two further binding inputs arrived while the review ran and were applied togethe
 | 39 | Low | Result-shape inconsistencies | `effects` keys aligned (`network`, `writes`, `processes`, `project_commands`); lowercase commit ids |
 
 Author re-validation after the edits: the six example contracts and six records validate against the updated schemas; ten negative mutants fail; the strict-profile line check passes for all six contract files. Not re-reviewed yet: this resolution is the subject of round 2.
+
+## Round 2
+
+Independent reviewer: read-only Opus confirmation review (executed checks), revision f7751e4, 2026-10-17. Verdict: NOT READY, 3 high, 8 medium, 12 low. Of the 39 round-1 resolutions, 31 were confirmed, 7 partially (2, 3, 8, 9, 17, 26, 39) and 1 not (7). Mechanically verified by the reviewer: six contracts and six records valid against the extracted schemas, each record consistent with its contract, strict-profile line check, Go regexp behavior of the mirror pattern (including `zlib-ng-v` and a trailing newline), `check-docs.py` and `git diff --check`, sibling permissions.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| H1 | High | The bootstrap release cannot be verified as specified (publication gates, signer, source ref) | The bootstrap workflow publishes `v0.1.0` itself; the spec no longer says the publish workflow does. New `verify --published` mode: `already-published` and `draft-missing` are `not-applicable`, and `--signer-workflow-file`/`--source-ref` are given explicitly (never read from the record); spec FR-027 and edge cases, verify.md, bootstrap.md, quickstart step 6, T047 |
+| H2 | High | Draft visibility rule contradicts itself and cannot be detected | `stw` cannot detect it, so the draft part of `release-exists` runs only with the caller's assertion `--with-drafts` (otherwise `not-applicable`, `drafts-not-checked`, printed); `draft-missing` fails closed; `drafts-invisible` removed (spec edge case, release-plan.md, verify.md, data-model, workflow.md, T025) |
+| H3 | High | `draft` and `verify-and-publish` lack `actions: read` | Added to both (and `attestations: read` flagged as possibly needed, unverified); rule tests extended in T036 |
+| M1 | Medium | `--product` missing in workflow steps, T006, `check --commit` | Passed in every workflow `stw` step; T006 and check.md updated |
+| M2 | Medium | "Literal" prefix/suffix of `tag_pattern` unsound | Defined on the parsed RE2 tree (literal nodes only); members must satisfy `tag == tag_for(version_of(tag))` (config.md) |
+| M3 | Medium | Placeholder table not applied everywhere | config.md and build.md now reference the spec table |
+| M4 | Medium | `verify` cannot verify a published release | `--published` (see H1) |
+| M5 | Medium | Smoke job cannot meet `ci` preconditions | Smoke checks out with full history; any `fail` or `not-run` offline gate refuses `gate-failed` in `build` |
+| M6 | Medium | Multi-product consequences unstated | Workflow "Multi-product consequences" section and a quickstart owner step; the repository-wide diff rule is kept |
+| M7 | Medium | Registry authentication unspecified | Pinned registry-login step with `github.token` named for the image-capable variants (workflow.md) |
+| M8 | Medium | Fetch disclosure missing from dispatch | Added to dispatch output, JSON and effects; T030 |
+| L1 | Low | Stale task/requirement text (64 lines, track-aware, four records, FR-023, checklist) | Updated |
+| L2 | Low | Example 2 is a default product though BundleDock is multi-product | `product = "toolbox"`; record carries `product` |
+| L3 | Low | release-plan example subject incomplete | Completed |
+| L4 | Low | Manifest and OCI result schemas prose only | Two schema blocks added to record.md; samples `go-cli.manifest.json`, `mirror-zlib.manifest.json`, `oci-bundle.result.json` validated; T010 extracts all three blocks |
+| L5 | Low | `--repository` versus `--repo`; "verified manifest" | `--repo` everywhere; wording corrected |
+| L6 | Low | Loose tag arguments | Ref-name character rules in the classification rule |
+| L7 | Low | `ci-not-green` wording | Rewritten |
+| L8 | Low | Mixed finding and refusal lists | Clarified in config.md, check.md and the spec limits row |
+| L9 | Low | Build job "no write permission" versus `packages: write` | Reworded ("no repository write") |
+| L10 | Low | `tag-version-mismatch` without a record | Defined against the tag-derived version in `--for build` |
+| L11 | Low | `dispatch --tag` for jj | `unsupported-backend` in jj |
+| L12 | Low | Leading zeros | Equal tuples are refused by strict monotonicity (stated) |
+
+Author re-validation: six contracts, six records, two manifests and one OCI result validate against the three-schema set; profile line check passes. Not re-reviewed yet.

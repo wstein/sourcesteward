@@ -184,7 +184,85 @@ Semantic rules (`record-invalid`): version valid for the scheme; `tag` equal to 
 }
 ```
 
-The build manifest schema (`release-build-manifest.schema.json`) has the same `$defs` and the properties `schema_version` (1), `kind` (`"build-manifest"`), `project`, `version`, `commit`, `source_date_epoch`, `config_sha256`, `stw_version`, `repository`, `run` (`workflow`, `run_id`, `run_attempt`), `builds` (per build: `id`, `network`, `network_hosts`, `lock_files` as `{path, sha256}`) and `assets`; all required except `product`, no additional properties. The OCI result schema has `schema_version` (1), `kind` (`"oci-build-result"`), `index_digest` and `platforms` (items as above).
+The build manifest and the OCI result have their own schemas (two further JSON blocks below, extracted and tested like the first; the manifest reuses the asset definition of the record schema by reference).
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/release-build-manifest.schema.json",
+  "title": "SourceSteward release build manifest (schema 1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "project", "version", "commit", "source_date_epoch", "config_sha256", "stw_version", "repository", "run", "builds", "assets"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "build-manifest"},
+    "project": {"type": "string", "pattern": "^[A-Za-z0-9._ -]{1,64}$"},
+    "product": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"},
+    "version": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$"},
+    "commit": {"type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"},
+    "source_date_epoch": {"type": ["integer", "null"], "minimum": 0},
+    "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stw_version": {"type": "string", "pattern": "^[A-Za-z0-9._+-]{1,64}$"},
+    "repository": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$"},
+    "run": {
+      "type": "object", "additionalProperties": false, "required": ["workflow", "run_id", "run_attempt"],
+      "properties": {
+        "workflow": {"type": "string", "pattern": "^[A-Za-z0-9._][A-Za-z0-9._/-]{0,255}$"},
+        "run_id": {"type": "integer", "minimum": 0},
+        "run_attempt": {"type": "integer", "minimum": 1}
+      }
+    },
+    "builds": {
+      "type": "array", "maxItems": 16,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "network", "network_hosts", "lock_files"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"},
+          "network": {"enum": ["none", "fetch"]},
+          "network_hosts": {"type": "array", "maxItems": 64, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,252}$"}},
+          "lock_files": {
+            "type": "array", "maxItems": 16,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+              "properties": {"path": {"type": "string", "pattern": "^[A-Za-z0-9._][A-Za-z0-9._/-]{0,255}$"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+            }
+          }
+        }
+      }
+    },
+    "assets": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "https://wstein.github.io/sourcesteward/schemas/v1/release-record.schema.json#/$defs/asset"}}
+  }
+}
+```
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/release-oci-result.schema.json",
+  "title": "SourceSteward OCI build result (schema 1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "index_digest", "platforms"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "oci-build-result"},
+    "index_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "platforms": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["os", "arch", "manifest_digest"],
+        "properties": {
+          "os": {"type": "string", "pattern": "^[a-z0-9_]{1,16}$"},
+          "arch": {"type": "string", "pattern": "^[a-z0-9_]{1,16}$"},
+          "variant": {"type": "string", "pattern": "^[a-z0-9_.]{1,16}$"},
+          "manifest_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}
+```
 
 ## Consumers
 
