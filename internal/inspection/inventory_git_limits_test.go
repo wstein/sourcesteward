@@ -941,20 +941,6 @@ func TestGitInventoryUnconfiguredFilterAttributeKeepsComparisonsAuthoritative(t 
 	}
 }
 
-// Every configured driver key counts: a filter with only a process or required setting is a transformation.
-func TestGitInventoryProcessOnlyAndRequiredOnlyFiltersAreTransformations(t *testing.T) {
-	isolatedHome(t)
-	for _, key := range []string{"process", "required"} {
-		d := manyFilesRepo(t, 3, "")
-		git(t, d, "config", "filter.solo."+key, map[string]string{"process": "cat", "required": "true"}[key])
-		os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("d000/file00001.txt filter=solo\n"), 0o644)
-		r := gitInventory(t, d, InventoryOptions{})
-		if r.Status != "partial" || r.Workspaces[0].Tracked.Value != "unknown" || !strings.Contains(r.Workspaces[0].Tracked.Reason, "transformations") {
-			t.Fatalf("%s: %s %+v", key, r.Status, r.Workspaces[0])
-		}
-	}
-}
-
 // Generic scan errors name the operating system condition of a failed Git process, never a path.
 func TestScanErrorMessagesCarryOnlyTheProcessCondition(t *testing.T) {
 	process := &processError{"git process failed: resource temporarily unavailable"}
@@ -1013,5 +999,43 @@ func TestReadTrackedLinkFailureIsAChangeDuringTheInventory(t *testing.T) {
 	os.Symlink("target", filepath.Join(d, "link"))
 	if link, err := readTrackedLink(root, "link"); err != nil || link != "target" {
 		t.Fatalf("%q %v", link, err)
+	}
+}
+
+// A same-size rewrite while a file is hashed gives different bytes and a different modification time: the
+// comparison is not trusted (LIM-10).
+func TestRewriteDuringHashingIsAChange(t *testing.T) {
+	isolatedHome(t)
+	d := manyFilesRepo(t, 3, "")
+	target := "d000/file00001.txt"
+	original, _ := os.ReadFile(filepath.Join(d, target))
+	inventoryBeforeHash = func(path string) {
+		if path != target {
+			return
+		}
+		inventoryBeforeHash = nil
+		rewritten := []byte(strings.Repeat("z", len(original)))
+		os.WriteFile(filepath.Join(d, target), rewritten, 0o644)
+		later := time.Now().Add(5 * time.Second)
+		os.Chtimes(filepath.Join(d, target), later, later)
+	}
+	t.Cleanup(func() { inventoryBeforeHash = nil })
+	r := gitInventory(t, d, InventoryOptions{})
+	if r.Status != "error" || r.Diagnostics[0].Code != "changed-repository" || r.Diagnostics[0].Message != "tracked content changed during inventory" {
+		t.Fatalf("%s %+v", r.Status, r.Diagnostics)
+	}
+}
+
+// Every configured driver key counts: a filter with only a process or required setting is a transformation.
+func TestGitInventoryProcessOnlyAndRequiredOnlyFiltersAreTransformations(t *testing.T) {
+	isolatedHome(t)
+	for _, key := range []string{"process", "required"} {
+		d := manyFilesRepo(t, 3, "")
+		git(t, d, "config", "filter.solo."+key, map[string]string{"process": "cat", "required": "true"}[key])
+		os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("d000/file00001.txt filter=solo\n"), 0o644)
+		r := gitInventory(t, d, InventoryOptions{})
+		if r.Status != "partial" || r.Workspaces[0].Tracked.Value != "unknown" || !strings.Contains(r.Workspaces[0].Tracked.Reason, "transformations") {
+			t.Fatalf("%s: %s %+v", key, r.Status, r.Workspaces[0])
+		}
 	}
 }
