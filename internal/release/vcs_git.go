@@ -37,7 +37,7 @@ func gitEnvironment() []string {
 			env = append(env, entry)
 		}
 	}
-	return append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_PAGER=cat", "GIT_ATTR_NOSYSTEM=1")
+	return append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_PAGER=cat", "GIT_ATTR_NOSYSTEM=1", "GIT_LITERAL_PATHSPECS=1")
 }
 
 func gitCommand(ctx context.Context, root string, args ...string) *exec.Cmd {
@@ -181,7 +181,7 @@ func (g *gitSource) Entries(paths []string) (map[string]TreeEntry, error) {
 	wanted := map[string]bool{}
 	parents := map[string]bool{}
 	for _, p := range paths {
-		if strings.ContainsAny(p, "\n\x00") || strings.HasPrefix(p, ":") {
+		if strings.ContainsAny(p, "\n\x00") {
 			return nil, fmt.Errorf("%w: unprobeable path", errGitFailed)
 		}
 		wanted[p] = true

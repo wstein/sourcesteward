@@ -125,3 +125,38 @@ func TestCheckSymlinkMessagesNameTheKind(t *testing.T) {
 		}
 	}
 }
+
+func TestGitEntriesTreatPathsLiterally(t *testing.T) {
+	dir := repoWith(t, map[string][]byte{"we*ird[1]/f": []byte("x"), ":colon/x": []byte("x"), ":8080": []byte("x"), "q?/y": []byte("x"), "plain/z": []byte("x")})
+	commit := commitAll(t, dir)
+	source, err := newGitSource(context.Background(), dir, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := source.Entries([]string{"we*ird[1]/f", ":colon/x", ":8080", "q?/y", "plain/z", "we*ird[1]/g", "wexird1/f", "plain/*", ":(top)plain", ":(glob)plain/*"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]TreeEntry{"we*ird[1]/f": {Kind: "file"}, ":colon/x": {Kind: "file"}, ":8080": {Kind: "file"}, "q?/y": {Kind: "file"}, "plain/z": {Kind: "file"}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestCheckArgvWordsThatLookLikePathspecsAreFine(t *testing.T) {
+	contract := strings.Replace(string(exampleBytes(t, "go-cli")), `"sh", "scripts/release-package.sh"`, `"sh", ":8080", ":(top)x", "*", "a[b]", "scripts/release-package.sh"`, 1)
+	dir := repoWith(t, map[string][]byte{".stw/release.toml": []byte(contract), ":8080": []byte("x"), "scripts/release-package.sh": []byte("x")})
+	commit := commitAll(t, dir)
+	for _, opts := range []CheckOptions{{Path: dir}, {Path: dir, Commit: commit}} {
+		if r := run(t, opts); r.Status != "ok" {
+			t.Fatalf("%+v: %s %+v %q", opts, r.Status, r.Error, codes(r))
+		}
+	}
+	// The word is also an input: allowlisting it is found in both forms.
+	contract = strings.Replace(contract, `paths = ["docs/**", "README.md", "llms.txt"]`, `paths = ["*8080"]`, 1)
+	write(t, dir, ".stw/release.toml", []byte(contract))
+	commit = commitAll(t, dir)
+	for _, opts := range []CheckOptions{{Path: dir}, {Path: dir, Commit: commit}} {
+		wantCodes(t, run(t, opts), "allowlist-overlaps-input .stw/release.toml /allowlist/paths/0")
+	}
+}
