@@ -50,7 +50,7 @@ Invariants: `landed` `applied` implies every commit is patch-equivalent; layers 
 
 ## Upstream
 
-`ref` (name of the configured upstream or tracked remote bookmark), `commit_id` (or `null` when the object is absent), `relation` (`same`, `ahead`, `behind`, `diverged`, `unknown` when the upstream ref exists but its object is absent, `gone` when an upstream is configured but its ref no longer exists; then `commit_id` is `null`).
+`ref` (name of the configured upstream or tracked remote bookmark), `commit_id` (or `null` when the object is absent), `ahead_by` and `behind_by` (integers, capped at 10000, merge commits counted, or `null` when `commit_id` is `null`), `relation` (`same`, `ahead`, `behind`, `diverged`, `unknown` when the upstream ref exists but its object is absent, `gone` when an upstream is configured but its ref no longer exists; then `commit_id` is `null`).
 
 ## PullRequestRef
 
@@ -166,7 +166,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | --- | --- | --- |
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
-| `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `push-needed` \| `diverged-undecided` \| `null` | fixed text for `observe` steps; `null` otherwise |
+| `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `diverged-undecided` \| `null` | fixed text for `observe` steps; `null` otherwise |
 | `layer` | integer or `null` | layer the step rewrites or describes; `null` for `fetch`, `link` and the `run-again` observe; set for every other `observe` (one step per affected layer, ordered by layer index bottom first) |
 | `findings` | string[] | codes that cause the step |
 | `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit with its uncommitted edits and every bookmark or commit descending from the moved change), `link` is `remote-write` (pushes unpushed commits, fast-forward only) |
