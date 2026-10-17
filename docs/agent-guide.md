@@ -137,10 +137,9 @@ unknown/partial evidence exits 1 and must never be treated as clean or safe to d
 their direct Git submodules in one read-only run; see [multi-repository inventory](repos.md).
 Exit 0 only when every entry is `ok` or `skipped`; exit 1 for any partial or failed entry,
 cancellation or output failure; exit 2 for usage errors with no JSON. Read each entry's `status`
-and `error.code` rather than the exit code alone: repositories with more than a few hundred tracked
-files, registered gitlinks or stale worktrees are partial or failed by the inherited inventory
-limits (64 KiB attribute output, 1,024 records), and `facts.dirty` is `unknown` for jj and
-submodules. A bad member never hides the others. The command offers no ahead/behind counts.
+and `error.code` rather than the exit code alone: repositories with registered gitlinks, a bare
+layout or stale worktrees are partial, very long changed-file or reference listings are truncated
+with a disclosure (partial), and `facts.dirty` is `unknown` for jj. A bad member never hides the others. The command offers no ahead/behind counts.
 
 ## Isolated task workspaces
 

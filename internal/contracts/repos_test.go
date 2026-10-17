@@ -159,11 +159,13 @@ func TestReposContractDisclosesInheritedLimits(t *testing.T) {
 	text := string(raw)
 	for _, want := range []string{
 		"## Inherited limits",
-		"cannot safely observe content attributes",
+		"incrementally",
 		"64 KiB",
-		"inventory record limit exceeded",
+		"20,000 references",
 		"1,024",
 		"git-inventory-failed",
+		"inventory-limit",
+		"Spec 027",
 		"exit status 1",
 		"alternates",
 		"commondir",
