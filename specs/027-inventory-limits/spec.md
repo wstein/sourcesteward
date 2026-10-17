@@ -24,7 +24,7 @@ A human or agent inventories a repository with thousands of tracked files and a 
 
 1. **Given** a clean repository of 5,000 tracked files, **When** `stw inventory` runs with the default scopes, **Then** status is `ok`, `tracked` is `false`, no file record exists and the run finishes within the 10-second deadline.
 2. **Given** the same repository with one tracked file modified and one untracked file, **When** it runs, **Then** records for exactly those two files (`disk` and `tracked` for the modified one, `untracked` for the new one) are reported with the same classification a 20-file repository gives.
-3. **Given** any tracked file with a configured clean filter or `text`/`eol`/`ident`/`working-tree-encoding` attribute among thousands of files, **When** it runs, **Then** the existing transformation qualification applies (`tracked` unknown, files qualified) exactly as for a small repository, and no filter, textconv or helper runs.
+3. **Given** any tracked file with a configured clean filter or `text`/`eol`/`crlf`/`ident`/`working-tree-encoding` attribute among thousands of files, **When** it runs, **Then** the existing transformation qualification applies (`tracked` unknown, files qualified) exactly as for a small repository, and no filter, textconv or helper runs.
 4. **Given** `--scope stored` on a repository whose root commit has 5,000 files, **When** it runs, **Then** the stored records are reported up to the record bound with the disclosure of the degradation table.
 5. **Given** a repository with 1,100 tags, **When** it runs, **Then** local branches and remote-tracking references are listed first, tags are omitted last with a disclosure, status is `partial`, and `--query ref-exists` for an omitted tag still answers `true`.
 

@@ -34,7 +34,7 @@ Two defects in the same code, found while measuring: a lightweight tag costs two
 
 ## Measurement 2: costs of the proposed reads (Git 2.56.0 unless noted)
 
-- `git ls-files -z | git check-attr --stdin -z filter text eol ident working-tree-encoding` on r50000: 9,950,000 bytes of output in 57-67 ms (output identical byte for byte under Git 2.47.3). It works with `-z --stdin` on 2.47.3; the output groups by path then attribute in the order requested, as the argument form does.
+- `git ls-files -z | git check-attr --stdin -z filter text eol crlf ident working-tree-encoding` on r50000: 9,950,000 bytes of output in 57-67 ms (output identical byte for byte under Git 2.47.3). It works with `-z --stdin` on 2.47.3; the output groups by path then attribute in the order requested, as the argument form does.
 - `git ls-files --stage -z` on r50000: 3,450,000 bytes in 7 ms. `ls-files --others` on a clean r50000: 8 ms. `for-each-ref` for 1,100 tags: 8 ms.
 - The Go raw comparison loop (`Lstat`, confined open, bounded read) over r5000 took 30 ms and over r50000 269 ms with a warm cache (12-byte files, no hashing). Two passes therefore cost about 0.6 s for 50,000 small files; large files are governed by LIM-11.
 - Per-reference ancestry costs one Git process each (`merge-base --is-ancestor`); with `--base`, `--revision` or `--remote` and 1,000 references this would be thousands of processes, which is why those facts are computed only after the listing is truncated.
