@@ -28,7 +28,7 @@ Constants marked "schema" appear in `boundary.limits` and keep their value (sche
 | LIM-10 | Content read per file | 16 MiB | raised from 64 KiB (COMPAT-10); content is hashed in chunks and never held whole; the blob header length is `st.Size()` from `Lstat`, the bytes read must equal it and the size and modification time after reading must equal those before, otherwise the existing `tracked content changed during inventory` failure (`changed-repository`); a larger file is `unknown` |
 | LIM-11 | Content read budget | 256 MiB per run | total bytes read for disk comparison, counted in the first comparison pass of every workspace, the inspected workspace first and the others in `worktree list` order; the second pass of a workspace compares exactly the paths the first pass compared (so the signatures stay comparable) and is not counted again, hence at most twice the budget is read. A workspace reached after exhaustion has its content comparison skipped (DEG-8) |
 
-Time: there is no per-command deadline; every streamed command observes the caller's context and the total deadline (LIM-1), so a command that prints nothing and blocks ends with the deadline (`inventory-timeout`). Memory: retained data is bounded by LIM-7, LIM-8 and LIM-9 plus one 64 KiB record; the retained data (candidates of the first pass of the inspected workspace at about 0.3 KiB each, scanned references at about 0.7 KiB each, the index paths, 8 MiB) stays below about 100 MiB; the second pass keeps only its signature and counters; streams are never retained.
+Time: there is no per-command deadline; every streamed command observes the caller's context and the total deadline (LIM-1), so a command that prints nothing and blocks ends with the deadline (`inventory-timeout`). Memory: retained data is bounded by LIM-7, LIM-8 and LIM-9 plus one 64 KiB record; the retained data (candidates of the first pass of the inspected workspace at about 0.3 KiB each, scanned references at about 0.7 KiB each, the index paths, 8 MiB) stays below about 100 MiB because retained candidate path bytes are capped at 32 MiB per pass (beyond that candidates are counted like LIM-8, DEG-2); the second pass keeps only its signature and counters; streams are never retained.
 
 ## Git commands (normative allowlist)
 
@@ -150,7 +150,7 @@ Read-only as Spec 009. Streamed commands add: bounded memory (one record, 64 KiB
 | COMPAT-11 | Skip-worktree entries are no longer reported as deleted (SP-1); entries under `core.symlinks=false` are `unknown` (SP-2) | value correction | Sparse checkouts stop reporting hundreds of false `deleted` records |
 | COMPAT-12 | QR-1: a query run with a known predicate stays `ok`/`complete=true` when a supporting listing is truncated | behavior, narrowing a Spec 009 sentence | The truncation is in `boundary.limitations` only |
 
-## Spec 023 consequences (recorded here, not applied)
+## Spec 023 consequences (applied by the implementation, WI2, WI3, WI5, WI7)
 
 Listed per artifact in [plan.md](../plan.md#spec-023-follow-up).
 

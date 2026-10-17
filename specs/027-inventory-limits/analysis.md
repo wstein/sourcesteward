@@ -66,3 +66,15 @@ Independent reviewer: read-only Opus review, revision 22519726d31f3ab88e164206d9
 | 8 | Low | Sparse fixture clears the bit | T006 and research name `update-index --skip-worktree` |
 | 9 | Low | Stale status line, plan Decision 6, "never printed" | Corrected |
 | 10 | Low | Scan-time record checks unnamed | Named in T007 |
+
+## Round 4
+
+Independent reviewer: read-only Opus review (general-purpose agent, commands allowed), revision 60690561ef589ad96322bfa0fbaea14db941885a, 2026-10-17, Git 2.56.0 and 2.47.3. Verdict: NOT READY (2 high, 2 medium, 4 low). All round 3 findings were confirmed resolved. The new findings concern the merged Spec 023 consumer; resolutions below are applied by the author and re-reviewed in round 5.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | 023 test changes scheduled after the work items that break them | Each 023 change moved into the WI that breaks it (WI2, WI3, WI5); WI7 keeps texts and docs |
+| 2 | High | 023 table incomplete (repos.go note and limitation, repos_facts.go, goldens, repos_discover_test, smoke-repos.py, contracts/repos_test.go, contract lines 54/95, README, llms) | Table rebuilt with all locations and the removal of the dirty caveat |
+| 3 | Medium | Spec/checklist/contract say 023 is not changed | FR-014, Scope, checklist and contract heading corrected |
+| 4 | Medium | T004/US1-2 record count | Three records; US1-2 reworded |
+| 5-8 | Low | FR-007 vs GL-3; output order; memory bound; stale headers | Applied (retained path bytes capped at 32 MiB per pass) |
