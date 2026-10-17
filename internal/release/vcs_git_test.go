@@ -29,7 +29,7 @@ func TestGitOutputIsCapped(t *testing.T) {
 }
 
 func TestGitEntriesOfATree(t *testing.T) {
-	dir := repoWith(t, map[string][]byte{"dir/file.txt": []byte("x"), "top.txt": []byte("x")})
+	dir := repoWith(t, map[string][]byte{"dir/file.txt": []byte("x"), "dir/sibling.txt": []byte("x"), "other/z": []byte("x"), "top.txt": []byte("x")})
 	if err := os.Symlink("dir/file.txt", filepath.Join(dir, "link")); err != nil {
 		t.Fatal(err)
 	}

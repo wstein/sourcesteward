@@ -495,6 +495,35 @@ func TestCheckProductKeepsAmbiguityFindingsAboutThatProduct(t *testing.T) {
 	wantCodes(t, run(t, CheckOptions{Path: dir, Product: "busybox"}), "config-ambiguous .stw/release.toml ")
 }
 
+func TestCheckSymlinkLeavingTheRepositoryFailsClosed(t *testing.T) {
+	contract := strings.Replace(string(exampleBytes(t, "go-cli")), `paths = ["docs/**", "README.md", "llms.txt"]`, `paths = ["docs/guides/*"]`, 1)
+	parent, _ := filepath.EvalSymlinks(t.TempDir())
+	dir := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(filepath.Join(parent, "outside", "elsewhere"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "init", "-q", "-b", "main")
+	write(t, dir, ".stw/release.toml", []byte(contract))
+	write(t, dir, "scripts/release-package.sh", []byte("x"))
+	if err := os.Symlink("../outside", filepath.Join(dir, "out")); err != nil {
+		t.Fatal(err)
+	}
+	// Point the build at the link: rewrite one argv word.
+	contract = strings.Replace(contract, `"sh", "scripts/release-package.sh"`, `"sh", "out/elsewhere/x.sh"`, 1)
+	write(t, dir, ".stw/release.toml", []byte(contract))
+	commit := commitAll(t, dir)
+	for _, opts := range []CheckOptions{{Path: dir}, {Path: dir, Commit: commit}} {
+		r := run(t, opts)
+		wantCodes(t, r, "allowlist-overlaps-input .stw/release.toml /allowlist/paths/0")
+		if !strings.Contains(r.Findings[0].Message, "cannot be proved apart") {
+			t.Fatalf("%+v", r.Findings[0])
+		}
+	}
+}
+
 func TestCheckFollowsRepositorySymlinksToInputs(t *testing.T) {
 	contract := strings.Replace(string(exampleBytes(t, "go-cli")), `paths = ["docs/**", "README.md", "llms.txt"]`, `paths = ["tools/**"]`, 1)
 	dir := repoWith(t, map[string][]byte{".stw/release.toml": []byte(contract), "tools/release-package.sh": []byte("#!/bin/sh\n")})
