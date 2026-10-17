@@ -336,7 +336,7 @@ def acceptance(binary=BINARY, want_jj=None):
             assert jj_entries[3]['error']['code'] == 'not-repository-root' and jj_entries[3]['inventory'] is None, jj_entries[3]
             completed.add('J.subdirectory')
             shim_log.write_text('')
-            output = observe_json(['repos', str(jj1), '--submodules'], 1)
+            output = observe_json(['repos', str(jj1), '--submodules'], 0)
             assert output['entries'][0]['discovery']['status'] == 'not-applicable', output['entries'][0]['discovery']
             calls = shim_log.read_text()
             assert not any(word in calls for word in ('ls-tree', 'ls-files', '--blob')), ('Git discovery ran for a jj parent', calls)
