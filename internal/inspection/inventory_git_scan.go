@@ -644,6 +644,9 @@ func (s gitInventorySession) indexRecord(rec []byte) (tag byte, mode, oid, stage
 	return tag, p[1], p[2], p[3], path, nil
 }
 
+// changeStamp is a seam for the platform change time, so tests can exercise the identity checks without it.
+var changeStamp = osChangeStamp
+
 // trackedChanged reports whether a tracked file changed while it was hashed: before is the Lstat taken before
 // opening, opened is the stat of the descriptor that was read and path the Lstat of the path afterwards.
 // Size, modification time, file identity and (where the platform offers it) the inode change time are
