@@ -64,6 +64,7 @@ gates
 would build (nothing executed)
   build cli (per-target): sh scripts/release-package.sh linux amd64 v0.2.0 dist/release/stw_0.2.0_linux_amd64.tar.gz  [x3 targets]
   assets: 3 files + SHA256SUMS + build-manifest.json
+advisory tag-ruleset: unknown (offline)
 verdict: incomplete (3 gates not run)
 ```
 
@@ -80,18 +81,19 @@ One `ReleasePlanResult` per invocation, validated by `schemas/v1/release-plan.sc
           {"code":"diff-not-allowlisted","outcome":"fail","reason":"path-not-allowlisted","detail":"src/main.go (M)"},
           {"code":"ci-not-green","outcome":"not-run","reason":"needs-online","detail":null}],
  "verdict":"fail","would_build":[],"would_publish":["stw_0.2.0_linux_amd64.tar.gz"],"network":[],
+ "advisories":[{"code":"tag-ruleset","state":"unknown","detail":"offline"}],
  "boundary":{"effects":{"network":false,"writes":false,"processes":"git","project_commands":false},"limits":{"max_diff_entries":20000},"complete":true},"error":null}
 ```
 
 ## Advisories
 
-The tag-ruleset advisory (decision D11) answers "does a tag ruleset restrict creation of the product's tag pattern to the owner" from the repository rulesets endpoint (the endpoint's permission needs and response shape are unverified). It is reported in the human output as `advisory tag-ruleset: absent` with the click path in the quickstart, and is the readiness check the owner reads before the first tag.
+The tag-ruleset advisory (decision D11) answers "does a tag ruleset restrict creation of the product's tag pattern to the owner" from the repository rulesets endpoint (the endpoint's permission needs and response shape are unverified). It is reported in the human output as `advisory tag-ruleset: absent` with the click path in the quickstart, and is the readiness check the owner reads before the first tag. Definitions (all unverified against the real endpoint): `present` means at least one ruleset with target `tag`, enforcement `active` (not `evaluate` or `disabled`), the `creation` rule, and an include pattern (a glob over `refs/tags/...`, matched against the product's literal tag prefix followed by a probe character, since a glob cannot be compared with an RE2 grammar exactly) that covers the product; `absent` means rulesets were readable and none qualifies; `unknown` means offline, a non-GitHub host, or a token that cannot read rulesets. Bypass actors are visible to administrators only, so `stw` does not check that the owner is the only bypass actor and says so in the detail; `present` is therefore a necessary hint, not a proof, and the owner confirms the setting by hand.
 
 ## Effects
 
 - Reads: ref and commit objects, trees and blobs of the evaluated commit (contract, record, version file, readiness paths, lock and tool-list paths are looked up, not read, except the version file and record), the raw tree diff between the record's commit and the tag commit, `refs/remotes/origin/main`, tag objects.
 - Writes: none. Index, refs, HEAD, configuration unchanged; no lock file remains; for jj no working-copy snapshot and no operation-log entry.
-- Network: none without `--online`; with it, only GETs through the hosting transport (workflow runs for the commit, releases and tags lists, at most 10 pages and 1,000 records).
+- Network: none without `--online`; with it, only GETs through the hosting transport (workflow runs for the commit, releases and tags lists, at most 10 pages and 1,000 records, and the repository rulesets for the tag-ruleset advisory).
 - Processes: the diff is read by a streaming parser (20,000 entries, 4 MiB); other reads use the existing runner cap. The fixed isolated Git invocations (`rev-parse`, `cat-file`, `merge-base --is-ancestor`, `diff-tree -r --raw -z --no-renames --no-ext-diff --no-textconv`, `ls-tree`, `for-each-ref`) with no hook, filter, textconv, fsmonitor, helper or alias; or the existing jj read-only runner. `gh auth token` only with `--online` (existing hosting behavior). No project command.
 
 ## Compatibility

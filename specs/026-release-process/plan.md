@@ -19,14 +19,14 @@ Add `stw release` (`check`, `plan`, `verify`, `record`, `dispatch`, `build`) and
 
 ## Constitution Check
 
-Pre-research: needs amendment (below). Post-design: PASS for WI1 to WI5 without the amendment; WI6 and later are blocked by it.
+Pre-research: needs the amendment (below; applied by PR #58 once merged). Post-design: PASS for WI1 to WI5 without the amendment; WI6 and later are blocked by it.
 
 - **I. Shared contract**: every command prints human output and, with `--json`, one result from the same data; no prompt, editor or pager; versioned schemas; exit statuses in one table.
 - **II. Evidence before actions**: `plan` and `verify` explain and prove; `dispatch` is plan then apply with a stateless digest, revalidated, stale plans refused; `record --write` refuses overwrite; a plan is not authorization (stated in output). Uncertain proof refuses (`not-run` is never `pass`).
 - **III. Ownership and recovery**: no stash, reset, branch change or publication by `stw`; the only local mutation is one new file; remote effects (dispatch run, draft, tag promotion) are disclosed with their recovery limits (a dispatched run can be cancelled and a draft deleted by hand; a published release and a promoted tag cannot be undone by `stw`; tags are never re-created).
 - **IV. Specify and verify**: this specification and its analysis precede code; every work item starts with failing tests; hostile fixtures (tree entries, tags, config text, record text, API text), concurrency (main moves between plan and apply), interruption and limits are specified; read-only claims have effect sentinels including jj working-copy and operation-log sentinels; conformance on the existing Git/jj lanes. **Gap**: jj is not installed where this was written, so every jj statement is unverified until WI1 conformance runs; the capability table says so.
 - **V. Tier 1 peers**: capability per backend in the spec table; jj uses its native read-only runner; unsupported capability (`verify`/`plan <tag>` annotation check, `local-verify`) refuses with `unsupported-backend` and never falls back to raw Git; no equivalence claimed.
-- **Scope and Constraints**: "push/merge/release automation ... require later specifications" and "Future ... releases and external mutations require authorization in their task context". This specification is the later specification, but automation of release steps (the CI build, draft, publish, promote) also changes what the constitution scope lists as roadmap. **An amendment is proposed, not applied** ([constitution-amendment-proposal.md](constitution-amendment-proposal.md)); until the owner decides, only the read-only work items (WI1 to WI5; WI5 adds disclosed read-only GitHub reads) may be implemented. No constitutional text is edited by this feature.
+- **Scope and Constraints**: "push/merge/release automation ... require later specifications" and "Future ... releases and external mutations require authorization in their task context". This specification is the later specification, but automation of release steps (the CI build, draft, publish, promote) also changes what the constitution scope lists as roadmap. **The amendment was decided by the owner and is applied by pull request sourcesteward#58** ([constitution-amendment-proposal.md](constitution-amendment-proposal.md)); until that PR is merged, only the read-only work items (WI1 to WI5; WI5 adds disclosed read-only GitHub reads) may be implemented. No constitutional text is edited by this feature.
 - **Umbrella AGENTS.md**: builds, tags, publication and activation need explicit authorization each time; schedules, bots, pushes and merges authorize nothing. The plan keeps `dispatch --apply`, `build --mode local-verify`, the tag push and consumer activation as separately authorized steps and ships no schedule.
 
 ## Project Structure
@@ -47,7 +47,7 @@ internal/release/attest.go           # bounded `gh attestation verify` process
 internal/release/dispatch.go         # dispatch plan, plan_id, apply
 internal/release/build.go            # CI build, smoke, local-verify export, promote; command runner
 internal/release/*_test.go           # temporary repositories, fixtures, sentinels
-internal/hosting/release.go          # read endpoints (runs, releases, tags, main ref) and the dispatch POST
+internal/hosting/release.go          # read endpoints (runs, releases, tags, main ref, repository rulesets for the advisory) and the dispatch POST
 internal/cli/release.go              # cobra commands, rendering, exit statuses
 schemas/v1/release-*.schema.json     # ten schemas
 internal/contracts/release_*_test.go # schema fixture tests and example validation
@@ -93,4 +93,4 @@ Decisions DD1 to DD14, DD34 and DD35 are in [research.md](research.md#decisions-
 - Hosting write path widens a read-only package; mitigation: DD20 and an architecture check.
 - Allowlist mis-declaration by a project; mitigation: `check` overlap rules, plan output showing matched files, the reproducibility job.
 - Scope growth: ten schemas and six commands; mitigation: work items stack with `make check` green at each and the cut order recorded in tasks (only non-decision items are cuttable without the owner).
-- Wave-2 fit: the BundleDock toolbox bundle's counter restart, secret registry token and moving aliases are not removed by this design (open question 3).
+- Wave-2 fit: the toolbox bundle's counter restart, registry credential and moving aliases are handled by decision D10 (P1 `non-decreasing` pattern product, P2 per-variant credential model, P3 no aliases in the record); adoption in the BundleDock repository still has to show all three, and the non-GitHub-registry variant keeps a documented credential exposure to project commands.

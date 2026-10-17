@@ -4,7 +4,7 @@
 
 ## What the bootstrap release workflow is
 
-`.github/workflows/release-bootstrap.yml` in `sourcesteward` (implemented in WI10, after the amendment decision): triggers `push` of annotated tags `v[0-9]+.[0-9]+.[0-9]+` and `workflow_dispatch` dry run (version label with a mandatory suffix, never publishes). Jobs `verify`, `build`, `smoke`, `attest`, `publish`, with the security posture and verification of the sibling workflows: owner-only actor checks, annotated tag, tag commit equals the run commit and is an ancestor of `main`, a successful `ci.yml` push run for the commit, no release for the tag (drafts included), version strictly above every existing tag and release, `make check` and `go mod verify`; build matrix `linux/amd64`, `linux/arm64`, `darwin/arm64` with `CGO_ENABLED=0`, `GOTOOLCHAIN=local`, `-trimpath`, `-buildvcs=false`, `-ldflags "-X main.version=<version>"`; native smoke on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` (`stw version`, `stw version --json`, `stw --help`); publish with `gh release create --verify-tag` (the bootstrap workflow publishes `v0.1.0` itself, in one tag-triggered run, as the siblings do); `environment: release` unprotected; no standing approval.
+`.github/workflows/release-bootstrap.yml` in `sourcesteward` (implemented in WI10, after PR #58 is merged): triggers `push` of annotated tags `v[0-9]+.[0-9]+.[0-9]+` and `workflow_dispatch` dry run (version label with a mandatory suffix, never publishes). Jobs `verify`, `build`, `smoke`, `attest`, `publish`, with the security posture and verification of the sibling workflows: owner-only actor checks, annotated tag, tag commit equals the run commit and is an ancestor of `main`, a successful `ci.yml` push run for the commit, no release for the tag (drafts included), version strictly above every existing tag and release, `make check` and `go mod verify`; build matrix `linux/amd64`, `linux/arm64`, `darwin/arm64` with `CGO_ENABLED=0`, `GOTOOLCHAIN=local`, `-trimpath`, `-buildvcs=false`, `-ldflags "-X main.version=<version>"`; native smoke on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` (`stw version`, `stw version --json`, `stw --help`); publish with `gh release create --verify-tag` (the bootstrap workflow publishes `v0.1.0` itself, in one tag-triggered run, as the siblings do); `environment: release` unprotected; no standing approval.
 
 Differences from the siblings, all deliberate:
 
@@ -29,7 +29,7 @@ From the release after `v0.1.0`: `stw` is released with `release-build.yml` and 
 | 1 | SheetMill (`smill`) | the merged tag workflow (no change) | adopts `stw release` by its own spec when `stw` v0.1 is released |
 | 1 | SourceSteward (`stw`) | bootstrap (this contract) | self-hosted |
 | 1 | BundleDock CLI (`bdock`) | the merged tag workflow | adopts `stw release`; prefix `bdock/` (`semver` with `tag_prefix`) |
-| 2 | BundleDock toolbox bundle | adopts `stw release` directly (`oci-image`, `pattern` product with `non-decreasing` monotonicity, example 2) | one product file per bundle product (`toolbox/`, `opentofu/`, ...) next to the CLI product `bdock/`; **binding precondition (D10)**: P1 restartable counter, P2 workflow-owned registry login, P3 no moving aliases in the record or promote; adoption does not start until BundleDock's repository shows all three |
+| 2 | BundleDock toolbox bundle | adopts `stw release` directly (`oci-image`, `pattern` product with `non-decreasing` monotonicity, example 2) | one product file per bundle product (`toolbox/`, `opentofu/`, ...) next to the CLI product `bdock/`; **binding precondition (D10)**: P1 restartable counter, P2 workflow-owned registry login (`github.token` for `ghcr.io`; one environment-scoped secret for a non-GitHub registry), P3 no moving aliases in the record or promote; adoption does not start until BundleDock's repository shows all three |
 | 2 | WorkHarbor (polyglot) | adopts directly (example 3) | its own release policy is **not yet read**; the maintainer states that its CI requires pull requests to target `main` |
 | 3 | CrewBook (skill pack) | adopts directly (example 4), released when the readiness criterion is met | criteria are the maintainer's examples, not read from the repository |
 
@@ -37,9 +37,9 @@ Each adoption is a separate change in that repository under its own instructions
 
 ## Preconditions (binding)
 
-- **Tag ruleset (D11).** Before the first tag of any product (including `v0.1.0`) the owner has applied a tag ruleset that restricts creation, update and deletion of that product's tag pattern to the owner. It is a repository setting; `stw` only reports its state as an advisory in `plan --online` (`present`, `absent`, `unknown`) and never changes it. T043 puts the check on the readiness list and T045 and the bootstrap tag step do not proceed while it is `absent`.
+- **Tag ruleset (D11).** Before the first tag of any product (including `v0.1.0`) the owner has applied a tag ruleset that restricts creation, update and deletion of that product's tag pattern to the owner. It is a repository setting; `stw` only reports its state as an advisory in `plan --online` (`present`, `absent`, `unknown`) and never changes it. T043 puts the check on the readiness list; the real bootstrap tag (and any first tag) does not proceed while the advisory is `absent` **or** `unknown` (confirm the setting by hand); the rehearsal in a disposable repository does not need the ruleset.
 - **Rehearsal (D10 e).** A rehearsal of the draft and attestation behavior happens in a disposable repository before WI10, only with the owner's explicit approval.
-- **Constitution (D10 a).** The amendment proposal is undecided; WI6 to WI11, including the bootstrap workflow, do not start until the owner decides.
+- **Constitution (D10 a).** The owner decided the amendment on 2026-10-17 and pull request sourcesteward#58 applies it; WI6 to WI11, including the bootstrap workflow, start only after that PR is merged.
 
 ## Risks
 

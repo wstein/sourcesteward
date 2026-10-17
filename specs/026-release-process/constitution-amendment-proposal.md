@@ -1,6 +1,6 @@
 # PROPOSAL (not applied): constitution amendment for release automation
 
-> **Owner decision log (2026-10-17): undecided. The owner will read the text first; it stays a proposal and WI6 to WI11 stay blocked.**
+> **Decided by the owner on 2026-10-17; applied in pull request sourcesteward#58. Until that PR is merged the constitution text is unchanged and WI6 to WI11 stay blocked.**
 >
 > **Status: proposal for Werner Stein. The constitution (`.specify/memory/constitution.md`) is not edited by this feature.** Governance requires an explicit rationale, an impact assessment and owner review. Until the owner applies, changes or rejects this text, Spec 026 may implement only WI1 to WI5 (read-only commands and disclosed read-only reads). Implementation of `dispatch`, `build`, the workflows and the bootstrap release (WI6 to WI11) waits.
 
