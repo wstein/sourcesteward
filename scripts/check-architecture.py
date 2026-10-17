@@ -23,16 +23,29 @@ def validate(lines):
 
 
 # Spec 026: project and Git processes start only in reviewed files of internal/release, and
-# nothing but internal/hosting imports a network package.
+# nothing but internal/hosting reaches a network package.
 PROCESS_FILES = re.compile(r'^internal/release/(vcs_[a-z0-9_]+|attest|build)\.go$')
 IMPORT_BLOCK = re.compile(r'^import\s*\((.*?)^\)', re.S | re.M)
 IMPORT_LINE = re.compile(r'^\s*(?:[A-Za-z_.][A-Za-z0-9_]*\s+)?"([^"]+)"', re.M)
 IMPORT_SINGLE = re.compile(r'^import\s+(?:[A-Za-z_.][A-Za-z0-9_]*\s+)?"([^"]+)"', re.M)
-PROCESS_CALL = re.compile(r'\b(os\.StartProcess|syscall\.ForkExec|syscall\.Exec)\s*\(')
-NETWORK_IMPORTS = ('net', 'net/http', 'net/rpc', 'net/smtp', 'net/textproto', 'net/http/httputil')
+OS_IMPORT = re.compile(r'^\s*(?:import\s+)?(\.|[A-Za-z_][A-Za-z0-9_]*)\s+"os"', re.M)
+PROCESS_FUNCTIONS = ('StartProcess',)
+NETWORK_ALLOWED = ('net/url', 'net/netip')
+PROCESS_IMPORTS = ('os/exec', 'syscall', 'plugin')
+NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace')
 
 
-def imports(text):
+def is_network_import(path):
+    if path in NETWORK_ALLOWED:
+        return False
+    return path == 'net' or path.startswith('net/') or path == 'crypto/tls' or path.startswith('golang.org/x/net')
+
+
+def is_process_import(path):
+    return path in PROCESS_IMPORTS or path.startswith('golang.org/x/sys')
+
+
+def source_imports(text):
     found = IMPORT_SINGLE.findall(text)
     for block in IMPORT_BLOCK.findall(text):
         found += IMPORT_LINE.findall(block)
@@ -43,18 +56,36 @@ def strip_comments(text):
     return re.sub(r'//[^\n]*|/\*.*?\*/', '', text, flags=re.S)
 
 
-def validate_sources(sources):
+def validate_sources(sources, imports=None):
+    """Check non-test Go sources. imports maps a path to its import list (from `go list`); without
+    it the imports are read from the source text, which handles aliased, blank and dot imports."""
     for path, text in sources.items():
         if path.endswith('_test.go') or not path.endswith('.go'):
             continue
-        imported = imports(text)
+        imported = imports[path] if imports and path in imports else source_imports(text)
         if not path.startswith('internal/hosting/'):
             for dependency in imported:
-                if dependency in NETWORK_IMPORTS:
+                if is_network_import(dependency):
                     raise ValueError('Only internal/hosting may use the network: ' + path + ' imports ' + dependency)
         if path.startswith('internal/release/') and not PROCESS_FILES.match(path):
-            if 'os/exec' in imported or PROCESS_CALL.search(strip_comments(text)):
-                raise ValueError('internal/release starts processes only in vcs_*.go, attest.go and build.go: ' + path)
+            for dependency in imported:
+                if is_process_import(dependency):
+                    raise ValueError('internal/release starts processes only in vcs_*.go, attest.go and build.go: ' + path + ' imports ' + dependency)
+            code = strip_comments(text)
+            for alias in OS_IMPORT.findall(code) + ['os']:
+                for function in PROCESS_FUNCTIONS:
+                    pattern = r'\b' + function + r'\s*\(' if alias == '.' else r'\b' + re.escape(alias) + r'\.' + function + r'\b'
+                    if re.search(pattern, code):
+                        raise ValueError('internal/release starts processes only in vcs_*.go, attest.go and build.go: ' + path + ' calls os.' + function)
+
+
+def validate_dependencies(dependencies):
+    """No network package may be in the dependency closure of the local-only packages."""
+    for package, deps in dependencies.items():
+        if package.removeprefix(MODULE) in NETWORK_FREE_PACKAGES:
+            for dependency in deps:
+                if is_network_import(dependency):
+                    raise ValueError(package + ' depends on the network package ' + dependency)
 
 
 def go_sources():
@@ -65,8 +96,27 @@ def go_sources():
     return sources
 
 
+def go_file_imports(sources):
+    """Imports of each non-test file as `go list` reports them for that file alone."""
+    imports = {}
+    for path in sources:
+        if path.endswith('_test.go'):
+            continue
+        result = subprocess.run(['go', 'list', '-f', '{{join .Imports " "}}', './' + path], cwd=ROOT, text=True, capture_output=True, check=True)
+        imports[path] = result.stdout.split()
+    return imports
+
+
+def go_dependencies():
+    result = subprocess.run(['go', 'list', '-deps', '-f', '{{.ImportPath}}'] + ['./' + p for p in NETWORK_FREE_PACKAGES], cwd=ROOT, text=True, capture_output=True, check=True)
+    closure = result.stdout.split()
+    return {MODULE + p: closure for p in NETWORK_FREE_PACKAGES}
+
+
 if __name__ == '__main__':
-    validate_sources(go_sources())
+    sources = go_sources()
+    validate_sources(sources, go_file_imports(sources))
+    validate_dependencies(go_dependencies())
     result = subprocess.run(['go', 'list', '-f', '{{.ImportPath}} {{join .Imports " "}}', './...'], cwd=ROOT, text=True, capture_output=True, check=True)
     validate(result.stdout.splitlines())
     print('Architecture boundary checks passed.')
