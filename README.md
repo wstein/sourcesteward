@@ -24,10 +24,11 @@ owned-workspace handoff/retirement, evidence-based local branch/bookmark tidy, a
 read-only GitHub repository/PR/CI inspection. Git and jj are Tier 1 peers; colocated
 repositories use native jj. All data commands have human and versioned JSON output.
 
-**Planned:** a read-only Git submodule pin audit (`stw pins`, [Spec 021](specs/021-submodule-pin-audit/spec.md),
-[guide](docs/pins.md); hidden until its final work item), stack inspection/diffs, checkpoint/resume, conflict diagnosis, restacking,
-stacked PR writes, work transfer, change editing, upstream synchronization and native
-GitButler integration. Bounded recovery evidence is not automatic restoration.
+**Planned:** a read-only Git submodule pin audit (`stw pins`,
+[Spec 021](specs/021-submodule-pin-audit/spec.md), [guide](docs/pins.md); merged but hidden
+until its conformance work item), stack inspection/diffs, checkpoint/resume, conflict
+diagnosis, restacking, stacked PR writes, work transfer, change editing, upstream
+synchronization and native GitButler integration. Bounded recovery evidence is not automatic restoration.
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
 [Specification](specs/001-project-foundation/spec.md) ·
