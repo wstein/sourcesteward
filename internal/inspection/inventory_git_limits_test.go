@@ -1002,27 +1002,38 @@ func TestReadTrackedLinkFailureIsAChangeDuringTheInventory(t *testing.T) {
 	}
 }
 
-// A same-size rewrite while a file is hashed gives different bytes and a different modification time: the
-// comparison is not trusted (LIM-10).
+// A same-size rewrite while a file is hashed is a change even when the modification time is restored: the
+// change time (set by the kernel) and the file identity are compared as well (LIM-10).
 func TestRewriteDuringHashingIsAChange(t *testing.T) {
 	isolatedHome(t)
-	d := manyFilesRepo(t, 3, "")
-	target := "d000/file00001.txt"
-	original, _ := os.ReadFile(filepath.Join(d, target))
-	inventoryBeforeHash = func(path string) {
-		if path != target {
-			return
-		}
-		inventoryBeforeHash = nil
-		rewritten := []byte(strings.Repeat("z", len(original)))
-		os.WriteFile(filepath.Join(d, target), rewritten, 0o644)
-		later := time.Now().Add(5 * time.Second)
-		os.Chtimes(filepath.Join(d, target), later, later)
-	}
-	t.Cleanup(func() { inventoryBeforeHash = nil })
-	r := gitInventory(t, d, InventoryOptions{})
-	if r.Status != "error" || r.Diagnostics[0].Code != "changed-repository" || r.Diagnostics[0].Message != "tracked content changed during inventory" {
-		t.Fatalf("%s %+v", r.Status, r.Diagnostics)
+	for _, mode := range []string{"in-place", "replaced"} {
+		t.Run(mode, func(t *testing.T) {
+			d := manyFilesRepo(t, 3, "")
+			target := "d000/file00001.txt"
+			full := filepath.Join(d, target)
+			original, _ := os.ReadFile(full)
+			info, _ := os.Stat(full)
+			inventoryBeforeHash = func(path string) {
+				if path != target {
+					return
+				}
+				inventoryBeforeHash = nil
+				time.Sleep(30 * time.Millisecond) // let the coarse filesystem clock advance past the Lstat
+				rewritten := []byte(strings.Repeat("z", len(original)))
+				if mode == "in-place" {
+					os.WriteFile(full, rewritten, 0o644)
+				} else {
+					os.WriteFile(full+".new", rewritten, 0o644)
+					os.Rename(full+".new", full)
+				}
+				os.Chtimes(full, info.ModTime(), info.ModTime()) // the modification time is restored: a tie
+			}
+			t.Cleanup(func() { inventoryBeforeHash = nil })
+			r := gitInventory(t, d, InventoryOptions{})
+			if r.Status != "error" || r.Diagnostics[0].Code != "changed-repository" || r.Diagnostics[0].Message != "tracked content changed during inventory" {
+				t.Fatalf("%s %+v", r.Status, r.Diagnostics)
+			}
+		})
 	}
 }
 

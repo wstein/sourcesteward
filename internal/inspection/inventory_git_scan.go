@@ -641,6 +641,25 @@ func (s gitInventorySession) indexRecord(rec []byte) (tag byte, mode, oid, stage
 	return tag, p[1], p[2], p[3], path, nil
 }
 
+// trackedChanged reports whether a tracked file changed while it was hashed: before is the Lstat taken before
+// opening, opened is the stat of the descriptor that was read and path the Lstat of the path afterwards.
+// Size, modification time, file identity and (where the platform offers it) the inode change time are
+// compared. The change time is set by the kernel and cannot be restored, so a rewrite that preserves size
+// and modification time is still seen unless it falls into the same tick of the filesystem clock; a tool
+// that rewrites a file within one tick and restores its modification time cannot be detected.
+func trackedChanged(before, opened, path os.FileInfo) bool {
+	if before.Size() != opened.Size() || !before.ModTime().Equal(opened.ModTime()) {
+		return true
+	}
+	if !os.SameFile(before, path) || before.Size() != path.Size() || !before.ModTime().Equal(path.ModTime()) {
+		return true
+	}
+	b, okB := changeStamp(before)
+	o, okO := changeStamp(opened)
+	p, okP := changeStamp(path)
+	return okB && okO && okP && (b != o || b != p)
+}
+
 // readTrackedLink reads a symlink the comparison just found with Lstat. A failure here means the entry was
 // swapped after the Lstat, which is a change during the inventory (and the error must not carry the path).
 func readTrackedLink(root *os.Root, path string) (string, error) {
@@ -857,7 +876,8 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 					c.add(v)
 					return nil
 				}
-				if size != after.Size() || !st.ModTime().Equal(after.ModTime()) {
+				pathAfter, pathErr := diskRoot.Lstat(path)
+				if pathErr != nil || trackedChanged(st, after, pathAfter) {
 					return &changedDuringError{"tracked content changed during inventory"}
 				}
 			}
