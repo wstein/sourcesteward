@@ -119,3 +119,17 @@ The eight medium and nine low findings were all resolved in the commit after thi
 | 9-17 | Low | `verified manifest` wording; `--with-drafts` on `verify` defined (detail only); `--signer-workflow-file`/`--source-ref` usage rules; optional `--record-commit` in quickstart step 6; config.md heading anchor broken (heading made a real heading); manifest `builds` in the prose list; SCHEMA_PATHS task number; plan example `readiness-missing` row and "bundle product"; dispatch exit codes and the "R follows the tag" ordering sentence | Applied |
 
 This is the third round; the verdict is READY. The final resolution is an author edit that has not been independently re-checked, which the handoff states.
+
+## Round 4
+
+Coordinator confirmation review: READY. One medium and six low findings, fixed by the author without a further review:
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Medium | The bootstrap `record` step lacked the signer override | `record --signer-workflow-file .github/workflows/release-bootstrap.yml` in bootstrap.md and T047 |
+| L1 | Low | verify.md `--published` row omitted `version-not-monotonic` | Added (matches step 5, FR-027, T025) |
+| L2 | Low | workflow.md `gates` said the gate is `not-applicable` | Draft part skipped with reason `drafts-not-checked`; the gate is `pass`/`fail` |
+| L3 | Low | spec `record` row lacked `--signer-workflow-file` | Added |
+| L4 | Low | `--published`, `--signer-workflow-file`, `--source-ref` shown as nested | Shown as independently optional in the spec row and verify.md synopsis |
+| L5 | Low | verify.md steps 2 and 7 and the flag row garbled | Rewritten; override stated alongside the defaults |
+| L6 | Low | workflow.md showed `--product "$PRODUCT"` unconditionally | Shown as `[--product "$PRODUCT"]` with a note: passed only when non-empty |
