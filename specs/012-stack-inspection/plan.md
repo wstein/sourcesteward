@@ -111,7 +111,7 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 
 ## Risks
 
-- **R1** jj parity rests on the reviewers' measurements (M13, M14) on both pinned versions; T002 re-measures with the task's own scripts before any jj code and may force changes to the Capability table; the contract states the one known gap.
+- **R1** jj parity rests on the reviewers' measurements (M13 to M15) on both pinned versions; T002 re-measures with the task's own scripts before any jj code and may force changes to the Capability table; the contract states the one known gap.
 - **R2** Parallel work on `transport.go`/`operations.go` (Spec 025 WI1, any Spec 022 follow-up): the remote work item is last in the order and rebases.
 - **R3** The native stack REST resources are new; shapes beyond the measured closed stack are unverified (U4). Every unexpected shape or status degrades to `unknown` or `incomplete`, never to a claim.
 - **R4** Patch ids differ when a rebase merge resolved a conflict or a squash combined commits; the layer then looks `pending` locally. The remote evidence (`rewritten`) covers it; the spec never claims a layer is not applied.
