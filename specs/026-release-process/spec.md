@@ -246,7 +246,7 @@ Placeholders are a closed set; any other brace expression, or a placeholder not 
 
 | Item | Rule |
 | --- | --- |
-| Environment | cleared; then `env_inherit` names copied from the CI environment (default `PATH`, `HOME`, `TMPDIR`), then the build's `env_set` entries, then `SOURCE_DATE_EPOCH` (C's committer time), `TZ=UTC`, `LC_ALL=C`. Names matching `*TOKEN*`, `*SECRET*`, `*KEY*`, `*PASSWORD*`, `*AUTH*`, `*CREDENTIAL*`, `ACTIONS_*`, `GITHUB_*`, `SSH_AUTH_SOCK` are refused in `env_inherit` and `env_set` (`env-name-forbidden`). `stw` passes no secret; an inherited `HOME` can still expose credential files of the runner user, so a build runs on an ephemeral runner and the contract does not claim isolation |
+| Environment | cleared; then `env_inherit` names copied from the CI environment (default `PATH`, `HOME`, `TMPDIR`), then the build's `env_set` entries, then `SOURCE_DATE_EPOCH` (C's committer time), `TZ=UTC`, `LC_ALL=C`. Names matching `*TOKEN*`, `*SECRET*`, `*KEY*`, `*PASSWORD*`, `*AUTH*`, `*CREDENTIAL*`, `ACTIONS_*`, `GITHUB_*`, `SSH_AUTH_SOCK` are refused in `env_inherit` and `env_set` (`env-name-forbidden`), and so are `SOURCE_DATE_EPOCH`, `TZ` and `LC_ALL`, which `stw` sets itself. `stw` passes no secret; an inherited `HOME` can still expose credential files of the runner user, so a build runs on an ephemeral runner and the contract does not claim isolation |
 | Version | injected only by the placeholders `{version}`, `{version_number}` in argv and `env_set` values; `stw` never reads it from Git for the build |
 | Argument vector | `argv` array, no shell; placeholders per the [placeholder table](#placeholders-normative) |
 | Working directory | the build's `working_dir` (default `.`), confined under the repository root, no `..`, no absolute path |
@@ -259,7 +259,7 @@ Placeholders are a closed set; any other brace expression, or a placeholder not 
 
 | Command | Git | jj (standalone, colocated, secondary workspace) |
 | --- | --- | --- |
-| `check` | supported (file read; `--commit` reads the blob) | supported; working-tree file read directly; `--commit` through the existing jj read-only runner (unverified until WI1 conformance) |
+| `check` | supported (file read; `--commit` reads the blob, also in a bare repository) | supported; working-tree file read directly (measured with jj 0.46.0 and 0.45.1); `--commit` through the existing jj read-only runner is **staged to T015 (WI3)** and is `unsupported-backend` until then |
 | `plan <commit>` | supported (ancestry against `refs/remotes/<remote>/main`) | supported through jj's documented interface (ancestry as the revset `C & ::main@<remote>`, tree lookup, diff); unverified (jj is not installed where this specification was written) |
 | `plan <tag>`, `verify` (including `--record-commit`, `--published`), `dispatch --tag` | supported | `unsupported-backend`: the annotation check needs the tag object, which jj is not known to expose through a documented interface (unverified); use a Git-owned checkout or the CI run |
 | `record` | supported | supported (reads C's tree through jj; `--write` creates one file that jj snapshots on its next command, disclosed) |
