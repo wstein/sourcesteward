@@ -32,9 +32,9 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | `project` | `name` | string | display name, 1 to 64 characters `[A-Za-z0-9._ -]` |
 | | `product` | id, optional | required in `.stw/release.<product>.*` files and equal to `<product>`; absent in `.stw/release.toml` |
 | `version` | `scheme` | `semver`, `calver`, `pattern` | see the spec's version table |
-| | `tag_prefix` | string, optional | for `semver`/`calver`: characters `[a-z0-9._/-]`, empty or ending with `/` |
+| | `tag_prefix` | string, optional | for `semver`/`calver`: characters `[a-z0-9._/-]`, empty or ending with `/`, and every segment starts with a letter or digit (so no `.`, `..` or hidden segment can make a tag name leave its namespace) |
 | | `tag_template` | string | for `pattern` only: the tag as a template with exactly one `{version}` (for example `zlib-v{version}`) |
-| | `tag_pattern` | string | for `pattern` only: RE2 of the form `^<literal prefix>(?P<version>...)<literal suffix>$` with exactly one top-level `version` group; the literal prefix and suffix (characters `[A-Za-z0-9._/-]`) must equal the template's, so version to tag to version is the identity |
+| | `tag_pattern` | string | for `pattern` only: RE2 of the form `^<literal prefix>(?P<version>...)<literal suffix>$` with exactly one top-level `version` group; the literal prefix and suffix (characters `[A-Za-z0-9._/-]`) must equal the template's, so version to tag to version is the identity; every `/`-separated segment of the literal prefix starts with a letter or digit, and the version group can only start with a letter or digit |
 | | `order` | array of strings | for `pattern` only: named numeric groups, at most 8 |
 | | `monotonicity` | `strict` or `non-decreasing`, default `strict` | for `pattern` only: `strict` requires the new version's `order` tuple to be greater than every existing one; `non-decreasing` requires it to be greater than or equal to the maximum existing tuple and the full tag not to exist yet, so groups that are **not** listed in `order` (a build counter) may restart within the same ordered tuple (for example `2026.10.15-b1` after `2026.10.15-b98.1` with `order` of year, month and day; the order within an equal tuple is undefined and consumers must not infer recency from the counter) |
 | | `source` | `input` or `file` | where the version is declared (`input` = the dispatch input / tag) |
@@ -43,7 +43,7 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | | `file_form` | `with-v` or `without-v` | for `source = "file"`: how the file spells the version |
 | `build` (array) | `id` | id | unique, `^[a-z0-9][a-z0-9-]{0,31}$` |
 | | `scope` | `per-target` or `once` | runs once per referencing target, or once for all |
-| | `argv` | array of strings | the command; no shell; placeholders per the spec's build table |
+| | `argv` | array of strings | the command; no shell; placeholders per the spec's build table; an element has no NUL or other control character (`\x00`-`\x1f`, `\x7f`) |
 | | `env_inherit` | array of names, optional | default `PATH`, `HOME`, `TMPDIR` |
 | | `env_set` | array of `NAME=value` strings, optional | values may contain placeholders |
 | | `working_dir` | path, optional | confined under the root; default `.` |
@@ -110,7 +110,7 @@ A `per-target` build runs once for each target that references it, with that tar
       "type": "object", "additionalProperties": false, "required": ["scheme", "source"],
       "properties": {
         "scheme": {"enum": ["semver", "calver", "pattern"]},
-        "tag_prefix": {"type": "string", "pattern": "^([a-z0-9._-]+/)*$", "maxLength": 64},
+        "tag_prefix": {"type": "string", "pattern": "^([a-z0-9][a-z0-9._-]*/)*$", "maxLength": 64},
         "tag_template": {"type": "string", "pattern": "^[A-Za-z0-9._/{}-]{1,128}$"},
         "tag_pattern": {"type": "string", "minLength": 1, "maxLength": 256},
         "monotonicity": {"enum": ["strict", "non-decreasing"]},
@@ -210,7 +210,7 @@ A `per-target` build runs once for each target that references it, with that tar
     "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"},
     "path": {"type": "string", "pattern": "^[A-Za-z0-9._][A-Za-z0-9._/-]{0,255}$"},
     "pathTemplate": {"type": "string", "pattern": "^[A-Za-z0-9._{][A-Za-z0-9._/{}-]{0,255}$"},
-    "argv": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 4096}}
+    "argv": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[^\\x00-\\x1f\\x7f]+$"}}
   }
 }
 ```

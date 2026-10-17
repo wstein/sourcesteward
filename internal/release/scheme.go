@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"regexp/syntax"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -33,6 +34,9 @@ func checkVersion(v Version) []Finding {
 		return out
 	}
 	prefix, suffix, templateOK := splitTemplate(v.TagTemplate)
+	if templateOK && !prefixSegmentsOK(prefix) {
+		invalid("/version/tag_template", "every segment of the literal prefix of tag_template must start with a letter or digit")
+	}
 	if v.TagTemplate != "" && !templateOK {
 		invalid("/version/tag_template", "tag_template must contain {version} exactly once and no other brace")
 	}
@@ -161,6 +165,8 @@ func namedGroup(re *syntax.Regexp, name string) *syntax.Regexp {
 func versionGroupProblem(group *syntax.Regexp) string {
 	min, max := lengthBounds(group)
 	switch {
+	case !startsWithAlnum(group):
+		return "the version group must start with a letter or digit"
 	case !runesWithin(group, versionRuneOK):
 		return "the version group may match characters outside A-Z, a-z, 0-9, . _ and -"
 	case min < 1:
@@ -276,4 +282,83 @@ func lengthBounds(re *syntax.Regexp) (min, max int) {
 		return lo * repeatMin, max
 	}
 	return 0, 0
+}
+
+// prefixSegmentsOK checks the literal prefix of a tag template: split at "/", every segment
+// except the last must be non-empty and start with a letter or digit, and so must a non-empty last
+// segment (the text that continues into the version).
+func prefixSegmentsOK(prefix string) bool {
+	segments := strings.Split(prefix, "/")
+	for i, segment := range segments {
+		if segment == "" && i == len(segments)-1 {
+			continue
+		}
+		if segment == "" || !alnumRune(rune(segment[0])) {
+			return false
+		}
+	}
+	return true
+}
+
+func alnumRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+}
+
+// startsWithAlnum reports whether every string the expression can match begins with a letter or
+// digit (a match is never empty here; emptiness is checked separately).
+func startsWithAlnum(re *syntax.Regexp) bool {
+	ok, _ := firstRunes(re)
+	return ok
+}
+
+// firstRunes returns whether the first rune of every match is a letter or digit, and whether the
+// expression can match the empty string (so the following part also contributes a first rune).
+func firstRunes(re *syntax.Regexp) (ok, nullable bool) {
+	switch re.Op {
+	case syntax.OpLiteral:
+		if len(re.Rune) == 0 {
+			return true, true
+		}
+		return alnumRune(re.Rune[0]) && re.Flags&syntax.FoldCase == 0, false
+	case syntax.OpCharClass:
+		for i := 0; i+1 < len(re.Rune); i += 2 {
+			for r := re.Rune[i]; r <= re.Rune[i+1]; r++ {
+				if !alnumRune(r) {
+					return false, false
+				}
+			}
+		}
+		return true, false
+	case syntax.OpAnyChar, syntax.OpAnyCharNotNL:
+		return false, false
+	case syntax.OpCapture:
+		return firstRunes(re.Sub[0])
+	case syntax.OpStar, syntax.OpQuest:
+		ok, _ := firstRunes(re.Sub[0])
+		return ok, true
+	case syntax.OpPlus:
+		return firstRunes(re.Sub[0])
+	case syntax.OpRepeat:
+		ok, nullable := firstRunes(re.Sub[0])
+		return ok, nullable || re.Min == 0
+	case syntax.OpConcat:
+		for _, sub := range re.Sub {
+			ok, nullable := firstRunes(sub)
+			if !ok {
+				return false, false
+			}
+			if !nullable {
+				return true, false
+			}
+		}
+		return true, true
+	case syntax.OpAlternate:
+		allOK, anyNullable := true, false
+		for _, sub := range re.Sub {
+			ok, nullable := firstRunes(sub)
+			allOK, anyNullable = allOK && ok, anyNullable || nullable
+		}
+		return allOK, anyNullable
+	}
+	return true, true
 }
