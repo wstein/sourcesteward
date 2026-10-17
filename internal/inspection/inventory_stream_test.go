@@ -70,7 +70,9 @@ func fakeGit(t *testing.T, script string) {
 func streamLines(t *testing.T, s gitStream, dir, delim string, args ...string) ([]string, bool, error) {
 	t.Helper()
 	var out []string
-	_, stopped, err := s(context.Background(), dir, nil, delim, args, func(r []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // a stuck stream fails this test, not the package
+	defer cancel()
+	_, stopped, err := s(ctx, dir, nil, delim, args, func(r []byte) error {
 		out = append(out, string(r))
 		return nil
 	})
