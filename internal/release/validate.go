@@ -36,7 +36,7 @@ var argvFields = []string{"argv", "smoke_argv"}
 
 // ValidateContract applies the schema and every rule beyond it to a decoded contract document
 // and returns the normalized contract when no error finding exists. Findings are ordered by
-// JSON pointer, at most one per code and pointer, and cut at MaxFindings.
+// JSON pointer and at most one per code and pointer. The report cuts them at MaxFindings.
 func ValidateContract(doc any, opts ValidateOptions) (*Contract, []Finding, error) {
 	findings := validateConfigSchema(doc)
 	root, ok := doc.(map[string]any)
@@ -67,7 +67,7 @@ func ValidateContract(doc any, opts ValidateOptions) (*Contract, []Finding, erro
 	return c, findings, nil
 }
 
-// finishFindings keeps the first finding per code and pointer, orders by pointer and cuts the list.
+// finishFindings keeps the first finding per code and pointer and orders by pointer.
 func finishFindings(findings []Finding) []Finding {
 	seen := map[string]bool{}
 	unique := findings[:0:0]
@@ -79,10 +79,6 @@ func finishFindings(findings []Finding) []Finding {
 		}
 	}
 	sortFindings(unique)
-	if len(unique) > MaxFindings {
-		dropped := len(unique) - MaxFindings
-		unique = append(unique[:MaxFindings:MaxFindings], errorFinding("limit-exceeded", "", fmt.Sprintf("%d further findings are not shown", dropped)))
-	}
 	return unique
 }
 

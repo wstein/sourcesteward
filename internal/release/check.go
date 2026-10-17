@@ -294,10 +294,23 @@ func finalizeCheck(r CheckResult) CheckResult {
 	if r.Products == nil {
 		r.Products = []CheckedProduct{}
 	}
+	moreUnknown := false
+	kept := make([]Finding, 0, len(r.Findings))
+	for _, f := range r.Findings {
+		if f.partial {
+			moreUnknown = true
+			continue
+		}
+		kept = append(kept, f)
+	}
+	r.Findings = kept
 	sortFindings(r.Findings)
-	if len(r.Findings) > MaxFindings {
-		dropped := len(r.Findings) - MaxFindings
-		r.Findings = append(r.Findings[:MaxFindings:MaxFindings], errorFinding("limit-exceeded", "", fmt.Sprintf("%d further findings are not shown", dropped)))
+	if len(r.Findings) > MaxFindings || moreUnknown {
+		message := "more findings were not shown"
+		if !moreUnknown {
+			message = fmt.Sprintf("%d further findings are not shown", len(r.Findings)-MaxFindings)
+		}
+		r.Findings = append(r.Findings[:min(len(r.Findings), MaxFindings):min(len(r.Findings), MaxFindings)], errorFinding("limit-exceeded", "", message))
 		r.Boundary.Complete = false
 	}
 	for _, f := range r.Findings {
@@ -317,6 +330,15 @@ func finalizeCheck(r CheckResult) CheckResult {
 	}
 	for i := range r.Products {
 		r.Products[i].File, r.Products[i].Product = Escape(r.Products[i].File), Escape(r.Products[i].Product)
+	}
+	single := r.Contract != nil && len(r.Products) == 1 && r.Products[0].Contract == r.Contract
+	for i := range r.Products {
+		r.Products[i].Contract = escapeContract(r.Products[i].Contract)
+	}
+	if single {
+		r.Contract = r.Products[0].Contract
+	} else {
+		r.Contract = escapeContract(r.Contract)
 	}
 	r.InputPath, r.Root = Escape(r.InputPath), Escape(r.Root)
 	if r.Error != nil {

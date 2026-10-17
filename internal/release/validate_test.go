@@ -389,27 +389,6 @@ func TestOneFindingPerCodeAndPointer(t *testing.T) {
 	}
 }
 
-func TestMoreThanOneHundredFindingsAreCut(t *testing.T) {
-	doc := loadExample(t, "go-cli")
-	argv := make([]any, 0, 64)
-	for i := 0; i < 64; i++ {
-		argv = append(argv, "{bad}")
-	}
-	setAt(t, doc, argv, "build", 0, "argv")
-	envs := make([]any, 0, 64)
-	for i := 0; i < 64; i++ {
-		envs = append(envs, "A={bad}")
-	}
-	setAt(t, doc, envs, "build", 0, "env_set")
-	_, findings, err := ValidateContract(doc, ValidateOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(findings) != MaxFindings+1 || findings[len(findings)-1].Code != "limit-exceeded" {
-		t.Fatalf("got %d findings, last %+v", len(findings), findings[len(findings)-1])
-	}
-}
-
 func TestDefaultsAreAppliedOnlyWhereAbsent(t *testing.T) {
 	polyglot, got := lint(t, "polyglot", nil, nil)
 	if len(got) != 0 {
@@ -463,15 +442,14 @@ func manyPlaceholderErrors(t *testing.T, count int) map[string]any {
 	return doc
 }
 
-func TestFindingLimitBoundary(t *testing.T) {
-	for _, c := range []struct{ count, want int }{{99, 99}, {100, 100}, {101, MaxFindings + 1}} {
-		_, findings, err := ValidateContract(manyPlaceholderErrors(t, c.count), ValidateOptions{})
-		if err != nil || len(findings) != c.want {
-			t.Errorf("%d errors: got %d findings, want %d", c.count, len(findings), c.want)
-			continue
-		}
-		if cut := findings[len(findings)-1].Code == "limit-exceeded"; cut != (c.count > MaxFindings) {
-			t.Errorf("%d errors: limit finding present=%v", c.count, cut)
+func TestValidateContractReturnsEveryFinding(t *testing.T) {
+	_, findings, err := ValidateContract(manyPlaceholderErrors(t, 128), ValidateOptions{})
+	if err != nil || len(findings) != 128 {
+		t.Fatalf("got %d findings (%v); the cut belongs to the final report", len(findings), err)
+	}
+	for _, f := range findings {
+		if f.Code == "limit-exceeded" {
+			t.Fatalf("validation cut its own list: %+v", f)
 		}
 	}
 }

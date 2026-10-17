@@ -565,3 +565,126 @@ func TestCheckBoundsTheStwDirectoryListing(t *testing.T) {
 		t.Fatalf("%q", codes(r))
 	}
 }
+
+func manyUnknownKeys(t *testing.T, n int) []byte {
+	doc := loadExample(t, "go-cli")
+	for i := 0; i < n; i++ {
+		doc[fmt.Sprintf("k%03d", i)] = 1
+	}
+	return mustJSON(t, doc)
+}
+
+func TestCheckCutsFindingsOnceAtTheEnd(t *testing.T) {
+	for _, c := range []struct {
+		n        int
+		want     int
+		message  string
+		complete bool
+	}{{100, 100, "", true}, {101, 101, "1 further findings are not shown", false}, {150, 101, "50 further findings are not shown", false}} {
+		r := run(t, CheckOptions{Path: repoWith(t, map[string][]byte{".stw/release.json": manyUnknownKeys(t, c.n)})})
+		if len(r.Findings) != c.want || r.Boundary.Complete != c.complete {
+			t.Fatalf("%d keys: %d findings, complete=%v", c.n, len(r.Findings), r.Boundary.Complete)
+		}
+		last := r.Findings[len(r.Findings)-1]
+		if c.message != "" && (last.Code != "limit-exceeded" || last.Message != c.message) {
+			t.Fatalf("%d keys: last finding %+v", c.n, last)
+		}
+		if c.message == "" && last.Code == "limit-exceeded" {
+			t.Fatalf("%d keys: nothing was cut", c.n)
+		}
+	}
+}
+
+func TestCheckSaysSoWhenTheParserStoppedEarly(t *testing.T) {
+	r := run(t, CheckOptions{Path: repoWith(t, map[string][]byte{".stw/release.toml": []byte(strings.Repeat("a.b = 1\n", 150))})})
+	if len(r.Findings) != MaxFindings+1 || r.Boundary.Complete {
+		t.Fatalf("%d findings", len(r.Findings))
+	}
+	last := r.Findings[len(r.Findings)-1]
+	if last.Code != "limit-exceeded" || last.Message != "more findings were not shown" {
+		t.Fatalf("%+v", last)
+	}
+	count := 0
+	for _, f := range r.Findings {
+		if f.Code == "limit-exceeded" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("%d limit findings", count)
+	}
+}
+
+func TestCheckContractStringsAreEscapedForTerminals(t *testing.T) {
+	doc := loadExample(t, "go-cli")
+	setAt(t, doc, "echo\u202ehidden\u0085x \\ ok", "build", 0, "argv", 1)
+	r := run(t, CheckOptions{Path: repoWith(t, map[string][]byte{".stw/release.json": mustJSON(t, doc)})})
+	if r.Contract == nil {
+		t.Fatalf("%q", codes(r))
+	}
+	got := r.Contract.Build[0].Argv[1]
+	if got != `echo\u{202e}hidden\u{85}x \ ok` {
+		t.Fatalf("%q", got)
+	}
+	if r.Products[0].Contract.Build[0].Argv[1] != got {
+		t.Fatal("the per-file model is not escaped")
+	}
+	raw := string(mustJSON(t, r))
+	if strings.ContainsAny(raw, "\u202e\u0085") {
+		t.Fatal("raw bidi or C1 character in the JSON result")
+	}
+}
+
+func TestCheckEscapesHostileContractFileNames(t *testing.T) {
+	dir := repoWith(t, map[string][]byte{".stw/release.\x1b[31mX\u202e.toml": exampleBytes(t, "go-cli")})
+	r := run(t, CheckOptions{Path: dir})
+	if len(r.Findings) != 1 || strings.ContainsAny(r.Findings[0].File, "\x1b\u202e") || !strings.Contains(r.Findings[0].File, `\x1b[31mX\u{202e}`) {
+		t.Fatalf("%+v", r.Findings)
+	}
+}
+
+func TestCheckReportsAnOversizedStwListingFromACommit(t *testing.T) {
+	dir := repoWith(t, map[string][]byte{".stw/release.toml": exampleBytes(t, "go-cli")})
+	blob := git(t, dir, "hash-object", "-w", ".stw/release.toml")
+	var index strings.Builder
+	for i := 0; i < 6000; i++ {
+		fmt.Fprintf(&index, "100644 %s 0\t.stw/%s%05d\n", blob, strings.Repeat("n", 200), i)
+	}
+	cmd := exec.Command("git", "update-index", "--add", "--index-info")
+	cmd.Dir, cmd.Env, cmd.Stdin = dir, gitEnv(), strings.NewReader(index.String())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	git(t, dir, "commit", "-q", "-m", "many")
+	r := run(t, CheckOptions{Path: dir, Commit: git(t, dir, "rev-parse", "HEAD")})
+	found := false
+	for _, f := range r.Findings {
+		found = found || f.Code == "limit-exceeded" && strings.Contains(f.Message, ".stw directory")
+	}
+	if !found {
+		t.Fatalf("a truncated listing went unreported: %q", codes(r))
+	}
+}
+
+func TestGitEnvironmentPinsEveryVariable(t *testing.T) {
+	t.Setenv("GIT_DIR", "/nonexistent")
+	t.Setenv("GIT_EXTERNAL_DIFF", "/bin/false")
+	env := map[string]string{}
+	for _, e := range gitEnvironment() {
+		k, v, _ := strings.Cut(e, "=")
+		env[k] = v
+	}
+	want := map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "GIT_NO_LAZY_FETCH": "1", "GIT_PAGER": "cat", "GIT_ATTR_NOSYSTEM": "1"}
+	for k, v := range want {
+		if env[k] != v {
+			t.Errorf("%s=%q, want %q", k, env[k], v)
+		}
+	}
+	for k := range env {
+		if strings.HasPrefix(k, "GIT_") {
+			if _, ok := want[k]; !ok {
+				t.Errorf("unexpected %s", k)
+			}
+		}
+	}
+}
