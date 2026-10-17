@@ -23,6 +23,15 @@ type gitInventorySession struct {
 	transforms  bool
 	filterNames map[string]bool
 	format      string
+	stream      gitStream
+	bounds      inventoryBounds
+}
+
+// streamCommand streams one Git command with the same prefix as command.
+func (s gitInventorySession) streamCommand(dir string, stdin io.Reader, delim string, each func([]byte) error, args ...string) (int, bool, error) {
+	prefix := []string{"-c", "core.untrackedCache=false", "-c", "core.hooksPath=/dev/null"}
+	prefix = append(prefix, s.flags...)
+	return s.stream(s.ctx, dir, stdin, delim, append(prefix, args...), each)
 }
 
 func (s gitInventorySession) command(dir string, args ...string) (string, int, error) {
@@ -34,11 +43,15 @@ func inventoryGit(ctx context.Context, id Result, o InventoryOptions) InventoryR
 	return inventoryGitRun(ctx, id, o, runGit)
 }
 func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run runner) InventoryResult {
+	bounds := defaultInventoryBounds()
+	return inventoryGitBounded(ctx, id, o, run, streamFromRunner(run, newStreamGit(bounds)), bounds)
+}
+func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run runner, stream gitStream, bounds inventoryBounds) InventoryResult {
 	r := newInventoryResult(id)
 	if id.Repository == nil {
 		return r.fail("git-inventory-failed", "Git identity is unavailable")
 	}
-	s := gitInventorySession{ctx: ctx, run: run, format: id.Repository.ObjectFormat}
+	s := gitInventorySession{ctx: ctx, run: run, format: id.Repository.ObjectFormat, stream: stream, bounds: bounds}
 	dir := id.InputPath
 	if o.Query == "ref-exists" || o.Query == "ancestor" {
 		return s.referencePredicate(id, o)
