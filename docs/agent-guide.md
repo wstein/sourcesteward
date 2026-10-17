@@ -176,8 +176,8 @@ Use `stw hosting repo|pr|ci` or the optional `gh jj repo|pr|ci` entry point. The
 
 ## Submodule pin audit
 
-`stw pins [PATH] --json` (planned, [Spec 021](../specs/021-submodule-pin-audit/spec.md); hidden until
-its final work item, so check `stw --help` first) reports for a Git superproject each submodule's
+`stw pins [PATH] --json` (planned, [Spec 021](../specs/021-submodule-pin-audit/spec.md); merged but hidden until
+its conformance work item, so it is absent from `stw --help`; run `stw pins --help`, or run `stw pins` and treat an unknown-command usage error, exit 2, as absence) reports for a Git superproject each submodule's
 pin, staged pin, checkout, dirty state and whether the pin is contained in a local remote-tracking
 ref. Use `--json` and dispatch on `schema_version`; use `--strict` to turn error findings into exit
 status 3 while still reading the full result from standard output. Without `--strict`, findings exit 0.

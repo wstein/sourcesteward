@@ -6,11 +6,10 @@ is staged, what is checked out, and whether the pinned commit is contained in a
 remote-tracking ref that the local submodule repository already holds. It answers one
 question that no local check answers: could the next person or agent fetch this pin?
 
-**Status.** Specified in [Spec 021](../specs/021-submodule-pin-audit/spec.md) and planned,
-not verified: the command stays hidden until the final work item of that specification, and
+**Status.** Specified in [Spec 021](../specs/021-submodule-pin-audit/spec.md). The command
+and its schema are merged but hidden until the conformance work item (WI5) completes, and
 [feature status](feature-status.json) keeps it `planned`. This guide describes the
-approved behavior. Where behavior depends on later work items it is marked so; until they
-land, an installed `stw` may lack the command or parts of this contract. The
+approved behavior; an installed `stw` may predate the merge and lack the command. The
 [specification](../specs/021-submodule-pin-audit/spec.md) is normative; if this page and
 the specification differ, the specification wins and this page is wrong.
 
@@ -196,8 +195,7 @@ for the fixed list of Git invocations.
 ## JSON
 
 `--json` emits one `PinsResult` object with `schema_version: 1` and `command: "pins"`, validated by
-`schemas/v1/pins.schema.json` (the schema file lands with the first work item of
-Spec 021). It includes refusals and operational errors, explicit `effects`
+`schemas/v1/pins.schema.json`. It includes refusals and operational errors, explicit `effects`
 (`network`, `fetch`, `writes`, `hooks` all false), `limits`, completeness, the staleness note, a
 summary of counts and the findings. See [JSON contracts](json-contracts.md) and the
 [contract](../specs/021-submodule-pin-audit/contracts/pins.md).

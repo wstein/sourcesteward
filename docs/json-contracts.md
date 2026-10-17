@@ -169,10 +169,10 @@ field types require another version. See [tidy](tidy.md) for native coupled/sepa
 
 ## Pin audit (v1, planned)
 
-`stw pins --json` (planned, hidden until the final work item of
-[Spec 021](../specs/021-submodule-pin-audit/spec.md)) will emit one `PinsResult` with `schema_version: 1`
-and `command: "pins"`, validated by `schemas/v1/pins.schema.json` (added by the first work item; the
-file does not exist yet). Its `status` is `ok`, `incomplete`, `refused` or `error`; refusals and
+`stw pins --json` (merged but hidden until the conformance work item of
+[Spec 021](../specs/021-submodule-pin-audit/spec.md); feature status stays planned) emits one `PinsResult`
+with `schema_version: 1` and `command: "pins"`, validated by
+[pins.schema.json](../schemas/v1/pins.schema.json), which is present. Its `status` is `ok`, `incomplete`, `refused` or `error`; refusals and
 operational failures keep the same envelope. Finding codes and refusal codes are fixed by the
 specification and append-only within schema 1; it is an independent contract and existing schemas keep
 their bytes. Exit status 3 (`--strict` with error findings in a complete result) is documented in
