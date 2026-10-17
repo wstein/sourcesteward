@@ -28,8 +28,9 @@ A summary counts entries by status and backend and sums the facts. Human text an
 come from the same result.
 
 Dirty state is a fact, not a status: a dirty repository is still `ok`. Dirty is `unknown`
-for jj members (disk freshness needs a snapshot) and for submodule checkouts (Git reports
-a submodule's Git directory, not its checkout, as its worktree).
+for jj members (disk freshness needs a snapshot). A submodule checkout is inventoried as a
+checkout (Spec 027), so its dirty state is a fact like any other member's; where the inventory
+cannot identify the checkout the fact stays `unknown` with that reason.
 
 ## Exit status
 
@@ -44,23 +45,23 @@ or damages the others.
 
 ## Limits that matter in practice
 
-These are inherited from the single-repository inventory that `repos` reuses unchanged, and
-they decide how often you will see exit status 1:
+`repos` reuses the single-repository inventory unchanged, whose limits decide how often you
+see exit status 1 (see [inventory](inventory.md) and the
+[Spec 027 contract](../specs/027-inventory-limits/contracts/inventory-limits.md)):
 
-- **Content attributes.** Git inventory reads attributes for every tracked path with one
-  `check-attr` call whose output is capped at 64 KiB. A repository with roughly 150 to 400
-  tracked files (depending on path length) therefore fails with `git-inventory-failed`
-  ("cannot safely observe content attributes"), even without any `.gitattributes`.
-- **Record limit.** More than 1,024 aggregate inventory records fails with
-  `git-inventory-failed` ("inventory record limit exceeded") or `inventory-limit`.
-- **Always partial.** A repository with registered gitlinks, a bare repository and a
-  repository with a stale linked worktree are `partial` (and exit 1).
+- **Large repositories give facts.** Thousands of tracked files and hundreds of tags are read
+  incrementally; changed-file and reference listings beyond the 1,024-record share are truncated
+  with a disclosure and the member is `partial`. A member over 20,000 references, or whose workspaces
+  alone exceed the record limit, still fails with `inventory-limit`.
+- **Gitlinks.** A clean repository with registered gitlinks is `partial` (submodule worktrees are
+  not opened, so `false` cannot be proven); its `dirty` fact is `true` when an ordinary tracked file
+  or a staged change differs. A bare repository and a repository with a stale linked worktree are
+  `partial` as well (and exit 1).
 - **jj output.** A jj inventory fails with `jj-output-limit` when one jj command prints
   more than 64 KiB (read from the code, not yet measured).
 
-So a workspace of large or submodule-bearing repositories mostly ends with exit status 1 and
-the cause on each entry; exit 0 means every member was fully observed. Lifting these limits is
-a change to single-repository inventory and a separate specification.
+So a workspace of submodule-bearing repositories still ends with exit status 1 and the cause on
+each entry; exit 0 means every member was fully observed.
 
 Other bounds of `repos` itself: 16 entries in total (explicit plus discovered), 64 candidate
 paths per `.gitmodules`, 4 workers, 10 seconds per identity inspection or inventory call and one 10-second bound per parent for submodule discovery, 60 seconds in total (unfinished

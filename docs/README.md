@@ -27,7 +27,7 @@
 
 - [Inventory](inventory.md): native workspace/reference/state observations and three-valued queries.
 
-- [Multi-repository inventory](repos.md): `stw repos` over several Git/jj repositories and direct submodules, with inherited limits.
+- [Multi-repository inventory](repos.md): `stw repos` over several Git/jj repositories and direct submodules, with the limits of single-repository inventory.
 
 - [Task workspaces](workspaces.md): reviewable isolated Git/jj creation and retained handoffs.
 

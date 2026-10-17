@@ -73,7 +73,7 @@ The Git adapter for discovery stays in `internal/inspection` and reuses `runGit`
 
 - Whole-run wall time is bounded at 60 s by the total deadline; per call bounds are 10 s, and the runner adds up to 1 s of process wait after a deadline. With 16 entries and slow members the total can fire and is reported per entry.
 - jj concurrency and `repository_dir` equality are unverified until the jj lanes run (tasks WI4).
-- The reused inventory is limited (a 64 KiB `check-attr` output cap that fails repositories of roughly 150 to 400 tracked files, 1,024 records, gitlink and bare repositories always `partial`, a submodule's worktree record points at its Git directory): realistic members often yield `partial` or `error`. Disclosed in the spec; shipping first and fixing inventory in a separate spec is an open question.
+- (Superseded by Spec 027 for Git size limits and submodule checkouts.) The reused inventory was limited (a 64 KiB `check-attr` output cap that fails repositories of roughly 150 to 400 tracked files, 1,024 records, gitlink and bare repositories always `partial`, a submodule's worktree record points at its Git directory): realistic members often yield `partial` or `error`. Disclosed in the spec; shipping first and fixing inventory in a separate spec is an open question.
 - jj `stored`-only scope is chosen from code reading and is unverified until the jj lanes run.
 - The embedded-schema is loose by necessity (no cross-schema `$ref`); the contract test closes the gap.
 - Discovery misses a gitlink without a `.gitmodules` entry until Spec 021's reader is reused; documented as a limitation.
@@ -85,5 +85,5 @@ The Git adapter for discovery stays in `internal/inspection` and reuses `runGit`
 2. `--strict` exit status for dirty or stale members. Recommendation: defer; wait for user demand.
 3. Raise `max_entries` above 16. Recommendation: keep 16, raise only with measurements of 60 s total behavior.
 4. Should a path-list file (`--paths-from`) exist? Recommendation: no, bounded argv is enough for 16.
-5. Ship before the inventory limits are lifted (see risks)? Recommendation: yes; failures are per entry and honest; open a separate spec to fix inventory for submodule checkouts, gitlink-bearing superprojects and larger repositories.
+5. Ship before the inventory limits are lifted (see risks)? Answered: the prerequisite was delivered first as Spec 027. Original recommendation: yes; failures are per entry and honest; open a separate spec to fix inventory for submodule checkouts, gitlink-bearing superprojects and larger repositories.
 6. Exit 0 for entries that are `partial` only because of qualified inventory observations (an opt-in flag)? Recommendation: defer until users ask; keep exit 1 consistent with `stw inventory`.

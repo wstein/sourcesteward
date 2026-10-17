@@ -27,14 +27,16 @@ The normative table is in [spec.md](../spec.md#exit-status-normative): 0 overall
 
 ## Inherited limits
 
-`repos` embeds the single-repository inventory unchanged, so it inherits that operation's limits, and their effect on the exit status is part of this contract:
+`repos` embeds the single-repository inventory unchanged, so it inherits that operation's limits, and their effect on the exit status is part of this contract. Spec 027 changed the Git limits (see [its contract](../../027-inventory-limits/contracts/inventory-limits.md)); this section states what `repos` now inherits:
 
-- **Content attributes.** The Git inventory reads attributes for every cached path with one `check-attr` call whose output is capped at 64 KiB. A repository with roughly 150 to 400 tracked files (depending on path length) therefore yields the entry error `git-inventory-failed` with the message `cannot safely observe content attributes`, even without any `.gitattributes`.
-- **Record limit.** More than 1,024 aggregate inventory records yields `git-inventory-failed` with the message `inventory record limit exceeded` (or the inventory's own `inventory-limit`).
+- **Large repositories.** The Git inventory reads the index, content attributes, changed files and references incrementally, so thousands of tracked files and hundreds of tags give facts. Changed-file and reference listings beyond the 1,024-record share are truncated with a disclosure in the embedded inventory and the entry is `partial` (`inventory-partial`); more than 20,000 references, or workspaces and bases alone above the record limit, still yield `inventory-limit`. The former `git-inventory-failed` errors `cannot safely observe content attributes` and `inventory record limit exceeded` for size no longer occur; other `git-inventory-failed` causes (a buffered command above 64 KiB, a failed Git command) remain.
 - **jj output.** A jj inventory fails with `jj-output-limit` when any single jj command prints more than 64 KiB (code reading, not yet measured: jj is absent from the authoring container).
-- **Always partial.** A repository with registered gitlinks and a bare repository are `partial` under the default Git scopes; a stale linked worktree makes its repository `partial`.
+- **Gitlinks.** A repository with registered gitlinks is `partial` under the default Git scopes because submodule worktrees are not opened (`false` cannot be proven); its `dirty` fact is `true` when an ordinary tracked file or a staged change differs. A bare repository is `partial`; a stale linked worktree makes its repository `partial`.
+- **Submodule checkouts.** The inventory describes a submodule checkout by its files (CK-1), so a submodule entry's `dirty` is derived from its root workspace record like any other member's; where the checkout cannot be identified the fact stays `unknown`.
 
-Such an entry is `error` or `partial` with the cause on the entry, and the run ends with exit status 1; the other members are unaffected. Exit status 0 therefore means every member was fully observed. A workspace of large or submodule-bearing repositories mostly ends with exit status 1; lifting these limits is a change to single-repository inventory and a separate specification. Whether to fix that prerequisite first, or to cut `--submodules`, is an open maintainer decision (analysis, round 5).
+Embedded inventories can now be close to the 1 MiB inventory bound (measured 1,044,707 bytes with 1,021 file records of 240-byte paths): sixteen such members exceed the 8 MiB JSON bound of `repos`, and the later entries then drop their embedded inventory and carry `output-limit` (their `facts` are kept), so a workspace of many large members can end `partial` for that reason.
+
+Such an entry is `error` or `partial` with the cause on the entry, and the run ends with exit status 1; the other members are unaffected. Exit status 0 therefore means every member was fully observed. A workspace with submodule-bearing repositories still commonly ends with exit status 1 (clean gitlinks are `partial`).
 
 `--submodules` also inherits the submodule pin audit's refusals (Spec 021 safety layer): a submodule is refused with `path-unsafe`, before any process runs in it, when its path or Git directory goes through a symlink, its `.git` pointer is not exactly the expected Git directory, the Git directory or its configuration is owned by another user or writable by others, its `core.worktree` or an include differs, or it has a `commondir` entry or a non-empty `objects/info/alternates` file. A submodule that borrows objects through alternates is therefore not inventoried by `repos`. The ownership rule is applied to every directory it walks, including the directory of an uninitialized submodule: Git creates directories writable by everyone under `umask 000`, and such a submodule directory is `path-unsafe` (the message names `chmod -R o-w`) rather than `skipped`. Two `.gitmodules` names for one path use the lowest name, and a Git directory that does not match that name is refused rather than guessed.
 
@@ -51,7 +53,6 @@ effects: read-only, no network, no fetch, no repository writes
 [2] vendor/lib  submodule of [1]  skipped  submodule-uninitialized
 summary: ok 1, partial 1, error 0, skipped 1; dirty 1; stale 0; foreign 0; conflicted refs 0
 limitations: No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.
-limitations: Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).
 ```
 
 Names and paths are escaped. Each boundary limitation is printed on its own `limitations:` line. An *attention workspace* is one that is stale, foreign or unverified; at most 16 are listed per entry from the embedded inventory, then a "+N more" line. The text is bounded by construction (at most 16 entries, at most 24 lines each (header, error, notes, 16 attention workspaces and the "+N more" line), each line escaped and truncated to 512 bytes, so below 256 KiB), tested in T004.
@@ -92,7 +93,6 @@ One `ReposResult` per invocation, validated by `schemas/v1/repos.schema.json`; e
   },
   "limitations": [
    "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
-   "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
    "Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
    "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
   ]

@@ -59,9 +59,9 @@ stw repos ~/work/umbrella --submodules --json
 
 One result lists every path in argument order with its status, backend, error, derived facts
 and the embedded `stw inventory` result. Exit 0 means every member was fully observed; exit 1
-means a member is partial or failed, with the cause on its entry (large repositories, gitlinks and
-stale worktrees commonly are, because the limits of single-repository inventory apply to each
-member). See [multi-repository inventory](repos.md).
+means a member is partial or failed, with the cause on its entry (gitlinks and stale worktrees
+commonly are, and very long change or reference listings are truncated with a disclosure, because
+the limits of single-repository inventory apply to each member). See [multi-repository inventory](repos.md).
 
 ## Create an isolated task workspace
 

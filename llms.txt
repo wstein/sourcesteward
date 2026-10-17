@@ -44,7 +44,7 @@ from the installed binary; check its version and help first.
 
 - [Inventory guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/inventory.md): scopes, literal paths, three-valued predicates and observation limits.
 
-- [Multi-repository inventory](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/repos.md): `stw repos` over several Git/jj repositories and direct submodules, exit statuses and inherited limits.
+- [Multi-repository inventory](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/repos.md): `stw repos` over several Git/jj repositories and direct submodules, exit statuses and the limits of single-repository inventory.
 
 - [Tidy guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/tidy.md): native ancestry reference plans, retained uncertainty, optional private state and authorized local cleanup and separately selected owned workspace retirement with durable recovery.
 

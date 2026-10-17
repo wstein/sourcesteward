@@ -67,7 +67,9 @@ The no-hook, no-network, no-write properties of single-repository inventory are 
 
 Statuses `ok`, `partial`, `error` match inventory. A new `skipped` entry status exists only for an uninitialized submodule (a gitlink with no checkout has no repository to inventory; Spec 021 treats it as information). New codes are kebab-case. Alternatives (`refused` status, per-repository exit codes) rejected for vocabulary growth.
 
-## Decision 12: what the reused inventory really reports (independent review, Git 2.56.0, linux/arm64)
+## Decision 12: what the reused inventory really reported (independent review, Git 2.56.0, linux/arm64)
+
+> Update: Spec 027 fixed the Git-directory, 64 KiB and 1,024-record findings below (submodule checkouts are described by their files, large repositories give facts, gitlink-bearing superprojects report `tracked: true` on ordinary-file evidence). The findings are kept as the measured history that motivated it; the always-`partial` statements remain true for clean gitlink-bearing superprojects and bare repositories.
 
 Findings of review round 1, each checked or taken from the reviewer's measurements as marked:
 

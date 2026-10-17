@@ -51,3 +51,6 @@ Text fields are bounded and are data. Codes, statuses, limits, the facts derivat
 - `status` `ok` implies `error` null and `inventory` non-null with inventory status `ok`; `partial` has an `error` (`inventory-partial`, `discovery-failed` or `discovery-limit`) and, unless the cause is discovery only, an inventory with status `partial`.
 - `error.code` is from the spec's error-code table or the inventory's vocabulary.
 - `inventory` and `facts` per entry status follow the table in the spec (Entry status); an entry failing the identity inspection or an entry check never runs an inventory, so `inventory` and `facts` are null; omission (`output-limit`) nulls `inventory` and keeps `facts`, except that an omitted error inventory keeps its inherited code and has null `facts`.
+
+
+Spec 027 note: a submodule entry's `dirty` is derived from its root workspace record (the inventory now describes the checkout); the former submodule dirty note and boundary limitation were removed. An embedded inventory can reach about 1 MiB (measured 1,044,707 bytes), so 16 members can exceed the 8 MiB bound and the later entries carry `output-limit` with their facts kept.

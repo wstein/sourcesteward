@@ -36,6 +36,10 @@ Source revision checked: `29f7b1c` (branch `codex/023-multi-repo-inventory`, PR 
 
 `make check` was not run as one command because of the Hugo-dependent packaging test and the missing Node (`node --test scripts/test_theme.mjs`); each other step was run on its own as listed. The scratch `stw` binary for the smoke run was compiled into a scratch directory, not into `bin/` or `dist/`; no release artifact, image, documentation or site build was made.
 
+## Spec 027 update
+
+Spec 027 (merged before this command ships) changes the inherited Git inventory limits and the submodule caveat; the evidence above for the 64 KiB check-attr and 1,024-record failures and for `dirty: unknown` on submodules is historical. The tests, goldens and smoke script were updated with the implementation of Spec 027 (see its verification record).
+
 ## Not run
 
 - jj lane of the smoke script (two parallel members, a secondary workspace, a subdirectory, `--submodules` on a jj parent with no Git discovery process, equality with `stw inventory --scope stored`) and every jj-specific claim in the spec (the jj identity comparison, the jj 64 KiB output limit): jj is absent. Written, unexecuted.
