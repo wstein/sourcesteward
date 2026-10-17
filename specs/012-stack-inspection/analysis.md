@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 to 8 resolved in the artifacts; round 9 pending. Round 0 is the author draft (a28d23e).
+**Status**: READY after round 9 (0 high, 0 medium); the round 9 low and info wording findings were fixed by the author without a further review round, by owner decision. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -151,3 +151,16 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: fa1a56f. 
 | I1 | Info | Rebase-merge or single-commit squash with local `s1` deleted blocks as `layer-partially-applied` | Sentence added in 8b |
 | I2 | Info | Research native-stack row covered only local `s1` | Cross-reference to scenario 8b added |
 | I3 | Info | Several-merged-heads fixture needs fake HTTP | Noted as fixture-only in T029 |
+
+### Round 9
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: fd02dbf. Verdict: **READY** (0 high, 0 medium, 3 low, 3 info). The wording-level findings were fixed by the author; no further review round, by owner decision.
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| L1 | Low | Precedence sentence still said jj guard | "group 5 guard (`landed-undetectable`, Git and jj)" |
+| L2 | Low | Research cross-reference on the wrong row | Row split into local `s1` kept, local `s1` deleted with GitHub not yet rewritten (guard), and with GitHub already rewrote (4(b)) |
+| L3 | Low | Capability table gave only jj outcomes | Git plain-chain outcome added (drop of commits already upstream, or add/add conflict), M16, and a Git counterpart in T029 |
+| I1 | Info | "it goes to group 5" imprecise | Group 5 guard when the child's upstream is `same` or absent, 4(b) when `diverged` or `behind`; documented in 8b |
+| I2 | Info | M15 head-in-range said jj only | M15 reworded; M16 records the Git measurement |
+| I3 | Info | Weaker advice with local `s1` deleted | Stated in 8b with the reason |
