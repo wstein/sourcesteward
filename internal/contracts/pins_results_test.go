@@ -35,7 +35,7 @@ func (w pinsWorld) git(dir string, args ...string) string {
 	w.t.Helper()
 	c := exec.Command("git", append([]string{"-c", "protocol.file.allow=always", "-c", "user.name=T", "-c", "user.email=t@e.invalid", "-c", "commit.gpgsign=false"}, args...)...)
 	c.Dir = dir
-	c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	c.Env = append(append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"), noAutoMaintenance...)
 	out, err := c.CombinedOutput()
 	if err != nil {
 		w.t.Fatalf("git %v: %s", args, out)
@@ -96,7 +96,7 @@ func gitlinks(w pinsWorld, dir string, paths []string) {
 	}
 	c := exec.Command("git", "update-index", "--add", "-z", "--index-info")
 	c.Dir, c.Stdin = dir, &in
-	c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	c.Env = append(append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"), noAutoMaintenance...)
 	if out, err := c.CombinedOutput(); err != nil {
 		w.t.Fatalf("%s %v", out, err)
 	}
@@ -202,3 +202,7 @@ func TestPinsFindingScenariosValidateAgainstSchema(t *testing.T) {
 		})
 	}
 }
+
+// noAutoMaintenance keeps `git commit` from starting a detached `maintenance run --auto` that can still be
+// writing into .git when the test's temporary directory is removed ("directory not empty" on a busy runner).
+var noAutoMaintenance = []string{"GIT_CONFIG_COUNT=2", "GIT_CONFIG_KEY_0=maintenance.auto", "GIT_CONFIG_VALUE_0=false", "GIT_CONFIG_KEY_1=gc.auto", "GIT_CONFIG_VALUE_1=0"}
