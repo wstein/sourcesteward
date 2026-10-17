@@ -79,7 +79,7 @@ func DiscoverProducts(names []string) ([]ContractFile, []Finding) {
 		files = append(files, byProduct[p])
 	}
 	if def, ok := byProduct[""]; ok && len(files) > 1 {
-		at("config-ambiguous", def.Path, "the default contract "+def.Path+" cannot be mixed with named product files .stw/release.<product>.*", append([]string{""}, namedProducts(files)...)...)
+		at("config-ambiguous", def.Path, "the default contract "+def.Path+" cannot be mixed with named product files .stw/release.<product>.*", namedProducts(files)...)
 	}
 	if len(files) > MaxProducts {
 		at("limit-exceeded", "", fmt.Sprintf("more than %d contract files; only the first %d are read", MaxProducts, MaxProducts))
@@ -100,7 +100,7 @@ func namedProducts(files []ContractFile) []string {
 }
 
 // DiscoveryFindingsFor keeps the discovery findings about one product: those about its files and
-// those about mixing the default file with named ones when that product is part of the mix.
+// those about mixing the default file with named ones when that named product is part of the mix.
 func DiscoveryFindingsFor(findings []Finding, product string) []Finding {
 	var kept []Finding
 	for _, f := range findings {

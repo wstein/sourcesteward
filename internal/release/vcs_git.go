@@ -197,7 +197,7 @@ func (g *gitSource) Entries(paths []string) (map[string]TreeEntry, error) {
 	for d := range parents {
 		if d == "" {
 			// The root cannot be combined with pathspecs; list it by itself.
-			if err := g.listInto([]string{"ls-tree", "-z", "--full-name", g.commit}, wanted, out, links); err != nil {
+			if err := g.listInto([]string{"ls-tree", "-z", g.commit}, wanted, out, links); err != nil {
 				return nil, err
 			}
 			continue
@@ -206,7 +206,7 @@ func (g *gitSource) Entries(paths []string) (map[string]TreeEntry, error) {
 	}
 	sort.Strings(dirs)
 	for start := 0; start < len(dirs); start += 100 {
-		args := append([]string{"ls-tree", "-z", "--full-name", g.commit, "--"}, dirs[start:min(start+100, len(dirs))]...)
+		args := append([]string{"ls-tree", "-z", g.commit, "--"}, dirs[start:min(start+100, len(dirs))]...)
 		if err := g.listInto(args, wanted, out, links); err != nil {
 			return nil, err
 		}
