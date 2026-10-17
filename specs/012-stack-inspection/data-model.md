@@ -153,8 +153,8 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Field | Type | Notes |
 | --- | --- | --- |
 | `advisory` | boolean | constant `true` |
-| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` or `unsafe-name` |
-| `native_checked` | boolean | `true` only when `--pull-requests` read the native stack state; `false` otherwise (the boundary then carries the native-stack limitation of the Plan rules) |
+| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name` |
+| `native_checked` | boolean | `true` only under the exact condition of the Plan rules (remote section present and the pull request and native stack sources `ok`); `false` otherwise, including `--pull-requests` with a failed remote read (the boundary then carries the native-stack limitation) |
 | `steps` | Step[] | at most 64, ordered |
 
 ### Step
@@ -163,10 +163,10 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | --- | --- | --- |
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
-| `note` | `run-again` \| `stale-base` \| `null` | fixed text for `observe` steps; `null` otherwise |
+| `note` | `run-again` \| `stale-base` \| `reconcile-upstream` \| `null` | fixed text for `observe` steps; `null` otherwise |
 | `layer` | integer or `null` | layer the step rewrites; `null` for `fetch`, `link` and `observe` |
 | `findings` | string[] | codes that cause the step |
-| `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree), `link` is `remote-write` |
+| `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit and carries uncommitted edits), `link` is `remote-write` (pushes unpushed commits, fast-forward only) |
 | `performed_by` | `maintainer` \| `gh-stack` | `gh-stack` only for `link` |
 | `argv` | string[] or `null` | the program and arguments; `null` for `observe` and for an unprintable step |
 | `display` | string or `null` | `argv` with each element single-quoted where needed, at most 1024 bytes; `null` when `argv` is `null` |
