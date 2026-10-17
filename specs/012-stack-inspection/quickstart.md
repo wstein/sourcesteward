@@ -24,7 +24,7 @@ stw stack plan --base main --tip s3 --json
 
 Expected: three layers; `layer-applied-in-base` for layer 1 (observed, patch equivalence); `stack-behind-base`; a plan of two `git rebase --onto` lines with full old-tip commit ids, as in [contracts/stack.md](contracts/stack.md). Nothing is executed. To repair, you run the printed lines yourself, bottom first; afterwards `stw stack show --base main --tip s3` reports no drift finding.
 
-With a merge commit instead of the cherry-pick (`git merge --no-ff s1`) the expected result is no drift finding at all; with `git -c merge.ff=true merge --squash s1 && git commit -qm squash` the layer stays `pending` locally (no patch equivalent) and only the pull request evidence marks the parent as merged (`rewritten`).
+With a merge commit instead of the cherry-pick (`git merge --no-ff s1`) the expected result is no drift finding at all; with `git -c merge.ff=true merge --squash s1 && git commit -qm squash` a single-commit layer is still patch-equivalent (`git cherry` marks it `-`) and is reported `layer-applied-in-base`; a multi-commit layer stays `pending` locally and only the pull request evidence marks the parent as merged (`rewritten`).
 
 ## jj variant (design; unverified until T002)
 

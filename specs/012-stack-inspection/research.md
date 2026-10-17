@@ -111,7 +111,8 @@ No jj binary was available. The pinned versions are 0.45.1 (minimum) and 0.46.0 
 | merge commit (M1) | layer commits are ancestors of the base | none | none |
 | rebase merge, plain chain (M2) | old commits stay in range, patch-equivalent in the base | `layer-applied-in-base` / `parent-merged-child-stale` (`rebase`) | `rebase --onto` per remaining layer |
 | rebase merge, native stack (M3) | GitHub already rewrote the remote heads (non-descendant of the old local tips) | `parent-merged-child-stale` (`native_stack`), `head-sha-differs` `diverged` (`unknown` before the fetch) | `fetch`, `observe` (group 2) |
-| squash merge | old commits in range, no patch equivalent | `parent-merged-child-stale` (`rewritten`, remote evidence only), inferred | `rebase --onto` per remaining layer (group 4); conflicts possible and found by the real rebase (unverified here) |
+| squash merge, one-commit layer | the squashed patch equals the layer's patch | `layer-applied-in-base` (patch equivalence, measured by the round 2 reviewer: `git cherry` gives `-`) | `rebase --onto` per remaining layer (group 5) |
+| squash merge, multi-commit layer | old commits in range, no patch equivalent | `parent-merged-child-stale` (`rewritten`, remote evidence only), inferred | `rebase --onto` per remaining layer (group 5) when `merge_commit_sha` is in `--base`; conflicts possible and found by the real rebase (unverified here) |
 | merge commit not contained in `--base` (stale base) | the merged layer's commits stay in range because `--base` was not updated | `parent-merged-child-stale` (`merge`) | `observe` note `stale-base` (group 3); no rebase onto the stale base |
 | any shape, offline (no `--pull-requests`) | native status unknown | local findings only | rebase steps with the boundary limitation `native_checked: false`; upstream `behind`/`diverged` switches to `fetch`, `observe` |
 
