@@ -17,11 +17,11 @@ stw release check [PATH] [--product NAME] [--commit SHA] [--json]
 | 2 | usage error |
 | 3 | one or more check findings |
 
-Precedence 2, 1, 3, 0. All findings are reported (up to 100, then `limit-exceeded`), ordered by JSON pointer.
+Precedence 2, 1, 3, 0. Findings are ordered by file, then JSON pointer (array indexes compare as numbers: `/build/2` before `/build/10`; a file-level finding has pointer `""`), and cut once at 100 with a final `limit-exceeded` finding ("N further findings are not shown", or "more findings were not shown" when the parser stopped early; `boundary.complete` is then false). `refused`/`error` results carry codes beyond the refusal list for operational failures: `read-failed` (a read or Git failure) and the diagnostic codes of the existing inspection (`invalid-path`, `git-unavailable`, `git-failed`, `jj-*`, ...) are passed through. Result additions (additive, per the result-schema rule): `root`, `commit`, `products[]` (file, product, `config_sha256`, contract) and a `file` property on findings; `contract` is the normalized model only when exactly one contract file was linted. Strings of the model are rewritten only where they could hide or forge terminal output (C1 controls, bidirectional and other format characters become `\u{...}`).
 
 ## Backend capability
 
-Per the spec's [capability table](../spec.md#backend-capability-normative): the working-tree form needs only ownership detection (for the repository root); `--commit` uses `git cat-file` under the isolated prefix in Git and the existing jj read-only runner in jj; GitButler-managed repositories lint the working-tree file only; `--commit` refuses `unsupported-backend`.
+Per the spec's [capability table](../spec.md#backend-capability-normative): the working-tree form needs only ownership detection (for the repository root); `--commit` uses the fixed read-only `git rev-parse --verify`, `ls-tree -z` and `cat-file` invocations under the isolated prefix in Git (also in a bare repository, which has no working tree for the other form). **jj `--commit` is staged to T015 (WI3):** until then, as for GitButler-managed repositories (which lint the working-tree file only), `--commit` refuses `unsupported-backend`.
 
 ## Human output
 
@@ -44,7 +44,7 @@ One object per invocation: `schema_version`, `command: "release-check"`, `status
 ## Effects
 
 - Reads: the contract file (never through a symlink; regular file only, at most 64 KiB), or one blob.
-- Writes: none. Network: none. Processes: for the working-tree form only the existing ownership detection (which starts Git); `--commit` additionally starts the fixed `git rev-parse`/`cat-file` invocations or the jj runner. No project command, ever.
+- Writes: none. Network: none. Processes: for the working-tree form only the existing ownership detection (which starts Git); `--commit` additionally starts the fixed `git rev-parse --verify`, `ls-tree -z` and `cat-file` (`-t`, `blob`, `--batch`, `--batch-check`) invocations (jj: T015). Files in the working tree are opened with `O_NOFOLLOW`/`O_NONBLOCK` and checked with `fstat`; the `.stw` listing is bounded (10,000 entries; 1 MiB in a commit). No project command, ever.
 - Check findings: `product-tag-overlap`, `fetch-unpinned`, `profile-violation`, `schema-violation`, `config-ambiguous`, `allowlist-overlaps-input`, `argv-not-array`, `placeholder-unknown`, `limit-exceeded`, `duplicate-id`, `unknown-reference`, `scheme-invalid`, `env-name-forbidden`, `promote-argv-invalid` (errors) and `unused-build` (info).
 
 ## Compatibility
