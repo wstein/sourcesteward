@@ -69,8 +69,15 @@ target is refused; see [Refusals](#refusals).
 | Status | Meaning |
 | --- | --- |
 | `reachable` | the pinned commit is contained in at least one remote-tracking ref (`refs/remotes/*`) of the submodule repository; at most 16 refs are named, each with its remote, and truncation is flagged |
-| `unreachable` | the commit object exists locally and no remote-tracking ref contains it |
-| `unknown` | anything else, with a reason: an absent object, a non-commit, an uninitialized submodule |
+| `unreachable` | the commit object exists locally and no remote-tracking ref contains it; never reported for a shallow submodule |
+| `unknown` | anything else, with a reason: an absent object, a non-commit, an uninitialized submodule, or a missing containment in a shallow submodule |
+
+In a shallow submodule a missing containment is `unknown` ("shallow repository: the history is
+cut"), never `unreachable`, because the cut history can hide the connection (a pin fetched alone
+by `git submodule update --depth 1`); a positive stays `reachable`, so `pin-unpublished` is never
+raised for a shallow submodule. Publication is evaluated only for the HEAD pin, or for the staged
+pin only when HEAD records none (an unborn superproject HEAD); the staged pin of a path whose HEAD
+pin differs is not evaluated, and `staged-pin-differs` says so.
 
 Symbolic refs such as a remote's `HEAD` never count. Local branches and tags never count as
 publication evidence. When several remotes exist, every remote-tracking ref is considered.
@@ -96,7 +103,7 @@ normative table of the [specification](../specs/021-submodule-pin-audit/spec.md)
 | `gitlink-without-entry` | error | gitlink with no `.gitmodules` entry |
 | `url-has-credentials` | error | registered URL embeds credentials |
 | `submodule-path-unsafe` | error | submodule refused: path, Git directory, pointer or encoding unsafe |
-| `submodule-unsafe-owner` | error | submodule refused: not owned by the effective user |
+| `submodule-unsafe-owner` | error | submodule refused: worktree or Git directory not owned by the effective user, or world-writable (or writable by a group other than the effective group) |
 | `submodule-unsupported-backend` | warning | submodule is itself jj- or GitButler-managed, not audited |
 | `pins-limit` | error | a bound was exhausted; result incomplete |
 | `pins-state-changed` | error | state changed during the audit; result incomplete |
@@ -117,9 +124,9 @@ normative table of the [specification](../specs/021-submodule-pin-audit/spec.md)
 - A finding is evidence from one local sample, not a verdict. `pin-unpublished` says the local
   remote-tracking refs do not contain the pin (see above); it does not say the commit is gone
   from the remote.
-- No error finding does not prove publication. An uninitialized submodule has publication
-  `unknown` and only an `info` finding, so a passing `--strict` run does not prove that
-  uninitialized submodules are published. An `unknown` publication is not a pass.
+- No error finding does not prove publication. An uninitialized or shallow submodule has
+  publication `unknown` and no `pin-unpublished` error, and a staged pin that differs from the HEAD
+  pin is not evaluated, so a passing `--strict` run does not prove that these pins are published. An `unknown` publication is not a pass.
 - `submodule-dirty` and `checkout-differs-from-pin` describe the local checkout. They do not say
   which side is right and do not suggest a repair; the audit never repairs registration.
 - `url-has-credentials` is raised without contacting the URL; the credentials never appear in
@@ -127,6 +134,9 @@ normative table of the [specification](../specs/021-submodule-pin-audit/spec.md)
 - A refused submodule (`submodule-path-unsafe`, `submodule-unsafe-owner`,
   `submodule-unsupported-backend`) still appears with only the fields that were safe to read. Its
   refusal does not by itself make the result incomplete; the other submodules are still reported.
+- A superproject whose current branch name is not valid UTF-8 cannot be identified, so the whole
+  result is `pins-failed` with a null identity (a recorded exception to per-field escaping, which
+  covers everything else the audit reads).
 - A non-UTF-8 submodule path cannot be represented in JSON: the entry is refused with
   `submodule-path-unsafe` and shown escaped (`\xNN`) with `path_encoding: "escaped"`.
 
@@ -152,7 +162,7 @@ full result.
 | `ambiguous-backend` | `refused` | `ambiguous` | ownership markers conflict |
 | `bare-repository` | `refused` | `git` | no worktree to compare |
 | `not-repository` | `refused` | `unknown` | no repository at the path |
-| `pins-failed` | `error` | `git` | an operational failure such as a failed Git invocation or cancellation |
+| `pins-failed` | `error` | `git` or `unknown` | an operational failure such as a failed Git invocation, an unreadable path or cancellation; `git` only once Git ownership is established, `unknown` for a failure before that (for example a superproject branch name that is not valid UTF-8, with a null identity) |
 
 Git-owned worktrees, including linked worktrees, are audited; a linked worktree's submodules
 live under that worktree's own `modules` directory. jj has no Git submodule model, so a jj-owned
@@ -173,7 +183,7 @@ jj- or GitButler-managed is refused individually and the others are still audite
 | ahead and behind counts | 10,000 each, with a `capped` flag |
 | dirty scan per submodule | 3 seconds and 20,000 index entries (yields `unknown`, never `pins-limit`) |
 
-Exhausting a bound marks the result `incomplete` with `pins-limit`. The audit also resamples the
+Exhausting a bound marks the result `incomplete` with `pins-limit`; beyond 256 submodules only the first 256 are examined and a global `pins-limit` finding reports the total. The audit also resamples the
 superproject HEAD and index identity and each submodule HEAD before success; a change marks the
 result `incomplete` with `pins-state-changed`. An incomplete result is never a complete success.
 An `unknown` observation, an uninitialized submodule or an absent pinned object is a valid
@@ -187,10 +197,17 @@ and Git directory are resolved without following symlinks and accepted only at t
 Git itself reports for the worktree in use (or an in-place `.git` directory); anything that
 escapes, including `commondir`, alternates or `core.worktree`, is refused. Because an explicit Git
 directory bypasses Git's own ownership check, the audit verifies that each submodule worktree and
-Git directory is owned by the effective user before any Git process runs there. Git runs with
-isolation that neutralizes hooks, filters, fsmonitor, optional locks, prompts, lazy fetch, replace
-objects, credential helpers and aliases. See [Spec 021 research](../specs/021-submodule-pin-audit/research.md)
-for the fixed list of Git invocations.
+Git directory is owned by the effective user and is not world-writable (nor writable by a group
+other than the effective group) before any Git process runs there; otherwise the submodule is
+refused with `submodule-unsafe-owner`. Git creates world-writable directories under umask 000, so
+the remedy is `chmod -R o-w` on the submodule or a re-clone under a stricter umask. A `commondir`
+entry or any non-empty `objects/info/alternates` is refused as `submodule-path-unsafe`.
+
+The Git isolation (replace objects, optional locks, fsmonitor, hooks path, credential helper, ssh
+command, every transport, gc, commit-graph, the graft file, no inherited `GIT_*` variable) is
+specified in [Spec 021 research](../specs/021-submodule-pin-audit/research.md), which also lists
+the fixed Git invocations, and exercised by the hostile-repository tests; this page does not
+restate it as a guarantee.
 
 ## JSON
 
