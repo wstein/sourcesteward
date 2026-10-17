@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Round 1 resolved in the artifacts; round 2 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 and 2 resolved in the artifacts; round 3 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -36,3 +36,25 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: a28d23e. 
 | L6 | Low | rebase needs checkout and clean worktree; `merge.ff` | Disclosed on the step effect and in the Plan rules; quickstart uses `-c merge.ff=true` |
 | L7 | Low | `cat-file -e` not on the allowlist | Listed in plan.md |
 | L8 | Low | 012 versus 025 treatment of denied sources; SC disposition | Stated in the status section; disposition row for SC-001 to SC-004 added |
+
+### Round 2
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: 775290d. Verdict: NOT READY (2 high, 3 medium, 9 low). Findings were measured in scratch repositories by the reviewer; jj facts on 0.46.0 and 0.45.1.
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| H1 | High | A squash or one-commit rebase merge on a stale `--base` dropped the parent's content | Plan rules: a layer is landed only by patch equivalence or a merged PR whose `merge_commit_sha` is a local ancestor of `--base`; otherwise group 3 (stale-base) for every merge kind, jj step included. Supersedes the round 1 dropped-set text |
+| H2 | High | Group 2 "fetch, run again" never terminated on Git; suppressed `link` after the maintainer's own rebase | Fetch-first only for missing objects (`run-again`); new group 4 `reconcile-upstream` note terminates for native rewrites already fetched and for behind/diverged upstreams. Supersedes the round 1 H1 upstream rule |
+| M1 | Med | A squash of a single-commit layer is patch-equivalent | Quickstart, D9 rows (one- and multi-commit), T010, US2 independent test corrected |
+| M2 | Med | New plan rules lacked scenarios and tests | US2 scenarios 6 to 10; T006 and T029 extended |
+| M3 | Med | plan.md D6 and D7 outdated | D6 and D7 rewritten for the groups, landed set, stale base, reconcile, blocked layer and `native_checked` |
+| L1 | Low | M3 confound overcorrected; lag 4 s and 5 s | M3, delegation table and U6 reworded to "confounded, ordering suggests native, plain-chain retarget unmeasured" |
+| L2 | Low | `+` not in the grammar | Argument rules say only a trailing `-` needs quoting and `+` is `unsafe-name` |
+| L3 | Low | Group 5 wording | Groups renumbered 1 to 6; group 6 only when groups 2 to 5 produced no step |
+| L4 | Low | `blocked.layer` for `merged-layer-not-bottom` | The lowest landed layer above a not-landed one (spec, data model, scenario 9) |
+| L5 | Low | `native_checked` after a failed remote read | True only when the remote section exists and the pull request and native stack sources are `ok`; spec and data model aligned |
+| L6 | Low | Full page bypassed the Findings table | `pull-request-ambiguous` row covers it (`truncated`, `incomplete`, `stack-limit`) |
+| L7 | Low | Human text for `stale-base` | Contract gives the text of all three notes |
+| L8 | Low | jj working-copy effect undisclosed | Disclosed in the group 5 text and the step effect in the data model |
+| L9 | Low | `link` after `rebase` implies a non-fast-forward push | `link` is never printed beside a `rebase` and requires upstream `same`, `none` or `ahead`; disclosed |
+| J | Info | jj facts | M13 records them as measured; U1 narrowed; T002 re-runs them; printed flag is `-o` |
