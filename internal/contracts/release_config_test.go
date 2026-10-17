@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/release"
 )
 
 // releaseExamples are the six worked-example contracts of specs/026-release-process (FR-023).
@@ -373,5 +375,34 @@ func TestReleaseConfigNegativeFixturesAreRejected(t *testing.T) {
 	}
 	if len(names) < 100 {
 		t.Fatalf("only %d fixtures", len(names))
+	}
+}
+
+// The linter interprets the same schema file; it must reach the same verdict as the test-only
+// JSON Schema library on every example and every negative fixture.
+func TestReleaseSchemaInterpreterAgreesWithTheSchemaLibrary(t *testing.T) {
+	s := schema(t, "release-config")
+	check := func(name string, doc map[string]any) {
+		raw, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		libraryValid := s.Validate(value(t, raw)) == nil
+		var decoded any
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		findings := release.ValidateSchema(decoded)
+		if libraryValid != (len(findings) == 0) {
+			t.Errorf("%s: library valid=%v, interpreter findings=%+v", name, libraryValid, findings)
+		}
+	}
+	for _, name := range releaseExamples {
+		check("example "+name, releaseExample(t, name))
+	}
+	for _, c := range configMutations() {
+		doc := releaseExample(t, c.example)
+		c.mutate(doc)
+		check(c.name, doc)
 	}
 }
