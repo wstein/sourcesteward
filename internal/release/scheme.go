@@ -38,7 +38,7 @@ func checkVersion(v Version) []Finding {
 		invalid("/version/tag_template", "every segment of the literal prefix of tag_template must start with a letter or digit")
 	}
 	if templateOK && !refTextOK(prefix, suffix) {
-		invalid("/version/tag_template", "the literal prefix and suffix of tag_template must keep tag names valid git ref names: no .., no component ending in . or .lock")
+		invalid("/version/tag_template", "the tag_template must keep tag names valid git ref names: no / after {version}, no .., no component ending in . or .lock")
 	}
 	if v.TagTemplate != "" && !templateOK {
 		invalid("/version/tag_template", "tag_template must contain {version} exactly once and no other brace")
@@ -369,11 +369,12 @@ func firstRunes(re *syntax.Regexp) (ok, nullable bool) {
 }
 
 // refTextOK mirrors the part of git check-ref-format that literal tag text can break (the other
-// rules are excluded by the character sets): no "..", and no component, once the text is
-// followed by "/" or ends the tag, that ends in "." or ".lock". The prefix is followed by the
-// version, so its last component is still open; the suffix ends the tag.
+// rules are excluded by the character sets). The suffix, which contains no "/", ends the last
+// component together with the version: no "..", and a non-empty suffix does not end in "." or
+// ".lock". The prefix is followed by the version, so its last component is still open; its
+// closed components may not end in "." or ".lock" and the prefix has no "..".
 func refTextOK(prefix, suffix string) bool {
-	if strings.Contains(prefix, "..") || strings.Contains(suffix, "..") {
+	if strings.Contains(prefix, "..") || strings.Contains(suffix, "..") || strings.Contains(suffix, "/") {
 		return false
 	}
 	closed := func(component string) bool {
@@ -385,18 +386,7 @@ func refTextOK(prefix, suffix string) bool {
 			return false
 		}
 	}
-	if suffix == "" {
-		return true
-	}
-	parts = strings.Split(suffix, "/")
-	for _, component := range parts {
-		// The first component of the suffix continues the version; it is closed only by a slash
-		// or the end of the tag, and both apply here.
-		if component != "" && !closed(component) {
-			return false
-		}
-	}
-	return true
+	return suffix == "" || closed(suffix)
 }
 
 // refShapeOK reports that the expression cannot match ".." and cannot end with a dot, so the
