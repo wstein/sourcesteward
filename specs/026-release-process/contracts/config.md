@@ -32,9 +32,9 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | `project` | `name` | string | display name, 1 to 64 characters `[A-Za-z0-9._ -]` |
 | | `product` | id, optional | required in `.stw/release.<product>.*` files and equal to `<product>`; absent in `.stw/release.toml` |
 | `version` | `scheme` | `semver`, `calver`, `pattern` | see the spec's version table |
-| | `tag_prefix` | string, optional | for `semver`/`calver`: characters `[a-z0-9._/-]`, empty or ending with `/`, and every segment starts with a letter or digit (so no `.`, `..` or hidden segment can make a tag name leave its namespace) |
+| | `tag_prefix` | string, optional | for `semver`/`calver`: characters `[a-z0-9._/-]`, empty or ending with `/`, and every segment starts with a letter or digit (so no `.`, `..` or hidden segment can make a tag name leave its namespace); the prefix also keeps tag names valid git ref names (the rules of `git check-ref-format` that the character set leaves open): no `..`, no component ending in `.` or `.lock` |
 | | `tag_template` | string | for `pattern` only: the tag as a template with exactly one `{version}` (for example `zlib-v{version}`) |
-| | `tag_pattern` | string | for `pattern` only: RE2 of the form `^<literal prefix>(?P<version>...)<literal suffix>$` with exactly one top-level `version` group; the literal prefix and suffix (characters `[A-Za-z0-9._/-]`) must equal the template's, so version to tag to version is the identity; every `/`-separated segment of the literal prefix starts with a letter or digit, and the version group can only start with a letter or digit |
+| | `tag_pattern` | string | for `pattern` only: RE2 of the form `^<literal prefix>(?P<version>...)<literal suffix>$` with exactly one top-level `version` group; the literal prefix and suffix (characters `[A-Za-z0-9._/-]`) must equal the template's, so version to tag to version is the identity; every `/`-separated segment of the literal prefix starts with a letter or digit, and the version group can only start with a letter or digit; the literal prefix and suffix keep tag names valid git ref names (no `..`, no component ending in `.` or `.lock`), and the version group can neither match `..` nor end with a dot (proved on the RE2 tree, conservatively). A version that ends in `.lock` cannot be excluded by the check; git refuses such a tag when it is created |
 | | `order` | array of strings | for `pattern` only: named numeric groups, at most 8 |
 | | `monotonicity` | `strict` or `non-decreasing`, default `strict` | for `pattern` only: `strict` requires the new version's `order` tuple to be greater than every existing one; `non-decreasing` requires it to be greater than or equal to the maximum existing tuple and the full tag not to exist yet, so groups that are **not** listed in `order` (a build counter) may restart within the same ordered tuple (for example `2026.10.15-b1` after `2026.10.15-b98.1` with `order` of year, month and day; the order within an equal tuple is undefined and consumers must not infer recency from the counter) |
 | | `source` | `input` or `file` | where the version is declared (`input` = the dispatch input / tag) |
@@ -110,7 +110,7 @@ A `per-target` build runs once for each target that references it, with that tar
       "type": "object", "additionalProperties": false, "required": ["scheme", "source"],
       "properties": {
         "scheme": {"enum": ["semver", "calver", "pattern"]},
-        "tag_prefix": {"type": "string", "pattern": "^([a-z0-9][a-z0-9._-]*/)*$", "maxLength": 64},
+        "tag_prefix": {"type": "string", "pattern": "^([a-z0-9][a-z0-9._-]*/)*$", "maxLength": 64, "not": {"pattern": "\\.\\.|\\./|\\.lock/"}},
         "tag_template": {"type": "string", "pattern": "^[A-Za-z0-9._/{}-]{1,128}$"},
         "tag_pattern": {"type": "string", "minLength": 1, "maxLength": 256},
         "monotonicity": {"enum": ["strict", "non-decreasing"]},

@@ -18,7 +18,7 @@
       "type": "object", "additionalProperties": false, "required": ["scheme", "source"],
       "properties": {
         "scheme": {"enum": ["semver", "calver", "pattern"]},
-        "tag_prefix": {"type": "string", "pattern": "^([a-z0-9][a-z0-9._-]*/)*$", "maxLength": 64},
+        "tag_prefix": {"type": "string", "pattern": "^([a-z0-9][a-z0-9._-]*/)*$", "maxLength": 64, "not": {"pattern": "\\.\\.|\\./|\\.lock/"}},
         "tag_template": {"type": "string", "pattern": "^[A-Za-z0-9._/{}-]{1,128}$"},
         "tag_pattern": {"type": "string", "minLength": 1, "maxLength": 256},
         "monotonicity": {"enum": ["strict", "non-decreasing"]},
