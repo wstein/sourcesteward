@@ -4,14 +4,22 @@ package release
 import (
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 )
 
-// Tree answers which paths exist in the tree the contract is linted against: the working tree
-// for the working-tree form and the commit's tree for --commit. Kinds returns "file" or "dir"
-// for each existing path of the argument and omits absent ones.
+// TreeEntry is what exists at a path of the linted tree: Kind is "file", "dir" or "symlink"
+// (with its Target).
+type TreeEntry struct {
+	Kind   string
+	Target string
+}
+
+// Tree answers which entries exist in the tree the contract is linted against: the working tree
+// for the working-tree form and the commit's tree for --commit. Entries covers exactly the given
+// paths, without following a symlink at the last component, and omits absent paths.
 type Tree interface {
-	Kinds(paths []string) (map[string]string, error)
+	Entries(paths []string) (map[string]TreeEntry, error)
 }
 
 // ValidateOptions selects the product file being validated and the tree for declared inputs.
@@ -416,43 +424,142 @@ func (v *validator) declaredInputs() ([]declaredInput, []string) {
 	for p := range candidates {
 		paths = append(paths, p)
 	}
+	sort.Strings(paths)
 	return inputs, paths
 }
 
-// addArgvCandidates records the repository paths an argument might name: as written and relative
-// to the working directory.
+// addArgvCandidates records the repository paths an argument might name, lexically cleaned and
+// confined to the repository: as written and relative to the working directory.
 func addArgvCandidates(into map[string]bool, arg, workingDir string) {
-	if strings.ContainsAny(arg, "{}") {
+	if strings.ContainsAny(arg, "{}") || strings.HasPrefix(arg, "/") {
 		return
 	}
-	arg = strings.TrimPrefix(arg, "./")
-	if ValidRepoPath(arg) {
-		into[arg] = true
-	}
-	if workingDir != "" && workingDir != "." {
-		if joined := path.Join(workingDir, arg); ValidRepoPath(joined) {
-			into[joined] = true
+	add := func(p string) {
+		if p = path.Clean(p); ValidRepoPath(p) {
+			into[p] = true
 		}
 	}
+	add(arg)
+	if workingDir != "" && workingDir != "." {
+		add(path.Join(workingDir, arg))
+	}
+}
+
+const maxSymlinkHops = 16
+
+// pathWalk follows one candidate path component by component through the tree.
+type pathWalk struct {
+	comps []string
+	idx   int
+	cur   string
+	hops  int
+	done  bool
+}
+
+// resolveCandidates finds, for each candidate, the repository path it denotes after symlinks
+// inside the repository are followed. Every symlink met is an input, and so is the final target.
+// A symlink that leaves the repository, is absolute, loops or is nested too deep cannot be
+// resolved and fails closed: the second result is true and every pattern is then reported.
+func resolveCandidates(tree Tree, candidates []string) (found []declaredInput, failClosed bool, err error) {
+	walks := make([]*pathWalk, len(candidates))
+	for i, c := range candidates {
+		walks[i] = &pathWalk{comps: strings.Split(c, "/")}
+	}
+	cache := map[string]*TreeEntry{}
+	for {
+		var need []string
+		seen := map[string]bool{}
+		for _, w := range walks {
+			if w.done {
+				continue
+			}
+			p := path.Join(w.cur, w.comps[w.idx])
+			if _, ok := cache[p]; !ok && !seen[p] {
+				seen[p] = true
+				need = append(need, p)
+			}
+		}
+		if len(need) == 0 && allDone(walks) {
+			return found, false, nil
+		}
+		sort.Strings(need)
+		if len(need) > 0 {
+			entries, err := tree.Entries(need)
+			if err != nil {
+				return nil, false, err
+			}
+			for _, p := range need {
+				if e, ok := entries[p]; ok {
+					cache[p] = &e
+				} else {
+					cache[p] = nil
+				}
+			}
+		}
+		for _, w := range walks {
+			if w.done {
+				continue
+			}
+			p := path.Join(w.cur, w.comps[w.idx])
+			e := cache[p]
+			last := w.idx == len(w.comps)-1
+			switch {
+			case e == nil:
+				w.done = true
+			case e.Kind == "symlink":
+				found = append(found, declaredInput{p, false, "a symlink on the way to a path named in an argument vector"})
+				target := e.Target
+				w.hops++
+				resolved := path.Join(path.Dir(p), target)
+				if w.hops > maxSymlinkHops || strings.HasPrefix(target, "/") || resolved == ".." || strings.HasPrefix(resolved, "../") || resolved == "." {
+					return found, true, nil
+				}
+				w.comps = append(strings.Split(resolved, "/"), w.comps[w.idx+1:]...)
+				w.idx, w.cur = 0, ""
+			case e.Kind == "dir":
+				w.cur = p
+				w.idx++
+				if last {
+					found = append(found, declaredInput{p, true, "the repository path " + p + " named in an argument vector"})
+					w.done = true
+				}
+			default:
+				if last {
+					found = append(found, declaredInput{p, false, "the repository path " + p + " named in an argument vector"})
+				}
+				w.done = true
+			}
+		}
+	}
+}
+
+func allDone(walks []*pathWalk) bool {
+	for _, w := range walks {
+		if !w.done {
+			return false
+		}
+	}
+	return true
 }
 
 func (v *validator) checkAllowlist() error {
 	inputs, candidates := v.declaredInputs()
+	failClosed := false
 	if v.opts.Tree != nil && len(candidates) > 0 {
-		kinds, err := v.opts.Tree.Kinds(candidates)
+		found, closed, err := resolveCandidates(v.opts.Tree, candidates)
 		if err != nil {
 			return err
 		}
-		for _, p := range candidates {
-			if kind := kinds[p]; kind != "" {
-				inputs = append(inputs, declaredInput{p, kind == "dir", "the repository path " + p + " named in an argument vector"})
-			}
-		}
+		inputs, failClosed = append(inputs, found...), closed
 	}
 	for i, pattern := range v.c.Allowlist.Paths {
 		pointer := fmt.Sprintf("/allowlist/paths/%d", i)
 		if problem := PatternProblem(pattern); problem != "" {
 			v.add("schema-violation", pointer, "allowlist-pattern: %s", problem)
+			continue
+		}
+		if failClosed {
+			v.add("allowlist-overlaps-input", pointer, "pattern %q cannot be proved apart from the build inputs: a symlink named in an argument vector leaves the repository, is absolute, loops or is nested too deep", clip(pattern))
 			continue
 		}
 		for _, in := range inputs {

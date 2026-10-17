@@ -89,10 +89,11 @@ func allowlistCases() []semanticCase {
 		return appendTo(p, "allowlist", "paths")
 	}
 	overlap := "allowlist-overlaps-input /allowlist/paths/3"
+	allPaths := []string{"allowlist-overlaps-input /allowlist/paths/0", "allowlist-overlaps-input /allowlist/paths/1", "allowlist-overlaps-input /allowlist/paths/2", overlap}
 	invalid := "schema-violation /allowlist/paths/3"
 	return []semanticCase{
 		{name: "pattern covering an argv file", example: "go-cli", tree: scripts, mutate: withPattern("scripts/**"), want: []string{overlap}},
-		{name: "pattern covering a smoke_argv file only", example: "go-cli", tree: fakeTree{"scripts/release-smoke.sh": "file"}, mutate: withPattern("scripts/*.sh"), want: []string{overlap}},
+		{name: "pattern covering a smoke_argv file only", example: "go-cli", tree: fakeTree{"scripts": "dir", "scripts/release-smoke.sh": "file"}, mutate: withPattern("scripts/*.sh"), want: []string{overlap}},
 		{name: "argv file that is not in the tree is not an input", example: "go-cli", tree: fakeTree{}, mutate: withPattern("scripts/**")},
 		{name: "no tree means declared inputs only", example: "go-cli", mutate: withPattern("scripts/**")},
 		{name: "pattern covering an argv directory", example: "go-cli", tree: fakeTree{"scripts": "dir"}, mutate: both(withPattern("scripts/**"), appendTo("scripts", "build", 0, "argv")), want: []string{overlap}},
@@ -116,9 +117,19 @@ func allowlistCases() []semanticCase {
 		{name: "pattern covering a release workflow outside .github", example: "go-cli", mutate: both(set("ops/release.yml", "ci", "release_workflow"), withPattern("ops/*")), want: []string{overlap}},
 		{name: "pattern naming the image lock file exactly", example: "oci-bundle", mutate: withPattern("bundles/toolbox/tools.lock.json"), want: []string{"allowlist-overlaps-input /allowlist/paths/1"}},
 		{name: "argv word with a placeholder is never probed", example: "go-cli", tree: fakeTree{"{out_dir}/x": "file"}, mutate: both(withPattern("*dir*/x"), appendTo("{out_dir}/x", "build", 0, "argv"))},
-		{name: "argv path with a ./ prefix", example: "go-cli", tree: fakeTree{"scripts/other.sh": "file"}, mutate: both(withPattern("scripts/o*.sh"), appendTo("./scripts/other.sh", "build", 0, "argv")), want: []string{overlap}},
-		{name: "argv path relative to the working directory", example: "go-cli", tree: fakeTree{"scripts/release.sh": "file"}, mutate: both(set("web", "build", 0, "working_dir"), withPattern("scripts/**"), appendTo("../scripts/release.sh", "build", 0, "argv")), want: []string{overlap}},
+		{name: "argv path with a ./ prefix", example: "go-cli", tree: fakeTree{"scripts": "dir", "scripts/other.sh": "file"}, mutate: both(withPattern("scripts/o*.sh"), appendTo("./scripts/other.sh", "build", 0, "argv")), want: []string{overlap}},
+		{name: "argv path relative to the working directory", example: "go-cli", tree: fakeTree{"scripts": "dir", "scripts/release.sh": "file"}, mutate: both(set("web", "build", 0, "working_dir"), withPattern("scripts/**"), appendTo("../scripts/release.sh", "build", 0, "argv")), want: []string{overlap}},
 		{name: "argv directory is matched as a directory", example: "go-cli", tree: fakeTree{"scripts": "dir"}, mutate: both(withPattern("scripts/*.sh"), appendTo("scripts", "build", 0, "argv")), want: []string{overlap}},
+		{name: "argv path through a symlinked directory", example: "go-cli", tree: fakeTree{"scripts": "symlink:tools", "tools": "dir", "tools/x.sh": "file"}, mutate: both(withPattern("tools/*.sh"), appendTo("scripts/x.sh", "build", 0, "argv")), want: []string{overlap}},
+		{name: "argv path that is a symlink to a file", example: "go-cli", tree: fakeTree{"run": "symlink:tools/x.sh", "tools": "dir", "tools/x.sh": "file"}, mutate: both(withPattern("tools/*.sh"), appendTo("run", "build", 0, "argv")), want: []string{overlap}},
+		{name: "chained symlinks", example: "go-cli", tree: fakeTree{"a": "symlink:b", "b": "symlink:tools", "tools": "dir", "tools/x.sh": "file"}, mutate: both(withPattern("tools/*.sh"), appendTo("a/x.sh", "build", 0, "argv")), want: []string{overlap}},
+		{name: "relative symlink inside a directory", example: "go-cli", tree: fakeTree{"bin": "dir", "bin/run": "symlink:../tools/x.sh", "tools": "dir", "tools/x.sh": "file"}, mutate: both(withPattern("tools/*.sh"), appendTo("bin/run", "build", 0, "argv")), want: []string{overlap}},
+		{name: "symlink leaving the repository fails closed", example: "go-cli", tree: fakeTree{"out": "symlink:../elsewhere"}, mutate: both(withPattern("docs/guides/*"), appendTo("out/x", "build", 0, "argv")), want: allPaths},
+		{name: "absolute symlink fails closed", example: "go-cli", tree: fakeTree{"out": "symlink:/etc"}, mutate: both(withPattern("docs/guides/*"), appendTo("out/x", "build", 0, "argv")), want: allPaths},
+		{name: "symlink loop fails closed", example: "go-cli", tree: fakeTree{"a": "symlink:b", "b": "symlink:a"}, mutate: both(withPattern("docs/guides/*"), appendTo("a/x", "build", 0, "argv")), want: allPaths},
+		{name: "symlink to a missing path is not an input", example: "go-cli", tree: fakeTree{"a": "symlink:missing"}, mutate: both(withPattern("docs/guides/*"), appendTo("a", "build", 0, "argv"))},
+		{name: "dot-dot in an argv path is cleaned", example: "go-cli", tree: fakeTree{"scripts": "dir", "scripts/x.sh": "file"}, mutate: both(withPattern("scripts/x*.sh"), appendTo("scripts/../scripts/x.sh", "build", 0, "argv")), want: []string{overlap}},
+		{name: "dot-dot cannot leave the repository", example: "go-cli", tree: fakeTree{"x.sh": "file"}, mutate: both(withPattern("*.sh"), appendTo("../x.sh", "build", 0, "argv"))},
 		{name: "pattern with a trailing slash", example: "go-cli", mutate: withPattern("docs/"), want: []string{invalid}},
 		{name: "pattern with a double star inside a segment", example: "go-cli", mutate: withPattern("a**b"), want: []string{invalid}},
 		{name: "pattern with a dot-dot segment", example: "go-cli", mutate: withPattern("../x"), want: []string{invalid}},

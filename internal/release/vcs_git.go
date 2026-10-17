@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,10 +21,11 @@ import (
 // read objects and run no hook, filter, textconv or fsmonitor.
 
 const (
-	gitListLimit  = 1 << 20 // bytes of an ls-tree listing
-	gitBatchLimit = 8 << 20 // bytes of a cat-file --batch-check reply (a missing path echoes its name)
-	gitDeadline   = 30 * time.Second
-	maxTreeProbes = 20000
+	gitListLimit     = 1 << 20  // bytes of the ls-tree listing of .stw
+	gitTreeListLimit = 16 << 20 // bytes of the ls-tree listing of the parent directories of probed paths
+	gitBatchLimit    = 8 << 20  // bytes of a cat-file --batch-check reply (a missing path echoes its name)
+	gitDeadline      = 30 * time.Second
+	maxTreeProbes    = 20000
 )
 
 // gitEnvironment drops every GIT_ variable and pins the isolating ones.
@@ -108,8 +111,8 @@ func newGitSource(ctx context.Context, root, commit string) (*gitSource, error) 
 
 var errCommitUnresolved = errors.New("commit-unresolved")
 
-// Entries lists the .stw directory of the commit; a missing or non-directory .stw is no entries.
-func (g *gitSource) Entries() ([]sourceEntry, bool, error) {
+// StwEntries lists the .stw directory of the commit; a missing or non-directory .stw is no entries.
+func (g *gitSource) StwEntries() ([]sourceEntry, bool, error) {
 	kind, _, status, err := gitOutput(g.ctx, g.root, 64, "", "cat-file", "-t", g.commit+":.stw")
 	if err != nil {
 		return nil, false, err
@@ -160,34 +163,107 @@ func (g *gitSource) Read(e sourceEntry, limit int) ([]byte, bool, error) {
 	return data, truncated, nil
 }
 
-// Kinds reports which of the paths exist in the commit's tree, with one `cat-file --batch-check`.
-func (g *gitSource) Kinds(paths []string) (map[string]string, error) {
+// Entries reports the entries at exactly the given paths of the commit's tree: `ls-tree -z` lists
+// the modes, and one `cat-file --batch` reads the targets of symlinks. A path below a symlink is
+// absent here; the caller resolves symlinks component by component.
+func (g *gitSource) Entries(paths []string) (map[string]TreeEntry, error) {
 	if len(paths) > maxTreeProbes {
 		return nil, fmt.Errorf("%w: more than %d paths to probe", errGitFailed, maxTreeProbes)
 	}
-	var stdin strings.Builder
+	out := map[string]TreeEntry{}
+	links := map[string]string{} // path -> blob id
+	wanted := map[string]bool{}
+	parents := map[string]bool{}
 	for _, p := range paths {
-		if strings.ContainsAny(p, "\n\x00") {
+		if strings.ContainsAny(p, "\n\x00") || strings.HasPrefix(p, ":") {
 			return nil, fmt.Errorf("%w: unprobeable path", errGitFailed)
 		}
-		stdin.WriteString(g.commit + ":" + p + "\n")
+		wanted[p] = true
+		parent := ""
+		if i := strings.LastIndexByte(p, '/'); i >= 0 {
+			parent = p[:i+1]
+		}
+		parents[parent] = true
 	}
-	reply, truncated, status, err := gitOutput(g.ctx, g.root, gitBatchLimit, stdin.String(), "cat-file", "--batch-check")
+	// Listing the parent directories gives every entry of each; a directory path listed on its own
+	// next to a path below it would not be printed by ls-tree, so entries are read per parent.
+	var dirs []string
+	for d := range parents {
+		if d == "" {
+			// The root cannot be combined with pathspecs; list it by itself.
+			if err := g.listInto([]string{"ls-tree", "-z", "--full-name", g.commit}, wanted, out, links); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+	for start := 0; start < len(dirs); start += 100 {
+		args := append([]string{"ls-tree", "-z", "--full-name", g.commit, "--"}, dirs[start:min(start+100, len(dirs))]...)
+		if err := g.listInto(args, wanted, out, links); err != nil {
+			return nil, err
+		}
+	}
+	if len(links) == 0 {
+		return out, nil
+	}
+	names := make([]string, 0, len(links))
+	for p := range links {
+		names = append(names, p)
+	}
+	sort.Strings(names)
+	var stdin strings.Builder
+	for _, p := range names {
+		stdin.WriteString(links[p] + "\n")
+	}
+	reply, truncated, status, err := gitOutput(g.ctx, g.root, gitBatchLimit, stdin.String(), "cat-file", "--batch")
 	if err != nil {
 		return nil, err
 	}
-	lines := strings.Split(strings.TrimSuffix(string(reply), "\n"), "\n")
-	if truncated || status != 0 || len(lines) != len(paths) {
-		return nil, fmt.Errorf("%w: cat-file --batch-check", errGitFailed)
+	if truncated || status != 0 {
+		return nil, fmt.Errorf("%w: cat-file --batch", errGitFailed)
 	}
-	out := map[string]string{}
-	for i, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) == 3 && fields[1] == "blob" {
-			out[paths[i]] = "file"
-		} else if len(fields) == 3 && (fields[1] == "tree" || fields[1] == "commit") {
-			out[paths[i]] = "dir"
+	for _, p := range names {
+		header, rest, ok := bytes.Cut(reply, []byte{'\n'})
+		fields := strings.Fields(string(header))
+		if !ok || len(fields) != 3 || fields[1] != "blob" {
+			return nil, fmt.Errorf("%w: cat-file --batch reply", errGitFailed)
 		}
+		size, convErr := strconv.Atoi(fields[2])
+		if convErr != nil || size < 0 || len(rest) < size+1 {
+			return nil, fmt.Errorf("%w: cat-file --batch size", errGitFailed)
+		}
+		out[p] = TreeEntry{Kind: "symlink", Target: string(rest[:size])}
+		reply = rest[size+1:]
 	}
 	return out, nil
+}
+
+// listInto runs one ls-tree and records the requested entries it prints.
+func (g *gitSource) listInto(args []string, wanted map[string]bool, out map[string]TreeEntry, links map[string]string) error {
+	listing, truncated, status, err := gitOutput(g.ctx, g.root, gitTreeListLimit, "", args...)
+	if err != nil {
+		return err
+	}
+	if truncated || status != 0 {
+		return fmt.Errorf("%w: ls-tree", errGitFailed)
+	}
+	for _, record := range bytes.Split(listing, []byte{0}) {
+		meta, name, ok := bytes.Cut(record, []byte{'\t'})
+		fields := strings.Fields(string(meta))
+		p := string(name)
+		if !ok || len(fields) != 3 || !wanted[p] {
+			continue
+		}
+		switch {
+		case fields[0] == "120000":
+			links[p] = fields[2]
+		case fields[1] == "tree" || fields[1] == "commit":
+			out[p] = TreeEntry{Kind: "dir"}
+		default:
+			out[p] = TreeEntry{Kind: "file"}
+		}
+	}
+	return nil
 }
