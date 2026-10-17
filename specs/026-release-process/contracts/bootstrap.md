@@ -4,16 +4,17 @@
 
 ## What the bootstrap release workflow is
 
-`.github/workflows/release-bootstrap.yml` in `sourcesteward` (implemented in WI10, after the amendment decision): triggers `push` of annotated tags `v[0-9]+.[0-9]+.[0-9]+` and `workflow_dispatch` dry run (version label with a mandatory suffix, never publishes). Jobs `verify`, `build`, `smoke`, `publish`, with the security posture and verification of the sibling workflows: owner-only actor checks, annotated tag, tag commit equals the run commit and is an ancestor of `main`, a successful `ci.yml` push run for the commit, no release for the tag (drafts included), version strictly above every existing tag and release, `make check` and `go mod verify`; build matrix `linux/amd64`, `linux/arm64`, `darwin/arm64` with `CGO_ENABLED=0`, `GOTOOLCHAIN=local`, `-trimpath`, `-buildvcs=false`, `-ldflags "-X main.version=<version>"`; native smoke on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` (`stw version`, `stw version --json`, `stw --help`); publish with `gh release create --verify-tag`; `environment: release` unprotected; no standing approval.
+`.github/workflows/release-bootstrap.yml` in `sourcesteward` (implemented in WI10, after the amendment decision): triggers `push` of annotated tags `v[0-9]+.[0-9]+.[0-9]+` and `workflow_dispatch` dry run (version label with a mandatory suffix, never publishes). Jobs `verify`, `build`, `smoke`, `attest`, `publish`, with the security posture and verification of the sibling workflows: owner-only actor checks, annotated tag, tag commit equals the run commit and is an ancestor of `main`, a successful `ci.yml` push run for the commit, no release for the tag (drafts included), version strictly above every existing tag and release, `make check` and `go mod verify`; build matrix `linux/amd64`, `linux/arm64`, `darwin/arm64` with `CGO_ENABLED=0`, `GOTOOLCHAIN=local`, `-trimpath`, `-buildvcs=false`, `-ldflags "-X main.version=<version>"`; native smoke on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` (`stw version`, `stw version --json`, `stw --help`); publish with `gh release create --verify-tag`; `environment: release` unprotected; no standing approval.
 
 Differences from the siblings, all deliberate:
 
 | Item | Sibling pattern | `stw` bootstrap |
 | --- | --- | --- |
 | Reproducibility | each target built twice in the release run | built **once** in the release run (D1); reproducibility is the separate `release-repro.yml` |
-| Attestation | none | the build job attests the archives and `SHA256SUMS` (artifact attestation), so `v0.1.0` is verifiable like later releases |
-| Record | none | after publication a docs commit adds `docs/releases/v0.1.0.json`, produced by `stw release record` from the downloaded assets (a bootstrap exception: the record is written after the tag, and is not checked by the bootstrap workflow) |
-| Contract | none | `.stw/release.toml` exists and is linted by `make check` from WI3, so the contract is exercised before it is relied on |
+| Build runner | shell | the build job builds the gate tool from the tag commit and runs `stw release build --mode ci`, which emits a schema-valid `SHA256SUMS` and `build-manifest.json`; this is the one deliberate use of the new code in its own bootstrap, and a defect would show in the manifest and the reproducibility workflow |
+| Attestation | none | a separate `attest` job (the build job holds no `id-token`) attests the archives, `SHA256SUMS` and `build-manifest.json`, so `v0.1.0` is verifiable like later releases |
+| Record | none | after publication a docs commit R adds `docs/releases/v0.1.0.json`, produced by `stw release record` from the downloaded assets and the manifest; the tag precedes the record, so `v0.1.0` is verified with `stw release verify v0.1.0 --record-commit R` (the input-mode-2 path), not by a tag-push workflow; the bootstrap workflow itself does not check the record |
+| Contract | none | `.stw/release.toml` exists and is linted by `make check` from WI10 (task T043), so the contract is exercised before the first release |
 
 The bootstrap workflow is a one-time, owner-run path: tagging and the run need the owner's explicit approval for `v0.1.0` (D4). The workflow itself needs the constitution amendment like any release automation.
 
@@ -28,7 +29,7 @@ From the release after `v0.1.0`: `stw` is released with `release-build.yml` and 
 | 1 | SheetMill (`smill`) | the merged tag workflow (no change) | adopts `stw release` by its own spec when `stw` v0.1 is released |
 | 1 | SourceSteward (`stw`) | bootstrap (this contract) | self-hosted |
 | 1 | BundleDock CLI (`bdock`) | the merged tag workflow | adopts `stw release`; prefix `bdock/` (`semver` with `tag_prefix`) |
-| 2 | BundleDock toolbox bundle | adopts `stw release` directly (`oci-image`, `calver`, example 2) | the multi-product layout question (open question 3) must be answered first because `bundledock` hosts the CLI and several bundle tracks |
+| 2 | BundleDock toolbox bundle | adopts `stw release` directly (`oci-image`, `calver`, example 2) | one product file per bundle track (`toolbox/`, `opentofu/`, ...) next to the CLI product `bdock/`; the wave-2 blockers in open question 3 (counter restart, registry secret, moving aliases) must be resolved first |
 | 2 | WorkHarbor (polyglot) | adopts directly (example 3) | its own release policy is **not yet read**; the maintainer states that its CI requires pull requests to target `main` |
 | 3 | CrewBook (skill pack) | adopts directly (example 4), released when the readiness criterion is met | criteria are the maintainer's examples, not read from the repository |
 

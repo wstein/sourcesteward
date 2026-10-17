@@ -1,0 +1,60 @@
+{
+  "assets": [
+    {
+      "arch": "any",
+      "build": "fetch",
+      "group": "sources",
+      "kind": "file",
+      "name": "busybox-1.36.1-sources.tar.gz",
+      "os": "any",
+      "role": "artifact",
+      "sha256": "a1de6df70d4953cf4a9ebc3c9b79b55ca3e00cd4e577037994253877475cbe3d",
+      "size": 1000000,
+      "target": "sources",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "arch": "any",
+      "build": "fetch",
+      "group": "sources",
+      "kind": "file",
+      "name": "busybox-1.36.1-sources.manifest.json",
+      "os": "any",
+      "role": "manifest",
+      "sha256": "8274e831505e83b5595bebe6f3a90e54a10a104dd2e1b01c160fef19b4adc09c",
+      "size": 1000000,
+      "target": "sources-manifest",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    }
+  ],
+  "attestation": {
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "provider": "github-artifact-attestation",
+    "signer_workflow": "wstein/bundledock-third-party-sources/.github/workflows/release-build.yml"
+  },
+  "build": {
+    "run_attempt": 1,
+    "run_id": 12345678901,
+    "stw_version": "v0.1.0",
+    "workflow": ".github/workflows/release-build.yml"
+  },
+  "checksums": {
+    "name": "SHA256SUMS",
+    "sha256": "d88cd877bee80af4390ef7ca4ccc2d28c6ff878f0ffc47e34efad0b4ca7ce039",
+    "size": 412
+  },
+  "commit": "4e7f3b62e29abc3b6014b68eb9b7ddfce9c9b702",
+  "kind": "release-record",
+  "manifest": {
+    "name": "build-manifest.json",
+    "sha256": "dda9e7d514b9b795d89b1e80c6b3b11f5f4db75d25d03423f665ddd35503b48b",
+    "size": 2210
+  },
+  "product": "busybox",
+  "project": "BundleDock third-party sources",
+  "repository": "wstein/bundledock-third-party-sources",
+  "schema_version": 1,
+  "source_date_epoch": 1760000000,
+  "tag": "busybox-v1.36.1",
+  "version": "1.36.1"
+}

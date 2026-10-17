@@ -4,15 +4,15 @@ Three machine-written JSON documents share the asset definitions below. All are 
 
 | Document | Path | Written by | Schema |
 | --- | --- | --- | --- |
-| Release record | `docs/releases/<version>.json` in the follow-up commit D | `stw release record` | `schemas/v1/release-record.schema.json` |
+| Release record | `docs/releases/<version>.json` (single default product) or `docs/releases/<product>/<version>.json` (named product) in the follow-up commit D | `stw release record` | `schemas/v1/release-record.schema.json` |
 | Build manifest | `build-manifest.json` next to the artifacts in the draft release; attested | `stw release build` (CI) | `schemas/v1/release-build-manifest.schema.json` |
 | OCI build result | the target's `result_file`, written by the project's build | the project command | `schemas/v1/release-oci-result.schema.json` |
 
-`<version>` is the version string with its leading `v` where the scheme has one (`v0.1.0`, `2026.10.15-b98.1`). The record names the **built commit C** and never the tag commit: the tag commit is D (the commit holding the record) and a commit cannot contain its own hash. Consumers read the tag commit with Git; `verify --json` reports it as `tag_commit`.
+`<version>` is the version string with its leading `v` where the scheme has one (`v0.1.0`, `2026.10.15-b98.1`, `1.3.1` for a `pattern` product). The record names the **built commit C** and never the tag commit: the tag commit is D (the commit holding the record) and a commit cannot contain its own hash. Consumers read the tag commit with Git; `verify --json` reports it as `tag_commit`.
 
 ## Canonical form (normative)
 
-UTF-8, no BOM; object keys sorted by byte order of their UTF-8 encoding at every level; arrays in the order the schema or the producer defines (assets sorted by `target` then `name`; platforms sorted by `os`, `arch`, `variant`; tags sorted); two-space indentation; `\n` after every line including the last; a space after the colon; no trailing spaces; integers only (no floats, no exponents); strings use the minimal JSON escapes (`\"`, `\\`, `\n`, `\r`, `\t`, other controls as `\u00xx`; non-ASCII written literally, `<`, `>`, `&` not escaped); optional absent keys are omitted, never `null` unless the schema says so. `record --check` and every reader compare the file bytes to the canonical re-encoding of the parsed content (`record-not-canonical`). This is a project-specific canonical form, deliberately readable in a pull request diff; it is not RFC 8785 (JCS), which has no indentation (research DD6).
+UTF-8, no BOM; object keys sorted by byte order of their UTF-8 encoding at every level (the encoder is hand-written and schema-ordered; a generic JSON encoder is not used, and the canonical check re-encodes from the parsed, schema-ordered model so misordered arrays are detected); empty arrays are `[]` and empty objects `{}`; arrays in the order the schema or the producer defines (assets sorted by `target` then `name`; platforms sorted by `os`, `arch`, `variant`; tags sorted); two-space indentation; `\n` after every line including the last; a space after the colon; no trailing spaces; integers only (no floats, no exponents); strings use the minimal JSON escapes (`\"`, `\\`, `\n`, `\r`, `\t`, other controls as `\u00xx`; non-ASCII written literally, `<`, `>`, `&` not escaped); optional absent keys are omitted, never `null` unless the schema says so. `record --check` and every reader compare the file bytes to the canonical re-encoding of the parsed content (`record-not-canonical`). This is a project-specific canonical form, deliberately readable in a pull request diff; it is not RFC 8785 (JCS), which has no indentation (research DD6).
 
 ## Shared asset definitions
 
@@ -52,8 +52,9 @@ An **oci-image asset**:
 | `schema_version` | 1 | |
 | `kind` | `"release-record"` | |
 | `project` | string | `project.name` |
+| `product` | id, optional | `project.product`; present exactly for named products |
 | `version` | string | validated against the scheme |
-| `tag` | string | `tag_prefix` + version (or the pattern's tag) |
+| `tag` | string | `tag_prefix` + version, or `tag_template` with `{version}` replaced |
 | `commit` | 40 or 64 hex | the built commit C |
 | `repository` | `owner/name` | where the release lives |
 | `source_date_epoch` | integer or `null` | the value used for the build |
@@ -61,13 +62,13 @@ An **oci-image asset**:
 | `assets` | array of file or oci-image assets | |
 | `checksums` | `{name, sha256, size}` | the checksum file asset |
 | `manifest` | `{name, sha256, size}` | the build manifest asset |
-| `attestation` | `{provider, signer_workflow, predicate_type}` | `github-artifact-attestation`, `owner/name/.github/workflows/release.yml`, `https://slsa.dev/provenance/v1`; the subject digests are the assets' `sha256` (files) and `index_digest` (images) |
+| `attestation` | `{provider, signer_workflow, predicate_type}` | `github-artifact-attestation`, `owner/name/.github/workflows/release-build.yml`, `https://slsa.dev/provenance/v1`; the subject digests are the assets' `sha256` (files) and `index_digest` (images) |
 
-Semantic rules (`record-invalid`): version valid for the scheme; `tag` consistent with it; `commit` a full id; asset names unique; every file asset's `sha256` appears in the checksum file; `url_template` placeholders are closed (`{repository}`, `{tag}`, `{name}`).
+Semantic rules (`record-invalid`): version valid for the scheme; `tag` equal to the tag derived from the version; `commit` a full id; asset names unique; every file asset's `sha256` appears in the checksum file; image `tags` equal exactly `[version]`; `url_template` placeholders are closed (`{repository}`, `{tag}`, `{name}`). **Derived fields are recomputed, never trusted:** `repository` (hosting resolution), `attestation.signer_workflow` (`<repository>/<ci.release_workflow at C>`), `project`, `product`, `url_template` (`outputs.url_template` of the contract at C) must equal the recomputed values; the record is editable in the follow-up commit and the record path is allowlisted, so a forged repository, signer or URL must not verify.
 
 ## Build manifest
 
-`schema_version`, `kind: "build-manifest"`, `project`, `version`, `commit`, `source_date_epoch`, `config_sha256` (SHA-256 of the contract bytes at C), `stw_version`, `repository`, `run` (`workflow`, `run_id`, `run_attempt`), `assets` (same definitions). The attestation of this file is what binds the artifacts to C: the attestation certificate names the workflow identity, and the attested content names the commit ([research](../research.md#attestation-binding-to-commit-c)).
+`schema_version`, `kind: "build-manifest"`, `project`, `product` (optional), `version`, `commit`, `source_date_epoch`, `config_sha256` (SHA-256 of the contract bytes at C), `stw_version`, `repository`, `run` (`workflow`, `run_id`, `run_attempt`), `assets` (same definitions). The attestation of this file is what binds the artifacts to C: the attestation certificate names the workflow identity, and the attested content names the commit ([research](../research.md#attestation-binding-to-commit-c)).
 
 ## Build result file for oci-image
 
@@ -87,6 +88,7 @@ Semantic rules (`record-invalid`): version valid for the scheme; `tag` consisten
     "schema_version": {"const": 1},
     "kind": {"const": "release-record"},
     "project": {"type": "string", "pattern": "^[A-Za-z0-9._ -]{1,64}$"},
+    "product": {"$ref": "#/$defs/id"},
     "version": {"$ref": "#/$defs/version"},
     "tag": {"type": "string", "pattern": "^[A-Za-z0-9._/-]{1,128}$"},
     "commit": {"$ref": "#/$defs/commit"},
@@ -182,7 +184,7 @@ Semantic rules (`record-invalid`): version valid for the scheme; `tag` consisten
 }
 ```
 
-The build manifest schema (`release-build-manifest.schema.json`) has the same `$defs` and the properties `schema_version` (1), `kind` (`"build-manifest"`), `project`, `version`, `commit`, `source_date_epoch`, `config_sha256`, `stw_version`, `repository`, `run` (`workflow`, `run_id`, `run_attempt`) and `assets`; all required, no additional properties. The OCI result schema has `schema_version` (1), `kind` (`"oci-build-result"`), `index_digest` and `platforms` (items as above).
+The build manifest schema (`release-build-manifest.schema.json`) has the same `$defs` and the properties `schema_version` (1), `kind` (`"build-manifest"`), `project`, `version`, `commit`, `source_date_epoch`, `config_sha256`, `stw_version`, `repository`, `run` (`workflow`, `run_id`, `run_attempt`), `builds` (per build: `id`, `network`, `network_hosts`, `lock_files` as `{path, sha256}`) and `assets`; all required except `product`, no additional properties. The OCI result schema has `schema_version` (1), `kind` (`"oci-build-result"`), `index_digest` and `platforms` (items as above).
 
 ## Consumers
 

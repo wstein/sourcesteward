@@ -1,6 +1,8 @@
 # Contract: the project release contract (`.stw/release.toml`)
 
-The contract is a human-edited file in a **strict TOML profile**, or the same model written as JSON by a machine (`.stw/release.json`). YAML is not accepted. Exactly one of the two files may exist (`config-ambiguous`). The versioned JSON Schema below is the source of truth for the model; the TOML profile is a restriction of TOML to what maps one-to-one onto it. `stw release check` is the linter. The default product uses `.stw/release.toml`; a named product (open question 3) would use `.stw/release.<product>.toml`, reserved by `project.product` and not implemented in v1.
+The contract is a human-edited file in a **strict TOML profile**, or the same model written as JSON by a machine (`.stw/release.json`). YAML is not accepted. Exactly one of the two files may exist (`config-ambiguous`). The versioned JSON Schema below is the source of truth for the model; the TOML profile is a restriction of TOML to what maps one-to-one onto it. `stw release check` is the linter. ## Products and files (normative)
+
+A repository has one or more **products**; each product has its own contract file, its own tag grammar and its own monotonic version, and versions are compared only within a product. A repository with one product uses `.stw/release.toml` (no `project.product`). A repository with several products uses one file per product, `.stw/release.<product>.toml` (or `.json`), where `<product>` is an id (`^[a-z0-9][a-z0-9-]{0,31}$`) that must equal `project.product` inside the file. Mixing `release.toml` with named files, or two files for one product, is `config-ambiguous`. At most 64 product files are read (`limit-exceeded`). Machines (for example a mirror tool that adds one product per third-party component) write the JSON form. Commands take `--product NAME`; it is required when more than one product exists (`product-required`) and an unknown name is `product-unknown`; a tag argument selects its product by the tag grammar. Without `--product`, `check` lints every product file and also reports `product-tag-overlap` when two products' literal tag prefixes are equal or one is a prefix of the other. Records are `docs/releases/<version>.json` for the single default product and `docs/releases/<product>/<version>.json` for named products.
 
 ## Strict TOML profile (normative)
 
@@ -9,7 +11,7 @@ The contract is a human-edited file in a **strict TOML profile**, or the same mo
 | Tables | only top-level tables `[name]` and top-level arrays of tables `[[name]]`; nothing nested | `profile-violation` |
 | Dotted keys (`a.b = 1`, `[a.b]`) | never | `profile-violation` |
 | Inline tables (`{ k = v }`) | never | `profile-violation` |
-| Split tables (the same `[name]` twice, or `[[name]]` entries interleaved with a different table that is reopened) | never; a `[name]` appears once; `[[name]]` entries may repeat | `profile-violation` |
+| Split tables (the same `[name]` twice) and interleaved arrays (`[[t]]`, then another table, then `[[t]]` again) | never; a `[name]` appears once; the `[[name]]` entries of one name are contiguous (measured: `tomllib` accepts the interleaved form) | `profile-violation` |
 | Duplicate key in one table | never | `profile-violation` |
 | Values | basic strings `"..."` with the TOML escapes, literal strings `'...'`, integers (decimal, no sign except `-`, no `_`), booleans, arrays of strings (may span lines, trailing comma allowed) | `profile-violation` |
 | Not allowed | floats, dates and times, multi-line strings, arrays of non-strings, arrays of arrays, mixed arrays, `+inf`/`nan`, hexadecimal/octal/binary integers | `profile-violation` |
@@ -27,10 +29,11 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | Table | Key | Type | Meaning |
 | --- | --- | --- | --- |
 | `project` | `name` | string | display name, 1 to 64 characters `[A-Za-z0-9._ -]` |
-| | `product` | string, optional | reserved for multi-product repositories; in v1 accepted but must equal the file's product (empty/absent for `.stw/release.toml`) |
+| | `product` | id, optional | required in `.stw/release.<product>.*` files and equal to `<product>`; absent in `.stw/release.toml` |
 | `version` | `scheme` | `semver`, `calver`, `pattern` | see the spec's version table |
 | | `tag_prefix` | string, optional | for `semver`/`calver`: characters `[a-z0-9._/-]`, empty or ending with `/` |
-| | `tag_pattern` | string | for `pattern` only: RE2, with the named group `version` |
+| | `tag_template` | string | for `pattern` only: the tag as a template with exactly one `{version}` (for example `zlib-v{version}`) |
+| | `tag_pattern` | string | for `pattern` only: RE2 of the form `^<literal prefix>(?P<version>...)<literal suffix>$` with exactly one top-level `version` group; the literal prefix and suffix (characters `[A-Za-z0-9._/-]`) must equal the template's, so version to tag to version is the identity |
 | | `order` | array of strings | for `pattern` only: named numeric groups, at most 8 |
 | | `source` | `input` or `file` | where the version is declared (`input` = the dispatch input / tag) |
 | | `file` | path | for `source = "file"`: repository file that must contain the version at C |
@@ -43,6 +46,9 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | | `env_set` | array of `NAME=value` strings, optional | values may contain placeholders |
 | | `working_dir` | path, optional | confined under the root; default `.` |
 | | `timeout_seconds` | integer, optional | 1 to 7200, default 1800 |
+| | `network` | `none` or `fetch`, default `none` | `fetch` declares that the command fetches inputs over the network (for example a source mirror assembling upstream sources); a declaration and a disclosure, not an enforcement |
+| | `network_hosts` | array of host names, required iff `network = "fetch"` | the hosts the command may contact, at most 64 |
+| | `lock_files` | array of paths, optional | repository files that pin the fetched inputs; build inputs (never allowlisted), hashed into the build manifest |
 | `target` (array) | `id` | id | unique |
 | | `kind` | `file` or `oci-image` | artifact kind |
 | | `role` | `artifact`, `manifest`, `metadata`, `sbom` | default `artifact` |
@@ -69,11 +75,11 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | `promote` | `argv` | array of strings | `oci-image` only; placeholders `{repository}`, `{digest}`, `{version}`; run by the tag-triggered workflow |
 | | `timeout_seconds` | integer, optional | |
 
-Rules beyond the schema (findings): every `target.build` names an existing build (`unknown-reference`); ids are unique (`duplicate-id`); argv elements contain only known placeholders (`placeholder-unknown`); `argv` is a non-empty array (`argv-not-array` also for a string where an array is required, because a shell string is never accepted); a `per-target` build referenced by no target and any build referenced by none are warnings reported as info `unused-build` (not an error); the record path `docs/releases/<version>.json` is always allowlisted implicitly and always the only record location; allowlist patterns are globs where `*` matches within a path segment, `**` matches whole segments, no other metacharacter, and a pattern may not match (a) anything under `.stw/` or `.github/`, (b) the version file, (c) any readiness file, any `lock_file`, `tool_list_file`, any path equal to a `working_dir` prefix or a build `argv` element that is a repository path that exists in the tree, (d) `go.mod`, `Cargo.toml`-style manifests cannot be detected generically and are the project's responsibility (stated limit). `allowlist-overlaps-input` is evaluated on the declared inputs only; the tree is the second line of defense: at `plan` time the matching patterns are shown with the number of tracked files each matches.
+Rules beyond the schema (findings): every `target.build` names an existing build (`unknown-reference`); ids are unique (`duplicate-id`); argv elements contain only known placeholders (`placeholder-unknown`); `argv` is a non-empty array (`argv-not-array` also for a string where an array is required, because a shell string is never accepted); a `per-target` build referenced by no target and any build referenced by none are warnings reported as info `unused-build` (not an error); the product's record path (`docs/releases/<version>.json`, or `docs/releases/<product>/<version>.json` for a named product) is always allowlisted implicitly and is the only record location; allowlist patterns are globs where `*` matches within a path segment, `**` matches whole segments, no other metacharacter, and a pattern may not match (a) anything under `.stw/` or `.github/`, (b) the version file, (c) any readiness file, any build `lock_files` entry, any `lock_file`, `tool_list_file`, any path equal to a `working_dir` prefix or a build `argv` element that is a repository path that exists in the tree, (d) `go.mod`, `Cargo.toml`-style manifests cannot be detected generically and are the project's responsibility (stated limit). `allowlist-overlaps-input` is evaluated on the declared inputs only; the tree is the second line of defense: at `plan` time the matching patterns are shown with the number of tracked files each matches.
 
-`{out_dir}` is always `dist/release` (relative to the repository root, git-ignored by convention); every `output` and `result_file` must be a path under `dist/release/` (finding `schema-violation` with pointer, rule `output-outside-out-dir`). `{output}` is the target's `output` path.
+`{out_dir}` is substituted as the **absolute** path of `<repository root>/dist/release` (git-ignored by convention), so it is the same for any `working_dir`; every `output` and `result_file` must be a path under `dist/release/` (finding `schema-violation` with pointer, rule `output-outside-out-dir`). `{output}` is the target's `output` path.
 
-Placeholders (closed set): `{version}`, `{version_number}`, `{commit}`, `{commit12}`, `{source_date_epoch}`, `{os}`, `{arch}`, `{target}`, `{output}`, `{out_dir}`, `{repository}`, `{tag}`, `{name}`, `{digest}` (`{repository}`, `{digest}` and `{version}` only in `promote`; `{tag}` and `{name}` only in `url_template`). Each field accepts only the subset the table says; an unknown or unavailable placeholder is `placeholder-unknown`.
+Placeholders are a closed set with one table per field in the spec ([placeholder table](../spec.md#placeholders-normative)); this document does not repeat it. An unknown placeholder, or one not allowed in the field, is `placeholder-unknown`.
 
 ## Build and target tables
 
@@ -103,6 +109,7 @@ A `per-target` build runs once for each target that references it, with that tar
       "properties": {
         "scheme": {"enum": ["semver", "calver", "pattern"]},
         "tag_prefix": {"type": "string", "pattern": "^([a-z0-9._-]+/)*$", "maxLength": 64},
+        "tag_template": {"type": "string", "pattern": "^[A-Za-z0-9._/{}-]{1,128}$"},
         "tag_pattern": {"type": "string", "minLength": 1, "maxLength": 256},
         "order": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,15}$"}, "minItems": 1, "maxItems": 8},
         "source": {"enum": ["input", "file"]},
@@ -111,7 +118,7 @@ A `per-target` build runs once for each target that references it, with that tar
         "file_form": {"enum": ["with-v", "without-v"]}
       },
       "allOf": [
-        {"if": {"properties": {"scheme": {"const": "pattern"}}}, "then": {"required": ["tag_pattern", "order"], "not": {"required": ["tag_prefix"]}}, "else": {"not": {"anyOf": [{"required": ["tag_pattern"]}, {"required": ["order"]}]}}},
+        {"if": {"properties": {"scheme": {"const": "pattern"}}}, "then": {"required": ["tag_pattern", "tag_template", "order"], "not": {"required": ["tag_prefix"]}}, "else": {"not": {"anyOf": [{"required": ["tag_pattern"]}, {"required": ["tag_template"]}, {"required": ["order"]}]}}},
         {"if": {"properties": {"source": {"const": "file"}}}, "then": {"required": ["file", "file_pattern", "file_form"]}, "else": {"not": {"anyOf": [{"required": ["file"]}, {"required": ["file_pattern"]}, {"required": ["file_form"]}]}}}
       ]
     },
@@ -126,8 +133,14 @@ A `per-target` build runs once for each target that references it, with that tar
           "env_inherit": {"type": "array", "maxItems": 32, "items": {"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"}},
           "env_set": {"type": "array", "maxItems": 64, "items": {"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,63}=[^\\x00]{0,1000}$"}},
           "working_dir": {"$ref": "#/$defs/path"},
-          "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 7200}
-        }
+          "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 7200},
+          "network": {"enum": ["none", "fetch"]},
+          "network_hosts": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,252}$"}},
+          "lock_files": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/path"}}
+        },
+        "allOf": [
+          {"if": {"properties": {"network": {"const": "fetch"}}, "required": ["network"]}, "then": {"required": ["network_hosts"]}, "else": {"not": {"required": ["network_hosts"]}}}
+        ]
       }
     },
     "target": {
@@ -199,7 +212,7 @@ A `per-target` build runs once for each target that references it, with that tar
 }
 ```
 
-Semantic checks the schema cannot express (all `check` findings): no `..` path segment and no leading `/` in any path field; `tag_pattern` compiles (RE2) and has the named group `version` and every `order` name; `file_pattern` compiles with exactly one capture group; placeholder closure; references and unique ids; `once` builds only use the allowed placeholders; every `oci-image` target requires the `[promote]` table and vice versa; `env_inherit` and `env_set` names are not forbidden (`env-name-forbidden`); allowlist overlap rules above. Schema violations of the same document are reported once each, ordered by JSON pointer.
+Semantic checks the schema cannot express (all `check` findings; `calver` also requires a real calendar date, so `2026.02.31` is `scheme-invalid` at version validation, and `pattern` groups listed in `order` must be bounded `[0-9]{1,9}`): no `..` path segment and no leading `/` in any path field; `tag_pattern` compiles (RE2), has the shape required by the table above (literal prefix and suffix equal to the template's, one top-level `version` group) and contains every `order` name as a named group nested in `version`; `fetch` builds with `reproducibility.policy = "required"` must list `lock_files` (`fetch-unpinned`); `product-tag-overlap`, `product-required`, `product-unknown` (above); `file_pattern` compiles with exactly one capture group; placeholder closure; references and unique ids; `once` builds only use the allowed placeholders; every `oci-image` target requires the `[promote]` table and vice versa; `env_inherit` and `env_set` names are not forbidden (`env-name-forbidden`); allowlist overlap rules above. Schema violations of the same document are reported once each, ordered by JSON pointer.
 
 ## Adapters
 

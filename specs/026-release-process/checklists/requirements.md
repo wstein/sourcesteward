@@ -13,6 +13,7 @@
 - [x] Success criteria are measurable and describe observable outcomes
 - [x] Acceptance scenarios and edge cases are defined (rebase merge, moved main, replaced draft asset, hostile text, readiness)
 - [x] Scope bounded: package channels, Windows, signing, adapters other than own-script, multi-product layout and readiness execution are out of scope
+- [x] Multiple products per repository and fetch-type builds specified with per-command treatment (D9)
 - [x] Dependencies identified: Specs 020, 021, 022, 025; the constitution amendment proposal; unverified WorkHarbor and CrewBook policies
 
 ## Constitution alignment
@@ -26,7 +27,7 @@
 
 ## Artifacts
 
-- [x] Four worked examples validated against the schemas by a scratch program
+- [x] Five worked examples (six contract files, six records) validated against the schemas by a scratch program, with ten negative mutants
 - [x] Every Git claim about ancestry, diffs, filters and tags was run; every GitHub and jj claim is marked unverified
 - [x] A planned entry in docs/feature-status.json (renamed from 026-release-hygiene)
 
