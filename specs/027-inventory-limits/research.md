@@ -65,7 +65,7 @@ Round 1 counted tracked files above 64 KiB in the maintainer's repositories (`so
 
 ## Decision 7: retention and index limits
 
-LIM-7 (100,000 entries, 8 MiB of paths) and LIM-8 (100,000 candidates) are memory guards with a measured time basis: 50,000 entries cost about 0.3 s of comparison per pass. The retained data stays below about 100 MiB (contract, Limits). LIM-9 (20,000 references) bounds parsed reference structures (several hundred bytes each).
+LIM-7 (100,000 entries, 8 MiB of paths) and LIM-8 (20,000 candidates, lowered from 100,000 after the round-6 review measured 126 to 163 MiB peak RSS at the old bound) are memory guards with a measured time basis: 50,000 entries cost about 0.3 s of comparison per pass. The retained data stays below 128 MiB (measured peaks in the contract, Limits). LIM-9 (20,000 references) bounds parsed reference structures (several hundred bytes each).
 
 ## Decision 8: process stop
 

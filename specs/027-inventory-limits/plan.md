@@ -15,7 +15,7 @@ Make the Git inventory adapter scale with the repository instead of with the 64 
 **Target Platform**: linux amd64/arm64 and darwin arm64 code paths (the streaming helper has no platform-specific code). CI evidence is ubuntu-24.04 amd64 only.
 **Project Type**: CLI with a shared operation layer; the change is inside `internal/inspection`.
 **Performance Goals**: 5,000 tracked files in well under the 10-second deadline (the measured cost of the proposed reads is tens of milliseconds, research Measurement 2); 50,000 files in about a second.
-**Constraints**: no hook, filter, helper, network, prompt or write; no index refresh or lock; bounded memory (below about 100 MiB at the extremes of LIM-7 to LIM-9, derived in the contract); contracts unchanged.
+**Constraints**: no hook, filter, helper, network, prompt or write; no index refresh or lock; bounded memory (below 128 MiB at the extremes of LIM-7 to LIM-9, measured peaks in the contract); contracts unchanged.
 **Scale/Scope**: single repository inventory, Git only.
 
 ## Constitution Check
