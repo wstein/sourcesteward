@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,7 +25,7 @@ import (
 var (
 	processFile  = regexp.MustCompile(`^(vcs_[a-z0-9_]+|attest|build)\.go$`)
 	openFile     = regexp.MustCompile(`^openfile_[a-z0-9_]+\.go$`)
-	foreignFiles = regexp.MustCompile(`(?i)\.(s|c|cc|cpp|cxx|h|hh|hpp|m|f|f90|syso|swig|swigcxx)$`)
+	foreignFiles = regexp.MustCompile(`(?i)\.(s|sx|c|cc|cpp|cxx|c\+\+|h|hh|hpp|hxx|h\+\+|m|f|for|ftn|f77|f90|f95|f03|f08|syso|swig|swigcxx)$`)
 )
 
 // releaseSourceViolations checks the files of internal/release (name -> content).
@@ -123,24 +124,73 @@ func releaseSourceViolations(files map[string]string) []string {
 	return out
 }
 
+// readTree reads every file below root (testdata directories excepted) keyed by slash path.
+func readTree(root string) (map[string]string, error) {
+	files := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if d.Name() == "testdata" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)] = string(raw)
+		return nil
+	})
+	return files, err
+}
+
 func TestReleaseSourceArchitecture(t *testing.T) {
-	entries, err := os.ReadDir(".")
+	files, err := readTree(".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	files := map[string]string{}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		raw, err := os.ReadFile(e.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		files[e.Name()] = string(raw)
-	}
 	if v := releaseSourceViolations(files); len(v) != 0 {
 		t.Fatalf("architecture violations:\n%s", strings.Join(v, "\n"))
+	}
+}
+
+// The walk reaches subpackages: assembly, cgo and process starts there are found on disk.
+func TestReleaseSourceArchitectureWalksSubpackages(t *testing.T) {
+	root := t.TempDir()
+	for name, text := range map[string]string{
+		"ok.go":               "package release\n",
+		"zzsub/zz.s":          "TEXT ·f(SB),0,$0\n",
+		"zzc/zz.go":           "package zzc\n\nimport \"C\"\n",
+		"zzexec/deeper/zz.go": "package deeper\n\nimport \"os/exec\"\n",
+		"zzhx/zz.hxx":         "x",
+	} {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := readTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(releaseSourceViolations(files), "\n")
+	for _, want := range []string{"zzsub/zz.s", "zzc/zz.go", "zzexec/deeper/zz.go", "zzhx/zz.hxx"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%s was not reported:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "ok.go") {
+		t.Errorf("false positive:\n%s", got)
 	}
 }
 
@@ -174,6 +224,23 @@ func TestReleaseSourceArchitectureCatchesTheBypasses(t *testing.T) {
 		"x/sys":                   {"zz.go": pkg + "import \"golang.org/x/sys/unix\"\n"},
 		"plugin":                  {"zz.go": pkg + "import \"plugin\"\n"},
 		"broken source":           {"zz.go": "package release\nfunc {"},
+	}
+	// Subpackages are covered: a nested directory gets no exemption from the file names.
+	nested := map[string]map[string]string{
+		"assembly in a subpackage":        {"zzsub/zz.s": "TEXT ·f(SB),0,$0\n"},
+		"cgo in a subpackage":             {"zzc/zz.go": pkg + "import \"C\"\n"},
+		"os/exec in a subpackage":         {"zzsub/zz.go": pkg + "import \"os/exec\"\n"},
+		"a reviewed name in a subpackage": {"zzsub/vcs_git.go": pkg + "import \"os/exec\"\n"},
+		"syscall in a subpackage opener":  {"zzsub/openfile_unix.go": pkg + "import \"syscall\"\n\nvar _ = syscall.O_NOFOLLOW\n"},
+		".sx":                             {"zz.sx": "x"},
+		".hxx":                            {"zz.hxx": "x"},
+		".for":                            {"zz.for": "x"},
+		".f03":                            {"zz.f03": "x"},
+		".c++":                            {"zz.c++": "x"},
+		".SX upper case":                  {"zz.SX": "x"},
+	}
+	for name, files := range nested {
+		bad[name] = files
 	}
 	for name, files := range bad {
 		if v := releaseSourceViolations(files); len(v) == 0 {

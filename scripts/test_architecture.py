@@ -95,3 +95,40 @@ class ArchitectureTests(unittest.TestCase):
         architecture.validate_sources({'internal/release/check.go': 'package release\n\n// uses unsafe and go:linkname elsewhere\nvar s = "unsafe"\n'})
         # Other packages are outside this rule.
         architecture.validate_sources({'internal/inspection/x.go': 'package inspection\n\nimport "unsafe"\n'})
+
+    def test_release_packages_have_no_foreign_sources(self):
+        prefix = 'github.com/wstein/sourcesteward/'
+        clean = {'ImportPath': prefix + 'internal/release', 'GoFiles': ['a.go']}
+        architecture.validate_release_packages([clean, {'ImportPath': prefix + 'internal/release/ok', 'GoFiles': ['b.go']}])
+        for key, value in {'SFiles': ['zz.s'], 'CgoFiles': ['zz.go'], 'CFiles': ['zz.c'], 'CXXFiles': ['zz.cc'], 'HFiles': ['zz.h'], 'MFiles': ['zz.m'], 'FFiles': ['zz.f'], 'SwigFiles': ['zz.swig'], 'SwigCXXFiles': ['zz.swigcxx'], 'SysoFiles': ['zz.syso']}.items():
+            for name in ('internal/release', 'internal/release/zzsub', 'internal/release/zzc'):
+                package = {'ImportPath': prefix + name, 'GoFiles': ['a.go'], key: value}
+                with self.assertRaises(ValueError, msg=key + name): architecture.validate_release_packages([clean, package])
+
+    def test_release_may_import_only_reviewed_module_packages(self):
+        prefix = 'github.com/wstein/sourcesteward/'
+        graph = {
+            prefix + 'internal/release': ['fmt', 'os', 'os/exec', prefix.rstrip('/'), prefix + 'internal/inspection', prefix + 'internal/release/sub'],
+            prefix + 'internal/release/sub': ['fmt'],
+            prefix + 'internal/inspection': ['os/exec', 'fmt'],
+            prefix.rstrip('/'): ['embed'],
+        }
+        architecture.validate_release_graph(graph)
+        for extra in ('internal/zzexec', 'internal/workspace', 'internal/hosting', 'internal/cli'):
+            leaked = dict(graph)
+            leaked[prefix + 'internal/release'] = graph[prefix + 'internal/release'] + [prefix + extra]
+            leaked[prefix + extra] = ['fmt']
+            with self.assertRaises(ValueError, msg=extra): architecture.validate_release_graph(leaked)
+        # os/exec reached through a package that is not reviewed.
+        hidden = dict(graph)
+        hidden[prefix + 'internal/release/sub'] = ['fmt', 'os/exec']
+        with self.assertRaises(ValueError): architecture.validate_release_graph(hidden)
+        deep = dict(graph)
+        deep[prefix + 'internal/release/sub'] = ['fmt', prefix + 'internal/release/sub/deeper']
+        deep[prefix + 'internal/release/sub/deeper'] = ['os/exec']
+        with self.assertRaises(ValueError): architecture.validate_release_graph(deep)
+
+        sub_leak = dict(graph)
+        sub_leak[prefix + 'internal/release/sub'] = ['fmt', prefix + 'internal/zzexec']
+        sub_leak[prefix + 'internal/zzexec'] = ['fmt']
+        with self.assertRaises(ValueError): architecture.validate_release_graph(sub_leak)
