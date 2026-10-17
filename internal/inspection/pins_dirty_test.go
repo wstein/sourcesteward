@@ -382,7 +382,7 @@ func TestPinsDirtyScanAllowanceIsALimitNotUnknown(t *testing.T) {
 
 func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testing.T) {
 	c := newDirtyCase(t, newPinsFixture(t))
-	deep := strings.Repeat("d/", 1500) + "f"
+	deep := strings.Repeat("d/", 600) + "f"
 	writeFile(t, filepath.Join(c.wt, deep), "x")
 	git(t, c.wt, "add", "-A")
 	git(t, c.wt, "commit", "-qm", "deep")
@@ -390,7 +390,9 @@ func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testi
 	c.head, err = pinsReadHead(c.run, pinsGitRepo{GitDir: c.dirs.GitDir, WorkTree: c.wt})
 	mustOS(t, err)
 	settleIndex(t, c.dirs.GitDir)
-	requireDirty(t, c.state(t), "absent", "absent", "")
+	// The walk is quadratic in the depth, so how long it takes depends on the machine: give it all the time
+	// it needs here and test the deadline with a fake clock below.
+	requireDirty(t, c.stateWith(t, pinsDirtyBudget{Entries: 20000, Time: time.Hour}), "absent", "absent", "")
 
 	// Time passes while one path is walked: the walk stops with the budget reason.
 	calls := 0
@@ -403,7 +405,7 @@ func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testi
 		return time.Now()
 	}
 	t.Cleanup(func() { pinsNow = old })
-	got := c.state(t)
+	got := c.stateWith(t, pinsDirtyBudget{Entries: 20000, Time: time.Hour})
 	if got.Tracked != "unknown" || got.Reason != pinsBudgetReason {
 		t.Fatalf("the walk must stop with exactly the budget reason: %+v", got)
 	}
