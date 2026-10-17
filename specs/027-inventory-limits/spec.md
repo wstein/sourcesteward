@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/027-inventory-limits`
 **Created**: 2026-10-16
-**Status**: Draft — three independent analysis rounds done, last verdict NOT READY (1 high); round 3 resolutions applied but not re-reviewed; implementation not started
+**Status**: Reviewed (READY after five independent rounds); implementation in progress
 **Input**: A follow-up to Spec 009 that makes `stw inventory` useful on ordinary Git repositories. Decision by the maintainer (2026-10-16): fix the inventory prerequisite before `stw repos` (Spec 023) ships.
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
