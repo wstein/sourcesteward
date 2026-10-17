@@ -61,7 +61,21 @@ class ArchitectureTests(unittest.TestCase):
         for name, sources in evasions.items():
             with self.assertRaises(ValueError, msg=name): architecture.validate_sources(sources)
         # The reviewed files may use them, and net/url remains allowed.
-        architecture.validate_sources({'internal/release/vcs_open_unix.go': 'package release\n\nimport "syscall"\n', 'internal/release/vcs_git.go': 'package release\n\nimport "os/exec"\n', 'internal/release/attest.go': 'package release\n\nimport "os/exec"\n'})
+        architecture.validate_sources({'internal/release/vcs_git.go': 'package release\n\nimport "os/exec"\n', 'internal/release/attest.go': 'package release\n\nimport "os/exec"\n'})
+        # syscall: only the O_ open flags in the file-open helpers, anything in build.go (process groups).
+        opener = 'package release\n\nimport (\n\t"os"\n\t"syscall"\n)\n\nvar f = os.O_RDONLY | syscall.O_NOFOLLOW | syscall.O_NONBLOCK\n'
+        architecture.validate_sources({'internal/release/openfile_unix.go': opener, 'internal/release/build.go': 'package release\n\nimport "syscall"\n\nvar _ = syscall.Kill\n'})
+        for name, text in {
+            'internal/release/openfile_unix.go': opener + 'var _ = syscall.RawSyscall\n',
+            'internal/release/openfile_unix.go ': None,
+            'internal/release/vcs_open_unix.go': opener,
+            'internal/release/vcs_git.go': opener,
+            'internal/release/attest.go': 'package release\n\nimport "syscall"\n',
+        }.items():
+            if text is None: continue
+            with self.assertRaises(ValueError, msg=name): architecture.validate_sources({name: text})
+        with self.assertRaises(ValueError): architecture.validate_sources({'internal/release/openfile_unix.go': 'package release\n\nimport sc "syscall"\n\nvar _ = sc.Kill\n'})
+        with self.assertRaises(ValueError): architecture.validate_sources({'internal/release/openfile_unix.go': 'package release\n\nimport . "syscall"\n\nvar _ = O_NOFOLLOW\n'})
         architecture.validate_sources({'internal/release/x.go': 'package release\n\nimport "net/url"\n'})
 
     def test_net_is_absent_from_the_dependencies_of_the_local_packages(self):
@@ -70,3 +84,14 @@ class ArchitectureTests(unittest.TestCase):
         for package in ('release', 'inspection', 'workspace'):
             for leaked in ('net', 'net/http', 'crypto/tls', 'golang.org/x/net/http2'):
                 with self.assertRaises(ValueError, msg=package + leaked): architecture.validate_dependencies({prefix + 'internal/' + package: ['fmt', leaked]})
+
+    def test_unsafe_and_linkname_are_refused_in_release(self):
+        for name in ('zz.go', 'check.go', 'vcs_git.go', 'build.go', 'openfile_unix.go'):
+            path = 'internal/release/' + name
+            with self.assertRaises(ValueError, msg=name): architecture.validate_sources({path: 'package release\n\nimport _ "unsafe"\n\n//go:linkname zzfork syscall.forkExec\nfunc zzfork()\n'})
+            with self.assertRaises(ValueError, msg=name): architecture.validate_sources({path: 'package release\n\nimport "unsafe"\n\nvar _ unsafe.Pointer\n'})
+            with self.assertRaises(ValueError, msg=name): architecture.validate_sources({path: 'package release\n\n//go:linkname zzfork os.runtime_beforeFork\nfunc zzfork()\n'})
+        # Mentions in comments and strings are not directives.
+        architecture.validate_sources({'internal/release/check.go': 'package release\n\n// uses unsafe and go:linkname elsewhere\nvar s = "unsafe"\n'})
+        # Other packages are outside this rule.
+        architecture.validate_sources({'internal/inspection/x.go': 'package inspection\n\nimport "unsafe"\n'})

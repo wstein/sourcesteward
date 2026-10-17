@@ -32,6 +32,10 @@ OS_IMPORT = re.compile(r'^\s*(?:import\s+)?(\.|[A-Za-z_][A-Za-z0-9_]*)\s+"os"', 
 PROCESS_FUNCTIONS = ('StartProcess',)
 NETWORK_ALLOWED = ('net/url', 'net/netip')
 PROCESS_IMPORTS = ('os/exec', 'syscall', 'plugin')
+# syscall is allowed only for the open flags of the file-open helpers and, for process groups, in build.go.
+OPEN_FILES = re.compile(r'^internal/release/openfile_[a-z0-9_]+\.go$')
+SYSCALL_OPEN_FLAGS = re.compile(r'\bsyscall\.(?!O_[A-Z]+\b)[A-Za-z_]+')
+LINKNAME = re.compile(r'^\s*//go:linkname\b', re.M)
 NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace')
 
 
@@ -67,16 +71,35 @@ def validate_sources(sources, imports=None):
             for dependency in imported:
                 if is_network_import(dependency):
                     raise ValueError('Only internal/hosting may use the network: ' + path + ' imports ' + dependency)
-        if path.startswith('internal/release/') and not PROCESS_FILES.match(path):
-            for dependency in imported:
-                if is_process_import(dependency):
-                    raise ValueError('internal/release starts processes only in vcs_*.go, attest.go and build.go: ' + path + ' imports ' + dependency)
-            code = strip_comments(text)
-            for alias in OS_IMPORT.findall(code) + ['os']:
-                for function in PROCESS_FUNCTIONS:
-                    pattern = r'\b' + function + r'\s*\(' if alias == '.' else r'\b' + re.escape(alias) + r'\.' + function + r'\b'
-                    if re.search(pattern, code):
-                        raise ValueError('internal/release starts processes only in vcs_*.go, attest.go and build.go: ' + path + ' calls os.' + function)
+        if path.startswith('internal/release/'):
+            validate_release_file(path, text, imported)
+
+
+def validate_release_file(path, text, imported):
+    if 'unsafe' in imported or LINKNAME.search(text):
+        raise ValueError('internal/release must not use unsafe or go:linkname: ' + path)
+    code = strip_comments(text)
+    if OPEN_FILES.match(path):
+        # The file-open helpers may use the syscall.O_ open flags and nothing else from syscall.
+        for dependency in imported:
+            if is_process_import(dependency) and dependency != 'syscall':
+                raise ValueError('the file-open helpers import only syscall: ' + path + ' imports ' + dependency)
+        if 'syscall' in imported:
+            plain = re.search(r'^\s*(import\s+)?"syscall"', text, re.M)
+            if not plain or SYSCALL_OPEN_FLAGS.search(code):
+                raise ValueError('the file-open helpers may use only the syscall.O_ constants (no alias, no dot import): ' + path)
+    elif path == 'internal/release/build.go':
+        pass  # process groups need syscall; build.go is a reviewed process file
+    else:
+        for dependency in imported:
+            if is_process_import(dependency) and not (dependency == 'os/exec' and PROCESS_FILES.match(path)):
+                raise ValueError('internal/release starts processes only in vcs_*.go, attest.go and build.go and uses syscall only in openfile_*.go and build.go: ' + path + ' imports ' + dependency)
+    if not PROCESS_FILES.match(path):
+        for alias in OS_IMPORT.findall(code) + ['os']:
+            for function in PROCESS_FUNCTIONS:
+                pattern = r'\b' + function + r'\s*\(' if alias == '.' else r'\b' + re.escape(alias) + r'\.' + function + r'\b'
+                if re.search(pattern, code):
+                    raise ValueError('internal/release starts processes only in reviewed files: ' + path + ' calls os.' + function)
 
 
 def validate_dependencies(dependencies):
