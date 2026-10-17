@@ -49,3 +49,20 @@ Independent reviewer: read-only Opus review, revision f659417beb5c8a051febfface2
 | 11 | Medium | Stale 16 MiB / tens of MiB, underived memory bound | Research and plan corrected; bound derived in the contract |
 | 12 | Medium | Edge case says sparse is untouched | Replaced by SP-1 reference |
 | 13-20 | Low | Checklist, COMPAT/TXT ranges, coverage rows, case-Q wording, `stopped` return and stdin adapter, two-records note, `{scope}` words, FR ordering | Applied |
+
+## Round 3
+
+Independent reviewer: read-only Opus review, revision 22519726d31f3ab88e164206d9fb1c166c00efb9, 2026-10-16, Git 2.56.0 and 2.47.3. Verdict: NOT READY (1 high, 5 medium, 4 low). All round 2 resolutions were confirmed except 1, 3 and 9 (partly). The resolutions below are re-reviewed in round 4.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | High | FR-015 and a data-model invariant still say skip-worktree entries are not compared (false clean for present modified ones) | FR-015 and the invariant say "absent on disk"; T006 asserts workspace `tracked` true |
+| 2 | Medium | CK query rule over-applies to stored-only and bare queries | Limited to selected scopes that need disk or index; bare stored-only case in T009 |
+| 3 | Medium | Failing candidate `W`: contract vs data model | One outcome: revert to CK-2; T009 case for a disappearing candidate |
+| 4 | Medium | T009/US3-3 vantage point | US3-3 and T009 distinguish the main checkout (CK-1) from a linked worktree (CK-2) |
+| 5 | Medium | DEG-7 FEED-5 sentence contradicts the general exception | FEED-5 follows the exception; T007 aligned |
+| 6 | Medium | LIM-11 charged in list order | Inspected workspace first; T006 case |
+| 7 | Low | H/S with non-zero stage | Any non-M tag with a non-zero stage is `invalid-metadata` |
+| 8 | Low | Sparse fixture clears the bit | T006 and research name `update-index --skip-worktree` |
+| 9 | Low | Stale status line, plan Decision 6, "never printed" | Corrected |
+| 10 | Low | Scan-time record checks unnamed | Named in T007 |
