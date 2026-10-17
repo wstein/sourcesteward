@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 to 7 resolved in the artifacts; round 8 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 to 8 resolved in the artifacts; round 9 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -139,3 +139,15 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: 3b6bf3d. 
 | I1 | Info | Unreachable clause "or a linked merged layer" | Removed; the guard is native-only |
 | I2 | Info | gone/unknown verified on files backend only | Stated in M15 (reftable could not build the state) |
 | I3 | Info | Several merged heads in different layers | One `landed-undetectable` observe per affected layer, bottom first |
+
+### Round 8
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: fa1a56f. Verdict: NOT READY, no High (1 medium, 1 low, 3 info).
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Med | After limiting 4(a) to local layers the Git protection was lost: a native squash-merge with the local branch deleted printed a competing `git rebase --onto` | The group 5 guard is backend-independent (Git and jj): native stack, merged member `head.sha` in the range, `stack-behind-base` the only trigger gives one `landed-undetectable` observe per affected layer and no rebase; plain chains stay as before; wording ("branch or bookmark"), Capability table, data model, contract text, quickstart, T006 and T029 (Git cases, head outside range) updated. Supersedes the round 6 and 7 jj-only guard wording |
+| L1 | Low | Scenario 8b Git sentence wrong for a native stack with `--pull-requests` | Limited to plain chains or runs without `--pull-requests`; the native local-`s1` case is the group 4 observe of 8a |
+| I1 | Info | Rebase-merge or single-commit squash with local `s1` deleted blocks as `layer-partially-applied` | Sentence added in 8b |
+| I2 | Info | Research native-stack row covered only local `s1` | Cross-reference to scenario 8b added |
+| I3 | Info | Several-merged-heads fixture needs fake HTTP | Noted as fixture-only in T029 |

@@ -165,7 +165,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
 | `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `diverged-undecided` \| `landed-undetectable` \| `null` | fixed text for `observe` steps; `null` otherwise |
-| `layer` | integer or `null` | layer the step rewrites or describes; `null` for `fetch`, `link` and the `run-again` observe; set for every other `observe` (`landed-undetectable` names the layer containing the landed member's head commit) (one step per affected layer, ordered by layer index bottom first) |
+| `layer` | integer or `null` | layer the step rewrites or describes; `null` for `fetch`, `link` and the `run-again` observe; set for every other `observe` (`landed-undetectable`, on Git and jj, names the layer containing the landed member's head commit) (one step per affected layer, ordered by layer index bottom first) |
 | `findings` | string[] | codes that cause the step |
 | `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit with its uncommitted edits and every bookmark or commit descending from the moved change), `link` is `remote-write` (links existing pull requests into a native stack; any push is unverified) |
 | `performed_by` | `maintainer` \| `gh-stack` | `gh-stack` only for `link` |
