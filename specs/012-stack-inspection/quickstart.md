@@ -34,7 +34,7 @@ jj git init --colocate repo-jj && cd repo-jj
 stw stack show --base main --tip s3
 ```
 
-Expected: the same layers with change ids, `capability-unavailable` (`jj-capability-gap`) instead of patch equivalence, and, with `--pull-requests` showing the parent merged, a single `jj rebase -s <change> -o "main"` step.
+Expected: the same layers with change ids, `capability-unavailable` (`jj-capability-gap`) instead of patch equivalence, and, with `--pull-requests` showing the parent merged, a single `jj rebase -s <change> -o '"main"'` step.
 
 ## Optional live read-only check of the pull request evidence
 
@@ -46,7 +46,7 @@ git clone -q https://github.com/OWNER/NAME.git repo && cd repo
 stw stack show --base origin/main --tip BRANCH --pull-requests
 ```
 
-Expected: per layer `PR #N (open, stack K position P of S, verified)` for a native stack, `native-stack-managed`, and no `rebase` step after a merge of a native stack member (only `fetch` and `observe`); `stack-link-missing` and a printed `gh stack link` line for a plain chain.
+Expected: per layer `PR #N (open, stack K position P of S, verified)` for a native stack, `native-stack-managed`, and no `rebase` step after a merge of a native stack member (at most `fetch` and `observe` while an object is missing, otherwise one `observe` describing GitHub's rewrite); `stack-link-missing` and a printed `gh stack link` line for a plain chain.
 
 ## Checks to run on any output
 
