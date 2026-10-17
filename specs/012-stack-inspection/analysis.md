@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 and 2 resolved in the artifacts; round 3 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 to 3 resolved in the artifacts; round 4 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -58,3 +58,20 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: 775290d. 
 | L8 | Low | jj working-copy effect undisclosed | Disclosed in the group 5 text and the step effect in the data model |
 | L9 | Low | `link` after `rebase` implies a non-fast-forward push | `link` is never printed beside a `rebase` and requires upstream `same`, `none` or `ahead`; disclosed |
 | J | Info | jj facts | M13 records them as measured; U1 narrowed; T002 re-runs them; printed flag is `-o` |
+
+### Round 3
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: 4f2fafd. Verdict: NOT READY (1 high, 3 medium, 6 low). Measured in scratch repositories; round 2 H1 holds and group 4 terminates after the maintainer's own rebase.
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| G2-LOOP | High | Group 2 never ends when a PR head cannot be fetched (deleted branch, fork head, merge commit in no branch); the spike's PR #8 head `6e019b0` is in that state | Heads of merged and closed PRs are never required and `head-sha-differs` is limited to open PRs; plan-only `--after-fetch` turns a still-missing object into the terminating `object-unreachable` note; scenario 8; T006, T020, T029. Measured `refs/pull/8/head` still holds `6e019b0` (research M13). Supersedes the round 2 group 2 text |
+| Med-A | Med | `reconcile-upstream` advice harmful (rebase onto the upstream; lease push over GitHub's rewrite); false when upstream is `same` | Replaced by evidence-chosen notes `take-upstream`, `native-rewrite-pending`, `upstream-ahead`, `push-needed`, `diverged-undecided`; none advises rebasing onto the upstream; `native-rewrite-pending` claims no difference. Supersedes the round 2 group 4 text |
+| Med-B | Med | Stale text said native plan is fetch and observe | US3-4, T006, T029, M3 and offline rows, D1, quickstart, R5, delegation table aligned with groups 1 to 6 |
+| Med-C | Med | `"main@origin"` fails as a jj literal | Argument rules and group 5 write `"name"@"remote"`; T006 tests both forms |
+| L1 | Low | Quickstart quoting; `s1-` silently the parent when `s1` exists | Quickstart shows `-o '"main"'`; research and Argument rules state the silent meaning |
+| L2 | Low | jj divergence claim too strong | M13 and scenario 8a: local rebase keeps the divergence, a remote rewrite conflicts the bookmark and FR-004 refuses |
+| L3 | Low | jj step also moves non-layer bookmarks | Disclosed in group 5 and the data model |
+| L4 | Low | Landed definition contradicted for a patch-equivalent layer on a stale base | Group 3 is evaluated before landing and wins |
+| L5 | Low | Upstream relation `unknown` gave an empty plan | Covered by group 2 (fetch, or `object-unreachable` after `--after-fetch`) |
+| L6 | Low | SC-007 traceability | FR-to-scenario map in tasks.md; T001 mapped to SC-007 |
