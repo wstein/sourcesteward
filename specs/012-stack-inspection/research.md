@@ -119,7 +119,7 @@ No jj binary was available. The pinned versions are 0.45.1 (minimum) and 0.46.0 
 
 | Id | Claim | How to verify | Task |
 | --- | --- | --- | --- |
-| U1 | All jj read forms: bookmark and range revsets on the pinned operation, `conflict`, `immutable` and divergence template keywords, tracked remote bookmark state, the one-step `jj rebase -s C -d N` including descendants, behavior when the rebased layer is already applied (emptied commits) | scratch jj repositories on 0.45.1 and 0.46.0, recorded in this file | T002 |
+| U1 | All jj read forms: bookmark and range revsets on the pinned operation, `conflict`, `immutable` and divergence template keywords, tracked remote bookmark state, the one-step `jj rebase -s C -d N` including descendants, whether `-d` (`--destination`) or `--onto` is accepted by 0.45.1 and by 0.46.0, whether a double-quoted string literal resolves a bookmark named with a trailing `-` or `+`, behavior when the rebased layer is already applied (emptied commits) | scratch jj repositories on 0.45.1 and 0.46.0, recorded in this file | T002 |
 | U2 | Git 2.46.0 (minimum) results for M9 and M11 | minimum lane run | T012 |
 | U3 | Refs containing `/` with the `head=O:REF` filter (the filter itself and `stack` on filtered items are measured, M4a) | read-only call in a repository with such a branch | T023 |
 | U4 | Open native stack shapes (`open: true`, member base refs while open), `stacks` pagination and `per_page`, public-repository and anonymous behavior, plan or permission requirements, GitHub Enterprise Server availability | read-only calls against an open stack; documentation read | T023 |
