@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/026-release-process-v2`
 **Created**: 2026-10-17 (rewrite of the 2026-10-16 "release hygiene" draft, same number)
-**Status**: Draft, first author draft; independent analysis rounds are recorded in [analysis.md](analysis.md); implementation pending
+**Status**: Reviewed (READY after three independent rounds; the round 3 resolutions are an unreviewed author edit); constitution amendment pending; implementation pending (see analysis.md)
 **Input**: A language-agnostic release process and the `stw release` commands that support it: a project contract (`.stw/release.toml`), a machine-written release record (`docs/releases/<version>.json`), a build-once-then-promote flow, and commands to check, plan, verify, record, dispatch and (in CI) build. Package-manager channels are out of scope.
 
 > **Constitution notice.** Constitution 1.1.0 (Scope and Constraints) says "push/merge/release automation ... require later specifications" and "Future merges, releases and external mutations require authorization in their task context". This specification is that later specification for the commands and workflows it describes, but it does **not** amend the constitution. The proposed amendment text is a separate item for the maintainer: [constitution-amendment-proposal.md](constitution-amendment-proposal.md). Until the owner applies or rejects it, only the read-only work items WI1 to WI5 of [tasks.md](tasks.md) (WI5 adds disclosed read-only GitHub reads) may be implemented; `dispatch`, `build`, the workflows and the bootstrap release wait (WI6 to WI11).
