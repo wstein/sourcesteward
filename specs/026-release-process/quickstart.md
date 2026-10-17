@@ -45,7 +45,7 @@ Fixtures for the files in `./assets` are produced by the test helper (`SHA256SUM
 
 ## 4. The owner's release (needs explicit approval at every numbered step, none is automated)
 
-0. Readiness: the tag ruleset exists (`stw release plan ... --online` reports `advisory tag-ruleset: present`; for any real tag, including the bootstrap tag, `absent` **and** `unknown` mean: check the setting by hand and do not tag until it is confirmed). The rehearsal in a disposable repository does not need the ruleset.
+0. Readiness: the tag ruleset exists (`stw release plan ... --online` reports `advisory tag-ruleset: present`; for any real tag, including the bootstrap tag, `partial`, `absent` **and** `unknown` mean: check the setting by hand and do not tag until it is confirmed). The rehearsal in a disposable repository does not need the ruleset.
 1. Choose C: a commit on `main` that CI ran on (normally the tip after a merge) and a version that satisfies the product's monotonicity rule (greater than every existing tag and release of the product; for a `non-decreasing` pattern product an `order` tuple not below the maximum, and the full tag must not exist).
 2. `stw release plan C --version V --online` must show verdict `pass`.
 3. Approve the build in your task context, then `stw release dispatch --commit C --version V` (prints the plan and `plan_id`), then `stw release dispatch ... --apply <plan_id>`. This starts one CI build, attests the files and keeps a **draft** release. Nothing is tagged or published. Do not publish the draft in the web UI (it would create a lightweight tag).
