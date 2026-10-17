@@ -188,7 +188,7 @@ func TestStrictTOMLProfile(t *testing.T) {
 
 func TestTOMLStopsAtTheFindingLimit(t *testing.T) {
 	_, findings := ParseTOML([]byte(strings.Repeat("a.b = 1\n", 500)))
-	if len(findings) != MaxFindings+1 {
+	if len(findings) != MaxFindings+2 || !findings[len(findings)-1].partial {
 		t.Fatalf("got %d findings", len(findings))
 	}
 }

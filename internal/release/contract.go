@@ -30,6 +30,11 @@ func ParseTOML(data []byte) (map[string]any, []Finding) {
 	p := &tomlParser{src: data, doc: map[string]any{}, kinds: map[string]string{}}
 	p.cur = p.doc
 	p.run()
+	if len(p.findings) >= maxTOMLFindings && p.pos < len(p.src) {
+		note := errorFinding("limit-exceeded", "", "the parser stopped after the finding limit")
+		note.partial = true
+		p.findings = append(p.findings, note)
+	}
 	if len(p.findings) > 0 {
 		return nil, p.findings
 	}

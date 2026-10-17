@@ -2,7 +2,9 @@
 package release
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -37,4 +39,55 @@ func Escape(s string) string {
 		i += size
 	}
 	return b.String()
+}
+
+// escapeInvisible rewrites the characters of s that can hide or forge terminal output (C1
+// controls, format characters such as bidirectional overrides, line and paragraph separators) as
+// \u{...}. Unlike Escape it leaves the backslash alone, so a model string keeps its meaning.
+func escapeInvisible(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) && r >= 0x80 || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) {
+			fmt.Fprintf(&b, `\u{%x}`, r)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// escapeContract returns a copy of the model with escapeInvisible applied to every string.
+func escapeContract(c *Contract) *Contract {
+	if c == nil {
+		return nil
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return c
+	}
+	var copied Contract
+	if err := json.Unmarshal(raw, &copied); err != nil {
+		return c
+	}
+	var walk func(v reflect.Value)
+	walk = func(v reflect.Value) {
+		switch v.Kind() {
+		case reflect.String:
+			v.SetString(escapeInvisible(v.String()))
+		case reflect.Pointer:
+			if !v.IsNil() {
+				walk(v.Elem())
+			}
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				walk(v.Field(i))
+			}
+		case reflect.Slice:
+			for i := 0; i < v.Len(); i++ {
+				walk(v.Index(i))
+			}
+		}
+	}
+	walk(reflect.ValueOf(&copied))
+	return &copied
 }

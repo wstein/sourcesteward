@@ -3,7 +3,6 @@ package release
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -156,7 +155,7 @@ func TestSchemaConditionalsAndAnyOf(t *testing.T) {
 	}
 }
 
-func TestSchemaFindingsAreSortedByPointerNotByVisitOrder(t *testing.T) {
+func TestSchemaFindingsAreInNumericIndexOrder(t *testing.T) {
 	builds := make([]string, 12)
 	for i := range builds {
 		builds[i] = `{"bogus":1}`
@@ -171,8 +170,8 @@ func TestSchemaFindingsAreSortedByPointerNotByVisitOrder(t *testing.T) {
 	if len(pointers) != 12 {
 		t.Fatalf("got %d", len(pointers))
 	}
-	if !sort.StringsAreSorted(pointers) || pointers[0] != "/build/0/bogus" || pointers[2] != "/build/10/bogus" {
-		t.Fatalf("pointers are in visit order: %v", pointers)
+	if pointers[0] != "/build/0/bogus" || pointers[2] != "/build/2/bogus" || pointers[11] != "/build/11/bogus" {
+		t.Fatalf("array indexes are not in numeric order: %v", pointers)
 	}
 }
 
@@ -220,5 +219,20 @@ func TestFindingsSortByFileThenPointer(t *testing.T) {
 	}
 	if got != "a/aa a/ab a/bb z/ab " {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestPointerOrderIsNumericForIndexes(t *testing.T) {
+	cases := []struct{ a, b string }{
+		{"/build/2", "/build/10"}, {"/build/9/argv", "/build/10/argv"}, {"", "/a"}, {"/a", "/a/b"}, {"/a/b", "/b"},
+		{"/build/1/x", "/build/01/x"}, {"/a~0b", "/a~1b"}, {"/x/2", "/x/b"},
+	}
+	for _, c := range cases {
+		if !pointerLess(c.a, c.b) || pointerLess(c.b, c.a) {
+			t.Errorf("%q should sort before %q", c.a, c.b)
+		}
+	}
+	if pointerLess("/a", "/a") {
+		t.Error("equal pointers")
 	}
 }
