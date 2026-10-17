@@ -30,9 +30,12 @@ func DiscoverProducts(names []string) ([]ContractFile, []Finding) {
 	sorted := append([]string(nil), names...)
 	sort.Strings(sorted)
 	var findings []Finding
-	at := func(code, path, message string) {
+	at := func(code, path, message string, products ...string) {
 		f := errorFinding(code, "", message)
 		f.File = path
+		for _, p := range products {
+			f.scope += "|" + p + "|"
+		}
 		findings = append(findings, f)
 	}
 	byProduct := map[string]ContractFile{}
@@ -49,10 +52,10 @@ func DiscoverProducts(names []string) ([]ContractFile, []Finding) {
 		}
 		switch {
 		case format == "yaml" || format == "yml":
-			at("profile-violation", path, "YAML contract files are not accepted; use TOML (.stw/release.toml) or JSON")
+			at("profile-violation", path, "YAML contract files are not accepted; use TOML (.stw/release.toml) or JSON", product)
 			continue
 		case named && !productID.MatchString(product):
-			at("schema-violation", path, "the product id in the file name must match ^[a-z0-9][a-z0-9-]{0,31}$")
+			at("schema-violation", path, "the product id in the file name must match ^[a-z0-9][a-z0-9-]{0,31}$", product)
 			continue
 		}
 		file := ContractFile{Product: product, Path: path, Format: format}
@@ -61,7 +64,7 @@ func DiscoverProducts(names []string) ([]ContractFile, []Finding) {
 			if format == "toml" {
 				kept, file = file, kept
 			}
-			at("config-ambiguous", file.Path, fmt.Sprintf("%s and %s both define the same product; keep one", kept.Path, file.Path))
+			at("config-ambiguous", file.Path, fmt.Sprintf("%s and %s both define the same product; keep one", kept.Path, file.Path), product)
 			file = kept
 		}
 		byProduct[product] = file
@@ -76,7 +79,7 @@ func DiscoverProducts(names []string) ([]ContractFile, []Finding) {
 		files = append(files, byProduct[p])
 	}
 	if def, ok := byProduct[""]; ok && len(files) > 1 {
-		at("config-ambiguous", def.Path, "the default contract "+def.Path+" cannot be mixed with named product files .stw/release.<product>.*")
+		at("config-ambiguous", def.Path, "the default contract "+def.Path+" cannot be mixed with named product files .stw/release.<product>.*", append([]string{""}, namedProducts(files)...)...)
 	}
 	if len(files) > MaxProducts {
 		at("limit-exceeded", "", fmt.Sprintf("more than %d contract files; only the first %d are read", MaxProducts, MaxProducts))
@@ -84,6 +87,28 @@ func DiscoverProducts(names []string) ([]ContractFile, []Finding) {
 	}
 	sortFindings(findings)
 	return files, findings
+}
+
+func namedProducts(files []ContractFile) []string {
+	var out []string
+	for _, f := range files {
+		if f.Product != "" {
+			out = append(out, f.Product)
+		}
+	}
+	return out
+}
+
+// DiscoveryFindingsFor keeps the discovery findings about one product: those about its files and
+// those about mixing the default file with named ones when that product is part of the mix.
+func DiscoveryFindingsFor(findings []Finding, product string) []Finding {
+	var kept []Finding
+	for _, f := range findings {
+		if f.scope == "" || strings.Contains(f.scope, "|"+product+"|") {
+			kept = append(kept, f)
+		}
+	}
+	return kept
 }
 
 // SelectProduct narrows the contract files by --product. An empty name is absent. When a

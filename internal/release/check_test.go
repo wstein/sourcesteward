@@ -466,3 +466,29 @@ func TestCheckOnlyTheSelectedProductIsJudged(t *testing.T) {
 		t.Fatalf("with --product only that product is linted: %+v %q", r, codes(r))
 	}
 }
+
+func TestCheckProductKeepsAmbiguityFindingsAboutThatProduct(t *testing.T) {
+	// Two files for the selected product.
+	dir := repoWith(t, map[string][]byte{".stw/release.zlib.toml": exampleBytes(t, "mirror-zlib"), ".stw/release.zlib.json": mustJSON(t, func() map[string]any {
+		doc := loadExample(t, "mirror-zlib")
+		return doc
+	}())})
+	r := run(t, CheckOptions{Path: dir, Product: "zlib"})
+	wantCodes(t, r, "config-ambiguous .stw/release.zlib.json ")
+	if r.Status != "findings" {
+		t.Fatalf("%+v", r)
+	}
+	// The default file mixed with the selected named product.
+	dir = repoWith(t, map[string][]byte{".stw/release.toml": exampleBytes(t, "go-cli"), ".stw/release.zlib.toml": exampleBytes(t, "mirror-zlib")})
+	r = run(t, CheckOptions{Path: dir, Product: "zlib"})
+	wantCodes(t, r, "config-ambiguous .stw/release.toml ")
+	// Findings about another product's files stay out.
+	dir = repoWith(t, map[string][]byte{".stw/release.zlib.toml": exampleBytes(t, "mirror-zlib"), ".stw/release.busybox.toml": exampleBytes(t, "mirror-busybox"), ".stw/release.busybox.json": []byte("{}"), ".stw/release.other.yaml": []byte("a: 1\n")})
+	r = run(t, CheckOptions{Path: dir, Product: "zlib"})
+	if r.Status != "ok" || len(r.Findings) != 0 {
+		t.Fatalf("%q", codes(r))
+	}
+	// The default file mixed with named files is not about a product that is not in the mix.
+	dir = repoWith(t, map[string][]byte{".stw/release.zlib.toml": exampleBytes(t, "mirror-zlib"), ".stw/release.toml": exampleBytes(t, "go-cli"), ".stw/release.busybox.toml": exampleBytes(t, "mirror-busybox")})
+	wantCodes(t, run(t, CheckOptions{Path: dir, Product: "busybox"}), "config-ambiguous .stw/release.toml ")
+}
