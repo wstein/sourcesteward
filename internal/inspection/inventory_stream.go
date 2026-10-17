@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -50,6 +51,24 @@ var (
 	// errStreamUnterminated reports output that ends inside a record.
 	errStreamUnterminated = errors.New("invalid NUL-delimited native output")
 )
+
+// processError reports that the Git process could not be started or waited for. Its message names only the
+// operating system condition: the underlying error carries the executable and repository paths, which must
+// not reach a result.
+type processError struct{ msg string }
+
+func (e *processError) Error() string { return e.msg }
+
+func newProcessError(err error) error {
+	var errno syscall.Errno
+	switch {
+	case errors.As(err, &errno):
+		return &processError{"git process failed: " + errno.Error()}
+	case errors.Is(err, exec.ErrNotFound):
+		return &processError{"git process failed: executable file not found"}
+	}
+	return &processError{"git process failed"}
+}
 
 // gitStream runs one Git command (arguments after the session prefix) and calls each for every
 // delimited stdout record. record is valid only during the call. stopped is true when each returned
@@ -108,10 +127,10 @@ func newStreamGit(b inventoryBounds) gitStream {
 		c.Stderr = counter
 		pipe, err := c.StdoutPipe()
 		if err != nil {
-			return -1, false, err
+			return -1, false, newProcessError(err)
 		}
 		if err := c.Start(); err != nil {
-			return -1, false, err
+			return -1, false, newProcessError(err)
 		}
 		stopped, readErr := consumeRecords(pipe, []byte(delim), b.Record, counter, cancel, each)
 		waitErr := c.Wait()
@@ -137,7 +156,7 @@ func newStreamGit(b inventoryBounds) gitStream {
 		if errors.As(waitErr, &exit) {
 			return exit.ExitCode(), false, nil
 		}
-		return -1, false, waitErr
+		return -1, false, newProcessError(waitErr)
 	}
 }
 

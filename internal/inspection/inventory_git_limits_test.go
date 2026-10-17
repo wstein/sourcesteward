@@ -954,3 +954,64 @@ func TestGitInventoryProcessOnlyAndRequiredOnlyFiltersAreTransformations(t *test
 		}
 	}
 }
+
+// Generic scan errors name the operating system condition of a failed Git process, never a path.
+func TestScanErrorMessagesCarryOnlyTheProcessCondition(t *testing.T) {
+	process := &processError{"git process failed: resource temporarily unavailable"}
+	if got := withCause("cannot observe Git index", process).Error(); got != "cannot observe Git index: git process failed: resource temporarily unavailable" {
+		t.Fatal(got)
+	}
+	pathError := &os.PathError{Op: "open", Path: "/home/user/secret-repo/.git/index", Err: os.ErrPermission}
+	if got := withCause("cannot observe Git index", pathError).Error(); got != "cannot observe Git index" {
+		t.Fatalf("an arbitrary error must not reach the message: %q", got)
+	}
+	// The reference scan uses the same wrapper.
+	s := gitInventorySession{ctx: context.Background(), format: "sha1", bounds: defaultInventoryBounds(),
+		stream: func(context.Context, string, io.Reader, string, []string, func([]byte) error) (int, bool, error) {
+			return -1, false, process
+		}}
+	_, _, code, msg := s.scanReferences("/ignored", true)
+	if code != "git-inventory-failed" || msg != "cannot enumerate Git references: git process failed: resource temporarily unavailable" {
+		t.Fatalf("%s %q", code, msg)
+	}
+	s.stream = func(context.Context, string, io.Reader, string, []string, func([]byte) error) (int, bool, error) {
+		return -1, false, pathError
+	}
+	if _, _, _, msg := s.scanReferences("/ignored", true); msg != "cannot enumerate Git references" {
+		t.Fatalf("%q", msg)
+	}
+}
+
+func TestStreamStartFailureNamesNoPath(t *testing.T) {
+	dir := t.TempDir()
+	// A shim whose interpreter does not exist: the start error from the operating system names the file.
+	bad := filepath.Join(dir, "git")
+	os.WriteFile(bad, []byte("#!/nonexistent/interpreter\n"), 0o755)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	s := newStreamGit(defaultInventoryBounds())
+	_, _, err := s(context.Background(), t.TempDir(), nil, "\x00", []string{"ls-files"}, func([]byte) error { return nil })
+	var process *processError
+	if !errors.As(err, &process) || process.msg != "git process failed: no such file or directory" || strings.Contains(err.Error(), dir) {
+		t.Fatalf("%v", err)
+	}
+}
+
+// A tracked symlink that is swapped after the Lstat is a change during the inventory, without the path.
+func TestReadTrackedLinkFailureIsAChangeDuringTheInventory(t *testing.T) {
+	d := t.TempDir()
+	os.WriteFile(filepath.Join(d, "regular"), []byte("x"), 0o644)
+	root, err := os.OpenRoot(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	_, err = readTrackedLink(root, "regular") // not a symlink: the entry changed between Lstat and Readlink
+	var changed *changedDuringError
+	if !errors.As(err, &changed) || strings.Contains(err.Error(), d) || changed.msg != "tracked content changed during inventory" {
+		t.Fatalf("%v", err)
+	}
+	os.Symlink("target", filepath.Join(d, "link"))
+	if link, err := readTrackedLink(root, "link"); err != nil || link != "target" {
+		t.Fatalf("%q %v", link, err)
+	}
+}
