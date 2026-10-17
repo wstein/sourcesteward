@@ -88,6 +88,7 @@ A caller receives the same evidence in human and structured output without hidde
 ## Assumptions
 
 - Depends on Specs 010, 012 and 014; optional checkpoints reuse Spec 013.
+- Spec 012 (reworked 2026-10-17) supplies the stack observation and an advisory, print-only plan; this spec owns executing a local rewrite and its recovery evidence and must revalidate the Spec 012 `expected` ids. A rewrite that GitHub performs on a native stack is not restacked here.
 - No automatic restacking of every stack, remote history rewrite or implicit base synchronization.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.

@@ -13,7 +13,7 @@ local inspection and workspace/tidy workflows do not require a cloud account.
 
 ## Planned features — no current command implementation
 
-Specs 012–019 cover stack inspection/diffs, checkpoint/resume, conflict diagnosis and
+Specs 012–019 cover stack inspection/plan, checkpoint/resume, conflict diagnosis and
 integration preflight, restacking, stacked PR coordination/writes, work transfer,
 change editing and upstream synchronization. Native GitButler integration is also
 planned. Current inventory, bounded recovery evidence and PR/CI reads do not implement
@@ -75,7 +75,7 @@ product priority and fit, not measured quality. Command names below are illustra
 | --- | --- | --- |
 | Workspace/worktree inventory | 10/10 | List ownership, path, dirty/unknown state, stale metadata and relevant identities; preserve backend-specific facts. |
 | Isolated task workspace lifecycle | 10/10 | Create a Git worktree or native jj workspace, checkpoint work and prepare handoff; explicit ownership and recovery for retirement. |
-| Stack inspection and diff summary | 9/10 | Show revisions, changed files, conflicts and reference relationships in text/JSON; report unknown stack boundaries instead of guessing. |
+| Stack inspection and plan | 9/10 | Show layers, reference and pull request relationships and GitHub native stack membership in text/JSON, detect drift after a parent lands, print the exact repair as advisory text; report unknown stack boundaries instead of guessing. |
 | Safe workspace and reference tidy | 10/10 | Plan/apply cleanup using integration and ownership evidence; missing upstreams and empty commits alone never prove disposable work. |
 | Checkpoint and resume evidence | 9/10 | Record backend identities and task context; disclose what is recoverable. jj operation IDs and Git recovery refs have different guarantees. |
 | Conflict diagnosis and handoff | 9/10 | Return affected files/revisions and bounded evidence for any agent or human; preserve unresolved state and avoid automatic model execution. |
@@ -117,7 +117,7 @@ command core and contracts; it will not grant additional permissions.
 - [009-workspace-inventory: Workspace, State and Reference Inventory](../specs/009-workspace-inventory/spec.md) — 10/10.
 - [010-isolated-task-workspaces: Isolated Task Workspaces](../specs/010-isolated-task-workspaces/spec.md) — 10/10.
 - [011-workspace-reference-tidy: Workspace and Reference Tidy](../specs/011-workspace-reference-tidy/spec.md) — 10/10.
-- [012-stack-inspection: Stack Inspection and Diffs](../specs/012-stack-inspection/spec.md) — 9/10.
+- [012-stack-inspection: Stack Inspection and Plan](../specs/012-stack-inspection/spec.md) — 9/10.
 - [013-checkpoint-resume: Checkpoint, Resume and Selective Undo](../specs/013-checkpoint-resume/spec.md) — 9/10.
 - [014-conflict-diagnosis: Conflict Diagnosis and Integration Preflight](../specs/014-conflict-diagnosis/spec.md) — 9/10.
 - [015-local-restacking: Local Restacking](../specs/015-local-restacking/spec.md) — 8/10.

@@ -26,7 +26,7 @@ repositories use native jj. All data commands have human and versioned JSON outp
 
 **Planned:** a read-only Git submodule pin audit (`stw pins`,
 [Spec 021](specs/021-submodule-pin-audit/spec.md), [guide](docs/pins.md); merged but hidden
-until its conformance work item), stack inspection/diffs, checkpoint/resume, conflict
+until its conformance work item), stack inspection/plan, checkpoint/resume, conflict
 diagnosis, restacking, stacked PR writes, work transfer, change editing, upstream
 synchronization and native GitButler integration. Bounded recovery evidence is not automatic restoration.
 
