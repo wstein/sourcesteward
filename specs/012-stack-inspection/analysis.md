@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 to 3 resolved in the artifacts; round 4 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 to 4 resolved in the artifacts; round 5 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -75,3 +75,19 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: 4f2fafd. 
 | L4 | Low | Landed definition contradicted for a patch-equivalent layer on a stale base | Group 3 is evaluated before landing and wins |
 | L5 | Low | Upstream relation `unknown` gave an empty plan | Covered by group 2 (fetch, or `object-unreachable` after `--after-fetch`) |
 | L6 | Low | SC-007 traceability | FR-to-scenario map in tasks.md; T001 mapped to SC-007 |
+
+### Round 4
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: 6331f5a. Verdict: NOT READY (2 high, 3 medium, 4 low). Evidence in scratch repositories. The owner accepted `--after-fetch`.
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| H1 | High | `push-needed` could not tell a local rewrite from a collaborator push; no lease value; native layers not excluded | Git only, non-native layer, `native_checked` true, tip descends from `--base` and `git cherry LAYER UPSTREAM` shows only `-`; otherwise `diverged-undecided`; jj always `diverged-undecided`; the second `cherry` call is on the process allowlist. Supersedes the round 3 `push-needed` rule |
+| H2 | High | A `gone` upstream after `fetch --prune` kept the plan in group 2 and hid the rebase | Relation `gone` added; `gone`, no upstream and the upstream relations of dropped layers are outside groups 2 and 4; scenario 8b |
+| M1 | Med | `run-again` text did not name `--after-fetch` | Contract text names the flag |
+| M2 | Med | Native note chosen from the upstream alone | Chosen from the pull request head relation (`diverged`/`remote-ahead` take-upstream; same/`local-ahead` native-rewrite-pending); independent of upstream configuration |
+| M3 | Med | Observe steps named no layer | One observe per affected layer, `layer` set (except `run-again`), ordered bottom first; texts name the layer |
+| L1 | Low | T006 said `reconcile-upstream` | Aligned with the evidence-chosen notes |
+| L2 | Low | `after_fetch` not echoed | Field in the result and the JSON example |
+| L3 | Low | jj deleted bookmark after remote merge | Finding `layer-ref-deleted` and a plan block at that layer; no `jj rebase` step moves the landed commit |
+| L4 | Low | `native-rewrite-pending` had no way out | Text points to GitHub's own stack handling |
