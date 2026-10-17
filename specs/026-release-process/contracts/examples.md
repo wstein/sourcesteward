@@ -4,8 +4,8 @@ Five worked examples (six contract files, because example 5 has two products) an
 
 | # | Fixture | Shows | Scheme | Artifacts |
 | --- | --- | --- | --- | --- |
-| 1 | `go-cli.release.toml`, `go-cli.record.json` | own-script adapter, one `per-target` build, three file targets with native smoke runners | `semver` | 3 `file` |
-| 2 | `oci-bundle.release.toml`, `oci-bundle.record.json` | one `once` build that pushes by digest and writes a result file, `[promote]`, lock, tool list and source-offer references | `calver` with `tag_prefix` | 1 `oci-image` |
+| 1 | `go-cli.release.toml`, `go-cli.record.json`, `go-cli.manifest.json` (sample build manifest; `mirror-zlib.manifest.json` shows a fetch build's `builds` entry) | own-script adapter, one `per-target` build, three file targets with native smoke runners | `semver` | 3 `file` |
+| 2 | `oci-bundle.release.toml` (as `.stw/release.toolbox.toml`, a named product next to a CLI product), `oci-bundle.record.json`, `oci-bundle.result.json` (sample OCI build result) | one `once` build that pushes by digest and writes a result file, `[promote]`, lock, tool list and source-offer references | `calver` with `tag_prefix` | 1 `oci-image` |
 | 3 | `polyglot.release.toml`, `polyglot.record.json` | four builds (Go per target, Elixir `mix release`, Python pack, image), five targets in three groups, version read from `web/mix.exs` | `semver`, `source = "file"` | 4 `file` + 1 `oci-image` |
 | 4 | `skill-pack.release.toml`, `skill-pack.record.json` | one `once` build producing an archive and a manifest (role `manifest`), `[readiness]` evidence files | `semver` | 2 `file` |
 | 5 | `mirror-zlib.release.toml`, `mirror-busybox.release.toml` (as `.stw/release.zlib.toml`, `.stw/release.busybox.toml`), `mirror-zlib.record.json`, `mirror-busybox.record.json` | **two products in one repository**, per-component tags `zlib-v1.3.1`, a **fetch build** (declared hosts, pinning lock file, the declared command is `bdock tools sources fetch`), source bundle plus manifest as file artifacts | `pattern` with `tag_template` | 2 `file` per product |

@@ -1,0 +1,12 @@
+{
+  "index_digest": "sha256:1bc04b5291c26a46d918139138b992d2de976d6851d0893b0476b85bfbdfc6e6",
+  "kind": "oci-build-result",
+  "platforms": [
+    {
+      "arch": "amd64",
+      "manifest_digest": "sha256:5861314d7fccb39c2192173240eab44fa35ca66426201ca2acd0630a6258dd51",
+      "os": "linux"
+    }
+  ],
+  "schema_version": 1
+}

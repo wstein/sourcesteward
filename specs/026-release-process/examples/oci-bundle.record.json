@@ -57,6 +57,7 @@
     "sha256": "2bfeb0b1af4a95a43120c6d8c692a16117f3f775bb142e109916fa49026a2897",
     "size": 2210
   },
+  "product": "toolbox",
   "project": "BundleDock toolbox",
   "repository": "wstein/bundledock",
   "schema_version": 1,

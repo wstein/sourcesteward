@@ -6,14 +6,14 @@
 stw release check [PATH] [--product NAME] [--commit SHA] [--json]
 ```
 
-`PATH` defaults to the current directory (any directory inside the repository). Without `--commit` the command lints the contract file in the working tree; with `--commit` it reads the blob at `.stw/release.toml` or `.stw/release.json` in that commit's tree (for example C before a dispatch). It accepts no other flags, never prompts, opens an editor or pager, writes nothing and starts no project command. Without `--product` it lints every product file of the repository (see [config.md](config.md#products-and-files-normative)), reports `product-tag-overlap` across them and `config-ambiguous` for mixed layouts; with it, only that product.
+`PATH` defaults to the current directory (any directory inside the repository). Without `--commit` the command lints the contract file in the working tree; with `--commit` it reads the contract blobs (`.stw/release.toml`/`.json` or the named product files `.stw/release.<product>.toml`/`.json`) in that commit's tree (for example C before a dispatch). It accepts no other flags, never prompts, opens an editor or pager, writes nothing and starts no project command. Without `--product` it lints every product file of the repository (see [config.md](config.md#products-and-files-normative)), reports `product-tag-overlap` across them and `config-ambiguous` for mixed layouts; with it, only that product.
 
 ## Exit status
 
 | Status | Meaning |
 | --- | --- |
 | 0 | the contract is valid |
-| 1 | refusal or operational failure (`config-missing`, `unsupported-backend`, `ambiguous-backend`, `not-repository`, `bare-repository`, `commit-unresolved`, `product-required`, `product-unknown`, `canceled`) |
+| 1 | refusal or operational failure (`config-missing`, `unsupported-backend`, `ambiguous-backend`, `not-repository`, `bare-repository`, `commit-unresolved`, `product-unknown`, `canceled`) |
 | 2 | usage error |
 | 3 | one or more check findings |
 

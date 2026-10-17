@@ -12,7 +12,7 @@
 - [x] Requirements are testable and unambiguous (one normative table each for commands, codes, version schemes, build environment, backend capability, limits and exit statuses)
 - [x] Success criteria are measurable and describe observable outcomes
 - [x] Acceptance scenarios and edge cases are defined (rebase merge, moved main, replaced draft asset, hostile text, readiness)
-- [x] Scope bounded: package channels, Windows, signing, adapters other than own-script, multi-product layout and readiness execution are out of scope
+- [x] Scope bounded: package channels, Windows, signing, adapters other than own-script, network enforcement for fetch builds and readiness execution are out of scope
 - [x] Multiple products per repository and fetch-type builds specified with per-command treatment (D9)
 - [x] Dependencies identified: Specs 020, 021, 022, 025; the constitution amendment proposal; unverified WorkHarbor and CrewBook policies
 

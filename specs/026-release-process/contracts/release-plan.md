@@ -3,7 +3,7 @@
 ## Command
 
 ```text
-stw release plan <commit|tag> [PATH] [--product NAME] [--version V] [--for build|publish] [--record-commit R] [--online] [--repo OWNER/NAME] [--json]
+stw release plan <commit|tag> [PATH] [--product NAME] [--version V] [--for build|publish] [--record-commit R] [--online] [--with-drafts] [--repo OWNER/NAME] [--json]
 ```
 
 `<commit>` is a full 40 or 64 lowercase hexadecimal id (abbreviations are a usage error: ambiguity is a safety problem here); any other argument is a tag name resolved as `refs/tags/<arg>` (see the spec's classification rule; an absent tag is the refusal `tag-unresolved`). `PATH` defaults to the current directory. The command never prompts, opens an editor or pager, writes anything, or starts a project command. It reads the contract from the **evaluated commit's tree**: C for a commit, the **tag commit** for a tag (the same source in `verify`); the working tree is never read. The product is selected by `--product`, or for a tag by the one product whose grammar matches the tag at the tag commit.
@@ -14,6 +14,7 @@ stw release plan <commit|tag> [PATH] [--product NAME] [--version V] [--for build
 | `--version V` | required with a commit (the version to be built); forbidden with a tag (derived from the tag) |
 | `--record-commit R` | publish mode only: read the record from commit R (a commit on `main` descending from the tag commit) instead of the tag commit; C is then the tag commit and must equal the record's `commit`; the diff is taken from C to R (input mode 2 and the bootstrap release) |
 | `--for build\|publish` | default `build` for a commit and `publish` for a tag; `--for build` with a tag is the second input mode of D1 (build once on an existing tag); `--for publish` with a commit is a usage error |
+| `--with-drafts` | assert that the caller's token sees draft releases, enabling the draft part of `release-exists` (otherwise `not-applicable`, reason `drafts-not-checked`, stated in the output); `stw` cannot detect draft visibility itself |
 | `--online` | evaluate the gates marked Net in the spec's [gate table](../spec.md#findings-and-gate-codes-normative) with bounded GitHub reads (hosting transport, read only); without it those gates are `not-run` and the verdict is `incomplete` |
 | `--repo OWNER/NAME` | select the repository when the local remotes are ambiguous (hosting resolution rules of Spec 020) |
 | `--json` | one result object |
@@ -23,7 +24,7 @@ stw release plan <commit|tag> [PATH] [--product NAME] [--version V] [--for build
 | Mode | Gates (spec gate table codes), in order |
 | --- | --- |
 | build, commit | `commit-not-on-main`, `config-invalid`, `version-invalid`, `version-file-mismatch`, `readiness-missing`, then Net: `version-not-monotonic`, `release-exists`, `ci-not-green` |
-| build, tag (`--for build`) | the publish gates `tag-not-annotated`, `tag-version-mismatch`, `tag-not-on-main`, then the build gates above evaluated at the tag's commit, with `release-exists` meaning a release or draft (the tag is expected to exist) and monotonicity excluding the subject tag |
+| build, tag (`--for build`) | the publish gates `tag-not-annotated`, `tag-version-mismatch` (defined in this mode against the version derived from the tag by the product grammar, since no record exists), `tag-not-on-main`, then the build gates above evaluated at the tag's commit, with `release-exists` meaning a release or draft (the tag is expected to exist) and monotonicity excluding the subject tag |
 | publish, tag | `tag-not-annotated`, `tag-version-mismatch`, `tag-not-on-main`, `config-invalid`, `record-missing`, `record-invalid`, `record-not-canonical`, `build-commit-not-ancestor`, `diff-not-allowlisted`, then Net: `ci-not-green` (on the record's commit), `version-not-monotonic`, `already-published`, `draft-missing`; `artifact-*` and `attestation-*` are `not-applicable` (they need files: use `verify`); with `--record-commit R` the record gates read R and `build-commit-not-ancestor` also requires R to descend from the tag commit |
 
 `commit-not-on-main` and `tag-not-on-main` use the local remote-tracking ref `refs/remotes/<remote>/main` of the remote that hosting resolution selects for the repository (so `--repo` and the evaluated repository agree; in jj the revset `C & ::main@<remote>`); the output names the remote and states that no fetch was made and the ref's recorded commit. A repository with `info/grafts` (which fakes ancestry even with replace objects disabled, measured) makes the ancestry gates `not-run` with reason `grafts-present`. A missing remote-tracking `main` or a shallow clone (where ancestry cannot be decided) makes the ancestry gates `not-run` with reason `main-ref-absent` or `shallow-clone`, never `pass`; the maintainer runs a visible `git fetch` first.
@@ -73,7 +74,7 @@ One `ReleasePlanResult` per invocation, validated by `schemas/v1/release-plan.sc
 
 ```json
 {"schema_version":1,"command":"release-plan","status":"ok","mode":"publish","backend":"git",
- "subject":{"commit":null,"tag":"v0.2.0","version":"v0.2.0","tag_commit":"1111111111111111111111111111111111111111","main_ref":{"commit":"2222222222222222222222222222222222222222","fetched":false}},
+ "subject":{"product":null,"commit":null,"tag":"v0.2.0","version":"v0.2.0","tag_commit":"1111111111111111111111111111111111111111","record_commit":null,"main_ref":{"remote":"origin","commit":"2222222222222222222222222222222222222222","fetched":false}},
  "gates":[{"code":"tag-not-annotated","outcome":"pass","reason":null,"detail":null},
           {"code":"diff-not-allowlisted","outcome":"fail","reason":"path-not-allowlisted","detail":"src/main.go (M)"},
           {"code":"ci-not-green","outcome":"not-run","reason":"needs-online","detail":null}],

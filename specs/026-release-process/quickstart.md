@@ -50,10 +50,12 @@ Fixtures for the files in `./assets` are produced by the test helper (`SHA256SUM
 3. Approve the build in your task context, then `stw release dispatch --commit C --version V` (prints the plan and `plan_id`), then `stw release dispatch ... --apply <plan_id>`. This starts one CI build, attests the files and keeps a **draft** release. Nothing is tagged or published. Do not publish the draft in the web UI (it would create a lightweight tag).
 4. Download the draft assets into a directory; `stw release record --commit C --version V --from DIR --write`; commit `docs/releases/V.json` plus the release notes as commit D on a branch; open a pull request; review the hashes against the draft; merge (a rebase merge is fine).
 5. Approve the tag (approving the tag push approves the publication it triggers), then push an **annotated** tag `V` on D yourself: `git tag -a V -m "..." D && git push origin V`. The publish workflow verifies (`stw release verify V --online` on the downloaded draft) and publishes; there is no build.
-6. Verify a download: `gh attestation verify <file> --repo <owner/name> --signer-workflow <owner/name>/.github/workflows/release-build.yml`, and `sha256sum -c SHA256SUMS`.
+6. Verify a download (assets and attestation of a published release): `stw release verify V --published --record-commit R --artifacts DIR --online` (for the bootstrap release add `--signer-workflow-file .github/workflows/release-bootstrap.yml --source-ref refs/tags/V`), or by hand: `gh attestation verify <file> --repo <owner/name> --signer-workflow <owner/name>/.github/workflows/release-build.yml`, and `sha256sum -c SHA256SUMS`.
 7. Consumer activation (devcontainer pin, catalog, lock) is a separate step with its own authorization.
 
 If something fails before step 5, delete the draft by hand and use the next version; never delete and re-create a tag. In input mode 2 (build once on an existing tag) and for the bootstrap release the tag precedes the record: merge the record commit R, then run the publish workflow with `workflow_dispatch` (inputs `tag` and `record_commit`).
+
+Adding a product to a multi-product repository is an owner step before its first tag: add its tag pattern to the publish workflow's triggers and its prefix to the tag ruleset; release products one at a time, because another product's contract change between C and D fails the repository-wide diff.
 
 For a repository with several products add `--product NAME` to every command (or let the tag select it); the mirror example shows `zlib-v1.3.2` selecting the `zlib` product.
 

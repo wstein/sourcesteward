@@ -31,11 +31,11 @@ Precedence 2, 1, 3, 0. The POST is never retried.
 
 ## Backend capability
 
-Git and jj supported (the local part is `plan --online`'s commit and contract reads, plus hosting resolution, which is native for both); GitButler-managed and ambiguous refuse. Only github.com is verified; GitHub Enterprise needs `--host` (hosting rules, unverified for dispatch).
+Git and jj supported for `--commit/--version` (the local part is `plan --online`'s commit and contract reads, plus hosting resolution, which is native for both); `--tag` mode needs the annotation check and is `unsupported-backend` in jj; GitButler-managed and ambiguous refuse. The plan runs `plan --online --with-drafts`, because the dispatching token must see drafts. Only github.com is verified; GitHub Enterprise needs `--host` (hosting rules, unverified for dispatch).
 
 ## Output
 
-Human: the gates, the request body (inputs escaped), `effects: network write on --apply: starts a CI build (draft release, attestations); no tag, no publication`, `plan_id: <64 hex>`, and on apply `dispatched: <workflow URL>`. JSON: `ReleaseDispatchResult` (`schemas/v1/release-dispatch.schema.json`): the plan result fields plus `request` (`method`, `endpoint`, `body`), `plan_id`, `applied`, `workflow_url`, `error`.
+Human: the gates, the declared network effect of every `fetch` build (hosts and lock files, from the contract at C), the request body (inputs escaped), `effects: network write on --apply: starts a CI build (draft release, attestations); no tag, no publication`, `plan_id: <64 hex>`, and on apply `dispatched: <workflow URL>`. JSON: `ReleaseDispatchResult` (`schemas/v1/release-dispatch.schema.json`): the plan result fields (including `would_build` with each build's `network`, `network_hosts` and `lock_files`) plus `request` (`method`, `endpoint`, `body`), `plan_id`, `applied`, `workflow_url`, `error`.
 
 ## Effects
 

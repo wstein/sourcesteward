@@ -37,7 +37,7 @@ Monotonicity examples (tests): `v0.10.0 > v0.9.0`; `2026.10.15-b98.1 > 2026.10.1
 
 ### Gate and verdict
 
-`Gate {code, outcome, reason, detail}`. `outcome` in `pass | fail | not-run | not-applicable`; `reason` is a kebab-case token (`needs-online`, `main-ref-absent`, `shallow-clone`, `grafts-present`, `depends-on-<code>`, `ci-run-absent`, `ci-run-failed`, `ci-run-pending`, `drafts-invisible`, `path-not-allowlisted`, `mode-change`, `type-change`, `symlink`, `gitlink`, `entries-exceeded`); `detail` is escaped, at most 200 bytes. Verdict rule (the spec's single definition): any `fail` gives `fail`; otherwise any required `not-run` gives `incomplete`; otherwise `pass`; `not-applicable` is ignored. `boundary.complete` is a different notion (false for refusals, errors and results cut by a bound) and does not change the verdict rule.
+`Gate {code, outcome, reason, detail}`. `outcome` in `pass | fail | not-run | not-applicable`; `reason` is a kebab-case token (`needs-online`, `main-ref-absent`, `shallow-clone`, `grafts-present`, `depends-on-<code>`, `ci-run-absent`, `ci-run-failed`, `ci-run-pending`, `drafts-not-checked`, `path-not-allowlisted`, `mode-change`, `type-change`, `symlink`, `gitlink`, `entries-exceeded`); `detail` is escaped, at most 200 bytes. Verdict rule (the spec's single definition): any `fail` gives `fail`; otherwise any required `not-run` gives `incomplete`; otherwise `pass`; `not-applicable` is ignored. `boundary.complete` is a different notion (false for refusals, errors and results cut by a bound) and does not change the verdict rule.
 
 ### Subject
 

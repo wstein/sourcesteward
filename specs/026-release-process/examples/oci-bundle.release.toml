@@ -1,8 +1,9 @@
-# Worked example 2: an OCI bundle with calendar versions. Promote adds a tag to the same digest.
+# Worked example 2 (file .stw/release.toolbox.toml; BundleDock also has a CLI product): an OCI bundle with calendar versions. Promote adds a tag to the same digest.
 schema_version = 1
 
 [project]
 name = "BundleDock toolbox"
+product = "toolbox"
 
 [version]
 scheme = "calver"
