@@ -232,15 +232,15 @@ func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunne
 	}
 
 	// 2. Registered paths: the last value per name; names sharing a path use the lowest name.
-	cfg, err := run.run(pinsCall{Dir: root, Args: []string{"config", "--blob", blob, "--null", "--list", "--no-includes"}})
+	kvs, ok, err := pinsConfigFromObject(run, pinsGitRepo{}, root, blob, ReposGitmodulesBytes)
 	if err != nil {
 		return failed(err, "cannot parse the .gitmodules blob")
 	}
-	if cfg.Exit != 0 {
+	if !ok {
 		return failed(nil, "cannot parse the .gitmodules blob")
 	}
 	namePath := map[string]string{}
-	for _, kv := range parsePinsConfig(cfg.Stdout) {
+	for _, kv := range kvs {
 		if n, variable, ok := splitSubmoduleKey(kv.Key); ok && variable == "path" && kv.HasValue && kv.Value != "" {
 			namePath[n] = kv.Value
 		}
