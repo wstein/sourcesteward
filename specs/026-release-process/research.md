@@ -76,7 +76,7 @@ A `workflow_dispatch` run executes the workflow file of `main`'s tip and its `gi
 
 ## Owner decisions of 2026-10-17
 
-Recorded in spec D10 and D11 and in the analysis decision log: amendment undecided; `tag_commit` omitted; wave-2 preconditions P1 to P3 for the toolbox bundle; dispatch-only reproducibility; draft retention with workflow-artifact fallback and a disposable-repository rehearsal; owner-only actor limit accepted; `build` and `verify --published` kept; the tag ruleset as a required precondition that `stw` only reports. The registry login item adds one named secret to the image-capable workflow variants; that widens the sibling "no secrets" rule in one step and is the price of quay.io.
+Recorded in spec D10 and D11 and in the analysis decision log: amendment decided, applied by PR #58; `tag_commit` omitted; wave-2 preconditions P1 to P3 for the toolbox bundle; dispatch-only reproducibility; draft retention with workflow-artifact fallback and a disposable-repository rehearsal; owner-only actor limit accepted; `build` and `verify --published` kept; the tag ruleset as a required precondition that `stw` only reports. The `ghcr.io` variant needs no secret (`github.token`); a non-GitHub registry such as `quay.io` needs exactly one environment-scoped secret of the `release` environment, which widens the sibling "no secrets" rule in that one login step; the exposure of the credential store to project commands is stated in the workflow credential model.
 
 ## Reuse and drops from the release-hygiene draft
 
