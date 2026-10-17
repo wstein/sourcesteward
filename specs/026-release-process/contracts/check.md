@@ -45,7 +45,7 @@ One object per invocation: `schema_version`, `command: "release-check"`, `status
 
 - Reads: the contract file (never through a symlink; regular file only, at most 64 KiB), or one blob.
 - Writes: none. Network: none. Processes: for the working-tree form only the existing ownership detection (which starts Git); `--commit` additionally starts the fixed `git rev-parse`/`cat-file` invocations or the jj runner. No project command, ever.
-- Check findings: `product-tag-overlap`, `fetch-unpinned`, `profile-violation`, `schema-violation`, `config-ambiguous`, `allowlist-overlaps-input`, `argv-not-array`, `placeholder-unknown`, `limit-exceeded`, `duplicate-id`, `unknown-reference`, `scheme-invalid`, `env-name-forbidden` (errors) and `unused-build` (info).
+- Check findings: `product-tag-overlap`, `fetch-unpinned`, `profile-violation`, `schema-violation`, `config-ambiguous`, `allowlist-overlaps-input`, `argv-not-array`, `placeholder-unknown`, `limit-exceeded`, `duplicate-id`, `unknown-reference`, `scheme-invalid`, `env-name-forbidden`, `promote-argv-invalid` (errors) and `unused-build` (info).
 
 ## Compatibility
 
