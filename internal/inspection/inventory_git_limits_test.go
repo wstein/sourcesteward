@@ -891,3 +891,66 @@ func TestDiffRecordsAcceptUnmergedOnlyOutsideTheStoredScope(t *testing.T) {
 		t.Fatal("a stored delta never contains an unmerged record")
 	}
 }
+
+// A filter driver whose name is not valid UTF-8 can neither be neutralized nor counted as a transformation
+// by a locale-dependent regular expression: the inventory refuses it as invalid metadata (DEG-14).
+func TestGitInventoryRefusesNonUTF8FilterConfigurationAndAttributes(t *testing.T) {
+	isolatedHome(t)
+	d := manyFilesRepo(t, 3, "")
+	f, err := os.OpenFile(filepath.Join(d, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("[filter \"\xff\x80\"]\n\tclean = cat\n")
+	f.Close()
+	for _, locale := range []string{"C", "C.UTF-8", "en_US.UTF-8"} {
+		t.Setenv("LC_ALL", locale)
+		r := gitInventory(t, d, InventoryOptions{})
+		if r.Status != "error" || r.Diagnostics[0].Code != "invalid-metadata" {
+			t.Fatalf("LC_ALL=%s: a non-UTF-8 filter name must be refused, not treated as authoritative: %s %+v tracked=%+v", locale, r.Status, r.Diagnostics, r.Workspaces)
+		}
+	}
+	// A non-ASCII but valid name is neutralized and counted as a transformation.
+	d2 := manyFilesRepo(t, 3, "")
+	git(t, d2, "config", "filter.日本語.clean", "cat")
+	os.WriteFile(filepath.Join(d2, ".gitattributes"), []byte("d000/file00001.txt filter=日本語\n"), 0o644)
+	r := gitInventory(t, d2, InventoryOptions{})
+	if r.Status != "partial" || r.Workspaces[0].Tracked.Value != "unknown" || !strings.Contains(r.Workspaces[0].Tracked.Reason, "transformations") {
+		t.Fatalf("%s %+v", r.Status, r.Workspaces[0])
+	}
+	// A non-UTF-8 attribute value is refused as invalid metadata, not read as a harmless value.
+	d3 := manyFilesRepo(t, 3, "")
+	os.WriteFile(filepath.Join(d3, ".gitattributes"), []byte("d000/file00001.txt filter=\xff\xfe\n"), 0o644)
+	r = gitInventory(t, d3, InventoryOptions{})
+	if r.Status != "error" || r.Diagnostics[0].Code != "invalid-metadata" {
+		t.Fatalf("non-UTF-8 attribute value: %s %+v", r.Status, r.Diagnostics)
+	}
+}
+
+// An attribute naming a filter driver that is not configured does not change how files are compared: the
+// driver cannot run, so comparisons stay authoritative.
+func TestGitInventoryUnconfiguredFilterAttributeKeepsComparisonsAuthoritative(t *testing.T) {
+	isolatedHome(t)
+	d := manyFilesRepo(t, 3, "")
+	os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("d000/file00001.txt filter=nobody\n"), 0o644)
+	os.WriteFile(filepath.Join(d, "d000", "file00001.txt"), []byte("edited\n"), 0o644)
+	r := gitInventory(t, d, InventoryOptions{})
+	w := r.Workspaces[0]
+	if r.Status != "ok" || w.Tracked.Value != "true" || strings.Contains(w.Tracked.Reason, "transformations") {
+		t.Fatalf("%s %+v", r.Status, w)
+	}
+}
+
+// Every configured driver key counts: a filter with only a process or required setting is a transformation.
+func TestGitInventoryProcessOnlyAndRequiredOnlyFiltersAreTransformations(t *testing.T) {
+	isolatedHome(t)
+	for _, key := range []string{"process", "required"} {
+		d := manyFilesRepo(t, 3, "")
+		git(t, d, "config", "filter.solo."+key, map[string]string{"process": "cat", "required": "true"}[key])
+		os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("d000/file00001.txt filter=solo\n"), 0o644)
+		r := gitInventory(t, d, InventoryOptions{})
+		if r.Status != "partial" || r.Workspaces[0].Tracked.Value != "unknown" || !strings.Contains(r.Workspaces[0].Tracked.Reason, "transformations") {
+			t.Fatalf("%s: %s %+v", key, r.Status, r.Workspaces[0])
+		}
+	}
+}

@@ -54,19 +54,29 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 	if o.Query == "ref-exists" || o.Query == "ancestor" {
 		return s.referencePredicate(id, o)
 	}
-	config, code, err := s.command(dir, "config", "--null", "--name-only", "--get-regexp", `^filter\..*\.(clean|process|required)$`)
+	// The regular expression only anchors the ASCII prefix: a pattern such as ".*" does not match bytes that
+	// are invalid in the active locale, so a driver named with such bytes would escape the suffix match.
+	// The suffix is matched here, on bytes, and every matching key must be valid UTF-8.
+	config, code, err := s.command(dir, "config", "--null", "--name-only", "--get-regexp", `^filter\.`)
 	if err != nil || code > 1 {
 		return r.fail("git-inventory-failed", "cannot safely suppress configured content helpers")
 	}
 	if code == 0 {
-		keys, e := gitInventoryNUL(config)
-		if e != nil {
+		if !strings.HasSuffix(config, "\x00") {
 			return r.fail("invalid-metadata", "invalid content filter configuration")
 		}
 		names := map[string]bool{}
-		for _, key := range keys {
+		for _, key := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 			dot := strings.LastIndexByte(key, '.')
-			if dot < 7 || !utf8.ValidString(key) || strings.ContainsAny(key, "\r\n") {
+			if dot < 7 {
+				continue
+			}
+			switch key[dot+1:] {
+			case "clean", "process", "required":
+			default:
+				continue
+			}
+			if !utf8.ValidString(key) || strings.ContainsAny(key, "\r\n") {
 				return r.fail("invalid-metadata", "invalid content filter configuration")
 			}
 			names[key[:dot]] = true
