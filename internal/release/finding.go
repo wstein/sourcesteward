@@ -65,13 +65,6 @@ func pointerLess(a, b string) bool {
 			continue
 		}
 		if isIndex(as[i]) && isIndex(bs[i]) {
-			x, y := strings.TrimLeft(as[i], "0"), strings.TrimLeft(bs[i], "0")
-			if x != y {
-				if len(x) != len(y) {
-					return len(x) < len(y)
-				}
-				return x < y
-			}
 			if len(as[i]) != len(bs[i]) {
 				return len(as[i]) < len(bs[i])
 			}

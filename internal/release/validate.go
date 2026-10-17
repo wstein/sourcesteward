@@ -427,7 +427,7 @@ func (v *validator) declaredInputs() ([]declaredInput, []string) {
 // addArgvCandidates records the repository paths an argument might name, lexically cleaned and
 // confined to the repository: as written and relative to the working directory.
 func addArgvCandidates(into map[string]bool, arg, workingDir string) {
-	if strings.ContainsAny(arg, "{}") || strings.HasPrefix(arg, "/") {
+	if strings.ContainsAny(arg, "{}") {
 		return
 	}
 	add := func(p string) {
@@ -478,7 +478,6 @@ func resolveCandidates(tree Tree, candidates []string) (found []declaredInput, f
 		if len(need) == 0 && allDone(walks) {
 			return found, false, nil
 		}
-		sort.Strings(need)
 		if len(need) > 0 {
 			entries, err := tree.Entries(need)
 			if err != nil {
