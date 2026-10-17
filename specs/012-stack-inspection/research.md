@@ -14,7 +14,7 @@ Plain chain `main <- r1 <- r2 <- r3`, PR #4 rebase-merged. `main` received a new
 
 ### M3. Native stack (spike scenario T)
 
-The same chain was created as plain PRs, then linked with `gh stack link 7 8 9`, which created native Stack #10 with base `main`. The repository had "delete head branches" on. After PR #7 was rebase-merged (new commit `233133d`) GitHub itself retargeted #8 to `main`, force-pushed `t2` rebased onto the new `main` (a single commit, no conflict) and rebased `t3` too; #9 stayed based on `t2` until #8 merged, then was retargeted. Re-read on 2026-10-17: PRs 7, 8, 9 are `closed`, `merged`, base `main`, `merge_commit_sha` `233133d`, `1ab44a9`, `c4df8f0`. Consequence: for a native stack the rewrite after a merge is GitHub's; a local rebase step would race with it and duplicate it.
+The same chain was created as plain PRs, then linked with `gh stack link 7 8 9`, which created native Stack #10 with base `main`. The repository had "delete head branches" on, which confounds the retarget: GitHub retargets a child when its parent's head branch is deleted on merge for plain chains as well (`automatic_base_change_succeeded`), so only the force-push that rebased the child onto the new trunk is native-stack specific. After PR #7 was rebase-merged (new commit `233133d`) GitHub itself retargeted #8 to `main`, force-pushed `t2` rebased onto the new `main` (a single commit, no conflict) and rebased `t3` too; #9 stayed based on `t2` until #8 merged, then was retargeted. Re-read on 2026-10-17: PRs 7, 8, 9 are `closed`, `merged`, base `main`, `merge_commit_sha` `233133d`, `1ab44a9`, `c4df8f0`. Consequence: for a native stack the rewrite after a merge is GitHub's; a local rebase step would race with it and duplicate it.
 
 ### M4. The `stack` object on a pull request
 
@@ -25,6 +25,10 @@ The same chain was created as plain PRs, then linked with `gh stack link 7 8 9`,
 ```
 
 The key is **absent** (not `null`) on pull requests of plain chains (#1, #4, #5 checked). `base.sha` is `null`. Stack number 10 is not a pull request number: `GET pulls/10` is `404`. `mergeable_state` is `unknown` for these closed pull requests, so it is not used.
+
+### M4a. The `head=` filter
+
+`GET repos/O/N/pulls?head=wstein:t2&state=all&per_page=5` returned only #8, with its `stack` object (position 2), although the head branch had been deleted on merge: a deleted head branch still matches. Refs containing `/` remain unverified.
 
 ### M5. The stack endpoints
 
@@ -117,10 +121,10 @@ No jj binary was available. The pinned versions are 0.45.1 (minimum) and 0.46.0 
 | --- | --- | --- | --- |
 | U1 | All jj read forms: bookmark and range revsets on the pinned operation, `conflict`, `immutable` and divergence template keywords, tracked remote bookmark state, the one-step `jj rebase -s C -d N` including descendants, behavior when the rebased layer is already applied (emptied commits) | scratch jj repositories on 0.45.1 and 0.46.0, recorded in this file | T002 |
 | U2 | Git 2.46.0 (minimum) results for M9 and M11 | minimum lane run | T012 |
-| U3 | The `head=O:REF` filter and refs containing `/` on `pulls`, and that filtered list items carry `stack` | read-only call in a repository with such a branch | T023 |
+| U3 | Refs containing `/` with the `head=O:REF` filter (the filter itself and `stack` on filtered items are measured, M4a) | read-only call in a repository with such a branch | T023 |
 | U4 | Open native stack shapes (`open: true`, member base refs while open), `stacks` pagination and `per_page`, public-repository and anonymous behavior, plan or permission requirements, GitHub Enterprise Server availability | read-only calls against an open stack; documentation read | T023 |
 | U5 | `merge_commit_sha` for multi-commit rebase merges and for squash merges; whether it can be absent for a merged pull request | spike repository additions (owner action) | T023 |
-| U6 | GitHub's maximum stack size; behavior with genuine conflicts between layers; timing of server-side rebases after a merge (eventual consistency) | documentation; owner spike | T023 |
+| U6 | GitHub's maximum stack size; behavior with genuine conflicts between layers; timing of server-side rebases after a merge (owner observed a lag of about 3 to 4 seconds in the spike; eventual consistency otherwise unmeasured) | documentation; owner spike | T023 |
 | U7 | The write endpoints for stack creation, extension and removal | out of scope; precondition of later effects | later-effects |
 | U8 | Fork pull requests (`head.repo` other than the base repository) and deleted head repositories | fixtures only until measured | T023 |
 | U9 | `git cherry` with binary files, huge patches, textconv drivers and `merge` attributes | hostile-input tests | T014 |
