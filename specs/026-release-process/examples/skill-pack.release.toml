@@ -1,0 +1,51 @@
+# Worked example 4: a skill pack (archive plus manifest) released when a readiness criterion is met.
+schema_version = 1
+
+[project]
+name = "CrewBook skills"
+
+[version]
+scheme = "semver"
+source = "input"
+
+[[build]]
+id = "pack"
+scope = "once"
+argv = ["python3", "tools/pack_skills.py", "--version", "{version_number}", "--out", "{out_dir}"]
+
+[[target]]
+id = "skills-pack"
+kind = "file"
+group = "skills"
+build = "pack"
+os = "any"
+arch = "any"
+output = "dist/release/crewbook-skills_{version_number}.tar.gz"
+
+[[target]]
+id = "skills-manifest"
+kind = "file"
+role = "manifest"
+group = "skills"
+build = "pack"
+os = "any"
+arch = "any"
+output = "dist/release/crewbook-skills-manifest_{version_number}.json"
+
+[outputs]
+checksums = "SHA256SUMS"
+
+[reproducibility]
+policy = "best-effort"
+source_date_epoch = "commit-time"
+
+[allowlist]
+paths = ["docs/**", "CHANGELOG.md"]
+
+[ci]
+workflows = ["ci.yml"]
+release_workflow = ".github/workflows/release-build.yml"
+
+# plan only checks that these files exist at C; the project's own CI writes and commits them.
+[readiness]
+files = ["readiness/skills-validation.json", "readiness/compatibility.json", "schemas/skill.schema.json"]

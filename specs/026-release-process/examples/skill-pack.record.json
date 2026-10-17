@@ -1,0 +1,59 @@
+{
+  "assets": [
+    {
+      "arch": "any",
+      "build": "pack",
+      "group": "skills",
+      "kind": "file",
+      "name": "crewbook-skills-manifest_1.0.0.json",
+      "os": "any",
+      "role": "manifest",
+      "sha256": "d21951f8d63eadfac0fbee7f21844a1698fffc3ebf5b7370b597c63998ef57e8",
+      "size": 1000000,
+      "target": "skills-manifest",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    },
+    {
+      "arch": "any",
+      "build": "pack",
+      "group": "skills",
+      "kind": "file",
+      "name": "crewbook-skills_1.0.0.tar.gz",
+      "os": "any",
+      "role": "artifact",
+      "sha256": "02c109cff717de4087630fb3747e156902bafa3f175dae27f3f93941931341b9",
+      "size": 1000000,
+      "target": "skills-pack",
+      "url_template": "https://github.com/{repository}/releases/download/{tag}/{name}"
+    }
+  ],
+  "attestation": {
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "provider": "github-artifact-attestation",
+    "signer_workflow": "wstein/crewbook/.github/workflows/release-build.yml"
+  },
+  "build": {
+    "run_attempt": 1,
+    "run_id": 12345678901,
+    "stw_version": "v0.1.0",
+    "workflow": ".github/workflows/release-build.yml"
+  },
+  "checksums": {
+    "name": "SHA256SUMS",
+    "sha256": "9fb94216a8715eed8e1490e061a3cc207266ce82b143dafaf36f0649907e55e3",
+    "size": 412
+  },
+  "commit": "4e7f3b62e29abc3b6014b68eb9b7ddfce9c9b702",
+  "kind": "release-record",
+  "manifest": {
+    "name": "build-manifest.json",
+    "sha256": "664d66ba771f039bd3d0051c2b4581695f0d14e0f457c9db677a9254b895675f",
+    "size": 2210
+  },
+  "project": "CrewBook skills",
+  "repository": "wstein/crewbook",
+  "schema_version": 1,
+  "source_date_epoch": 1760000000,
+  "tag": "v1.0.0",
+  "version": "v1.0.0"
+}
