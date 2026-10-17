@@ -152,9 +152,9 @@
       "evidence": null
     },
     {
-      "id": "026-release-hygiene",
+      "id": "026-release-process",
       "status": "planned",
-      "spec": "../specs/026-release-hygiene/spec.md",
+      "spec": "../specs/026-release-process/spec.md",
       "evidence": null
     },
     {
