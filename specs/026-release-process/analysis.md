@@ -140,7 +140,7 @@ Recorded from the owner's reply on pull request sourcesteward#56. **No further r
 
 | # | Decision | Where applied |
 | --- | --- | --- |
-| 1 | Constitution amendment **not decided**: the owner reads the text first; it stays a proposal; WI6 to WI11 stay blocked | spec notice and D10 (a), constitution-amendment-proposal.md header, bootstrap.md preconditions, tasks authorization boundary |
+| 1 | *Superseded by D10 (a): the owner then decided the amendment, applied in PR #58.* Constitution amendment **not decided**: the owner reads the text first; it stays a proposal; WI6 to WI11 stay blocked | spec notice and D10 (a), constitution-amendment-proposal.md header, bootstrap.md preconditions, tasks authorization boundary |
 | 2 | `tag_commit` stays omitted from the record; `verify --json` reports it | spec D10 (b), DD14 unchanged |
 | 3 | Toolbox-bundle blockers solved **before wave 2** (binding): restartable calver counter via a `pattern` product (new `monotonicity = "non-decreasing"`), registry auth as a workflow-owned login step with no secret in the contract, moving aliases `stable`/`latest` removed from the record | spec D10 (c), FR-028, version table, config.md field and schema, example 2 (now `pattern`), examples.md, workflow.md posture (one named secret, login step only), bootstrap.md wave table and preconditions, tasks T049 to T052, plan DD36, research DD36 |
 | 4 | Reproducibility workflow dispatch-only; a schedule only with explicit owner approval | spec D10 (d), FR-017 unchanged |
@@ -153,7 +153,7 @@ Mechanical re-check by the author only: example 2 (now a `pattern` product) vali
 
 ## Round 5
 
-Review of revision 7ecaea8 (after the merge of the specification as pull request #56): READY, 0 high, 2 medium, 9 low findings. **Author fixes, no further independent round** (unless the owner asks for one); the fixes are not independently re-checked. The owner-decision commits of 2026-10-17 (non-decreasing monotonicity, wave-2 preconditions, tag-ruleset advisory) were rebased onto `origin/main` and come before these fixes.
+Review of revision e532c53 (the owner-decision commits after the merge of the specification as pull request #56): NOT READY, 0 high, 2 medium, 9 low findings. **Author fixes, no further independent round** (unless the owner asks for one); the fixes are not independently re-checked. The owner-decision commits of 2026-10-17 (non-decreasing monotonicity, wave-2 preconditions, tag-ruleset advisory) were rebased onto `origin/main` and come before these fixes.
 
 | # | Severity | Finding | Resolution |
 | --- | --- | --- | --- |
@@ -170,3 +170,23 @@ Review of revision 7ecaea8 (after the merge of the specification as pull request
 | 9 | Low | Typo `[[--product "$PRODUCT"]]` | Fixed |
 
 Author re-validation: the six contracts (example 2 with the tightened pattern), six records and samples validate against the schemas; the tightened toolbox pattern was run in Go.
+
+## Round 6
+
+Re-check of revision dfddca3 (pull request sourcesteward#59): NOT READY, 0 high, 2 medium, 11 low findings. **Author fixes; no further independent round, by owner decision.** Not independently re-checked.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Medium | verify step 5 and the gate row required "full tag not yet existing" although `verify` has no `release-exists` and the subject tag exists | The new-tag condition applies to build mode only; in `verify` and `plan <tag>` the subject is excluded and a replay shows as `already-published` or the subject itself (verify.md, spec gate row) |
+| M2 | Medium | ghcr.io variant exposure understated: in `verify-and-publish` the login token carries `contents: write`, `attestations: write`, `packages: write` and `promote.argv` runs in the same job | Exposure stated honestly in the credential model and Known limitations; the "better" claim replaced; hardening named but unspecified (promote in a job holding only `packages: write`, giving up the single-job property unless publish re-lists assets) |
+| 1 | Low | T025 "leading-zero equal tuples refused" contradicted `non-decreasing` | Made mode-aware |
+| 2 | Low | config.md node list omitted concatenation | Concatenations added |
+| 3 | Low | check.md lacked `promote-argv-invalid` | Added |
+| 4 | Low | plan DD36 not variant-aware | Reworded per the credential model |
+| 5 | Low | `packages: write` granted to "the image-capable variant" in general | Limited to the `ghcr.io` variant in the job rows |
+| 6 | Low | `present` required only the creation rule, D11 requires creation, update and deletion | `present` needs all three; new state `partial` with the missing rules named; every state list and the block-on rule updated (anything but `present` blocks a real tag) |
+| 7 | Low | Stale amendment wording in the proposal title/status and task headers | Proposal retitled and restated as decided and applied by PR #58; task headers and the WI7 dependency say "until PR #58 is merged" |
+| 8 | Low | Decision-log row 1 "not decided" | Marked superseded by D10 (a) |
+| 9 | Low | Round 5 recorded as READY | Corrected to NOT READY (0 high, 2 medium, 9 low), reviewed revision e532c53 |
+| 10 | Low | data-model lacked a `non-decreasing` example | Added (accepted restart, refused regression, existing full tag) |
+| 11 | Low | D1 wording awkward | Tidied |
