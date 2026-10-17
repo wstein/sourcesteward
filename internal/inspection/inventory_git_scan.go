@@ -468,6 +468,9 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 	attr := ""
 	decisive := false
 	exit, stopped, serr := s.streamCommand(dir, bytes.NewReader(paths.Bytes()), "\x00", func(rec []byte) error {
+		if !utf8.Valid(rec) {
+			return &nativeFormatError{"invalid NUL-delimited native output"}
+		}
 		idx := fields % 3
 		fields++
 		switch idx {
@@ -494,6 +497,10 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 		return false, reason, nil
 	}
 	if serr != nil {
+		var format *nativeFormatError
+		if errors.As(serr, &format) || errors.Is(serr, errStreamUnterminated) {
+			return false, "", serr
+		}
 		return false, "", withCause("cannot safely observe content attributes", serr)
 	}
 	if decisive || stopped {
