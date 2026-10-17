@@ -66,7 +66,7 @@ Terms: *plain run* and *query run* are defined by QR-1. Wherever a row says "par
 | DEG-11 | A buffered command exceeds LIM-2 | unchanged: `error`, `git-inventory-failed` with that command's message. Note `worktree list` is buffered, so about 400 linked worktrees (not 1,024) already end here; documented, not changed |
 | DEG-12 | Deadline or cancellation | unchanged: `inventory-timeout` or `canceled` |
 | DEG-13 | `--path` filters | Index entries outside the filters are not retained as records: they set one per-pass flag `outsideFilter`, which gives the existing `unknown` reason "disk path outside requested literal selection" once per workspace, not per entry |
-| DEG-14 | A streamed record is not valid UTF-8, or the stream ends inside a record | `error` `invalid-metadata` with the message the corresponding buffered parser gives today |
+| DEG-14 | A streamed record (including a `check-attr` attribute value) is not valid UTF-8, a configured `filter.<name>.clean|process|required` key is not valid UTF-8 (the filter keys are matched on bytes, not by a locale-dependent pattern), or the stream ends inside a record | `error` `invalid-metadata` with the message the corresponding buffered parser gives today |
 
 ### Record share (FS-1)
 
