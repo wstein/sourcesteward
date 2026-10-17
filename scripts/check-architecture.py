@@ -130,6 +130,13 @@ def go_file_imports(sources):
     return imports
 
 
+def run_release_ast_check():
+    """The syntax-tree rules of internal/release (syscall use, cgo, assembly, unsafe, linkname)."""
+    result = subprocess.run(['go', 'test', './internal/release', '-run', '^TestReleaseSourceArchitecture', '-count=1'], cwd=ROOT, text=True, capture_output=True)
+    if result.returncode != 0:
+        raise ValueError('internal/release architecture rules failed:\n' + result.stdout + result.stderr)
+
+
 def go_dependencies():
     result = subprocess.run(['go', 'list', '-deps', '-f', '{{.ImportPath}}'] + ['./' + p for p in NETWORK_FREE_PACKAGES], cwd=ROOT, text=True, capture_output=True, check=True)
     closure = result.stdout.split()
@@ -140,6 +147,7 @@ if __name__ == '__main__':
     sources = go_sources()
     validate_sources(sources, go_file_imports(sources))
     validate_dependencies(go_dependencies())
+    run_release_ast_check()
     result = subprocess.run(['go', 'list', '-f', '{{.ImportPath}} {{join .Imports " "}}', './...'], cwd=ROOT, text=True, capture_output=True, check=True)
     validate(result.stdout.splitlines())
     print('Architecture boundary checks passed.')
