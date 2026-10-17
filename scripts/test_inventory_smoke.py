@@ -15,17 +15,17 @@ _spec.loader.exec_module(smoke)
 class InventorySmokeTests(unittest.TestCase):
     def test_milestone_manifests_have_stable_unique_case_ids(self):
         self.assertEqual({name: len(ids) for name, ids in smoke.CASE_IDS.items()},
-                         {'M1': 8, 'M2': 4, 'M3': 8, 'M4': 16})
+                         {'M1': 8, 'M2': 4, 'M3': 8, 'M4': 16, 'M5': 4})
         all_ids = [case_id for ids in smoke.CASE_IDS.values() for case_id in ids]
-        self.assertEqual(len(all_ids), 36)
-        self.assertEqual(len(set(all_ids)), 36)
+        self.assertEqual(len(all_ids), 40)
+        self.assertEqual(len(set(all_ids)), 40)
         for group, ids in smoke.CASE_IDS.items():
             self.assertTrue(all(case_id.startswith(group + '.') for case_id in ids))
 
     def test_unknown_milestone_is_rejected_before_backend_execution(self):
         with patch.object(smoke.shutil, 'which') as backend:
             with self.assertRaisesRegex(ValueError, 'Unknown inventory milestone'):
-                smoke.acceptance(milestone='M5')
+                smoke.acceptance(milestone='M6')
             backend.assert_not_called()
 
     def test_missing_backend_is_failure_not_skip(self):

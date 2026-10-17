@@ -24,6 +24,7 @@ CASE_IDS = {
     'M1': tuple('M1.' + name for name in ('clean', 'dirty-false', 'ref-absent', 'ref-present', 'ancestor-false', 'ancestor-true', 'human', 'error')),
     'M2': tuple('M2.' + name for name in ('files-workspaces', 'dirty-true', 'literal-filter', 'denied-filters')),
     'M3': tuple('M3.' + layout + '.' + name for layout in ('standalone', 'colocated') for name in ('ref-absent', 'ref-present', 'ancestor-false', 'ancestor-true')),
+    'M5': tuple('M5.' + name for name in ('large-repository', 'truncated-listing', 'submodule-checkout', 'gitlink-superproject')),
     'M4': tuple('M4.' + layout + '.' + name for layout in ('standalone', 'colocated') for name in ('stored', 'literal-stored', 'disk-unknown', 'clean-unknown', 'staging-unsupported', 'workspaces', 'secondary', 'missing')),
 }
 
@@ -215,6 +216,41 @@ def acceptance(binary=BINARY, milestone=None):
             assert_registrations(output, registrations)
             if output is not None:
                 assert 'secondary' in {item['name'] for item in output['workspaces']}, output
+        # M5 (Spec 027): ordinary large repositories give facts, listings are truncated with a disclosure,
+        # a submodule checkout is described by its files and a gitlink-bearing superproject reports ordinary changes.
+        big = root / 'large'
+        setup('git', ['init', '-q', '-b', 'main', str(big)])
+        for index in range(1100):
+            (big / ('file%05d.txt' % index)).write_text('content %d\n' % index)
+        setup('git', ['add', '.'], big)
+        setup('git', ['commit', '-qm', 'many files'], big)
+        output = observe('M5.large-repository', big, status='ok')
+        if output is not None:
+            assert output['workspaces'][0]['tracked']['value'] == 'false' and output['files'] == [], output
+        head = setup('git', ['rev-parse', 'HEAD'], big)
+        (big / '.git' / 'packed-refs').write_text('# pack-refs with: peeled fully-peeled sorted\n' + ''.join('%s refs/tags/t%04d\n' % (head, index) for index in range(700)))
+        output = observe('M5.truncated-listing', big, status='partial')
+        if output is not None:
+            assert any(item.startswith('reference listing truncated: ') for item in output['boundary']['limitations']), output
+            assert len(output['references']) < 701, output
+        library = root / 'lib-src'
+        setup('git', ['init', '-q', '-b', 'main', str(library)])
+        (library / 'a').write_text('a\n')
+        setup('git', ['add', '.'], library)
+        setup('git', ['commit', '-qm', 'lib'], library)
+        super_repo = root / 'super'
+        setup('git', ['init', '-q', '-b', 'main', str(super_repo)])
+        (super_repo / 's').write_text('s\n')
+        setup('git', ['add', '.'], super_repo)
+        setup('git', ['commit', '-qm', 'super'], super_repo)
+        setup('git', ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', str(library), 'mods/lib'], super_repo)
+        setup('git', ['commit', '-qm', 'submodule'], super_repo)
+        output = observe('M5.submodule-checkout', super_repo / 'mods' / 'lib', status='ok')
+        if output is not None:
+            workspace = output['workspaces'][0]
+            assert workspace['path'].endswith('super/mods/lib') and workspace['tracked']['value'] == 'false', output
+        (super_repo / 's').write_text('edited\n')
+        output = observe('M5.gitlink-superproject', super_repo, ['--query', 'dirty'], predicate='dirty', value='true')
     selected = (milestone,) if milestone else tuple(CASE_IDS)
     expected = {case_id for group in selected for case_id in CASE_IDS[group]}
     assert completed == expected, ('Mandatory inventory cases differ', sorted(expected - completed), sorted(completed - expected))
