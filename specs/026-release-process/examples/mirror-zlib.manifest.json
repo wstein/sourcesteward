@@ -38,8 +38,8 @@
       ],
       "network": "fetch",
       "network_hosts": [
-        "github.com",
-        "zlib.net"
+        "zlib.net",
+        "github.com"
       ]
     }
   ],
@@ -48,7 +48,7 @@
   "kind": "build-manifest",
   "product": "zlib",
   "project": "BundleDock third-party sources",
-  "repository": "wstein/sourcesteward",
+  "repository": "wstein/bundledock-third-party-sources",
   "run": {
     "run_attempt": 1,
     "run_id": 12345678901,

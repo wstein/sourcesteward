@@ -5,7 +5,7 @@ Three workflows implement the process for a repository whose contract declares t
 | File | Triggers | Purpose |
 | --- | --- | --- |
 | `.github/workflows/release-build.yml` | `workflow_dispatch` only | gates, build once (compile or fetch), smoke, attest, draft release |
-| `.github/workflows/release-publish.yml` | `push` of tags matching the product's strict tag pattern, and `workflow_dispatch` with `tag` and `record_commit` (input mode 2 and the bootstrap release) | verify, promote images, publish the draft; **no build** |
+| `.github/workflows/release-publish.yml` | `push` of tags matching the product's strict tag pattern, and `workflow_dispatch` with `tag` and `record_commit` (input mode 2 only; the bootstrap release publishes itself and is checked with `verify --published`) | verify, promote images, publish the draft; **no build** |
 | `.github/workflows/release-repro.yml` | `workflow_dispatch` only (a `schedule` needs the owner's explicit approval, FR-017) | build `main` twice on independent runners and compare hashes; no release |
 
 `ci.yml` is unchanged except that `make check` also runs `stw release check` over the repository's own contract. `release-build.yml` is the contract's `ci.release_workflow`: its identity is the attestation signer. A repository with several products has one pair of workflows; the product is a dispatch input (`product`), and the tag-push trigger lists every product's tag pattern (generated from the contracts; the pattern list is a rule-tested constant).
@@ -29,7 +29,7 @@ If a project needs a native runner per build, a later schema revision adds `buil
 
 ## release-publish.yml
 
-Triggers: tag push of the strict pattern, or `workflow_dispatch` with inputs `tag` and `record_commit` (the record commit R of [verify.md](verify.md); owner-only). A single job keeps verification and publication together so nothing can be replaced between them.
+Triggers: tag push of the strict pattern, or `workflow_dispatch` with inputs `tag` and `record_commit` (the record commit R of [verify.md](verify.md); owner-only; input mode 2). A step passes `--product "$PRODUCT"` only when the product is non-empty; an empty value is treated as absent by the CLI as well. A single job keeps verification and publication together so nothing can be replaced between them.
 
 | Job | Permissions | Steps |
 | --- | --- | --- |

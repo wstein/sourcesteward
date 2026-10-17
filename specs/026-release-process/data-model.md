@@ -17,7 +17,7 @@ One normative table per concept lives in [spec.md](spec.md): gate and finding co
 | `release-dispatch.schema.json` | `dispatch --json` | [contracts/dispatch.md](contracts/dispatch.md) | yes |
 | `release-build.schema.json` | `build --json` | [contracts/build.md](contracts/build.md) | yes |
 
-Publishing them on Pages is the existing packaging list (`scripts/package-pages.py` `SCHEMA_PATHS`), extended in WI2 and WI4.
+Publishing them on Pages is the existing packaging list (`scripts/package-pages.py` `SCHEMA_PATHS`), extended in WI9 (T041).
 
 ## Entities
 

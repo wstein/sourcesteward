@@ -1,6 +1,7 @@
 # Contract: the project release contract (`.stw/release.toml`)
 
-The contract is a human-edited file in a **strict TOML profile**, or the same model written as JSON by a machine (`.stw/release.json`). YAML is not accepted. Exactly one of the two files may exist (`config-ambiguous`). The versioned JSON Schema below is the source of truth for the model; the TOML profile is a restriction of TOML to what maps one-to-one onto it. `stw release check` is the linter. ## Products and files (normative)
+The contract is a human-edited file in a **strict TOML profile**, or the same model written as JSON by a machine (`.stw/release.json`). YAML is not accepted. Exactly one of the two files may exist (`config-ambiguous`). The versioned JSON Schema below is the source of truth for the model; the TOML profile is a restriction of TOML to what maps one-to-one onto it. `stw release check` is the linter.
+## Products and files (normative)
 
 A repository has one or more **products**; each product has its own contract file, its own tag grammar and its own monotonic version, and versions are compared only within a product. A repository with one product uses `.stw/release.toml` (no `project.product`). A repository with several products uses one file per product, `.stw/release.<product>.toml` (or `.json`), where `<product>` is an id (`^[a-z0-9][a-z0-9-]{0,31}$`) that must equal `project.product` inside the file. Mixing `release.toml` with named files, or two files for one product, is `config-ambiguous`. At most 64 product files are read (`limit-exceeded`). Machines (for example a mirror tool that adds one product per third-party component) write the JSON form. Commands take `--product NAME`; it is required when more than one product exists (`product-required`) and an unknown name is `product-unknown`; a tag argument selects its product by the tag grammar. Without `--product`, `check` lints every product file and also reports `product-tag-overlap` when two products' literal tag prefixes are equal or one is a prefix of the other. Records are `docs/releases/<version>.json` for the single default product and `docs/releases/<product>/<version>.json` for named products.
 
@@ -57,7 +58,7 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | | `os`, `arch` | strings `[a-z0-9_]+` (or `any`) | `file` kind; `oci-image` uses `platforms` |
 | | `output` | path template | `file` kind: repository-relative path written by the build; placeholders allowed |
 | | `runner` | string, optional | opaque CI runner label for the native smoke job |
-| | `smoke_argv` | array of strings, optional | command run in CI after the build, in the directory of the extracted output |
+| | `smoke_argv` | array of strings, optional | command run in CI after the build at the root of the checkout of C, with `{artifact}` the target's output file; `stw` extracts nothing |
 | | `repository` | string | `oci-image`: registry repository without tag |
 | | `platforms` | array of `os/arch[/variant]` strings | `oci-image` |
 | | `staging_tag` | string template | `oci-image`: reference the build pushes (no version tag) |
@@ -72,7 +73,7 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | `ci` | `workflows` | array of workflow file names | all must have a successful run for C |
 | | `release_workflow` | path | the workflow that builds and attests; its identity is verified |
 | `readiness` | `files` | array of paths | evidence files that must exist at C |
-| `promote` | `argv` | array of strings | `oci-image` only; placeholders `{repository}`, `{digest}`, `{version}`; run by the tag-triggered workflow |
+| `promote` | `argv` | array of strings | `oci-image` only; placeholders per the spec's placeholder table; run by the publish workflow |
 | | `timeout_seconds` | integer, optional | |
 
 Rules beyond the schema (findings): every `target.build` names an existing build (`unknown-reference`); ids are unique (`duplicate-id`); argv elements contain only known placeholders (`placeholder-unknown`); `argv` is a non-empty array (`argv-not-array` also for a string where an array is required, because a shell string is never accepted); a `per-target` build referenced by no target and any build referenced by none are warnings reported as info `unused-build` (not an error); the product's record path (`docs/releases/<version>.json`, or `docs/releases/<product>/<version>.json` for a named product) is always allowlisted implicitly and is the only record location; allowlist patterns are globs where `*` matches within a path segment, `**` matches whole segments, no other metacharacter, and a pattern may not match (a) anything under `.stw/` or `.github/`, (b) the version file, (c) any readiness file, any build `lock_files` entry, any `lock_file`, `tool_list_file`, any path equal to a `working_dir` prefix or a build `argv` element that is a repository path that exists in the tree, (d) `go.mod`, `Cargo.toml`-style manifests cannot be detected generically and are the project's responsibility (stated limit). `allowlist-overlaps-input` is evaluated on the declared inputs only; the tree is the second line of defense: at `plan` time the matching patterns are shown with the number of tracked files each matches.

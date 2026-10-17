@@ -14,7 +14,7 @@ stw release plan <commit|tag> [PATH] [--product NAME] [--version V] [--for build
 | `--version V` | required with a commit (the version to be built); forbidden with a tag (derived from the tag) |
 | `--record-commit R` | publish mode only: read the record from commit R (a commit on `main` descending from the tag commit) instead of the tag commit; C is then the tag commit and must equal the record's `commit`; the diff is taken from C to R (input mode 2 and the bootstrap release) |
 | `--for build\|publish` | default `build` for a commit and `publish` for a tag; `--for build` with a tag is the second input mode of D1 (build once on an existing tag); `--for publish` with a commit is a usage error |
-| `--with-drafts` | assert that the caller's token sees draft releases, enabling the draft part of `release-exists` (otherwise `not-applicable`, reason `drafts-not-checked`, stated in the output); `stw` cannot detect draft visibility itself |
+| `--with-drafts` | assert that the caller's token sees draft releases, enabling the draft part of `release-exists` (otherwise only tags and published releases are checked and the reason `drafts-not-checked` is stated in the output; the gate's outcome is `pass` or `fail` from that part); `stw` cannot detect draft visibility itself |
 | `--online` | evaluate the gates marked Net in the spec's [gate table](../spec.md#findings-and-gate-codes-normative) with bounded GitHub reads (hosting transport, read only); without it those gates are `not-run` and the verdict is `incomplete` |
 | `--repo OWNER/NAME` | select the repository when the local remotes are ambiguous (hosting resolution rules of Spec 020) |
 | `--json` | one result object |
@@ -56,6 +56,7 @@ gates
   pass     config-invalid
   pass     version-invalid
   n/a      version-file-mismatch      version source is input
+  n/a      readiness-missing          no [readiness] table
   not-run  version-not-monotonic      needs --online
   not-run  release-exists             needs --online
   not-run  ci-not-green               needs --online
