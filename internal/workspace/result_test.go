@@ -97,3 +97,17 @@ func TestBoundedResultCapsSmallAggregatedRecords(t *testing.T) {
 		}
 	}
 }
+
+// Spec 027 COMPAT-8: the record share of a large inventory (up to 1,023 records) plus the handoff's own
+// records can exceed this result's 1,024 observation bound; the existing fallback omits the inventory.
+func TestHandoffFallsBackWhenALargeInventoryExceedsTheObservationBound(t *testing.T) {
+	r := newResult("workspace-handoff")
+	r.Status = "ok"
+	files := make([]inspection.InventoryFile, 1020)
+	r.Task = &TaskRecord{RemainingWork: []string{"a", "b"}, RecoveryLimits: []string{"c", "d"}, Inventory: &inspection.InventoryResult{Files: files}}
+	r.Limitations = []string{"e", "f", "g"}
+	r = bounded(r)
+	if r.Status != "partial" || r.Task == nil || r.Task.Inventory != nil || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "result-limit" {
+		t.Fatalf("%s %+v", r.Status, r.Diagnostics)
+	}
+}

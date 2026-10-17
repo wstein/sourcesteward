@@ -28,7 +28,6 @@
   },
   "limitations": [
    "No ahead/behind, publication or task-ownership facts: single-repository inventory does not observe them.",
-   "Submodule checkouts: dirty state is unknown (Git reports a submodule's Git directory as its worktree).",
    "Submodule locations are confined by the submodule pin audit's checks: a submodule whose Git directory has alternates or a commondir entry, or that is not owned by the effective user or is writable by others, is refused with path-unsafe.",
    "Discovered submodule paths are checked before Git runs, but a path swapped for a symlink in between can be read before it is rejected."
   ]

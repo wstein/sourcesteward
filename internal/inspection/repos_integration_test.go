@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -128,12 +127,13 @@ func TestReposIntegrationRealRepositories(t *testing.T) {
 		}
 	}
 
-	// The discovered submodule is an entry after all explicit ones, with the caveat in its notes.
+	// The discovered submodule is an entry after all explicit ones, with facts derived from its checkout.
 	sub := res.Entries[len(paths)]
 	if sub.Path != "sub" || sub.Origin != "submodule" || sub.Parent == nil || *sub.Parent != 5 || sub.Status != "ok" || sub.Backend != "git" || sub.Error != nil {
 		t.Errorf("discovered submodule entry: %+v %+v", sub, sub.Error)
 	}
-	if sub.Facts == nil || sub.Facts.Dirty.Value != "unknown" || len(sub.Notes) != 1 || !strings.Contains(sub.Notes[0], "dirty is unknown") {
+	// Spec 027 CK-1: the inventory describes the checkout, so a clean submodule is clean and has no caveat.
+	if sub.Facts == nil || sub.Facts.Dirty.Value != "false" || len(sub.Notes) != 0 {
 		t.Errorf("submodule facts/notes: %+v %q", sub.Facts, sub.Notes)
 	}
 	if res.Entries[5].Discovery.Status != "ok" || res.Entries[5].Discovery.Submodules != 1 {
@@ -170,25 +170,13 @@ func TestReposIntegrationRealRepositories(t *testing.T) {
 		t.Errorf("r5Super expected partial, got %s", res.Entries[5].Status)
 	}
 
-	// r6Attr (check-attr > 64 KiB) -> error (git-inventory-failed)
-	if res.Entries[6].Status != "error" {
-		t.Errorf("r6Attr expected error, got %s", res.Entries[6].Status)
-	}
-	// Inherited limit (disclosed in the contract): one check-attr call over all tracked paths is capped.
-	if e := res.Entries[6].Error; e == nil || e.Code != "git-inventory-failed" || e.Message != "cannot safely observe content attributes" {
-		t.Errorf("r6Attr expected the inherited check-attr failure, got %+v", e)
-	}
-	if res.Entries[6].Inventory == nil || res.Entries[6].Inventory.Status != "error" || res.Entries[6].Facts != nil {
-		t.Errorf("r6Attr: an error inventory is embedded as returned, with no facts: %+v", res.Entries[6])
-	}
-
-	// r7Limit (> 1024 files) -> error (git-inventory-failed or inventory-limit)
-	if res.Entries[7].Status != "error" {
-		t.Errorf("r7Limit expected error, got %s", res.Entries[7].Status)
-	}
-	// Inherited limit: more than 1,024 aggregate records.
-	if e := res.Entries[7].Error; e == nil || e.Code != "git-inventory-failed" || e.Message != "inventory record limit exceeded" {
-		t.Errorf("r7Limit expected the inherited record limit, got %+v", e)
+	// r6Attr (400 files, long paths) and r7Limit (more than 1,024 files) are ordinary repositories
+	// now (Spec 027): they give facts instead of the former inherited inventory errors.
+	for _, i := range []int{6, 7} {
+		e := res.Entries[i]
+		if e.Status != "ok" || e.Error != nil || e.Facts == nil || e.Facts.Dirty.Value != "false" || e.Inventory == nil || e.Inventory.Status != "ok" {
+			t.Errorf("%s expected ok with clean facts, got %+v %+v", e.Path, e, e.Facts)
+		}
 	}
 	if e := res.Entries[1].Error; e == nil || e.Code != "inventory-partial" || e.Message != "one or more registered workspace paths are unavailable" {
 		t.Errorf("r2 expected the stale-worktree cause, got %+v", e)

@@ -3,11 +3,7 @@ package inspection
 
 import (
 	"context"
-	"crypto/sha1"
-	"crypto/sha256"
 	"errors"
-	"fmt"
-	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -40,7 +36,8 @@ func (s gitInventorySession) command(dir string, args ...string) (string, int, e
 	return s.run(s.ctx, dir, append(prefix, args...)...)
 }
 func inventoryGit(ctx context.Context, id Result, o InventoryOptions) InventoryResult {
-	return inventoryGitRun(ctx, id, o, runGit)
+	bounds := defaultInventoryBounds()
+	return inventoryGitBounded(ctx, id, o, runGit, newStreamGit(bounds), bounds)
 }
 func inventoryGitRun(ctx context.Context, id Result, o InventoryOptions, run runner) InventoryResult {
 	bounds := defaultInventoryBounds()
@@ -51,6 +48,7 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 	if id.Repository == nil {
 		return r.fail("git-inventory-failed", "Git identity is unavailable")
 	}
+	contentLeft := bounds.ContentBudget
 	s := gitInventorySession{ctx: ctx, run: run, format: id.Repository.ObjectFormat, stream: stream, bounds: bounds}
 	dir := id.InputPath
 	if o.Query == "ref-exists" || o.Query == "ancestor" {
@@ -82,19 +80,14 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 	if e != nil || c != 0 {
 		return r.fail("git-inventory-failed", "cannot enumerate registered Git worktrees")
 	}
-	works, e := parseGitInventoryWorktrees(workraw, s.format)
+	works, bareEntries, e := parseGitInventoryWorktrees(workraw, s.format)
 	if e != nil {
 		return r.fail("invalid-metadata", e.Error())
 	}
-	refraw, c, e := s.command(dir, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(upstream)%00%(symref)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00")
-	if e != nil || c != 0 {
-		return r.fail("git-inventory-failed", "cannot enumerate Git references")
+	refs, refDigest, refCode, refMsg := s.scanReferences(dir, true)
+	if refCode != "" {
+		return r.fail(refCode, refMsg)
 	}
-	refs, e := parseGitInventoryRefs(refraw, s.format)
-	if e != nil {
-		return r.fail("invalid-metadata", e.Error())
-	}
-	r.References = refs
 	remoteRaw, remoteCode, remoteErr := s.command(dir, "remote")
 	if remoteErr != nil || remoteCode != 0 {
 		return r.fail("git-inventory-failed", "cannot observe native remote names")
@@ -128,15 +121,53 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 		}
 	}
 	var currentStatus []gitInventoryStatus
-	statusComplete := true
-	for _, w := range works {
-		if len(r.Workspaces)+len(r.References) >= inventoryRecordLimit {
-			return r.fail("inventory-limit", "inventory record limit exceeded")
+	hardIncomplete, softIncomplete := false, false
+	softReasons := []string{}
+	inspectedObserved := false
+	// CK: describe the checkout instead of its Git directory, before any query-scope decision.
+	checkoutMissing := map[int]bool{}
+	for i := range works {
+		w := &works[i]
+		if w.Path == nil || bareEntries[i] || id.Repository.Bare || filepath.Clean(*w.Path) != filepath.Clean(id.Repository.CommonDir) {
+			continue
 		}
+		if candidate, ok := s.checkoutCandidate(id, w); ok {
+			w.Path = ptr(candidate)
+			w.Name = candidate
+		} else {
+			checkoutMissing[i] = true
+		}
+	}
+	// The inspected workspace is compared first so that the content budget cannot starve it.
+	order := make([]int, 0, len(works))
+	for i, w := range works {
+		if w.Path != nil && id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
+			order = append(order, i)
+		}
+	}
+	for i, w := range works {
+		if w.Path == nil || id.Repository.Worktree == nil || *w.Path != *id.Repository.Worktree {
+			order = append(order, i)
+		}
+	}
+	statusOmitted, storedOmitted, omittedLower := 0, 0, false
+	for _, index := range order {
+		w := works[index]
 		w.Tracked = unknown("disk state unavailable")
 		w.Untracked = unknown("disk state unavailable")
 		w.Conflicts = unknown("disk state unavailable")
-		if o.Query != "" && w.Path != nil && (id.Repository.Worktree == nil || *w.Path != *id.Repository.Worktree) {
+		if checkoutMissing[index] {
+			w.Registration = "present"
+			w.Tracked, w.Untracked, w.Conflicts = unknown(txtCheckoutMissing), unknown(txtCheckoutMissing), unknown(txtCheckoutMissing)
+			w.Limitations = append(w.Limitations, txtCheckoutMissing)
+			if o.Query == "" {
+				r.partial(txtCheckoutMissing)
+			}
+			r.Workspaces = append(r.Workspaces, w)
+			continue
+		}
+		isCurrent := w.Path != nil && id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree
+		if o.Query != "" && w.Path != nil && !isCurrent {
 			w.Limitations = append(w.Limitations, "workspace disk state is outside selected predicate scope")
 			r.Workspaces = append(r.Workspaces, w)
 			continue
@@ -154,8 +185,8 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 			}
 			w.Limitations = append(w.Limitations, "registered path is unavailable; no repair attempted")
 			r.partial("one or more registered workspace paths are unavailable")
-			if id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
-				statusComplete = false
+			if isCurrent {
+				hardIncomplete = true
 			}
 			r.Workspaces = append(r.Workspaces, w)
 			continue
@@ -164,8 +195,8 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 		_, ownerr := ancestors(*w.Path, &ownership)
 		if ownerr != nil || len(ownership.Evidence) > 0 {
 			w.Manager = "unknown"
-			if id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
-				statusComplete = false
+			if isCurrent {
+				hardIncomplete = true
 			}
 			if len(ownership.Evidence) > 0 {
 				w.Manager = "jj"
@@ -175,7 +206,7 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 			r.Workspaces = append(r.Workspaces, w)
 			continue
 		}
-		if id.Repository.Bare && *w.Path == id.Repository.CommonDir {
+		if bareEntries[index] || id.Repository.Bare && *w.Path == id.Repository.CommonDir {
 			w.Registration = "present"
 			w.Limitations = append(w.Limitations, "bare repository has no disk checkout")
 			r.Workspaces = append(r.Workspaces, w)
@@ -184,8 +215,8 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 		check := inspect(ctx, *w.Path, run)
 		if check.Status != "ok" || check.Backend != "git" || check.Repository == nil || check.Repository.CommonDir != id.Repository.CommonDir {
 			w.Manager = check.Backend
-			if id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
-				statusComplete = false
+			if isCurrent {
+				hardIncomplete = true
 			}
 			w.Limitations = append(w.Limitations, "registered path ownership/identity could not be confirmed")
 			r.partial("registered workspace identity unavailable")
@@ -196,96 +227,126 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 			return r.fail("changed-repository", "registered checkout identity changed during inventory")
 		}
 		w.Registration = "present"
-		transforms, transformErr := false, error(nil)
+		transforms, unobserved, transformErr := false, "", error(nil)
 		if requiresRaw {
-			transforms, transformErr = s.workspaceTransforms(*w.Path, nil)
+			transforms, unobserved, transformErr = s.workspaceTransforms(*w.Path, nil)
 		}
 		if transformErr != nil {
-			return r.fail("git-inventory-failed", transformErr.Error())
+			code, msg := scanFailure(transformErr)
+			return r.fail(code, msg)
 		}
 		selectedTransforms := transforms
 		if requiresRaw && transforms && len(o.Paths) > 0 {
-			selectedTransforms, transformErr = s.workspaceTransforms(*w.Path, o.Paths)
+			selectedTransforms, _, transformErr = s.workspaceTransforms(*w.Path, o.Paths)
 			if transformErr != nil {
-				return r.fail("git-inventory-failed", transformErr.Error())
+				code, msg := scanFailure(transformErr)
+				return r.fail(code, msg)
 			}
 		}
-		parsed, signature, e := s.workspaceStatus(*w.Path, requiresRaw, o.Scopes, o.Paths)
+		parsed, meta, e := s.workspaceStatus(gitStatusOptions{dir: *w.Path, rawDisk: requiresRaw, scopes: o.Scopes, filters: o.Paths, retain: isCurrent, skipIndex: unobserved, charge: &contentLeft, cutoff: -1})
 		if e != nil {
-			return r.fail("git-inventory-failed", e.Error())
+			code, msg := scanFailure(e)
+			return r.fail(code, msg)
 		}
-		second, nextSignature, e := s.workspaceStatus(*w.Path, requiresRaw, o.Scopes, o.Paths)
+		_, second, e := s.workspaceStatus(gitStatusOptions{dir: *w.Path, rawDisk: requiresRaw, scopes: o.Scopes, filters: o.Paths, retain: isCurrent, skipIndex: unobserved, cutoff: meta.cutoff})
 		if e != nil {
-			return r.fail("git-inventory-failed", e.Error())
+			code, msg := scanFailure(e)
+			return r.fail(code, msg)
 		}
-		if signature != nextSignature {
+		if meta.signature != second.signature {
 			return r.fail("changed-repository", "Git workspace state changed during inventory")
 		}
-		_ = second
-
-		tracked, untracked, conflicts := false, false, false
-		submodules := false
-		selectedSubmodules := false
-		rawUnknown := ""
-		selectedRawUnknown := ""
-		for _, v := range parsed {
-			tracked = tracked || v.kind == "tracked" && v.xy != ".." || v.kind == "conflict"
-			untracked = untracked || v.kind == "untracked"
-			conflicts = conflicts || v.kind == "conflict"
-			submodules = submodules || v.submodule
-			if v.submodule && inventoryPathSelected(v.path, o.Paths) {
-				selectedSubmodules = true
-			}
-			if v.unknown != "" {
-				rawUnknown = v.unknown
-				if inventoryPathSelected(v.path, o.Paths) {
-					selectedRawUnknown = v.unknown
-				}
-			}
-		}
-		w.Tracked = known(tracked)
-		if !requiresRaw && !tracked {
+		w.Tracked = known(meta.tracked)
+		if !requiresRaw && !meta.tracked {
 			w.Tracked = unknown("raw disk comparison not requested")
 		}
-		w.Untracked = known(untracked)
+		w.Untracked = known(meta.untracked)
 		if len(o.Paths) > 0 {
 			w.Untracked = unknown("untracked paths outside requested literal selection were not observed")
 		}
 		if !gitInventoryHasScope(o.Scopes, "untracked") {
 			w.Untracked = unknown("untracked scope not requested")
 		}
-		w.Conflicts = known(conflicts)
-		if rawUnknown != "" {
-			w.Tracked = unknown(rawUnknown)
-			w.Limitations = append(w.Limitations, rawUnknown)
+		if meta.untrackedAbort != "" {
+			w.Untracked = unknown(meta.untrackedAbort)
+			w.Limitations = append(w.Limitations, meta.untrackedAbort)
+		}
+		w.Conflicts = known(meta.conflicts)
+		if meta.indexAbort != "" {
+			w.Conflicts = unknown(meta.indexAbort)
+			w.Limitations = append(w.Limitations, meta.indexAbort)
+			if requiresRaw {
+				w.Tracked = unknown(meta.indexAbort)
+			}
+		}
+		if meta.rawUnknown != "" {
+			w.Tracked = unknown(meta.rawUnknown)
+			w.Limitations = append(w.Limitations, meta.rawUnknown)
 		}
 		if transforms {
 			w.Tracked = unknown("configured transformations suppressed; raw comparisons not authoritative")
 			w.Limitations = append(w.Limitations, w.Tracked.Reason)
 		}
-		if submodules {
-			w.Tracked = unknown("submodule disk state excluded to avoid recursive helpers")
-			w.Limitations = append(w.Limitations, w.Tracked.Reason)
+		if meta.stagedAbort != "" {
+			w.Tracked = unknown(meta.stagedAbort)
+			w.Limitations = append(w.Limitations, meta.stagedAbort)
 		}
-		if id.Repository.Worktree != nil && *w.Path == *id.Repository.Worktree {
+		if meta.submodules {
+			if w.Tracked.Value == "true" {
+				w.Limitations = append(w.Limitations, txtGitlinkTrue)
+			} else {
+				w.Tracked = unknown(txtGitlink)
+				w.Limitations = append(w.Limitations, w.Tracked.Reason)
+			}
+		}
+		if meta.sparse {
+			w.Limitations = append(w.Limitations, txtSkipWorktree)
+		}
+		if isCurrent {
+			inspectedObserved = true
 			currentStatus = parsed
+			statusOmitted += meta.omitted
+			omittedLower = omittedLower || meta.lowerBound
 			s.transforms = selectedTransforms
-			if requiresRaw && (selectedTransforms || selectedSubmodules || selectedRawUnknown != "") {
-				statusComplete = false
+			if requiresRaw && (selectedTransforms || meta.selectedRawUnknown != "") {
+				hardIncomplete = true
 				reason := "configured transformations suppressed; raw comparisons not authoritative"
-				if selectedSubmodules {
-					reason = "submodule disk state excluded to avoid recursive helpers"
+				if meta.selectedSubmodules {
+					reason = txtGitlink
 				}
-				if selectedRawUnknown != "" {
-					reason = selectedRawUnknown
+				if meta.selectedRawUnknown != "" {
+					reason = meta.selectedRawUnknown
 				}
 				r.partial(reason)
+			} else if requiresRaw && meta.selectedSubmodules {
+				softIncomplete = true
+				softReasons = append(softReasons, txtGitlink)
+			}
+			if requiresRaw && meta.indexAbort != "" {
+				hardIncomplete = true
+				r.partial(meta.indexAbort)
+			}
+			for _, abort := range []struct {
+				reason string
+				active bool
+			}{
+				{meta.stagedAbort, gitInventoryHasScope(o.Scopes, "staged") || requiresRaw},
+				{meta.untrackedAbort, gitInventoryHasScope(o.Scopes, "untracked")},
+				{meta.ignoredAbort, gitInventoryHasScope(o.Scopes, "ignored")},
+			} {
+				if abort.reason != "" && abort.active {
+					softIncomplete = true
+					softReasons = append(softReasons, abort.reason)
+				}
 			}
 		}
 		r.Workspaces = append(r.Workspaces, w)
 	}
+	if o.Query != "" && needsDisk && !id.Repository.Bare && !inspectedObserved {
+		hardIncomplete = true
+	}
 	if needsDisk && id.Repository.Bare {
-		statusComplete = false
+		hardIncomplete = true
 		r.partial("bare repository has no disk or index checkout scopes")
 	}
 	if needsDisk {
@@ -300,9 +361,6 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 						f.Limitations = append(f.Limitations, "configured transformations suppressed; raw comparison")
 					}
 					if inventoryPathSelected(f.Path, o.Paths) || (f.OldPath != nil && inventoryPathSelected(*f.OldPath, o.Paths)) {
-						if len(r.Files)+len(r.References)+len(r.Workspaces) >= inventoryRecordLimit {
-							return r.fail("inventory-limit", "inventory record limit exceeded")
-						}
 						r.Files = append(r.Files, f)
 					}
 				}
@@ -335,22 +393,26 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 			}
 			if (o.Base != "" && base == nil) || (o.Revision != "" && revision == nil) {
 				r.partial("stored comparison endpoints unavailable")
-				statusComplete = false
+				hardIncomplete = true
 				continue
 			}
-			files, e := s.storedFiles(dir, target, base, o.Paths)
+			stored, e := s.storedFiles(dir, target, base, o.Paths)
 			if e != nil {
 				if strings.HasPrefix(e.Error(), "unknown stored comparison:") {
 					r.partial(e.Error())
-					statusComplete = false
+					hardIncomplete = true
 					continue
 				}
-				return r.fail("git-inventory-failed", e.Error())
+				code, msg := scanFailure(e)
+				return r.fail(code, msg)
 			}
-			if len(r.Files)+len(r.References)+len(r.Workspaces)+len(r.Bases)+len(files) > inventoryRecordLimit {
-				return r.fail("inventory-limit", "inventory record limit exceeded")
+			if stored.abort != "" {
+				softIncomplete = true
+				softReasons = append(softReasons, stored.abort)
+				continue
 			}
-			r.Files = append(r.Files, files...)
+			storedOmitted += stored.omitted // exact: the stored diff is counted to the end
+			r.Files = append(r.Files, stored.files...)
 		}
 	}
 	if e := s.bases(dir, id, &r); e != nil {
@@ -369,6 +431,30 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 		if !found {
 			remoteCoverage = false
 			r.partial("selected remote has no sampled tracking-reference coverage")
+		}
+	}
+	// Predicates use the candidate count before any truncation; the listings are cut afterwards (FS-1).
+	sortInventoryFiles(r.Files)
+	omittedCandidates := statusOmitted + storedOmitted
+	candidateTotal := len(r.Files) + omittedCandidates
+	positive := 0
+	for _, f := range r.Files {
+		if f.Change != "unknown" {
+			positive++
+		}
+	}
+	filesCut, refsCut := 0, 0
+	{
+		budget, fits := inventoryRecordBudget(len(r.Workspaces), len(r.Bases))
+		if !fits {
+			return r.fail("inventory-limit", "inventory record limit exceeded")
+		}
+		fileKeep, refBudget := fairShare(len(r.Files), totalReferenceCost(r.References), budget)
+		filesCut = len(r.Files) - fileKeep
+		r.Files = r.Files[:fileKeep]
+		if kept := truncateReferences(r.References, refBudget); len(kept) < len(r.References) {
+			refsCut = len(r.References) - len(kept)
+			r.References = kept
 		}
 	}
 	for i := range r.References {
@@ -419,8 +505,14 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 		r.Query = q
 		switch o.Query {
 		case "clean", "dirty":
-			if statusComplete {
-				dirty := len(r.Files) > 0
+			decided, dirty := false, false
+			switch {
+			case !hardIncomplete && !softIncomplete:
+				decided, dirty = true, candidateTotal > 0
+			case !hardIncomplete && softIncomplete && positive > 0:
+				decided, dirty = true, true
+			}
+			if decided {
 				q.Value = known(dirty == (o.Query == "dirty")).Value
 				q.Reason = "selected scopes are clean"
 				if dirty {
@@ -428,36 +520,17 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 				}
 				q.Evidence = append(q.Evidence, "requested literal paths and scopes inspected without refresh")
 			} else {
+				for _, reason := range softReasons {
+					r.partial(reason)
+				}
 				r.partial("clean/dirty requires complete selected scope observations")
 			}
-		case "ref-exists":
-			matches := gitInventoryRefMatches(refs, o.Ref)
-			if len(matches) == 0 {
-				q.Value = "false"
-				q.Reason = ""
-			} else if len(matches) == 1 {
-				q.Value = "true"
-				q.Reason = ""
-				q.Evidence = append(q.Evidence, matches[0].Name)
-			} else {
-				q.Reason = "reference selector is ambiguous"
-				r.partial(q.Reason)
-			}
-		case "ancestor":
-			from, ef := resolve(o.From)
-			to, et := resolve(o.To)
-			if ef != nil || et != nil {
-				q.Reason = "ancestry requires uniquely resolved native commit identities"
-				r.partial(q.Reason)
-			} else {
-				value, e := s.ancestor(dir, *from, *to)
-				if e != nil {
-					return r.fail("git-inventory-failed", e.Error())
-				}
-				q.Value = known(value).Value
-				q.Reason = ""
-				q.Evidence = []string{*from, *to}
-			}
+		}
+	}
+	queryKnown := r.Query != nil && r.Query.Value != "unknown"
+	if o.Query == "" {
+		for _, reason := range softReasons {
+			r.partial(reason)
 		}
 	}
 	last, c, e := s.command(dir, "worktree", "list", "--porcelain", "-z")
@@ -467,20 +540,58 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 	if workraw != last {
 		return r.fail("changed-repository", "Git registrations changed during inventory")
 	}
-	last, c, e = s.command(dir, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(upstream)%00%(symref)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00")
-	if e != nil || c != 0 {
-		return r.fail("git-inventory-failed", "cannot recheck Git references")
+	_, lastDigest, lcode, lmsg := s.scanReferences(dir, false)
+	if lcode != "" {
+		if lcode == "git-inventory-failed" {
+			lmsg = "cannot recheck Git references"
+		}
+		return r.fail(lcode, lmsg)
 	}
-	if refraw != last {
+	if refDigest != lastDigest {
 		return r.fail("changed-repository", "Git references changed during inventory")
 	}
 	sort.Slice(r.Workspaces, func(i, j int) bool { return r.Workspaces[i].Name < r.Workspaces[j].Name })
-	sort.Slice(r.Files, func(i, j int) bool {
-		if r.Files[i].Path == r.Files[j].Path {
-			return r.Files[i].Scope < r.Files[j].Scope
+	sortInventoryFiles(r.Files)
+	notesFor := func(extraFiles, extraRefs int, trimmed bool) []string {
+		notes := []string{}
+		if n := filesCut + extraFiles + omittedCandidates; n > 0 {
+			notes = append(notes, txtFilesTruncated(n, omittedLower))
 		}
-		return r.Files[i].Path < r.Files[j].Path
-	})
+		if n := refsCut + extraRefs; n > 0 {
+			notes = append(notes, txtRefsTruncated(n))
+		}
+		if trimmed {
+			notes = append(notes, txtResultTrimmed)
+		}
+		return notes
+	}
+	applyTruncationNotes(&r, notesFor(0, 0, false), queryKnown)
+	if checkInventoryLimits(r) != nil {
+		// DEG-9: trim to the 1 MiB bound and report the records dropped here together with the earlier ones.
+		stale := notesFor(0, 0, false)
+		applyTruncationNotes(&r, []string{txtResultTrimmed}, queryKnown)
+		files, refs := len(r.Files), len(r.References)
+		if !fitInventoryBytes(&r) {
+			return r.fail("inventory-limit", "inventory result exceeded its safe byte bound without trimming branches or files")
+		}
+		current := stale
+		for {
+			kept := r.Boundary.Limitations[:0]
+			for _, l := range r.Boundary.Limitations {
+				if !hasString(current, l) {
+					kept = append(kept, l)
+				}
+			}
+			r.Boundary.Limitations = kept
+			current = notesFor(files-len(r.Files), refs-len(r.References), false)
+			applyTruncationNotes(&r, current, queryKnown)
+			// The updated counts are a few bytes longer; drop one more file until the notes fit.
+			if checkInventoryLimits(r) == nil || len(r.Files) == 0 {
+				break
+			}
+			r.Files = r.Files[:len(r.Files)-1]
+		}
+	}
 	if e := checkInventoryLimits(r); e != nil {
 		return r.fail("inventory-limit", e.Error())
 	}
@@ -489,6 +600,100 @@ func inventoryGitBounded(ctx context.Context, id Result, o InventoryOptions, run
 	}
 	return r
 }
+
+// checkoutCandidate implements CK-1: the checkout that stands for a worktree-list entry which is a Git
+// directory. The candidate must pass the existing checks before it replaces the entry.
+func (s gitInventorySession) checkoutCandidate(id Result, w *InventoryWorkspace) (string, bool) {
+	var candidate string
+	entry := inspect(s.ctx, *w.Path, s.run)
+	if entry.Status == "ok" && entry.Backend == "git" && entry.Repository != nil && entry.Repository.CommonDir == id.Repository.CommonDir && !entry.Repository.LinkedWorktree && entry.Repository.Worktree != nil {
+		candidate = *entry.Repository.Worktree
+	} else if !id.Repository.LinkedWorktree && id.Repository.Worktree != nil {
+		candidate = *id.Repository.Worktree
+	}
+	if candidate == "" || candidate == *w.Path || !filepath.IsAbs(candidate) {
+		return "", false
+	}
+	info, err := os.Stat(candidate)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+	var ownership Result
+	if _, ownerr := ancestors(candidate, &ownership); ownerr != nil || len(ownership.Evidence) > 0 {
+		return "", false
+	}
+	check := inspect(s.ctx, candidate, s.run)
+	if check.Status != "ok" || check.Backend != "git" || check.Repository == nil || check.Repository.CommonDir != id.Repository.CommonDir || check.Repository.Worktree == nil || *check.Repository.Worktree != candidate {
+		return "", false
+	}
+	if !sameGitInventoryOID(w.CommitID, check.Repository.Head.OID) {
+		return "", false
+	}
+	return candidate, true
+}
+
+func sortInventoryFiles(files []InventoryFile) {
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].Path == files[j].Path {
+			return files[i].Scope < files[j].Scope
+		}
+		return files[i].Path < files[j].Path
+	})
+}
+
+// applyTruncationNotes adds the disclosures of omitted records. In a query run with a known predicate the
+// listing is supporting evidence: the note is added without changing status or completeness (QR-1).
+func applyTruncationNotes(r *InventoryResult, notes []string, queryKnown bool) {
+	for _, note := range notes {
+		if queryKnown {
+			r.Boundary.Limitations = append(r.Boundary.Limitations, note)
+		} else {
+			r.partial(note)
+		}
+	}
+}
+
+// fitInventoryBytes trims file records, then tag references from the end, until the encoded result
+// fits (DEG-9). Local and remote references are never trimmed: it reports false when the result does
+// not fit without files and tags.
+func fitInventoryBytes(r *InventoryResult) bool {
+	allFiles, allRefs := r.Files, r.References
+	fits := func(files, refs int) bool {
+		r.Files = allFiles[:files]
+		r.References = allRefs[:refs]
+		return checkInventoryLimits(*r) == nil
+	}
+	lo, hi := 0, len(allFiles)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fits(mid, len(allRefs)) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	if fits(lo, len(allRefs)) {
+		return true
+	}
+	firstTag := len(allRefs)
+	for i, ref := range allRefs {
+		if ref.Kind == "tag" {
+			firstTag = i
+			break
+		}
+	}
+	lo, hi = firstTag, len(allRefs)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fits(0, mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return fits(0, lo)
+}
+
 func sameGitInventoryOID(a, b *string) bool {
 	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
@@ -508,12 +713,16 @@ func gitInventoryNUL(raw string) ([]string, error) {
 	}
 	return strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00"), nil
 }
-func parseGitInventoryWorktrees(raw, format string) ([]InventoryWorkspace, error) {
+
+// parseGitInventoryWorktrees returns the registrations and, in parallel, whether each is the bare
+// repository entry (CK-3).
+func parseGitInventoryWorktrees(raw, format string) ([]InventoryWorkspace, []bool, error) {
 	fields, e := gitInventoryNUL(raw)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	out := []InventoryWorkspace{}
+	bare := []bool{}
 	var w *InventoryWorkspace
 	for _, field := range fields {
 		if field == "" {
@@ -523,90 +732,43 @@ func parseGitInventoryWorktrees(raw, format string) ([]InventoryWorkspace, error
 		key, val, ok := strings.Cut(field, " ")
 		if key == "worktree" {
 			if !ok || !filepath.IsAbs(val) {
-				return nil, errors.New("invalid registered Git worktree path")
+				return nil, nil, errors.New("invalid registered Git worktree path")
 			}
 			if len(out) >= inventoryRecordLimit {
-				return nil, errors.New("inventory record limit exceeded")
+				return nil, nil, errors.New("inventory record limit exceeded")
 			}
 			out = append(out, InventoryWorkspace{Path: ptr(val), Name: val, Manager: "git", Registration: "unknown", TaskOwner: "unknown", Limitations: []string{}})
+			bare = append(bare, false)
 			w = &out[len(out)-1]
 			continue
 		}
 		if w == nil {
-			return nil, errors.New("malformed Git worktree registration")
+			return nil, nil, errors.New("malformed Git worktree registration")
 		}
 		switch key {
 		case "HEAD":
 			if !gitInventoryOID(val, format) {
-				return nil, errors.New("invalid registered Git commit")
+				return nil, nil, errors.New("invalid registered Git commit")
 			}
 			if strings.Trim(val, "0") != "" {
 				w.CommitID = ptr(val)
 			}
 		case "branch":
 			if !strings.HasPrefix(val, "refs/heads/") {
-				return nil, errors.New("invalid registered branch")
+				return nil, nil, errors.New("invalid registered branch")
 			}
 		case "bare", "detached", "locked", "prunable":
+			if key == "bare" {
+				bare[len(bare)-1] = true
+			}
 			if key == "prunable" || key == "locked" {
 				w.Limitations = append(w.Limitations, field)
 			}
 		default:
-			return nil, errors.New("unknown Git registration record")
+			return nil, nil, errors.New("unknown Git registration record")
 		}
 	}
-	return out, nil
-}
-func parseGitInventoryRefs(raw, format string) ([]InventoryReference, error) {
-	out := []InventoryReference{}
-	for raw != "" {
-		record, rest, ok := strings.Cut(raw, "\x00\n")
-		if !ok || !utf8.ValidString(record) {
-			return nil, errors.New("malformed Git reference records")
-		}
-		raw = rest
-		p := strings.Split(record, "\x00")
-		if len(p) != 7 || !strings.HasPrefix(p[0], "refs/") || !gitInventoryOID(p[1], format) {
-			return nil, errors.New("invalid Git reference identity")
-		}
-		kind := "tag"
-		var remote *string
-		if strings.HasPrefix(p[0], "refs/heads/") {
-			kind = "local"
-		} else if strings.HasPrefix(p[0], "refs/remotes/") {
-			kind = "remote"
-			name, _, _ := strings.Cut(strings.TrimPrefix(p[0], "refs/remotes/"), "/")
-			remote = ptr(name)
-		} else if !strings.HasPrefix(p[0], "refs/tags/") {
-			continue
-		}
-		if len(out) >= inventoryRecordLimit {
-			return nil, errors.New("inventory record limit exceeded")
-		}
-		ref := InventoryReference{Name: p[0], Kind: kind, Remote: remote, Upstreams: []string{}, AddedTargets: []InventoryTarget{}, RemovedTargets: []InventoryTarget{}, Tracked: unknown("not a jj tracking relationship"), ContainsRevision: unknown("no revision selected"), MergedIntoBase: unknown("no base selected"), LocalOnly: unknown("no complete explicit remote sample selected"), Limitations: []string{}}
-		oid := p[1]
-		if p[4] == "tag" && p[6] == "commit" {
-			if !gitInventoryOID(p[5], format) {
-				return nil, errors.New("invalid peeled Git tag")
-			}
-			oid = p[5]
-		}
-		if p[4] == "commit" || p[4] == "tag" && p[6] == "commit" {
-			ref.CommitID = ptr(oid)
-			ref.AddedTargets = append(ref.AddedTargets, InventoryTarget{CommitID: oid})
-		} else {
-			ref.Limitations = append(ref.Limitations, "non-commit tag object; commit reachability not evaluated")
-		}
-		if p[2] != "" {
-			ref.Upstream = ptr(p[2])
-			ref.Upstreams = append(ref.Upstreams, p[2])
-		}
-		if kind == "local" {
-			ref.Tracked = known(p[2] != "")
-		}
-		out = append(out, ref)
-	}
-	return out, nil
+	return out, bare, nil
 }
 
 type gitInventoryStatus struct {
@@ -698,81 +860,6 @@ func (s gitInventorySession) ancestor(dir, from, to string) (bool, error) {
 	}
 	return c == 0, nil
 }
-func (s gitInventorySession) storedFiles(dir string, oid, base *string, paths []string) ([]InventoryFile, error) {
-	out := []InventoryFile{}
-	if oid == nil {
-		return out, nil
-	}
-	parents, c, e := s.command(dir, "rev-list", "--parents", "-n", "1", *oid)
-	if e != nil || c != 0 {
-		return nil, errors.New("cannot observe stored Git parents")
-	}
-	p := strings.Fields(parents)
-	if len(p) == 0 || p[0] != *oid {
-		return nil, errors.New("invalid stored Git parents")
-	}
-	args := []string{"diff-tree", "--root", "--no-commit-id", "--name-status", "-r", "-z", "-M", "--no-ext-diff", "--no-textconv", *oid}
-	if base == nil && len(p) > 2 {
-		return nil, errors.New("unknown stored comparison: multi-parent revision requires explicit --base")
-	}
-	if base != nil || len(p) > 1 {
-		parent := ""
-		if base != nil {
-			parent = *base
-		} else {
-			parent = p[1]
-		}
-		if !gitInventoryOID(parent, s.format) {
-			return nil, errors.New("invalid stored Git parent")
-		}
-		args = []string{"diff", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", parent, *oid, "--"}
-	}
-	raw, c, e := s.command(dir, args...)
-	if e != nil || c != 0 {
-		return nil, errors.New("cannot observe stored Git files")
-	}
-	records, e := gitInventoryNUL(raw)
-	if e != nil {
-		return nil, e
-	}
-	for i := 0; i < len(records); i++ {
-		code := records[i]
-		if code == "" || i+1 >= len(records) {
-			return nil, errors.New("malformed stored Git diff")
-		}
-		i++
-		f := InventoryFile{Path: records[i], Scope: "stored", Limitations: []string{"stored revision delta against explicit base, sole parent, or empty tree for root revisions"}}
-		switch code[0] {
-		case 'A':
-			f.Change = "added"
-		case 'M', 'T':
-			f.Change = "modified"
-		case 'D':
-			f.Change = "deleted"
-		case 'R', 'C':
-			f.OldPath = ptr(f.Path)
-			i++
-			if i >= len(records) {
-				return nil, errors.New("malformed stored Git rename")
-			}
-			f.Path = records[i]
-			f.Change = "renamed"
-			if code[0] == 'C' {
-				f.Change = "copied"
-			}
-		default:
-			return nil, errors.New("unknown stored Git change")
-		}
-		if !inventoryPathSelected(f.Path, paths) && (f.OldPath == nil || !inventoryPathSelected(*f.OldPath, paths)) {
-			continue
-		}
-		if len(out) >= inventoryRecordLimit {
-			return nil, errors.New("inventory record limit exceeded")
-		}
-		out = append(out, f)
-	}
-	return out, nil
-}
 func (s gitInventorySession) bases(dir string, id Result, r *InventoryResult) error {
 	candidates := map[string]InventoryBase{}
 	for _, ref := range r.References {
@@ -831,9 +918,6 @@ func (s gitInventorySession) bases(dir string, id Result, r *InventoryResult) er
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if len(r.Bases)+len(r.References)+len(r.Workspaces) >= inventoryRecordLimit {
-			return errors.New("inventory record limit exceeded")
-		}
 		r.Bases = append(r.Bases, candidates[key])
 	}
 	if len(candidates) > 1 {
@@ -842,345 +926,17 @@ func (s gitInventorySession) bases(dir string, id Result, r *InventoryResult) er
 	return nil
 }
 
-// workspaceTransforms inspects literal attributes without running content filters.
-func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (bool, error) {
-	autocrlf, c, e := s.command(dir, "config", "--get", "core.autocrlf")
-	if e != nil || c > 1 {
-		return false, errors.New("cannot observe native normalization configuration")
-	}
-	normalizes := c == 0 && terminated(autocrlf) != "false" && terminated(autocrlf) != ""
-	raw, c, e := s.command(dir, "ls-files", "--cached", "-z")
-	if e != nil || c != 0 {
-		return false, errors.New("cannot safely observe content attribute usage")
-	}
-	paths, e := gitInventoryNUL(raw)
-	if e != nil {
-		return false, e
-	}
-	if len(paths) > inventoryRecordLimit {
-		return false, errors.New("inventory record limit exceeded")
-	}
-	selected := paths[:0]
-	for _, path := range paths {
-		if inventoryPathSelected(path, filters) {
-			selected = append(selected, path)
-		}
-	}
-	paths = selected
-	if len(paths) == 0 {
-		return false, nil
-	}
-	if normalizes {
-		return true, nil
-	}
-	args := []string{"check-attr", "-z", "filter", "text", "eol", "ident", "working-tree-encoding", "--"}
-	args = append(args, paths...)
-	raw, c, e = s.command(dir, args...)
-	if e != nil || c != 0 {
-		return false, errors.New("cannot safely observe content attributes")
-	}
-	values, e := gitInventoryNUL(raw)
-	if e != nil || len(values)%3 != 0 {
-		return false, errors.New("malformed content attribute observation")
-	}
-	for i := 0; i < len(values); i += 3 {
-		value := values[i+2]
-		if value == "unspecified" || value == "unset" {
-			continue
-		}
-		if values[i+1] == "filter" {
-			if s.filterNames["filter."+value] {
-				return true, nil
-			}
-		} else {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// workspaceStatus never asks Git to hash worktree contents. Content comparisons
-// happen here, so even concurrent configuration changes cannot execute filters.
-func (s gitInventorySession) workspaceStatus(dir string, rawDisk bool, scopes, filters []string) ([]gitInventoryStatus, string, error) {
-	raw, c, e := s.command(dir, "ls-files", "--stage", "-z")
-	if e != nil || c != 0 {
-		return nil, "", errors.New("cannot observe Git index")
-	}
-	fields, e := gitInventoryNUL(raw)
-	if e != nil {
-		return nil, "", e
-	}
-	if len(fields) > inventoryRecordLimit {
-		return nil, "", errors.New("inventory record limit exceeded")
-	}
-	out := []gitInventoryStatus{}
-	var diskRoot *os.Root
-	if rawDisk {
-		var rootErr error
-		diskRoot, rootErr = os.OpenRoot(dir)
-		if rootErr != nil {
-			return nil, "", rootErr
-		}
-		defer diskRoot.Close()
-	}
-	positions := map[string]int{}
-	signature := raw
-	modeRaw, modeCode, modeErr := s.command(dir, "config", "--type=bool", "--get", "core.filemode")
-	if modeErr != nil || modeCode > 1 {
-		return nil, "", errors.New("cannot observe native file mode semantics")
-	}
-	filemode := modeCode == 1 || terminated(modeRaw) == "true"
-	for _, record := range fields {
-		if s.ctx.Err() != nil {
-			return nil, "", s.ctx.Err()
-		}
-		head, path, ok := strings.Cut(record, "\t")
-		p := strings.Split(head, " ")
-		if !ok || len(p) != 3 || !gitInventoryOID(p[1], s.format) || len(p[0]) != 6 || len(p[2]) != 1 || p[2][0] < '0' || p[2][0] > '3' || path == "" || filepath.IsAbs(path) || strings.HasPrefix(path, "../") {
-			return nil, "", errors.New("malformed native Git index record")
-		}
-		if p[2] != "0" {
-			if i, ok := positions[path]; ok {
-				out[i].kind = "conflict"
-				out[i].xy = "UU"
-			} else {
-				positions[path] = len(out)
-				out = append(out, gitInventoryStatus{kind: "conflict", path: path, xy: "UU"})
-			}
-			continue
-		}
-		v := gitInventoryStatus{kind: "tracked", path: path, xy: ".."}
-		if p[0] == "160000" {
-			v.submodule = true
-			positions[path] = len(out)
-			out = append(out, v)
-			continue
-		}
-		if rawDisk && !inventoryPathSelected(path, filters) {
-			v.unknown = "disk path outside requested literal selection"
-			positions[path] = len(out)
-			out = append(out, v)
-			continue
-		}
-		if !rawDisk {
-			positions[path] = len(out)
-			out = append(out, v)
-			continue
-		}
-
-		st, e := diskRoot.Lstat(path)
-		if os.IsNotExist(e) {
-			v.xy = ".D"
-			signature += "\x00missing:" + path
-		} else if e != nil {
-			v.unknown = "tracked disk path is unreadable"
-			positions[path] = len(out)
-			out = append(out, v)
-			continue
-		} else {
-			data := []byte{}
-			if p[0] == "120000" {
-				if st.Mode()&os.ModeSymlink == 0 {
-					v.xy = ".T"
-				} else {
-					link, e := diskRoot.Readlink(path)
-					if e != nil {
-						return nil, "", e
-					}
-					if len(link) > outputLimit {
-						return nil, "", errors.New("tracked content limit exceeded")
-					}
-					data = []byte(link)
-				}
-			} else if !st.Mode().IsRegular() {
-				v.unknown = "tracked disk path has an unsupported or unsafe file type; content not read"
-				positions[path] = len(out)
-				out = append(out, v)
-				continue
-			} else {
-				if st.Size() > outputLimit {
-					v.unknown = "tracked disk content exceeds 64 KiB per-file observation limit"
-					signature += "\x00oversize:" + path + ":" + st.ModTime().String()
-					positions[path] = len(out)
-					out = append(out, v)
-					continue
-				}
-				f, e := openGitInventoryDisk(diskRoot, path)
-				if e != nil {
-					if strings.Contains(e.Error(), "changed while opening") {
-						return nil, "", e
-					}
-					v.unknown = "tracked disk content could not be safely opened"
-					positions[path] = len(out)
-					out = append(out, v)
-					continue
-				}
-				data, e = readGitInventoryContent(s.ctx, f)
-				after, statErr := f.Stat()
-				f.Close()
-				if e != nil || statErr != nil {
-					if s.ctx.Err() != nil {
-						return nil, "", s.ctx.Err()
-					}
-					v.unknown = "tracked disk content is unreadable"
-					positions[path] = len(out)
-					out = append(out, v)
-					continue
-				}
-				if len(data) > outputLimit {
-					v.unknown = "tracked disk content exceeds 64 KiB per-file observation limit"
-					positions[path] = len(out)
-					out = append(out, v)
-					continue
-				}
-				if st.Size() != after.Size() || !st.ModTime().Equal(after.ModTime()) {
-					return nil, "", errors.New("tracked content changed during inventory")
-				}
-			}
-			var h hash.Hash = sha1.New()
-			if s.format == "sha256" {
-				h = sha256.New()
-			}
-			fmt.Fprintf(h, "blob %d%c", len(data), 0)
-			h.Write(data)
-			oid := fmt.Sprintf("%x", h.Sum(nil))
-			signature += "\x00" + path + ":" + oid + ":" + st.Mode().String()
-			if v.xy != ".T" && (oid != p[1] || filemode && p[0] != "120000" && (st.Mode()&0111 != 0) != (p[0] == "100755")) {
-				v.xy = ".M"
-			}
-		}
-		positions[path] = len(out)
-		out = append(out, v)
-	}
-	raw, c, e = s.command(dir, "diff", "--cached", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", "--")
-	if e != nil || c != 0 {
-		return nil, "", errors.New("cannot observe staged Git files")
-	}
-	signature += raw
-	staged, e := parseGitInventoryDiff(raw, "staged")
-	if e != nil {
-		return nil, "", e
-	}
-	for _, f := range staged {
-		code := byte('M')
-		switch f.Change {
-		case "added":
-			code = 'A'
-		case "deleted":
-			code = 'D'
-		case "renamed":
-			code = 'R'
-		case "copied":
-			code = 'C'
-		case "conflict":
-			code = 'U'
-		}
-		if i, ok := positions[f.Path]; ok {
-			v := &out[i]
-			v.xy = string([]byte{code, v.xy[1]})
-			v.old = f.OldPath
-		} else {
-			positions[f.Path] = len(out)
-			out = append(out, gitInventoryStatus{kind: "tracked", path: f.Path, xy: string([]byte{code, '.'}), old: f.OldPath})
-		}
-	}
-	for _, ignored := range []bool{false, true} {
-		if ignored && !gitInventoryHasScope(scopes, "ignored") || !ignored && !gitInventoryHasScope(scopes, "untracked") {
-			continue
-		}
-		args := []string{"ls-files", "--others", "--exclude-standard", "-z"}
-		kind := "untracked"
-		if ignored {
-			args = append(args, "--ignored")
-			kind = "ignored"
-		}
-		if len(filters) > 0 {
-			args = append(args, "--")
-			args = append(args, filters...)
-		}
-		args = append([]string{"--literal-pathspecs"}, args...)
-		raw, c, e = s.command(dir, args...)
-		if e != nil || c != 0 {
-			return nil, "", errors.New("cannot enumerate native Git untracked/ignored paths")
-		}
-		signature += raw
-		paths, e := gitInventoryNUL(raw)
-		if e != nil {
-			return nil, "", e
-		}
-		for _, path := range paths {
-			if len(out) >= inventoryRecordLimit {
-				return nil, "", errors.New("inventory record limit exceeded")
-			}
-			out = append(out, gitInventoryStatus{kind: kind, path: path})
-		}
-	}
-	// Keep index entries for submodule qualification, but omit unchanged normal files.
-	filtered := out[:0]
-	for _, v := range out {
-		if v.xy != ".." || v.submodule || v.unknown != "" {
-			filtered = append(filtered, v)
-		}
-	}
-	return filtered, signature, nil
-}
-func parseGitInventoryDiff(raw, scope string) ([]InventoryFile, error) {
-	records, e := gitInventoryNUL(raw)
-	if e != nil {
-		return nil, e
-	}
-	out := []InventoryFile{}
-	for i := 0; i < len(records); i++ {
-		code := records[i]
-		if code == "" || i+1 >= len(records) {
-			return nil, errors.New("malformed native Git diff")
-		}
-		i++
-		f := InventoryFile{Path: records[i], Scope: scope, Limitations: []string{}}
-		switch code[0] {
-		case 'A':
-			f.Change = "added"
-		case 'M', 'T':
-			f.Change = "modified"
-		case 'D':
-			f.Change = "deleted"
-		case 'R', 'C':
-			f.OldPath = ptr(f.Path)
-			i++
-			if i >= len(records) {
-				return nil, errors.New("malformed Git rename")
-			}
-			f.Path = records[i]
-			f.Change = "renamed"
-			if code[0] == 'C' {
-				f.Change = "copied"
-			}
-		case 'U':
-			f.Change = "conflict"
-		default:
-			return nil, errors.New("unknown Git change")
-		}
-		if len(out) >= inventoryRecordLimit {
-			return nil, errors.New("inventory record limit exceeded")
-		}
-		out = append(out, f)
-	}
-	return out, nil
-}
-
 // Reference predicates collect no unrelated disk/workspace observations.
 func (s gitInventorySession) referencePredicate(id Result, o InventoryOptions) InventoryResult {
 	r := newInventoryResult(id)
 	q := &InventoryQuery{Predicate: o.Query, Value: "unknown", Reason: "requested native reference evidence unavailable", Evidence: []string{}}
 	r.Query = q
-	const format = "--format=%(refname)%00%(objectname)%00%(upstream)%00%(symref)%00%(objecttype)%00%(*objectname)%00%(*objecttype)%00"
-	raw, c, e := s.command(id.InputPath, "for-each-ref", format)
-	if e != nil || c != 0 {
-		return r.fail("git-inventory-failed", "cannot enumerate Git predicate references")
-	}
-	refs, e := parseGitInventoryRefs(raw, s.format)
-	if e != nil {
-		return r.fail("invalid-metadata", e.Error())
+	refs, digest, code, msg := s.scanReferences(id.InputPath, true)
+	if code != "" {
+		if code == "git-inventory-failed" {
+			msg = "cannot enumerate Git predicate references"
+		}
+		return r.fail(code, msg)
 	}
 	r.References = refs
 	if o.Query == "ref-exists" {
@@ -1213,16 +969,32 @@ func (s gitInventorySession) referencePredicate(id Result, o InventoryOptions) I
 			q.Evidence = []string{*from, *to}
 		}
 	}
-	last, c, e := s.command(id.InputPath, "for-each-ref", format)
-	if e != nil || c != 0 {
-		return r.fail("git-inventory-failed", "cannot recheck Git predicate references")
+	_, last, lcode, lmsg := s.scanReferences(id.InputPath, false)
+	if lcode != "" {
+		if lcode == "git-inventory-failed" {
+			lmsg = "cannot recheck Git predicate references"
+		}
+		return r.fail(lcode, lmsg)
 	}
-	if last != raw {
+	if last != digest {
 		return r.fail("changed-repository", "Git references changed during inventory")
 	}
 	head, e := readHead(s.ctx, s.run, id.InputPath, id.Repository.ObjectFormat)
 	if e != nil || head.State != id.Repository.Head.State || !sameGitInventoryOID(head.OID, id.Repository.Head.OID) || !sameGitInventoryOID(head.Ref, id.Repository.Head.Ref) {
 		return r.fail("changed-repository", "Git HEAD changed during inventory")
+	}
+	var notes []string
+	if kept := truncateReferences(r.References, inventoryRecordLimit); len(kept) < len(r.References) {
+		notes = append(notes, txtRefsTruncated(len(r.References)-len(kept)))
+		r.References = kept
+	}
+	queryKnown := q.Value != "unknown"
+	applyTruncationNotes(&r, notes, queryKnown)
+	if checkInventoryLimits(r) != nil {
+		applyTruncationNotes(&r, []string{txtResultTrimmed}, queryKnown)
+		if !fitInventoryBytes(&r) {
+			return r.fail("inventory-limit", "inventory result exceeded its safe byte bound without trimming branches")
+		}
 	}
 	if e := checkInventoryLimits(r); e != nil {
 		return r.fail("inventory-limit", e.Error())
@@ -1230,32 +1002,24 @@ func (s gitInventorySession) referencePredicate(id Result, o InventoryOptions) I
 	return r
 }
 
-func readGitInventoryContent(ctx context.Context, f *os.File) ([]byte, error) {
-	data := []byte{}
-	buffer := make([]byte, 4096)
-	for {
-		if e := ctx.Err(); e != nil {
-			return nil, e
-		}
-		n, e := f.Read(buffer)
-		if n > 0 {
-			data = append(data, buffer[:n]...)
-			if len(data) > outputLimit {
-				return data, nil
-			}
-		}
-		if e == io.EOF {
-			return data, nil
-		}
-		if e != nil {
-			return nil, e
-		}
-	}
-}
-
 func gitInventoryHasScope(scopes []string, want string) bool {
 	for _, scope := range scopes {
 		if scope == want {
+			return true
+		}
+	}
+	return false
+}
+
+// inventoryRecordBudget is the number of records left for files and references (DEG-10).
+func inventoryRecordBudget(workspaces, bases int) (int, bool) {
+	left := inventoryRecordLimit - workspaces - bases
+	return left, left >= 0
+}
+
+func hasString(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
 			return true
 		}
 	}

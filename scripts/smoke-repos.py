@@ -247,8 +247,11 @@ def acceptance(binary=BINARY, want_jj=None):
 
         # Discovery: the initialized submodule is an entry, the uninitialized one is skipped.
         subs = [entry for entry in output['entries'] if entry['origin'] == 'submodule']
-        assert [(entry['path'], entry['status'], entry['parent']) for entry in subs] == [('vendor/lib', 'ok', 3), ('vendor/lib', 'skipped', 4)], subs
-        assert subs[0]['facts']['dirty']['value'] == 'unknown' and subs[0]['notes'], subs[0]
+        assert [(entry['path'], entry['status'], entry['parent']) for entry in subs] == [('vendor/lib', 'partial', 3), ('vendor/lib', 'skipped', 4)], subs
+        # Spec 027 CK-1: the checkout is inventoried. The planted filter configuration makes raw comparisons
+        # non-authoritative (partial, inventory-partial) and the planted untracked .gitattributes makes it dirty.
+        assert subs[0]['error']['code'] == 'inventory-partial' and subs[0]['facts']['dirty']['value'] == 'true', subs[0]
+        assert not any('dirty is unknown' in note for note in subs[0]['notes']), subs[0]
         assert subs[1]['error']['code'] == 'submodule-uninitialized' and subs[1]['inventory'] is None
         assert output['summary']['skipped_uninitialized'] == 1
         completed.add('G.submodules')
