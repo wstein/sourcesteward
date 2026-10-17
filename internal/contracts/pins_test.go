@@ -250,7 +250,7 @@ func TestPinsOperationResultsValidateAgainstSchema(t *testing.T) {
 		t.Helper()
 		c := exec.Command("git", args...)
 		c.Dir = dir
-		c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+		c.Env = append(append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"), noAutoMaintenance...)
 		if out, err := c.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %s", args, out)
 		}
@@ -314,7 +314,7 @@ func TestPinsIncidentResultValidatesAgainstSchema(t *testing.T) {
 		t.Helper()
 		c := exec.Command("git", append([]string{"-c", "protocol.file.allow=always", "-c", "user.name=T", "-c", "user.email=t@e.invalid"}, args...)...)
 		c.Dir = dir
-		c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+		c.Env = append(append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"), noAutoMaintenance...)
 		if out, err := c.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %s", args, out)
 		}
