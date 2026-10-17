@@ -45,6 +45,7 @@ Fixtures for the files in `./assets` are produced by the test helper (`SHA256SUM
 
 ## 4. The owner's release (needs explicit approval at every numbered step, none is automated)
 
+0. Readiness: the tag ruleset exists (`stw release plan ... --online` reports `advisory tag-ruleset: present`; `absent` or `unknown` means check the setting by hand and do not tag).
 1. Choose C: a commit on `main` that CI ran on (normally the tip after a merge) and a version greater than every existing tag and release of the product.
 2. `stw release plan C --version V --online` must show verdict `pass`.
 3. Approve the build in your task context, then `stw release dispatch --commit C --version V` (prints the plan and `plan_id`), then `stw release dispatch ... --apply <plan_id>`. This starts one CI build, attests the files and keeps a **draft** release. Nothing is tagged or published. Do not publish the draft in the web UI (it would create a lightweight tag).
@@ -69,5 +70,7 @@ Documentation only; the tool never changes settings.
 - Optional: a repository variable is not used by these workflows.
 
 ## Rehearsal checklist for the unverified GitHub behavior (before the first real release)
+
+Do this in a **disposable repository**, before WI10, and only with the owner's explicit approval (it dispatches a build there).
 
 Run once with a throwaway version label (a draft is deleted by hand afterward; nothing is tagged): dispatch the build workflow for a commit that is not the tip of `main`; confirm the draft exists with the assets, that the web view shows it as untagged, that `releases/tags/{tag}` does not list it, that the releases list does, that assets download by id, and that `gh attestation verify` verifies a downloaded file against the build workflow. Record the observations in the verification note; if any contradicts research items 1 to 3, switch to the workflow-artifact fallback before WI10.

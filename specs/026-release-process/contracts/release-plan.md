@@ -71,7 +71,7 @@ Repository text (paths, names, tags, argv) has control characters escaped; the a
 
 ## JSON
 
-One `ReleasePlanResult` per invocation, validated by `schemas/v1/release-plan.schema.json`: `schema_version`, `command: "release-plan"`, `status` (`ok`, `refused`, `error`), `mode` (`build` or `publish`), `backend`, `subject` (`product` or `null`, `commit`, `tag` or `null`, `version`, `tag_commit` or `null`, `record_commit` or `null`, `main_ref` with `remote`, `commit` and `fetched: false`), `gates` (array of `{code, outcome, reason, detail}`; `outcome` is `pass`, `fail`, `not-run`, `not-applicable`), `verdict` (`pass`, `fail`, `incomplete`), `would_build` (array of builds with `id`, `scope`, `network`, `network_hosts`, `lock_files`, `invocations` of `{target, argv}`; empty in publish mode; the argv is displayed, never run), `would_publish` (the record's asset names, or empty), `network` (array of `{method: "GET", endpoint}` actually requested), `boundary` (`effects`, `limits`, `complete`), `error`. Example (a gate failure):
+One `ReleasePlanResult` per invocation, validated by `schemas/v1/release-plan.schema.json`: `schema_version`, `command: "release-plan"`, `status` (`ok`, `refused`, `error`), `mode` (`build` or `publish`), `backend`, `subject` (`product` or `null`, `commit`, `tag` or `null`, `version`, `tag_commit` or `null`, `record_commit` or `null`, `main_ref` with `remote`, `commit` and `fetched: false`), `gates` (array of `{code, outcome, reason, detail}`; `outcome` is `pass`, `fail`, `not-run`, `not-applicable`), `verdict` (`pass`, `fail`, `incomplete`), `would_build` (array of builds with `id`, `scope`, `network`, `network_hosts`, `lock_files`, `invocations` of `{target, argv}`; empty in publish mode; the argv is displayed, never run), `would_publish` (the record's asset names, or empty), `network` (array of `{method: "GET", endpoint}` actually requested), `advisories` (array of `{code, state, detail}`; today `tag-ruleset` with state `present`, `absent` or `unknown`, read with a bounded GET of the repository rulesets when `--online`, `unknown` offline or when the token cannot read them; an advisory never changes the verdict or the exit status and `stw` never changes the setting), `boundary` (`effects`, `limits`, `complete`), `error`. Example (a gate failure):
 
 ```json
 {"schema_version":1,"command":"release-plan","status":"ok","mode":"publish","backend":"git",
@@ -82,6 +82,10 @@ One `ReleasePlanResult` per invocation, validated by `schemas/v1/release-plan.sc
  "verdict":"fail","would_build":[],"would_publish":["stw_0.2.0_linux_amd64.tar.gz"],"network":[],
  "boundary":{"effects":{"network":false,"writes":false,"processes":"git","project_commands":false},"limits":{"max_diff_entries":20000},"complete":true},"error":null}
 ```
+
+## Advisories
+
+The tag-ruleset advisory (decision D11) answers "does a tag ruleset restrict creation of the product's tag pattern to the owner" from the repository rulesets endpoint (the endpoint's permission needs and response shape are unverified). It is reported in the human output as `advisory tag-ruleset: absent` with the click path in the quickstart, and is the readiness check the owner reads before the first tag.
 
 ## Effects
 

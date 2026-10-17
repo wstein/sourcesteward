@@ -81,15 +81,22 @@
 
 ## WI10 - `stw` bootstrap release preparation (needs owner approval before any run or tag)
 
-- [ ] T043 [FR-024, DD26] Add the missing Cobra and pflag notices to third_party/README.md (test: notices cover the module closure of ./cmd/stw); add scripts/release-package.sh and scripts/release-smoke.sh (own-script adapter), the stamp test skipped unless `STW_RELEASE_VERSION` is set, and .stw/release.toml (the go-cli example adapted); `make check` runs `stw release check` on it. Unit tests with a fake compiler; no real build.
+- [ ] T043 [FR-024, FR-028, DD26] (readiness list: tag ruleset advisory `present`, owner-applied; stw never changes it) Add the missing Cobra and pflag notices to third_party/README.md (test: notices cover the module closure of ./cmd/stw); add scripts/release-package.sh and scripts/release-smoke.sh (own-script adapter), the stamp test skipped unless `STW_RELEASE_VERSION` is set, and .stw/release.toml (the go-cli example adapted); `make check` runs `stw release check` on it. Unit tests with a fake compiler; no real build.
 - [ ] T044 [FR-024] Add .github/workflows/release-bootstrap.yml per contracts/bootstrap.md (build job without `id-token`, separate `attest` job) with the rule tests of WI8; no run.
-- [ ] T045 [FR-024] Owner-approved dry run only: **requires explicit approval**; otherwise leave unchecked. Rehearse per the quickstart rehearsal checklist (it rehearses the build workflow and the draft; the bootstrap workflow gets its own dry run with a suffixed label).
+- [ ] T045 [FR-024] Owner-approved dry run only, in a **disposable repository** and before the bootstrap workflow is relied on: **requires explicit approval**; otherwise leave unchecked. Does not proceed while the tag-ruleset advisory is `absent`. Rehearse per the quickstart rehearsal checklist (it rehearses the build workflow and the draft; the bootstrap workflow gets its own dry run with a suffixed label).
 
 ## WI11 - Acceptance evidence and the self-hosting switch
 
 - [ ] T046 [FR-020, SC-001 to SC-009] Run `make check`, `go test -race ./...`, `python3 scripts/check-architecture.py`, the smoke scripts and the release conformance lanes; record exact versions, platforms and outcomes in specs/026-release-process/verification.md, labelling arm64 and darwin results as local evidence and listing everything not run (jj lanes, GitHub behavior).
 - [ ] T047 [FR-024, FR-027] (the record commit R must follow the tag on `main` before any code lands) After the owner's `v0.1.0` release by the bootstrap workflow (separately authorized, not part of this task list's execution): add docs/releases/v0.1.0.json via `stw release record --signer-workflow-file .github/workflows/release-bootstrap.yml` (record commit R), verify it with `stw release verify v0.1.0 --published --record-commit R --artifacts DIR --online --signer-workflow-file .github/workflows/release-bootstrap.yml --source-ref refs/tags/v0.1.0`, remove release-bootstrap.yml, document the first self-hosted release procedure; the first self-hosted release is the owner's separately authorized step.
 - [ ] T048 [FR-019] Update docs/progress.md, docs/feature-status.json and the roadmap with the actual evidence; keep release, tag, publication, new CI platforms and consumer activation out of this feature.
+
+## Wave-2 preconditions (binding, decision D10; tracked here, implemented in the BundleDock repository)
+
+- [ ] T049 [FR-028, US7] P1: tests for `monotonicity = "non-decreasing"` (restart accepted, date regression refused, existing full tag refused, strict default unchanged) and the example 2 fixture; in WI2 with T009.
+- [ ] T050 [FR-028, FR-018] P2: workflow rule test that the image-capable variants reference exactly one secret, only in the pinned registry-login step, and that no contract field names a credential; in WI8.
+- [ ] T051 [FR-028, FR-003] P3: record rule `tags == [version]` and a `promote` test that adds no other tag; the aliases `stable` and `latest` are documented as a separate, separately authorized step outside the release; in WI7 and WI9.
+- [ ] T052 [FR-028] Tag-ruleset advisory (`present|absent|unknown`) in `plan --online`, never altering the verdict (bounded GET, unverified endpoint); in WI5.
 
 ## Dependencies
 

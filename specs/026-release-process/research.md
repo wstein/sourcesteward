@@ -69,9 +69,14 @@ A `workflow_dispatch` run executes the workflow file of `main`'s tip and its `gi
 | DD11 | Owner-only actor checks in the workflows | an allow-list from the contract | identical to the siblings, fails closed; organization support needs its own design |
 | DD12 | Two workflows (build and publish) plus a repro workflow | one workflow with roles | the attestation signer is the build workflow; the publish workflow has no build step and different permissions, which is easier to test by rule |
 | DD13 | Version in the release is `v`-prefixed for semver and stamped by the project through placeholders | stamping from Git (`git describe`) | tag independence (D1) |
+| DD36 | `monotonicity = "non-decreasing"` for `pattern` products | making `calver` accept counter restarts; dropping monotonicity for bundles; a separate counter scheme | BundleDock documents a restarting `-bN` counter; the date must still never go back; keeping `strict` the default and `calver` strict preserves the siblings' rule |
 | DD14 | No `tag_commit` field in the record | recording the tag commit | self-reference impossible; consumers resolve the tag; `verify --json` prints it |
 | DD34 | One contract file per product; product discovered from the file name and the tag grammar | nesting products in one file (the strict profile has no nested tables); one global tag grammar | the profile forbids nesting; per-product files are machine-writable (JSON) for a mirror with many components |
 | DD35 | `fetch` is a declared property of a build, not a build kind | a separate `kind = "fetch"` target type with its own runner | keeps one execution path; the effect is what matters and is disclosed |
+
+## Owner decisions of 2026-10-17
+
+Recorded in spec D10 and D11 and in the analysis decision log: amendment undecided; `tag_commit` omitted; wave-2 preconditions P1 to P3 for the toolbox bundle; dispatch-only reproducibility; draft retention with workflow-artifact fallback and a disposable-repository rehearsal; owner-only actor limit accepted; `build` and `verify --published` kept; the tag ruleset as a required precondition that `stw` only reports. The registry login item adds one named secret to the image-capable workflow variants; that widens the sibling "no secrets" rule in one step and is the price of quay.io.
 
 ## Reuse and drops from the release-hygiene draft
 
