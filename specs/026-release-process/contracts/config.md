@@ -36,6 +36,7 @@ Top-level keys: `schema_version` (integer 1), tables `project`, `version`, `outp
 | | `tag_template` | string | for `pattern` only: the tag as a template with exactly one `{version}` (for example `zlib-v{version}`) |
 | | `tag_pattern` | string | for `pattern` only: RE2 of the form `^<literal prefix>(?P<version>...)<literal suffix>$` with exactly one top-level `version` group; the literal prefix and suffix (characters `[A-Za-z0-9._/-]`) must equal the template's, so version to tag to version is the identity |
 | | `order` | array of strings | for `pattern` only: named numeric groups, at most 8 |
+| | `monotonicity` | `strict` or `non-decreasing`, default `strict` | for `pattern` only: `strict` requires the new version's `order` tuple to be greater than every existing one; `non-decreasing` requires it to be greater than or equal to the maximum existing tuple and the full tag not to exist yet, so groups that are **not** listed in `order` (a build counter) may restart within the same ordered tuple (for example `2026.10.15-b1` after `2026.10.15-b98.1` with `order` of year, month and day) |
 | | `source` | `input` or `file` | where the version is declared (`input` = the dispatch input / tag) |
 | | `file` | path | for `source = "file"`: repository file that must contain the version at C |
 | | `file_pattern` | string | for `source = "file"`: RE2 multi-line pattern with exactly one capture group holding the version (compared as `{version}` or `{version_number}` per `file_form`) |
@@ -112,6 +113,7 @@ A `per-target` build runs once for each target that references it, with that tar
         "tag_prefix": {"type": "string", "pattern": "^([a-z0-9._-]+/)*$", "maxLength": 64},
         "tag_template": {"type": "string", "pattern": "^[A-Za-z0-9._/{}-]{1,128}$"},
         "tag_pattern": {"type": "string", "minLength": 1, "maxLength": 256},
+        "monotonicity": {"enum": ["strict", "non-decreasing"]},
         "order": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,15}$"}, "minItems": 1, "maxItems": 8},
         "source": {"enum": ["input", "file"]},
         "file": {"$ref": "#/$defs/path"},
@@ -119,7 +121,7 @@ A `per-target` build runs once for each target that references it, with that tar
         "file_form": {"enum": ["with-v", "without-v"]}
       },
       "allOf": [
-        {"if": {"properties": {"scheme": {"const": "pattern"}}}, "then": {"required": ["tag_pattern", "tag_template", "order"], "not": {"required": ["tag_prefix"]}}, "else": {"not": {"anyOf": [{"required": ["tag_pattern"]}, {"required": ["tag_template"]}, {"required": ["order"]}]}}},
+        {"if": {"properties": {"scheme": {"const": "pattern"}}}, "then": {"required": ["tag_pattern", "tag_template", "order"], "not": {"required": ["tag_prefix"]}}, "else": {"not": {"anyOf": [{"required": ["tag_pattern"]}, {"required": ["tag_template"]}, {"required": ["order"]}, {"required": ["monotonicity"]}]}}},
         {"if": {"properties": {"source": {"const": "file"}}}, "then": {"required": ["file", "file_pattern", "file_form"]}, "else": {"not": {"anyOf": [{"required": ["file"]}, {"required": ["file_pattern"]}, {"required": ["file_form"]}]}}}
       ]
     },

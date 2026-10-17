@@ -66,7 +66,7 @@ tag_pattern = '^opentofu/(?P<version>(?P<major>[0-9]{1,9})\.(?P<minor>[0-9]{1,9}
 order = ["major", "minor", "patch", "build"]
 ```
 
-The product is the unit of comparison: its monotonicity set is every tag that fully matches this grammar. Each product has its own file (`.stw/release.opentofu.toml`).
+`monotonicity` is `strict` (default) or `non-decreasing`; the latter requires the new `order` tuple to be greater than or equal to the maximum in the set and the full tag not to exist, so counters outside `order` may restart (toolbox example). The product is the unit of comparison: its monotonicity set is every tag that fully matches this grammar. Each product has its own file (`.stw/release.opentofu.toml`).
 
 ### DispatchPlan
 
