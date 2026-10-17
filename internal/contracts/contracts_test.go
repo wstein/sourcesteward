@@ -323,6 +323,8 @@ func TestPublishedV1Bytes(t *testing.T) {
 	for name, want := range map[string]string{
 		"inspect": "8e12ee38a3e065e1f2e47b88ec4b1668cd8a32d8879e4803870e8994a9cfcfae",
 		"version": "886864837547ded4992af89e8e8e04d38fe7bf77724f91a8960a184c51a0659f",
+		// Spec 027 keeps the inventory schema byte-identical to main at f91c1e0 (COMPAT-1).
+		"inventory": "8a8aeb281ca24c91809ea8fc95e83655d5a459afce51b1993965c9fa25a805f8",
 	} {
 		raw, err := os.ReadFile(filepath.Join(root(t), "schemas/v1", name+".schema.json"))
 		if err != nil {
