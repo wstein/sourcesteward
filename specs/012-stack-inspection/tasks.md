@@ -95,9 +95,33 @@ T001 gates all code; T002 gates WI3 only. WI1 first (pure, no I/O). WI2 and WI3 
 | SC-004 | T013, T018, T021, T024, T030, T031 |
 | SC-005 | T003, T020 |
 | SC-006 | T006, T030 |
-| SC-007 | T033 |
+| SC-007 | T001, T033 and the FR-to-scenario map below |
 | US1 | T008, T009, T016, T021 |
 | US2 | T004, T006, T010, T011, T017, T029 |
 | US3 | T004, T025, T027, T028, T029 |
 | US4 | T014, T015, T019, T020, T030 |
 | US5 | T006, T013, T032, T034 |
+
+## FR-to-scenario map (SC-007 traceability)
+
+Scenarios are those of [spec.md](spec.md); `USn.k` is acceptance scenario k of User Story n, `8a` the evidence-based reconcile scenario of User Story 2.
+
+| FR | Acceptance scenarios |
+| --- | --- |
+| FR-001 | US1.1, US4.1 |
+| FR-002 | US1.1, US1.2, US2.2 |
+| FR-003 | US1.5, US2.2, US4.4 |
+| FR-004 | US1.1, US1.2, US1.3, US1.4, US2.8a |
+| FR-005 | US4.4 |
+| FR-006 | US1.3, US2.1, US2.3, US3.1 to US3.6 |
+| FR-007 | US3.1 to US3.6 |
+| FR-008 | US3.5 |
+| FR-009 | US2.8, US2.8a, US3.1, US3.4, US5.1 |
+| FR-010 | US2.1 to US2.11, US5.2 |
+| FR-011 | US4.3 |
+| FR-012 | US4.3 |
+| FR-013 | US4.1 |
+| FR-014 | US4.2 |
+| FR-015 | US4.4, US5.1 |
+| FR-016 | US1.5, US4.4 (conformance lanes) |
+| FR-017 | verified by T033 (dependency and architecture checks) |
