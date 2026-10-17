@@ -87,7 +87,7 @@ func TestPinsConfigFromObjectBoundaryIsExact(t *testing.T) {
 	repo := pinsGitRepo{GitDir: filepath.Join(f.Super, ".git"), WorkTree: f.Super}
 	for _, limit := range []int{200, 65536, 1 << 20} {
 		for delta, want := range map[int]bool{-1: true, 0: true, 1: false} {
-			commitGitmodules(t, f, gitmodulesOfSize(t, limit+delta, "member", f.Sub))
+			commitGitmodules(t, f, gitmodulesOfSize(t, limit+delta, "member", "/u")) // a short constant URL: the temp path must not decide the size
 			_, ok, err := pinsConfigFromObject(run, repo, "", "HEAD:.gitmodules", limit)
 			if err != nil || ok != want {
 				t.Errorf("limit %d, blob %d: ok=%v err=%v, want %v", limit, limit+delta, ok, err, want)
