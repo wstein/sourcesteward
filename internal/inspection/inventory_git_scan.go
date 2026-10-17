@@ -485,14 +485,18 @@ func (s gitInventorySession) workspaceTransforms(dir string, filters []string) (
 			attr = string(rec)
 		case 2:
 			value := string(rec)
-			if value == "unspecified" || value == "unset" {
-				return nil
-			}
+			// check-attr prints "unset" and "unspecified" both for those states and for a literal value of
+			// that name, which Git passes to a driver of that name: a configured driver counts either way
+			// (a driver named "unset" next to a real unset attribute is a conservative false positive).
+			// For text, eol, ident and working-tree-encoding a literal "unset" has no silent effect in Git:
+			// it is ignored or, for an encoding, an error, never a clean comparison of transformed content.
 			if attr == "filter" {
 				if s.filterNames["filter."+value] {
 					decisive = true
 					return errStreamStop
 				}
+			} else if value == "unspecified" || value == "unset" {
+				return nil
 			} else {
 				decisive = true
 				return errStreamStop

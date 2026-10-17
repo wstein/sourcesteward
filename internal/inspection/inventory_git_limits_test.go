@@ -1039,3 +1039,20 @@ func TestGitInventoryProcessOnlyAndRequiredOnlyFiltersAreTransformations(t *test
 		}
 	}
 }
+
+// Git runs a driver named "unset" or "unspecified" for filter=unset: check-attr prints the same word for
+// the real states, so a configured driver of that name must count as a transformation.
+func TestGitInventoryFilterDriversNamedLikeAttributeStatesAreTransformations(t *testing.T) {
+	isolatedHome(t)
+	for _, name := range []string{"unset", "unspecified"} {
+		d := manyFilesRepo(t, 3, "")
+		git(t, d, "config", "filter."+name+".clean", "cat")
+		os.WriteFile(filepath.Join(d, ".gitattributes"), []byte("d000/file00001.txt filter="+name+"\n"), 0o644)
+		os.WriteFile(filepath.Join(d, "d000", "file00001.txt"), []byte("edited\n"), 0o644)
+		r := gitInventory(t, d, InventoryOptions{})
+		w := r.Workspaces[0]
+		if r.Status != "partial" || w.Tracked.Value != "unknown" || !strings.Contains(w.Tracked.Reason, "transformations") {
+			t.Fatalf("filter=%s: %s %+v", name, r.Status, w)
+		}
+	}
+}
