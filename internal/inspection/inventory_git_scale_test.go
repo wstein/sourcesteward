@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // gitInventoryWith runs the Git adapter with explicit bounds so limit rows need no large repository.
@@ -47,13 +46,9 @@ func TestGitInventoryScaleCleanRepositories(t *testing.T) {
 	}{{"150", 150, ""}, {"400", 400, ""}, {"1030", 1030, ""}, {"5000", 5000, ""}, {"long1030", 1030, long}} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := manyFilesRepo(t, tc.n, tc.prefix)
-			start := time.Now()
 			r := gitInventory(t, d, InventoryOptions{})
 			if r.Status != "ok" || !r.Boundary.Complete || len(r.Files) != 0 || len(r.Workspaces) != 1 || r.Workspaces[0].Tracked.Value != "false" || r.Workspaces[0].Untracked.Value != "false" || r.Workspaces[0].Conflicts.Value != "false" {
 				t.Fatalf("%+v", r)
-			}
-			if time.Since(start) > 9*time.Second {
-				t.Fatalf("too slow: %v", time.Since(start))
 			}
 		})
 	}

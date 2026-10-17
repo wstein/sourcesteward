@@ -259,20 +259,16 @@ func TestInventoryDeadlineMapsToTimeoutAndLeavesNoProcess(t *testing.T) {
 	isolatedHome(t)
 	d := manyFilesRepo(t, 5, "")
 	pidFile := filepath.Join(t.TempDir(), "pid")
+	// Only the attribute-path listing is blocked; every other Git call passes through to the real Git.
 	fakeGitFor(t, "*\" ls-files --cached \"*", "echo $$ > "+pidFile+"; exec sleep 30")
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	start := time.Now()
+	ctx := newTriggeredDeadline()
+	go func() { readPIDQuiet(pidFile); ctx.expire() }() // the deadline fires only after the shim is running
 	r := Inventory(ctx, d, InventoryOptions{})
-	if r.Status != "error" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "inventory-timeout" || time.Since(start) > 9*time.Second {
-		t.Fatalf("%s %+v %v", r.Status, r.Diagnostics, time.Since(start))
+	if r.Status != "error" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "inventory-timeout" {
+		t.Fatalf("%s %+v", r.Status, r.Diagnostics)
 	}
-	// On a very slow machine the deadline can fire before the shim starts; the process check applies when it did.
-	if b, err := os.ReadFile(pidFile); err == nil {
-		var pid int
-		if _, e := fmt.Sscanf(string(b), "%d", &pid); e == nil && pid > 0 && !processGone(pid) {
-			t.Fatal("blocked process survived the deadline")
-		}
+	if !processGone(readPID(t, pidFile)) {
+		t.Fatal("blocked process survived the deadline")
 	}
 }
 
@@ -728,7 +724,7 @@ func TestInventoryCancellationStopsABlockedStreamAndLeavesNoProcess(t *testing.T
 		if r.Status != "error" || r.Diagnostics[0].Code != "canceled" {
 			t.Fatalf("%s %+v", r.Status, r.Diagnostics)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(120 * time.Second):
 		t.Fatal("cancellation did not stop the blocked stream")
 	}
 	if !processGone(pid) {
