@@ -1125,11 +1125,22 @@ func TestGitInventoryAgreesWithGitForTheLegacyCrlfAttribute(t *testing.T) {
 			d := manyFilesRepo(t, 3, "")
 			os.WriteFile(filepath.Join(d, ".gitattributes"), []byte(tc.attributes), 0o644)
 			os.WriteFile(filepath.Join(d, "d000", "file00001.txt"), []byte("content 1\r\n"), 0o644)
-			gitClean := exec.Command("git", "-c", "core.autocrlf=false", "diff", "--quiet")
-			gitClean.Dir = d
-			gitClean.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
-			if clean := gitClean.Run() == nil; clean != tc.converts {
-				t.Fatalf("fixture: git reports clean=%v, the case expects conversion=%v", clean, tc.converts)
+			// Ground truth from Git itself. A converted CRLF copy is clean for `git diff` (which converts before it
+			// compares; `git status` still lists such a stat-dirty file, so it cannot be used for these cases). A
+			// copy that no conversion applies to is modified for `git status`; `git diff --quiet` is not used for
+			// it because Git 2.46.0 reports a modified file with the -diff attribute (the binary macro) as clean.
+			git := func(args ...string) ([]byte, error) {
+				c := exec.Command("git", append([]string{"-c", "core.autocrlf=false"}, args...)...)
+				c.Dir = d
+				c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+				return c.Output()
+			}
+			if tc.converts {
+				if _, err := git("diff", "--quiet"); err != nil {
+					t.Fatalf("fixture: git diff reports a change, the case expects the conversion to make it clean: %v", err)
+				}
+			} else if out, err := git("status", "--porcelain", "--untracked-files=no"); err != nil || len(out) == 0 {
+				t.Fatalf("fixture: git status reports no change (%q %v), the case expects an unconverted modification", out, err)
 			}
 			r := gitInventory(t, d, InventoryOptions{})
 			w := r.Workspaces[0]
