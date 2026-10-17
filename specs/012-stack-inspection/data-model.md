@@ -9,6 +9,7 @@ Types live in `internal/inspection` (local observation, plan) and `internal/host
 | `schema_version` | integer | constant 1 |
 | `kind` | string | constant `stack` |
 | `mode` | `show` \| `plan` | from the command |
+| `after_fetch` | boolean | whether `--after-fetch` was given (always `false` for `show`) |
 | `status` | `ok` \| `incomplete` \| `error` | spec status table |
 | `backend` | `git` \| `jj` \| `gitbutler` \| `ambiguous` \| `unknown` | as the hosting result |
 | `identity` | native identity or `null` | the existing identity shapes, copied into the schema (drift-guarded) |
@@ -49,7 +50,7 @@ Invariants: `landed` `applied` implies every commit is patch-equivalent; layers 
 
 ## Upstream
 
-`ref` (name of the configured upstream or tracked remote bookmark), `commit_id` (or `null` when the object is absent), `relation` (`same`, `ahead`, `behind`, `diverged`, `unknown`).
+`ref` (name of the configured upstream or tracked remote bookmark), `commit_id` (or `null` when the object is absent), `relation` (`same`, `ahead`, `behind`, `diverged`, `unknown` when the upstream ref exists but its object is absent, `gone` when an upstream is configured but its ref no longer exists; then `commit_id` is `null`).
 
 ## PullRequestRef
 
@@ -103,6 +104,7 @@ Source `outcome` is `ok`, `denied`, `not-found`, `rate-limited`, `failed` or `sk
 | `layer-checked-out-elsewhere` | `worktrees` (string[], at most 8) |
 | `capability-unavailable` | `capability` (`patch-equivalence`) |
 | `layer-conflicted`, `layer-immutable` | `commits` (commit id[], at most 8) |
+| `layer-ref-deleted` | `refs` (string[], deleted remote bookmark names, at most 8) |
 | `pull-request-missing` | `refs` (string[] looked up) |
 | `pull-request-ambiguous` | `numbers` (integer[], at most 5), `truncated` (boolean, true when the page was full) |
 | `pull-request-closed-unmerged` | `number` |
@@ -135,6 +137,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `capability-unavailable` | {capability} is not available for jj; pull request evidence can supply it. |
 | `layer-conflicted` | Layer {layer} contains conflicted commits. |
 | `layer-immutable` | Layer {layer} contains immutable commits. |
+| `layer-ref-deleted` | Layer {layer} contains commits whose remote bookmarks were deleted: {refs}; they have probably landed. |
 | `pull-request-missing` | No pull request from this repository was found for layer {layer} ({refs}). |
 | `pull-request-ambiguous` | Layer {layer} has several candidate pull requests: {numbers}. |
 | `pull-request-closed-unmerged` | The pull request for layer {layer} is closed and not merged. |
@@ -153,7 +156,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Field | Type | Notes |
 | --- | --- | --- |
 | `advisory` | boolean | constant `true` |
-| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name` |
+| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `layer-ref-deleted`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name` |
 | `native_checked` | boolean | `true` only under the exact condition of the Plan rules (remote section present and the pull request and native stack sources `ok`); `false` otherwise, including `--pull-requests` with a failed remote read (the boundary then carries the native-stack limitation) |
 | `steps` | Step[] | at most 64, ordered |
 
@@ -164,7 +167,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `id` | string | `s1`, `s2`, … |
 | `kind` | `fetch` \| `rebase` \| `link` \| `observe` | |
 | `note` | `run-again` \| `object-unreachable` \| `stale-base` \| `take-upstream` \| `native-rewrite-pending` \| `upstream-ahead` \| `push-needed` \| `diverged-undecided` \| `null` | fixed text for `observe` steps; `null` otherwise |
-| `layer` | integer or `null` | layer the step rewrites; `null` for `fetch`, `link` and `observe` |
+| `layer` | integer or `null` | layer the step rewrites or describes; `null` for `fetch`, `link` and the `run-again` observe; set for every other `observe` (one step per affected layer, ordered by layer index bottom first) |
 | `findings` | string[] | codes that cause the step |
 | `effect` | `none` \| `local-network-read` \| `local-history-rewrite` \| `remote-write` | `observe` is `none`, `fetch` is `local-network-read`, `rebase` is `local-history-rewrite` (when run, checks out the layer branch and needs a clean worktree; the jj step also moves the working-copy commit with its uncommitted edits and every bookmark or commit descending from the moved change), `link` is `remote-write` (pushes unpushed commits, fast-forward only) |
 | `performed_by` | `maintainer` \| `gh-stack` | `gh-stack` only for `link` |

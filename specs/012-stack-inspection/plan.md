@@ -67,7 +67,7 @@ Every Git invocation runs through the Spec 021 isolated runner (`pinsRunner`, `p
 - `rev-list --topo-order --parents --max-count=501 BASE..TIP --`, and `rev-list --count --max-count=10001 FORK..BASE --`.
 - `for-each-ref --format=<fixed> --contains BOTTOM --merged TIP refs/heads` (layer references), `for-each-ref --contains LAYERTIP --no-merged TIP refs/heads` (fork-point references, one call per layer, results bounded to 21 names), and `for-each-ref --format=<fixed with %(upstream)> refs/heads/NAME`.
 - `merge-base --is-ancestor A B` (landed tip, upstream relation, pull request head relation).
-- `cherry BASE TIP` (no `-v`; commit ids and marks only).
+- `cherry BASE TIP` and, for a diverged non-native layer only, `cherry LAYERTIP UPSTREAM` (no `-v`; commit ids and marks only; the second shows whether every upstream-only commit is already present as a patch).
 - `worktree list --porcelain -z` (checked-out-elsewhere).
 - `rev-list --no-walk --parents --format=%s IDS` for bounded subjects, and `rev-list --parents -n1 SHA` for a merge commit's parent count.
 - `cat-file -e SHA^{commit}` (object existence by exit status; no object content is read).
