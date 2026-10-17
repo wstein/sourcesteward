@@ -150,3 +150,23 @@ Recorded from the owner's reply on pull request sourcesteward#56. **No further r
 | 8 | Tag ruleset (creation restricted to the owner) is a REQUIRED precondition before the first tag; an owner-applied setting that `stw` may only report | spec D11, FR-028, release-plan.md advisory (`tag-ruleset`), bootstrap.md preconditions, quickstart readiness step 0, T043, T045, T052 |
 
 Mechanical re-check by the author only: example 2 (now a `pattern` product) validates against the updated config schema together with the other five contracts, and its tag pattern was run in Go (`toolbox/2026.10.15-b98.1`, `-b1` and the bare date match; extra components and another prefix do not). Open questions 3 to 7 of the earlier handoff are closed; the amendment and the unverified GitHub behavior remain open.
+
+## Round 5
+
+Review of revision 7ecaea8 (after the merge of the specification as pull request #56): READY, 0 high, 2 medium, 9 low findings. **Author fixes, no further independent round** (unless the owner asks for one); the fixes are not independently re-checked. The owner-decision commits of 2026-10-17 (non-decreasing monotonicity, wave-2 preconditions, tag-ruleset advisory) were rebased onto `origin/main` and come before these fixes.
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Medium | Normative gate text still said "strictly greater" (verify.md step 5, version-not-monotonic row, D1, leading-zero sentence, quickstart step 1, T025) | All made mode-aware: strictly greater (`strict`), or an `order` tuple not below the maximum (`non-decreasing`), the full tag not yet existing (`release-exists`); verify.md states that `toolbox/2026.10.15-b1` is accepted when `-b98.1` exists under `non-decreasing` |
+| M2 | Medium | Registry secret posture inconsistent (ghcr.io versus quay.io, repository versus environment secret, T050 counting, credential exposure) | New credential model table in workflow.md: no secret for file-only and `ghcr.io` (`github.token`), one environment-scoped secret of `release` for a non-GitHub registry, counted per workflow file (T050); FR-018, D10 P2, research and example 2 aligned; honest limit added: the login writes the credential (a base64 form not covered by masking) under the runner `HOME` read by project commands in the same job; workflow-owned push and promote steps are named as unspecified hardening |
+| 1 | Low | Example 2 pattern lacked calendar validation and conflicted with the digit-width rule | Month, day and build expressions tightened; rule stated precisely (an `order` group can match only 1 to 9 decimal digits, checked on the parsed tree); no calendar validation for `pattern` stated (`2026.02.31` still matches) |
+| 2 | Low | Order within an equal tuple undefined | Stated in the spec, config.md and the version table: consumers must not infer recency from the counter |
+| 3 | Low | Rulesets GET undisclosed; `present` undefined; advisory not in the examples | Effects, plan.md endpoint list, human and JSON examples updated; `present`/`absent`/`unknown` defined with their limits (glob versus RE2, enforcement, bypass actors unverifiable, endpoint unverified) |
+| 4 | Low | Absent versus unknown inconsistent | Real bootstrap and first tags block on `absent` and `unknown`; the disposable-repository rehearsal does not need the ruleset (quickstart, bootstrap.md, T043, T045) |
+| 5 | Low | Tasks header said "implemented in the BundleDock repository" | Reworded: T049 to T052 are `stw` tasks; adoption evidence lives in the BundleDock repository |
+| 6 | Low | plan.md risk said the blockers are not removed | Reworded to match D10 |
+| 7 | Low | P3 checkability overstated | `check` rule `promote-argv-invalid` (`{digest}` and `{version}`/`{version_number}` required, literal aliases refused) plus the record rule and stw's own invocation; the tool's behavior beyond argv is stated as unverified (spec FR-028, config.md, T004, T051) |
+| 8 | Low | Constitution amendment listed as both closed and open | Unified: decided by the owner, applied by pull request sourcesteward#58; WI6 to WI11 start only after the merge (spec notice, D10, open questions, proposal header, plan, tasks, bootstrap, checklist) |
+| 9 | Low | Typo `[[--product "$PRODUCT"]]` | Fixed |
+
+Author re-validation: the six contracts (example 2 with the tightened pattern), six records and samples validate against the schemas; the tightened toolbox pattern was run in Go.
