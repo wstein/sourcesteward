@@ -212,14 +212,12 @@ var errPinsBlobTooLarge = errors.New("blob exceeds its size limit")
 // them. The bool is false when the object is absent, too large or not a valid configuration.
 func pinsConfigFromObject(run *pinsRunner, repo pinsGitRepo, dir, object string, limit int) ([]pinsConfigKV, bool, error) {
 	var data []byte
-	out, err := run.run(pinsCall{Repo: repo, Dir: dir, Args: []string{"cat-file", "blob", object}, Each: func(rec []byte, last bool) error {
-		if len(data)+len(rec)+1 > limit {
+	out, err := run.run(pinsCall{Repo: repo, Dir: dir, Args: []string{"cat-file", "blob", object}, Chunks: func(chunk []byte) error {
+		// Exact accounting: a blob of exactly limit bytes is accepted, one more is not.
+		if len(data)+len(chunk) > limit {
 			return errPinsBlobTooLarge
 		}
-		data = append(data, rec...)
-		if !last {
-			data = append(data, 0)
-		}
+		data = append(data, chunk...)
 		return nil
 	}})
 	if errors.Is(err, errPinsBlobTooLarge) {
