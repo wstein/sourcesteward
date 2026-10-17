@@ -24,7 +24,12 @@ GUIDES = {
     'docs/agent-guide.md': ('agents', 'Agent guide'),
     'docs/json-contracts.md': ('json-contracts', 'JSON contracts'),
 }
-SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json', 'release-config.schema.json', 'release-check.schema.json'), 'v2': ('inspect.schema.json', 'tidy.schema.json')}
+SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json'), 'v2': ('inspect.schema.json', 'tidy.schema.json')}
+
+# Schemas of features whose commands are still hidden: they exist in the source tree and are
+# validated, but are not copied to the site. The documentation work item of the feature removes
+# them from this set (and adds them to SCHEMAS) when it publishes the contracts.
+UNPUBLISHED_SCHEMAS = {'v1/release-config.schema.json', 'v1/release-check.schema.json'}
 
 SCHEMA_PATHS = {version + '/' + name for version, names in SCHEMAS.items() for name in names}
 
@@ -79,6 +84,9 @@ def schema_sources(root):
     actual = set()
     for path in schema_root.rglob('*'):
         relative = path.relative_to(schema_root).as_posix()
+        if relative in UNPUBLISHED_SCHEMAS and path.is_file() and not path.is_symlink():
+            json.loads(path.read_text())
+            continue
         if path.is_symlink() or relative not in expected or (relative in SCHEMAS and not path.is_dir()) or (relative in SCHEMA_PATHS and not path.is_file()):
             raise ValueError('Unexpected or linked schema source: ' + str(path))
         actual.add(relative)

@@ -162,6 +162,34 @@ class DocumentationTests(unittest.TestCase):
             self.assertEqual((destination / 'revision.txt').read_text(), 'a' * 40 + '\n')
             with self.assertRaises(ValueError): package.package(ROOT, destination, 'b' * 40)
 
+    def test_unpublished_schemas_stay_out_of_the_bundle_without_weakening_the_check(self):
+        package = load('package_unpublished', 'package-pages.py')
+        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json'})
+        self.assertFalse(package.UNPUBLISHED_SCHEMAS & package.SCHEMA_PATHS)
+        for name in package.UNPUBLISHED_SCHEMAS:
+            self.assertTrue((ROOT / 'schemas' / name).is_file(), name)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(ROOT / 'schemas', root / 'schemas')
+            destination = root / 'output'
+            package.copy_schemas(root, destination)
+            copied = {p.relative_to(destination / 'schemas').as_posix() for p in (destination / 'schemas').rglob('*') if p.is_file()}
+            self.assertEqual(copied, package.SCHEMA_PATHS)
+            shutil.rmtree(destination)
+            # An unpublished schema must still be valid JSON and a regular file.
+            (root / 'schemas/v1/release-check.schema.json').write_text('{')
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+            (root / 'schemas/v1/release-check.schema.json').unlink()
+            (root / 'schemas/v1/release-check.schema.json').symlink_to(root / 'schemas/v1/version.schema.json')
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+            (root / 'schemas/v1/release-check.schema.json').unlink()
+            # Other unexpected files and missing published schemas are still refused.
+            (root / 'schemas/v1/private.json').write_text('{}')
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+            (root / 'schemas/v1/private.json').unlink()
+            (root / 'schemas/v1/version.schema.json').unlink()
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+
     def test_schema_packaging_is_verbatim_and_rejects_unexpected_sources(self):
         package = load('package_schemas', 'package-pages.py')
         with tempfile.TemporaryDirectory() as directory:
@@ -171,7 +199,7 @@ class DocumentationTests(unittest.TestCase):
             shutil.copytree(ROOT / 'schemas', root / 'schemas')
             destination = root / 'output'
             package.copy_schemas(root, destination)
-            for name in ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json', 'release-config.schema.json', 'release-check.schema.json'):
+            for name in ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json'):
                 self.assertEqual((destination / 'schemas/v1' / name).read_bytes(),
                                  (ROOT / 'schemas/v1' / name).read_bytes())
             self.assertEqual((destination / 'schemas/v2/inspect.schema.json').read_bytes(),
