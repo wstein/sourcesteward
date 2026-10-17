@@ -703,7 +703,7 @@ func TestGitEnvironmentPinsEveryVariable(t *testing.T) {
 		k, v, _ := strings.Cut(e, "=")
 		env[k] = v
 	}
-	want := map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "GIT_NO_LAZY_FETCH": "1", "GIT_PAGER": "cat", "GIT_ATTR_NOSYSTEM": "1"}
+	want := map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "GIT_NO_LAZY_FETCH": "1", "GIT_PAGER": "cat", "GIT_ATTR_NOSYSTEM": "1", "GIT_LITERAL_PATHSPECS": "1"}
 	for k, v := range want {
 		if env[k] != v {
 			t.Errorf("%s=%q, want %q", k, env[k], v)
