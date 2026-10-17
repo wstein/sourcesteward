@@ -5,5 +5,5 @@ package inspection
 
 import "os"
 
-// changeStamp is unavailable here: only size, modification time and identity are compared.
-func changeStamp(info os.FileInfo) (int64, bool) { return 0, false }
+// osChangeStamp is unavailable here: only size, modification time and identity are compared.
+func osChangeStamp(info os.FileInfo) (int64, bool) { return 0, false }

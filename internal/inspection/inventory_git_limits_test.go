@@ -1006,8 +1006,14 @@ func TestReadTrackedLinkFailureIsAChangeDuringTheInventory(t *testing.T) {
 // change time (set by the kernel) and the file identity are compared as well (LIM-10).
 func TestRewriteDuringHashingIsAChange(t *testing.T) {
 	isolatedHome(t)
-	for _, mode := range []string{"in-place", "replaced"} {
+	// "replaced without change time" runs on a platform without the inode change time: only the file
+	// identity and the path re-check can see the swap.
+	for _, mode := range []string{"in-place", "replaced", "replaced without change time"} {
 		t.Run(mode, func(t *testing.T) {
+			if mode == "replaced without change time" {
+				changeStamp = func(os.FileInfo) (int64, bool) { return 0, false }
+				t.Cleanup(func() { changeStamp = osChangeStamp })
+			}
 			d := manyFilesRepo(t, 3, "")
 			target := "d000/file00001.txt"
 			full := filepath.Join(d, target)
