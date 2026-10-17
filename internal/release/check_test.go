@@ -4,6 +4,8 @@ package release
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -503,5 +505,63 @@ func TestCheckFollowsRepositorySymlinksToInputs(t *testing.T) {
 	for _, opts := range []CheckOptions{{Path: dir}, {Path: dir, Commit: commit}} {
 		r := run(t, opts)
 		wantCodes(t, r, "allowlist-overlaps-input .stw/release.toml /allowlist/paths/0")
+	}
+}
+
+func TestCheckGitButlerRootIsTheRepositoryNotAStrayGitDirectory(t *testing.T) {
+	dir := repoWith(t, map[string][]byte{".stw/release.toml": exampleBytes(t, "go-cli")})
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "gitbutler"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inner := filepath.Join(dir, "sub", "inner")
+	if err := os.MkdirAll(filepath.Join(inner, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r := run(t, CheckOptions{Path: inner})
+	if r.Backend != "gitbutler" || r.Root != dir || r.Status != "ok" {
+		t.Fatalf("root %q backend %q status %s %+v", r.Root, r.Backend, r.Status, r.Error)
+	}
+}
+
+func TestCheckCommitInABareRepository(t *testing.T) {
+	src := repoWith(t, map[string][]byte{".stw/release.toml": exampleBytes(t, "go-cli")})
+	commit := commitAll(t, src)
+	bare := filepath.Join(t.TempDir(), "bare.git")
+	git(t, src, "clone", "-q", "--bare", src, bare)
+	r := run(t, CheckOptions{Path: bare, Commit: commit})
+	if r.Status != "ok" || r.Backend != "git" || r.Contract == nil {
+		t.Fatalf("%+v %q", r, codes(r))
+	}
+	if r := run(t, CheckOptions{Path: bare}); r.Status != "refused" || r.Error.Code != "bare-repository" || !strings.Contains(r.Error.Message, "--commit") {
+		t.Fatalf("working-tree form: %+v", r)
+	}
+	if r := run(t, CheckOptions{Path: bare, Commit: strings.Repeat("a", 40)}); r.Error == nil || r.Error.Code != "commit-unresolved" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestNewGitSourceTellsAMissingCommitFromAFailure(t *testing.T) {
+	dir := repoWith(t, map[string][]byte{"x": []byte("x")})
+	commitAll(t, dir)
+	if _, err := newGitSource(context.Background(), dir, strings.Repeat("b", 40)); !errors.Is(err, errCommitUnresolved) {
+		t.Fatalf("%v", err)
+	}
+	if _, err := newGitSource(context.Background(), t.TempDir(), strings.Repeat("b", 40)); err == nil || errors.Is(err, errCommitUnresolved) {
+		t.Fatalf("a directory that is no repository is a read failure, not a missing commit: %v", err)
+	}
+}
+
+func TestCheckBoundsTheStwDirectoryListing(t *testing.T) {
+	dir := repoWith(t, map[string][]byte{".stw/release.toml": exampleBytes(t, "go-cli")})
+	for i := 0; i <= maxStwEntries; i++ {
+		write(t, dir, fmt.Sprintf(".stw/n%05d", i), nil)
+	}
+	r := run(t, CheckOptions{Path: dir})
+	found := false
+	for _, f := range r.Findings {
+		found = found || f.Code == "limit-exceeded" && strings.Contains(f.Message, ".stw directory")
+	}
+	if !found {
+		t.Fatalf("%q", codes(r))
 	}
 }

@@ -99,12 +99,18 @@ type gitSource struct {
 
 // newGitSource checks that the commit id names a commit object of the repository.
 func newGitSource(ctx context.Context, root, commit string) (*gitSource, error) {
-	_, _, status, err := gitOutput(ctx, root, 64, "", "cat-file", "-e", commit+"^{commit}")
+	// With --verify --quiet a missing object or a non-commit is a silent status 1; any other
+	// failure (a repository that cannot be read) is a read failure, not a missing commit.
+	_, _, status, err := gitOutput(ctx, root, 64, "", "rev-parse", "--verify", "--quiet", commit+"^{commit}")
 	if err != nil {
 		return nil, err
 	}
-	if status != 0 {
+	switch status {
+	case 0:
+	case 1:
 		return nil, errCommitUnresolved
+	default:
+		return nil, fmt.Errorf("%w: rev-parse", errGitFailed)
 	}
 	return &gitSource{ctx: ctx, root: root, commit: commit}, nil
 }
@@ -266,4 +272,16 @@ func (g *gitSource) listInto(args []string, wanted map[string]bool, out map[stri
 		}
 	}
 	return nil
+}
+
+// gitToplevel returns the root of the working tree that contains dir.
+func gitToplevel(ctx context.Context, dir string) (string, error) {
+	out, _, status, err := gitOutput(ctx, dir, 4096, "", "rev-parse", "--path-format=absolute", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	if status != 0 {
+		return "", fmt.Errorf("%w: rev-parse --show-toplevel", errGitFailed)
+	}
+	return strings.TrimSuffix(string(out), "\n"), nil
 }

@@ -29,6 +29,9 @@ type contractSource interface {
 // errStwNotDirectory is returned when .stw exists but is a symlink or not a directory.
 var errStwNotDirectory = errors.New(".stw is not a directory")
 
+// maxStwEntries bounds the entries read from the .stw directory.
+const maxStwEntries = 10000
+
 // errNotStable is returned when a listed contract file is not, when read, the same regular file.
 var errNotStable = errors.New("the contract file is not a stable regular file")
 
@@ -50,9 +53,18 @@ func (w worktreeSource) StwEntries() ([]sourceEntry, bool, error) {
 	if !info.IsDir() {
 		return nil, false, errStwNotDirectory
 	}
-	items, err := os.ReadDir(filepath.Join(w.root, ".stw"))
+	dir, err := os.Open(filepath.Join(w.root, ".stw"))
 	if err != nil {
 		return nil, false, err
+	}
+	defer dir.Close()
+	items, err := dir.ReadDir(maxStwEntries + 1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, false, err
+	}
+	truncated := len(items) > maxStwEntries
+	if truncated {
+		items = items[:maxStwEntries]
 	}
 	entries := make([]sourceEntry, 0, len(items))
 	for _, item := range items {
@@ -67,32 +79,28 @@ func (w worktreeSource) StwEntries() ([]sourceEntry, bool, error) {
 		}
 		entries = append(entries, sourceEntry{Name: item.Name(), Kind: kind})
 	}
-	return entries, false, nil
+	return entries, truncated, nil
 }
 
 // Read opens a regular file, rechecks after opening that it is the same file that was listed
 // (no symlink swap), and reads at most limit bytes.
 func (w worktreeSource) Read(e sourceEntry, limit int) ([]byte, bool, error) {
 	path := filepath.Join(w.root, ".stw", e.Name)
-	before, err := os.Lstat(path)
-	if err != nil {
-		return nil, false, err
-	}
-	if !before.Mode().IsRegular() {
-		return nil, false, fmt.Errorf("%w: it is not a regular file", errNotStable)
-	}
 	beforeOpen(path)
-	f, err := os.Open(path)
+	f, err := openRegular(path)
+	if errors.Is(err, errNotStable) {
+		return nil, false, fmt.Errorf("%w: it is a symlink", errNotStable)
+	}
 	if err != nil {
 		return nil, false, err
 	}
 	defer f.Close()
-	after, err := f.Stat()
+	info, err := f.Stat()
 	if err != nil {
 		return nil, false, err
 	}
-	if !os.SameFile(before, after) || !after.Mode().IsRegular() {
-		return nil, false, fmt.Errorf("%w: it changed while it was opened", errNotStable)
+	if !info.Mode().IsRegular() {
+		return nil, false, fmt.Errorf("%w: it is not a regular file", errNotStable)
 	}
 	data, err := io.ReadAll(io.LimitReader(f, int64(limit)+1))
 	if err != nil {
