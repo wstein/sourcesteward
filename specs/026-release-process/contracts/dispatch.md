@@ -23,7 +23,7 @@ The workflow additionally requires the dispatching actor to be the repository ow
 | Status | Meaning |
 | --- | --- |
 | 0 | plan printed with verdict `pass`, or the request was accepted (204) |
-| 1 | refusal or operational failure (`main-ref-stale`, `product-required`, `plan-stale`, `gate-failed` on `--apply`, `auth-unavailable`, `online-unavailable`, `remote-unresolved`, `unsupported-backend`, `ambiguous-backend`, `canceled`); an HTTP failure of the POST is `online-unavailable` with the status code and no body |
+| 1 | refusal or operational failure (`main-ref-stale`, `product-required`, `product-unknown`, `tag-unresolved`, `plan-stale`, `gate-failed` on `--apply`, `auth-unavailable`, `online-unavailable`, `remote-unresolved`, `unsupported-backend`, `ambiguous-backend`, `canceled`); an HTTP failure of the POST is `online-unavailable` with the status code and no body |
 | 2 | usage error (for example `--apply` without a plan id of 64 hex characters) |
 | 3 | the plan's verdict is `fail` (not applied) |
 
@@ -31,7 +31,7 @@ Precedence 2, 1, 3, 0. The POST is never retried.
 
 ## Backend capability
 
-Git and jj supported for `--commit/--version` (the local part is `plan --online`'s commit and contract reads, plus hosting resolution, which is native for both); `--tag` mode needs the annotation check and is `unsupported-backend` in jj; GitButler-managed and ambiguous refuse. The plan runs `plan --online --with-drafts`, because the dispatching token must see drafts. Only github.com is verified; GitHub Enterprise needs `--host` (hosting rules, unverified for dispatch).
+Git and jj supported for `--commit/--version` (the local part is `plan --online`'s commit and contract reads, plus hosting resolution, which is native for both); `--tag` mode needs the annotation check and is `unsupported-backend` in jj; GitButler-managed and ambiguous refuse. The plan runs `plan --online` without `--with-drafts` (it cannot know what the caller's token sees) and reports `drafts-not-checked`; the workflow's `draft` job repeats the check authoritatively. Only github.com is verified; GitHub Enterprise needs `--host` (hosting rules, unverified for dispatch).
 
 ## Output
 

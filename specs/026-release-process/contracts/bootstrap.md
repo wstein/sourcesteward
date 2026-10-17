@@ -29,7 +29,7 @@ From the release after `v0.1.0`: `stw` is released with `release-build.yml` and 
 | 1 | SheetMill (`smill`) | the merged tag workflow (no change) | adopts `stw release` by its own spec when `stw` v0.1 is released |
 | 1 | SourceSteward (`stw`) | bootstrap (this contract) | self-hosted |
 | 1 | BundleDock CLI (`bdock`) | the merged tag workflow | adopts `stw release`; prefix `bdock/` (`semver` with `tag_prefix`) |
-| 2 | BundleDock toolbox bundle | adopts `stw release` directly (`oci-image`, `calver`, example 2) | one product file per bundle track (`toolbox/`, `opentofu/`, ...) next to the CLI product `bdock/`; the wave-2 blockers in open question 3 (counter restart, registry secret, moving aliases) must be resolved first |
+| 2 | BundleDock toolbox bundle | adopts `stw release` directly (`oci-image`, `calver`, example 2) | one product file per bundle product (`toolbox/`, `opentofu/`, ...) next to the CLI product `bdock/`; the wave-2 blockers in open question 3 (counter restart, registry secret, moving aliases) must be resolved first |
 | 2 | WorkHarbor (polyglot) | adopts directly (example 3) | its own release policy is **not yet read**; the maintainer states that its CI requires pull requests to target `main` |
 | 3 | CrewBook (skill pack) | adopts directly (example 4), released when the readiness criterion is met | criteria are the maintainer's examples, not read from the repository |
 

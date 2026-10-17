@@ -3,7 +3,7 @@
 ## Command
 
 ```text
-stw release record --commit C --version V --from DIR [--repo OWNER/NAME] [--run-id N --run-attempt N] [PATH] [--product NAME] [--write | --check FILE] [--json]
+stw release record --commit C --version V --from DIR [--repo OWNER/NAME] [--signer-workflow-file PATH] [--run-id N --run-attempt N] [PATH] [--product NAME] [--write | --check FILE] [--json]
 ```
 
 Builds the canonical release record ([record.md](record.md)) from the downloaded build output. It never builds, contacts a network, or executes anything downloaded.
@@ -14,14 +14,15 @@ Builds the canonical release record ([record.md](record.md)) from the downloaded
 | `--version V` | validated against the contract's scheme |
 | `--from DIR` | directory with `SHA256SUMS`, `build-manifest.json` and the file artifacts (downloaded draft assets); regular files only |
 | `--repo`, `--run-id`, `--run-attempt` | default to the values in the manifest (parsed and hash-checked here; its attestation is checked by `verify --online`, not by `record`); if given they must equal it (`artifact-mismatch` otherwise) |
-| `--product NAME` | the product (required when several exist) |
+| `--product NAME` | the product (required when several exist; an empty value is treated as absent) |
+| `--signer-workflow-file PATH` | explicit signer workflow file for a release not built by `ci.release_workflow` (the bootstrap release): the record's `signer_workflow` becomes `<repository>/PATH`; verify applies the same override |
 | `--write` | create the product's record file (`docs/releases/<version>.json`, or `docs/releases/<product>/<version>.json`) in the working tree; refuse (`output-exists`) if a different file exists; an identical file is a no-op |
 | `--check FILE` | exit 3 with `record-not-canonical` or `record-invalid` unless FILE is exactly what `record` would produce |
 | none of the two | print the record to standard output |
 
 ## Procedure
 
-Read the contract at C; parse `build-manifest.json` against its schema; recompute each file's SHA-256 and size from `DIR` and compare with `SHA256SUMS` and with the manifest (any difference is `artifact-mismatch`); require the manifest's `commit`, `version` and `config_sha256` (SHA-256 of the contract blob at C) to match; for `oci-image` targets take digests from the manifest's copy of the build result and hash `lock_file` and `tool_list_file` from C's tree (`null` when not declared); assemble, order and canonically encode with the hand-written, schema-ordered encoder (a generic JSON encoder is not used: its escaping and ordering differ from the canonical form). The repository, signer, `url_template`, `tag`, `project`, `product` and image `tags` are computed from the contract and the verified manifest, never taken from flags other than `--repo`, which must equal the manifest's value. A `fetch` build's declaration and `lock_files` hashes come from the manifest and are not part of the record.
+Read the contract at C; parse `build-manifest.json` against its schema; recompute each file's SHA-256 and size from `DIR` and compare with `SHA256SUMS` and with the manifest (any difference is `artifact-mismatch`); require the manifest's `commit`, `version` and `config_sha256` (SHA-256 of the contract blob at C) to match; for `oci-image` targets take digests from the manifest's copy of the build result and hash `lock_file` and `tool_list_file` from C's tree (`null` when not declared); assemble, order and canonically encode with the hand-written, schema-ordered encoder (a generic JSON encoder is not used: its escaping and ordering differ from the canonical form). The repository, signer, `url_template`, `tag`, `project`, `product` and image `tags` are computed from the contract and the hash-checked manifest, never taken from flags other than `--repo`, which must equal the manifest's value. A `fetch` build's declaration and `lock_files` hashes come from the manifest and are not part of the record.
 
 ## Exit status
 

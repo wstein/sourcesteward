@@ -99,3 +99,23 @@ Independent reviewer: read-only Opus confirmation review (executed checks), revi
 | L12 | Low | Leading zeros | Equal tuples are refused by strict monotonicity (stated) |
 
 Author re-validation: six contracts, six records, two manifests and one OCI result validate against the three-schema set; profile line check passes. Not re-reviewed yet.
+
+## Round 3
+
+Independent reviewer: read-only Opus confirmation review (executed checks), revision ddde764, 2026-10-17. Verdict: **READY** (no critical or high finding). All 23 round-2 items were checked; 17 confirmed, 6 partially (H1, H2, M3, M4, L5, with leftovers). Mechanically: the four schemas (three in record.md, one in config.md) compile and resolve the manifest's cross-reference; 6 contracts, 6 records, 2 manifests and 1 OCI result valid; 25 negative probes rejected; all 9 JSON fixtures canonical; each record consistent with its contract; the strict-profile line check, `check-docs.py` and `git diff --check` clean.
+
+The eight medium and nine low findings were all resolved in the commit after this review and are **not re-reviewed**:
+
+| # | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | Medium | Three places still sent the bootstrap release through the publish workflow | workflow.md, plan DD33 and quickstart limited to input mode 2; the bootstrap release publishes itself and is checked with `verify --published` |
+| 2 | Medium | Bootstrap record named a signer that did not sign | `record` and `verify` take the same explicit `--signer-workflow-file`, replacing the recomputation (record-command.md, verify.md, record.md) |
+| 3 | Medium | `--published` could not audit an older release | `version-not-monotonic` is `not-applicable` under `--published` (spec, verify.md, T025) |
+| 4 | Medium | Outcome of `release-exists` without `--with-drafts` undefined | Gate outcome comes from the tag/release part (`pass`/`fail`) with reason `drafts-not-checked`; never `not-applicable` as a whole (spec, release-plan.md, T025) |
+| 5 | Medium | `drafts-invisible` leftover; dispatch asserted draft visibility | T024 corrected; dispatch runs `plan --online` without `--with-drafts` and reports `drafts-not-checked`; the `draft` job is authoritative |
+| 6 | Medium | Empty `--product` unspecified | Empty value is treated as absent by the CLI (spec rule, T006 test); workflows pass it only when non-empty |
+| 7 | Medium | config.md `smoke_argv`/`promote.argv` rows stale | Aligned with build.md and the spec placeholder table |
+| 8 | Medium | Sample manifest/result disagreed with their record pairs | Samples regenerated to agree (repository, host order, platforms) |
+| 9-17 | Low | `verified manifest` wording; `--with-drafts` on `verify` defined (detail only); `--signer-workflow-file`/`--source-ref` usage rules; optional `--record-commit` in quickstart step 6; config.md heading anchor broken (heading made a real heading); manifest `builds` in the prose list; SCHEMA_PATHS task number; plan example `readiness-missing` row and "bundle product"; dispatch exit codes and the "R follows the tag" ordering sentence | Applied |
+
+This is the third round; the verdict is READY. The final resolution is an author edit that has not been independently re-checked, which the handoff states.

@@ -81,7 +81,7 @@ Decisions DD1 to DD14, DD34 and DD35 are in [research.md](research.md#decisions-
 - **DD30 Fetch builds are ordinary builds with a declared effect.** `network` and `network_hosts` are disclosed by `plan`, `dispatch` and the attested manifest; `stw` neither enforces nor sandboxes network access; `lock_files` are hashed build inputs; `check` requires them when reproducibility is `required`.
 - **DD31 Streaming diff.** The raw tree diff is read by a streaming parser with an entry and byte limit (20,000 entries, 4 MiB), modelled on `inventory_stream.go`, because the shared Git runner caps output at 64 KiB.
 - **DD32 Verification and publication in one job.** The publish workflow verifies, promotes and publishes in a single job, re-lists the draft's asset ids and sizes just before publishing, and builds the verifier from the `main` tip (the tag commit is data); a tag ruleset restricting creation to the owner is a required setting.
-- **DD33 Existing-tag publication.** `verify --record-commit R` plus a `workflow_dispatch` publish path serves input mode 2 and the bootstrap release.
+- **DD33 Existing-tag publication.** `verify --record-commit R` plus a `workflow_dispatch` publish path serves input mode 2; the bootstrap release publishes itself and is checked afterward with `verify --published`.
 - **DD27 Schedule of work.** WI1 to WI5 are source-only and ship under the existing authorization model; WI6 to WI11 add a remote write, project command execution, workflows and a release, and wait for the constitution decision; WI10 and WI11 need separate owner approvals for any rehearsal, tag or run.
 
 ## Risks
