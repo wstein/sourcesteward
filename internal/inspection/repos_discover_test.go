@@ -532,3 +532,37 @@ func TestReposDiscoverIgnoresDirectoriesValuelessKeysAndNonUTF8Paths(t *testing.
 		t.Fatalf("notes %q", parent.Notes)
 	}
 }
+
+// FR-009: a .gitmodules of exactly 64 KiB is read; 64 KiB + 1 is discovery-failed.
+func TestReposDiscoverGitmodulesSizeBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		size int
+		ok   bool
+	}{{ReposGitmodulesBytes - 1, true}, {ReposGitmodulesBytes, true}, {ReposGitmodulesBytes + 1, false}} {
+		reposHermetic(t)
+		repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+		writeFile(t, filepath.Join(repo, ".gitmodules"), gitmodulesOfSize(t, tc.size, "bigdir", "https://example.invalid/x.git"))
+		git(t, repo, "add", ".gitmodules")
+		git(t, repo, "commit", "-qm", "gitmodules")
+		parent := reposRun([]string{repo}, true).Entries[0]
+		if (parent.Discovery.Status == "ok") != tc.ok {
+			t.Errorf("size %d: discovery %+v", tc.size, parent.Discovery)
+		}
+	}
+}
+
+func TestReposDiscoverMissingGitmodulesBlobFailsClosed(t *testing.T) {
+	reposHermetic(t)
+	repo := reposNewRepo(t, filepath.Join(reposTempDir(t), "super"))
+	writeFile(t, filepath.Join(repo, ".gitmodules"), "[submodule \"x\"]\n\tpath = x\n")
+	git(t, repo, "add", ".gitmodules")
+	git(t, repo, "commit", "-qm", "gitmodules")
+	oid := gitIn(t, repo, "rev-parse", "HEAD:.gitmodules")
+	obj := filepath.Join(repo, ".git", "objects", oid[:2], oid[2:])
+	mustOS(t, os.Chmod(filepath.Dir(obj), 0o755))
+	mustOS(t, os.Remove(obj))
+	parent := reposRun([]string{repo}, true).Entries[0]
+	if parent.Discovery.Status != "failed" || !strings.Contains(parent.Discovery.Reason, "cannot parse the .gitmodules blob") {
+		t.Fatalf("%+v", parent.Discovery)
+	}
+}

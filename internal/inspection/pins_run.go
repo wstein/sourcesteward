@@ -75,6 +75,10 @@ type pinsCall struct {
 	// the process early without an error, or any other error to end it and return that error. It
 	// replaces Keep.
 	Each func(record []byte, last bool) error
+	// Chunks streams the raw stdout in pieces to a callback, with no record framing: the NUL-terminated
+	// record limit does not apply, so a bounded blob (cat-file blob has no NULs) can be read whole. The
+	// callback owns the byte bound (return an error to stop); nothing is retained here. It replaces Keep.
+	Chunks func(chunk []byte) error
 	// Timeout shortens the invocation deadline for this call; it never extends the runner's default.
 	Timeout time.Duration
 }
@@ -195,7 +199,7 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 	if err := c.Start(); err != nil {
 		return pinsOutput{}, err
 	}
-	kept, readErr := r.consume(pipe, call.Keep, call.Each, &scanned, errs, cancel)
+	kept, readErr := r.consume(pipe, call.Keep, call.Each, call.Chunks, &scanned, errs, cancel)
 	stopped := errors.Is(readErr, errPinsStop)
 	if stopped {
 		readErr = nil
@@ -234,7 +238,7 @@ func (r *pinsRunner) run(call pinsCall) (pinsOutput, error) {
 
 // consume reads stdout incrementally. It stops the process as soon as the scan allowance or the shared
 // retained budget is exhausted.
-func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, each func([]byte, bool) error, scanned *int, errs *scanCounter, cancel context.CancelFunc) ([]byte, error) {
+func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, each func([]byte, bool) error, chunks func([]byte) error, scanned *int, errs *scanCounter, cancel context.CancelFunc) ([]byte, error) {
 	var kept, pending []byte
 	buf := make([]byte, 32<<10)
 	retain := func(b []byte) error {
@@ -259,7 +263,11 @@ func (r *pinsRunner) consume(pipe io.Reader, keep func([]byte) bool, each func([
 			if over {
 				return fail(&pinsLimitError{Kind: "scan"})
 			}
-			if each != nil {
+			if chunks != nil {
+				if e := chunks(buf[:n]); e != nil {
+					return fail(e)
+				}
+			} else if each != nil {
 				pending = append(pending, buf[:n]...)
 				for {
 					i := bytes.IndexByte(pending, 0)

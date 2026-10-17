@@ -227,7 +227,11 @@ func discoverParent(callerCtx, totalCtx context.Context, newRunner reposNewRunne
 	if mode != "100644" && mode != "100755" {
 		return failed(nil, fmt.Sprintf(".gitmodules is not a regular file (mode %s)", mode))
 	}
-	if size, err := strconv.Atoi(sizeText); err != nil || size > ReposGitmodulesBytes {
+	size, err := strconv.Atoi(sizeText)
+	if err != nil { // a missing object shows no size
+		return failed(nil, "cannot parse the .gitmodules blob")
+	}
+	if size > ReposGitmodulesBytes {
 		return failed(nil, ".gitmodules exceeds maximum size of 64 KiB")
 	}
 
