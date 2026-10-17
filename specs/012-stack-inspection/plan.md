@@ -69,7 +69,8 @@ Every Git invocation runs through the Spec 021 isolated runner (`pinsRunner`, `p
 - `merge-base --is-ancestor A B` (landed tip, upstream relation, pull request head relation).
 - `cherry BASE TIP` (no `-v`; commit ids and marks only).
 - `worktree list --porcelain -z` (checked-out-elsewhere).
-- `rev-list --no-walk --parents --format=%s IDS` for bounded subjects, and `rev-list --parents -n1 SHA` for a merge commit's parent count (object existence is the exit status of `cat-file -e SHA^{commit}`).
+- `rev-list --no-walk --parents --format=%s IDS` for bounded subjects, and `rev-list --parents -n1 SHA` for a merge commit's parent count.
+- `cat-file -e SHA^{commit}` (object existence by exit status; no object content is read).
 
 Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`, `config` writes, `submodule`, anything that reads working-tree content. jj: only the pinned-operation session of Spec 008 (`--no-pager --color=never --ignore-working-copy --at-operation=OP`), `bookmark list --all-remotes --template …` and `log --no-graph -r REVSET --template …` with fixed templates; no `rebase`, `git fetch`, `new`, `edit` or any command that snapshots.
 
@@ -93,7 +94,7 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 ## Edits to other specifications and documents (minimal, listed for review)
 
 - `specs/015-local-restacking/spec.md`, Assumptions: add "Spec 012 (reworked 2026-10-17) supplies the stack observation and an advisory, print-only plan; this spec owns executing a local rewrite and its recovery evidence and must revalidate the 012 `expected` ids. A rewrite that GitHub performs on a native stack is not restacked here."
-- `specs/016-stacked-pr-coordination/spec.md`, Assumptions: add "Spec 012 (reworked 2026-10-17) reads pull requests and native stack membership and prints advisory steps; this spec owns every remote effect of the catalog in `specs/012-stack-inspection/contracts/later-effects.md` (push, link, unstack, sync, merge), through GitHub native stack semantics and the bounded transport. FR-006 is unchanged for the first slice."
+- `specs/016-stacked-pr-coordination/spec.md`, Assumptions: add "Spec 012 (reworked 2026-10-17) reads pull requests and native stack membership and prints advisory steps; this spec owns every remote effect of the catalog in `specs/012-stack-inspection/contracts/later-effects.md` (push, link, unstack, sync, merge), through GitHub native stack semantics and the bounded transport. FR-006 is unchanged for the first slice (L2 with a lease and L5 need its amendment). User Story 1 is re-scoped: the read-only mapping of a local stack to pull requests and native stacks is delivered by Spec 012; this spec consumes it and keeps the publication stories."
 - `docs/roadmap.md`: the row and the list entry for Spec 012 get the new title and one-line summary.
 - `docs/feature-status.json`: the `012-stack-inspection` object already exists with status `planned` and no evidence; it is unchanged (the spec path is unchanged).
 
