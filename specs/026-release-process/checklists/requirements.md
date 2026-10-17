@@ -23,7 +23,7 @@
 - [x] III. Only one new local file; remote effects disclosed with recovery limits; tags never re-created
 - [x] IV. Failing tests first; hostile, concurrent and limit cases specified; effect sentinels; jj verification gap stated
 - [x] V. Capability per backend stated; unsupported capability refuses; no fallback to raw Git in jj
-- [ ] Scope: release automation needs a constitutional amendment, proposed separately and not applied (blocks WI6 to WI11)
+- [ ] Scope: release automation needs the constitutional amendment, decided by the owner and applied by PR sourcesteward#58; WI6 to WI11 are blocked until it is merged
 
 ## Artifacts
 
