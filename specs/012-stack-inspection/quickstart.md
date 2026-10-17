@@ -26,7 +26,7 @@ Expected: three layers; `layer-applied-in-base` for layer 1 (observed, patch equ
 
 With a merge commit instead of the cherry-pick (`git merge --no-ff s1`) the expected result is no drift finding at all; with `git -c merge.ff=true merge --squash s1 && git commit -qm squash` a single-commit layer is still patch-equivalent (`git cherry` marks it `-`) and is reported `layer-applied-in-base`; a multi-commit layer stays `pending` locally and only the pull request evidence marks the parent as merged (`rewritten`).
 
-## jj variant (design; unverified until T002)
+## jj variant (design; flag and quoting measured, the rest unverified until T002)
 
 ```sh
 jj git init --colocate repo-jj && cd repo-jj
@@ -34,7 +34,7 @@ jj git init --colocate repo-jj && cd repo-jj
 stw stack show --base main --tip s3
 ```
 
-Expected: the same layers with change ids, `capability-unavailable` (`jj-capability-gap`) instead of patch equivalence, and, with `--pull-requests` showing the parent merged, a single `jj rebase -s <change> -d main` step.
+Expected: the same layers with change ids, `capability-unavailable` (`jj-capability-gap`) instead of patch equivalence, and, with `--pull-requests` showing the parent merged, a single `jj rebase -s <change> -o "main"` step.
 
 ## Optional live read-only check of the pull request evidence
 
