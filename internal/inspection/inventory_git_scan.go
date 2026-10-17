@@ -49,9 +49,16 @@ func txtRefsTruncated(n int) string {
 
 const txtResultTrimmed = "listing trimmed to fit the 1 MiB result bound"
 
-// withCause keeps the underlying error (for example a failed process start under memory pressure) in the
-// message instead of hiding it behind a generic text.
-func withCause(msg string, err error) error { return fmt.Errorf("%s: %w", msg, err) }
+// withCause appends the operating system condition of a failed Git process start or wait (for example
+// resource exhaustion under load) to a generic message. Other errors are not appended: they can carry
+// repository or executable paths.
+func withCause(msg string, err error) error {
+	var process *processError
+	if errors.As(err, &process) {
+		return fmt.Errorf("%s: %s", msg, process.msg)
+	}
+	return errors.New(msg)
+}
 
 // nativeFormatError marks native output that is not valid (DEG-14): invalid-metadata.
 type nativeFormatError struct{ msg string }
@@ -190,7 +197,7 @@ func (s gitInventorySession) scanReferences(dir string, keep bool) (refs []Inven
 	case err != nil:
 		c, m := scanFailure(err)
 		if c == "git-inventory-failed" {
-			m = "cannot enumerate Git references: " + err.Error()
+			m = withCause("cannot enumerate Git references", err).Error()
 		}
 		return nil, "", c, m
 	case exit != 0:
@@ -630,6 +637,16 @@ func (s gitInventorySession) indexRecord(rec []byte) (tag byte, mode, oid, stage
 	return tag, p[1], p[2], p[3], path, nil
 }
 
+// readTrackedLink reads a symlink the comparison just found with Lstat. A failure here means the entry was
+// swapped after the Lstat, which is a change during the inventory (and the error must not carry the path).
+func readTrackedLink(root *os.Root, path string) (string, error) {
+	link, err := root.Readlink(path)
+	if err != nil {
+		return "", &changedDuringError{"tracked content changed during inventory"}
+	}
+	return link, nil
+}
+
 // hashDisk hashes git-style (blob header from the stat size) and checks the bytes read.
 func hashDisk(ctx context.Context, f *os.File, size int64, h hash.Hash) error {
 	fmt.Fprintf(h, "blob %d%c", size, 0)
@@ -683,8 +700,8 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 		if o.rawDisk {
 			var rootErr error
 			diskRoot, rootErr = os.OpenRoot(dir)
-			if rootErr != nil {
-				return nil, c.meta, rootErr
+			if rootErr != nil { // the error names the path: keep it out of the result
+				return nil, c.meta, errors.New("cannot open the workspace for comparison")
 			}
 			defer diskRoot.Close()
 		}
@@ -767,7 +784,7 @@ func (s gitInventorySession) workspaceStatus(o gitStatusOptions) ([]gitInventory
 					c.add(v)
 					return nil
 				}
-				link, e := diskRoot.Readlink(path)
+				link, e := readTrackedLink(diskRoot, path)
 				if e != nil {
 					return e
 				}
