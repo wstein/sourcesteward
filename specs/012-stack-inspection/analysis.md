@@ -1,6 +1,6 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: Rounds 1 to 5 resolved in the artifacts; round 6 pending. Round 0 is the author draft (a28d23e).
+**Status**: Rounds 1 to 6 resolved in the artifacts; round 7 pending. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
@@ -107,3 +107,21 @@ Reviewer: independent reviewer (coordinator relay). Reviewed revision: 14b51b6. 
 | L4 | Low | T029 used a merged PR's head for `object-unreachable` | Open-pull-request head fixture; the spike head only shows that a merged head is never required |
 | L5 | Low | FR-006 map omitted 8a and 8b | Added |
 | L6 | Low | `object-unreachable` text unconditional | "if you have fetched (stw cannot verify)" |
+
+### Round 6
+
+Reviewer: independent reviewer (coordinator relay). Reviewed revision: 67d72e2. Verdict: NOT READY, no High (1 medium, 8 low, 2 info). jj results identical on 0.46.0 and 0.45.1.
+
+| Id | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | Med | The jj no-rebase guard never fires for a plain chain; the printed step moves the landed commit (empty after rebase-merge, conflicted after multi-commit squash) | Guard made exact and native-only (merged member's `head.sha` in the range); plain chains on jj declared unguarded and the outcomes disclosed in the Capability table and 8b; T017 and T029 cover the plain-chain jj case; `jj-landed-layer-undetectable` stays on every jj result |
+| L1 | Low | Guard too broad (any merged member) and wrong bookmark claim | The head-in-range test replaces it; observe text reworded |
+| L2 | Low | Allowlist could not tell `unknown` from `gone` | Unpeeled `rev-parse --verify --quiet` added; definitions in the data model and plan |
+| L3 | Low | Group 4 note precedence ambiguous | (a) applies to every non-dropped layer of a native stack above a merged member; plain chains never get `take-upstream`; (b) otherwise |
+| L4 | Low | `landed-undetectable` layer rule | Layer is the one containing the member head; data model and T003 if/then (`layer` null iff `run-again`) |
+| L5 | Low | Two lease sources in L2 | Stale phrase removed |
+| L6 | Low | Unbacked `link` push claim | Reworded; numeric link push marked unverified |
+| L7 | Low | T017 not updated | Updated |
+| L8 | Low | `gone` listed as detection; gone layer gets no hint; quickstart jj text | Table corrected; boundary limitation for a not-dropped `gone` layer; quickstart updated |
+| I1 | Info | R1 said no jj binary | Reworded to the measured facts |
+| I2 | Info | Allowlist said base and tip read once | Read at the first read and again at the resample |

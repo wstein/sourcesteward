@@ -34,7 +34,7 @@ jj git init --colocate repo-jj && cd repo-jj
 stw stack show --base main --tip s3
 ```
 
-Expected: the same layers with change ids, `capability-unavailable` (`jj-capability-gap`) instead of patch equivalence, and, with `--pull-requests` showing the parent merged, a single `jj rebase -s <change> -o '"main"'` step.
+Expected: the same layers with change ids, `capability-unavailable` (`jj-capability-gap`) instead of patch equivalence, the boundary limitation `jj-landed-layer-undetectable` on every jj result, and a single `jj rebase -s <change> -o '"main"'` step for a moved base; after a remote merge with head deletion, a native stack whose merged member head is in the range gives `landed-undetectable` instead, while a plain chain is unguarded (the limitation is the disclosure).
 
 ## Optional live read-only check of the pull request evidence
 

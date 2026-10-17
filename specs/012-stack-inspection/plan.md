@@ -63,9 +63,9 @@ docs/README.md, llms.txt, docs/progress.md, docs/roadmap.md
 
 Every Git invocation runs through the Spec 021 isolated runner (`pinsRunner`, `pinsIsolation()`, `pinsEnvironment()`; explicit `--git-dir` and `--work-tree` only after the ownership validation of `pins_safe.go`; per-call timeout and scan allowance; stdin empty). The allowed commands, each read-only (M9 to M11):
 
-- `rev-parse --verify --quiet refs/heads/NAME^{commit}` (and `refs/remotes/R/NAME^{commit}`), once for the base and once for the tip.
+- `rev-parse --verify --quiet refs/heads/NAME^{commit}` (and `refs/remotes/R/NAME^{commit}`), for the base and the tip at the first read and again at the resample.
 - `rev-list --topo-order --parents --max-count=501 BASE..TIP --`, and `rev-list --count --max-count=10001 FORK..BASE --`.
-- `for-each-ref --format=<fixed> --contains BOTTOM --merged TIP refs/heads` (layer references), `for-each-ref --contains LAYERTIP --no-merged TIP refs/heads` (fork-point references, one call per layer, results bounded to 21 names), and, per layer reference, `for-each-ref --format=<fixed with %(upstream) %(upstream:track)> refs/heads/NAME`, `rev-parse --verify --quiet UPSTREAMREF^{commit}` (the upstream commit id; `gone` is `%(upstream:track)` `[gone]`, `unknown` is an existing ref whose object is absent), and `rev-list --count --max-count=10001 UPSTREAM..TIP --` with `TIP..UPSTREAM` (the counts of the upstream relation, merge commits included).
+- `for-each-ref --format=<fixed> --contains BOTTOM --merged TIP refs/heads` (layer references), `for-each-ref --contains LAYERTIP --no-merged TIP refs/heads` (fork-point references, one call per layer, results bounded to 21 names), and, per layer reference, `for-each-ref --format=<fixed with %(upstream) %(upstream:track)> refs/heads/NAME`, unpeeled `rev-parse --verify --quiet UPSTREAMREF` and then `UPSTREAMREF^{commit}` (the upstream commit id; exit 1 of the unpeeled read is `gone`, a present ref whose object is absent is `unknown`; `%(upstream:track)` alone cannot tell them apart), and `rev-list --count --max-count=10001 UPSTREAM..TIP --` with `TIP..UPSTREAM` (the counts of the upstream relation, merge commits included).
 - `merge-base --is-ancestor A B` (landed tip, upstream relation, pull request head relation).
 - `cherry BASE TIP` (no `-v`; commit ids and marks only; it omits merge commits, so it is used only for the applied-layer detection and never as proof for any advice).
 - `worktree list --porcelain -z` (checked-out-elsewhere).
@@ -111,7 +111,7 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 
 ## Risks
 
-- **R1** jj parity is design only (no jj binary here); T002 measures before any jj code and may force changes to the Capability table; the contract states the one known gap.
+- **R1** jj parity rests on the reviewers' measurements (M13, M14) on both pinned versions; T002 re-measures with the task's own scripts before any jj code and may force changes to the Capability table; the contract states the one known gap.
 - **R2** Parallel work on `transport.go`/`operations.go` (Spec 025 WI1, any Spec 022 follow-up): the remote work item is last in the order and rebases.
 - **R3** The native stack REST resources are new; shapes beyond the measured closed stack are unverified (U4). Every unexpected shape or status degrades to `unknown` or `incomplete`, never to a claim.
 - **R4** Patch ids differ when a rebase merge resolved a conflict or a squash combined commits; the layer then looks `pending` locally. The remote evidence (`rewritten`) covers it; the spec never claims a layer is not applied.
