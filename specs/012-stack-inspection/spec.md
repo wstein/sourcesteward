@@ -45,7 +45,7 @@ A maintainer who prefers rebase-merge merges the bottom pull request. The remain
 
 **Why this priority**: This is the recurring manual step ("head not rebased after parent merge", "stale child after rebase-merge") and the one place a local tool is not redundant with GitHub for non-native chains.
 
-**Independent Test**: Fixtures built in temporary repositories from the three merge shapes measured in the spike: merge commit (children untouched), rebase-merge (new commit ids, children stale), and squash (no patch equivalent). Run `show` and `plan` offline, then with fake HTTP evidence.
+**Independent Test**: Fixtures built in temporary repositories from the three merge shapes measured in the spike: merge commit (children untouched), rebase-merge (new commit ids, children stale), and squash (a single-commit layer is patch-equivalent, a multi-commit layer is not). Run `show` and `plan` offline, then with fake HTTP evidence.
 
 **Acceptance Scenarios**:
 
@@ -54,7 +54,12 @@ A maintainer who prefers rebase-merge merges the bottom pull request. The remain
 3. **Given** a parent merged with a merge commit (the spike's scenario A), **When** `show` runs after the base is fetched, **Then** no drift finding is reported: the children are untouched and still based on contained commits.
 4. **Given** a base that moved, **When** `show` runs, **Then** `stack-behind-base` reports how far; the plan's rebase steps move every layer onto the base, bottom first (Plan rules).
 5. **Given** a layer that is checked out in another Git worktree, a conflicted or immutable jj commit, or a partially applied layer, **When** `plan` runs, **Then** the plan stops at that layer with a `blocked` reason and prints no step for it or the layers above.
-6. **Given** any plan, **When** it is rendered, **Then** every step is advisory text, the result states that nothing was executed and that the plan authorizes nothing, and each step names the commit ids it expects so a later executor (Spec 015) can refuse a stale plan.
+6. **Given** a squash merge of a multi-commit bottom layer (no patch equivalent) and `--pull-requests` evidence that the parent merged with a one-parent merge commit contained in `--base`, **When** `plan` runs, **Then** the layer is landed (`parent_merge` `rewritten`) and the plan rebases the remaining layers; a squash of a single-commit layer is landed by patch equivalence offline.
+7. **Given** the same merged pull request but a `--base` that does not contain its `merge_commit_sha` (stale base), for a merge, rebase or squash, **When** `plan` runs, **Then** no layer is dropped, no `rebase` step is printed and the plan has one `observe` step with note `stale-base`.
+8. **Given** a missing merge commit object, or a native-stack head that is not local, **When** `plan` runs, **Then** the plan is `fetch` then `observe` (`run-again`); **Given** all objects local and a native stack whose child GitHub already rewrote (upstream `diverged`), or any layer whose upstream is `behind` or `diverged` (including layers just rewritten by the maintainer's own rebase), **Then** the plan is a single `observe` with note `reconcile-upstream`, no `rebase` and no `link`, and a repeated run after a fetch gives the same plan (it terminates).
+9. **Given** a merged layer above an unmerged one, **When** `plan` runs, **Then** it is blocked with `merged-layer-not-bottom` naming that layer in `blocked.layer`.
+10. **Given** `plan` without `--pull-requests`, or with a failed remote read, **When** it is rendered, **Then** `native_checked` is `false` and the boundary carries the native-stack limitation; **Given** unlinked chained pull requests and unpushed or up-to-date layers, **Then** a `link` step appears only when the plan has no `rebase` step.
+11. **Given** any plan, **When** it is rendered, **Then** every step is advisory text, the result states that nothing was executed and that the plan authorizes nothing, and each step names the commit ids it expects so a later executor (Spec 015) can refuse a stale plan.
 
 ### User Story 3 — Account for GitHub native stacks (Priority: P1)
 
