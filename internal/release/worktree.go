@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // sourceEntry is one entry of the .stw directory of the evaluated source.
@@ -21,8 +20,8 @@ type sourceEntry struct {
 // the working tree or a commit.
 type contractSource interface {
 	Tree
-	// Entries lists .stw; truncated reports a listing cut at its bound.
-	Entries() (entries []sourceEntry, truncated bool, err error)
+	// StwEntries lists .stw; truncated reports a listing cut at its bound.
+	StwEntries() (entries []sourceEntry, truncated bool, err error)
 	// Read returns at most limit bytes of the entry and whether it is longer.
 	Read(e sourceEntry, limit int) (data []byte, tooLarge bool, err error)
 }
@@ -40,7 +39,7 @@ var beforeOpen = func(path string) {}
 // worktreeSource reads files of the working tree without following symlinks.
 type worktreeSource struct{ root string }
 
-func (w worktreeSource) Entries() ([]sourceEntry, bool, error) {
+func (w worktreeSource) StwEntries() ([]sourceEntry, bool, error) {
 	info, err := os.Lstat(filepath.Join(w.root, ".stw"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, false, nil
@@ -105,33 +104,27 @@ func (w worktreeSource) Read(e sourceEntry, limit int) ([]byte, bool, error) {
 	return data, false, nil
 }
 
-// Kinds reports which paths exist in the working tree; a path below a symlink counts as absent
-// and a final symlink counts as a file.
-func (w worktreeSource) Kinds(paths []string) (map[string]string, error) {
-	out := map[string]string{}
+// Entries reports the entries that exist at the given paths, without following symlinks at the
+// last component; a symlink entry carries its target.
+func (w worktreeSource) Entries(paths []string) (map[string]TreeEntry, error) {
+	out := map[string]TreeEntry{}
 	for _, p := range paths {
-		segments := strings.Split(p, "/")
-		current, kind := w.root, ""
-		for i, segment := range segments {
-			current = filepath.Join(current, segment)
-			info, err := os.Lstat(current)
-			if err != nil {
-				kind = ""
-				break
-			}
-			kind = "file"
-			if info.IsDir() {
-				kind = "dir"
-			}
-			// Only the last segment may be a file; a symlink on the way is a file here, so a path
-			// below it is not probed through it.
-			if kind == "file" && i < len(segments)-1 {
-				kind = ""
-				break
-			}
+		full := filepath.Join(w.root, filepath.FromSlash(p))
+		info, err := os.Lstat(full)
+		if err != nil {
+			continue
 		}
-		if kind != "" {
-			out[p] = kind
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(full)
+			if err != nil {
+				return nil, err
+			}
+			out[p] = TreeEntry{Kind: "symlink", Target: target}
+		case info.IsDir():
+			out[p] = TreeEntry{Kind: "dir"}
+		default:
+			out[p] = TreeEntry{Kind: "file"}
 		}
 	}
 	return out, nil

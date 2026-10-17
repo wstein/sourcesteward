@@ -143,7 +143,7 @@ func Check(ctx context.Context, opts CheckOptions) CheckResult {
 		}
 		source = git
 	}
-	entries, truncated, err := source.Entries()
+	entries, truncated, err := source.StwEntries()
 	if errors.Is(err, errStwNotDirectory) {
 		return refuse("config-missing", ".stw is not a directory (symlinks are not followed); no release contract found")
 	}

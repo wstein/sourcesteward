@@ -3,6 +3,7 @@ package release
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,13 +26,18 @@ func loadExample(t *testing.T, name string) map[string]any {
 	return doc
 }
 
+// fakeTree maps a path to "file", "dir" or "symlink:<target>".
 type fakeTree map[string]string
 
-func (f fakeTree) Kinds(paths []string) (map[string]string, error) {
-	out := map[string]string{}
+func (f fakeTree) Entries(paths []string) (map[string]TreeEntry, error) {
+	out := map[string]TreeEntry{}
 	for _, p := range paths {
-		if kind := f[p]; kind != "" {
-			out[p] = kind
+		switch v := f[p]; {
+		case v == "":
+		case strings.HasPrefix(v, "symlink:"):
+			out[p] = TreeEntry{Kind: "symlink", Target: strings.TrimPrefix(v, "symlink:")}
+		default:
+			out[p] = TreeEntry{Kind: v}
 		}
 	}
 	return out, nil
@@ -477,5 +483,37 @@ func TestSemanticAndSchemaFindingsAreOrderedTogether(t *testing.T) {
 	_, findings, _ := ValidateContract(doc, ValidateOptions{})
 	if len(findings) != 2 || findings[0].Pointer != "/build/0/argv/2" || findings[1].Pointer != "/schema_version" {
 		t.Fatalf("%+v", findings)
+	}
+}
+
+func TestAllowlistFindingsAreDeterministic(t *testing.T) {
+	tree := fakeTree{"scripts": "dir"}
+	for i := 0; i < 40; i++ {
+		tree[fmt.Sprintf("scripts/s%02d.sh", i)] = "file"
+	}
+	mutate := func(t *testing.T, doc map[string]any) {
+		argv := []any{"sh"}
+		for i := 39; i >= 0; i-- {
+			argv = append(argv, fmt.Sprintf("scripts/s%02d.sh", i))
+		}
+		setAt(t, doc, argv, "build", 0, "argv")
+		setAt(t, doc, strs("scripts/*.sh", "scripts/**", "**"), "allowlist", "paths")
+	}
+	var first string
+	for run := 0; run < 25; run++ {
+		_, findings := lintFindings(t, "go-cli", tree, mutate)
+		var out []string
+		for _, f := range findings {
+			out = append(out, f.Pointer+f.Message)
+		}
+		got := strings.Join(out, "\n")
+		if run == 0 {
+			first = got
+			if len(findings) != 3 {
+				t.Fatalf("%q", out)
+			}
+		} else if got != first {
+			t.Fatalf("run %d differs:\n%s\n--\n%s", run, got, first)
+		}
 	}
 }

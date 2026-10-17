@@ -28,27 +28,35 @@ func TestGitOutputIsCapped(t *testing.T) {
 	}
 }
 
-func TestGitKindsOfATree(t *testing.T) {
+func TestGitEntriesOfATree(t *testing.T) {
 	dir := repoWith(t, map[string][]byte{"dir/file.txt": []byte("x"), "top.txt": []byte("x")})
+	if err := os.Symlink("dir/file.txt", filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("dir", filepath.Join(dir, "dirlink")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(dir, "top.txt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	commit := commitAll(t, dir)
 	git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+commit+",sub")
 	git(t, dir, "commit", "-q", "-m", "gitlink")
-	head := git(t, dir, "rev-parse", "HEAD")
-	source, err := newGitSource(context.Background(), dir, head)
+	source, err := newGitSource(context.Background(), dir, git(t, dir, "rev-parse", "HEAD"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := source.Kinds([]string{"dir", "dir/file.txt", "top.txt", "sub", "missing", "dir/missing", "top.txt/below"})
+	got, err := source.Entries([]string{"dir", "dir/file.txt", "top.txt", "sub", "missing", "dir/missing", "top.txt/below", "link", "dirlink", "dirlink/file.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"dir": "dir", "dir/file.txt": "file", "top.txt": "file", "sub": "dir"}
+	want := map[string]TreeEntry{"dir": {Kind: "dir"}, "dir/file.txt": {Kind: "file"}, "top.txt": {Kind: "file"}, "sub": {Kind: "dir"}, "link": {Kind: "symlink", Target: "dir/file.txt"}, "dirlink": {Kind: "symlink", Target: "dir"}}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 
-func TestGitKindsRefusesMoreProbesThanItCanCheck(t *testing.T) {
+func TestGitEntriesRefusesMoreProbesThanItCanCheck(t *testing.T) {
 	dir := repoWith(t, map[string][]byte{"x": []byte("x")})
 	head := commitAll(t, dir)
 	source, err := newGitSource(context.Background(), dir, head)
@@ -60,13 +68,13 @@ func TestGitKindsRefusesMoreProbesThanItCanCheck(t *testing.T) {
 		paths[i] = fmt.Sprintf("p%d", i)
 	}
 	paths[maxTreeProbes] = "x"
-	if _, err := source.Kinds(paths); err == nil {
+	if _, err := source.Entries(paths); err == nil {
 		t.Fatal("the probe list was silently truncated")
 	}
-	if got, err := source.Kinds(append(paths[:maxTreeProbes-1:maxTreeProbes-1], "x")); err != nil || got["x"] != "file" {
+	if got, err := source.Entries(append(paths[:maxTreeProbes-1:maxTreeProbes-1], "x")); err != nil || got["x"].Kind != "file" {
 		t.Fatalf("a list of exactly the limit is probed: %v %v", got, err)
 	}
-	if _, err := source.Kinds([]string{"a\nb"}); err == nil {
+	if _, err := source.Entries([]string{"a\nb"}); err == nil {
 		t.Fatal("a path with a newline cannot be probed safely")
 	}
 }

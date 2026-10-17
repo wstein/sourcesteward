@@ -3,6 +3,7 @@ package release
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,7 +96,7 @@ func TestWorktreeReadDoesNotBlockOnAFifo(t *testing.T) {
 	}
 }
 
-func TestWorktreeKinds(t *testing.T) {
+func TestWorktreeEntries(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "real/file.txt", []byte("x"))
 	write(t, dir, "top.txt", []byte("x"))
@@ -105,19 +106,12 @@ func TestWorktreeKinds(t *testing.T) {
 	if err := os.Symlink("top.txt", filepath.Join(dir, "filelink")); err != nil {
 		t.Fatal(err)
 	}
-	got, err := (worktreeSource{dir}).Kinds([]string{"real", "real/file.txt", "top.txt", "top.txt/below", "link", "link/file.txt", "filelink", "missing", "real/missing"})
+	got, err := (worktreeSource{dir}).Entries([]string{"real", "real/file.txt", "top.txt", "top.txt/below", "link", "filelink", "missing", "real/missing"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"real": "dir", "real/file.txt": "file", "top.txt": "file", "filelink": "file"}
-	// A symlink to a directory is a final symlink and counts as a file; nothing below it exists.
-	want["link"] = "file"
-	if len(got) != len(want) {
+	want := map[string]TreeEntry{"real": {Kind: "dir"}, "real/file.txt": {Kind: "file"}, "top.txt": {Kind: "file"}, "link": {Kind: "symlink", Target: "real"}, "filelink": {Kind: "symlink", Target: "top.txt"}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("got %v, want %v", got, want)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%s: got %q, want %q", k, got[k], v)
-		}
 	}
 }

@@ -492,3 +492,16 @@ func TestCheckProductKeepsAmbiguityFindingsAboutThatProduct(t *testing.T) {
 	dir = repoWith(t, map[string][]byte{".stw/release.zlib.toml": exampleBytes(t, "mirror-zlib"), ".stw/release.toml": exampleBytes(t, "go-cli"), ".stw/release.busybox.toml": exampleBytes(t, "mirror-busybox")})
 	wantCodes(t, run(t, CheckOptions{Path: dir, Product: "busybox"}), "config-ambiguous .stw/release.toml ")
 }
+
+func TestCheckFollowsRepositorySymlinksToInputs(t *testing.T) {
+	contract := strings.Replace(string(exampleBytes(t, "go-cli")), `paths = ["docs/**", "README.md", "llms.txt"]`, `paths = ["tools/**"]`, 1)
+	dir := repoWith(t, map[string][]byte{".stw/release.toml": []byte(contract), "tools/release-package.sh": []byte("#!/bin/sh\n")})
+	if err := os.Symlink("tools", filepath.Join(dir, "scripts")); err != nil {
+		t.Fatal(err)
+	}
+	commit := commitAll(t, dir)
+	for _, opts := range []CheckOptions{{Path: dir}, {Path: dir, Commit: commit}} {
+		r := run(t, opts)
+		wantCodes(t, r, "allowlist-overlaps-input .stw/release.toml /allowlist/paths/0")
+	}
+}
