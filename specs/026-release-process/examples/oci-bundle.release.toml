@@ -1,4 +1,7 @@
-# Worked example 2 (file .stw/release.toolbox.toml; BundleDock also has a CLI product): an OCI bundle with calendar versions. Promote adds a tag to the same digest.
+# Worked example 2 (file .stw/release.toolbox.toml; BundleDock also has a CLI product): an OCI bundle with calendar versions.
+# Decision D10 preconditions: P1 restartable counter (non-decreasing, counter outside order), P2 registry login is a
+# workflow-owned step (no credential in this file), P3 promote adds only the version tag (no stable/latest alias).
+# Promote adds the version tag to the same digest.
 schema_version = 1
 
 [project]
@@ -6,9 +9,13 @@ name = "BundleDock toolbox"
 product = "toolbox"
 
 [version]
-scheme = "calver"
-tag_prefix = "toolbox/"
+scheme = "pattern"
 source = "input"
+# P1 of decision D10: the build counter (-bN.M) is outside "order" and may restart within a day.
+monotonicity = "non-decreasing"
+tag_template = "toolbox/{version}"
+tag_pattern = '^toolbox/(?P<version>(?P<year>[0-9]{4})\.(?P<month>[0-9]{2})\.(?P<day>[0-9]{2})(?:-b(?P<build>[0-9]{1,9})(?:\.(?P<patch>[0-9]{1,9}))?)?)$'
+order = ["year", "month", "day"]
 
 [[build]]
 id = "toolbox-image"
