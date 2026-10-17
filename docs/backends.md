@@ -51,7 +51,7 @@ Every native read suppresses snapshots and pins operation selection. Results exp
 `stored-unsnapshotted`: disk edits/untracked files are not represented, freshness is unknown,
 and sampling cannot guarantee a transaction or detect all concurrent/ABA changes. Divergent
 operations and stale workspace state never trigger automatic merging or workspace updates.
-Native inspection has a ten-second total deadline and 64 KiB per-command output bound.
+Native inspection has a ten-second total deadline and 64 KiB per-command output bound; the Git inventory reads large outputs incrementally (Spec 027) while the jj adapter keeps the per-command bound.
 
 Bind plans to backend, repository/workspace identity, relevant refs, changes and operation
 identity where supported. Revalidate before applying; reject stale plans. Recovery is backend-
