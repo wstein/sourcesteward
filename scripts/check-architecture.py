@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: EUPL-1.2
 """Enforce the CLI/inspection import and effects boundary."""
 from pathlib import Path
+import json
 import re
 import subprocess
 
@@ -137,6 +138,61 @@ def run_release_ast_check():
         raise ValueError('internal/release architecture rules failed:\n' + result.stdout + result.stderr)
 
 
+FOREIGN_FILE_LISTS = ('CgoFiles', 'CFiles', 'CXXFiles', 'MFiles', 'HFiles', 'FFiles', 'SFiles', 'SwigFiles', 'SwigCXXFiles', 'SysoFiles')
+# Module packages internal/release may import: the root package (embedded schema), the existing
+# inspection and its own subpackages. Extend only when the code really needs more.
+RELEASE_IMPORT_ALLOWLIST = (MODULE.rstrip('/'), MODULE + 'internal/inspection')
+RELEASE_PREFIX = MODULE + 'internal/release'
+EXEC_ALLOWED_PACKAGES = (RELEASE_PREFIX, MODULE + 'internal/inspection')
+
+
+def validate_release_packages(packages):
+    """`go list -json` of internal/release/...: no cgo, assembly or other foreign sources."""
+    for package in packages:
+        path = package['ImportPath']
+        if path != RELEASE_PREFIX and not path.startswith(RELEASE_PREFIX + '/'):
+            continue
+        for key in FOREIGN_FILE_LISTS:
+            if package.get(key):
+                raise ValueError(path + ' has ' + key + ' ' + ', '.join(package[key]) + '; internal/release is pure Go')
+
+
+def validate_release_graph(graph):
+    """graph maps a module package to its direct imports (internal/release/... and its closure)."""
+    for package, imports in graph.items():
+        in_release = package == RELEASE_PREFIX or package.startswith(RELEASE_PREFIX + '/')
+        if in_release:
+            for dependency in imports:
+                module_internal = dependency.startswith(MODULE) or dependency == MODULE.rstrip('/')
+                inside = dependency == RELEASE_PREFIX or dependency.startswith(RELEASE_PREFIX + '/')
+                if module_internal and not inside and dependency not in RELEASE_IMPORT_ALLOWLIST:
+                    raise ValueError(package + ' imports ' + dependency + ', which is not on the internal/release import allowlist')
+        if 'os/exec' in imports and package not in EXEC_ALLOWED_PACKAGES:
+            raise ValueError(package + ' imports os/exec; only internal/release (reviewed files) and internal/inspection may')
+
+
+def go_release_packages():
+    result = subprocess.run(['go', 'list', '-json', './internal/release/...'], cwd=ROOT, text=True, capture_output=True, check=True)
+    decoder, text, packages, index = json.JSONDecoder(), result.stdout, [], 0
+    while index < len(text):
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text):
+            break
+        package, index = decoder.raw_decode(text, index)
+        packages.append(package)
+    return packages
+
+
+def go_release_graph():
+    result = subprocess.run(['go', 'list', '-deps', '-f', '{{.ImportPath}} {{join .Imports " "}}', './internal/release/...'], cwd=ROOT, text=True, capture_output=True, check=True)
+    graph = {}
+    for line in result.stdout.splitlines():
+        package, *imports = line.split()
+        graph[package] = imports
+    return graph
+
+
 def go_dependencies():
     result = subprocess.run(['go', 'list', '-deps', '-f', '{{.ImportPath}}'] + ['./' + p for p in NETWORK_FREE_PACKAGES], cwd=ROOT, text=True, capture_output=True, check=True)
     closure = result.stdout.split()
@@ -147,6 +203,8 @@ if __name__ == '__main__':
     sources = go_sources()
     validate_sources(sources, go_file_imports(sources))
     validate_dependencies(go_dependencies())
+    validate_release_packages(go_release_packages())
+    validate_release_graph(go_release_graph())
     run_release_ast_check()
     result = subprocess.run(['go', 'list', '-f', '{{.ImportPath}} {{join .Imports " "}}', './...'], cwd=ROOT, text=True, capture_output=True, check=True)
     validate(result.stdout.splitlines())
