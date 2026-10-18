@@ -1,3 +1,5 @@
+> Current disposition: [round3 rejected this candidate; finite correction assessment](round3-disposition.md). Three NOT CLEAR gates remain counted, round4 is unspent, and runtime is blocked. Historical candidate claims below are not clearance.
+
 # Watch-owned lifetime assessment — predecessor and component protocols
 
 **Predecessor state**: Superseded for current disposition by [the scoped authentication ownership candidate](auth-lifetime.md). The historical rejection/options below record why the direct-child-only candidate failed; they are not the current selected alternatives. One finite mechanism assessment completed; the candidate below is **not a complete acceptable watch design**. Actual supported gh authentication can create an unowned descendant, so the direct-child completion assumption failed before review round3. Two prior NOT CLEAR reviews remain recorded and round3 is unspent. The component protocols below are preserved as evaluated alternatives, not normative schema/runtime additions. Existing one-shot/CI adapters and all five requested outcomes stay unchanged.

@@ -1,3 +1,5 @@
+> Current gate: [round3 disposition](../round3-disposition.md). The terminal ownership candidate is rejected; three NOT CLEAR reviews are counted. Polling/schema contracts remain proposed, with no runtime implementation authorized.
+
 # PR status contract candidate
 
 ## CLI and compatibility decision
