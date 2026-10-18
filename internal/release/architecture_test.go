@@ -26,7 +26,9 @@ import (
 //   - no cgo (import "C", cgo directives), no assembly or other foreign sources, no unsafe, no
 //     go:linkname or plugin. The two checkout-view platform observers
 //     (build_checkout_view_linux.go and build_checkout_view_darwin.go) may import syscall for the
-//     selector expression syscall.Stat_t only. The exact record writer alone imports pinned x/sys/unix;
+//     selector expression syscall.Stat_t (linux additionally the direct call syscall.Getpgid and
+//     syscall.ESRCH; darwin additionally x/sys/unix KinfoProc, SizeofKinfoProc and a direct
+//     SysctlRaw("kern.proc.pgrp", ...) call). The exact record writer imports pinned x/sys/unix;
 //     only direct Openat/Mkdirat calls and its explicit O_* constants are admitted.
 //     Direct imports and the non-hosting dependency closure are closed to other external helpers.
 var (
@@ -89,15 +91,16 @@ func releaseSourceViolations(files map[string]string) []string {
 			path, _ := strconv.Unquote(spec.Path.Value)
 			named := spec.Name != nil
 			unixWriter := path == "golang.org/x/sys/unix" && name == "openfile_write_unix.go"
-			if !standards[path] && !releaseProjectImport(path) && !unixWriter {
+			unixObserver := path == "golang.org/x/sys/unix" && name == "build_checkout_view_darwin.go"
+			if !standards[path] && !releaseProjectImport(path) && !unixWriter && !unixObserver {
 				add(name, "import outside the closed release dependency boundary: "+path)
 			}
 			switch {
 			case path == "C":
 				add(name, `import "C" (cgo) is not allowed`)
-			case path == "golang.org/x/sys/unix" && name == "openfile_write_unix.go":
+			case path == "golang.org/x/sys/unix" && (name == "openfile_write_unix.go" || name == "build_checkout_view_darwin.go"):
 				if named {
-					add(name, "writer unix import must have no alias, dot or blank name")
+					add(name, "unix import must have no alias, dot or blank name")
 				}
 			case path == "unsafe", path == "plugin", strings.HasPrefix(path, "golang.org/x/sys"):
 				add(name, "import of "+path+" is not allowed")
@@ -156,6 +159,27 @@ func releaseSourceViolations(files map[string]string) []string {
 		allowedSyscall := map[*ast.Ident]bool{}
 		allowedUnix := map[*ast.Ident]bool{}
 		directWriterCalls := map[*ast.SelectorExpr]bool{}
+		// Direct, plain calls: a selector used as the called function itself (not parenthesized,
+		// not captured as a value). groupArgument records whether the first argument is the
+		// exact owned-group sysctl name.
+		directCalls := map[*ast.SelectorExpr]bool{}
+		groupSysctl := map[*ast.SelectorExpr]bool{}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+					directCalls[sel] = true
+					if len(call.Args) > 0 {
+						if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+							if value, err := strconv.Unquote(lit.Value); err == nil && value == "kern.proc.pgrp" {
+								groupSysctl[sel] = true
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+		allowedUnixObserver := map[*ast.Ident]bool{}
 		if name == "openfile_write_unix.go" {
 			for _, decl := range file.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
@@ -184,8 +208,23 @@ func releaseSourceViolations(files map[string]string) []string {
 			if x.Name == "syscall" && openFile.MatchString(name) && strings.HasPrefix(sel.Sel.Name, "O_") {
 				allowedSyscall[x] = true
 			}
-			if x.Name == "syscall" && checkoutObserver.MatchString(name) && sel.Sel.Name == "Stat_t" {
-				allowedSyscall[x] = true
+			if x.Name == "syscall" && checkoutObserver.MatchString(name) {
+				switch {
+				case sel.Sel.Name == "Stat_t":
+					allowedSyscall[x] = true
+				case name == "build_checkout_view_linux.go" && sel.Sel.Name == "ESRCH":
+					allowedSyscall[x] = true
+				case name == "build_checkout_view_linux.go" && sel.Sel.Name == "Getpgid" && directCalls[sel]:
+					allowedSyscall[x] = true
+				}
+			}
+			if x.Name == "unix" && name == "build_checkout_view_darwin.go" {
+				switch {
+				case sel.Sel.Name == "KinfoProc" || sel.Sel.Name == "SizeofKinfoProc":
+					allowedUnixObserver[x] = true
+				case sel.Sel.Name == "SysctlRaw" && directCalls[sel] && groupSysctl[sel]:
+					allowedUnixObserver[x] = true
+				}
 			}
 			if x.Name == "unix" && name == "openfile_write_unix.go" && (writerUnixConstants[sel.Sel.Name] || (sel.Sel.Name == "Openat" || sel.Sel.Name == "Mkdirat") && directWriterCalls[sel]) {
 				allowedUnix[x] = true
@@ -204,7 +243,10 @@ func releaseSourceViolations(files map[string]string) []string {
 			}
 			ast.Inspect(file, func(n ast.Node) bool {
 				if id, ok := n.(*ast.Ident); ok && id.Name == "syscall" && !allowedSyscall[id] && !imports[id] {
-					add(name, "the checkout view observers may use only syscall.Stat_t, found "+fset.Position(id.Pos()).String())
+					add(name, "the checkout view observers may use only syscall.Stat_t (linux: also direct Getpgid and ESRCH), found "+fset.Position(id.Pos()).String())
+				}
+				if id, ok := n.(*ast.Ident); ok && id.Name == "unix" && !allowedUnixObserver[id] && !imports[id] {
+					add(name, "the Darwin observer permits only KinfoProc, SizeofKinfoProc and a direct SysctlRaw(\"kern.proc.pgrp\", ...) call, found "+fset.Position(id.Pos()).String())
 				}
 				return true
 			})
@@ -420,7 +462,7 @@ func TestReleaseSourceArchitectureCheckoutObserversAreTypeOnly(t *testing.T) {
 		if v := releaseSourceViolations(map[string]string{name: source}); len(v) != 0 {
 			t.Fatalf("%s rejected: %v", name, v)
 		}
-		for _, selector := range []string{"Kill", "Exec", "ForkExec", "Syscall", "RawSyscall", "O_TRUNC", "Getpgid"} {
+		for _, selector := range []string{"Kill", "Exec", "ForkExec", "Syscall", "RawSyscall", "O_TRUNC"} {
 			if len(releaseSourceViolations(map[string]string{name: source + "var _ = syscall." + selector + "\n"})) == 0 {
 				t.Fatalf("%s accepted syscall.%s", name, selector)
 			}
@@ -439,6 +481,57 @@ func TestReleaseSourceArchitectureCheckoutObserversAreTypeOnly(t *testing.T) {
 	for _, wrong := range []string{"build_checkout_view.go", "build_checkout_view_other.go", "build_checkout_view_linux_test_support.go", "sub/build_checkout_view_linux.go", "check.go"} {
 		if len(releaseSourceViolations(map[string]string{wrong: source})) == 0 {
 			t.Fatalf("accepted the observer import in %s", wrong)
+		}
+	}
+}
+
+func TestReleaseSourceArchitectureCheckoutObserverGroupQueries(t *testing.T) {
+	const linux, darwin = "build_checkout_view_linux.go", "build_checkout_view_darwin.go"
+	base := "package release\nimport \"syscall\"\nvar _ *syscall.Stat_t\n"
+	group := base + "func f() { _, _ = syscall.Getpgid(42); _ = syscall.ESRCH }\n"
+	if v := releaseSourceViolations(map[string]string{linux: group}); len(v) != 0 {
+		t.Fatalf("linux group query rejected: %v", v)
+	}
+	for _, name := range []string{darwin, "build_checkout_view.go", "sub/" + linux} {
+		if len(releaseSourceViolations(map[string]string{name: group})) == 0 {
+			t.Fatalf("accepted the linux group query in %s", name)
+		}
+	}
+	for _, only := range []string{"func f() { _, _ = syscall.Getpgid(42) }\n", "var _ = syscall.ESRCH\n"} {
+		if len(releaseSourceViolations(map[string]string{darwin: base + only})) == 0 {
+			t.Fatalf("darwin accepted the linux-only selector in %s", only)
+		}
+		if v := releaseSourceViolations(map[string]string{linux: base + only}); len(v) != 0 {
+			t.Fatalf("linux rejected %s: %v", only, v)
+		}
+	}
+	for _, form := range []string{"var f = syscall.Getpgid\n", "func g() { _, _ = (syscall.Getpgid)(1) }\n", "func h() any { return syscall.Getpgid }\n"} {
+		if len(releaseSourceViolations(map[string]string{linux: base + form})) == 0 {
+			t.Fatalf("accepted Getpgid used as a value: %s", form)
+		}
+	}
+	unix := "package release\nimport \"golang.org/x/sys/unix\"\nvar _ unix.KinfoProc\nvar _ = unix.SizeofKinfoProc\nfunc observe() { _, _ = unix.SysctlRaw(\"kern.proc.pgrp\", 42) }\n"
+	if v := releaseSourceViolations(map[string]string{darwin: unix}); len(v) != 0 {
+		t.Fatalf("darwin group query rejected: %v", v)
+	}
+	for _, selector := range []string{"SysctlKinfoProcSlice", "SysctlKinfoProc", "Kill", "Exec", "Syscall", "Openat"} {
+		if len(releaseSourceViolations(map[string]string{darwin: unix + "var _ = unix." + selector + "\n"})) == 0 {
+			t.Fatalf("darwin accepted unix.%s", selector)
+		}
+	}
+	for _, form := range []string{"var f = unix.SysctlRaw\n", "func f() any { return unix.SysctlRaw }\n", "func g() { _, _ = (unix.SysctlRaw)(\"kern.proc.pgrp\", 1) }\n", "func h() { _, _ = unix.SysctlRaw(\"kern.proc.all\", 1) }\n", "func i(n string) { _, _ = unix.SysctlRaw(n, 1) }\n", "func j() { _, _ = unix.SysctlRaw() }\n"} {
+		if len(releaseSourceViolations(map[string]string{darwin: unix + form})) == 0 {
+			t.Fatalf("darwin accepted %s", form)
+		}
+	}
+	for _, alias := range []string{"u", ".", "_"} {
+		if len(releaseSourceViolations(map[string]string{darwin: strings.Replace(unix, "import \"", "import "+alias+" \"", 1)})) == 0 {
+			t.Fatalf("darwin accepted alias %s", alias)
+		}
+	}
+	for _, name := range []string{linux, "build_checkout_view.go", "build_checkout_view_other.go", "check.go", "openfile_unix.go", "sub/" + darwin} {
+		if len(releaseSourceViolations(map[string]string{name: unix})) == 0 {
+			t.Fatalf("accepted x/sys/unix in %s", name)
 		}
 	}
 }

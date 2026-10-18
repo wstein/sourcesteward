@@ -492,3 +492,148 @@ func checkBuildWorktreeRoot(ctx context.Context, root string) error {
 func openBuildViewFile(parent *os.Root, name string) (*os.File, error) {
 	return parent.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 }
+
+// runBuildViewNative retains an unreaped direct leader until its entire owned
+// group and both output streams reach terminal state. exec.CommandContext/Run
+// would reap before descendant cleanup, losing the identity that pins the PGID.
+var buildViewDrainGrace = 500 * time.Millisecond
+
+type buildViewNativeHooks struct {
+	pipes   func(*os.File, *os.File)
+	started func(int)
+}
+
+func runBuildViewNative(parent context.Context, c buildViewCommand, out io.Writer, testHooks ...buildViewNativeHooks) (int, []byte, error) {
+	var hooks buildViewNativeHooks
+	if len(testHooks) > 0 {
+		hooks = testHooks[0]
+	}
+	ctx, cancel := context.WithTimeout(parent, gitDeadline)
+	defer cancel()
+	cmd := exec.Command(c.Executable, c.Args...)
+	cmd.Dir, cmd.Env, cmd.Stdin = c.Dir, c.Env, c.Stdin
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return -1, nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		stdout.Close()
+		return -1, nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		stdout.Close()
+		stderr.Close()
+		return -1, nil, err
+	}
+	if hooks.pipes != nil {
+		hooks.pipes(cmd.Stdout.(*os.File), cmd.Stderr.(*os.File))
+	}
+	if err := cmd.Start(); err != nil {
+		stdout.Close()
+		stderr.Close()
+		return -1, nil, err
+	}
+	pid := cmd.Process.Pid
+	if hooks.started != nil {
+		hooks.started(pid)
+	}
+	diagnostic := &buildViewDiagnostic{cancel: cancel}
+	streams := make(chan error, 2)
+	go func() { _, e := io.CopyBuffer(out, stdout, make([]byte, 32<<10)); stdout.Close(); streams <- e }()
+	go func() { _, e := io.CopyBuffer(diagnostic, stderr, make([]byte, 16<<10)); stderr.Close(); streams <- e }()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	drained := 0
+	var streamErr, cleanupErr error
+	killed, closed := false, false
+	var killedAt time.Time
+	for {
+		if ctx.Err() != nil || streamErr != nil {
+			if !killed {
+				e := syscall.Kill(-pid, syscall.SIGKILL)
+				if e != nil && !errors.Is(e, syscall.ESRCH) {
+					if cleanupErr == nil {
+						cleanupErr = errors.New("native group cleanup signal failed")
+					}
+				} else {
+					killed, killedAt = true, time.Now()
+				}
+			}
+		}
+		// A descendant that left the group (setsid) can keep an output pipe open for
+		// good. After the kill and a short grace the read ends are closed, so the
+		// wait is bounded; the job is refused, never accepted with partial output.
+		if killed && !closed && time.Since(killedAt) > buildViewDrainGrace {
+			closed = true
+			stdout.Close()
+			stderr.Close()
+			cleanupErr = errors.Join(cleanupErr, errors.New("native output held open outside the group"))
+		}
+		state, e := observeBuildViewGroup(pid)
+		if e != nil { // Observation failure never authorizes a reap or lease release.
+			if cleanupErr == nil {
+				cleanupErr = errors.New("native group observation incomplete")
+			}
+			cancel()
+		} else if state.leaderTerminal {
+			if state.members == 1 && drained == 2 {
+				break
+			}
+			if state.members > 1 && !killed {
+				cleanupErr = errors.Join(cleanupErr, errors.New("native group outlived its leader"))
+				cancel()
+			}
+		}
+		select {
+		case e := <-streams:
+			drained++
+			if e != nil {
+				streamErr = errors.Join(streamErr, e)
+				cancel()
+			}
+		case <-ticker.C:
+		}
+	}
+	// No signal is sent to this numeric PGID after the following reap.
+	waitErr := cmd.Wait()
+	if diagnostic.overflow {
+		return -1, diagnostic.prefix, fmt.Errorf("%w: native diagnostics exceed limit", errReleaseLimit)
+	}
+	if parent.Err() != nil {
+		return -1, diagnostic.prefix, parent.Err()
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return -1, diagnostic.prefix, ctx.Err()
+	}
+	if streamErr != nil || cleanupErr != nil {
+		return -1, diagnostic.prefix, errors.Join(streamErr, cleanupErr)
+	}
+	var exit *exec.ExitError
+	if errors.As(waitErr, &exit) {
+		return exit.ExitCode(), diagnostic.prefix, nil
+	}
+	if waitErr != nil {
+		return -1, diagnostic.prefix, waitErr
+	}
+	return 0, diagnostic.prefix, nil
+}
+
+type buildViewDiagnostic struct {
+	prefix   []byte
+	overflow bool
+	cancel   context.CancelFunc
+}
+
+func (w *buildViewDiagnostic) Write(p []byte) (int, error) {
+	n := len(p)
+	left := (64 << 10) - len(w.prefix)
+	if len(p) > left {
+		p = p[:left]
+		w.overflow = true
+		w.cancel()
+	}
+	w.prefix = append(w.prefix, p...)
+	return n, nil
+}
