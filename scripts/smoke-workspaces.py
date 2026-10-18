@@ -18,6 +18,10 @@ BINARY = ROOT / 'bin/stw'
 _spec = importlib.util.spec_from_file_location('jj_smoke', ROOT / 'scripts/smoke-jj-inspection.py')
 helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
+_layout_spec = importlib.util.spec_from_file_location('git_layout_smoke', ROOT / 'scripts/smoke-git-layouts.py')
+layout_smoke = importlib.util.module_from_spec(_layout_spec)
+_layout_spec.loader.exec_module(layout_smoke)
+LAYOUT_CASE_IDS = layout_smoke.CASE_IDS['workspace']
 NAMES = ('plan', 'apply', 'retry', 'handoff', 'retire-plan', 'stale', 'occupied',
          'symlink', 'private-store', 'foreign', 'helpers', 'incomplete-retry', 'authorization', 'human', 'manager-ownership')
 CASE_IDS = {group: tuple(group + '.' + name for name in NAMES)
@@ -246,7 +250,8 @@ def acceptance(binary=BINARY):
             mark(group, 'incomplete-retry')
     expected = {case for ids in CASE_IDS.values() for case in ids}
     require_complete(completed, expected)
-    print(str(len(completed)) + ' native workspace CLI cases passed with independently checked source and declared effects')
+    layout_count = layout_smoke.acceptance(binary, 'workspace')
+    print(str(len(completed) + layout_count) + ' native workspace CLI cases passed with independently checked source and declared effects')
 
 
 if __name__ == '__main__':
