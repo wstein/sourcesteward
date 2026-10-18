@@ -6,6 +6,7 @@
 
 - [x] T001 Inspect actual readers, shared callers, transport, schemas, cancellation and exit boundary; verify GitHub meanings using primary documentation. Correct the checkpoint's strict-v1 assumption.
 - [x] T002 Specify lifecycle/field/exit tables, migration, compact/detail, expectation, bounded watch and delivery alternatives; create candidate schema and illustrative fixtures.
+- [ ] T002a Complete a source-specific bounded operation/teardown protocol for every path in [teardown-assessment.md](teardown-assessment.md), including explicit failure/completion/residual-state handling and no live worker. The old one-second reserve is invalid; changing arithmetic alone does not complete this design prerequisite. Do not defer the mechanism to T010 or request round3 until it is coherent.
 - [ ] T003 Dispatch obtains strongest independent cross-artifact review of exact committed revision. Resolve findings; independently review changed rules. Evaluate proposed final-delivery C without weakening inclusive scope; no runtime before independent design CLEAR and named cleanup/entry/race/platform acceptance prerequisites.
 
 ## WI1 — Enhanced result and decoder (FR-001/003/009)

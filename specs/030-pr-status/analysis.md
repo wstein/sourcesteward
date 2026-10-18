@@ -16,8 +16,8 @@
 | One request gets 30s on every poll / auth repeats | One work context/auth session and absolute deadline; T006/T008 |
 | Terminal eighth sample rejected; ninth read attempted | Predicate-before-count stop; exact budget tests T008 |
 | A wait clipped to deadline still permits a poll | No poll after clipped wait/W; global-clock tests T008 |
-| Full output pipe or stderr blocks outside HTTP deadline | Explicit delivery A/B decision, measured capability gap and T010; remains blocker |
-| Arbitrary writer timeout leaves live goroutine | Prohibited; effective sink deadline/cancellation preflight and joined monitor required |
+| Full output pipe or stderr blocks outside HTTP deadline | Final-delivery C component is independently CLEAR; source-specific pre-delivery teardown remains the High design blocker |
+| Arbitrary writer timeout leaves live goroutine | Prohibited; C writes synchronously under a cmd-owned final exit arbiter; returning test callbacks join, real process exits without a disarm gap |
 | V1 is called strict without checking implementation | Corrected after inspecting extensible schema and explicit future-property test; v2 rationale revised |
 | New decoder quietly breaks CI or legacy v1 validation | Separate enhanced path; characterization/frozen bytes and shared-caller ledger T004/T006/T009 |
 | Last sample survives HTTP failure but appears fresh | Separate sampled_at/observed_at; error/incomplete and stop; denied-after-sample fixture |
@@ -54,3 +54,13 @@ Independent review of `09274122cd12857b340135d46f2089cbb1c0bd12`: NOT CLEAR (3 M
 Executed round 2 design checks: `/tmp/stw-spec030-round2/schema_test.go` first failed nine added negative cases plus standalone compilation, then passed all 21 original decisions, seven positive fixtures, standalone compile, five unchanged embedded definitions/local-reference scan and six extra grammar/expectation/output-limit decisions. `/tmp/stw-spec030-round2/final_guard_test.go` passed five decision boundaries, 100 simultaneous-ready callback cases and seven disposable process scenarios (blocked stdout/stderr/root-error stderr, cancellation, ordinary file, /dev/null, expired-before-arming cleanup ordering). No production file, provider request or CLI artifact was involved. Final docs/whitespace results are recorded in the handoff.
 
 Review round 2 must inspect the complete changed package, original findings and D3 C's explicit limitations at the frozen exact head. No build, publication or runtime start is authorized by this correction.
+
+## Round 2 result — NOT CLEAR; final round not consumed
+
+Independent round2 at `6a3973c1fe4a7c101e4d8271d0fde63a5b8c86db` closed all original3 Medium and1 Low findings. The final-output C component was CLEAR, including command-only final exit, original deadline, both streams and no disarm gap. Overall design remained NOT CLEAR because mandatory pre-delivery teardown has no bounded mechanism; the Low counterexample rows above are corrected to describe C. This is the second NOT CLEAR gate for the same item; the count is not reset.
+
+The remaining High cannot be deferred to T010 implementation: actual1s WaitDelay tails consume the old W=D−1s reserve, while synchronous RemoveAll/body Close have no independent cancellation/error/completion protocol. [The source-specific assessment](teardown-assessment.md) inventories all paths, separates an operation/teardown/delivery allocation, and gives the exact cutoff counterexample plus normal opposing control. It explicitly leaves the missing mechanism undesigned. The final review round must not be requested until that mechanism is coherent.
+
+Authority correction from the coordinator: the actual user asked for watch with a deadline and backoff; strict inclusive process exit was unapproved design/brief detail. No human permission is needed merely to choose ordinary engineering budgets. Existing accepted hosting bounds, no unbounded cleanup/worker leaks and honest failure semantics still apply. No owner question or silent accepted-contract amendment is introduced here.
+
+Round2 reviewer evidence: `/tmp/stw-review-spec030-round2/schema_test.go`, SHA256 `46562aa3ac64f1370c4cb83c72fa21d2bcaa4f66ae703b744610d239da86e60e`; `/tmp/stw-review-spec030-round2/final_guard_test.go`, SHA256 `30105a6b35d3d0307eab3f56085fbb015aaa054b2db85e42451af45892ebc3ae`. Round3-preparation source-only AST/cutoff/synchronous-cleanup tests passed, demonstrating the identified gap rather than fixing runtime behavior. No shared production code changed.
