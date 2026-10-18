@@ -16,8 +16,10 @@ import (
 // complete CI/constraint/deployment collection and public rendering are later
 // operation work. No report body, raw response or caller path is returned.
 type readyReviewCollection struct {
+	githubReported readiness.GitHubReported
 	// The once-loaded immutable baseline feeds the shared result evaluator.
 	policy         readiness.Policy
+	lock           readiness.Lock
 	Review         readiness.Component
 	Evidence       readiness.ReviewEvidence
 	Policy         readiness.PolicyBinding
@@ -89,6 +91,7 @@ func collectReadyReview(target, path string, number int, s *readySources) (out r
 		return
 	}
 	p := pr.Value
+	out.githubReported = readiness.GitHubReported{Mergeable: p.Mergeable, Rebaseable: p.Rebaseable, MergeableState: p.MergeableState}
 	out.Repository = readiness.Repository{Host: s.repo.Host, ID: *p.Base.RepositoryID, FullName: p.Base.Repository, BaseRef: p.Base.Ref}
 	out.PullRequest = readiness.PullRequest{Number: int64(p.Number), HeadSHA: p.Head.SHA, BaseSHA: p.Base.SHA, HeadRef: p.Head.Ref, BaseRef: p.Base.Ref, HeadRepositoryID: p.Head.RepositoryID, BaseRepositoryID: *p.Base.RepositoryID, State: p.State, Merged: p.Merged, Draft: p.Draft}
 	if !sameReadyRepository(out.Repository, l.Value().Repository) {
@@ -114,6 +117,7 @@ func collectReadyReview(target, path string, number int, s *readySources) (out r
 	}
 	out.Policy = policy.binding()
 	out.policy = policy.policy
+	out.lock = policy.lock
 	associated := s.openPullRequests()
 	files := s.files(number, p.ChangedFiles)
 	statuses := s.statuses(p.Head.SHA)
