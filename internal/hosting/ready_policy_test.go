@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/readiness"
@@ -131,6 +132,16 @@ func TestReadyPolicyRejectsNonDirectoryTarget(t *testing.T) {
 	path := loaderLockFile(t, loaderJSON(t, l))
 	if _, err := readReadyLock(loaderLockFile(t, []byte("target")), path); err == nil {
 		t.Fatal("non-directory target accepted")
+	}
+}
+
+func TestReadyPolicyRejectsFIFOWithoutOpeningIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fifo")
+	if err := syscall.Mkfifo(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readReadyLock(t.TempDir(), path); err == nil {
+		t.Fatal("nonregular lock accepted")
 	}
 }
 func TestReadyPolicySourceAndIdentityRefusals(t *testing.T) {
@@ -301,6 +312,69 @@ func TestReadyCallerPolicyResampleRejectsAllR3Drift(t *testing.T) {
 			}
 			if got.transitionApproved() {
 				t.Fatal("caller transition granted approval")
+			}
+		})
+	}
+}
+
+func TestReadyCallerPolicyUnavailableSourcesNeverReturnSnapshot(t *testing.T) {
+	for _, status := range []int{401, 403, 404, 500} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			l, _, repo := policyLoaderFixture(t)
+			s := readyFixture(t, func(*http.Request) (int, string) { return status, `secret response body` })
+			got, err := loadReadyCallerPolicy(t.TempDir(), loaderLockFile(t, loaderJSON(t, l)), repo, s)
+			if err == nil || len(got.lock.RawJSON()) != 0 || len(got.policy.RawJSON()) != 0 || strings.Contains(err.Error(), "secret") {
+				t.Fatal("unavailable source retained a snapshot or disclosed response")
+			}
+		})
+	}
+}
+
+func TestReadyCallerPolicySameRepositoryStillVerifiesImmutableSourceID(t *testing.T) {
+	for _, id := range []int64{1, 99} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			l, policy, repo := policyLoaderFixture(t)
+			l.PolicySource.FullName = "o/r"
+			l.PolicySource.RepositoryID = id
+			calls := 0
+			s := readyFixture(t, func(r *http.Request) (int, string) {
+				calls++
+				switch r.URL.RequestURI() {
+				case "/repos/o/r":
+					return 200, `{"id":1,"full_name":"o/r","default_branch":"main","allow_rebase_merge":true,"allow_merge_commit":false,"allow_squash_merge":true}`
+				case "/repos/o/r/contents/.stw/ready-policy.json?ref=" + readySHA:
+					return 200, fmt.Sprintf(`{"type":"file","encoding":"base64","size":%d,"content":%q}`, len(policy), base64.StdEncoding.EncodeToString(policy))
+				default:
+					t.Fatal("unapproved endpoint")
+					return 500, `{}`
+				}
+			})
+			_, err := loadReadyCallerPolicy(t.TempDir(), loaderLockFile(t, loaderJSON(t, l)), repo, s)
+			if (err == nil) != (id == 1) || id == 1 && calls != 2 || id != 1 && calls != 1 {
+				t.Fatalf("same-repository binding err=%v requests=%d", err, calls)
+			}
+		})
+	}
+}
+
+func TestReadyCallerPolicyFinalRemoteFailureAndRawDrift(t *testing.T) {
+	for _, kind := range []string{"unavailable", "whitespace"} {
+		t.Run(kind, func(t *testing.T) {
+			l, policy, repo := policyLoaderFixture(t)
+			path, target := loaderLockFile(t, loaderJSON(t, l)), t.TempDir()
+			calls := []string{}
+			got, err := loadReadyCallerPolicy(target, path, repo, loaderSources(t, policy, 2, &calls))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var final *readySources
+			if kind == "unavailable" {
+				final = readyFixture(t, func(*http.Request) (int, string) { return 403, `{}` })
+			} else {
+				final = loaderSources(t, append(policy, ' '), 2, &calls)
+			}
+			if err := got.resample(target, path, repo, final); err == nil {
+				t.Fatal("failed final source preserved a successful sample")
 			}
 		})
 	}
