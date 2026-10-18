@@ -278,3 +278,16 @@ func executeLocalVerify(ctx context.Context, s buildState, o BuildOptions, docum
 	}
 	return r
 }
+
+// RunBuildCheckoutInternal is reserved for the trusted private native route.
+// Normal CLI invocations are unaffected. The cmd/CLI owner calls this before
+// command parsing; it exposes no public command or project runner capability.
+func RunBuildCheckoutInternal(ctx context.Context) (bool, int) {
+	if os.Getenv(buildViewRole) != "route" || filepath.Base(os.Args[0]) != "git" {
+		return false, 0
+	}
+	if err := runBuildViewRoute(ctx, os.Args[1:]); err != nil {
+		return true, 1
+	}
+	return true, 0 // A successful trusted route replaces this process.
+}
