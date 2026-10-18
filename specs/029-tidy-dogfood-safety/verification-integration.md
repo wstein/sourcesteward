@@ -56,3 +56,32 @@ The actual Hugo packaging/build test requires separate authorization and will be
 excluded by exact test identity if still unauthorized; Node availability will
 be reported separately. No build/install, live HTTP, real cleanup, push, hosted
 CI, tag, release, publication, settings or submodule gitlink change ran.
+
+
+## Early exact-source review corrections
+
+Independent early F review of `1b592323a212bf9889d0aad98de83c3d78542dbe`
+was NOT CLEAR: one High fixture-environment escape, one Medium repeated-singleton
+syntax violation and one Low missing-host-Git classification. Review evidence is
+`/tmp/stw-review-f-cli-evidence/review.json`; this was not final Spec 029 acceptance.
+
+Failing-first corrections are retained under
+`/tmp/stw-f-review-fixes-ff607zjf/red-receipt.json` and `green-receipt.json`.
+The fixture regression uses only disposable external sentinel repositories and
+controlled hook scripts. It first reproduced changed sentinel refs/config/index
+and hook execution. Every new F fixture Git invocation, including standalone
+show-ref, now uses the same canonical executable and an explicit isolated
+HOME/config/template/noninteractive environment rather than inherited Git controls.
+The child test reruns the actual 695-file flow with injected repository/index and
+config/hooks/template controls and verifies unchanged external bytes and hook markers.
+The fixture now measures that its complete metadata really exceeds 64 KiB.
+
+The parser counts all singleton occurrences through their existing typed flag
+values and rejects every repeated scalar/bool singleton only on explicit v3.
+Spaced/equal and repeated-identical inputs are covered; repeatable refs/PR hints/
+protections and default v1/v2 last-value semantics remain covered. Missing Git is
+an explicit optional-local skip, not acceptance, while the existing mandatory
+native-sandbox/jj conformance controls force failure. Product admission is unchanged.
+Focused correction checks passed: CLI 0.015 seconds; real flow/sentinel/availability
+contracts 4.791 seconds. Same-reviewer exact-source re-review and final E port/full
+normal/race gates remain pending.

@@ -18,10 +18,33 @@ func tidyCommandWith(run func(context.Context, workspace.TidyPlanOptions) worksp
 	return tidyCommandWithOperations(run, workspace.ApplyTidy)
 }
 func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult, applyRun func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult) *cobra.Command {
-	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files and never contacts a forge.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nOwned task retirement requires separate registration and exact filesystem selections.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
+	return tidyCommandWithV3Operations(run, applyRun, workspace.PlanTidyV3, workspace.ApplyTidyV3)
+}
+func tidyCommandWithV3Operations(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult, applyRun func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult, planV3 func(context.Context, workspace.V3PlanOptions) workspace.V3Result, applyV3 func(context.Context, workspace.V3ApplyOptions) workspace.V3Result) *cobra.Command {
+	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files. Default v1/v2 planning stays offline.\nContract 3 permits explicitly selected authenticated GitHub reads with --online.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nOwned task retirement requires separate registration and exact filesystem selections.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
 	var options workspace.TidyPlanOptions
 	var structured bool
+	var v3 workspace.V3PlanOptions
+	var contract string
+	var hints []string
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Flags().Changed("contract") {
+			if contract != "3" {
+				return fmt.Errorf("--contract accepts exactly 3")
+			}
+			if err := validateTidyV3PresentFlags(cmd); err != nil {
+				return err
+			}
+			v3.Path, v3.Base, v3.StateDir, v3.Refs = workspacePath(args), options.Base, options.StateDir, options.Refs
+			v3.Task, v3.Owner, v3.RemoveRegistration, v3.RemoveFiles = options.Task, options.Owner, options.RemoveRegistration, options.RemoveFiles
+			if err := validateTidyV3PlanCLI(args, &v3, hints); err != nil {
+				return err
+			}
+			return writeTidyV3Result(cmd, planV3(cmd.Context(), v3), structured)
+		}
+		if err := rejectTidyV3Flags(cmd, tidyV3PlanFlags); err != nil {
+			return err
+		}
 		if (cmd.Flags().Changed("task") || cmd.Flags().Changed("owner") || cmd.Flags().Changed("remove-registration") || cmd.Flags().Changed("remove-files")) && options.Task == "" && options.Owner == "" && !options.RemoveRegistration && options.RemoveFiles == "" {
 			return fmt.Errorf("retirement selectors require --task, --owner, --state-dir and --remove-registration")
 		}
@@ -40,9 +63,28 @@ func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptio
 	plan.Flags().BoolVar(&options.RemoveRegistration, "remove-registration", false, "Plan exact native registration removal; required for task retirement")
 	plan.Flags().StringVar(&options.RemoveFiles, "remove-files", "", "Separately select the exact owned absolute destination for filesystem removal")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
+	addTidyV3PlanFlags(plan, &contract, &v3, &hints)
 	var applyOptions workspace.TidyApplyOptions
 	var applyStructured bool
+	var applyContract string
+	var applyV3Options workspace.V3ApplyOptions
 	apply := &cobra.Command{Use: "apply", Short: "Apply an authorized stored reference or task retirement plan", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if cmd.Flags().Changed("contract") {
+			if applyContract != "3" {
+				return fmt.Errorf("--contract accepts exactly 3")
+			}
+			if err := validateTidyV3PresentFlags(cmd); err != nil {
+				return err
+			}
+			applyV3Options.PlanID, applyV3Options.StateDir, applyV3Options.Authorize = applyOptions.PlanID, applyOptions.StateDir, applyOptions.Authorize
+			if err := validateTidyV3ApplyCLI(applyV3Options); err != nil {
+				return err
+			}
+			return writeTidyV3Result(cmd, applyV3(cmd.Context(), applyV3Options), applyStructured)
+		}
+		if err := rejectTidyV3Flags(cmd, tidyV3ApplyFlags); err != nil {
+			return err
+		}
 		if err := validateWorkspaceCLI("plan", applyOptions.PlanID, "state-dir", applyOptions.StateDir); err != nil {
 			return err
 		}
@@ -52,6 +94,9 @@ func tidyCommandWithOperations(run func(context.Context, workspace.TidyPlanOptio
 	apply.Flags().StringVar(&applyOptions.StateDir, "state-dir", "", "Private store containing the reviewed plan and durable recovery journal")
 	apply.Flags().BoolVar(&applyOptions.Authorize, "authorize", false, "Authorize only the reviewed plan's declared recovery, reference or retirement effects")
 	apply.Flags().BoolVar(&applyStructured, "json", false, "Output one versioned tidy result, including operational refusals and partial effects")
+	addTidyV3ApplyFlags(apply, &applyContract, &applyV3Options)
+	trackTidyV3Singletons(plan)
+	trackTidyV3Singletons(apply)
 	family.AddCommand(plan, apply)
 	return family
 }
