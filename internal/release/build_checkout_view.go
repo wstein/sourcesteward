@@ -362,7 +362,9 @@ func captureBuildViewPathMode(ctx context.Context, path string, step func(string
 				break
 			}
 		}
-		if errors.Is(e, os.ErrNotExist) && !hasRemaining {
+		// Absence of an ancestor also proves the requested suffix absent. Bind
+		// that first missing edge so later creation cannot become a stale capture.
+		if errors.Is(e, os.ErrNotExist) {
 			b.edges = append(b.edges, buildViewEdge{parent: current, name: name, missing: true})
 			return b, nil
 		}
@@ -438,7 +440,8 @@ func captureBuildViewPathMode(ctx context.Context, path string, step func(string
 		return b, nil
 	}
 }
-func (b *buildViewBinding) copyTo(out *os.File) error {
+func (b *buildViewBinding) copyTo(out *os.File) error { return b.capture(out) }
+func (b *buildViewBinding) capture(out io.Writer) error {
 	if b.file == nil || !b.info.Mode().IsRegular() {
 		return errors.New("checkout metadata file absent or not regular")
 	}
