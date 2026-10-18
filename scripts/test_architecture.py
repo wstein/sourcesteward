@@ -6,6 +6,26 @@ spec = importlib.util.spec_from_file_location('architecture', Path(__file__).wit
 architecture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(architecture)
 class ArchitectureTests(unittest.TestCase):
+    def test_readiness_accepts_only_reviewed_pure_imports(self):
+        for dependency in ('bytes', 'crypto/sha256', 'encoding/json', 'fmt', 'io', 'regexp', 'sort', 'strconv', 'strings', 'unicode/utf8'):
+            architecture.validate_sources({'internal/readiness/evaluate.go': 'package readiness\nimport "' + dependency + '"\n'})
+        for dependency in ('os', 'os/exec', 'io/fs', 'path/filepath', 'time', 'net/http', 'net/url', 'syscall', 'unsafe', 'C', 'plugin', architecture.MODULE + 'internal/inspection', 'example.org/helper'):
+            for alias in ('', 'x ', '. ', '_ '):
+                with self.subTest(dependency=dependency, alias=alias):
+                    with self.assertRaises(ValueError):
+                        architecture.validate_sources({'internal/readiness/sub/helper.go': 'package helper\nimport ' + alias + '"' + dependency + '"\n'})
+        with self.assertRaises(ValueError):
+            architecture.validate_sources({'internal/readiness/evaluate.go': 'package readiness\n//go:linkname now runtime.nanotime\nfunc now() int64\n'})
+        # Tests may use temporary files and real clocks; production may not.
+        architecture.validate_sources({'internal/readiness/evaluate_test.go': 'package readiness\nimport "os"\n'})
+
+    def test_readiness_refuses_foreign_sources_even_in_subpackages(self):
+        architecture.validate_readiness_files(['internal/readiness/evaluate.go', 'internal/readiness/testdata/result.json'])
+        for suffix in ('.s', '.S', '.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx', '.f', '.for', '.f90', '.sx', '.syso', '.swig', '.swigcxx', '.m', '.mm'):
+            with self.subTest(suffix=suffix):
+                with self.assertRaises(ValueError):
+                    architecture.validate_readiness_files(['internal/readiness/sub/hidden' + suffix])
+
     def test_operation_boundary(self):
         prefix='github.com/wstein/sourcesteward/'
         architecture.validate([prefix+'internal/cli '+prefix+'internal/inspection'+' '+prefix+'internal/workspace'+' '+prefix+'internal/hosting'])

@@ -38,6 +38,18 @@ OPEN_FILES = re.compile(r'^internal/release/openfile_[a-z0-9_]+\.go$')
 SYSCALL_OPEN_FLAGS = re.compile(r'\bsyscall\.(?!O_[A-Z]+\b)[A-Za-z_]+')
 LINKNAME = re.compile(r'^\s*//go:linkname\b', re.M)
 NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace')
+# These libraries are used only for value transformations. In particular fmt's
+# printing capabilities and non-concrete public API capabilities are separately
+# refused by the readiness syntax/type checks, across each complete package.
+READINESS_IMPORTS = frozenset(('bytes', 'crypto/sha256', 'encoding/json', 'fmt', 'io',
+                              'regexp', 'sort', 'strconv', 'strings', 'unicode/utf8'))
+
+
+def validate_readiness_files(paths):
+    for path in paths:
+        if path.startswith('internal/readiness/') and Path(path).suffix.lower() in (
+                '.s', '.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx', '.f', '.for', '.f90', '.sx', '.syso', '.swig', '.swigcxx', '.m', '.mm'):
+            raise ValueError('internal/readiness must be pure Go: ' + path)
 
 
 def is_network_import(path):
@@ -68,6 +80,12 @@ def validate_sources(sources, imports=None):
         if path.endswith('_test.go') or not path.endswith('.go'):
             continue
         imported = imports[path] if imports and path in imports else source_imports(text)
+        if path.startswith('internal/readiness/'):
+            if LINKNAME.search(text):
+                raise ValueError('internal/readiness must not use go:linkname: ' + path)
+            for dependency in imported:
+                if dependency not in READINESS_IMPORTS:
+                    raise ValueError('internal/readiness uses only reviewed pure value imports: ' + path + ' imports ' + dependency)
         if not path.startswith('internal/hosting/'):
             for dependency in imported:
                 if is_network_import(dependency):
@@ -151,6 +169,12 @@ def run_release_ast_check():
         raise ValueError('internal/release architecture rules failed:\n' + result.stdout + result.stderr)
 
 
+def run_readiness_ast_check():
+    result = subprocess.run(['go', 'test', './internal/readiness', '-run', '^TestReadinessSourceArchitecture$', '-count=1'], cwd=ROOT, text=True, capture_output=True)
+    if result.returncode != 0:
+        raise ValueError('internal/readiness architecture rules failed:\n' + result.stdout + result.stderr)
+
+
 FOREIGN_FILE_LISTS = ('CgoFiles', 'CFiles', 'CXXFiles', 'MFiles', 'HFiles', 'FFiles', 'SFiles', 'SwigFiles', 'SwigCXXFiles', 'SysoFiles')
 # Module packages internal/release may import: the root package (embedded schema), the existing
 # inspection, hosting operations and its own subpackages. Extend only when actually needed.
@@ -218,11 +242,13 @@ def go_dependencies():
 
 if __name__ == '__main__':
     sources = go_sources()
+    validate_readiness_files(path.relative_to(ROOT).as_posix() for path in (ROOT / 'internal/readiness').rglob('*') if path.is_file())
     validate_sources(sources, go_file_imports(sources))
     validate_dependencies(go_dependencies())
     validate_release_packages(go_release_packages())
     validate_release_graph(go_release_graph())
     run_release_ast_check()
+    run_readiness_ast_check()
     result = subprocess.run(['go', 'list', '-f', '{{.ImportPath}} {{join .Imports " "}}', './...'], cwd=ROOT, text=True, capture_output=True, check=True)
     validate(result.stdout.splitlines())
     print('Architecture boundary checks passed.')
