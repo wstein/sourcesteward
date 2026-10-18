@@ -16,6 +16,7 @@ import (
 var errReleaseLimit = errors.New("release input exceeds a documented limit")
 
 type PlanOptions struct {
+	signerWorkflowFile                                        string
 	Path, Subject, Product, Version, Mode, RecordCommit, Repo string
 	Online, WithDrafts                                        bool
 }
@@ -77,6 +78,11 @@ func countAllowlistPath(rows []AllowlistMatch, path string) {
 }
 
 type PlanResult struct {
+	record   *ReleaseRecord
+	contract *Contract
+	diff     DiffResult
+	root     string
+
 	AllowlistMatches []AllowlistMatch `json:"allowlist_matches"`
 	SchemaVersion    int              `json:"schema_version"`
 	Command          string           `json:"command"`
@@ -141,13 +147,16 @@ func Plan(ctx context.Context, o PlanOptions) (r PlanResult) {
 		return fail(problem.code, problem.message)
 	}
 	if backend != "git" && backend != "jj" {
+		if !IsFullCommitID(o.Subject) {
+			return fail("unsupported-backend", "tag planning requires a Git-owned checkout or the authoritative CI run; plan <commit> works in jj")
+		}
 		return fail("unsupported-backend", "release planning requires native Git or jj ownership")
 	}
 	if !IsFullCommitID(o.Subject) {
 		if backend == "jj" {
-			return fail("unsupported-backend", "jj tag planning is unsupported; use Git CI for annotation and tag checks")
+			return fail("unsupported-backend", "tag planning requires a Git-owned checkout or the authoritative CI run; plan <commit> works in jj")
 		}
-		return fail("unsupported-backend", "tag planning is not implemented in this source slice")
+		return evaluateTagPlan(ctx, o, root, r)
 	}
 	r.Subject.Commit = &o.Subject
 	if o.Online {
