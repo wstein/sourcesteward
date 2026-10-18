@@ -1,3 +1,5 @@
+> Current candidate: [accepted-baseline replacement](baseline-lifetime.md), proposed for separate technical/risk assessment. Three prior NOT CLEAR results retained; formal round4 unspent. Historical candidate/gate discussions below do not authorize runtime.
+
 # Cross-artifact analysis and frozen-gate brief
 
 **Candidate status**: Complete artifact package for independent analysis; not self-reviewed CLEAR and not implementation-ready. This author owns these decisions and cannot provide their independent stamp.
@@ -82,3 +84,9 @@ Authority correction for the SAME round3 packet: the user approved deadline/back
 ## Round3 result and finite correction-cycle disposition
 
 Exact bc59132a57bf34e4d55b409b0906414e5350cd02 was DESIGN NOT CLEAR (High terminal group-observation/failure algorithm; Medium actual fixed native producer closure; Low stale owner-approval requirement). Three negative gates remain counted. [The finite correction assessment](round3-disposition.md) closes the stale approval wording, inventories the actual Git/Linux bwrap-jj/Darwin sandbox-jj/gh-security producers and executes an inert Linux new-session/parent-death opposing model. It does **not** close the High: failed/incomplete observation cannot certify unknown descendants, and registered known-PID proof does not supply missing pre-discovery registration. The candidate is explicitly rejected; no fourth formal review requested. All five outcomes stay retained and runtime stays blocked. The authority correction remains in force; no automatic owner question or new generic framework is selected.
+
+## Current replacement and assessment boundary
+
+ROOT selected reconsideration against actual accepted behavior, not another attempt at exhaustive process-tree certification. [baseline-lifetime.md](baseline-lifetime.md) provides the replacement: established direct native/auth cancellation and joined captures, unchanged fixed native/sandbox/auth capabilities, bounded owned HTTP/private helper calls and final output after enumerated completion. The failed transitive certificate is withdrawn honestly, with a schema-required watch limitation. Prior source counterexamples are positive evidence of the inherited limit, not tests this design claims to make pass as all-descendant shutdown.
+
+Separate SAME-reviewer technical/risk assessment precedes any formal round4 routing. Judge source accepted30s/auth/read-only/private-cleanup obligations, new helper and transport surfaces, and whether the disclosure hides any actual material new risk. Three prior NOT CLEAR gates remain counted; no fresh review count, owner question, runtime authorization or platform proof is inferred.

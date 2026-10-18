@@ -51,7 +51,7 @@ Without `--watch`, one numbered PR GET is made, even for open/null-mergeability 
 | FR-008 | Preserve native Git/jj capabilities and read-only effects; gh jj still refuses Git ownership | Tier 1 tasks |
 | FR-009 | Reject missing/malformed/inconsistent new fields; retain last valid sample only as timestamped incomplete evidence | state/error table |
 | FR-010 | Stop on observed head/ref/repository movement; disclose undetectable unobserved ABA and nontransactional sampling | sampling rule |
-| FR-011 | Specify operation, mandatory teardown and final stdout/stderr delivery phase bounds/completion failures honestly; preserve accepted hosting bounds and no leaking worker | delivery decision / teardown assessment |
+| FR-011 | Specify bounded operation/owned teardown/final output phases honestly; preserve accepted hosting bounds and joined owned calls; disclose inherited descendant uncertainty | delivery decision / teardown assessment |
 | FR-012 | Reviewed spec/plan/tasks/analysis before code; meaningful failing tests and mutants; actual acceptance limits recorded | gate/tasks |
 
 ## Success criteria
