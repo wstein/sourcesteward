@@ -1,0 +1,22 @@
+{
+  "source": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+  "source_parent": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+  "review_level": "CONTENT CLEAR, zero open findings; preparation only, final E aggregate SOURCE acceptance pending",
+  "paths": [
+    {
+      "path": "internal/workspace/tidy_v3_result.go",
+      "old_blob": "75342db47b80fd3e910d4907e54233bd9a9babcd",
+      "new_blob": "f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed",
+      "source": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+      "sha256": "3945958525fbfd7b1bdaec2c467e7d8cb0fa4f31fe3b67dacf843c8835fbccfe"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "old_blob": "0b02731a231cee15ab9319b33de0acc6e6b650d6",
+      "new_blob": "a55ab78df3a0631482dea19d81af021a4ee9ec99",
+      "source": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+      "sha256": "3adf5503d4fa0947d893adfd197d2c55c91b846bb6771427228a4e5b0acb114d"
+    }
+  ],
+  "scope": "Retain original creation authority via sameOwner and mandatory unchanged ObjectFormat while current target/integration/recovery bind task progress. No E removal or routing added."
+}

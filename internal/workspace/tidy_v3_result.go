@@ -586,7 +586,7 @@ func validV3Retirement(r V3Retirement, p V3Plan) bool {
 			return false
 		}
 		o := r.Provenance.Owned
-		return o.CreationPlan.Backend == "git" && o.CreationPlan.Destination == r.Destination.Path && o.CreationPlan.StateDir == p.StateDir && validatePlan(o.CreationPlan, p.StateDir, o.CreationPlan.PlanID) == nil && validTask(o.Task, o.CreationPlan) && o.Task.Destination == r.Destination.Path && o.Task.Native == r.Target && o.Task.DestinationIdentity == (PathIdentity{Path: r.Destination.Path, Device: r.Destination.Device, Inode: r.Destination.Inode}) && r.Target.HeadRef == "" && v3Hash(o.CreationJournalDigest) && o.LockReason == "stw:"+o.Task.TaskID
+		return o.CreationPlan.Backend == "git" && o.CreationPlan.Destination == r.Destination.Path && o.CreationPlan.StateDir == p.StateDir && validatePlan(o.CreationPlan, p.StateDir, o.CreationPlan.PlanID) == nil && validTask(o.Task, o.CreationPlan) && o.Task.Destination == r.Destination.Path && sameOwner(o.Task.Native, r.Target) && o.Task.Native.ObjectFormat == r.Target.ObjectFormat && o.Task.DestinationIdentity == (PathIdentity{Path: r.Destination.Path, Device: r.Destination.Device, Inode: r.Destination.Inode}) && r.Target.HeadRef == "" && v3Hash(o.CreationJournalDigest) && o.LockReason == "stw:"+o.Task.TaskID
 	case "legacy-retirement":
 		if r.Provenance.Kind != "legacy-completion" || r.Provenance.Legacy == nil || r.Provenance.Owned != nil {
 			return false

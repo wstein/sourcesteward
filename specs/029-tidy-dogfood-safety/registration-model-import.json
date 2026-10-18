@@ -103,8 +103,8 @@
     "original 75-row import and supplemental correction history"
   ],
   "pending": [
-    "B2 content-cleared central predicate in a separate integration layer",
     "E reviewed comparisons/removal coordinator/runner",
     "final full normal/race and exact integrated-source review"
-  ]
+  ],
+  "later_owned_progress_layer": "owned-progress-model-import.json"
 }
