@@ -95,7 +95,9 @@ func TestTidyV3ApplyCreatesExactRecoveryDeletesAndRetriesReadOnly(t *testing.T) 
 // Cancellation may prevent abort acknowledgment; preserve A's uncertainty.
 type fixtureTidyV3CancelAfterIntent struct {
 	tidyV3ApplyRefTransaction
-	observed gitRefTransactionOutcome
+	observed    gitRefTransactionOutcome
+	afterIntent func()
+	afterStop   func()
 }
 
 func (t *fixtureTidyV3CancelAfterIntent) Commit(ctx context.Context, validate func(context.Context) error) (gitRefTransactionOutcome, error) {
@@ -104,51 +106,179 @@ func (t *fixtureTidyV3CancelAfterIntent) Commit(ctx context.Context, validate fu
 	out, err := t.tidyV3ApplyRefTransaction.Commit(caller, func(callback context.Context) error {
 		err := validate(callback)
 		if err == nil {
+			if t.afterIntent != nil {
+				t.afterIntent()
+			}
 			cancel()
 			<-callback.Done()
 		}
 		return err
 	})
 	t.observed = out
+	if t.afterStop != nil {
+		t.afterStop()
+	}
 	return out, err
 }
 func TestTidyV3ApplyCancellationAfterDurableCommitIntentIsUnknown(t *testing.T) {
+	for _, state := range []string{"native", "owned-retained", "absent", "replaced"} {
+		t.Run(state, func(t *testing.T) { testTidyV3UncertainCancellation(t, state) })
+	}
+}
+func testTidyV3UncertainCancellation(t *testing.T, state string) {
 	dir, _, p := fixtureTidyV3NativeApply(t)
 	c := defaultTidyV3RefsApplyCoordinator()
 	prepare := c.prepare
 	var tx *fixtureTidyV3CancelAfterIntent
+	var native *gitRefTransaction
+	var prepared layoutProtectedFile
+	var actorLock *layoutProtectedFile
+	lock := filepath.Join(p.Expected.Identity.RepositoryDir, "refs", "heads", "integrated.lock")
+	reserved := filepath.Join(t.TempDir(), "prepared-native-lock")
 	c.prepare = func(ctx context.Context, bin string, id NativeIdentity, ref, oid string, write, ro []string) (tidyV3ApplyRefTransaction, error) {
 		inner, err := prepare(ctx, bin, id, ref, oid, write, ro)
 		if err != nil {
 			return inner, err
 		}
+		native = inner.(*gitRefTransaction)
+		prepared = layoutProtectedFileAt(t, lock)
+		info, err := os.Lstat(lock)
+		if err != nil || !info.Mode().IsRegular() || !privateOwner(info) {
+			t.Fatal("prepared native lock lacks owned regular identity", err)
+		}
 		tx = &fixtureTidyV3CancelAfterIntent{tidyV3ApplyRefTransaction: inner}
+		if state != "native" {
+			// Deterministic terminal-state injection, not a claim about cancellation's
+			// cleanup result. Reserve the actual prepared inode after durable intent;
+			// expose its original path only after the owned process has been reaped.
+			tx.afterIntent = func() {
+				if got := layoutProtectedFileAt(t, lock); !reflect.DeepEqual(got, prepared) {
+					t.Fatal("prepared lock changed before reservation")
+				}
+				if err := os.Rename(lock, reserved); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		tx.afterStop = func() {
+			if !native.stopped || native.cmd.ProcessState == nil {
+				t.Fatal("native cancellation process was not stopped and reaped")
+			}
+			select {
+			case <-native.done:
+			default:
+				t.Fatal("native transaction lifecycle remains active")
+			}
+			if state == "native" {
+				return
+			}
+			if _, err := os.Lstat(lock); !os.IsNotExist(err) {
+				t.Fatal("unexpected actor lock at reserved boundary", err)
+			}
+			switch state {
+			case "owned-retained":
+				if err := os.Rename(reserved, lock); err != nil {
+					t.Fatal(err)
+				}
+			case "replaced":
+				if err := os.WriteFile(lock, []byte("actor lock: preserve identity and bytes\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				actor := layoutProtectedFileAt(t, lock)
+				actorLock = &actor
+			}
+		}
 		return tx, nil
 	}
-	r := c.apply(context.Background(), V3ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Online: p.Online != nil, ProtectWorktrees: []string{}})
-	if tx == nil {
-		t.Fatal("actual native prepared transaction was not exercised")
+	r := c.apply(context.Background(), V3ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, ProtectWorktrees: []string{}})
+	if tx == nil || !tx.observed.Prepared || tx.observed.CommitAttempted || tx.observed.Committed || !tx.observed.Uncertain {
+		t.Fatalf("expected actual uncertain cancellation/no COMMIT: %+v", tx)
 	}
-	if !tx.observed.Prepared || tx.observed.CommitAttempted || tx.observed.Committed || !tx.observed.Uncertain {
-		t.Fatalf("expected unconfirmed cancellation cleanup with no COMMIT send, got %+v", tx.observed)
-	}
-	if r.Status != "partial" || r.Plan != nil {
-		t.Fatalf("canceled action became successful %+v", r)
+	if r.Status != "partial" || r.Plan != nil || r.Boundary.Complete || validateV3Result(r) != nil {
+		t.Fatalf("uncertain cancellation became authority: %+v", r)
 	}
 	target := p.Candidates[0]
 	if got := gitFixture(t, dir, "rev-parse", target.Name); got != target.OID {
-		t.Fatal("confirmed abort changed target")
+		t.Fatal("uncertain cancellation changed target")
 	}
 	recovery := v3RecoveryFor(p, target.ActionID, target.OID)
 	if got := gitFixture(t, dir, "rev-parse", recovery.Name); got != target.OID {
-		t.Fatal("recovery missing after abort")
+		t.Fatal("uncertain cancellation lost recovery")
 	}
-	if _, err := os.Stat(filepath.Join(p.Expected.Identity.RepositoryDir, "refs", "heads", "integrated.lock")); !os.IsNotExist(err) {
-		t.Fatal("confirmed native abort left target lock", err)
+	// Unacknowledged cancellation cannot promise cleanup. If a native lock
+	// remains, bind it to the prepared inode and bytes; a replacement belongs
+	// to the actor fixture and must also survive without being called ours.
+	var possibleLock *layoutProtectedFile
+	info, statErr := os.Lstat(lock)
+	if os.IsNotExist(statErr) {
+		if state == "owned-retained" || state == "replaced" {
+			t.Fatal("terminal processing removed a possible lock")
+		}
+	} else {
+		if statErr != nil || !info.Mode().IsRegular() {
+			t.Fatal("unexpected terminal lock identity", statErr)
+		}
+		current := layoutProtectedFileAt(t, lock)
+		possibleLock = &current
+		if state == "absent" {
+			t.Fatal("terminal processing recreated an absent lock")
+		}
+		if state == "replaced" {
+			if actorLock == nil || !reflect.DeepEqual(current, *actorLock) || current.Identity == prepared.Identity {
+				t.Fatal("foreign replacement was changed or confused with the prepared lock")
+			}
+		} else if !reflect.DeepEqual(current, prepared) {
+			t.Fatal("retained lock is not the exact native prepared lock")
+		}
 	}
 	j := readTidyV3ApplyJournal(t, p)
-	if j.Entries[0].Transaction != "unknown" || j.Phase != "incomplete" {
-		t.Fatalf("actual uncertain native outcome=%+v but persisted phase=%s transaction=%s", tx.observed, j.Phase, j.Entries[0].Transaction)
+	if len(j.Entries) != 1 || j.Entries[0].Transaction != "unknown" || j.Phase != "incomplete" {
+		t.Fatalf("uncertain native outcome lost durable unknown intent: %+v", j)
+	}
+	journalPath := filepath.Join(p.StateDir, "tidy-v3-operations", p.PlanID+".json")
+	before := layoutProtectedFileAt(t, journalPath)
+	c.prepare = func(context.Context, string, NativeIdentity, string, string, []string, []string) (tidyV3ApplyRefTransaction, error) {
+		t.Fatal("uncertain retry prepared a native writer")
+		return nil, nil
+	}
+	c.pin = func(context.Context, string, NativeIdentity, TidyRecovery, []string) (bool, error) {
+		t.Fatal("uncertain retry replayed recovery")
+		return false, nil
+	}
+	retry := c.apply(context.Background(), V3ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, ProtectWorktrees: []string{}})
+	if retry.Status != "partial" || retry.Plan != nil || retry.Boundary.Complete {
+		t.Fatalf("uncertain retry became executable: %+v", retry)
+	}
+	found := false
+	for _, a := range retry.Actions {
+		if a.Name == "native-target-lock:"+target.ActionID && a.Status == "unknown" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("uncertain retry hid the possible native lock")
+	}
+	if after := layoutProtectedFileAt(t, journalPath); !reflect.DeepEqual(before, after) {
+		t.Fatal("uncertain retry rewrote terminal journal")
+	}
+	if possibleLock == nil {
+		if _, err := os.Lstat(lock); !os.IsNotExist(err) {
+			t.Fatal("uncertain retry created a lock", err)
+		}
+	} else if after := layoutProtectedFileAt(t, lock); !reflect.DeepEqual(*possibleLock, after) {
+		t.Fatal("uncertain retry changed a retained or foreign lock")
+	}
+	if got := gitFixture(t, dir, "rev-parse", target.Name); got != target.OID {
+		t.Fatal("uncertain retry changed target")
+	}
+	if got := gitFixture(t, dir, "rev-parse", recovery.Name); got != target.OID {
+		t.Fatal("uncertain retry changed recovery")
+	}
+	if state == "absent" || state == "replaced" {
+		held := layoutProtectedFileAt(t, reserved)
+		if held.Identity.Device != prepared.Identity.Device || held.Identity.Inode != prepared.Identity.Inode || !reflect.DeepEqual(held.Data, prepared.Data) || held.Mode != prepared.Mode {
+			t.Fatal("reserved prepared lock was changed")
+		}
 	}
 }
 
