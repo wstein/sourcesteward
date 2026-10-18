@@ -1,4 +1,4 @@
-> Current candidate: [accepted-baseline replacement](baseline-lifetime.md), proposed for separate technical/risk assessment. Three prior NOT CLEAR results retained; formal round4 unspent. Historical candidate/gate discussions below do not authorize runtime.
+> Current candidate: [accepted-baseline replacement](baseline-lifetime.md), technically assessed as honest, awaiting formal round4 at the frozen exact candidate. Three prior NOT CLEAR results retained; the technical assessment did not consume round4. Historical candidate/gate discussions below do not authorize runtime.
 
 # Cross-artifact analysis and frozen-gate brief
 
@@ -90,3 +90,7 @@ Exact bc59132a57bf34e4d55b409b0906414e5350cd02 was DESIGN NOT CLEAR (High termin
 ROOT selected reconsideration against actual accepted behavior, not another attempt at exhaustive process-tree certification. [baseline-lifetime.md](baseline-lifetime.md) provides the replacement: established direct native/auth cancellation and joined captures, unchanged fixed native/sandbox/auth capabilities, bounded owned HTTP/private helper calls and final output after enumerated completion. The failed transitive certificate is withdrawn honestly, with a schema-required watch limitation. Prior source counterexamples are positive evidence of the inherited limit, not tests this design claims to make pass as all-descendant shutdown.
 
 Separate SAME-reviewer technical/risk assessment precedes any formal round4 routing. Judge source accepted30s/auth/read-only/private-cleanup obligations, new helper and transport surfaces, and whether the disclosure hides any actual material new risk. Three prior NOT CLEAR gates remain counted; no fresh review count, owner question, runtime authorization or platform proof is inferred.
+
+## Technical assessment completed; formal round4 packet
+
+The same reviewer's separate assessment found the replacement technically honest, with no material new descendant risk or accepted-contract conflict requiring an owner question; it was not formal DESIGN CLEAR and did not consume round4. Corrected the reused helper component sentence to require direct-call/capture completion while explicitly retaining unverified descendant state and possible cleanup races; confinement/identity/cap/error handling still apply. The bounded helper/residue tradeoff, owned HTTP abort/join/late-dial behavior, phase timing, supported platforms and both cmd entries remain implementation acceptance obligations. All five features, full auth, native flags and W27/T29/D30 remain. Three prior negative gates are preserved. This exact corrected package is the formal round4 candidate; runtime remains gated.
