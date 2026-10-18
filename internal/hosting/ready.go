@@ -16,6 +16,8 @@ import (
 // complete CI/constraint/deployment collection and public rendering are later
 // operation work. No report body, raw response or caller path is returned.
 type readyReviewCollection struct {
+	// The once-loaded immutable baseline feeds the shared result evaluator.
+	policy         readiness.Policy
 	Review         readiness.Component
 	Evidence       readiness.ReviewEvidence
 	Policy         readiness.PolicyBinding
@@ -111,6 +113,7 @@ func collectReadyReview(target, path string, number int, s *readySources) (out r
 		return
 	}
 	out.Policy = policy.binding()
+	out.policy = policy.policy
 	associated := s.openPullRequests()
 	files := s.files(number, p.ChangedFiles)
 	statuses := s.statuses(p.Head.SHA)

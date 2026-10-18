@@ -56,6 +56,8 @@ type readyEvidence[T any] struct {
 type readyReadBudget struct {
 	started                      time.Time
 	requests, ciRows, statusRows int
+	// Actual operation-wide observations, distinct from per-collection caps.
+	bodyBytes, pages, records int
 }
 type readySources struct {
 	ctx    context.Context
@@ -550,12 +552,18 @@ func collectReady[T any](s *readySources, src *readySource, endpoint func(int) s
 	normalizedBytes := 0
 	seen := map[string]bool{}
 	for page := 1; page <= maxPages; page++ {
+		before := src.Requests
 		raw := s.get(src, endpoint(page))
+		s.budget.pages += src.Requests - before
 		if src.Outcome != readyOK {
 			return nil
 		}
 		var data []json.RawMessage
-		if json.Unmarshal(raw, &data) != nil || data == nil || len(data) > 100 {
+		decodeErr := json.Unmarshal(raw, &data)
+		if decodeErr == nil && data != nil {
+			s.budget.records += len(data)
+		}
+		if decodeErr != nil || data == nil || len(data) > 100 {
 			src.Outcome = readyMalformed
 			return nil
 		}
@@ -602,13 +610,18 @@ func (s *readySources) checks(sha string) readyEvidence[[]readyCheck] {
 	normalizedBytes := 0
 	total := int64(-1)
 	for page := 1; page <= maxPages; page++ {
+		before := src.Requests
 		o := object(s.get(&src, fmt.Sprintf("%s/commits/%s/check-runs?filter=all&per_page=100&page=%d", s.prefix(), sha, page)))
+		s.budget.pages += src.Requests - before
 		if src.Outcome != readyOK {
 			break
 		}
 		count, a := o.integer("total_count")
 		var data []json.RawMessage
 		e := json.Unmarshal(o["check_runs"], &data)
+		if e == nil && data != nil {
+			s.budget.records += len(data)
+		}
 		if !a || count < 0 || e != nil || data == nil || len(data) > 100 || total >= 0 && total != count {
 			src.Outcome = readyMalformed
 			break
