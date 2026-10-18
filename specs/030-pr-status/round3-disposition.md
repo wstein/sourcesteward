@@ -1,3 +1,5 @@
+> Current replacement: [baseline-lifetime.md](baseline-lifetime.md). This file records earlier rejected certificate/assessments; its stronger descendant/resource-free claims are historical. Component HTTP/private-helper mechanics are reused only as explicitly specified by the replacement.
+
 # Round3 disposition: finite candidate failure, no fourth submission
 
 **Exact reviewed candidate**: `bc59132a57bf34e4d55b409b0906414e5350cd02`; third formal result **DESIGN NOT CLEAR**. Three negative gates remain counted. This bounded correction cycle does not supply a complete replacement terminal protocol; it must not be sent for round4 as a corrected coherent design. Runtime remains blocked and all five requested outcomes remain in scope. This is a finite assessment of the current mechanisms, not a proof that every possible implementation is impossible.

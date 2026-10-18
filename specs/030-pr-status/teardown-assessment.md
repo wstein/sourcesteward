@@ -1,3 +1,5 @@
+> Current replacement: [baseline-lifetime.md](baseline-lifetime.md). This file records earlier rejected certificate/assessments; its stronger descendant/resource-free claims are historical. Component HTTP/private-helper mechanics are reused only as explicitly specified by the replacement.
+
 > Current disposition: [round3 rejected this candidate; finite correction assessment](round3-disposition.md). Three NOT CLEAR gates remain counted, round4 is unspent, and runtime is blocked. Historical candidate claims below are not clearance.
 
 > Historical gap inventory. Current proposed disposition: [auth-lifetime.md](auth-lifetime.md), together with [component protocols](watch-lifetime.md). The incomplete/rejected states below preserve review provenance; they do not replace the current candidate.

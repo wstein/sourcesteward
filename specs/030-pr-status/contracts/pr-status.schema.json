@@ -363,6 +363,10 @@
   },
   "allOf": [
     {
+      "if": {"properties": {"observation": {"properties": {"mode": {"const": "watch"}}}}},
+      "then": {"properties": {"boundary": {"properties": {"limitations": {"contains": {"const": "native-descendant-state-unverified"}}}}}}
+    },
+    {
       "if": {"properties": {"status": {"const": "ok"}}},
       "then": {
         "properties": {

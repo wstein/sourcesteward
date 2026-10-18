@@ -61,6 +61,7 @@
     "max_requests": 8,
     "requests": 1,
     "limitations": [
+      "native-descendant-state-unverified",
       "Sampled evidence cannot exclude unobserved ABA or future PR changes.",
       "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."
     ]
