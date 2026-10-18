@@ -688,7 +688,7 @@
     "scripts/package-pages.py": "Union v3/tidy unpublished source with all ten current unpublished release sources; admit only exact hidden version directory.",
     "scripts/test_docs.py": "Preserve all current release inventory checks and add reviewed hidden-v3 negative copy fixtures."
   },
-  "E_admission_status": "Not imported; waiting for final independently cleared E apply graph. f696611 is stable admission provenance only.",
+  "E_admission_status": "Reviewed f696 admission/content dependencies imported with fb4ddf1 registration constructor transport; removal still gated on E final source review.",
   "F_owned_new_paths": [
     "internal/workspace/tidy_v3.go",
     "internal/workspace/tidy_v3_entry_test.go",
@@ -699,5 +699,17 @@
     "specs/029-tidy-dogfood-safety/integration-ledger.json",
     "specs/029-tidy-dogfood-safety/verification-integration.md"
   ],
-  "reviews_required": "All new F source and every shared reconciliation need independent executed exact-candidate review; old source CLEAR does not extend to this candidate."
+  "reviews_required": "All new F source and every shared reconciliation need independent executed exact-candidate review; old source CLEAR does not extend to this candidate.",
+  "supplemental_import_layers": [
+    {
+      "path": "specs/029-tidy-dogfood-safety/registration-model-import.json",
+      "source": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+      "description": "All eight exact reviewed model/schema/test/doc/constructor files; stable E admission dependency layer supplies the collector prerequisites."
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/admission-dependency-import.json",
+      "source": "f696611d925ac6d320d66178c3bc739c9084b061",
+      "description": "Fifteen exact reviewed admission/content/doc/constructor dependencies; seven primary imports already present verified exact; no removal or old local-only apply overwrite."
+    }
+  ]
 }

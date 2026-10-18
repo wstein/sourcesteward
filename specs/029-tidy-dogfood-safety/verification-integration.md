@@ -85,3 +85,37 @@ native-sandbox/jj conformance controls force failure. Product admission is uncha
 Focused correction checks passed: CLI 0.015 seconds; real flow/sentinel/availability
 contracts 4.791 seconds. Same-reviewer exact-source re-review and final E port/full
 normal/race gates remain pending.
+
+
+## Reviewed admission and registration-model preparation
+
+The prior F candidate `34a1430bb1b256d070da0a217df870097cd290a4` received
+CONTENT-CONDITIONAL CLEAR with zero open findings from the same independent
+reviewer (`/tmp/stw-review-f-cli-r2/review.json`). It remains an immutable
+historical source-content checkpoint; later integration does not inherit that
+clearance. No additional checkpoint branch was created.
+
+The finite [registration model layer](registration-model-import.json) imports
+all eight exact source blobs from SOURCE CLEAR
+`fb4ddf177b52275d3f01162eb39b58bee48abd5a`. Required registration parent and
+sibling facts reach model/schema/store fixtures and the evidence-only collector
+constructor. Its source-provenance SHA-256 and each source/old/new blob are retained.
+The [admission dependency layer](admission-dependency-import.json) supplies only
+15 already-reviewed admission/content/contract dependencies from SOURCE CLEAR
+`f696611d925ac6d320d66178c3bc739c9084b061`, using the exact fb4ddf1 collector
+transport. Seven primary bindings already present from D were verified identical.
+The earlier regular-sibling and `.git`-pointer accounting model prerequisites
+are explicit; no stale whole-tree or local-only apply overwrite occurred.
+
+Original import/correction manifests and the original 75-row import history stay
+intact, with new layers naming their later overrides. Fresh-main release SDK,
+authentication, dispatch transport and unpublished schema inventories, all prior
+F guard fixes and D tracking apply behavior remain present. Admission/content
+and the constructor collect evidence only. Pending E removal/coordinator/runner
+code is absent and retirement CLI flags remain hidden/unwired.
+
+Intermediate focused checks passed on the imported working tree: model/schema
+workspace 2.761 seconds/contracts 0.082 seconds; admission/content/model checks
+workspace 3.482 seconds/contracts 0.076 seconds. Native fixture checks were launched
+with inherited Git/jj/Rust controls removed; these are targeted source checks,
+not final full-suite, native-platform acceptance or new independent clearance.

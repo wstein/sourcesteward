@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -298,7 +299,7 @@ func v3LegacyTestPlan() V3Plan {
 	entries := []V3ManifestEntry{}
 	digest, _ := v3RecordDigest(entries)
 	manifest := V3Manifest{Complete: true, Entries: entries, Digest: digest}
-	p.Retirement = &V3Retirement{Actions: []V3RetirementAction{{Name: "remove-registration", Target: "/old", Decision: "delete", Reason: "integrated", Blockers: []string{}}, {Name: "remove-files", Target: "/old", Decision: "delete", Reason: "clean", Blockers: []string{}}}, ActionID: "retire-1", RegisteredRoots: []string{"/old", "/repo"}, ProtectedRoots: []string{"/active"}, Provenance: V3Provenance{Kind: "legacy-completion", Legacy: &V3LegacyProvenance{Owner: "owner", Completed: true, SameUserAuthority: true, SelectedPath: "/old", ProtectedRoots: []string{"/active"}, ObservedIdentity: destination}}, Destination: destination, Parent: physical("/", 1), Registration: physical(target.GitDir, 3), Target: target, RemoveRegistration: true, RemoveFiles: "/old", ContentPolicy: "git-v3", Disk: manifest, Metadata: manifest, Siblings: []V3PhysicalIdentity{}, Integration: V3CommitProof{OID: candidate.OID, Decision: candidate.Decision, Reason: candidate.Reason, Proof: candidate.Proof, WorkspacePaths: []string{"/old"}, Evidence: candidate.Evidence}}
+	p.Retirement = &V3Retirement{Actions: []V3RetirementAction{{Name: "remove-registration", Target: "/old", Decision: "delete", Reason: "integrated", Blockers: []string{}}, {Name: "remove-files", Target: "/old", Decision: "delete", Reason: "clean", Blockers: []string{}}}, ActionID: "retire-1", RegisteredRoots: []string{"/old", "/repo"}, ProtectedRoots: []string{"/active"}, Provenance: V3Provenance{Kind: "legacy-completion", Legacy: &V3LegacyProvenance{Owner: "owner", Completed: true, SameUserAuthority: true, SelectedPath: "/old", ProtectedRoots: []string{"/active"}, ObservedIdentity: destination}}, Destination: destination, Parent: physical("/", 1), Registration: physical(target.GitDir, 3), RegistrationParent: physical("/repo/.git/worktrees", 4), RegistrationSiblings: []V3PhysicalIdentity{}, Target: target, RemoveRegistration: true, RemoveFiles: "/old", ContentPolicy: "git-v3", Disk: manifest, Metadata: manifest, Siblings: []V3PhysicalIdentity{}, Integration: V3CommitProof{OID: candidate.OID, Decision: candidate.Decision, Reason: candidate.Reason, Proof: candidate.Proof, WorkspacePaths: []string{"/old"}, Evidence: candidate.Evidence}}
 	p.Effects = v3PlanEffects(p)
 	p.Digest, _ = v3PlanDigest(p)
 	return p
@@ -331,6 +332,248 @@ func TestV3LegacyProvenanceAndPhysicalPolicy(t *testing.T) {
 	o.ProtectWorktrees = []string{"/active", "/new-active"}
 	if validateV3ApplyOptions(o, p) == nil {
 		t.Fatal("new protection ignored")
+	}
+}
+
+func TestV3RetirementRegistrationFactsAreRequired(t *testing.T) {
+	p := v3LegacyTestPlan()
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	var retirement map[string]json.RawMessage
+	if err = json.Unmarshal(fields["retirement"], &retirement); err != nil {
+		t.Fatal(err)
+	}
+	for _, missing := range [][]string{{"registration_parent", "registration_siblings"}, {"registration_parent"}, {"registration_siblings"}} {
+		t.Run(strings.Join(missing, "+"), func(t *testing.T) {
+			copy := map[string]json.RawMessage{}
+			for key, value := range retirement {
+				copy[key] = value
+			}
+			for _, key := range missing {
+				delete(copy, key)
+			}
+			fields["retirement"], _ = json.Marshal(copy)
+			wire, _ := json.Marshal(fields)
+			var got V3Plan
+			if decodeV3Record(wire, &got) == nil {
+				t.Fatal("retirement record omitted required registration grant evidence")
+			}
+		})
+	}
+}
+
+func v3RegistrationGrantPlan() V3Plan {
+	p := v3LegacyTestPlan()
+	r := p.Retirement
+	file := r.RegistrationParent
+	file.Path, file.Inode, file.Kind, file.Mode, file.Nlink, file.Size = r.RegistrationParent.Path+"/notes.txt", 6, "regular", 0600, 1, (64<<20)+1
+	dir := r.RegistrationParent
+	dir.Path, dir.Inode = r.RegistrationParent.Path+"/other", 7
+	r.RegistrationSiblings = []V3PhysicalIdentity{file, dir}
+	neighbor := r.Parent
+	neighbor.Path, neighbor.Inode = "/neighbor", 8
+	r.Siblings = []V3PhysicalIdentity{neighbor}
+	p.Digest, _ = v3PlanDigest(p)
+	return p
+}
+
+func TestV3RetirementRegistrationGrantValidation(t *testing.T) {
+	p := v3RegistrationGrantPlan()
+	if err := validateV3Plan(p, p.StateDir, p.PlanID); err != nil {
+		t.Fatalf("complete parent and other-only file/directory sibling control refused: %v", err)
+	}
+	for name, mutate := range map[string]func(*V3Retirement){
+		"zero-parent": func(r *V3Retirement) { r.RegistrationParent = V3PhysicalIdentity{} },
+		"parent-path": func(r *V3Retirement) { r.RegistrationParent.Path += "-replacement" },
+		"coherent-wrong-parent": func(r *V3Retirement) {
+			before := r.RegistrationParent.Path
+			r.RegistrationParent.Path += "-replacement"
+			for i := range r.RegistrationSiblings {
+				r.RegistrationSiblings[i].Path = strings.Replace(r.RegistrationSiblings[i].Path, before, r.RegistrationParent.Path, 1)
+			}
+		},
+		"parent-alias":            func(r *V3Retirement) { r.RegistrationParent.Path += "/../worktrees" },
+		"parent-kind":             func(r *V3Retirement) { r.RegistrationParent.Kind = "regular"; r.RegistrationParent.Nlink = 1 },
+		"parent-owner":            func(r *V3Retirement) { r.RegistrationParent.UID++ },
+		"parent-owner-capability": func(r *V3Retirement) { r.RegistrationParent.OwnerKnown = false },
+		"parent-mode":             func(r *V3Retirement) { r.RegistrationParent.Mode = 0100000 },
+		"parent-inode":            func(r *V3Retirement) { r.RegistrationParent.Inode = 0 },
+		"parent-links":            func(r *V3Retirement) { r.RegistrationParent.Nlink = 0 },
+		"parent-size":             func(r *V3Retirement) { r.RegistrationParent.Size = -1 },
+		"parent-precision":        func(r *V3Retirement) { r.RegistrationParent.TimestampPrecision = "unknown" },
+		"parent-physical-alias": func(r *V3Retirement) {
+			r.RegistrationParent.Device, r.RegistrationParent.Inode = r.Parent.Device, r.Parent.Inode
+		},
+		"null-siblings": func(r *V3Retirement) { r.RegistrationSiblings = nil },
+		"sibling-order": func(r *V3Retirement) {
+			r.RegistrationSiblings[0], r.RegistrationSiblings[1] = r.RegistrationSiblings[1], r.RegistrationSiblings[0]
+		},
+		"sibling-duplicate-path": func(r *V3Retirement) { r.RegistrationSiblings[1].Path = r.RegistrationSiblings[0].Path },
+		"sibling-physical-alias": func(r *V3Retirement) {
+			r.RegistrationSiblings[1].Device, r.RegistrationSiblings[1].Inode = r.RegistrationSiblings[0].Device, r.RegistrationSiblings[0].Inode
+		},
+		"sibling-parent-alias": func(r *V3Retirement) {
+			r.RegistrationSiblings[0].Device, r.RegistrationSiblings[0].Inode = r.RegistrationParent.Device, r.RegistrationParent.Inode
+		},
+		"sibling-target-alias": func(r *V3Retirement) {
+			r.RegistrationSiblings[0].Device, r.RegistrationSiblings[0].Inode = r.Registration.Device, r.Registration.Inode
+		},
+		"sibling-destination-alias": func(r *V3Retirement) {
+			r.RegistrationSiblings[0].Device, r.RegistrationSiblings[0].Inode = r.Destination.Device, r.Destination.Inode
+		},
+		"cross-parent-sibling-alias": func(r *V3Retirement) {
+			r.RegistrationSiblings[0].Device, r.RegistrationSiblings[0].Inode = r.Siblings[0].Device, r.Siblings[0].Inode
+		},
+		"selected-registration": func(r *V3Retirement) { r.RegistrationSiblings[1].Path = r.Registration.Path },
+		"sibling-wrong-parent":  func(r *V3Retirement) { r.RegistrationSiblings[0].Path = "/unrelated/notes.txt" },
+		"sibling-nested":        func(r *V3Retirement) { r.RegistrationSiblings[0].Path += "/nested" },
+		"sibling-path-alias":    func(r *V3Retirement) { r.RegistrationSiblings[0].Path += "/../notes.txt" },
+		"sibling-symlink":       func(r *V3Retirement) { r.RegistrationSiblings[0].Kind = "symlink" },
+		"sibling-special":       func(r *V3Retirement) { r.RegistrationSiblings[0].Kind = "fifo" },
+		"sibling-hardlink":      func(r *V3Retirement) { r.RegistrationSiblings[0].Nlink = 2 },
+		"sibling-owner":         func(r *V3Retirement) { r.RegistrationSiblings[0].UID++ },
+		"sibling-mode":          func(r *V3Retirement) { r.RegistrationSiblings[0].Mode = 0100000 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, _ := json.Marshal(v3RegistrationGrantPlan())
+			var p V3Plan
+			if err := json.Unmarshal(raw, &p); err != nil {
+				t.Fatal(err)
+			}
+			mutate(p.Retirement)
+			p.Digest, _ = v3PlanDigest(p)
+			if validateV3Plan(p, p.StateDir, p.PlanID) == nil {
+				t.Fatal("forged registration parent or sibling evidence admitted after digest recomputation")
+			}
+		})
+	}
+}
+
+func TestV3RegistrationGrantReusesIdenticalNestedParentFacts(t *testing.T) {
+	r := *v3RegistrationGrantPlan().Retirement
+	r.Parent.Path = "/repo/.git"
+	r.Destination.Path = "/repo/.git/workspace"
+	r.Siblings = []V3PhysicalIdentity{r.RegistrationParent}
+	if !validV3RegistrationGrant(r) {
+		t.Fatal("identical canonical registration-parent fact refused in destination-sibling role")
+	}
+	for _, change := range []string{"mode", "inode", "different-path-alias", "duplicate-entry"} {
+		t.Run(change, func(t *testing.T) {
+			bad := r
+			bad.Siblings = append([]V3PhysicalIdentity{}, r.Siblings...)
+			switch change {
+			case "mode":
+				bad.Siblings[0].Mode ^= 1
+			case "inode":
+				bad.Siblings[0].Inode++
+			case "different-path-alias":
+				bad.Siblings[0].Path += "-alias"
+			case "duplicate-entry":
+				bad.Siblings = append(bad.Siblings, bad.Siblings[0])
+			}
+			if validV3RegistrationGrant(bad) {
+				t.Fatal("role reuse admitted a different identity, path alias or duplicate entry")
+			}
+		})
+	}
+}
+
+func TestV3RetirementRegistrationFactsBindDigestAndWire(t *testing.T) {
+	p := v3RegistrationGrantPlan()
+	raw, _ := json.Marshal(p)
+	var got V3Plan
+	if err := decodeV3Record(raw, &got); err != nil || validateV3Plan(got, got.StateDir, got.PlanID) != nil || !reflect.DeepEqual(got, p) {
+		t.Fatalf("complete registration grant did not roundtrip: %v", err)
+	}
+	for _, parent := range []bool{true, false} {
+		q := v3RegistrationGrantPlan()
+		if parent {
+			q.Retirement.RegistrationParent.Mode ^= 1
+		} else {
+			q.Retirement.RegistrationSiblings[0].MtimeNS++
+		}
+		if validateV3Plan(q, q.StateDir, q.PlanID) == nil {
+			t.Fatal("new registration facts omitted from immutable digest")
+		}
+	}
+	for _, field := range []string{"registration_parent", "registration_siblings"} {
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &fields)
+		var retirement map[string]json.RawMessage
+		_ = json.Unmarshal(fields["retirement"], &retirement)
+		retirement[field] = json.RawMessage("null")
+		fields["retirement"], _ = json.Marshal(retirement)
+		wire, _ := json.Marshal(fields)
+		if decodeV3Record(wire, &got) == nil {
+			t.Fatalf("null required registration field admitted: %s", field)
+		}
+	}
+}
+
+func TestV3RetirementRegistrationFactsShareAggregateLimit(t *testing.T) {
+	p := v3RegistrationGrantPlan()
+	r := p.Retirement
+	// All slice entries in this closed legacy fixture, excluding the new list.
+	used := len(p.SelectedRefs) + len(p.Candidates) + len(p.Effects) + len(p.RecoveryLimits) + len(r.Actions) + len(r.RegisteredRoots) + len(r.ProtectedRoots) + len(r.Disk.Entries) + len(r.Metadata.Entries) + len(r.Siblings) + len(r.Integration.WorkspacePaths) + len(r.Provenance.Legacy.ProtectedRoots)
+	r.RegistrationSiblings = []V3PhysicalIdentity{}
+	for i := 0; i < observationLimit-used; i++ {
+		s := r.RegistrationParent
+		s.Path, s.Inode = fmt.Sprintf("%s/s%04d", r.RegistrationParent.Path, i), uint64(100+i)
+		r.RegistrationSiblings = append(r.RegistrationSiblings, s)
+	}
+	p.Digest, _ = v3PlanDigest(p)
+	if err := validateV3Plan(p, p.StateDir, p.PlanID); err != nil {
+		t.Fatalf("exact aggregate 1024 refused: %v", err)
+	}
+	s := r.RegistrationParent
+	s.Path, s.Inode = r.RegistrationParent.Path+"/z-extra", 10000
+	r.RegistrationSiblings = append(r.RegistrationSiblings, s)
+	p.Digest, _ = v3PlanDigest(p)
+	if validateV3Plan(p, p.StateDir, p.PlanID) == nil {
+		t.Fatal("new registration siblings escaped aggregate 1024 limit")
+	}
+}
+
+func TestV3RetirementRegistrationFactsShareEncodedLimit(t *testing.T) {
+	p := v3RegistrationGrantPlan()
+	r := newV3Result("tidy-plan")
+	r.Boundary.ObservedAt = "2026-10-18T00:00:00Z"
+	r.Status, r.Backend, r.Plan, r.Boundary.Complete = "ok", "git", &p, true
+	for {
+		raw, _ := json.Marshal(r)
+		if recordLimit-len(raw) <= 4099 {
+			r.Limitations = append(r.Limitations, "")
+			raw, _ = json.Marshal(r)
+			remaining := recordLimit - len(raw)
+			if remaining < 0 {
+				t.Fatal("invalid exact-limit fixture")
+			}
+			r.Limitations[len(r.Limitations)-1] = strings.Repeat("x", remaining)
+			break
+		}
+		r.Limitations = append(r.Limitations, strings.Repeat("x", 4096))
+	}
+	raw, _ := json.Marshal(r)
+	if len(raw) != recordLimit {
+		t.Fatalf("encoded boundary fixture: %d", len(raw))
+	}
+	var got V3Result
+	if err := decodeV3Result(raw, &got); err != nil {
+		t.Fatalf("exact encoded limit with new facts refused: %v", err)
+	}
+	r.Limitations[len(r.Limitations)-1] += "x"
+	raw, _ = json.Marshal(r)
+	if decodeV3Result(raw, &got) == nil {
+		t.Fatal("new registration facts escaped one-MiB record bound")
+	}
+	if validateV3Result(r) == nil {
+		t.Fatal("new registration facts escaped in-memory encoded bound")
 	}
 }
 func TestV3GitHubMergeTupleAndTrackingProof(t *testing.T) {
