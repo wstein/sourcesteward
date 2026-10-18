@@ -168,6 +168,12 @@
       "status": "planned",
       "spec": "../specs/027-inventory-limits/spec.md",
       "evidence": null
+    },
+    {
+      "id": "029-tidy-dogfood-safety",
+      "status": "planned",
+      "spec": "../specs/029-tidy-dogfood-safety/spec.md",
+      "evidence": "../specs/029-tidy-dogfood-safety/verification-integration.md"
     }
   ]
 }

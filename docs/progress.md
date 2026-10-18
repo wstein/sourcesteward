@@ -1,5 +1,15 @@
 # Progress and handoff
 
+## Active work: Spec 029 tidy safety (source candidate, acceptance pending)
+
+Explicit `tidy --contract 3` adds native Git reference proof, local tracking cleanup and
+owned or explicitly completed legacy retirement. Default v1/v2 stays offline. Exact reviewed
+dependencies, fresh-main reconciliations, safe disposable CLI conformance and remaining
+gates are recorded in [integration evidence](../specs/029-tidy-dogfood-safety/verification-integration.md).
+The feature remains `planned`: final integrated source review/checks, unavailable pinned
+versions/platform lanes, separately approved candidate build/install and fresh real-repository
+acceptance are distinct gates. No schema publication, activation or live cleanup is implied.
+
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 
 The Git inventory reads large outputs incrementally, degrades to partial results with verbatim disclosures instead of `git-inventory-failed` for repositories of thousands of files or hundreds of tags, describes submodule and separate-Git-directory checkouts by their files and reports `tracked: true` for ordinary changes in gitlink-bearing superprojects. Schema v1 is byte-unchanged; the Spec 023 `stw repos` tests, goldens and texts that pinned the old limits were updated with it. Evidence and what was not run (hosted CI, binary acceptance, Git 2.46.0, jj) are in [verification](../specs/027-inventory-limits/verification.md); the feature stays `planned` until then.

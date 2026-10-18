@@ -130,6 +130,12 @@ exact-path file selections. It is not implicit branch cleanup. Read the
 Recovery preserves declared evidence within documented limits; automatic restoration
 and general checkpoint/resume are not implemented.
 
+Explicit `--contract 3` adds Git merged-head proof (`--online --remote NAME`), local
+tracking cleanup (`--tracking-remote NAME --online`) and separately declared completed
+legacy retirement. Default invocations remain offline. Online apply needs both `--online`
+and `--authorize` for its exact stored effects. See the [tidy guide](tidy.md) for canonical
+paths, completion/protection repeats, precise native/provider proof and recovery limits.
+
 ## Inspect GitHub PRs and CI
 
 ```sh

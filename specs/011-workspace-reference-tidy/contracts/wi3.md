@@ -293,3 +293,18 @@ After authorized combined removal, require only the expected target/registration
 all remaining layout evidence must still agree. Do not recreate missing metadata for proof,
 adopt primary/submodule paths, or weaken complete retry/recovery checks. This design amendment
 has no implementation or independent acceptance claim until the new tasks pass.
+
+
+## Git-v3 retirement policy amendment
+
+Default v2/jj user-file limits, original owned journals/locks and retry meanings above remain.
+Explicit Git contract 3 uses the Spec 029 stream/content contract: regular user files at most
+16 MiB, 64 MiB per complete user pass, at most 64 KiB buffers and unchanged 64 KiB metadata
+files. The selected version/backend policy reaches stored objects, disk manifests, decoded
+records and deletion-adjacent proof; no ambient larger constant changes old callers.
+Three plan/eight apply observations retain nine/24 full user-content passes, at most three/eight
+batched raw-object processes and their one-operation byte/deadline ledgers. No old hash replaces
+fresh evidence. Physical/native pointers, target/registration parents and protected sibling sets
+remain immutable pre-effect facts. Registration/file outcomes remain distinct even for coupled
+native Git removal. Legacy completion has independent exact-path authority, no forced removal
+or lock release, and preserves its attached branch for a later fresh reference plan.

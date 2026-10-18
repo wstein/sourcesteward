@@ -127,7 +127,6 @@ abandonment. Optional private plan persistence is distinct from repository effec
 Git uses old-OID CAS, while jj checks pinned operations and exact allowed deltas. Owned task retirement requires its separate v2 plan, ownership and complete disk proof. See [tidy](tidy.md); its acceptance evidence is
 independent of prior inspection, inventory and workspace creation.
 
-
 ## Owned workspace retirement capability
 
 Native Git supports its coupled worktree registration/files removal only when both actions are
@@ -173,3 +172,14 @@ including a mixed product, refuses before export or execution. In CI files-only
 mode, a shared file/image `once` build refuses before any project invocation;
 normal mixed CI builds remain valid. Source implementation and tests do not
 establish image reproducibility, live GitHub behavior or release acceptance.
+
+## Explicit tidy contract 3
+
+Contract 3 is an admitted native Git capability for exact merged-head GitHub.com/SHA-1 proof,
+local tracking-reference cleanup and completed legacy/owned Git retirement. It does not grant
+Git writes in jj- or GitButler-owned workspaces. Existing native jj v1/v2 tidy remains supported
+with its original identities/content policy. New online reads are explicit and separate from
+network-denied native effects. Shared complete tree/filter admission retains path/blob/ownership
+guards; Git-v3 retirement alone gains the larger streamed user-content policy. See the
+[tidy guide](tidy.md) for selection, effects, recovery and sampled-evidence limits. Required
+minimum/current and platform acceptance gaps remain explicit in the Spec 029 source evidence.

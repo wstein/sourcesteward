@@ -112,3 +112,16 @@ A caller receives the same evidence in human and structured output without hidde
 - No deletion overrides for uncertain ownership or dirty state are included in this slice.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
+
+
+## Explicit contract-3 source amendment
+
+Spec 029 adds separately selected Git/GitHub.com exact merged-head evidence, local tracking
+reference cleanup and one-operation legacy completion. Existing default v1/v2 behavior and
+published schema bytes remain unchanged. Stable provider identities/exact-head attribution
+and local reported-integration-result ancestry bind online proof; complete resampled branch
+advertisements bind tracking absence. Every workspace/base/symbolic/ownership guard remains.
+Legacy completion is independent provenance, never a creation journal or inferred activity.
+The new Git-v3-only user-content policy and shared complete metadata channel limits are
+specified in Spec 029 FR-017–FR-032. Source implementation and global/native acceptance remain
+separate; no server writes, fetch/prune, automatic adoption or cleanup fallback is added.

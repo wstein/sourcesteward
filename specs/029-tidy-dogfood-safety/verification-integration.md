@@ -1,4 +1,56 @@
-# Fresh-main v3 integration work in progress
+# Final integrated source candidate
+
+Formal E SOURCE CLEAR `071b707bcd6750a17dd7da13b5ea274839ed707f` satisfied
+F's execution dependency. [The 22-path retirement layer](retirement-execution-import.json)
+records seven already-exact paths and 15 exact imported blobs, with final receipt and
+source-provenance SHA-256 values. D reference/tracking apply and all fresh-main release,
+authentication, transport and unpublished-schema protections remain separate and retained.
+The three early F findings remain fixed; the earlier conditional review does not transfer
+to this new integration.
+
+The final source exposes the approved four v3 modes through typed CLI dispatch and a
+read-only immutable-plan union selector. Completion/owner/protection repeats, authorization,
+online acknowledgment and cancellation precede effect authority. Human output quotes the
+complete typed retirement facts, including Unicode/control characters, alongside separate
+effects/outcomes and recovery limits. Default v1/v2 entry points remain unchanged.
+
+Disposable native CLI coverage uses 316 tracked files and a 301,117-byte file, complete
+streamed tree metadata above 64 KiB, native index-v4 compression and stage/index assertions
+within unchanged 64 KiB controls. Both original-owned current task progress and legacy
+completion execute plan/apply/read-only retry with schema validation. Original creation
+records and immutable plans, primary user plans/ignored cache and active-workspace bytes
+remain unchanged. Tampered records, missing or mismatched acknowledgments, cancellation
+and late actor files refuse; removing actor bytes requires a fresh physical plan. Legacy
+retirement preserves its branch. A fresh exact-base-OID plan retains it; after the fixture
+advances its integration base, another fresh plan and actual apply delete that eligible
+branch. Every setup/readback Git command uses the isolated fixture helper. Adversarial
+external dummy repository/index/config/hooks sentinels exercise both native CLI flows.
+
+The source candidate is frozen for same-reviewer content review before one final normal,
+race and source-check pass. Exact final SHA, raw logs, provenance and packaging partition
+will be bound in the final external receipt; intermediate results below are historical.
+No result here claims the final aggregate or independent exact-source gate has passed.
+
+Finite read-only primary preflight at `2e9b9fc99888b605bcce08afa6ef98846359e06a`
+(also origin/main) measured 778 tree records, 76,018 tree bytes, 43,342 filter bytes,
+6,398,241 blob bytes and a 408,496-byte largest blob. Primary index-v2 is 83,973 bytes
+and its stage output is 67,460 bytes. Those unchanged index controls belong to selected
+retirement targets, not source-root streamed proof; this measurement alone establishes
+no source-root failure or permission to alter an index. Full per-command hashes and counts
+are in `/tmp/stw-f-final-cli-evidence/primary-preflight.json`.
+
+T038/T039/T041/T042 source work is implemented; T040 has integrated source/native tests.
+T043 executable smoke script extensions remain deferred in this bounded CLI item, per
+coordinator scope. Required Linux/macOS minimum/current version lanes (T044), final checks
+and review (T045/T046), approved candidate activation (T047) and fresh two-repository
+runs/evidence (T048/T049) remain distinct outstanding gates. Source schema v3 stays
+unpublished. Actual Hugo packaging is excluded without build authorization; Node availability
+must be reported honestly. No product/site build, install, live HTTP, user-repository tidy,
+push, hosted CI, PR, tag, release, settings or gitlink operation ran.
+
+# Historical intermediate integration evidence
+
+# Initial fresh-main preparation
 
 F uses isolated branch `codex/tidy-v3-cli-integration`, initially based on freshly
 observed GitHub API and fetched main `2e9b9fc99888b605bcce08afa6ef98846359e06a`.
