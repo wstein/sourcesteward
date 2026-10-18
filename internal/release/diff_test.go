@@ -19,6 +19,7 @@ func TestDiffMetadataClassification(t *testing.T) {
 		{"100644", "100755", "M", "docs/mode", false}, {"120000", "120000", "M", "docs/link", false}, {"160000", "160000", "M", "docs/sub", false}, {"100644", "100644", "T", "docs/type", false},
 		{"100644", "100644", "M", ".stw/release.toml", false}, {"100644", "100644", "M", ".github/a", false}, {"100644", "100644", "M", "docs/\xff", false}, {"100644", "100644", "M", "src/a", false},
 		{"100644", "100644", "M", "docs/releases/v1.json", true},
+		{"100644", "100644", "R100", "docs/renamed", false}, {"100644", "100644", "C100", "docs/copied", false}, {"100644", "100644", "U", "docs/conflict", false}, {"100644", "100644", "X", "docs/unknown", false},
 	} {
 		t.Run(tc.path+tc.status, func(t *testing.T) {
 			r, e := parseRawDiff(strings.NewReader(rawDiff(tc.old, tc.new, tc.status, tc.path)), []string{"docs/**"}, "docs/releases/v1.json")
