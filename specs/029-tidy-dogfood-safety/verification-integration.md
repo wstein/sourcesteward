@@ -1,0 +1,58 @@
+# Fresh-main v3 integration work in progress
+
+F uses isolated branch `codex/tidy-v3-cli-integration`, initially based on freshly
+observed GitHub API and fetched main `2e9b9fc99888b605bcce08afa6ef98846359e06a`.
+The [integration ledger](integration-ledger.json) binds every old baseline,
+reviewed aggregate and fresh-main blob before import and records the integrated
+blob for each path. Sixty-five paths were imported only after proving fresh main
+still had the original baseline blob; five reviewed release files were already
+identical on main. Five shared files received additive reconciliations instead
+of old whole-file replacement. Fresh typed authentication failures, dedicated
+workflow-dispatch transport and all current release schema inventories remain.
+
+Original dependency imports and supplemental correction manifests are preserved
+byte-for-byte, including the original 52-entry ownership graph. D aggregate
+`e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2` supplies frozen reference/tracking,
+primary binding and the original C hosting source. E admission
+`f696611d925ac6d320d66178c3bc739c9084b061` is stable provenance; pending E apply
+source is not imported or wired. Legacy-specific flags stay hidden and the
+workspace entry point does not execute retirement yet. This is an intermediate
+source candidate, not feature acceptance, source CLEAR or activation authority.
+
+The first F test failed on fresh main: `go test ./internal/cli -run
+'^TestTidyV3UnsupportedBackendStructured$' -count=1` reported CLI code 2,
+`unknown flag: --contract`, and no JSON. The explicit v3 path now returns its
+versioned unsupported-backend refusal with code 1 and no executable plan.
+Further test-first failures reproduced unrelated OID hints reporting code 1
+instead of syntax code 2, canceled apply reaching store admission before caller
+cancellation, and five explicitly empty scalar selectors reaching operations.
+Each failure was fixed and its targeted test passed afterward.
+
+Executed intermediate checks (working-tree evidence, not a frozen source gate):
+
+- All hosting package tests passed, 3.567 seconds, including current typed
+  authentication and dispatch regressions with the imported tidy readers.
+- All CLI package tests passed, 8.206 seconds, before the later narrow tests;
+  the final targeted `TestTidy` run passed after empty-selector fixes.
+- All contracts package tests passed, 62.091 seconds, before the new F native
+  contract test was added. That new test passed independently in 1.734 seconds.
+- The real v3 CLI contract flow uses 695 tracked files and base metadata beyond
+  the old 64 KiB limit, one selected branch, dirty primary document and ignored
+  cache, unrelated-OID syntax refusal before HTTP, explicit online/local apply
+  acknowledgment, exact native recovery/deletion, unchanged completed retry,
+  moved-target stale refusal and byte-preserved primary user files.
+- Public entry-point apply/recovery/retry and canceled-before-store tests passed
+  in 1.166 seconds. Original operation deadline covers dispatch/bootstrap;
+  coordinator subcontexts cannot reset it.
+- Thirteen architecture unit tests, eight source-only Hugo tests, the unpublished
+  schema-copy test and `git diff --check` passed. The Hugo tests operate on
+  synthetic HTML/source inventories; no Hugo process or site build ran.
+
+This Linux arm64 session has Git 2.56.0, jj 0.46.0 and Go 1.27.2. Other pinned
+versions/platforms have not been executed here. Full frozen normal/race gates,
+remaining source gates, final E retirement integration, realistic combined
+retirement-then-ref acceptance and independent exact-head review remain pending.
+The actual Hugo packaging/build test requires separate authorization and will be
+excluded by exact test identity if still unauthorized; Node availability will
+be reported separately. No build/install, live HTTP, real cleanup, push, hosted
+CI, tag, release, publication, settings or submodule gitlink change ran.

@@ -1,0 +1,44 @@
+{
+  "base_head": "a464bbf249c42f13ef3a7ac4408c206984365dd3",
+  "source_sha": "a8512764088f50920dbb333a71e0576ad3717d83",
+  "source_parent": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+  "source_tree": "198858803cb8fe6f2ee081cd6921aa95e9f3d56a",
+  "initial_manifest_blob": "c0a67ffb128077006023693c266489249ff3c238",
+  "imports": [
+    {
+      "path": "internal/contracts/tidy_v3_schema_test.go",
+      "source_path": "internal/contracts/tidy_v3_schema_test.go",
+      "source_sha": "a8512764088f50920dbb333a71e0576ad3717d83",
+      "old_blob": "32f612e752d6f944a119d921387949a8ad9e2c84",
+      "new_blob": "3a525118162c548ac5f2f40e95d4cb569639379a"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result.go",
+      "source_path": "internal/workspace/tidy_v3_result.go",
+      "source_sha": "a8512764088f50920dbb333a71e0576ad3717d83",
+      "old_blob": "5b1a6c35f1bf4b2c617100dc6c7dc40d16a823f5",
+      "new_blob": "989905fcc9aac97dc8102dca71246371b98b1d1f"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result_test.go",
+      "source_path": "internal/workspace/tidy_v3_result_test.go",
+      "source_sha": "a8512764088f50920dbb333a71e0576ad3717d83",
+      "old_blob": "8d77549441c54f927e9d1e344581caa90b650a20",
+      "new_blob": "ca11ecb6dfdd88f685923d0f071e63463b6f0d80"
+    },
+    {
+      "path": "schemas/v3/tidy.schema.json",
+      "source_path": "schemas/v3/tidy.schema.json",
+      "source_sha": "a8512764088f50920dbb333a71e0576ad3717d83",
+      "old_blob": "18afbccbb931ae9414873cdba2840dce763911f0",
+      "new_blob": "818a6bd3b17a20c754c4bbb760ff088895028fc3"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "source_path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "source_sha": "a8512764088f50920dbb333a71e0576ad3717d83",
+      "old_blob": "626dab5ac0a363c2f57d0fb69e5517296aa13cba",
+      "new_blob": "4d24beb9afddf8bccd00a26c236c19e27c0ebff1"
+    }
+  ]
+}
