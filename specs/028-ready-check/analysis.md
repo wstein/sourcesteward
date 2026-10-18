@@ -39,3 +39,29 @@ Actual captured logs, command exits and range-diff for exact checked revision `8
 ## Generated task candidate
 
 [Tasks](tasks.md) contains 34 unchecked tasks with tests before behavior, all 19 functional requirements and six success criteria mapped, four independently testable stories, shared-file ownership and dependency order. US2 supplies the authenticated review that US1 consumes; inactive US3 publisher source is separate from its owner-gated deployment tasks; US4 establishes native effects and bounded refusal. The approved specification and normative contracts remain unchanged by task generation. The independent full-artifact gate is pending; no implementation, settings or credential resource is authorized by this record.
+
+## Accepted full-artifact gate and bounded input increment
+
+The coordinator relayed independent full-artifact FINAL CLEAR on exact design
+`51a9015c5912d221e3d3e9fdafb2811c9572aff0`, covering the specification,
+plan, research, data model, contracts, examples, tasks and traceability: zero
+open findings, including Low. This completes the implementation design gate;
+it grants no build, deployment, credential, settings or publication authority.
+The configured review tier is not runtime attestation.
+
+The first source increment owns T001–T004 only: this ledger, new hosting
+compatibility tests and pure immutable lock/policy/report inputs. Shared
+`internal/hosting/transport.go`, `scripts/check-architecture.py` and schema/site
+inventories remain outside this author's ownership; the coordinator separately
+owns their allocation. The three approved unpublished input schemas remain the
+shape baseline. Existing hosting schema/fixture bytes and behavior are preserved.
+
+| Requirement | Bounded evidence and remaining work |
+| --- | --- |
+| FR-005, FR-012 | Closed bounded input parsing; authentication, policy semantics and collection are later tasks. |
+| FR-018 | Exact-byte published hosting compatibility assertions; Ready output/schema publication remains later work. |
+| FR-019 | Failing parser tests precede implementation; independent source review and checks are recorded at handoff. |
+| SC-001, SC-004, SC-006 | Parser/shape evidence only; evaluator/native/hosted acceptance and rollout remain incomplete. |
+
+No T005+ evaluator, transport, CLI or publisher capability is implemented by this
+increment. Fictitious examples establish shape only and grant no actual trust.
