@@ -57,6 +57,13 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 		if e != nil {
 			return failTidyV3(r, e)
 		}
+		hints := map[string]int{}
+		for _, h := range o.PRHints {
+			if h.OID != first.Retirement.Target.CommitID || h.Number > int64(^uint(0)>>1) {
+				return failTidyV3(r, failure("invalid-options", "Retirement hints must name the exact selected native head."))
+			}
+			hints[h.OID] = int(h.Number)
+		}
 		session, e = c.refs.openHosting(ctx, o.Path, hosting.TidySessionOptions{Online: true, Remote: o.Remote, Repo: o.Repo})
 		if session != nil {
 			defer func() {
@@ -81,13 +88,6 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 		temporary := p
 		temporary.Retirement = nil
 		temporary.Candidates = []V3Candidate{retirementV3Candidate(first.Retirement)}
-		hints := map[string]int{}
-		for _, h := range o.PRHints {
-			if h.OID != first.Retirement.Target.CommitID || h.Number > int64(^uint(0)>>1) {
-				return failTidyV3(r, failure("invalid-options", "Retirement hints must name the exact selected native head."))
-			}
-			hints[h.OID] = int(h.Number)
-		}
 		if e = c.refs.providerProofs(ctx, session, &temporary, hints); e != nil {
 			return failTidyV3(r, e)
 		}
