@@ -2,11 +2,13 @@
 package readiness
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -319,4 +321,349 @@ func orderReferences(refs []SourceReference) {
 		}
 		return refs[i].Field < refs[j].Field
 	})
+}
+
+// ReviewStatus preserves full status creator identity; display names confer no trust.
+type ReviewStatus struct {
+	ID, CreatorID                          int64
+	Context, State, TargetURL, Description string
+}
+
+// ReviewComment contains the fixed comment reader's exact UTF-8 body bytes.
+type ReviewComment struct {
+	ID, AuthorID   int64
+	IssueURL, Body string
+}
+type ReviewFile struct {
+	Filename, Status string
+	PreviousFilename *string
+}
+
+// ReviewSample is a value-only snapshot from authenticated fixed readers. Sources
+// must contain exactly the complete full-statuses, files, open-prs and report
+// readers; unrelated operation sources are rejected. Every supplied request is
+// accounted before source selection. Hosting remains responsible for the shared
+// operation-wide budget (including PR, policy, CI and final resamples), and must
+// set Complete=false when any global bound is exhausted.
+// Complete and Stable describe collection and its final resamples, not trust
+// inferred from report declarations. Policy source/activation loading belongs to
+// hosting; this predicate verifies its supplied immutable policy binding.
+type ReviewSource struct {
+	Host, Name, Repository, Selector, Outcome string
+	Complete                                  bool
+	Requests                                  int
+}
+type ReviewSample struct {
+	Repository           Repository
+	PullRequest          PullRequest
+	Policy               PolicyBinding
+	WebOrigin, APIOrigin string
+	AssociatedOpenPRs    []int64
+	ChangedFiles         int
+	Files                []ReviewFile
+	Statuses             []ReviewStatus
+	Comment              ReviewComment
+	Sources              []ReviewSource
+	Complete, Stable     bool
+}
+
+// EvaluateReview is the shared policy review projection, independent of CI and
+// the publisher's own check. It never performs collection or publication.
+func EvaluateReview(policy Policy, sample ReviewSample) (Component, ReviewEvidence) {
+	c := Component{State: "pass", Complete: true, Reasons: []Reason{}, Evidence: []SourceReference{}}
+	e := ReviewEvidence{RuntimeAttestation: "unavailable", AssociatedOpenPRs: append([]int64{}, sample.AssociatedOpenPRs...)}
+	add := func(state, code, source, field string) {
+		c.Reasons = append(c.Reasons, Reason{Code: code, Subject: field, Sources: []SourceReference{{Source: source, Field: field}}})
+		if state == "fail" || c.State == "pass" {
+			c.State = state
+		}
+		if state == "unknown" {
+			c.Complete = false
+		}
+	}
+	finish := func() (Component, ReviewEvidence) { orderReasons(c.Reasons); orderReferences(c.Evidence); return c, e }
+	if len(policy.RawJSON()) == 0 || !validReviewPolicy(policy.Value().Review) {
+		add("unknown", "policy-invalid", "policy", "review")
+		return finish()
+	}
+	p := policy.Value()
+	if len(sample.Sources) > 80 || len(sample.Files) > 1000 || len(sample.Statuses) > 1000 || len(sample.AssociatedOpenPRs) > 1000 {
+		add("unknown", "evidence-incomplete", "collection", "bounds")
+		return finish()
+	}
+	if !sample.Complete {
+		add("unknown", "evidence-incomplete", "collection", "complete")
+	}
+	if !sample.Stable {
+		add("unknown", "sample-changed", "resample", "stable")
+	}
+	// Readers assert exhaustion separately from HTTP success. A missing or duplicate
+	// source and a source without request accounting cannot prove completeness.
+	seenSources := map[string]bool{}
+	requests := 0
+	required := map[string]bool{"full-statuses": false, "files": false, "open-prs": false, "report": false}
+	for _, src := range sample.Sources {
+		// Account first: the closed review-only vocabulary is no excuse to
+		// discard declared requests or silently accept another source.
+		requests += src.Requests
+		if _, ok := required[src.Name]; !ok {
+			add("unknown", "evidence-incomplete", "collection", "source")
+			continue
+		}
+		selector := ""
+		switch src.Name {
+		case "full-statuses":
+			selector = sample.PullRequest.HeadSHA
+		case "files":
+			selector = strconv.FormatInt(sample.PullRequest.Number, 10)
+		case "report":
+			selector = strconv.FormatInt(sample.Comment.ID, 10)
+		}
+		if seenSources[src.Name] || src.Outcome != "ok" || !src.Complete || src.Requests < 1 || src.Requests > 80 || src.Host != sample.Repository.Host || src.Repository != sample.Repository.FullName || src.Selector != selector {
+			add("unknown", "evidence-incomplete", src.Name, "source")
+		}
+		seenSources[src.Name] = true
+		required[src.Name] = true
+	}
+	if requests > 80 {
+		add("unknown", "evidence-incomplete", "collection", "requests")
+	}
+	for _, name := range []string{"full-statuses", "files", "open-prs", "report"} {
+		if !required[name] {
+			add("unknown", "evidence-incomplete", name, "source")
+		}
+	}
+	pr := sample.PullRequest
+	if sample.Repository != p.Repository || pr.BaseRepositoryID != p.Repository.ID || pr.BaseRef != p.Repository.BaseRef {
+		add("fail", "repository-mismatch", "pr", "repository")
+	}
+	if pr.State != "open" || pr.Merged {
+		add("fail", "pull-request-closed", "pr", "state")
+	}
+	if pr.Number <= 0 || !reviewSHA.MatchString(pr.HeadSHA) || !reviewSHA.MatchString(pr.BaseSHA) || !reviewSHA.MatchString(sample.Policy.Commit) || sample.Policy.SHA256 != policy.SHA256() {
+		add("fail", "review-binding-mismatch", "policy", "binding")
+	}
+	if len(sample.AssociatedOpenPRs) > 1000 {
+		add("unknown", "evidence-incomplete", "open-prs", "count")
+	}
+	seenPRs := map[int64]bool{}
+	for _, n := range sample.AssociatedOpenPRs {
+		if n <= 0 || seenPRs[n] {
+			add("unknown", "association-incomplete", "open-prs", "number")
+		}
+		seenPRs[n] = true
+	}
+	e.Singleton = len(sample.AssociatedOpenPRs) == 1 && seenPRs[pr.Number]
+	if len(sample.AssociatedOpenPRs) > 1 {
+		add("unknown", "shared-head-ambiguous", "open-prs", "head")
+	} else if !e.Singleton {
+		add("unknown", "association-incomplete", "open-prs", "head")
+	}
+	filesDigest, filesOK := reviewFilesDigest(sample.Files, sample.ChangedFiles)
+	if !filesOK {
+		add("unknown", "evidence-incomplete", "files", "scope")
+	}
+	if len(sample.Statuses) > 1000 {
+		add("unknown", "evidence-incomplete", "full-statuses", "count")
+		return finish()
+	}
+	var selected *ReviewStatus
+	seenIDs := map[int64]bool{}
+	for i := range sample.Statuses {
+		status := &sample.Statuses[i]
+		if status.ID <= 0 || seenIDs[status.ID] || len(status.Context) > 100 || !boundedReviewText(status.Context, 100) || !boundedReviewText(status.Description, 2048) || !boundedReviewText(status.TargetURL, 2048) {
+			add("unknown", "evidence-incomplete", "full-statuses", "record")
+		}
+		seenIDs[status.ID] = true
+		if status.Context == p.Review.Context && (selected == nil || status.ID > selected.ID) {
+			selected = status
+		}
+	}
+	if selected == nil {
+		add("fail", "review-missing", "full-statuses", "context")
+		return finish()
+	}
+	statusID := selected.ID
+	e.StatusID = &statusID
+	c.Evidence = append(c.Evidence, SourceReference{Source: "full-statuses", Field: "id"})
+	if !reviewIDAllowed(selected.CreatorID, p.Review.StatusCreatorIDs) || !reviewIDAllowed(sample.Comment.AuthorID, p.Review.ReportAuthorIDs) {
+		add("fail", "review-issuer-untrusted", "report", "issuer")
+	}
+	if selected.State != "success" {
+		add("fail", "review-not-clear", "full-statuses", "state")
+	}
+	// Exact construction avoids permissive URL normalization, credentials, encoded
+	// fragments, cross-origin locators and alternate comment candidates. No URL is fetched.
+	locator := sample.WebOrigin + "/" + sample.Repository.FullName + "/pull/" + strconv.FormatInt(pr.Number, 10) + "#issuecomment-"
+	commentText := strings.TrimPrefix(selected.TargetURL, locator)
+	commentID, err := strconv.ParseInt(commentText, 10, 64)
+	expectedIssue := sample.APIOrigin + "/repos/" + sample.Repository.FullName + "/issues/" + strconv.FormatInt(pr.Number, 10)
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(sample.Comment.Body)))
+	if !validReviewOrigins(sample.Repository.Host, sample.WebOrigin, sample.APIOrigin) || !strings.HasPrefix(selected.TargetURL, locator) || err != nil || commentID <= 0 || strconv.FormatInt(commentID, 10) != commentText || sample.Comment.ID != commentID || sample.Comment.IssueURL != expectedIssue || selected.Description != "stw-review-v1 sha256="+digest {
+		add("fail", "report-binding-mismatch", "report", "binding")
+	}
+	commentID = sample.Comment.ID
+	e.CommentID = &commentID
+	report, err := ParseReport([]byte(sample.Comment.Body))
+	if err != nil {
+		add("unknown", "report-malformed", "report", "body")
+		return finish()
+	}
+	r := report.Value()
+	// Only authenticated public metadata is projected. Reviewer labels and raw
+	// report text (which may contain private identifiers) are never copied out.
+	if c.State != "fail" {
+		e.ReportID = r.ReportID
+		e.ReportSHA256 = report.SHA256()
+		e.ConfiguredModel = Model{ID: r.Model.ID, Effort: r.Model.Effort}
+		e.DeclaredIndependence = r.Independence
+	}
+	if r.RepositoryID != sample.Repository.ID || r.Number != pr.Number || r.HeadSHA != pr.HeadSHA || r.BaseSHA != pr.BaseSHA || r.PolicyCommit != sample.Policy.Commit || r.PolicySHA256 != sample.Policy.SHA256 || r.Scope != "full-pr" || filesOK && r.FilesSHA256 != filesDigest {
+		add("fail", "review-binding-mismatch", "report", "scope")
+	}
+	requiredRank, requiredTier := reviewRequiredTier(p.Review, sample.Files)
+	e.Tier = requiredTier
+	modelRank := int64(0)
+	for _, tier := range p.Review.Tiers {
+		for _, model := range tier.Models {
+			if model.ID == r.Model.ID && model.Effort == r.Model.Effort {
+				modelRank = tier.Rank
+			}
+		}
+	}
+	if modelRank < requiredRank {
+		add("fail", "review-tier-insufficient", "report", "model")
+	}
+	if p.Review.Independence != "declared-execution" || r.Independence.Kind != "declared-execution" || !r.Independence.SeparateAuthor || !r.Independence.SeparateContext {
+		add("unknown", "independence-unverifiable", "report", "independence")
+	}
+	history, clear := reviewHistory(r, p.Review)
+	if !history {
+		add("unknown", "report-history-invalid", "report", "rounds")
+	}
+	if !clear {
+		add("fail", "review-not-clear", "report", "findings")
+	}
+	c.Evidence = append(c.Evidence, SourceReference{Source: "report", Field: "body"}, SourceReference{Source: "files", Field: "scope"}, SourceReference{Source: "open-prs", Field: "head"})
+	return finish()
+}
+
+var reviewSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+func reviewIDAllowed(id int64, ids []int64) bool {
+	for _, allowed := range ids {
+		if id > 0 && id == allowed {
+			return true
+		}
+	}
+	return false
+}
+func boundedReviewText(s string, max int) bool { return len(s) <= max && utf8.ValidString(s) }
+func validReviewOrigins(host, web, api string) bool {
+	// Selected host comes from native hosting resolution; reject authority/path
+	// metacharacters here rather than accepting caller-provided alternate origins.
+	if host == "" || strings.ContainsAny(host, "/:@?#\\ \t\r\n") {
+		return false
+	}
+	if host == "github.com" {
+		return web == "https://github.com" && api == "https://api.github.com"
+	}
+	return web == "https://"+host && api == "https://"+host+"/api/v3"
+}
+func validReviewPolicy(p ReviewPolicy) bool {
+	names := map[string]int64{}
+	ranks := map[int64]bool{}
+	models := map[Model]bool{}
+	for _, tier := range p.Tiers {
+		if names[tier.Name] != 0 || ranks[tier.Rank] || tier.Rank < 1 {
+			return false
+		}
+		names[tier.Name] = tier.Rank
+		ranks[tier.Rank] = true
+		for _, model := range tier.Models {
+			if models[model] {
+				return false
+			}
+			models[model] = true
+		}
+	}
+	if names[p.DefaultTier] == 0 {
+		return false
+	}
+	prefixes := map[string]bool{}
+	for _, rule := range p.PathTiers {
+		if names[rule.Tier] == 0 || !validReviewPrefix(rule.Prefix) || prefixes[rule.Prefix] {
+			return false
+		}
+		prefixes[rule.Prefix] = true
+	}
+	return true
+}
+func validReviewPrefix(s string) bool {
+	if s == "" || strings.HasPrefix(s, "/") || strings.ContainsAny(s, "\\*?[]{}") || !boundedReviewText(s, 1024) {
+		return false
+	}
+	for _, part := range strings.Split(strings.TrimSuffix(s, "/"), "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+func reviewRequiredTier(p ReviewPolicy, files []ReviewFile) (int64, string) {
+	ranks := map[string]int64{}
+	for _, t := range p.Tiers {
+		ranks[t.Name] = t.Rank
+	}
+	name := p.DefaultTier
+	rank := ranks[name]
+	for _, f := range files {
+		for _, rule := range p.PathTiers {
+			for _, path := range []string{f.Filename, reviewPrevious(f)} {
+				matches := path == rule.Prefix || strings.HasSuffix(rule.Prefix, "/") && strings.HasPrefix(path, rule.Prefix)
+				if matches && ranks[rule.Tier] > rank {
+					name, rank = rule.Tier, ranks[rule.Tier]
+				}
+			}
+		}
+	}
+	return rank, name
+}
+func reviewPrevious(f ReviewFile) string {
+	if f.PreviousFilename != nil {
+		return *f.PreviousFilename
+	}
+	return ""
+}
+func reviewFilesDigest(files []ReviewFile, count int) (string, bool) {
+	if count < 0 || count > 1000 || len(files) != count {
+		return "", false
+	}
+	rows := append([]ReviewFile{}, files...)
+	seen := map[string]bool{}
+	for _, f := range rows {
+		if f.Filename == "" || f.Status == "" || !boundedReviewText(f.Filename, 2048) || !boundedReviewText(f.Status, 2048) || !boundedReviewText(reviewPrevious(f), 2048) || seen[f.Filename] || f.Status == "renamed" && reviewPrevious(f) == "" {
+			return "", false
+		}
+		seen[f.Filename] = true
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if a.Filename != b.Filename {
+			return a.Filename < b.Filename
+		}
+		if reviewPrevious(a) != reviewPrevious(b) {
+			return reviewPrevious(a) < reviewPrevious(b)
+		}
+		return a.Status < b.Status
+	})
+	var framed strings.Builder
+	for _, f := range rows {
+		for _, value := range []string{f.Filename, reviewPrevious(f), f.Status} {
+			framed.WriteString(strconv.Itoa(len(value)))
+			framed.WriteByte(':')
+			framed.WriteString(value)
+		}
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(framed.String()))), true
 }

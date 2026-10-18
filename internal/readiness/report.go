@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 package readiness
 
+import "strings"
+
 type ReportModel struct {
 	ID       string `json:"id"`
 	Effort   string `json:"effort"`
@@ -64,4 +66,59 @@ func reportShape() *shape {
 		"findings":     array(obj(map[string]*shape{"id": tokenShape(), "severity": choice("critical", "high", "medium", "low"), "state": choice("open", "resolved", "accepted-followup"), "owner": nullable(text(200, "")), "evidence": nullable(text(2048, ""))}), 0, 100),
 		"blockers":     array(text(2048, ""), 0, 100),
 	})
+}
+
+// reviewHistory evaluates the complete disclosed history. It cannot reconstruct
+// events an authenticated issuer omitted; declarations retain that explicit limit.
+func reviewHistory(r ReportData, p ReviewPolicy) (valid, clear bool) {
+	valid, clear = true, r.Verdict == "clear" && len(r.Blockers) == 0
+	findings := map[string]Finding{}
+	referenced := map[string]bool{}
+	for _, f := range r.Findings {
+		if _, ok := findings[f.ID]; ok {
+			valid = false
+		}
+		findings[f.ID] = f
+		switch f.State {
+		case "open":
+			clear = false
+		case "accepted-followup":
+			if f.Severity != "low" || !p.AllowLowFollowups || f.Owner == nil || f.Evidence == nil || strings.TrimSpace(*f.Owner) == "" || strings.TrimSpace(*f.Evidence) == "" || r.Verdict != "clear" {
+				clear = false
+			}
+		}
+	}
+	notClear := int64(0)
+	for i, round := range r.Rounds {
+		if round.Number != int64(i+1) {
+			valid = false
+		}
+		if round.Verdict == "not-clear" {
+			notClear++
+		}
+		seen := map[string]bool{}
+		for _, id := range round.Findings {
+			if _, ok := findings[id]; !ok || seen[id] {
+				valid = false
+			}
+			seen[id] = true
+			referenced[id] = true
+		}
+	}
+	for id := range findings {
+		if !referenced[id] {
+			valid = false
+		}
+	}
+	if len(r.Rounds) == 0 {
+		return false, false
+	}
+	final := r.Rounds[len(r.Rounds)-1]
+	if final.HeadSHA != r.HeadSHA || final.Verdict != r.Verdict {
+		valid = false
+	}
+	if notClear >= p.MaxRounds {
+		clear = false
+	}
+	return valid, clear
 }
