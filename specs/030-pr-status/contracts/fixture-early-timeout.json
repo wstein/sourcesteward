@@ -1,0 +1,34 @@
+{
+  "backend": "git",
+  "identity": null,
+  "repository": null,
+  "candidates": [],
+  "schema_version": 2,
+  "kind": "pr",
+  "status": "error",
+  "pull_request": null,
+  "diagnostics": [{"code": "hosting-watch-timeout", "message": "PR status observation did not satisfy the requested bounded observation."}],
+  "observed_at": "2026-10-18T12:00:29Z",
+  "sampled_at": null,
+  "observation": {
+    "mode": "watch",
+    "stop": "timeout",
+    "samples": 0,
+    "initial_head_sha": null,
+    "expected_head": null,
+    "expectation": "not-requested",
+    "identity_changed": false
+  },
+  "boundary": {
+    "complete": false,
+    "network": false,
+    "max_bytes": 1048576,
+    "timeout_seconds": 30,
+    "max_requests": 8,
+    "requests": 0,
+    "limitations": [
+      "Sampled evidence cannot exclude unobserved ABA or future PR changes.",
+      "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."
+    ]
+  }
+}

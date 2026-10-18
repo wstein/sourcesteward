@@ -1,22 +1,59 @@
-# Feature Specification: Explicit pull request status observations
+# Feature Specification: Explicit PR status observations
 
 **Branch**: `codex/hosting-pr-status-design` | **Created**: 2026-10-18
-**Status**: Design checkpoint; incomplete and not independently reviewed. No implementation gate clearance.
+**Status**: Complete design candidate, pending independent strong review; implementation blocked.
+**Input**: Extend existing PR inspection with merged/closed evidence, compact human output, stable versioned JSON, expected-head validation and explicit bounded watching.
 
-## Scope
+## Scope and decision status
 
-Extend the existing `stw hosting pr NUMBER [PATH]` and `gh jj pr` operation with five requested capabilities: merged/closed evidence, compact human output with detailed output retained, stable versioned JSON, an exact expected-head constraint, and explicitly requested bounded watching. Preserve native Git/jj ownership, fixed read-only GitHub GETs and one-shot operation by default. Provisioning, arbitrary gh forwarding, Ready evaluation and hosting mutations are excluded.
+Extend `stw hosting pr NUMBER [PATH]` and `gh jj pr` through shared operations. Reuse native Git/jj ownership and bounded fixed GitHub GETs. No generic gh wrapper, provisioning, Ready evaluation, merge action, review transfer, installation or publication. Specs 020/022 remain the hosting foundation; 028/029 own separate capabilities.
 
-## Initial acceptance requirements
+The five outcomes are requested scope. The exact CLI compatibility, eight-read ceiling, backoff and one-second delivery reserve below are **proposed design decisions**, not existing policy or additional user approval. The proposed command-owned final-delivery guard and its acceptance limits in [contracts/pr-status.md](contracts/pr-status.md#delivery-decision) remain behind an independent design/implementation gate. Independent review must evaluate the complete candidate before runtime implementation; no automatic policy relaxation is selected.
 
-- **FR-001**: Report GitHub's `merged`, `merged_at`, `closed_at` and `merge_commit_sha`, and distinguish `open`, `closed-unmerged`, `merged`. Do not derive merged state from a non-null SHA. Before merge, that SHA can name GitHub's test merge; after rebase merge it names the commit to which the base was updated, which need not equal the reviewed head. No review or attestation transfers between these identities.
-- **FR-002**: Offer a compact single-line human observation, escaping untrusted data; preserve the existing detailed observation through an explicit presentation choice. Human and JSON must derive from the same result.
-- **FR-003**: Version the expanded JSON separately from the published strict v1 hosting shape. Preserve `repo` and `ci` v1 contracts. Define explicit nullable fields, `observed_at`, schema compatibility and failure observations before implementation.
-- **FR-004**: `--expect-head SHA` compares the observed PR head using the existing hosting full-SHA grammar (exactly 40 lowercase hexadecimal digits); reject short, uppercase and native jj change/operation IDs. An expectation never authorizes writes or asserts review acceptance.
-- **FR-005**: Only explicit `--watch` permits repeat reads. One inclusive global deadline must cover native resolution, authentication, requests, decoding, waiting, encoding and delivery. Preserve the existing 30-second upper bound and one MiB output cap. Fix an explicit request cap and bounded backoff before implementation. No new request starts after deadline or parent cancellation.
-- **FR-006**: Preserve exit 0 for successful observations, 1 for operational failure and 2 for usage errors. Specify mismatch, observed head changes, deadline, closed-unmerged and watch terminal outcomes before implementation. No hidden retry of null mergeability or HTTP denial.
-- **FR-007**: Reuse caller-owned bounded authentication, typed fixed GET transport, refusal of redirects/compression/arbitrary URLs and redacted diagnostics. Both Tier 1 backends retain their existing native behavior and effect boundaries.
+## User scenarios and acceptance
 
-## Gate and outstanding decisions
+### US1 — Identify closure and merge evidence (P1)
 
-This checkpoint reserves Spec 030. It is not a complete specification. Required before strong independent review: exact CLI compatibility choice; state/field truth table including missing/null/inconsistent fields; complete JSON schema and fixtures; watch state machine, request count, backoff and terminal/error precedence; inclusive output-writer cancellation limits; meaningful TDD/mutant plan; traceability and work-item ownership ledger. No runtime work may begin until the complete cross-artifact gate is independently CLEAR.
+A caller distinguishes a merged PR from an unmerged closure without interpreting a test-merge SHA as integration proof.
+
+1. Open + `merged:false` yields `lifecycle:open`, including when `merge_commit_sha` is non-null; `result_sha` stays null.
+2. Closed + `merged:false` yields `closed-unmerged`; closed + `merged:true` yields `merged`, reporting both dates and the available method-dependent GitHub result SHA.
+3. Merge/squash/rebase fixtures keep head SHA and reported result separate, even when they differ. No reviewed/approved/integrated verdict is produced.
+4. Missing or inconsistent required evidence fails rather than converting missing `merged` to false. Null mergeability does not affect lifecycle or initiate a retry.
+
+### US2 — Choose concise or detailed human output (P1)
+
+`--compact` emits one escaped line from the same enhanced result that powers v2 JSON. Without it human output retains the existing detailed sections and adds labelled merge evidence, expectation and watch outcome. Malicious title/ref/URL bytes never become terminal controls, endpoints or commands. Both forms expose errors and stale last-sample timestamps.
+
+### US3 — Consume an explicit stable machine contract (P1)
+
+`--json --json-version 2` emits exactly one final object conforming to [the candidate schema](contracts/pr-status.schema.json); nullable data is explicit. Ordinary `--json` remains v1; repo/ci, v1 schema and v1 fixtures remain byte unchanged. v1 consumers must explicitly select v2 to get new fields. Full compatibility details and limitations are in the contract.
+
+### US4 — Bind observations to an expected head (P1)
+
+`--expect-head` accepts only 40 lowercase hexadecimal digits, matching the existing hosting contract. A mismatching head fails immediately, even on an otherwise merged sample; expectation is never compared to the result SHA. Unsupported SHA-256 OIDs and jj change/operation IDs are refused as usage errors. A matching head says nothing about review, CI or ancestry.
+
+### US5 — Explicitly wait for a terminal PR observation (P1)
+
+Without `--watch`, one numbered PR GET is made, even for open/null-mergeability PRs. Explicit watch samples until merged or closed-unmerged, or stops on mismatch, observed identity movement, failure, eight requests, cancellation or the inclusive deadline. It emits one final observation, not a stream. A terminal state first observed on the last permitted read succeeds; an open last read exhausts the request budget. Timeout is operational failure, not evidence of closure.
+
+## Requirements
+
+| ID | Required behavior | Acceptance / contract |
+| --- | --- | --- |
+| FR-001 | Report lifecycle, required `merged` bool, explicit nullable merge/close dates, raw GitHub SHA and qualified result SHA | US1; field/state table |
+| FR-002 | Retain detailed human presentation and add opt-in compact single line from the enhanced model | US2; presentation |
+| FR-003 | Explicit v2 JSON, explicit nulls/timestamps, documented compatibility; one final object | US3; schema/compatibility |
+| FR-004 | Exact hosting full-SHA expectation; mismatch wins before lifecycle success | US4; precedence |
+| FR-005 | Watch only by explicit flag; finite total clock, requests, backoff and bytes; no reset per poll | US5; watch algorithm |
+| FR-006 | Exit 0/1/2; closed-unmerged is an observed terminal result, not a merge failure | exit table |
+| FR-007 | Caller-owned bounded auth, fixed typed GET, redaction, redirect/compression refusal; no new network writes | effects/bounds |
+| FR-008 | Preserve native Git/jj capabilities and read-only effects; gh jj still refuses Git ownership | Tier 1 tasks |
+| FR-009 | Reject missing/malformed/inconsistent new fields; retain last valid sample only as timestamped incomplete evidence | state/error table |
+| FR-010 | Stop on observed head/ref/repository movement; disclose undetectable unobserved ABA and nontransactional sampling | sampling rule |
+| FR-011 | Include native/auth/read/decode/backoff/render/final stdout and stderr delivery in watch deadline; no leaking blocked writer | delivery decision |
+| FR-012 | Reviewed spec/plan/tasks/analysis before code; meaningful failing tests and mutants; actual acceptance limits recorded | gate/tasks |
+
+## Success criteria
+
+SC-001: all state and exit table rows are exercised through the shared operation and CLI fixtures with exact request assertions. SC-002: schema accepts valid results and rejects documented invalid/missing/null invariants; legacy contract bytes and behavior pass unchanged. SC-003: fake-clock and blocked real-pipe tests prove no request after cancellation/deadline and bounded delivery without leaked goroutines. SC-004: native minimum/current Git and jj fixture conformance preserves target state. SC-005: no implementation begins until independent complete-artifact review is CLEAR and the final-delivery guard design is independently CLEAR and its acceptance prerequisites are assigned; source tests never imply CLI build/live API acceptance.

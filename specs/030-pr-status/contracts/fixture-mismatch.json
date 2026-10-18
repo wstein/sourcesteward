@@ -1,0 +1,68 @@
+{
+  "backend": "git",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {"state": "attached", "ref": "refs/heads/main", "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+    },
+    "diagnostics": []
+  },
+  "repository": {"host": "github.com", "owner": "example", "name": "project", "selection": "unique-candidate"},
+  "candidates": [{"remote": "upstream", "host": "github.com", "owner": "example", "name": "project"}],
+  "schema_version": 2,
+  "kind": "pr",
+  "status": "error",
+  "pull_request": {
+    "number": 42,
+    "title": "Example PR",
+    "url": "https://github.com/example/project/pull/42",
+    "state": "open",
+    "draft": false,
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "head_ref": "feature",
+    "base_ref": "main",
+    "head_repository": "example/fork",
+    "base_repository": "example/project",
+    "merged": false,
+    "merged_at": null,
+    "closed_at": null,
+    "merge_commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "result_sha": null,
+    "lifecycle": "open"
+  },
+  "diagnostics": [{"code": "hosting-head-mismatch", "message": "PR status observation did not satisfy the requested bounded observation."}],
+  "observed_at": "2026-10-18T12:00:29Z",
+  "sampled_at": "2026-10-18T12:00:00Z",
+  "observation": {
+    "mode": "watch",
+    "stop": "expectation-mismatch",
+    "samples": 1,
+    "initial_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expected_head": "cccccccccccccccccccccccccccccccccccccccc",
+    "expectation": "mismatched",
+    "identity_changed": false
+  },
+  "boundary": {
+    "complete": false,
+    "network": true,
+    "max_bytes": 1048576,
+    "timeout_seconds": 30,
+    "max_requests": 8,
+    "requests": 1,
+    "limitations": [
+      "Sampled evidence cannot exclude unobserved ABA or future PR changes.",
+      "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."
+    ]
+  }
+}
