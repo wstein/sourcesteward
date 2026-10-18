@@ -1,0 +1,2459 @@
+{
+  "$defs": {
+    "ActionOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "complete",
+            "incomplete",
+            "refused",
+            "unknown"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "MutationPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "const": "git",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "destination": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "destination_identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PathIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "destination_parent": {
+          "$ref": "#/$defs/PathIdentity"
+        },
+        "digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "expected": {
+          "$ref": "#/$defs/Snapshot"
+        },
+        "owner": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "plan_id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "recovery_limits": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_path": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "state_dir": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "task_id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "plan_id",
+        "task_id",
+        "owner",
+        "source_path",
+        "destination",
+        "state_dir",
+        "backend",
+        "reason",
+        "digest",
+        "expected",
+        "destination_parent",
+        "destination_identity",
+        "effects",
+        "recovery_limits"
+      ],
+      "type": "object"
+    },
+    "NativeIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "const": "git",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "change_id": {
+          "const": "",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "commit_id": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "git_dir": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "head_ref": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "object_format": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "operation_id": {
+          "const": "",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "repository_dir": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "workspace_name": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "workspace_root": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "backend",
+        "repository_dir",
+        "workspace_root",
+        "workspace_name",
+        "git_dir",
+        "head_ref",
+        "commit_id",
+        "change_id",
+        "operation_id",
+        "object_format"
+      ],
+      "type": "object"
+    },
+    "PathIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "device",
+        "inode"
+      ],
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "base_change": {
+          "const": "",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "base_commit": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "base_selector": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/NativeIdentity"
+        },
+        "reference_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "registration_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "safety_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "base_selector",
+        "base_commit",
+        "base_change",
+        "reference_digest",
+        "registration_digest",
+        "safety_digest"
+      ],
+      "type": "object"
+    },
+    "TaskRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "const": "git",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "base_change": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "base_commit": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "destination": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "destination_identity": {
+          "$ref": "#/$defs/PathIdentity"
+        },
+        "inventory": {
+          "type": "null"
+        },
+        "native": {
+          "$ref": "#/$defs/NativeIdentity"
+        },
+        "owner": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "plan_id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "recovery_limits": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "recovery_pointer": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "remaining_work": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "const": "complete",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "task_id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "owner",
+        "plan_id",
+        "backend",
+        "destination",
+        "recovery_pointer",
+        "native",
+        "destination_identity",
+        "base_commit",
+        "base_change",
+        "state",
+        "inventory",
+        "remaining_work",
+        "recovery_limits"
+      ],
+      "type": "object"
+    },
+    "V3AbsenceProof": {
+      "additionalProperties": false,
+      "properties": {
+        "advertisement_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "config_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "refspec": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "remote": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/V3Repository"
+        },
+        "source_ref": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "tracking_ref": {
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "remote",
+        "source_ref",
+        "tracking_ref",
+        "refspec",
+        "config_digest",
+        "advertisement_digest"
+      ],
+      "type": "object"
+    },
+    "V3AncestryProof": {
+      "additionalProperties": false,
+      "properties": {
+        "base_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "target_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_oid",
+        "base_oid"
+      ],
+      "type": "object"
+    },
+    "V3Boundary": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "network_attempted": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "budget": {
+                "properties": {
+                  "http_bytes": {
+                    "const": 0
+                  },
+                  "http_requests": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "budget": {
+          "$ref": "#/$defs/V3BudgetCounters"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "freshness": {
+          "const": "sampled-nontransactional",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "network_attempted": {
+          "type": "boolean"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "maxLength": 4096,
+          "minLength": 20,
+          "type": "string"
+        }
+      },
+      "required": [
+        "complete",
+        "network_attempted",
+        "freshness",
+        "observed_at",
+        "budget"
+      ],
+      "type": "object"
+    },
+    "V3BudgetCounters": {
+      "additionalProperties": false,
+      "properties": {
+        "framing_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "http_bytes": {
+          "maximum": 33554433,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "http_requests": {
+          "maximum": 128,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "metadata_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "native_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "native_processes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "observations": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stderr_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "user_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "native_processes",
+        "native_bytes",
+        "http_requests",
+        "http_bytes",
+        "observations",
+        "user_bytes",
+        "metadata_bytes",
+        "framing_bytes",
+        "stderr_bytes"
+      ],
+      "type": "object"
+    },
+    "V3Candidate": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workspace_paths": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "decision": {
+              "const": "retain"
+            },
+            "evidence": {
+              "type": "null"
+            },
+            "proof": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "properties": {
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "type": "null"
+                    },
+                    "native": {
+                      "$ref": "#/$defs/V3AncestryProof"
+                    }
+                  }
+                }
+              ]
+            },
+            "kind": {
+              "const": "branch"
+            },
+            "name": {
+              "pattern": "^refs/heads/.+"
+            },
+            "proof": {
+              "const": "native-ancestry"
+            }
+          }
+        },
+        {
+          "properties": {
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "$ref": "#/$defs/V3MergeProof"
+                    },
+                    "native": {
+                      "type": "null"
+                    }
+                  }
+                }
+              ]
+            },
+            "kind": {
+              "const": "branch"
+            },
+            "name": {
+              "pattern": "^refs/heads/.+"
+            },
+            "proof": {
+              "const": "github-merged-head"
+            }
+          }
+        },
+        {
+          "properties": {
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "$ref": "#/$defs/V3AbsenceProof"
+                    },
+                    "github": {
+                      "type": "null"
+                    },
+                    "native": {
+                      "type": "null"
+                    }
+                  }
+                }
+              ]
+            },
+            "kind": {
+              "const": "tracking-ref"
+            },
+            "name": {
+              "pattern": "^refs/remotes/[^/]+/.+"
+            },
+            "proof": {
+              "const": "github-branch-absent"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "action_id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "delete",
+            "retain"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3ProofEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "branch",
+            "tracking-ref"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 4096,
+          "pattern": "^refs/",
+          "type": "string"
+        },
+        "oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "proof": {
+          "enum": [
+            "none",
+            "native-ancestry",
+            "github-merged-head",
+            "github-branch-absent"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspace_paths": {
+          "items": {
+            "maxLength": 4096,
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "//"
+                },
+                {
+                  "pattern": "(^|/)\\.{1,2}(/|$)"
+                },
+                {
+                  "pattern": "^/.+/$"
+                }
+              ]
+            },
+            "pattern": "^/",
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "action_id",
+        "kind",
+        "name",
+        "oid",
+        "decision",
+        "reason",
+        "proof",
+        "workspace_paths",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "V3CommitProof": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "decision": {
+              "const": "retain"
+            },
+            "evidence": {
+              "type": "null"
+            },
+            "proof": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "properties": {
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "type": "null"
+                    },
+                    "native": {
+                      "$ref": "#/$defs/V3AncestryProof"
+                    }
+                  }
+                }
+              ]
+            },
+            "proof": {
+              "const": "native-ancestry"
+            }
+          }
+        },
+        {
+          "properties": {
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "$ref": "#/$defs/V3MergeProof"
+                    },
+                    "native": {
+                      "type": "null"
+                    }
+                  }
+                }
+              ]
+            },
+            "proof": {
+              "const": "github-merged-head"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "delete",
+            "retain"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3ProofEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "proof": {
+          "enum": [
+            "none",
+            "native-ancestry",
+            "github-merged-head",
+            "github-branch-absent"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspace_paths": {
+          "items": {
+            "maxLength": 4096,
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "//"
+                },
+                {
+                  "pattern": "(^|/)\\.{1,2}(/|$)"
+                },
+                {
+                  "pattern": "^/.+/$"
+                }
+              ]
+            },
+            "pattern": "^/",
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "oid",
+        "decision",
+        "reason",
+        "proof",
+        "workspace_paths",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "V3LegacyProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "const": true,
+          "type": "boolean"
+        },
+        "observed_identity": {
+          "$ref": "#/$defs/V3PhysicalIdentity"
+        },
+        "owner": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "protected_roots": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "same_user_authority": {
+          "const": true,
+          "type": "boolean"
+        },
+        "selected_path": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "completed",
+        "same_user_authority",
+        "selected_path",
+        "protected_roots",
+        "observed_identity"
+      ],
+      "type": "object"
+    },
+    "V3Manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "complete": {
+          "const": true,
+          "type": "boolean"
+        },
+        "digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/V3ManifestEntry"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        }
+      },
+      "required": [
+        "complete",
+        "entries",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "V3ManifestEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "maxLength": 4096,
+          "pattern": "^([0-9a-f]{64})?$",
+          "type": "string"
+        },
+        "executable": {
+          "type": "boolean"
+        },
+        "identity": {
+          "$ref": "#/$defs/V3PhysicalIdentity"
+        }
+      },
+      "required": [
+        "identity",
+        "digest",
+        "executable"
+      ],
+      "type": "object"
+    },
+    "V3MergeProof": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/V3PRSide"
+        },
+        "chosen_base_oid": {
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "draft": {
+          "const": false,
+          "type": "boolean"
+        },
+        "head": {
+          "$ref": "#/$defs/V3PRSide"
+        },
+        "id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "merge_oid": {
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "merged": {
+          "const": true,
+          "type": "boolean"
+        },
+        "merged_at": {
+          "format": "date-time",
+          "maxLength": 4096,
+          "minLength": 20,
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[!-~]+$",
+          "type": "string"
+        },
+        "number": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "observation_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/V3Repository"
+        },
+        "state": {
+          "const": "closed",
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "id",
+        "node_id",
+        "number",
+        "state",
+        "merged",
+        "merged_at",
+        "draft",
+        "head",
+        "base",
+        "merge_oid",
+        "chosen_base_oid",
+        "observation_digest"
+      ],
+      "type": "object"
+    },
+    "V3OnlineSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "budget_policy": {
+          "const": "github-read-v3",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "config_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observation_digests": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "pr_hints": {
+          "items": {
+            "$ref": "#/$defs/V3PRHint"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "remote": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "remote_url": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/V3Repository"
+        }
+      },
+      "required": [
+        "repository",
+        "remote",
+        "remote_url",
+        "config_digest",
+        "pr_hints",
+        "observation_digests",
+        "budget_policy"
+      ],
+      "type": "object"
+    },
+    "V3OwnedProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "creation_journal_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "creation_plan": {
+          "$ref": "#/$defs/MutationPlan"
+        },
+        "lock_reason": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/TaskRecord"
+        }
+      },
+      "required": [
+        "creation_plan",
+        "task",
+        "creation_journal_digest",
+        "lock_reason"
+      ],
+      "type": "object"
+    },
+    "V3PRHint": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "oid": {
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "oid",
+        "number"
+      ],
+      "type": "object"
+    },
+    "V3PRSide": {
+      "additionalProperties": false,
+      "properties": {
+        "oid": {
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "ref": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/V3Repository"
+        }
+      },
+      "required": [
+        "repository",
+        "ref",
+        "oid"
+      ],
+      "type": "object"
+    },
+    "V3PhysicalIdentity": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "regular"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "nlink": {
+                "const": 1
+              },
+              "size": {
+                "maximum": 16777216
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "ctime_ns": {
+          "type": "integer"
+        },
+        "device": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "directory",
+            "regular"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "mode": {
+          "maximum": 4095,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mtime_ns": {
+          "type": "integer"
+        },
+        "nlink": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "owner_known": {
+          "const": true,
+          "type": "boolean"
+        },
+        "path": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timestamp_precision": {
+          "enum": [
+            "nanosecond",
+            "microsecond",
+            "second"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "uid": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "device",
+        "inode",
+        "uid",
+        "owner_known",
+        "kind",
+        "mode",
+        "nlink",
+        "size",
+        "mtime_ns",
+        "ctime_ns",
+        "timestamp_precision"
+      ],
+      "type": "object"
+    },
+    "V3Plan": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "online": {
+                "type": "object"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "object_format": {
+                        "const": "sha1"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "else": {
+            "properties": {
+              "plan_id": {
+                "minLength": 1
+              },
+              "state_dir": {
+                "pattern": "^/"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "state_dir": {
+                "const": ""
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plan_id": {
+                "const": ""
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "object_format": {
+                        "const": "sha1"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "candidates": {
+                "items": {
+                  "properties": {
+                    "oid": {
+                      "not": {
+                        "const": "0000000000000000000000000000000000000000"
+                      },
+                      "pattern": "^[0-9a-f]{40}$",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "expected": {
+                "properties": {
+                  "base_commit": {
+                    "not": {
+                      "const": "0000000000000000000000000000000000000000"
+                    },
+                    "pattern": "^[0-9a-f]{40}$",
+                    "type": "string"
+                  },
+                  "identity": {
+                    "properties": {
+                      "commit_id": {
+                        "not": {
+                          "const": "0000000000000000000000000000000000000000"
+                        },
+                        "pattern": "^[0-9a-f]{40}$",
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "expected": {
+                "properties": {
+                  "identity": {
+                    "properties": {
+                      "object_format": {
+                        "const": "sha256"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "candidates": {
+                "items": {
+                  "properties": {
+                    "oid": {
+                      "not": {
+                        "const": "0000000000000000000000000000000000000000000000000000000000000000"
+                      },
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "expected": {
+                "properties": {
+                  "base_commit": {
+                    "not": {
+                      "const": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "identity": {
+                    "properties": {
+                      "commit_id": {
+                        "not": {
+                          "const": "0000000000000000000000000000000000000000000000000000000000000000"
+                        },
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "candidates": {
+              "items": {
+                "properties": {
+                  "kind": {
+                    "const": "branch"
+                  },
+                  "proof": {
+                    "enum": [
+                      "none",
+                      "native-ancestry",
+                      "github-merged-head"
+                    ]
+                  }
+                }
+              }
+            },
+            "mode": {
+              "const": "local-refs"
+            },
+            "retirement": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "candidates": {
+              "items": {
+                "properties": {
+                  "kind": {
+                    "const": "tracking-ref"
+                  },
+                  "proof": {
+                    "enum": [
+                      "none",
+                      "github-branch-absent"
+                    ]
+                  }
+                }
+              }
+            },
+            "mode": {
+              "const": "tracking-refs"
+            },
+            "online": {
+              "$ref": "#/$defs/V3OnlineSelection"
+            },
+            "retirement": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "candidates": {
+              "maxItems": 0
+            },
+            "mode": {
+              "const": "owned-retirement"
+            },
+            "plan_id": {
+              "minLength": 1
+            },
+            "retirement": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3Retirement"
+                },
+                {
+                  "properties": {
+                    "provenance": {
+                      "properties": {
+                        "kind": {
+                          "const": "owned"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "selected_refs": {
+              "maxItems": 0
+            },
+            "state_dir": {
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "candidates": {
+              "maxItems": 0
+            },
+            "mode": {
+              "const": "legacy-retirement"
+            },
+            "plan_id": {
+              "minLength": 1
+            },
+            "retirement": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3Retirement"
+                },
+                {
+                  "properties": {
+                    "provenance": {
+                      "properties": {
+                        "kind": {
+                          "const": "legacy-completion"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "selected_refs": {
+              "maxItems": 0
+            },
+            "state_dir": {
+              "minLength": 1
+            }
+          }
+        }
+      ],
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/V3Candidate"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "expected": {
+          "$ref": "#/$defs/Snapshot"
+        },
+        "mode": {
+          "enum": [
+            "local-refs",
+            "tracking-refs",
+            "owned-retirement",
+            "legacy-retirement"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "online": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3OnlineSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan_id": {
+          "maxLength": 128,
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9._-]*)?$",
+          "type": "string"
+        },
+        "policy": {
+          "const": "tidy-git-v3",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "recovery_limits": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "retirement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3Retirement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selected_refs": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_path": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "state_dir": {
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "plan_id",
+        "digest",
+        "policy",
+        "mode",
+        "source_path",
+        "state_dir",
+        "expected",
+        "selected_refs",
+        "online",
+        "candidates",
+        "retirement",
+        "effects",
+        "recovery_limits"
+      ],
+      "type": "object"
+    },
+    "V3ProofEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "absence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3AbsenceProof"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "github": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3MergeProof"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "native": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3AncestryProof"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "native",
+        "github",
+        "absence"
+      ],
+      "type": "object"
+    },
+    "V3Provenance": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "owned"
+            },
+            "legacy": {
+              "type": "null"
+            },
+            "owned": {
+              "$ref": "#/$defs/V3OwnedProvenance"
+            }
+          }
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "legacy-completion"
+            },
+            "legacy": {
+              "$ref": "#/$defs/V3LegacyProvenance"
+            },
+            "owned": {
+              "type": "null"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "kind": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "legacy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3LegacyProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owned": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3OwnedProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "owned",
+        "legacy"
+      ],
+      "type": "object"
+    },
+    "V3Repository": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "const": "github.com",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 4096,
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[!-~]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "id",
+        "node_id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "V3Result": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "plan": {
+                "type": "object"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              },
+              "boundary": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              },
+              "status": {
+                "const": "ok"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "boundary": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              },
+              "plan": {
+                "$ref": "#/$defs/V3Plan"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "boundary": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plan": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "boundary": {
+                "properties": {
+                  "budget": {
+                    "properties": {
+                      "http_bytes": {
+                        "minimum": 33554433
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "boundary": {
+                "properties": {
+                  "budget": {
+                    "properties": {
+                      "http_requests": {
+                        "minimum": 1
+                      }
+                    }
+                  },
+                  "complete": {
+                    "const": false
+                  },
+                  "network_attempted": {
+                    "const": true
+                  }
+                }
+              },
+              "diagnostics": {
+                "contains": {
+                  "properties": {
+                    "code": {
+                      "const": "hosting-evidence-limit"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ]
+                }
+              },
+              "plan": {
+                "type": "null"
+              },
+              "status": {
+                "enum": [
+                  "refused",
+                  "partial",
+                  "error"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionOutcome"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj",
+            "gitbutler",
+            "unknown",
+            "ambiguous"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "boundary": {
+          "$ref": "#/$defs/V3Boundary"
+        },
+        "command": {
+          "enum": [
+            "tidy-plan",
+            "tidy-apply"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3Plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "refused",
+            "partial",
+            "error"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "command",
+        "status",
+        "backend",
+        "plan",
+        "boundary",
+        "actions",
+        "diagnostics",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "V3Retirement": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "actions": {
+                "items": {
+                  "properties": {
+                    "decision": {
+                      "const": "delete"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "actions": {
+                "prefixItems": [
+                  {
+                    "properties": {
+                      "reason": {
+                        "const": "integrated"
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "reason": {
+                        "const": "clean"
+                      }
+                    }
+                  }
+                ]
+              },
+              "integration": {
+                "properties": {
+                  "decision": {
+                    "const": "delete"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "action_id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/V3RetirementAction"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "oneOf": [
+            {
+              "items": {
+                "properties": {
+                  "decision": {
+                    "const": "delete"
+                  }
+                }
+              }
+            },
+            {
+              "items": {
+                "properties": {
+                  "decision": {
+                    "const": "retain"
+                  }
+                }
+              }
+            }
+          ],
+          "prefixItems": [
+            {
+              "properties": {
+                "name": {
+                  "const": "remove-registration"
+                }
+              }
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "remove-files"
+                }
+              }
+            }
+          ],
+          "type": "array"
+        },
+        "content_policy": {
+          "const": "git-v3",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "destination": {
+          "$ref": "#/$defs/V3PhysicalIdentity",
+          "allOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "directory"
+                }
+              }
+            }
+          ]
+        },
+        "disk": {
+          "$ref": "#/$defs/V3Manifest"
+        },
+        "integration": {
+          "$ref": "#/$defs/V3CommitProof",
+          "allOf": [
+            {
+              "properties": {
+                "workspace_paths": {
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/V3Manifest",
+          "allOf": [
+            {
+              "properties": {
+                "entries": {
+                  "items": {
+                    "properties": {
+                      "identity": {
+                        "properties": {
+                          "size": {
+                            "maximum": 65536
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "parent": {
+          "$ref": "#/$defs/V3PhysicalIdentity",
+          "allOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "directory"
+                }
+              }
+            }
+          ]
+        },
+        "protected_roots": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "provenance": {
+          "$ref": "#/$defs/V3Provenance"
+        },
+        "registered_roots": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "registration": {
+          "$ref": "#/$defs/V3PhysicalIdentity",
+          "allOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "directory"
+                }
+              }
+            }
+          ]
+        },
+        "remove_files": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "remove_registration": {
+          "const": true,
+          "type": "boolean"
+        },
+        "siblings": {
+          "items": {
+            "$ref": "#/$defs/V3PhysicalIdentity"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "target": {
+          "$ref": "#/$defs/NativeIdentity"
+        }
+      },
+      "required": [
+        "registered_roots",
+        "protected_roots",
+        "action_id",
+        "provenance",
+        "destination",
+        "parent",
+        "registration",
+        "target",
+        "remove_registration",
+        "remove_files",
+        "content_policy",
+        "disk",
+        "metadata",
+        "siblings",
+        "integration",
+        "actions"
+      ],
+      "type": "object"
+    },
+    "V3RetirementAction": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "blockers": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "blockers": {
+          "items": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "decision": {
+          "enum": [
+            "delete",
+            "retain"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "enum": [
+            "remove-registration",
+            "remove-files"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "target": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "target",
+        "decision",
+        "reason",
+        "blockers"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v3/tidy.schema.json",
+  "$ref": "#/$defs/V3Result",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
