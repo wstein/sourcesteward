@@ -57,6 +57,23 @@ class HugoTests(unittest.TestCase):
             (source / 'inspect.schema.json').symlink_to(source / 'version.schema.json')
             with self.assertRaises(ValueError): pages.copy_schemas(root,root / 'bad',required=True)
 
+    def test_unpublished_tidy_v3_does_not_widen_public_schema_versions(self):
+        # This is a source inventory/copy test; it never invokes Hugo or a CLI.
+        self.assertIn('v3/tidy.schema.json', pages.UNPUBLISHED_SCHEMAS)
+        self.assertNotIn('v3', pages.SCHEMAS)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in pages.SCHEMA_PATHS | pages.UNPUBLISHED_SCHEMAS:
+                source = root / 'schemas' / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text('{}')
+            pages.copy_schemas(root, root / 'public')
+            self.assertFalse((root / 'public/schemas/v3').exists())
+            (root / 'schemas/v3/other.schema.json').write_text('{}')
+            with self.assertRaises(ValueError):
+                pages.copy_schemas(root, root / 'invalid')
+            self.assertFalse((root / 'invalid').exists())
+
     def test_hugo_security_and_project_base(self):
         config = (ROOT / 'site/hugo.toml').read_text()
         for required in ('baseURL = "https://wstein.github.io/sourcesteward/"', 'unsafe = false', 'allow = []', 'urls = []', 'enableInlineShortcodes = false'):

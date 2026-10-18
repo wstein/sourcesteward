@@ -18,6 +18,15 @@ internal/workspace owns the reviewed mutation boundary: secure plan/task records
 pre-action recovery journals, stale checks and fixed native adapters. CLI does not access
 state files or launch processes. scripts/check-architecture.py mechanically checks this boundary.
 
+For opt-in tidy v3 evidence, the workspace coordinator consumes the typed read-only
+hosting session only after native ownership, configuration and protection preflight.
+HTTP and authentication remain in internal/hosting; native sandboxes stay network-denied.
+The dependency guard stops at the exact internal/hosting package for reviewed release
+and workspace operations. Direct network imports, other transitive network paths and
+lookalike/subpackages remain rejected. Inspection cannot borrow this boundary, including
+by traversing workspace. This source boundary does not expose the pending v3 CLI or
+establish feature acceptance.
+
 ## Planned operation boundary
 ```text
 CLI / future MCP → application operation → selected Git | jj | GitButler adapter

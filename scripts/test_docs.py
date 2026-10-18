@@ -178,8 +178,10 @@ class DocumentationTests(unittest.TestCase):
 
     def test_unpublished_schemas_stay_out_of_the_bundle_without_weakening_the_check(self):
         package = load('package_unpublished', 'package-pages.py')
-        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json'})
+        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v3/tidy.schema.json'})
         self.assertFalse(package.UNPUBLISHED_SCHEMAS & package.SCHEMA_PATHS)
+        self.assertNotIn('v3', package.SCHEMAS)
+        self.assertNotIn('v3/tidy.schema.json', package.SCHEMA_PATHS)
         for name in package.UNPUBLISHED_SCHEMAS:
             self.assertTrue((ROOT / 'schemas' / name).is_file(), name)
         with tempfile.TemporaryDirectory() as directory:
@@ -189,7 +191,36 @@ class DocumentationTests(unittest.TestCase):
             package.copy_schemas(root, destination)
             copied = {p.relative_to(destination / 'schemas').as_posix() for p in (destination / 'schemas').rglob('*') if p.is_file()}
             self.assertEqual(copied, package.SCHEMA_PATHS)
+            self.assertFalse((destination / 'schemas/v3').exists())
             shutil.rmtree(destination)
+            # Only the exact hidden v3 source is admitted. Invalid content,
+            # aliases, extra files and unlisted versions cannot widen exports.
+            hidden = root / 'schemas/v3/tidy.schema.json'
+            hidden_bytes = hidden.read_bytes()
+            hidden.write_text('{')
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+            self.assertFalse(destination.exists())
+            hidden.unlink()
+            hidden.symlink_to(root / 'schemas/v1/tidy.schema.json')
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+            hidden.unlink()
+            hidden.write_bytes(hidden_bytes)
+            hidden_dir = hidden.parent
+            saved_dir = root / 'saved-v3'
+            hidden_dir.rename(saved_dir)
+            hidden_dir.symlink_to(saved_dir, target_is_directory=True)
+            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
+            hidden_dir.unlink()
+            saved_dir.rename(hidden_dir)
+            for name in ('v3/private.json', 'v4/tidy.schema.json'):
+                extra = root / 'schemas' / name
+                extra.parent.mkdir(parents=True, exist_ok=True)
+                extra.write_text('{}')
+                with self.subTest(extra=name), self.assertRaises(ValueError):
+                    package.copy_schemas(root, destination)
+                self.assertFalse(destination.exists())
+                extra.unlink()
+                if extra.parent.name == 'v4': extra.parent.rmdir()
             # An unpublished schema must still be valid JSON and a regular file.
             (root / 'schemas/v1/release-check.schema.json').write_text('{')
             with self.assertRaises(ValueError): package.copy_schemas(root, destination)

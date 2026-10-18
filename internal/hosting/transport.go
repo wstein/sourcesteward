@@ -281,13 +281,16 @@ type guardedTransport struct {
 }
 
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !fixedReadEndpoint(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
+	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !transportReadEndpoint(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
 		if req.URL.RawQuery != "" {
 			return "?" + req.URL.RawQuery
 		}
 		return ""
 	}()) {
 		return nil, errors.New("hosting request refused outside fixed read-only destination")
+	}
+	if tidyReadEndpoint(strings.TrimPrefix(req.URL.RequestURI(), t.prefix)) && t.host != "api.github.com" {
+		return nil, errors.New("tidy reads require github.com")
 	}
 	res, err := t.next.RoundTrip(req)
 	if err != nil {
@@ -330,7 +333,7 @@ func newSDKClientWithGuard(host, token, dir string, guard http.RoundTripper) (*h
 	return ghapi.NewHTTPClient(ghapi.ClientOptions{Host: host, APIHost: destination, AuthToken: token, Transport: guard, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("hosting redirects are unsupported") }, LogIgnoreEnv: true, CacheDir: dir, SkipDefaultHeaders: true, Headers: map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "SourceSteward"}})
 }
 func (api *ghAPI) get(ctx context.Context, endpoint string) ([]byte, error) {
-	if !fixedReadEndpoint(endpoint) {
+	if !transportReadEndpoint(endpoint) || (tidyReadEndpoint(endpoint) && api.host != "github.com") {
 		return nil, errors.New("invalid fixed API endpoint")
 	}
 	host, prefix := apiDestination(api.host)
@@ -394,3 +397,16 @@ func resolveConfigurationPath(path string, depth int) (string, error) {
 	}
 	return current, nil
 }
+
+// Tidy adds only repository identity and unfiltered, bounded collection GETs.
+// Existing inspection/release predicates keep their original meaning.
+var tidyRoute = regexp.MustCompile(`\Arepos/[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*(?:/(?:pulls\?state=closed&per_page=100&page=(?:[1-9]|10)|branches\?per_page=100&page=(?:[1-9]|10)))?\z`)
+
+func tidyReadEndpoint(p string) bool {
+	if !tidyRoute.MatchString(p) {
+		return false
+	}
+	parts := strings.SplitN(p, "/", 4)
+	return validRepo(parts[1]+"/"+parts[2]) && parts[1] != ".." && parts[2] != ".."
+}
+func transportReadEndpoint(p string) bool { return fixedReadEndpoint(p) || tidyReadEndpoint(p) }
