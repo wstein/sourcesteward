@@ -100,6 +100,12 @@ func fullGitOID(s, format string) bool {
 }
 
 func (gitAdapter) Observe(ctx context.Context, path, base string) (Snapshot, error) {
+	return observeGitWithPrimary(ctx, path, base, nil)
+}
+
+// The optional output exposes authority from the existing completed layout
+// proof. Legacy callers keep exactly their original snapshot and admission.
+func observeGitWithPrimary(ctx context.Context, path, base string, primary *gitPrimaryBinding) (Snapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	id, err := gitNativeIdentity(ctx, path)
@@ -128,7 +134,7 @@ func (gitAdapter) Observe(ctx context.Context, path, base string) (Snapshot, err
 	if !fullGitOID(commit, id.ObjectFormat) {
 		return Snapshot{}, failure("git-base-refused", "cannot resolve a complete base commit identity")
 	}
-	safety, err := gitSafety(ctx, bin, id, commit)
+	safety, err := gitSafetyWithPrimary(ctx, bin, id, commit, primary)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -150,7 +156,10 @@ func (gitAdapter) Observe(ctx context.Context, path, base string) (Snapshot, err
 }
 
 func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string) (string, error) {
-	config, layout, err := gitLayoutSafety(ctx, bin, id)
+	return gitSafetyWithPrimary(ctx, bin, id, commit, nil)
+}
+func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, commit string, primary *gitPrimaryBinding) (string, error) {
+	config, layout, err := gitLayoutSafetyWithPrimary(ctx, bin, id, primary)
 	if err != nil {
 		return "", err
 	}
@@ -177,67 +186,24 @@ func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string
 			return "", failure("git-unsupported-metadata", "worktree-specific, sparse or alternate-object configuration is unsupported for task creation")
 		}
 	}
-	tree, err := gitRead(ctx, bin, id.WorkspaceRoot, "ls-tree", "-r", "-l", "-z", "--full-tree", commit)
+	digest := sha256.New()
+	io.WriteString(digest, "layout-v1\x00"+layout+"\x00"+config+"\x00"+hooks+"\x00")
+	paths, err := gitTreeEvidence(ctx, bin, id.WorkspaceRoot, commit, id.ObjectFormat, digest)
 	if err != nil {
 		return "", err
 	}
-	if err = validateGitTree(tree); err != nil {
-		return "", err
-	}
-	attributes, err := gitCheckoutFilterEvidence(ctx, bin, id.WorkspaceRoot, commit, tree)
-	if err != nil {
+	io.WriteString(digest, "\x00")
+	if err = gitFilterEvidence(ctx, bin, id.WorkspaceRoot, commit, paths, digest); err != nil {
 		return "", err
 	}
 	info, err := os.Stat(bin)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", failure("git-unavailable", "Git executable identity is unavailable")
 	}
-	return gitDigest("layout-v1\x00" + layout + "\x00" + config + "\x00" + hooks + "\x00" + tree + "\x00" + attributes + "\x00" + bin + "\x00" + fmt.Sprintf("%d:%d:%d", info.Mode(), info.Size(), info.ModTime().UnixNano())), nil
+	io.WriteString(digest, "\x00"+bin+"\x00"+fmt.Sprintf("%d:%d:%d", info.Mode(), info.Size(), info.ModTime().UnixNano()))
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-// Attribute inspection resolves data only: check-attr does not run filter
-// drivers. --source pins committed attributes to the admitted checkout base,
-// rather than reading a dirty or untracked source .gitattributes. Native info
-// and default global attributes remain effective and are included in evidence.
-func gitCheckoutFilterEvidence(ctx context.Context, bin, dir, commit, tree string) (string, error) {
-	var paths []string
-	if tree != "" {
-		for _, entry := range strings.Split(strings.TrimSuffix(tree, "\x00"), "\x00") {
-			_, path, ok := strings.Cut(entry, "\t")
-			if !ok {
-				return "", failure("git-tree-refused", "checkout tree lacks complete path evidence")
-			}
-			paths = append(paths, path)
-		}
-	}
-	var evidence strings.Builder
-	for start := 0; start < len(paths); start += 128 {
-		end := start + 128
-		if end > len(paths) {
-			end = len(paths)
-		}
-		args := []string{"check-attr", "--source=" + commit, "-z", "filter", "--"}
-		args = append(args, paths[start:end]...)
-		raw, err := gitRead(ctx, bin, dir, args...)
-		if err != nil {
-			return "", err
-		}
-		fields := strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00")
-		if len(fields) != (end-start)*3 {
-			return "", failure("git-attributes-refused", "checkout filter evidence is incomplete")
-		}
-		for i, path := range paths[start:end] {
-			if fields[i*3] != path || fields[i*3+1] != "filter" {
-				return "", failure("git-attributes-refused", "checkout filter evidence does not match the selected base paths")
-			}
-			if value := fields[i*3+2]; value != "unspecified" && value != "unset" {
-				return "", failure("git-active-filter-refused", "base checkout has an active filter attribute; task creation never runs or silently suppresses configured filter helpers")
-			}
-		}
-		evidence.WriteString(raw)
-	}
-	return evidence.String(), nil
-}
 func gitFalse(s string) bool { return s == "false" || s == "no" || s == "off" || s == "0" }
 
 func gitHooksFingerprint(dir string) (string, error) {
@@ -272,50 +238,84 @@ func gitHooksFingerprint(dir string) (string, error) {
 	return fingerprint.String(), nil
 }
 
-func validateGitTree(raw string) error {
-	entries := strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00")
-	if raw == "" {
-		entries = nil
-	}
-	if len(entries) > observationLimit {
+type gitTreePathNode struct {
+	name     string
+	file     bool
+	children map[string]*gitTreePathNode
+}
+
+type gitTreeValidator struct {
+	count int
+	total int64
+	root  gitTreePathNode
+}
+
+func newGitTreeValidator() *gitTreeValidator {
+	return &gitTreeValidator{}
+}
+func (v *gitTreeValidator) add(entry string) error {
+	v.count++
+	if v.count > observationLimit {
 		return failure("git-checkout-limit", "base checkout exceeds 1024 leaf entries")
 	}
-	var total int64
-	paths := map[string]string{}
-	files := map[string]bool{}
-	for _, entry := range entries {
-		meta, path, ok := strings.Cut(entry, "\t")
-		fields := strings.Fields(meta)
-		if !ok || len(fields) != 4 || fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755") {
-			return failure("git-tree-refused", "base contains unsupported tree objects, symlinks or gitlinks")
+	if len(entry)+1 > gitMetadataRecordLimit {
+		return failure("git-checkout-limit", "base tree logical record exceeds 4224 bytes")
+	}
+	meta, path, ok := strings.Cut(entry, "\t")
+	fields := strings.Fields(meta)
+	if !ok || len(fields) != 4 || fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755") {
+		return failure("git-tree-refused", "base contains unsupported tree objects, symlinks or gitlinks")
+	}
+	if len(path) > 4096 || path == "" || filepath.IsAbs(path) || strings.ContainsAny(path, "\x00") || !utf8.ValidString(path) {
+		return failure("git-tree-refused", "base contains an unsupported checkout path")
+	}
+	for _, component := range strings.Split(path, "/") {
+		if component == "." || component == ".." || strings.EqualFold(component, ".git") || component == "" {
+			return failure("git-tree-refused", "base contains an unsafe checkout path")
 		}
-		if path == "" || filepath.IsAbs(path) || strings.ContainsAny(path, "\x00") || !utf8.ValidString(path) {
-			return failure("git-tree-refused", "base contains an unsupported checkout path")
+	}
+	components := strings.Split(path, "/")
+	node := &v.root
+	for i, component := range components {
+		if node.children == nil {
+			node.children = map[string]*gitTreePathNode{}
 		}
-		for _, component := range strings.Split(path, "/") {
-			if component == "." || component == ".." || strings.EqualFold(component, ".git") || component == "" {
-				return failure("git-tree-refused", "base contains an unsafe checkout path")
-			}
+		folded := strings.ToLower(norm.NFC.String(component))
+		child, exists := node.children[folded]
+		if exists && (child.name != component || child.file || i == len(components)-1) {
+			return failure("git-tree-refused", "base contains aliased file or directory names")
 		}
-		components := strings.Split(path, "/")
-		for i := range components {
-			prefix := strings.Join(components[:i+1], "/")
-			folded := strings.ToLower(norm.NFC.String(prefix))
-			if previous, exists := paths[folded]; exists && (previous != prefix || files[folded] || i == len(components)-1) {
-				return failure("git-tree-refused", "base contains aliased file or directory names")
-			}
-			paths[folded] = prefix
-			if i == len(components)-1 {
-				files[folded] = true
-			}
+		if !exists {
+			child = &gitTreePathNode{name: component}
+			node.children[folded] = child
 		}
-		size, err := strconv.ParseInt(fields[3], 10, 64)
-		if err != nil || size < 0 || size > 16*1024*1024 {
-			return failure("git-checkout-limit", "base blob exceeds 16 MiB or has unavailable size")
+		if i == len(components)-1 {
+			child.file = true
 		}
-		total += size
-		if total > 64*1024*1024 {
-			return failure("git-checkout-limit", "base checkout exceeds 64 MiB")
+		node = child
+	}
+
+	size, err := strconv.ParseInt(fields[3], 10, 64)
+	if err != nil || size < 0 || size > 16*1024*1024 {
+		return failure("git-checkout-limit", "base blob exceeds 16 MiB or has unavailable size")
+	}
+	v.total += size
+	if v.total > 64*1024*1024 {
+		return failure("git-checkout-limit", "base checkout exceeds 64 MiB")
+	}
+	return nil
+}
+func validateGitTree(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > gitMetadataStreamLimit || !strings.HasSuffix(raw, "\x00") {
+		return failure("git-tree-refused", "base tree evidence is oversized or incomplete")
+	}
+	v := newGitTreeValidator()
+	for _, entry := range strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00") {
+		if e := v.add(entry); e != nil {
+			return e
 		}
 	}
 	return nil

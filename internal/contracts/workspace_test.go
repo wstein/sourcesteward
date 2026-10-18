@@ -285,3 +285,57 @@ func TestRealJJWorkspaceLifecycleSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestGitCompleteMetadataKeepsWorkspaceV1Schema(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	root, e := filepath.EvalSymlinks(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	source := filepath.Join(root, "source")
+	state := filepath.Join(root, "state")
+	if e = os.Mkdir(state, 0700); e != nil {
+		t.Fatal(e)
+	}
+	git := func(args ...string) []byte {
+		t.Helper()
+		out, e := exec.Command("git", args...).CombinedOutput()
+		if e != nil {
+			t.Fatalf("Git fixture %v: %s %v", args, out, e)
+		}
+		return out
+	}
+	git("init", "-q", source)
+	// The independent CLI/schema fixture fixes the measured tree dimensions.
+	for i := 0; i < 695; i++ {
+		n := 35
+		if i < 462 {
+			n++
+		}
+		name := strings.Repeat("x", n-5) + fmt.Sprintf("-%04d", i)
+		if e = os.WriteFile(filepath.Join(source, name), []byte("x"), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	git("-C", source, "add", ".")
+	git("-C", source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "metadata fixture")
+	tree := git("-C", source, "ls-tree", "-r", "-l", "-z", "--full-tree", "HEAD")
+	if len(tree) != 67877 || bytes.Count(tree, []byte{0}) != 695 {
+		t.Fatalf("tree dimensions: %d/%d", len(tree), bytes.Count(tree, []byte{0}))
+	}
+	var out, diagnostic bytes.Buffer
+	code := cli.Run(context.Background(), "test", []string{"workspace", "plan", source, "--base", "HEAD", "--destination", filepath.Join(root, "task"), "--task", "metadata", "--owner", "fixture", "--state-dir", state, "--json"}, &out, &diagnostic)
+	valid(t, schema(t, "workspace"), out.Bytes())
+	var result workspace.Result
+	if e = json.Unmarshal(out.Bytes(), &result); e != nil {
+		t.Fatal(e)
+	}
+	if code != 0 || result.SchemaVersion != 1 || result.Status != "ok" || result.Plan == nil {
+		t.Fatalf("workspace v1 plan: code=%d %s %s", code, out.String(), diagnostic.String())
+	}
+	if _, e = os.Lstat(filepath.Join(root, "task")); !os.IsNotExist(e) {
+		t.Fatal("planning changed native destination")
+	}
+}
