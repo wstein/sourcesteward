@@ -166,3 +166,15 @@ existing refusals. Unused filter definitions retain their already specified attr
 admission. No raw Git fallback for jj, source snapshots, jj change abandonment or remote
 reference deletion is introduced. Missing enforced confinement or complete evidence refuses.
 The mandatory acceptance matrix is in [T031–T038](../tasks.md#issue-62-native-git-layout-readiness).
+
+
+## Spec 029 complete metadata channels
+
+The shared admitted Git base/target tree and all-path filter channels use complete bounded
+record consumption: 4,224 bytes per logical record, 4,325,376 stdout bytes per observation,
+64 KiB stderr, 1,024 leaves, 4,096-byte paths, 16 MiB/blob and 64 MiB aggregate blobs. Exactly
+at-limit valid observations can pass; truncation, a final unsafe path/filter, first detection
+byte/entry overrun or changed evidence refuses. All other native-output caps remain 64 KiB.
+This amendment applies to creation, reference tidy and old/new retirement consumers. It does
+not reuse partial inventory proof or broaden old user-content policies. Separate contract-3
+legacy completion never invents original creation provenance or bypasses native ownership.

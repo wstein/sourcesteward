@@ -48,3 +48,16 @@ Any inability to enforce parent/sibling or confined deletion proof blocks WI3 so
 never ship an advertised native jj retirement that always refuses disk freshness.
 See [tasks](wi3-tasks.md), [contract](contracts/wi3.md). Test-first implementation in native/core/CLI
 worktrees, independent source+sandbox review/full checks/race/both pinned lanes, then WI3 PR.
+
+
+## Explicit Git-v3 content and provenance
+
+Spec 029 supplies a separate versioned Git retirement path: larger streamed user content with
+unchanged metadata limits and complete three-plan/eight-apply sampling. Old v2/jj callers keep
+their original content/unlink policies and journal semantics. Owned v3 still proves original
+creation ownership; legacy v3 instead binds one exact completed path, exclusive cooperative
+authority, complete active-workspace protections and reciprocal physical/native identity.
+Both writable parents and protected sibling sets are immutable pre-effect plan facts. Legacy
+native removal requires both registration and exact file selections, never force/unlock, and
+leaves the branch for a fresh reference plan. Source/native acceptance and activation remain
+separate gates recorded in the Spec 029 integration evidence.

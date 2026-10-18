@@ -238,3 +238,14 @@ and `approval` fields describe plan/apply effects; no-apply performs no POST.
 not be retried on the assumption that nothing started. The
 [dispatch contract](../specs/026-release-process/contracts/dispatch.md) defines
 its command-specific exit meanings and the separately required build approval.
+
+## Explicit tidy source contract 3
+
+`stw tidy plan/apply --contract 3 --json` uses the independent source schema
+`schemas/v3/tidy.schema.json`. It remains unpublished in the source-only inventory; the
+existing public v1/v2 schema URLs and bytes are unchanged. The v3 envelope identifies mode,
+proof/provenance, exact effects, null executable plan on incompleteness, sampled freshness,
+actual network attempts and cumulative measured budgets. Complete negative observations
+exit 0, operational incomplete/refused/partial results exit 1 and malformed invocations exit 2.
+A saved plan is immutable evidence, never permission. See [tidy](tidy.md) for exact selection
+and online/local acknowledgments; old records are neither migrated nor reinterpreted.

@@ -24,8 +24,9 @@ HTTP and authentication remain in internal/hosting; native sandboxes stay networ
 The dependency guard stops at the exact internal/hosting package for reviewed release
 and workspace operations. Direct network imports, other transitive network paths and
 lookalike/subpackages remain rejected. Inspection cannot borrow this boundary, including
-by traversing workspace. This source boundary does not expose the pending v3 CLI or
-establish feature acceptance.
+by traversing workspace. Explicit `--contract 3` selects the reviewed v3 operation union;
+default v1/v2 operations remain separate. Source implementation does not establish native
+platform acceptance or authorize activation.
 
 ## Planned operation boundary
 ```text

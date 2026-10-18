@@ -17,10 +17,10 @@ An unknown or duplicate selected reference refuses the plan. Git base selectors 
 The base is required; SourceSteward
 does not infer `main`, `master` or `origin`.
 
-## Evidence and retention
+## Default v1/v2 evidence and retention
 
-Only native ancestry proves integration in this WI. Squash equivalence and forge proof are
-unsupported; the CLI never contacts GitHub or another forge. A missing upstream, empty commit,
+Only native ancestry proves integration in the default v1/v2 contracts. Squash equivalence and
+forge proof are unsupported there; those invocations never contact GitHub or another forge. A missing upstream, empty commit,
 branch-name match or merged PR alone provides no deletion permission.
 
 Checked-out references, workspace-used revisions, the selected integration base, conflicted or
@@ -50,8 +50,11 @@ is still evidence, not authorization. Apply supports authorized local reference 
 
 ## Bounds, output and failures
 
-Planning has a ten-second total deadline, native output limited to 64 KiB, a 1 MiB encoded
-record/result limit and an aggregate observation limit of 1024 entries. Paths and selectors
+Offline planning has a ten-second total deadline, a 1 MiB encoded record/result limit and
+an aggregate observation limit of 1024 entries. Complete base/target tree metadata and
+all-path filter observations use at most 4,325,376 stdout bytes and 4,224 bytes per logical
+record, retaining the 1,024-leaf, 4,096-byte path, 16 MiB/blob and 64 MiB aggregate blob
+bounds. Other native output and every stderr channel remain bounded to 64 KiB. Paths and selectors
 are bounded UTF-8 text of at most 4096 bytes; IDs are at most 128 bytes. Missing native tools,
 unsupported versions, unavailable sandboxing, malformed or truncated output, cancellation,
 ambiguous/GitButler ownership and changed observations refuse or report incomplete evidence.
@@ -111,7 +114,7 @@ completed/attempted actions and recovery location. An incomplete journal is not 
 blindly. A completed retry succeeds only after its recorded postconditions are verified. Sampled
 checks cannot exclude every external or ABA race; jj deletion is not an atomic Git-style CAS.
 Reference cleanup excludes workspace registration removal, filesystem removal and jj abandonment;
-owned retirement uses a separately reviewed version 2 plan.
+default owned retirement uses a separately reviewed version 2 plan.
 
 ## Owned task retirement
 
@@ -165,6 +168,106 @@ recorded postconditions and remaining files. Native writes and disk removal stil
 external/ABA race limits rather than a repository-wide transaction.
 
 Retirement uses the same ten-second planning/sixty-second apply deadlines, 1 MiB encoded record
-bound and aggregate 1024-entry bound; each stored/disk raw file is bounded to 64 KiB. Oversized or
+bound and aggregate 1024-entry bound; each stored/disk raw file in the default v2 contract
+is bounded to 64 KiB. Oversized or
 incomplete evidence never authorizes a truncated removal target. Remote deletion, garbage collection,
 jj change abandonment and arbitrary forced cleanup remain excluded.
+
+
+## Explicit Git contract 3
+
+Source contract 3 adds Git-only merged-head proof, local tracking-ref cleanup and explicitly
+completed legacy retirement. Select it with `--contract 3`; omission preserves the existing
+v1/v2 dispatch and zero-network behavior. These new capabilities do not permit Git writes in
+jj- or GitButler-owned workspaces. Source/native checks and remaining acceptance limits are
+recorded in the Spec 029 integration evidence. The v3 schema is retained in the source tree at
+`schemas/v3/tidy.schema.json`; it is not yet part of the published schema inventory.
+
+A local reference plan remains useful offline. Online merged-head evidence requires explicit
+`--online --remote NAME` and one admitted GitHub.com/SHA-1 repository:
+
+```sh
+stw tidy plan /absolute/source --contract 3 --base refs/heads/main \
+  --ref refs/heads/finished-task --online --remote origin \
+  --state-dir /private/task-state --json
+stw tidy apply --contract 3 --plan PLAN_ID --state-dir /private/task-state \
+  --authorize --online --json
+```
+
+Optional `--repo OWNER/NAME` must agree with that remote; `--host` accepts only `github.com`.
+An optional repeatable `--pr FULL_HEAD_OID=NUMBER` selects exact-head PR candidates. A branch
+name only helps discovery. Proof binds stable repository/PR identities, the exact local tip,
+the provider's complete merged tuple and its reported integration commit reaching the exact
+chosen local base. The original PR base can be an intermediate stack branch. Amended tips,
+forks, missing local integration objects, ambiguity or changed provider facts retain/refuse;
+no patch equivalence, inferred PR chain or fetch substitutes for proof. Selected bases,
+symbolic references and every registered workspace-used identity remain protected.
+
+Online reads use one 30-second plan/60-second apply deadline, at most 128 HTTP requests and
+32 MiB raw response bytes including failures/resampling, 1 MiB per raw/normalized body and
+16 KiB per auth channel. Collections require proven exhaustion within ten pages/1,000 unique
+records. Native processes remain network-denied. Apply requires `--online` exactly when the
+stored plan declares network effects, alongside separate `--authorize` for its local effects;
+a saved online plan never enables networking by itself.
+
+### Local tracking refs
+
+Tracking selection is a separate mode. The selected remote must have one canonical fetch URL
+and exactly one standard optional-plus full-head mapping; duplicate, negative, custom, mirror,
+overlapping or rewritten mappings refuse. Select exact local tracking refs, or omit `--ref`
+for the complete bounded namespace:
+
+```sh
+stw tidy plan /absolute/source --contract 3 --base refs/heads/main \
+  --tracking-remote origin --online --ref refs/remotes/origin/finished-task \
+  --state-dir /private/task-state --json
+```
+
+Two complete remote branch advertisements must agree at plan time. Fresh complete inventories
+and native/configuration proof must still match before recovery and final prepared deletion.
+A present source branch retains even at a different OID. Symbolic remote HEAD and its resolved
+target, the selected base and workspace-used refs retain. Deletion preserves the exact old OID
+in recovery and changes only the local tracking ref; there is no fetch, synchronization, prune,
+server deletion or config repair. Remote absence is sampled and cannot prevent later recreation.
+
+### One-operation legacy completion
+
+Legacy retirement selects one exact canonical absolute linked worktree and owner label. The
+completion flag declares that the task is complete, no person or agent is using it, and the
+supplied protection set includes every caller-known active worktree. This is cooperative
+one-operation authority, not authentication, activity detection, adoption or historical stw
+creation evidence. Keep active worktrees protected explicitly:
+
+```sh
+stw tidy plan /absolute/source --contract 3 --base refs/heads/main \
+  --state-dir /private/task-state --completed-worktree /absolute/completed-task \
+  --owner operator --protect-worktree /absolute/active-task \
+  --remove-registration --remove-files /absolute/completed-task --json
+stw tidy apply --contract 3 --plan PLAN_ID --state-dir /private/task-state --authorize \
+  --completed-worktree /absolute/completed-task --owner operator \
+  --protect-worktree /absolute/active-task --json
+```
+
+Repeat the exact completion path, owner and protection set at apply. Newly known active work
+requires refusal and replanning. Primary/current/source/ancestor, protected, foreign, locked,
+dirty, ignored-extra, aliased, overlapping or incompletely observed paths remain blocked.
+Native Git removal couples separately selected registration and exact-path file effects;
+legacy removal has no force/unlock fallback and keeps its attached branch. Generate a fresh
+reference plan after retirement before selecting that branch for cleanup. Online retirement
+adds the same explicit remote selection and apply acknowledgment as other v3 online plans.
+
+Owned v3 retirement instead selects `--task ID --owner LABEL` with the original completed
+creation records and exact owned-lock rules. It never substitutes a completion declaration
+for owned provenance. Both Git-v3 retirement modes stream regular user files up to 16 MiB
+and 64 MiB per user-content pass in buffers no larger than 64 KiB. Metadata remains 64 KiB
+per file; old v2/jj policy is unchanged. Full content/identity checks run at three plan/eight
+apply observations, with one shared byte/process/deadline budget and no reused fresh hashes.
+Timestamp and inode checks do not exclude every same-user/ABA race.
+
+V3 human and JSON results report completeness, sampled freshness, actual network attempts,
+measured counters, precise candidates/actions, recovery and effects. Complete negative plans
+exit 0; unavailable, changed, refused, partial or failed observations exit 1; malformed usage
+exits 2. Incomplete evidence has no executable plan. Interrupted effects retain recovery and
+report known outcomes; only a completed journal can retry after read-only postcondition
+verification. Recovery preserves selected committed history, not untracked files, original
+index/reflog/configuration, automatic worktree restoration or a general undo command.
