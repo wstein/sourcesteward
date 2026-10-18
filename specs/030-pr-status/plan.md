@@ -1,28 +1,39 @@
 # Implementation Plan: PR status
 
-**Status**: Incomplete design checkpoint, not implementation authorization.
+**Base**: `2e9b9fc99888b605bcce08afa6ef98846359e06a` | **Status**: Complete design candidate; code blocked by independent review and final-delivery guard acceptance prerequisites.
 
-## Existing code evidence
+## Context and inspected evidence
 
-Inspected base `2e9b9fc99888b605bcce08afa6ef98846359e06a`:
+Go1.27.2, Cobra1.10.2, pinned go-gh/v2 2.16.2 and the existing JSON Schema library; standard library first, no added dependency/storage. Linux/macOS remain the supported platform scope. `internal/hosting/result.go` Options/Result/PullRequest serve repo/pr/ci. `operations.go` readPR is shared with CI/resampling; `fullSHA` is exactly 40 lowercase hex. Existing inspect owns a 30-second context through operation return; CLI delivery follows outside it. Existing v1 schema permits future properties, confirmed by `internal/contracts/hosting_test.go`; checkpoint claims of strictness were incorrect. V1 guarantees its current required fields and version const, not rejection of extra fields.
 
-- `internal/hosting/result.go`: `PullRequest` lacks merge evidence; `Result` already includes `observed_at`. `Options` serves repo/pr/ci.
-- `internal/hosting/operations.go`: `readPR` is shared by PR and CI including CI resampling. `fullSHA` accepts exactly 40 lowercase hex. `inspect` starts a single 30-second context before native ownership and authentication; JSON output checking is internal, but CLI delivery happens afterward.
-- `internal/cli/hosting.go`: shared `stw hosting`/`gh jj` registration, detailed rendering, one JSON object, runtime failure after result rendering. No implicit polling.
-- `schemas/v1/hosting.schema.json`: strict published shape; an additive field is not compatible with existing validators. Expanded PR output requires a new version or explicit format selection, not an unversioned additive change.
-- `internal/hosting/transport.go`: fixed GET endpoint guard, caller-owned gh authentication, one MiB raw and normalized body caps, request context, redirect/compression refusal. Per-client timeouts must not replace the operation's global deadline.
+`transport.go` authenticates with bounded gh in a neutral directory and owns typed destination/body/redirect guards. Do not duplicate that transport or introduce arbitrary HTTP URLs, new token access, retrying clients or global environment changes. The new enhanced decoder accepts explicit null head repository; legacy/CI readers keep their behavior. Source-side fixture seams are test-only; production gains no endpoint override.
 
-## Initial design direction
+## Decisions and alternatives
 
-Retain 30 seconds rather than silently raising established bounds. Prefer one final result in both one-shot and watch modes rather than adding an implicit NDJSON stream. Watching reuses one resolution/authentication session and the fixed numbered PR GET only. Settle final schema/CLI compatibility and writer deadline behavior in the next design batch; these are proposals, not frozen contracts.
+D1 (proposed): v1 remains default JSON; explicit `--json-version 2` selects the enhanced operation. Default human detail is retained with added evidence; compact is opt-in. Rejected default-v2 silently changes existing machine callers. Rejected v1 additive-only delivery does not provide a separately guaranteed lifecycle/watch contract. Tradeoff: legacy JSON intentionally cannot access the new watch/expect flags without explicit migration.
 
-## Dependency and ownership ledger
+D2 (proposed): one final observation, fixed 30s global upper bound, 8 GETs, 1/2/4s capped backoff, 1s internal delivery reserve. No cap raise or new duration flags. These values make explicit short observation useful while keeping existing total bounds; they are reviewable conservative choices, not measured product-performance targets. A longer-running watch requires a separately reviewed contract, not a loop of unbounded 30s sessions.
 
-| Item | Owned now | Before implementation |
+D3 (proposed C; unverified production integration): [command-owned final-delivery guard](contracts/pr-status.md#delivery-decision). Return a resource-free prepared delivery only after all native/auth/HTTP/children/temporary cleanup completes; cmd-owned final exit arbitration covers formatting, stdout, root stderr and cancellation using original D. No library os.Exit, detached writer or monitor-disarm-before-exit gap. Normal candidate code is submitted to the same arbiter, which makes the final cancellation/deadline decision then exits immediately. No external cleanup may be skipped by that exit. Pure callback models can join; a successful real os.Exit terminates its own monitor by process teardown. Existing arbitrary-writer library calls need explicit command-host capability or refuse watch before effects. Disposable Linux fixtures support feasibility; actual cleanup boundedness, both executable entry points and supported terminal/platform evidence remain implementation gates. A retains unusable ordinary-sink refusal; B weakens inclusive delivery and is not selected.
+
+D4: lifecycle comes only from coherent state/merged/timestamp evidence, result identity stays separate from head, and errors retain last samples only as incomplete timestamped evidence. No cross-endpoint or review/attestation inference.
+
+## Constitution check
+
+I: shared enhanced human/v2 model, explicit legacy format path, noninteractive one final output; D3 requires separate command-host delivery capability and guarded process exit, with no claim for arbitrary library writers. II/III: read-only observations, no plans/actions or target writes; preserve existing ownership/config/auth refusal. IV: complete specification/plan/tasks precede code and independent review; TDD, real native sentinels and explicit source-vs-acceptance limits. V: both Tier 1 backends share hosting operations without substituting Git inside jj. Existing native versions, sandbox, snapshot suppression and operation pinning stay. No constitutional amendment is proposed; a relaxed inclusive output contract would need an explicit owner decision, not a hidden implementation shortcut.
+
+## Work-item and dependency ledger
+
+| Item | Proposed file scope | Prerequisite / owner |
 | --- | --- | --- |
-| Spec 030 design | This worktree, `specs/030-pr-status/**` only | Complete artifacts and independent strong review |
-| Shared transport / PR reader | No edit ownership | Dispatch grants named files after reconciling current F tidy and Ready changes |
-| Published schema / CLI | No edit ownership | Explicit compatibility choice and handoff after design gate |
-| Specs 028 and 029 | Other active work | Do not reserve or edit their paths |
+| WI0 design | `specs/030-pr-status/**` only | This author; strongest independent complete-artifact review via dispatch |
+| WI1 result/decoder | New `internal/hosting/pr_status_result.go`, `pr_status_decode.go`, tests; new `schemas/v2/hosting-pr.schema.json`, contract fixtures | WI0 CLEAR + explicit D3 acceptance/file handoff; dispatch grants runtime files |
+| WI2 orchestration | New `internal/hosting/pr_status.go`, watch tests; minimal shared prelude extraction only with characterization | WI1; reconcile F tidy/Ready transport/prelude consumers first |
+| WI3 CLI/delivery | New enhanced PR renderer/parser seam; `internal/cli/hosting.go`, root boundary, both cmd entry points and a cmd-owned final-delivery arbiter | WI2 + explicit file handoff; resource-free prepared output, finite cleanup and process-guard acceptance |
+| WI4 docs/acceptance | hosting/JSON/agent documentation, progress/status/evidence and source smoke observer only as needed | WI3, exact implementation review and actual checks |
 
-No runtime, transport, public docs, status registry or gitlink edits in this checkpoint. No source/artifact/site/image/CLI build, installation, CI dispatch, push or outward write is authorized by this handoff.
+This plan names likely files, not runtime ownership authorization. Shared `operations.go`, `result.go`, `transport.go` and CLI root have current F tidy and Ready consumers. Before WI1/2, dispatch supplies their current exact heads, accepted interfaces and integration order; re-inspect them before any shared edit. Prefer extracting a shared resolution/auth prelude with existing `Inspect` characterized green; never couple hosting PR status to tidy or Ready. No transport endpoint expansion or classification dependency is needed: every HTTP failure stops using existing safe messages. Specs 028/029 are excluded. Old review clearance never transfers across head changes.
+
+## Design verification and acceptance boundary
+
+For this spec-only revision: offline documentation checker, JSON syntax/schema compilation and fixture validation with the already pinned library, targeted schema-invalid mutants, temporary source-only output-deadline probe and whitespace. No full Go suite/race is needed for design-only edits. Future runtime work requires `make check`, `go test -race ./...`, module verification, architecture checks and minimum/current native conformance per repository instructions. No CLI/site/image/artifact build or installation is authorized. Generated command reference and real binary smoke remain blocked on separately authorized builds; do not use `go run` as a build bypass.
