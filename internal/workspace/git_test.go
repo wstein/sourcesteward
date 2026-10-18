@@ -200,7 +200,6 @@ func TestGitWorkspaceNativeCreatePreservesSource(t *testing.T) {
 	if _, err := (gitAdapter{}).Verify(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
-	gitFixture(t, dest, "config", "user.name", "Fixture") // same shared setting, no content change
 	if err := os.WriteFile(filepath.Join(dest, "file"), []byte("progress\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

@@ -150,21 +150,21 @@ func (gitAdapter) Observe(ctx context.Context, path, base string) (Snapshot, err
 }
 
 func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string) (string, error) {
-	config, err := gitRead(ctx, bin, id.WorkspaceRoot, "config", "--null", "--list", "--includes")
+	config, layout, err := gitLayoutSafety(ctx, bin, id)
 	if err != nil {
 		return "", err
 	}
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
-		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "core.worktree" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
+		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
 		// check-attr's textual sentinel values can also be literal driver names.
 		// Refuse those definitions rather than mistake an executable literal for
 		// absent/unset attributes. Case-insensitive refusal is conservative.
 		unsafe = unsafe || strings.HasPrefix(key, "filter.unspecified.") || strings.HasPrefix(key, "filter.unset.") || strings.HasPrefix(key, "filter.set.")
 		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || key == "submodule.recurse" && !gitFalse(value) || strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 		if unsafe {
-			return "", failure("git-unsafe-configuration", "configured hooks, checkout helpers or unsupported checkout configuration require an explicit supported policy before creation")
+			return "", failure("git-unsafe-configuration", fmt.Sprintf("Git safety setting %q requires an explicit supported policy; configuration was preserved", gitSafetyRule(key)))
 		}
 	}
 	// Relative/conditional hook paths are refused above; default hooks are shared.
@@ -192,7 +192,7 @@ func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string
 	if err != nil || !info.Mode().IsRegular() {
 		return "", failure("git-unavailable", "Git executable identity is unavailable")
 	}
-	return gitDigest(config + "\x00" + hooks + "\x00" + tree + "\x00" + attributes + "\x00" + bin + "\x00" + fmt.Sprintf("%d:%d:%d", info.Mode(), info.Size(), info.ModTime().UnixNano())), nil
+	return gitDigest("layout-v1\x00" + layout + "\x00" + config + "\x00" + hooks + "\x00" + tree + "\x00" + attributes + "\x00" + bin + "\x00" + fmt.Sprintf("%d:%d:%d", info.Mode(), info.Size(), info.ModTime().UnixNano())), nil
 }
 
 // Attribute inspection resolves data only: check-attr does not run filter
@@ -448,9 +448,41 @@ func (gitAdapter) Verify(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	if err != nil {
 		return n, err
 	}
+	bin, err := gitExecutable()
+	if err != nil {
+		return n, err
+	}
+	if _, _, err := gitLayoutSafety(ctx, bin, id); err != nil {
+		return n, err
+	}
+	safety, err := gitSafety(ctx, bin, source, p.Expected.BaseCommit)
+	if err != nil {
+		return n, err
+	}
+	if safety != p.Expected.SafetyDigest {
+		return n, failure("git-stale-plan", "Git source layout or safety configuration changed; replan before further effects")
+	}
 	n.Identity = id
 	n.Phase = "materialized"
 	n.Complete = true
 	n.SourceUnchanged = reflect.DeepEqual(source, p.Expected.Identity)
 	return n, nil
+}
+
+// Report the matched rule without disclosing config values or subsection names.
+func gitSafetyRule(key string) string {
+	switch {
+	case strings.HasPrefix(key, "filter."):
+		return "filter.<reserved-sentinel>.*"
+	case strings.HasPrefix(key, "hook."):
+		return "hook.*"
+	case strings.HasPrefix(key, "includeif."):
+		return "includeIf.*"
+	case strings.HasPrefix(key, "submodule."):
+		return "submodule.*"
+	case strings.HasPrefix(key, "remote."):
+		return "remote.*.promisor"
+	default:
+		return key
+	}
 }
