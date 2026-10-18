@@ -98,8 +98,8 @@ class ArchitectureTests(unittest.TestCase):
             mutant[release] = [hosting, bypass]
             with self.assertRaises(ValueError, msg=bypass):
                 architecture.validate_dependencies(mutant)
-        # Local packages cannot borrow hosting's boundary or reach network via another package.
-        for local in ('internal/inspection', 'internal/workspace'):
+        # Inspection cannot borrow hosting's boundary or reach network via another package.
+        for local in ('internal/inspection',):
             mutant = dict(graph)
             mutant[prefix + local] = [hosting]
             with self.assertRaises(ValueError, msg=local):
@@ -112,6 +112,40 @@ class ArchitectureTests(unittest.TestCase):
             architecture.validate_dependencies(mutant)
         with self.assertRaises(ValueError):
             architecture.validate_release_graph(mutant)
+
+    def test_workspace_uses_only_the_exact_hosting_operation_boundary(self):
+        prefix = architecture.MODULE
+        workspace = prefix + 'internal/workspace'
+        hosting = prefix + 'internal/hosting'
+        inspection = prefix + 'internal/inspection'
+        sdk = 'example.org/reviewed-hosting-sdk'
+        graph = {workspace: [hosting], hosting: [sdk],
+                 sdk: ['net/http'], 'net/http': ['net']}
+        # Spec 029's coordinator consumes the typed opt-in hosting session.
+        # The implementation still cannot import a direct network adapter.
+        architecture.validate_dependencies(graph)
+        for bypass in ('net/http', sdk, prefix + 'internal/hosting/sub',
+                       prefix + 'internal/hosting-lookalike'):
+            mutant = dict(graph)
+            mutant[workspace] = [hosting, bypass]
+            if bypass.startswith(prefix):
+                mutant[bypass] = [sdk]
+            with self.subTest(bypass=bypass), self.assertRaises(ValueError):
+                architecture.validate_dependencies(mutant)
+        # A helper/shared SDK outside hosting is not promoted into the trusted
+        # boundary simply because hosting also reaches that dependency.
+        helper = prefix + 'internal/workspace/proof-helper'
+        mutant = dict(graph)
+        mutant[workspace] = [hosting, helper]
+        mutant[helper] = [sdk]
+        with self.assertRaises(ValueError):
+            architecture.validate_dependencies(mutant)
+        # Inspection remains local even if it traverses workspace first.
+        for path in (hosting, workspace):
+            mutant = dict(graph)
+            mutant[inspection] = [path]
+            with self.subTest(inspection_path=path), self.assertRaises(ValueError):
+                architecture.validate_dependencies(mutant)
 
     def test_unsafe_and_linkname_are_refused_in_release(self):
         for name in ('zz.go', 'check.go', 'vcs_git.go', 'build.go', 'openfile_unix.go'):
