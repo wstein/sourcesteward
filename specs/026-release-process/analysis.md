@@ -190,3 +190,12 @@ Re-check of revision dfddca3 (pull request sourcesteward#59): NOT READY, 0 high,
 | 9 | Low | Round 5 recorded as READY | Corrected to NOT READY (0 high, 2 medium, 9 low), reviewed revision e532c53 |
 | 10 | Low | data-model lacked a `non-decreasing` example | Added (accepted restart, refused regression, existing full tag) |
 | 11 | Low | D1 wording awkward | Tidied |
+
+
+## WI3 owner clarification H5 (2026-10-18)
+
+The owner explicitly approved option (a): native jj may read and discard readiness-file bytes solely to distinguish zero from nonzero, with no returned contents, content judgment, new file-size cap, writes or network. This corrects the former metadata-only effects wording: measured jj 0.45.1 exposes tree path/type/conflict/executable but no blob identity or size; the `normal_value()` method available in the installed 0.46 build is absent at the supported minimum.
+
+FR-022, the limits table, T015 and the release-plan effects now agree. The fixed read uses the existing operation-pinned read-only runner and ten-second deadline, retains one stdout boolean and the existing bounded stderr, waits for successful completion and requires final state resampling. A prefix followed by failure, timeout, cancellation, stderr overflow or stale state cannot prove readiness. Git keeps metadata-only emptiness checks. This approval authorizes the stated read effect and source amendment only; it authorizes no build, run, tag, publication or consumer activation.
+
+These are author amendments awaiting independent cross-artifact analysis with the exact WI3 implementation revision; no final completeness or independent CLEAR is claimed here.
