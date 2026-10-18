@@ -80,8 +80,6 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.StringArrayVar(hints, "pr", nil, "Select an exact full head OID=positive PR number (repeatable)")
 	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Exact completed legacy path; asserts exclusive retirement authority")
 	f.StringArrayVar(&o.ProtectWorktrees, "protect-worktree", []string{}, "Declare every caller-known active absolute workspace (repeatable)")
-	_ = f.MarkHidden("completed-worktree")
-	_ = f.MarkHidden("protect-worktree")
 }
 func addTidyV3ApplyFlags(cmd *cobra.Command, contract *string, o *workspace.V3ApplyOptions) {
 	f := cmd.Flags()
@@ -90,9 +88,6 @@ func addTidyV3ApplyFlags(cmd *cobra.Command, contract *string, o *workspace.V3Ap
 	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Reassert the exact legacy completion path and exclusive authority")
 	f.StringVar(&o.Owner, "owner", "", "Repeat the legacy completion owner label")
 	f.StringArrayVar(&o.ProtectWorktrees, "protect-worktree", []string{}, "Repeat every exact legacy active-workspace protection (repeatable)")
-	_ = f.MarkHidden("completed-worktree")
-	_ = f.MarkHidden("owner")
-	_ = f.MarkHidden("protect-worktree")
 }
 func tidyV3Path(s string) bool {
 	return s != "" && len(s) <= 4096 && utf8.ValidString(s) && !strings.ContainsRune(s, 0) && filepath.IsAbs(s) && filepath.Clean(s) == s
@@ -289,8 +284,18 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(&text, "  Proof evidence: %s\n", data)
+				fmt.Fprintf(&text, "  Proof evidence: %q\n", data)
 			}
+		}
+		if r := p.Retirement; r != nil {
+			fmt.Fprintf(&text, "Retirement: provenance=%q destination=%q registration=%q target=%q content_policy=%q registration_selected=%t files_selected=%q\n", r.Provenance.Kind, r.Destination.Path, r.Registration.Path, r.Target.CommitID, r.ContentPolicy, r.RemoveRegistration, r.RemoveFiles)
+			facts, err := json.Marshal(r)
+			if err != nil {
+				return err
+			}
+			// Quote the complete evidence as opaque text, including Unicode format
+			// controls. Human review retains every typed fact without terminal effects.
+			fmt.Fprintf(&text, "Retirement facts: %q\n", facts)
 		}
 		for _, e := range p.Effects {
 			fmt.Fprintf(&text, "Effect: %q\n", e)
