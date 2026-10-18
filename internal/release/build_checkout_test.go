@@ -245,7 +245,9 @@ func TestRound4RedirectedNestedWorktreeDoesNotBypassHelperScreening(t *testing.T
 	if b, e := os.ReadFile(marker); e == nil {
 		t.Fatalf("redirected nested helper inherited %q; checkout error=%v", b, err)
 	}
-	t.Logf("checkout refused/result: %v", err)
+	if err == nil {
+		t.Fatal("redirected nested checkout was accepted")
+	}
 }
 
 func TestBuildCheckoutAllowsMatchingConfiguredWorktree(t *testing.T) {
