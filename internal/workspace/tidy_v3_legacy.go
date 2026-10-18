@@ -68,6 +68,9 @@ func retirementV3NoOperation(ctx context.Context, id NativeIdentity) error {
 // Missing mandatory files and unknown/special nodes refuse; optional native
 // files remain optional rather than being fabricated for a legacy worktree.
 func retirementV3RegistrationAdmission(path string, policy retirementContentPolicy) (retirementManifestAdmission, error) {
+	return retirementV3RegistrationAdmissionMode(path, policy, false)
+}
+func retirementV3RegistrationAdmissionMode(path string, policy retirementContentPolicy, owned bool) (retirementManifestAdmission, error) {
 	a := retirementManifestAdmission{Backend: "git", NativeMetadataPaths: []string{}}
 	paths, e := gitRetirementV3MetadataPaths(policy)
 	if e != nil {
@@ -86,7 +89,7 @@ func retirementV3RegistrationAdmission(path string, policy retirementContentPoli
 			return a, failure("invalid-evidence", "Required legacy registration metadata is missing.")
 		}
 	}
-	if containsString(a.NativeMetadataPaths, "locked") {
+	if !owned && containsString(a.NativeMetadataPaths, "locked") {
 		return a, failure("active-workspace", "Locked legacy worktrees are retained; completion never unlocks them.")
 	}
 	return a, nil
@@ -135,6 +138,12 @@ func observeTidyV3Legacy(ctx context.Context, o V3PlanOptions, budget *tidyV3Pro
 }
 
 func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budget *tidyV3ProofBudget) (tidyV3LegacyObservation, error) {
+	if o.Task != "" {
+		return tidyV3LegacyObservation{}, failure("completion-required", "Legacy completion cannot replace original owned creation records.")
+	}
+	return c.observeWithOwnership(ctx, o, budget, nil)
+}
+func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3PlanOptions, budget *tidyV3ProofBudget, owned *V3OwnedProvenance) (tidyV3LegacyObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	out := tidyV3LegacyObservation{}
@@ -144,7 +153,7 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 	if e := validateV3PlanOptions(o); e != nil {
 		return out, e
 	}
-	if o.CompletedWorktree == "" || o.Task != "" {
+	if owned == nil && (o.CompletedWorktree == "" || o.Task != "") {
 		return out, failure("completion-required", "Select one exact completed legacy worktree with current exclusive retirement authority.")
 	}
 	source, e := canonicalSource(o.Path)
@@ -155,6 +164,9 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 		return out, failure("invalid-input", "Legacy admission requires an exact canonical source root.")
 	}
 	dest := o.CompletedWorktree
+	if owned != nil {
+		dest = owned.Task.Destination
+	}
 	if v3Overlaps(o.Path, dest) || dest == string(filepath.Separator) {
 		return out, failure("active-workspace", "The source/current/primary or overlapping workspace is protected.")
 	}
@@ -210,7 +222,7 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 			return out, failure("active-workspace", "Another registered workspace overlaps the selected target.")
 		}
 	}
-	if !found || registration.Bare || registration.Prunable || registration.Locked {
+	if !found || registration.Bare || registration.Prunable || (owned == nil && registration.Locked) || (owned != nil && (!registration.Locked || registration.LockReason != owned.LockReason)) {
 		return out, failure("active-workspace", "The exact ordinary unlocked legacy registration is unavailable.")
 	}
 	target, e := c.target(ctx, dest)
@@ -219,6 +231,12 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 	}
 	if target.WorkspaceRoot != dest || target.RepositoryDir != before.Expected.Identity.RepositoryDir || target.ObjectFormat != before.Expected.Identity.ObjectFormat || target.GitDir == target.RepositoryDir || filepath.Dir(target.GitDir) != filepath.Join(target.RepositoryDir, "worktrees") || target.CommitID != registration.HeadOID || target.HeadRef != registration.HeadRef {
 		return out, failure("invalid-evidence", "Target identity does not bind an exact linked registration in the source repository.")
+	}
+	if owned != nil {
+		verified, e := (gitAdapter{}).Verify(ctx, owned.CreationPlan)
+		if e != nil || !verified.Complete || verified.Identity != target || !sameOwner(target, owned.Task.Native) || target.ObjectFormat != owned.Task.Native.ObjectFormat || target.HeadRef != "" {
+			return out, failure("changed-ownership", "Exact original stable registration, format and task lock must bind the current detached target.")
+		}
 	}
 	if e = retirementV3NoOperation(ctx, before.Expected.Identity); e != nil {
 		return out, e
@@ -229,6 +247,9 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 	destination, e := retirementV3Directory(dest)
 	if e != nil {
 		return out, e
+	}
+	if owned != nil && owned.Task.DestinationIdentity != (PathIdentity{Path: dest, Device: destination.Device, Inode: destination.Inode}) {
+		return out, failure("changed-ownership", "Original owned destination physical identity changed.")
 	}
 	if destination.Device == sourceIdentity.Device && destination.Inode == sourceIdentity.Inode {
 		return out, failure("active-workspace", "Source and destination have aliased physical identities.")
@@ -274,7 +295,7 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 	if e != nil {
 		return out, e
 	}
-	metadataAdmission, e := retirementV3RegistrationAdmission(target.GitDir, policy)
+	metadataAdmission, e := retirementV3RegistrationAdmissionMode(target.GitDir, policy, owned != nil)
 	if e != nil {
 		return out, e
 	}
@@ -304,6 +325,9 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 	}
 	r := V3Retirement{ActionID: "retirement-" + gitDigest(dest)[:32], RegisteredRoots: roots, ProtectedRoots: append([]string{}, o.ProtectWorktrees...), Destination: destination, Parent: parent, Registration: regIdentity, RegistrationParent: regParent, RegistrationSiblings: out.RegistrationSiblings, Target: target, RemoveRegistration: true, RemoveFiles: dest, ContentPolicy: "git-v3", Disk: disk, Metadata: metadata, Siblings: siblings, Integration: proof}
 	r.Provenance = V3Provenance{Kind: "legacy-completion", Legacy: &V3LegacyProvenance{Owner: o.Owner, Completed: true, SameUserAuthority: true, SelectedPath: dest, ProtectedRoots: append([]string{}, o.ProtectWorktrees...), ObservedIdentity: destination}}
+	if owned != nil {
+		r.Provenance = V3Provenance{Kind: "owned", Owned: owned}
+	}
 	r.Actions = []V3RetirementAction{{Name: "remove-registration", Target: dest, Decision: "retain", Reason: proof.Reason, Blockers: []string{}}, {Name: "remove-files", Target: dest, Decision: "retain", Reason: proof.Reason, Blockers: []string{}}}
 	if proof.Decision == "delete" {
 		r.Actions[0].Decision = "delete"
@@ -374,12 +398,25 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 			return out, failure("active-workspace", "The current physical directory entered the selected target during admission.")
 		}
 	}
+	if owned != nil {
+		fresh, e := readTidyV3OwnedProvenance(o)
+		if e != nil || !reflect.DeepEqual(fresh, *owned) {
+			return out, failure("changed-ownership", "Original creation journal/task evidence changed during observation.")
+		}
+		verified, e := (gitAdapter{}).Verify(ctx, owned.CreationPlan)
+		if e != nil || !verified.Complete || verified.Identity != target {
+			return out, failure("changed-ownership", "Original owned native binding changed during observation.")
+		}
+	}
 	if e = ctx.Err(); e != nil {
 		return out, e
 	}
 	// Consume the shared observer's proven primary checkout binding, then
 	// retain the complete central source/target/protection and record guards.
 	plan := V3Plan{SourcePath: o.Path, StateDir: o.StateDir, Expected: before.Expected, Mode: "legacy-retirement", Retirement: &r, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits()}
+	if owned != nil {
+		plan.Mode = "owned-retirement"
+	}
 	if !validV3Retirement(r, plan) || !validV3NativeState(before.Native, plan, plan.Expected) {
 		return out, failure("invalid-evidence", "Complete native registrations must bind the exact source/target/protection and physical retirement model; unproven or inconsistent primary mappings refuse.")
 	}

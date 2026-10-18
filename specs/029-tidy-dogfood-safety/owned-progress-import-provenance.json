@@ -1,0 +1,142 @@
+{
+  "kind": "reviewed source integration preparation; final combined exact-head acceptance pending",
+  "source_head": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+  "source_parent": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+  "content_gate": "Dispatch reports SAME independent CONTENTCLEAR zero open; combined E normal/race/source and review required",
+  "paths": [
+    {
+      "path": "internal/workspace/tidy_v3_result.go",
+      "old_blob": "75342db47b80fd3e910d4907e54233bd9a9babcd",
+      "new_blob": "f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed",
+      "old_sha256": "9daf7aa8bdeef2aeb9edb17583510af927398dbb70ba1e1a24ef1cd4fb028b99",
+      "new_sha256": "3945958525fbfd7b1bdaec2c467e7d8cb0fa4f31fe3b67dacf843c8835fbccfe"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "old_blob": "0b02731a231cee15ab9319b33de0acc6e6b650d6",
+      "new_blob": "a55ab78df3a0631482dea19d81af021a4ee9ec99",
+      "old_sha256": "f2c02804dbeb90694f2d9efcaa6dc0fb0e3f899e7d0dcab65d242e897085cec4",
+      "new_sha256": "3adf5503d4fa0947d893adfd197d2c55c91b846bb6771427228a4e5b0acb114d"
+    }
+  ],
+  "original_receipt": {
+    "kind": "author evidence/source index, not runtime attestation or independent approval",
+    "base": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+    "head": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+    "tree": "96bbba5b243d01d22fe6972e50e830579e42f9f0",
+    "clean": true,
+    "paths": [
+      {
+        "path": "internal/workspace/tidy_v3_result.go",
+        "old_blob": "75342db47b80fd3e910d4907e54233bd9a9babcd",
+        "new_blob": "f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed",
+        "old_sha256": "9daf7aa8bdeef2aeb9edb17583510af927398dbb70ba1e1a24ef1cd4fb028b99",
+        "new_sha256": "3945958525fbfd7b1bdaec2c467e7d8cb0fa4f31fe3b67dacf843c8835fbccfe"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_state_test.go",
+        "old_blob": "0b02731a231cee15ab9319b33de0acc6e6b650d6",
+        "new_blob": "a55ab78df3a0631482dea19d81af021a4ee9ec99",
+        "old_sha256": "f2c02804dbeb90694f2d9efcaa6dc0fb0e3f899e7d0dcab65d242e897085cec4",
+        "new_sha256": "3adf5503d4fa0947d893adfd197d2c55c91b846bb6771427228a4e5b0acb114d"
+      }
+    ],
+    "focused_race": "final-focused-race.log EXIT0 workspace1.892s",
+    "mutants": "Final passing unmodified baseline then7/7 behavioral kills. initial4/7 retained. Intermediate apparent7/7 INVALID baseline explicitly excluded, retained under invalid-baseline-mutants/NOTICE.txt.",
+    "source_checks": {
+      "source_sha": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+      "checks": [
+        {
+          "name": "vet",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "modules",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "python-source",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "docs",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "architecture",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "whitespace",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "compatibility",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "format",
+          "exit_code": 0,
+          "passed": true
+        }
+      ]
+    },
+    "python_source_tests": 83,
+    "exact_exclusion": "test_docs.DocumentationTests.test_packaging_excludes_source_and_binds_revision",
+    "pending": "New-head required go test ./... and agreed race deferred to final E combined runtime head using identical imported blobs plus exact independent review; prior fb4ddf aggregate is not coverage for this behavior change. Integration preparation only until final gate.",
+    "unchanged_scope": "No E observer, schema, record shape, shared helper, routing, capabilities, limits, force or lock behavior changes.",
+    "files_sha256": {
+      "final-focused-race.log": "da0f8b58804be15180c9095e29dcef313736b507067daa73a5508d3fb7640e77",
+      "green.log": "16a01c080fdc41858985a58f66c8f6d9d39c6f0d3a0a30318fe2174f4ee5f4f7",
+      "initial-mutants/mutant-creation-current-full-equality.log": "bd74a9838ef029fa922214a928b8db58e489bad0fbea6768c19ad800151053db",
+      "initial-mutants/mutant-current-integration-binding-omitted.log": "c131a1c796c0f192f9739d5833e868806abb9a1900a75495cad0a499452d70a8",
+      "initial-mutants/mutant-current-registration-head-unbound.log": "f5af53cfeffff9e26b28fc3b879138d33c92100088a130e2dccd11c214dafc7b",
+      "initial-mutants/mutant-format-check-omitted.log": "ac95bdb8fc597b24cc0dbbfcb649fa8bafc19edee5fa87435be09fbb67b75bbd",
+      "initial-mutants/mutant-input-sha256.json": "4967b4d251342db6ba1e43eea7012fd6f0fc3859f98bcb800de1685859fbca31",
+      "initial-mutants/mutant-original-journal-digest-unbound.log": "83dec83b5685d26b870f208e5e429a8a917fc1a330b95426f6915d0523c8e5cb",
+      "initial-mutants/mutant-owner-check-omitted.log": "8f1cef3fa011ac9149dd848b84434adbe3fe68bcda32d4b363234d6012959236",
+      "initial-mutants/mutant-recovery-uses-creation-head.log": "93839a285d1374488bfa3429c2baeab8c6153cfbf2e6ab4cd4c3b4e5a396aac5",
+      "initial-mutants/mutant-results.json": "1800b30a0d2634c769bd1be97b95b92e8dfa1cb44fd4e944b91b6e1f5f415749",
+      "initial-mutants/mutants-summary.log": "49a8a73f34bc36e7162b5696952f66b6c733f80b3db98aa1ab73f8c2efff0246",
+      "initial-mutants/run-mutants.py": "0ec54b98bb3b0ef75ffa5945cb2b5576d60601f0e7ad2dccb5cd77e63e3f68b4",
+      "invalid-baseline-mutants/NOTICE.txt": "02f3ae507ead5a0ae4ed1303c8547e9a79e5f910d4fc88c8d035a369aa7040d4",
+      "invalid-baseline-mutants/final-focused-race.log": "5032b3af391713590a5df5c133f7aab9609c522a10a635fa47a824f566be1478",
+      "invalid-baseline-mutants/mutant-creation-current-full-equality.log": "c4459bad63d2289e8f087bef3c4fcb6a24ca2ec521a82c16a77ca063d27883cf",
+      "invalid-baseline-mutants/mutant-current-integration-binding-omitted.log": "3643743ecfdff1d0a2bece7d7c32469a9992833603f809039eab64fbc4dba19c",
+      "invalid-baseline-mutants/mutant-current-registration-head-unbound.log": "224a00dbb138f8f8b3b6a30ccb8a76f6b66f40975fa2dfd16f4ba62b920e3cd0",
+      "invalid-baseline-mutants/mutant-format-check-omitted.log": "42bb170818155fbd59805e12574acdba513d27c6b63a0b4b439846a57733e25e",
+      "invalid-baseline-mutants/mutant-input-sha256.json": "4967b4d251342db6ba1e43eea7012fd6f0fc3859f98bcb800de1685859fbca31",
+      "invalid-baseline-mutants/mutant-original-journal-digest-unbound.log": "34157eba717c1fb29a5dcc874fc1c8341056e9281ba0f3bb9c3d65f56b4d50ac",
+      "invalid-baseline-mutants/mutant-owner-check-omitted.log": "0484739e8bcded79104ff60cdc46a962444d9da4e3406c7c6cf6d1af26799117",
+      "invalid-baseline-mutants/mutant-recovery-uses-creation-head.log": "9635145d10fbcca232a86d8b1dd0e7429b2c38dafbaad5288c038812c1ce7e37",
+      "invalid-baseline-mutants/mutant-results.json": "1a34cfae6460f8331e93a3197f243c812fbea8675de5cbbd09cd2176960f901e",
+      "invalid-baseline-mutants/mutants-summary.log": "a348d6f3f81e6a7cd8167bcdbf8406c7710d0c2f2358aaabb2e6da1d06b15609",
+      "invalid-baseline-mutants/run-mutants.py": "0ec54b98bb3b0ef75ffa5945cb2b5576d60601f0e7ad2dccb5cd77e63e3f68b4",
+      "mutant-baseline.log": "998d3af2796579c7166af6490cc22eb091efec8ad3507527b5c785bc2036ba47",
+      "mutant-creation-current-full-equality.log": "48b339f8c3a17210fd0be4a551c37fcead5c38a9b598555b74d2cdb8031973bb",
+      "mutant-current-integration-binding-omitted.log": "185c54217d5ee300d8f0626500348a4fb086609fe5cc173fd4a1ab42327e6035",
+      "mutant-current-registration-head-unbound.log": "224a00dbb138f8f8b3b6a30ccb8a76f6b66f40975fa2dfd16f4ba62b920e3cd0",
+      "mutant-current-registration-lock-unbound.log": "f76a9207f1bcddbb8fc96c4fe03df97e1ed6dfcb06339cf04168733ae810a61a",
+      "mutant-format-check-omitted.log": "9b34e45e3f473fdd22aa5cef7d154a5584cb0cc2cc0bc0979fde802005c24a69",
+      "mutant-input-sha256.json": "4967b4d251342db6ba1e43eea7012fd6f0fc3859f98bcb800de1685859fbca31",
+      "mutant-original-journal-digest-unbound.log": "05beaf5c8e1f2a70f8965365d8fa2ee40835cf947b9a1b5e9bd4e53d6f57a157",
+      "mutant-owner-check-omitted.log": "f4186fd0cc509e46ab24a71935c18cfa091d8d42736043b62bfae96b1d76cf2f",
+      "mutant-recovery-uses-creation-head.log": "d04f834f0ccda42433a0e676157c0983e531969fbe0a48b3f53fe0cd0968b1f1",
+      "mutant-results.json": "9fc8827038a2055d41eac82cf0e23e3046b1c9f240adb7fd3be5978ae0992bb1",
+      "mutants-summary.log": "d939ff20ac2b6e73cf6f0f416c3b66cbbbafd852f796fdd9833b372649952abd",
+      "red.log": "228f65c828a32cd1c59ef90e30d1a8d07a5fe1f101ea3c3c9c533dbfba58ca0e",
+      "run-mutants.py": "a45f83a0eaf6bbc27575fb7cae0d47d54d454fd72db734a4b7209d2211b022c6",
+      "run-source-checks.py": "d265f1377db476107f4194f08afe36a3ceea0bfa97d8c9d70502de72eac426a6",
+      "source-check-results.json": "99e3657e1826994aecc38d145bcee869320f652fd8f107f6e20ee8d4786a9015",
+      "source-checks-summary.log": "4f09115ddfbe1c875d1003fc589efa0a2bc672785bde6a8c9df0fff724d9b7a7",
+      "source-checks.log": "fce6f5b3d2d496e831b6b73aa80b74005a306f68bf2c33fec998930b3884400a"
+    }
+  }
+}

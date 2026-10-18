@@ -410,7 +410,7 @@ func (gitRetirementAdapter) RemoveRegistration(ctx context.Context, p Retirement
 	}
 	out.Attempted = true
 	out.Effects = []string{"Attempted native coupled removal of exact owned stw lock, registration " + p.Expected.Target.GitDir + " and physical worktree " + p.Task.Destination}
-	_, code, e := runSandboxed(ctx, bin, []string{"--no-replace-objects", "worktree", "remove", "--force", "--force", "--", p.Task.Destination}, p.SourcePath, []string{p.Expected.DestinationParent.Path, p.Expected.RegistrationParent.Path}, protection)
+	_, code, e := gitRetirementOwnedNativeRemove(ctx, bin, p.SourcePath, p.Task.Destination, []string{p.Expected.DestinationParent.Path, p.Expected.RegistrationParent.Path}, protection)
 	if e != nil {
 		return out, gitExecutionError(e)
 	}
@@ -509,4 +509,11 @@ func gitRetirementOutcome() TidyNativeOutcome {
 // absence and an independent recovery pin, never trust journal snapshots alone.
 func (gitRetirementAdapter) VerifyPost(ctx context.Context, p RetirementPlanRecord, recovery TidyRecovery, expected Snapshot) error {
 	return gitRetirementVerifyAbsent(ctx, p, recovery, expected)
+}
+
+// gitRetirementOwnedNativeRemove is the original owned-only fixed runner,
+// factored without changing its argv, sandbox grants, environment or policy.
+// Callers must prove the exact original creation/task lock and clean contents.
+func gitRetirementOwnedNativeRemove(ctx context.Context, bin, source, destination string, parents, protection []string) (string, int, error) {
+	return runSandboxed(ctx, bin, []string{"--no-replace-objects", "worktree", "remove", "--force", "--force", "--", destination}, source, parents, protection)
 }
