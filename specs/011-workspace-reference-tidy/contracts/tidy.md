@@ -43,3 +43,15 @@ freshness refuses; no unbounded fallback. Cancellation after start reports known
 The v1 command discriminant reserves tidy-plan and tidy-apply from WI1 publication; WI1 does not
 expose apply until WI2 acceptance. WI3 uses a separate v2 retirement contract rather than expanding
 strict v1 candidate enums/fields. Published v1 bytes and prior fixtures remain unchanged.
+
+## Issue #62: Git checkout layout admission
+
+Primary and linked Git sources use the
+[Spec 010 layout contract](../../010-isolated-task-workspaces/contracts/workspace.md#git-checkout-layout-admission-issue-62)
+through observation, persisted-plan validation, recovery and apply. A validated shared
+`core.worktree` names the primary checkout; it does not replace the current linked identity
+or authorize primary writes. Incomplete mapping/workspace protection or changed fingerprint
+refuses before the next effect. Reference/retirement schemas, action authorization, retention
+and recovery semantics remain unchanged. This amendment is pending implementation and
+independent acceptance; existing native jj bookmark deletion retains remote counterparts,
+including untracked remote targets, and never abandons changes.

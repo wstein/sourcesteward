@@ -35,3 +35,19 @@ FR001→T201–203/T208; FR002→T204–209; FR003→T205/T207/T213 (forge unsup
 FR004→T204–208; FR005→T205/T207/T213; FR006→WI3, not enabled here; FR007→T202–209;
 FR008→T204–207/T212; FR009→T210–211; FR010→T202–203/T208–212; FR011→T212/T214–215.
 SC001→T204–212/T214; SC002→T202–209/T212; SC003→T210–211/T214; SC004→T201/T214–215.
+
+## Issue #62: shared layout consumers
+
+These tasks extend the implemented WIs and depend on
+[Spec 010 T031–T035](../010-isolated-task-workspaces/tasks.md#issue-62-native-git-layout-readiness).
+They are not completed by the historical WI task checkmarks. Independent amendment analysis
+precedes source work; tests fail before implementing any consumer change.
+
+- [ ] T401 [FR-001, FR-004, FR-007, FR-012] Add native primary/linked submodule and separate-Git-directory reference-plan/recovery/delete tests in internal/workspace/tidy_git_test.go and tidy_git_apply_test.go. Keep checked-out branches and all workspace-used tips retained; verify exact recovery/selected-target deltas, packed-ref handling and preserved primary/sibling/index/config bytes. Changed layout or config, including after recovery creation, must refuse the next effect without deleting the recovery root.
+- [ ] T402 [FR-004, FR-006, FR-007, FR-012] Add owned lifecycle tests in internal/workspace/retirement_git_test.go: create from each admitted primary/linked layout, prove complete ownership and clean state, record recovery, then remove only the selected task registration/files. Protect source, primary, other registrations and superproject metadata. Retain dirty/unknown/foreign/current tasks; test target/source pointer replacement, config changes, cancellation/partial outcomes and verified completed retry. Registration-only Git removal stays unsupported.
+- [ ] T403 [FR-001, FR-005, FR-008, FR-012] Make only necessary consumer plumbing changes after failing tests; reuse the shared admission/fingerprint rather than introducing independent weaker proof. Rerun native jj local-bookmark recovery/deletion for standalone/colocated layouts on both versions, retaining tracked/untracked remote counterparts, conflict/base/recovery/workspace-used cases and source Git/WC state; no abandonment or remote reference effects.
+- [ ] T404 [FR-009, FR-010, FR-011, FR-012, SC-001–SC-004] Extend the tidy/apply/retirement smoke manifests and tests with the new layout cases; independently review the exact integrated source, run required source checks and mandatory minimum/current native/schema acceptance, and record effects, versions, SHA and unrun gates. Any needed binary/documentation build requires separate owner authorization; historical baseline tests do not close this task.
+
+FR-012 maps to T401–T404 plus Spec 010 T031–T038. T401/T402 depend on the reviewed shared
+proof; T403 preserves native bookmark semantics, and T404 is the essential v0.1.0 acceptance
+gate. No cleanup of real development or user repositories is part of these tests.

@@ -4,6 +4,9 @@
 **Created**: 2026-10-15
 **Status**: Implemented — independently reviewed; local minimum/current acceptance passed; hosted CI and owner review tracked in PR handoff
 **Input**: Native Git worktrees and jj workspaces, with safe handoff and retirement.
+
+**Issue #62 amendment (2026-10-18)**: Design candidate, independent analysis and implementation pending. Native Git worktrees and native jj bookmarks are essential v0.1.0 acceptance requirements. Historical implementation status above does not establish acceptance of the additional Git layouts below; existing qualified jj bookmark support remains governed by Spec 011.
+
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
 ## User Scenarios & Testing
@@ -21,6 +24,8 @@ A caller prepares a task without disturbing an existing checkout.
 1. **Given** a supported repository, explicit base and unused destination, **When** creation is planned, **Then** the caller sees backend, base identity, destination, ownership and all intended effects.
 2. **Given** an authorized unchanged plan, **When** creation is applied, **Then** a native Git worktree or jj workspace is created with a durable task identity and the original checkout is preserved.
 3. **Given** an occupied or aliased destination or changed base, **When** apply is attempted, **Then** the action refuses without overwriting files or silently selecting another base.
+4. **Given** an ordinary primary checkout, an initialized submodule checkout or a checkout with a separate Git directory, including a linked worktree of those repositories, **When** its mapping satisfies the [Git checkout layout admission contract](contracts/workspace.md#git-checkout-layout-admission-issue-62) and all existing safety bounds, **Then** native creation is available without changing configuration; a shared primary `core.worktree` value is not mistaken for the current linked checkout.
+5. **Given** redirected, ambiguous, aliased or changed layout evidence, **When** planning or apply evaluates it, **Then** it refuses before the next native effect, retains already recorded effects and never repairs configuration or redirects execution to another checkout.
 
 ### User Story 2 — Hand off and prepare retirement (Priority: P2)
 
@@ -56,6 +61,7 @@ A caller receives the same evidence in human and structured output without hidde
 
 - Destination races, symlinks, outside-repository destinations, insufficient space and permission failures.
 - Interrupted registration, task-name collisions, foreign ownership, stale operations and concurrent base movement.
+- Primary/submodule/separate-Git-directory mappings, linked reciprocal pointers, configuration origins, duplicate `core.worktree` keys and concurrent metadata replacement.
 
 ## Requirements
 
@@ -72,6 +78,7 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-009**: Provide understandable human output and versioned structured success/error results from the same observations, preserving published contracts; no interactive prompt, editor or pager is required.
 - **FR-010**: Declare and enforce observation/action scope, output and time limits, cancellation and incomplete-result behavior; never convert missing or truncated evidence into success or permission to mutate.
 - **FR-011**: Require acceptance evidence for minimum/current supported Git and jj, including failure, concurrency, ownership and effects cases; missing mandatory coverage cannot count as passed conformance.
+- **FR-012**: Admit proven native Git checkout layouts under the [layout contract](contracts/workspace.md#git-checkout-layout-admission-issue-62), separating current checkout, per-worktree Git directory, common repository and primary checkout identities. Bind layout/configuration evidence into stale validation for creation and Spec 011 consumers; no layout admission alone authorizes mutation or expands write grants.
 
 ### Key Entities
 

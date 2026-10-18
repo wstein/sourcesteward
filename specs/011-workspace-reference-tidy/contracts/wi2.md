@@ -91,3 +91,13 @@ effects, equal shared repository identities and complete expected native operati
 research alone is not accepted shipping evidence. Tests include hostile metadata symlink/extra files,
 bounds, copy/source replacement races and nonzero/cancel after native start. Recovery bookmark uses
 fixed trailing ? to avoid native Git-ref export; both protections are required for colocated safety.
+
+## Issue #62: layout proof through reference recovery and deletion
+
+The [shared Git layout contract](../../010-isolated-task-workspaces/contracts/workspace.md#git-checkout-layout-admission-issue-62)
+applies before recovery creation and before deletion, including from submodule-backed linked
+sources. Native recovery/target deltas may advance only the already specified snapshot fields;
+layout/configuration evidence and all unrelated workspace/index/ref state remain equal. A
+changed mapping after recovery creation refuses deletion and preserves that recovery pointer.
+No primary, superproject or common-parent write grant follows from layout admission. Existing
+jj bookmark-only semantics and native private execution context remain unchanged.

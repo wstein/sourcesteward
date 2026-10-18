@@ -58,3 +58,30 @@ are required before handoff; creation is an internal MVP gate rather than a part
 ## Complexity Tracking
 No constitution exceptions. The explicit store avoids hidden source metadata writes and makes
 recovery independently inspectable; platform-native sandboxing is required for safe Git/jj effects.
+
+## Issue #62: native Git layout admission
+
+Native Git worktrees and native jj bookmarks are essential v0.1.0 acceptance, not optional
+follow-up capabilities. This amendment closes the measured `gitSafety` layout refusal;
+it does not redesign the adapters or add bookmark semantics. The governing rule is the
+[layout admission contract](contracts/workspace.md#git-checkout-layout-admission-issue-62).
+Existing statuses and earlier reviews cover earlier source, not this candidate amendment.
+
+Keep proof inside the Git workspace observation/safety boundary (`internal/workspace/git.go`
+and a focused helper if needed). Inspect all consumers: `gitAdapter.Observe/Create`,
+`gitTidyAdapter.Observe`, reference recovery/deletion in `tidy_git_apply.go`, and source/target
+observations and removal in `retirement_git.go`. Bind the additional evidence into the
+existing safety fingerprint rather than widening published schemas or rewriting stored plans.
+Keep native arguments, sandbox grants and recovery ownership operation-specific. Existing
+inspection layout fixtures provide useful expected identities; their read-only admission
+is not sufficient mutation proof, and submodule-only `commondir` refusal cannot be copied
+onto legitimate linked registrations.
+
+Implement only after independent cross-artifact analysis. First reproduce primary/linked
+submodule refusal with failing source tests, add positive and adversarial layout fixtures,
+then implement bounded reciprocal proof. Rerun creation, tidy and retirement effects, shared
+sandbox regressions and jj bookmark conformance. Apply the existing source checks and both
+native version lanes; obtain separate authorization for any binary or documentation build
+needed for CLI acceptance. No build authorization or runtime clearance follows from this plan.
+See [tasks](tasks.md#issue-62-native-git-layout-readiness) and the separately scoped
+[measured baseline](analysis.md#issue-62-measured-baseline-and-design-candidate).

@@ -85,3 +85,24 @@ change is coordinated before implementation; no duplicate common types or broad 
 | SC-002 | T007–013,T019,T021–024 | Before/after effect and failure assertions |
 | SC-003 | T015,T017,T025,T029 | Real result/schema/old-contract validation |
 | SC-004 | T001,T028–030 | Traceability, independent analysis/review/evidence |
+
+## Issue #62: native Git layout readiness
+
+These unchecked tasks amend the implemented baseline; T001–T030 and their historical
+clearance do not establish completion here. Spec 010 owns the shared layout proof; the
+[Spec 011 follow-up tasks](../011-workspace-reference-tidy/tasks.md#issue-62-shared-layout-consumers)
+exercise its cleanup consumers. No runtime implementation precedes T031.
+
+- [ ] T031 [FR-012, SC-004] Independently analyze this exact Spec 010/011 amendment and resolve blocking findings; record the reviewer and exact candidate SHA in analysis.md before source work.
+- [ ] T032 [FR-001, FR-003, FR-012] Write failing temporary-repository tests in internal/workspace/git_test.go (or focused git_layout_test.go) for ordinary, submodule and separate-Git-directory primary sources and their linked sources. Cover native relative and explicit absolute core.worktree mappings, no-key existing behavior, a shared primary value different from the linked root, detached creation, and the exact native identities rather than path-name assumptions.
+- [ ] T033 [FR-003, FR-005, FR-010, FR-012] Write failing hostile tests for redirected primary values, duplicate/wrong-origin keys, missing or mismatched backlinks/commondir, symlink/hardlink/path aliases, malformed/oversized pointers/configuration, and metadata/configuration replacement between plan and apply. Refuse before the next effect and preserve unrelated files, index, refs and configuration; a config-only change with equal commit IDs must stale the plan.
+- [ ] T034 [FR-005, FR-008, FR-012] Implement the bounded reciprocal proof and consistent safety fingerprint in internal/workspace/git.go plus a narrowly scoped helper if needed. Preserve existing configuration, attribute and hook checks, native commands, sandbox grants and old-plan strictness; incompatible old fingerprints require replanning. No generic adapter rewrite or unrelated capability expansion.
+- [ ] T035 [FR-002, FR-004, FR-005, FR-012] Prove full plan/apply/handoff/retry from admitted primary and linked sources. Assert source/primary/sibling disk, indexes, refs, configuration and preexisting registration metadata remain unchanged except exact declared effects. Exercise active hooks/filters and existing unsafe-config refusals with zero helper sentinels; test stale evidence after durable preparation and native-start failure without hidden rollback or enlarged write grants.
+- [ ] T036 [FR-011, FR-012, SC-001, SC-002, SC-003] Extend scripts/smoke-workspaces.py and its source tests for the admitted layouts and refused redirections. Execute minimum/current Git lanes and existing minimum/current native jj workspace/bookmark regressions with mandatory tools/sandbox and zero skipped mandatory cases; retain result-schema fixtures. Binary builds, if needed, require separate owner authorization.
+- [ ] T037 [FR-011, FR-012, SC-004] Complete Spec 011 T401–T404, independent exact-source safety review, required source checks and both-version acceptance; record commands, tool versions, revisions, effects and every unrun gate in analysis.md/verification.md. Documentation builds, if needed, require separate owner authorization.
+- [ ] T038 [FR-009, FR-011, FR-012] Update workspace/backend/tidy guides and durable release-readiness evidence after verified behavior; do not mark the essential capability accepted while #62 implementation, review or mandatory conformance remains incomplete.
+
+T032–T033 must fail against the old blanket guard or unsafe proposed shortcuts before T034.
+T035 and Spec 011 consumer tests follow the shared proof; T036–T038 finish acceptance.
+FR-012 maps to T031–T038 and Spec 011 T401–T404. Existing FR-001–FR-011 and SC-001–SC-004
+continue to apply; this amendment changes only the supported layout proof and its evidence.

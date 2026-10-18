@@ -4,6 +4,9 @@
 **Created**: 2026-10-15
 **Status**: All three WIs implemented and independently reviewed; local verification complete; PRs 36/37/38 opened; WI3 hosted acceptance pending
 **Input**: Evidence-based plans, stale-state checks and recovery.
+
+**Issue #62 amendment (2026-10-18)**: Shared Git layout design candidate, independent analysis and implementation pending. The historical status above does not verify this amendment. Native Git worktrees and native jj bookmarks are essential v0.1.0 acceptance; existing native bookmark cleanup remains qualified as below.
+
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
 ## Delivery Work Items
@@ -47,6 +50,8 @@ A caller applies an explicitly authorized cleanup plan.
 1. **Given** unchanged proven candidates and recorded recovery, **When** apply is requested, **Then** only listed local targets are changed and each action reports an outcome.
 2. **Given** a moved tip/base, new worktree owner, changed files or expired remote evidence, **When** apply is requested, **Then** affected actions refuse rather than reuse stale proof.
 3. **Given** partial failure, **When** cleanup stops, **Then** completed actions and remaining work are recorded and recovery is offered within declared limits.
+4. **Given** a primary or linked Git checkout admitted by the [Spec 010 layout contract](../010-isolated-task-workspaces/contracts/workspace.md#git-checkout-layout-admission-issue-62), **When** reference cleanup or owned retirement is planned/applied, **Then** the same layout proof is required throughout recovery and deletion; only declared target effects occur, with the primary and unrelated linked state preserved.
+5. **Given** changed mapping/configuration or unresolved linked ownership, **When** the next cleanup action is evaluated, **Then** it refuses stale or incomplete evidence and retains its recovery pin and any already recorded effects; native ancestry alone never bypasses layout proof.
 
 ### User Story 3 — Rely on a bounded agent contract (Priority: P1)
 
@@ -85,6 +90,7 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-009**: Provide understandable human output and versioned structured success/error results from the same observations, preserving published contracts; no interactive prompt, editor or pager is required.
 - **FR-010**: Declare and enforce observation/action scope, output and time limits, cancellation and incomplete-result behavior; never convert missing or truncated evidence into success or permission to mutate.
 - **FR-011**: Require acceptance evidence for minimum/current supported Git and jj, including failure, concurrency, ownership and effects cases; missing mandatory coverage cannot count as passed conformance.
+- **FR-012**: Reuse the [Spec 010 layout admission and fingerprint](../010-isolated-task-workspaces/contracts/workspace.md#git-checkout-layout-admission-issue-62) for all Git tidy observations, recovery/deletion and retirement source/target validation. Preserve separate native identities, exact ownership, complete protected-workspace evidence and narrow action effects; supporting initialized submodule checkouts never authorizes nested-submodule activation or primary checkout retirement.
 
 ### Key Entities
 
