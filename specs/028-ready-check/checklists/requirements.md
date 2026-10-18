@@ -17,7 +17,7 @@
 
 ## Gates
 
-- [ ] Independent specification review and coordinator gate accepted on the exact candidate.
+- [x] Independent specification review and coordinator gate accepted at `4dbfd8e557148f315daf8c00c932d9f5a6b5aa46`; zero findings, as recorded in [analysis](../analysis.md).
 - [ ] Plan approved before tasks are generated.
 - [ ] Independent complete artifact analysis CLEAR before implementation.
 

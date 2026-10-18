@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "policy_id": "example-ready",
+  "version": 1,
+  "repository": {
+    "host": "github.com",
+    "id": 123,
+    "full_name": "example/project",
+    "base_ref": "main"
+  },
+  "review": {
+    "context": "review/independent",
+    "status_creator_ids": [
+      456
+    ],
+    "report_author_ids": [
+      456
+    ],
+    "tiers": [
+      {
+        "name": "independent",
+        "rank": 1,
+        "models": [
+          {
+            "id": "configured-review-model",
+            "effort": "high"
+          }
+        ]
+      }
+    ],
+    "default_tier": "independent",
+    "path_tiers": [],
+    "max_rounds": 4,
+    "independence": "declared-execution",
+    "allow_low_followups": false
+  },
+  "ci": [
+    {
+      "context": "check",
+      "app_id": 789,
+      "creator_ids": []
+    }
+  ],
+  "merge": {
+    "method": "rebase",
+    "require_strict": true
+  },
+  "deployment": {
+    "profile": "none",
+    "publisher_app_id": null
+  },
+  "trust_roots": [
+    ".github/workflows/",
+    ".stw/ready-policy.json",
+    "scripts/review-evidence.py"
+  ]
+}

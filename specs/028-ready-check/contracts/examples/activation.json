@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "repository": {
+    "host": "github.com",
+    "id": 123,
+    "full_name": "example/project",
+    "base_ref": "main"
+  },
+  "generation": 1,
+  "policy_source": {
+    "repository_id": 123,
+    "full_name": "example/project",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "checker": {
+    "source_sha": "cccccccccccccccccccccccccccccccccccccccc",
+    "artifact_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "deployment": {
+    "profile": "app",
+    "environment": "review-evidence",
+    "publisher_app_id": 789
+  },
+  "transition": null
+}

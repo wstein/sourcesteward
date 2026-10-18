@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "repository": {
+    "host": "github.com",
+    "id": 123,
+    "full_name": "example/project",
+    "base_ref": "main"
+  },
+  "generation": 1,
+  "policy_source": {
+    "repository_id": 123,
+    "full_name": "example/project",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "checker": {
+    "source_sha": "cccccccccccccccccccccccccccccccccccccccc",
+    "artifact_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "deployment": {
+    "profile": "app",
+    "environment": "review-evidence",
+    "publisher_app_id": 789
+  },
+  "transition": {
+    "repository_id": 123,
+    "number": 42,
+    "head_sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "old_generation": 1,
+    "old_policy_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "new_policy_commit": "1111111111111111111111111111111111111111",
+    "new_policy_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "new_checker_source_sha": "3333333333333333333333333333333333333333",
+    "new_checker_artifact_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  }
+}

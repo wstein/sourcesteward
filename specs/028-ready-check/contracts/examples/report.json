@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "report_id": "example-review-1",
+  "repository_id": 123,
+  "number": 42,
+  "head_sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "base_sha": "ffffffffffffffffffffffffffffffffffffffff",
+  "policy_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "policy_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "scope": "full-pr",
+  "files_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "verdict": "clear",
+  "reviewer": "independent reviewer",
+  "model": {
+    "id": "configured-review-model",
+    "effort": "high",
+    "evidence": "host-configured"
+  },
+  "independence": {
+    "kind": "declared-execution",
+    "separate_author": true,
+    "separate_context": true
+  },
+  "rounds": [
+    {
+      "number": 1,
+      "head_sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "verdict": "clear",
+      "findings": []
+    }
+  ],
+  "findings": [],
+  "blockers": []
+}
