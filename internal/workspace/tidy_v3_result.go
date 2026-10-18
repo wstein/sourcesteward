@@ -198,22 +198,24 @@ type V3RetirementAction struct {
 	Blockers []string `json:"blockers"`
 }
 type V3Retirement struct {
-	Actions            []V3RetirementAction `json:"actions"`
-	RegisteredRoots    []string             `json:"registered_roots"`
-	ProtectedRoots     []string             `json:"protected_roots"`
-	ActionID           string               `json:"action_id"`
-	Provenance         V3Provenance         `json:"provenance"`
-	Destination        V3PhysicalIdentity   `json:"destination"`
-	Parent             V3PhysicalIdentity   `json:"parent"`
-	Registration       V3PhysicalIdentity   `json:"registration"`
-	Target             NativeIdentity       `json:"target"`
-	RemoveRegistration bool                 `json:"remove_registration"`
-	RemoveFiles        string               `json:"remove_files"`
-	ContentPolicy      string               `json:"content_policy"`
-	Disk               V3Manifest           `json:"disk"`
-	Metadata           V3Manifest           `json:"metadata"`
-	Siblings           []V3PhysicalIdentity `json:"siblings"`
-	Integration        V3CommitProof        `json:"integration"`
+	Actions              []V3RetirementAction `json:"actions"`
+	RegisteredRoots      []string             `json:"registered_roots"`
+	ProtectedRoots       []string             `json:"protected_roots"`
+	ActionID             string               `json:"action_id"`
+	Provenance           V3Provenance         `json:"provenance"`
+	Destination          V3PhysicalIdentity   `json:"destination"`
+	Parent               V3PhysicalIdentity   `json:"parent"`
+	Registration         V3PhysicalIdentity   `json:"registration"`
+	RegistrationParent   V3PhysicalIdentity   `json:"registration_parent"`
+	RegistrationSiblings []V3PhysicalIdentity `json:"registration_siblings"`
+	Target               NativeIdentity       `json:"target"`
+	RemoveRegistration   bool                 `json:"remove_registration"`
+	RemoveFiles          string               `json:"remove_files"`
+	ContentPolicy        string               `json:"content_policy"`
+	Disk                 V3Manifest           `json:"disk"`
+	Metadata             V3Manifest           `json:"metadata"`
+	Siblings             []V3PhysicalIdentity `json:"siblings"`
+	Integration          V3CommitProof        `json:"integration"`
 }
 
 func newV3Result(command string) V3Result {
@@ -568,9 +570,12 @@ func validV3Retirement(r V3Retirement, p V3Plan) bool {
 		}
 	}
 	for _, s := range r.Siblings {
-		if !v3Physical(s, "directory") || v3Overlaps(s.Path, r.Destination.Path) || filepath.Dir(s.Path) != r.Parent.Path {
+		if (s.Kind != "directory" && s.Kind != "regular") || !v3Physical(s, s.Kind) || (s.Kind == "regular" && s.Nlink != 1) || v3Overlaps(s.Path, r.Destination.Path) || filepath.Dir(s.Path) != r.Parent.Path {
 			return false
 		}
+	}
+	if !validV3RegistrationGrant(r) {
+		return false
 	}
 	if !validV3Manifest(r.Disk, r.Destination.Path, false) || !validV3Manifest(r.Metadata, r.Registration.Path, true) {
 		return false
@@ -591,6 +596,48 @@ func validV3Retirement(r V3Retirement, p V3Plan) bool {
 	}
 	return false
 }
+
+func validV3RegistrationGrant(r V3Retirement) bool {
+	if !v3Physical(r.RegistrationParent, "directory") || r.RegistrationParent.Path != filepath.Dir(r.Registration.Path) || r.RegistrationSiblings == nil || v3Overlaps(r.RegistrationParent.Path, r.Destination.Path) {
+		return false
+	}
+	// Writable parents may be nested; their objects and protected children must
+	// still be distinct. Bind aliases across both grant sets, not only names.
+	paths := map[string]V3PhysicalIdentity{}
+	objects := map[[2]uint64]string{}
+	admit := func(i V3PhysicalIdentity, reuse bool) bool {
+		key := [2]uint64{i.Device, i.Inode}
+		if prior, exists := paths[i.Path]; exists {
+			return reuse && prior == i
+		}
+		if _, exists := objects[key]; exists {
+			return false
+		}
+		paths[i.Path], objects[key] = i, i.Path
+		return true
+	}
+	for _, i := range []V3PhysicalIdentity{r.Destination, r.Parent, r.Registration, r.RegistrationParent} {
+		if !admit(i, false) {
+			return false
+		}
+	}
+	seen := map[string]bool{}
+	for _, s := range r.Siblings {
+		if seen[s.Path] || !admit(s, s.Path == r.RegistrationParent.Path) {
+			return false
+		}
+		seen[s.Path] = true
+	}
+	last := ""
+	for _, s := range r.RegistrationSiblings {
+		if s.Path <= last || (s.Kind != "directory" && s.Kind != "regular") || !v3Physical(s, s.Kind) || (s.Kind == "regular" && s.Nlink != 1) || filepath.Dir(s.Path) != r.RegistrationParent.Path || v3Overlaps(s.Path, r.Registration.Path) || v3Overlaps(s.Path, r.Destination.Path) || !admit(s, false) {
+			return false
+		}
+		last = s.Path
+	}
+	return true
+}
+
 func validV3Manifest(m V3Manifest, root string, metadata bool) bool {
 	if !m.Complete || m.Entries == nil {
 		return false
@@ -620,7 +667,11 @@ func validV3Manifest(m V3Manifest, root string, metadata bool) bool {
 			if i.Nlink != 1 || i.Size > limit || !v3Hash(entry.Digest) || entry.Executable != (i.Mode&0111 != 0) {
 				return false
 			}
-			total += i.Size
+			// The physical .git pointer is metadata, accounted separately from
+			// the 64 MiB user-content pass. Registration totals stay unchanged.
+			if metadata || i.Path != filepath.Join(root, ".git") {
+				total += i.Size
+			}
 		default:
 			return false
 		}

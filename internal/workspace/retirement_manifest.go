@@ -35,8 +35,13 @@ func retirementManifestEntriesDigest(entries []RetirementEntry) (string, error) 
 	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
 func observeRetirementManifest(ctx context.Context, path string, a retirementManifestAdmission) (RetirementManifest, error) {
-	if a.Backend != "git" && a.Backend != "jj" {
-		return RetirementManifest{}, errors.New("unsupported manifest backend")
+	policy, e := retirementPolicy(a.Backend, 2)
+	if e != nil {
+		return RetirementManifest{}, e
+	}
+	limit, e := policy.fileLimit(false)
+	if e != nil {
+		return RetirementManifest{}, e
 	}
 	if len(a.NativeMetadataPaths)+len(a.StoredFiles) > retirementManifestEntries {
 		return RetirementManifest{}, errors.New("manifest admission exceeds limit")
@@ -70,7 +75,7 @@ func observeRetirementManifest(ctx context.Context, path string, a retirementMan
 		if e := admit(f.Path); e != nil {
 			return RetirementManifest{}, e
 		}
-		if len(f.Digest) != 64 || f.Size < 0 || f.Size > retirementFileBytes {
+		if len(f.Digest) != 64 || f.Size < 0 || f.Size > limit {
 			return RetirementManifest{}, errors.New("invalid stored file fact")
 		}
 		stored[f.Path] = f
