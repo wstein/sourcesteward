@@ -19,8 +19,12 @@ type tidyCoordinator struct {
 	adapter func(string) (tidyAdapter, error)
 }
 
+// tidyPlanTimeout bounds one PlanTidy call. It is a variable only so that a test of a
+// large fixture can widen it on a slow runner; production never changes it.
+var tidyPlanTimeout = 10 * time.Second
+
 func PlanTidy(ctx context.Context, o TidyPlanOptions) TidyResult {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, tidyPlanTimeout)
 	defer cancel()
 	if o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
 		return boundedTidy(defaultRetirementCoordinator().plan(ctx, o))

@@ -73,20 +73,18 @@ func canonicalSandboxDir(path string) (string, error) {
 // grants. Linux bubblewrap does not constrain exec: adapters must admit native
 // configuration/hooks before execution and disclose external-race/ABA limits.
 // macOS additionally admits only the exact native binary, including its children.
-func runSandboxed(ctx context.Context, bin string, args []string, cwd string, writeRoots, readOnlyRoots []string) (string, int, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
+func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string, writeRoots, readOnlyRoots []string) (*exec.Cmd, error) {
 	if ctx.Err() != nil {
-		return "", -1, ctx.Err()
+		return nil, ctx.Err()
 	}
 	total := len(bin) + len(cwd)
 	if len(args) > 1024 {
-		return "", -1, errors.New("too many native arguments")
+		return nil, errors.New("too many native arguments")
 	}
 	for _, arg := range args {
 		total += len(arg)
 		if strings.ContainsRune(arg, 0) {
-			return "", -1, errors.New("invalid native argument")
+			return nil, errors.New("invalid native argument")
 		}
 	}
 	for _, roots := range [][]string{writeRoots, readOnlyRoots} {
@@ -95,42 +93,42 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 		}
 	}
 	if total > 64*1024 {
-		return "", -1, errors.New("native arguments exceed input limit")
+		return nil, errors.New("native arguments exceed input limit")
 	}
 	if !filepath.IsAbs(bin) {
-		return "", -1, errors.New("native executable must be absolute")
+		return nil, errors.New("native executable must be absolute")
 	}
 	resolved, e := filepath.EvalSymlinks(bin)
 	if e != nil || resolved != filepath.Clean(bin) {
-		return "", -1, errors.New("native executable must be canonical")
+		return nil, errors.New("native executable must be canonical")
 	}
 	st, e := os.Stat(bin)
 	if e != nil || !st.Mode().IsRegular() || st.Mode().Perm()&0111 == 0 {
-		return "", -1, errors.New("native executable must be executable regular file")
+		return nil, errors.New("native executable must be executable regular file")
 	}
 	cwd, e = canonicalSandboxDir(cwd)
 	if e != nil {
-		return "", -1, e
+		return nil, e
 	}
 	for i, roots := range [][]string{writeRoots, readOnlyRoots} {
 		if len(roots) > 1024 {
-			return "", -1, errors.New("too many sandbox roots")
+			return nil, errors.New("too many sandbox roots")
 		}
 		for _, r := range roots {
 			if i == 0 {
 				if _, e := canonicalSandboxDir(r); e != nil {
-					return "", -1, e
+					return nil, e
 				}
 			} else {
 				if e := canonicalSandboxReadOnly(r); e != nil {
-					return "", -1, e
+					return nil, e
 				}
 			}
 		}
 	}
 	for _, r := range writeRoots {
 		if r == "/" || bin == r || strings.HasPrefix(bin, r+string(filepath.Separator)) {
-			return "", -1, errors.New("unsafe native write grant")
+			return nil, errors.New("unsafe native write grant")
 		}
 	}
 	var sandbox string
@@ -153,7 +151,7 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 			sandbox, e = filepath.EvalSymlinks(sandbox)
 		}
 		if e != nil {
-			return "", -1, errNativeSandboxUnavailable
+			return nil, errNativeSandboxUnavailable
 		}
 		argv = []string{"--ro-bind", "/", "/", "--dev-bind", "/dev/null", "/dev/null", "--unshare-net", "--die-with-parent", "--new-session", "--cap-drop", "ALL"}
 		for _, r := range writeRoots {
@@ -165,13 +163,23 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 		argv = append(argv, "--", bin)
 		argv = append(argv, args...)
 	default:
-		return "", -1, errNativeSandboxUnavailable
+		return nil, errNativeSandboxUnavailable
 	}
 	c := exec.CommandContext(ctx, sandbox, argv...)
 	c.Dir = cwd
 	c.Env = sandboxEnvironment(bin)
-	c.Stdin = strings.NewReader("")
 	c.WaitDelay = time.Second
+	return c, nil
+}
+
+func runSandboxed(ctx context.Context, bin string, args []string, cwd string, writeRoots, readOnlyRoots []string) (string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	c, e := prepareSandboxed(ctx, bin, args, cwd, writeRoots, readOnlyRoots)
+	if e != nil {
+		return "", -1, e
+	}
+	c.Stdin = strings.NewReader("")
 	var out, errout nativeCapture
 	c.Stdout = &out
 	c.Stderr = &errout
@@ -182,23 +190,29 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 	if out.overflow || errout.overflow {
 		return "", -1, errNativeOutputLimit
 	}
+	code, e := nativeExitResult(e, errout.data)
+	if e != nil {
+		return "", -1, e
+	}
+	return string(out.data), code, nil
+}
+
+func nativeExitResult(e error, stderr []byte) (int, error) {
 	if e == nil {
-		return string(out.data), 0, nil
+		return 0, nil
 	}
 	var exit *exec.ExitError
 	if errors.As(e, &exit) {
-		// Sandbox startup failures must never be mistaken for an admitted native
-		// action. Its launch diagnostics are bounded and used only for classification.
-		diag := string(errout.data)
+		diag := string(stderr)
 		if strings.Contains(diag, "sandbox-exec:") || strings.Contains(diag, "bwrap:") {
-			return "", -1, errNativeSandboxUnavailable
+			return -1, errNativeSandboxUnavailable
 		}
-		return string(out.data), exit.ExitCode(), nil
+		return exit.ExitCode(), nil
 	}
 	if errors.Is(e, exec.ErrNotFound) || errors.Is(e, os.ErrNotExist) || errors.Is(e, os.ErrPermission) {
-		return "", -1, errNativeSandboxUnavailable
+		return -1, errNativeSandboxUnavailable
 	}
-	return "", -1, e
+	return -1, e
 }
 
 var _ io.Writer = (*nativeCapture)(nil)
