@@ -253,3 +253,13 @@ identity failure, also reproduced locally, is repaired in a focused test-only fo
 Independent review and full local checks pass; the next action is to review that repair
 and confirm its exact hosted minimum/current checks. Earlier owner-merge-pending statements
 are historical snapshots; no live schema publication or global verification is inferred.
+
+### Spec 028 bounded fixed-source preparation
+
+T007–T008 now have additive typed Ready-reader source and fake-HTTP fixtures on
+`codex/ready-sources`, based on `82eb959c3c038359aae34a032a2961a2f51ec538`.
+Legacy hosting results/authentication remain unchanged. Collection completeness,
+issuer metadata and shared operation budgets are observations for later policy
+and CLI work; they do not establish installed-profile eligibility or deployment.
+[Reader evidence](../specs/028-ready-check/analysis.md#bounded-t007t008-fixed-source-increment)
+records test-first controls and remaining exact-source/hosted gates.

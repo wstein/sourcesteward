@@ -268,3 +268,74 @@ rejection tests (exit 1). Receipts are
 complete architecture checks passed (exit 0); exact-source review and the
 coordinated aggregate verification remain pending. No aggregate/build/install
 or hosted operation ran in this correction.
+
+## Bounded T007–T008 fixed-source increment
+
+Author worktree `wt/stw-ready-sources`, branch `codex/ready-sources`, starts at
+reviewed scaffold `82eb959c3c038359aae34a032a2961a2f51ec538`. This increment
+adds only fixed Ready observations and a guarded transport allowlist extension.
+Existing hosting `readPR` lacks immutable repository/PR IDs and constraint
+metadata; `readCI` lacks numeric status creator IDs and check App/output fields.
+Those legacy readers, their endpoint predicate, authentication and published
+results remain unchanged. At this exact base there are no separate Tidy or
+Spec 026 online reader implementations to reuse; eventual integration must
+compare sibling source changes rather than assume their APIs are present here.
+
+The thirteen contract sources have typed entry points, source identity,
+per-source request counts and explicit complete/unknown outcomes. Policy-source
+repository reads share the same 80-request/30-second operation budget. Array
+readers prove exhaustion/counts, refuse duplicate identities, bound normalized
+collections and retain full unfiltered status/check/open-PR evidence. Status
+resampling replaces the sampled row count rather than double-counting rows.
+A successful constraint read is an observation, not a supported predicate;
+protection 404 remains ambiguous. Branch `protected=false` is only presence
+metadata, to be combined with complete effective rules by a later operation.
+Activation requires a typed accepted App channel; readable bytes establish no
+owner-only write isolation. T012 owns complete lock parsing/authentication.
+No CLI operation, policy predicate, publisher, activation write or live API call
+is introduced. Effective-rules/compare hosted-shape acceptance remains pending.
+
+TDD receipts in `/tmp/stw-ready-sources-*.log` record missing-reader compilation
+RED, then behavior RED for normalized collection overflow and repeat status
+sampling. Focused fake-HTTP GREEN covers all thirteen fixed source shapes,
+numeric App/creator identities, nullable PR identities, complete open-PR
+pagination, ten-full-page refusal, changed check totals, file count mismatch,
+missing issuer metadata, strict policy base64/type/size, exact report issue
+binding, typed activation refusal, duplicate keys, request/cancellation bounds,
+shared policy-repository accounting, body/header caps, actual redirect refusal,
+fixed-query/ref/SHA guards and the preserved `2022-11-28` header.
+The full existing hosting package also passed before the final refinements.
+
+The coordinator accepted this coherent protocol increment's size exception
+(thirteen endpoint shapes plus hostile fixtures); no artificial partial-reader
+split is used. Required aggregate verification and independent exact-source
+review follow the frozen candidate. No artifact/site/image build, install,
+publication, hosted acceptance, deployment or repository setting change ran.
+
+### T007–T008 independent review corrections
+
+The first frozen reader candidate `ec6b83313452025450e86005b49779d5a7387d14`
+passed full normal/race Go suites, vet, module verification, formatting,
+architecture/docs checks and 81 Python source tests. The exact Hugo packaging
+method was asserted excluded; Node was unavailable. Independent strongest-tier
+review returned NOT CLEAR: one Medium and two Low findings. Body-read errors
+were all labeled limit, repository endpoint aliases escaped the canonical-path
+guard, and a report read dereferenced a missing API client after typed refusal.
+All findings require correction; none is accepted as a residual limitation.
+
+Review regressions reproduced parent cancellation labeled limit, truncation
+labeled limit, successful-body internal deadline labeled cancellation,
+cancellation racing a denied HTTP response, all three endpoint aliases and the
+nil-client report panic. The common stop check now gives parent cancellation
+precedence, distinguishes the operation deadline/body cap from transport I/O
+failure, and runs after both HTTP and body reads. Canonical endpoint parsing
+rejects trailing slash and bare query separators. Failed report reads return
+before accessing API configuration. Source identity explicitly includes host.
+A further test-first normalization control exposed JSON escaping expansion;
+finished typed values now also enforce the one MiB normalized bound.
+
+Focused Ready fixtures pass, including every review regression. Local receipts
+are `/tmp/stw-ready-sources-review-{red,green}.log` and
+`/tmp/stw-ready-sources-normalized-red.log`; the reviewer separately retained
+independent repros. The corrected exact revision still needs full source
+verification and the same reviewer's recheck. No hosted operation or build ran.
