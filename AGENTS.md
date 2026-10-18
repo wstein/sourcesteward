@@ -39,3 +39,12 @@ Agents push only their own topic branches and open pull requests for reviewed
 work within the requested task. They never push the default branch or tags, never
 merge, and never rewrite commits they did not author. The owner merges. A containing
 workspace may add owner-workflow rules in its own `AGENTS.md`; follow them when present.
+
+Agent-created pull request and issue bodies end with
+`🤖 Generated with [<tool name>](<official tool URL>)`, naming the actual tool that
+originated the body. For Claude Code, use
+`🤖 Generated with [Claude Code](https://claude.com/claude-code)`; for Codex, use
+`🤖 Generated with [Codex](https://openai.com/codex/)`. For other tools, use the actual
+product name and a known official URL; if no official URL is known, use the plain
+tool name without inventing a URL. Existing session-link and commit-attribution
+policies remain unchanged.
