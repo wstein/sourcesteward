@@ -136,3 +136,135 @@ Documentation, architecture, formatting and whitespace checks passed again.
 The previous candidate remains preserved locally; the corrected candidate
 requires the same independent reviewer's exact-revision recheck. No source
 CLEAR or deployment proof is claimed by this correction.
+
+## T005–T006 pure result and reduction increment
+
+The bounded source increment `6a54918569b58ac573f15df68b5d7fa55fc71150` starts
+from reviewed input increment `75b897cf8b4f5c9923b5c92feed5bb88ce4696a9` and
+implements only result construction, component reduction and purity guards.
+The accepted full-artifact design remains
+`51a9015c5912d221e3d3e9fdafb2811c9572aff0`. No T009/T011 review authentication,
+CI/constraint/deployment predicate, hosting collector, CLI, published schema or
+publisher is implemented by this scaffold. Caller-supplied passing component
+projections are test inputs, not authenticated review evidence or installed-gate
+acceptance. T005–T006 still require independent exact-source review and the
+coordinated full source/race check before final handoff.
+
+`Evaluate(policy, sample)` returns an immutable `Result` and an error. Invalid
+operation timestamps or native JSON snapshots return an error and no result
+bytes; the evaluator never invents an observation time. Valid operational-error
+samples retain a contract result with `decision=error`, incomplete boundary and
+incomplete review. Other reductions preserve known failures alongside unknown
+components; incomplete passing components cannot pass. Only an undeployed
+policy permits deployment `not-required`. Reasons follow the documented family
+and code order, with repeated subjects sorted by UTF-8 bytes and source ties
+ordered deterministically. Raw GitHub booleans remain nullable display metadata
+here; future explicit predicates own their meaning.
+
+Native identity uses an operation-supplied defensive `json.RawMessage` snapshot
+of the existing `inspection.Result` representation. Git/jj fixture comparisons
+preserve native fields, including jj change/commit/operation identities and
+observation limits. Strict JSON/object/backend validation proves no native
+resolution or source authenticity. Typed native adaptation belongs to the
+future hosting operation boundary: importing `internal/inspection` here would
+also import its external-state capabilities. Backend and identity can be null
+only for early operational failure. `Value` and `RawJSON` return fresh copies;
+mutation tests cover supplied and returned nested slices, pointers and bytes.
+Runtime attestation is always `unavailable`, independent of configured metadata.
+
+Purity uses a closed reviewed value-library import allowlist, across all
+readiness source files and subpackages, plus Go syntax-tree checks restricting
+`fmt` to `Errorf`/`Sprintf`, refusing built-in output and bodyless functions.
+The guard refuses clock, filesystem, process, environment, network, unsafe,
+cgo, foreign source, linkname and hidden project/third-party adapter imports.
+Tests may use native fixtures and filesystem helpers. Standard-library internal
+dependencies alone are not effects: `encoding/json` and the existing parser's
+value-formatting APIs transitively import packages with broader capabilities.
+The guard therefore checks direct usable imports/APIs instead of rejecting that
+entire standard-library closure. No callbacks or interface-valued operation
+fields enter evaluation.
+
+TDD evidence is retained in local `/tmp/stw-ready-evaluator-*.log` receipts:
+
+- Missing result APIs first failed compilation. A permissive typed scaffold
+  then failed behavior assertions for unknown/incomplete/failed/error reduction,
+  installed deployment `not-required`, missing UTC timestamps and reason order.
+- Purity fixtures initially accepted forbidden imports; alias/dot/blank and
+  hidden-subpackage variants now refuse. Separate RED fixtures exposed foreign
+  source suffix gaps and built-in `print`/`println`, then passed after guards.
+- Further RED fixtures exposed error-boundary completeness, invalid UTF-8 raw
+  merge state and valid explicit UTC `+00:00` handling. The final implementation
+  passes those controls, including `Z`, leap-day and fractional timestamps,
+  while rejecting unknown `-00:00` and non-UTC offsets.
+- `go test ./internal/readiness -count=1`, 12 Python architecture tests,
+  `python3 -B scripts/check-architecture.py`,
+  `python3 -B scripts/check-docs.py` and `git diff --check` passed (exit 0).
+
+Full normal/race checks are queued with the coordinator, not claimed complete.
+The required aggregate `make check` contains an actual Hugo packaging test
+requiring separate owner build approval; that exact method will be asserted
+excluded while other source tests run. Node is unavailable in this environment;
+theme tests are consequently unavailable. No artifact/site/image build,
+installation, hosted acceptance, publication, settings change or API write ran.
+
+### T005–T006 independent review corrections
+
+Independent strongest-tier review of exact
+`08ff6a50ffb2d5c4cbf3cdb76c0d48bf72361537` returned NOT CLEAR: two Medium
+findings, no Low. Current evaluator entry inputs were concrete, but the guard
+accepted hypothetical public callbacks and `io.Reader`/`io.Writer`, custom
+JSON marshaler and Stringer inputs. The review executed an accepted custom
+marshaler that wrote a temporary file. The guard also accepted parenthesized
+`(println)(...)`, which compiled and produced output. These were guard defects;
+the review did not identify an implemented evaluator semantic failure.
+
+Regression tests first failed for all thirteen public capability examples and
+parenthesized output. The corrected guard type-checks each complete readiness
+package and recursively inspects exported functions, variables, value types and
+method sets, including aliases, private nested fields, promoted methods,
+recursive containers and generic exposures. Public values must be concrete and
+capability-free; returned callable/interface capabilities refuse too. Built-in
+`error` remains permitted only as an outbound diagnostic result. The existing
+concrete `json.RawMessage` snapshot is retained by exact type identity, including
+its standard-library alias representation, without admitting arbitrary
+marshaler implementations. Internal parser interfaces and pure concrete
+JSON/formatting calls remain supported. Call classification now unwraps nested
+parentheses before refusing either built-in output function.
+
+Both focused regression groups pass. Separate temporary Go overlays disabling
+public-API checking or parenthesis unwrapping each compiled and failed the
+corresponding rejection assertions (exit 1); no product source was mutated.
+Receipts are `/tmp/stw-ready-evaluator-review-fixes-red.log`,
+`/tmp/stw-ready-evaluator-review-fixes-green.log` and
+`/tmp/stw-evaluator-guard-mutants-eydxhcq6/`. Corrected targeted readiness,
+Python architecture, and complete architecture checks passed (exit 0).
+The candidate requires the same independent reviewer's exact-revision recheck.
+Full normal/race checks remain queued behind the coordinator's active gate;
+no aggregate suite, build, installation or hosted operation ran in this fix.
+
+The same reviewer rechecked exact
+`7cb54e621183c1a0451e408fa0423daaa028d7a2`: parenthesized output was closed,
+but the capability finding remained Medium. An `error` return could hide a
+private concrete implementation with exported `Invoke(func())`; an external
+type assertion recovered that method and executed a file-writing callback.
+Allowing the interface solely because it was an outbound error was insufficient.
+
+Eleven otherwise-valid error-mediated rejection fixtures first failed for
+value/pointer methods, error/result aliases, callback fields, nested recursive
+containers and readers, generic instances/methods, promoted methods and
+anonymous error values. The guard now audits every package-local concrete error
+implementation and its pointer method set, including private named types and
+anonymous/instantiated expression types, using the same recursive value and
+method checks before permitting the diagnostic interface result. This bounded
+audit requires no factory body-flow inference. Pure standard-library error
+outputs and concrete local string-only value/pointer errors remain accepted.
+No production evaluator or input-parser behavior changed.
+
+The eleven rejections and four accepted controls pass. A temporary overlay
+disabled only the concrete-error audit: it compiled, then failed the intended
+rejection tests (exit 1). Receipts are
+`/tmp/stw-ready-evaluator-error-capabilities-{red,green}.log` and
+`/tmp/stw-evaluator-error-mutant-7yjxbgs3/result.log`. Corrected readiness and
+complete architecture checks passed (exit 0); exact-source review and the
+coordinated aggregate verification remain pending. No aggregate/build/install
+or hosted operation ran in this correction.
