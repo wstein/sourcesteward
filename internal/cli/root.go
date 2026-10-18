@@ -85,6 +85,10 @@ func exitStatus(stderr io.Writer, err error) int {
 	if errors.As(err, &releaseFindings) {
 		return report(stderr, err, 3)
 	}
+	var releasePlan releasePlanFailed
+	if errors.As(err, &releasePlan) {
+		return report(stderr, err, 3)
+	}
 	return report(stderr, err, 2)
 }
 

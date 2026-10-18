@@ -1,0 +1,384 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/release-plan.schema.json",
+  "title": "SourceSteward release plan (schema 1)",
+  "description": "Read-only release gates and descriptive argv. No command in would_build is executed. Gate codes are append-only; unknown properties are additive extensions. Usage errors emit no JSON.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "mode",
+    "backend",
+    "subject",
+    "allowlist_matches",
+    "gates",
+    "verdict",
+    "would_build",
+    "would_publish",
+    "network",
+    "advisories",
+    "boundary",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "release-plan"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "refused",
+        "error"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "build",
+        "publish"
+      ]
+    },
+    "backend": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "product",
+        "commit",
+        "tag",
+        "tag_commit",
+        "record_commit",
+        "version",
+        "main_ref"
+      ],
+      "properties": {
+        "product": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tag_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "record_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "main_ref": {
+          "type": "object",
+          "required": [
+            "remote",
+            "commit",
+            "fetched"
+          ],
+          "properties": {
+            "remote": {
+              "type": "string"
+            },
+            "commit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "fetched": {
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "outcome",
+          "reason",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "outcome": {
+            "enum": [
+              "pass",
+              "fail",
+              "not-run",
+              "not-applicable"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "fail",
+        "incomplete"
+      ]
+    },
+    "would_build": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "scope",
+          "network",
+          "network_hosts",
+          "lock_files",
+          "invocations"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "once",
+              "per-target"
+            ]
+          },
+          "network": {
+            "enum": [
+              "none",
+              "fetch"
+            ]
+          },
+          "network_hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lock_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "invocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "target",
+                "argv"
+              ],
+              "properties": {
+                "target": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "argv": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "would_publish": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "network": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "method",
+          "endpoint"
+        ],
+        "properties": {
+          "method": {
+            "const": "GET"
+          },
+          "endpoint": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "advisories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "state",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "const": "tag-ruleset"
+          },
+          "state": {
+            "enum": [
+              "present",
+              "partial",
+              "absent",
+              "unknown"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "effects",
+        "limits",
+        "complete"
+      ],
+      "properties": {
+        "effects": {
+          "type": "object",
+          "required": [
+            "network",
+            "writes",
+            "processes",
+            "project_commands"
+          ],
+          "properties": {
+            "network": {
+              "const": false
+            },
+            "writes": {
+              "const": false
+            },
+            "processes": {
+              "enum": [
+                "detection",
+                "detection+reads"
+              ]
+            },
+            "project_commands": {
+              "const": false
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "required": [
+            "max_bytes",
+            "max_findings"
+          ],
+          "properties": {
+            "max_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_findings": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "allowlist_matches": {
+      "description": "Conservative tracked-leaf reach of every declared pattern in order, including zero; null when unavailable. Counts are not publication eligibility.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "required": [
+          "pattern",
+          "tracked_files"
+        ],
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "tracked_files": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
