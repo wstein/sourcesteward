@@ -42,7 +42,8 @@ Actual captured logs, command exits and range-diff for exact checked revision `8
 
 ## Accepted full-artifact gate and bounded input increment
 
-The coordinator relayed independent full-artifact FINAL CLEAR on exact design
+On 2026-10-18 the coordinator relayed independent `crewbook/review` full-artifact
+FINAL CLEAR (configured strongest tier, `gpt-6-astra`/high) on exact design
 `51a9015c5912d221e3d3e9fdafb2811c9572aff0`, covering the specification,
 plan, research, data model, contracts, examples, tasks and traceability: zero
 open findings, including Low. This completes the implementation design gate;
@@ -65,3 +66,73 @@ shape baseline. Existing hosting schema/fixture bytes and behavior are preserved
 
 No T005+ evaluator, transport, CLI or publisher capability is implemented by this
 increment. Fictitious examples establish shape only and grant no actual trust.
+
+### T001–T004 source evidence
+
+The bounded implementation adds standard-library strict token parsing and typed
+immutable wrappers. `ParsePolicy`, `ParseLock` and `ParseReport` validate shape;
+`Value` returns a fresh deep snapshot, `RawJSON` returns a defensive byte copy,
+and `SHA256` hashes every original byte, including whitespace and lock transition.
+These APIs prove no issuer authenticity, policy semantics, deployment authority
+or runtime model identity. Cross-document and history predicates remain T009+.
+
+TDD evidence: `go test ./internal/readiness -count=1` initially exited 1 for
+missing parser APIs. With permissive typed scaffolding, the focused syntax/shape
+suite exited 1 for accepted duplicate/escaped/nested keys, null roots, malformed
+UTF-8/surrogates, depth, byte caps and closed-schema violations. Strict guards
+then made it pass. Final independent-schema negative counts are policy 219,
+lock 156 and report 178 (553 total), plus accepted enum, nullable, numeric,
+string and maximum-array boundaries. These are regression fixtures, not an
+independent source review. Depth 16 is accepted and 17 refused before nested
+container allocation. JSON Schema string lengths count Unicode code points;
+the command contract additionally caps each decoded string at 2,048 UTF-8 bytes.
+Tests cover both bounds, valid surrogate pairs and exact document-size limits.
+
+Checks on the unchanged production increment passed with Go 1.27.2 linux/arm64
+and Python 3.13.5, under `umask 022`:
+
+- `go test ./...` and `go test -race ./...` (exit 0); after final test-only boundary
+  additions, `go test ./internal/readiness -count=1` and
+  `go test -race ./internal/readiness -count=1` also passed (exit 0).
+- `go vet ./...`, `go mod verify`, gofmt, `git diff --check`,
+  `python3 -B scripts/check-docs.py` (266 documents) and
+  `python3 -B scripts/check-architecture.py` passed (exit 0).
+- 79 Python source tests passed (exit 0). The selector asserted exactly one
+  exclusion, `test_docs.DocumentationTests.test_packaging_excludes_source_and_binds_revision`,
+  before execution because it performs an actual Hugo build. Other schema/site
+  tests used source or temporary HTML fixtures, not an actual site build.
+
+`make check` was not invoked wholesale because its Python discovery includes
+that unauthorized build and Node is unavailable. Its authorized source checks
+were run individually; the Node theme tests remain unrun. Minimum-version and
+hosted lanes, source independent review and all deployment acceptance remain
+pending. Local captured RED/full Go/race/shape logs were retained for handoff;
+no permanent remote evidence archive is claimed. No distribution, image, CLI
+installation, actual Hugo site build, push or publication occurred.
+
+### Independent source review correction: array-limit isolation
+
+Independent `crewbook/review` returned NOT CLEAR on
+`057a10b7d682c756cd1f9da0eac9856d363bf412`: one Medium, zero other findings,
+including Low. The over-limit array fixtures repeated identical items, so
+uniqueness rejection masked the array upper-bound guard. Removing only that
+guard left the original parser suite green. This was a test-evidence gap;
+no production parser defect was identified by that review.
+
+The same author corrected tests only: each of the twelve approved array limits
+now has distinct otherwise-valid max+1 items, an independent schema error tree
+assertion requiring exactly one `maxItems` failure and no other leaf failure,
+and an accepted exact-max control under both schema oracle and parser. Counts
+remain policy 219, lock 156 and report 178 negatives (553 total); twelve existing
+negatives now isolate cardinality instead of also violating uniqueness.
+
+A temporary Go overlay removed only `|| int64(len(a)) > s.max` without editing
+production files. `go test -overlay <temporary-overlay> ./internal/readiness
+-count=1` exited 1 with exactly twelve `max-items` failures (eight policy, four
+report). Without the overlay, focused normal/race parser and compatibility
+checks passed. Production `parse.go`, `policy.go` and `report.go` are byte-identical
+to the reviewed candidate, allowing its full Go/race evidence to remain applicable.
+Documentation, architecture, formatting and whitespace checks passed again.
+The previous candidate remains preserved locally; the corrected candidate
+requires the same independent reviewer's exact-revision recheck. No source
+CLEAR or deployment proof is claimed by this correction.
