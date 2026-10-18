@@ -504,6 +504,9 @@ func resolveCandidates(tree Tree, candidates []string) (found []declaredInput, f
 			case e.Kind == "symlink":
 				found = append(found, declaredInput{p, false, "a symlink on the way to a path named in an argument vector"})
 				target := e.Target
+				if target == "" {
+					return nil, false, fmt.Errorf("cannot resolve empty symlink target at %q", p)
+				}
 				w.hops++
 				resolved := path.Join(path.Dir(p), target)
 				if w.hops > maxSymlinkHops || strings.HasPrefix(target, "/") || resolved == ".." || strings.HasPrefix(resolved, "../") || resolved == "." {

@@ -122,7 +122,7 @@ func TestCheckHasNoEffectOnAJJWorkspace(t *testing.T) {
 					t.Fatalf("working-tree form: %+v %q", result, codes(result))
 				}
 				refused := run(t, CheckOptions{Path: dir, Commit: strings.Repeat("a", 40)})
-				if refused.Status != "refused" || refused.Error.Code != "unsupported-backend" {
+				if refused.Status != "refused" || refused.Error.Code != "commit-unresolved" {
 					t.Fatalf("--commit: %+v", refused)
 				}
 				if after := jjState(t, dir, home); after != stateBefore {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,18 +100,37 @@ type gitSource struct {
 
 // newGitSource checks that the commit id names a commit object of the repository.
 func newGitSource(ctx context.Context, root, commit string) (*gitSource, error) {
-	// With --verify --quiet a missing object or a non-commit is a silent status 1; any other
-	// failure (a repository that cannot be read) is a read failure, not a missing commit.
-	_, _, status, err := gitOutput(ctx, root, 64, "", "rev-parse", "--verify", "--quiet", commit+"^{commit}")
+	// Inspect the exact object, not a peeled revision: a tag id must never be
+	// reported or substituted into argv as though it were the commit it targets.
+	if !IsFullCommitID(commit) {
+		return nil, errCommitUnresolved
+	}
+	out, cut, status, err := gitOutput(ctx, root, 128, commit+"\n", "cat-file", "--batch-check")
 	if err != nil {
 		return nil, err
 	}
-	switch status {
-	case 0:
-	case 1:
+	if cut {
+		return nil, errReleaseLimit
+	}
+	if status != 0 {
+		return nil, fmt.Errorf("%w: cat-file --batch-check", errGitFailed)
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) == 2 && fields[0] == commit && fields[1] == "missing" {
 		return nil, errCommitUnresolved
+	}
+	if len(fields) != 3 || fields[0] != commit {
+		return nil, fmt.Errorf("%w: invalid object header", errGitFailed)
+	}
+	switch fields[1] {
+	case "blob", "tree", "tag":
+		return nil, errCommitUnresolved
+	case "commit":
 	default:
-		return nil, fmt.Errorf("%w: rev-parse", errGitFailed)
+		return nil, fmt.Errorf("%w: invalid object type", errGitFailed)
+	}
+	if size, err := strconv.ParseInt(fields[2], 10, 64); err != nil || size < 0 {
+		return nil, fmt.Errorf("%w: invalid object size", errGitFailed)
 	}
 	return &gitSource{ctx: ctx, root: root, commit: commit}, nil
 }
@@ -285,3 +305,133 @@ func gitToplevel(ctx context.Context, dir string) (string, error) {
 	}
 	return strings.TrimSuffix(string(out), "\n"), nil
 }
+
+// mainAncestry uses only the selected remote's locally recorded main. It never fetches.
+func (g *gitSource) mainAncestry(remote string) (MainRef, Gate, error) {
+	main := MainRef{Remote: remote}
+	id, err := g.recordedMain(remote)
+	if err != nil {
+		return main, Gate{}, err
+	}
+	if id != "" {
+		main.Commit = &id
+	}
+	notRun := func(reason string) (MainRef, Gate, error) {
+		return main, gate("commit-not-on-main", "not-run", reason, "no fetch was made"), nil
+	}
+	out, cut, status, err := gitOutput(g.ctx, g.root, 4096, "", "rev-parse", "--path-format=absolute", "--git-path", "info/grafts")
+	if err != nil || cut || status != 0 {
+		return main, Gate{}, fmt.Errorf("cannot resolve grafts path: %w", errGitFailed)
+	}
+	_, err = os.Lstat(strings.TrimSuffix(string(out), "\n"))
+	if err == nil {
+		return notRun("grafts-present")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return main, Gate{}, err
+	}
+	out, cut, status, err = gitOutput(g.ctx, g.root, 64, "", "rev-parse", "--is-shallow-repository")
+	if err != nil || cut || status != 0 {
+		return main, Gate{}, fmt.Errorf("cannot read shallow state: %w", errGitFailed)
+	}
+	if strings.TrimSpace(string(out)) == "true" {
+		return notRun("shallow-clone")
+	}
+	if id == "" {
+		return notRun("main-ref-absent")
+	}
+	_, cut, status, err = gitOutput(g.ctx, g.root, 64, "", "merge-base", "--is-ancestor", g.commit, id)
+	if err != nil {
+		return main, Gate{}, err
+	}
+	if cut || status > 1 {
+		return main, Gate{}, errGitFailed
+	}
+	outcome := "pass"
+	if status == 1 {
+		outcome = "fail"
+	}
+	return main, gate("commit-not-on-main", outcome, "", "recorded locally; no fetch was made"), nil
+}
+
+// recordedMain samples the local ref even when ancestry must remain not-run.
+func (g *gitSource) recordedMain(remote string) (string, error) {
+	if remote == "" {
+		return "", nil
+	}
+	out, cut, status, err := gitOutput(g.ctx, g.root, 66, "", "rev-parse", "--verify", "--quiet", "refs/remotes/"+remote+"/main^{commit}")
+	if err != nil {
+		return "", err
+	}
+	if status == 1 {
+		return "", nil
+	}
+	id := strings.TrimSpace(string(out))
+	if cut || status != 0 || !IsFullCommitID(id) {
+		return "", errGitFailed
+	}
+	return id, nil
+}
+
+// pathEntry reads exact tree metadata without attributes, symlink traversal or checkout filters.
+func (g *gitSource) pathEntry(path string) (sourceEntry, int64, error) {
+	out, cut, status, err := gitOutput(g.ctx, g.root, gitTreeListLimit, "", "ls-tree", "-z", "-l", g.commit, "--", path)
+	if err != nil {
+		return sourceEntry{}, 0, err
+	}
+	if cut {
+		return sourceEntry{}, 0, errReleaseLimit
+	}
+	if status != 0 {
+		return sourceEntry{}, 0, errGitFailed
+	}
+	for _, rec := range bytes.Split(out, []byte{0}) {
+		meta, name, ok := bytes.Cut(rec, []byte{'\t'})
+		if !ok || string(name) != path {
+			continue
+		}
+		fields := strings.Fields(string(meta))
+		if len(fields) != 4 {
+			return sourceEntry{}, 0, errGitFailed
+		}
+		e := sourceEntry{Name: path, id: fields[2], Kind: "other"}
+		if fields[0] == "100644" || fields[0] == "100755" {
+			e.Kind = "file"
+		}
+		n, _ := strconv.ParseInt(fields[3], 10, 64)
+		return e, n, nil
+	}
+	return sourceEntry{Name: path}, 0, nil
+}
+
+func (g *gitSource) commitTime() (string, error) {
+	out, cut, status, err := gitOutput(g.ctx, g.root, MaxContractBytes, "", "cat-file", "commit", g.commit)
+	if err != nil {
+		return "", err
+	}
+	if cut {
+		return "", errReleaseLimit
+	}
+	if status != 0 {
+		return "", errGitFailed
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if line == "" {
+			break
+		}
+		if strings.HasPrefix(line, "committer ") {
+			f := strings.Fields(line)
+			if len(f) < 3 {
+				break
+			}
+			epoch := f[len(f)-2]
+			if _, e := strconv.ParseInt(epoch, 10, 64); e == nil {
+				return epoch, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("invalid commit timestamp")
+}
+
+// outputDirectory is descriptive only; plan never creates it.
+func outputDirectory(root string) string { return filepath.Join(root, "dist", "release") }

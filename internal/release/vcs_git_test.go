@@ -3,12 +3,58 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestCommitSourcesRequireExactCommitObject(t *testing.T) {
+	for _, format := range []string{"sha1", "sha256"} {
+		t.Run(format, func(t *testing.T) {
+			dir := t.TempDir()
+			git(t, dir, "init", "-q", "-b", "main", "--object-format="+format)
+			write(t, dir, ".stw/release.toml", exampleBytes(t, "go-cli"))
+			commit := commitAll(t, dir)
+			git(t, dir, "remote", "add", "origin", "https://github.com/example/test.git")
+			git(t, dir, "update-ref", "refs/remotes/origin/main", commit)
+			git(t, dir, "tag", "-a", "v1.2.3", "-m", "fixture", commit)
+			for _, tc := range []struct {
+				name, id string
+				valid    bool
+			}{
+				{"commit", commit, true},
+				{"annotated tag", git(t, dir, "rev-parse", "refs/tags/v1.2.3"), false},
+				{"tree", git(t, dir, "rev-parse", commit+"^{tree}"), false},
+				{"blob", git(t, dir, "rev-parse", commit+":.stw/release.toml"), false},
+				{"missing", strings.Repeat("0", len(commit)), false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					source, err := newGitSource(context.Background(), dir, tc.id)
+					checked := Check(context.Background(), CheckOptions{Path: dir, Commit: tc.id})
+					planned := Plan(context.Background(), PlanOptions{Path: dir, Subject: tc.id, Version: "v1.2.3"})
+					if tc.valid {
+						if err != nil || source == nil || source.commit != commit || checked.Status != "ok" || checked.Commit != commit || planned.Status != "ok" || planned.Subject.Commit == nil || *planned.Subject.Commit != commit {
+							t.Fatalf("actual commit not preserved: source=%+v err=%v check=%+v plan=%+v", source, err, checked, planned)
+						}
+					} else {
+						if !errors.Is(err, errCommitUnresolved) {
+							t.Errorf("non-commit source accepted: %+v %v", source, err)
+						}
+						if checked.Status != "refused" || checked.Error == nil || checked.Error.Code != "commit-unresolved" {
+							t.Errorf("check accepted non-commit: %+v", checked)
+						}
+						if planned.Status != "refused" || planned.Error == nil || planned.Error.Code != "commit-unresolved" || len(planned.WouldBuild) != 0 {
+							t.Errorf("plan accepted non-commit: %+v", planned)
+						}
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestGitOutputIsCapped(t *testing.T) {
 	dir := repoWith(t, map[string][]byte{"big": []byte(strings.Repeat("x", 1000))})

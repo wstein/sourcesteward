@@ -259,8 +259,8 @@ Placeholders are a closed set; any other brace expression, or a placeholder not 
 
 | Command | Git | jj (standalone, colocated, secondary workspace) |
 | --- | --- | --- |
-| `check` | supported (file read; `--commit` reads the blob, also in a bare repository) | supported; working-tree file read directly (measured with jj 0.46.0 and 0.45.1); `--commit` through the existing jj read-only runner is **staged to T015 (WI3)** and is `unsupported-backend` until then |
-| `plan <commit>` | supported (ancestry against `refs/remotes/<remote>/main`) | supported through jj's documented interface (ancestry as the revset `C & ::main@<remote>`, tree lookup, diff); unverified (jj is not installed where this specification was written) |
+| `check` | supported (file read; `--commit` reads the blob, also in a bare repository) | supported; working-tree file read directly; committed regular files through the operation-pinned read-only runner (source tests on jj 0.46.0 and 0.45.1); declared input resolution reaching a committed symlink refuses `unsupported-backend` (target capability unavailable) |
+| `plan <commit>` | supported (ancestry against `refs/remotes/<remote>/main`) | supported subset through the operation-pinned read-only runner (local main ancestry and admitted tree reads); declared input resolution reaching a committed symlink refuses `unsupported-backend`; no full symlink-dependent planning acceptance |
 | `plan <tag>`, `verify` (including `--record-commit`, `--published`), `dispatch --tag` | supported | `unsupported-backend`: the annotation check needs the tag object, which jj is not known to expose through a documented interface (unverified); use a Git-owned checkout or the CI run |
 | `record` | supported | supported (reads C's tree through jj; `--write` creates one file that jj snapshots on its next command, disclosed) |
 | `dispatch` | supported (repository identity via hosting resolution) | supported (hosting resolution is native for both) |
@@ -268,6 +268,8 @@ Placeholders are a closed set; any other brace expression, or a placeholder not 
 | `build --mode local-verify` | supported (tree-object export) | `unsupported-backend` |
 | GitButler-managed | `unsupported-backend`, except `check` of the working-tree file | |
 | Ambiguous ownership | `ambiguous-backend` | |
+
+Native jj committed input resolution has a measured capability limit: if resolving a declared argument path reaches a symlink, its target is unavailable through the admitted native interface. `check --commit` and `plan <commit>` then return `status: refused`, `unsupported-backend`, exit 1 and `boundary.complete: false`, with detail `native jj committed symlink input resolution unavailable`. This is unavailable evidence, not invalid configuration: `config-invalid` is absent or `not-run`, never `pass` or `fail` for this refusal. An empty allowlist does not bypass the refusal. Unrelated symlinks remain admitted for tree inventory and pattern-reach counting. No full jj planning acceptance is claimed for symlink-dependent inputs.
 
 ### Limits (normative)
 
@@ -280,7 +282,8 @@ Placeholders are a closed set; any other brace expression, or a placeholder not 
 | Artifact size hashed by `verify` and `record` | 2 GiB each, streamed | `release-limit` |
 | Tags/releases listing | 10 pages, 1,000 records (the hosting caps) | `release-limit` |
 | Native jj readiness emptiness | no file-size cap; stdout consumed and discarded with one retained boolean; existing ten-second session deadline and 64 KiB retained stderr; final state resampling required | operational failure, cancellation, or `release-limit` on stderr overflow; never a passing gate |
-| Other Git output | the existing inspection runner cap (64 KiB per stream); blobs read for the contract, record and version file are limited by their own rows above | `release-limit` |
+| Allowlist reach metadata | Git streams tracked leaf paths with one 4,096-byte path buffer plus delimiter and at most 256 counters under the existing 30-second deadline; no total repository-count or byte-volume cap; clean EOF and successful exit required. jj reuses already admitted tree entries. | `release-limit` for a path exceeding the bound; operational failure/cancellation otherwise; counts unavailable on failure |
+| Other Git output | the existing inspection runner cap (64 KiB per stream), excluding the streamed allowlist reach row above; blobs read for the contract, record and version file are limited by their own rows above | `release-limit` |
 | Project command output | 1 MiB retained per stream, the rest discarded with a note | noted, not a failure |
 | Products per repository | 64 contract files | `limit-exceeded` (check), `release-limit` elsewhere |
 | Deadlines | 30 s local commands; 120 s online `plan`/`verify` excluding artifact hashing; 60 s per `gh attestation verify` | `online-unavailable` or `canceled` |
