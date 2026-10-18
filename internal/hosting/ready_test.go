@@ -166,6 +166,47 @@ func TestReadyCollectionIncompleteSourcesNeverPass(t *testing.T) {
 		}
 	}
 }
+func TestReadyCollectionMalformedAndUntrustedProof(t *testing.T) {
+	for _, kind := range []string{"missing-creator", "missing-author", "foreign-creator", "foreign-author", "wrong-comment-issue", "bad-locator", "newer-foreign", "wrong-files"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newCollectionFixture(t)
+			switch kind {
+			case "missing-creator":
+				f.routes[collectionStatuses] = strings.Replace(f.routes[collectionStatuses], `"creator":{"id":456},`, "", 1)
+			case "foreign-creator":
+				f.routes[collectionStatuses] = strings.Replace(f.routes[collectionStatuses], `"id":456`, `"id":999`, 1)
+			case "missing-author":
+				f.routes[collectionReport] = strings.Replace(f.routes[collectionReport], `,"user":{"id":456}`, "", 1)
+			case "foreign-author":
+				f.routes[collectionReport] = strings.Replace(f.routes[collectionReport], `"id":456`, `"id":999`, 1)
+			case "wrong-comment-issue":
+				f.routes[collectionReport] = strings.Replace(f.routes[collectionReport], "issues/7", "issues/8", 1)
+			case "bad-locator":
+				f.routes[collectionStatuses] = strings.Replace(f.routes[collectionStatuses], "https://github.com/o/r/pull/7", "https://attacker.invalid/o/r/pull/7", 1)
+			case "newer-foreign":
+				newer := strings.Replace(strings.Trim(f.routes[collectionStatuses], "[]"), `"id":3,`, `"id":4,`, 1)
+				newer = strings.Replace(newer, `"id":456`, `"id":999`, 1)
+				f.routes[collectionStatuses] = strings.TrimSuffix(f.routes[collectionStatuses], "]") + "," + newer + "]"
+			case "wrong-files":
+				f.routes[collectionFiles] = `[]`
+			}
+			requireCollectionNonpass(t, f.collect(), "")
+			if kind == "bad-locator" && f.calls[collectionReport] != 0 {
+				t.Fatal("invalid locator caused report fetch")
+			}
+		})
+	}
+}
+
+func TestReadyCollectionDeletedForkKeepsNullableRepositoryIdentity(t *testing.T) {
+	f := newCollectionFixture(t)
+	f.routes[collectionPR] = mutateCollectionJSON(t, f.routes[collectionPR], func(v map[string]any) { v["head"].(map[string]any)["repo"] = nil })
+	f.routes[collectionOpen] = "[" + f.routes[collectionPR] + "]"
+	got := f.collect()
+	if got.Review.State != "pass" || !got.Review.Complete || got.PullRequest.HeadRepositoryID != nil {
+		t.Fatalf("nullable head repository changed exact-head review semantics: %+v", got)
+	}
+}
 func TestReadyCollectionSingletonIncludesDraftAndOtherBases(t *testing.T) {
 	f := newCollectionFixture(t)
 	other := mutateCollectionJSON(t, f.routes[collectionPR], func(v map[string]any) { v["id"] = 12; v["number"] = 8; v["base"].(map[string]any)["ref"] = "other" })
@@ -364,6 +405,206 @@ func TestReadyCollectionBaselineRootsCannotApproveThemselves(t *testing.T) {
 				t.Fatalf("literal-root positive control failed: %+v", got)
 			}
 		})
+	}
+}
+
+func TestReadyCollectionUnrelatedCIAndEnumerationOrderDoNotAffectReview(t *testing.T) {
+	f := newCollectionFixture(t)
+	other := mutateCollectionJSON(t, f.routes[collectionPR], func(v map[string]any) {
+		v["id"] = 12
+		v["number"] = 8
+		v["head"].(map[string]any)["sha"] = strings.Repeat("c", 40)
+	})
+	f.routes[collectionOpen] = "[" + f.routes[collectionPR] + "," + other + "]"
+	f.change = func(path string, n int, raw string) (int, string) {
+		if n == 2 {
+			switch path {
+			case collectionOpen:
+				raw = "[" + other + "," + f.routes[collectionPR] + "]"
+			case collectionStatuses:
+				var rows []map[string]any
+				if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+					t.Fatal(err)
+				}
+				ci := map[string]any{}
+				for k, v := range rows[0] {
+					ci[k] = v
+				}
+				ci["id"] = 4
+				ci["context"] = "unrelated-ci"
+				ci["state"] = "pending"
+				raw = string(loaderJSON(t, append([]map[string]any{ci}, rows...)))
+			}
+		}
+		return 200, raw
+	}
+	got := f.collect()
+	if got.Review.State != "pass" || !got.Complete {
+		t.Fatalf("CI/order leaked into review: %+v", got)
+	}
+}
+
+func TestReadyCollectionEveryTransitionFieldDriftRevokesCompleteness(t *testing.T) {
+	seed := newCollectionFixture(t)
+	tr := transitionFixture(seed.lock)
+	var fields map[string]any
+	if err := json.Unmarshal(loaderJSON(t, tr), &fields); err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 9 {
+		t.Fatal("transition coverage changed")
+	}
+	for field := range fields {
+		t.Run(field, func(t *testing.T) {
+			f := newCollectionFixture(t)
+			l := f.lock
+			l.Transition = transitionFixture(l)
+			if err := os.WriteFile(f.lockPath, loaderJSON(t, l), 0600); err != nil {
+				t.Fatal(err)
+			}
+			f.change = func(path string, n int, raw string) (int, string) {
+				if path == collectionPR && n == 2 {
+					var value map[string]any
+					if err := json.Unmarshal(loaderJSON(t, l), &value); err != nil {
+						t.Fatal(err)
+					}
+					transition := value["transition"].(map[string]any)
+					switch x := transition[field].(type) {
+					case float64:
+						transition[field] = x + 1
+					case string:
+						transition[field] = strings.Repeat("4", len(x))
+					}
+					if err := os.WriteFile(f.lockPath, loaderJSON(t, value), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return 200, raw
+			}
+			got := f.collect()
+			requireCollectionNonpass(t, got, "")
+			if got.Complete || got.Review.Complete {
+				t.Fatal("transition drift retained completeness")
+			}
+		})
+	}
+}
+
+func TestReadyCollectionClosedPRSkipsUnnecessarySources(t *testing.T) {
+	f := newCollectionFixture(t)
+	f.routes[collectionPR] = mutateCollectionJSON(t, f.routes[collectionPR], func(v map[string]any) { v["state"] = "closed" })
+	got := f.collect()
+	requireCollectionNonpass(t, got, "pull-request-closed")
+	if len(f.calls) != 1 || f.calls[collectionPR] != 1 {
+		t.Fatalf("unnecessary closed-PR reads: %v", f.calls)
+	}
+}
+
+func (f *collectionFixture) replaceBaselinePolicy(change func(*readiness.PolicyData)) {
+	f.t.Helper()
+	policyPath := "/repos/policies/r/contents/.stw/ready-policy.json?ref=" + readySHA
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(f.routes[policyPath]), &envelope); err != nil {
+		f.t.Fatal(err)
+	}
+	raw, err := base64.StdEncoding.DecodeString(envelope["content"].(string))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	p, err := readiness.ParsePolicy(raw)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	pv := p.Value()
+	change(&pv)
+	raw = loaderJSON(f.t, pv)
+	envelope["content"] = base64.StdEncoding.EncodeToString(raw)
+	envelope["size"] = len(raw)
+	f.routes[policyPath] = string(loaderJSON(f.t, envelope))
+	f.lock.PolicySource.SHA256 = document(raw).Digest
+	if err := os.WriteFile(f.lockPath, loaderJSON(f.t, f.lock), 0600); err != nil {
+		f.t.Fatal(err)
+	}
+	var comment map[string]any
+	if err := json.Unmarshal([]byte(f.routes[collectionReport]), &comment); err != nil {
+		f.t.Fatal(err)
+	}
+	var report readiness.ReportData
+	if err := json.Unmarshal([]byte(comment["body"].(string)), &report); err != nil {
+		f.t.Fatal(err)
+	}
+	report.PolicySHA256 = f.lock.PolicySource.SHA256
+	body := string(loaderJSON(f.t, report))
+	comment["body"] = body
+	f.routes[collectionReport] = string(loaderJSON(f.t, comment))
+	var statuses []map[string]any
+	if err := json.Unmarshal([]byte(f.routes[collectionStatuses]), &statuses); err != nil {
+		f.t.Fatal(err)
+	}
+	statuses[0]["description"] = "stw-review-v1 sha256=" + document([]byte(body)).Digest
+	f.routes[collectionStatuses] = string(loaderJSON(f.t, statuses))
+}
+
+func TestReadyCollectionGenericProjectContextAndIssuerPins(t *testing.T) {
+	f := newCollectionFixture(t)
+	f.replaceBaselinePolicy(func(p *readiness.PolicyData) {
+		p.Review.Context = "project-specific-review"
+		p.Review.StatusCreatorIDs = []int64{714}
+		p.Review.ReportAuthorIDs = []int64{715}
+	})
+	f.routes[collectionStatuses] = strings.ReplaceAll(f.routes[collectionStatuses], "review/independent", "project-specific-review")
+	f.routes[collectionStatuses] = strings.Replace(f.routes[collectionStatuses], `"id":456`, `"id":714`, 1)
+	f.routes[collectionReport] = strings.Replace(f.routes[collectionReport], `"id":456`, `"id":715`, 1)
+	got := f.collect()
+	if got.Review.State != "pass" || !got.Review.Complete {
+		t.Fatalf("project trust values were hardcoded: %+v", got)
+	}
+}
+
+func TestReadyCollectionAdditionalBaselineRootsAndInvalidRules(t *testing.T) {
+	for _, root := range []string{"private-checker/", "../untrusted/", ""} {
+		t.Run(root, func(t *testing.T) {
+			f := newCollectionFixture(t)
+			f.replaceBaselinePolicy(func(p *readiness.PolicyData) { p.TrustRoots = []string{root} })
+			f.setFile("private-checker/auth.go", "")
+			code := "policy-transition-required"
+			if root != "private-checker/" {
+				code = "policy-invalid"
+			}
+			if root == "" { // Shape-invalid policy must fail before evaluating its roots.
+				requireCollectionNonpass(t, f.collect(), "")
+				return
+			}
+			requireCollectionNonpass(t, f.collect(), code)
+		})
+	}
+}
+
+func TestReadyCollectionFullAssociationPageBoundNeverProvesSingleton(t *testing.T) {
+	f := newCollectionFixture(t)
+	for page := 1; page <= 10; page++ {
+		rows := []map[string]any{}
+		for i := 0; i < 100; i++ {
+			var pr map[string]any
+			if err := json.Unmarshal([]byte(f.routes[collectionPR]), &pr); err != nil {
+				t.Fatal(err)
+			}
+			pr["id"] = page*100 + i + 100
+			pr["number"] = page*100 + i + 100
+			pr["head"].(map[string]any)["sha"] = strings.Repeat("c", 40)
+			if page == 1 && i == 0 {
+				pr["id"] = 11
+				pr["number"] = 7
+				pr["head"].(map[string]any)["sha"] = readySHA
+			}
+			rows = append(rows, pr)
+		}
+		f.routes[fmt.Sprintf("/repos/o/r/pulls?state=open&per_page=100&page=%d", page)] = string(loaderJSON(t, rows))
+	}
+	got := f.collect()
+	requireCollectionNonpass(t, got, "")
+	if got.Review.Complete || got.Complete || got.Evidence.Singleton {
+		t.Fatal("bounded prefix became a singleton proof")
 	}
 }
 
