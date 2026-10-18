@@ -26,8 +26,21 @@ The generated plan ID identifies a stored immutable record. A plan alone never g
 permission. Apply requires explicit `--authorize` and revalidates relevant source/base,
 registrations, destination and ownership. Changed or uncertain evidence refuses.
 
-Git creates a detached worktree and no branch. Executable checkout hooks, active filters, unsupported sparse,
-submodule or external-helper configurations refuse rather than silently bypassing helpers.
+Git creates a detached worktree and no branch. Ordinary checkouts, initialized submodule
+checkouts and separate-Git-directory checkouts, including their linked worktrees, require
+canonical native identities and matching `.git`, `commondir` and registration backlinks.
+A shared `core.worktree` must occur once directly in the common repository config and map
+back to the independently proven primary checkout; that primary can differ from a linked
+source. Configuration is never rewritten to admit a layout. Missing or aliased mapping
+metadata refuses with `git-layout-refused`; duplicate or external `core.worktree` origins
+refuse with `git-worktree-config-refused`. Other unsafe settings identify the matched rule
+without exposing its value. Executable hooks, active filters, unsupported sparse state,
+nested-submodule activation and external helpers retain their refusals.
+
+Literal layout/config bytes and physical identities are part of stale-plan evidence,
+including during completed creation verification. Replan historical records whose safety
+fingerprints no longer match. See [layout verification](../specs/010-isolated-task-workspaces/verification.md#issue-62-source-implementation)
+for measured source support and pending fresh CLI/version acceptance.
 jj creates a named native workspace and working-copy change; native operation metadata changes.
 Its isolated configuration and write sandbox deny network and undeclared writes. Source dirty
 and untracked work remains in the source workspace without snapshotting it or changing branches.

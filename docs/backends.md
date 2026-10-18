@@ -111,6 +111,13 @@ fallback, hook bypass or automatic cleanup is supported. See [task workspaces](w
 for command effects, capability refusals and bounds. Spec 010 acceptance is independent of
 historical read-only inspection/inventory evidence.
 
+Git layout admission separates the current checkout, its Git directory, common repository
+and primary checkout. Initialized submodule and separate-Git-directory checkouts and their
+linked worktrees use the same bounded reciprocal metadata proof throughout creation and
+tidy; a primary `core.worktree` value never transfers primary ownership to a linked task.
+Unsupported or ambiguous mappings refuse. [Workspace layout evidence](../specs/010-isolated-task-workspaces/verification.md#issue-62-source-implementation)
+distinguishes executed source tests from pending fresh CLI/version acceptance.
+
 ## Local reference tidy planning
 
 `stw tidy plan` supports bounded native Git branch and jj bookmark ancestry evidence against an

@@ -91,6 +91,15 @@ selected local bookmark, checks its own operation parent and full allowed refere
 abandons the underlying change. Remote-associated jj bookmarks remain retained. Neither backend
 fetches, pushes, runs hooks or garbage collects recovery roots.
 
+Git cleanup and owned retirement reuse the [workspace layout proof](workspaces.md), including
+initialized submodule and separate-Git-directory primary or linked sources. Replacing a
+layout pointer or common config, even with identical bytes and unchanged commit IDs, stales
+stored evidence. Apply rechecks before recovery and the next deletion/removal; an already
+created recovery root stays retained after refusal. A linked task never owns the primary
+checkout named by shared `core.worktree`. Layout admission grants no superproject, primary
+checkout or sibling metadata writes. Fresh CLI/version acceptance remains a separate
+[verification gate](../specs/010-isolated-task-workspaces/verification.md#issue-62-source-implementation).
+
 A durable journal is recorded before native effects. Human/JSON output identifies its location,
 recovery pins, action outcomes and limitations. Recovery roots remain after success and protect
 native committed identities; they do not back up untracked files, restore registrations/files or
