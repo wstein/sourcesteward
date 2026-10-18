@@ -261,7 +261,9 @@ for failing-first fixtures, native lane results, compiler-only Darwin checks and
 remaining limits. New result schemas remain unpublished and Spec 026 remains planned.
 
 Full source and race suites passed. Independent review of the exact final head,
-including the recorded target/image contract interpretation question, remains pending.
+after correcting the first review’s target binding, tag observation and isolated
+regression coverage findings, remains pending. The image repository clarification
+received independent assessment; it adds no network or publication effects.
 No product build, Hugo packaging, release, publication, owner tag or consumer activation
 was performed. Normal hosted workflows and later release operations retain their
 separate owner authorization requirements.

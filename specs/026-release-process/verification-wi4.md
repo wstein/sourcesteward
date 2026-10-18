@@ -2,11 +2,12 @@
 
 ## Candidate and scope
 
-Tested source/test candidate: `9535ecfe4f7987bf266c6cb730e7f52d695b83bf`, on the assigned
-`codex/release-offline-verify-record` worktree. This implements T018–T023 as a source
-candidate; independent review of the final evidence head remains required. Runtime
-source is unchanged since `af6990056ea7906a1660a68bc2f33327e2a108fd`; the final source
-commit adds checksum-line-boundary, malformed-tag-contract and raw-status fixtures. Spec 026 remains
+Corrected source/test candidate: `2cbc81c1513525bf7e468e2b542d51e17684598d`, on the
+assigned `codex/release-offline-verify-record` worktree. Independent review of the
+final corrected evidence head remains required. The first reviewed candidate
+`a6c9c5f096474d11f1937c4256061f29a23a907d` is preserved on the author's backup branch.
+It received NOT CLEAR (one High and two Medium findings); this candidate corrects
+those findings as recorded below. Spec 026 remains
 planned globally. No release, tag, publication, consumer activation, product artifact,
 image or documentation build was performed. Temporary Git tags, fixture files and
 compiler-generated test executables belong only to isolated source tests.
@@ -79,20 +80,25 @@ resampling, and applies no invented artifact-size cap to committed lock/tool-lis
 Fake-process tests reject late failure, stderr overflow, cancellation and closed/non-file
 readers; they do not establish native Darwin behavior.
 
-At the source candidate, vet, module verification, source architecture checks,
-formatting of all 32 changed Go files and whitespace checks passed. Source documentation
-checks passed with 254 authored documents before this evidence file. The Python suite
-passed 81 tests after asserting that exactly
+At the corrected source/test candidate, architecture checks, all-Go formatting,
+whitespace checks and source documentation checks passed (255 authored documents).
+The Python suite passed 81 tests after asserting that exactly
 `test_docs.DocumentationTests.test_packaging_excludes_source_and_binds_revision` was
 excluded and absent before execution. That existing test performs a real Hugo build,
 which remains unauthorized; raw `make check` was therefore not run.
 
-Full `go test ./...` and `go test -race ./...` passed at the tested source/test
-candidate, offline with `GOPROXY=off GOSUMDB=off`. The release package completed in
-72.011 seconds and 67.393 seconds respectively. Vet, module, architecture, Python and
-Darwin compiler checks above ran on the identical runtime source before the final
-three test fixtures; those new fixtures also passed a targeted race run. The final
-evidence commit changes only Markdown task/progress/evidence records.
+At the corrected candidate, full `go test ./...`, full `go test -race ./...`,
+`go vet ./...` and `go mod verify` passed with `GOPROXY=off GOSUMDB=off`.
+The release package completed normal tests in 68.404 seconds and race tests in
+75.454 seconds. Two final target-boundary mutation probes overlapped the first race
+invocation; after their restoration, `git diff --exit-code HEAD -- cmd internal
+schemas go.mod go.sum` proved exact committed source/test bytes and the full race
+invocation passed again (cached). No source mutation occurred during that final run.
+The final evidence commit changes only Markdown progress/evidence files.
+
+The initial candidate's full Go and race suites also passed; the independent review
+nevertheless demonstrated the three defects and insufficiently orthogonal fixtures.
+Those passing historical suites are not evidence that those defects were covered.
 
 Compiler-only test fixture checks passed for Darwin arm64 and amd64 at the source
 candidate. The fixtures were not run. Native Darwin, Linux amd64, Git 2.46, external
@@ -107,30 +113,56 @@ dependency-test modules (`heredoc`, `gock`, `x/tools`, `check.v1`). No download 
 or made. The one directness classification was applied manually and module verification
 passed; a complete tidy check is not claimed.
 
-## Independent review focus: target and image semantics
+## First independent review and executed corrections
 
-The coordinator recorded a contract interpretation question for independent review;
-no behavior or coverage expansion is claimed here. The record command procedure in
-[record-command.md](contracts/record-command.md), lines 18–28, requires derivation
-from the contract and hash-checked manifest. The semantic field list in
-[record.md](contracts/record.md), lines 62–70, does not explicitly enumerate asset
-target closure or image repository agreement.
+The first exact-head review at `a6c9c5f096474d11f1937c4256061f29a23a907d`
+reported one High and two Medium findings, with no Low findings:
 
-`internal/release/record_command.go`, lines 194–219, copies manifest assets, derives
-file URLs and image tags, and derives image repositories and source hashes when a
-matching target exists. `internal/release/record_validate.go`, lines 75–98, checks
-file identity/hash/URL and image tags without an explicit target-closure check.
-Review whether a schema-valid undeclared file/image target, with a canonical manifest
-and regenerated checksum, must fail with artifact-mismatch/record-invalid. Also
-review a known image target's forged repository (currently recomputed by Record), an
-unknown image target's repository, and an edited release record's image repository
-and target. Acceptance for the unknown-target mutations is inferred from these code
-paths, not independently executed evidence. Resolve against the exact contracts
-before changing settled behavior or claiming semantic acceptance.
+- An undeclared file/image target was accepted; an undeclared image target could
+  retain an attacker repository and omit lock/tool-list hashes. Failing fixtures
+  reproduced acceptance, then passed after trusted target membership and compatible
+  kind checks were added before assembly and during editable-record validation.
+- A tag ref swapped from an annotated first commit to a lightweight second commit
+  between the type and peel reads combined unrelated observations. The deterministic
+  swap fixture failed first; the resolver now pins the full immutable object ID once
+  and performs both later reads on that ID. The fixture asserts that the ref swap
+  actually executed and that the original annotated commit is returned.
+- Existing artifact tampering changed length as well as hash; trusted manifest
+  fields were not independently mutated; forbidden-path samples were already outside
+  the allowlist. The strengthened tests hold size constant, mutate only one of
+  commit/version/config/project/product with canonical manifest/checksums regenerated,
+  and prove a forbidden path matches both the provided pattern and record path before
+  rejecting it.
+
+The separate image-repository semantic question received independent strongest-tier
+assessment as faithful to the existing design. The minimal clarification in
+[record.md](contracts/record.md) states that each asset target names a compatible
+contract target at C and each image repository equals that target's repository.
+Supporting contracts are shared target meaning (record lines 24/39), target kind and
+repository (config lines 55/63), and record derivation (record-command line 25).
+No requirement for target completeness, target uniqueness or other asset field
+equalities was added. A failing unit fixture and a real Verify fixture established
+that an edited image repository passed local gates while online evidence remained
+incomplete; corrected validation rejects it with `record-invalid`. This is not a
+claim of successful online verification or an online bypass.
+
+Twelve actual, compiling guard-removal mutants each failed the intended test assertion:
+artifact SHA comparison; forbidden allowlisted path; each of the five manifest
+agreement fields; target membership; compatible target kind; the before-assembly
+check; image repository agreement; immutable tag peel.
+Logs are `/tmp/stw-wi4-correction-mutant-<rule>.log` in the author environment. The
+config comparator mutant initially failed compilation from an unused local; that
+attempt is not counted. Its corrected compiling mutant then failed the isolated
+config assertion. Fixtures also cover both file/image kind incompatibilities and
+reject a known file target used by an image before asset assembly.
+
+Corrections were folded into only the author's corresponding logical commits;
+foreign/base history was not rewritten. The preserved first review SHA remains
+available for the reviewer to compare. Source and effects remain within WI4.
 
 ## Remaining handoff
 
-Obtain independent strongest-tier review of the final WI4 head, including the focus
+Obtain independent strongest-tier review of the final WI4 head, including the corrections
 above, and preserve any findings until corrected and re-reviewed.
 No push or PR is authorized before that exact-head CLEAR; normal hosted workflows may
 build documentation/toolchains/CLI artifacts, so their separate owner build authorization
