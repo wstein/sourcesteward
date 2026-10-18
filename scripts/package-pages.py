@@ -29,7 +29,7 @@ SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schem
 # Schemas of features whose commands are still hidden: they exist in the source tree and are
 # validated, but are not copied to the site. The documentation work item of the feature removes
 # them from this set (and adds them to SCHEMAS) when it publishes the contracts.
-UNPUBLISHED_SCHEMAS = {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json'}
+UNPUBLISHED_SCHEMAS = {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v3/tidy.schema.json'}
 
 SCHEMA_PATHS = {version + '/' + name for version, names in SCHEMAS.items() for name in names}
 
@@ -81,11 +81,15 @@ def schema_sources(root):
     if schema_root.is_symlink() or not schema_root.is_dir():
         raise ValueError('Regular schema directory required')
     expected = set(SCHEMAS) | SCHEMA_PATHS
+    # Only explicitly listed unpublished sources may introduce a hidden directory.
+    unpublished_dirs = {Path(name).parent.as_posix() for name in UNPUBLISHED_SCHEMAS} - set(SCHEMAS)
     actual = set()
     for path in schema_root.rglob('*'):
         relative = path.relative_to(schema_root).as_posix()
         if relative in UNPUBLISHED_SCHEMAS and path.is_file() and not path.is_symlink():
             json.loads(path.read_text())
+            continue
+        if relative in unpublished_dirs and path.is_dir() and not path.is_symlink():
             continue
         if path.is_symlink() or relative not in expected or (relative in SCHEMAS and not path.is_dir()) or (relative in SCHEMA_PATHS and not path.is_file()):
             raise ValueError('Unexpected or linked schema source: ' + str(path))

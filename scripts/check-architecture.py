@@ -169,10 +169,12 @@ def reachable(graph, root, boundary=None):
 
 
 def validate_dependencies(graph):
-    """Release may delegate to hosting; no other path may reach a network package."""
+    """Reviewed release/workspace operations delegate through the exact hosting boundary.
+    Every path outside that boundary, including all inspection paths, stays network-free.
+    """
     for local in NETWORK_FREE_PACKAGES:
         package = MODULE + local
-        boundary = MODULE + 'internal/hosting' if local == 'internal/release' else None
+        boundary = MODULE + 'internal/hosting' if local in ('internal/release', 'internal/workspace') else None
         for dependency in reachable(graph, package, boundary):
             if is_network_import(dependency):
                 raise ValueError(package + ' reaches network outside internal/hosting: ' + dependency)
