@@ -1,4 +1,4 @@
-> Current proposed lifetime: [accepted-baseline replacement](../baseline-lifetime.md), for separate technical/risk assessment before formal round4. Three prior NOT CLEAR results remain counted; no runtime authorization.
+> Current proposed lifetime: [accepted-baseline replacement](../baseline-lifetime.md), technically assessed as honest and awaiting formal round4 at the frozen exact candidate. Three prior NOT CLEAR results remain counted; no runtime authorization.
 
 # PR status contract candidate
 
