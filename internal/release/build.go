@@ -637,3 +637,9 @@ func (w *buildViewDiagnostic) Write(p []byte) (int, error) {
 	w.prefix = append(w.prefix, p...)
 	return n, nil
 }
+
+// Trusted route replacement retains the native parent's owned process group.
+// It never resolves argv through PATH or starts an independent child/session.
+func execBuildViewRoute(c buildViewCommand) error {
+	return syscall.Exec(c.Executable, append([]string{c.Executable}, c.Args...), c.Env)
+}
