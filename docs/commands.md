@@ -33,17 +33,19 @@ qualifications rather than claiming live disk freshness. See [backend readiness]
 ## Release source commands (feature acceptance pending)
 
 The hidden `stw release` group currently registers `check`, `plan`, `verify`,
-`record` and `build`; inspect them with `stw release --help`. They are source
-implementations of planned, unreleased Spec 026, not a completed release facility.
-`dispatch` is not registered in this source slice. Online gates and attestations
-are unavailable: `plan --online` refuses, and `verify --online` cannot complete
-live evidence. Offline local checks can pass while the verdict remains
-`incomplete` (exit 1).
+`record`, `build` and `dispatch`; inspect them with `stw release --help`. These
+are source implementations of planned, unreleased Spec 026, not a completed
+release facility. `plan --online` adds bounded GitHub gate reads and
+`verify --online` adds pinned attestation verification. Offline local checks
+can pass while the verdict remains `incomplete` (exit 1). Source implementation
+does not establish live workflow/release acceptance.
 
 `check`, `plan` and `verify` execute no project commands; `record` does not build
 and writes only when selected with `--write`. `build` executes declared project
 commands and requires separate build authorization as well as its runtime
-preconditions. See the [current command/acceptance matrix](release.md),
+preconditions. `dispatch` performs online reads to print a stateless request plan;
+only explicit `--apply PLAN_ID` attempts one workflow-dispatch POST, with no retry.
+An accepted request is not a completed build. See the [current command/acceptance matrix](release.md),
 [owner preparation](releasing.md), [backend limits](backends.md#release-source-capabilities)
 and [unpublished source schemas](json-contracts.md#release-source-schemas-unpublished).
 
