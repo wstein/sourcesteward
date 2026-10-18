@@ -1,3 +1,5 @@
+> Current disposition: [round3 rejected this candidate; finite correction assessment](round3-disposition.md). Three NOT CLEAR gates remain counted, round4 is unspent, and runtime is blocked. Historical candidate claims below are not clearance.
+
 # Authentication ownership: bounded design candidate
 
 **State**: Proposed source-only correction for the same final design gate. Two NOT CLEAR reviews remain counted; round3 is unspent. This selects a watch-owned direct-child lifetime, preserving existing authentication. It does not select token-only watch, introduce a persistent guardian, or claim production/platform acceptance. The component HTTP/private-directory protocols in [watch-lifetime.md](watch-lifetime.md) remain part of this candidate; this document replaces that assessment's rejected direct-child assumption and current-options paragraph.

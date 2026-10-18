@@ -1,6 +1,6 @@
 # Implementation Plan: PR status
 
-**Base**: `2e9b9fc99888b605bcce08afa6ef98846359e06a` | **Status**: Complete design candidate; round2 NOT CLEAR; source-only bounded pre-delivery candidate prepared for the same final review; runtime remains gated.
+**Base**: `2e9b9fc99888b605bcce08afa6ef98846359e06a` | **Status**: Complete design candidate; round2 NOT CLEAR; round3 DESIGN NOT CLEAR; finite correction assessment rejected the current terminal mechanism; runtime remains gated.
 
 ## Context and inspected evidence
 
@@ -20,7 +20,7 @@ D4: lifecycle comes only from coherent state/merged/timestamp evidence, result i
 
 ## Constitution check
 
-I: shared enhanced human/v2 model, explicit legacy format path, noninteractive one final output; D3 requires separate command-host delivery capability and guarded process exit, with no claim for arbitrary library writers. II/III: read-only observations, no plans/actions or target writes; preserve existing ownership/config/auth refusal. IV: complete specification/plan/tasks precede code and independent review; TDD, real native sentinels and explicit source-vs-acceptance limits. V: both Tier 1 backends share hosting operations without substituting Git inside jj. Existing native versions, sandbox, snapshot suppression and operation pinning stay. No constitutional amendment is proposed; a relaxed inclusive output contract would need an explicit owner decision, not a hidden implementation shortcut.
+I: shared enhanced human/v2 model, explicit legacy format path, noninteractive one final output; D3 requires separate command-host delivery capability and guarded process exit, with no claim for arbitrary library writers. II/III: read-only observations, no plans/actions or target writes; preserve existing ownership/config/auth refusal. IV: complete specification/plan/tasks precede code and independent review; TDD, real native sentinels and explicit source-vs-acceptance limits. V: both Tier 1 backends share hosting operations without substituting Git inside jj. Existing native versions, sandbox, snapshot suppression and operation pinning stay. No constitutional amendment is proposed. Revisions to the unapproved inclusive-output proposal are engineering choices; escalate only a material accepted-contract change or independently assessed unresolved risk.
 
 ## Work-item and dependency ledger
 
