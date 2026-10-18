@@ -249,3 +249,19 @@ identity failure, also reproduced locally, is repaired in a focused test-only fo
 Independent review and full local checks pass; the next action is to review that repair
 and confirm its exact hosted minimum/current checks. Earlier owner-merge-pending statements
 are historical snapshots; no live schema publication or global verification is inferred.
+
+## Spec 026 WI4 offline release source candidate
+
+The isolated WI4 candidate implements streamed tag publication diffs, offline tag
+planning and file verification, canonical record generation and the verify/record
+CLI contracts. It preserves the Git-only tag boundary and uses native operation-pinned
+jj committed reads for records; the no-follow writer has a reviewed Linux/Darwin
+adapter design. See [WI4 evidence](../specs/026-release-process/verification-wi4.md)
+for failing-first fixtures, native lane results, compiler-only Darwin checks and
+remaining limits. New result schemas remain unpublished and Spec 026 remains planned.
+
+Full source and race suites passed. Independent review of the exact final head,
+including the recorded target/image contract interpretation question, remains pending.
+No product build, Hugo packaging, release, publication, owner tag or consumer activation
+was performed. Normal hosted workflows and later release operations retain their
+separate owner authorization requirements.
