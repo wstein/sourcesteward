@@ -55,3 +55,15 @@ refuses before the next effect. Reference/retirement schemas, action authorizati
 and recovery semantics remain unchanged. This amendment is pending implementation and
 independent acceptance; existing native jj bookmark deletion retains remote counterparts,
 including untracked remote targets, and never abandons changes.
+
+
+## Explicit contract 3
+
+The separate CLI/effects/model contract is `specs/029-tidy-dogfood-safety/contracts/tidy-v3.md`.
+Only explicit `--contract 3` selects it. Default v1/v2 invocations and existing stored-plan
+meanings remain offline. Online planning requires `--online` and its exact selected remote;
+apply requires the stored plan's exact online acknowledgment plus local `--authorize`.
+Modes are mutually exclusive local refs, local tracking refs, owned retirement and explicit
+legacy completion. No incomplete result carries an executable plan. Source-only v3 schema
+inventory is not a schema publication. Shared complete tree/filter metadata bounds are the
+Spec 029 exception to the old whole-output cap; all other native channels keep their limits.

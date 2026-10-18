@@ -102,3 +102,13 @@ A caller receives the same evidence in human and structured output without hidde
 - Recovery restores only documented local state; no claim of restoring untracked files, hook side effects or external effects.
 - This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
+
+
+## Spec 029 shared-admission amendment
+
+The implemented source amendment for complete base/target tree metadata and all-path filter
+observations is defined by Spec 029 FR-017–FR-019. It changes only those channels to complete
+bounded record consumption; all existing path/blob/ownership/helper/sandbox checks remain.
+Legacy completion is a separate one-operation provenance under explicit tidy contract 3;
+creation/task records continue to mean actual stw creation. See the Spec 029 contract amendments
+and integration evidence for source status and remaining acceptance gates.
