@@ -8,7 +8,7 @@
   "properties": {
     "schema_version": {"const": 1},
     "command": {"const": "release-check"},
-    "status": {"enum": ["ok", "findings", "refused", "error"]},
+    "status": {"description": "Command-level result: ok has no error findings; findings reports validation errors; refused or error reports unavailable capability/evidence or an operational failure. This status does not establish release acceptance.", "enum": ["ok", "findings", "refused", "error"]},
     "backend": {"type": "string", "minLength": 1},
     "input_path": {"type": "string", "description": "Repository text in this result (paths, pointers, messages, file names) is escaped: control characters, invalid UTF-8, format characters and the backslash itself are written as \\n, \\xNN, \\u{...} and \\\\, so a literal backslash and an escape sequence can look alike."},
     "root": {"type": "string"},
