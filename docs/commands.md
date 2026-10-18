@@ -30,6 +30,23 @@ or uncertain states refuse; raw Git never substitutes for jj. Read-only native j
 requires usable Linux bubblewrap or macOS sandbox-exec and reports stored-unsnapshotted
 qualifications rather than claiming live disk freshness. See [backend readiness](backends.md).
 
+## Release source commands (feature acceptance pending)
+
+The hidden `stw release` group currently registers `check`, `plan`, `verify`,
+`record` and `build`; inspect them with `stw release --help`. They are source
+implementations of planned, unreleased Spec 026, not a completed release facility.
+`dispatch` is not registered in this source slice. Online gates and attestations
+are unavailable: `plan --online` refuses, and `verify --online` cannot complete
+live evidence. Offline local checks can pass while the verdict remains
+`incomplete` (exit 1).
+
+`check`, `plan` and `verify` execute no project commands; `record` does not build
+and writes only when selected with `--write`. `build` executes declared project
+commands and requires separate build authorization as well as its runtime
+preconditions. See the [current command/acceptance matrix](release.md),
+[owner preparation](releasing.md), [backend limits](backends.md#release-source-capabilities)
+and [unpublished source schemas](json-contracts.md#release-source-schemas-unpublished).
+
 ## Inspect a repository and query its state
 
 From a source checkout, build the development executable once:

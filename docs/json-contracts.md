@@ -189,3 +189,35 @@ their bytes. Exit status 3 (`--strict` with error findings in a complete result)
 ## Hosting observations (v1)
 
 [hosting.schema.json](../schemas/v1/hosting.schema.json) is a separate contract shared by `stw hosting` and `gh jj`. It retains native identity, candidates, explicit hosting selection, PR head/base identities, individual CI checks/statuses, diagnostics, sample time and bounded completeness/network effects. Errors may occur before any remote read; missing evidence is never empty successful CI. Existing version/inspection/inventory/workspace/tidy schemas retain their bytes and meanings. See [hosting](hosting.md).
+
+## Release source schemas (unpublished)
+
+Spec 026 remains planned/unreleased. The following checked-in schema v1 files
+support current source implementations; they are deliberately excluded from
+Pages packaging until T041. Their `$id` values do not prove live publication.
+No release schema is promoted by this documentation change.
+
+| Document/result | Source schema |
+| --- | --- |
+| Project contract | [release-config](../schemas/v1/release-config.schema.json) |
+| Release record | [release-record](../schemas/v1/release-record.schema.json) |
+| Build manifest | [release-build-manifest](../schemas/v1/release-build-manifest.schema.json) |
+| OCI build result | [release-oci-result](../schemas/v1/release-oci-result.schema.json) |
+| `release check --json` | [release-check](../schemas/v1/release-check.schema.json) |
+| `release plan --json` | [release-plan](../schemas/v1/release-plan.schema.json) |
+| `release verify --json` | [release-verify](../schemas/v1/release-verify.schema.json) |
+| `release record --json` | [release-record-result](../schemas/v1/release-record-result.schema.json) |
+| `release build --json` | [release-build](../schemas/v1/release-build.schema.json) |
+
+Result schemas admit additive members; the four contract/data formats reject
+unknown properties. The manifest schema references the record schema; offline
+validation must resolve that reference to the checked-in file, not fetch its
+publication URL. The record object and the `record --json` result envelope are
+different documents. Preserve the generated canonical record bytes.
+
+Inspect `status`, `verdict`, gates and boundary qualifications as well as exit
+status. Offline `plan`/`verify` cannot clear online gates; registered `--online`
+flags do not imply a live verifier exists. Exit 3 also covers release findings,
+failed gates, record disagreements and local-verification hash mismatches. See
+the [release guide](release.md) for the per-command matrix and remaining gates.
+Dispatch and its schema remain planned in this source slice.
