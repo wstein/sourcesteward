@@ -220,15 +220,15 @@ func (api *ghAPI) token(parent context.Context) (string, error) {
 	defer cancel()
 	raw, err := api.runLimited(ctx, 16*1024, "auth", "token", "--hostname", api.host)
 	if err != nil {
-		return "", errors.New("gh authentication unavailable; check selected-host credentials")
+		return "", authenticationFailure("gh authentication unavailable; check selected-host credentials")
 	}
 	token := strings.TrimSuffix(string(raw), "\n")
 	if len(token) == 0 {
-		return "", errors.New("gh authentication returned an invalid token")
+		return "", authenticationFailure("gh authentication returned an invalid token")
 	}
 	for _, b := range []byte(token) {
 		if b < 33 || b > 126 {
-			return "", errors.New("gh authentication returned an invalid token")
+			return "", authenticationFailure("gh authentication returned an invalid token")
 		}
 	}
 	return token, nil
