@@ -164,7 +164,7 @@ class DocumentationTests(unittest.TestCase):
 
     def test_unpublished_schemas_stay_out_of_the_bundle_without_weakening_the_check(self):
         package = load('package_unpublished', 'package-pages.py')
-        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json'})
+        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json'})
         self.assertFalse(package.UNPUBLISHED_SCHEMAS & package.SCHEMA_PATHS)
         for name in package.UNPUBLISHED_SCHEMAS:
             self.assertTrue((ROOT / 'schemas' / name).is_file(), name)
