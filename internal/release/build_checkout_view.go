@@ -260,12 +260,14 @@ type buildViewEdge struct {
 	missing bool
 }
 type buildViewBinding struct {
-	parents []*os.Root
-	edges   []buildViewEdge
-	file    *os.File
-	info    os.FileInfo
-	digest  [32]byte
-	copied  bool
+	parents    []*os.Root
+	edges      []buildViewEdge
+	file       *os.File
+	info       os.FileInfo
+	digest     [32]byte
+	copied     bool
+	rawSymlink bool
+	linkTarget string
 }
 
 func (b *buildViewBinding) Close() error {
@@ -284,7 +286,13 @@ func sameBuildViewIdentity(a, b os.FileInfo) bool { return os.SameFile(a, b) && 
 func sameBuildViewFile(a, b os.FileInfo) bool {
 	return sameBuildViewIdentity(a, b) && a.Size() == b.Size() && a.ModTime() == b.ModTime() && buildViewChangeStamp(a) == buildViewChangeStamp(b)
 }
-func captureBuildViewPath(ctx context.Context, path string, step func(string)) (_ *buildViewBinding, retErr error) {
+func captureBuildViewPath(ctx context.Context, path string, step func(string)) (*buildViewBinding, error) {
+	return captureBuildViewPathMode(ctx, path, step, false)
+}
+func captureBuildViewMetadata(ctx context.Context, path string, step func(string)) (*buildViewBinding, error) {
+	return captureBuildViewPathMode(ctx, path, step, true)
+}
+func captureBuildViewPathMode(ctx context.Context, path string, step func(string), rawFinal bool) (_ *buildViewBinding, retErr error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("checkout metadata path is not absolute")
 	}
@@ -379,6 +387,12 @@ func captureBuildViewPath(ctx context.Context, path string, step func(string)) (
 			}
 			edge.link = link
 			b.edges = append(b.edges, edge)
+			if rawFinal && !hasRemaining {
+				b.rawSymlink = true
+				b.linkTarget = link
+				b.info = info
+				return b, nil
+			}
 			if filepath.IsAbs(link) {
 				stack = stack[:1]
 			}
