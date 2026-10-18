@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: EUPL-1.2
 """Enforce the CLI/inspection import and effects boundary."""
 from pathlib import Path
+from functools import lru_cache
 import json
 import re
 import subprocess
@@ -76,14 +77,39 @@ def validate_sources(sources, imports=None):
             validate_release_file(path, text, imported)
 
 
+@lru_cache(maxsize=1)
+def standard_packages():
+    result = subprocess.run(['go', 'list', 'std'], cwd=ROOT, text=True, capture_output=True, check=True)
+    return set(result.stdout.split())
+
+
+def release_project_import(path):
+    return path in RELEASE_IMPORT_ALLOWLIST or path == RELEASE_PREFIX or path.startswith(RELEASE_PREFIX + '/')
+
+
 def validate_release_file(path, text, imported):
     if 'unsafe' in imported or LINKNAME.search(text):
         raise ValueError('internal/release must not use unsafe or go:linkname: ' + path)
     code = strip_comments(text)
+    unix_writer = path == 'internal/release/openfile_write_unix.go'
+    for dependency in imported:
+        if dependency not in standard_packages() and not release_project_import(dependency) and not (unix_writer and dependency == 'golang.org/x/sys/unix'):
+            raise ValueError('release import outside the closed dependency boundary: ' + path + ' imports ' + dependency)
+    if unix_writer and 'golang.org/x/sys/unix' in imported:
+        if not re.search(r'^\s*(?:import\s+)?"golang.org/x/sys/unix"', text, re.M):
+            raise ValueError('writer unix import must have no alias, dot or blank name: ' + path)
+        constants = {'O_RDONLY', 'O_WRONLY', 'O_CREAT', 'O_EXCL', 'O_NOFOLLOW', 'O_DIRECTORY', 'O_CLOEXEC', 'O_NONBLOCK'}
+        for selector in re.finditer(r'\bunix\.([A-Za-z_][A-Za-z0-9_]*)', code):
+            name = selector.group(1)
+            if name in constants:
+                continue
+            if name in ('Openat', 'Mkdirat') and re.match(r'\s*\(', code[selector.end():]):
+                continue
+            raise ValueError('writer unix permits only exact constants and direct filesystem calls: ' + path)
     if OPEN_FILES.match(path):
         # The file-open helpers may use the syscall.O_ open flags and nothing else from syscall.
         for dependency in imported:
-            if is_process_import(dependency) and dependency != 'syscall':
+            if is_process_import(dependency) and dependency != 'syscall' and not (unix_writer and dependency == 'golang.org/x/sys/unix'):
                 raise ValueError('the file-open helpers import only syscall: ' + path + ' imports ' + dependency)
         if 'syscall' in imported:
             plain = re.search(r'^\s*(import\s+)?"syscall"', text, re.M)
@@ -173,6 +199,9 @@ def validate_release_packages(packages):
 def validate_release_graph(graph):
     """graph maps a module package to its direct imports (internal/release/... and its closure)."""
     outside_hosting = reachable(graph, RELEASE_PREFIX, MODULE + 'internal/hosting')
+    for package in outside_hosting:
+        if package not in standard_packages() and not release_project_import(package) and package != 'golang.org/x/sys/unix':
+            raise ValueError('release reaches an unreviewed external/helper package outside hosting: ' + package)
     for package, imports in graph.items():
         in_release = package == RELEASE_PREFIX or package.startswith(RELEASE_PREFIX + '/')
         if in_release:

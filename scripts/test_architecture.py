@@ -160,3 +160,30 @@ class ArchitectureTests(unittest.TestCase):
         sub_leak[prefix + 'internal/release/sub'] = ['fmt', prefix + 'internal/zzexec']
         sub_leak[prefix + 'internal/zzexec'] = ['fmt']
         with self.assertRaises(ValueError): architecture.validate_release_graph(sub_leak)
+
+    def test_record_writer_has_only_descriptor_relative_filesystem_exception(self):
+        writer = 'internal/release/openfile_write_unix.go'
+        source = 'package release\nimport "golang.org/x/sys/unix"\nfunc writeRecordExclusive() { _, _ = unix.Openat(0, "x", unix.O_RDONLY, 0); _ = unix.Mkdirat(0, "x", 0755) }\n'
+        architecture.validate_sources({writer: source})
+        for selector in ('ForkExec', 'Exec', 'RawSyscall', 'Syscall', 'Socket', 'Kill', 'O_TRUNC'):
+            with self.assertRaises(ValueError, msg=selector):
+                architecture.validate_sources({writer: source + 'var _ = unix.' + selector + '\n'})
+        for function in ('Openat', 'Mkdirat'):
+            for form in ('var f = unix.{}', 'func capture() {{ f := unix.{}; _ = f }}', 'func returned() any {{ return unix.{} }}', 'func consume(any) {{}}\nfunc passed() {{ consume(unix.{}) }}', 'var table = []any{{unix.{}}}'):
+                with self.assertRaises(ValueError, msg=form):
+                    architecture.validate_sources({writer: source + form.format(function) + '\n'})
+        for wrong in ('internal/release/openfile_unix.go', 'internal/release/check.go', 'internal/release/sub/openfile_write_unix.go'):
+            with self.assertRaises(ValueError): architecture.validate_sources({wrong: source})
+        for alias in ('u', '.', '_'):
+            with self.assertRaises(ValueError): architecture.validate_sources({writer: source.replace('import "', 'import ' + alias + ' "', 1)})
+
+    def test_release_foreign_helpers_cannot_forward_capabilities(self):
+        prefix = 'github.com/wstein/sourcesteward/'
+        release = prefix + 'internal/release'
+        for target in ('syscall', 'unsafe', 'net/http', 'os/exec'):
+            for owner in (release, release + '/sub', prefix + 'internal/inspection'):
+                graph = {release: [owner] if owner != release else ['example.org/helper'], owner: ['example.org/helper'], 'example.org/helper': [target]}
+                with self.assertRaises(ValueError): architecture.validate_release_graph(graph)
+        architecture.validate_release_graph({release: ['golang.org/x/sys/unix'], 'golang.org/x/sys/unix': ['syscall', 'unsafe']})
+        for file in ('internal/release/record.go', 'internal/release/sub/helper.go', 'internal/release/openfile_write_unix.go'):
+            with self.assertRaises(ValueError): architecture.validate_sources({file: 'package release\nimport "example.org/helper"\n'})

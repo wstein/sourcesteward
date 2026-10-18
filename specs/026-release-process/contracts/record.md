@@ -64,6 +64,8 @@ An **oci-image asset**:
 | `manifest` | `{name, sha256, size}` | the build manifest asset |
 | `attestation` | `{provider, signer_workflow, predicate_type}` | `github-artifact-attestation`, `owner/name/.github/workflows/release-build.yml`, `https://slsa.dev/provenance/v1`; the subject digests are the assets' `sha256` (files) and `index_digest` (images) |
 
+Every asset's `target` must name a target in the contract at C whose `kind` matches the asset kind. Each `oci-image` asset's `repository` must equal that target's `repository` at C; a mismatch is `record-invalid`.
+
 Semantic rules (`record-invalid`): version valid for the scheme; `tag` equal to the tag derived from the version; `commit` a full id; asset names unique; every file asset's `sha256` appears in the checksum file; image `tags` equal exactly `[version]`; `url_template` placeholders are closed (`{repository}`, `{tag}`, `{name}`). **Derived fields are recomputed, never trusted:** `repository` (hosting resolution), `attestation.signer_workflow` (`<repository>/<ci.release_workflow at C>`, or `<repository>/PATH` under the explicit `--signer-workflow-file PATH` of `record` and `verify`, used for the bootstrap release), `project`, `product`, `url_template` (`outputs.url_template` of the contract at C) must equal the recomputed values; the record is editable in the follow-up commit and the record path is allowlisted, so a forged repository, signer or URL must not verify.
 
 ## Build manifest

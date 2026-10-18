@@ -2,16 +2,19 @@
 package release
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -21,16 +24,46 @@ import (
 //   - syscall is imported only by openfile_*.go (and build.go for process groups), without an
 //     alias, and in openfile_*.go its only uses are the selector expressions syscall.O_*;
 //   - no cgo (import "C", cgo directives), no assembly or other foreign sources, no unsafe, no
-//     go:linkname, no plugin or x/sys, no dot or blank import of os, syscall, os/exec or unsafe.
+//     go:linkname or plugin. The exact record writer alone imports pinned x/sys/unix;
+//     only direct Openat/Mkdirat calls and its explicit O_* constants are admitted.
+//     Direct imports and the non-hosting dependency closure are closed to other external helpers.
 var (
 	processFile  = regexp.MustCompile(`^(vcs_[a-z0-9_]+|attest|build)\.go$`)
 	openFile     = regexp.MustCompile(`^openfile_[a-z0-9_]+\.go$`)
 	foreignFiles = regexp.MustCompile(`(?i)\.(s|sx|c|cc|cpp|cxx|c\+\+|h|hh|hpp|hxx|h\+\+|m|f|for|ftn|f77|f90|f95|f03|f08|syso|swig|swigcxx)$`)
 )
 
+var standardOnce sync.Once
+var standardImports map[string]bool
+var standardImportError error
+
+func standardImportInventory() (map[string]bool, error) {
+	standardOnce.Do(func() {
+		standardImports = map[string]bool{}
+		raw, err := exec.Command("go", "list", "std").Output()
+		standardImportError = err
+		for _, path := range strings.Fields(string(raw)) {
+			standardImports[path] = true
+		}
+	})
+	return standardImports, standardImportError
+}
+
+const releaseModule = "github.com/wstein/sourcesteward"
+
+func releaseProjectImport(path string) bool {
+	return path == releaseModule || path == releaseModule+"/internal/inspection" || path == releaseModule+"/internal/hosting" || path == releaseModule+"/internal/release" || strings.HasPrefix(path, releaseModule+"/internal/release/")
+}
+
+var writerUnixConstants = map[string]bool{"O_RDONLY": true, "O_WRONLY": true, "O_CREAT": true, "O_EXCL": true, "O_NOFOLLOW": true, "O_DIRECTORY": true, "O_CLOEXEC": true, "O_NONBLOCK": true}
+
 // releaseSourceViolations checks the files of internal/release (name -> content).
 func releaseSourceViolations(files map[string]string) []string {
 	var out []string
+	standards, standardErr := standardImportInventory()
+	if standardErr != nil {
+		return []string{"cannot inspect Go standard-library metadata: " + standardErr.Error()}
+	}
 	add := func(name, why string) { out = append(out, name+": "+why) }
 	for name, text := range files {
 		if foreignFiles.MatchString(name) {
@@ -50,9 +83,17 @@ func releaseSourceViolations(files map[string]string) []string {
 		for _, spec := range file.Imports {
 			path, _ := strconv.Unquote(spec.Path.Value)
 			named := spec.Name != nil
+			unixWriter := path == "golang.org/x/sys/unix" && name == "openfile_write_unix.go"
+			if !standards[path] && !releaseProjectImport(path) && !unixWriter {
+				add(name, "import outside the closed release dependency boundary: "+path)
+			}
 			switch {
 			case path == "C":
 				add(name, `import "C" (cgo) is not allowed`)
+			case path == "golang.org/x/sys/unix" && name == "openfile_write_unix.go":
+				if named {
+					add(name, "writer unix import must have no alias, dot or blank name")
+				}
 			case path == "unsafe", path == "plugin", strings.HasPrefix(path, "golang.org/x/sys"):
 				add(name, "import of "+path+" is not allowed")
 			case path == "syscall":
@@ -87,7 +128,45 @@ func releaseSourceViolations(files map[string]string) []string {
 		if osName == "" {
 			osName = "os"
 		}
+		allowedWriterRefs := map[*ast.Ident]bool{}
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "writeRecordExclusive" {
+				allowedWriterRefs[fn.Name] = true
+			}
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "writeRecordExclusive" && len(call.Args) == 3 && call.Ellipsis == token.NoPos {
+					allowedWriterRefs[id] = true
+				}
+			}
+			return true
+		})
+		ast.Inspect(file, func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok && id.Name == "writeRecordExclusive" && !allowedWriterRefs[id] {
+				add(name, "production may only call the private record writer directly with its three ordinary arguments")
+			}
+			return true
+		})
 		allowedSyscall := map[*ast.Ident]bool{}
+		allowedUnix := map[*ast.Ident]bool{}
+		directWriterCalls := map[*ast.SelectorExpr]bool{}
+		if name == "openfile_write_unix.go" {
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Name.Name != "writeRecordExclusive" {
+					continue
+				}
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					if call, ok := n.(*ast.CallExpr); ok {
+						if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+							directWriterCalls[sel] = true
+						}
+					}
+					return true
+				})
+			}
+		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
 			if !ok {
@@ -99,6 +178,9 @@ func releaseSourceViolations(files map[string]string) []string {
 			}
 			if x.Name == "syscall" && openFile.MatchString(name) && strings.HasPrefix(sel.Sel.Name, "O_") {
 				allowedSyscall[x] = true
+			}
+			if x.Name == "unix" && name == "openfile_write_unix.go" && (writerUnixConstants[sel.Sel.Name] || (sel.Sel.Name == "Openat" || sel.Sel.Name == "Mkdirat") && directWriterCalls[sel]) {
+				allowedUnix[x] = true
 			}
 			if x.Name == osName && sel.Sel.Name == "StartProcess" && !processFile.MatchString(name) {
 				add(name, "os.StartProcess is not allowed outside vcs_*.go, attest.go and build.go")
@@ -113,8 +195,11 @@ func releaseSourceViolations(files map[string]string) []string {
 				}
 			}
 			ast.Inspect(file, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok && id.Name == "unix" && name == "openfile_write_unix.go" && !allowedUnix[id] && !imports[id] {
+					add(name, "unix permits only exact constants and direct filesystem calls inside writeRecordExclusive")
+				}
 				if id, ok := n.(*ast.Ident); ok && id.Name == "syscall" && !allowedSyscall[id] && !imports[id] {
-					add(name, "the only use of syscall allowed here is a syscall.O_ constant, found "+fset.Position(id.Pos()).String())
+					add(name, "unapproved syscall use (only O_* constants and the dedicated writer Openat/Mkdirat calls are allowed), found "+fset.Position(id.Pos()).String())
 				}
 				return true
 			})
@@ -258,5 +343,51 @@ func TestReleaseSourceArchitectureCatchesTheBypasses(t *testing.T) {
 	}
 	if v := releaseSourceViolations(good); len(v) != 0 {
 		t.Errorf("false positives: %v", v)
+	}
+}
+
+func TestReleaseSourceArchitecturePortableWriter(t *testing.T) {
+	const writer = "openfile_write_unix.go"
+	prefix := "package release\nimport \"golang.org/x/sys/unix\"\n"
+	safe := prefix + "func writeRecordExclusive() { _, _ = unix.Openat(0, \"x\", unix.O_RDONLY, 0); _ = unix.Mkdirat(0, \"x\", 0755) }\n"
+	if v := releaseSourceViolations(map[string]string{writer: safe}); len(v) > 0 {
+		t.Fatal(v)
+	}
+	for _, fn := range []string{"Openat", "Mkdirat"} {
+		for _, form := range []string{"var captured = unix.%s\n", "func capture() { f := unix.%s; _ = f }\n", "func returned() any { return unix.%s }\n", "func consume(any) {}\nfunc passed() { consume(unix.%s) }\n", "var table = []any{unix.%s}\n"} {
+			mutant := prefix + fmt.Sprintf(form, fn)
+			if v := releaseSourceViolations(map[string]string{writer: mutant}); len(v) == 0 {
+				t.Fatalf("accepted %s: %s", fn, form)
+			}
+		}
+	}
+	for _, mutant := range []string{prefix + "func forward() { _, _ = unix.Openat(0, \"x\", 0, 0) }", prefix + "var _, _ = unix.Openat(0, \"x\", 0, 0)", prefix + "func writeRecordExclusive() { _, _ = (unix.Openat)(0, \"x\", 0, 0) }", prefix + "func writeRecordExclusive() { _, _ = unix.Socket(0, 0, 0) }"} {
+		if len(releaseSourceViolations(map[string]string{writer: mutant})) == 0 {
+			t.Fatalf("accepted %s", mutant)
+		}
+	}
+	for _, wrong := range []string{"openfile_unix.go", "record.go", "sub/openfile_write_unix.go"} {
+		if len(releaseSourceViolations(map[string]string{wrong: safe})) == 0 {
+			t.Fatalf("accepted writer import in %s", wrong)
+		}
+	}
+	for _, alias := range []string{"u", ".", "_"} {
+		source := strings.Replace(prefix, "import \"", "import "+alias+" \"", 1)
+		if len(releaseSourceViolations(map[string]string{writer: source})) == 0 {
+			t.Fatalf("accepted alias %s", alias)
+		}
+	}
+	for _, file := range []string{"record.go", "sub/helper.go", writer} {
+		if len(releaseSourceViolations(map[string]string{file: "package release\nimport \"example.org/foreignhelper\"\n"})) == 0 {
+			t.Fatalf("accepted foreign helper in %s", file)
+		}
+	}
+}
+
+func TestReleaseSourceArchitectureProductionCannotInjectWriterHooks(t *testing.T) {
+	for _, body := range []string{"func caller() { writeRecordExclusive(\"root\",\"docs/releases/v1.json\",nil,recordWriteHooks{}) }", "var capturedWriter = writeRecordExclusive", "func caller() { _ = writeRecordExclusive }"} {
+		if len(releaseSourceViolations(map[string]string{"record.go": "package release\n" + body})) == 0 {
+			t.Fatalf("accepted production hook route %s", body)
+		}
 	}
 }
