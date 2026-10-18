@@ -85,6 +85,34 @@ class ArchitectureTests(unittest.TestCase):
             for leaked in ('net', 'net/http', 'crypto/tls', 'golang.org/x/net/http2'):
                 with self.assertRaises(ValueError, msg=package + leaked): architecture.validate_dependencies({prefix + 'internal/' + package: ['fmt', leaked]})
 
+    def test_release_uses_hosting_boundary_without_network_bypass(self):
+        prefix = architecture.MODULE
+        release, hosting = prefix + 'internal/release', prefix + 'internal/hosting'
+        helper = 'example.org/hosting-client'
+        graph = {release: [hosting], hosting: [helper, 'os/exec'],
+                 helper: ['net/http', 'os/exec'], 'net/http': ['net']}
+        architecture.validate_dependencies(graph)
+        architecture.validate_release_graph(graph)
+        for bypass in ('net/http', helper):
+            mutant = dict(graph)
+            mutant[release] = [hosting, bypass]
+            with self.assertRaises(ValueError, msg=bypass):
+                architecture.validate_dependencies(mutant)
+        # Local packages cannot borrow hosting's boundary or reach network via another package.
+        for local in ('internal/inspection', 'internal/workspace'):
+            mutant = dict(graph)
+            mutant[prefix + local] = [hosting]
+            with self.assertRaises(ValueError, msg=local):
+                architecture.validate_dependencies(mutant)
+        # Shared dependencies do not become trusted merely because hosting also uses them.
+        mutant = dict(graph)
+        mutant[release] = [hosting, prefix + 'internal/release/sub']
+        mutant[prefix + 'internal/release/sub'] = [helper]
+        with self.assertRaises(ValueError):
+            architecture.validate_dependencies(mutant)
+        with self.assertRaises(ValueError):
+            architecture.validate_release_graph(mutant)
+
     def test_unsafe_and_linkname_are_refused_in_release(self):
         for name in ('zz.go', 'check.go', 'vcs_git.go', 'build.go', 'openfile_unix.go'):
             path = 'internal/release/' + name
@@ -114,7 +142,7 @@ class ArchitectureTests(unittest.TestCase):
             prefix.rstrip('/'): ['embed'],
         }
         architecture.validate_release_graph(graph)
-        for extra in ('internal/zzexec', 'internal/workspace', 'internal/hosting', 'internal/cli'):
+        for extra in ('internal/zzexec', 'internal/workspace', 'internal/hosting/unreviewed', 'internal/cli'):
             leaked = dict(graph)
             leaked[prefix + 'internal/release'] = graph[prefix + 'internal/release'] + [prefix + extra]
             leaked[prefix + extra] = ['fmt']
