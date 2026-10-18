@@ -267,3 +267,14 @@ received independent assessment; it adds no network or publication effects.
 No product build, Hugo packaging, release, publication, owner tag or consumer activation
 was performed. Normal hosted workflows and later release operations retain their
 separate owner authorization requirements.
+
+## Spec 026 WI5 online release source candidate
+
+The isolated WI5 source candidate adds bounded fixed release GETs, online gate
+selection and fake-process attestation verification, with offline zero-request
+sentinels. The [WI5 evidence](../specs/026-release-process/verification-wi5.md)
+records executed source checks and the unverified real-gh/Darwin boundaries.
+Independent source review and the no-write descriptor-input design assessment
+remain pending; T026 acceptance and global Spec 026 completion are not claimed.
+No actual credentials, external release operation or product/documentation build
+was used. Later effects retain their separate owner authorization requirements.

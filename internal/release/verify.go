@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type VerifyOptions struct {
@@ -41,6 +42,14 @@ func VerifyWithOnline(ctx context.Context, o VerifyOptions, online OnlineVerifie
 	opts.signerWorkflowFile = o.SignerWorkflowFile
 	opts.Online = false
 	p := Plan(ctx, opts)
+	remainingOnline := 120 * time.Second
+	if o.Online && online == nil {
+		started := time.Now()
+		onlineCtx, cancel := context.WithTimeout(ctx, remainingOnline)
+		p = applyOnlinePlan(onlineCtx, o.PlanOptions, p, o.Published)
+		cancel()
+		remainingOnline -= time.Since(started)
+	}
 	r := VerifyResult{PlanResult: p, Artifacts: []ArtifactObservation{}, Attestations: []AttestationObservation{}, TagCommit: p.Subject.TagCommit, Diff: p.diff}
 	r.Command = "release-verify"
 	if r.Diff.Offending == nil {
@@ -52,6 +61,9 @@ func VerifyWithOnline(ctx context.Context, o VerifyOptions, online OnlineVerifie
 		}
 		return r
 	}
+	// Every later launch revalidates executable/configuration containment against
+	// the native ownership root, never a caller-relative or nested PATH.
+	o.Path = p.root
 	filtered := []Gate{}
 	for _, g := range r.Gates {
 		if !strings.HasPrefix(g.Code, "artifact-") && !strings.HasPrefix(g.Code, "attestation-") {
@@ -99,6 +111,11 @@ func VerifyWithOnline(ctx context.Context, o VerifyOptions, online OnlineVerifie
 			}
 		}
 	}
+	if o.Online {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, remainingOnline)
+		defer cancel()
+	}
 	if o.Online && online != nil && p.record != nil {
 		g, a, e := online.VerifyRelease(ctx, o, *p.record, p.contract)
 		if e != nil {
@@ -116,6 +133,28 @@ func VerifyWithOnline(ctx context.Context, o VerifyOptions, online OnlineVerifie
 			if !replaced {
 				r.Gates = append(r.Gates, newGate)
 			}
+		}
+	} else if o.Online && online == nil && p.record != nil {
+		trusted := true
+		for _, g := range r.Gates {
+			if (g.Code == "record-invalid" || g.Code == "config-invalid") && g.Outcome != "pass" {
+				trusted = false
+			}
+		}
+		if !trusted {
+			replaceGates(&r.PlanResult, []Gate{gate("attestation-missing", "not-run", "depends-on-record-invalid", ""), gate("attestation-invalid", "not-run", "depends-on-record-invalid", "")})
+			r.Verdict = Verdict(r.Gates)
+			return r
+		}
+		g, a, e := verifyReleaseAttestations(ctx, o, *p.record, p.contract)
+		if e != nil {
+			return verifyReadFailure(r, ctx, e)
+		}
+		replaceGates(&r.PlanResult, g)
+		r.Attestations = a
+		r.Boundary.Effects.Network = true
+		if len(a) > 0 {
+			r.Boundary.Effects.Processes += "+gh-attestation"
 		}
 	} else {
 		for _, code := range []string{"attestation-missing", "attestation-invalid"} {
