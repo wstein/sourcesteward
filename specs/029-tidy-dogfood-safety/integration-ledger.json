@@ -715,6 +715,11 @@
       "path": "specs/029-tidy-dogfood-safety/owned-progress-model-import.json",
       "source": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
       "description": "Two exact content-cleared owned-progress model/store-test blobs; final E aggregate source acceptance remains pending."
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/retirement-execution-import.json",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "description": "Exact22 formally reviewed E source delta:7alreadyprepared,15exactimports. F entry/CLI wiring remains separately reviewed integration behavior."
     }
   ]
 }
