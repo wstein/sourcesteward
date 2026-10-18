@@ -2,7 +2,7 @@
 
 ## Active design: Spec 028 Ready inspection and review evidence
 
-The [specification](../specs/028-ready-check/spec.md) has independent specification-gate clearance at `4dbfd8e557148f315daf8c00c932d9f5a6b5aa46`. The [plan and contracts](../specs/028-ready-check/plan.md) are proposed; the plan gate precedes tasks and complete design review precedes implementation. The CLI and trusted merge check remain planned. Deployment profiles, source authenticity and owner operations are explicit; no App, credential, environment or settings change is approved or active. [Gate evidence](../specs/028-ready-check/analysis.md) separates source checks from hosted acceptance.
+The [specification](../specs/028-ready-check/spec.md) and corrected [plan and contracts](../specs/028-ready-check/plan.md) have independent gate clearance at `88c9b8b2c8f5ecd6240c5065d0b9bd6de62632cc`, with zero open findings. [Tasks](../specs/028-ready-check/tasks.md) are generated; independent complete-artifact review still precedes implementation. The CLI and trusted merge check remain planned. Deployment profiles, source authenticity and owner operations are explicit; no App, credential, environment or settings change is approved or active. [Gate evidence](../specs/028-ready-check/analysis.md) separates source checks from hosted acceptance.
 
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 

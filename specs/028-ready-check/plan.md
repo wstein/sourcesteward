@@ -2,7 +2,7 @@
 
 **Branch**: `codex/64-ready-evidence-contract` | **Date**: 2026-10-18 | **Spec**: [spec.md](spec.md)
 
-**Status**: Proposed plan; specification gate CLEAR at `4dbfd8e557148f315daf8c00c932d9f5a6b5aa46`; plan gate pending. No tasks, implementation or deployment.
+**Status**: Specification and corrected-plan gates independently CLEAR at `88c9b8b2c8f5ecd6240c5065d0b9bd6de62632cc` (rebased specification `23b22c0b5829a1fab07dea935ee61ce795d830cc`), zero open findings. [Tasks](tasks.md) generated; complete-artifact review pending. No implementation or deployment.
 
 ## Summary
 
@@ -43,7 +43,7 @@ No constitutional exception is requested. Proposed publisher writes are a separa
 
 ## Project Structure
 
-Design artifacts are this plan, research, data model, four contracts, three unpublished input schemas/examples, quickstart and analysis record. The installed plan review gate precedes creation of `tasks.md`.
+Design artifacts are this plan, research, data model, four contracts, three unpublished input schemas/examples, quickstart and analysis record. The installed plan review gate is complete; [tasks.md](tasks.md) now awaits independent complete-artifact review.
 
 Future source allocation (not created by this plan):
 

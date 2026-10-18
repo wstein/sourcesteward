@@ -18,7 +18,7 @@
 ## Gates
 
 - [x] Independent specification review and coordinator gate accepted at `4dbfd8e557148f315daf8c00c932d9f5a6b5aa46`; zero findings, as recorded in [analysis](../analysis.md).
-- [ ] Plan approved before tasks are generated.
+- [x] Plan approved before tasks are generated: corrected exact candidate `88c9b8b2c8f5ecd6240c5065d0b9bd6de62632cc`, with rebased specification also independently CLEAR and zero open findings.
 - [ ] Independent complete artifact analysis CLEAR before implementation.
 
 Author checklist completion is not independent review, feature acceptance or permission to activate resources. No runtime tests or deployment measurements have been performed for this draft.
