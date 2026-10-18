@@ -68,7 +68,7 @@ func evaluateTagPlan(ctx context.Context, o PlanOptions, root string, r PlanResu
 	if e != nil {
 		return planReadFailure(r, ctx, e)
 	}
-	resolved := hosting.Inspect(ctx, root, hosting.Options{Kind: "repo", Repo: o.Repo})
+	resolved := hosting.Inspect(ctx, root, hosting.Options{Kind: "repo", Repo: o.Repo, Host: o.Host})
 	if resolved.Status != "ok" || resolved.Repository == nil {
 		return planRefusal(r, "remote-unresolved", resolved.Error())
 	}
@@ -117,6 +117,9 @@ func evaluateTagPlan(ctx context.Context, o PlanOptions, root string, r PlanResu
 		buildOpts := o
 		buildOpts.Subject = commit
 		buildOpts.Version = version
+		if c != nil {
+			buildOpts.Product = c.Project.Product
+		}
 		r = evaluateCommitPlan(ctx, buildOpts, root, g, r)
 		r.Subject.Tag = &tag
 		r.Subject.TagCommit = &commit

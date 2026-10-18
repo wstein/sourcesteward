@@ -16,10 +16,16 @@ import (
 var errReleaseLimit = errors.New("release input exceeds a documented limit")
 
 type PlanOptions struct {
-	signerWorkflowFile                                        string
-	Path, Subject, Product, Version, Mode, RecordCommit, Repo string
-	Online, WithDrafts                                        bool
+	signerWorkflowFile                                              string
+	dispatch, explicitTag                                           bool
+	Path, Subject, Product, Version, Mode, RecordCommit, Repo, Host string
+	Online, WithDrafts                                              bool
 }
+
+// Explicit dispatch flags preserve kind even when a tag looks like a commit.
+// Ordinary positional planning retains its existing commit/tag inference.
+func (o PlanOptions) tagSubject() bool { return o.explicitTag || !IsFullCommitID(o.Subject) }
+
 type MainRef struct {
 	Remote  string  `json:"remote"`
 	Commit  *string `json:"commit"`
@@ -78,10 +84,11 @@ func countAllowlistPath(rows []AllowlistMatch, path string) {
 }
 
 type PlanResult struct {
-	record   *ReleaseRecord
-	contract *Contract
-	diff     DiffResult
-	root     string
+	configSHA256 string
+	record       *ReleaseRecord
+	contract     *Contract
+	diff         DiffResult
+	root         string
 
 	AllowlistMatches []AllowlistMatch `json:"allowlist_matches"`
 	SchemaVersion    int              `json:"schema_version"`
@@ -147,12 +154,12 @@ func planOffline(ctx context.Context, o PlanOptions) (r PlanResult) {
 		return fail(problem.code, problem.message)
 	}
 	if backend != "git" && backend != "jj" {
-		if !IsFullCommitID(o.Subject) {
+		if o.tagSubject() {
 			return fail("unsupported-backend", "tag planning requires a Git-owned checkout or the authoritative CI run; plan <commit> works in jj")
 		}
 		return fail("unsupported-backend", "release planning requires native Git or jj ownership")
 	}
-	if !IsFullCommitID(o.Subject) {
+	if o.tagSubject() {
 		if backend == "jj" {
 			return fail("unsupported-backend", "tag planning requires a Git-owned checkout or the authoritative CI run; plan <commit> works in jj")
 		}
@@ -212,7 +219,7 @@ func evaluateCommitPlan(ctx context.Context, o PlanOptions, root string, source 
 		r.Error = &CheckError{"read-failed", err.Error()}
 		return r
 	}
-	resolved := hosting.Inspect(ctx, root, hosting.Options{Kind: "repo", Repo: o.Repo})
+	resolved := hosting.Inspect(ctx, root, hosting.Options{Kind: "repo", Repo: o.Repo, Host: o.Host})
 	if resolved.Status != "ok" || resolved.Repository == nil {
 		return fail("remote-unresolved", resolved.Error())
 	}
@@ -246,6 +253,12 @@ func evaluateCommitPlan(ctx context.Context, o PlanOptions, root string, source 
 			return readFail(err)
 		}
 		r.AllowlistMatches = matches
+		if o.dispatch {
+			r.configSHA256, err = contractBlobHash(source, c.Project.Product)
+			if err != nil {
+				return readFail(err)
+			}
+		}
 		if c.Project.Product != "" {
 			p := c.Project.Product
 			r.Subject.Product = &p

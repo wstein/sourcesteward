@@ -44,7 +44,7 @@ func applyOnlinePlanWithReader(ctx context.Context, o PlanOptions, r PlanResult,
 			return r
 		}
 	}
-	resolved := hosting.Inspect(ctx, r.root, hosting.Options{Kind: "repo", Repo: o.Repo})
+	resolved := hosting.Inspect(ctx, r.root, hosting.Options{Kind: "repo", Repo: o.Repo, Host: o.Host})
 	if resolved.Status != "ok" || resolved.Repository == nil {
 		return planRefusal(r, "remote-unresolved", resolved.Error())
 	}
@@ -111,7 +111,7 @@ func onlineGatesAtCommit(o PlanOptions, c *Contract, record *ReleaseRecord, e ho
 		}
 	}
 	for _, t := range e.Tags {
-		if t == tag && IsFullCommitID(o.Subject) {
+		if t == tag && !o.tagSubject() {
 			exists = true
 		}
 	}
@@ -143,7 +143,7 @@ func onlineGatesAtCommit(o PlanOptions, c *Contract, record *ReleaseRecord, e ho
 		}
 	}
 	subject := ""
-	if o.Mode == "publish" || !IsFullCommitID(o.Subject) {
+	if o.Mode == "publish" || o.tagSubject() {
 		subject = o.Subject
 	}
 	monotonic, err := s.CheckMonotonicity(o.Version, names, subject)
