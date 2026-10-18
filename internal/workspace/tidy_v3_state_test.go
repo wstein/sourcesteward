@@ -774,7 +774,8 @@ func TestV3StoreRefusesOrphanOperationIdentityReuse(t *testing.T) {
 	}
 }
 
-func TestV3OwnedProvenanceReadsOriginalEvidenceWithoutMigration(t *testing.T) {
+func v3OwnedModelFixture(t *testing.T) (V3Plan, V3NativeState, []string) {
+	t.Helper()
 	c, _, options := fixtureRetirement(t)
 	oldResult := c.plan(context.Background(), options)
 	if oldResult.Status != "ok" {
@@ -817,6 +818,11 @@ func TestV3OwnedProvenanceReadsOriginalEvidenceWithoutMigration(t *testing.T) {
 	p.Effects = v3PlanEffects(p)
 	p.Digest, _ = v3PlanDigest(p)
 	paths := []string{filepath.Join(p.StateDir, "plans", old.CreationPlan.PlanID+".json"), filepath.Join(p.StateDir, "tasks", old.Task.TaskID+".json"), filepath.Join(p.StateDir, "operations", old.CreationPlan.PlanID+".json")}
+	return p, native, paths
+}
+
+func TestV3OwnedProvenanceReadsOriginalEvidenceWithoutMigration(t *testing.T) {
+	p, native, paths := v3OwnedModelFixture(t)
 	before := [][]byte{}
 	for _, path := range paths {
 		b, e := os.ReadFile(path)
@@ -1014,5 +1020,132 @@ func TestV3RetirementCommitWorkspaceEvidenceMatchesNativeState(t *testing.T) {
 	p.Digest, _ = v3PlanDigest(p)
 	if validV3NativeState(native, p, p.Expected) {
 		t.Fatal("commit workspace proof includes a registered path at a different commit")
+	}
+}
+
+// Creation provenance stays immutable while a task makes normal detached commits.
+// Retirement proof, registration snapshots and recovery bind its CURRENT head.
+func TestV3OwnedProgressKeepsCurrentHeadAndOriginalAuthority(t *testing.T) {
+	p, native, paths := v3OwnedModelFixture(t)
+	original := map[string][]byte{}
+	for _, path := range paths {
+		raw, e := os.ReadFile(path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		original[path] = raw
+	}
+	oldNative := p.Retirement.Provenance.Owned.Task.Native
+	current := strings.Repeat("e", 40)
+	p.Retirement.Target.CommitID = current
+	p.Retirement.Integration.OID = current
+	p.Retirement.Integration.Evidence.Native.TargetOID = current
+	p.Retirement.Integration.WorkspacePaths = []string{p.Retirement.Destination.Path}
+	for i := range native.Registrations {
+		if native.Registrations[i].Path == p.Retirement.Destination.Path {
+			native.Registrations[i].HeadOID = current
+		}
+	}
+	p.Expected = v3SnapshotWithState(p.Expected, native)
+	p.Effects = v3PlanEffects(p)
+	p.Digest, _ = v3PlanDigest(p)
+	if e := validateV3Plan(p, p.StateDir, p.PlanID); e != nil {
+		t.Fatalf("stable owned progress rejected: %v", e)
+	}
+	if !validV3NativeState(native, p, p.Expected) {
+		t.Fatal("current registration snapshot rejected")
+	}
+	if p.Retirement.Provenance.Owned.Task.Native != oldNative {
+		t.Fatal("original native provenance changed")
+	}
+	j := newV3Journal(p, native)
+	if len(j.Entries) != 1 || j.Entries[0].PlannedRecovery.CommitID != current || j.Entries[0].PlannedRecovery.CommitID == oldNative.CommitID {
+		t.Fatal("recovery did not bind current task head")
+	}
+	store, e := openV3Store(p.StateDir, true, v3NativeRoots(native), native.ProtectedRoots)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer store.Close()
+	if e = store.writePlan(p, native); e != nil {
+		t.Fatal(e)
+	}
+	if _, _, e = store.readPlan(p.PlanID); e != nil {
+		t.Fatal(e)
+	}
+	for path, before := range original {
+		after, e := os.ReadFile(path)
+		if e != nil || string(after) != string(before) {
+			t.Fatalf("creation record changed: %s %v", path, e)
+		}
+	}
+	t.Run("original-completed-journal-digest", func(t *testing.T) {
+		raw, _ := json.Marshal(p)
+		var q V3Plan
+		_ = json.Unmarshal(raw, &q)
+		q.Retirement.Provenance.Owned.CreationJournalDigest = strings.Repeat("f", 64)
+		if store.verifyOwned(q) == nil {
+			t.Fatal("different original completed journal digest admitted")
+		}
+	})
+
+	for name, mutate := range map[string]func(*V3Plan){
+		"creation-workspace-name": func(q *V3Plan) { q.Retirement.Provenance.Owned.Task.Native.WorkspaceName = "foreign" },
+		"creation-registration":   func(q *V3Plan) { q.Retirement.Provenance.Owned.Task.Native.GitDir += "-foreign" },
+		"creation-repository":     func(q *V3Plan) { q.Retirement.Provenance.Owned.Task.Native.RepositoryDir += "-foreign" },
+		"creation-destination":    func(q *V3Plan) { q.Retirement.Provenance.Owned.Task.Native.WorkspaceRoot += "-foreign" },
+		"physical-destination":    func(q *V3Plan) { q.Retirement.Destination.Inode++ },
+		"current-head-changed":    func(q *V3Plan) { q.Retirement.Target.CommitID = strings.Repeat("d", 40) },
+		"stale-integration":       func(q *V3Plan) { q.Retirement.Integration.Evidence.Native.TargetOID = oldNative.CommitID },
+		"attached-current-head":   func(q *V3Plan) { q.Retirement.Target.HeadRef = "refs/heads/foreign" },
+		"foreign-lock":            func(q *V3Plan) { q.Retirement.Provenance.Owned.LockReason = "stw:foreign" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, _ := json.Marshal(p)
+			var q V3Plan
+			_ = json.Unmarshal(raw, &q)
+			mutate(&q)
+			q.Effects = v3PlanEffects(q)
+			q.Digest, _ = v3PlanDigest(q)
+			if validateV3Plan(q, q.StateDir, q.PlanID) == nil {
+				t.Fatal("changed authority admitted")
+			}
+		})
+	}
+	t.Run("stable-object-format", func(t *testing.T) {
+		raw, _ := json.Marshal(p)
+		var q V3Plan
+		_ = json.Unmarshal(raw, &q)
+		q.Retirement.Provenance.Owned.Task.Native.ObjectFormat = "sha256"
+		q.Retirement.Provenance.Owned.Task.Native.CommitID = strings.Repeat("a", 64)
+		q.Digest, _ = v3PlanDigest(q)
+		if validateV3Plan(q, q.StateDir, q.PlanID) == nil {
+			t.Fatal("changed original repository object format admitted")
+		}
+	})
+	for _, change := range []string{"head", "lock"} {
+		t.Run("native-"+change, func(t *testing.T) {
+			n := cloneV3Native(native)
+			for i := range n.Registrations {
+				if n.Registrations[i].Path == p.Retirement.Destination.Path {
+					if change == "head" {
+						n.Registrations[i].HeadOID = oldNative.CommitID
+					} else {
+						n.Registrations[i].LockReason = "stw:foreign"
+					}
+				}
+			}
+			raw, _ := json.Marshal(p)
+			var q V3Plan
+			_ = json.Unmarshal(raw, &q)
+			q.Expected = v3SnapshotWithState(q.Expected, n)
+			q.Digest, _ = v3PlanDigest(q)
+			if e := validateV3Plan(q, q.StateDir, q.PlanID); e != nil {
+				t.Fatal("public control invalid", e)
+			}
+			if validV3NativeState(n, q, q.Expected) {
+				t.Fatal("changed current registration admitted")
+			}
+		})
 	}
 }

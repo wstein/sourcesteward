@@ -119,3 +119,22 @@ workspace 2.761 seconds/contracts 0.082 seconds; admission/content/model checks
 workspace 3.482 seconds/contracts 0.076 seconds. Native fixture checks were launched
 with inherited Git/jj/Rust controls removed; these are targeted source checks,
 not final full-suite, native-platform acceptance or new independent clearance.
+
+
+## Content-cleared owned-progress model preparation
+
+The separate [owned-progress layer](owned-progress-model-import.json) imports
+only the two exact content-cleared blobs from
+`0c555b5e1eae9fc36663ab9e4183e097b459f160`: result model
+`f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed` and store fixture
+`a55ab78df3a0631482dea19d81af021a4ee9ec99`. This preserves original creation
+owner identity plus mandatory unchanged object format while retirement target,
+integration evidence, current registration and recovery still bind current task
+progress. It changes no native collector/removal or CLI routing. This is content
+clearance for preparation, not final combined E SOURCE acceptance.
+
+After those exact imports, focused model/schema/content/legacy admission checks
+passed (workspace 9.143 seconds, contracts 0.079 seconds), with caller Git/jj/Rust
+controls removed for native fixtures. Full final normal/race, reviewed E removal
+integration and formal exact integrated-source review remain pending. No source
+preparation check enables retirement effects or promotes the unpublished schema.
