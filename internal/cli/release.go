@@ -28,7 +28,7 @@ func (e releaseFindingsError) Error() string {
 
 // releaseCommand groups the release process commands of Spec 026. It stays hidden until the
 // documentation work item (WI9) lists it, so a partial stack never advertises a half feature.
-func releaseCommand() *cobra.Command {
+func releaseCommand(stwVersion ...string) *cobra.Command {
 	command := &cobra.Command{
 		Use: "release", Short: "Release process commands (check the project release contract)",
 		Long:         "Release process commands. check lints the project release contract (.stw/release.toml) without writes, network or project commands.",
@@ -36,7 +36,7 @@ func releaseCommand() *cobra.Command {
 		SilenceUsage: true, SilenceErrors: true, Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error { return cmd.Help() },
 	}
-	command.AddCommand(releaseCheckCommand(), releasePlanCommand(), releaseVerifyCommand(), releaseRecordCommand())
+	command.AddCommand(releaseCheckCommand(), releasePlanCommand(), releaseVerifyCommand(), releaseRecordCommand(), releaseBuildCommand(stwVersion...))
 	return command
 }
 

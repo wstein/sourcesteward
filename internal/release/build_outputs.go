@@ -20,8 +20,8 @@ import (
 
 // BuildOptions describes one explicitly selected build operation.
 type BuildOptions struct {
-	Path, Mode, Commit, Version, Product, Out, Smoke, Tag, Record string
-	FilesOnly                                                     bool
+	Path, Mode, Commit, Version, Product, Out, Smoke, Tag, Record, STWVersion string
+	FilesOnly                                                                 bool
 }
 type BuildResult struct {
 	SchemaVersion int              `json:"schema_version"`
@@ -63,6 +63,12 @@ func (r BuildResult) Text() string {
 	for _, b := range r.Builds {
 		for _, i := range b.Invocations {
 			fmt.Fprintf(&out, "%s: exit %d\n%s%s", Escape(b.ID), i.Exit, i.Stdout, i.Stderr)
+			if i.StdoutTruncated {
+				out.WriteString("\nstdout truncated: further output discarded\n")
+			}
+			if i.StderrTruncated {
+				out.WriteString("\nstderr truncated: further output discarded\n")
+			}
 		}
 	}
 	for _, n := range r.Unexpected {

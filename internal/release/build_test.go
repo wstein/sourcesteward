@@ -324,7 +324,7 @@ func TestBuildProductionPreflightWithFakeRunnerOnly(t *testing.T) {
 				}
 				return 0, os.WriteFile(p, []byte("FAKE compiler output"), 0644)
 			}}
-			r := buildRelease(context.Background(), BuildOptions{Mode: "ci", Path: dir, Commit: subject, Version: "v1.2.3", Out: filepath.Join(t.TempDir(), "new")}, f, nil)
+			r := buildRelease(context.Background(), BuildOptions{Mode: "ci", Path: dir, Commit: subject, Version: "v1.2.3", STWVersion: "v1.0.0", Out: filepath.Join(t.TempDir(), "new")}, f, nil)
 			if scenario == "clean" {
 				if r.Status != "ok" || len(f.calls) != 3 {
 					t.Fatalf("%+v calls=%d", r, len(f.calls))
@@ -504,6 +504,15 @@ func TestBuildExecutableUsesOnlyConstructedPATH(t *testing.T) {
 		t.Fatal("used inherited PATH")
 	}
 }
+func TestBuildHumanOutputNotesDiscardedStreams(t *testing.T) {
+	r := newBuildResult("ci")
+	r.Builds = []BuildExecution{{ID: "fake", Invocations: []BuildInvocationResult{{StdoutTruncated: true, StderrTruncated: true}}}}
+	text := r.Text()
+	if !strings.Contains(text, "stdout truncated") || !strings.Contains(text, "stderr truncated") {
+		t.Fatal(text)
+	}
+}
+
 func TestBuildLocalVerifyRejectsTrustedOCITargetBeforeExport(t *testing.T) {
 	for _, imageOnly := range []bool{false, true} {
 		for _, filesOnly := range []bool{false, true} {
