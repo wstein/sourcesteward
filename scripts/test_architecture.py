@@ -177,6 +177,20 @@ class ArchitectureTests(unittest.TestCase):
         for alias in ('u', '.', '_'):
             with self.assertRaises(ValueError): architecture.validate_sources({writer: source.replace('import "', 'import ' + alias + ' "', 1)})
 
+    def test_checkout_platform_metadata_exception_is_type_only(self):
+        source = 'package release\nimport "syscall"\nvar _ *syscall.Stat_t\n'
+        for platform in ('linux', 'darwin'):
+            path = 'internal/release/build_checkout_view_' + platform + '.go'
+            architecture.validate_sources({path: source})
+            for selector in ('Kill', 'Exec', 'ForkExec', 'Syscall', 'RawSyscall', 'O_TRUNC'):
+                with self.assertRaises(ValueError, msg=selector):
+                    architecture.validate_sources({path: source + 'var _ = syscall.' + selector + '\n'})
+            for alias in ('s', '.', '_'):
+                with self.assertRaises(ValueError):
+                    architecture.validate_sources({path: source.replace('import "', 'import ' + alias + ' "', 1)})
+        for path in ('internal/release/build_checkout_view.go', 'internal/release/build_checkout_view_other.go', 'internal/release/sub/build_checkout_view_linux.go'):
+            with self.assertRaises(ValueError): architecture.validate_sources({path: source})
+
     def test_release_foreign_helpers_cannot_forward_capabilities(self):
         prefix = 'github.com/wstein/sourcesteward/'
         release = prefix + 'internal/release'

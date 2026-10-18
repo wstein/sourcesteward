@@ -4,9 +4,13 @@ package release
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Native config output is semantic data, never a diagnostic. Keep full streams
@@ -243,4 +247,265 @@ func escapeBuildViewConfig(out io.Writer, in io.Reader, value bool) error {
 			return err
 		}
 	}
+}
+
+// Each edge is observed through the parent descriptor used to acquire its child.
+// Retain all parents, including symlink origins, until the job revalidates/closes.
+// Do not reacquire a recursive path from its original string after a rename.
+type buildViewEdge struct {
+	parent  *os.Root
+	name    string
+	info    os.FileInfo
+	link    string
+	missing bool
+}
+type buildViewBinding struct {
+	parents []*os.Root
+	edges   []buildViewEdge
+	file    *os.File
+	info    os.FileInfo
+	digest  [32]byte
+	copied  bool
+}
+
+func (b *buildViewBinding) Close() error {
+	var err error
+	if b.file != nil {
+		err = b.file.Close()
+	}
+	for i := len(b.parents) - 1; i >= 0; i-- {
+		err = errors.Join(err, b.parents[i].Close())
+	}
+	b.file = nil
+	b.parents = nil
+	return err
+}
+func sameBuildViewIdentity(a, b os.FileInfo) bool { return os.SameFile(a, b) && a.Mode() == b.Mode() }
+func sameBuildViewFile(a, b os.FileInfo) bool {
+	return sameBuildViewIdentity(a, b) && a.Size() == b.Size() && a.ModTime() == b.ModTime() && buildViewChangeStamp(a) == buildViewChangeStamp(b)
+}
+func captureBuildViewPath(ctx context.Context, path string, step func(string)) (_ *buildViewBinding, retErr error) {
+	if !filepath.IsAbs(path) {
+		return nil, errors.New("checkout metadata path is not absolute")
+	}
+	b := &buildViewBinding{}
+	defer func() {
+		if retErr != nil {
+			_ = b.Close()
+		}
+	}()
+	root, err := os.OpenRoot(string(filepath.Separator))
+	if err != nil {
+		return nil, err
+	}
+	b.parents = append(b.parents, root)
+	stack := []*os.Root{root}
+	type component struct {
+		name    string
+		release os.FileInfo
+	}
+	components := func(text string) []component {
+		var out []component
+		for _, name := range strings.Split(text, string(filepath.Separator)) {
+			out = append(out, component{name: name})
+		}
+		return out
+	}
+	pending := components(path)
+	var active []os.FileInfo
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		current := stack[len(stack)-1]
+		if len(pending) == 0 {
+			f, e := current.Open(".")
+			if e != nil {
+				return nil, e
+			}
+			b.file = f
+			b.info, e = f.Stat()
+			if e != nil {
+				return nil, e
+			}
+			return b, nil
+		}
+		part := pending[0]
+		pending = pending[1:]
+		if part.release != nil {
+			active = active[:len(active)-1]
+			continue
+		}
+		name := part.name
+		if name == "" || name == "." {
+			continue
+		}
+		if name == ".." {
+			if len(stack) > 1 {
+				stack = stack[:len(stack)-1]
+			}
+			continue
+		}
+		info, e := current.Lstat(name)
+		hasRemaining := false
+		for _, part := range pending {
+			if part.release == nil && part.name != "" && part.name != "." {
+				hasRemaining = true
+				break
+			}
+		}
+		if errors.Is(e, os.ErrNotExist) && !hasRemaining {
+			b.edges = append(b.edges, buildViewEdge{parent: current, name: name, missing: true})
+			return b, nil
+		}
+		if e != nil {
+			return nil, e
+		}
+		edge := buildViewEdge{parent: current, name: name, info: info}
+		if info.Mode()&os.ModeSymlink != 0 {
+			for _, prior := range active {
+				if os.SameFile(prior, info) {
+					return nil, errors.New("checkout metadata symlink cycle")
+				}
+			}
+			active = append(active, info)
+			link, e := current.Readlink(name)
+			if e != nil {
+				return nil, e
+			}
+			again, e := current.Lstat(name)
+			if e != nil || !sameBuildViewFile(info, again) {
+				return nil, errors.New("checkout metadata symlink changed")
+			}
+			edge.link = link
+			b.edges = append(b.edges, edge)
+			if filepath.IsAbs(link) {
+				stack = stack[:1]
+			}
+			pending = append(append(components(link), component{release: info}), pending...)
+			continue
+		}
+		b.edges = append(b.edges, edge)
+		if info.IsDir() {
+			next, e := current.OpenRoot(name)
+			if e != nil {
+				return nil, e
+			}
+			b.parents = append(b.parents, next)
+			actual, e := next.Stat(".")
+			if e != nil || !sameBuildViewIdentity(info, actual) {
+				return nil, errors.New("checkout metadata directory changed")
+			}
+			stack = append(stack, next)
+			if step != nil {
+				step("opened-directory:" + next.Name())
+			}
+			continue
+		}
+		if hasRemaining {
+			return nil, errors.New("checkout metadata component is not a directory")
+		}
+		if !info.Mode().IsRegular() {
+			return nil, errors.New("checkout metadata input is not a regular file")
+		}
+		if step != nil {
+			step("before-file")
+		}
+		f, e := openBuildViewFile(current, name)
+		if e != nil {
+			return nil, e
+		}
+		b.file = f
+		actual, e := f.Stat()
+		if e != nil || !sameBuildViewFile(info, actual) {
+			return nil, errors.New("checkout metadata file changed")
+		}
+		b.info = actual
+		return b, nil
+	}
+}
+func (b *buildViewBinding) copyTo(out *os.File) error {
+	if b.file == nil || !b.info.Mode().IsRegular() {
+		return errors.New("checkout metadata file absent or not regular")
+	}
+	hash := sha256.New()
+	if _, err := io.CopyBuffer(io.MultiWriter(out, hash), io.NewSectionReader(b.file, 0, b.info.Size()), make([]byte, 32<<10)); err != nil {
+		return err
+	}
+	after, err := b.file.Stat()
+	if err != nil || !sameBuildViewFile(b.info, after) {
+		return errors.New("checkout metadata changed while captured")
+	}
+	copy(b.digest[:], hash.Sum(nil))
+	b.copied = true
+	return nil
+}
+func (b *buildViewBinding) validate() error {
+	for _, edge := range b.edges {
+		actual, err := edge.parent.Lstat(edge.name)
+		if edge.missing {
+			if !errors.Is(err, os.ErrNotExist) {
+				return errors.New("absent checkout metadata changed")
+			}
+			continue
+		}
+		if err != nil || !sameBuildViewIdentity(edge.info, actual) {
+			return errors.New("checkout metadata edge changed")
+		}
+		if edge.info.Mode()&os.ModeSymlink != 0 {
+			link, e := edge.parent.Readlink(edge.name)
+			if e != nil || link != edge.link || !sameBuildViewFile(edge.info, actual) {
+				return errors.New("checkout metadata symlink changed")
+			}
+		}
+	}
+	if b.file == nil {
+		return nil
+	}
+	actual, err := b.file.Stat()
+	if err != nil {
+		return err
+	}
+	if b.info.Mode().IsRegular() {
+		if !sameBuildViewFile(b.info, actual) {
+			return errors.New("checkout metadata modification changed")
+		}
+		if b.copied {
+			hash := sha256.New()
+			if _, err := io.CopyBuffer(hash, io.NewSectionReader(b.file, 0, b.info.Size()), make([]byte, 32<<10)); err != nil {
+				return err
+			}
+			if !bytes.Equal(hash.Sum(nil), b.digest[:]) {
+				return errors.New("checkout metadata content changed")
+			}
+			after, err := b.file.Stat()
+			if err != nil || !sameBuildViewFile(b.info, after) {
+				return errors.New("checkout metadata changed during validation")
+			}
+		}
+	} else if !sameBuildViewIdentity(b.info, actual) {
+		return errors.New("checkout metadata root changed")
+	}
+	return nil
+}
+
+// Native comparison never inherits project credentials, loader/startup hooks or
+// arbitrary GIT_* injection. Preserve native pathname/locale semantics explicitly.
+func buildViewEnvironment(inherited []string, realGit, private string) []string {
+	var env []string
+	for _, entry := range inherited {
+		key, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "HOME", "XDG_CONFIG_HOME", "XDG_CONFIG_DIRS", "XDG_DATA_HOME", "XDG_DATA_DIRS", "XDG_STATE_HOME", "XDG_CACHE_HOME", "LANG", "LANGUAGE", "TZ", "SUDO_UID":
+			env = append(env, entry)
+		default:
+			if strings.HasPrefix(key, "LC_") {
+				env = append(env, entry)
+			}
+		}
+	}
+	return append(env, "PATH="+filepath.Dir(realGit)+":/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR="+private, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_ATTR_NOSYSTEM=1", "GIT_LITERAL_PATHSPECS=1")
 }

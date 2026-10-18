@@ -115,6 +115,17 @@ def validate_release_file(path, text, imported):
             plain = re.search(r'^\s*(import\s+)?"syscall"', text, re.M)
             if not plain or SYSCALL_OPEN_FLAGS.search(code):
                 raise ValueError('the file-open helpers may use only the syscall.O_ constants (no alias, no dot import): ' + path)
+    elif path in ('internal/release/build_checkout_view_linux.go', 'internal/release/build_checkout_view_darwin.go'):
+        # The two platform observers currently read only Stat_t ctime fields.
+        # This is not a wildcard process-capability exception for build_* files.
+        for dependency in imported:
+            if is_process_import(dependency) and dependency != 'syscall':
+                raise ValueError('checkout metadata observers may import only syscall.Stat_t: ' + path)
+        if 'syscall' in imported:
+            if not re.search(r'^\s*(?:import\s+)?"syscall"', text, re.M):
+                raise ValueError('checkout observer syscall import must be plain: ' + path)
+            if re.search(r'\bsyscall\.(?!Stat_t\b)[A-Za-z_][A-Za-z0-9_]*', code):
+                raise ValueError('checkout metadata observers may use only syscall.Stat_t: ' + path)
     elif path == 'internal/release/build.go':
         pass  # process groups need syscall; build.go is a reviewed process file
     else:
