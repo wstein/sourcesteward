@@ -24,6 +24,9 @@ type readyReviewCollection struct {
 	Sources        []readySource
 	Requests       int
 	PolicyRequests int
+	// PolicySources accounts within PolicyRequests, never a second addition to
+	// the operation total. Local lock observations have zero HTTP requests.
+	PolicySources []readySource
 	// Complete describes collected review evidence, never full Ready eligibility
 	// or completeness of an arbitrary checker/credential dependency closure.
 	Complete    bool
@@ -58,11 +61,13 @@ func collectReadyReview(target, path string, number int, s *readySources) (out r
 		return
 	}
 	defer func() { out.Requests = s.budget.requests }()
-	l, err := readReadyLock(target, path)
-	if err != nil {
-		problem("unknown", "lock-invalid", "lock", "selection")
+	l, failure := readReadyLockTyped(target, path)
+	if failure != nil {
+		out.PolicySources = append(out.PolicySources, *failure.Source)
+		problem("unknown", failure.Reason, "policy-lock", failure.Stage)
 		return
 	}
+	out.PolicySources = append(out.PolicySources, readySource{Name: "policy-lock", Outcome: readyOK, Complete: true})
 	if l.Value().Deployment.Profile != "none" {
 		problem("unknown", "deployment-unverified", "activation", "capability")
 		return
@@ -93,16 +98,14 @@ func collectReadyReview(target, path string, number int, s *readySources) (out r
 		problem("fail", "pull-request-closed", "pr", "state")
 		return
 	}
-	before := s.budget.requests
-	policy, err := loadReadyCallerPolicy(target, path, out.Repository, s)
-	out.PolicyRequests += s.budget.requests - before
-	if err != nil {
-		// The existing loader returns safe bare errors without precise reader
-		// outcomes. Preserve unknown proof rather than fabricate denied/transport
-		// provenance. Only global cancellation/deadline can be observed directly.
-		problem("unknown", readyLoaderFailureCode(s), "policy", "loading")
+	loaded := loadReadyPolicyEvidence(target, path, out.Repository, s)
+	out.PolicyRequests += loaded.Requests
+	out.PolicySources = append(out.PolicySources, loaded.Sources...)
+	if loaded.Failure != nil {
+		problem("unknown", loaded.Failure.Reason, loaded.Failure.referenceSource(), loaded.Failure.Stage)
 		return
 	}
+	policy := loaded.Value
 	if !sameReadyLockBytes(l, policy.lock) {
 		problem("unknown", "sample-changed", "lock", "initial-bytes")
 		return
@@ -192,15 +195,11 @@ func collectReadyReview(target, path string, number int, s *readySources) (out r
 			problem("unknown", "sample-changed", "report", "resample")
 		}
 	}
-	before = s.budget.requests
-	err = policy.resample(target, path, out.Repository, s)
-	out.PolicyRequests += s.budget.requests - before
-	if err != nil {
-		code := readyLoaderFailureCode(s)
-		if err.Error() == "sample-changed" {
-			code = "sample-changed"
-		}
-		problem("unknown", code, "policy", "resample")
+	resampled := policy.resampleEvidence(target, path, out.Repository, s)
+	out.PolicyRequests += resampled.Requests
+	out.PolicySources = append(out.PolicySources, resampled.Sources...)
+	if resampled.Failure != nil {
+		problem("unknown", resampled.Failure.Reason, resampled.Failure.referenceSource(), resampled.Failure.Stage)
 	}
 	if stopped := s.stopped(s.ctx); stopped != readyOK {
 		problem("unknown", readyCollectionCode(stopped), "collection", "budget")
@@ -238,12 +237,6 @@ func readyCollectionCode(outcome readyOutcome) string {
 	default:
 		return "evidence-incomplete"
 	}
-}
-func readyLoaderFailureCode(s *readySources) string {
-	if stopped := s.stopped(s.ctx); stopped != readyOK {
-		return readyCollectionCode(stopped)
-	}
-	return "evidence-incomplete"
 }
 func newestReadyReviewStatus(rows []readyStatus, context string) *readyStatus {
 	var selected *readyStatus

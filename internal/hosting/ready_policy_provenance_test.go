@@ -87,6 +87,65 @@ func TestReadyPolicyProvenanceOpaqueErrorsAndNativePrivacy(t *testing.T) {
 	}
 }
 
+func TestReadyPolicyProvenanceGlobalBudgetAndLateStop(t *testing.T) {
+	for _, seed := range []int{65, 66, 80} {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) {
+			f := newCollectionFixture(t)
+			f.s.budget.requests = seed
+			got := f.collect()
+			count := 0
+			for _, src := range got.Sources {
+				count += src.Requests
+			}
+			policy := 0
+			for _, src := range got.PolicySources {
+				policy += src.Requests
+			}
+			if policy != got.PolicyRequests || count+policy != got.Requests-seed || got.Requests > 80 {
+				t.Fatal("global accounting double-counted or lost source requests")
+			}
+			if seed == 65 {
+				if got.Review.State != "pass" || !got.Complete {
+					t.Fatal("exact-budget positive refused")
+				}
+			} else {
+				requireCollectionNonpass(t, got, "")
+				if got.Complete {
+					t.Fatal("incomplete budget passed")
+				}
+			}
+		})
+	}
+	for _, kind := range []string{"canceled", "deadline"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newCollectionFixture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			f.s.ctx = ctx
+			f.change = func(path string, n int, raw string) (int, string) {
+				if path == "/repos/policies/r" && n == 2 {
+					if kind == "canceled" {
+						cancel()
+					} else {
+						f.s.budget.started = time.Now().Add(-31 * time.Second)
+					}
+				}
+				return 200, raw
+			}
+			reason := "hosting-canceled"
+			if kind == "deadline" {
+				reason = "source-limit"
+			}
+			got := f.collect()
+			requireCollectionNonpass(t, got, reason)
+			last := got.PolicySources[len(got.PolicySources)-1]
+			if last.Name != "repository" || last.Repository != "policies/r" || last.Complete {
+				t.Fatal("late stop lost actual source")
+			}
+		})
+	}
+}
+
 func TestReadyPolicyProvenanceBoundsUnsupportedAndBindings(t *testing.T) {
 	for _, kind := range []string{"canceled", "deadline", "requests", "installed", "missing-client", "digest", "transition", "oversize"} {
 		t.Run(kind, func(t *testing.T) {
@@ -140,6 +199,36 @@ func TestReadyPolicyProvenanceBoundsUnsupportedAndBindings(t *testing.T) {
 			}
 			if (kind == "digest" || kind == "transition") && (!got.Failure.Source.Complete || got.Failure.Source.Outcome != readyOK) {
 				t.Fatal("binding mismatch invented a failed source read")
+			}
+		})
+	}
+}
+
+func TestReadyPolicyProvenanceResampleAndCollectorConsumption(t *testing.T) {
+	for _, late := range []bool{false, true} {
+		t.Run(fmt.Sprint(late), func(t *testing.T) {
+			f := newCollectionFixture(t)
+			f.change = func(path string, n int, raw string) (int, string) {
+				if path == "/repos/policies/r" && (!late || n == 2) {
+					return 403, `private-response`
+				}
+				return 200, raw
+			}
+			got := f.collect()
+			requireCollectionNonpass(t, got, "source-denied")
+			if got.Review.Reasons[0].Sources[0].Source != "repository" {
+				t.Fatal("consumer replaced actual denied source with a generic label")
+			}
+			count := 0
+			denied := false
+			for _, src := range got.PolicySources {
+				count += src.Requests
+				if src.Name == "repository" && src.Repository == "policies/r" && src.Outcome == readyDenied {
+					denied = true
+				}
+			}
+			if count != got.PolicyRequests || !denied || got.Complete || strings.Contains(fmt.Sprint(got), "private-response") {
+				t.Fatal("precise producer evidence lost/double-counted/leaked")
 			}
 		})
 	}
