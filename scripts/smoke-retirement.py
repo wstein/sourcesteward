@@ -17,6 +17,10 @@ BINARY = ROOT / 'bin/stw'
 _spec = importlib.util.spec_from_file_location('jj_smoke', ROOT / 'scripts/smoke-jj-inspection.py')
 helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
+_layout_spec = importlib.util.spec_from_file_location('git_layout_smoke', ROOT / 'scripts/smoke-git-layouts.py')
+layout_smoke = importlib.util.module_from_spec(_layout_spec)
+_layout_spec.loader.exec_module(layout_smoke)
+LAYOUT_CASE_IDS = layout_smoke.CASE_IDS['retirement']
 NAMES = ('authorization', 'owned-clean-remove', 'metadata-only', 'current-workspace',
          'wrong-owner', 'dirty', 'untracked', 'ignored', 'symlink',
          'unknown-metadata', 'stale-files', 'stale-inode')
@@ -217,7 +221,8 @@ def acceptance(binary=BINARY):
             mark('stale-inode')
     expected = {case for cases in CASE_IDS.values() for case in cases}
     assert len(completed) == len(set(completed)) and set(completed) == expected, ('Missing retirement cases', expected - set(completed), set(completed) - expected)
-    print(str(len(completed)) + ' native retirement CLI cases passed with separate effects and protected-state checks')
+    layout_count = layout_smoke.acceptance(binary, 'retirement')
+    print(str(len(completed) + layout_count) + ' native retirement CLI cases passed with separate effects and protected-state checks')
 
 
 if __name__ == '__main__':

@@ -17,6 +17,10 @@ BINARY = ROOT / 'bin/stw'
 _spec = importlib.util.spec_from_file_location('jj_smoke', ROOT / 'scripts/smoke-jj-inspection.py')
 helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
+_layout_spec = importlib.util.spec_from_file_location('git_layout_smoke', ROOT / 'scripts/smoke-git-layouts.py')
+layout_smoke = importlib.util.module_from_spec(_layout_spec)
+_layout_spec.loader.exec_module(layout_smoke)
+LAYOUT_CASE_IDS = layout_smoke.CASE_IDS['tidy-apply']
 NAMES = ('authorization', 'delete-recovery', 'retry', 'stale-tip', 'stale-base',
          'workspace-use', 'remote-preservation', 'human')
 CASE_IDS = {group: tuple(group + '.' + name for name in NAMES)
@@ -204,7 +208,8 @@ def acceptance(binary=BINARY):
             mark('workspace-use')
     expected = {case_id for cases in CASE_IDS.values() for case_id in cases}
     assert len(completed) == len(set(completed)) and set(completed) == expected, ('Missing/extra apply cases', expected - set(completed), set(completed) - expected)
-    print(str(len(completed)) + ' native tidy apply CLI cases passed with exact reference and protected-state checks')
+    layout_count = layout_smoke.acceptance(binary, 'tidy-apply')
+    print(str(len(completed) + layout_count) + ' native tidy apply CLI cases passed with exact reference and protected-state checks')
 
 
 if __name__ == '__main__':

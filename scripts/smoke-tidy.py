@@ -18,6 +18,10 @@ BINARY = ROOT / 'bin/stw'
 _spec = importlib.util.spec_from_file_location('jj_smoke', ROOT / 'scripts/smoke-jj-inspection.py')
 helpers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helpers)
+_layout_spec = importlib.util.spec_from_file_location('git_layout_smoke', ROOT / 'scripts/smoke-git-layouts.py')
+layout_smoke = importlib.util.module_from_spec(_layout_spec)
+_layout_spec.loader.exec_module(layout_smoke)
+LAYOUT_CASE_IDS = layout_smoke.CASE_IDS['tidy']
 NAMES = ('ancestry', 'unique', 'base-retain', 'used-retain', 'empty-retain',
          'upstream-not-proof', 'literal-selection', 'missing-selection',
          'duplicate-selection', 'explicit-base', 'human', 'helper',
@@ -222,7 +226,8 @@ def acceptance(binary=BINARY):
             assert upstream['decision'] == 'retain', upstream
     expected = {case_id for cases in CASE_IDS.values() for case_id in cases}
     require_complete(completed, expected)
-    print(str(len(completed)) + ' native tidy planning CLI cases passed with byte/mode-identical native state')
+    layout_count = layout_smoke.acceptance(binary, 'tidy')
+    print(str(len(completed) + layout_count) + ' native tidy planning CLI cases passed with byte/mode-identical native state')
 
 
 if __name__ == '__main__':
