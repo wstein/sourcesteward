@@ -22,6 +22,7 @@
       "const": "release-record"
     },
     "status": {
+      "description": "Command-level result: ok produced or checked a canonical record; failed reports input disagreement or a failed record comparison; refused and error report unavailable capability/evidence or operational failure. Record generation does not verify attestations.",
       "enum": [
         "ok",
         "refused",

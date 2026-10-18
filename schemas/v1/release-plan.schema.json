@@ -29,6 +29,7 @@
       "const": "release-plan"
     },
     "status": {
+      "description": "Command-level evaluation status, separate from verdict. An ok result can have a pass, fail or incomplete verdict; callers must inspect gates and boundary qualifications. Refused and error are not passing evidence.",
       "enum": [
         "ok",
         "refused",
