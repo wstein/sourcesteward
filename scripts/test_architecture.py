@@ -188,8 +188,25 @@ class ArchitectureTests(unittest.TestCase):
             for alias in ('s', '.', '_'):
                 with self.assertRaises(ValueError):
                     architecture.validate_sources({path: source.replace('import "', 'import ' + alias + ' "', 1)})
+        linux_group = source + 'func f() { _, _ = syscall.Getpgid(42); _ = syscall.ESRCH }\n'
+        architecture.validate_sources({'internal/release/build_checkout_view_linux.go': linux_group})
+        for path in ('internal/release/build_checkout_view_darwin.go', 'internal/release/build_checkout_view.go'):
+            with self.assertRaises(ValueError): architecture.validate_sources({path: linux_group})
+        with self.assertRaises(ValueError): architecture.validate_sources({'internal/release/build_checkout_view_linux.go': source + 'var f = syscall.Getpgid\n'})
         for path in ('internal/release/build_checkout_view.go', 'internal/release/build_checkout_view_other.go', 'internal/release/sub/build_checkout_view_linux.go'):
             with self.assertRaises(ValueError): architecture.validate_sources({path: source})
+
+    def test_darwin_checkout_group_query_is_one_shot_and_not_forwarded(self):
+        path = 'internal/release/build_checkout_view_darwin.go'
+        source = 'package release\nimport "golang.org/x/sys/unix"\nvar _ unix.KinfoProc\nvar _ = unix.SizeofKinfoProc\nfunc observe() { _, _ = unix.SysctlRaw("kern.proc.pgrp", 42) }\n'
+        architecture.validate_sources({path: source})
+        for selector in ('SysctlKinfoProcSlice', 'SysctlKinfoProc', 'Kill', 'Exec', 'Syscall'):
+            with self.assertRaises(ValueError): architecture.validate_sources({path: source + 'var _ = unix.' + selector + '\n'})
+        for form in ('var f = unix.SysctlRaw', 'func f() any { return unix.SysctlRaw }'):
+            with self.assertRaises(ValueError): architecture.validate_sources({path: source + form})
+        for alias in ('u', '.', '_'):
+            with self.assertRaises(ValueError): architecture.validate_sources({path: source.replace('import "', 'import ' + alias + ' "', 1)})
+        with self.assertRaises(ValueError): architecture.validate_sources({'internal/release/build_checkout_view_linux.go': source})
 
     def test_release_foreign_helpers_cannot_forward_capabilities(self):
         prefix = 'github.com/wstein/sourcesteward/'

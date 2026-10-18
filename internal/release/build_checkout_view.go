@@ -509,3 +509,33 @@ func buildViewEnvironment(inherited []string, realGit, private string) []string 
 	}
 	return append(env, "PATH="+filepath.Dir(realGit)+":/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR="+private, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_ATTR_NOSYSTEM=1", "GIT_LITERAL_PATHSPECS=1")
 }
+
+// The lease is released by the whole comparison job only after actual cleanup;
+// native command completion alone never makes another capture job admissible.
+var buildViewLease = make(chan struct{}, 1)
+
+func acquireBuildViewLease(ctx context.Context) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	select {
+	case buildViewLease <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-buildViewLease
+			return nil, err
+		}
+		return func() { <-buildViewLease }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+type buildViewCommand struct {
+	Executable, Dir string
+	Args, Env       []string
+	Stdin           *os.File
+}
+type buildViewGroup struct {
+	members        int
+	leaderTerminal bool
+}

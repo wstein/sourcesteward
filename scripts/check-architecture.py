@@ -92,8 +92,9 @@ def validate_release_file(path, text, imported):
         raise ValueError('internal/release must not use unsafe or go:linkname: ' + path)
     code = strip_comments(text)
     unix_writer = path == 'internal/release/openfile_write_unix.go'
+    darwin_observer = path == 'internal/release/build_checkout_view_darwin.go'
     for dependency in imported:
-        if dependency not in standard_packages() and not release_project_import(dependency) and not (unix_writer and dependency == 'golang.org/x/sys/unix'):
+        if dependency not in standard_packages() and not release_project_import(dependency) and not ((unix_writer or darwin_observer) and dependency == 'golang.org/x/sys/unix'):
             raise ValueError('release import outside the closed dependency boundary: ' + path + ' imports ' + dependency)
     if unix_writer and 'golang.org/x/sys/unix' in imported:
         if not re.search(r'^\s*(?:import\s+)?"golang.org/x/sys/unix"', text, re.M):
@@ -119,13 +120,28 @@ def validate_release_file(path, text, imported):
         # The two platform observers currently read only Stat_t ctime fields.
         # This is not a wildcard process-capability exception for build_* files.
         for dependency in imported:
-            if is_process_import(dependency) and dependency != 'syscall':
-                raise ValueError('checkout metadata observers may import only syscall.Stat_t: ' + path)
+            if is_process_import(dependency) and dependency != 'syscall' and not (darwin_observer and dependency == 'golang.org/x/sys/unix'):
+                raise ValueError('checkout observers may import only reviewed metadata operations: ' + path)
+        if darwin_observer and 'golang.org/x/sys/unix' in imported:
+            if not re.search(r'^\s*(?:import\s+)?"golang.org/x/sys/unix"', text, re.M):
+                raise ValueError('checkout observer unix import must be plain: ' + path)
+            for selector in re.finditer(r'\bunix\.([A-Za-z_][A-Za-z0-9_]*)', code):
+                name = selector.group(1)
+                if name in ('KinfoProc', 'SizeofKinfoProc'):
+                    continue
+                if name == 'SysctlRaw' and re.match(r'\s*\(\s*"kern.proc.pgrp"\s*,', code[selector.end():]):
+                    continue
+                raise ValueError('Darwin checkout observer permits only direct owned-group read and ABI types: ' + path)
         if 'syscall' in imported:
             if not re.search(r'^\s*(?:import\s+)?"syscall"', text, re.M):
                 raise ValueError('checkout observer syscall import must be plain: ' + path)
-            if re.search(r'\bsyscall\.(?!Stat_t\b)[A-Za-z_][A-Za-z0-9_]*', code):
-                raise ValueError('checkout metadata observers may use only syscall.Stat_t: ' + path)
+            for selector in re.finditer(r'\bsyscall\.([A-Za-z_][A-Za-z0-9_]*)', code):
+                name = selector.group(1)
+                if name == 'Stat_t' or (not darwin_observer and name == 'ESRCH'):
+                    continue
+                if not darwin_observer and name == 'Getpgid' and re.match(r'\s*\(', code[selector.end():]):
+                    continue
+                raise ValueError('checkout observers may use only metadata types/direct owned-group observations: ' + path)
     elif path == 'internal/release/build.go':
         pass  # process groups need syscall; build.go is a reviewed process file
     else:
