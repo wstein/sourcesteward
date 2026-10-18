@@ -3,11 +3,15 @@ package release
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // These are native config LIST frames, not a project command runner. Complete
@@ -125,6 +129,147 @@ func TestBuildViewRenderNativeRoundTrip(t *testing.T) {
 	for _, expected := range []string{"fixture.line\tbreak.value\nnewline\nand tab\t\x00", "fixture.tab\tpart.empty\n\x00", "fixture.duplicate\nfirst\x00fixture.duplicate\nlast\x00"} {
 		if !bytes.Contains(actual, []byte(expected)) {
 			t.Fatal("native roundtrip lost literal key, value or order")
+		}
+	}
+}
+
+func TestBuildViewCaptureBindsParentAndActualFile(t *testing.T) {
+	base := t.TempDir()
+	parent := filepath.Join(base, "source")
+	if err := os.Mkdir(parent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(parent, "index")
+	if err := os.WriteFile(original, []byte("captured bytes"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(base, "moved")
+	actor := filepath.Join(base, "actor")
+	if err := os.Mkdir(actor, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(actor, "index"), []byte("wrong bytes"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	changed := false
+	binding, err := captureBuildViewPath(context.Background(), original, func(stage string) {
+		if stage == "opened-directory:"+parent && !changed {
+			if _, e := os.Stat(filepath.Join(parent, "index")); e == nil {
+				if e = os.Rename(parent, moved); e != nil {
+					t.Fatal(e)
+				}
+				if e = os.Symlink(actor, parent); e != nil {
+					t.Fatal(e)
+				}
+				changed = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer binding.Close()
+	snapshot, err := os.CreateTemp(t.TempDir(), "snapshot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snapshot.Close()
+	if err := binding.copyTo(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(io.NewSectionReader(snapshot, 0, 1<<20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "captured bytes" {
+		t.Fatal("recursive acquisition reopened replaced parent")
+	}
+	if err := binding.validate(); err == nil {
+		t.Fatal("replaced parent binding accepted")
+	}
+}
+func TestBuildViewCaptureReadAndRevalidation(t *testing.T) {
+	base := t.TempDir()
+	target := filepath.Join(base, "metadata")
+	if err := os.WriteFile(target, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	binding, err := captureBuildViewPath(context.Background(), link, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer binding.Close()
+	snapshot, err := os.CreateTemp(t.TempDir(), "snapshot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snapshot.Close()
+	if err := binding.copyTo(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if err := binding.validate(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("mutated!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(target, before.ModTime(), before.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := binding.validate(); err == nil {
+		t.Fatal("content mutation with restored mtime accepted")
+	}
+}
+
+func TestBuildViewCaptureSymlinkResolution(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Symlink(".", filepath.Join(dir, "repeat")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "index"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	path := dir + "/repeat/repeat/index"
+	b, err := captureBuildViewPath(context.Background(), path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Close()
+	if err := os.Symlink("cycle/again", filepath.Join(dir, "cycle")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = captureBuildViewPath(ctx, filepath.Join(dir, "cycle/index"), nil)
+	if err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("symlink cycle was not resolved as native path failure: %v", err)
+	}
+}
+
+func TestBuildViewEnvironmentIsNativeOnly(t *testing.T) {
+	inherited := []string{"HOME=/semantic/home", "XDG_CONFIG_HOME=/semantic/xdg", "LANG=en_US.UTF-8", "LC_CTYPE=C.UTF-8", "TZ=UTC", "SUDO_UID=42", "GITHUB_TOKEN=synthetic", "AWS_SECRET_ACCESS_KEY=synthetic", "LD_PRELOAD=/project/loader", "DYLD_INSERT_LIBRARIES=/project/loader", "BASH_ENV=/project/startup", "PATH=/project/bin", "GIT_DIR=/project/source", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=filter.fixture.clean", "STW_PRIVATE_MANIFEST=/project/manifest"}
+	env := buildViewEnvironment(inherited, "/trusted/bin/git", "/private/job")
+	joined := strings.Join(env, "\n")
+	for _, bad := range []string{"synthetic", "/project/", "GIT_CONFIG_COUNT", "STW_PRIVATE"} {
+		if strings.Contains(joined, bad) {
+			t.Fatalf("native environment retained forbidden field %q", bad)
+		}
+	}
+	for _, wanted := range []string{"HOME=/semantic/home", "XDG_CONFIG_HOME=/semantic/xdg", "LANG=en_US.UTF-8", "LC_CTYPE=C.UTF-8", "TZ=UTC", "SUDO_UID=42", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "TMPDIR=/private/job"} {
+		found := false
+		for _, v := range env {
+			found = found || v == wanted
+		}
+		if !found {
+			t.Fatalf("missing semantic/native environment field %q", wanted)
 		}
 	}
 }
