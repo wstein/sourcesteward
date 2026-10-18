@@ -1,0 +1,68 @@
+{
+  "import_base": "f973d1b32da9cf300176375195ffb24bd2ee1ec5",
+  "original_handoff_manifest": {
+    "base": "429b31bdc3188dc3440dee86fe3902117563cada",
+    "head": "f17b6beb8716c9cfa5f6943cdd2980aff610c752",
+    "tree": "132e4f65d32a0a5e2600da062d59549da8c81cc8",
+    "files": [
+      {
+        "path": "internal/workspace/git.go",
+        "old_blob": "3a791b03efa654004ef8d0dfcd6eaa068ab3b2d2",
+        "new_blob": "192f70981014bc097ac6f83da2e1a4ce930ba451"
+      },
+      {
+        "path": "internal/workspace/git_layout.go",
+        "old_blob": "af9dce5e9db87b60202256cfe660dbfd0fdcbb6b",
+        "new_blob": "f896525e607a52bc244144e34169eb770e7ce782"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_primary.go",
+        "old_blob": null,
+        "new_blob": "b468b4af6efecb4348e8c6edea3bedc1f41a6cd5"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_primary_test.go",
+        "old_blob": null,
+        "new_blob": "2840ef8877d6bb36015fee34949e4e5d59902ac8"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_proof.go",
+        "old_blob": "e8582121d4694596099abd319b0b9d225e07724b",
+        "new_blob": "594adea3a142c77675e2fa42d57857f09e7da2f2"
+      },
+      {
+        "path": "specs/029-tidy-dogfood-safety/primary-binding-provenance.json",
+        "old_blob": null,
+        "new_blob": "ecb0e8a7e7ee978dd2a6a6d7951fb5e8eea8bc41"
+      },
+      {
+        "path": "specs/029-tidy-dogfood-safety/verification-primary-binding.md",
+        "old_blob": null,
+        "new_blob": "318a3052fb538b2493af22703cb5bdf8faf4fcbc"
+      }
+    ],
+    "proposal": {
+      "path": "/tmp/stw-unit-d-primary-binding-design/proposal.md",
+      "sha256": "0a95388596d7381ec512098def2c5c9d1e9682a901707ea09992184a0dc6d5bc",
+      "independent_design": "CLEAR; source review pending"
+    },
+    "source_receipt": "/tmp/stw-unit-d-primary-source-bfxve472/receipt.json",
+    "full_receipt": "/tmp/stw-unit-d-primary-full-denmxpvh/receipt.json",
+    "targeted": [
+      "/tmp/stw-unit-d-primary-binding-1ggjonwq/red-receipt.json",
+      "/tmp/stw-unit-d-primary-binding-1ggjonwq/green-receipt.json",
+      "/tmp/stw-unit-d-primary-binding-1ggjonwq/boundary-receipt.json",
+      "/tmp/stw-unit-d-primary-mutants-2odpljhp/receipt.json"
+    ],
+    "acceptance": "Bounded additive native primary authority and v3 registration projection only. Full suites and exact independent source review pending; no actual retirement or Spec029 completion claim."
+  },
+  "original_handoff_sha256": "f14ac4f885872b25c96e5a093f8c84c5587e998b48d34ab7cd8196f33b473bfe",
+  "source_gate": {
+    "coordinator_reported": "SOURCECLEAR; 0 open including Low",
+    "exact_head": "f17b6beb8716c9cfa5f6943cdd2980aff610c752",
+    "tree": "132e4f65d32a0a5e2600da062d59549da8c81cc8",
+    "full_normal_seconds": 115.542,
+    "full_race_seconds": 141.286
+  },
+  "scope": "Exactly seven reviewed dependency blobs imported; no foreign commit history rewritten. Original dependency import/correction manifests and exact imported primary provenance remain unchanged. E consumer adaptation is reviewed separately in this candidate."
+}

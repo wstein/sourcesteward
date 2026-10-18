@@ -110,15 +110,36 @@ func (gitRetirementAdapter) Observe(ctx context.Context, source, base string, ta
 }
 
 func gitRetirementStoredFiles(ctx context.Context, bin string, id NativeIdentity) ([]RetirementStoredFile, error) {
+	policy, e := retirementPolicy("git", 2)
+	if e != nil {
+		return nil, e
+	}
+	return gitRetirementStoredFilesWithPolicy(ctx, bin, id, policy, nil)
+}
+
+func gitRetirementStoredFilesWithPolicy(ctx context.Context, bin string, id NativeIdentity, policy retirementContentPolicy, budget *tidyV3ProofBudget) ([]RetirementStoredFile, error) {
+	limit, e := policy.fileLimit(false)
+	if e != nil {
+		return nil, e
+	}
+	if policy == retirementGitV3Content && id.Backend != "git" {
+		return nil, failure("retirement-policy-refused", "Git v3 policy requires native Git identity")
+	}
 	entries, e := gitTreeEntries(ctx, bin, id.WorkspaceRoot, id.CommitID, id.ObjectFormat, nil)
 	if e != nil {
 		return nil, e
 	}
 	files := []RetirementStoredFile{}
 	expectedIndex := map[string]string{}
+	requests := []gitBlobRequest{}
 	for _, entry := range entries {
-		if entry.Size > nativeOutputLimit {
+		if entry.Size > limit {
 			return nil, failure("retirement-file-limit", "Stored Git content exceeds 64 KiB; retain the target")
+		}
+		if policy == retirementGitV3Content {
+			requests = append(requests, gitBlobRequest{Path: entry.Path, OID: entry.OID, Size: entry.Size, Executable: entry.Mode == "100755"})
+			expectedIndex[entry.Path] = entry.Mode + " " + entry.OID + " 0"
+			continue
 		}
 		content, code, e := runSandboxed(ctx, bin, []string{"--no-replace-objects", "cat-file", "blob", entry.OID}, id.WorkspaceRoot, nil, nil)
 		if e != nil {
@@ -129,6 +150,12 @@ func gitRetirementStoredFiles(ctx context.Context, bin string, id NativeIdentity
 		}
 		files = append(files, RetirementStoredFile{Path: entry.Path, Digest: gitDigest(content), Size: entry.Size, Executable: entry.Mode == "100755"})
 		expectedIndex[entry.Path] = entry.Mode + " " + entry.OID + " 0"
+	}
+	if policy == retirementGitV3Content {
+		files, e = gitStoredBlobSample(ctx, bin, id.WorkspaceRoot, id.ObjectFormat, requests, budget)
+		if e != nil {
+			return nil, e
+		}
 	}
 	index, e := gitRead(ctx, bin, id.WorkspaceRoot, "ls-files", "--stage", "-z")
 	if e != nil {

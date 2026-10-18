@@ -591,6 +591,58 @@ func TestV3JournalRecordsUncertainRecoveryWithoutInventingConfirmation(t *testin
 func v3LegacyTestNative(p V3Plan) V3NativeState {
 	return V3NativeState{ProtectedRoots: p.Retirement.ProtectedRoots, References: []V3Reference{{Name: "refs/heads/main", OID: p.Expected.BaseCommit}, {Name: p.Retirement.Target.HeadRef, OID: p.Retirement.Target.CommitID}}, Registrations: []V3Registration{{Path: p.Retirement.Destination.Path, HeadOID: p.Retirement.Target.CommitID, HeadRef: p.Retirement.Target.HeadRef}, {Path: p.SourcePath, HeadOID: p.Expected.Identity.CommitID, HeadRef: p.Expected.Identity.HeadRef}}}
 }
+
+func TestV3RetirementRegistrationFactsBindPrivateStore(t *testing.T) {
+	p := v3RegistrationGrantPlan()
+	p.StateDir = t.TempDir()
+	if err := os.Chmod(p.StateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	native := v3LegacyTestNative(p)
+	p.Expected = v3SnapshotWithState(p.Expected, native)
+	p.Digest, _ = v3PlanDigest(p)
+	s, err := openV3Store(p.StateDir, true, v3NativeRoots(native), native.ProtectedRoots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err = s.writePlan(p, native); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(p.StateDir, "tidy-v3-plans", p.PlanID+".json")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"parent", "siblings"} {
+		t.Run(field, func(t *testing.T) {
+			if err := os.WriteFile(path, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			stored, observed, err := s.readPlan(p.PlanID)
+			if err != nil || !reflect.DeepEqual(stored, p) || !reflect.DeepEqual(observed, native) {
+				t.Fatalf("complete private control failed to roundtrip: %v", err)
+			}
+			var envelope v3StoredPlan
+			if err := json.Unmarshal(original, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if field == "parent" {
+				envelope.Plan.Retirement.RegistrationParent.Mode ^= 1
+			} else {
+				envelope.Plan.Retirement.RegistrationSiblings[0].CtimeNS++
+			}
+			envelope.Plan.Digest, _ = v3PlanDigest(envelope.Plan)
+			mutated, _ := json.Marshal(envelope)
+			if err := os.WriteFile(path, mutated, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := s.readPlan(p.PlanID); err == nil {
+				t.Fatal("new physical facts escaped private envelope digest after public digest recomputation")
+			}
+		})
+	}
+}
 func TestV3RetirementJournalSeparatesRegistrationAndFiles(t *testing.T) {
 	p := v3LegacyTestPlan()
 	p.StateDir = t.TempDir()
@@ -744,6 +796,7 @@ func TestV3OwnedProvenanceReadsOriginalEvidenceWithoutMigration(t *testing.T) {
 	r.Destination = physical(old.Task.Destination, old.Task.DestinationIdentity.Device, old.Task.DestinationIdentity.Inode)
 	r.Parent = physical(filepath.Dir(old.Task.Destination), old.CreationPlan.DestinationParent.Device, old.CreationPlan.DestinationParent.Inode)
 	r.Registration = physical(old.Task.Native.GitDir, 1, 3)
+	r.RegistrationParent = physical(filepath.Dir(old.Task.Native.GitDir), 1, 4)
 	r.Target = old.Task.Native
 	r.RemoveFiles = old.Task.Destination
 	r.Provenance = V3Provenance{Kind: "owned", Owned: &V3OwnedProvenance{CreationPlan: old.CreationPlan, Task: old.Task, CreationJournalDigest: old.CreationJournalDigest, LockReason: "stw:" + old.Task.TaskID}}

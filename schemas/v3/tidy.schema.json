@@ -1060,7 +1060,25 @@
           "type": "boolean"
         },
         "identity": {
-          "$ref": "#/$defs/V3PhysicalIdentity"
+          "$ref": "#/$defs/V3PhysicalIdentity",
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "regular"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "size": {
+                    "maximum": 16777216
+                  }
+                }
+              }
+            }
+          ]
         }
       },
       "required": [
@@ -1306,9 +1324,6 @@
             "properties": {
               "nlink": {
                 "const": 1
-              },
-              "size": {
-                "maximum": 16777216
               }
             }
           }
@@ -2349,6 +2364,26 @@
             }
           ]
         },
+        "registration_parent": {
+          "$ref": "#/$defs/V3PhysicalIdentity",
+          "allOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "directory"
+                }
+              }
+            }
+          ]
+        },
+        "registration_siblings": {
+          "items": {
+            "$ref": "#/$defs/V3PhysicalIdentity"
+          },
+          "maxItems": 1024,
+          "type": "array",
+          "uniqueItems": true
+        },
         "remove_files": {
           "maxLength": 4096,
           "pattern": "^/",
@@ -2385,7 +2420,9 @@
         "metadata",
         "siblings",
         "integration",
-        "actions"
+        "actions",
+        "registration_parent",
+        "registration_siblings"
       ],
       "type": "object"
     },

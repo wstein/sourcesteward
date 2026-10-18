@@ -185,8 +185,14 @@ func TestTidyV3SchemaPositiveModesAndExclusiveProvenance(t *testing.T) {
 	p.Candidates = []workspace.V3Candidate{}
 	p.SelectedRefs = []string{}
 	p.Online = nil
-	p.Retirement = &workspace.V3Retirement{Actions: []workspace.V3RetirementAction{{Name: "remove-registration", Target: "/old", Decision: "delete", Reason: "integrated", Blockers: []string{}}, {Name: "remove-files", Target: "/old", Decision: "delete", Reason: "clean", Blockers: []string{}}}, ActionID: "retire-1", RegisteredRoots: []string{"/old", "/repo"}, ProtectedRoots: []string{"/active"}, Provenance: workspace.V3Provenance{Kind: "legacy-completion", Legacy: &workspace.V3LegacyProvenance{Owner: "owner", Completed: true, SameUserAuthority: true, SelectedPath: "/old", ProtectedRoots: []string{"/active"}, ObservedIdentity: destination}}, Destination: destination, Parent: physical("/", 1), Registration: physical(target.GitDir, 3), Target: target, RemoveRegistration: true, RemoveFiles: "/old", ContentPolicy: "git-v3", Disk: manifest, Metadata: manifest, Siblings: []workspace.V3PhysicalIdentity{}, Integration: workspace.V3CommitProof{OID: candidate.OID, Decision: candidate.Decision, Reason: candidate.Reason, Proof: candidate.Proof, WorkspacePaths: []string{"/old"}, Evidence: candidate.Evidence}}
+	p.Retirement = &workspace.V3Retirement{Actions: []workspace.V3RetirementAction{{Name: "remove-registration", Target: "/old", Decision: "delete", Reason: "integrated", Blockers: []string{}}, {Name: "remove-files", Target: "/old", Decision: "delete", Reason: "clean", Blockers: []string{}}}, ActionID: "retire-1", RegisteredRoots: []string{"/old", "/repo"}, ProtectedRoots: []string{"/active"}, Provenance: workspace.V3Provenance{Kind: "legacy-completion", Legacy: &workspace.V3LegacyProvenance{Owner: "owner", Completed: true, SameUserAuthority: true, SelectedPath: "/old", ProtectedRoots: []string{"/active"}, ObservedIdentity: destination}}, Destination: destination, Parent: physical("/", 1), Registration: physical(target.GitDir, 3), RegistrationParent: physical("/repo/.git/worktrees", 4), RegistrationSiblings: []workspace.V3PhysicalIdentity{}, Target: target, RemoveRegistration: true, RemoveFiles: "/old", ContentPolicy: "git-v3", Disk: manifest, Metadata: manifest, Siblings: []workspace.V3PhysicalIdentity{}, Integration: workspace.V3CommitProof{OID: candidate.OID, Decision: candidate.Decision, Reason: candidate.Reason, Proof: candidate.Proof, WorkspacePaths: []string{"/old"}, Evidence: candidate.Evidence}}
 	p.Retirement.Integration.WorkspacePaths = []string{"/old"}
+	registrationFile := physical("/repo/.git/worktrees/notes.txt", 5)
+	registrationFile.Kind, registrationFile.Nlink, registrationFile.Mode, registrationFile.Size = "regular", 1, 0600, (64<<20)+1
+	p.Retirement.RegistrationSiblings = []workspace.V3PhysicalIdentity{registrationFile, physical("/repo/.git/worktrees/other", 6)}
+	neighborFile := registrationFile
+	neighborFile.Path, neighborFile.Inode = "/neighbor-notes.txt", 9
+	p.Retirement.Siblings = []workspace.V3PhysicalIdentity{neighborFile}
 	raw, _ = json.Marshal(r)
 	valid(t, s, raw)
 	// A detached legacy target retains the same commit proof and paths without
@@ -217,7 +223,31 @@ func TestTidyV3SchemaPositiveModesAndExclusiveProvenance(t *testing.T) {
 		provenance["owned"] = map[string]any{}
 	}, "missing-completion": func(v map[string]any) {
 		v["provenance"].(map[string]any)["legacy"].(map[string]any)["completed"] = false
-	}, "wrong-content-policy": func(v map[string]any) { v["content_policy"] = "git-v2" }, "null-disk-entries": func(v map[string]any) { v["disk"].(map[string]any)["entries"] = nil }, "null-protection": func(v map[string]any) { v["protected_roots"] = nil }} {
+	}, "wrong-content-policy": func(v map[string]any) { v["content_policy"] = "git-v2" }, "null-disk-entries": func(v map[string]any) { v["disk"].(map[string]any)["entries"] = nil }, "null-protection": func(v map[string]any) { v["protected_roots"] = nil },
+		"missing-registration-parent": func(v map[string]any) { delete(v, "registration_parent") },
+		"null-registration-parent":    func(v map[string]any) { v["registration_parent"] = nil },
+		"registration-parent-kind": func(v map[string]any) {
+			parent := v["registration_parent"].(map[string]any)
+			parent["kind"], parent["nlink"] = "regular", 1
+		},
+		"registration-parent-mode":       func(v map[string]any) { v["registration_parent"].(map[string]any)["mode"] = 0100000 },
+		"registration-parent-open-shape": func(v map[string]any) { v["registration_parent"].(map[string]any)["extra"] = true },
+		"missing-registration-siblings":  func(v map[string]any) { delete(v, "registration_siblings") },
+		"null-registration-siblings":     func(v map[string]any) { v["registration_siblings"] = nil },
+		"registration-sibling-null":      func(v map[string]any) { v["registration_siblings"] = []any{nil} },
+		"registration-sibling-hardlink":  func(v map[string]any) { v["registration_siblings"].([]any)[0].(map[string]any)["nlink"] = 2 },
+		"registration-sibling-special":   func(v map[string]any) { v["registration_siblings"].([]any)[0].(map[string]any)["kind"] = "symlink" },
+		"registration-sibling-duplicate": func(v map[string]any) {
+			a := v["registration_siblings"].([]any)
+			v["registration_siblings"] = append(a, a[0])
+		},
+		"oversized-retired-user": func(v map[string]any) {
+			identity := physical("/old/user", 10)
+			identity.Kind, identity.Nlink, identity.Mode, identity.Size = "regular", 1, 0600, (16<<20)+1
+			entry, _ := json.Marshal(workspace.V3ManifestEntry{Identity: identity, Digest: hash})
+			v["disk"].(map[string]any)["entries"] = []any{value(t, entry)}
+		},
+	} {
 		t.Run(name, func(t *testing.T) {
 			v := value(t, raw).(map[string]any)
 			mutate(v["plan"].(map[string]any)["retirement"].(map[string]any))
