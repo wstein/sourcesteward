@@ -93,7 +93,10 @@ func buildRelease(ctx context.Context, o BuildOptions, runner buildRunner, inher
 	if err != nil {
 		return r.fail("build-failed", err)
 	}
-	s := buildState{root: root, commit: o.Commit, version: o.Version, epoch: epoch, contract: c, repository: os.Getenv("GITHUB_REPOSITORY"), stwVersion: "dev", run: RecordRun{Workflow: c.CI.ReleaseWorkflow}}
+	s := buildState{root: root, commit: o.Commit, version: o.Version, epoch: epoch, contract: c, repository: os.Getenv("GITHUB_REPOSITORY"), stwVersion: o.STWVersion, run: RecordRun{Workflow: c.CI.ReleaseWorkflow}}
+	if s.stwVersion == "" {
+		s.stwVersion = "dev"
+	}
 	s.run.RunID, _ = strconv.ParseInt(os.Getenv("GITHUB_RUN_ID"), 10, 64)
 	s.run.RunAttempt, _ = strconv.ParseInt(os.Getenv("GITHUB_RUN_ATTEMPT"), 10, 64)
 	entries, _, err := source.StwEntries()

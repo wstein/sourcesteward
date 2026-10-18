@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/release-build.schema.json",
+  "title": "SourceSteward release build result (schema 1)",
+  "type": "object",
+  "required": ["schema_version", "command", "status", "mode", "builds", "outputs", "unexpected", "error"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "command": {"const": "release-build"},
+    "status": {"enum": ["ok", "refused", "error", "mismatch"]},
+    "mode": {"type": "string"},
+    "builds": {"type": "array", "items": {
+      "type": "object", "required": ["id", "invocations"],
+      "properties": {"id": {"type": "string"}, "invocations": {"type": "array", "items": {
+        "type": "object", "required": ["target", "exit", "duration_seconds", "stdout_truncated", "stderr_truncated", "stdout", "stderr"],
+        "properties": {
+          "target": {"type": ["string", "null"]}, "exit": {"type": "integer"}, "duration_seconds": {"type": "number", "minimum": 0},
+          "stdout_truncated": {"type": "boolean"}, "stderr_truncated": {"type": "boolean"}, "stdout": {"type": "string"}, "stderr": {"type": "string"}
+        }
+      }}}
+    }},
+    "outputs": {"type": "array", "items": {"type": "object", "required": ["name", "size", "sha256"], "properties": {
+      "name": {"type": "string"}, "size": {"type": "integer", "minimum": 0}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }}},
+    "unexpected": {"type": "array", "items": {"type": "string"}},
+    "error": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["code", "message"], "properties": {"code": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "message": {"type": "string"}}}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "ok"}}}, "then": {"properties": {"error": {"type": "null"}}}},
+    {"if": {"properties": {"status": {"enum": ["refused", "error", "mismatch"]}}}, "then": {"properties": {"error": {"type": "object"}}}}
+  ]
+}
