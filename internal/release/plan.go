@@ -109,12 +109,11 @@ type planSource interface {
 }
 
 // Plan evaluates a commit's contract and displays data only. No build command is executed.
-func Plan(ctx context.Context, o PlanOptions) (r PlanResult) {
+func planOffline(ctx context.Context, o PlanOptions) (r PlanResult) {
 	r = PlanResult{SchemaVersion: 1, Command: "release-plan", Status: "error", Mode: "build", Backend: "unknown", Subject: PlanSubject{Version: o.Version}, Gates: []Gate{}, Verdict: "incomplete", WouldBuild: []PlanBuild{}, WouldPublish: []string{}, Network: []PlanRequest{}, Advisories: []PlanAdvisory{{"tag-ruleset", "unknown", "offline"}}, Boundary: CheckBoundary{Effects: CheckEffects{Processes: "detection+reads"}, Limits: CheckLimits{MaxBytes: MaxContractBytes, MaxFindings: MaxFindings}}}
 	if o.Mode != "" {
 		r.Mode = o.Mode
 	}
-	defer func() { r = escapePlan(r) }()
 	fail := func(code, message string) PlanResult {
 		r.Status = "refused"
 		r.Boundary.Complete = false
@@ -143,6 +142,7 @@ func Plan(ctx context.Context, o PlanOptions) (r PlanResult) {
 	}
 	root, backend, problem := detectOwner(ctx, o.Path, true)
 	r.Backend = backend
+	r.root = root
 	if problem != nil {
 		return fail(problem.code, problem.message)
 	}
@@ -233,6 +233,7 @@ func evaluateCommitPlan(ctx context.Context, o PlanOptions, root string, source 
 	if code != "" {
 		return fail(code, "cannot select a release contract at the evaluated commit")
 	}
+	r.contract = c
 	if len(findings) > 0 {
 		r.Gates = append(r.Gates, gate("config-invalid", "fail", "check-findings", findings[0].Code+": "+findings[0].Message))
 		for _, code := range []string{"version-invalid", "version-file-mismatch", "readiness-missing"} {
@@ -518,7 +519,7 @@ func (r PlanResult) Text() string {
 	if r.Subject.Tag != nil {
 		subject = *r.Subject.Tag
 	}
-	fmt.Fprintf(&b, "SourceSteward release plan: %s %s as %s (%s)\neffects: read-only; no project command executed; nothing built; network: none (offline)\n", r.Mode, subject, r.Subject.Version, r.Backend)
+	fmt.Fprintf(&b, "SourceSteward release plan: %s %s as %s (%s)\neffects: read-only; no project command executed; nothing built; network: %s\n", r.Mode, subject, r.Subject.Version, r.Backend, onlineText(r))
 	b.WriteString("allowlist reach (tracked leaves; not publication eligibility)\n")
 	if r.AllowlistMatches == nil {
 		b.WriteString("  unavailable\n")
