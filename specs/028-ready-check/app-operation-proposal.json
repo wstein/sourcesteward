@@ -28,7 +28,14 @@
     "writer_policy": "owner-only; actual actor and credential closure unknown",
     "publisher_installation": "excluded",
     "read_credential": "existing bounded read credential only; feasibility unknown",
-    "accepted_identity": null
+    "accepted_identity": null,
+    "inactive_initialization_proposed": {
+      "branch": "main",
+      "path": "README.md",
+      "raw_utf8": "# SourceSteward Ready control\n\nInactive owner-channel repository. No activation is installed.\n",
+      "sha256": "310350bf2435d6e61f3889d84366c8c5c88727fb9bbdc915f341a26347640f07",
+      "scope": "Optional exact reviewed initialization within P01; no activation, workflow, executor or credential"
+    }
   },
   "publisher_app": {
     "status": "proposed-not-registered",
@@ -96,15 +103,22 @@
     "policy_raw_sha256": null,
     "owner_transition_raw_sha256": null,
     "affected_key_inventory": null,
-    "write_and_reevaluation": "separate one-operation approvals; no implicit combined authority"
+    "write_and_reevaluation": "One exact approved P10 operation may include bounded blocking, channel write and reevaluation; no authority granted here"
   },
   "operation_slices": [
     {
       "id": "P01",
-      "operation": "Create empty public repository wstein/sourcesteward-ready-control",
-      "effect": "One repository creation; no auto-initialized branch, workflow, App installation, activation file or collaborator grant",
-      "prerequisite": "Independent proposal review; owner identity/name availability check under approval",
-      "authorization": "none"
+      "operation": "Create public repository wstein/sourcesteward-ready-control, optionally with the exact reviewed inactive README initialization",
+      "effect": "One useful repository-creation operation may include repository creation and the approved initial main commit; no activation file, workflow, App installation or collaborator grant",
+      "prerequisite": "Independent proposal review; owner identity/name availability; approval specifies empty or exact README initialization bytes/hash and all creation/initial-commit effects",
+      "authorization": "none",
+      "steps": [
+        "Confirm operating owner and exact repository-name availability within approved scope",
+        "Create proposed public repository",
+        "If included in approval, create initial main commit with only the exact reviewed README bytes",
+        "Read back immutable repository ID/owner/visibility and, when included, exact main commit/tree/README bytes"
+      ],
+      "failure": "Stop and report partial creation/initialization with observed IDs; no automatic deletion, alternative name or active configuration"
     },
     {
       "id": "P02",
@@ -122,24 +136,18 @@
     },
     {
       "id": "P04",
-      "operation": "Create empty target environment stw-ready-publisher",
-      "effect": "One environment creation; no secret, deployment, workflow or Ready claim",
-      "prerequisite": "Observed environment-name availability and owner-specific operation approval",
-      "authorization": "none"
-    },
-    {
-      "id": "P05",
-      "operation": "Set the exact observed environment to custom deployment-branch policies only",
-      "effect": "One environment policy update; no secret or branch-policy creation",
-      "prerequisite": "Actual environment ID/current protection diff; preserve unrelated protections; capability/actor closure review",
-      "authorization": "none"
-    },
-    {
-      "id": "P06",
-      "operation": "Add one main branch deployment policy to the exact environment",
-      "effect": "One branch-policy creation; no tag access, key or credential release",
-      "prerequisite": "P05 readback; exact policy absence/current diff; actual owner-only mutation and bypass proof",
-      "authorization": "none"
+      "operation": "Create and configure no-secret target environment stw-ready-publisher for main branch only",
+      "effect": "One useful environment operation includes creation, custom-only branch-policy mode and one main branch policy; no key/secret, deployment, tag policy or workflow",
+      "prerequisite": "Independent review; operating owner/target ID; exact name absent; supported policy shape and approved actor/custody assessment; approval enumerates all three writes and readbacks",
+      "authorization": "none",
+      "steps": [
+        "Preflight operating owner identity, exact target ID and complete authorized environment-name metadata; stop on unknown scope/completeness, existing name or identity mismatch; a 404 alone does not prove absence",
+        "Create environment without secrets; read back new ID and initial protection state",
+        "Set custom deployment-branch-policy mode while preserving observed unrelated protections; read back exact environment policy",
+        "Create only main branch deployment policy; read back complete bounded branch-policy set and environment mode"
+      ],
+      "bounds": "At most 3 fixed preflight metadata reads (operating identity, target repository, bounded complete environment list), 3 mutation requests and 3 post-write readback requests; no retries or pagination beyond the approved complete bound",
+      "failure": "Stop on unexpected state, denied/ambiguous response or failed readback; retain no-secret/nonactivated partial environment and report confirmed/unconfirmed steps; no automatic deletion or credential release"
     },
     {
       "id": "P07",
@@ -164,17 +172,29 @@
     },
     {
       "id": "P10",
-      "operation": "Commit one exact fully reviewed activation lock to the control channel",
-      "effect": "One owner channel write with exact old/new blob identities; no automatic executor install, settings change or reevaluation",
-      "prerequisite": "Actual channel ID/current branch, complete lock/policy/checker pins, old-baseline transition, separately approved raw-byte diff and confirmed separately approved blocking/invalidation for affected keys",
-      "authorization": "none"
-    },
-    {
-      "id": "P11",
-      "operation": "Run one explicit bounded activation reevaluation for the exact known affected-key set",
-      "effect": "One execution with the approved check-write/readback bounds; no polling, build, activation write or unrelated keys",
-      "prerequisite": "Separate approval, accepted immutable executor/channel/custody, current activation and complete at-most-20-key inventory; otherwise enforcement incomplete",
-      "authorization": "none"
+      "operation": "Activate one exact reviewed lock with bounded blocking, channel write and affected-key reevaluation",
+      "effect": "One useful activation operation explicitly includes locking, confirmed invalidation, exact channel commit, resampling and reevaluation/publication for the approved key set; no settings change, build or executor installation",
+      "prerequisite": "Actual channel ID/current commit, complete lock/policy/checker pins, old-baseline transition, accepted immutable executor/custody, exact raw-byte diff and complete bounded affected-key set; every write/readback and publication effect included in approval",
+      "authorization": "none",
+      "steps": [
+        "Validate old generation, exact candidate/new lock and complete at-most-20-key set; reject if the complete lifecycle cannot fit approved budgets",
+        "Acquire existing shared-key ownership in lexical key order; invalidate owned successes and confirm blocking readback before channel change",
+        "Commit only exact approved activation bytes under expected old branch/commit precondition; read back channel identity/commit/full raw bytes",
+        "Reevaluate affected keys with existing before/after full activation and association samples; publish/read back only current complete outcomes",
+        "Release ownership and report each confirmed or uncertain state; no old payload replay"
+      ],
+      "bounds": "Existing publisher limits: 60 seconds/120 total requests, at most 20 mutations and 20 readbacks; CLI 30-second/80-request sub-budget; at most 20 known keys, and fewer when required by the global budget; no polling/retries",
+      "failure": "No channel write before confirmed blocking; after cancellation, partial commit, drift or uncertain write retain confirmed blocking and report enforcement-unknown for unconfirmed keys; never restore stale successes or automatically roll back channel"
     }
-  ]
+  ],
+  "already_authorized_source_continuation": {
+    "scope": [
+      "caller-only evaluation/CLI under Spec028",
+      "inactive publisher source under T020-T023"
+    ],
+    "resource_dependency": "none",
+    "defaults": "denied/uninstalled/unsupported installed authority",
+    "fixtures": "honest injected source fixtures, never deployment acceptance",
+    "operation_approval_required": "No new resource approval for already-authorized bounded source work; file ownership/dependency gates still apply"
+  }
 }
