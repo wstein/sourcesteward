@@ -278,3 +278,16 @@ Independent source review and the no-write descriptor-input design assessment
 remain pending; T026 acceptance and global Spec 026 completion are not claimed.
 No actual credentials, external release operation or product/documentation build
 was used. Later effects retain their separate owner authorization requirements.
+
+## Spec 026 WI6 dispatch source candidate
+
+The isolated WI6 candidate implements a stateless canonical plan identity,
+one fixed POST transport and `release dispatch` plan/apply integration. It
+recomputes native and online build gates, refuses stale ids and local/remote
+main disagreement, and exposes attempted writes and HTTP status without remote
+bodies. Named products, fetch disclosures and native Git/jj identities remain
+explicit. The result schema is unpublished. [WI6 evidence](../specs/026-release-process/verification-wi6.md)
+records failing-first fixtures, source guard mutants, native state sentinels and
+remaining verification. T028/T029 have exact-source clearance; final T030 checks
+and independent review remain pending. Spec 026 stays planned. No actual
+workflow, build, publication, tag, release or activation was performed.
