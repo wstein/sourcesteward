@@ -19,7 +19,7 @@ func recordPath(product, version string) string {
 func planReadFailure(r PlanResult, ctx context.Context, err error) PlanResult {
 	code := "read-failed"
 	r.Status = "error"
-	if errors.Is(err, errReleaseLimit) {
+	if errors.Is(err, errReleaseLimit) || errors.Is(err, hosting.ErrReleaseLimit) {
 		code = "release-limit"
 		r.Status = "refused"
 	}
