@@ -108,6 +108,21 @@ func executeBuild(ctx context.Context, s buildState, o BuildOptions, runner buil
 	if o.Smoke != "" {
 		return executeSmoke(ctx, s, o, runner, inherited)
 	}
+	if o.FilesOnly {
+		kinds := map[string]uint8{}
+		for _, target := range s.contract.Target {
+			if target.Kind == "file" {
+				kinds[target.Build] |= 1
+			} else if target.Kind == "oci-image" {
+				kinds[target.Build] |= 2
+			}
+		}
+		for _, build := range s.contract.Build {
+			if build.Scope == "once" && kinds[build.ID] == 3 {
+				return r.fail("unsupported-target", fmt.Errorf("files-only requires separate file/image builds; once build %s is shared", build.ID))
+			}
+		}
+	}
 	out, err := filepath.Abs(o.Out)
 	if err != nil {
 		return r.fail("output-exists", err)
