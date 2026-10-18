@@ -486,3 +486,9 @@ func checkBuildWorktreeRoot(ctx context.Context, root string) error {
 		return nil
 	})
 }
+
+// Final metadata opens must not follow a swapped symlink or block on a FIFO.
+// Parent Root acquisition is descriptor-relative; its descriptor stays pinned.
+func openBuildViewFile(parent *os.Root, name string) (*os.File, error) {
+	return parent.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+}

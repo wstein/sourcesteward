@@ -24,13 +24,18 @@ import (
 //   - syscall is imported only by openfile_*.go (and build.go for process groups), without an
 //     alias, and in openfile_*.go its only uses are the selector expressions syscall.O_*;
 //   - no cgo (import "C", cgo directives), no assembly or other foreign sources, no unsafe, no
-//     go:linkname or plugin. The exact record writer alone imports pinned x/sys/unix;
+//     go:linkname or plugin. The two checkout-view platform observers
+//     (build_checkout_view_linux.go and build_checkout_view_darwin.go) may import syscall for the
+//     selector expression syscall.Stat_t only. The exact record writer alone imports pinned x/sys/unix;
 //     only direct Openat/Mkdirat calls and its explicit O_* constants are admitted.
 //     Direct imports and the non-hosting dependency closure are closed to other external helpers.
 var (
-	processFile  = regexp.MustCompile(`^(vcs_[a-z0-9_]+|attest|build)\.go$`)
-	openFile     = regexp.MustCompile(`^openfile_[a-z0-9_]+\.go$`)
-	foreignFiles = regexp.MustCompile(`(?i)\.(s|sx|c|cc|cpp|cxx|c\+\+|h|hh|hpp|hxx|h\+\+|m|f|for|ftn|f77|f90|f95|f03|f08|syso|swig|swigcxx)$`)
+	processFile = regexp.MustCompile(`^(vcs_[a-z0-9_]+|attest|build)\.go$`)
+	openFile    = regexp.MustCompile(`^openfile_[a-z0-9_]+\.go$`)
+	// The platform observers of the private checkout view. This is an exact-name exception, not
+	// a build_* wildcard: subdirectories and other names get no exemption.
+	checkoutObserver = regexp.MustCompile(`^build_checkout_view_(linux|darwin)\.go$`)
+	foreignFiles     = regexp.MustCompile(`(?i)\.(s|sx|c|cc|cpp|cxx|c\+\+|h|hh|hpp|hxx|h\+\+|m|f|for|ftn|f77|f90|f95|f03|f08|syso|swig|swigcxx)$`)
 )
 
 var standardOnce sync.Once
@@ -97,8 +102,8 @@ func releaseSourceViolations(files map[string]string) []string {
 			case path == "unsafe", path == "plugin", strings.HasPrefix(path, "golang.org/x/sys"):
 				add(name, "import of "+path+" is not allowed")
 			case path == "syscall":
-				if !openFile.MatchString(name) && name != "build.go" {
-					add(name, "syscall may be imported only by openfile_*.go and build.go")
+				if !openFile.MatchString(name) && name != "build.go" && !checkoutObserver.MatchString(name) {
+					add(name, "syscall may be imported only by openfile_*.go, build.go and the checkout view observers")
 				} else if named {
 					add(name, "syscall must be imported without an alias, dot or blank name")
 				}
@@ -179,6 +184,9 @@ func releaseSourceViolations(files map[string]string) []string {
 			if x.Name == "syscall" && openFile.MatchString(name) && strings.HasPrefix(sel.Sel.Name, "O_") {
 				allowedSyscall[x] = true
 			}
+			if x.Name == "syscall" && checkoutObserver.MatchString(name) && sel.Sel.Name == "Stat_t" {
+				allowedSyscall[x] = true
+			}
 			if x.Name == "unix" && name == "openfile_write_unix.go" && (writerUnixConstants[sel.Sel.Name] || (sel.Sel.Name == "Openat" || sel.Sel.Name == "Mkdirat") && directWriterCalls[sel]) {
 				allowedUnix[x] = true
 			}
@@ -187,6 +195,20 @@ func releaseSourceViolations(files map[string]string) []string {
 			}
 			return true
 		})
+		if checkoutObserver.MatchString(name) {
+			imports := map[*ast.Ident]bool{}
+			for _, spec := range file.Imports {
+				if spec.Name != nil {
+					imports[spec.Name] = true
+				}
+			}
+			ast.Inspect(file, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok && id.Name == "syscall" && !allowedSyscall[id] && !imports[id] {
+					add(name, "the checkout view observers may use only syscall.Stat_t, found "+fset.Position(id.Pos()).String())
+				}
+				return true
+			})
+		}
 		if openFile.MatchString(name) {
 			imports := map[*ast.Ident]bool{}
 			for _, spec := range file.Imports {
@@ -388,6 +410,35 @@ func TestReleaseSourceArchitectureProductionCannotInjectWriterHooks(t *testing.T
 	for _, body := range []string{"func caller() { writeRecordExclusive(\"root\",\"docs/releases/v1.json\",nil,recordWriteHooks{}) }", "var capturedWriter = writeRecordExclusive", "func caller() { _ = writeRecordExclusive }"} {
 		if len(releaseSourceViolations(map[string]string{"record.go": "package release\n" + body})) == 0 {
 			t.Fatalf("accepted production hook route %s", body)
+		}
+	}
+}
+
+func TestReleaseSourceArchitectureCheckoutObserversAreTypeOnly(t *testing.T) {
+	source := "package release\nimport \"syscall\"\nvar _ *syscall.Stat_t\n"
+	for _, name := range []string{"build_checkout_view_linux.go", "build_checkout_view_darwin.go"} {
+		if v := releaseSourceViolations(map[string]string{name: source}); len(v) != 0 {
+			t.Fatalf("%s rejected: %v", name, v)
+		}
+		for _, selector := range []string{"Kill", "Exec", "ForkExec", "Syscall", "RawSyscall", "O_TRUNC", "Getpgid"} {
+			if len(releaseSourceViolations(map[string]string{name: source + "var _ = syscall." + selector + "\n"})) == 0 {
+				t.Fatalf("%s accepted syscall.%s", name, selector)
+			}
+		}
+		for _, alias := range []string{"s", ".", "_"} {
+			if len(releaseSourceViolations(map[string]string{name: strings.Replace(source, "import \"", "import "+alias+" \"", 1)})) == 0 {
+				t.Fatalf("%s accepted alias %s", name, alias)
+			}
+		}
+		for _, other := range []string{"os/exec", "unsafe", "golang.org/x/sys/unix"} {
+			if len(releaseSourceViolations(map[string]string{name: "package release\nimport \"syscall\"\nimport _ \"" + other + "\"\nvar _ *syscall.Stat_t\n"})) == 0 {
+				t.Fatalf("%s accepted import %s", name, other)
+			}
+		}
+	}
+	for _, wrong := range []string{"build_checkout_view.go", "build_checkout_view_other.go", "build_checkout_view_linux_test_support.go", "sub/build_checkout_view_linux.go", "check.go"} {
+		if len(releaseSourceViolations(map[string]string{wrong: source})) == 0 {
+			t.Fatalf("accepted the observer import in %s", wrong)
 		}
 	}
 }
