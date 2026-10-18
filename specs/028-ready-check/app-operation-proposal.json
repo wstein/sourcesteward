@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "kind": "ready-app-operation-proposal",
+  "status": "inactive-proposal",
+  "design_source": "67694593697947db0db4d0aa4928d8b15dbda00b",
+  "authorization": "none",
+  "provider_apply_format": false,
+  "owner": {
+    "login": "wstein",
+    "account_id": 36202,
+    "type": "User",
+    "provenance": "T024 sampled repository owner; current operating principal unverified"
+  },
+  "target": {
+    "host": "github.com",
+    "full_name": "wstein/sourcesteward",
+    "repository_id": 1420737180,
+    "base_ref": "main",
+    "provenance": "T024 observation, not current permission proof"
+  },
+  "control_channel": {
+    "status": "proposed-not-created",
+    "full_name": "wstein/sourcesteward-ready-control",
+    "repository_id": null,
+    "visibility": "public",
+    "branch": "main",
+    "path": ".stw/ready-activation.json",
+    "writer_policy": "owner-only; actual actor and credential closure unknown",
+    "publisher_installation": "excluded",
+    "read_credential": "existing bounded read credential only; feasibility unknown",
+    "accepted_identity": null
+  },
+  "publisher_app": {
+    "status": "proposed-not-registered",
+    "owner": "wstein",
+    "display_name": "SourceSteward Ready",
+    "desired_slug": "sourcesteward-ready",
+    "name_availability": "unknown; no automatic alternative name",
+    "app_id": null,
+    "installation_id": null,
+    "installation_repositories": [
+      "wstein/sourcesteward"
+    ],
+    "repository_permissions_proposed": {
+      "checks": "write",
+      "contents": "read",
+      "pull_requests": "read",
+      "statuses": "read",
+      "metadata": "read"
+    },
+    "additional_read_permissions": "unknown; require demonstrated necessity and separate exact permission approval",
+    "user_permissions": [],
+    "webhook_delivery": "disabled; target native Actions events proposed",
+    "oauth_user_authorization": "not requested",
+    "private_key_material": "never included in proposal or agent output"
+  },
+  "credential_custody": {
+    "status": "unproven",
+    "repository": "wstein/sourcesteward",
+    "environment_proposed": "stw-ready-publisher",
+    "environment_id": null,
+    "secret_name_proposed": "STW_READY_APP_PRIVATE_KEY",
+    "secret_value": null,
+    "deployment_ref_policy_proposed": "custom branch main only; no tag policy",
+    "interactive_release_approval_proposed": "none; autonomous after source/custody acceptance",
+    "trusted_administration_proposed": [
+      "owner account 36202"
+    ],
+    "actual_environment_mutators_approvers_bypass_actors": null,
+    "actual_app_key_holders_and_token_minting_paths": null,
+    "candidate_credential_exclusion_proof": null
+  },
+  "executor": {
+    "status": "not-built-not-deployed",
+    "source_repository": "wstein/sourcesteward",
+    "source_repository_id": 1420737180,
+    "checker_source_sha": null,
+    "payload_sha256": null,
+    "bundle_location": null,
+    "bundle_sha256": null,
+    "bootstrap_raw_sha256": null,
+    "workflow_proposed": ".github/workflows/ready-evidence.yml",
+    "workflow_blob_sha": null,
+    "runner_proposed": "GitHub-hosted ubuntu-24.04",
+    "closure_inventory_revision": null,
+    "closure_raw_sha256": null,
+    "final_profile_acceptance_revision": null,
+    "untrusted_checkout_cache_artifact_execution": "forbidden",
+    "new_token_bridge_or_signing_provider": "none"
+  },
+  "activation": {
+    "status": "not-authorized-not-written",
+    "raw_lock_sha256": null,
+    "generation": null,
+    "policy_source_sha": null,
+    "policy_raw_sha256": null,
+    "owner_transition_raw_sha256": null,
+    "affected_key_inventory": null,
+    "write_and_reevaluation": "separate one-operation approvals; no implicit combined authority"
+  },
+  "operation_slices": [
+    {
+      "id": "P01",
+      "operation": "Create empty public repository wstein/sourcesteward-ready-control",
+      "effect": "One repository creation; no auto-initialized branch, workflow, App installation, activation file or collaborator grant",
+      "prerequisite": "Independent proposal review; owner identity/name availability check under approval",
+      "authorization": "none"
+    },
+    {
+      "id": "P02",
+      "operation": "Register owner-account App SourceSteward Ready with the listed proposed permissions",
+      "effect": "One App registration only; webhook disabled; no installation, key generation, OAuth grant or settings change",
+      "prerequisite": "Independent proposal review; owner/available name and exact form permission confirmation; unresolved permission extension requires new approval",
+      "authorization": "none"
+    },
+    {
+      "id": "P03",
+      "operation": "Install the exact newly observed App on target repository 1420737180 only",
+      "effect": "One installation grant; control repository excluded; no key generation or check publication",
+      "prerequisite": "Actual App ID/owner/permission readback and separately approved exact installation selection",
+      "authorization": "none"
+    },
+    {
+      "id": "P04",
+      "operation": "Create empty target environment stw-ready-publisher",
+      "effect": "One environment creation; no secret, deployment, workflow or Ready claim",
+      "prerequisite": "Observed environment-name availability and owner-specific operation approval",
+      "authorization": "none"
+    },
+    {
+      "id": "P05",
+      "operation": "Set the exact observed environment to custom deployment-branch policies only",
+      "effect": "One environment policy update; no secret or branch-policy creation",
+      "prerequisite": "Actual environment ID/current protection diff; preserve unrelated protections; capability/actor closure review",
+      "authorization": "none"
+    },
+    {
+      "id": "P06",
+      "operation": "Add one main branch deployment policy to the exact environment",
+      "effect": "One branch-policy creation; no tag access, key or credential release",
+      "prerequisite": "P05 readback; exact policy absence/current diff; actual owner-only mutation and bypass proof",
+      "authorization": "none"
+    },
+    {
+      "id": "P07",
+      "operation": "Generate one private key for the exact App into owner-controlled custody",
+      "effect": "One key generation; no agent-visible value, environment secret, installation expansion or publisher execution",
+      "prerequisite": "Actual App identity and owner custody/rotation plan; separate explicit approval",
+      "authorization": "none"
+    },
+    {
+      "id": "P08",
+      "operation": "Add the owner-held key as environment secret STW_READY_APP_PRIVATE_KEY",
+      "effect": "One secret write only; no value in review receipts; no automatic workflow dispatch or activation",
+      "prerequisite": "Immutable executor/source and custody acceptance, effective source-root guards, controlled startup, actual environment/key identities; separately approved secret operation",
+      "authorization": "none"
+    },
+    {
+      "id": "P09",
+      "operation": "Apply one exact current-to-proposed review-evidence source-pinned requirement diff",
+      "effect": "One separately reviewed settings operation preserving all current requirements; not executable from this proposal",
+      "prerequisite": "Actual passing exact-source check and App ID, authorized security acceptance, current rules/settings and rollback diff; all currently unknown",
+      "authorization": "none"
+    },
+    {
+      "id": "P10",
+      "operation": "Commit one exact fully reviewed activation lock to the control channel",
+      "effect": "One owner channel write with exact old/new blob identities; no automatic executor install, settings change or reevaluation",
+      "prerequisite": "Actual channel ID/current branch, complete lock/policy/checker pins, old-baseline transition, separately approved raw-byte diff and confirmed separately approved blocking/invalidation for affected keys",
+      "authorization": "none"
+    },
+    {
+      "id": "P11",
+      "operation": "Run one explicit bounded activation reevaluation for the exact known affected-key set",
+      "effect": "One execution with the approved check-write/readback bounds; no polling, build, activation write or unrelated keys",
+      "prerequisite": "Separate approval, accepted immutable executor/channel/custody, current activation and complete at-most-20-key inventory; otherwise enforcement incomplete",
+      "authorization": "none"
+    }
+  ]
+}
