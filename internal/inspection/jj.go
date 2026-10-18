@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -290,6 +291,19 @@ func (s jjSession) query(dir, op string, args ...string) (string, int, error) {
 	return s.execute(dir, s.bin, append(prefix, args...))
 }
 func (s jjSession) execute(dir, bin string, args []string) (string, int, error) {
+	var out capture
+	code, err := s.executeSink(dir, bin, args, &out)
+	if err != nil {
+		return "", code, err
+	}
+	if out.overflow {
+		return "", -1, errJJOutput
+	}
+	return out.String(), code, nil
+}
+
+// executeSink preserves the same sandbox and bounded stderr for a private stdout sink.
+func (s jjSession) executeSink(dir, bin string, args []string, stdout io.Writer) (int, error) {
 	var argv []string
 	if runtime.GOOS == "darwin" {
 		profile := `(version 1)(allow default)(deny file-write*)(deny network*)(deny process-exec)(allow process-exec (literal ` + strconv.Quote(bin) + `))`
@@ -302,24 +316,24 @@ func (s jjSession) execute(dir, bin string, args []string) (string, int, error) 
 	c.Env = s.env
 	c.Stdin = strings.NewReader("")
 	c.WaitDelay = time.Second
-	var out, errout capture
-	c.Stdout = &out
+	var errout capture
+	c.Stdout = stdout
 	c.Stderr = &errout
 	e := c.Run()
 	if s.ctx.Err() != nil {
-		return "", -1, s.ctx.Err()
+		return -1, s.ctx.Err()
 	}
-	if out.overflow || errout.overflow {
-		return "", -1, errJJOutput
+	if errout.overflow {
+		return -1, errJJOutput
 	}
 	if e == nil {
-		return out.String(), 0, nil
+		return 0, nil
 	}
 	var exit *exec.ExitError
 	if errors.As(e, &exit) {
-		return out.String(), exit.ExitCode(), nil
+		return exit.ExitCode(), nil
 	}
-	return "", -1, e
+	return -1, e
 }
 func isolateJJConfig(metadata, repo, dest string) error {
 	original := os.Getenv("XDG_CONFIG_HOME")

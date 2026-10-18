@@ -90,8 +90,10 @@ func IsFullCommitID(s string) bool {
 
 // Check lints the release contract files of the repository that owns Path. It reads the working
 // tree or one commit, writes nothing, contacts no network and starts no project command: the
-// only processes are the existing ownership detection and, with a commit, fixed Git reads.
-func Check(ctx context.Context, opts CheckOptions) CheckResult {
+// only processes are ownership detection and, with a commit, fixed isolated Git or native jj reads.
+func Check(ctx context.Context, opts CheckOptions) CheckResult { return check(ctx, opts, nil) }
+
+func check(ctx context.Context, opts CheckOptions, jj contractSource) CheckResult {
 	input := opts.Path
 	if input == "" {
 		input = "."
@@ -109,6 +111,10 @@ func Check(ctx context.Context, opts CheckOptions) CheckResult {
 		return finish(r)
 	}
 	fail := func(err error) CheckResult {
+		if ctx.Err() == nil && errors.Is(err, errJJCommittedSymlinkInput) {
+			r.Boundary.Complete = false
+			return refuse("unsupported-backend", err.Error())
+		}
 		if ctx.Err() != nil {
 			r.Status, r.Error = "error", &CheckError{"canceled", "the check was canceled"}
 		} else {
@@ -130,17 +136,36 @@ func Check(ctx context.Context, opts CheckOptions) CheckResult {
 	}
 	var source contractSource = worktreeSource{root}
 	if opts.Commit != "" {
-		if backend != "git" {
+		if backend == "jj" {
+			if jj != nil {
+				source = jj
+			} else {
+				var result CheckResult
+				err := inspection.WithJJReleaseTree(ctx, root, opts.Commit, func(reader *inspection.JJReleaseReader) error {
+					result = check(ctx, opts, jjSource{reader})
+					return nil
+				})
+				if errors.Is(err, inspection.ErrJJReleaseCommitUnresolved) {
+					return refuse("commit-unresolved", "the commit does not name a native commit of this repository")
+				}
+				if err != nil {
+					return fail(err)
+				}
+				return result
+			}
+		} else if backend != "git" {
 			return refuse("unsupported-backend", fmt.Sprintf("--commit reads a Git commit and is not supported for a %s-managed repository; lint the working-tree file instead", backend))
 		}
-		git, err := newGitSource(ctx, root, opts.Commit)
-		if errors.Is(err, errCommitUnresolved) {
-			return refuse("commit-unresolved", "the commit does not name a commit object of this repository")
+		if backend == "git" {
+			git, err := newGitSource(ctx, root, opts.Commit)
+			if errors.Is(err, errCommitUnresolved) {
+				return refuse("commit-unresolved", "the commit does not name a commit object of this repository")
+			}
+			if err != nil {
+				return fail(err)
+			}
+			source = git
 		}
-		if err != nil {
-			return fail(err)
-		}
-		source = git
 	}
 	entries, truncated, err := source.StwEntries()
 	if errors.Is(err, errStwNotDirectory) {
