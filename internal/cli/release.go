@@ -36,7 +36,7 @@ func releaseCommand() *cobra.Command {
 		SilenceUsage: true, SilenceErrors: true, Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error { return cmd.Help() },
 	}
-	command.AddCommand(releaseCheckCommand(), releasePlanCommand())
+	command.AddCommand(releaseCheckCommand(), releasePlanCommand(), releaseVerifyCommand(), releaseRecordCommand())
 	return command
 }
 
@@ -91,9 +91,15 @@ func releaseCheckCommand() *cobra.Command {
 	return command
 }
 
-type releasePlanFailed struct{}
+type releasePlanFailed struct{ command string }
 
-func (releasePlanFailed) Error() string { return "release plan: gates failed" }
+func (e releasePlanFailed) Error() string {
+	command := e.command
+	if command == "" {
+		command = "plan"
+	}
+	return "release " + command + ": gates failed"
+}
 
 func releasePlanCommand() *cobra.Command {
 	var options release.PlanOptions
