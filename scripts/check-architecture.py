@@ -24,7 +24,7 @@ def validate(lines):
 
 
 # Spec 026: project and Git processes start only in reviewed files of internal/release, and
-# nothing but internal/hosting reaches a network package.
+# network use is confined to the internal/hosting operation boundary.
 PROCESS_FILES = re.compile(r'^internal/release/(vcs_[a-z0-9_]+|attest|build)\.go$')
 IMPORT_BLOCK = re.compile(r'^import\s*\((.*?)^\)', re.S | re.M)
 IMPORT_LINE = re.compile(r'^\s*(?:[A-Za-z_.][A-Za-z0-9_]*\s+)?"([^"]+)"', re.M)
@@ -103,13 +103,26 @@ def validate_release_file(path, text, imported):
                     raise ValueError('internal/release starts processes only in reviewed files: ' + path + ' calls os.' + function)
 
 
-def validate_dependencies(dependencies):
-    """No network package may be in the dependency closure of the local-only packages."""
-    for package, deps in dependencies.items():
-        if package.removeprefix(MODULE) in NETWORK_FREE_PACKAGES:
-            for dependency in deps:
-                if is_network_import(dependency):
-                    raise ValueError(package + ' depends on the network package ' + dependency)
+def reachable(graph, root, boundary=None):
+    """Follow direct edges, excluding only the named operation boundary, never shared deps."""
+    seen, pending = set(), [root]
+    while pending:
+        package = pending.pop()
+        if package == boundary or package in seen:
+            continue
+        seen.add(package)
+        pending.extend(graph.get(package, ()))
+    return seen
+
+
+def validate_dependencies(graph):
+    """Release may delegate to hosting; no other path may reach a network package."""
+    for local in NETWORK_FREE_PACKAGES:
+        package = MODULE + local
+        boundary = MODULE + 'internal/hosting' if local == 'internal/release' else None
+        for dependency in reachable(graph, package, boundary):
+            if is_network_import(dependency):
+                raise ValueError(package + ' reaches network outside internal/hosting: ' + dependency)
 
 
 def go_sources():
@@ -140,8 +153,8 @@ def run_release_ast_check():
 
 FOREIGN_FILE_LISTS = ('CgoFiles', 'CFiles', 'CXXFiles', 'MFiles', 'HFiles', 'FFiles', 'SFiles', 'SwigFiles', 'SwigCXXFiles', 'SysoFiles')
 # Module packages internal/release may import: the root package (embedded schema), the existing
-# inspection and its own subpackages. Extend only when the code really needs more.
-RELEASE_IMPORT_ALLOWLIST = (MODULE.rstrip('/'), MODULE + 'internal/inspection')
+# inspection, hosting operations and its own subpackages. Extend only when actually needed.
+RELEASE_IMPORT_ALLOWLIST = (MODULE.rstrip('/'), MODULE + 'internal/inspection', MODULE + 'internal/hosting')
 RELEASE_PREFIX = MODULE + 'internal/release'
 EXEC_ALLOWED_PACKAGES = (RELEASE_PREFIX, MODULE + 'internal/inspection')
 
@@ -159,6 +172,7 @@ def validate_release_packages(packages):
 
 def validate_release_graph(graph):
     """graph maps a module package to its direct imports (internal/release/... and its closure)."""
+    outside_hosting = reachable(graph, RELEASE_PREFIX, MODULE + 'internal/hosting')
     for package, imports in graph.items():
         in_release = package == RELEASE_PREFIX or package.startswith(RELEASE_PREFIX + '/')
         if in_release:
@@ -167,7 +181,7 @@ def validate_release_graph(graph):
                 inside = dependency == RELEASE_PREFIX or dependency.startswith(RELEASE_PREFIX + '/')
                 if module_internal and not inside and dependency not in RELEASE_IMPORT_ALLOWLIST:
                     raise ValueError(package + ' imports ' + dependency + ', which is not on the internal/release import allowlist')
-        if 'os/exec' in imports and package not in EXEC_ALLOWED_PACKAGES:
+        if package in outside_hosting and 'os/exec' in imports and package not in EXEC_ALLOWED_PACKAGES:
             raise ValueError(package + ' imports os/exec; only internal/release (reviewed files) and internal/inspection may')
 
 
@@ -194,9 +208,12 @@ def go_release_graph():
 
 
 def go_dependencies():
-    result = subprocess.run(['go', 'list', '-deps', '-f', '{{.ImportPath}}'] + ['./' + p for p in NETWORK_FREE_PACKAGES], cwd=ROOT, text=True, capture_output=True, check=True)
-    closure = result.stdout.split()
-    return {MODULE + p: closure for p in NETWORK_FREE_PACKAGES}
+    result = subprocess.run(['go', 'list', '-deps', '-f', '{{.ImportPath}} {{join .Imports " "}}'] + ['./' + p for p in NETWORK_FREE_PACKAGES], cwd=ROOT, text=True, capture_output=True, check=True)
+    graph = {}
+    for line in result.stdout.splitlines():
+        package, *imports = line.split()
+        graph[package] = imports
+    return graph
 
 
 if __name__ == '__main__':
