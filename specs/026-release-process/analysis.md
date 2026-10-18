@@ -200,6 +200,15 @@ FR-022, the limits table, T015 and the release-plan effects now agree. The fixed
 
 These are author amendments awaiting independent cross-artifact analysis with the exact WI3 implementation revision; no final completeness or independent CLEAR is claimed here.
 
+
+## WI7 scoped optional cut: file-only local verification (2026-10-18)
+
+The task list's optional cut authority is applied narrowly to `build --mode local-verify`: file-only selected products retain local verification, while OCI and mixed products are explicitly deferred. This does not cut OCI from CI building or digest-only promotion. FR-008, the backend capability row, the additive refusal inventory, T033 and contracts/build.md now specify `unsupported-target` (exit 1) for any `oci-image` target in the trusted selected contract at C, before tree export, project execution or network. Backend ownership remains a separate `unsupported-backend` decision.
+
+The comparison record/manifest is not authoritative for target capability; omitting image assets cannot bypass the refusal. `--files-only` cannot make an OCI/mixed product eligible for local verification. Required fake-runner checks cover those attempts and preserve file-only verification and OCI CI/promote behavior. This is a scope disclosure under the existing optional-cut authority, not an authorization to build, execute, publish or activate anything. Local OCI reproducibility remains unimplemented and unclaimed.
+
+Independent cross-artifact analysis of this cut, the H5 amendment and their exact implementations is required before final completeness claims. WI7 must align the trusted-contract precheck and refusal code before its source candidate is reviewed.
+
 ### WI3 allowlist disclosure reconciliation
 
 The config contract and plan mitigation require plan-time pattern reach disclosure, independently of WI4 net-diff classification. `allowlist_matches` contains every declared pattern and conservative case-insensitive tracked-leaf count in contract order, including zero, or null when exact enumeration is unavailable. Symlinks, gitlinks and hostile tracked names remain in these metadata counts; counts do not grant publication eligibility. Git enumerates paths incrementally under its existing deadline, retaining one bounded path and the existing maximum 256 counters, with clean EOF and successful completion required. The buffered-output and raw-diff volume/count cuts do not apply to this metadata stream. Native jj reuses already admitted entries. This closes the missing human/JSON disclosure without reading contents or the working tree and without introducing a total repository-size cut.
