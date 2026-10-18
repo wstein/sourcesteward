@@ -146,3 +146,30 @@ worktrees. jj and GitButler are explicitly unsupported for submodules: jj has no
 model, so a jj-owned workspace, even a colocated one, is refused with `unsupported-backend` and
 never falls back to Git. No equivalence between a Git gitlink and any jj or GitButler concept is
 claimed. See [pins](pins.md) for evidence, findings and refusals.
+
+## Release source capabilities
+
+Spec 026 is planned/unreleased; the command group is hidden and the complete
+release process is not accepted. This table describes current source capability,
+not per-backend final acceptance. See the [release matrix](release.md).
+
+| Operation | Git-owned checkout | Native jj workspace |
+| --- | --- | --- |
+| `release check` | Working-tree contracts or committed blobs | Working-tree contracts; operation-pinned committed regular-file reads |
+| `release plan C --version V` | Local ancestry/contract/tree gates | Measured native ancestry/tree subset |
+| `release plan TAG`, `release verify TAG` | Local tag/record/diff and supplied-file checks | Refuses `unsupported-backend`; no raw Git fallback |
+| `release record` | Committed source reads and existing output hashing | Native source reader; `--write` discloses next-command snapshot of the new file |
+| `release build` modes | Git-only; explicit execution/runtime preconditions | Refuses `unsupported-backend` |
+| Online release evidence and `dispatch` | Pending implementation/integration | Pending implementation/integration; tag mode remains unsupported by design |
+
+Declared input resolution reaching a committed symlink in native jj check/commit
+planning refuses `unsupported-backend` (exit 1, incomplete), rather than judging
+configuration invalid. Unrelated symlinks remain admitted for inventory and
+pattern-reach counts. GitButler supports working-tree contract checking only;
+other release operations refuse. Ambiguous ownership refuses.
+
+Local verification is file-only: any OCI target in the trusted selected contract,
+including a mixed product, refuses before export or execution. In CI files-only
+mode, a shared file/image `once` build refuses before any project invocation;
+normal mixed CI builds remain valid. Source implementation and tests do not
+establish image reproducibility, live GitHub behavior or release acceptance.

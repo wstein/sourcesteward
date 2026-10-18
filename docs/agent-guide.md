@@ -70,11 +70,13 @@ The version command's JSON output contains no guidance notice or human prose.
 | 0 | Successful help, version or inspection output | Read standard output; standard error is empty. |
 | 1 | Runtime failure, including cancellation or output write failure | Read standard error; output may be incomplete after a write failure. |
 | 2 | Invalid command, flag, argument or help topic | Correct the invocation using installed help. |
-| 3 | Only `stw pins --strict`: a complete result with at least one error finding | Read the full result on standard output; standard error has one line with the error count. |
+| 3 | `stw pins --strict` error findings, or command-specific release findings/failed gates/mismatches | Read the full structured result and the command's documented status meaning. |
 
-Status 3 belongs to the planned `stw pins` command (see below) and appears only once that command
-ships. Its precedence is 2, then 1, then 3, then 0: an incomplete result exits 1 even when it has
-error findings. See [pins](pins.md).
+For pins, an incomplete result exits 1 even with error findings; see [pins](pins.md).
+For release commands, exit 3 means check findings, a failed plan/verify verdict,
+record disagreement/noncanonical comparison, or local verification hash mismatch.
+Exit 1 includes a release refusal, operational failure or incomplete verdict;
+`not-run` gates never clear publication. See the [release status table](release.md).
 
 Failures use the single-line `Error: ...` diagnostic on standard error when that stream
 can be written. Usage failures produce no standard output. Do not treat partial output
@@ -184,3 +186,19 @@ Never treat status 1, an `incomplete`, `refused` or `error` result, or `unknown`
 `unreachable` means only that local remote-tracking refs do not contain the pin; no fetch is made, so
 it does not prove the remote lacks the commit. jj and GitButler workspaces are refused; do not
 substitute raw Git. Read [pins](pins.md) before acting on a finding.
+
+## Release source commands and pending acceptance
+
+The hidden release group currently registers `check`, `plan`, `verify`, `record`
+and `build`; use explicit `stw release --help` on a matching binary. `dispatch`
+and live online evidence are not available in this source slice. `plan --online`
+refuses `online-unavailable`; `verify --online` cannot complete CI/attestation
+gates. These are partial source implementations, not release acceptance.
+
+Use the [current release matrix](release.md) and [owner preparation](releasing.md)
+before interpreting output. Read-only release checks never execute project
+commands. `record --write` creates a new record without staging/committing;
+`build` is an execution boundary requiring separate build approval. A plan,
+source test or documentation update does not authorize build, tag, publication,
+consumer activation or settings changes. WI9 remains incomplete until WI8 and
+the remaining acceptance/publication work are complete.

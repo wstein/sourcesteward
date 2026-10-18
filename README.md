@@ -30,6 +30,11 @@ until its conformance work item), stack inspection/plan, checkpoint/resume, conf
 diagnosis, restacking, stacked PR writes, work transfer, change editing, upstream
 synchronization and native GitButler integration. Bounded recovery evidence is not automatic restoration.
 
+**Release source work:** hidden `stw release check|plan|verify|record|build` commands
+are partially implemented; online evidence, dispatch, workflows, bootstrap and
+release acceptance remain pending. See the [current matrix](docs/release.md) and
+[owner preparation](docs/releasing.md). No release readiness is implied.
+
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
 [Specification](specs/001-project-foundation/spec.md) ·
 [Plan](specs/001-project-foundation/plan.md) · [Tasks](specs/001-project-foundation/tasks.md)
