@@ -273,3 +273,33 @@ func TestBuildViewEnvironmentIsNativeOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildViewCaptureRawHeadSymlinkDoesNotRequirePhysicalTarget(t *testing.T) {
+	dir := t.TempDir()
+	head := filepath.Join(dir, "HEAD")
+	// Native Git treats refs/... symlink HEAD as a symbolic ref in its ref store;
+	// a linked worktree need not have that physical path under its own gitdir.
+	if err := os.Symlink("refs/heads/main", head); err != nil {
+		t.Fatal(err)
+	}
+	b, err := captureBuildViewMetadata(context.Background(), head, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if !b.rawSymlink || b.linkTarget != "refs/heads/main" {
+		t.Fatal("raw metadata symlink not preserved")
+	}
+	if err := b.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(head); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("refs/heads/other", head); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.validate(); err == nil {
+		t.Fatal("changed symbolic HEAD accepted")
+	}
+}
