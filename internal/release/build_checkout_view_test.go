@@ -303,3 +303,24 @@ func TestBuildViewCaptureRawHeadSymlinkDoesNotRequirePhysicalTarget(t *testing.T
 		t.Fatal("changed symbolic HEAD accepted")
 	}
 }
+
+func TestBuildViewCaptureAbsentAncestryBindsFirstMissingEdge(t *testing.T) {
+	root := t.TempDir()
+	b, err := captureBuildViewMetadata(context.Background(), filepath.Join(root, "absent", ".git"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if b.info != nil {
+		t.Fatal("missing ancestry synthesized metadata")
+	}
+	if err := b.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "absent"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.validate(); err == nil {
+		t.Fatal("changed missing ancestor accepted")
+	}
+}
