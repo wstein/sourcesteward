@@ -157,3 +157,116 @@ pass. Integrating author makecheck passes with mandatory current backends/sandbo
 43Python tests,12theme cases,132docs and all Go/module/architecture/whitespace checks.
 This fixture-only follow-up changes no production operation, schema or native permission.
 Its PR body records separate hosted acceptance; earlier merged feature checks stand.
+
+## Issue #62 source implementation
+
+The native layout implementation follows independently reviewed design
+`4a861bba9e6661c6b5a37ee38704261a331bd713` ([design provenance](analysis.md#issue-62-independently-reviewed-design-prerequisite)).
+`git_layout_test.go` and `git_layout_lifecycle_test.go` exercise canonical ordinary,
+initialized submodule and separate-Git-directory primary/linked sources, generated relative
+and explicit absolute mappings, detached creation, stored apply/handoff/retry, packed local
+branch recovery/deletion and owned full retirement/retry. They check protected
+source/primary/sibling bytes, index/configuration and exact declared reference changes.
+Duplicate/external-origin settings, redirections, missing or mismatched reciprocal pointers,
+malformed/oversized files and symlink/hardlink aliases refuse. Same-byte metadata replacement
+stales evidence; config replacement after recovery retains both target and recovery root.
+Helper tests preserve unused LFS definitions and dirty-source attribute behavior while
+refusing committed/info/global active attributes, reserved driver settings and executable
+hooks with absent process sentinels.
+
+Source smoke manifests additionally require 24 workspace, 12 tidy-plan, 20 tidy-apply and
+20 retirement layout cases across initialized-submodule/separate-Git-directory primary and
+linked sources. Three source tests check all manifests, fail-closed prerequisites and
+native fixture identities. These supplements preserve the original mandatory cases.
+No new-layout CLI matrix acceptance, distribution/release/image/site build, local candidate
+CLI installation, real-user cleanup, push, PR, tag, release or publication ran. The existing
+`TestRealCLIOutputs` and `TestRealJJCLIOutputs` each compiled/executed a temporary `stw`
+fixture during both full Go suites, within the authorized routine source-test/compiler
+verification boundary. Test temporary directories were cleaned. Those generic schema tests
+do not establish acceptance of the newly extended layout smoke matrix. Mandatory fresh
+minimum/current Git CLI/schema matrix acceptance
+and exact implementation review remain pending. Git 2.46.0 was unavailable; Node was absent
+from PATH, so the theme test was not run. No tool was downloaded or installed.
+
+The tested source was committed as `08398366936da8527218ec380ca1057adcf20c91`, after
+focused proof (`5983db0`), lifecycle (`13984f3`) and smoke (`0839836`) commits. This evidence
+and guide update changes no runtime/test/smoke source. The author was configured
+`gpt-6.1-sol/high`; runtime model identity was unexposed. Narrow host execution escalation
+was required because the outer sandbox could not mount `/proc`; the product's required
+native filesystem/network sandbox remained enabled throughout.
+
+| Executed source verification | Result |
+| --- | --- |
+| `STW_REQUIRE_JJ=1 STW_REQUIRE_NATIVE_SANDBOX=1 go test ./...` | PASS; full initial suite, including permitted temporary generic CLI fixtures, before final test-only additions |
+| Same mandatory environment, `go test -race ./... -count=1 -v` | PASS; all packages; 14 new layout groups and six existing native jj groups passed with zero skips in those groups |
+| `go test -race ./internal/workspace -count=1 -v -run '^TestGitLayoutOwnedRetirementRetainsUnsafeTargets$'` | PASS; final added fifteenth layout group, all four primary/linked external layouts; 3.595s |
+| Existing minimum jj prepended to `PATH`, mandatory environment, six exact native groups below | PASS; inspection 19.278s, workspace 11.126s; zero skips |
+| `go vet ./...`, `go mod verify`, gofmt check, `git diff --check` | PASS |
+| Python source suite with exactly one packaging test excluded, exclusion count asserted | PASS; 79 tests; excluded only `test_docs.DocumentationTests.test_packaging_excludes_source_and_binds_revision` |
+| `python3 -B scripts/check-docs.py`, `python3 -B scripts/check-architecture.py` | PASS; 253 authored documents, architecture boundary intact |
+| `node --test scripts/test_theme.mjs` | NOT RUN; Node unavailable on PATH |
+
+Installed current tools were Git `2.56.0` and jj
+`0.46.0-7d382314f9420b4b8d932245b49c99492c812b9f`. Existing minimum jj was
+`0.45.1-7c41cdeb16b6b321c64e789a966b6adf723816a5` at the same temporary pin used by the
+reviewed design baseline. The minimum source command selected exactly
+`TestJJInventoryConformance`, `TestJJTidyCandidateSafety`, `TestJJTidyNativeReadOnly`,
+`TestJJTidyApplyNativeRecovery`, `TestJJWorkspaceNativeCreationPreservesSource` and
+`TestJJRetirementAdapterOwnedLifecycle` across inspection/workspace packages. It preserves
+standalone/colocated local bookmark deletion and native recovery while retaining remote
+counterparts and native changes; no abandonment or remote deletion was added. The full
+race suite's separate opt-in release debug helper `TestTOMLCorpusDump` skipped as designed;
+that is not a skipped native acceptance case.
+
+Three single-rule mutations were executed and restored: dropping direct config-origin
+admission failed included/global fixtures; dropping backlink equality failed the wrong-backlink
+fixture; dropping metadata inode evidence failed same-byte/same-mode config replacement.
+The inode sample first exposed a test confounder (replacement also changed mode); the fixture
+was corrected to change only inode, and the mutation then failed for the intended reason.
+Transient logs use `/tmp/stw-native-layout-` prefixes and are not external test inputs.
+
+Independent strongest-tier review of the exact final source/evidence SHA and the new CLI
+layout/schema matrix on minimum/current Git remain pending. Git minimum 2.46.0, other
+platforms, hosted CI, the single approval-required Hugo packaging test and Node theme test
+are not claimed. No new layout smoke suite was run against a built CLI. These limits leave
+Spec 010 T036–T038 / Spec 011 T404 open and do not establish overall v0.1.0 readiness.
+
+## Issue #62 backlink review correction
+
+The initial `0075d75afaacbf773b5d4970a53978f0ba3121d5` implementation was independently
+**NOT CLEAR** for one Medium literal-backlink traversal finding. Its tests and source
+results above remain historical evidence rather than clearance of the missed boundary.
+[Analysis](analysis.md#issue-62-first-implementation-review-and-correction) records the
+finding and test-first correction. The focused source matrix now refuses six absolute/relative
+symlink, missing-entry and regular-file parent traversals and admits two valid real-directory
+traversals. Each hostile case checks source/metadata/refs, an external sentinel and an empty
+reserved destination before the next effect. The focused corrected test command
+`go test ./internal/workspace -count=1 -run '^TestGitLayoutBacklinkLiteral'` passed in 0.495s.
+No native argument, sandbox grant, configuration-origin rule or recovery effect was widened.
+
+The correction and regression tests are folded into the owned shared-proof commit; the
+initial head is preserved locally. Changed-source checks and same-reviewer exact-head
+re-review must cover the rewritten candidate. Fresh CLI layout acceptance, Git 2.46.0,
+Node, hosted CI, cross-platform checks and the approval-required Hugo packaging test remain
+unrun gates. The expanded source layout suite contains 17 groups; this is a source-test
+coverage count, not fresh CLI matrix acceptance.
+
+Corrected source `bdf509a1e18e6d326e0e158d670c15c52ae2a904` was checked after folding
+the correction. Old reviewed head `0075d75afaacbf773b5d4970a53978f0ba3121d5` is preserved
+as local `codex/62-native-layout-review-round1`. `range-diff` retains equality for the
+lifecycle and smoke commits; shared proof/tests and evidence changed. The final evidence
+amendment changes no `internal/` or `scripts/` bytes from this checked corrected source.
+
+| Corrected-source check | Measured result |
+| --- | --- |
+| Mandatory environment, `go test ./... -count=1 -v` | PASS; 17 new layout and six mandatory jj groups, zero skips in those groups; workspace 130.017s, inspection 142.097s |
+| Mandatory environment, `go test -race ./... -count=1 -v` | PASS; same 17 layout and six jj groups, zero mandatory skips; workspace 138.943s, inspection 154.987s |
+| Existing minimum jj pin, same exact six-group selection and mandatory environment | PASS; inspection 31.137s, workspace 16.025s; zero skips |
+| `go vet ./...`, `go mod verify`, gofmt and whitespace | PASS |
+| Python source suite, exactly the one Hugo packaging test excluded/count asserted | PASS; 79 tests |
+| Source docs and architecture checks | PASS; 253 authored documents |
+
+Both full corrected suites retained only the intentional opt-in `TestTOMLCorpusDump` skip.
+Tool versions, allowed temporary generic CLI fixture compilation and every unrun gate remain
+as recorded above. Same-reviewer review of the exact final amended head is pending; these
+checks do not assert CLEAR or essential v0.1.0 acceptance.

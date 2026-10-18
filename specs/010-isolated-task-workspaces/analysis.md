@@ -165,3 +165,56 @@ Author validation of the specification candidate: `python3 -B scripts/check-docs
 (253 authored documents) and `git diff --check` passed. These are source-only documentation
 and whitespace checks. No full source-suite rerun, Hugo/site build or new native acceptance
 was performed for the prose-only candidate; the scoped baseline results above remain distinct.
+
+## Issue #62 independently reviewed design prerequisite
+
+The coordinator supplied executed independent design-only CLEAR from
+`/root/dispatch/review_native_spec`, configured `gpt-6-astra/high` (runtime model identity
+unexposed), first at `bfb7332cd8c141d0f88c84c3f3dee367f09b4189`, then at the exact
+rebased design `4a861bba9e6661c6b5a37ee38704261a331bd713`. The author's old parent
+`279865a525be13684e989e8c1d936c0cdff2269b` and new parent
+`9a704dbaf166ccc2bca57fce890b44cdc239374f` both had tree
+`edf9b48bfbf8cd3514e98b8402a7969b017dd788`; old/new design tree was
+`eee9f5dbae5ab764f2469311e6ce0c5052a0a0df`, with `range-diff` equality `1 = 1` and
+unchanged message/attribution. The same independent reviewer rechecked the exact new
+SHA, tree/range/message proof, 253-document source check and whitespace. The earlier
+15 current and six minimum-jj native groups were not rerun for that source-identical
+rebase. This is prerequisite design evidence, not implementation review, a native Git
+minimum run or artifact/build authorization.
+
+The implementation author reproduced the old refusal with real native fixtures before
+replacing it: ten admitted-key creation combinations failed in
+`TestGitLayoutNativeAdmissionAndDetachedCreation`, and the config-replacement creation
+case was blocked by that guard (`/tmp/stw-native-layout-red.log`). A separate failing
+`TestGitLayoutVerifyRefusesReplacedConfiguration` proved that completed creation
+verification previously ignored a same-byte common-config replacement
+(`/tmp/stw-native-layout-verify-red.log`). Both defects are fixed at the shared workspace
+safety boundary; native command arguments and sandbox grants are unchanged.
+
+The runtime proof is now implemented and source-tested; [verification](verification.md#issue-62-source-implementation)
+records the focused source commits, executed single-rule mutations, mandatory native jj
+regressions, preserved effects and remaining exact-source review/fresh CLI acceptance gates.
+The historical design-candidate wording above records the prerequisite state, not a claim
+that the implementation has independently cleared its own safety changes.
+
+### Issue #62 first implementation review and correction
+
+Independent executed review of exact implementation/evidence head
+`0075d75afaacbf773b5d4970a53978f0ba3121d5` by `/root/dispatch/review_native_layout`
+(assigned strongest tier; runtime model identity unexposed) was **NOT CLEAR**, with one Medium finding and no other source findings. In
+`git_layout.go`, `filepath.Dir(value)` cleaned the registration's backlink before the
+literal traversal proof. Absolute and relative backlinks containing a symlink, missing
+entry or regular file followed by `/../.git` could therefore be admitted and reach
+successful native creation, contrary to T033/T034. The earlier source tests did not
+establish this boundary; T031 design clearance remains separate and unchanged.
+
+The author first reproduced all six hostile cases, including native creation and
+source/index/config/ref/destination/external sentinel checks, in
+`TestGitLayoutBacklinkLiteralTraversalRefused`. The separate positive matrix
+`TestGitLayoutBacklinkLiteralDirectoryTraversalAdmitted` retains both absolute and relative
+backlinks with real directory traversal and ordinary generated `..` components. The focused
+suite failed before the correction, then passed after splitting the literal final `.git`
+filename without cleaning and validating the complete parent traversal before comparison.
+The old head is preserved locally; the correction is folded into the original shared-proof
+commit. A rewritten head needs the same independent review again; no prior clearance is
+carried onto it. See [verification](verification.md#issue-62-backlink-review-correction).
