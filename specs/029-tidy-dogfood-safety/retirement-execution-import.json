@@ -1,0 +1,209 @@
+{
+  "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+  "source_tree": "f338ab89dbf86ccbded81be0e3d75e638e5dbba6",
+  "review_level": "FORMAL SOURCE CLEAR, zero open findings; parent confirmed same strongest reviewer final gate",
+  "final_receipt_sha256": "88f4fa47ca3086fb34420fb5b5c020e095f73b741aa617afb0d716fcdfae1d55",
+  "source_manifest_sha256": "53bfd493c7464d1655f846c2b74eaa3a0967e05bfbed1ade2acd3ec67ac5e1e2",
+  "F_previous": "ab9f516d8893e8ef2e09da1a6f9603fcff048993",
+  "paths": [
+    {
+      "path": "internal/contracts/tidy_v3_schema_test.go",
+      "F_old_blob": "89d030f0cf69cbb1461c4e3827fd6e0c8ae1bcff",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "89d030f0cf69cbb1461c4e3827fd6e0c8ae1bcff",
+      "new_blob": "89d030f0cf69cbb1461c4e3827fd6e0c8ae1bcff",
+      "sha256": "f82b1b178968d355a2483d21458244a27a7eecbefbad4835eb2e72b38dd06531"
+    },
+    {
+      "path": "internal/workspace/retirement_git.go",
+      "F_old_blob": "bfc2323e923932ff8ff3209c5ca38a79e787ec92",
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "bfc2323e923932ff8ff3209c5ca38a79e787ec92",
+      "new_blob": "fcf13263f40aae67656758084058b5ec24b16a33",
+      "sha256": "6a769cf7e65cdff451a5b407bb5fa89584e2c872a10aebeafa3b10962cb95e44"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_legacy.go",
+      "F_old_blob": "f3c5a793110699630f689a1afe17f238206b83c6",
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "f3c5a793110699630f689a1afe17f238206b83c6",
+      "new_blob": "4a7bf2396f112834377f455691bfc6889a5d2163",
+      "sha256": "82ef888cbdc7c57f1c8b1f520ec203e859f3b9f9a807aaa62248c06975067932"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result.go",
+      "F_old_blob": "f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed",
+      "new_blob": "f44dc3f2286c72003483cf6d2244b0b2ac9ae7ed",
+      "sha256": "3945958525fbfd7b1bdaec2c467e7d8cb0fa4f31fe3b67dacf843c8835fbccfe"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result_test.go",
+      "F_old_blob": "67b7508d557251327457e35565dd66295fe051cf",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "67b7508d557251327457e35565dd66295fe051cf",
+      "new_blob": "67b7508d557251327457e35565dd66295fe051cf",
+      "sha256": "39a64980f8c17a8e7fd5eea9baf5e3575281fed91b044452d31a16498e4018a3"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "b53a471f878571f061a717299cee9eb66e28654f",
+      "sha256": "353df2e78d5989237e7b31f20a21a028b035974523f7a2b160912c5eae70001a"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_apply.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "f1f9291b69c0f939405d1599941e6c848697eb83",
+      "sha256": "7af9a855b5db98a5e36d51c03ae5ac79d0713d6aa728a88844db2946fd1a9257"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_apply_test.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "dde24a1ce979b093c42e6875bb8f41ec533242c4",
+      "sha256": "5dedf35d119275c58130704f47c292b45210d9a45121b86fc09c4a11fb6558d1"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_fixture_test.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "539f863820949bc90efd4dbb063ab88339744d76",
+      "sha256": "e677b417d6b8d19bf452aba89def46311cee3694c4b286a1c5f8c009681a9db3"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_online_test.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "9242e5e4364a06e3a2d1f1d74fda11bb00d6126a",
+      "sha256": "0a1d6de584cf45a8bb7dcad908d00a14079de1b20cc1391b48ce100e5841fe26"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_owned.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "19215dfa6fbf59cefed0d32628981627f949935e",
+      "sha256": "0e1bb2671756f9913131baa69ed47db0eb74cbeae2a1bffa3ae2401cb366d459"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_owned_test.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "cf6ae90780f1710f9bc5a5806f8264ebd5d5e8b7",
+      "sha256": "8ab0f2c38d365ca7480d825062918b105b259b261bcbd20e9a352af9fc1fb2b0"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_postcondition_test.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "7b914468306871945e15c080c52b6c8ac0e77740",
+      "sha256": "07365ee984ed9559b8337ce6fc3a85d934256460b4efe89d3db4d6b710affd39"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_retirement_test.go",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "b681b6afb418894307620fceed4c10a4157acdc2",
+      "sha256": "2be584cbdbd308cf6b6c01e3d41c1e7518af8eaa9858a6975f215adffe111836"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "F_old_blob": "a55ab78df3a0631482dea19d81af021a4ee9ec99",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "a55ab78df3a0631482dea19d81af021a4ee9ec99",
+      "new_blob": "a55ab78df3a0631482dea19d81af021a4ee9ec99",
+      "sha256": "3adf5503d4fa0947d893adfd197d2c55c91b846bb6771427228a4e5b0acb114d"
+    },
+    {
+      "path": "schemas/v3/tidy.schema.json",
+      "F_old_blob": "dd69e4584a4315a3924770212dbbf94bfaadd066",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "dd69e4584a4315a3924770212dbbf94bfaadd066",
+      "new_blob": "dd69e4584a4315a3924770212dbbf94bfaadd066",
+      "sha256": "a42487441ea9150ca1d04097ffa278ff3d8f36f294ae45b63d85a0f992206916"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/contracts/tidy-v3.md",
+      "F_old_blob": "b877b25fc5cd983e11cfff49fa847bf54012b190",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "b877b25fc5cd983e11cfff49fa847bf54012b190",
+      "new_blob": "b877b25fc5cd983e11cfff49fa847bf54012b190",
+      "sha256": "f90fe055a71c639657e4c21cb6e44c8da4a271351f6c1de4ab07dd15b99a793b"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "F_old_blob": "6ab45b68d0bcb1bd0a05e9b482024aed57902472",
+      "status": "already-exact-prepared",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "6ab45b68d0bcb1bd0a05e9b482024aed57902472",
+      "new_blob": "6ab45b68d0bcb1bd0a05e9b482024aed57902472",
+      "sha256": "5a95dcb5963a74a4d589c78f1b0d6eee4ba23d3aaaeae8cda015d443da795e02"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/owned-progress-import-provenance.json",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "647ad0317e3c9750c683ed85a91c8890ff267fc1",
+      "sha256": "e4e1c7dee6f3b29cd3949e72f0b587c4677b045f3131751e751fc118add2af59"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/retirement-model-import-provenance.json",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "ac4b33148b56d262720fbcc0f9f01dd1d78a8872",
+      "sha256": "fa16416969801ec95ea1730c3b2f362217d631033d0dc9b4eae694ec764bead8"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-retirement-apply.md",
+      "F_old_blob": null,
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": null,
+      "new_blob": "70b6dc50f468f6dad10d97a19f46008f8e3bcb03",
+      "sha256": "c845eac54549e2610d18d0a353401bef3aa87a63064c071b905a14a7bbe47e81"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification.md",
+      "F_old_blob": "8ff347ec881d59b919ad5427f14797675e1fdacb",
+      "status": "exact-formally-reviewed-import",
+      "source": "071b707bcd6750a17dd7da13b5ea274839ed707f",
+      "old_blob": "8ff347ec881d59b919ad5427f14797675e1fdacb",
+      "new_blob": "07de1e53e308710c6fc0f81611181f2da2167239",
+      "sha256": "39272d4d87ea395fb3a09d29952f863d5223dae491e76819a3f579b20a7b5f4d"
+    }
+  ],
+  "preserved": "D tracking/ref apply, fresh-main release SDK/auth/transport/schema inventories, earlier F guard corrections and original 75-row import provenance. Old E local-only apply is not copied."
+}

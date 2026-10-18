@@ -1,0 +1,300 @@
+{
+  "kind": "reviewed source import; original author manifests and receipt preserved verbatim as nested evidence, not a runtime attestation",
+  "source_head": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+  "source_tree": "da3fa2842809f806b6684c658e11dfba34bc09b3",
+  "formal_gate": "Dispatch reports SAME independent formal SOURCECLEAR zero open including Low; full normal/race/source and 24 final mutants verified",
+  "pure_paths": [
+    {
+      "path": "internal/contracts/tidy_v3_schema_test.go",
+      "old_blob": "3a525118162c548ac5f2f40e95d4cb569639379a",
+      "new_blob": "89d030f0cf69cbb1461c4e3827fd6e0c8ae1bcff",
+      "old_sha256": "fcdc8432f8b1855786dd6ba6eaebbb5efa94e184469cfdf32ac45f49ee386b35",
+      "new_sha256": "f82b1b178968d355a2483d21458244a27a7eecbefbad4835eb2e72b38dd06531"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result.go",
+      "old_blob": "5b273465780705e8eefa0a6a399ba4897430d5e7",
+      "new_blob": "75342db47b80fd3e910d4907e54233bd9a9babcd",
+      "old_sha256": "fdc124d7216832de7eab9933868b1d5d0fad3b2bee43beed40473f286377d020",
+      "new_sha256": "9daf7aa8bdeef2aeb9edb17583510af927398dbb70ba1e1a24ef1cd4fb028b99"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result_test.go",
+      "old_blob": "ca11ecb6dfdd88f685923d0f071e63463b6f0d80",
+      "new_blob": "67b7508d557251327457e35565dd66295fe051cf",
+      "old_sha256": "5d65cf58fa8badab4d0d6b369e3146691503c7091029d42142464189a7381ac7",
+      "new_sha256": "39a64980f8c17a8e7fd5eea9baf5e3575281fed91b044452d31a16498e4018a3"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "old_blob": "a055c21bff54987a456f7761324adb4f7d3a129a",
+      "new_blob": "0b02731a231cee15ab9319b33de0acc6e6b650d6",
+      "old_sha256": "6ce715785fcafa6ea9f0bd9933bb040540afce8d6aafe4f725cd9c2bf3037773",
+      "new_sha256": "f2c02804dbeb90694f2d9efcaa6dc0fb0e3f899e7d0dcab65d242e897085cec4"
+    },
+    {
+      "path": "schemas/v3/tidy.schema.json",
+      "old_blob": "818a6bd3b17a20c754c4bbb760ff088895028fc3",
+      "new_blob": "dd69e4584a4315a3924770212dbbf94bfaadd066",
+      "old_sha256": "c7facd73c6f487f4cc0620e5d0b4e70efebc742f5930bdd250990fea156b9ea5",
+      "new_sha256": "a42487441ea9150ca1d04097ffa278ff3d8f36f294ae45b63d85a0f992206916"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/contracts/tidy-v3.md",
+      "old_blob": "2e99bbd44e10c2d32b945f69d7b9b790ae424ced",
+      "new_blob": "b877b25fc5cd983e11cfff49fa847bf54012b190",
+      "old_sha256": "af4d8121ab29fad893662c27a31aec1c19f79cc6131e9889ab6b37ec9d7837d0",
+      "new_sha256": "f90fe055a71c639657e4c21cb6e44c8da4a271351f6c1de4ab07dd15b99a793b"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "old_blob": "91e7a6d22c334ae88cc63e3b2091c5961132eb8b",
+      "new_blob": "6ab45b68d0bcb1bd0a05e9b482024aed57902472",
+      "old_sha256": "628227af39505338979170e5f3ff64c6c1ce83610426e3ae32bff24e55296dc8",
+      "new_sha256": "5a95dcb5963a74a4d589c78f1b0d6eee4ba23d3aaaeae8cda015d443da795e02"
+    }
+  ],
+  "collector_transport": {
+    "upstream": {
+      "path": "internal/workspace/tidy_v3_legacy.go",
+      "old_blob": "604a0bedbd2e1f63bbf36e854073032023668dee",
+      "new_blob": "f3c5a793110699630f689a1afe17f238206b83c6",
+      "old_sha256": "df12aaf8488c68f229f251b05c1792f9ce3cda6348072eace281daf3ef908937",
+      "new_sha256": "58f05efd76bf0e74e2d740a10893f4634f9dfd09e1c1c8326f300f889e915111"
+    },
+    "e_authored_original_patch_sha256": "d587c455e39788bef0eb15ed1b92a3ad55af6bf43daf462269bc06e9421469ef",
+    "transformation": "same reviewed constructor delta onto E-owned collector; no additional traversal/content pass; preserve own observer edits",
+    "integration_commit_blob": "fc2e0339df8fd5ed8317175875f52ef8ec096e9c",
+    "local_before_sha256": "d10c5b31a07841a26c65077b56634013e415613f995b8eb27d427c9dace225a0",
+    "local_after_sha256": "82ef888cbdc7c57f1c8b1f520ec203e859f3b9f9a807aaa62248c06975067932",
+    "pending_separate_stable_owner_edit_not_part_of_import_commit": true
+  },
+  "original_author_provenance": {
+    "kind": "author source-provenance metadata, not runtime attestation",
+    "base": "f696611d925ac6d320d66178c3bc739c9084b061",
+    "head": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+    "tree": "da3fa2842809f806b6684c658e11dfba34bc09b3",
+    "worktree_clean": true,
+    "paths": [
+      {
+        "path": "internal/contracts/tidy_v3_schema_test.go",
+        "old_blob": "3a525118162c548ac5f2f40e95d4cb569639379a",
+        "new_blob": "89d030f0cf69cbb1461c4e3827fd6e0c8ae1bcff",
+        "old_sha256": "fcdc8432f8b1855786dd6ba6eaebbb5efa94e184469cfdf32ac45f49ee386b35",
+        "new_sha256": "f82b1b178968d355a2483d21458244a27a7eecbefbad4835eb2e72b38dd06531"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_legacy.go",
+        "old_blob": "604a0bedbd2e1f63bbf36e854073032023668dee",
+        "new_blob": "f3c5a793110699630f689a1afe17f238206b83c6",
+        "old_sha256": "df12aaf8488c68f229f251b05c1792f9ce3cda6348072eace281daf3ef908937",
+        "new_sha256": "58f05efd76bf0e74e2d740a10893f4634f9dfd09e1c1c8326f300f889e915111"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_result.go",
+        "old_blob": "5b273465780705e8eefa0a6a399ba4897430d5e7",
+        "new_blob": "75342db47b80fd3e910d4907e54233bd9a9babcd",
+        "old_sha256": "fdc124d7216832de7eab9933868b1d5d0fad3b2bee43beed40473f286377d020",
+        "new_sha256": "9daf7aa8bdeef2aeb9edb17583510af927398dbb70ba1e1a24ef1cd4fb028b99"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_result_test.go",
+        "old_blob": "ca11ecb6dfdd88f685923d0f071e63463b6f0d80",
+        "new_blob": "67b7508d557251327457e35565dd66295fe051cf",
+        "old_sha256": "5d65cf58fa8badab4d0d6b369e3146691503c7091029d42142464189a7381ac7",
+        "new_sha256": "39a64980f8c17a8e7fd5eea9baf5e3575281fed91b044452d31a16498e4018a3"
+      },
+      {
+        "path": "internal/workspace/tidy_v3_state_test.go",
+        "old_blob": "a055c21bff54987a456f7761324adb4f7d3a129a",
+        "new_blob": "0b02731a231cee15ab9319b33de0acc6e6b650d6",
+        "old_sha256": "6ce715785fcafa6ea9f0bd9933bb040540afce8d6aafe4f725cd9c2bf3037773",
+        "new_sha256": "f2c02804dbeb90694f2d9efcaa6dc0fb0e3f899e7d0dcab65d242e897085cec4"
+      },
+      {
+        "path": "schemas/v3/tidy.schema.json",
+        "old_blob": "818a6bd3b17a20c754c4bbb760ff088895028fc3",
+        "new_blob": "dd69e4584a4315a3924770212dbbf94bfaadd066",
+        "old_sha256": "c7facd73c6f487f4cc0620e5d0b4e70efebc742f5930bdd250990fea156b9ea5",
+        "new_sha256": "a42487441ea9150ca1d04097ffa278ff3d8f36f294ae45b63d85a0f992206916"
+      },
+      {
+        "path": "specs/029-tidy-dogfood-safety/contracts/tidy-v3.md",
+        "old_blob": "2e99bbd44e10c2d32b945f69d7b9b790ae424ced",
+        "new_blob": "b877b25fc5cd983e11cfff49fa847bf54012b190",
+        "old_sha256": "af4d8121ab29fad893662c27a31aec1c19f79cc6131e9889ab6b37ec9d7837d0",
+        "new_sha256": "f90fe055a71c639657e4c21cb6e44c8da4a271351f6c1de4ab07dd15b99a793b"
+      },
+      {
+        "path": "specs/029-tidy-dogfood-safety/data-model.md",
+        "old_blob": "91e7a6d22c334ae88cc63e3b2091c5961132eb8b",
+        "new_blob": "6ab45b68d0bcb1bd0a05e9b482024aed57902472",
+        "old_sha256": "628227af39505338979170e5f3ff64c6c1ce83610426e3ae32bff24e55296dc8",
+        "new_sha256": "5a95dcb5963a74a4d589c78f1b0d6eee4ba23d3aaaeae8cda015d443da795e02"
+      }
+    ],
+    "e_handoff": {
+      "patch_sha256": "d587c455e39788bef0eb15ed1b92a3ad55af6bf43daf462269bc06e9421469ef",
+      "path": "internal/workspace/tidy_v3_legacy.go",
+      "transformation": "exact E handoff then gofmt; no other collector edits"
+    },
+    "schema_size_clause": "Moved only16MiB regular-file size maximum from generic V3PhysicalIdentity to V3ManifestEntry.identity; physical shape/link rule and actual manifest/metadata limits retained."
+  },
+  "original_author_final_receipt": {
+    "kind": "author evidence index; original redirected logs retained; not runtime attestation",
+    "head": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+    "tree": "da3fa2842809f806b6684c658e11dfba34bc09b3",
+    "base": "f696611d925ac6d320d66178c3bc739c9084b061",
+    "clean": true,
+    "aggregates": [
+      {
+        "name": "full-normal",
+        "command": [
+          "go",
+          "test",
+          "./..."
+        ],
+        "source_sha": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+        "exit_code": 0,
+        "elapsed_seconds": 131.572,
+        "log": "/tmp/stw-registration-model-evidence/full-normal.log"
+      },
+      {
+        "name": "full-race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "./..."
+        ],
+        "source_sha": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+        "exit_code": 0,
+        "elapsed_seconds": 161.139,
+        "log": "/tmp/stw-registration-model-evidence/full-race.log"
+      }
+    ],
+    "source_checks": {
+      "source_sha": "fb4ddf177b52275d3f01162eb39b58bee48abd5a",
+      "checks": [
+        {
+          "name": "vet",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "modules",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "python-source",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "docs",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "architecture",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "whitespace",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "compatibility",
+          "exit_code": 0,
+          "passed": true
+        },
+        {
+          "name": "format",
+          "exit_code": 0,
+          "passed": true
+        }
+      ]
+    },
+    "python_source_tests": 83,
+    "exact_exclusion": "test_docs.DocumentationTests.test_packaging_excludes_source_and_binds_revision",
+    "mutants": "initial20/22 retained honestly; final24/24 behavioral kills; frozen input hashes match",
+    "limitations": [
+      "No actual Hugo/packaging build, install, publication or schema promotion",
+      "Owned-progress separate correction not included; no T031 parity claim"
+    ],
+    "sha256": {
+      "aggregate-results.json": "47cedcb55c510e8d36c02dbab0ab25a88421385916623ac4c22f2007582330ca",
+      "final-focused-green.log": "cdb5cfec58af4c133ce2672ab531e4f97ac34e6e73937ca5b34c26e7cfa8ab92",
+      "final-model-schema-green.log": "3e76b861b8f7d47e55f104d746c2f0f267d44a170d6080d4323fb0fb4dcc47c5",
+      "full-normal.log": "dac1e78842a729e048e83d792baad5f264f1be6e6e1759b50e7cb1993a6cd5ff",
+      "full-race.log": "209818a8a1a664943eaa9451d53a34c39781907b59f65ce53249e8db29fe7afa",
+      "grant-semantics-red.log": "c3277029a1e25d8f3d768fe1bbb4b47db80029e321c390e55df0f6747b727db0",
+      "initial-mutants/mutant-aggregate-limit-increased.log": "26551b7d8253a28e50ba79408b25069db9e5ff3648d21f43029289b5314d01a2",
+      "initial-mutants/mutant-different-path-physical-aliases.log": "db96d454af4a1e742040b09b0f1c0c7c9a92aa3f8aeba47ec4a0286d5158e554",
+      "initial-mutants/mutant-duplicate-role-list-entry.log": "f5bc09795d4fe9b38a0a3203b32790c7f543ba0408008827fdbb6cab22bacd81",
+      "initial-mutants/mutant-encoded-limit-increased.log": "10d295d196c1bf56dfdfef2d3a378a9110dec15122f05bb68f44db367633ae2c",
+      "initial-mutants/mutant-grant-guard-omitted.log": "5683ba7ecdd3245a5ca8950c7a2f8b089b6de69168aad6831ed58cf36d2f3f73",
+      "initial-mutants/mutant-input-sha256.json": "718e1ddaa7058ecb517f2e808e9a5547e671b9e78236a8db6d7f22a5ae416c91",
+      "initial-mutants/mutant-legitimate-role-reuse-refused.log": "b4d323ff5eb579141fa929bfc089ebcf3b91f9a61b411ba4a520b5d0443c84df",
+      "initial-mutants/mutant-parent-physical-unchecked.log": "66b0f1d23d4333df9714257ab01176a193b9aef6d7465044ea0b960f702285cb",
+      "initial-mutants/mutant-registration-parent-not-bound.log": "ecbe451977df97219bc90a8d057db2cc699de30d60d5db4ae8d58343fd9c49f1",
+      "initial-mutants/mutant-registration-parent-omitted-from-wire.log": "c6838d080a4b98db4909ba39f3f033b7ef1a2b41c884305e634e8877494bbe49",
+      "initial-mutants/mutant-registration-siblings-omitted-from-wire.log": "4eb500a1b11e2e1c0583957e2a863a2a4ed9318718085dde81942591b615891b",
+      "initial-mutants/mutant-results.json": "5c15498b6a743584b095ae022383bd150e5c0f875d370f7476ea56d270a02034",
+      "initial-mutants/mutant-role-reuse-mismatched-facts.log": "cce0c12796738c88dea6522b1367a3f7e64ebed91cee2b4eb768b6f90eed0b7d",
+      "initial-mutants/mutant-schema-duplicate-siblings.log": "4a13ca7bfea2b1a4acf7f9aa2161fb54f4e9922c8ddb2667cee36c373b29017c",
+      "initial-mutants/mutant-schema-missing-parent-admitted.log": "9d5f6e720e5368a7700cc78373f478972d7c91c2a77705431ad60d37bd0296b6",
+      "initial-mutants/mutant-schema-missing-siblings-admitted.log": "d965ca419359b11fed718b3bc849cba4a5b313f0344e07b83f93e7bef3e5c8b7",
+      "initial-mutants/mutant-schema-null-siblings.log": "2f2d12aa97006ebc7551a4e6dc49e05b1a69ad2efa598af3d296d9cadc754db6",
+      "initial-mutants/mutant-schema-parent-kind-unchecked.log": "a16573743b36e8b00aecef6757991c2733ad59a50563d5686574c2579ead9970",
+      "initial-mutants/mutant-schema-sibling-hardlink.log": "0fa00534be2cc8f32a68f8e002dc0203a4b697d28221f2947d800942d027a1a2",
+      "initial-mutants/mutant-sibling-hardlinks-admitted.log": "fd761090e62f340a45ebd4e447a3b3341a0b9806c5af7a37a24c2d75fc7a6009",
+      "initial-mutants/mutant-sibling-kind-unchecked.log": "59b1bda0404d6e54e943f764a2686109706018e5cdfee7c2b053c5e9291108f2",
+      "initial-mutants/mutant-sibling-order-unchecked.log": "e7c9871ace93b0e0715534ccad7fb576d4c02cb7455dacc6f05f160340711674",
+      "initial-mutants/mutant-sibling-parent-unbound.log": "854e83168a4c61596bc4daa9d31f39ec3f5acc059d1a40da253c7d95babee27b",
+      "initial-mutants/mutant-sibling-physical-unchecked.log": "eeb7066910407474c42344d6801fbe3a2680da802eb280e06b3597331cd8788f",
+      "initial-mutants/mutants-summary.log": "cb6f3690a10fde79e24ed8093c33105e27a07a2fa3f3d11dceb602adf1c32299",
+      "initial-mutants/run-mutants.py": "3cf7bf4df978aa7543a54e3817621fea0932a34a4e1d787998c0b250b3c2795b",
+      "model-schema-store-green.log": "785a9ed982d66fa3df86c329f00764d24f35cd6653bace0d35ddda0c08bd508a",
+      "mutant-aggregate-limit-increased.log": "a1cd7a6c96d52a0824a353138db360da314ac20a1bf07ddc8f11d60a4921829d",
+      "mutant-different-path-physical-aliases.log": "2a7a9b7a27abc3e6d6e1c67059d65c83b5907792945eec0f3cba6f999619ccff",
+      "mutant-duplicate-role-list-entry.log": "4a6f92f1601e67dd7eb4c8e9ac89229f884633d2afa3e842a614fd3d4a5ab4d3",
+      "mutant-encoded-limit-increased.log": "5a2ffc6a31dd60ce1c94cd650c7f82267f440338f49f4d6d53347ff9ac1aba50",
+      "mutant-grant-guard-omitted.log": "f75540ccecb7ecfcc6f29248eab20ad604951736f72f75309a0ed345408090a7",
+      "mutant-input-sha256.json": "bc4a04536a3da8d8ae3553ea40cc49ca5818f2c283c43a623e423caa0d423faa",
+      "mutant-legitimate-role-reuse-refused.log": "2a3a66888240edf425fb359085d39492f7adef2d608baf951e15314d55970c94",
+      "mutant-parent-physical-unchecked.log": "917f01b699584ab7daf7b8057f296f06d2f7a8e9c87a732667742e7808a4bc26",
+      "mutant-registration-parent-not-bound.log": "815e3610c47402edb32a94b19b4780f5c259cfb25ba8c6e70cd6716eb20a4c90",
+      "mutant-registration-parent-omitted-from-wire.log": "c6838d080a4b98db4909ba39f3f033b7ef1a2b41c884305e634e8877494bbe49",
+      "mutant-registration-siblings-omitted-from-wire.log": "4eb500a1b11e2e1c0583957e2a863a2a4ed9318718085dde81942591b615891b",
+      "mutant-results.json": "dfac883bd9079e2b62efad709a594f2605a40673eb17c7c684bc61bc7f545fe3",
+      "mutant-role-reuse-mismatched-facts.log": "fa11042ef67e85709e34a945162307598f15db0f33d355c34fd76b425ae902f7",
+      "mutant-schema-duplicate-siblings.log": "a011cb48ebcfb3c90e11449bbc8f194de772be1366d86565a35d1f3f7131e7f7",
+      "mutant-schema-missing-parent-admitted.log": "a31781e145d408d16755f53b3f18d3f389ef5c4bd7bb2dde2b9be111ce8be76e",
+      "mutant-schema-missing-siblings-admitted.log": "f1a68aa2efcc2ddc34c49795db2eca614cf5dedc144757e09b1f79cf2b96aaaf",
+      "mutant-schema-null-siblings.log": "b073b06e2d88becbd4370e3342560701b2565b174fdb475084828fb1e803b739",
+      "mutant-schema-parent-kind-unchecked.log": "1e37950553ef21908bb29b5415aabc9a205db34f1c82efcedf6adba729f89e3e",
+      "mutant-schema-payload-cap-on-protected-siblings.log": "d0f25dde2b1b9dcd9bc2747f3b0cb32b2c44f701dfe5882be44741ed5734b991",
+      "mutant-schema-retired-payload-cap-removed.log": "e9eca63545d7c8b91dafb1e16c59a1161521ee4d8b5086e04e5b3195bccff036",
+      "mutant-schema-sibling-hardlink.log": "da3126df1b6e8c8416b02097a1673305287970fa2a02d440c3ce9409f726e606",
+      "mutant-sibling-hardlinks-admitted.log": "d439d4e90354a6029f11c8300e83638218f19173457edef2d223efaee8aa92d3",
+      "mutant-sibling-kind-unchecked.log": "3fa881720e25ba0bd4bd4187d032bb8f585b6c194318aec2f265c22d77847ce9",
+      "mutant-sibling-order-unchecked.log": "f9617c7e2fb7329bb4449e12a57b11067da622189e715cbcbf20b9521802f316",
+      "mutant-sibling-parent-unbound.log": "e2eeb042c070826e512054095cacd60969aac26224ae991295f234609f591386",
+      "mutant-sibling-physical-unchecked.log": "8e2a4d05a5d966ec2358024e22142f84615538ccfc4847a9375c5097822554db",
+      "mutants-summary.log": "3ae9847f23c580e091a2b76d63b9e6004c5dbe3dc6f96a2d8a1ca0ef276149c6",
+      "nested-role-red.log": "ecf0f25c0cfaf81319cfb6c7f4cca518661c40100abfea53d1a6973e6ac860a0",
+      "registration-model-green.log": "04576c157f1d5ce3c5384968b10941a78d2955f6344aa73f4574835f844720d8",
+      "required-fields-red.log": "1d6b6d51104f4f391bef0f78741791b6e67daba7c23ef4056de72fd9e0ebe606",
+      "run-mutants.py": "3cc1a87302983b4c0110851c90c4dc4c4af197ad55f22432c3a29a50c18c232f",
+      "run-source-checks.py": "cea39cf502dc47b1be5473cc7b4fda42f0d8396b380c508c83b4f22f606d3366",
+      "sibling-schema-payload-cap-red.log": "155d58ce2867737de27eac0d5e6834e8376157c9bc9d2fd83bf7554d8c19a41b",
+      "source-check-results.json": "2ef4915a1c3c21b6a3003f4704d9b042cd6f8d82c4b423e2b6a40f5591037c38",
+      "source-checks.log": "6cdff5aafe37c484efb5d58ad12d1e5460ceaf4da378700f1655fc75f674a8f0",
+      "source-provenance.json": "3def0277f8a53e54b70419d000868b60de56b9eeba6ae5239fdf4fdcc4ab4202"
+    }
+  }
+}

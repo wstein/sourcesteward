@@ -99,3 +99,14 @@ available commands report Git 2.56.0 and jj
 Minimum-version execution remains unverified until its declared lane runs.
 No build, download, install, publication, activation or real tidy execution is
 part of this source slice.
+
+## T028–T031 retirement source execution
+
+The [retirement apply evidence](verification-retirement-apply.md) records actual
+six-worktree retirement followed by fresh T021/T023 reference planning and apply,
+per-channel bytes, 3/8 observations, 9/24 user passes, raw processes, buffer and
+elapsed times. It also distinguishes sampled native/physical guards, immutable
+legacy/owned authority, separate files/registration outcomes, actor/fault cases,
+old-version regressions and unavailable runtime lanes. These development runs
+are source evidence; exact final-head checks and independent review remain the
+handoff gate. No user cleanup, CLI release or build is recorded or authorized.
