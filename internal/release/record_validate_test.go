@@ -46,6 +46,7 @@ func TestValidateRecordRules(t *testing.T) {
 		{"commit", "go-cli", func(r *ReleaseRecord, c *RecordContext) { r.Commit = "abcdef" }},
 		{"checksum missing", "go-cli", func(r *ReleaseRecord, c *RecordContext) { delete(c.Checksums, r.Assets[0].File.Name) }},
 		{"checksum wrong", "go-cli", func(r *ReleaseRecord, c *RecordContext) { c.Checksums[r.Assets[0].File.Name] = r.Assets[1].File.SHA256 }},
+		{"image repository", "oci-bundle", func(r *ReleaseRecord, c *RecordContext) { r.Assets[0].Image.Repository = "ghcr.io/attacker/redirect" }},
 		{"image tags", "oci-bundle", func(r *ReleaseRecord, c *RecordContext) { r.Assets[0].Image.Tags = []string{"latest"} }},
 		{"extra image tag", "oci-bundle", func(r *ReleaseRecord, c *RecordContext) {
 			r.Assets[0].Image.Tags = append(r.Assets[0].Image.Tags, "latest")
@@ -148,5 +149,51 @@ func TestValidateRecordPlaceholderClosure(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestValidateRecordTargetMembershipAndKind(t *testing.T) {
+	for _, fixture := range []string{"go-cli", "oci-bundle"} {
+		for _, change := range []string{"unknown", "wrong-kind"} {
+			t.Run(fixture+"/"+change, func(t *testing.T) {
+				r, c := recordFixture(t, fixture)
+				target := ""
+				if a := r.Assets[0].File; a != nil {
+					target = a.Target
+					if change == "unknown" {
+						a.Target = "undeclared"
+					}
+				} else {
+					target = r.Assets[0].Image.Target
+					if change == "unknown" {
+						r.Assets[0].Image.Target = "undeclared"
+					}
+				}
+				if change == "wrong-kind" {
+					for i := range c.Contract.Target {
+						if c.Contract.Target[i].ID == target {
+							if c.Contract.Target[i].Kind == "file" {
+								c.Contract.Target[i].Kind = "oci-image"
+							} else {
+								c.Contract.Target[i].Kind = "file"
+							}
+						}
+					}
+				}
+				findings := ValidateRecord(r, c)
+				if len(findings) == 0 {
+					t.Fatal("invalid target accepted")
+				}
+				found := false
+				for _, f := range findings {
+					if f.Code == "record-invalid" && f.Pointer == "/assets/0/target" {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("target membership finding missing: %+v", findings)
+				}
+			})
+		}
 	}
 }

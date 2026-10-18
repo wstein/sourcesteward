@@ -69,6 +69,7 @@ func ValidateRecord(record ReleaseRecord, context RecordContext) []Finding {
 	if record.Attestation.SignerWorkflow != context.Repository+"/"+workflow {
 		out = append(out, add("/attestation/signer_workflow", "signer workflow differs from the trusted workflow"))
 	}
+	out = append(out, validateAssetTargets(record.Assets, c)...)
 	names := map[string]bool{}
 	for i, asset := range record.Assets {
 		p := fmt.Sprintf("/assets/%d", i)
@@ -88,11 +89,41 @@ func ValidateRecord(record ReleaseRecord, context RecordContext) []Finding {
 			}
 		} else {
 			a := asset.Image
+			for _, target := range c.Target {
+				if target.ID == a.Target && target.Kind == "oci-image" && a.Repository != target.Repository {
+					out = append(out, add(p+"/repository", "image repository differs from the contract target"))
+				}
+			}
 			if len(a.Tags) != 1 || a.Tags[0] != record.Version {
 				out = append(out, add(p+"/tags", "image tags must equal exactly [version]"))
 			}
 		}
 	}
 	sortFindings(out)
+	return out
+}
+
+// Asset references are resolved only against the trusted contract at C, before
+// any asset-derived fields are assembled or an editable record is accepted.
+func validateAssetTargets(assets []RecordAsset, c *Contract) []Finding {
+	var out []Finding
+	for i, asset := range assets {
+		id, kind := "", ""
+		if asset.File != nil {
+			id, kind = asset.File.Target, "file"
+		} else if asset.Image != nil {
+			id, kind = asset.Image.Target, "oci-image"
+		}
+		found := false
+		for _, target := range c.Target {
+			if target.ID == id && target.Kind == kind {
+				found = true
+				break
+			}
+		}
+		if !found {
+			out = append(out, errorFinding("record-invalid", fmt.Sprintf("/assets/%d/target", i), "asset target must name a contract target of the same kind"))
+		}
+	}
 	return out
 }

@@ -38,7 +38,7 @@ Human: a header (commit, version, number of assets), the effects line, `wrote do
 
 ## Effects
 
-Reads: contract and blobs at C, files in DIR (streamed, at most 2 GiB each, 64 files). Writes: with `--write`, exactly one new file created with `O_EXCL` and mode 0644. Every path component under the repository root is opened without following symlinks (`openat` with `O_NOFOLLOW`); the directories `docs/releases/` and `docs/releases/<product>/` are created if absent, and a symlink or non-directory in the way refuses with `output-exists`; no staging, no commit; nothing else. Network: none. Processes: fixed isolated Git reads. Recovery: the written file is new, so nothing is overwritten; deleting it undoes the effect (constitution III).
+Reads: contract and blobs at C, files in DIR (streamed, at most 2 GiB each, 64 files). Declared lock and tool-list blobs at C are hashed incrementally through fixed isolated Git or operation-pinned native jj reads, retaining only SHA-256 state under the existing deadlines. The artifact byte limit and buffered metadata-read limit do not apply to this distinct committed-source hash consumer. Writes: with `--write`, exactly one new file created with `O_EXCL` and mode 0644. Every path component under the repository root is opened without following symlinks (`openat` with `O_NOFOLLOW`); the directories `docs/releases/` and `docs/releases/<product>/` are created if absent, and a symlink or non-directory in the way refuses with `output-exists`; no staging, no commit; nothing else. Network: none. Processes: fixed isolated Git reads. Recovery: the written file is new, so nothing is overwritten; deleting it undoes the effect (constitution III).
 
 ## Compatibility
 
