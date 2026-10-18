@@ -1,10 +1,11 @@
 # Release commands: current source and planned process
 
 Spec 026 remains **planned and unreleased**. Source implementations exist for
-`check`, `plan`, `verify`, `record` and `build`; the `release` group is hidden from
-root help while the feature is incomplete. `dispatch` and live release evidence
-are not available in this source slice. Command registration does not establish
-feature acceptance, a completed release workflow or authorization to build.
+`check`, `plan`, `verify`, `record`, `build` and `dispatch`; the `release` group
+is hidden from root help while the feature is incomplete. Online gate reads,
+pinned attestation verification and explicit workflow dispatch are implemented
+in source. Their live GitHub/workflow acceptance remains pending. Registration
+does not establish feature acceptance, a completed release workflow or authorization to build.
 See [feature status](feature-status.json) and the
 [work items](../specs/026-release-process/tasks.md). WI9 documentation can start
 after the contract is stable but finishes only after WI8 workflows.
@@ -19,12 +20,12 @@ All current release commands offer human output and `--json`.
 | Registered command | Current source behavior | Boundary still pending |
 | --- | --- | --- |
 | `stw release check [PATH] [--commit C]` | Validates working-tree contracts, or committed contracts at full C; fixed ownership/native reads, no network, writes or project commands | Contract validity is not proof of script behavior or release acceptance |
-| `stw release plan C --version V [PATH]` | Reads C's contract, checks local build gates and displays argv/effects as data | Online gates are `not-run`; `--online` refuses `online-unavailable` |
-| `stw release plan TAG [PATH]` | Checks local annotation, ancestry, record and allowlist-diff gates; `--for build` selects the existing-tag build mode | Git-owned checkout required; no online gate implementation or artifact/provenance verification |
-| `stw release verify TAG [PATH] --artifacts DIR` | Adds exact local file-set, size, checksum and canonical-record checks to tag planning | Live CI/release/attestation evidence is unavailable; `--online` has no live verifier and cannot turn this into a complete publication check |
+| `stw release plan C --version V [PATH]` | Reads C's contract, checks local build gates and displays argv/effects as data; `--online` adds bounded authenticated GitHub GET reads | Required remote gates remain `not-run` offline; live end-to-end acceptance remains pending |
+| `stw release plan TAG [PATH]` | Checks annotation, ancestry, record and allowlist-diff gates; `--online` adds remote gates; `--for build` selects existing-tag build mode | Git-owned checkout required; artifacts and attestations require `verify` |
+| `stw release verify TAG [PATH] --artifacts DIR` | Adds exact file-set, size, checksum and canonical-record checks; `--online` adds remote gates and bounded `gh attestation verify` processes | Git-owned checkout required; source conformance is separate from real release acceptance |
 | `stw release record --commit C --version V --from DIR [PATH]` | Generates canonical JSON from existing outputs; prints by default; `--check FILE` compares; `--write` creates the record and missing parent directories without replacing a different existing file | Does not verify attestations, stage, commit, build or contact a network |
 | `stw release build --mode MODE ...` | Explicit project-command boundary for `ci`, `promote` and `local-verify`; see below | Runtime preconditions are not owner approval; workflow integration and end-to-end acceptance remain pending |
-| `stw release dispatch ...` | **Planned; not registered here** | WI5 online reads and WI6 dispatch must land before this is available |
+| `stw release dispatch (--commit C --version V \| --tag T) [PATH]` | Recomputes native/online build gates and displays a request/`plan_id`; only `--apply PLAN_ID` attempts one fixed POST | Build approval is separate; an accepted request is not CI completion, a tag or publication; target workflows still need WI8 |
 
 C is a full lowercase 40- or 64-hex commit object ID, not an abbreviation.
 `--product NAME` selects a product when several contracts exist; a tag selects
@@ -44,13 +45,36 @@ local gate clears publication. Gate names identify violations being tested, so
 | 0 | Successful operation or passing complete verdict |
 | 1 | Refusal, operational failure, cancellation or incomplete verdict |
 | 2 | Usage error |
-| 3 | `check` findings; failed `plan`/`verify` verdict; `record` disagreement/noncanonical comparison; local verification hash mismatch |
+| 3 | `check` findings; failed `plan`/`verify`/dispatch-plan verdict; `record` disagreement/noncanonical comparison; local verification hash mismatch |
 
 The [normative tables](../specs/026-release-process/spec.md#findings-and-gate-codes-normative)
 define the individual gates, bounds and status precedence. Local ancestry reads
 the hosting-selected remote's recorded `main` and never fetches; missing refs,
 shallow history and grafts prevent passing ancestry evidence. Allowlist counts
 show tracked-leaf pattern reach, including zero matches, not publication eligibility.
+
+## Online reads and dispatch effects
+
+`plan --online` reads qualified CI push runs on C, product tags/releases and the
+ruleset advisory through the bounded hosting transport. `--with-drafts` is the
+caller's assertion that its token sees drafts; otherwise the existence gate may
+pass for tags/published releases while reporting `drafts-not-checked`. It is not
+proof of draft absence. `verify --online` also runs bounded attestation verification
+outside the repository, pins repository/workflow/source-ref and checks the
+attested manifest's C and digests. Those processes may read GitHub attestations
+and trust roots and use private temporary setup. No project command executes.
+
+Dispatch performs online reads even without `--apply`. Its request targets the
+contract's workflow on `main`; its stateless ID binds destination, inputs,
+resolved C, remote main, contract hash and verdict. A stale local main ref refuses
+`main-ref-stale`. Apply recomputes fresh evidence: changed identity refuses
+`plan-stale`, and failed gates refuse rather than dispatch. A matching passing
+apply attempts one POST without retry. The result's `applied`, `http_status` and
+workflow URL describe that request, not a successful build or an inferred run ID.
+A timeout or uncertain transport result needs direct Actions inspection before
+considering another request. The intended draft/build effects depend on the
+reviewed target workflow; WI8 integration and rehearsal are not implied by this
+command. See the [dispatch contract](../specs/026-release-process/contracts/dispatch.md).
 
 ## Contract, outputs and evidence
 
@@ -82,7 +106,7 @@ See the [record format](../specs/026-release-process/contracts/record.md).
 | Valid contract | Declared profile, schema and input/allowlist rules | Safe scripts, installed toolchains or reproducibility |
 | Offline plan/verify | The local gates actually evaluated and, for verify, supplied file agreement | Live CI state, trusted attestations or permission to publish |
 | Canonical record | Agreement among downloaded files, manifest and checksums | Trusted provenance; `record` does not verify attestations |
-| Planned full online verification | Recorded bytes and manifest bound to the expected repository, workflow and commit | Source correctness or an independent reproducibility result |
+| Online verification | Recorded bytes and manifest checked against the expected repository, workflow and commit when all gates pass | Source correctness, independent reproducibility, owner approval or unmeasured workflow behavior |
 
 ## Build modes and backend limits
 
@@ -124,7 +148,7 @@ without rebuilding the product. The repository-wide diff denies undeclared
 changes, so intervening build-input changes require a new candidate/build approval.
 
 Images gain only the version tag at the same digest. Moving aliases, package
-channels and consumer pin activation are separate steps. Online reads/dispatch,
-WI8 workflows, schema publication, bootstrap and final acceptance are still pending;
-this source guide completes none of those gates. The [owner preparation guide](releasing.md)
-links their contracts and explains what must be established before execution.
+channels and consumer pin activation are separate steps. Online reads/dispatch
+have source implementations; WI8 workflows, schema publication, bootstrap and final
+acceptance remain pending. This source guide completes none of those later gates.
+The [owner preparation guide](releasing.md) links their contracts and explains what must be established before execution.

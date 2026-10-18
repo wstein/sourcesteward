@@ -73,7 +73,7 @@ The version command's JSON output contains no guidance notice or human prose.
 | 3 | `stw pins --strict` error findings, or command-specific release findings/failed gates/mismatches | Read the full structured result and the command's documented status meaning. |
 
 For pins, an incomplete result exits 1 even with error findings; see [pins](pins.md).
-For release commands, exit 3 means check findings, a failed plan/verify verdict,
+For release commands, exit 3 means check findings, a failed plan/verify/dispatch-plan verdict,
 record disagreement/noncanonical comparison, or local verification hash mismatch.
 Exit 1 includes a release refusal, operational failure or incomplete verdict;
 `not-run` gates never clear publication. See the [release status table](release.md).
@@ -189,11 +189,13 @@ substitute raw Git. Read [pins](pins.md) before acting on a finding.
 
 ## Release source commands and pending acceptance
 
-The hidden release group currently registers `check`, `plan`, `verify`, `record`
-and `build`; use explicit `stw release --help` on a matching binary. `dispatch`
-and live online evidence are not available in this source slice. `plan --online`
-refuses `online-unavailable`; `verify --online` cannot complete CI/attestation
-gates. These are partial source implementations, not release acceptance.
+The hidden release group currently registers `check`, `plan`, `verify`, `record`,
+`build` and `dispatch`; use explicit `stw release --help` on a matching binary.
+`plan --online` adds bounded GitHub gate reads; `verify --online` also checks pinned
+attestations. Dispatch reads fresh native/online evidence to print a request plan;
+only explicit `--apply PLAN_ID` attempts one fixed workflow POST without retry.
+A passing plan grants no build approval; an accepted request proves no CI outcome.
+Workflow integration, rehearsal and final release acceptance remain pending.
 
 Use the [current release matrix](release.md) and [owner preparation](releasing.md)
 before interpreting output. Read-only release checks never execute project

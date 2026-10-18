@@ -160,7 +160,7 @@ not per-backend final acceptance. See the [release matrix](release.md).
 | `release plan TAG`, `release verify TAG` | Local tag/record/diff and supplied-file checks | Refuses `unsupported-backend`; no raw Git fallback |
 | `release record` | Committed source reads and existing output hashing | Native source reader; `--write` discloses next-command snapshot of the new file |
 | `release build` modes | Git-only; explicit execution/runtime preconditions | Refuses `unsupported-backend` |
-| Online release evidence and `dispatch` | Pending implementation/integration | Pending implementation/integration; tag mode remains unsupported by design |
+| Online release evidence and `dispatch` | Bounded GitHub reads; explicit plan/apply dispatch; no completed workflow acceptance | Native commit planning/dispatch plus bounded online reads; tag planning/verification/dispatch remain unsupported |
 
 Declared input resolution reaching a committed symlink in native jj check/commit
 planning refuses `unsupported-backend` (exit 1, incomplete), rather than judging
