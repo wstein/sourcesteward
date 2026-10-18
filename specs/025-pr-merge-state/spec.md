@@ -10,6 +10,8 @@
 
 **Depends on**: [Spec 020](../020-gh-jj-inspection/spec.md) (hosting resolution and fixed REST reads) and [Spec 022](../022-bounded-go-gh/spec.md) (bounded go-gh transport, implemented on `origin/main`). See Scope and Dependencies.
 
+[Spec 028](../028-ready-check/spec.md) separately specifies normative Ready policy evaluation. This feature remains explanatory with `verdict: not-asserted`; no Ready predicate or implementation dependency is added here.
+
 ## The incident this feature answers
 
 A bot-authored pull request in `wstein/bundledock` had auto-merge enabled with the rebase method and still waited. The base branch required the status context `check`, required branches to be up to date (strict), required linear history, allowed only rebase merges and enforced those rules for administrators. Each pull request therefore had to wait for the previous one and then be updated. A maintainer assembled this from four separate API calls (pull request, check runs, branch protection, repository merge settings). Measured facts about those endpoints, including what a normal token sees, are in [research.md](research.md).

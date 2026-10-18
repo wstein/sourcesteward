@@ -168,6 +168,12 @@
       "status": "planned",
       "spec": "../specs/027-inventory-limits/spec.md",
       "evidence": null
+    },
+    {
+      "id": "028-ready-check",
+      "status": "planned",
+      "spec": "../specs/028-ready-check/spec.md",
+      "evidence": null
     }
   ]
 }

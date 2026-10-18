@@ -19,6 +19,10 @@ change editing and upstream synchronization. Native GitButler integration is als
 planned. Current inventory, bounded recovery evidence and PR/CI reads do not implement
 those broader features. The following design directions retain those distinctions.
 
+## Ready inspection — planned
+
+[Spec 028](../specs/028-ready-check/spec.md) specifies read-only `stw hosting ready-check NUMBER` and a separate trusted `review-evidence` merge check sharing project-policy evaluation. Exact-head review, required CI and supported effective merge constraints remain separate components. Design review, implementation, deployment choice and owner settings activation are pending. [Spec 025](../specs/025-pr-merge-state/spec.md) remains explanatory and does not assert readiness.
+
 ## Implemented foundation
 Go/Cobra command parsing, text/JSON version information, Spec Kit workflow, automated
 source checks, original family branding, versioned JSON schemas and Hugo-generated GitHub

@@ -100,4 +100,4 @@
 
 ## Dependencies
 
-WI1 before everything. WI2 before WI3 (records and versions). WI3 before WI4. WI4 before WI5. WI6 needs WI5 (plan reads) and the merge of PR #58. WI7 needs WI2 (record/manifest) and the merge of PR #58. WI8 needs WI6 and WI7. WI9 may start after WI1's contract text is stable and finishes after WI8. WI10 needs WI7, WI8 and the owner's approval; WI11 last. Tasks marked [P] within a work item touch different files and may run in parallel. Follow-up specs 028 and later (package channels) depend on the record schema of WI2.
+WI1 before everything. WI2 before WI3 (records and versions). WI3 before WI4. WI4 before WI5. WI6 needs WI5 (plan reads) and the merge of PR #58. WI7 needs WI2 (record/manifest) and the merge of PR #58. WI8 needs WI6 and WI7. WI9 may start after WI1's contract text is stable and finishes after WI8. WI10 needs WI7, WI8 and the owner's approval; WI11 last. Tasks marked [P] within a work item touch different files and may run in parallel. Separate follow-up specifications for package channels depend on the record schema of WI2.

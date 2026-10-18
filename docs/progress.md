@@ -1,5 +1,9 @@
 # Progress and handoff
 
+## Active design: Spec 028 Ready inspection and review evidence
+
+The [specification](../specs/028-ready-check/spec.md) has independent specification-gate clearance at `4dbfd8e557148f315daf8c00c932d9f5a6b5aa46`. The [plan and contracts](../specs/028-ready-check/plan.md) are proposed; the plan gate precedes tasks and complete design review precedes implementation. The CLI and trusted merge check remain planned. Deployment profiles, source authenticity and owner operations are explicit; no App, credential, environment or settings change is approved or active. [Gate evidence](../specs/028-ready-check/analysis.md) separates source checks from hosted acceptance.
+
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 
 The Git inventory reads large outputs incrementally, degrades to partial results with verbatim disclosures instead of `git-inventory-failed` for repositories of thousands of files or hundreds of tags, describes submodule and separate-Git-directory checkouts by their files and reports `tracked: true` for ordinary changes in gitlink-bearing superprojects. Schema v1 is byte-unchanged; the Spec 023 `stw repos` tests, goldens and texts that pinned the old limits were updated with it. Evidence and what was not run (hosted CI, binary acceptance, Git 2.46.0, jj) are in [verification](../specs/027-inventory-limits/verification.md); the feature stays `planned` until then.

@@ -25,7 +25,7 @@ Constitution 1.1.0, Scope and Constraints, lists "push/merge/release automation"
 - **Existing contracts and specifications**: none changes. Principles I to V are unchanged. Specs 001 to 025 and 027 describe no release behavior. The older Spec 026 draft ("release hygiene") is superseded by this specification.
 - **Umbrella `AGENTS.md`**: stricter or equal; builds, tags, publication and activation still need explicit approval; schedules and bots still authorize nothing. The sourcesteward `AGENTS.md` sentence "otherwise do not merge, publish, release or change remote refs" stays true: `stw` never pushes or tags, and the dispatch is a disclosed remote effect needing authorization.
 - **Sibling repositories**: `sheetmill` and `bundledock` have their own recorded owner decisions for tag-driven workflows; this amendment governs SourceSteward only (Governance: "This constitution governs SourceSteward only").
-- **Alternatives considered**: (a) no amendment, treat the specification as the exception - weaker and invites per-feature drift; (b) a patch-level clarification only - the new conditions are constraints, not clarifications; (c) amend only the Scope sentence - leaves the release rules unspecified for later features (package channels, specs 028 and later).
+- **Alternatives considered**: (a) no amendment, treat the specification as the exception - weaker and invites per-feature drift; (b) a patch-level clarification only - the new conditions are constraints, not clarifications; (c) amend only the Scope sentence - leaves the release rules unspecified for later features (package channels, separate follow-up specifications).
 
 ## Decision
 
