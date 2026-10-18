@@ -3,9 +3,9 @@
 **Preparation for planned, unreleased Spec 026.** Current source commands and
 their incomplete evidence are described in the [release guide](release.md).
 There is no completed self-hosted release procedure in this source slice.
-Online evidence/dispatch, WI8 workflows, WI10 bootstrap and WI11 acceptance remain
-separate dependencies; WI9 cannot finish before WI8. Consult the
-[task list](../specs/026-release-process/tasks.md) before relying on the design.
+Online evidence/dispatch have source implementations; WI8 workflows, WI10 bootstrap
+and WI11 acceptance remain separate dependencies; WI9 cannot finish before WI8.
+Consult the [task list](../specs/026-release-process/tasks.md) before relying on the design.
 
 ## Authority and readiness evidence
 
@@ -55,8 +55,9 @@ Before any first real product tag, including bootstrap, require the planned
 ruleset advisory `present` and manually confirm active coverage and owner-only
 bypass access. `partial`, `absent` and `unknown` block the tag until resolved;
 `present` alone cannot prove membership. The tagged workflow runs on tag push,
-so protection must exist beforehand. Current offline source reports `unknown`;
-it cannot establish this readiness condition. Registry login and credentials
+so protection must exist beforehand. Offline results report `unknown`;
+`plan --online` can report the advisory but cannot prove bypass membership or
+establish the owner's manual settings confirmation. Registry login and credentials
 belong to reviewed workflow setup under the
 [credential model](../specs/026-release-process/contracts/workflow.md#registry-credential-model-per-variant),
 never the project contract.
@@ -94,7 +95,8 @@ its attested assets; merge only allowlisted notes/record as D; explicitly approv
 the annotated tag and triggered publication; verify the published download; then
 separately authorize any consumer activation. Detailed commands remain in the
 [workflow contract](../specs/026-release-process/contracts/workflow.md) until that
-procedure has actual evidence. No current offline result clears this sequence.
+procedure has actual evidence. No offline result, accepted dispatch request or source-only verification clears
+this entire sequence.
 
 | Failure | Owner response |
 | --- | --- |

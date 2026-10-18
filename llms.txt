@@ -52,5 +52,5 @@ from the installed binary; check its version and help first.
 
 - [Submodule pin audit](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/pins.md): planned read-only `stw pins` Git submodule evidence, findings, exit status 3 and limits.
 
-- [Release source guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/release.md): hidden current command matrix, offline evidence, effects and pending Spec 026 acceptance; dispatch/online integration remain planned.
+- [Release source guide](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/release.md): hidden current command matrix, offline/online evidence, explicit dispatch effects and pending workflow/Spec 026 acceptance.
 - [Owner release preparation](https://raw.githubusercontent.com/wstein/sourcesteward/main/docs/releasing.md): settings, approval boundaries, rehearsal/bootstrap dependencies and failure handling; no execution authority.

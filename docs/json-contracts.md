@@ -208,6 +208,7 @@ No release schema is promoted by this documentation change.
 | `release verify --json` | [release-verify](../schemas/v1/release-verify.schema.json) |
 | `release record --json` | [release-record-result](../schemas/v1/release-record-result.schema.json) |
 | `release build --json` | [release-build](../schemas/v1/release-build.schema.json) |
+| `release dispatch --json` | [release-dispatch](../schemas/v1/release-dispatch.schema.json) |
 
 Result schemas admit additive members; the four contract/data formats reject
 unknown properties. The manifest schema references the record schema; offline
@@ -216,8 +217,24 @@ publication URL. The record object and the `record --json` result envelope are
 different documents. Preserve the generated canonical record bytes.
 
 Inspect `status`, `verdict`, gates and boundary qualifications as well as exit
-status. Offline `plan`/`verify` cannot clear online gates; registered `--online`
-flags do not imply a live verifier exists. Exit 3 also covers release findings,
-failed gates, record disagreements and local-verification hash mismatches. See
+status. Offline `plan`/`verify` cannot clear online gates; `--online` adds bounded
+GitHub evidence, and verification additionally checks attestations. Exit 3 also
+covers release findings, failed gates, record disagreements and local-verification hash mismatches. See
 the [release guide](release.md) for the per-command matrix and remaining gates.
-Dispatch and its schema remain planned in this source slice.
+Dispatch source is implemented; its schema is also unpublished. Result-schema
+`status` is separate from a gate `verdict` or from workflow completion:
+
+| Results | Status interpretation |
+| --- | --- |
+| `check` | `ok` has no error findings; `findings` reports validation errors |
+| `plan`, `verify`, `dispatch` | `ok` can still carry `fail` or `incomplete` verdicts; inspect gates and qualifications |
+| `record` | `ok` produced/checked a record; `failed` reports input or comparison disagreement |
+| All above | `refused`/`error` are not passing evidence; inspect the typed error and boundary |
+
+For dispatch, `applied` reports acceptance of the one fixed POST, not completion
+of its CI run. The required `request`, `plan_id`, `http_status`, `workflow_url`
+and `approval` fields describe plan/apply effects; no-apply performs no POST.
+`network` lists requests actually attempted, so an uncertain POST failure must
+not be retried on the assumption that nothing started. The
+[dispatch contract](../specs/026-release-process/contracts/dispatch.md) defines
+its command-specific exit meanings and the separately required build approval.
