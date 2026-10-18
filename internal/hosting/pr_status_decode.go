@@ -3,8 +3,10 @@ package hosting
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -129,4 +131,68 @@ func decodePRStatus(raw []byte, repo *Repository, number int) (*PRStatusPullRequ
 		result.ResultSHA = mergeSHA
 	}
 	return result, nil
+}
+
+// readPRStatusOnce consumes an already resolved selection and an existing client.
+// Its caller owns native/auth/client lifetime and the global operation context.
+// This seam does not resolve, authenticate, retry, watch or render output.
+func readPRStatusOnce(ctx context.Context, api apiReader, selection Result, number int, clock func() time.Time) (r PRStatusResult) {
+	r = newPRStatusResult()
+	if clock == nil {
+		clock = time.Now
+	}
+	defer func() {
+		r.ObservedAt = clock().UTC().Format(time.RFC3339)
+		if ctx.Err() != nil {
+			r.fail("hosting-canceled", "hosting inspection canceled or exceeded its deadline", "canceled")
+		}
+		encoded, err := json.Marshal(r)
+		if err != nil || len(encoded)+1 > maxBytes {
+			r.Identity = nil
+			r.Repository = nil
+			r.Candidates = []Candidate{}
+			r.PullRequest = nil
+			r.SampledAt = nil
+			r.Observation.InitialHeadSHA = nil
+			r.fail("hosting-output-limit", "hosting result exceeded its one MiB limit", "output-limit")
+		}
+	}()
+	if ctx.Err() != nil {
+		return r
+	}
+	if selection.Identity == nil || selection.Identity.Status != "ok" || (selection.Backend != "git" && selection.Backend != "jj") || selection.Identity.Backend != selection.Backend || selection.Repository == nil || !validHost(selection.Repository.Host) || !validRepo(selection.Repository.Owner+"/"+selection.Repository.Name) || number <= 0 {
+		r.fail("hosting-invalid-options", "valid native ownership and selected repository are required", "failed")
+		return r
+	}
+	r.Backend = selection.Backend
+	r.Identity = selection.Identity
+	r.Repository = selection.Repository
+	r.Candidates = append([]Candidate{}, selection.Candidates...)
+	r.Boundary.Network = true
+	r.Boundary.Requests = 1
+	raw, err := api.get(ctx, fmt.Sprintf("repos/%s/%s/pulls/%d", selection.Repository.Owner, selection.Repository.Name, number))
+	if ctx.Err() != nil {
+		return r
+	}
+	if err != nil {
+		r.fail("hosting-pr-failed", "cannot read PR evidence; check selected-host access and rate limits", "failed")
+		return r
+	}
+	pr, err := decodePRStatus(raw, selection.Repository, number)
+	if err != nil {
+		r.fail("hosting-pr-evidence", errPRStatusEvidence.Error(), "failed")
+		return r
+	}
+	if ctx.Err() != nil {
+		return r
+	}
+	sampled := clock().UTC().Format(time.RFC3339)
+	r.SampledAt = &sampled
+	r.PullRequest = pr
+	r.Observation.InitialHeadSHA = &pr.HeadSHA
+	r.Observation.Samples = 1
+	r.Observation.Stop = "sampled"
+	r.Status = "ok"
+	r.Boundary.Complete = true
+	return r
 }
