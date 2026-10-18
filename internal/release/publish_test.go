@@ -82,3 +82,15 @@ func TestTagGrammarMismatchFails(t *testing.T) {
 		t.Fatalf("%+v", r.Gates)
 	}
 }
+
+func TestTagPlanChecksContractAtTagCommit(t *testing.T) {
+	d, _ := planRepo(t)
+	write(t, d, ".stw/release.toml", []byte("schema_version = 2\n"))
+	bad := commitAll(t, d)
+	git(t, d, "update-ref", "refs/remotes/upstream/main", bad)
+	git(t, d, "tag", "-a", "v1.2.3", "-m", "invalid contract")
+	p := Plan(context.Background(), PlanOptions{Path: d, Subject: "v1.2.3"})
+	if p.Status != "ok" || findGate(p, "config-invalid") != "fail" || p.Verdict != "fail" {
+		t.Fatalf("%+v", p)
+	}
+}

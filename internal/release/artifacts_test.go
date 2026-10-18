@@ -88,3 +88,20 @@ func TestArtifactSizeAndCancellationBounds(t *testing.T) {
 		t.Fatalf("%v", e)
 	}
 }
+
+func TestChecksumLineCountBoundary(t *testing.T) {
+	for _, n := range []int{65, 66} {
+		var input strings.Builder
+		for i := 0; i < n; i++ {
+			fmt.Fprintf(&input, "%s  asset-%d\n", strings.Repeat("a", 64), i)
+		}
+		sums, e := parseChecksums([]byte(input.String()))
+		if n == 65 {
+			if e != nil || len(sums) != 65 {
+				t.Fatalf("%d %v", len(sums), e)
+			}
+		} else if !errors.Is(e, errReleaseLimit) {
+			t.Fatalf("66 lines: %v", e)
+		}
+	}
+}
