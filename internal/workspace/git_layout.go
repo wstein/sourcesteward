@@ -136,9 +136,19 @@ func (p *gitLayoutProof) checkout(root, target string) error {
 	return nil
 }
 
+// A binding is authority from the existing checkout/pointer proof, rather than
+// an inferred registration. Unknown and conflicting authority stay explicit.
+type gitPrimaryBinding struct {
+	Root        string
+	Conflicting bool
+}
+
 // Return the same effective configuration used by all existing helper guards,
 // plus a fingerprint of literal config, canonical mappings and reciprocal files.
 func gitLayoutSafety(ctx context.Context, bin string, id NativeIdentity) (string, string, error) {
+	return gitLayoutSafetyWithPrimary(ctx, bin, id, nil)
+}
+func gitLayoutSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, primary *gitPrimaryBinding) (string, string, error) {
 	proof := gitLayoutProof{directories: map[string]PathIdentity{}, files: map[string]PathIdentity{}, contents: map[string]string{}}
 	for _, path := range []string{id.WorkspaceRoot, id.GitDir, id.RepositoryDir} {
 		if err := proof.directory(path); err != nil {
@@ -225,6 +235,10 @@ func gitLayoutSafety(ctx context.Context, bin string, id NativeIdentity) (string
 			worktree = value
 		}
 	}
+	binding := gitPrimaryBinding{}
+	if id.GitDir == id.RepositoryDir {
+		binding.Root = id.WorkspaceRoot
+	}
 	if occurrences != 0 {
 		primary, err := gitLayoutDirectory(id.RepositoryDir, worktree)
 		if err != nil {
@@ -235,6 +249,10 @@ func gitLayoutSafety(ctx context.Context, bin string, id NativeIdentity) (string
 		}
 		// An independent checkout mapping proves the shared value; never compare it
 		// to the current linked root or adopt it as the current workspace identity.
+		if binding.Root != "" && binding.Root != primary {
+			binding.Conflicting = true
+		}
+		binding.Root = primary
 		fmt.Fprintf(&proof.evidence, "primary:%q\x00", primary)
 	}
 	// Re-read the exact files to refuse replacement observed during native reads.
@@ -252,6 +270,9 @@ func gitLayoutSafety(ctx context.Context, bin string, id NativeIdentity) (string
 			return "", "", gitLayoutRefused("Git layout metadata changed during native configuration observation")
 		}
 		fmt.Fprintf(&proof.evidence, "final:%q:%d:%q\x00", path, mode, data)
+	}
+	if primary != nil {
+		*primary = binding
 	}
 	return config.String(), gitDigest(proof.evidence.String()), nil
 }

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -111,33 +110,25 @@ func (gitRetirementAdapter) Observe(ctx context.Context, source, base string, ta
 }
 
 func gitRetirementStoredFiles(ctx context.Context, bin string, id NativeIdentity) ([]RetirementStoredFile, error) {
-	raw, e := gitRead(ctx, bin, id.WorkspaceRoot, "ls-tree", "-r", "-l", "-z", "--full-tree", id.CommitID)
+	entries, e := gitTreeEntries(ctx, bin, id.WorkspaceRoot, id.CommitID, id.ObjectFormat, nil)
 	if e != nil {
-		return nil, e
-	}
-	if e = validateGitTree(raw); e != nil {
 		return nil, e
 	}
 	files := []RetirementStoredFile{}
 	expectedIndex := map[string]string{}
-	if raw != "" {
-		for _, record := range strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00") {
-			meta, path, _ := strings.Cut(record, "\t")
-			f := strings.Fields(meta)
-			size, _ := strconv.ParseInt(f[3], 10, 64)
-			if size > nativeOutputLimit {
-				return nil, failure("retirement-file-limit", "Stored Git content exceeds 64 KiB; retain the target")
-			}
-			content, code, e := runSandboxed(ctx, bin, []string{"--no-replace-objects", "cat-file", "blob", f[2]}, id.WorkspaceRoot, nil, nil)
-			if e != nil {
-				return nil, gitExecutionError(e)
-			}
-			if code != 0 || int64(len(content)) != size {
-				return nil, failure("retirement-stored-content-refused", "Complete raw stored Git content is unavailable")
-			}
-			files = append(files, RetirementStoredFile{Path: path, Digest: gitDigest(content), Size: size, Executable: f[0] == "100755"})
-			expectedIndex[path] = f[0] + " " + f[2] + " 0"
+	for _, entry := range entries {
+		if entry.Size > nativeOutputLimit {
+			return nil, failure("retirement-file-limit", "Stored Git content exceeds 64 KiB; retain the target")
 		}
+		content, code, e := runSandboxed(ctx, bin, []string{"--no-replace-objects", "cat-file", "blob", entry.OID}, id.WorkspaceRoot, nil, nil)
+		if e != nil {
+			return nil, gitExecutionError(e)
+		}
+		if code != 0 || int64(len(content)) != entry.Size {
+			return nil, failure("retirement-stored-content-refused", "Complete raw stored Git content is unavailable")
+		}
+		files = append(files, RetirementStoredFile{Path: entry.Path, Digest: gitDigest(content), Size: entry.Size, Executable: entry.Mode == "100755"})
+		expectedIndex[entry.Path] = entry.Mode + " " + entry.OID + " 0"
 	}
 	index, e := gitRead(ctx, bin, id.WorkspaceRoot, "ls-files", "--stage", "-z")
 	if e != nil {
