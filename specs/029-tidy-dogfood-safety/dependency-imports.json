@@ -1,0 +1,474 @@
+{
+  "base_sha": "c93ac0705f7ab2d770e050e02ef5c5cb19ae27d9",
+  "base_tree": "7a5db84b66c6865d2018de2ff5803021fdab74d2",
+  "imports": [
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/analysis.md",
+      "path": "specs/029-tidy-dogfood-safety/analysis.md",
+      "old_blob": null,
+      "new_blob": "36c66ffa4090f24d3ced45efd111eb4247cdf62e"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/checklists/requirements.md",
+      "path": "specs/029-tidy-dogfood-safety/checklists/requirements.md",
+      "old_blob": null,
+      "new_blob": "b4017d5a614fdaf91c8eff666177c8c04f63594d"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/contract-amendments.md",
+      "path": "specs/029-tidy-dogfood-safety/contract-amendments.md",
+      "old_blob": null,
+      "new_blob": "6d03cf4f181f9662d5f451604bacd50ab50049b4"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/contracts/online.md",
+      "path": "specs/029-tidy-dogfood-safety/contracts/online.md",
+      "old_blob": null,
+      "new_blob": "72a3b910d1416886bd2982ceb255097c8cc485c8"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/contracts/streams.md",
+      "path": "specs/029-tidy-dogfood-safety/contracts/streams.md",
+      "old_blob": null,
+      "new_blob": "a21bc365a179b68ca935c224a56bf30ce06f50d6"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/contracts/tidy-v3.md",
+      "path": "specs/029-tidy-dogfood-safety/contracts/tidy-v3.md",
+      "old_blob": null,
+      "new_blob": "2e99bbd44e10c2d32b945f69d7b9b790ae424ced"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "old_blob": null,
+      "new_blob": "626dab5ac0a363c2f57d0fb69e5517296aa13cba"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/plan.md",
+      "path": "specs/029-tidy-dogfood-safety/plan.md",
+      "old_blob": null,
+      "new_blob": "a83823078704be8a52a5adb6b146d11fa163b299"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/quickstart.md",
+      "path": "specs/029-tidy-dogfood-safety/quickstart.md",
+      "old_blob": null,
+      "new_blob": "aba944dd581281f35e67a1a15cf31dfae582b180"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/research.md",
+      "path": "specs/029-tidy-dogfood-safety/research.md",
+      "old_blob": null,
+      "new_blob": "bfff14711d6172515342adf3891fec1310f62de4"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/spec.md",
+      "path": "specs/029-tidy-dogfood-safety/spec.md",
+      "old_blob": null,
+      "new_blob": "51be184f49c35274e8f8c54205495cde60bca38b"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/tasks.md",
+      "path": "specs/029-tidy-dogfood-safety/tasks.md",
+      "old_blob": null,
+      "new_blob": "640d20be39e5a29a19dada9a42e1d8e2aaa64f7a"
+    },
+    {
+      "unit": "shared-reviewed-contract",
+      "source_sha": "9fc680cc2cb66c33127971368ca7e92f39c11281",
+      "source_tree": "4b5bddbd83d800f848c1a907e0716e9725df5a61",
+      "source_path": "specs/029-tidy-dogfood-safety/verification.md",
+      "path": "specs/029-tidy-dogfood-safety/verification.md",
+      "old_blob": null,
+      "new_blob": "8ff347ec881d59b919ad5427f14797675e1fdacb"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/contracts/workspace_test.go",
+      "path": "internal/contracts/workspace_test.go",
+      "old_blob": "ce1b14e5a945170f5a3bcb5feeb126fd1718fd33",
+      "new_blob": "37614d528a5ea1dbe832959ea6649f5bab2b7f21"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/git.go",
+      "path": "internal/workspace/git.go",
+      "old_blob": "b87d16d4ecd5990c279828f7693988c13426b97a",
+      "new_blob": "3a791b03efa654004ef8d0dfcd6eaa068ab3b2d2"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/git_stream.go",
+      "path": "internal/workspace/git_stream.go",
+      "old_blob": null,
+      "new_blob": "3a8ab71d821ca552bdc2e106992630664f619283"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/git_stream_consumers_test.go",
+      "path": "internal/workspace/git_stream_consumers_test.go",
+      "old_blob": null,
+      "new_blob": "5ed44be372ab84b3fc5ecb46bdcbf38db6caa446"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/git_stream_test.go",
+      "path": "internal/workspace/git_stream_test.go",
+      "old_blob": null,
+      "new_blob": "0553bb17371835d3c423b1fe30245553920ff551"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_blob_stream.go",
+      "path": "internal/workspace/native_blob_stream.go",
+      "old_blob": null,
+      "new_blob": "607684191a5a8b73953c1fd90d206bd30e643660"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_blob_stream_test.go",
+      "path": "internal/workspace/native_blob_stream_test.go",
+      "old_blob": null,
+      "new_blob": "d52cc41a75be3c832c40152b9b7eec898274310f"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_ref_transaction.go",
+      "path": "internal/workspace/native_ref_transaction.go",
+      "old_blob": null,
+      "new_blob": "8f2acb05f443919e4fd2ff82408a987f99e1def1"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_ref_transaction_test.go",
+      "path": "internal/workspace/native_ref_transaction_test.go",
+      "old_blob": null,
+      "new_blob": "c4c75e8d1e1c9db0b39648f864a1433c91a57437"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_sandbox.go",
+      "path": "internal/workspace/native_sandbox.go",
+      "old_blob": "e639309ead058c3fa1bafa374210f12680b7b8c4",
+      "new_blob": "2dd6431385fee1c7cd5798e29e3cac5fc75a54bd"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_stream.go",
+      "path": "internal/workspace/native_stream.go",
+      "old_blob": null,
+      "new_blob": "0d5959c3b6258617598da117c3c60c6341bfdfa2"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/native_stream_test.go",
+      "path": "internal/workspace/native_stream_test.go",
+      "old_blob": null,
+      "new_blob": "b194177d5df928e01b063276eb6206285fca8c5f"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/retirement_git.go",
+      "path": "internal/workspace/retirement_git.go",
+      "old_blob": "c438df212bcc4e2caaba66352870b7d2a21494be",
+      "new_blob": "31e4462bfa9edf6e0cf9d72e20e794044eb6aead"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "internal/workspace/tidy_v3_budget.go",
+      "path": "internal/workspace/tidy_v3_budget.go",
+      "old_blob": null,
+      "new_blob": "677e2c65b0299a388b93368537973cb0388f9dd6"
+    },
+    {
+      "unit": "A",
+      "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+      "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+      "source_path": "specs/029-tidy-dogfood-safety/verification.md",
+      "path": "specs/029-tidy-dogfood-safety/verification-native.md",
+      "old_blob": null,
+      "new_blob": "5c56f3ba7e72b9717294924048fdb93f50280a6d"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "internal/contracts/tidy_v3_schema_test.go",
+      "path": "internal/contracts/tidy_v3_schema_test.go",
+      "old_blob": null,
+      "new_blob": "32f612e752d6f944a119d921387949a8ad9e2c84"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "internal/workspace/tidy_v3_options.go",
+      "path": "internal/workspace/tidy_v3_options.go",
+      "old_blob": null,
+      "new_blob": "9f1c6895408fe15e0346b1786d489769ce065e4f"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "internal/workspace/tidy_v3_result.go",
+      "path": "internal/workspace/tidy_v3_result.go",
+      "old_blob": null,
+      "new_blob": "5b1a6c35f1bf4b2c617100dc6c7dc40d16a823f5"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "internal/workspace/tidy_v3_result_test.go",
+      "path": "internal/workspace/tidy_v3_result_test.go",
+      "old_blob": null,
+      "new_blob": "8d77549441c54f927e9d1e344581caa90b650a20"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "internal/workspace/tidy_v3_state.go",
+      "path": "internal/workspace/tidy_v3_state.go",
+      "old_blob": null,
+      "new_blob": "242fb65e733e9c0d9215f8b4b3e19900d0662c0c"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "internal/workspace/tidy_v3_state_test.go",
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "old_blob": null,
+      "new_blob": "2f4ceb68a1e75b08e8cd122dbc1fdcb00cf5987e"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "schemas/v3/tidy.schema.json",
+      "path": "schemas/v3/tidy.schema.json",
+      "old_blob": null,
+      "new_blob": "18afbccbb931ae9414873cdba2840dce763911f0"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "scripts/package-pages.py",
+      "path": "scripts/package-pages.py",
+      "old_blob": "44a8a19d2baa5c2f71ee09d6b2135ab1718d35ae",
+      "new_blob": "364eaf73b2b73b868bb378b871b3d7fefe048c1c"
+    },
+    {
+      "unit": "B",
+      "source_sha": "9ea4edc1cd1bec1af97c7181fb9307042e17bacc",
+      "source_tree": "2b78012de96dcb5522b945825eb32375e0c136e5",
+      "source_path": "scripts/test_docs.py",
+      "path": "scripts/test_docs.py",
+      "old_blob": "e30728c530a9103f4366270d4020e863ea59f563",
+      "new_blob": "12d324bd971466c75002981d34d88760864ce630"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/release.go",
+      "path": "internal/hosting/release.go",
+      "old_blob": null,
+      "new_blob": "0c261ac1386a4eceb13986f970abedc02be81811"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/release_review_test.go",
+      "path": "internal/hosting/release_review_test.go",
+      "old_blob": null,
+      "new_blob": "91312dcf2f83b5718587f8ab411a76061e26b3fd"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/release_rules_test.go",
+      "path": "internal/hosting/release_rules_test.go",
+      "old_blob": null,
+      "new_blob": "030ad2e2c441ebd091ccdb7624316a9d59b99a04"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/release_test.go",
+      "path": "internal/hosting/release_test.go",
+      "old_blob": null,
+      "new_blob": "2668a1c85a5244ec2ca4180c13a6debdf6205dde"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/release_transport_test.go",
+      "path": "internal/hosting/release_transport_test.go",
+      "old_blob": null,
+      "new_blob": "2831f949aeb7da564f45859ae8253c585eb78910"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_branches.go",
+      "path": "internal/hosting/tidy_evidence_branches.go",
+      "old_blob": null,
+      "new_blob": "7f62061432a83d107a48f341ff3bac98e08df616"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_branches_test.go",
+      "path": "internal/hosting/tidy_evidence_branches_test.go",
+      "old_blob": null,
+      "new_blob": "a6339b39b35e8df5bfa86429d9b18b4ad7854d23"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_json.go",
+      "path": "internal/hosting/tidy_evidence_json.go",
+      "old_blob": null,
+      "new_blob": "aa63341e0e16a345f1b0d7c7de0e0327cf582c45"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_pr.go",
+      "path": "internal/hosting/tidy_evidence_pr.go",
+      "old_blob": null,
+      "new_blob": "af5c2add86798280d335ca5d518f2db8bdd05ceb"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_pr_test.go",
+      "path": "internal/hosting/tidy_evidence_pr_test.go",
+      "old_blob": null,
+      "new_blob": "6bfcab31a1b22f397c3219eeaf964de096097211"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_session.go",
+      "path": "internal/hosting/tidy_evidence_session.go",
+      "old_blob": null,
+      "new_blob": "8d5bd73354afddd3b4c777b5e414a8046a60882c"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_session_test.go",
+      "path": "internal/hosting/tidy_evidence_session_test.go",
+      "old_blob": null,
+      "new_blob": "0bddec0a7643660c7c0ae9988ff1192b7506ce12"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/tidy_evidence_test.go",
+      "path": "internal/hosting/tidy_evidence_test.go",
+      "old_blob": null,
+      "new_blob": "7e5bf0d6dec4bda22da7deb46d359a922b297029"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "internal/hosting/transport.go",
+      "path": "internal/hosting/transport.go",
+      "old_blob": "4dc9b6fd66d50a292f1aa7e85b3471601db873ea",
+      "new_blob": "ea84c70e4d34b5d2b9594bc349d8d484c421328b"
+    },
+    {
+      "unit": "C",
+      "source_sha": "5404674d23fa7279ee33c2e261eb6cda07159160",
+      "source_tree": "d8cb490f148f2fb39abf44ee2ed9fabf3524caa8",
+      "source_path": "specs/029-tidy-dogfood-safety/verification-hosting.md",
+      "path": "specs/029-tidy-dogfood-safety/verification-hosting.md",
+      "old_blob": null,
+      "new_blob": "a962303e0e4121ebf38d9b2b450119a39d287553"
+    }
+  ]
+}
