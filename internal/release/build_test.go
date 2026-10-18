@@ -530,3 +530,54 @@ func TestBuildLocalVerifyRejectsTrustedOCITargetBeforeExport(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildFilesOnlyRefusesMixedOnceBeforeAnyInvocation(t *testing.T) {
+	s := fixtureBuildState(t)
+	s.contract.Build = append(s.contract.Build, Build{ID: "mixed", Scope: "once", Argv: []string{"fake-mixed"}, TimeoutSeconds: 1})
+	s.contract.Target = append(s.contract.Target, Target{ID: "shared-file", Kind: "file", Build: "mixed", Output: "dist/release/shared"}, Target{ID: "shared-image", Kind: "oci-image", Build: "mixed"})
+	fake := &fakeBuildRunner{}
+	out := filepath.Join(t.TempDir(), "new")
+	r := executeBuild(context.Background(), s, BuildOptions{Mode: "ci", FilesOnly: true, Out: out}, fake, nil)
+	if r.Error == nil || r.Error.Code != "unsupported-target" || len(fake.calls) != 0 {
+		t.Fatalf("%+v calls%d", r, len(fake.calls))
+	}
+	if _, err := os.Lstat(out); !os.IsNotExist(err) {
+		t.Fatalf("preflight created output directory: %v", err)
+	}
+}
+func TestBuildNormalCIKeepsMixedOnceValid(t *testing.T) {
+	s := fixtureBuildState(t)
+	s.contract.Build[0].Scope = "once"
+	s.contract.Build[0].Argv = []string{"fake-mixed", "{out_dir}"}
+	s.contract.Target = append(s.contract.Target, Target{ID: "image", Kind: "oci-image", Role: "artifact", Build: "fake", Repository: "ghcr.io/example/image", Platforms: []string{"linux/amd64", "linux/arm64"}, ResultFile: "dist/release/result.json"})
+	raw, err := os.ReadFile("../../specs/026-release-process/examples/oci-bundle.result.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeBuildRunner{run: func(_ context.Context, c BuildCommand, _, _ io.Writer) (int, error) {
+		if err := os.WriteFile(filepath.Join(c.Argv[1], "fixture_1.2.3.txt"), []byte("fake artifact"), 0644); err != nil {
+			return -1, err
+		}
+		return 0, os.WriteFile(filepath.Join(c.Argv[1], "result.json"), raw, 0644)
+	}}
+	out := filepath.Join(t.TempDir(), "new")
+	r := executeBuild(context.Background(), s, BuildOptions{Mode: "ci", Out: out}, fake, nil)
+	if r.Status != "ok" || len(fake.calls) != 1 {
+		t.Fatalf("%+v calls%d", r, len(fake.calls))
+	}
+}
+
+func TestBuildFilesOnlyOmitsSharedPerTargetImageInvocation(t *testing.T) {
+	s := fixtureBuildState(t)
+	s.contract.Target = append(s.contract.Target, Target{ID: "image", Kind: "oci-image", Build: "fake"})
+	fake := &fakeBuildRunner{run: func(_ context.Context, c BuildCommand, _, _ io.Writer) (int, error) {
+		if c.Argv[1] != "linux" {
+			t.Fatal("image invocation was retained", c.Argv)
+		}
+		return 0, os.WriteFile(filepath.Join(s.root, c.Argv[2]), []byte("fake file artifact"), 0644)
+	}}
+	r := executeBuild(context.Background(), s, BuildOptions{Mode: "ci", FilesOnly: true, Out: filepath.Join(t.TempDir(), "new")}, fake, nil)
+	if r.Status != "ok" || len(fake.calls) != 1 {
+		t.Fatalf("%+v calls%d", r, len(fake.calls))
+	}
+}
