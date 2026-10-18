@@ -209,6 +209,10 @@ func (api *ghAPI) token(parent context.Context) (string, error) {
 
 var fixedEndpoint = regexp.MustCompile(`^repos/[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*/(pulls/[1-9][0-9]*|commits/[0-9a-f]{40}/(check-runs|statuses)\?per_page=100&page=([1-9]|10))$`)
 
+func guardedEndpoint(endpoint string) bool {
+	return fixedEndpoint.MatchString(endpoint) || readyEndpoint(endpoint)
+}
+
 func apiDestination(host string) (string, string) {
 	if host == "github.com" || strings.HasSuffix(host, ".ghe.com") {
 		return "api." + host, "/"
@@ -254,7 +258,7 @@ type guardedTransport struct {
 }
 
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !fixedEndpoint.MatchString(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
+	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !guardedEndpoint(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
 		if req.URL.RawQuery != "" {
 			return "?" + req.URL.RawQuery
 		}
