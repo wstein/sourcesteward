@@ -26,6 +26,7 @@ func hostingCommands(requireJJ bool, run hostingOperation) []*cobra.Command {
 	for _, kind := range []string{"repo", "pr", "ci"} {
 		commands = append(commands, hostingLeaf(kind, requireJJ, run))
 	}
+	commands = append(commands, readyCommand(requireJJ, hosting.CheckReady))
 	return commands
 }
 func hostingLeaf(kind string, requireJJ bool, run hostingOperation) *cobra.Command {
