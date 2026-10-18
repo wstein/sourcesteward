@@ -710,6 +710,11 @@
       "path": "specs/029-tidy-dogfood-safety/admission-dependency-import.json",
       "source": "f696611d925ac6d320d66178c3bc739c9084b061",
       "description": "Fifteen exact reviewed admission/content/doc/constructor dependencies; seven primary imports already present verified exact; no removal or old local-only apply overwrite."
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/owned-progress-model-import.json",
+      "source": "0c555b5e1eae9fc36663ab9e4183e097b459f160",
+      "description": "Two exact content-cleared owned-progress model/store-test blobs; final E aggregate source acceptance remains pending."
     }
   ]
 }
