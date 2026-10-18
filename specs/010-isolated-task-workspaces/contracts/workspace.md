@@ -97,3 +97,72 @@ never substitute for the selected base. Active filters refuse; configured driver
 `set`, `unset` and `unspecified` also refuse because they collide with attribute sentinels.
 No filter helper is executed or silently disabled. Configuration and attribute evidence
 are included in stale-plan validation.
+
+## Git checkout layout admission (issue #62)
+
+This amendment is a design candidate pending independent analysis and implementation. It
+replaces blanket refusal of `core.worktree` only for the proven layouts below. All existing
+helper, tree, ownership, bounded execution, sandbox and recovery requirements still apply.
+It creates no new command, public schema field, adoption path or configuration-writing effect.
+
+### Supported mappings
+
+| Source layout | Required mapping evidence |
+| --- | --- |
+| Ordinary primary checkout | Canonical checkout with its own `.git` directory; native Git directory/common directory/top-level agree. |
+| Primary initialized submodule or separate-Git-directory checkout | Canonical checkout `.git` is a bounded regular pointer file to the primary Git directory; that directory is also the common directory and has no linked `commondir` redirection. Native identity agrees. Any admitted `core.worktree` resolves back to this exact primary checkout. |
+| Linked worktree of either layout | Checkout `.git` points to its exact registration under the common directory's `worktrees/`; registration `commondir` resolves to that common directory and `gitdir` resolves back to this checkout's `.git` file. Native identity and registration evidence agree. A present shared `core.worktree` is validated against the separately proven primary checkout, not against this linked checkout. |
+
+A separate Git directory need not be inside the checkout. Its location, or a `modules/`
+component alone, establishes no ownership. An initialized submodule used as the selected
+repository is distinct from activating nested submodules or admitting gitlinks in the
+checkout base; those existing unsupported cases stay unsupported. Existing no-`core.worktree`
+layouts keep their admitted behavior and qualifications; an unavailable primary mapping
+must never be invented to satisfy a new proof requirement.
+
+### Proof and trust boundary
+
+1. Keep current workspace root, current Git directory, common directory and any separately
+   proven primary checkout distinct. Resolve native identity through the existing bounded,
+   isolated read path; cross-check it with reciprocal filesystem metadata before permitting
+   an effect. Do not trust `core.worktree`, a native listing or a path basename by itself.
+2. Admit a present `core.worktree` only as one nonempty value originating directly in the
+   common directory's regular repository `config`. Refuse duplicate occurrences, included,
+   global, system, command or worktree-specific origins for this key, even if values agree.
+   Resolve a relative value from the primary/common Git directory; ordinary generated `..`
+   components are allowed only when the resulting canonical mapping is proven. Absolute
+   values require the same proof. Preserve the literal configuration without rewriting it.
+3. When `core.worktree` is present, prove the primary checkout independently: its `.git`
+   directory is the common directory, or its regular `.git` pointer resolves directly to
+   that directory, with no `commondir` indirection. For a linked source with this key, prove
+   both this primary mapping and the linked reciprocal pointers. An unrelated checkout, missing target, mismatched backlink or unprovable mapping
+   refuses; it is never silently substituted as the source, recovered or traversed for content.
+4. Use bounded no-follow metadata reads and canonical directory identities. Refuse symlink,
+   special-file, hardlinked metadata-file, duplicate/aliased path, ownership or identity
+   ambiguity. The existing 4,096-byte path, 64 KiB native output and aggregate observation
+   limits apply; layout pointer/configuration files are at most 64 KiB each. Evaluate pointer
+   syntax as data; execute no text from it. Limit extra traversal to the exact directories
+   and metadata files needed for the reciprocal proof, not sibling repository contents.
+5. Bind literal layout pointer/configuration bytes, their physical identities and the proven
+   directory mapping into the existing safety fingerprint, in addition to effective config,
+   attributes, hooks and existing native evidence. Re-observe at the existing pre-action and
+   post-action boundaries. An observed replacement, mapping or configuration change is stale
+   even if it still reaches the same commit. Include the new proof consistently in fresh
+   plans and validation; historical plans with incompatible fingerprints refuse and require
+   replanning, never rewritten records or an equality bypass. Sampled external/ABA limits remain.
+6. Reuse the same admission for creation, local reference observation/recovery/deletion and
+   owned retirement source/target validation. A present primary `core.worktree` shared by a
+   linked target does not transfer primary ownership to that target. Exact permitted native
+   deltas remain action-specific: creation may add its owned registration, reference cleanup
+   may add its recovery root/delete its selected ref, and retirement may remove only its owned
+   registration/files. None permits changes to configuration, primary checkout, source index,
+   unrelated refs or sibling metadata. Existing narrow write grants must protect the common
+   config and every preexisting sibling; do not grant write access to the superproject,
+   common-directory parent or primary checkout to make a new layout work.
+
+Executable hooks, active checkout filters, unsafe helper/attribute sources, sparse/promisor
+state, alternates, worktree-specific configuration and nested-submodule activation retain
+existing refusals. Unused filter definitions retain their already specified attribute-based
+admission. No raw Git fallback for jj, source snapshots, jj change abandonment or remote
+reference deletion is introduced. Missing enforced confinement or complete evidence refuses.
+The mandatory acceptance matrix is in [T031–T038](../tasks.md#issue-62-native-git-layout-readiness).

@@ -280,3 +280,16 @@ stored-file facts preserve executable semantics only; recovery from committed tr
 restoring every original filesystem permission/ownership bit. Reject NFC/casefold-aliased physical
 paths under the existing Spec010 ordinary-tree admission rules; do not silently normalize or merge
 separate names. Permission changes between plan/apply/removal are stale, never cleanup proof.
+
+## Issue #62: layout proof for owned retirement
+
+Apply the [shared Git layout contract](../../010-isolated-task-workspaces/contracts/workspace.md#git-checkout-layout-admission-issue-62)
+to both source observation and the exact owned target before recovery/removal. A linked
+target may inherit a primary `core.worktree`; prove both mappings without requiring path
+equality or treating the primary as owned by this task. Preserve the immutable ownership and
+physical metadata manifest, exact lock/removal conditions and complete protected-workspace
+set. Primary/configuration and unrelated source/sibling metadata remain outside write grants.
+After authorized combined removal, require only the expected target/registration absence;
+all remaining layout evidence must still agree. Do not recreate missing metadata for proof,
+adopt primary/submodule paths, or weaken complete retry/recovery checks. This design amendment
+has no implementation or independent acceptance claim until the new tasks pass.
