@@ -73,3 +73,8 @@ func observeBuildViewGroup(leader int) (buildViewGroup, error) {
 	}
 	return result, nil
 }
+
+func buildViewFileIdentity(info os.FileInfo) buildViewIdentity {
+	s := info.Sys().(*syscall.Stat_t)
+	return buildViewIdentity{Dev: uint64(s.Dev), Ino: uint64(s.Ino), UID: s.Uid, GID: s.Gid, Mode: uint32(info.Mode())}
+}
