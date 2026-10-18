@@ -322,7 +322,12 @@ func newSDKClient(host, token, dir string, rt http.RoundTripper) (*http.Client, 
 	if rt == nil {
 		rt = newHTTPTransport()
 	}
-	return ghapi.NewHTTPClient(ghapi.ClientOptions{Host: host, APIHost: destination, AuthToken: token, Transport: guardedTransport{next: rt, host: destination, prefix: prefix}, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("hosting redirects are unsupported") }, LogIgnoreEnv: true, CacheDir: dir, SkipDefaultHeaders: true, Headers: map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "SourceSteward"}})
+	return newSDKClientWithGuard(host, token, dir, guardedTransport{next: rt, host: destination, prefix: prefix})
+}
+
+func newSDKClientWithGuard(host, token, dir string, guard http.RoundTripper) (*http.Client, error) {
+	destination, _ := apiDestination(host)
+	return ghapi.NewHTTPClient(ghapi.ClientOptions{Host: host, APIHost: destination, AuthToken: token, Transport: guard, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("hosting redirects are unsupported") }, LogIgnoreEnv: true, CacheDir: dir, SkipDefaultHeaders: true, Headers: map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "SourceSteward"}})
 }
 func (api *ghAPI) get(ctx context.Context, endpoint string) ([]byte, error) {
 	if !fixedReadEndpoint(endpoint) {
