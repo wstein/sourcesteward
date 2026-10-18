@@ -3,10 +3,16 @@ package hosting
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
@@ -171,6 +177,177 @@ func TestPRStatusDeletedHeadAndIgnoredMergeability(t *testing.T) {
 	}
 }
 
+func TestPRStatusOnceResultAndExplicitNulls(t *testing.T) {
+	n := 0
+	times := []time.Time{time.Date(2026, 10, 18, 12, 0, 1, 0, time.FixedZone("offset", 3600)), time.Date(2026, 10, 18, 12, 0, 2, 0, time.UTC)}
+	clock := func() time.Time { v := times[n]; n++; return v }
+	calls := 0
+	p := statusBody(t)
+	p["head"].(map[string]any)["repo"] = nil
+	p["mergeable"] = nil
+	r := readPRStatusOnce(context.Background(), apiReaderFunc(func(_ context.Context, path string) ([]byte, error) {
+		calls++
+		if path != "repos/a/b/pulls/3" {
+			t.Fatal(path)
+		}
+		return statusBytes(t, p), nil
+	}), statusSelection(), 3, clock)
+	if calls != 1 || r.SchemaVersion != 2 || r.Status != "ok" || !r.Boundary.Complete || r.Boundary.Requests != 1 || r.Observation.Samples != 1 || r.Observation.Mode != "once" || r.Observation.Stop != "sampled" {
+		t.Fatalf("wrong one-shot result: %+v calls=%d", r, calls)
+	}
+	if r.SampledAt == nil || *r.SampledAt != "2026-10-18T11:00:01Z" || r.ObservedAt != "2026-10-18T12:00:02Z" {
+		t.Fatalf("sample/final timestamps: %+v", r)
+	}
+	raw, e := json.Marshal(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var out map[string]any
+	json.Unmarshal(raw, &out)
+	pr := out["pull_request"].(map[string]any)
+	for _, key := range []string{"merged_at", "closed_at", "result_sha", "head_repository"} {
+		if value, ok := pr[key]; !ok || value != nil {
+			t.Fatalf("missing explicit null %s: %s", key, raw)
+		}
+	}
+	obs := out["observation"].(map[string]any)
+	if v, ok := obs["expected_head"]; !ok || v != nil {
+		t.Fatal("missing explicit expected_head null")
+	}
+	if out["diagnostics"] == nil || out["candidates"] == nil {
+		t.Fatal("nil arrays")
+	}
+	if _, ok := out["checks"]; ok {
+		t.Fatal("v1 CI fields leaked into v2 PR")
+	}
+}
+
+func TestPRStatusOnceCancellationAndRedaction(t *testing.T) {
+	for _, tc := range []struct {
+		name                                  string
+		before, during, apiError, badEvidence bool
+		wantRequests                          int
+		wantCode                              string
+	}{
+		{name: "before", before: true, wantCode: "hosting-canceled"},
+		{name: "during", during: true, wantRequests: 1, wantCode: "hosting-canceled"},
+		{name: "transport-secret", apiError: true, wantRequests: 1, wantCode: "hosting-pr-failed"},
+		{name: "evidence-secret", badEvidence: true, wantRequests: 1, wantCode: "hosting-pr-evidence"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.before {
+				cancel()
+			}
+			calls := 0
+			r := readPRStatusOnce(ctx, apiReaderFunc(func(context.Context, string) ([]byte, error) {
+				calls++
+				if tc.during {
+					cancel()
+				}
+				if tc.apiError {
+					return nil, errors.New("credential-secret")
+				}
+				if tc.badEvidence {
+					return []byte(`{"secret":"credential-secret"}`), nil
+				}
+				return statusBytes(t, statusBody(t)), nil
+			}), statusSelection(), 3, time.Now)
+			if calls != tc.wantRequests || r.Boundary.Requests != calls || r.Boundary.Network != (calls > 0) || r.Status != "error" || r.Boundary.Complete || r.PullRequest != nil || r.SampledAt != nil || r.Observation.Samples != 0 || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != tc.wantCode {
+				t.Fatalf("unsafe error result: %+v calls=%d", r, calls)
+			}
+			raw, _ := json.Marshal(r)
+			if bytes.Contains(raw, []byte("credential-secret")) {
+				t.Fatal("raw auth/API/evidence detail leaked")
+			}
+		})
+	}
+}
+
+func TestPRStatusOnceOutputBoundAndLegacyReader(t *testing.T) {
+	p := statusBody(t)
+	p["title"] = strings.Repeat("<", maxBytes/4)
+	var body bytes.Buffer
+	encoder := json.NewEncoder(&body)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(p); err != nil {
+		t.Fatal(err)
+	}
+	r := readPRStatusOnce(context.Background(), apiReaderFunc(func(context.Context, string) ([]byte, error) { return body.Bytes(), nil }), statusSelection(), 3, time.Now)
+	raw, e := json.Marshal(r)
+	if e != nil || len(raw)+1 > maxBytes || r.Status != "error" || r.Observation.Stop != "output-limit" || r.PullRequest != nil || r.SampledAt != nil || r.Observation.InitialHeadSHA != nil || r.Observation.Samples != 1 || r.Boundary.Requests != 1 {
+		t.Fatalf("unbounded/incorrect fallback: %+v bytes=%d %v", r, len(raw), e)
+	}
+	got, e := readPR(context.Background(), apiReaderFunc(func(context.Context, string) ([]byte, error) { return prJSON(strings.Repeat("a", 40)), nil }), statusSelection().Repository, 3)
+	if e != nil || got.HeadRepository != "fork/b" {
+		t.Fatal("legacy reader changed")
+	}
+	p = statusBody(t)
+	p["head"].(map[string]any)["repo"] = nil
+	if _, e := readPR(context.Background(), apiReaderFunc(func(context.Context, string) ([]byte, error) { return statusBytes(t, p), nil }), statusSelection().Repository, 3); e == nil {
+		t.Fatal("legacy null-head behavior changed")
+	}
+}
+
+type prStatusSchemaLoader struct{}
+
+func (prStatusSchemaLoader) Load(string) (any, error) {
+	return nil, errors.New("external schema load refused")
+}
+func TestPRStatusResultSchemaAndJJIdentity(t *testing.T) {
+	raw, e := os.ReadFile("../../specs/030-pr-status/contracts/pr-status.schema.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if e != nil {
+		t.Fatal(e)
+	}
+	c := jsonschema.NewCompiler()
+	c.UseLoader(prStatusSchemaLoader{})
+	c.AssertFormat()
+	const id = "https://wstein.github.io/sourcesteward/schemas/v2/hosting-pr.schema.json"
+	if e = c.AddResource(id, doc); e != nil {
+		t.Fatal(e)
+	}
+	schema, e := c.Compile(id)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, backend := range []string{"git", "jj"} {
+		for _, bad := range []bool{false, true} {
+			t.Run(backend+fmt.Sprint(bad), func(t *testing.T) {
+				selection := statusSelection()
+				if backend == "jj" {
+					selection.Backend = "jj"
+					selection.Identity = &inspection.Result{SchemaVersion: 2, Status: "ok", Backend: "jj", InputPath: "/repo", Evidence: []inspection.Evidence{{Kind: "jj-metadata", Location: "/repo/.jj"}}, Diagnostics: []inspection.Diagnostic{}, JJRepository: &inspection.JJRepository{WorkspaceRoot: "/repo", MetadataDir: "/repo/.jj", RepositoryDir: "/repo/.jj/repo", WorkspaceName: "default", ChangeID: strings.Repeat("k", 32), CommitID: strings.Repeat("a", 40), OperationID: strings.Repeat("b", 128), Observation: inspection.JJObservation{WorkingCopy: "stored-unsnapshotted", Limitation: "Stored identity only."}}}
+				}
+				r := readPRStatusOnce(context.Background(), apiReaderFunc(func(context.Context, string) ([]byte, error) {
+					if bad {
+						return nil, errors.New("private detail")
+					}
+					return statusBytes(t, statusBody(t)), nil
+				}), selection, 3, time.Now)
+				if r.Backend != backend || r.Identity != selection.Identity {
+					t.Fatal("native identity was converted or replaced")
+				}
+				encoded, e := json.Marshal(r)
+				if e != nil {
+					t.Fatal(e)
+				}
+				value, e := jsonschema.UnmarshalJSON(bytes.NewReader(encoded))
+				if e != nil {
+					t.Fatal(e)
+				}
+				if e = schema.Validate(value); e != nil {
+					t.Fatal(e)
+				}
+			})
+		}
+	}
+}
+
 func TestPRStatusRFC3339Evidence(t *testing.T) {
 	for _, tc := range []struct {
 		value string
@@ -191,5 +368,22 @@ func TestPRStatusRFC3339Evidence(t *testing.T) {
 				t.Fatal("valid reported timestamp text changed")
 			}
 		})
+	}
+}
+
+func TestPRStatusCancellationDuringFinalAssembly(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ticks := 0
+	clock := func() time.Time {
+		ticks++
+		if ticks == 2 {
+			cancel()
+		}
+		return time.Now()
+	}
+	r := readPRStatusOnce(ctx, apiReaderFunc(func(context.Context, string) ([]byte, error) { return statusBytes(t, statusBody(t)), nil }), statusSelection(), 3, clock)
+	if r.Status != "error" || r.Boundary.Complete || r.Observation.Stop != "canceled" || r.PullRequest == nil || r.Observation.Samples != 1 {
+		t.Fatal("final assembly cancellation must retain only incomplete sampled evidence")
 	}
 }
