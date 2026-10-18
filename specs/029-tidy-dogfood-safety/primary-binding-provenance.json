@@ -1,0 +1,47 @@
+{
+  "base": "429b31bdc3188dc3440dee86fe3902117563cada",
+  "proposal_sha256": "0a95388596d7381ec512098def2c5c9d1e9682a901707ea09992184a0dc6d5bc",
+  "ownership": "Explicit dispatcher serialized A native additive-proof to retained D handoff after same E reviewer design CLEAR; no B/E or old dependency manifest edits.",
+  "files": [
+    {
+      "path": "internal/workspace/git.go",
+      "old_blob": "3a791b03efa654004ef8d0dfcd6eaa068ab3b2d2",
+      "new_blob": "192f70981014bc097ac6f83da2e1a4ce930ba451",
+      "original_import": [
+        {
+          "unit": "A",
+          "source_sha": "dd4439c82e913f7dca207935f07d45e76a789bc0",
+          "source_tree": "17f9e85ca86f5598a1f9a492ac07082ec3c0f46d",
+          "source_path": "internal/workspace/git.go",
+          "path": "internal/workspace/git.go",
+          "old_blob": "b87d16d4ecd5990c279828f7693988c13426b97a",
+          "new_blob": "3a791b03efa654004ef8d0dfcd6eaa068ab3b2d2"
+        }
+      ]
+    },
+    {
+      "path": "internal/workspace/git_layout.go",
+      "old_blob": "af9dce5e9db87b60202256cfe660dbfd0fdcbb6b",
+      "new_blob": "f896525e607a52bc244144e34169eb770e7ce782",
+      "original_import": []
+    },
+    {
+      "path": "internal/workspace/tidy_v3_proof.go",
+      "old_blob": "e8582121d4694596099abd319b0b9d225e07724b",
+      "new_blob": "594adea3a142c77675e2fa42d57857f09e7da2f2",
+      "original_import": []
+    },
+    {
+      "path": "internal/workspace/tidy_v3_primary.go",
+      "old_blob": null,
+      "new_blob": "b468b4af6efecb4348e8c6edea3bedc1f41a6cd5",
+      "original_import": []
+    },
+    {
+      "path": "internal/workspace/tidy_v3_primary_test.go",
+      "old_blob": null,
+      "new_blob": "2840ef8877d6bb36015fee34949e4e5d59902ac8",
+      "original_import": []
+    }
+  ]
+}

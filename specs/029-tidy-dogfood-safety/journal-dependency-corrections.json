@@ -1,0 +1,31 @@
+{
+  "base_head": "03c54111f5f056dbcc1c4588383a97a200acd6ba",
+  "source_sha": "9a420f679de4ecc0f8f8c3895e324a2ac15c2125",
+  "source_parent": "a8512764088f50920dbb333a71e0576ad3717d83",
+  "source_tree": "96a08d788c9d1fdd02b589933b20e17455578507",
+  "initial_manifest_blob": "c0a67ffb128077006023693c266489249ff3c238",
+  "previous_corrections_blob": "e617e284274310a2f1355b3d930e1705ec33d3b2",
+  "imports": [
+    {
+      "path": "internal/workspace/tidy_v3_state.go",
+      "source_path": "internal/workspace/tidy_v3_state.go",
+      "source_sha": "9a420f679de4ecc0f8f8c3895e324a2ac15c2125",
+      "old_blob": "242fb65e733e9c0d9215f8b4b3e19900d0662c0c",
+      "new_blob": "15fecd35397874ec7de05ec465ae9dd4be7e845b"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "source_path": "internal/workspace/tidy_v3_state_test.go",
+      "source_sha": "9a420f679de4ecc0f8f8c3895e324a2ac15c2125",
+      "old_blob": "2f4ceb68a1e75b08e8cd122dbc1fdcb00cf5987e",
+      "new_blob": "a055c21bff54987a456f7761324adb4f7d3a129a"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "source_path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "source_sha": "9a420f679de4ecc0f8f8c3895e324a2ac15c2125",
+      "old_blob": "4d24beb9afddf8bccd00a26c236c19e27c0ebff1",
+      "new_blob": "91e7a6d22c334ae88cc63e3b2091c5961132eb8b"
+    }
+  ]
+}

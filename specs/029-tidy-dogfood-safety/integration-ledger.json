@@ -1,0 +1,703 @@
+{
+  "base": "2e9b9fc99888b605bcce08afa6ef98846359e06a",
+  "comparison_base": "c0832055dbd3f7c89355a39489a14a85231b605e",
+  "reviewed_D": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+  "reviewed_E_admission": "f696611d925ac6d320d66178c3bc739c9084b061",
+  "scope": "Fresh-main integration requires a new independent exact-source review; prior CLEARs establish provenance only. No legacy apply activation before E final source gate.",
+  "files": [
+    {
+      "path": "ARCHITECTURE.md",
+      "base_blob": "0750e7cd31d727ba0c4721a1ab373eee40b7c44a",
+      "main_blob": "0750e7cd31d727ba0c4721a1ab373eee40b7c44a",
+      "reviewed_d_blob": "b0ea4a8f5123bda93d34ab16b10f31c4ac122167",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "b0ea4a8f5123bda93d34ab16b10f31c4ac122167"
+    },
+    {
+      "path": "internal/contracts/tidy_v3_schema_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "3a525118162c548ac5f2f40e95d4cb569639379a",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "3a525118162c548ac5f2f40e95d4cb569639379a"
+    },
+    {
+      "path": "internal/contracts/workspace_test.go",
+      "base_blob": "ce1b14e5a945170f5a3bcb5feeb126fd1718fd33",
+      "main_blob": "ce1b14e5a945170f5a3bcb5feeb126fd1718fd33",
+      "reviewed_d_blob": "37614d528a5ea1dbe832959ea6649f5bab2b7f21",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "37614d528a5ea1dbe832959ea6649f5bab2b7f21"
+    },
+    {
+      "path": "internal/hosting/release.go",
+      "base_blob": null,
+      "main_blob": "0c261ac1386a4eceb13986f970abedc02be81811",
+      "reviewed_d_blob": "0c261ac1386a4eceb13986f970abedc02be81811",
+      "disposition": "already-main",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "0c261ac1386a4eceb13986f970abedc02be81811"
+    },
+    {
+      "path": "internal/hosting/release_review_test.go",
+      "base_blob": null,
+      "main_blob": "91312dcf2f83b5718587f8ab411a76061e26b3fd",
+      "reviewed_d_blob": "91312dcf2f83b5718587f8ab411a76061e26b3fd",
+      "disposition": "already-main",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "91312dcf2f83b5718587f8ab411a76061e26b3fd"
+    },
+    {
+      "path": "internal/hosting/release_rules_test.go",
+      "base_blob": null,
+      "main_blob": "030ad2e2c441ebd091ccdb7624316a9d59b99a04",
+      "reviewed_d_blob": "030ad2e2c441ebd091ccdb7624316a9d59b99a04",
+      "disposition": "already-main",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "030ad2e2c441ebd091ccdb7624316a9d59b99a04"
+    },
+    {
+      "path": "internal/hosting/release_test.go",
+      "base_blob": null,
+      "main_blob": "2668a1c85a5244ec2ca4180c13a6debdf6205dde",
+      "reviewed_d_blob": "2668a1c85a5244ec2ca4180c13a6debdf6205dde",
+      "disposition": "already-main",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "2668a1c85a5244ec2ca4180c13a6debdf6205dde"
+    },
+    {
+      "path": "internal/hosting/release_transport_test.go",
+      "base_blob": null,
+      "main_blob": "2831f949aeb7da564f45859ae8253c585eb78910",
+      "reviewed_d_blob": "2831f949aeb7da564f45859ae8253c585eb78910",
+      "disposition": "already-main",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "2831f949aeb7da564f45859ae8253c585eb78910"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_branches.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "7f62061432a83d107a48f341ff3bac98e08df616",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "7f62061432a83d107a48f341ff3bac98e08df616"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_branches_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a6339b39b35e8df5bfa86429d9b18b4ad7854d23",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a6339b39b35e8df5bfa86429d9b18b4ad7854d23"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_json.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "aa63341e0e16a345f1b0d7c7de0e0327cf582c45",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "aa63341e0e16a345f1b0d7c7de0e0327cf582c45"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_pr.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "af5c2add86798280d335ca5d518f2db8bdd05ceb",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "af5c2add86798280d335ca5d518f2db8bdd05ceb"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_pr_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "6bfcab31a1b22f397c3219eeaf964de096097211",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "6bfcab31a1b22f397c3219eeaf964de096097211"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_session.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "8d5bd73354afddd3b4c777b5e414a8046a60882c",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "8d5bd73354afddd3b4c777b5e414a8046a60882c"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_session_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "0bddec0a7643660c7c0ae9988ff1192b7506ce12",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "0bddec0a7643660c7c0ae9988ff1192b7506ce12"
+    },
+    {
+      "path": "internal/hosting/tidy_evidence_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "7e5bf0d6dec4bda22da7deb46d359a922b297029",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "7e5bf0d6dec4bda22da7deb46d359a922b297029"
+    },
+    {
+      "path": "internal/hosting/transport.go",
+      "base_blob": "4dc9b6fd66d50a292f1aa7e85b3471601db873ea",
+      "main_blob": "60b42ad69a7731b215018e93e43f8b3474a392dd",
+      "reviewed_d_blob": "ea84c70e4d34b5d2b9594bc349d8d484c421328b",
+      "disposition": "reconcile-hunks",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "e6082a46536d8cfaf6981aefdcd596373e0de6ef"
+    },
+    {
+      "path": "internal/workspace/git.go",
+      "base_blob": "b87d16d4ecd5990c279828f7693988c13426b97a",
+      "main_blob": "b87d16d4ecd5990c279828f7693988c13426b97a",
+      "reviewed_d_blob": "192f70981014bc097ac6f83da2e1a4ce930ba451",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "192f70981014bc097ac6f83da2e1a4ce930ba451"
+    },
+    {
+      "path": "internal/workspace/git_layout.go",
+      "base_blob": "af9dce5e9db87b60202256cfe660dbfd0fdcbb6b",
+      "main_blob": "af9dce5e9db87b60202256cfe660dbfd0fdcbb6b",
+      "reviewed_d_blob": "f896525e607a52bc244144e34169eb770e7ce782",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "f896525e607a52bc244144e34169eb770e7ce782"
+    },
+    {
+      "path": "internal/workspace/git_stream.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "3a8ab71d821ca552bdc2e106992630664f619283",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "3a8ab71d821ca552bdc2e106992630664f619283"
+    },
+    {
+      "path": "internal/workspace/git_stream_consumers_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "5ed44be372ab84b3fc5ecb46bdcbf38db6caa446",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "5ed44be372ab84b3fc5ecb46bdcbf38db6caa446"
+    },
+    {
+      "path": "internal/workspace/git_stream_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "0553bb17371835d3c423b1fe30245553920ff551",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "0553bb17371835d3c423b1fe30245553920ff551"
+    },
+    {
+      "path": "internal/workspace/native_blob_stream.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "607684191a5a8b73953c1fd90d206bd30e643660",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "607684191a5a8b73953c1fd90d206bd30e643660"
+    },
+    {
+      "path": "internal/workspace/native_blob_stream_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "d52cc41a75be3c832c40152b9b7eec898274310f",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "d52cc41a75be3c832c40152b9b7eec898274310f"
+    },
+    {
+      "path": "internal/workspace/native_ref_transaction.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "8f2acb05f443919e4fd2ff82408a987f99e1def1",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "8f2acb05f443919e4fd2ff82408a987f99e1def1"
+    },
+    {
+      "path": "internal/workspace/native_ref_transaction_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "c4c75e8d1e1c9db0b39648f864a1433c91a57437",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "c4c75e8d1e1c9db0b39648f864a1433c91a57437"
+    },
+    {
+      "path": "internal/workspace/native_sandbox.go",
+      "base_blob": "e639309ead058c3fa1bafa374210f12680b7b8c4",
+      "main_blob": "e639309ead058c3fa1bafa374210f12680b7b8c4",
+      "reviewed_d_blob": "2dd6431385fee1c7cd5798e29e3cac5fc75a54bd",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "2dd6431385fee1c7cd5798e29e3cac5fc75a54bd"
+    },
+    {
+      "path": "internal/workspace/native_stream.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "0d5959c3b6258617598da117c3c60c6341bfdfa2",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "0d5959c3b6258617598da117c3c60c6341bfdfa2"
+    },
+    {
+      "path": "internal/workspace/native_stream_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "b194177d5df928e01b063276eb6206285fca8c5f",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "b194177d5df928e01b063276eb6206285fca8c5f"
+    },
+    {
+      "path": "internal/workspace/retirement_git.go",
+      "base_blob": "c438df212bcc4e2caaba66352870b7d2a21494be",
+      "main_blob": "c438df212bcc4e2caaba66352870b7d2a21494be",
+      "reviewed_d_blob": "31e4462bfa9edf6e0cf9d72e20e794044eb6aead",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "31e4462bfa9edf6e0cf9d72e20e794044eb6aead"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_budget.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "677e2c65b0299a388b93368537973cb0388f9dd6",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "677e2c65b0299a388b93368537973cb0388f9dd6"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_options.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "9f1c6895408fe15e0346b1786d489769ce065e4f",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "9f1c6895408fe15e0346b1786d489769ce065e4f"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_primary.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "b468b4af6efecb4348e8c6edea3bedc1f41a6cd5",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "b468b4af6efecb4348e8c6edea3bedc1f41a6cd5"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_primary_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "2840ef8877d6bb36015fee34949e4e5d59902ac8",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "2840ef8877d6bb36015fee34949e4e5d59902ac8"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_proof.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "594adea3a142c77675e2fa42d57857f09e7da2f2",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "594adea3a142c77675e2fa42d57857f09e7da2f2"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_refs.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a8f84e4e84e47112ebf7d4e157e4337e601e8427",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a8f84e4e84e47112ebf7d4e157e4337e601e8427"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_refs_apply.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "410154dc531e5f47d0f52949a340c68d677ec586",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "410154dc531e5f47d0f52949a340c68d677ec586"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_refs_apply_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "49c380c54a64d7addcb314dfae019157b7804171",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "49c380c54a64d7addcb314dfae019157b7804171"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_refs_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "b13b6eac1f197c5f1f432bc2e558646aeb3e26ea",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "b13b6eac1f197c5f1f432bc2e558646aeb3e26ea"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "989905fcc9aac97dc8102dca71246371b98b1d1f",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "989905fcc9aac97dc8102dca71246371b98b1d1f"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_result_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "ca11ecb6dfdd88f685923d0f071e63463b6f0d80",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "ca11ecb6dfdd88f685923d0f071e63463b6f0d80"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "15fecd35397874ec7de05ec465ae9dd4be7e845b",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "15fecd35397874ec7de05ec465ae9dd4be7e845b"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_state_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a055c21bff54987a456f7761324adb4f7d3a129a",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a055c21bff54987a456f7761324adb4f7d3a129a"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_tracking.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "80bf7b6a7db5179fcb6ab48c3e63dc01adfb1ab5",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "80bf7b6a7db5179fcb6ab48c3e63dc01adfb1ab5"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_tracking_apply.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "aa001236cbfee236106e699d949a2d389a5a28ea",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "aa001236cbfee236106e699d949a2d389a5a28ea"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_tracking_apply_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "df9eb399087788ea5733426c4ad854dc224abb91",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "df9eb399087788ea5733426c4ad854dc224abb91"
+    },
+    {
+      "path": "internal/workspace/tidy_v3_tracking_test.go",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "62584fe442bcebb1e5ecddc98718677aa075b559",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "62584fe442bcebb1e5ecddc98718677aa075b559"
+    },
+    {
+      "path": "schemas/v3/tidy.schema.json",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "818a6bd3b17a20c754c4bbb760ff088895028fc3",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "818a6bd3b17a20c754c4bbb760ff088895028fc3"
+    },
+    {
+      "path": "scripts/check-architecture.py",
+      "base_blob": "68592bf7c295bc383cb5b1c0b1b66998fa89ca4f",
+      "main_blob": "6e4b04fc6cdfa41e9796d2b9170696334cb6ada1",
+      "reviewed_d_blob": "d6115ee42ded692d1b788c3f92d9f78d9b63259e",
+      "disposition": "reconcile-hunks",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "75cc0e3df0533eb1fa89eeec237e33c8efad4325"
+    },
+    {
+      "path": "scripts/package-pages.py",
+      "base_blob": "44a8a19d2baa5c2f71ee09d6b2135ab1718d35ae",
+      "main_blob": "2e24f4096160188880523484e532a7382ad6589c",
+      "reviewed_d_blob": "364eaf73b2b73b868bb378b871b3d7fefe048c1c",
+      "disposition": "reconcile-hunks",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "8e51b81ad1ecccef6cfface0370eb0170a83ada3"
+    },
+    {
+      "path": "scripts/test_architecture.py",
+      "base_blob": "47b856ce1b56da9b892d9202b9e7465e4dbbb0ff",
+      "main_blob": "6dbbdfbb99f1d8d24cb6fe5e794079ffc2e9a366",
+      "reviewed_d_blob": "58350b109a22b341e13bc0b650c4234aee8d72b3",
+      "disposition": "reconcile-hunks",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "44d43a8359efeb9dae21a8825b37fdfa1a4aa82b"
+    },
+    {
+      "path": "scripts/test_docs.py",
+      "base_blob": "e30728c530a9103f4366270d4020e863ea59f563",
+      "main_blob": "e770db55f731f7fcbdfdc960a27fd6558e359853",
+      "reviewed_d_blob": "12d324bd971466c75002981d34d88760864ce630",
+      "disposition": "reconcile-hunks",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "2f77b8cce9e71041849b6c93b48225f467a727c1"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/analysis.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "36c66ffa4090f24d3ced45efd111eb4247cdf62e",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "36c66ffa4090f24d3ced45efd111eb4247cdf62e"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/checklists/requirements.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "b4017d5a614fdaf91c8eff666177c8c04f63594d",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "b4017d5a614fdaf91c8eff666177c8c04f63594d"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/contract-amendments.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "6d03cf4f181f9662d5f451604bacd50ab50049b4",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "6d03cf4f181f9662d5f451604bacd50ab50049b4"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/contracts/online.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "72a3b910d1416886bd2982ceb255097c8cc485c8",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "72a3b910d1416886bd2982ceb255097c8cc485c8"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/contracts/streams.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a21bc365a179b68ca935c224a56bf30ce06f50d6",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a21bc365a179b68ca935c224a56bf30ce06f50d6"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/contracts/tidy-v3.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "2e99bbd44e10c2d32b945f69d7b9b790ae424ced",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "2e99bbd44e10c2d32b945f69d7b9b790ae424ced"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/data-model.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "91e7a6d22c334ae88cc63e3b2091c5961132eb8b",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "91e7a6d22c334ae88cc63e3b2091c5961132eb8b"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/dependency-corrections.json",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "e617e284274310a2f1355b3d930e1705ec33d3b2",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "e617e284274310a2f1355b3d930e1705ec33d3b2"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/dependency-imports.json",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "c0a67ffb128077006023693c266489249ff3c238",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "c0a67ffb128077006023693c266489249ff3c238"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/journal-dependency-corrections.json",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "abf76c15048f5bfd4cce88c07dc315f54d9b269f",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "abf76c15048f5bfd4cce88c07dc315f54d9b269f"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/plan.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a83823078704be8a52a5adb6b146d11fa163b299",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a83823078704be8a52a5adb6b146d11fa163b299"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/primary-binding-provenance.json",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "ecb0e8a7e7ee978dd2a6a6d7951fb5e8eea8bc41",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "ecb0e8a7e7ee978dd2a6a6d7951fb5e8eea8bc41"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/quickstart.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "aba944dd581281f35e67a1a15cf31dfae582b180",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "aba944dd581281f35e67a1a15cf31dfae582b180"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/research.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "bfff14711d6172515342adf3891fec1310f62de4",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "bfff14711d6172515342adf3891fec1310f62de4"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/spec.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "51be184f49c35274e8f8c54205495cde60bca38b",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "51be184f49c35274e8f8c54205495cde60bca38b"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/tasks.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "640d20be39e5a29a19dada9a42e1d8e2aaa64f7a",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "640d20be39e5a29a19dada9a42e1d8e2aaa64f7a"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-hosting.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a962303e0e4121ebf38d9b2b450119a39d287553",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a962303e0e4121ebf38d9b2b450119a39d287553"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-native.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "5c56f3ba7e72b9717294924048fdb93f50280a6d",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "5c56f3ba7e72b9717294924048fdb93f50280a6d"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-primary-binding.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "318a3052fb538b2493af22703cb5bdf8faf4fcbc",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "318a3052fb538b2493af22703cb5bdf8faf4fcbc"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-reference-apply.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "a613edea36eda91b86c55a18a4f725fc4cd589b7",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "a613edea36eda91b86c55a18a4f725fc4cd589b7"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-reference-proof.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "eac99ee75a904d1c019fe26535d8314757474453",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "eac99ee75a904d1c019fe26535d8314757474453"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification-tracking-apply.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "6b963489db415a2fb5d427c74774964be43a7280",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "6b963489db415a2fb5d427c74774964be43a7280"
+    },
+    {
+      "path": "specs/029-tidy-dogfood-safety/verification.md",
+      "base_blob": null,
+      "main_blob": null,
+      "reviewed_d_blob": "8ff347ec881d59b919ad5427f14797675e1fdacb",
+      "disposition": "exact-import",
+      "source": "e9ee81bc653c9e7cc2ea61f4e6d0ed049d2053a2",
+      "integrated_blob": "8ff347ec881d59b919ad5427f14797675e1fdacb"
+    }
+  ],
+  "shared_reconciliation": {
+    "internal/hosting/transport.go": "Only reviewed tidy route predicates and GET host guards; retain fresh-main authenticationFailure and newSDKClientWithGuard/dedicated dispatch path.",
+    "scripts/check-architecture.py": "Permit workspace to consume exact hosting package while preserving fresh-main release/native process restrictions.",
+    "scripts/test_architecture.py": "Port corresponding workspace boundary fixtures; retain all current release tests.",
+    "scripts/package-pages.py": "Union v3/tidy unpublished source with all ten current unpublished release sources; admit only exact hidden version directory.",
+    "scripts/test_docs.py": "Preserve all current release inventory checks and add reviewed hidden-v3 negative copy fixtures."
+  },
+  "E_admission_status": "Not imported; waiting for final independently cleared E apply graph. f696611 is stable admission provenance only.",
+  "F_owned_new_paths": [
+    "internal/workspace/tidy_v3.go",
+    "internal/workspace/tidy_v3_entry_test.go",
+    "internal/cli/tidy_v3.go",
+    "internal/cli/tidy_v3_test.go",
+    "internal/contracts/tidy_v3_test.go",
+    "scripts/test_hugo.py",
+    "specs/029-tidy-dogfood-safety/integration-ledger.json",
+    "specs/029-tidy-dogfood-safety/verification-integration.md"
+  ],
+  "reviews_required": "All new F source and every shared reconciliation need independent executed exact-candidate review; old source CLEAR does not extend to this candidate."
+}
