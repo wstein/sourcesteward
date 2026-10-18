@@ -29,7 +29,7 @@ SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schem
 # Schemas of features whose commands are still hidden: they exist in the source tree and are
 # validated, but are not copied to the site. The documentation work item of the feature removes
 # them from this set (and adds them to SCHEMAS) when it publishes the contracts.
-UNPUBLISHED_SCHEMAS = {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json'}
+UNPUBLISHED_SCHEMAS = {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json'}
 
 SCHEMA_PATHS = {version + '/' + name for version, names in SCHEMAS.items() for name in names}
 

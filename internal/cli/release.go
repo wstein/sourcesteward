@@ -36,7 +36,7 @@ func releaseCommand(stwVersion ...string) *cobra.Command {
 		SilenceUsage: true, SilenceErrors: true, Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error { return cmd.Help() },
 	}
-	command.AddCommand(releaseCheckCommand(), releasePlanCommand(), releaseVerifyCommand(), releaseRecordCommand(), releaseBuildCommand(stwVersion...))
+	command.AddCommand(releaseCheckCommand(), releasePlanCommand(), releaseVerifyCommand(), releaseRecordCommand(), releaseBuildCommand(stwVersion...), releaseDispatchCommand())
 	return command
 }
 
