@@ -33,6 +33,7 @@
       "const": "release-verify"
     },
     "status": {
+      "description": "Command-level evaluation status, separate from verdict. An ok result can still fail a publication gate or remain incomplete. Read gates, artifacts, attestations and boundary qualifications; status alone never authorizes publication.",
       "enum": [
         "ok",
         "refused",

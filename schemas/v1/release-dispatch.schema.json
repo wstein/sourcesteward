@@ -35,6 +35,7 @@
       "const": "release-dispatch"
     },
     "status": {
+      "description": "Command-level result, separate from verdict and applied. An ok passing plan sends no POST unless explicitly applied; applied reports acceptance of the fixed dispatch request, not CI completion. Refused and error do not establish that a build succeeded.",
       "enum": [
         "ok",
         "refused",
