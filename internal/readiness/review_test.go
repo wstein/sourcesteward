@@ -322,3 +322,82 @@ func TestReviewClosedSourceVocabularyAccountsEveryRecord(t *testing.T) {
 	}
 }
 
+func TestReviewPermittedLowFollowupRetainsFinding(t *testing.T) {
+	p, s, r := reviewFixture(t)
+	pd := p.Value()
+	pd.Review.AllowLowFollowups = true
+	p = parsedReviewPolicy(t, pd)
+	s.Policy.SHA256 = p.SHA256()
+	r.PolicySHA256 = p.SHA256()
+	owner, evidence := "public owner", "public issue"
+	r.Findings = []Finding{{ID: "F1", Severity: "low", State: "accepted-followup", Owner: &owner, Evidence: &evidence}}
+	r.Rounds = []Round{{Number: 1, HeadSHA: reviewBase, Verdict: "not-clear", Findings: []string{"F1"}}, {Number: 2, HeadSHA: reviewHead, Verdict: "clear", Findings: []string{"F1"}}}
+	bindReport(t, &s, r)
+	requireReview(t, p, s, "pass", "")
+}
+func TestReviewScopeFramingOrderAndExactPrefix(t *testing.T) {
+	// Unicode byte lengths and newline/colon paths remain raw; no JSON or path
+	// normalization participates. A sibling prefix must not raise the tier.
+	p, s, r := reviewFixture(t)
+	s.Files = []ReviewFile{{Filename: "securely/a", Status: "modified"}, {Filename: "é\n:", Status: "added"}}
+	s.ChangedFiles = 2
+	r.FilesSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte("10:securely/a0:8:modified4:é\n:0:5:added")))
+	bindReport(t, &s, r)
+	first, e := EvaluateReview(p, s)
+	if first.State != "pass" || e.Tier != "ordinary" {
+		t.Fatal(first, e)
+	}
+	s.Files[0], s.Files[1] = s.Files[1], s.Files[0]
+	second, _ := EvaluateReview(p, s)
+	if !reflect.DeepEqual(first, second) {
+		t.Fatal("order-sensitive scope")
+	}
+}
+func TestReviewMalformedPublicMetadataAndBounds(t *testing.T) {
+	for _, which := range []string{"private field", "runtime proof", "model evidence", "scope", "source accounting", "source duplicate", "status limit", "file limit", "association limit", "source limit", "source selector", "source incomplete", "source request total"} {
+		t.Run(which, func(t *testing.T) {
+			p, s, _ := reviewFixture(t)
+			code := "report-malformed"
+			switch which {
+			case "private field":
+				s.Comment.Body = strings.TrimSuffix(s.Comment.Body, "}") + `,"session_id":"private"}`
+			case "runtime proof":
+				s.Comment.Body = strings.Replace(s.Comment.Body, `"declared-execution"`, `"runtime-attested"`, 1)
+			case "model evidence":
+				s.Comment.Body = strings.Replace(s.Comment.Body, `"host-configured"`, `"runtime-attested"`, 1)
+			case "scope":
+				s.Comment.Body = strings.Replace(s.Comment.Body, `"full-pr"`, `"narrowed-rebase"`, 1)
+			case "source selector":
+				s.Sources[0].Selector = reviewBase
+				code = "evidence-incomplete"
+			case "source incomplete":
+				s.Sources[0].Complete = false
+				code = "evidence-incomplete"
+			case "source request total":
+				s.Sources[0].Requests = 79
+				code = "evidence-incomplete"
+			case "source accounting":
+				s.Sources[0].Requests = 0
+				code = "evidence-incomplete"
+			case "source duplicate":
+				s.Sources = append(s.Sources, s.Sources[0])
+				code = "evidence-incomplete"
+			case "status limit":
+				s.Statuses = make([]ReviewStatus, 1001)
+				code = "evidence-incomplete"
+			case "file limit":
+				s.Files = make([]ReviewFile, 1001)
+				s.ChangedFiles = 1001
+				code = "evidence-incomplete"
+			case "association limit":
+				s.AssociatedOpenPRs = make([]int64, 1001)
+				code = "evidence-incomplete"
+			case "source limit":
+				s.Sources = make([]ReviewSource, 81)
+				code = "evidence-incomplete"
+			}
+			s.Statuses[0].Description = fmt.Sprintf("stw-review-v1 sha256=%x", sha256.Sum256([]byte(s.Comment.Body)))
+			requireReview(t, p, s, "unknown", code)
+		})
+	}
+}
