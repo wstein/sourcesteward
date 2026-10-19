@@ -307,3 +307,26 @@ func TestGitRefTransactionPostAckFailureRetainsDeadlineCause(t *testing.T) {
 		t.Fatal("post-ack failure lost recovery")
 	}
 }
+
+// The locked readback also compares object names, so the stale-OID test above
+// cannot tell whether Git itself was asked to compare-and-swap. Pin the command
+// bytes, and show that native Git refuses a stale value from exactly them.
+func TestGitRefDeleteCommandPinsOldOIDCompareAndSwap(t *testing.T) {
+	d, bin, id, _ := refTransactionFixture(t, false)
+	old := id.CommitID
+	if got, want := gitRefDeleteCommand("refs/heads/target", old), "option no-deref\x00delete refs/heads/target\x00"+old+"\x00prepare\x00"; got != want {
+		t.Fatalf("prepared delete command = %q, want %q", got, want)
+	}
+	gitFixture(t, d, "commit", "--allow-empty", "-qm", "second native commit")
+	gitFixture(t, d, "update-ref", "refs/heads/target", "HEAD")
+	moved := gitFixture(t, d, "rev-parse", "refs/heads/target")
+	cmd := exec.Command(bin, "--no-replace-objects", "update-ref", "--stdin", "-z")
+	cmd.Dir = d
+	cmd.Stdin = strings.NewReader("start\x00" + gitRefDeleteCommand("refs/heads/target", old))
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("stale old OID accepted by native Git: %q", out)
+	}
+	if gitFixture(t, d, "rev-parse", "refs/heads/target") != moved {
+		t.Fatal("stale compare-and-swap changed the target")
+	}
+}
