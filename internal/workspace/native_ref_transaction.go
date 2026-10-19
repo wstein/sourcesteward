@@ -112,7 +112,7 @@ func prepareGitRefDeletion(ctx context.Context, bin string, id NativeIdentity, r
 		e = t.ack("start: ok\n")
 	}
 	if e == nil {
-		e = t.write("option no-deref\x00delete " + ref + "\x00" + oldOID + "\x00prepare\x00")
+		e = t.write(gitRefDeleteCommand(ref, oldOID))
 	}
 	if e == nil {
 		e = t.ack("prepare: ok\n")
@@ -126,6 +126,12 @@ func prepareGitRefDeletion(ctx context.Context, bin string, id NativeIdentity, r
 		return t, t.abortFor(e)
 	}
 	return t, nil
+}
+
+// gitRefDeleteCommand is the exact prepared command: the old object name is
+// Git's own compare-and-swap, independent of the later locked readback.
+func gitRefDeleteCommand(ref, oldOID string) string {
+	return "option no-deref\x00delete " + ref + "\x00" + oldOID + "\x00prepare\x00"
 }
 func (t *gitRefTransaction) write(command string) error {
 	if t.stopped {
