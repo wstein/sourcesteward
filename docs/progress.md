@@ -10,6 +10,13 @@ The feature remains `planned`: final integrated source review/checks, unavailabl
 versions/platform lanes, separately approved candidate build/install and fresh real-repository
 acceptance are distinct gates. No schema publication, activation or live cleanup is implied.
 
+Tasks T001-T042 are ticked in [tasks](../specs/029-tidy-dogfood-safety/tasks.md) as implemented,
+pending independent review; they close fully only after T046. Still open: T044 (pinned Git
+2.46.0/2.56.0 and jj 0.45.1/0.46.0 on Linux and macOS lanes), T046 (independent review of the
+exact integrated SHA, which differs from the reviewed fold tips), T047 (candidate build and
+install, which needs separate owner approval) and T048/T049 (fresh real-repository acceptance).
+Windows and Darwin remain unverified here.
+
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 
 The Git inventory reads large outputs incrementally, degrades to partial results with verbatim disclosures instead of `git-inventory-failed` for repositories of thousands of files or hundreds of tags, describes submodule and separate-Git-directory checkouts by their files and reports `tracked: true` for ordinary changes in gitlink-bearing superprojects. Schema v1 is byte-unchanged; the Spec 023 `stw repos` tests, goldens and texts that pinned the old limits were updated with it. Evidence and what was not run (hosted CI, binary acceptance, Git 2.46.0, jj) are in [verification](../specs/027-inventory-limits/verification.md); the feature stays `planned` until then.
