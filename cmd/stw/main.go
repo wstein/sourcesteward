@@ -16,5 +16,11 @@ func main() { os.Exit(run()) }
 func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	// The private native route of the build checkout comparison re-executes stw as "git" and
+	// must be handled before any command parsing. It is not a public command: it applies only
+	// with argv0 "git" and the private role variable, and a successful route replaces the process.
+	if handled, status := cli.RunPrivateRoute(ctx); handled {
+		return status
+	}
 	return cli.Run(ctx, version, os.Args[1:], os.Stdout, os.Stderr)
 }
