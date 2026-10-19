@@ -22,7 +22,7 @@ No search endpoint, commit-association endpoint or GraphQL is added by this Spec
 
 ## Request budget
 
-Shared with Spec 029 FR-025: 30-second online plan deadline, at most 128 requests and 32 MiB raw response bytes per run, shared with tracking-ref reads, failures counted. Accounting: 1 repository read, at most 10 collection pages, per chosen PR 2 requests (the PR and the repository identity, from the Spec 029 online contract), so at most (128 - 1 - 10) / 2 = 58 re-reads fit. Re-reads run in ascending OID order; when the remaining budget cannot cover the next re-read, that OID and all later OIDs are `discovery-budget-exhausted` (retained) and the plan completes with a note. The 60-second forge-free proof budget is separate, runs first and does not extend the online deadline.
+Shared with Spec 029 FR-025: 30-second online plan deadline, at most 128 requests and 32 MiB raw response bytes per run, shared with tracking-ref reads, failures counted. Accounting (formula and source citations in spec FR-018): fixed repository reads 2, at most 10 page reads, one PR read per candidate, so at most (128 - 2 - 10) / 1 = 116 candidate reads fit. `RevalidatePullRequest` pairs (repository plus PR, `tidy_evidence_pr.go:159-173`) run at apply inside the apply budget, outside this plan budget. Candidate reads run in ascending OID order; when the remaining budget cannot cover the next re-read, that OID and all later OIDs are `discovery-budget-exhausted` (retained) and the plan completes with a note. The 60-second forge-free proof budget is separate, runs first and does not extend the online deadline.
 
 ## Hint rules
 
