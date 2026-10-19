@@ -9,6 +9,12 @@ import (
 )
 
 func TestGitCompleteMetadataExistingConsumers(t *testing.T) {
+	// The public operations apply their own fixed 10 s and 60 s deadlines, which
+	// a 695-entry tree can exceed when other packages saturate the machine. The
+	// deadlines are production policy, so quick runs skip this load-sensitive case.
+	if testing.Short() {
+		t.Skip("load-sensitive 695-entry fixture under fixed operation deadlines")
+	}
 	d := fixtureGitLargeMetadata(t)
 	// Native v4 prefix compression keeps registration index metadata within its
 	// unchanged 64 KiB cap; this does not change full ls-tree evidence dimensions.
