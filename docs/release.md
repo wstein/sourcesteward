@@ -118,6 +118,16 @@ the declared image-tag command for the recorded digest/version and never rebuild
 Project commands may write outputs or use networks; the contract is not a sandbox.
 No build mode creates or pushes Git tags or publishes a GitHub release.
 
+The tracked-tree comparison of `ci` and `promote` runs through a frozen private
+view of the checkout metadata: captured before the first project invocation
+(`.git` anchor, git directories, index and configuration, nested gitlink checkouts
+included), compared with C through a supervised native Git process, and revalidated
+after the build. A change of that metadata or of the native configuration during the
+build refuses `checkout-mismatch`. This is source-implemented and pending independent
+review. The Darwin observer has only been compiled, not run; `internal/release` does
+not compile for Windows, as before. See the
+[verification note](../specs/026-release-process/verification-checkout-view.md).
+
 `local-verify` requires separate explicit build approval and a Git-owned checkout.
 It exports C to a temporary tree, builds and compares file hashes, then removes
 its outputs. Any OCI target in the trusted selected contract, including a mixed

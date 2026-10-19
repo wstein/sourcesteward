@@ -103,6 +103,7 @@ this entire sequence.
 | Failed/incomplete gate or exceeded bound | Stop the consequential step; resolve evidence and review a fresh plan. `not-run` is not success. |
 | Uncertain dispatch result | Inspect Actions before considering another request; uncertainty does not authorize a duplicate build. |
 | Build/draft failure before tagging | Preserve logs/hashes. Owner-authorized cancellation/deletion is manual; a new release attempt uses the next version and separate build approval. |
+| `checkout-mismatch` | The checkout differs from C, or its metadata or native configuration changed during the build. Treat the build as untrusted, keep the draft unpublished and investigate what modified the checkout. |
 | Build inputs changed between C and D | Keep the draft unpublished and select a newer candidate; do not broaden the allowlist to hide changes. |
 | Artifact/provenance disagreement | Keep publication blocked and investigate. A rewritten record cannot legitimize substituted bytes. |
 | Image promotion succeeds but publication fails | A version tag may exist without a published release. The owner may authorize retrying the same publication; promotion is idempotent for the same digest. Otherwise abandon the version. |
