@@ -146,6 +146,9 @@ func (g *buildViewGraph) read(ctx context.Context, root string, env []string, li
 		if err != nil {
 			return nil, status, err
 		}
+		if bytes.Contains(diagnostic, []byte("sparse index")) {
+			return nil, status, errors.New("native checkout metadata reported diagnostics: a sparse index is not supported")
+		}
 		return nil, status, errors.New("native checkout metadata reported diagnostics")
 	}
 	return f, status, nil

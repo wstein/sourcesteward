@@ -105,6 +105,11 @@ func readBuildViewManifest(path string) (buildViewManifest, error) {
 	}
 	return m, nil
 }
+
+// buildViewExec replaces the process with native Git. A test substitutes it to observe a
+// route that was admitted without replacing the test process.
+var buildViewExec = execBuildViewRoute
+
 func runBuildViewRoute(ctx context.Context, args []string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -170,7 +175,7 @@ func runBuildViewRoute(ctx context.Context, args []string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return execBuildViewRoute(buildViewCommand{Executable: string(m.RealGit), Env: env, Args: append(append([]string{}, buildViewGitPrefix...), args...)})
+		return buildViewExec(buildViewCommand{Executable: string(m.RealGit), Env: env, Args: append(append([]string{}, buildViewGitPrefix...), args...)})
 	}
 	return errors.New("unknown private native child root")
 }
