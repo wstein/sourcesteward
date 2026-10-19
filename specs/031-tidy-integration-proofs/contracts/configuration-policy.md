@@ -20,7 +20,7 @@ Dispositions: **neutralized** (plan succeeds, plan note), **review reason** (pla
 | `core.fsmonitor` | neutralized | status checks neutralized, noted |
 | `submodule.*` | neutralized | retirement retains `submodule-present` |
 | `core.pager`, `core.editor`, `core.sshCommand`, `core.askPass`, `credential.*`, `gpg.*` | neutralized (never invoked, environment stripped), noted when set | unchanged |
-| `diff.external`, `diff.<d>.textconv` | neutralized (`--no-ext-diff --no-textconv`) | unchanged |
+| `diff.external`, `diff.<d>.textconv` | neutralized for proof commands (`--no-ext-diff --no-textconv`); `git range-diff` ignores that, so range pairing is skipped when any textconv is configured | unchanged |
 | executable `filter.*`, `merge.*.driver` | review reason `merge-driver` (`merge-noop` only) | existing stage2 behavior retained |
 | sentinel `filter.unspecified|unset|set.*` | refused | refused |
 | `include.path` | evaluated by Git, classified by effective keys | same |
@@ -45,8 +45,8 @@ Each row is a temporary-repository fixture; hooks, filters, drivers, pagers and 
 | C4 | `submodule.recurse=true` | neutralized | unchanged |
 | C5 | `core.fsmonitor=helper` | neutralized | status neutralized |
 | C6 | `filter.x.clean=helper` with matching attribute | `merge-driver` for `merge-noop`; other classes run | stage2 behavior |
-| C7 | `merge.x.driver=helper` with matching attribute | `merge-driver` | stage2 behavior |
-| C8 | `diff.external=helper`, `diff.x.textconv=helper` | neutralized, proofs run | unchanged |
+| C7 | `merge.x.driver=helper` with matching attribute | `merge-driver`; `merge-tree` is never run (proof or report), report shows `git diff M B`, verdict `unclear`, helper marker absent | stage2 behavior |
+| C8 | `diff.external=helper`, `diff.x.textconv=helper` | neutralized, proofs run; report with a named consolidation range skips range pairing with a note, helper marker absent | unchanged |
 | C9 | `includeIf` | refused, class named | refused |
 | C10 | `extensions.partialclone` | refused | refused |
 | C11 | umbrella: three gitlinks, `submodule.*` set | plan succeeds | unchanged |
@@ -58,7 +58,7 @@ Each row is a temporary-repository fixture; hooks, filters, drivers, pagers and 
 | C17 | `core.sparseCheckout` | refused | refused |
 | C18 | `core.alternateRefsCommand=helper` | refused, marker absent | refused |
 | C19 | sentinel `filter.unspecified.clean`, `filter.unset.*`, `filter.set.*` | refused | refused |
-| C20 | non-reserved executable `filter.evil.*`, `filter.fixture.*`, `filter.reviewer.*` with matching attributes | `merge-driver` | stage2 behavior |
+| C20 | non-reserved executable `filter.evil.*`, `filter.fixture.*`, `filter.reviewer.*` with matching attributes | `merge-driver`, marker absent in proof and report paths | stage2 behavior |
 | C21 | executable `.git/hooks/reference-transaction` | note, hooks fingerprint bound | refuses ref deletion |
 | C22 | replace refs present | note `replace-refs-ignored` | same |
 | C23 | `info/grafts` present | hard stop `history-override` | retained |

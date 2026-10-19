@@ -28,7 +28,7 @@ As defined in the [review report contract](contracts/review-report.md): `schema_
 
 ## Decision
 
-`branch`, `tip_oid`, `decision` (`integrated`, `keep`, `drop`), `reason`, `reviewer`, `kind` (`human`, `ai`); bounds in the [decisions contract](contracts/decisions.md). Recorded in the plan and journal with `applied` (boolean) and the note (`stale-decision`, `decision-not-applicable`) when ignored.
+`branch`, `tip_oid`, `base_oid`, `decision` (`integrated`, `keep`, `drop`), `reason`, `reviewer`, `kind` (`human`, `ai`); bounds in the [decisions contract](contracts/decisions.md). Recorded in the plan and journal with `applied` (boolean) and the note (`stale-decision`, `decision-not-applicable`) when ignored.
 
 ## DiscoveryRecord (online)
 
