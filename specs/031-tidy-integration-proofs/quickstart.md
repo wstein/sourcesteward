@@ -2,7 +2,7 @@
 
 ```text
 stw tidy plan . --contract 3 --base main --json
-stw tidy plan . --contract 3 --base main --integration-proof ancestor,merge-noop,patch-exact --json
+stw tidy plan . --contract 3 --base main --integration-proof ancestor,merge-noop --whitespace-significant '*.toml' --json
 stw tidy plan . --contract 3 --base main --online --remote origin --json
 stw tidy plan . --contract 3 --base main --online --remote origin --pr FULL_OID=123 --json
 ```
