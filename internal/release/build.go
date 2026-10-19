@@ -489,8 +489,27 @@ func checkBuildWorktreeRoot(ctx context.Context, root string) error {
 
 // Final metadata opens must not follow a swapped symlink or block on a FIFO.
 // Parent Root acquisition is descriptor-relative; its descriptor stays pinned.
+//
+// os.Root resolves in-root symlinks itself, so the O_NOFOLLOW flag alone does not
+// refuse a final symlink. The opened descriptor is therefore bound to the name
+// again: a final component that is (or became) a symlink, or that is not the
+// opened file, is refused.
 func openBuildViewFile(parent *os.Root, name string) (*os.File, error) {
-	return parent.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, err := parent.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	named, err := parent.Lstat(name)
+	if err != nil || named.Mode()&os.ModeSymlink != 0 || !os.SameFile(opened, named) {
+		file.Close()
+		return nil, errors.New("checkout metadata final component is not the opened file")
+	}
+	return file, nil
 }
 
 // runBuildViewNative retains an unreaped direct leader until its entire owned
