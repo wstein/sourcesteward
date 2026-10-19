@@ -1,35 +1,47 @@
 # Integration proof contract
 
-Subordinate to the [specification](../spec.md) FR-001..FR-012.
+Subordinate to the [specification](../spec.md) FR-001..FR-012. `U` base OID, `B` tip OID, `M` the single merge base; all OIDs come from an earlier native read.
 
 ## Fixed native operations
-
-`U` base OID, `B` tip OID, `M` the single merge base. All OIDs come from an earlier native read.
 
 | Class | Native operations (fixed typed argv) | Result rule |
 | --- | --- | --- |
 | `ancestor` | `merge-base --is-ancestor B U` | exit 0 proves |
-| `no-net-change` | `merge-base --all U B` (exactly one); `rev-parse B^{tree} M^{tree}` | equal trees: deletable `no-net-change`, never labelled integrated |
-| `patch-id` / `patch-exact` | `rev-list --count --no-merges M..B`, `M..U`, `rev-list --count --merges M..B` (must be 0); `log --no-merges --format='%H %T %P' M..B` (empty commits); `git --attr-source=B^{tree} diff-tree --stdin -p --binary --full-index --no-ext-diff --no-textconv --no-renames --no-color -r --root` for each side, consumed once by `git patch-id --verbatim` and by the stw normalizer (SHA-256); `diff-tree --stdin --no-commit-id --name-only -r -z` (touched paths); `git --attr-source=B^{tree} diff-tree --stdin --numstat -r -z --no-renames` and `git --attr-source=B^{tree} check-attr -z --stdin binary diff text` (binary paths) | multiset match per digest: all by verbatim digest `patch-exact`; all by normalized digest `patch-id`; any merge commit, any unmatched commit or a guarded path retains |
-| `merge-noop` | `merge-base --all U B` (exactly one); `rev-parse B^{tree} M^{tree} U^{tree}`; `diff-tree -r --raw --no-renames M B` and `M U` (gitlink check); `merge-tree --write-tree --no-messages U B` with `--attr-source=U^{tree}`; attribute sources per FR-010a | see below |
+| `no-net-change` | `merge-base --all U B` (exactly one); `rev-parse B^{tree} M^{tree}` | equal trees: deletable `no-net-change` |
+| `patch-id` | `rev-list --count --no-merges M..B`, `M..U`, `rev-list --count --merges M..B`; `log --no-merges --format='%H %T %P' M..B` (empty commits); `log --no-merges -p --binary --no-ext-diff --no-textconv --format=%H` for each side, piped to `patch-id --stable` and `patch-id --verbatim`; `diff-tree --stdin --no-commit-id --name-only -r -z` (touched paths); `check-attr --source=B^{tree} -z --stdin diff`; `diff-tree --stdin --numstat -r -z --no-renames` (binary paths, FR-003b) | all non-empty branch commits matched by default patch-id with multiset counts, no reason: proven; verbatim mismatch on a non-binary path: `whitespace-differs` |
+| `merge-noop` | `merge-base --all U B` (exactly one); `rev-parse B^{tree} M^{tree} U^{tree}`; `diff-tree -r --raw --no-renames M B` and `M U` (gitlink check); attribute scan (below); `merge-tree --write-tree --no-messages U B` with `--attr-source=U^{tree}` | `merge-tree` exit 0, tree equals `U^{tree}`, `B^{tree} != M^{tree}`, no gitlink difference, no reason: proven |
 
-`merge-noop` proves only when: no `merge` attribute from any source (`merge-attributes-present` otherwise), `B^{tree} != M^{tree}` (equal trees are `no-net-change`), no gitlink (mode 160000) path differs in `M..B` or `M..U`, one merge base, and `merge-tree` exits 0 printing a tree equal to `U^{tree}`. Exit 1 is `conflict`; a different clean tree is `would-add-content`; a gitlink difference is `not-evaluated: gitlink-change`.
+Every command runs under the planning environment and argument list of the [configuration policy](configuration-policy.md), with `git --attr-source=<tree>` pinned as stated, and with the private object directory below. Git semantics: `patch-id` is git's default stable patch-id (the semantics of `git cherry`, whitespace-insensitive); `--verbatim` preserves whitespace; both hash a binary patch (`--binary`) by content. Measured on Git 2.47.3 and 2.56.0: two different binary changes to one path give different patch-ids, and the same binary change gives `-` in `git cherry`; so a binary change never matches on path alone.
 
-## Whitespace-significance guard
+## Review reasons
 
-Default significant list (basename globs): `*.py`, `*.pyi`, `*.yml`, `*.yaml`, `.clang-format`, `.clang-tidy`, `.yamllint`, `Makefile`, `makefile`, `GNUmakefile`, `*.mk`, `*.make`, `BUILD`, `BUILD.bazel`, `WORKSPACE`, `*.bzl`, `*.hs`, `*.nim`, `*.sass`, `*.pug`, `*.jade`, `*.haml`, `*.coffee`, `*.rst`, `*.tsv`. It is a documented default; extend it with the repeatable `--whitespace-significant GLOB` (at most 64 globs of at most 128 bytes, bound into plan identity); no option removes defaults. A commit matched only by normalized digest (not verbatim) is whitespace-different. If any touched path (from `--name-only -z`) matches the list, the branch is retained with evidence `whitespace-significant-difference` and up to 16 paths. Otherwise the branch is deletable with subclass `integrated-modulo-whitespace`.
+The single definition of every reason; spec, report, data model and tests use these names only. "Clearable" means a reviewer decision may clear it; hard stops are not clearable.
 
-Normalization (exact): drop `index` lines and the numbers of `@@` hunk headers; keep file header, mode and rename lines and, per hunk, the ordered `+`, `-` and context-space lines with their path; strip leading whitespace after the marker, trailing whitespace and a trailing CR from each; never touch whitespace between two non-whitespace characters. Context stays in the digest, so the same inserted line at two different positions gives different digests, while indentation-only, trailing-whitespace and CR differences give equal digests and the `rm -rf` token join stays unmatched. `git cherry`'s default patch-id removes all whitespace (reproduced on Git 2.56: an indented call inside a Python block matched a base commit that does not indent it, and `rm -rf "$D" /` matches `rm -rf "$D"/`) and shows an empty commit as `+` with no counterpart on the base (observed), so it is not used. Line endings, trailing whitespace and indentation style add no refusal outside the list; token joining, import ordering and gofmt-style reformatting change the normalized digest and are retained, while `merge-noop` still proves them when the base has the final content.
+| Reason | Raised when | Applies to | Clearable |
+| --- | --- | --- | --- |
+| `whitespace-differs` | patch-id matches but no matched base commit has an equal verbatim patch-id, and no touched path is binary | `patch-id` | yes; or `--accept-whitespace-differences` |
+| `partial-match` | some, not all, non-empty branch commits have a base match | `patch-id` | yes |
+| `multiset-mismatch` | for some patch-id the base-side count is lower than the branch-side count | `patch-id` | yes |
+| `merge-commits-in-range` | any merge commit in `M..B` | `patch-id` | yes |
+| `ambiguous-merge-base` | `merge-base --all` returns more than one | `patch-id`, `merge-noop`, `no-net-change` | yes |
+| `gitlink-change` | a mode-160000 path differs in `M..B` or `M..U` | `merge-noop` | yes |
+| `would-add-content` | `merge-tree` is clean with a tree different from `U^{tree}` | `merge-noop` | yes |
+| `conflict` | `merge-tree` exits 1 | `merge-noop` | yes |
+| `attribute-source` | `$GIT_DIR/info/attributes` (common git directory) is a symlink, a special file, over 1 MiB or has any non-blank, non-comment line | `patch-id`, `merge-noop` | yes |
+| `merge-attribute` | any `.gitattributes` in the `U`, `B` or `M` trees defines or uses `merge` or the `binary` macro (conservative token scan, at most 64 files of 1 MiB) | `merge-noop` | yes |
+| `diff-attribute` | `check-attr diff` on a path touched by a branch commit is anything but `unspecified` | `patch-id` | yes |
+| `merge-driver` | `merge.*.driver` or executable `filter.*.clean|smudge|process` configured | `merge-noop` | yes |
+| `proof-limit` | a command bound or count bound of the table below is exceeded | the class affected | yes |
+| `proof-budget-exhausted` | the per-tip or phase budget is exhausted | remaining tips | yes |
+| `object-dir-unavailable` | the private object directory cannot be created | all | yes |
+| `history-override` | `info/grafts` or `shallow` exists | all | no (hard stop) |
+| `unsupported-metadata` | `objects/info/alternates` exists | all | no (hard stop) |
 
-## Binary paths
-
-A path is binary when `check-attr --source=B^{tree}` reports `binary` set, `diff` unset or `text` unset; with those attributes unspecified, when `diff-tree --numstat` prints `-` (NUL bytes). All of `check-attr`, `diff-tree --numstat` and both `diff-tree -p` streams run with `git --attr-source=B^{tree}`, so worktree and untracked `.gitattributes` files never apply, and with the private empty `HOME`/`XDG_CONFIG_HOME`, null `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM=1` and `GIT_ATTR_NOSYSTEM=1`, so global, XDG and system attributes never apply. `$GIT_DIR/info/attributes` is read from the common git directory (resolved exactly as the existing code resolves it, also from linked worktrees) and Git still applies it under `--attr-source` (measured on Git 2.47.3 and 2.56.0), so the pin does not remove it. One rule decides it: if the file exists and is a symlink (Git follows it), a special file, larger than 1 MiB, or contains any non-blank, non-comment line, the attribute-dependent decisions (the binary classification of the patch classes and `merge-noop`) are `not-evaluated: info-attributes-present`; `ancestor` and `no-net-change` are unaffected; an absent file or one with only blank and comment lines is ignored. No name scan is attempted, because a macro defined in a tree `.gitattributes` and used here would pass it. The reason classes are therefore split once: a merge attribute in a tree `.gitattributes` is `merge-attributes-present`; any content in `info/attributes` is `info-attributes-present`. If any touched path has a `diff` attribute with a named driver value (neither set, unset nor unspecified), the binary classification is `not-evaluated: diff-driver-attribute` for the patch classes, because `diff.<driver>.binary` or `textconv` in the configuration could hide NUL content (rare). `whitespace` is not used. A commit touching a binary path matches only by verbatim digest.
-
-All commands use the planning environment and argument list of the [configuration policy](configuration-policy.md) and the private object directory below.
+A ref with no proven class and one or more clearable reasons is `needs-review`; with a hard stop or protection it is `retained`. A ref that is not proven and has no other reason is `needs-review` with the reasons of the failed classes (`would-add-content`, `conflict` or `partial-match`).
 
 ## Command bounds
 
-Stdout is read by the bounded stream executor, one grammar per command; OID is `[0-9a-f]{40}` or `[0-9a-f]{64}` (SHA-256), so a line is at most 65 bytes with newline. A line outside its grammar, a record or byte bound exceeded, an unexpected exit, timeout or cancellation makes the affected kind `not-evaluated` (`proof-limit` or the failure class); stderr is at most 65,536 bytes for all. Each row has its own test at the bound (accepted) and one over (refused), for SHA-1 and SHA-256 widths.
+Stdout is read by the bounded stream executor, one grammar per command; OID is `[0-9a-f]{40}` or `[0-9a-f]{64}` (SHA-256), so a line is at most 65 bytes with newline. A line outside its grammar, a bound exceeded, an unexpected exit, timeout or cancellation gives `proof-limit` (or `object-dir-unavailable`) for the affected class, never a partial proof. stderr is at most 65,536 bytes for all. Each row has a test at the bound (accepted) and one over (refused), for SHA-1 and SHA-256 widths.
 
 | Command | Max records | Max bytes | Line grammar |
 | --- | --- | --- | --- |
@@ -37,35 +49,27 @@ Stdout is read by the bounded stream executor, one grammar per command; OID is `
 | `merge-base --all U B` | 8 (more than 1 is `ambiguous-merge-base`) | 520 | `OID` |
 | `rev-parse` trees | 3 | 195 | `OID` |
 | `rev-list --count` | 1 | 11 | `[0-9]{1,7}` |
-| `rev-list --no-merges` commit lists | 4,096 base, 1,024 branch | 266,240 / 66,560 | `OID` |
 | `log --no-merges --format='%H %T %P'` | 1,024 | 201,728 | `OID OID OID` |
+| `log --no-merges -p --binary` stream | opaque | 64 MiB per tip | none; piped to `patch-id`, never buffered |
+| `patch-id` (default and verbatim) | 5,120 | 537,600 (5,120 x 105) | `[0-9a-f]{40} OID` |
 | `diff-tree -r --raw --no-renames --no-abbrev` (gitlink check) | 8,192 | 34,603,008 (8,192 x 4,224) | `:[0-7]{6} [0-7]{6} OID OID [A-Z]` TAB `PATH`, PATH at most 4,096 bytes |
+| `diff-tree --stdin --name-only -r -z` | 8,192 | 34,603,008 | PATH NUL, at most 4,096 bytes |
+| `diff-tree --stdin --numstat -r -z --no-renames` | 8,192 | 34,603,008 | `(\d+\|-)` TAB `(\d+\|-)` TAB PATH NUL |
+| `check-attr -z --stdin diff` | 8,192 | 34,603,008 | PATH NUL `diff` NUL VALUE NUL |
 | `ls-tree -r -z` (attribute files) | 1,024 (Spec 029 leaf bound) | 4,325,376 | `MODE TYPE OID` TAB `PATH`, NUL terminated |
 | `cat-file --batch` (attribute files) | 64 files | 1 MiB each | batch header then content |
 | `merge-tree --write-tree --no-messages` | first line `OID`; a conflict listing counts only against the byte bound | 4,325,376 | first line `OID` |
-| `diff-tree --stdin --numstat -r -z --no-renames` | 8,192 | 34,603,008 | `(\d+\|-)` TAB `(\d+\|-)` TAB PATH NUL |
-| `check-attr -z --stdin binary diff text` | 24,576 | 103,809,024 (3 x 8,192 x 4,224) | PATH NUL ATTR NUL VALUE NUL |
-| stw normalizer | one line | 1 MiB per line, 64 MiB per tip | opaque lines; longer is `proof-limit` |
-| `diff-tree --stdin --no-commit-id --name-only -r -z` | 8,192 | 34,603,008 | PATH NUL, at most 4,096 bytes |
-| `diff-tree --stdin -p --binary` patch stream | opaque | 64 MiB per tip | none; piped, never buffered |
-| `patch-id --verbatim` | 5,120 | 537,600 (5,120 x 105) | `[0-9a-f]{40} OID` |
+
+Report commands have their own table in the [review report contract](review-report.md#command-bounds).
 
 ## Private object directory
 
-`GIT_OBJECT_DIRECTORY=<fresh mode-0700 dir>`, `GIT_ALTERNATE_OBJECT_DIRECTORIES=<repository objects directory only>`, removed on every exit path. Git ignores the repository's own `objects/info/alternates` when `GIT_OBJECT_DIRECTORY` is set, so a repository with an alternates file is `not-evaluated: unsupported-metadata`. The repository `objects/`, refs and `packed-refs` are compared byte-wise before and after in tests.
+`GIT_OBJECT_DIRECTORY=<fresh mode-0700 dir>`, `GIT_ALTERNATE_OBJECT_DIRECTORIES=<repository objects directory only>`, removed on every exit path. Git ignores the repository's own `objects/info/alternates` when `GIT_OBJECT_DIRECTORY` is set, so a repository with an alternates file is the hard stop `unsupported-metadata`. The repository `objects/`, refs and `packed-refs` are compared byte-wise before and after in tests.
 
 ## History integrity
 
-`info/grafts`, a `shallow` file: every proof `not-evaluated: history-override`. Replace refs: ignored by `--no-replace-objects`, plan note `replace-refs-ignored`.
-
-## Refusal and retention rules
-
-1. Protected refs (base, symbolic, workspace-used) and uncertain targets: evidence recorded, disposition retained.
-2. `merge-noop`: `merge.*.driver` or executable `filter.*`: `not-evaluated: git-unsafe-configuration`; any merge attribute: `not-evaluated: merge-attributes-present`.
-3. Patch classes: count bounds exceeded `proof-limit`; merge commit in `M..B`: retained `merge-commits-in-range`; normalized-only match on a whitespace-significant path: retained `whitespace-significant-difference`.
-4. Per-command 10 s, per-tip 20 s or the 60 s forge-free proof phase exceeded: remaining tips `proof-budget-exhausted`.
-5. Everything else not proven is retained `integration-not-proven` with classification. No branch is deleted by cherry-pick replay, subject similarity or a user-named range.
+`info/grafts` or a `shallow` file: every proof is the hard stop `history-override`. Replace refs: ignored by `--no-replace-objects`, plan note `replace-refs-ignored`.
 
 ## What each class does not claim
 
-`merge-noop`: not review, not a PR, not authorship. `patch-exact`/`patch-id`: not that the change is still present. `integrated-modulo-whitespace`: not that indentation matches. `no-net-change`: not integration; only that nothing is unmerged. `ancestor`: not review. None says anything about CI or other branches. Each local deletion keeps the recovery ref and journal entry described in the spec's design rationale (tip commit and history only; reflog and `branch.<name>.*` configuration are not recorded; restore is manual; local to this clone).
+`merge-noop`: not review, not a PR, not authorship. `patch-id`: not that the change is still present; `whitespace-differs` says the formatting differs and needs a look. `no-net-change`: not integration; only that nothing is unmerged. `ancestor`: not review. None says anything about CI or other branches. Each local deletion keeps the recovery ref and journal entry described in the spec's design rationale (tip commit and history only; reflog and `branch.<name>.*` configuration are not recorded; restore is manual; local to this clone).
