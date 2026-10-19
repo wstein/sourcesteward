@@ -21,7 +21,7 @@ Replaying each commit of `M..B` onto the base conflicts for 1,087 of 1,750 commi
 ## Why these three kinds
 
 - `ancestor` is exact but misses every rewrite (rebase-merge, squash-merge).
-- `patch-id` (`git cherry`) recognizes rebased commits and is order independent and forge-free, but it ignores whitespace (reproduced on Git 2.56: an indented call inside a Python block matched a base commit that does not indent it), marks empty commits `-` (measured) and cannot see squash-merge or whether the change is still present. It is therefore evidence only; `patch-exact` uses `git patch-id --verbatim`, which keeps whitespace and ignores only hunk line numbers.
+- `patch-id` (`git cherry`) recognizes rebased commits and is order independent and forge-free, but it ignores whitespace (reproduced on Git 2.56: an indented call inside a Python block matched a base commit that does not indent it), shows an empty commit as `+` with no counterpart on the base (observed) and cannot see squash-merge or whether the change is still present. It is therefore evidence only; `patch-exact` uses `git patch-id --verbatim`, which keeps whitespace and ignores only hunk line numbers.
 - `merge-noop` needs a net-change precondition: a branch that added and reverted work merges cleanly to the base tree but was never integrated.
 - `merge-noop` (with that precondition) recognizes rebase-merge and squash-merge whose content landed unchanged, and present content only. A branch whose changes were later modified on the base conflicts or would add content and is not proven.
 
