@@ -38,11 +38,11 @@ Refuse versus neutralize follows the execution surface (research): refuse what t
 
 ### Decision: proof strength and defaults
 
-Owner direction: deletion rules are not stricter than the real risk, because apply already records a recovery root and a branch-to-tip journal, so a wrong local deletion is reversible. Defaults: all five classes eligible (`ancestor`, `patch-exact`, `merge-noop`, `patch-id`, `no-net-change`). `git cherry` patch-ids ignore whitespace (reproduced on Git 2.56), so a whitespace-sensitivity guard replaces blanket strictness: whitespace-only differences on `*.py`, `*.yml`, `*.yaml`, `Makefile`, `*.mk` (extendable with `--whitespace-significant`) retain; elsewhere they delete as `integrated-modulo-whitespace` and stay visible. `no-net-change` branches have nothing unmerged and are deletable under their own label. Real-risk guards stay: merge attributes, gitlinks, grafts/shallow/alternates, unsafe configuration, bounded output. Non-whitespace reformatting stays retained; the range-diff aid is a later Spec, and `merge-noop` already covers it when the base has the final content. Cost of the relaxation: a patch-equivalent branch whose change was later reverted on the base is deletable, visible as `history-equivalent`, and recoverable.
+Owner direction: deletion rules are not stricter than the real risk, because apply already records a recovery ref and a branch-to-tip journal entry; the recovery covers the tip commit's history only (not the reflog or `branch.<name>.*` configuration), is manual and is local to the clone. Defaults: all five classes eligible (`ancestor`, `patch-exact`, `merge-noop`, `patch-id`, `no-net-change`). `git cherry` patch-ids ignore whitespace (reproduced on Git 2.56), so a whitespace-sensitivity guard replaces blanket strictness: differences beyond indentation, trailing whitespace and CR are unmatched (stw normalizes only those, so token joining never matches); normalized-only matches on whitespace-significant paths (default list in the contract, extendable with `--whitespace-significant`) retain; elsewhere they delete as `integrated-modulo-whitespace` and stay visible. Binary paths (by attribute from the branch tip tree, else NUL content) match only exactly. Merge commits in the range limit proof to ancestor, merge-noop and no-net-change; matching uses multiset counts. `no-net-change` branches have nothing unmerged and are deletable under their own label. Real-risk guards stay: merge attributes, gitlinks, grafts/shallow/alternates, unsafe configuration, bounded output. Non-whitespace reformatting stays retained; the range-diff aid is a later Spec, and `merge-noop` already covers it when the base has the final content. Cost of the relaxation: a patch-equivalent branch whose change was later reverted on the base is deletable, visible as `history-equivalent`, and recoverable within those limits.
 
 ### Decision: discovery endpoint
 
-No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting (T022..T025), and share the Spec 029 online budget (128 requests, 30 s) with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidate endpoints (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment, `truncated` being the honest result until then.
+No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting (T022..T025), and share the Spec 029 online budget (128 requests, 30 s) with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidate endpoints (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment, `incomplete` being the honest result until then (positive evidence stays proof).
 
 ### Decision: superseded-candidate evidence aid
 
@@ -59,7 +59,7 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 - **P3 Slice B configuration**: planning environment, matrix, apply retention (T007..T011).
 - **P4 Slice C proofs**: patch-id, merge-noop, order/budget, schema/CLI (T012..T020).
 - **P5 Slice D discovery** (T021..T026).
-- **P6 Slice E** docs, review, owner-gated build and real-repository acceptance (T027..T033).
+- **P6 Slice E** docs, review, owner-gated build and real-repository acceptance (T027..T034).
 
 ## Risks
 
@@ -74,17 +74,17 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 | Patch-id of huge diffs is slow | commit-count bounds, aggregate deadline, retain on exhaustion |
 | Neutralization hides a real hook problem at apply | apply refuses hook-running effects; plan says non-appliable |
 | Rebase onto a corrected stage2 moves code | spec paths marked to confirm; only new files here |
-| Page cap hides PRs | coverage `truncated`, never absence |
+| Page cap hides PRs | coverage `incomplete`, never absence |
 
 ## Decisions made as conservative defaults (revisable by the owner)
 
 1. Default deletion classes: all five, with the whitespace-significance guard and the `no-net-change` class (owner direction).
 2. Bounds 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase separate from the online 30 s, with totals 70 s offline and 100 s online (amended in Spec 029).
-3. No second discovery endpoint; report `truncated`.
+3. No second discovery endpoint; report `incomplete`.
 4. Plan-only acceptance by source test runner; any CLI build stays an owner gate.
 5. Range-diff aid is a later Spec.
 
 ## Open questions
 
-- **OQ-1**: is the default whitespace-significant list (`*.py`, `*.yml`, `*.yaml`, `Makefile`, `*.mk`) the right one, for example should `*.md` or `*.go` stay out?
-- **OQ-2**: authorize a named CLI build for the binary acceptance lane (T031), or record it as a gap?
+- **OQ-1**: is the default whitespace-significant list (the extended default list in the integration-proofs contract) the right one, for example should `*.rst` or `*.tsv` stay out?
+- **OQ-2**: authorize a named CLI build for the binary acceptance lane (T032), or record it as a gap?

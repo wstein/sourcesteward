@@ -6,7 +6,7 @@
 | --- | --- |
 | Local branches / worktrees | 149 / 111 (131 non-main branches evaluated) |
 | merge-noop (`merge-tree --write-tree` clean, tree equals base tree) | 5 |
-| patch-id equivalent (`git cherry` semantics, all commits `-`), overlapping merge-noop | 21 |
+| patch-id equivalent (measured with `git cherry`, which erases all whitespace; the Spec uses a narrower normalized digest, re-measured by T031), overlapping merge-noop | 21 |
 | Clean merge that would add content | 33 |
 | Conflict with base | 99 |
 | Offline v3 `integration-not-proven` | 93 of 149 |
