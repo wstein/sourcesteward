@@ -150,31 +150,24 @@ func buildRelease(ctx context.Context, o BuildOptions, runner buildRunner, inher
 			return r.fail("gate-failed", fmt.Errorf("missing offline gate %s", gate))
 		}
 	}
-	if err := checkBuildCheckout(ctx, root, o.Commit); err != nil {
+	// The comparison runs through a frozen private view of the checkout metadata (spec 026
+	// T031/T034): captured before the first project invocation, revalidated after the build.
+	view, err := openBuildCheckoutView(ctx, root, o.Commit, inherited)
+	if err != nil {
+		return r.fail("checkout-mismatch", err)
+	}
+	defer view.Close()
+	if err := view.check(ctx); err != nil {
 		return r.fail("checkout-mismatch", err)
 	}
 	r = executeBuild(ctx, s, o, runner, inherited)
 	if err := ctx.Err(); err != nil {
 		return r.fail("canceled", err)
 	}
-	if err := checkBuildCheckout(ctx, root, o.Commit); err != nil {
+	if err := view.check(ctx); err != nil {
 		return r.fail("checkout-mismatch", err)
 	}
 	return r
-}
-func checkBuildCheckout(ctx context.Context, root, commit string) error {
-	if err := checkBuildCheckoutHelpers(ctx, root); err != nil {
-		return err
-	}
-	head, truncated, status, err := gitOutput(ctx, root, 128, "", "rev-parse", "--verify", "HEAD")
-	if err != nil || truncated || status != 0 || strings.TrimSpace(string(head)) != commit {
-		return errors.New("HEAD differs from requested commit")
-	}
-	_, truncated, status, err = gitOutput(ctx, root, 65536, "", "diff-index", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", "--")
-	if err != nil || truncated || status != 0 {
-		return errors.New("tracked checkout differs from HEAD")
-	}
-	return nil
 }
 func executePromote(ctx context.Context, s buildState, o BuildOptions, record *ReleaseRecord, runner buildRunner, inherited []string) BuildResult {
 	r := newBuildResult(o.Mode)
