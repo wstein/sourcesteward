@@ -5,7 +5,7 @@
 
 ## Summary
 
-Five slices over the existing contract 3 code, none adding an effect class: (A) bounded streaming reads, (B) configuration policy, (C) forge-free proofs (`merge-noop` default, `patch-exact` opt-in, `patch-id` evidence), (D) PR discovery per distinct OID, (E) real-repository plan-only acceptance. It also amends Spec 029's patch-similarity rule in `contract-amendments.md`. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes.
+Five slices over the existing contract 3 code, none adding an effect class: (A) bounded streaming reads, (B) configuration policy, (C) forge-free proofs (all five classes by default with the whitespace guard), (D) PR discovery per distinct OID, (E) real-repository plan-only acceptance. It also amends Spec 029's patch-similarity rule in `contract-amendments.md`. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes.
 
 ## Constitution check
 
@@ -38,7 +38,7 @@ Refuse versus neutralize follows the execution surface (research): refuse what t
 
 ### Decision: proof strength and defaults
 
-Default deletion proofs are `ancestor` and `merge-noop`. `git cherry` patch-ids ignore whitespace (reproduced on Git 2.56), so `patch-id` is evidence only. `patch-exact` (verbatim patch-id, whitespace preserved) is a deletion proof only when the owner names it in `--integration-proof`; even then it proves history, not present content. `merge-noop` requires a net change (`B^{tree} != M^{tree}`), one merge base and no gitlink difference. These are conservative defaults selected for the owner and revisable; the dogfood gain of the default set is the 5 merge-noop branches, with the 21 patch-id branches visible as evidence.
+Owner direction: deletion rules are not stricter than the real risk, because apply already records a recovery root and a branch-to-tip journal, so a wrong local deletion is reversible. Defaults: all five classes eligible (`ancestor`, `patch-exact`, `merge-noop`, `patch-id`, `no-net-change`). `git cherry` patch-ids ignore whitespace (reproduced on Git 2.56), so a whitespace-sensitivity guard replaces blanket strictness: whitespace-only differences on `*.py`, `*.yml`, `*.yaml`, `Makefile`, `*.mk` (extendable with `--whitespace-significant`) retain; elsewhere they delete as `integrated-modulo-whitespace` and stay visible. `no-net-change` branches have nothing unmerged and are deletable under their own label. Real-risk guards stay: merge attributes, gitlinks, grafts/shallow/alternates, unsafe configuration, bounded output. Non-whitespace reformatting stays retained; the range-diff aid is a later Spec, and `merge-noop` already covers it when the base has the final content. Cost of the relaxation: a patch-equivalent branch whose change was later reverted on the base is deletable, visible as `history-equivalent`, and recoverable.
 
 ### Decision: discovery endpoint
 
@@ -66,8 +66,8 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 | Risk | Mitigation |
 | --- | --- |
 | `merge-tree` writes objects | private object directory (FR-009), byte-compare test, alternates refusal |
-| Whitespace-blind patch-id | evidence only; `patch-exact` verbatim and opt-in |
-| Empty-net-change branch | `B^{tree} != M^{tree}` precondition |
+| Whitespace-blind patch-id | guard on whitespace-significant paths, `integrated-modulo-whitespace` label, recovery |
+| Empty-net-change branch | own class `no-net-change`, never labelled integrated |
 | Grafts/shallow/replace refs fake history | retain or ignore with notes (FR-010) |
 | Submodule opened by merge engine | gitlink-difference pre-check |
 | `merge=union`/`binary` attributes fake a clean merge | refuse `merge-noop` when any merge attribute source defines it; `--attr-source` pin |
@@ -78,7 +78,7 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 
 ## Decisions made as conservative defaults (revisable by the owner)
 
-1. Default deletion proofs `ancestor`, `merge-noop`; `patch-id` evidence only; `patch-exact` opt-in.
+1. Default deletion classes: all five, with the whitespace-significance guard and the `no-net-change` class (owner direction).
 2. Bounds 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase separate from the online 30 s, with totals 70 s offline and 100 s online (amended in Spec 029).
 3. No second discovery endpoint; report `truncated`.
 4. Plan-only acceptance by source test runner; any CLI build stays an owner gate.
@@ -86,5 +86,5 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 
 ## Open questions
 
-- **OQ-1**: does the owner accept these defaults, in particular opt-in `patch-exact` (loses the 16 patch-id-only branches as default deletions)?
+- **OQ-1**: is the default whitespace-significant list (`*.py`, `*.yml`, `*.yaml`, `Makefile`, `*.mk`) the right one, for example should `*.md` or `*.go` stay out?
 - **OQ-2**: authorize a named CLI build for the binary acceptance lane (T031), or record it as a gap?
