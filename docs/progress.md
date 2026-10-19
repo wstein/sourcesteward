@@ -291,3 +291,16 @@ records failing-first fixtures, source guard mutants, native state sentinels and
 remaining verification. T028/T029 have exact-source clearance; final T030 checks
 and independent review remain pending. Spec 026 stays planned. No actual
 workflow, build, publication, tag, release or activation was performed.
+
+## Spec 026 WI7 build checkout view source candidate
+
+`stw release build` now compares the tracked tree through a frozen private view of the
+checkout metadata, captured before the first project invocation and revalidated after
+the build, with a supervised native process group and a trusted nested-status route
+entered from `cmd/stw`. This is source only and pending independent review: T031 and
+T034 stay unchecked and Spec 026 stays planned. The
+[verification note](../specs/026-release-process/verification-checkout-view.md) lists
+the mutation evidence and what was not verified: the Darwin observer has only been
+compiled and vetted, `internal/release` does not compile for Windows (also true before
+this work), and no real checkout, build, workflow or release was run. The earlier
+dead-code state of the view, which had no production caller, is closed by this wiring.
