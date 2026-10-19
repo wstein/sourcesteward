@@ -27,3 +27,12 @@ Creation, reference tidy and both retirement paths consume the shared complete t
 Hosting supplies bounded read observations, not deletion authority. Current hosting v1 lacks stable provider IDs and merged/integration-commit fields; the new proof must obtain and validate those facts without silently reinterpreting existing inspection output. A separately reviewed plan will identify any new hosting result contract; its existing v1 fixtures remain intact.
 
 No constitution principle is weakened: evidence precedes local effects, exact ownership is explicit, incomplete proof retains, native backends remain separated and old local functionality needs no network. The expanded provider trust and legacy-completion trust are visible new capabilities requiring independent specification/security review, not inferred exceptions to current contracts.
+
+## Spec 031 amendments
+
+[Spec 031](../031-tidy-integration-proofs/spec.md) amends two statements of this Spec, documentation only, without changing any published v1/v2 contract:
+
+1. Spec 029 "Assumptions and scope" (and the optional-supporting-information reading of patch similarity): patch similarity stays evidence only. Spec 031 adds two forge-free proof kinds with exact semantics: `merge-noop` (a net-change branch whose clean merge into the base yields exactly the base tree, one merge base, no gitlink difference), eligible by default, and `patch-exact` (verbatim patch-id of every non-empty branch commit on the base), eligible only by explicit `--integration-proof` opt-in. Whitespace-insensitive `git cherry` patch-ids (`patch-id`) are never a proof.
+2. Spec 029 FR-010 protections and the online contract are unchanged; forge-free proofs never override a protected ref.
+3. Spec 029's read-only planning refusal of `core.hooksPath`, `core.fsmonitor` and `submodule.*` becomes neutralization under Spec 031 FR-019..FR-022 (plan succeeds with a note); apply keeps every refusal. `hook.*`, `core.attributesFile`, `includeIf` and the other refusals stay.
+4. The v1/v2 whole-output 64 KiB limit for reference and registration collections is replaced by bounded streaming under Spec 031 FR-024..FR-025.

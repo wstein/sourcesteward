@@ -11,7 +11,7 @@ Closed set, all `GET`, exact allow-listed routes (add or remove only together wi
 3. `repos/OWNER/REPO/pulls/NUMBER` (full re-read of each chosen PR);
 4. `repos/OWNER/REPO/branches?per_page=100&page=N` (existing tracking-ref feature, unchanged).
 
-No search endpoint, commit-association endpoint or GraphQL is added by default (see plan decision). No filters by head or base name.
+No search endpoint, commit-association endpoint or GraphQL is added by this Spec. No filters by head or base name.
 
 ## Algorithm
 
@@ -19,6 +19,10 @@ No search endpoint, commit-association endpoint or GraphQL is added by default (
 2. For each OID without a hint, collect candidates from the closed collection; with a hint, read that PR directly.
 3. Re-read each chosen candidate (endpoint 3) and apply Spec 029 FR-007 tuple validation.
 4. Emit one DiscoveryRecord per OID listing all refs with that OID.
+
+## Request budget
+
+Shared with Spec 029 FR-025: 30-second online plan deadline, at most 128 requests and 32 MiB raw response bytes per run, shared with tracking-ref reads, failures counted. Accounting: 1 repository read, at most 10 collection pages, one re-read per chosen PR. Re-reads run in ascending OID order; when the remaining budget cannot cover the next re-read, that OID and all later OIDs are `discovery-budget-exhausted` (retained) and the plan completes with a note. The 60-second forge-free proof budget is separate, runs first and does not extend the online deadline.
 
 ## Hint rules
 

@@ -12,7 +12,7 @@
 | Offline v3 `integration-not-proven` | 93 of 149 |
 | Per-commit cherry-pick simulation: commits that conflict | 1,087 of 1,750 |
 
-The measurement scripts are not committed; task T029 re-measures with a recorded command list so the numbers are reproducible evidence rather than a claim.
+The measurement scripts are not committed; task T029 re-measures with a recorded command list, running every `merge-tree` with a private object directory, so the numbers are reproducible evidence rather than a claim.
 
 ## Rejected: per-commit cherry-pick simulation
 
@@ -21,8 +21,9 @@ Replaying each commit of `M..B` onto the base conflicts for 1,087 of 1,750 commi
 ## Why these three kinds
 
 - `ancestor` is exact but misses every rewrite (rebase-merge, squash-merge).
-- `patch-id` recognizes rebase-merge: rebased commits keep their patch-id when context lines do not change. It is order independent and forge-free. It does not see squash-merge (one commit with the combined patch). It cannot tell whether the change is still present.
-- `merge-noop` recognizes rebase-merge and squash-merge whose content landed unchanged, and present content only. A branch whose changes were later modified on the base conflicts or would add content and is not proven.
+- `patch-id` (`git cherry`) recognizes rebased commits and is order independent and forge-free, but it ignores whitespace (reproduced on Git 2.56: an indented call inside a Python block matched a base commit that does not indent it), marks empty commits `-` (measured) and cannot see squash-merge or whether the change is still present. It is therefore evidence only; `patch-exact` uses `git patch-id --verbatim`, which keeps whitespace and ignores only hunk line numbers.
+- `merge-noop` needs a net-change precondition: a branch that added and reverted work merges cleanly to the base tree but was never integrated.
+- `merge-noop` (with that precondition) recognizes rebase-merge and squash-merge whose content landed unchanged, and present content only. A branch whose changes were later modified on the base conflicts or would add content and is not proven.
 
 Neither is a heuristic: both are deterministic Git computations with defined refusals. Nothing else is accepted.
 
@@ -33,6 +34,10 @@ Neither is a heuristic: both are deterministic Git computations with defined ref
 ## Configuration execution surface
 
 Hooks run for mutating commands; `core.fsmonitor` hooks run for status-like commands; filters, textconv and merge drivers run when attributes name a configured driver during content evaluation; `submodule.<name>.update=!cmd` runs only on `git submodule update`, which tidy never runs. Existing code already neutralizes `core.hooksPath` and `core.fsmonitor` for inventory and release reads with `-c`, which is the precedent for FR-019. Spec 029's safety collector instead refuses any `submodule.*` key and `core.hooksPath`, which is the behavior #79 reports; the refusal is correct for apply (hooks would run) and over-broad for read-only planning.
+
+## Merge engine side effects
+
+`merge-ort` may open initialized submodule repositories to resolve gitlink conflicts, applies rename detection and (with `merge.renormalize`) content conversion, and may trigger auto maintenance. The Spec fixes these with constant `-c` arguments and pre-checks gitlink differences. A grafts file can fake ancestry and a shallow clone gives a wrong merge base, so both make proofs not-evaluated; the repository's alternates file is ignored once `GIT_OBJECT_DIRECTORY` is set.
 
 ## Open measurements before implementation
 
