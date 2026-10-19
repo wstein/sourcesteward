@@ -5,7 +5,7 @@
 
 ## Summary
 
-Five slices over the existing contract 3 code, none adding an effect class: (A) bounded streaming reads, (B) configuration policy, (C) forge-free proofs, (D) PR discovery per distinct OID, (E) real-repository acceptance. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes.
+Five slices over the existing contract 3 code, none adding an effect class: (A) bounded streaming reads, (B) configuration policy, (C) forge-free proofs (`merge-noop` default, `patch-exact` opt-in, `patch-id` evidence), (D) PR discovery per distinct OID, (E) real-repository plan-only acceptance. It also amends Spec 029's patch-similarity rule in `contract-amendments.md`. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes.
 
 ## Constitution check
 
@@ -21,7 +21,8 @@ No constitution exception.
 
 ## Affected source areas (to confirm in T002)
 
-- `internal/workspace/git.go` (`gitSafetyWithPrimary` refusal list, `gitRead` for `for-each-ref`/`worktree list`), `native_sandbox.go` (`sandboxEnvironment`, `nativeOutputLimit`), `native_stream.go` (`executeNativeStream*`), `tidy_v3_proof.go`, `tidy_v3_refs.go`, `tidy_v3_options.go`, `tidy_v3_result.go`; new `tidy_v3_proof_native.go` for patch-id/merge-noop and a private object-directory helper.
+- `specs/029-tidy-dogfood-safety/contract-amendments.md` (the only Spec 029 file touched, documentation only);
+- `internal/workspace/git.go` (`gitSafetyWithPrimary` refusal list, `gitRead` for `for-each-ref`/`worktree list`), `native_sandbox.go` (`sandboxEnvironment`, `nativeOutputLimit`), `native_stream.go` (`executeNativeStream*`), `tidy_v3_proof.go`, `tidy_v3_refs.go`, `tidy_v3_options.go`, `tidy_v3_result.go`; new `tidy_v3_proof_native.go` for merge-noop/patch evidence/patch-exact and a private object-directory helper.
 - `internal/hosting/tidy_evidence_pr.go` (`discoverPRHints` currently keeps `[]tidyPRHint` per OID), `transport.go` route allow-list.
 - `internal/cli` for `--integration-proof` and `--pr` handling; `schemas/v3` candidate; smoke scripts `scripts/smoke-tidy.py` extension for real-binary lanes (owner-gated build).
 
@@ -35,17 +36,21 @@ Options: (1) raise `nativeOutputLimit`; (2) stream v1 reads; (3) document v3 as 
 
 Refuse versus neutralize follows the execution surface (research): refuse what the planning command would execute or cannot evaluate reproducibly; neutralize what is executable only on commands tidy never runs or can disable by command-line configuration. Apply is stricter than plan: it never skips a hook silently. The cost is a plan that says "plannable, not appliable" for hook-configured repositories; that is intentional and visible.
 
-### Decision: proof strength and defaults (OQ-1)
+### Decision: proof strength and defaults
 
-Default is all three forge-free kinds eligible, because the dogfood measurement (5 merge-noop, 21 patch-id) shows patch-id carries most of the gain and every deletion keeps a recovery root. The more conservative alternative (merge-noop and ancestor eligible, patch-id evidence-only unless `--integration-proof` names it) is one flag default away. The owner decides.
+Default deletion proofs are `ancestor` and `merge-noop`. `git cherry` patch-ids ignore whitespace (reproduced on Git 2.56), so `patch-id` is evidence only. `patch-exact` (verbatim patch-id, whitespace preserved) is a deletion proof only when the owner names it in `--integration-proof`; even then it proves history, not present content. `merge-noop` requires a net change (`B^{tree} != M^{tree}`), one merge base and no gitlink difference. These are conservative defaults selected for the owner and revisable; the dogfood gain of the default set is the 5 merge-noop branches, with the 21 patch-id branches visible as evidence.
 
 ### Decision: discovery endpoint
 
-Keep the Spec 029 closed-PR collection (10 pages) and fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting first (T022..T025). Whether a second read-only endpoint is needed is decided by evidence from T003 and T021 (why #81 required hints, and whether the 1,000-record page cap truncates on this repository). Candidates to measure only: commit-associated PR listing (documented to return open PRs for commits outside the default branch, so likely unsuitable for rebase-merged heads) and issue search by SHA (separate rate limit). An endpoint is added only with research evidence, in the closed set, the route allow-list and tests together; until then `truncated` is honest.
+No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting (T022..T025), and share the Spec 029 online budget (128 requests, 30 s) with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidate endpoints (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment, `truncated` being the honest result until then.
 
-### Decision: superseded-candidate evidence aid (deferred)
+### Decision: superseded-candidate evidence aid
 
-The 99 conflicting branches are consolidated work whose content was reworked into other commits. `git range-diff BRANCH_RANGE CONSOLIDATION_RANGE` can pair commits by patch similarity, and could be reported as `superseded-candidate` evidence for a user-named range, never as deletion proof. **Deferred** to a follow-up Spec: its cost is quadratic in the two range sizes (stacked branches with hundreds of commits), it needs its own bounds, user-input validation for the range, and an owner decision on how a human uses it, none of which is measured. This Spec reserves the classification name only in prose; no schema field, option or task is added. The owner may promote it after reading the 99-branch measurement.
+The range-diff evidence aid for consolidated work (99 branches in the measurement) becomes its own later Spec. It is not specified, bounded or tasked here.
+
+### Decision: forge-free budget
+
+The 60-second forge-free proof deadline is its own budget, separate from the online 30-second deadline; planning offline uses only the former.
 
 ## Phases
 
@@ -60,16 +65,25 @@ The 99 conflicting branches are consolidated work whose content was reworked int
 
 | Risk | Mitigation |
 | --- | --- |
-| `merge-tree` writes objects | private object directory (FR-009), byte-compare test |
+| `merge-tree` writes objects | private object directory (FR-009), byte-compare test, alternates refusal |
+| Whitespace-blind patch-id | evidence only; `patch-exact` verbatim and opt-in |
+| Empty-net-change branch | `B^{tree} != M^{tree}` precondition |
+| Grafts/shallow/replace refs fake history | retain or ignore with notes (FR-010) |
+| Submodule opened by merge engine | gitlink-difference pre-check |
 | Patch-id of huge diffs is slow | commit-count bounds, aggregate deadline, retain on exhaustion |
 | Neutralization hides a real hook problem at apply | apply refuses hook-running effects; plan says non-appliable |
 | Rebase onto a corrected stage2 moves code | spec paths marked to confirm; only new files here |
 | Page cap hides PRs | coverage `truncated`, never absence |
 
+## Decisions made as conservative defaults (revisable by the owner)
+
+1. Default deletion proofs `ancestor`, `merge-noop`; `patch-id` evidence only; `patch-exact` opt-in.
+2. Bounds 1,024 branch-side and 4,096 base-side commits, 60 s forge-free deadline separate from the online 30 s.
+3. No second discovery endpoint; report `truncated`.
+4. Plan-only acceptance by source test runner; any CLI build stays an owner gate.
+5. Range-diff aid is a later Spec.
+
 ## Open questions
 
-- **OQ-1**: default `--integration-proof`: all three, or ancestor and merge-noop only with patch-id opt-in?
-- **OQ-2**: are the proposed numeric bounds (patch-id 1,024/4,096 commits, 60 s forge-free deadline) acceptable?
-- **OQ-3**: promote the superseded-candidate aid to a follow-up Spec now, or after the acceptance counts?
-- **OQ-4**: does the owner authorize a CLI build for the plan-only acceptance run (T030, T031), or should acceptance use a source test runner only?
-- **OQ-5**: is a second discovery endpoint acceptable if T021 shows the page cap truncates this repository?
+- **OQ-1**: does the owner accept these defaults, in particular opt-in `patch-exact` (loses the 16 patch-id-only branches as default deletions)?
+- **OQ-2**: authorize a named CLI build for the binary acceptance lane (T031), or record it as a gap?
