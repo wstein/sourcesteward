@@ -8,7 +8,7 @@ Closed set, all `GET`, exact allow-listed routes (add or remove only together wi
 
 1. `repos/OWNER/REPO` (identity);
 2. `repos/OWNER/REPO/pulls?state=closed&per_page=100&page=N`, `N` from 1 to 10 (candidate collection, at most 1,000 records);
-3. `repos/OWNER/REPO/pulls/NUMBER` (full re-read of each chosen PR);
+3. `repos/OWNER/REPO/pulls/NUMBER` (full read of each chosen PR);
 4. `repos/OWNER/REPO/branches?per_page=100&page=N` (existing tracking-ref feature, unchanged).
 
 No search endpoint, commit-association endpoint or GraphQL is added by this Spec. No filters by head or base name.
@@ -22,7 +22,7 @@ No search endpoint, commit-association endpoint or GraphQL is added by this Spec
 
 ## Request budget
 
-Shared with Spec 029 FR-025: 30-second online plan deadline, at most 128 requests and 32 MiB raw response bytes per run, shared with tracking-ref reads, failures counted. Accounting (formula and source citations in spec FR-018): fixed repository reads 2, at most 10 page reads, one PR read per candidate, so at most (128 - 2 - 10) / 1 = 116 candidate reads fit. `RevalidatePullRequest` pairs (repository plus PR, `tidy_evidence_pr.go:159-173`) run at apply inside the apply budget, outside this plan budget. Candidate reads run in ascending OID order; when the remaining budget cannot cover the next re-read, that OID and all later OIDs are `discovery-budget-exhausted` (retained) and the plan completes with a note. The 60-second forge-free proof budget is separate, runs first and does not extend the online deadline.
+Shared with Spec 029 FR-025: 30-second online plan deadline, at most 128 requests and 32 MiB raw response bytes per run, shared with tracking-ref reads, failures counted. Accounting (formula and source citations in spec FR-018): fixed repository reads 2, at most 10 page reads, one PR read per candidate, so at most (128 - 2 - 10) / 1 = 116 candidate reads fit. `RevalidatePullRequest` pairs (repository plus PR, `tidy_evidence_pr.go:159-173`) run at apply inside the apply budget, outside this plan budget. Candidate reads run in ascending OID order; when the remaining budget cannot cover the next candidate PR read, that OID and all later OIDs are `discovery-budget-exhausted` (retained) and the plan completes with a note. The 60-second forge-free proof budget is separate, runs first and does not extend the online deadline.
 
 ## Hint rules
 

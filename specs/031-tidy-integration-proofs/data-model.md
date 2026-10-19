@@ -13,7 +13,7 @@ All additions are optional-additive within the unpublished v3 schema defined by 
 | `matched`, `unmatched`, `empty`, `skipped_merges` | integer >= 0 | patch kinds only; patch classes require 0 |
 | `subclass` | enum `integrated-modulo-whitespace` or null | `patch-id` with verbatim mismatch |
 | `whitespace_significant_paths` | array of at most 16 paths | present iff `whitespace-significant-difference` |
-| `not_evaluated_reason` | enum `proof-limit`, `proof-budget-exhausted`, `git-unsafe-configuration`, `object-dir-unavailable`, `unsupported-metadata`, `merge-attributes-present`, `history-override`, `ambiguous-merge-base`, `gitlink-change` | present iff `not-evaluated` |
+| `not_evaluated_reason` | enum `proof-limit`, `proof-budget-exhausted`, `git-unsafe-configuration`, `object-dir-unavailable`, `unsupported-metadata`, `merge-attributes-present`, `info-attributes-present`, `history-override`, `ambiguous-merge-base`, `gitlink-change` | present iff `not-evaluated` |
 | `refs` | array of full ref names | every selected ref with this tip |
 
 Invariants: `matched + unmatched + empty` (multiset counts per digest) equals the evaluated non-merge branch-side commits; `proven` for `patch-exact` and `patch-id` requires `unmatched = 0` and `matched >= 1`; `no-net-change` is proven only with equal trees and is never reported as integrated; the journal entry stores branch, tip OID, class, strength and subclass; the headline kind is the strongest `proven` entry; a ref in a protected class carries evidence but its disposition stays retained.
