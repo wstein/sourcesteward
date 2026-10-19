@@ -37,6 +37,7 @@ type buildViewGraph struct {
 	manifest string
 	route    string
 	scratch  string
+	sealed   map[string]buildViewSealEntry
 	// indexSeal holds, per root, the digest of the captured index's semantic content.
 	indexSeal []([32]byte)
 }
@@ -65,10 +66,12 @@ func (l *buildViewLimitWriter) Write(p []byte) (int, error) {
 
 var buildViewGitPrefix = []string{"--no-pager", "--no-replace-objects", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "hook.post-index-change.enabled=false"}
 
-func prepareBuildViewGraph(ctx context.Context, o buildViewGraphOptions, native buildViewNative) (_ *buildViewGraph, retErr error) {
+func prepareBuildViewGraph(ctx context.Context, o buildViewGraphOptions, native buildViewNative) (*buildViewGraph, error) {
 	g := &buildViewGraph{options: o, native: native, seen: map[string]bool{}}
+	// Close the bindings on every exit that does not return the graph, a panic included.
+	prepared := false
 	defer func() {
-		if retErr != nil {
+		if !prepared {
 			_ = g.Close()
 		}
 	}()
@@ -92,6 +95,14 @@ func prepareBuildViewGraph(ctx context.Context, o buildViewGraphOptions, native 
 	if err := g.writeManifest(); err != nil {
 		return nil, err
 	}
+	// Everything the native comparison trusts now exists. Native results that are only
+	// read back by the job move to the scratch directory from here on.
+	sealed, err := sealBuildViewPrivate(o.Private)
+	if err != nil {
+		return nil, err
+	}
+	g.sealed = sealed
+	prepared = true
 	return g, nil
 }
 func (g *buildViewGraph) Close() error {
@@ -117,7 +128,11 @@ func (g *buildViewGraph) bind(ctx context.Context, path string, raw bool) (*buil
 	return b, nil
 }
 func (g *buildViewGraph) read(ctx context.Context, root string, env []string, limit int64, args ...string) (*os.File, int, error) {
-	f, err := os.CreateTemp(g.scratch, "native-")
+	dir := g.options.Private
+	if g.sealed != nil {
+		dir = g.scratch
+	}
+	f, err := os.CreateTemp(dir, "native-")
 	if err != nil {
 		return nil, -1, err
 	}
@@ -556,6 +571,9 @@ func (g *buildViewGraph) captureGitlinks(ctx context.Context, root buildViewRoot
 	}
 }
 func (g *buildViewGraph) validate(ctx context.Context) error {
+	if err := g.verifySeal(); err != nil {
+		return err
+	}
 	for _, b := range g.bindings {
 		if err := b.validate(); err != nil {
 			return err
