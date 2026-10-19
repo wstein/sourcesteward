@@ -263,7 +263,7 @@ func TestBuildViewEnvironmentIsNativeOnly(t *testing.T) {
 			t.Fatalf("native environment retained forbidden field %q", bad)
 		}
 	}
-	for _, wanted := range []string{"HOME=/semantic/home", "XDG_CONFIG_HOME=/semantic/xdg", "LANG=en_US.UTF-8", "LC_CTYPE=C.UTF-8", "TZ=UTC", "SUDO_UID=42", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "TMPDIR=/private/job"} {
+	for _, wanted := range []string{"HOME=/semantic/home", "XDG_CONFIG_HOME=/semantic/xdg", "LANG=en_US.UTF-8", "LC_CTYPE=C.UTF-8", "TZ=UTC", "SUDO_UID=42", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "TMPDIR=/private/job/scratch"} {
 		found := false
 		for _, v := range env {
 			found = found || v == wanted

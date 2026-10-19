@@ -524,7 +524,7 @@ func buildViewEnvironment(inherited []string, realGit, private string) []string 
 			}
 		}
 	}
-	return append(env, "PATH="+filepath.Dir(realGit)+":/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR="+private, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_ATTR_NOSYSTEM=1", "GIT_LITERAL_PATHSPECS=1")
+	return append(env, "PATH="+filepath.Dir(realGit)+":/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR="+filepath.Join(private, buildViewScratch), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_ATTR_NOSYSTEM=1", "GIT_LITERAL_PATHSPECS=1")
 }
 
 // The lease is released by the whole comparison job only after actual cleanup;

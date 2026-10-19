@@ -487,6 +487,17 @@ func checkBuildWorktreeRoot(ctx context.Context, root string) error {
 	})
 }
 
+// resolveBuildViewGit returns the absolute path of the native Git executable used for the
+// frozen checkout view. The project never influences this lookup: it runs before any
+// project invocation, with the stw process environment.
+func resolveBuildViewGit() (string, error) {
+	path, err := exec.LookPath("git")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(path)
+}
+
 // Final metadata opens must not follow a swapped symlink or block on a FIFO.
 // Parent Root acquisition is descriptor-relative; its descriptor stays pinned.
 //
