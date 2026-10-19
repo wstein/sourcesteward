@@ -78,4 +78,5 @@ Each row is a temporary-repository fixture; hook, filter, driver, pager and simi
 | C34 | binary by NUL content, no attributes | numstat `-`: verbatim only | same |
 | C35 | text file with `-text` set, differing only by CRLF | treated as binary: retained | same |
 | C36 | `binary` attribute only in the checked-out worktree `.gitattributes`, not in the pinned tree | ignored: path judged by tree and content | same |
+| C37 | untracked `.gitattributes` with `e.raw diff` on a NUL file, and with `-diff` on a text file, plus `info/attributes` variants | classification and patch text unchanged (judged by the pinned tree only) | same |
 | M5 | mutant: omit the attribute-source scan or `--attr-source` | C28..C31 must fail | n/a |
