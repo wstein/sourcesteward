@@ -22,7 +22,9 @@ Disposition values: **neutralized** (plan succeeds, plan note), **proof-not-eval
 | `core.pager`, `core.editor`, `core.sshCommand`, `core.askPass`, `credential.*`, `gpg.*` | neutralized (never invoked, environment stripped), noted when set | unchanged |
 | `diff.external`, `diff.<d>.textconv` | neutralized (`--no-ext-diff --no-textconv`) | unchanged |
 | executable `filter.*`, `merge.*.driver` | `merge-noop` proof-not-evaluated | existing stage2 behavior retained |
-| any `merge` attribute (`merge`, `-merge`, `merge=union`, macro `binary`) in `.gitattributes` of the `U`, `B` or `M` trees or in `info/attributes` | `merge-noop` proof-not-evaluated, class `merge-attributes-present` | re-evaluation reads the same sources and retains |
+| any `merge` attribute (`merge`, `-merge`, `merge=union`, macro `binary`) in `.gitattributes` of the `U`, `B` or `M` trees | `merge-noop` proof-not-evaluated, class `merge-attributes-present` | re-evaluation reads the same sources and retains |
+| `$GIT_DIR/info/attributes` that is a symlink, a special file, over 1 MiB or has any non-blank, non-comment line | binary classification of patch classes and `merge-noop` proof-not-evaluated, class `info-attributes-present` | same |
+| `diff=<driver>` attribute with a named driver, `diff.<d>.binary`, `diff.<d>.textconv` | patch classes `not-evaluated: diff-driver-attribute` | same |
 | sentinel `filter.unspecified|unset|set.*` | refused | refused |
 | `include.path` | evaluated by Git, classified by effective keys | same |
 | `includeIf.*` | refused | refused |
@@ -45,7 +47,7 @@ Each row is a temporary-repository fixture; hook, filter, driver, pager and simi
 | C5 | `core.fsmonitor=helper` | neutralized | status neutralized |
 | C6 | `filter.x.clean=helper` with matching attribute | `merge-noop` not-evaluated, other proofs run | stage2 behavior |
 | C7 | `merge.x.driver=helper` with matching attribute | `merge-noop` not-evaluated (`git-unsafe-configuration`) | stage2 behavior |
-| C28 | union repro: branch deletes a line the base changed, `merge=union` in `info/attributes` | `merge-attributes-present`, not proven although `merge-tree` would exit 0; control without the attribute: exit 1, `conflict` | re-evaluation retains |
+| C28 | union repro: branch deletes a line the base changed, `merge=union` in `info/attributes` | `info-attributes-present`, not proven although `merge-tree` would exit 0; control without the attribute: exit 1, `conflict` | re-evaluation retains |
 | C29 | same repro with `merge=union` in an in-tree `.gitattributes` of the base only, the branch only, the merge base only | each `merge-attributes-present` | same |
 | C30 | `* binary` macro, `-merge` or `merge=binary` | `merge-attributes-present` | same |
 | C31 | user macro `[attr]m merge=union` used by a path | `merge-attributes-present` | same |
@@ -79,8 +81,11 @@ Each row is a temporary-repository fixture; hook, filter, driver, pager and simi
 | C35 | text file with `-text` set, differing only by CRLF | treated as binary: retained | same |
 | C36 | `binary` attribute only in the checked-out worktree `.gitattributes`, not in the pinned tree | ignored: path judged by tree and content | same |
 | C37a | untracked `.gitattributes` with `e.raw diff` on a NUL file, and with `-diff` on a text file | classification and patch text unchanged (judged by the pinned tree only) | same |
-| C37b | `$GIT_DIR/info/attributes` defining or unsetting `binary`, `diff`, `text`, `eol`, `merge` or `whitespace`, or an `[attr]` macro | binary classification and `merge-noop` `not-evaluated: info-attributes-present`; `ancestor` and `no-net-change` unaffected; comments-only or absent file ignored | same |
-| C37c | `$XDG_CONFIG_HOME/git/attributes` with `merge=union`, and a system attributes file with `merge=union` (via `GIT_ATTR_NOSYSTEM` test double) | verdict unchanged, never falsely proven | same |
+| C37b | `$GIT_DIR/info/attributes` with any non-blank, non-comment line (including a macro use such as `*.dat tm` with `[attr]tm diff` defined in a tree `.gitattributes`), as a symlink, a special file, over 1 MiB, and resolved through a linked worktree's common git directory | binary classification and `merge-noop` `not-evaluated: info-attributes-present`; `ancestor` and `no-net-change` unaffected; absent or comment-only file ignored | same |
+| C37c | `$XDG_CONFIG_HOME/git/attributes` with `merge=union`, real Git | verdict unchanged, never falsely proven | same |
+| C37d | tree attribute `*.dat diff=d` with `diff.d.binary=false` on a NUL file | patch classes `not-evaluated: diff-driver-attribute` | same |
+| C37e | tree attribute `*.dat diff=d` with `diff.d.textconv=helper` | `not-evaluated: diff-driver-attribute`, helper marker absent | same |
+| C37f | unit test of the exact environment the executor builds: private empty `HOME`/`XDG_CONFIG_HOME`, null `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_ATTR_NOSYSTEM=1`; no variable can redirect Git's system attributes path, so the real-Git assertion covers global and XDG only | environment equals the expected list | same |
 | M5 | mutant: omit the attribute-source scan or `--attr-source` | C28..C31 must fail | n/a |
-| M6 | mutant: inherit the caller's `HOME`/`XDG_CONFIG_HOME` or drop `GIT_ATTR_NOSYSTEM` | C37c must fail | n/a |
+| M6 | mutant: inherit the caller's `HOME`/`XDG_CONFIG_HOME` or drop `GIT_ATTR_NOSYSTEM` | C37c or C37f must fail | n/a |
 | M7 | mutant: ignore `info/attributes` | C37b must fail | n/a |
