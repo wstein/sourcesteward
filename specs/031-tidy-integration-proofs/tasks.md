@@ -17,7 +17,7 @@
 ## Phase 3: Configuration policy (FR-019..FR-023; fixes #79)
 
 - [ ] T007 Add failing matrix tests C1..C37 from [configuration policy](contracts/configuration-policy.md), each with a marker-file helper, asserting plan success or the named refusal and an absent marker.
-- [ ] T008 Add mutant tests M1..M5 (drop `-c core.hooksPath`; inherit global config; inherit `GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT`; drop renormalize/autocrlf neutralization; omit the attribute-source scan) that must fail the matrix.
+- [ ] T008 Add mutant tests M1..M7 (drop `-c core.hooksPath`; inherit global config; inherit `GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT`; drop renormalize/autocrlf neutralization; omit the attribute-source scan; inherit `HOME`/`XDG_CONFIG_HOME` or drop `GIT_ATTR_NOSYSTEM`; ignore `info/attributes`) that must fail the matrix.
 - [ ] T009 Implement the planning environment and the admission-read classification (neutralize versus refuse) and the plan `ConfigNote` records; pass T007 and T008.
 - [ ] T010 Add failing apply tests: hook-configured repository plans but apply refuses ref deletion naming the key class; submodule-present retirement retains; existing refusals unchanged.
 - [ ] T011 Implement the apply-side refusal and the plan `apply_effect` note; pass T010.
