@@ -16,7 +16,7 @@ stw tidy plan [PATH] --contract 3 --base REF ... [--report-dir ABS] [--consolida
 
 ## Entry selection and order
 
-Entries omitted by the entry bound or whose commits or diff were truncated by a bound cannot be cleared by a decision (raise the `--report-max-*` bounds and re-plan); see the [decisions contract](decisions.md).
+Entries omitted by the entry bound or whose commits or diff were truncated by a bound cannot be cleared by a decision (split the review per `--ref` or per named consolidation range, or raise the overridable `--report-max-*` bounds up to their ceilings; the per-entry commit, line and file bounds are fixed, see the spec's Known limits); see the [decisions contract](decisions.md).
 
 Every `needs-review` ref, ordered by full ref name, up to 256 entries; the remaining are listed by name and reasons only with the omitted count. `retained` refs appear only in the summary with `clearable: false`.
 
@@ -27,7 +27,7 @@ Per branch, in this order:
 1. Header: ref name, tip OID, base selector and OID, merge base, reasons (names from the [reason table](integration-proofs.md#review-reasons)), suggested verdict and confidence.
 2. Commits: OID (12 chars), subject (at most 200 bytes, escaped), author name, date; at most 50, then `... N more commits`.
 3. Proofs tried: one line per class with outcome and why it failed.
-4. What the base does not yet contain: `git diff U^{tree} R`, except under the merge gate (`merge-driver`, `gitlink-change`, `merge-attribute` or `attribute-source` applies: `merge-tree` is never run, the section shows `git diff M B` labelled "branch against merge base" and the verdict is `unclear`). Otherwise `git diff U^{tree} R`, where `R` is the result tree printed by `git merge-tree --write-tree --no-messages U B` (also for a conflicting merge: the tree with conflict markers, with the conflicted paths listed). Render as a fenced diff block. A binary path is shown as "binary file changed", old and new blob OIDs and sizes, no content (decided by `git --attr-source=<tip tree> diff-tree --numstat` printing `-`). Every changed path is listed with its file type and old to new mode (`regular -> executable`, `file -> symlink`, `gitlink: submodule pointer OLD -> NEW`); a mode-only change is listed as "mode only"; a symlink or type change is flagged. When the diff is empty under `-w` but not without, the section states "whitespace-only difference" and renders tab as `→`, trailing space as `·`, CR as `␍`. Truncated at 64 KiB, 1,000 lines or 16 files with a line `truncated: shown N of M files, K of L lines`.
+4. What the base does not yet contain: `git diff-tree -p --no-ext-diff --no-textconv U^{tree} R` (plumbing), except under the merge gate (`merge-driver`, `gitlink-change`, `merge-attribute` or `attribute-source` applies: `merge-tree` is never run, the section shows `git diff-tree -p --no-ext-diff --no-textconv M B` (plumbing) labelled "branch against merge base" and the verdict is `unclear`). Otherwise `git diff-tree -p --no-ext-diff --no-textconv U^{tree} R` (plumbing), where `R` is the result tree printed by `git merge-tree --write-tree --no-messages U B` (also for a conflicting merge: the tree with conflict markers, with the conflicted paths listed). Render as a fenced diff block. A binary path is shown as "binary file changed", old and new blob OIDs and sizes, no content (decided by `git --attr-source=<tip tree> diff-tree --numstat` printing `-`). Every changed path is listed with its file type and old to new mode (`regular -> executable`, `file -> symlink`, `gitlink: submodule pointer OLD -> NEW`); a mode-only change is listed as "mode only"; a symlink or type change is flagged. When the diff is empty under `-w` but not without, the section states "whitespace-only difference" and renders tab as `→`, trailing space as `·`, CR as `␍`. Truncated at 64 KiB, 1,000 lines or 16 files with a line `truncated: shown N of M files, K of L lines`.
 5. Candidate base commits: up to 5 commits on the base side with the same default patch-id or the same subject, with the match kind.
 6. Range pairing when `--consolidation-range` is named (skipped with the note `range pairing skipped: textconv or diff attribute` when any `diff.*.textconv` is configured or `diff-attribute` applies, because `git range-diff` runs textconv helpers): rows `= ! < >` with branch and range commit abbreviations (up to 256), evidence label `superseded-candidate`.
 7. Questions: the fixed list below.
@@ -41,13 +41,14 @@ Per branch, in this order:
 | `summary` | object | `entries`, `omitted`, counts per bucket (`proven`, `needs_review`, `retained`) and per reason |
 | `base` | object | `selector`, `oid` |
 | `entries[]` | array | one per entry, below |
-| `entries[].branch` | string | full ref name |
+| `reviewer_guidance` | string | fixed text (see Untrusted content) |
+| `entries[].branch` | untrusted object `{untrusted: true, text}` | full ref name |
 | `entries[].tip_oid`, `base_oid`, `merge_base_oid` | string | full OIDs |
 | `entries[].reasons[]` | enum | review reasons |
-| `entries[].commits[]` | array | `oid`, `subject`, `author`, `date`; `truncated` marker `{shown,total}` |
+| `entries[].commits[]` | array | `oid`, `subject` (untrusted object), `author` (untrusted object), `date`; `truncated` marker `{shown,total}` |
 | `entries[].proofs_tried[]` | array | `class`, `outcome`, `why` |
-| `entries[].unintegrated_diff` | object | `stat` (`files`,`insertions`,`deletions`), `conflicted_paths[]`, `whitespace_only`, `binary_files[]` (`path`, `old_blob`, `new_blob`, `old_size`, `new_size`), `files[]` (`path`, `old_mode`, `new_mode`, `type_change` (for example `regular->executable`), `kind` (`content`, `mode-only`, `symlink`, `gitlink`, `binary`), for gitlinks `old_oid`, `new_oid`), `hunks[]` (`file`, `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]`), `truncated` (`{unit,shown,total}` or null) |
-| `entries[].candidate_base_commits[]` | array | `oid`, `subject`, `match` (`patch-id`, `subject`) |
+| `entries[].unintegrated_diff` | object | `stat` (`files`,`insertions`,`deletions`), `conflicted_paths[]`, `whitespace_only`, `binary_files[]` (`path` (untrusted object), `old_blob`, `new_blob`, `old_size`, `new_size`), `files[]` (`path` (untrusted object), `old_mode`, `new_mode`, `type_change` (for example `regular->executable`), `kind` (`content`, `mode-only`, `symlink`, `gitlink`, `binary`), for gitlinks `old_oid`, `new_oid`), `hunks[]` (`file` (untrusted object), `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]` (untrusted objects)), `truncated` (`{unit,shown,total}` or null) |
+| `entries[].candidate_base_commits[]` | array | `oid`, `subject` (untrusted object), `match` (`patch-id`, `subject`) |
 | `entries[].range_pairing` | object or null | `range`, `pairs[]` (`status`, `branch_commit`, `range_commit`), `truncated` |
 | `entries[].suggested_verdict` | object | `verdict`, `confidence`, `basis[]` |
 | `entries[].questions[]` | array | fixed template ids and text |
@@ -65,12 +66,15 @@ Deterministic, in order: (0) any of `merge-driver`, `gitlink-change`, `merge-att
 
 ## Command bounds
 
+Every report git command runs under the planning environment, the `planningConfigArgs` and the output constants of the configuration policy; tests include a signed commit with `log.showSignature=true` and a helper `gpg.program` (marker absent) and a `diff.<d>.command`/`diff.external` helper under the merge gate (marker absent).
+
 Same grammar rules as the proof table; each with a bound test (at the bound accepted, one over refused, SHA-1 and SHA-256 widths).
 
 | Command | Max records | Max bytes |
 | --- | --- | --- |
 | `log -n 50 --format=%H%x00%s%x00%an%x00%aI` | 50 | 50 x 4,224 |
 | `diff-tree -p U^{tree} R` (no ext diff, no textconv, `--binary` off) | opaque | 1 MiB read, 64 KiB rendered |
+| `diff-tree -p --no-ext-diff --no-textconv M B` (merge gate, plumbing, same flags and bounds as the other diff streams) | opaque | 1 MiB read, 64 KiB rendered |
 | `diff-tree --numstat -r -z U^{tree} R` | 8,192 | 34,603,008 |
 | `diff-tree -r --raw --no-renames --no-abbrev U^{tree} R` (modes) | 8,192 | 34,603,008 (8,192 x 4,224) |
 | candidate commit lookup (`log` over `M..U` limited to the patch-id and subject matches already computed) | 5 per entry | 5 x 4,224 |
