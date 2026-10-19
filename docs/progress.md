@@ -17,6 +17,16 @@ exact integrated SHA, which differs from the reviewed fold tips), T047 (candidat
 install, which needs separate owner approval) and T048/T049 (fresh real-repository acceptance).
 Windows and Darwin remain unverified here.
 
+## Active work: Spec 030 PR status (design only, runtime held)
+
+Only the Spec 030 design and specification documents are on this branch
+([spec](../specs/030-pr-status/spec.md)). The third design review is NOT CLEAR and the
+spec blocks implementation, so the two runtime commits (typed PR lifecycle model and decoder,
+then one-shot observation assembly under `internal/hosting/pr_status_*`) are not here. They are
+preserved, unmerged, on the branch `codex/hold-spec030-runtime` and are held pending an
+independent Spec 030 design CLEAR and the owner disposition recorded in
+[round 3](../specs/030-pr-status/round3-disposition.md). The feature stays `planned`.
+
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 
 The Git inventory reads large outputs incrementally, degrades to partial results with verbatim disclosures instead of `git-inventory-failed` for repositories of thousands of files or hundreds of tags, describes submodule and separate-Git-directory checkouts by their files and reports `tracked: true` for ordinary changes in gitlink-bearing superprojects. Schema v1 is byte-unchanged; the Spec 023 `stw repos` tests, goldens and texts that pinned the old limits were updated with it. Evidence and what was not run (hosted CI, binary acceptance, Git 2.46.0, jj) are in [verification](../specs/027-inventory-limits/verification.md); the feature stays `planned` until then.
