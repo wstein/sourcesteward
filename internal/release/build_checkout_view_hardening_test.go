@@ -2,7 +2,9 @@
 package release
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -92,5 +94,94 @@ func TestBuildViewCaptureRefusesFinalComponentSwappedForSymlink(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("capture accepted a final component swapped for a symlink")
+	}
+}
+
+// Mode is part of the identity. A directory edge is compared by identity alone
+// (no ctime), so a chmod-only change of an ancestor is refused only through Mode.
+func TestBuildViewIdentityIncludesModeBits(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "ancestor")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatal("fixture changed the inode")
+	}
+	if sameBuildViewIdentity(before, after) {
+		t.Fatal("identity ignores a chmod-only change")
+	}
+	if !sameBuildViewIdentity(before, before) {
+		t.Fatal("identity differs from itself")
+	}
+}
+
+func TestBuildViewValidateRefusesChmodOnlyAncestorChange(t *testing.T) {
+	base := t.TempDir()
+	ancestor := filepath.Join(base, "ancestor")
+	if err := os.Mkdir(ancestor, 0700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(ancestor, "index")
+	if err := os.WriteFile(file, []byte("captured"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	binding, err := captureBuildViewPath(context.Background(), file, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer binding.Close()
+	if err := binding.validate(); err != nil {
+		t.Fatalf("unchanged binding refused: %v", err)
+	}
+	if err := os.Chmod(ancestor, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := binding.validate(); err == nil {
+		t.Fatal("chmod-only change of a bound ancestor accepted")
+	}
+}
+
+// Cancellation must SIGKILL the whole owned group and return promptly. The
+// helper sleeps for an hour, so only the kill can end it: a missing kill fails
+// here with a message instead of hanging until the package timeout.
+func TestBuildViewSupervisorKillsOwnedGroupWithinDeadline(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pidCh := make(chan int, 1)
+	type outcome struct {
+		err error
+	}
+	done := make(chan outcome, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	go func() {
+		_, _, e := runBuildViewNative(ctx, buildViewCommand{Executable: binary, Dir: t.TempDir(), Env: []string{"STW_BUILD_VIEW_NATIVE_TEST=wait", "GORACE=atexit_sleep_ms=0"}}, &bytes.Buffer{}, buildViewNativeHooks{started: func(pid int) { pidCh <- pid }})
+		done <- outcome{e}
+	}()
+	pid := <-pidCh
+	defer func() { _ = syscall.Kill(-pid, syscall.SIGKILL) }() // never leak the sleeper if the assertion fails
+	select {
+	case o := <-done:
+		if !errors.Is(o.err, context.DeadlineExceeded) {
+			t.Fatalf("canceled group returned %v, want the deadline error", o.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the supervisor did not SIGKILL the owned process group within 5s of cancellation")
+	}
+	if err := syscall.Kill(-pid, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("owned process group %d still exists after return: %v", pid, err)
 	}
 }
