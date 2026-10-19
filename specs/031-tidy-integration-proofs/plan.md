@@ -50,7 +50,7 @@ The range-diff evidence aid for consolidated work (99 branches in the measuremen
 
 ### Decision: forge-free budget
 
-The 60-second forge-free proof deadline is its own budget, separate from the online 30-second deadline; planning offline uses only the former.
+The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 s). Arithmetic, amended in Spec 029's contract amendments: offline plan 10 + 60 = 70 s; online plan 10 + 60 + 30 = 100 s; apply 60 s unchanged.
 
 ## Phases
 
@@ -70,6 +70,7 @@ The 60-second forge-free proof deadline is its own budget, separate from the onl
 | Empty-net-change branch | `B^{tree} != M^{tree}` precondition |
 | Grafts/shallow/replace refs fake history | retain or ignore with notes (FR-010) |
 | Submodule opened by merge engine | gitlink-difference pre-check |
+| `merge=union`/`binary` attributes fake a clean merge | refuse `merge-noop` when any merge attribute source defines it; `--attr-source` pin |
 | Patch-id of huge diffs is slow | commit-count bounds, aggregate deadline, retain on exhaustion |
 | Neutralization hides a real hook problem at apply | apply refuses hook-running effects; plan says non-appliable |
 | Rebase onto a corrected stage2 moves code | spec paths marked to confirm; only new files here |
@@ -78,7 +79,7 @@ The 60-second forge-free proof deadline is its own budget, separate from the onl
 ## Decisions made as conservative defaults (revisable by the owner)
 
 1. Default deletion proofs `ancestor`, `merge-noop`; `patch-id` evidence only; `patch-exact` opt-in.
-2. Bounds 1,024 branch-side and 4,096 base-side commits, 60 s forge-free deadline separate from the online 30 s.
+2. Bounds 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase separate from the online 30 s, with totals 70 s offline and 100 s online (amended in Spec 029).
 3. No second discovery endpoint; report `truncated`.
 4. Plan-only acceptance by source test runner; any CLI build stays an owner gate.
 5. Range-diff aid is a later Spec.

@@ -4,7 +4,7 @@ Subordinate to the [specification](../spec.md) FR-019..FR-023.
 
 ## Planning environment
 
-One constant argument list `planningConfigArgs`, used by planning and by apply re-evaluation (a test asserts equality): `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c core.untrackedCache=false -c merge.renormalize=false -c merge.renames=true -c merge.directoryRenames=conflict -c merge.renameLimit=1000 -c diff.renames=true -c diff.renameLimit=1000 -c core.autocrlf=false -c gc.auto=0 -c maintenance.auto=false -c protocol.ext.allow=never`, with `--no-optional-locks`, `--no-replace-objects`. Environment: the existing sandbox environment with no inherited `GIT_*` override (explicitly including `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER`, `GIT_ASKPASS`), `GIT_CONFIG_NOSYSTEM=1`, global configuration replaced by an empty private file for content-evaluating commands, `GIT_NO_LAZY_FETCH=1`, `GIT_TERMINAL_PROMPT=0`. One admission read lists effective configuration with origins (global and system included) for classification and notes; it runs no helper.
+One constant argument list `planningConfigArgs`, used by planning and by apply re-evaluation (a test asserts equality): `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c core.untrackedCache=false -c merge.renormalize=false -c merge.renames=true -c merge.directoryRenames=conflict -c merge.renameLimit=1000 -c diff.renames=true -c diff.renameLimit=1000 -c core.autocrlf=false -c gc.auto=0 -c maintenance.auto=false -c protocol.ext.allow=never`, with `--no-optional-locks`, `--no-replace-objects`. Environment: the existing sandbox environment with no inherited `GIT_*` override (explicitly including `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER`, `GIT_ASKPASS`), `GIT_CONFIG_NOSYSTEM=1`, global configuration replaced by an empty private file for content-evaluating commands, `GIT_NO_LAZY_FETCH=1`, `GIT_TERMINAL_PROMPT=0`. For `merge-noop`, `merge` attributes from every source are checked (spec FR-010a) and `--attr-source=U^{tree}` is passed. One admission read lists effective configuration with origins (global and system included) for classification and notes; it runs no helper.
 
 Why these keys change (versus Spec 029's blanket refusal): only `core.hooksPath`, `core.fsmonitor` and `submodule.*` become neutralized, because no read-only planning command runs hooks, fsmonitor or `git submodule` and the arguments disable them on every command (the precedent in inventory and release reads). `hook.*` and `core.attributesFile` stay refused (a command-line `core.hooksPath` does not neutralize config-based hooks; attributes change content evaluation). The default `.git/hooks` fingerprint stays bound into the safety digest.
 
@@ -19,9 +19,10 @@ Disposition values: **neutralized** (plan succeeds, plan note), **proof-not-eval
 | default executable `.git/hooks/*` | fingerprint retained, noted | refuses a hook-running effect |
 | `core.fsmonitor` | neutralized | status checks neutralized, noted |
 | `submodule.*` | neutralized | retirement retains `submodule-present` |
-| `core.pager`, `core.editor`, `core.sshCommand`, `credential.*`, `gpg.*`, `core.askPass` | unreachable, noted | unchanged |
+| `core.pager`, `core.editor`, `core.sshCommand`, `core.askPass`, `credential.*`, `gpg.*` | neutralized (never invoked, environment stripped), noted when set | unchanged |
 | `diff.external`, `diff.<d>.textconv` | neutralized (`--no-ext-diff --no-textconv`) | unchanged |
 | executable `filter.*`, `merge.*.driver` | `merge-noop` proof-not-evaluated | existing stage2 behavior retained |
+| any `merge` attribute (`merge`, `-merge`, `merge=union`, macro `binary`) in `.gitattributes` of the `U`, `B` or `M` trees or in `info/attributes` | `merge-noop` proof-not-evaluated, class `merge-attributes-present` | re-evaluation reads the same sources and retains |
 | sentinel `filter.unspecified|unset|set.*` | refused | refused |
 | `include.path` | evaluated by Git, classified by effective keys | same |
 | `includeIf.*` | refused | refused |
@@ -43,7 +44,12 @@ Each row is a temporary-repository fixture; hook, filter, driver, pager and simi
 | C4 | `submodule.recurse=true` | neutralized | unchanged |
 | C5 | `core.fsmonitor=helper` | neutralized | status neutralized |
 | C6 | `filter.x.clean=helper` with matching attribute | `merge-noop` not-evaluated, other proofs run | stage2 behavior |
-| C7 | `merge.x.driver=helper` with matching attribute | `merge-noop` not-evaluated | stage2 behavior |
+| C7 | `merge.x.driver=helper` with matching attribute | `merge-noop` not-evaluated (`git-unsafe-configuration`) | stage2 behavior |
+| C28 | union repro: branch deletes a line the base changed, `merge=union` in `info/attributes` | `merge-attributes-present`, not proven although `merge-tree` would exit 0; control without the attribute: exit 1, `conflict` | re-evaluation retains |
+| C29 | same repro with `merge=union` in an in-tree `.gitattributes` of the base only, the branch only, the merge base only | each `merge-attributes-present` | same |
+| C30 | `* binary` macro, `-merge` or `merge=binary` | `merge-attributes-present` | same |
+| C31 | user macro `[attr]m merge=union` used by a path | `merge-attributes-present` | same |
+| C32 | clean tree without merge attributes (other attributes such as `text`, `eol` allowed) | `merge-noop` evaluates and can prove; a checked-out worktree `.gitattributes` with `merge=union` is ignored by `--attr-source` | same sources, same result |
 | C8 | `diff.external=helper`, `diff.x.textconv=helper` | neutralized, all proofs run | unchanged |
 | C9 | `includeIf` | refused, class named | refused |
 | C10 | `extensions.partialclone` | refused | refused |
@@ -68,3 +74,4 @@ Each row is a temporary-repository fixture; hook, filter, driver, pager and simi
 | M2 | mutant: inherit global config | C2 must fail | n/a |
 | M3 | mutant: inherit `GIT_CONFIG_PARAMETERS` / `GIT_CONFIG_COUNT` with a hooksPath value | C1 must fail | n/a |
 | M4 | mutant: drop `merge.renormalize=false` or `core.autocrlf=false` | a renormalizing fixture changes `merge-noop` and must fail | n/a |
+| M5 | mutant: omit the attribute-source scan or `--attr-source` | C28..C31 must fail | n/a |
