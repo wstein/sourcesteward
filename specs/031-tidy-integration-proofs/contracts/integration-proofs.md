@@ -13,6 +13,10 @@ Subordinate to the [specification](../spec.md) FR-001..FR-012. `U` base OID, `B`
 
 Every command runs under the planning environment and argument list of the [configuration policy](configuration-policy.md), with `git --attr-source=<tree>` pinned as stated, and with the private object directory below. Git semantics: `patch-id` is git's default stable patch-id (the semantics of `git cherry`, whitespace-insensitive); `--verbatim` preserves whitespace; both hash a binary patch (`--binary`) by content. Measured on Git 2.47.3 and 2.56.0: two different binary changes to one path give different patch-ids, and the same binary change gives `-` in `git cherry`; so a binary change never matches on path alone.
 
+## File types and modes
+
+Modes come from `git --attr-source=<tip tree> diff-tree -r --raw --no-renames` (100644 regular, 100755 executable, 120000 symlink, 160000 gitlink, 040000 tree). Measured on Git 2.47.3 and 2.56.0: `git patch-id` (default and verbatim) and `git cherry` distinguish a mode-only change (its patch-id is non-empty and differs from a content change and from no change), give equal ids for equal mode flips, differ between the flip directions and files, and differ between symlink retargets (`a` to `b` versus `a` to `c`) and between a symlink-to-file type change and a retarget. No extra match rule is therefore needed; the tests assert it (executable bit flip, symlink retarget, gitlink bump) and that a mode-only change is never silently treated as integrated. If a later Git version stops distinguishing them, the fallback is to compare the `diff-tree --raw` mode column of the matched commits.
+
 ## Review reasons
 
 The single definition of every reason; spec, report, data model and tests use these names only. "Clearable" means a reviewer decision may clear it; hard stops are not clearable.
@@ -24,7 +28,7 @@ The single definition of every reason; spec, report, data model and tests use th
 | `multiset-mismatch` | for some patch-id the base-side count is lower than the branch-side count | `patch-id` | yes |
 | `merge-commits-in-range` | any merge commit in `M..B` | `patch-id` | yes |
 | `ambiguous-merge-base` | `merge-base --all` returns more than one | `patch-id`, `merge-noop`, `no-net-change` | yes |
-| `gitlink-change` | a mode-160000 path differs in `M..B` or `M..U` | `merge-noop` | yes |
+| `gitlink-change` | a mode-160000 path differs in `M..B` or `M..U`, or in the unintegrated change of the report | `merge-noop`, report | yes |
 | `would-add-content` | `merge-tree` is clean with a tree different from `U^{tree}` | `merge-noop` | yes |
 | `conflict` | `merge-tree` exits 1 | `merge-noop` | yes |
 | `attribute-source` | `$GIT_DIR/info/attributes` (common git directory) is a symlink, a special file, over 1 MiB or has any non-blank, non-comment line | `patch-id`, `merge-noop` | yes |
