@@ -1,22 +1,34 @@
 # Data model additions (unpublished v3 result and plan)
 
-All additions are optional-additive within the unpublished v3 schema defined by Spec 029; v1/v2 schemas are untouched.
+All additions are additive within the unpublished v3 schema defined by Spec 029; v1/v2 schemas are untouched.
 
 ## ProofEvidence (per distinct tip OID)
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `kind` | enum `ancestor`, `patch-exact`, `merge-noop`, `patch-id`, `no-net-change`, `github-merged-head` | FR-001 |
-| `strength` | enum `ancestry`, `content-present`, `exact-patch-history`, `history-equivalent`, `modulo-whitespace`, `nothing-unmerged`, `forge-attested` | derived from kind |
-| `classification` | enum `proven`, `partial`, `would-add-content`, `conflict`, `no-net-change`, `whitespace-significant-difference`, `merge-commits-in-range`, `not-evaluated` | `proven` only per FR-002..004 |
+| `class` | enum `ancestor`, `patch-id`, `merge-noop`, `no-net-change`, `github-merged-head`, `reviewed-integrated`, `reviewed-drop` | FR-001 |
+| `strength` | enum `ancestry`, `history-equivalent`, `content-present`, `nothing-unmerged`, `forge-attested`, `reviewer-decision` | derived from class |
+| `disposition` | enum `proven`, `needs-review`, `retained` | FR-001, FR-031 |
+| `reasons` | array of the closed reason enum of the [reason table](contracts/integration-proofs.md#review-reasons) | non-empty iff `needs-review` or `retained` |
+| `flags` | array, `whitespace-differs` or `accepted-whitespace-differences` | patch-id |
 | `base_selector`, `base_oid`, `tip_oid` | string | full OIDs |
-| `matched`, `unmatched`, `empty`, `skipped_merges` | integer >= 0 | patch kinds only; patch classes require 0 |
-| `subclass` | enum `integrated-modulo-whitespace` or null | `patch-id` with verbatim mismatch |
-| `whitespace_significant_paths` | array of at most 16 paths | present iff `whitespace-significant-difference` |
-| `not_evaluated_reason` | enum `proof-limit`, `proof-budget-exhausted`, `git-unsafe-configuration`, `object-dir-unavailable`, `unsupported-metadata`, `merge-attributes-present`, `info-attributes-present`, `diff-driver-attribute`, `history-override`, `ambiguous-merge-base`, `gitlink-change` | present iff `not-evaluated` |
+| `matched`, `unmatched`, `empty`, `skipped_merges` | integer >= 0 | patch-id only; `matched + unmatched + empty` equals evaluated non-merge branch-side commits (multiset counts) |
 | `refs` | array of full ref names | every selected ref with this tip |
+| `decision` | Decision or null | FR-040 |
 
-Invariants: `matched + unmatched + empty` (multiset counts per digest) equals the evaluated non-merge branch-side commits; `proven` for `patch-exact` and `patch-id` requires `unmatched = 0` and `matched >= 1`; `no-net-change` is proven only with equal trees and is never reported as integrated; the journal entry stores branch, tip OID, class, strength and subclass; the headline kind is the strongest `proven` entry; a ref in a protected class carries evidence but its disposition stays retained.
+Invariants: `proven` for `patch-id` requires `unmatched = 0`, `matched >= 1`, `skipped_merges = 0` and no reasons (a `whitespace-differs` flag is deletable only with `--accept-whitespace-differences` or a decision); `no-net-change` is never reported as integrated; a ref in a protected class or with a hard stop is `retained` with evidence; the journal entry stores branch, tip OID, class, flags and, for decisions, reviewer, kind, decision and reason.
+
+## ReviewSummary (plan result)
+
+Counts per disposition and per reason; `report_written` boolean; `entries`, `omitted`.
+
+## Report and ReportEntry
+
+As defined in the [review report contract](contracts/review-report.md): `schema_version`, `summary`, `base`, `entries[]` with `branch`, `tip_oid`, `base_oid`, `merge_base_oid`, `reasons`, `commits`, `proofs_tried`, `unintegrated_diff`, `candidate_base_commits`, `range_pairing`, `suggested_verdict`, `questions`, `allowed_decisions`. Truncation markers are `{unit, shown, total}`. Candidate JSON schema validated by tests, unpublished.
+
+## Decision
+
+`branch`, `tip_oid`, `decision` (`integrated`, `keep`, `drop`), `reason`, `reviewer`, `kind` (`human`, `ai`); bounds in the [decisions contract](contracts/decisions.md). Recorded in the plan and journal with `applied` (boolean) and the note (`stale-decision`, `decision-not-applicable`) when ignored.
 
 ## DiscoveryRecord (online)
 
@@ -24,8 +36,8 @@ Invariants: `matched + unmatched + empty` (multiset counts per digest) equals th
 
 ## ConfigNote (plan level)
 
-`key_class` (closed set from the [configuration policy](contracts/configuration-policy.md)), `disposition` (`neutralized`, `proof-not-evaluated`, `refused`, `retained`), `digest` (SHA-256 of the sanitized key/value records, no values stored beyond class), `apply_effect` (`none`, `refuses-apply`).
+`key_class` (closed set from the [configuration policy](contracts/configuration-policy.md)), `disposition` (`neutralized`, `review-reason`, `hard-stop`, `refused`, `retained`), `digest` (SHA-256 of the sanitized key/value records, no values stored beyond class), `apply_effect` (`none`, `refuses-apply`).
 
 ## Plan binding
 
-The plan identity includes proof policy version, the selected proof kinds, the discovery coverage and the neutralized configuration digest.
+The plan identity includes proof policy version, the selected proof kinds, `--accept-whitespace-differences`, the decision file digest, the discovery coverage and the neutralized configuration digest.

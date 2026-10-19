@@ -6,13 +6,13 @@
 | --- | --- |
 | Local branches / worktrees | 149 / 111 (131 non-main branches evaluated) |
 | merge-noop (`merge-tree --write-tree` clean, tree equals base tree) | 5 |
-| patch-id equivalent (measured with `git cherry`, which erases all whitespace; the Spec uses a narrower normalized digest, re-measured by T031), overlapping merge-noop | 21 |
+| patch-id equivalent (measured with `git cherry`, which erases all whitespace; the Spec uses the same git patch-id with a visible whitespace flag, re-measured by T040), overlapping merge-noop | 21 |
 | Clean merge that would add content | 33 |
 | Conflict with base | 99 |
 | Offline v3 `integration-not-proven` | 93 of 149 |
 | Per-commit cherry-pick simulation: commits that conflict | 1,087 of 1,750 |
 
-The measurement scripts are not committed; task T029 re-measures with a recorded command list, running every `merge-tree` with a private object directory, so the numbers are reproducible evidence rather than a claim.
+The measurement scripts are not committed; task T039 re-measures with a recorded command list, running every `merge-tree` with a private object directory, so the numbers are reproducible evidence rather than a claim.
 
 ## Rejected: per-commit cherry-pick simulation
 
@@ -21,19 +21,15 @@ Replaying each commit of `M..B` onto the base conflicts for 1,087 of 1,750 commi
 ## Why these classes
 
 - `ancestor` is exact but misses every rewrite (rebase-merge, squash-merge).
-- `patch-id` (`git cherry`) recognizes rebased commits and is order independent and forge-free, but it ignores whitespace (reproduced on Git 2.56: an indented call inside a Python block matched a base commit that does not indent it), shows an empty commit as `+` with no counterpart on the base (observed) and cannot see squash-merge or whether the change is still present. The Spec keeps it as a default proof guarded by whitespace significance (Python-like files retain, others delete as `integrated-modulo-whitespace`); `patch-exact` uses `git patch-id --verbatim`, which keeps whitespace and ignores only hunk line numbers, and classifies exactness.
-- A branch with no net change (added and reverted work) merges cleanly to the base tree but was never integrated; it has nothing unmerged, so it is its own deletable class `no-net-change`, not `merge-noop`.
-- `merge-noop` (with that precondition) recognizes rebase-merge and squash-merge whose content landed unchanged, and present content only. A branch whose changes were later modified on the base conflicts or would add content and is not proven.
+- `patch-id` is git's own default patch-id (the semantics of `git cherry`): it recognizes rebased commits, is order independent and forge-free. It ignores whitespace (reproduced on Git 2.56: an indented call inside a Python block matched a base commit that does not indent it; `rm -rf "$D" /` matches `rm -rf "$D"/`), so a verbatim comparison from the same git (`patch-id --verbatim`) raises the visible flag `whitespace-differs`, which needs review instead of any custom normalization. It shows an empty commit as `+` with no counterpart on the base (observed), so empty commits are counted separately. Binary changes are hashed by content (`--binary`): measured on Git 2.47.3 and 2.56.0, two different binary changes to one path gave different patch-ids and the same change gave `-` in `git cherry`.
+- `merge-noop` recognizes rebase-merge and squash-merge whose content landed unchanged, and present content only. It also proves reformatting-only branches when the base already contains the final content.
+- A branch with no net change (added and reverted work) merges cleanly to the base tree but was never integrated; it has nothing unmerged, so it is its own deletable class `no-net-change`.
 
-Neither is a heuristic: both are deterministic Git computations with defined refusals. Nothing else is accepted.
+Everything else (the 99 consolidated branches) is not provable forge-free. Rounds 3 to 7 of review explored custom normalized digests, whitespace-significant file lists and binary-by-attribute classification; the owner decided that this is over-engineering for an edge case. The Spec instead flags, reports and lets a reviewer clear, and documents residual risks under Known limits.
 
-## Object writes by merge-tree
+## Why a review report and decisions
 
-`git merge-tree --write-tree` writes the merged tree (and conflict blobs) into the object database. A read-only planner must not leave objects in the inspected repository, so the Spec requires a private temporary object directory with the repository as an alternate. This is checked by byte comparison of the object directory before and after.
-
-## Configuration execution surface
-
-Hooks run for mutating commands; `core.fsmonitor` hooks run for status-like commands; filters, textconv and merge drivers run when attributes name a configured driver during content evaluation; `submodule.<name>.update=!cmd` runs only on `git submodule update`, which tidy never runs. Existing code already neutralizes `core.hooksPath` and `core.fsmonitor` for inventory and release reads with `-c`, which is the precedent for FR-019. Spec 029's safety collector instead refuses any `submodule.*` key and `core.hooksPath`, which is the behavior #79 reports; the refusal is correct for apply (hooks would run) and over-broad for read-only planning.
+The cost of a wrong local-branch deletion is bounded by the recovery ref, so the valuable work is making the judgment cheap: one readable diff of what the base does not yet contain, the evidence that failed, and a machine-readable rendering an AI can evaluate. A decision file makes the verdict an explicit, attributable input (who, what, why) bound to the exact tip OID, and apply still needs owner authorization.
 
 ## Merge engine side effects
 

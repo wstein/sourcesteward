@@ -1,20 +1,20 @@
-# Implementation Plan: Tidy integration proofs, PR discovery and bounded planning
+# Implementation Plan: Tidy integration proofs, review report and bounded planning
 
 **Branch**: `codex/spec-tidy-integration-proofs` | **Date**: 2026-10-19 | **Spec**: [spec.md](spec.md)
 **Status**: Plan candidate, not independently reviewed. Baseline: Spec 029 source at `417c42e03a3842c9a2e63c16d94f16614431eaff` (stage2-final); it will be rebased onto a corrected stage2 and every source path below must be re-confirmed by T002.
 
 ## Summary
 
-Five slices over the existing contract 3 code, none adding an effect class: (A) bounded streaming reads, (B) configuration policy, (C) forge-free proofs (all five classes by default with the whitespace guard), (D) PR discovery per distinct OID, (E) real-repository plan-only acceptance. It also amends Spec 029's patch-similarity rule in `contract-amendments.md`. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes.
+Six slices over the existing contract 3 code, none adding a repository write effect: (A) bounded streaming reads, (B) configuration policy, (C) simple forge-free proofs (`ancestor`, git `patch-id`, `merge-noop`, `no-net-change`, with `whitespace-differs` flag and review reasons), (D) PR discovery per distinct OID, (E) review report and reviewer decisions, (F) real-repository plan-only acceptance. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes. It also amends Spec 029's patch-similarity rule, collection completeness and planning time in `contract-amendments.md`.
 
 ## Constitution check
 
 | Principle | Evidence |
 | --- | --- |
-| I shared human/agent contract | One typed result carries proofs, discovery and config notes; human and JSON agree; offline useful. |
-| II evidence before consequential actions | Proofs and notes bind into the plan; apply re-evaluates; nothing deleted on heuristics (FR-005). |
-| III ownership and recovery | Protected refs retain regardless of proof; recovery roots unchanged; no new effect. |
-| IV specify and verify | Failing tests first for each task; sentinel and mutant killers; independent review gate T001. |
+| I shared human/agent contract | One typed result and one report data set rendered for humans (Markdown) and agents (JSON); offline useful. |
+| II evidence before consequential actions | Proofs, reasons, reports and decisions bind into the plan; apply re-evaluates and needs owner authorization; a decision is never authorization. |
+| III ownership and recovery | Protected refs retain regardless of proof or decision; recovery refs unchanged and their limits stated; no new effect. |
+| IV specify and verify | Failing tests first, golden reports, sentinel and mutant killers; independent review gate T001. |
 | V Tier 1 peers | Git-only proofs; jj/GitButler get no Git writes and no claimed proofs. |
 
 No constitution exception.
@@ -22,69 +22,71 @@ No constitution exception.
 ## Affected source areas (to confirm in T002)
 
 - `specs/029-tidy-dogfood-safety/contract-amendments.md` (the only Spec 029 file touched, documentation only);
-- `internal/workspace/git.go` (`gitSafetyWithPrimary` refusal list, `gitRead` for `for-each-ref`/`worktree list`), `native_sandbox.go` (`sandboxEnvironment`, `nativeOutputLimit`), `native_stream.go` (`executeNativeStream*`), `tidy_v3_proof.go`, `tidy_v3_refs.go`, `tidy_v3_options.go`, `tidy_v3_result.go`; new `tidy_v3_proof_native.go` for merge-noop/patch evidence/patch-exact and a private object-directory helper.
-- `internal/hosting/tidy_evidence_pr.go` (`discoverPRHints` currently keeps `[]tidyPRHint` per OID), `transport.go` route allow-list.
-- `internal/cli` for `--integration-proof` and `--pr` handling; `schemas/v3` candidate; smoke scripts `scripts/smoke-tidy.py` extension for real-binary lanes (owner-gated build).
+- `internal/workspace/git.go` (`gitSafetyWithPrimary` refusal list, `gitRead`), `native_sandbox.go` (`sandboxEnvironment`, `nativeOutputLimit`), `native_stream.go`, `tidy_v3_proof.go`, `tidy_v3_refs.go`, `tidy_v3_options.go`, `tidy_v3_result.go`; new `tidy_v3_proof_native.go` (patch-id, merge-noop, no-net-change, reasons), `tidy_v3_report.go` (data), `tidy_v3_report_render.go` (Markdown and JSON), `tidy_v3_decisions.go`, and a private object-directory helper;
+- `internal/hosting/tidy_evidence_pr.go` (`discoverPRHints`), `transport.go` route allow-list;
+- `internal/cli` for `--integration-proof`, `--accept-whitespace-differences`, `--report-dir`, `--consolidation-range`, `--decisions`, `--pr`; `schemas/v3` candidate plus candidate report and decision schemas; smoke scripts for real-binary lanes (owner-gated build).
 
 ## Decisions
 
 ### Decision: limits (fixes #80)
 
-Options: (1) raise `nativeOutputLimit`; (2) stream v1 reads; (3) document v3 as the supported path. Chosen: **(2)**. Raising a global constant weakens every buffered native read; documenting v3 leaves v1 callers broken at about 146 refs. Streaming reuses `executeNativeStream` (Spec 029 unit A) with record parsing, bounded memory and the Spec 029 constants (1,024 records, 4,224 bytes per record, 4,325,376 stdout and 65,536 stderr bytes per stream). Refusals stay hard: one over the bound refuses with the named limit. 64 KiB remains for non-collection reads. Rationale for the exact numbers: 1,024 equals the existing `observationLimit`; 4,224 x 1,024 is the already reviewed Spec 029 maximum, so no new reviewed arithmetic.
+Stream the v1 reads through `executeNativeStream` with record parsing, bounded memory and the Spec 029 constants (1,024 records, 4,224 bytes per record, 4,325,376 stdout and 65,536 stderr bytes). Raising a global constant weakens every buffered native read; documenting v3 as the only path leaves v1 callers broken. Refusals stay hard.
 
 ### Decision: configuration (fixes #79)
 
-Refuse versus neutralize follows the execution surface (research): refuse what the planning command would execute or cannot evaluate reproducibly; neutralize what is executable only on commands tidy never runs or can disable by command-line configuration. Apply is stricter than plan: it never skips a hook silently. The cost is a plan that says "plannable, not appliable" for hook-configured repositories; that is intentional and visible.
+Refuse what a planning command would execute or cannot evaluate reproducibly; neutralize what only runs in commands tidy never runs or what command-line configuration disables. Apply is stricter than plan and never skips a hook silently. Attribute sources other than the pinned tip tree become review reasons, not refusals.
 
-### Decision: proof strength and defaults
+### Decision: simple proofs, visible flags (owner direction)
 
-Owner direction: deletion rules are not stricter than the real risk, because apply already records a recovery ref and a branch-to-tip journal entry; the recovery covers the tip commit's history only (not the reflog or `branch.<name>.*` configuration), is manual and is local to the clone. Defaults: all five classes eligible (`ancestor`, `patch-exact`, `merge-noop`, `patch-id`, `no-net-change`). `git cherry` patch-ids ignore whitespace (reproduced on Git 2.56), so a whitespace-sensitivity guard replaces blanket strictness: differences beyond indentation, trailing whitespace and CR are unmatched (stw normalizes only those, so token joining never matches); normalized-only matches on whitespace-significant paths (default list in the contract, extendable with `--whitespace-significant`) retain; elsewhere they delete as `integrated-modulo-whitespace` and stay visible. Binary paths (by attribute from the branch tip tree, else NUL content) match only exactly. Merge commits in the range limit proof to ancestor, merge-noop and no-net-change; matching uses multiset counts. `no-net-change` branches have nothing unmerged and are deletable under their own label. Real-risk guards stay: merge attributes, gitlinks, grafts/shallow/alternates, unsafe configuration, bounded output. Non-whitespace reformatting stays retained; the range-diff aid is a later Spec, and `merge-noop` already covers it when the base has the final content. Cost of the relaxation: a patch-equivalent branch whose change was later reverted on the base is deletable, visible as `history-equivalent`, and recoverable within those limits.
+Git's own `patch-id`, `merge-noop` and `no-net-change` are the deletable defaults. Whitespace is a visible flag (`whitespace-differs`) from git's own `--verbatim` comparison, not a normalization or a file list; binary decisions are left to Git (`diff-tree --numstat`) and used only for rendering and for never raising the whitespace flag. Cheap guards that prevent real loss (merge commits in range, partial or multiset mismatch, gitlinks, attribute sources, diff attributes, merge drivers) produce review reasons and report entries. Residual low-probability risks are listed under Known limits instead of becoming rules.
+
+### Decision: review report and decisions in scope
+
+The report and decision file make the judgment cheap for a human and an AI. `git range-diff` pairing against a user-named consolidation range, previously deferred, is in scope as evidence only. Bounded sizes, deterministic ordering and golden fixtures keep it testable. Decisions are bound to the exact tip OID, recorded in plan and journal, and never authorize apply.
 
 ### Decision: discovery endpoint
 
-No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting (T022..T025), and share the Spec 029 online budget (128 requests, 30 s) with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidate endpoints (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment, `incomplete` being the honest result until then (positive evidence stays proof).
-
-### Decision: superseded-candidate evidence aid
-
-The range-diff evidence aid for consolidated work (99 branches in the measurement) becomes its own later Spec. It is not specified, bounded or tasked here.
+No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting, and share the Spec 029 online budget with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidates (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment.
 
 ### Decision: forge-free budget
 
-The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 s). Arithmetic, amended in Spec 029's contract amendments: offline plan 10 + 60 = 70 s; online plan 10 + 60 + 30 = 100 s; apply 60 s unchanged.
+The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 s): offline plan 10 + 60 = 70 s; online plan 10 + 60 + 30 = 100 s; apply 60 s unchanged (amended in Spec 029). The report has its own bounds and is built from data the proofs already computed plus bounded commands.
 
 ## Phases
 
-- **P1 Gate**: independent review of artifacts, baseline characterization and reproduction of #79/#80/#81 as failing tests (T001..T003).
-- **P2 Slice A limits**: streaming reads (T004..T006).
-- **P3 Slice B configuration**: planning environment, matrix, apply retention (T007..T011).
-- **P4 Slice C proofs**: patch-id, merge-noop, order/budget, schema/CLI (T012..T020).
+- **P1 Gate**: independent review, baseline characterization, reproduction of #79/#80/#81 (T001..T003).
+- **P2 Slice A limits** (T004..T006).
+- **P3 Slice B configuration** (T007..T011).
+- **P4 Slice C proofs** (T012..T020).
 - **P5 Slice D discovery** (T021..T026).
-- **P6 Slice E** docs, review, owner-gated build and real-repository acceptance (T027..T034).
+- **P6 Slice E review report and decisions** (T027..T036).
+- **P7 Slice F** docs, review, measurement, owner-gated acceptance (T037..T045).
 
 ## Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| `merge-tree` writes objects | private object directory (FR-009), byte-compare test, alternates refusal |
-| Whitespace-blind patch-id | guard on whitespace-significant paths, `integrated-modulo-whitespace` label, recovery |
-| Empty-net-change branch | own class `no-net-change`, never labelled integrated |
-| Grafts/shallow/replace refs fake history | retain or ignore with notes (FR-010) |
-| Submodule opened by merge engine | gitlink-difference pre-check |
-| `merge=union`/`binary` attributes fake a clean merge | refuse `merge-noop` when any merge attribute source defines it; `--attr-source` pin |
-| Patch-id of huge diffs is slow | commit-count bounds, aggregate deadline, retain on exhaustion |
-| Neutralization hides a real hook problem at apply | apply refuses hook-running effects; plan says non-appliable |
+| `merge-tree` writes objects | private object directory (FR-009), byte-compare test, alternates hard stop |
+| Whitespace-insensitive patch-id | visible `whitespace-differs` flag, report with visible whitespace, opt-in flag or decision |
+| Merge commits hide edits | `merge-commits-in-range` reason |
+| `merge=union`/`binary` attributes fake a clean merge | `merge-attribute` and `attribute-source` reasons, `--attr-source` pin |
+| Grafts/shallow fake history | hard stops |
+| Submodule opened by merge engine | `gitlink-change` pre-check |
+| Page cap hides PRs | coverage `incomplete`, positive evidence kept |
+| Report leaks branch content | only unintegrated diff, 0600, redaction, sensitive-file note |
+| AI or human decision is wrong | exact tip binding, kind marked, recovery ref, never authorization |
 | Rebase onto a corrected stage2 moves code | spec paths marked to confirm; only new files here |
-| Page cap hides PRs | coverage `incomplete`, never absence |
 
-## Decisions made as conservative defaults (revisable by the owner)
+## Decisions made as defaults (revisable by the owner)
 
-1. Default deletion classes: all five, with the whitespace-significance guard and the `no-net-change` class (owner direction).
-2. Bounds 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase separate from the online 30 s, with totals 70 s offline and 100 s online (amended in Spec 029).
-3. No second discovery endpoint; report `incomplete`.
+1. Git patch-id is a default proof; `whitespace-differs` needs `--accept-whitespace-differences` or a decision.
+2. Bounds: 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase, report bounds of FR-035.
+3. No second discovery endpoint; `incomplete` coverage.
 4. Plan-only acceptance by source test runner; any CLI build stays an owner gate.
-5. Range-diff aid is a later Spec.
+5. Range-diff pairing is in scope as evidence only.
 
 ## Open questions
 
-- **OQ-1**: is the default whitespace-significant list (the extended default list in the integration-proofs contract) the right one, for example should `*.rst` or `*.tsv` stay out?
-- **OQ-2**: authorize a named CLI build for the binary acceptance lane (T032), or record it as a gap?
+- **OQ-1**: are the report bounds (256 entries, 64 KiB per diff, 4 MiB per file) right for the 99 conflicting branches, or should the report be split per branch file?
+- **OQ-2**: authorize a named CLI build for the binary acceptance lane (T042), or record it as a gap?
+- **OQ-3**: should `kind: ai` decisions need an extra confirmation flag before they make a ref deletable?
