@@ -31,7 +31,7 @@ func jjLanes(t *testing.T) map[string]string {
 }
 
 func jjEnvironment(home string) []string {
-	return append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+home, "JJ_CONFIG=", "JJ_USER=Test", "JJ_EMAIL=t@example.org", "JJ_TIMESTAMP=2026-01-01T00:00:00Z", "JJ_OP_TIMESTAMP=2026-01-01T00:00:00Z")
+	return append(withoutInheritedGit(os.Environ()), "HOME="+home, "XDG_CONFIG_HOME="+home, "JJ_CONFIG=", "JJ_USER=Test", "JJ_EMAIL=t@example.org", "JJ_TIMESTAMP=2026-01-01T00:00:00Z", "JJ_OP_TIMESTAMP=2026-01-01T00:00:00Z")
 }
 
 func jjRun(t *testing.T, dir, home string, args ...string) (string, error) {
