@@ -53,7 +53,7 @@ func projectExecutionViolations(files map[string]string) []string {
 			}
 		}
 	}
-	sinks := map[string]bool{"BuildRelease": true, "buildRelease": true, "executeBuild": true, "executeSmoke": true, "executePromote": true, "executeLocalVerify": true, "runBuildCommand": true, "projectRunner": true}
+	sinks := map[string]bool{"BuildRelease": true, "buildRelease": true, "executeBuild": true, "executeSmoke": true, "executePromote": true, "executeLocalVerify": true, "runBuildCommand": true, "projectRunner": true, "openBuildCheckoutView": true, "runBuildViewNative": true, "execBuildViewRoute": true, "buildViewExec": true}
 	for fn, names := range owners {
 		for _, name := range names {
 			if strings.HasPrefix(filepath.Base(name), "build") {
@@ -117,7 +117,7 @@ func TestBuildExecutionOnlyReachableFromBuild(t *testing.T) {
 	}
 }
 func TestBuildBoundaryCatchesIndirectAndFunctionValueMutants(t *testing.T) {
-	for _, text := range []string{"func Check(){executeBuild()}", "func Check(){bridge()};func bridge(){executeSmoke()}", "func Plan(){f:=BuildRelease;_ = f}", "func dispatch(){helper()};func helper(){r:=projectRunner{};_ = r}", "var hidden = BuildRelease", "func (*reader) Check(){runBuildCommand()}"} {
+	for _, text := range []string{"func Check(){executeBuild()}", "func Check(){bridge()};func bridge(){executeSmoke()}", "func Plan(){f:=BuildRelease;_ = f}", "func dispatch(){helper()};func helper(){r:=projectRunner{};_ = r}", "var hidden = BuildRelease", "func (*reader) Check(){runBuildCommand()}", "func Verify(){openBuildCheckoutView()}", "func Record(){bridge()};func bridge(){runBuildViewNative()}", "func Dispatch(){f:=execBuildViewRoute;_ = f}", "func Plan(){buildViewExec()}"} {
 		if bad := projectExecutionViolations(map[string]string{"check.go": "package release;" + text}); len(bad) == 0 {
 			t.Fatalf("missed %s", text)
 		}
