@@ -74,4 +74,8 @@ Each row is a temporary-repository fixture; hook, filter, driver, pager and simi
 | M2 | mutant: inherit global config | C2 must fail | n/a |
 | M3 | mutant: inherit `GIT_CONFIG_PARAMETERS` / `GIT_CONFIG_COUNT` with a hooksPath value | C1 must fail | n/a |
 | M4 | mutant: drop `merge.renormalize=false` or `core.autocrlf=false` | a renormalizing fixture changes `merge-noop` and must fail | n/a |
+| C33 | file marked by `* binary` or `*.bin -diff` in the branch tip tree, differing by one byte | retained, `patch-exact` only; identical patch is `patch-exact` | same |
+| C34 | binary by NUL content, no attributes | numstat `-`: verbatim only | same |
+| C35 | text file with `-text` set, differing only by CRLF | treated as binary: retained | same |
+| C36 | `binary` attribute only in the checked-out worktree `.gitattributes`, not in the pinned tree | ignored: path judged by tree and content | same |
 | M5 | mutant: omit the attribute-source scan or `--attr-source` | C28..C31 must fail | n/a |

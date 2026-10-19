@@ -1,6 +1,6 @@
 # Tasks: Tidy integration proofs, PR discovery and bounded planning
 
-**Gate**: all boxes unchecked; this list is a design artifact. Each behavior task starts with an observed failing test (TDD), then the implementation task, then relevant checks. Focused Conventional Commits per task group. No build, release, tag, installation or `apply` on a real repository happens in any task; T030 is a source test runner and T031 and T033 require explicit owner authorization named for that operation.
+**Gate**: all boxes unchecked; this list is a design artifact. Each behavior task starts with an observed failing test (TDD), then the implementation task, then relevant checks. Focused Conventional Commits per task group. No build, release, tag, installation or `apply` on a real repository happens in any task; T030 is a source test runner and T032 and T034 require explicit owner authorization named for that operation.
 
 ## Phase 1: Design gate and baseline
 
@@ -16,7 +16,7 @@
 
 ## Phase 3: Configuration policy (FR-019..FR-023; fixes #79)
 
-- [ ] T007 Add failing matrix tests C1..C32 from [configuration policy](contracts/configuration-policy.md), each with a marker-file helper, asserting plan success or the named refusal and an absent marker.
+- [ ] T007 Add failing matrix tests C1..C36 from [configuration policy](contracts/configuration-policy.md), each with a marker-file helper, asserting plan success or the named refusal and an absent marker.
 - [ ] T008 Add mutant tests M1..M5 (drop `-c core.hooksPath`; inherit global config; inherit `GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT`; drop renormalize/autocrlf neutralization; omit the attribute-source scan) that must fail the matrix.
 - [ ] T009 Implement the planning environment and the admission-read classification (neutralize versus refuse) and the plan `ConfigNote` records; pass T007 and T008.
 - [ ] T010 Add failing apply tests: hook-configured repository plans but apply refuses ref deletion naming the key class; submodule-present retirement retains; existing refusals unchanged.
@@ -25,8 +25,8 @@
 ## Phase 4: Forge-free integration proofs (FR-001..FR-012)
 
 - [ ] T012 Add failing proof-model tests: kinds, strengths, headline ordering, protected refs retain, evidence for `ancestor` unchanged from Spec 029.
-- [ ] T013 Add failing patch tests: three-commit rebase-merge (`patch-exact`, 3 of 3), reordered base side, partial match, merge commits skipped and counted, an empty commit counted `empty` and never matched (`cherry` shows it as `+` with no base counterpart), formatting-only difference in a Go/Markdown file (CRLF, trailing whitespace, indentation) deletable as `integrated-modulo-whitespace`, the Python-`if` indentation case and a configured extra glob retained `whitespace-significant-difference`, import reordering retained unmatched, command-bounds table rows at the bound (accepted) and one over (refused) for SHA-1 and SHA-256 widths including `cherry` 1,024 lines (68,608 bytes), `proof-limit`, malformed lines, ambiguous merge base.
-- [ ] T014 Implement default and verbatim patch-id passes, the `patch-exact`/`patch-id` classes, the whitespace-significance guard and `--whitespace-significant` through fixed argv under the planning environment; pass T012 and T013.
+- [ ] T013 Add failing patch tests: three-commit rebase-merge (`patch-exact`, 3 of 3), reordered base side, multiset counting (add X, revert, add X against a base with add and revert is retained), partial match, a merge commit in `M..B` retained `merge-commits-in-range` unless `merge-noop` proves it, an empty commit counted `empty` and never matched, indentation-only, trailing-whitespace-only and CRLF-only changes in Go/Markdown deletable as `integrated-modulo-whitespace`, the `rm -rf "$D" /` token-joining repro unmatched and retained, the Python-`if` indentation case, an extra configured glob and each default-list entry retained `whitespace-significant-difference`, binary rows C33..C36 (by attribute, by NUL content, `-text`, worktree-only attribute), import reordering retained, command-bounds table rows at the bound (accepted) and one over (refused) for SHA-1 and SHA-256 widths, `proof-limit`, malformed lines, ambiguous merge base.
+- [ ] T014 Implement the verbatim and normalized digest passes, multiset matching, the `patch-exact`/`patch-id` classes, the whitespace-significance guard, binary detection through pinned `check-attr` and numstat, and `--whitespace-significant` through fixed argv under the planning environment; pass T012 and T013.
 - [ ] T015 Add failing `merge-noop` tests: rebase-merge and squash-merge noop; revert-after-merge not noop while patch-id matches; add-then-revert branch (`B^{tree} == M^{tree}`) deletable as `no-net-change`, journaled and never labelled integrated; conflict; would-add-content; ancestor short-circuit; gitlink difference `gitlink-change`; `merge=union` repro (branch deletes a line the base changed) from `info/attributes` and from in-tree `.gitattributes` of each tree, `binary` macro, user macro and a control tree without the attribute (C28..C32), plan and apply reading the same sources; grafts, shallow and alternates not-evaluated; `merge.*.driver`/executable `filter.*` not-evaluated; repository `objects/`, refs and `packed-refs` byte-identical before and after planning.
 - [ ] T016 Implement `merge-noop` with the net-change, merge-base, gitlink and merge-attribute pre-checks and `--attr-source`, history-integrity checks, private object directory and exit/output handling; pass T015.
 - [ ] T017 Add failing order, budget and apply tests: proof order, per-command 10 s, per-tip 20 s and 60 s forge-free phase separate from the online 30 s, with 70 s offline and 100 s online totals with injected clock (remaining tips `proof-budget-exhausted`, plan valid), apply re-evaluates the recorded kind with fresh state and retains on change.
@@ -37,9 +37,9 @@
 ## Phase 5: Merged-PR discovery (FR-013..FR-018; fixes #81)
 
 - [ ] T021 Research, with deterministic doubles and a recorded read-only measurement design, why #81 needed hints and whether the 1,000-record cap truncates this repository; record the evidence in `research.md`. No second endpoint is added; any later amendment needs this evidence.
-- [ ] T022 Add failing discovery tests: 40 refs sharing 12 OIDs plan without `--pr`; duplicate identical hint accepted; same OID with two numbers, hint for an unselected OID and malformed hints fail with messages naming the selector (escaped, bounded); multiple admissible PRs need a hint; request assertions show only allow-listed GETs, one re-read per chosen PR in ascending OID order and at most 128 requests; a 130-OID fixture (10 collection pages) makes exactly 117 re-reads and 13 OIDs `discovery-budget-exhausted`; beyond the budget the remaining OIDs are `discovery-budget-exhausted` and the plan completes.
+- [ ] T022 Add failing discovery tests: 40 refs sharing 12 OIDs plan without `--pr`; duplicate identical hint accepted; same OID with two numbers, hint for an unselected OID and malformed hints fail with messages naming the selector (escaped, bounded); multiple admissible PRs need a hint; request assertions show only allow-listed GETs, one re-read per chosen PR in ascending OID order and at most 128 requests; a 70-OID fixture (10 collection pages) makes exactly 58 re-reads and 12 OIDs `discovery-budget-exhausted` (two requests per re-read: the PR and the repository identity; the test also confirms that reading against the Spec 029 source); beyond the budget the remaining OIDs are `discovery-budget-exhausted` and the plan completes.
 - [ ] T023 Implement per-OID hint aggregation, idempotent hints and selector-naming errors; pass T022.
-- [ ] T024 Add failing coverage tests: pagination ending within bounds is `complete`; a tenth full page is `truncated` with `discovery-truncated`, plan still completes and claims no absence; error and 404 never prove absence.
+- [ ] T024 Add failing coverage tests: pagination ending within bounds is `complete`; a tenth full page is `incomplete`, found exact-head PRs still prove their OIDs, others are retained `discovery-incomplete`, the plan completes and claims no absence; error and 404 never prove absence.
 - [ ] T025 Implement coverage reporting; pass T024; the endpoint set stays closed.
 - [ ] T026 Re-run Spec 029 online and tracking-ref conformance unchanged after T023 and T025.
 
@@ -49,10 +49,11 @@
 - [ ] T028 Run source checks (`gofmt`, `go test ./...`, `go vet ./...`, `go mod verify`, `python3 scripts/check-docs.py`, `python3 scripts/check-architecture.py`, `git diff --check`) on the exact source SHA and obtain independent executed review of that SHA; resolve findings.
 - [ ] T029 Reproduce the dogfood measurement (merge-noop, patch-id, would-add, conflict counts and the rejected cherry-pick simulation) with a recorded command list, every `merge-tree` under a private object directory, into `verification.md` as baseline.
 - [ ] T030 Run the plan-only source acceptance runner (in-process test, no build, never `apply`, temporary state and private object directories) on this repository (149 branches) and on the Anchorage umbrella; record counts before (stage2 baseline) and after per proof kind and disposition, and every unexplained retention.
-- [ ] T031 Owner gate: with explicit authorization naming one CLI build, repeat the plan-only runs with the built `stw`; without it, record the binary lane as a gap.
-- [ ] T032 Record acceptance outcomes (including the gap if T031 is not authorized) in `verification.md` and `docs/progress.md`; mark verified only with this evidence.
-- [ ] T034 Re-measure on this repository (the 131 non-main branches) how many are provable under the relaxed rules, per class (`ancestor`, `patch-exact`, `merge-noop`, `patch-id` with `integrated-modulo-whitespace` split, `no-net-change`) and how many are retained by `whitespace-significant-difference`; run in the T030 source runner with a private object directory and record the counts and the baseline difference (5 merge-noop, 21 patch-id equivalent) in `verification.md`. Also record how many reformatting-only branches `merge-noop` already covers.
-- [ ] T033 Owner gate: any `apply`, release, tag, publication or consumer activation is separately authorized and out of this task list.
+- [ ] T031 Re-measure on this repository (the 131 non-main branches) how many are provable under the relaxed rules, per class (`ancestor`, `patch-exact`, `merge-noop`, `patch-id` with `integrated-modulo-whitespace` split, `no-net-change`) and how many are retained by `whitespace-significant-difference`; run in the T030 source runner with a private object directory and record the counts and the baseline difference (5 merge-noop, 21 patch-id equivalent) in `verification.md`. Also record how many reformatting-only branches `merge-noop` already covers.
+- [ ] T032 Owner gate: with explicit authorization naming one CLI build, repeat the plan-only runs with the built `stw`; without it, record the binary lane as a gap.
+- [ ] T033 Record acceptance outcomes (including the gap if T032 is not authorized) in `verification.md` and `docs/progress.md`; mark verified only with this evidence.
+- [ ] T034 Owner gate: any `apply`, release, tag, publication or consumer activation is separately authorized and out of this task list.
+- [ ] T035 Follow-up decision, not a requirement of this Spec: if cheap, also record the `branch.<name>.*` configuration and the branch reflog tip in the Spec 029 recovery journal so restoring a deleted branch is less manual; decide and, if accepted, specify in a later amendment before any implementation.
 
 ## Dependencies and ownership
 
@@ -91,9 +92,10 @@ Table guard: one table, one row per task, prerequisites sorted and acyclic.
 | T029 | T003 |
 | T030 | T028, T029 |
 | T031 | T030 |
-| T032 | T031, T034 |
-| T033 | T032 |
-| T034 | T030 |
+| T032 | T030 |
+| T033 | T031, T032 |
+| T034 | T033 |
+| T035 | T020 |
 
 Slices A, B and D may proceed in parallel in separate worktrees after T003 with disjoint files; slice C needs the planning environment (T009) because proof commands run under it. At most two editing authors. Shared files (`tidy_v3_result.go`, schema) have one owner at a time.
 
@@ -109,13 +111,13 @@ Slices A, B and D may proceed in parallel in separate worktrees after T003 with 
 | FR-018 | T021, T022, T025 | endpoint decision from evidence |
 | FR-019..FR-023 | T007..T011 | configuration policy and sentinels |
 | FR-024..FR-026 | T004..T006 | streaming and hard bounds |
-| FR-027, FR-029, FR-030 | T027..T032 | acceptance, schema, no new effects |
+| FR-027, FR-029, FR-030 | T027..T033 | acceptance, schema, no new effects |
 | FR-028 | all behavior tasks | failing tests first |
 | SC-001 | T013..T018 | proof fixtures |
 | SC-002 | T004..T006 | large plan fixtures |
 | SC-003 | T007..T011 | sentinels and mutants |
 | SC-004 | T022..T025 | discovery fixtures |
 | SC-005 | T006, T020, T026 | contract byte stability |
-| SC-006 | T029, T030, T032, T034 | recorded counts |
+| SC-006 | T029, T030, T033, T031 | recorded counts |
 
-There are 34 tasks. Every task has an unchecked sequential ID.
+There are 35 tasks (T035 is a follow-up decision). Every task has an unchecked sequential ID.
