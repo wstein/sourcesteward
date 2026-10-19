@@ -12,11 +12,37 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW_MAIN = 'https://raw.githubusercontent.com/wstein/sourcesteward/main/'
 
 
+def heading_anchors(path):
+    """GitHub-style anchors of the headings of a Markdown file, outside fenced code."""
+    anchors, seen, fence = set(), {}, None
+    for line in path.read_text().splitlines():
+        marker = re.match(r'\s*(```+|~~~+)', line)
+        if marker:
+            if fence is None: fence = marker.group(1)[0]
+            elif marker.group(1)[0] == fence: fence = None
+            continue
+        heading = None if fence else re.match(r' {0,3}#{1,6}\s+(.*?)\s*#*\s*$', line)
+        if heading:
+            text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', heading.group(1)).replace('`', '')
+            slug = re.sub(r'[^\w\- ]', '', text.lower()).replace(' ', '-')
+            count = seen.get(slug, 0)
+            seen[slug] = count + 1
+            anchors.add(slug if count == 0 else f'{slug}-{count}')
+    return anchors
+
+
+def check_fragment(root, source, path, fragment):
+    if fragment and path.suffix == '.md' and path.is_file() and unquote(fragment).lower() not in heading_anchors(path):
+        raise ValueError(f'{source.relative_to(root)}: stale anchor #{fragment} in {path.relative_to(root.resolve())}')
+
+
 def local_target(root, source, target):
     url = urlsplit(target)
     if target.startswith(RAW_MAIN):
         path = (root / unquote(url.path.removeprefix('/wstein/sourcesteward/main/'))).resolve()
     elif url.scheme or url.netloc or not url.path:
+        if not url.scheme and not url.netloc and url.fragment and source.suffix == '.md':
+            check_fragment(root, source, source.resolve(), url.fragment)
         return
     else:
         if source == root / 'docs/index.html' and target == 'docs/':
@@ -24,6 +50,8 @@ def local_target(root, source, target):
         path = (source.parent / unquote(url.path)).resolve()
     if not path.is_relative_to(root.resolve()) or not path.exists() or (target.startswith(RAW_MAIN) and not path.is_file()):
         raise ValueError(f'{source.relative_to(root)}: broken local link {target}')
+    if not target.startswith(RAW_MAIN):
+        check_fragment(root, source, path, url.fragment)
 
 
 def check_asset(root, source, target):

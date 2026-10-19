@@ -118,6 +118,20 @@ class DocumentationTests(unittest.TestCase):
             (root / 'README.md').write_text('[Web](https://example.org/)')
             checker.check_links(root, root / 'README.md')
 
+    def test_stale_markdown_anchors_fail(self):
+        checker = load('checker_anchor', 'check-docs.py')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'docs').mkdir()
+            (root / 'docs/guide.md').write_text('# Guide\n\n## Checkout view (`ci`, `ci --smoke`)\n\n```\n# not a heading\n```\n\n## Same\n\n## Same\n')
+            readme = root / 'README.md'
+            for target in ('docs/guide.md#checkout-view-ci-ci---smoke', 'docs/guide.md#same-1', 'docs/guide.md', '#top-level'):
+                readme.write_text('# Top level\n\n[ok](' + target + ')')
+                checker.check_links(root, readme)
+            for target in ('docs/guide.md#checkout-view-ci-ci---smoke-promote', 'docs/guide.md#not-a-heading', '#missing'):
+                readme.write_text('# Top level\n\n[stale](' + target + ')')
+                with self.assertRaises(ValueError): checker.check_links(root, readme)
+
     def test_raw_main_guidance_links_resolve_offline(self):
         checker = load('checker_raw', 'check-docs.py')
         prefix = 'https://raw.githubusercontent.com/wstein/sourcesteward/main/'
