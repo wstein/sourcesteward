@@ -80,13 +80,12 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 ## Decisions made as defaults (revisable by the owner)
 
 1. Git patch-id is a default proof; `whitespace-differs` needs `--accept-whitespace-differences` or a decision.
-2. Bounds: 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase, report bounds of FR-035.
+2. Bounds: 1,024 branch-side and 4,096 base-side commits, 60 s forge-free phase; report defaults 256 entries, 4 MiB per file, 64 KiB per diff, overridable by `--report-max-entries`, `--report-max-bytes` and `--report-max-diff-bytes` within hard ceilings (1,024, 16 MiB, 1 MiB).
 3. No second discovery endpoint; `incomplete` coverage.
 4. Plan-only acceptance by source test runner; any CLI build stays an owner gate.
 5. Range-diff pairing is in scope as evidence only.
 
 ## Open questions
 
-- **OQ-1**: are the report bounds (256 entries, 64 KiB per diff, 4 MiB per file) right for the 99 conflicting branches, or should the report be split per branch file?
-- **OQ-2**: authorize a named CLI build for the binary acceptance lane (T042), or record it as a gap?
-- **OQ-3**: should `kind: ai` decisions need an extra confirmation flag before they make a ref deletable?
+- **OQ-1**: authorize a named CLI build for the binary acceptance lane (T042), or record it as a gap?
+- **OQ-2**: should `kind: ai` decisions need an extra confirmation flag before they make a ref deletable?
