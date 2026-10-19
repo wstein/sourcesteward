@@ -69,6 +69,14 @@ head remains pending; these source task marks do not establish global acceptance
 - [ ] T033 [FR-008, FR-027] `--mode promote` (digest from the record, idempotent for the same digest, refuses another digest): record digest equality, `[promote].argv` substitution, `promote-failed`, refuses outside CI; `--mode local-verify`: tree-object export with `export-unsafe` fixtures (symlink, gitlink, `.git`, `..`, absolute, duplicate, case collision, grafts), hash comparison against a record; Git-only, jj refusal. Scope local-verify to trusted file-only product contracts; any `oci-image` target (also mixed products) refuses `unsupported-target` before export/project commands/network. Add fake-runner tests for image-only and mixed contracts, omitted image assets in a comparison record/manifest and `--files-only` bypass attempts; file-only verification still executes only through the fake runner, while CI/promote OCI remain covered and supported.
 - [ ] T034 [FR-016, SC-005] Prove no test runs a real product build; scan test that `internal/release` command execution is reachable only from `build` and that `check`, `plan`, `verify`, `record`, `dispatch` never reach it (import/call graph test).
 
+The checkout comparison of `build` (the `checkout-mismatch` part of T031 and the SC-005
+sentinel part of T034) is implemented in source through a frozen private checkout view
+(`internal/release/build_checkout_view*.go`, entered from `build` and `cmd/stw`); see
+[the build contract](contracts/build.md#checkout-comparison-view-ci-ci---smoke) and
+[verification-checkout-view.md](verification-checkout-view.md). This is implemented, pending
+independent review: T031 and T034 stay unchecked until the exact final head is reviewed and
+the Darwin and Windows limits recorded there are resolved or accepted by the owner.
+
 ## WI8 - Workflows and their tests (blocked until PR #58 is merged)
 
 - [ ] T035 [FR-018, SC-006] Add failing tests, then add internal/releaseworkflow (test-only) with the rule set of contracts/workflow.md and about 60 single-edit mutants plus a golden change detector; add the pinned test-only YAML dependency with justification in the commit.

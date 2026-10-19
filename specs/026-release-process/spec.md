@@ -253,7 +253,7 @@ Placeholders are a closed set; any other brace expression, or a placeholder not 
 | Time | `timeout_seconds` per command (default 1800, maximum 7200) |
 | Network | a build with `network = "fetch"` may contact its declared `network_hosts`; the declaration is disclosed by `plan`, the manifest and the dispatch plan, and is not enforced by `stw` |
 | Output | each target's declared `output` (file kind) or the build's result file (oci-image kind); other new files are reported, not collected |
-| Clean tree | HEAD equals C; tracked changes are checked before and after with `git diff-index --quiet HEAD`; `stw` never runs `git status` |
+| Clean tree | HEAD equals C; tracked changes are checked before and after with `git diff-index --quiet` against C through the [frozen checkout view](contracts/build.md#checkout-comparison-view-ci-ci---smoke); `stw` runs no user-facing `git status`, and only the private route's nested `git status --porcelain=2` (optionally `-uno`) for initialized gitlink checkouts, as a child of that comparison |
 
 ### Backend capability (normative)
 
