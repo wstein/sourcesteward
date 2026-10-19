@@ -4,6 +4,7 @@
 package inspection
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 	"testing"
@@ -13,5 +14,9 @@ import (
 // sandbox with umask 000 would otherwise create every fixture directory world-writable.
 func TestMain(m *testing.M) {
 	syscall.Umask(0o022)
+	if err := isolateGitEnvironment(); err != nil {
+		fmt.Fprintln(os.Stderr, "tests refuse to run:", err)
+		os.Exit(2)
+	}
 	os.Exit(m.Run())
 }
