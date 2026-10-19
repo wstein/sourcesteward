@@ -34,7 +34,7 @@ File at most 1 MiB, at most 1,024 decisions, absolute path to a regular file (no
 - `drop` on a `needs-review` ref: deletable, class `reviewed-drop`.
 - `keep`: `retained`, disposition `reviewed-keep`.
 - A decision whose `tip_oid` differs from the current tip or whose `base_oid` differs from the plan's base OID: ignored, plan note `stale-decision` naming branch and both OIDs.
-- A decision for a ref whose report entry was omitted by the entry bound, or whose commits or unintegrated diff were truncated by a bound (the reviewer did not see all of it): ignored with `decision-not-applicable: not-fully-reviewed`; raise the `--report-max-*` bounds and re-plan.
+- A decision for a ref whose report entry was omitted by the entry bound, or whose commits or unintegrated diff were truncated by a bound (the reviewer did not see all of it): ignored with `decision-not-applicable: not-fully-reviewed`; split the review per `--ref` or per named consolidation range, or raise the overridable `--report-max-*` bounds up to their ceilings (the 50-commit, 1,000-line and 16-file entry bounds are fixed; see Known limits in the spec).
 - A decision for a protected ref, a hard stop (`history-override`, `unsupported-metadata`) or a ref that is `proven` or absent from the plan: ignored with plan note `decision-not-applicable` and the reason.
 - The decision (reviewer, kind, decision, reason, tip OID) is recorded in the plan and in the recovery journal next to the Spec 029 recovery ref; `kind: ai` is marked so the owner can see which decisions were not human. The plan identity includes the decision file digest.
 
