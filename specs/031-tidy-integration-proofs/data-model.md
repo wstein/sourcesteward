@@ -32,7 +32,7 @@ As defined in the [review report contract](contracts/review-report.md): `schema_
 
 ## DiscoveryRecord (online)
 
-`oid`, `source` (`discovered`, `hint`), `pr` (Spec 029 identity tuple or null), `refs`, `coverage` (`complete`, `incomplete`), `result` (`github-merged-head`, `no-merged-pr`, `discovery-incomplete`, `discovery-budget-exhausted`, `ambiguous-needs-hint`).
+`oid`, `source` (`discovered`, `hint`), `pr` (Spec 029 identity tuple or null), `refs`, `coverage` (`complete`, `incomplete`), `result` (`github-merged-head`, `no-merged-pr`, `discovery-incomplete`, `discovery-budget-exhausted`, `ambiguous-needs-hint`). The stored list is capped (256 records, 512 refs, 128 KiB) outside the aggregate bound; overflow is dropped with a `discovery-records-truncated` note ([contract](contracts/pr-discovery.md#stored-discovery-list)).
 
 ## ConfigNote (plan level)
 
