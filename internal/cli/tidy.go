@@ -45,6 +45,9 @@ func tidyCommandWithV3Operations(run func(context.Context, workspace.TidyPlanOpt
 				}
 				v3.IntegrationProofs = kinds
 			}
+			if err := validateTidyV3ReviewFlags(cmd, &v3); err != nil {
+				return err
+			}
 			if err := validateTidyV3PlanCLI(args, &v3, hints); err != nil {
 				return err
 			}

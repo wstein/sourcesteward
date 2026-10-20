@@ -15,7 +15,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
-var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences"}
+var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "consolidation-range", "decisions"}
 var tidyV3ApplyFlags = []string{"online", "completed-worktree", "owner", "protect-worktree"}
 
 // Counting wraps the existing typed flag value without changing Cobra parsing.
@@ -34,7 +34,7 @@ func (v *tidyV3CountedFlag) String() string     { return v.value.String() }
 func (v *tidyV3CountedFlag) Type() string       { return v.value.Type() }
 func (v *tidyV3CountedFlag) Set(s string) error { v.count++; return v.value.Set(s) }
 
-var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences"}
+var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "decisions"}
 
 func trackTidyV3Singletons(cmd *cobra.Command) {
 	for _, name := range tidyV3Singletons {
@@ -54,7 +54,7 @@ func validateTidyV3PresentFlags(cmd *cobra.Command) error {
 			}
 		}
 	}
-	for _, name := range []string{"base", "state-dir", "task", "owner", "remove-files", "remote", "tracking-remote", "repo", "host", "completed-worktree", "integration-proof"} {
+	for _, name := range []string{"base", "state-dir", "task", "owner", "remove-files", "remote", "tracking-remote", "repo", "host", "completed-worktree", "integration-proof", "report-dir", "decisions"} {
 		flag := cmd.Flags().Lookup(name)
 		if flag != nil && flag.Changed && flag.Value.String() == "" {
 			return fmt.Errorf("--%s requires a nonempty value", name)
@@ -83,6 +83,45 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.StringArrayVar(&o.ProtectWorktrees, "protect-worktree", []string{}, "Declare every caller-known active absolute workspace (repeatable)")
 	f.StringVar(proofs, "integration-proof", "", "Comma-separated forge-free proof classes: ancestor, patch-id, merge-noop, no-net-change (default all four)")
 	f.BoolVar(&o.AcceptWhitespaceDifferences, "accept-whitespace-differences", false, "Allow deletion when a patch-id match differs only in whitespace")
+	f.StringVar(&o.ReportDir, "report-dir", "", "Absolute existing directory that receives tidy-report.md and tidy-report.json for every ref that needs review")
+	f.IntVar(&o.ReportMaxEntries, "report-max-entries", 0, "Most report entries (default 256, ceiling 1024)")
+	f.IntVar(&o.ReportMaxBytes, "report-max-bytes", 0, "Most bytes per report file (default 4 MiB, ceiling 16 MiB)")
+	f.IntVar(&o.ReportMaxDiffBytes, "report-max-diff-bytes", 0, "Most diff bytes per report entry (default 64 KiB, ceiling 1 MiB)")
+	f.StringArrayVar(&o.ConsolidationRanges, "consolidation-range", nil, "A..B range whose commits the report pairs with each branch (repeatable, at most four)")
+	f.StringVar(&o.DecisionsFile, "decisions", "", "Absolute path of a reviewer decision file; evidence for the plan, never authorization")
+}
+
+// validateTidyV3ReviewFlags checks the review report flags that need no
+// native work; the planner validates the rest before it reads Git.
+func validateTidyV3ReviewFlags(cmd *cobra.Command, o *workspace.V3PlanOptions) error {
+	for _, bound := range []struct {
+		name    string
+		value   int
+		ceiling int
+	}{{"report-max-entries", o.ReportMaxEntries, 1024}, {"report-max-bytes", o.ReportMaxBytes, 16 << 20}, {"report-max-diff-bytes", o.ReportMaxDiffBytes, 1 << 20}} {
+		if cmd.Flags().Changed(bound.name) && (bound.value < 1 || bound.value > bound.ceiling) {
+			return fmt.Errorf("--%s must be between 1 and %d", bound.name, bound.ceiling)
+		}
+	}
+	if o.ReportDir != "" && !tidyV3Path(o.ReportDir) {
+		return fmt.Errorf("--report-dir requires an absolute canonical path")
+	}
+	if o.DecisionsFile != "" && !tidyV3Path(o.DecisionsFile) {
+		return fmt.Errorf("--decisions requires an absolute canonical path")
+	}
+	if len(o.ConsolidationRanges) > 4 {
+		return fmt.Errorf("--consolidation-range may be given at most four times")
+	}
+	for _, selector := range o.ConsolidationRanges {
+		if selector == "" {
+			return fmt.Errorf("--consolidation-range requires a nonempty A..B selector")
+		}
+	}
+	retirement := o.Task != "" || o.CompletedWorktree != ""
+	if (retirement || o.TrackingRemote != "") && (o.ReportDir != "" || o.DecisionsFile != "" || len(o.ConsolidationRanges) > 0 || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0) {
+		return fmt.Errorf("the review report flags apply to local-reference plans only")
+	}
+	return nil
 }
 
 var tidyV3ProofKinds = []string{"ancestor", "patch-id", "merge-noop", "no-net-change"}
@@ -300,10 +339,33 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 	var text strings.Builder
 	fmt.Fprintf(&text, "Tidy operation: %q\nContract: %d\nStatus: %q\nBackend: %q\nComplete: %t\nNetwork attempted: %t\nFreshness: %q\nObserved at: %q\n", r.Command, r.SchemaVersion, r.Status, r.Backend, r.Boundary.Complete, r.Boundary.NetworkAttempted, r.Boundary.Freshness, r.Boundary.ObservedAt)
 	fmt.Fprintf(&text, "Measured budget: native_processes=%d native_bytes=%d http_requests=%d http_bytes=%d observations=%d user_bytes=%d metadata_bytes=%d framing_bytes=%d stderr_bytes=%d\n", r.Boundary.Budget.NativeProcesses, r.Boundary.Budget.NativeBytes, r.Boundary.Budget.HTTPRequests, r.Boundary.Budget.HTTPBytes, r.Boundary.Budget.Observations, r.Boundary.Budget.UserBytes, r.Boundary.Budget.MetadataBytes, r.Boundary.Budget.FramingBytes, r.Boundary.Budget.StderrBytes)
+	if rs := r.ReviewSummary; rs != nil {
+		fmt.Fprintf(&text, "Review summary: proven=%d needs_review=%d retained=%d report_written=%t entries=%d omitted=%d\n", rs.Proven, rs.NeedsReview, rs.Retained, rs.ReportWritten, rs.Entries, rs.Omitted)
+		names := make([]string, 0, len(rs.Reasons))
+		for name := range rs.Reasons {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		for _, name := range names {
+			fmt.Fprintf(&text, "Review reason: %q count=%d\n", name, rs.Reasons[name])
+		}
+	}
 	if p := r.Plan; p != nil {
 		fmt.Fprintf(&text, "Plan: %q\nDigest: %q\nMode: %q\nSource: %q\nState directory: %q\nBase selector: %q\nBase commit: %q\n", p.PlanID, p.Digest, p.Mode, p.SourcePath, p.StateDir, p.Expected.BaseSelector, p.Expected.BaseCommit)
 		if pol := p.ProofPolicy; pol != nil {
 			fmt.Fprintf(&text, "Proof policy: version=%d kinds=%q accept_whitespace_differences=%t\n", pol.Version, pol.Kinds, pol.AcceptWhitespaceDifferences)
+		}
+		if rv := p.Review; rv != nil {
+			fmt.Fprintf(&text, "Review bounds: max_entries=%d max_bytes=%d max_diff_bytes=%d\n", rv.MaxEntries, rv.MaxBytes, rv.MaxDiffBytes)
+			for _, rg := range rv.Ranges {
+				fmt.Fprintf(&text, "Review range: %q from=%q to=%q commits=%d\n", rg.Selector, rg.From, rg.To, rg.Commits)
+			}
+			if rv.DecisionsDigest != "" {
+				fmt.Fprintf(&text, "Review decisions digest: %q\n", rv.DecisionsDigest)
+			}
+			for _, n := range rv.Notes {
+				fmt.Fprintf(&text, "Review note: %q branch=%q detail=%q\n", n.Code, n.Branch, n.Detail)
+			}
 		}
 		if p.Online != nil {
 			fmt.Fprintf(&text, "Online repository: host=%q name=%q id=%d node_id=%q remote=%q\n", p.Online.Repository.Host, p.Online.Repository.Name, p.Online.Repository.ID, p.Online.Repository.NodeID, p.Online.Remote)
@@ -315,6 +377,9 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 			}
 			if c.Evidence != nil && c.Evidence.Integration != nil {
 				e := c.Evidence.Integration
+				if d := e.Decision; d != nil {
+					fmt.Fprintf(&text, "  Decision: branch=%q decision=%q kind=%q reviewer=%q reason=%q tip=%q base=%q\n", d.Branch, d.Decision, d.Kind, d.Reviewer, d.Reason, d.TipOID, d.BaseOID)
+				}
 				fmt.Fprintf(&text, "  Integration: disposition=%q class=%q strength=%q reasons=%q flags=%q matched=%d unmatched=%d empty=%d skipped_merges=%d base=%q tip=%q\n", e.Disposition, e.Class, e.Strength, e.Reasons, e.Flags, e.Matched, e.Unmatched, e.Empty, e.SkippedMerges, e.BaseOID, e.TipOID)
 			}
 			if c.Evidence != nil {

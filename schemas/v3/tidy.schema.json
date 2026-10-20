@@ -704,7 +704,9 @@
               "enum": [
                 "patch-id",
                 "merge-noop",
-                "no-net-change"
+                "no-net-change",
+                "reviewed-integrated",
+                "reviewed-drop"
               ]
             }
           }
@@ -864,6 +866,8 @@
             "patch-id",
             "merge-noop",
             "no-net-change",
+            "reviewed-integrated",
+            "reviewed-drop",
             "github-merged-head",
             "github-branch-absent"
           ],
@@ -1116,6 +1120,72 @@
       ],
       "type": "object"
     },
+    "V3DecisionRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "base_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "branch": {
+          "maxLength": 4096,
+          "pattern": "^refs/heads/.+",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "integrated",
+            "keep",
+            "drop"
+          ],
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "ai"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "reviewer": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "tip_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch",
+        "tip_oid",
+        "base_oid",
+        "decision",
+        "reason",
+        "reviewer",
+        "kind"
+      ],
+      "type": "object"
+    },
     "V3DiscoveryRecord": {
       "additionalProperties": false,
       "properties": {
@@ -1284,6 +1354,96 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "reviewed-integrated",
+                  "reviewed-drop"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "empty": {
+                "const": 0
+              },
+              "flags": {
+                "maxItems": 0
+              },
+              "matched": {
+                "const": 0
+              },
+              "skipped_merges": {
+                "const": 0
+              },
+              "strength": {
+                "const": "reviewer-decision"
+              },
+              "unmatched": {
+                "const": 0
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "reviewed-integrated"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "decision": {
+                "properties": {
+                  "decision": {
+                    "const": "integrated"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "reviewed-drop"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "decision": {
+                "properties": {
+                  "decision": {
+                    "const": "drop"
+                  }
+                }
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -1307,9 +1467,14 @@
           "enum": [
             "patch-id",
             "merge-noop",
-            "no-net-change"
+            "no-net-change",
+            "reviewed-integrated",
+            "reviewed-drop"
           ],
           "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/V3DecisionRecord"
         },
         "disposition": {
           "enum": [
@@ -1377,7 +1542,8 @@
           "enum": [
             "history-equivalent",
             "content-present",
-            "nothing-unmerged"
+            "nothing-unmerged",
+            "reviewer-decision"
           ],
           "type": "string"
         },
@@ -2052,6 +2218,8 @@
                       "patch-id",
                       "merge-noop",
                       "no-net-change",
+                      "reviewed-integrated",
+                      "reviewed-drop",
                       "github-merged-head"
                     ]
                   }
@@ -3009,6 +3177,10 @@
     "V3ReviewBinding": {
       "additionalProperties": false,
       "properties": {
+        "decisions_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
         "max_bytes": {
           "maximum": 16777216,
           "minimum": 1,
@@ -3023,6 +3195,37 @@
           "maximum": 1024,
           "minimum": 1,
           "type": "integer"
+        },
+        "notes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "branch": {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              "code": {
+                "enum": [
+                  "stale-decision",
+                  "decision-not-applicable"
+                ],
+                "type": "string"
+              },
+              "detail": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "branch",
+              "detail"
+            ],
+            "type": "object"
+          },
+          "maxItems": 1024,
+          "type": "array"
         },
         "ranges": {
           "items": {
@@ -3060,6 +3263,7 @@
         "max_bytes",
         "max_diff_bytes",
         "max_entries",
+        "notes",
         "ranges"
       ],
       "type": "object"

@@ -69,7 +69,7 @@ func TestTidyV3ReportSchemaAcceptsTheGoldenAndRefusesViolations(t *testing.T) {
 func TestTidyV3PlanSchemaCarriesTheReviewBindingAndSummary(t *testing.T) {
 	s := schemaAt(t, "v3", "tidy")
 	r := tidyV3SchemaPlan()
-	r.Plan.Review = &workspace.V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []workspace.V3ReviewRange{}}
+	r.Plan.Review = &workspace.V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []workspace.V3ReviewRange{}, Notes: []workspace.V3ReviewNote{}}
 	r.ReviewSummary = &workspace.V3ReviewSummary{Proven: 1, NeedsReview: 2, Retained: 1, Reasons: map[string]int{"would-add-content": 2, "selected-base": 1}, ReportWritten: true, Entries: 2}
 	raw, err := json.Marshal(r)
 	if err != nil {
