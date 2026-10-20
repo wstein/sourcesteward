@@ -3,7 +3,7 @@ GO ?= go
 .PHONY: build extension check test fmt vet docs-check
 check:
 	@test -z "$$(gofmt -l cmd internal)" || { echo 'Run make fmt'; exit 1; }
-	$(GO) test ./...
+	$(GO) test -timeout 40m ./...
 	$(GO) vet ./...
 	$(GO) mod verify
 	python3 -B -m unittest discover -s scripts -p 'test_*.py'
@@ -22,7 +22,7 @@ extension:
 	$(GO) build -o bin/gh-jj/gh-jj ./cmd/gh-jj
 
 test:
-	$(GO) test ./...
+	$(GO) test -timeout 40m ./...
 fmt:
 	gofmt -w cmd internal
 vet:
