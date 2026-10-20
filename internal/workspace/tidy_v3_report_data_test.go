@@ -321,7 +321,7 @@ func TestReportGitlinkChangeUsesTheBranchAgainstMergeBaseAndNeverMerges(t *testi
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("merge-tree ran under the merge gate")
 	}
-	if !containsAll(e.Reasons, "gitlink-change") || e.Diff.Source != "branch-against-merge-base" {
+	if !containsAll(e.Reasons, "gitlink-change") || e.Diff.Source != "branch-against-merge-base" || e.Verdict.Verdict != "unclear" || e.Verdict.Confidence != "low" {
 		t.Fatalf("entry %+v", e)
 	}
 	if len(e.Diff.Files) != 1 || e.Diff.Files[0].Kind != "gitlink" || e.Diff.Files[0].OldOID != old || e.Diff.Files[0].NewOID != bumped || e.Diff.Files[0].TypeChange != "" {
@@ -346,7 +346,7 @@ func TestReportMergeAttributeGateAvoidsMergeTree(t *testing.T) {
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("merge-tree ran under the merge gate")
 	}
-	if !containsAll(e.Reasons, "merge-attribute") || e.Diff.Source != "branch-against-merge-base" || e.Diff.WhitespaceOnly {
+	if !containsAll(e.Reasons, "merge-attribute") || e.Diff.Source != "branch-against-merge-base" || e.Diff.WhitespaceOnly || e.Verdict.Verdict != "unclear" || e.Verdict.Verdict == "obviously-integrated" {
 		t.Fatalf("entry %+v", e)
 	}
 }
@@ -383,7 +383,7 @@ func TestReportHelpersNeverRunUnderTheMergeGate(t *testing.T) {
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("a configured helper ran during the report")
 	}
-	if !containsAll(e.Reasons, "merge-driver") || e.Diff.Source != "branch-against-merge-base" {
+	if !containsAll(e.Reasons, "merge-driver") || e.Diff.Source != "branch-against-merge-base" || e.Verdict.Verdict != "unclear" {
 		t.Fatalf("entry %+v", e)
 	}
 }

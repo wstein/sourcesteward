@@ -217,7 +217,7 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 	if e.MergeBaseOID == "" {
 		mergeBase = "none (no single merge base)"
 	}
-	fmt.Fprintf(&b, "- Tip: `%s`\n- Base: `%s`\n- Merge base: %s\n- Reasons: %s\n\nBranch:\n\n%s\n", e.TipOID, e.BaseOID, mergeBase, backticked(e.Reasons), untrustedBlock(e.Branch.Text))
+	fmt.Fprintf(&b, "- Tip: `%s`\n- Base: `%s`\n- Merge base: %s\n- Reasons: %s\n- Suggested verdict: `%s`, confidence %s (basis %s)\n\nBranch:\n\n%s\n", e.TipOID, e.BaseOID, mergeBase, backticked(e.Reasons), e.Verdict.Verdict, e.Verdict.Confidence, backticked(e.Verdict.Basis), untrustedBlock(e.Branch.Text))
 	total := len(e.Commits)
 	if e.CommitsTruncated != nil {
 		total = e.CommitsTruncated.Total
@@ -289,6 +289,26 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 		}
 		b.WriteString(untrustedBlock(cands.String()))
 	}
+	if p := e.RangePairing; p != nil {
+		b.WriteString("\n### Range pairing\n\nEvidence `" + p.Evidence + "` only: it proves nothing and is never a deletion proof.\n\nRange:\n\n" + untrustedBlock(p.Range))
+		if p.Note != "" {
+			b.WriteString("\n" + p.Note + "\n")
+		} else {
+			var rows strings.Builder
+			for _, pair := range p.Pairs {
+				fmt.Fprintf(&rows, "%s  %s  %s\n", pair.Status, orNone(pair.BranchCommit), orNone(pair.RangeCommit))
+			}
+			b.WriteString("\nRows (status, branch commit, range commit):\n\n" + untrustedBlock(rows.String()))
+			if p.Truncated != nil {
+				fmt.Fprintf(&b, "\ntruncated: shown %d of %d rows\n", p.Truncated.Shown, p.Truncated.Total)
+			}
+		}
+	}
+	b.WriteString("\n### Questions\n\n")
+	for _, q := range e.Questions {
+		fmt.Fprintf(&b, "- %s: %s\n", q.ID, q.Text)
+	}
+	fmt.Fprintf(&b, "\nAllowed decisions: %s\n", backticked(e.AllowedDecisions))
 	return b.String()
 }
 

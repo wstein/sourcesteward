@@ -97,10 +97,6 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(observation.Native), o.StateDir); err != nil {
 		return failTidyV3(r, err)
 	}
-	review, reviewBounds, err := reviewBindingFor(o)
-	if err != nil {
-		return failTidyV3(r, err)
-	}
 	if o.ReportDir != "" {
 		if err = checkReportDirectory(o.ReportDir, reportRoots(source, o.StateDir, observation.Expected.Identity, v3NativeRoots(observation.Native))); err != nil {
 			return failTidyV3(r, err)
@@ -108,12 +104,21 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy, Review: review}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy}
 	run, closeRun, err := c.integration.begin(ctx, observation.Expected.Identity, observation.ConfigNotes)
 	if err != nil {
 		return failTidyV3(r, err)
 	}
 	defer closeRun()
+	ranges, err := run.resolveConsolidationRanges(ctx, o.ConsolidationRanges)
+	if err != nil {
+		return failTidyV3(r, err)
+	}
+	review, reviewBounds, err := reviewBindingFor(o, ranges)
+	if err != nil {
+		return failTidyV3(r, err)
+	}
+	p.Review = review
 	proofs := c.localProofs(run, p.Expected, policy)
 	if p.StateDir != "" {
 		p.PlanID, err = randomID()

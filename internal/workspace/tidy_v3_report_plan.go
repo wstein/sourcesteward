@@ -14,19 +14,33 @@ func defaultWriteReport(dir string, markdown, jsonData []byte) error {
 	return writeReportFiles(dir, markdown, jsonData, defaultReportFileOps())
 }
 
-func validV3ReviewBinding(b V3ReviewBinding) bool {
+func validV3ReviewBinding(b V3ReviewBinding, p V3Plan) bool {
 	r, err := resolveReportBounds(reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes})
-	return err == nil && b.MaxEntries > 0 && b.MaxBytes > 0 && b.MaxDiffBytes > 0 && r == reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes}
+	if err != nil || b.MaxEntries <= 0 || b.MaxBytes <= 0 || b.MaxDiffBytes <= 0 || r != (reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes}) {
+		return false
+	}
+	if b.Ranges == nil || len(b.Ranges) > reportMaxRanges {
+		return false
+	}
+	for _, rg := range b.Ranges {
+		if _, _, err := parseConsolidationRange(rg.Selector); err != nil || !v3OID(rg.From, p.Expected.Identity.ObjectFormat) || !v3OID(rg.To, p.Expected.Identity.ObjectFormat) || rg.Commits < 0 || rg.Commits > reportMaxRangeCommits {
+			return false
+		}
+	}
+	return true
 }
 
 // reviewBindingFor is the binding of the plan options, nil when no report
 // option was given.
-func reviewBindingFor(o V3PlanOptions) (*V3ReviewBinding, reportBounds, error) {
+func reviewBindingFor(o V3PlanOptions, ranges []V3ReviewRange) (*V3ReviewBinding, reportBounds, error) {
 	bounds, err := resolveReportBounds(o.reportBounds())
 	if err != nil || !o.reviewRequested() {
 		return nil, bounds, err
 	}
-	return &V3ReviewBinding{MaxEntries: bounds.MaxEntries, MaxBytes: bounds.MaxBytes, MaxDiffBytes: bounds.MaxDiffBytes}, bounds, nil
+	if ranges == nil {
+		ranges = []V3ReviewRange{}
+	}
+	return &V3ReviewBinding{MaxEntries: bounds.MaxEntries, MaxBytes: bounds.MaxBytes, MaxDiffBytes: bounds.MaxDiffBytes, Ranges: ranges}, bounds, nil
 }
 
 // reportRoots are the places a report must not be written into.
@@ -94,7 +108,7 @@ func (c tidyV3RefsCoordinator) buildReviewReport(ctx context.Context, run *integ
 		entry, ok := collected[cand.OID]
 		if !ok {
 			var err error
-			entry, err = run.collectReportEntry(ctx, reportRequest{Base: p.Expected.BaseCommit, Tip: cand.OID, Verdict: verdicts[cand.OID], Policy: *p.ProofPolicy, Bounds: bounds})
+			entry, err = run.collectReportEntry(ctx, reportRequest{Base: p.Expected.BaseCommit, Tip: cand.OID, Verdict: verdicts[cand.OID], Policy: *p.ProofPolicy, Bounds: bounds, Ranges: p.Review.Ranges})
 			if err != nil {
 				return renderedReport{}, err
 			}

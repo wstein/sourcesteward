@@ -149,6 +149,10 @@ type V3ReportEntry struct {
 	Proofs           []V3ReportProof     `json:"proofs_tried"`
 	Diff             V3ReportDiff        `json:"unintegrated_diff"`
 	Candidates       []V3ReportCandidate `json:"candidate_base_commits"`
+	RangePairing     *V3ReportPairing    `json:"range_pairing"`
+	Verdict          V3ReportVerdict     `json:"suggested_verdict"`
+	Questions        []V3ReportQuestion  `json:"questions"`
+	AllowedDecisions []string            `json:"allowed_decisions"`
 
 	// rawDiff is the bounded diff text the Markdown rendering shows.
 	rawDiff string
@@ -201,4 +205,41 @@ func resolveReportBounds(b reportBounds) (reportBounds, error) {
 		return b, failure("invalid-options", "Report bounds must be positive and within 1,024 entries, 16 MiB per file and 1 MiB per diff.")
 	}
 	return b, nil
+}
+
+// V3ReportPair is one row of `git range-diff`: = same patch, ! similar patch,
+// < only in the branch, > only in the named range.
+type V3ReportPair struct {
+	Status       string `json:"status"`
+	BranchCommit string `json:"branch_commit"`
+	RangeCommit  string `json:"range_commit"`
+}
+
+// V3ReportPairing is evidence only (FR-037): it never proves integration.
+type V3ReportPairing struct {
+	Range     string              `json:"range"`
+	Evidence  string              `json:"evidence"`
+	Note      string              `json:"note,omitempty"`
+	Pairs     []V3ReportPair      `json:"pairs"`
+	Truncated *V3ReportTruncation `json:"truncated"`
+}
+
+type V3ReportVerdict struct {
+	Verdict    string   `json:"verdict"`
+	Confidence string   `json:"confidence"`
+	Basis      []string `json:"basis"`
+}
+
+type V3ReportQuestion struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+// V3ReviewRange is a consolidation range resolved to full object ids before
+// use (FR-037), bound into the plan.
+type V3ReviewRange struct {
+	Selector string `json:"selector"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Commits  int    `json:"commits"`
 }

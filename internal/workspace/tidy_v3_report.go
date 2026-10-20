@@ -27,6 +27,8 @@ type reportRequest struct {
 	Verdict   integrationVerdict
 	Policy    V3ProofPolicy
 	Bounds    reportBounds
+	// Ranges are the resolved consolidation ranges, in command line order.
+	Ranges []V3ReviewRange
 }
 
 const reportRecordBytes = 4224
@@ -64,11 +66,12 @@ const (
 func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest) (V3ReportEntry, error) {
 	r.reporting = true
 	defer func() { r.reporting = false }()
-	e := V3ReportEntry{TipOID: q.Tip, BaseOID: q.Base, Commits: []V3ReportCommit{}, Candidates: []V3ReportCandidate{}, Diff: emptyReportDiff("unavailable")}
+	e := V3ReportEntry{TipOID: q.Tip, BaseOID: q.Base, Commits: []V3ReportCommit{}, Candidates: []V3ReportCandidate{}, Diff: emptyReportDiff("unavailable"), Questions: reportQuestions(), AllowedDecisions: reportAllowedDecisions()}
 	reasons := slices.Clone(q.Verdict.Reasons)
 	finish := func() (V3ReportEntry, error) {
 		e.Reasons = reasonOrder(reasons)
 		e.Proofs = reportProofs(q.Policy, e.Reasons, q.Verdict)
+		e.Verdict = suggestVerdict(e)
 		return e, nil
 	}
 	// degrade turns a command bound into the entry reason proof-limit.
@@ -148,6 +151,13 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 	if err = r.reportCandidates(ctx, &e, q, mergeBase); err != nil {
 		if err = degrade(err); err != nil {
 			return e, err
+		}
+	}
+	if len(q.Ranges) > 0 {
+		if err = r.reportPairing(ctx, &e, q, reasons); err != nil {
+			if err = degrade(err); err != nil {
+				return e, err
+			}
 		}
 	}
 	return finish()

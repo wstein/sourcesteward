@@ -167,6 +167,13 @@
     "Entry": {
       "additionalProperties": false,
       "properties": {
+        "allowed_decisions": {
+          "const": [
+            "integrated",
+            "keep",
+            "drop"
+          ]
+        },
         "base_oid": {
           "$ref": "#/$defs/OID"
         },
@@ -207,6 +214,23 @@
           "maxItems": 4,
           "type": "array"
         },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/Question"
+          },
+          "maxItems": 5,
+          "type": "array"
+        },
+        "range_pairing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Pairing"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "reasons": {
           "items": {
             "$ref": "#/$defs/Reason"
@@ -214,6 +238,9 @@
           "maxItems": 17,
           "type": "array",
           "uniqueItems": true
+        },
+        "suggested_verdict": {
+          "$ref": "#/$defs/Verdict"
         },
         "tip_oid": {
           "$ref": "#/$defs/OID"
@@ -223,6 +250,7 @@
         }
       },
       "required": [
+        "allowed_decisions",
         "base_oid",
         "branch",
         "candidate_base_commits",
@@ -230,7 +258,10 @@
         "commits_truncated",
         "merge_base_oid",
         "proofs_tried",
+        "questions",
+        "range_pairing",
         "reasons",
+        "suggested_verdict",
         "tip_oid",
         "unintegrated_diff"
       ],
@@ -347,6 +378,71 @@
       ],
       "type": "object"
     },
+    "Pair": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_commit": {
+          "type": "string"
+        },
+        "range_commit": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "=",
+            "!",
+            "<",
+            ">"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch_commit",
+        "range_commit",
+        "status"
+      ],
+      "type": "object"
+    },
+    "Pairing": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "const": "superseded-candidate"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pairs": {
+          "items": {
+            "$ref": "#/$defs/Pair"
+          },
+          "maxItems": 256,
+          "type": "array"
+        },
+        "range": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "truncated": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Truncation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "range",
+        "evidence",
+        "pairs",
+        "truncated"
+      ],
+      "type": "object"
+    },
     "Proof": {
       "additionalProperties": false,
       "properties": {
@@ -370,6 +466,22 @@
         "class",
         "outcome",
         "why"
+      ],
+      "type": "object"
+    },
+    "Question": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
       ],
       "type": "object"
     },
@@ -507,7 +619,8 @@
             "commits",
             "files",
             "lines",
-            "bytes"
+            "bytes",
+            "rows"
           ],
           "type": "string"
         }
@@ -532,6 +645,41 @@
       "required": [
         "text",
         "untrusted"
+      ],
+      "type": "object"
+    },
+    "Verdict": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "obviously-integrated",
+            "looks-superseded",
+            "has-real-unmerged-content",
+            "unclear"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "confidence",
+        "verdict"
       ],
       "type": "object"
     }

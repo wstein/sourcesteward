@@ -45,7 +45,12 @@ func TestTidyV3ReportSchemaAcceptsTheGoldenAndRefusesViolations(t *testing.T) {
 		"truncation with a free unit": func(v map[string]any) {
 			first(v)["commits_truncated"] = map[string]any{"unit": "pages", "shown": 1, "total": 2}
 		},
-		"negative count":               func(v map[string]any) { v["summary"].(map[string]any)["omitted"] = -1 },
+		"negative count":            func(v map[string]any) { v["summary"].(map[string]any)["omitted"] = -1 },
+		"verdict outside the table": func(v map[string]any) { first(v)["suggested_verdict"].(map[string]any)["verdict"] = "integrated" },
+		"allowed decisions changed": func(v map[string]any) { first(v)["allowed_decisions"] = []any{"integrated"} },
+		"pairing status unknown": func(v map[string]any) {
+			first(v)["range_pairing"].(map[string]any)["pairs"].([]any)[0].(map[string]any)["status"] = "~"
+		},
 		"proof outcome claims a proof": func(v map[string]any) { first(v)["proofs_tried"].([]any)[0].(map[string]any)["outcome"] = "proven" },
 	}
 	for name, mutate := range mutations {
@@ -64,7 +69,7 @@ func TestTidyV3ReportSchemaAcceptsTheGoldenAndRefusesViolations(t *testing.T) {
 func TestTidyV3PlanSchemaCarriesTheReviewBindingAndSummary(t *testing.T) {
 	s := schemaAt(t, "v3", "tidy")
 	r := tidyV3SchemaPlan()
-	r.Plan.Review = &workspace.V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10}
+	r.Plan.Review = &workspace.V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []workspace.V3ReviewRange{}}
 	r.ReviewSummary = &workspace.V3ReviewSummary{Proven: 1, NeedsReview: 2, Retained: 1, Reasons: map[string]int{"would-add-content": 2, "selected-base": 1}, ReportWritten: true, Entries: 2}
 	raw, err := json.Marshal(r)
 	if err != nil {
