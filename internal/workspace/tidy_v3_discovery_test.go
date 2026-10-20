@@ -37,7 +37,7 @@ func fixtureTidyV3SharedHeads(t *testing.T, refs, oids int) (string, string, hos
 func TestTidyV3FortyRefsSharingTwelveOIDsPlanWithoutHints(t *testing.T) {
 	dir, base, repo, heads := fixtureTidyV3SharedHeads(t, 40, 12)
 	c, session := fixtureTidyV3Online(t, dir, repo, nil)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil {
 		t.Fatalf("shared heads needed hints: %+v %+v", r.Status, r.Diagnostics)
 	}
@@ -89,7 +89,7 @@ func TestTidyV3IdenticalDuplicateHintIsOneHintOnePlanEntry(t *testing.T) {
 	dir, base, repo, heads := fixtureTidyV3SharedHeads(t, 6, 2)
 	c, session := fixtureTidyV3Online(t, dir, repo, nil)
 	h := V3PRHint{OID: heads[0], Number: 7}
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}, PRHints: []V3PRHint{h, h}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}, PRHints: []V3PRHint{h, h}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("identical duplicate hint refused: %+v", r.Diagnostics)
 	}
@@ -111,7 +111,7 @@ func TestTidyV3HintErrorsNameTheSelector(t *testing.T) {
 		"number shared": {[]V3PRHint{{OID: heads[0], Number: 3}, {OID: heads[1], Number: 3}}, []string{`--pr "` + heads[0] + `=3"`, `--pr "` + heads[1] + `=3"`}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}, PRHints: tc.hints})
+			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}, PRHints: tc.hints})
 			if r.Status == "ok" || len(r.Diagnostics) == 0 || len(session.targets) != 0 {
 				t.Fatalf("bad hints accepted: %+v", r)
 			}
@@ -141,7 +141,7 @@ func TestTidyV3DiscoveryCoverageNotesAndRetention(t *testing.T) {
 		}
 		session.rows[h] = hosting.TidyHeadEvidence{HeadOID: h, Reason: reason, Result: results[i], Coverage: cov}
 	}
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil {
 		t.Fatalf("%+v", r.Diagnostics)
 	}
@@ -171,7 +171,7 @@ func TestTidyV3DiscoveryCoverageNotesAndRetention(t *testing.T) {
 func TestTidyV3DiscoverySortsTargetsAscending(t *testing.T) {
 	dir, base, repo, heads := fixtureTidyV3SharedHeads(t, 5, 5)
 	c, session := fixtureTidyV3Online(t, dir, repo, nil)
-	c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if len(session.targets) != 1 || !sort.StringsAreSorted(session.targets[0]) || len(session.targets[0]) != len(heads) {
 		t.Fatalf("%v", session.targets)
 	}
@@ -239,7 +239,7 @@ func fixtureTidyV3Budgeted(t *testing.T, dir string, repo hosting.TidyRepository
 func TestTidyV3PlanCompletesWhenDiscoveryExhaustsTheBudget(t *testing.T) {
 	dir, base, repo, heads := fixtureTidyV3SharedHeads(t, 120, 120)
 	c, s := fixtureTidyV3Budgeted(t, dir, repo, nil, 10)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", StateDir: privateDir(t), ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, StateDir: privateDir(t), ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil {
 		t.Fatalf("plan failed at the budget: %+v %+v", r.Status, r.Diagnostics)
 	}
@@ -267,7 +267,7 @@ func TestTidyV3PlanWithFortyProvenOIDsMakesNoPlanTimeProviderReads(t *testing.T)
 	}
 	gitFixture(t, dir, "update-ref", "refs/heads/selected-base", parent)
 	c, s := fixtureTidyV3Budgeted(t, dir, repo, rows, 1)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: "refs/heads/selected-base", Online: true, Remote: "origin", StateDir: privateDir(t), ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: "refs/heads/selected-base", Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, StateDir: privateDir(t), ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("%+v", r.Diagnostics)
 	}
@@ -302,7 +302,7 @@ func TestTidyV3DiscoveryRecordsNeverRefuseThePlan(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, base, repo, _ := fixtureTidyV3SharedHeads(t, tc.refs, tc.oids)
 			c, _ := fixtureTidyV3Online(t, dir, repo, nil)
-			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 			if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil {
 				t.Fatalf("plan refused: %s %+v", r.Status, r.Diagnostics)
 			}
@@ -320,7 +320,7 @@ func TestTidyV3DiscoveryRecordsNeverRefuseThePlan(t *testing.T) {
 func TestTidyV3DiscoveryRefCapDropsOverflowWithNote(t *testing.T) {
 	dir, base, repo, _ := fixtureTidyV3SharedHeads(t, 700, 100) // 7 refs per OID: 73 records fit 511 refs
 	c, _ := fixtureTidyV3Online(t, dir, repo, nil)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("%+v", r.Diagnostics)
 	}
@@ -336,7 +336,7 @@ func TestTidyV3DiscoveryRefCapDropsOverflowWithNote(t *testing.T) {
 func TestTidyV3DiscoveryRecordValidationKillsEachInvariant(t *testing.T) {
 	dir, base, repo, heads := fixtureTidyV3SharedHeads(t, 4, 2)
 	c, _ := fixtureTidyV3Online(t, dir, repo, nil)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil || len(r.Plan.Online.Discovery) != 2 {
 		t.Fatalf("%+v", r.Diagnostics)
 	}
@@ -396,7 +396,7 @@ func TestTidyV3DiscoveryNoteIsBounded(t *testing.T) {
 	for _, h := range heads {
 		session.rows[h] = hosting.TidyHeadEvidence{HeadOID: h, Reason: "integration-not-proven", Result: "discovery-budget-exhausted", Coverage: "complete"}
 	}
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" {
 		t.Fatalf("%+v", r.Diagnostics)
 	}
@@ -420,7 +420,7 @@ func TestTidyV3DiscoveryNoteIsBounded(t *testing.T) {
 func TestTidyV3StoredDiscoveryRecordCapIsEnforcedAlone(t *testing.T) {
 	dir, base, repo, _ := fixtureTidyV3SharedHeads(t, 4, 2)
 	c, _ := fixtureTidyV3Online(t, dir, repo, nil)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("%+v", r.Diagnostics)
 	}
@@ -452,7 +452,7 @@ func TestTidyV3DiscoveryNotesUseTheFullSetNotTheKeptRecords(t *testing.T) {
 	for _, h := range heads {
 		session.rows[h] = hosting.TidyHeadEvidence{HeadOID: h, Reason: "integration-not-proven", Result: "discovery-incomplete", Coverage: "incomplete"}
 	}
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || len(r.Plan.Online.Discovery) != v3DiscoveryRecordCap {
 		t.Fatalf("%s kept %d", r.Status, len(r.Plan.Online.Discovery))
 	}
@@ -476,7 +476,7 @@ func TestTidyV3DiscoveryListIsByteBounded(t *testing.T) {
 	gitFixture(t, dir, "commit", "--allow-empty", "-qm", "advance base")
 	base := gitFixture(t, dir, "symbolic-ref", "HEAD")
 	c, _ := fixtureTidyV3Online(t, dir, repo, nil)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("%s %+v", r.Status, r.Diagnostics)
 	}
@@ -494,7 +494,7 @@ func TestTidyV3DiscoveryListIsByteBounded(t *testing.T) {
 func TestTidyV3StoredDiscoveryByteCapIsEnforcedAlone(t *testing.T) {
 	dir, base, repo, _ := fixtureTidyV3SharedHeads(t, 4, 2)
 	c, _ := fixtureTidyV3Online(t, dir, repo, nil)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("%+v", r.Diagnostics)
 	}

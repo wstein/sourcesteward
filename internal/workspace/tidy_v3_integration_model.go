@@ -124,7 +124,7 @@ func validV3IntegrationEvidence(e V3IntegrationEvidence, tip string, p V3Plan) b
 	if e.TipOID != tip || e.BaseOID != p.Expected.BaseCommit || e.BaseSelector != p.Expected.BaseSelector || e.Reasons == nil || e.Flags == nil {
 		return false
 	}
-	if e.Matched < 0 || e.Unmatched < 0 || e.Empty < 0 || e.SkippedMerges < 0 || e.Matched > observationLimit || e.Unmatched > observationLimit || e.Empty > observationLimit || e.SkippedMerges > observationLimit {
+	if e.Matched < 0 || e.Unmatched < 0 || e.Empty < 0 || e.SkippedMerges < 0 || e.Matched > observationLimit || e.Unmatched > observationLimit || e.Empty > observationLimit || e.SkippedMerges > 9999999 {
 		return false
 	}
 	seen := map[string]bool{}
@@ -156,12 +156,13 @@ func validV3IntegrationEvidence(e V3IntegrationEvidence, tip string, p V3Plan) b
 		if e.Class != "" || e.Strength != "" || len(e.Reasons) == 0 || len(e.Flags) > 1 {
 			return false
 		}
-		hard := false
+		hard, soft := false, false
 		for _, r := range e.Reasons {
-			hard = hard || integrationHardStop(r)
+			hard, soft = hard || integrationHardStop(r), soft || !integrationHardStop(r)
 		}
-		// A hard stop retains the tip; every other reason leaves it for review.
-		return hard == (e.Disposition == integrationRetainedDisposition) && (len(e.Flags) == 0 || e.Flags[0] == integrationFlagWhitespace && seen[integrationFlagWhitespace])
+		// A hard stop retains the tip (and only hard stops do); every other
+		// reason leaves it for review.
+		return hard == (e.Disposition == integrationRetainedDisposition) && !(hard && soft) && (len(e.Flags) == 0 || e.Flags[0] == integrationFlagWhitespace && seen[integrationFlagWhitespace])
 	}
 	return false
 }

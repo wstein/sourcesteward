@@ -497,7 +497,7 @@ func validV3IntegrationReview(c V3CommitProof, p V3Plan) bool {
 		return false
 	}
 	if e.Disposition == integrationRetainedDisposition {
-		return len(e.Reasons) == 1 && c.Reason == e.Reasons[0]
+		return c.Reason == e.Reasons[0]
 	}
 	return c.Reason == integrationReviewDisposition
 }

@@ -555,3 +555,33 @@ func TestIntegrationCheckAttrStreamBounds(t *testing.T) {
 		t.Fatalf("wrong path: %v", err)
 	}
 }
+
+// Unrelated histories have no merge base: nothing is proven.
+func TestPatchIDWithoutAMergeBaseIsAmbiguous(t *testing.T) {
+	f := newProofFix(t)
+	f.git("checkout", "-q", "--orphan", "other")
+	f.git("rm", "-rfq", ".")
+	f.commit("unrelated root", map[string]string{"o.txt": "o\n"})
+	for _, kinds := range [][]string{{"patch-id"}, {"merge-noop"}, {"no-net-change"}} {
+		wantVerdict(t, f.verdict(f.main, "other", noopPolicy(kinds...)), "needs-review", "", "ambiguous-merge-base")
+	}
+}
+
+// The whitespace difference is reported even when the class is otherwise
+// unproven, so a reviewer sees it next to partial-match.
+func TestPatchIDReportsWhitespaceWhenOtherwiseUnproven(t *testing.T) {
+	f := newProofFix(t)
+	mb := f.rev("HEAD")
+	f.branch("topic", mb)
+	f.commit("script", map[string]string{"s.sh": "  echo hi\n"})
+	f.commit("other", map[string]string{"o.txt": "only on the branch\n"})
+	f.checkout(f.main)
+	f.commit("script landed", map[string]string{"s.sh": "echo hi\n"})
+	for _, accept := range []bool{false, true} {
+		v := f.verdict(f.main, "topic", patchPolicy(accept))
+		wantVerdict(t, v, "needs-review", "", "whitespace-differs", "partial-match")
+		if !reflect.DeepEqual(v.Flags, []string{"whitespace-differs"}) || v.Matched != 1 || v.Unmatched != 1 {
+			t.Fatalf("accept=%t verdict %+v", accept, v)
+		}
+	}
+}

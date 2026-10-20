@@ -365,6 +365,9 @@ func (c tidyV3RefsApplyCoordinator) revalidateProof(ctx context.Context, p V3Pla
 			return tidyV3HostingError(err)
 		}
 	}
+	if integrationProofTag(target.Proof) {
+		return c.revalidateIntegrationProof(ctx, p, expected, target)
+	}
 	proof := V3CommitProof{OID: target.OID, Decision: target.Decision, Reason: target.Reason, Proof: target.Proof, WorkspacePaths: target.WorkspacePaths, Evidence: target.Evidence}
 	return revalidateTidyV3Commit(ctx, s, expected, proof, func(ctx context.Context, oid, base string) (bool, error) {
 		return c.refs.ancestry(ctx, expected, oid, base)

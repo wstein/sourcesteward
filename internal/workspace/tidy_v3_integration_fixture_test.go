@@ -19,6 +19,8 @@ type proofFix struct {
 	t    *testing.T
 	dir  string
 	main string
+	// bin, when set, replaces the Git executable of the engine under test.
+	bin string
 }
 
 func newProofFix(t *testing.T) *proofFix {
@@ -118,6 +120,9 @@ func (f *proofFix) verdictWith(base, tip string, policy V3ProofPolicy, engine in
 		f.t.Fatal(err)
 	}
 	defer cleanup()
+	if f.bin != "" {
+		run.bin = f.bin
+	}
 	return run.evaluate(ctx, f.rev(base), f.rev(tip), policy)
 }
 
@@ -183,4 +188,21 @@ func snapshotTree(t *testing.T, dir string, skip ...string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// wrapGit writes an executable that behaves as Git except that merge-tree runs
+// the given shell fragment instead.
+func wrapGit(t *testing.T, mergeTree string) string {
+	t.Helper()
+	real, err := gitExecutable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := gitTempDir(t)
+	path := filepath.Join(dir, "git")
+	script := "#!/bin/sh\nfor a in \"$@\"; do if [ \"$a\" = merge-tree ]; then " + mergeTree + "; fi; done\nexec " + real + " \"$@\"\n"
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

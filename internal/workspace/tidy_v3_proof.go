@@ -132,7 +132,7 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 		return out, err
 	}
 	notes := session.configNotes()
-	if err = gitTidyAncestryMetadata(before.Identity); err != nil {
+	if err = tidyV3AncestryMetadata(ctx, before.Identity); err != nil {
 		return out, err
 	}
 	bin, err := gitExecutable()
@@ -158,7 +158,7 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 	if err != nil {
 		return out, err
 	}
-	if err = gitTidyAncestryMetadata(after.Identity); err != nil {
+	if err = tidyV3AncestryMetadata(ctx, after.Identity); err != nil {
 		return out, err
 	}
 	if before != after || primaryBefore != primaryAfter || !reflect.DeepEqual(notes, session.configNotes()) {
@@ -171,6 +171,16 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 	out.Expected = v3SnapshotWithState(before, out.Native)
 	out.ConfigNotes = tidyV3ConfigNotesWithReplace(notes, out.Native.References)
 	return out, nil
+}
+
+// tidyV3AncestryMetadata keeps Spec 029's refusal of graft metadata except in a
+// local-reference planning context, where grafts are the hard stop
+// history-override of every proof.
+func tidyV3AncestryMetadata(ctx context.Context, id NativeIdentity) error {
+	if historyHardStopsTolerated(ctx) {
+		return nil
+	}
+	return gitTidyAncestryMetadata(id)
 }
 
 // refs/replace/* are never consulted (--no-replace-objects); say so once.

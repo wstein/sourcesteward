@@ -4,6 +4,7 @@ package workspace
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"slices"
 	"sort"
@@ -33,8 +34,6 @@ func logPatchArgs(rangeSpec string) []string {
 // patchIDs pipes one `log -p` stream into `patch-id --stable` and
 // `patch-id --verbatim` concurrently (one pass). The stream is never buffered.
 func (r *integrationRun) patchIDs(ctx context.Context, attrTree, rangeSpec string) (stable, verbatim []patchIDRow, err error) {
-	pipeCtx, cancel := context.WithTimeout(ctx, integrationCommandTimeout)
-	defer cancel()
 	type outcome struct {
 		rows []patchIDRow
 		err  error
@@ -43,7 +42,7 @@ func (r *integrationRun) patchIDs(ctx context.Context, attrTree, rangeSpec strin
 		done := make(chan outcome, 1)
 		go func() {
 			var rows []patchIDRow
-			_, e := r.run(pipeCtx, integrationCommand{args: []string{"patch-id", flag}, stdin: source, limit: specPatchID.bytes(r.width)}, func(out io.Reader) error {
+			_, e := r.run(ctx, integrationCommand{args: []string{"patch-id", flag}, stdin: source, limit: specPatchID.bytes(r.width)}, func(out io.Reader) error {
 				return readIntegrationRecords(out, specPatchID, r.width, func(rec []byte) error {
 					rows = append(rows, patchIDRow{patch: string(rec[:r.width]), commit: string(rec[r.width+1:])})
 					return nil
@@ -58,20 +57,30 @@ func (r *integrationRun) patchIDs(ctx context.Context, attrTree, rangeSpec strin
 	stableReader, stableWriter := io.Pipe()
 	verbatimReader, verbatimWriter := io.Pipe()
 	stableDone, verbatimDone := start("--stable", stableReader), start("--verbatim", verbatimReader)
-	_, logErr := r.run(pipeCtx, integrationCommand{attrTree: attrTree, args: logPatchArgs(rangeSpec), limit: integrationPatchStream}, func(out io.Reader) error {
+	_, logErr := r.run(ctx, integrationCommand{attrTree: attrTree, args: logPatchArgs(rangeSpec), limit: integrationPatchStream}, func(out io.Reader) error {
 		_, e := io.Copy(io.MultiWriter(stableWriter, verbatimWriter), out)
 		return e
 	})
 	stableWriter.CloseWithError(logErr)
 	verbatimWriter.CloseWithError(logErr)
 	s, v := <-stableDone, <-verbatimDone
+	// The budget and the caller's cancellation dominate the pipe errors that
+	// an early stop of one process causes in the others.
+	var first error
 	for _, e := range []error{logErr, s.err, v.err} {
-		if e != nil {
-			if ctx.Err() != nil {
-				return nil, nil, ctx.Err()
-			}
+		switch {
+		case e == nil:
+		case errors.Is(e, errIntegrationBudget):
 			return nil, nil, e
+		case first == nil:
+			first = e
 		}
+	}
+	if first != nil {
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+		return nil, nil, first
 	}
 	return s.rows, v.rows, nil
 }
