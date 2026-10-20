@@ -163,6 +163,20 @@ func TestTidyV3SchemaPositiveModesAndExclusiveProvenance(t *testing.T) {
 	p.Candidates[0].Evidence = &workspace.V3ProofEvidence{GitHub: &merged}
 	raw, _ := json.Marshal(r)
 	valid(t, s, raw)
+	// Spec 031 DiscoveryRecord: additive and optional; closed and bounded.
+	p.Online.Discovery = []workspace.V3DiscoveryRecord{{OID: candidate.OID, Source: "discovered", PR: &workspace.V3PRIdentity{ID: 10, NodeID: "pr-node", Number: 42}, Refs: []string{candidate.Name}, Coverage: "complete", Result: "github-merged-head"}, {OID: strings.Repeat("b", 40), Source: "hint", PR: nil, Refs: []string{"refs/heads/x"}, Coverage: "incomplete", Result: "discovery-incomplete"}}
+	raw, _ = json.Marshal(r)
+	valid(t, s, raw)
+	p.Online.Discovery[1].Result = "absent"
+	raw, _ = json.Marshal(r)
+	if err := s.Validate(value(t, raw)); err == nil {
+		t.Fatal("unknown discovery result accepted")
+	}
+	p.Online.Discovery = nil
+	raw, _ = json.Marshal(r)
+	if strings.Contains(string(raw), `"discovery"`) {
+		t.Fatalf("absent discovery changed stored plan bytes: %s", raw)
+	}
 	p.Mode = "tracking-refs"
 	p.SelectedRefs = []string{"refs/remotes/origin/gone"}
 	p.Candidates[0].Name = p.SelectedRefs[0]

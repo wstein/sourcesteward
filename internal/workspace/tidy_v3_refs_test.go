@@ -213,7 +213,7 @@ func TestTidyV3CoordinatorNineProviderHeadsAndStoredPlan(t *testing.T) {
 			}
 		}
 	}
-	if count != 9 || len(session.targets) != 1 || len(session.targets[0]) != 9 || len(session.rechecks) != 18 || !session.closed || !r.Boundary.NetworkAttempted {
+	if count != 9 || len(session.targets) != 1 || len(session.targets[0]) != 9 || len(session.rechecks) != 0 || !session.closed || !r.Boundary.NetworkAttempted {
 		t.Fatalf("incomplete provider work: count=%d session=%+v boundary=%+v", count, session, r.Boundary)
 	}
 	native, err := observeTidyV3Git(context.Background(), dir, o.Base)
@@ -234,7 +234,7 @@ func TestTidyV3CoordinatorNineProviderHeadsAndStoredPlan(t *testing.T) {
 	}
 }
 func TestTidyV3CompleteNegativeAndUnavailableAreDistinct(t *testing.T) {
-	for _, kind := range []string{"negative", "unavailable", "changed", "missing-object", "nonreachable", "wrong-repository", "amended-tip", "patch-only"} {
+	for _, kind := range []string{"negative", "unavailable", "missing-object", "nonreachable", "wrong-repository", "amended-tip", "patch-only"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, _, expected, repo, rows := fixtureTidyV3Merged(t)
 			row := rows[0]
@@ -259,12 +259,9 @@ func TestTidyV3CompleteNegativeAndUnavailableAreDistinct(t *testing.T) {
 			if kind == "unavailable" {
 				s.discoverErr = errors.New("provider unavailable")
 			}
-			if kind == "changed" {
-				s.errorOnRecheck = hosting.ErrTidyChanged
-			}
 			o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", Refs: []string{"refs/heads/topic-x"}, ProtectWorktrees: []string{}}
 			r := c.plan(context.Background(), o)
-			incomplete := kind == "unavailable" || kind == "changed" || kind == "missing-object"
+			incomplete := kind == "unavailable" || kind == "missing-object"
 			if incomplete {
 				if r.Status == "ok" || r.Plan != nil || r.Boundary.Complete {
 					t.Fatalf("incomplete provider evidence authorized %+v", r)
@@ -507,10 +504,12 @@ func TestTidyV3UnsupportedOwnershipAndChangedProviderHavePreciseRefusals(t *test
 		t.Fatalf("unsupported ownership was not explicit refusal: %+v", r)
 	}
 	c.inspect = originalInspect
+	// Provider re-reads belong to apply (Spec 031 FR-018): a plan makes none, so
+	// provider drift is refused at apply, never by spending plan budget.
 	s.errorOnRecheck = hosting.ErrTidyChanged
 	r = c.plan(context.Background(), o)
-	if r.Status != "refused" || r.Plan != nil || r.Diagnostics[0].Code != "evidence-changed" {
-		t.Fatalf("provider drift lost its precise refusal: %+v", r)
+	if r.Status != "ok" || r.Plan == nil || len(s.rechecks) != 0 {
+		t.Fatalf("plan re-read the provider: %+v rechecks=%d", r, len(s.rechecks))
 	}
 }
 

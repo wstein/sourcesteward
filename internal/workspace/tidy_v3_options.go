@@ -8,14 +8,10 @@ import (
 	"strconv"
 )
 
-// v3HintSelector renders a hint as the flag text that selected it, escaped and
-// bounded to the Spec 029 4,096-byte message limit.
+// v3HintSelector renders a validated hint (40 hex digits and a number, far
+// below the 4,096-byte message limit) as the quoted flag text that selected it.
 func v3HintSelector(h V3PRHint) string {
-	q := strconv.Quote(h.OID + "=" + strconv.FormatInt(h.Number, 10))
-	if len(q) > 4096 {
-		q = q[:4096]
-	}
-	return "--pr " + q
+	return "--pr " + strconv.Quote(h.OID+"="+strconv.FormatInt(h.Number, 10))
 }
 
 // normalizeV3PRHints keys hints by head OID: identical repeats collapse to one

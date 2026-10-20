@@ -146,6 +146,23 @@ type V3OnlineSelection struct {
 	PRHints            []V3PRHint   `json:"pr_hints"`
 	ObservationDigests []string     `json:"observation_digests"`
 	BudgetPolicy       string       `json:"budget_policy"`
+	// Discovery holds one record per distinct unproven head OID, listing every
+	// selected ref that carries it (Spec 031 FR-014). Absent for plans without
+	// provider discovery, so earlier stored plans keep their bytes.
+	Discovery []V3DiscoveryRecord `json:"discovery,omitempty"`
+}
+type V3PRIdentity struct {
+	ID     int64  `json:"id"`
+	NodeID string `json:"node_id"`
+	Number int64  `json:"number"`
+}
+type V3DiscoveryRecord struct {
+	OID      string        `json:"oid"`
+	Source   string        `json:"source"`
+	PR       *V3PRIdentity `json:"pr"`
+	Refs     []string      `json:"refs"`
+	Coverage string        `json:"coverage"`
+	Result   string        `json:"result"`
 }
 
 // Physical facts are sampled with native timestamp precision, never inferred
@@ -486,12 +503,64 @@ func validV3Online(o V3OnlineSelection, p V3Plan) bool {
 			return false
 		}
 	}
+	records := map[string]bool{}
+	refTotal, byteTotal := 0, 0
+	if len(o.Discovery) > v3DiscoveryRecordCap {
+		return false
+	}
+	for _, d := range o.Discovery {
+		refTotal += len(d.Refs)
+		byteTotal += v3DiscoveryBytes(d)
+		if refTotal > v3DiscoveryRefCap || byteTotal > v3DiscoveryByteCap {
+			return false
+		}
+		if !validV3Discovery(d, p, o) || records[d.OID] {
+			return false
+		}
+		records[d.OID] = true
+	}
 	seen = map[string]bool{}
 	for _, h := range o.ObservationDigests {
 		if !v3Hash(h) || seen[h] {
 			return false
 		}
 		seen[h] = true
+	}
+	return true
+}
+func validV3Discovery(d V3DiscoveryRecord, p V3Plan, o V3OnlineSelection) bool {
+	if !v3OID(d.OID, "sha1") || (d.Source != "discovered" && d.Source != "hint") || (d.Coverage != "complete" && d.Coverage != "incomplete") || len(d.Refs) == 0 || len(d.Refs) > 1024 {
+		return false
+	}
+	hinted := false
+	for _, h := range o.PRHints {
+		hinted = hinted || h.OID == d.OID
+	}
+	if hinted != (d.Source == "hint") {
+		return false
+	}
+	switch d.Result {
+	case "github-merged-head":
+		if d.PR == nil || d.PR.ID <= 0 || d.PR.Number <= 0 || !v3OpaqueID(d.PR.NodeID) {
+			return false
+		}
+	case "no-merged-pr", "discovery-incomplete", "discovery-budget-exhausted", "ambiguous-needs-hint":
+		if d.PR != nil || (d.Result == "no-merged-pr" && d.Coverage != "complete") {
+			return false
+		}
+	default:
+		return false
+	}
+	names := map[string]bool{}
+	for _, c := range p.Candidates {
+		if c.OID == d.OID {
+			names[c.Name] = true
+		}
+	}
+	for i, ref := range d.Refs {
+		if !names[ref] || (i > 0 && d.Refs[i-1] >= ref) {
+			return false
+		}
 	}
 	return true
 }
@@ -682,6 +751,47 @@ func validV3Manifest(m V3Manifest, root string, metadata bool) bool {
 	return total <= 64<<20 && len(m.Entries) <= observationLimit
 }
 
+const (
+	v3DiscoveryRecordCap = 256
+	v3DiscoveryRefCap    = 512
+	// v3DiscoveryByteCap bounds the encoded size contributed by the repeated ref
+	// names, so the informational list stays far below the 1 MiB record limit.
+	v3DiscoveryByteCap = 128 << 10
+)
+
+// v3DiscoveryBytes approximates the encoded size of one record: its text and a
+// fixed allowance for the member names, source, coverage, result and PR identity.
+func v3DiscoveryBytes(d V3DiscoveryRecord) int {
+	n := 320
+	for _, r := range d.Refs {
+		n += len(r) + 4
+	}
+	return n
+}
+
+// v3DiscoveryText validates the text of discovery records, which are counted
+// against their own caps rather than the aggregate entry cap.
+func v3DiscoveryText(v reflect.Value) bool {
+	records, ok := v.Interface().([]V3DiscoveryRecord)
+	if !ok {
+		return false
+	}
+	for _, d := range records {
+		if !validText(d.OID) || !validText(d.Source) || !validText(d.Coverage) || !validText(d.Result) || d.Refs == nil {
+			return false
+		}
+		for _, r := range d.Refs {
+			if !validText(r) {
+				return false
+			}
+		}
+		if d.PR != nil && !validText(d.PR.NodeID) {
+			return false
+		}
+	}
+	return true
+}
+
 // Validate original Go strings before encoding/json can replace invalid UTF-8.
 func v3Bounds(v any) error {
 	count := 0
@@ -713,6 +823,15 @@ func v3Bounds(v any) error {
 			for i := 0; i < v.NumField(); i++ {
 				// An absent optional array (json omitempty) is not a null array.
 				if f := v.Field(i); f.Kind() == reflect.Slice && f.IsNil() && strings.Contains(v.Type().Field(i).Tag.Get("json"), ",omitempty") {
+					continue
+				}
+				// Discovery records have their own bounds (v3DiscoveryRecordCap,
+				// v3DiscoveryRefCap) and never count toward the aggregate cap, so
+				// they can never make a plan refuse (Spec 031 FR-017).
+				if strings.HasPrefix(v.Type().Field(i).Tag.Get("json"), "discovery,") {
+					if !v3DiscoveryText(v.Field(i)) {
+						return false
+					}
 					continue
 				}
 				if !walk(v.Field(i), depth+1) {
