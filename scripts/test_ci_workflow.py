@@ -31,5 +31,26 @@ class TriggerTests(unittest.TestCase):
         self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", job_text('pages'))
 
 
+class CheckJobTests(unittest.TestCase):
+    def test_check_job_runs_static_checks_and_race_suite_once(self):
+        check = job_text('check')
+        self.assertIn('run: make check-static', check)
+        self.assertNotIn('run: make check\n', check)
+        self.assertEqual(len(re.findall(r'go test\b', check)), 1, 'check must run go test exactly once')
+        self.assertIn('run: go test -timeout 40m -race ./...', check)
+
+    def test_make_check_keeps_every_step_and_check_static_omits_only_go_test(self):
+        makefile = (ROOT / 'Makefile').read_text()
+        check = re.search(r'^check:[^\n]*\n((?:\t[^\n]*\n)+)', makefile, re.M).group(1)
+        static = re.search(r'^check-static:[^\n]*\n((?:\t[^\n]*\n)+)', makefile, re.M).group(1)
+        self.assertIn('$(GO) test -timeout 40m ./...', check)
+        self.assertIn('check-static', check)
+        self.assertNotIn('$(GO) test', static)
+        for required in ('gofmt -l', '$(GO) vet ./...', '$(GO) mod verify', 'unittest discover',
+                         'scripts/test_theme.mjs', 'scripts/check-docs.py', 'scripts/check-architecture.py',
+                         'git diff --check'):
+            self.assertIn(required, static)
+
+
 if __name__ == '__main__':
     unittest.main()

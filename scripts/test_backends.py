@@ -107,7 +107,7 @@ class BackendInstallerTests(unittest.TestCase):
 
     def test_every_native_test_job_installs_and_requires_sandbox_before_tests(self):
         workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        for name, following, test_command in (('check', 'conformance', 'run: make check'),
+        for name, following, test_command in (('check', 'conformance', 'run: make check-static'),
                                               ('conformance', 'pages', 'run: go test -count=1 -timeout 40m -race ./...')):
             with self.subTest(job=name):
                 job = workflow.split('  ' + name + ':\n', 1)[1].split('\n  ' + following + ':\n', 1)[0]
