@@ -323,6 +323,11 @@ func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3Plan
 	if e != nil {
 		return out, e
 	}
+	// An initialized submodule is data this retirement never opens or removes:
+	// retain rather than delete the worktree (Spec 031 FR-021).
+	if proof.Decision == "delete" && submodulesInitialized(before.Config, target.RepositoryDir) {
+		proof = V3CommitProof{OID: proof.OID, Decision: "retain", Reason: "submodule-present", Proof: "none", WorkspacePaths: proof.WorkspacePaths}
+	}
 	r := V3Retirement{ActionID: "retirement-" + gitDigest(dest)[:32], RegisteredRoots: roots, ProtectedRoots: append([]string{}, o.ProtectWorktrees...), Destination: destination, Parent: parent, Registration: regIdentity, RegistrationParent: regParent, RegistrationSiblings: out.RegistrationSiblings, Target: target, RemoveRegistration: true, RemoveFiles: dest, ContentPolicy: "git-v3", Disk: disk, Metadata: metadata, Siblings: siblings, Integration: proof}
 	r.Provenance = V3Provenance{Kind: "legacy-completion", Legacy: &V3LegacyProvenance{Owner: o.Owner, Completed: true, SameUserAuthority: true, SelectedPath: dest, ProtectedRoots: append([]string{}, o.ProtectWorktrees...), ObservedIdentity: destination}}
 	if owned != nil {
