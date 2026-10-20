@@ -24,7 +24,7 @@ Counts per disposition and per reason; `report_written` boolean; `entries`, `omi
 
 ## Report and ReportEntry
 
-As defined in the [review report contract](contracts/review-report.md): `schema_version`, `reviewer_guidance`, `summary`, `base`, `entries[]` with `branch`, `tip_oid`, `base_oid`, `merge_base_oid`, `reasons`, `commits`, `proofs_tried`, `unintegrated_diff`, `candidate_base_commits`, `range_pairing`, `suggested_verdict`, `questions`, `allowed_decisions`. Per-path `files[]` carries mode, type change and kind (FR-003c). `unintegrated_diff.source` says which diff is shown, `commits_truncated` is the commit marker and `summary.retained_refs` lists the retained references with `clearable: false`. Truncation markers are `{unit, shown, total}`. Candidate JSON schema validated by tests, unpublished.
+As defined in the [review report contract](contracts/review-report.md): `schema_version`, `reviewer_guidance`, `summary`, `base`, `entries[]` with `branch`, `tip_oid`, `base_oid`, `merge_base_oid`, `reasons`, `commits`, `proofs_tried`, `unintegrated_diff`, `candidate_base_commits`, `range_pairing`, `suggested_verdict`, `questions`, `allowed_decisions`. Per-path `files[]` carries mode, type change and kind (FR-003c). `range_pairing` (`range`, `evidence`, `note`, `pairs`, `truncated`) is the best-pairing range and `questions` ends with the guidance item. `unintegrated_diff.source` says which diff is shown, `commits_truncated` is the commit marker and `summary.retained_refs` lists the retained references with `clearable: false`. Truncation markers are `{unit, shown, total}`. Candidate JSON schema validated by tests, unpublished.
 
 ## Decision
 

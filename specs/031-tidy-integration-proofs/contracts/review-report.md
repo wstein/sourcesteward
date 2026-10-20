@@ -49,9 +49,9 @@ Per branch, in this order:
 | `entries[].proofs_tried[]` | array | `class`, `outcome`, `why` |
 | `entries[].unintegrated_diff` | object | `source` (`merge-result`, `branch-against-merge-base` under the merge gate, or `unavailable`), `stat` (`files`,`insertions`,`deletions`), `conflicted_paths[]`, `whitespace_only`, `binary_files[]` (`path` (untrusted object), `old_blob`, `new_blob`, `old_size`, `new_size`), `files[]` (`path` (untrusted object), `old_mode`, `new_mode`, `type_change` (for example `regular->executable`), `kind` (`content`, `mode-only`, `symlink`, `gitlink`, `binary`), for gitlinks `old_oid`, `new_oid`), `hunks[]` (`file` (untrusted object), `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]` (untrusted objects)), `truncated` (`{unit,shown,total}` or null) |
 | `entries[].candidate_base_commits[]` | array | `oid`, `subject` (untrusted object), `match` (`patch-id`, `subject`) |
-| `entries[].range_pairing` | object or null | `range`, `pairs[]` (`status`, `branch_commit`, `range_commit`), `truncated` |
+| `entries[].range_pairing` | object or null | `range`, `evidence` (`superseded-candidate`), `note` (only when skipped), `pairs[]` (`status`, `branch_commit`, `range_commit`), `truncated`; with several ranges the entry reports the one that pairs most commits (the first on a tie) and names it in `range` |
 | `entries[].suggested_verdict` | object | `verdict`, `confidence`, `basis[]` |
-| `entries[].questions[]` | array | fixed template ids and text |
+| `entries[].questions[]` | array | fixed template ids and text `Q1`..`Q4`, then the fixed `reviewer_guidance` as the item with id `guidance` |
 | `entries[].allowed_decisions[]` | array | `integrated`, `keep`, `drop` |
 
 An AI reviewer must be able to classify each branch from this file alone, without running git. The candidate JSON schema is validated by tests; it is published only with accepted implementation.
