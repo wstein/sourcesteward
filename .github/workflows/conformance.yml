@@ -1,0 +1,103 @@
+name: Git/jj conformance
+
+# Reusable conformance suite for one pinned backend lane. Called by ci.yml (pushes to main,
+# PRs against the default branch, PRs labelled ci-full) and by ci-full.yml (label event).
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: Pinned backend lane (minimum or current)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Stable job name: with a caller job named "Git/jj conformance (<lane>)", the check run is
+  # "Git/jj conformance (<lane>) / suite".
+  suite:
+    name: suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      STW_REQUIRE_JJ: '1'
+      STW_REQUIRE_NATIVE_SANDBOX: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Install distro sandbox without relaxing host protections
+        run: |
+          sandbox_settings() {
+            for setting in kernel/unprivileged_userns_clone kernel/apparmor_restrict_unprivileged_userns user/max_user_namespaces; do
+              if test -f "/proc/sys/$setting"; then cat "/proc/sys/$setting"; else echo unavailable; fi
+            done
+          }
+          if test -f /proc/sys/kernel/unprivileged_userns_clone; then
+            test "$(cat /proc/sys/kernel/unprivileged_userns_clone)" = 1
+          fi
+          before="$(sandbox_settings)"
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y bubblewrap apparmor apparmor-profiles
+          python3 -B scripts/activate-sandbox-profile.py
+          test "$before" = "$(sandbox_settings)"
+      - name: Require sandbox capability before building toolchains
+        run: python3 -B scripts/smoke-jj-inspection.py --sandbox-preflight
+      - name: Read-only sandbox failure diagnostics
+        if: failure()
+        run: python3 -B scripts/smoke-jj-inspection.py --sandbox-diagnostics
+      - name: Resolve pinned Git version for the build cache key
+        id: gitpin
+        env:
+          BACKEND_LANE: ${{ inputs.lane }}
+        run: |
+          python3 -B -c "import json, os; print('version=' + json.load(open('scripts/backend-releases.json'))[os.environ['BACKEND_LANE']]['git']['version'])" >> "$GITHUB_OUTPUT"
+      # Only the Git build prefix is cached (jj is a checked download). The Git version is
+      # asserted again by the preflight below, so a stale or wrong cache entry fails closed.
+      - name: Restore cached Git build
+        id: gitcache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools/conformance/${{ inputs.lane }}/git
+          key: stw-git-${{ runner.os }}-${{ runner.arch }}-${{ inputs.lane }}-${{ steps.gitpin.outputs.version }}-${{ hashFiles('scripts/install-backends.py', 'scripts/backend-releases.json') }}
+      - name: Install checked native backend releases
+        env:
+          BACKEND_LANE: ${{ inputs.lane }}
+          GIT_CACHE_HIT: ${{ steps.gitcache.outputs.cache-hit }}
+        run: |
+          if [ "$GIT_CACHE_HIT" = true ]; then
+            python3 -B scripts/install-backends.py --tool jj "$BACKEND_LANE"
+          else
+            python3 -B scripts/install-backends.py "$BACKEND_LANE"
+          fi
+          echo "$GITHUB_WORKSPACE/.tools/conformance/$BACKEND_LANE/git/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.tools/conformance/$BACKEND_LANE/jj" >> "$GITHUB_PATH"
+      - name: Install checked GitHub CLI for private extension conformance
+        run: |
+          python3 -B scripts/install-hosting-gh.py
+          echo "$GITHUB_WORKSPACE/.tools/hosting-gh/bin" >> "$GITHUB_PATH"
+      - name: Assert exact versions and required sandbox capability
+        env:
+          BACKEND_LANE: ${{ inputs.lane }}
+        run: python3 -B scripts/smoke-jj-inspection.py --preflight "$BACKEND_LANE"
+      - name: Mandatory real-backend and schema conformance with race checks
+        run: go test -count=1 -timeout 40m -race ./...
+      - name: Real CLI inspection and zero-write acceptance
+        run: |
+          go build -o bin/stw ./cmd/stw
+          python3 -B scripts/smoke-inspection.py
+          python3 -B scripts/smoke-jj-inspection.py
+          python3 -B scripts/smoke-inventory.py
+          python3 -B scripts/smoke-repos.py
+          python3 -B scripts/smoke-workspaces.py
+          python3 -B scripts/smoke-tidy.py
+          python3 -B scripts/smoke-tidy-apply.py
+          python3 -B scripts/smoke-retirement.py
+          go build -o bin/gh-jj/gh-jj ./cmd/gh-jj
+          python3 -B scripts/smoke-hosting.py

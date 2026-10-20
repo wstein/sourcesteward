@@ -93,12 +93,23 @@ lane, the pinned Git version and the installer hash; a hit skips the build and t
 preflight still asserts the exact Git version. Caches written by a branch or PR are visible
 only to that ref and its children, and never to other forks' runs (GitHub's default scoping).
 CI is tiered so stacked PRs do not repeat the heavy suite. The `check` job (static checks
-and the race suite) always runs. The two `Git/jj conformance` lanes run for pushes to `main`,
-for PRs whose base is the default branch, and for any PR carrying the `ci-full` label; a PR
-stacked on another PR branch skips them unless labeled. The owner or dispatcher puts
-`ci-full` on the top PR of a stack (the label event starts the run). A skipped job reports
-a neutral result, so it does not block merging; the stack tip with `ci-full` carries the
-evidence for the whole stack, and the post-merge push to `main` runs everything again.
+and the race suite) always runs. The two `Git/jj conformance` lanes live in the reusable
+workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for pushes to `main`, for PRs
+whose base is the default branch, and for any PR that carries the `ci-full` label when it is
+opened or pushed; a PR stacked on another PR branch skips it otherwise. The separate workflow
+`ci-full.yml` runs it when the `ci-full` label is applied (a `labeled` event), so labelling
+never re-runs `check`. The owner or dispatcher puts `ci-full` on the top PR of a stack. A
+skipped job reports a neutral result, so it does not block merging; the stack tip with
+`ci-full` carries the evidence for the whole stack, and the post-merge push to `main` runs
+everything again. When GitHub retargets a stacked PR to `main` after its parent merged, the
+workflow does not react (no `edited` trigger) and the conformance job stays skipped: the
+dispatcher restacks (a push) or applies `ci-full`.
+
+Check names of the conformance jobs are prefixed by the calling job: a lane reports as
+`Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`), from `ci.yml` and from
+`ci-full.yml` alike. No branch protection exists today; a future required check should
+reference `Git/jj conformance (minimum) / suite` and `Git/jj conformance (current) / suite`.
+The cache key also hashes `scripts/backend-releases.json`.
 Its check job builds and
 validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
 lanes must also pass before deployment. The deployment job runs only for main

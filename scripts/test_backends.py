@@ -98,19 +98,25 @@ class BackendInstallerTests(unittest.TestCase):
                 self.assertTrue(artifact['name'].endswith('.tar.gz'))
 
     def test_ci_requires_both_lanes_and_exact_artifact_gate(self):
-        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        for required in ('lane: [minimum, current]', 'STW_REQUIRE_JJ:', 'scripts/smoke-jj-inspection.py', 'needs: [check, conformance]'):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        workflow = (ROOT / '.github/workflows/conformance.yml').read_text()
+        for required in ('lane: [minimum, current]', 'needs: [check, conformance]'):
+            self.assertIn(required, ci)
+        for required in ('STW_REQUIRE_JJ:', 'scripts/smoke-jj-inspection.py'):
             self.assertIn(required, workflow)
         for forbidden in ('--privileged', 'apparmor_restrict_unprivileged_userns=0', 'chmod u+s'):
             self.assertNotIn(forbidden, workflow)
         self.assertLess(workflow.index('scripts/smoke-jj-inspection.py --sandbox-preflight'), workflow.index('scripts/install-backends.py'))
 
     def test_every_native_test_job_installs_and_requires_sandbox_before_tests(self):
-        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        for name, following, test_command in (('check', 'conformance', 'run: make check-static'),
-                                              ('conformance', 'pages', 'run: go test -count=1 -timeout 40m -race ./...')):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        conformance = (ROOT / '.github/workflows/conformance.yml').read_text()
+        for name, workflow, following, test_command in (('check', ci, 'conformance', 'run: make check-static'),
+                                                        ('suite', conformance, None, 'run: go test -count=1 -timeout 40m -race ./...')):
             with self.subTest(job=name):
-                job = workflow.split('  ' + name + ':\n', 1)[1].split('\n  ' + following + ':\n', 1)[0]
+                job = workflow.split('  ' + name + ':\n', 1)[1]
+                if following:
+                    job = job.split('\n  ' + following + ':\n', 1)[0]
                 self.assertIn("STW_REQUIRE_NATIVE_SANDBOX: '1'", job)
                 setup = job.index('sudo apt-get install --no-install-recommends -y bubblewrap apparmor apparmor-profiles')
                 profile = job.index('python3 -B scripts/activate-sandbox-profile.py')
