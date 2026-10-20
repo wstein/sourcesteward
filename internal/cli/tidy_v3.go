@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -14,7 +15,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
-var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree"}
+var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences"}
 var tidyV3ApplyFlags = []string{"online", "completed-worktree", "owner", "protect-worktree"}
 
 // Counting wraps the existing typed flag value without changing Cobra parsing.
@@ -33,7 +34,7 @@ func (v *tidyV3CountedFlag) String() string     { return v.value.String() }
 func (v *tidyV3CountedFlag) Type() string       { return v.value.Type() }
 func (v *tidyV3CountedFlag) Set(s string) error { v.count++; return v.value.Set(s) }
 
-var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize"}
+var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences"}
 
 func trackTidyV3Singletons(cmd *cobra.Command) {
 	for _, name := range tidyV3Singletons {
@@ -53,7 +54,7 @@ func validateTidyV3PresentFlags(cmd *cobra.Command) error {
 			}
 		}
 	}
-	for _, name := range []string{"base", "state-dir", "task", "owner", "remove-files", "remote", "tracking-remote", "repo", "host", "completed-worktree"} {
+	for _, name := range []string{"base", "state-dir", "task", "owner", "remove-files", "remote", "tracking-remote", "repo", "host", "completed-worktree", "integration-proof"} {
 		flag := cmd.Flags().Lookup(name)
 		if flag != nil && flag.Changed && flag.Value.String() == "" {
 			return fmt.Errorf("--%s requires a nonempty value", name)
@@ -69,7 +70,7 @@ func rejectTidyV3Flags(cmd *cobra.Command, names []string) error {
 	}
 	return nil
 }
-func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3PlanOptions, hints *[]string) {
+func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3PlanOptions, hints *[]string, proofs *string) {
 	f := cmd.Flags()
 	f.StringVar(contract, "contract", "", "Select exactly contract 3; omission preserves existing offline contracts")
 	f.BoolVar(&o.Online, "online", false, "Explicitly permit bounded authenticated GitHub reads")
@@ -80,6 +81,27 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.StringArrayVar(hints, "pr", nil, "Select an exact full head OID=positive PR number (repeatable)")
 	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Exact completed legacy path; asserts exclusive retirement authority")
 	f.StringArrayVar(&o.ProtectWorktrees, "protect-worktree", []string{}, "Declare every caller-known active absolute workspace (repeatable)")
+	f.StringVar(proofs, "integration-proof", "", "Comma-separated forge-free proof classes: ancestor, patch-id, merge-noop, no-net-change (default all four)")
+	f.BoolVar(&o.AcceptWhitespaceDifferences, "accept-whitespace-differences", false, "Allow deletion when a patch-id match differs only in whitespace")
+}
+
+var tidyV3ProofKinds = []string{"ancestor", "patch-id", "merge-noop", "no-net-change"}
+
+// parseTidyV3ProofKinds reads the comma-separated class list of
+// --integration-proof: members of the four classes, each at most once.
+func parseTidyV3ProofKinds(value string) ([]string, error) {
+	kinds := strings.Split(value, ",")
+	seen := map[string]bool{}
+	for _, kind := range kinds {
+		if !slices.Contains(tidyV3ProofKinds, kind) {
+			return nil, fmt.Errorf("--integration-proof accepts ancestor, patch-id, merge-noop and no-net-change")
+		}
+		if seen[kind] {
+			return nil, fmt.Errorf("--integration-proof names %s more than once", kind)
+		}
+		seen[kind] = true
+	}
+	return kinds, nil
 }
 func addTidyV3ApplyFlags(cmd *cobra.Command, contract *string, o *workspace.V3ApplyOptions) {
 	f := cmd.Flags()
@@ -132,6 +154,9 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 		return bad()
 	}
 	retirement := o.Task != "" || o.CompletedWorktree != ""
+	if (retirement || o.TrackingRemote != "") && (len(o.IntegrationProofs) > 0 || o.AcceptWhitespaceDifferences) {
+		return fmt.Errorf("--integration-proof and --accept-whitespace-differences apply to local-reference plans only")
+	}
 	if retirement {
 		if o.Task != "" && o.CompletedWorktree != "" || o.StateDir == "" || !o.RemoveRegistration || !tidyV3Path(o.RemoveFiles) || len(o.Refs) > 0 || o.TrackingRemote != "" {
 			return bad()
@@ -277,6 +302,9 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 	fmt.Fprintf(&text, "Measured budget: native_processes=%d native_bytes=%d http_requests=%d http_bytes=%d observations=%d user_bytes=%d metadata_bytes=%d framing_bytes=%d stderr_bytes=%d\n", r.Boundary.Budget.NativeProcesses, r.Boundary.Budget.NativeBytes, r.Boundary.Budget.HTTPRequests, r.Boundary.Budget.HTTPBytes, r.Boundary.Budget.Observations, r.Boundary.Budget.UserBytes, r.Boundary.Budget.MetadataBytes, r.Boundary.Budget.FramingBytes, r.Boundary.Budget.StderrBytes)
 	if p := r.Plan; p != nil {
 		fmt.Fprintf(&text, "Plan: %q\nDigest: %q\nMode: %q\nSource: %q\nState directory: %q\nBase selector: %q\nBase commit: %q\n", p.PlanID, p.Digest, p.Mode, p.SourcePath, p.StateDir, p.Expected.BaseSelector, p.Expected.BaseCommit)
+		if pol := p.ProofPolicy; pol != nil {
+			fmt.Fprintf(&text, "Proof policy: version=%d kinds=%q accept_whitespace_differences=%t\n", pol.Version, pol.Kinds, pol.AcceptWhitespaceDifferences)
+		}
 		if p.Online != nil {
 			fmt.Fprintf(&text, "Online repository: host=%q name=%q id=%d node_id=%q remote=%q\n", p.Online.Repository.Host, p.Online.Repository.Name, p.Online.Repository.ID, p.Online.Repository.NodeID, p.Online.Remote)
 		}
@@ -284,6 +312,10 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 			fmt.Fprintf(&text, "Candidate: %q kind=%q oid=%q decision=%q reason=%q proof=%q\n", c.Name, c.Kind, c.OID, c.Decision, c.Reason, c.Proof)
 			for _, path := range c.WorkspacePaths {
 				fmt.Fprintf(&text, "  Workspace: %q\n", path)
+			}
+			if c.Evidence != nil && c.Evidence.Integration != nil {
+				e := c.Evidence.Integration
+				fmt.Fprintf(&text, "  Integration: disposition=%q class=%q strength=%q reasons=%q flags=%q matched=%d unmatched=%d empty=%d skipped_merges=%d base=%q tip=%q\n", e.Disposition, e.Class, e.Strength, e.Reasons, e.Flags, e.Matched, e.Unmatched, e.Empty, e.SkippedMerges, e.BaseOID, e.TipOID)
 			}
 			if c.Evidence != nil {
 				data, err := json.Marshal(c.Evidence)

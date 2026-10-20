@@ -629,6 +629,88 @@
         },
         {
           "properties": {
+            "decision": {
+              "const": "retain"
+            },
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "type": "null"
+                    },
+                    "integration": {
+                      "$ref": "#/$defs/V3IntegrationEvidence"
+                    },
+                    "native": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "integration"
+                  ]
+                }
+              ]
+            },
+            "proof": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "properties": {
+            "decision": {
+              "const": "delete"
+            },
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "type": "null"
+                    },
+                    "integration": {
+                      "$ref": "#/$defs/V3IntegrationEvidence"
+                    },
+                    "native": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "integration"
+                  ]
+                }
+              ]
+            },
+            "kind": {
+              "const": "branch"
+            },
+            "name": {
+              "pattern": "^refs/heads/.+"
+            },
+            "proof": {
+              "enum": [
+                "patch-id",
+                "merge-noop",
+                "no-net-change"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
             "evidence": {
               "allOf": [
                 {
@@ -779,6 +861,9 @@
           "enum": [
             "none",
             "native-ancestry",
+            "patch-id",
+            "merge-noop",
+            "no-net-change",
             "github-merged-head",
             "github-branch-absent"
           ],
@@ -1090,6 +1175,240 @@
         "refs",
         "coverage",
         "result"
+      ],
+      "type": "object"
+    },
+    "V3IntegrationEvidence": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "class"
+                  ]
+                },
+                {
+                  "required": [
+                    "strength"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "proven"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "class",
+              "strength"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "const": "patch-id"
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "strength": {
+                "const": "history-equivalent"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "const": "merge-noop"
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "flags": {
+                "maxItems": 0
+              },
+              "strength": {
+                "const": "content-present"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "const": "no-net-change"
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "flags": {
+                "maxItems": 0
+              },
+              "strength": {
+                "const": "nothing-unmerged"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "base_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "base_selector": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "class": {
+          "enum": [
+            "patch-id",
+            "merge-noop",
+            "no-net-change"
+          ],
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "proven",
+            "needs-review",
+            "retained"
+          ],
+          "type": "string"
+        },
+        "empty": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "flags": {
+          "items": {
+            "enum": [
+              "whitespace-differs",
+              "accepted-whitespace-differences"
+            ],
+            "type": "string"
+          },
+          "maxItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "matched": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reasons": {
+          "items": {
+            "enum": [
+              "whitespace-differs",
+              "partial-match",
+              "multiset-mismatch",
+              "merge-commits-in-range",
+              "ambiguous-merge-base",
+              "gitlink-change",
+              "would-add-content",
+              "conflict",
+              "attribute-source",
+              "merge-attribute",
+              "diff-attribute",
+              "merge-driver",
+              "proof-limit",
+              "proof-budget-exhausted",
+              "object-dir-unavailable",
+              "history-override",
+              "unsupported-metadata"
+            ],
+            "type": "string"
+          },
+          "maxItems": 17,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "skipped_merges": {
+          "maximum": 9999999,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "strength": {
+          "enum": [
+            "history-equivalent",
+            "content-present",
+            "nothing-unmerged"
+          ],
+          "type": "string"
+        },
+        "tip_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "unmatched": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "disposition",
+        "reasons",
+        "flags",
+        "base_selector",
+        "base_oid",
+        "tip_oid",
+        "matched",
+        "unmatched",
+        "empty",
+        "skipped_merges"
       ],
       "type": "object"
     },
@@ -1730,6 +2049,9 @@
                     "enum": [
                       "none",
                       "native-ancestry",
+                      "patch-id",
+                      "merge-noop",
+                      "no-net-change",
                       "github-merged-head"
                     ]
                   }
@@ -1908,6 +2230,38 @@
           "maxLength": 4096,
           "type": "string"
         },
+        "proof_policy": {
+          "additionalProperties": false,
+          "properties": {
+            "accept_whitespace_differences": {
+              "type": "boolean"
+            },
+            "kinds": {
+              "items": {
+                "enum": [
+                  "ancestor",
+                  "patch-id",
+                  "merge-noop",
+                  "no-net-change"
+                ],
+                "type": "string"
+              },
+              "maxItems": 4,
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "version": {
+              "const": 1
+            }
+          },
+          "required": [
+            "version",
+            "kinds",
+            "accept_whitespace_differences"
+          ],
+          "type": "object"
+        },
         "recovery_limits": {
           "items": {
             "maxLength": 4096,
@@ -1990,6 +2344,9 @@
               "type": "null"
             }
           ]
+        },
+        "integration": {
+          "$ref": "#/$defs/V3IntegrationEvidence"
         },
         "native": {
           "anyOf": [
