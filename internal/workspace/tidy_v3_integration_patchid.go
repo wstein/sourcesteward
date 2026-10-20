@@ -21,6 +21,9 @@ type patchIDResult struct {
 	Empty         int
 	SkippedMerges int
 	BinaryPaths   []string
+	// BaseMatches are the first base commits (at most five, in log order)
+	// whose patch-id equals a branch commit's: candidates for the report.
+	BaseMatches []string
 }
 
 type patchIDRow struct{ patch, commit string }
@@ -182,6 +185,11 @@ func (r *integrationRun) patchID(ctx context.Context, base, tip, mergeBase, tipT
 		res.Unmatched += n - min(n, have)
 		multiset = multiset || have > 0 && have < n
 		absent = absent || have == 0
+	}
+	for _, row := range baseStable {
+		if branchCounts[row.patch] > 0 && len(res.BaseMatches) < reportMaxCandidates {
+			res.BaseMatches = append(res.BaseMatches, row.commit)
+		}
 	}
 	for _, row := range stable {
 		if baseCounts[row.patch] > 0 && !baseVerbatimByStable[row.patch][verbatimOfCommit[row.commit]] {

@@ -19,6 +19,7 @@ type integrationVerdict struct {
 	Empty         int
 	SkippedMerges int
 	BinaryPaths   []string
+	BaseMatches   []string
 }
 
 // reasonOrder sorts reasons by the contract's table order, without duplicates.
@@ -91,7 +92,7 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 			out, _, e := stop(err)
 			return out, e
 		}
-		v.Matched, v.Unmatched, v.Empty, v.SkippedMerges, v.BinaryPaths = pr.Matched, pr.Unmatched, pr.Empty, pr.SkippedMerges, pr.BinaryPaths
+		v.Matched, v.Unmatched, v.Empty, v.SkippedMerges, v.BinaryPaths, v.BaseMatches = pr.Matched, pr.Unmatched, pr.Empty, pr.SkippedMerges, pr.BinaryPaths, pr.BaseMatches
 		reasons = append(reasons, pr.Reasons...)
 		switch {
 		case pr.Proven && !pr.Whitespace:

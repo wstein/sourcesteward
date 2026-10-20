@@ -66,6 +66,9 @@ type integrationRun struct {
 	phaseStart   time.Time
 	phaseStarted bool
 	tipStart     time.Time
+	// reporting lifts the proof time budget while the review report collects
+	// its data: the report has its own bounds (FR-035).
+	reporting bool
 }
 
 // beginTip starts the budget of one distinct tip (20 s) inside the forge-free
@@ -81,7 +84,7 @@ func (r *integrationRun) beginTip() error {
 
 // checkBudget reads the clock once and compares both budgets.
 func (r *integrationRun) checkBudget(now time.Time) error {
-	if !r.phaseStarted {
+	if !r.phaseStarted || r.reporting {
 		return nil // no tip has started: nothing is budgeted yet
 	}
 	if now.Sub(r.phaseStart) >= integrationPhaseTimeout || now.Sub(r.tipStart) >= integrationTipTimeout {
