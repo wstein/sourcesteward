@@ -81,9 +81,9 @@ func TestTidyV3HintErrorsNameTheSelector(t *testing.T) {
 		hints []V3PRHint
 		want  []string
 	}{
-		"conflict":      {[]V3PRHint{{OID: heads[0], Number: 1}, {OID: heads[0], Number: 2}}, []string{"--pr " + heads[0] + "=1", "--pr " + heads[0] + "=2"}},
-		"unselected":    {[]V3PRHint{{OID: other, Number: 5}}, []string{"--pr " + other + "=5", "no selected reference"}},
-		"number shared": {[]V3PRHint{{OID: heads[0], Number: 3}, {OID: heads[1], Number: 3}}, []string{"--pr " + heads[0] + "=3", "--pr " + heads[1] + "=3"}},
+		"conflict":      {[]V3PRHint{{OID: heads[0], Number: 1}, {OID: heads[0], Number: 2}}, []string{`--pr "` + heads[0] + `=1"`, `--pr "` + heads[0] + `=2"`}},
+		"unselected":    {[]V3PRHint{{OID: other, Number: 5}}, []string{`--pr "` + other + `=5"`, "no selected reference"}},
+		"number shared": {[]V3PRHint{{OID: heads[0], Number: 3}, {OID: heads[1], Number: 3}}, []string{`--pr "` + heads[0] + `=3"`, `--pr "` + heads[1] + `=3"`}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", ProtectWorktrees: []string{}, PRHints: tc.hints})

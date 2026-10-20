@@ -15,7 +15,7 @@ func v3HintSelector(h V3PRHint) string {
 	if len(q) > 4096 {
 		q = q[:4096]
 	}
-	return "--pr " + q[1:len(q)-1]
+	return "--pr " + q
 }
 
 // normalizeV3PRHints keys hints by head OID: identical repeats collapse to one
