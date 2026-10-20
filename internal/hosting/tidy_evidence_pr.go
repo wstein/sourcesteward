@@ -320,8 +320,10 @@ func (s *TidySession) DiscoverPullRequests(parent context.Context, targets []str
 			candidates = []tidyPRHint{{Number: number, Head: head}}
 			hinted = true
 		}
+		// A hint skips the collection, so only the named PR was examined and
+		// absence of any other merged PR is never claimed for it.
 		coverage := "complete"
-		if !hinted && !complete {
+		if hinted || !complete {
 			coverage = "incomplete"
 		}
 		item := TidyHeadEvidence{HeadOID: head, Reason: "integration-not-proven", Coverage: coverage}

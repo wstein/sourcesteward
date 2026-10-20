@@ -204,3 +204,79 @@ func TestTidyDiscoveryHintReadsOnlyTheNamedPR(t *testing.T) {
 		t.Fatalf("hint widened reads: %+v", c.calls)
 	}
 }
+
+// Exhaustion is sticky (Spec 031 contract: that OID and all later OIDs): a
+// later OID that would need no read is still reported exhausted.
+func TestTidyDiscoveryExhaustionIsStickyForLaterOIDs(t *testing.T) {
+	c := &discoveryCollection{pages: 1, last: 5, calls: map[string]int{}, t: t}
+	s := tidyFixtureSession(t, c.handle)
+	s.ledger.stats.Requests = 125 // 1 revalidation + 1 page leave exactly one read
+	targets := []string{fmt.Sprintf("%040x", 1), fmt.Sprintf("%040x", 2), fmt.Sprintf("%040x", 999)}
+	got, err := s.DiscoverPullRequests(context.Background(), targets, nil)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	want := []string{"github-merged-head", "discovery-budget-exhausted", "discovery-budget-exhausted"}
+	for i, row := range got {
+		if row.Result != want[i] {
+			t.Fatalf("row %d: %+v", i, row)
+		}
+	}
+	if s.Budget().Requests != 128 {
+		t.Fatalf("requests %d", s.Budget().Requests)
+	}
+}
+
+func TestTidyDiscoverySortsUnsortedTargets(t *testing.T) {
+	c := &discoveryCollection{pages: 1, last: 5, calls: map[string]int{}, t: t}
+	s := tidyFixtureSession(t, c.handle)
+	in := []string{fmt.Sprintf("%040x", 3), fmt.Sprintf("%040x", 1), fmt.Sprintf("%040x", 2)}
+	got, err := s.DiscoverPullRequests(context.Background(), in, nil)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	for i, row := range got {
+		if row.HeadOID != fmt.Sprintf("%040x", i+1) {
+			t.Fatalf("row %d is %s", i, row.HeadOID)
+		}
+	}
+	if !sort.IntsAreSorted(c.order) {
+		t.Fatalf("reads out of order: %v", c.order)
+	}
+}
+
+// A hint examines one PR only; a non-admissible hinted PR must not be reported
+// as a complete absence of any merged PR.
+func TestTidyDiscoveryHintedNonAdmissiblePRClaimsNoAbsence(t *testing.T) {
+	c := &discoveryCollection{pages: 1, last: 5, calls: map[string]int{}, t: t}
+	s := tidyFixtureSession(t, c.handle)
+	head := fmt.Sprintf("%040x", 4)
+	got, err := s.DiscoverPullRequests(context.Background(), []string{head}, map[string]int{head: 2})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	row := got[0]
+	if row.PullRequest != nil || row.Reason != "pr-head-mismatch" || row.Result != "discovery-incomplete" || row.Coverage != "incomplete" {
+		t.Fatalf("%+v", row)
+	}
+}
+
+func TestTidyDiscoveryTwoAdmissiblePRsAreAmbiguous(t *testing.T) {
+	head := fmt.Sprintf("%040x", 7)
+	rows := []string{tidyPRJSON(1, head, "main"), tidyPRJSON(2, head, "main")}
+	s := tidyFixtureSession(t, func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/repos/owner/repo":
+			return response(200, tidyRepositoryJSON()), nil
+		case "/repos/owner/repo/pulls":
+			return response(200, "["+strings.Join(rows, ",")+"]"), nil
+		case "/repos/owner/repo/pulls/1":
+			return response(200, rows[0]), nil
+		}
+		return response(200, rows[1]), nil
+	})
+	got, err := s.DiscoverPullRequests(context.Background(), []string{head}, nil)
+	if err != nil || len(got) != 1 || got[0].Result != "ambiguous-needs-hint" || got[0].Reason != "pr-ambiguous" || got[0].PullRequest != nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
