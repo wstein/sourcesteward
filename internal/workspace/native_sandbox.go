@@ -40,13 +40,19 @@ func (c *nativeCapture) Write(p []byte) (int, error) {
 // Standard system/global config is intentionally still visible: the adapter
 // refuses executable configuration rather than silently disabling hooks.
 func sandboxEnvironment(bin string) []string {
-	env := []string{"PATH=" + filepath.Dir(bin), "GIT_EXEC_PATH=" + filepath.Dir(bin), "LANG=C", "LC_ALL=C", "TZ=UTC", "TERM=dumb", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat"}
+	env := sandboxBaseEnvironment(bin)
 	for _, key := range []string{"HOME", "XDG_CONFIG_HOME"} {
 		if v, ok := os.LookupEnv(key); ok {
 			env = append(env, key+"="+v)
 		}
 	}
 	return env
+}
+
+// sandboxBaseEnvironment is the fixed part shared with the planning
+// environment: nothing inherited, no home or configuration location.
+func sandboxBaseEnvironment(bin string) []string {
+	return []string{"PATH=" + filepath.Dir(bin), "GIT_EXEC_PATH=" + filepath.Dir(bin), "LANG=C", "LC_ALL=C", "TZ=UTC", "TERM=dumb", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat"}
 }
 
 func canonicalSandboxDir(path string) (string, error) {
@@ -76,6 +82,12 @@ func canonicalSandboxDir(path string) (string, error) {
 func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string, writeRoots, readOnlyRoots []string) (*exec.Cmd, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
+	}
+	// A planning session (git_planning.go) pins one constant argument list and a
+	// private environment on every command it covers; apply writers never carry it.
+	session := planningSessionFrom(ctx)
+	if session != nil {
+		args = session.arguments(args)
 	}
 	total := len(bin) + len(cwd)
 	if len(args) > 1024 {
@@ -168,6 +180,9 @@ func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string
 	c := exec.CommandContext(ctx, sandbox, argv...)
 	c.Dir = cwd
 	c.Env = sandboxEnvironment(bin)
+	if session != nil {
+		c.Env = session.environment(bin)
+	}
 	c.WaitDelay = time.Second
 	return c, nil
 }

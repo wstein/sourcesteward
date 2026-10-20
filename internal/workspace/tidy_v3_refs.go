@@ -50,6 +50,11 @@ func (c tidyV3RefsCoordinator) plan(ctx context.Context, o V3PlanOptions) V3Resu
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	ctx, _, closeSession, err := withPlanningSession(ctx)
+	if err != nil {
+		return boundV3Result(failTidyV3(newV3Result("tidy-plan"), err))
+	}
+	defer closeSession()
 	return boundV3Result(c.planRefs(ctx, o))
 }
 func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r V3Result) {
@@ -84,7 +89,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits()}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes}
 	if p.StateDir != "" {
 		p.PlanID, err = randomID()
 		if err != nil {

@@ -71,7 +71,7 @@ type gitTreeEntry struct {
 }
 
 func gitTreeEvidence(ctx context.Context, bin, dir, commit, format string, digest hash.Hash) ([]string, error) {
-	entries, e := gitTreeEntries(ctx, bin, dir, commit, format, digest)
+	entries, e := gitTreeEntriesMode(ctx, bin, dir, commit, format, digest, planningSessionFrom(ctx) != nil)
 	if e != nil {
 		return nil, e
 	}
@@ -82,6 +82,9 @@ func gitTreeEvidence(ctx context.Context, bin, dir, commit, format string, diges
 	return paths, nil
 }
 func gitTreeEntries(ctx context.Context, bin, dir, commit, format string, digest hash.Hash) ([]gitTreeEntry, error) {
+	return gitTreeEntriesMode(ctx, bin, dir, commit, format, digest, false)
+}
+func gitTreeEntriesMode(ctx context.Context, bin, dir, commit, format string, digest hash.Hash, gitlinks bool) ([]gitTreeEntry, error) {
 	if !fullGitOID(commit, format) {
 		return nil, failure("git-tree-refused", "tree selection requires a full admitted commit identity")
 	}
@@ -93,6 +96,7 @@ func gitTreeEntries(ctx context.Context, bin, dir, commit, format string, digest
 	}
 	entries := []gitTreeEntry{}
 	validator := newGitTreeValidator()
+	validator.gitlinks = gitlinks
 	_, e = executeNativeStream(ctx, cancel, cmd, nil, gitMetadataStreamLimit, func(out io.Reader) error {
 		return parseGitTreeStream(out, format, validator, func(record []byte, path string) {
 			if digest != nil {
@@ -100,6 +104,9 @@ func gitTreeEntries(ctx context.Context, bin, dir, commit, format string, digest
 			}
 			meta, _, _ := strings.Cut(string(record), "\t")
 			fields := strings.Fields(meta)
+			if session := planningSessionFrom(ctx); session != nil && fields[0] == "160000" {
+				session.noteGitlink(path)
+			}
 			size, _ := strconv.ParseInt(fields[3], 10, 64)
 			entries = append(entries, gitTreeEntry{Path: path, OID: fields[2], Mode: fields[0], Size: size})
 		})
@@ -154,7 +161,13 @@ func gitFilterEvidence(ctx context.Context, bin, dir, commit string, paths []str
 	}
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd, e := prepareSandboxed(streamCtx, bin, []string{"--no-replace-objects", "check-attr", "--source=" + commit, "--stdin", "-z", "filter"}, dir, nil, nil)
+	// Planning pins the attribute source to the tree through the policy;
+	// worktree and untracked .gitattributes never apply.
+	checkArgs := []string{"--no-replace-objects", "check-attr", "--source=" + commit, "--stdin", "-z", "filter"}
+	if session := planningSessionFrom(ctx); session != nil {
+		checkArgs = append(append([]string{"--no-replace-objects"}, session.attrSource(commit)...), "check-attr", "--stdin", "-z", "filter")
+	}
+	cmd, e := prepareSandboxed(streamCtx, bin, checkArgs, dir, nil, nil)
 	if e != nil {
 		return gitExecutionError(e)
 	}

@@ -204,7 +204,9 @@ func gitLayoutSafetyWithPrimary(ctx context.Context, bin string, id NativeIdenti
 			return "", "", gitLayoutRefused("Linked Git backlink does not identify the current checkout pointer")
 		}
 	}
-	raw, err := gitRead(ctx, bin, id.WorkspaceRoot, "config", "--null", "--list", "--includes", "--show-origin")
+	// The admission read must see global and system configuration: it is the one
+	// command that runs outside the private planning environment.
+	raw, err := gitRead(withoutPlanningSession(ctx), bin, id.WorkspaceRoot, "config", "--null", "--list", "--includes", "--show-origin")
 	if err != nil {
 		return "", "", err
 	}

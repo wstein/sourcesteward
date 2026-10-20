@@ -145,7 +145,7 @@ func TestGitCompleteMetadataPreservesSafetyDigestBytes(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	hooks, e := gitHooksFingerprint(filepath.Join(id.RepositoryDir, "hooks"))
+	hooks, _, e := gitHooksFingerprint(filepath.Join(id.RepositoryDir, "hooks"), false)
 	if e != nil {
 		t.Fatal(e)
 	}

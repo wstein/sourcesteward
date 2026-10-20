@@ -977,6 +977,60 @@
       ],
       "type": "object"
     },
+    "V3ConfigNote": {
+      "additionalProperties": false,
+      "properties": {
+        "apply_effect": {
+          "enum": [
+            "none",
+            "refuses-apply"
+          ],
+          "type": "string"
+        },
+        "digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "neutralized",
+            "review-reason",
+            "hard-stop",
+            "refused",
+            "retained"
+          ],
+          "type": "string"
+        },
+        "key_class": {
+          "enum": [
+            "attribute-source",
+            "core.askPass",
+            "core.editor",
+            "core.fsmonitor",
+            "core.hooksPath",
+            "core.pager",
+            "core.sshCommand",
+            "credential.*",
+            "default-hooks",
+            "diff.*.textconv",
+            "diff.external",
+            "gitlinks",
+            "gpg.*",
+            "merge-driver",
+            "replace-refs-ignored",
+            "submodule.*"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_class",
+        "disposition",
+        "digest",
+        "apply_effect"
+      ],
+      "type": "object"
+    },
     "V3LegacyProvenance": {
       "additionalProperties": false,
       "properties": {
@@ -1706,6 +1760,13 @@
             "$ref": "#/$defs/V3Candidate"
           },
           "maxItems": 1024,
+          "type": "array"
+        },
+        "config_notes": {
+          "items": {
+            "$ref": "#/$defs/V3ConfigNote"
+          },
+          "maxItems": 64,
           "type": "array"
         },
         "digest": {
