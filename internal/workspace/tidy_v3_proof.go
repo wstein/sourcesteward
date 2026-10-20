@@ -3,6 +3,8 @@ package workspace
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/url"
@@ -107,20 +109,29 @@ func proveTidyV3Commit(ctx context.Context, expected Snapshot, oid string, paths
 // tidyV3NativeObservation retains complete native facts. Typed digests replace
 // only the reference/registration channels; all original safety evidence stays.
 type tidyV3NativeObservation struct {
-	Expected Snapshot
-	Native   V3NativeState
-	Config   string
+	Expected    Snapshot
+	Native      V3NativeState
+	Config      string
+	ConfigNotes []V3ConfigNote
 }
 
 func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	out := tidyV3NativeObservation{}
+	// Every native command of the observation runs under the planning
+	// environment and constant argument list; apply re-evaluation joins it here.
+	ctx, session, closeSession, err := withPlanningSession(ctx)
+	if err != nil {
+		return out, err
+	}
+	defer closeSession()
 	var primaryBefore, primaryAfter gitPrimaryBinding
 	before, err := observeGitWithPrimary(ctx, path, base, &primaryBefore)
 	if err != nil {
 		return out, err
 	}
+	notes := session.configNotes()
 	if err = gitTidyAncestryMetadata(before.Identity); err != nil {
 		return out, err
 	}
@@ -139,7 +150,7 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 	if len(out.Native.References)+len(out.Native.Registrations) > observationLimit {
 		return out, failure("record-limit", "Complete native facts exceed 1024 records.")
 	}
-	out.Config, err = gitRead(ctx, bin, path, "config", "--null", "--list", "--includes", "--show-origin")
+	out.Config, err = gitRead(withoutPlanningSession(ctx), bin, path, "config", "--null", "--list", "--includes", "--show-origin")
 	if err != nil {
 		return out, err
 	}
@@ -150,7 +161,7 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 	if err = gitTidyAncestryMetadata(after.Identity); err != nil {
 		return out, err
 	}
-	if before != after || primaryBefore != primaryAfter {
+	if before != after || primaryBefore != primaryAfter || !reflect.DeepEqual(notes, session.configNotes()) {
 		return out, failure("evidence-changed", "Native identity, base, complete references, registrations or safety changed during observation.")
 	}
 	out.Native.Registrations, err = projectTidyV3Primary(out.Native.Registrations, before.Identity, primaryBefore)
@@ -158,7 +169,25 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 		return out, err
 	}
 	out.Expected = v3SnapshotWithState(before, out.Native)
+	out.ConfigNotes = tidyV3ConfigNotesWithReplace(notes, out.Native.References)
 	return out, nil
+}
+
+// refs/replace/* are never consulted (--no-replace-objects); say so once.
+func tidyV3ConfigNotesWithReplace(notes []V3ConfigNote, refs []V3Reference) []V3ConfigNote {
+	lines := []string{}
+	for _, r := range refs {
+		if strings.HasPrefix(r.Name, "refs/replace/") {
+			lines = append(lines, r.Name+"\n"+r.OID)
+		}
+	}
+	if len(lines) == 0 {
+		return notes
+	}
+	h := sha256.Sum256([]byte(strings.Join(lines, "\x00")))
+	notes = append(append([]V3ConfigNote{}, notes...), V3ConfigNote{KeyClass: "replace-refs-ignored", Disposition: v3ConfigClassPolicy["replace-refs-ignored"][0], Digest: hex.EncodeToString(h[:]), ApplyEffect: v3ConfigClassPolicy["replace-refs-ignored"][1]})
+	sort.Slice(notes, func(i, j int) bool { return notes[i].KeyClass < notes[j].KeyClass })
+	return notes
 }
 
 // tidyV3ReferenceParser accepts one for-each-ref record at a time and requires
@@ -260,6 +289,11 @@ func tidyV3NativeAncestry(ctx context.Context, expected Snapshot, target, base s
 	if err != nil {
 		return false, err
 	}
+	ctx, _, closeSession, err := withPlanningSession(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer closeSession()
 	_, code, err := runSandboxed(ctx, bin, []string{"--no-replace-objects", "merge-base", "--is-ancestor", target, base}, expected.Identity.WorkspaceRoot, nil, nil)
 	if err != nil {
 		return false, gitExecutionError(err)

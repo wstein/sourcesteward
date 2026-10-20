@@ -209,6 +209,11 @@ const tidyV3TrackingSamplingLimit = "Remote branch absence is sampled; server re
 func (c tidyV3TrackingCoordinator) plan(ctx context.Context, o V3PlanOptions) V3Result {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	ctx, _, closeSession, err := withPlanningSession(ctx)
+	if err != nil {
+		return boundV3Result(failTidyV3Tracking(newV3Result("tidy-plan"), err))
+	}
+	defer closeSession()
 	return boundV3Result(c.planTracking(ctx, o))
 }
 func failTidyV3Tracking(r V3Result, err error) V3Result {
@@ -254,7 +259,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "tracking-refs", SourcePath: source, StateDir: o.StateDir, Expected: observed.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits()}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "tracking-refs", SourcePath: source, StateDir: o.StateDir, Expected: observed.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observed.ConfigNotes}
 	if !validV3NativeState(observed.Native, p, p.Expected) {
 		return failTidyV3Tracking(r, failure("incomplete-evidence", "Complete native tracking, symbolic and registered workspace protections are required before online evidence."))
 	}

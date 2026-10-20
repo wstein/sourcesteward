@@ -35,6 +35,11 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 	budget := newTidyV3ProofBudget(false)
 	defer func() { retirementV3BudgetResult(&r, budget); r = boundV3Result(r) }()
 	r = newV3Result("tidy-plan")
+	ctx, _, closeSession, sessionErr := withPlanningSession(ctx)
+	if sessionErr != nil {
+		return failTidyV3(r, sessionErr)
+	}
+	defer closeSession()
 	if err := validateV3PlanOptions(o); err != nil {
 		return failTidyV3(r, err)
 	}
@@ -42,7 +47,7 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 	if err != nil {
 		return failTidyV3(r, err)
 	}
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "legacy-retirement", SourcePath: o.Path, StateDir: o.StateDir, Expected: first.Native.Expected, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Retirement: &first.Retirement, Effects: []string{}, RecoveryLimits: v3RecoveryLimits()}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "legacy-retirement", SourcePath: o.Path, StateDir: o.StateDir, Expected: first.Native.Expected, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Retirement: &first.Retirement, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: first.Native.ConfigNotes}
 	if o.Task != "" {
 		p.Mode = "owned-retirement"
 	}

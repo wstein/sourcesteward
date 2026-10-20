@@ -136,6 +136,11 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	if err != nil {
 		return failTidyV3(r, err)
 	}
+	if prior == nil && len(v3Eligible(p)) > 0 {
+		if err = tidyV3ApplyEffectGuard(ctx, p); err != nil {
+			return failTidyV3(r, err)
+		}
+	}
 	var session tidyV3Hosting
 	if p.Online != nil {
 		session, err = c.refs.openHosting(ctx, p.SourcePath, hosting.TidySessionOptions{Online: true, Apply: true, Remote: p.Online.Remote, Repo: p.Online.Repository.Name})

@@ -358,7 +358,7 @@ func TestTidyV3OfflineAndUnsafePreflightHaveNoHostingCalls(t *testing.T) {
 			case "wrong-override":
 				o.Repo = "other/repo"
 			case "helper":
-				gitFixture(t, dir, "config", "core.fsmonitor", "must-never-run")
+				gitFixture(t, dir, "config", "hook.fixture.command", "must-never-run")
 			case "state-overlap":
 				o.StateDir = filepath.Join(dir, "private-state")
 			}

@@ -157,6 +157,7 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 	if err != nil {
 		return "", err
 	}
+	session := planningSessionFrom(ctx)
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
@@ -166,12 +167,18 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 		// absent/unset attributes. Case-insensitive refusal is conservative.
 		unsafe = unsafe || strings.HasPrefix(key, "filter.unspecified.") || strings.HasPrefix(key, "filter.unset.") || strings.HasPrefix(key, "filter.set.")
 		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || key == "submodule.recurse" && !gitFalse(value) || strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
+		if session != nil {
+			// Planning (Spec 031 FR-020/FR-021): only hooksPath, fsmonitor and
+			// submodule.* leave the refusal list; they are neutralized by the
+			// constant arguments and recorded as plan notes below.
+			unsafe = refusedPlanningKey(key, value)
+		}
 		if unsafe {
 			return "", failure("git-unsafe-configuration", fmt.Sprintf("Git safety setting %q requires an explicit supported policy; configuration was preserved", gitSafetyRule(key)))
 		}
 	}
 	// Relative/conditional hook paths are refused above; default hooks are shared.
-	hooks, err := gitHooksFingerprint(filepath.Join(id.RepositoryDir, "hooks"))
+	hooks, executableHook, err := gitHooksFingerprint(filepath.Join(id.RepositoryDir, "hooks"), session != nil)
 	if err != nil {
 		return "", err
 	}
@@ -187,6 +194,9 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 		return "", err
 	}
 	io.WriteString(digest, "\x00")
+	if session != nil {
+		session.setNotes(planningConfigNotes(config, hooks, executableHook, session.policy.scanInfoAttributes && infoAttributesActive(id.RepositoryDir), session.takeGitlinks()))
+	}
 	if err = gitFilterEvidence(ctx, bin, id.WorkspaceRoot, commit, paths, digest); err != nil {
 		return "", err
 	}
@@ -200,36 +210,42 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 
 func gitFalse(s string) bool { return s == "false" || s == "no" || s == "off" || s == "0" }
 
-func gitHooksFingerprint(dir string) (string, error) {
+// Executable default hooks refuse unless planning merely records them: the
+// fingerprint stays bound into the safety digest and apply refuses any effect
+// that would run a hook.
+func gitHooksFingerprint(dir string, allowExecutable bool) (string, bool, error) {
 	info, err := os.Lstat(dir)
 	if os.IsNotExist(err) {
-		return "absent", nil
+		return "absent", false, nil
 	}
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return "", failure("git-hooks-refused", "cannot safely inspect the default Git hook directory")
+		return "", false, failure("git-hooks-refused", "cannot safely inspect the default Git hook directory")
 	}
 	f, err := os.Open(dir)
 	if err != nil {
-		return "", failure("git-hooks-refused", "cannot inspect Git hooks")
+		return "", false, failure("git-hooks-refused", "cannot inspect Git hooks")
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(observationLimit + 1)
 	if err != nil && err != io.EOF || len(entries) > observationLimit {
-		return "", failure("git-hooks-refused", "Git hooks exceed the inspection bound")
+		return "", false, failure("git-hooks-refused", "Git hooks exceed the inspection bound")
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	var fingerprint strings.Builder
+	executable := false
 	for _, entry := range entries {
 		st, e := entry.Info()
-		if e != nil || !st.Mode().IsRegular() || st.Mode().Perm()&0111 != 0 && !strings.HasSuffix(entry.Name(), ".sample") {
-			return "", failure("git-hooks-refused", "executable hooks or unsupported hook directory entries prevent task creation; hooks are never silently skipped")
+		runnable := e == nil && st.Mode().IsRegular() && st.Mode().Perm()&0111 != 0 && !strings.HasSuffix(entry.Name(), ".sample")
+		if e != nil || !st.Mode().IsRegular() || runnable && !allowExecutable {
+			return "", false, failure("git-hooks-refused", "default-hooks: executable hooks or unsupported hook directory entries prevent this effect; hooks are never silently skipped")
 		}
 		if st.Size() > 65536 {
-			return "", failure("git-hooks-refused", "Git hook metadata exceeds the inspection bound")
+			return "", false, failure("git-hooks-refused", "Git hook metadata exceeds the inspection bound")
 		}
+		executable = executable || runnable
 		fmt.Fprintf(&fingerprint, "%s:%d:%d:%d\x00", entry.Name(), st.Mode(), st.Size(), st.ModTime().UnixNano())
 	}
-	return fingerprint.String(), nil
+	return fingerprint.String(), executable, nil
 }
 
 type gitTreePathNode struct {
@@ -239,9 +255,11 @@ type gitTreePathNode struct {
 }
 
 type gitTreeValidator struct {
-	count int
-	total int64
-	root  gitTreePathNode
+	// gitlinks admits submodule commits as data; planning never descends.
+	gitlinks bool
+	count    int
+	total    int64
+	root     gitTreePathNode
 }
 
 func newGitTreeValidator() *gitTreeValidator {
@@ -257,7 +275,8 @@ func (v *gitTreeValidator) add(entry string) error {
 	}
 	meta, path, ok := strings.Cut(entry, "\t")
 	fields := strings.Fields(meta)
-	if !ok || len(fields) != 4 || fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755") {
+	gitlink := v.gitlinks && len(fields) == 4 && fields[0] == "160000" && fields[1] == "commit"
+	if !ok || len(fields) != 4 || !gitlink && (fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755")) {
 		return failure("git-tree-refused", "base contains unsupported tree objects, symlinks or gitlinks")
 	}
 	if len(path) > 4096 || path == "" || filepath.IsAbs(path) || strings.ContainsAny(path, "\x00") || !utf8.ValidString(path) {
@@ -289,6 +308,9 @@ func (v *gitTreeValidator) add(entry string) error {
 		node = child
 	}
 
+	if gitlink {
+		return nil
+	}
 	size, err := strconv.ParseInt(fields[3], 10, 64)
 	if err != nil || size < 0 || size > 16*1024*1024 {
 		return failure("git-checkout-limit", "base blob exceeds 16 MiB or has unavailable size")
@@ -477,6 +499,10 @@ func gitSafetyRule(key string) string {
 	case strings.HasPrefix(key, "remote."):
 		return "remote.*.promisor"
 	default:
+		// Refusal text uses the plan note class (core.hooksPath, core.fsmonitor).
+		if class := planningConfigClass(key); class != "" {
+			return class
+		}
 		return key
 	}
 }

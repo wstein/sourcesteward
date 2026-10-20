@@ -61,6 +61,9 @@ type V3Plan struct {
 	Retirement     *V3Retirement      `json:"retirement"`
 	Effects        []string           `json:"effects"`
 	RecoveryLimits []string           `json:"recovery_limits"`
+	// Planning configuration notes (Spec 031 FR-020); absent when empty so plans
+	// of repositories without noted configuration keep their exact bytes.
+	ConfigNotes []V3ConfigNote `json:"config_notes,omitempty"`
 }
 type V3Candidate struct {
 	ActionID       string           `json:"action_id"`
@@ -333,7 +336,7 @@ func validateV3Plan(p V3Plan, state, id string) error {
 	if e != nil {
 		return e
 	}
-	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) {
+	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) {
 		return bad()
 	}
 	if state == "" {
@@ -708,6 +711,10 @@ func v3Bounds(v any) error {
 			}
 		case reflect.Struct:
 			for i := 0; i < v.NumField(); i++ {
+				// An absent optional array (json omitempty) is not a null array.
+				if f := v.Field(i); f.Kind() == reflect.Slice && f.IsNil() && strings.Contains(v.Type().Field(i).Tag.Get("json"), ",omitempty") {
+					continue
+				}
 				if !walk(v.Field(i), depth+1) {
 					return false
 				}
@@ -752,7 +759,7 @@ func decodeV3Record(b []byte, value any) error {
 		switch typ.Kind() {
 		case reflect.Struct:
 			var fields map[string]json.RawMessage
-			if json.Unmarshal(raw, &fields) != nil || len(fields) != typ.NumField() {
+			if json.Unmarshal(raw, &fields) != nil || len(fields) > typ.NumField() {
 				return false
 			}
 			for i := 0; i < typ.NumField(); i++ {
@@ -762,6 +769,9 @@ func decodeV3Record(b []byte, value any) error {
 					name = field.Name
 				}
 				part, exists := fields[name]
+				if !exists && strings.Contains(field.Tag.Get("json"), ",omitempty") {
+					continue
+				}
 				if !exists || !shape(part, field.Type, depth+1) {
 					return false
 				}
