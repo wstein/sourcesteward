@@ -1,9 +1,15 @@
 GO ?= go
 
-.PHONY: build extension check test fmt vet docs-check
+.PHONY: build extension check check-static test fmt vet docs-check
+# check-static is everything check runs except the Go tests, so CI can run the
+# race suite once instead of repeating a plain pass.
 check:
 	@test -z "$$(gofmt -l cmd internal)" || { echo 'Run make fmt'; exit 1; }
 	$(GO) test -timeout 40m ./...
+	@$(MAKE) --no-print-directory check-static
+
+check-static:
+	@test -z "$$(gofmt -l cmd internal)" || { echo 'Run make fmt'; exit 1; }
 	$(GO) vet ./...
 	$(GO) mod verify
 	python3 -B -m unittest discover -s scripts -p 'test_*.py'

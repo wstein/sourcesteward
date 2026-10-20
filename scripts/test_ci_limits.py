@@ -36,9 +36,11 @@ class CILimitTests(unittest.TestCase):
         for command in commands:
             self.assertRegex(command, r'-timeout \d+m')
 
-    def test_check_job_covers_sequential_plain_and_race_runs(self):
-        limit = int(re.search(r'timeout-minutes: (\d+)', job_text('check')).group(1))
-        self.assertGreaterEqual(limit, 2 * MIN_TEST_MINUTES - 20)
+    def test_check_job_runs_one_race_pass_within_its_limit(self):
+        text = job_text('check')
+        self.assertEqual(len(re.findall(r'go test\b', text)), 1)
+        limit = int(re.search(r'timeout-minutes: (\d+)', text).group(1))
+        self.assertGreaterEqual(limit, MIN_TEST_MINUTES + JOB_MARGIN_MINUTES)
 
 
 if __name__ == '__main__':

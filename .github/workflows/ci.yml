@@ -54,7 +54,7 @@ jobs:
         if: failure()
         run: python3 -B scripts/smoke-jj-inspection.py --sandbox-diagnostics
       - name: Source and documentation checks
-        run: make check
+        run: make check-static
       - name: Module files must be tidy
         run: |
           go mod tidy
