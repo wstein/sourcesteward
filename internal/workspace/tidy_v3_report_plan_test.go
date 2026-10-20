@@ -16,6 +16,14 @@ import (
 // Spec 031 T027, T029, T030: the review report through the production planner,
 // the stored plan identity and the files written for the owner.
 
+func consolidatedLines(first, last string) string {
+	out := first + "\n"
+	for i := 2; i < 20; i++ {
+		out += "line\n"
+	}
+	return out + last + "\n"
+}
+
 // reportRepo builds the fixture repository of the golden report: one branch per
 // kind of case the planner admits (the planning admission refuses a symlink in
 // the base tree, so the symlink retarget is covered by the data tests), with deterministic commit times so object ids are stable.
@@ -39,6 +47,7 @@ func reportRepo(t *testing.T) *proofFix {
 		"notes.txt": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n",
 		"data.bin":  "\x00\x01old",
 		"run.sh":    "echo run\n",
+		"lines.txt": consolidatedLines("l1", "l20"),
 	})
 	if err := os.MkdirAll(filepath.Join(f.dir, "vendor", "lib"), 0o700); err != nil {
 		t.Fatal(err)
@@ -53,6 +62,11 @@ func reportRepo(t *testing.T) *proofFix {
 		f.checkout(f.main)
 		return tip
 	}
+	branch("consol", map[string]string{"cons.txt": "cons\n"}, "consolidate one")
+	f.checkout("consol")
+	commit("consolidate two", map[string]string{"lines.txt": consolidatedLines("L1", "l20")})
+	commit("consolidate three", map[string]string{"cons3.txt": "three\n"})
+	f.checkout(f.main)
 	branch("real", map[string]string{"new.txt": "hello\nworld\n"}, "add a new file")
 	branch("ws", map[string]string{"notes.txt": "one\n\ttwo \nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n"}, "indent line two")
 	branch("wsmatch", map[string]string{"hello.sh": "  echo hi\n"}, "add the greeting indented")
@@ -98,6 +112,11 @@ func reportRepo(t *testing.T) *proofFix {
 	f.git("cherry-pick", r1)
 	commit("second change", map[string]string{"different.txt": "d\n"})
 	commit("add the greeting", map[string]string{"hello.sh": "echo hi\n"})
+	start := f.rev("HEAD")
+	tick()
+	f.git("cherry-pick", f.rev("consol~1"))
+	commit("consolidate two, reworked", map[string]string{"lines.txt": consolidatedLines("L1", "L20")})
+	f.consolidation = start + ".." + f.rev("HEAD")
 	return f
 }
 
@@ -159,7 +178,7 @@ func TestPlanWritesTheReportForEveryNeedsReviewRef(t *testing.T) {
 	if s == nil || !s.ReportWritten || s.NeedsReview != len(review) || s.Entries != len(review) || s.Omitted != 0 || s.Proven < 2 || s.Reasons["would-add-content"] == 0 || s.Reasons["gitlink-change"] != 1 {
 		t.Fatalf("summary %+v", s)
 	}
-	if r.Plan.Review == nil || *r.Plan.Review != (V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10}) {
+	if r.Plan.Review == nil || !reflect.DeepEqual(*r.Plan.Review, V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []V3ReviewRange{}}) {
 		t.Errorf("review binding %+v", r.Plan.Review)
 	}
 }
@@ -322,11 +341,10 @@ func TestPlanReportMatchesTheGoldensAndIsRepeatable(t *testing.T) {
 		return b
 	}
 	a, b := gitTempDir(t), gitTempDir(t)
-	if r := f.planReport(V3PlanOptions{ReportDir: a}); r.Status != "ok" {
-		t.Fatalf("%+v", r.Diagnostics)
-	}
-	if r := f.planReport(V3PlanOptions{ReportDir: b}); r.Status != "ok" {
-		t.Fatalf("%+v", r.Diagnostics)
+	for _, dir := range []string{a, b} {
+		if r := f.planReport(V3PlanOptions{ReportDir: dir, ConsolidationRanges: []string{f.consolidation}}); r.Status != "ok" {
+			t.Fatalf("%+v", r.Diagnostics)
+		}
 	}
 	for _, name := range []string{"tidy-report.md", "tidy-report.json"} {
 		if string(read(a, name)) != string(read(b, name)) {
@@ -337,5 +355,45 @@ func TestPlanReportMatchesTheGoldensAndIsRepeatable(t *testing.T) {
 	// The report names the worktree-independent facts only: the base and the tips.
 	if !strings.Contains(string(read(a, "tidy-report.json")), `"selector":"refs/heads/trunk"`) {
 		t.Error("base selector missing")
+	}
+}
+
+func TestPlanRangePairingIsEvidenceOnlyAndBoundIntoThePlan(t *testing.T) {
+	f, rng := rangeFixture(t)
+	plain := f.planReport(V3PlanOptions{ReportDir: gitTempDir(t)})
+	dir := gitTempDir(t)
+	paired := f.planReport(V3PlanOptions{ReportDir: dir, ConsolidationRanges: []string{rng}})
+	if plain.Status != "ok" || paired.Status != "ok" {
+		t.Fatalf("%+v %+v", plain.Diagnostics, paired.Diagnostics)
+	}
+	if !reflect.DeepEqual(plain.Plan.Candidates, paired.Plan.Candidates) {
+		t.Error("a named range changed a disposition")
+	}
+	if plain.Plan.Digest == paired.Plan.Digest {
+		t.Error("the plan identity does not bind the consolidation range")
+	}
+	rg := paired.Plan.Review.Ranges
+	if len(rg) != 1 || rg[0].Selector != rng || rg[0].From != strings.Split(rng, "..")[0] || rg[0].To != strings.Split(rng, "..")[1] || rg[0].Commits != 3 {
+		t.Errorf("resolved range %+v", rg)
+	}
+	doc := readReportJSON(t, dir)
+	entry := doc["entries"].([]any)[0].(map[string]any)
+	pairing, _ := entry["range_pairing"].(map[string]any)
+	if pairing == nil || pairing["evidence"] != "superseded-candidate" || len(pairing["pairs"].([]any)) == 0 {
+		t.Errorf("range pairing missing: %v", entry["range_pairing"])
+	}
+	md, _ := os.ReadFile(filepath.Join(dir, "tidy-report.md"))
+	if !strings.Contains(string(md), "### Range pairing") || !strings.Contains(string(md), "Evidence `superseded-candidate` only") {
+		t.Error("Markdown lacks the range pairing")
+	}
+}
+
+func TestPlanConsolidationRangeUsageErrorsRefuseBeforeAnyPlan(t *testing.T) {
+	f, _ := rangeFixture(t)
+	for _, ranges := range [][]string{{"nosuchref..main"}, {"main"}, {"a..b", "a..b", "a..b", "a..b", "a..b"}} {
+		r := f.planReport(V3PlanOptions{ReportDir: gitTempDir(t), ConsolidationRanges: ranges})
+		if r.Status != "refused" || r.Plan != nil || r.Diagnostics[0].Code != "invalid-options" {
+			t.Errorf("%v: %q %+v", ranges, r.Status, r.Diagnostics)
+		}
 	}
 }

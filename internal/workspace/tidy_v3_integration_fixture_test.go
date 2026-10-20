@@ -21,6 +21,8 @@ type proofFix struct {
 	main string
 	// bin, when set, replaces the Git executable of the engine under test.
 	bin string
+	// consolidation is a named consolidation range of the report fixture.
+	consolidation string
 }
 
 func newProofFix(t *testing.T) *proofFix {

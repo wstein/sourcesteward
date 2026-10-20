@@ -52,6 +52,9 @@ type V3PlanOptions struct {
 	// (FR-032). The three bounds are 0 for their defaults (FR-035).
 	ReportDir                                            string
 	ReportMaxEntries, ReportMaxBytes, ReportMaxDiffBytes int
+	// ConsolidationRanges are `A..B` selectors whose commits the report pairs
+	// with each reported branch (FR-037), at most four.
+	ConsolidationRanges []string
 }
 type V3ApplyOptions struct {
 	StateDir, PlanID         string
@@ -133,6 +136,14 @@ func validateV3PlanOptions(o V3PlanOptions) error {
 				return err
 			}
 		}
+		if len(o.ConsolidationRanges) > reportMaxRanges {
+			return failure("invalid-options", "--consolidation-range may be given at most four times.")
+		}
+		for _, selector := range o.ConsolidationRanges {
+			if _, _, err := parseConsolidationRange(selector); err != nil {
+				return err
+			}
+		}
 	}
 	hints := map[string]int64{}
 	for _, h := range o.PRHints {
@@ -204,7 +215,7 @@ func v3ProofPlanTimeout(o V3PlanOptions) time.Duration {
 
 // reviewRequested reports whether any review report option is set.
 func (o V3PlanOptions) reviewRequested() bool {
-	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0
+	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0 || len(o.ConsolidationRanges) > 0
 }
 
 func (o V3PlanOptions) reportBounds() reportBounds {

@@ -3023,12 +3023,44 @@
           "maximum": 1024,
           "minimum": 1,
           "type": "integer"
+        },
+        "ranges": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "commits": {
+                "maximum": 256,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "from": {
+                "type": "string"
+              },
+              "selector": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "selector",
+              "from",
+              "to",
+              "commits"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "type": "array"
         }
       },
       "required": [
-        "max_entries",
         "max_bytes",
-        "max_diff_bytes"
+        "max_diff_bytes",
+        "max_entries",
+        "ranges"
       ],
       "type": "object"
     },
