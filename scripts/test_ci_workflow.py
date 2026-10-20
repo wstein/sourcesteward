@@ -82,5 +82,21 @@ class CacheTests(unittest.TestCase):
         self.assertLess(text.index('scripts/install-backends.py'), text.index('--preflight "$BACKEND_LANE"'))
 
 
+class TieringTests(unittest.TestCase):
+    CONDITION = ("if: github.event_name != 'pull_request' || "
+                 "github.event.pull_request.base.ref == github.event.repository.default_branch || "
+                 "contains(github.event.pull_request.labels.*.name, 'ci-full')")
+
+    def test_conformance_is_tiered_by_base_branch_or_ci_full_label(self):
+        self.assertIn(self.CONDITION, job_text('conformance'))
+
+    def test_check_job_always_runs(self):
+        self.assertNotRegex(job_text('check'), r'(?m)^    if:')
+
+    def test_label_changes_start_a_run_so_ci_full_takes_effect(self):
+        on = WORKFLOW.split('\npermissions:', 1)[0]
+        self.assertIn('types: [opened, synchronize, reopened, labeled]', on)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -92,6 +92,13 @@ lanes also cache the Git-from-source prefix with `actions/cache`, keyed by runne
 lane, the pinned Git version and the installer hash; a hit skips the build and the
 preflight still asserts the exact Git version. Caches written by a branch or PR are visible
 only to that ref and its children, and never to other forks' runs (GitHub's default scoping).
+CI is tiered so stacked PRs do not repeat the heavy suite. The `check` job (static checks
+and the race suite) always runs. The two `Git/jj conformance` lanes run for pushes to `main`,
+for PRs whose base is the default branch, and for any PR carrying the `ci-full` label; a PR
+stacked on another PR branch skips them unless labeled. The owner or dispatcher puts
+`ci-full` on the top PR of a stack (the label event starts the run). A skipped job reports
+a neutral result, so it does not block merging; the stack tip with `ci-full` carries the
+evidence for the whole stack, and the post-merge push to `main` runs everything again.
 Its check job builds and
 validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
 lanes must also pass before deployment. The deployment job runs only for main
