@@ -64,6 +64,9 @@ type V3Plan struct {
 	// Planning configuration notes (Spec 031 FR-020); absent when empty so plans
 	// of repositories without noted configuration keep their exact bytes.
 	ConfigNotes []V3ConfigNote `json:"config_notes,omitempty"`
+	// Proof policy of a local-reference plan (Spec 031 FR-011); absent in plans
+	// that predate it, which are evaluated by ancestry alone.
+	ProofPolicy *V3ProofPolicy `json:"proof_policy,omitempty"`
 }
 type V3Candidate struct {
 	ActionID       string           `json:"action_id"`
@@ -94,6 +97,9 @@ type V3ProofEvidence struct {
 	Native  *V3AncestryProof `json:"native"`
 	GitHub  *V3MergeProof    `json:"github"`
 	Absence *V3AbsenceProof  `json:"absence"`
+	// Integration is the arm of the forge-free classes and of the review and
+	// hard-stop dispositions (Spec 031); absent for the Spec 029 arms.
+	Integration *V3IntegrationEvidence `json:"integration,omitempty"`
 }
 type V3AncestryProof struct {
 	TargetOID string `json:"target_oid"`
@@ -353,7 +359,7 @@ func validateV3Plan(p V3Plan, state, id string) error {
 	if e != nil {
 		return e
 	}
-	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) {
+	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || p.ProofPolicy != nil && (p.Mode != "local-refs" || !validV3ProofPolicy(*p.ProofPolicy)) {
 		return bad()
 	}
 	if state == "" {
@@ -448,12 +454,17 @@ func validV3CommitProof(c V3CommitProof, p V3Plan) bool {
 		return false
 	}
 	if c.Proof == "none" {
-		return c.Decision == "retain" && c.Evidence == nil
+		return c.Decision == "retain" && (c.Evidence == nil || validV3IntegrationReview(c, p))
 	}
 	if c.Evidence == nil || c.Evidence.Absence != nil {
 		return false
 	}
+	if c.Evidence.Integration != nil && !integrationProofTag(c.Proof) {
+		return false
+	}
 	switch c.Proof {
+	case integrationPatchID, integrationMergeNoop, integrationNoNetChange:
+		return validV3IntegrationProven(c, p)
 	case "native-ancestry":
 		n := c.Evidence.Native
 		return p.Mode != "tracking-refs" && n != nil && c.Evidence.GitHub == nil && n.TargetOID == c.OID && n.BaseOID == p.Expected.BaseCommit && (c.Decision != "delete" || c.Reason == "native-ancestry")
@@ -462,6 +473,33 @@ func validV3CommitProof(c V3CommitProof, p V3Plan) bool {
 		return p.Mode != "tracking-refs" && g != nil && c.Evidence.Native == nil && p.Online != nil && validV3Merge(*g, c.OID, p) && (c.Decision != "delete" || c.Reason == "github-merged-head")
 	}
 	return false
+}
+
+// integrationProofTag reports the Proof values that carry the Integration arm.
+func integrationProofTag(proof string) bool {
+	return proof == integrationPatchID || proof == integrationMergeNoop || proof == integrationNoNetChange
+}
+
+// validV3IntegrationProven checks a deletable (or, for a missing delete, never
+// stored) forge-free proof: only the Integration arm, the class equal to the
+// proof tag and the plan's recorded policy.
+func validV3IntegrationProven(c V3CommitProof, p V3Plan) bool {
+	e := c.Evidence.Integration
+	return p.Mode == "local-refs" && e != nil && c.Evidence.Native == nil && c.Evidence.GitHub == nil && c.Decision == "delete" && c.Reason == c.Proof &&
+		e.Disposition == integrationProvenDisposition && e.Class == c.Proof && validV3IntegrationEvidence(*e, c.OID, p)
+}
+
+// validV3IntegrationReview checks the evidence of a retained tip with proof none:
+// needs-review reasons or a hard stop, never a deletable class.
+func validV3IntegrationReview(c V3CommitProof, p V3Plan) bool {
+	e := c.Evidence.Integration
+	if p.Mode != "local-refs" || e == nil || c.Evidence.Native != nil || c.Evidence.GitHub != nil || c.Evidence.Absence != nil || e.Disposition == integrationProvenDisposition || !validV3IntegrationEvidence(*e, c.OID, p) {
+		return false
+	}
+	if e.Disposition == integrationRetainedDisposition {
+		return len(e.Reasons) == 1 && c.Reason == e.Reasons[0]
+	}
+	return c.Reason == integrationReviewDisposition
 }
 func v3Repo(r V3Repository) bool {
 	parts := strings.Split(r.Name, "/")
@@ -834,8 +872,15 @@ func v3Bounds(v any) error {
 					}
 					continue
 				}
+				// Reasons and flags are closed enums of at most 17 values; like
+				// the strings of a record they do not count against the 1,024
+				// record plan bound, so reviewing many refs never refuses a plan.
+				before := count
 				if !walk(v.Field(i), depth+1) {
 					return false
+				}
+				if v.Type() == reflect.TypeOf(V3IntegrationEvidence{}) && v.Field(i).Kind() == reflect.Slice {
+					count = before
 				}
 			}
 		}
