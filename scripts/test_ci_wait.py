@@ -33,7 +33,10 @@ pick() { # file-prefix: use prefix.N if present, else the last one
 }
 case "$1 $2" in
   "pr view") pick head ;;
-  "run list") pick runs ;;
+  "run list")
+    lim=100
+    while [ $# -gt 0 ]; do [ "$1" = --limit ] && lim=$2; shift; done
+    pick runs | jq -c ".[:$lim]" ;;
   "run view") cat "$FIX/log" ;;
   *) echo "unexpected $*" >&2; exit 9 ;;
 esac
@@ -217,6 +220,45 @@ class OutcomeTests(Base):
         (self.fix / 'runs.1').write_text('not json')
         code, _, _ = self.call('7')
         self.assertEqual(code, 5)
+
+    def test_full_page_raises_limit_then_succeeds(self):
+        self.runs([run(i, 'w%d' % i) for i in range(1, 151)])
+        code, out, _ = self.call('7')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count(' | success | '), 150)
+        self.assertIn('--limit 200', ' '.join(self.calls()))
+
+    def test_exactly_100_runs_is_retried_with_higher_limit(self):
+        self.runs([run(i, 'w') for i in range(1, 101)])
+        code, _, _ = self.call('7')
+        self.assertEqual(code, 0)
+        self.assertIn('--limit 200', ' '.join(self.calls()))
+
+    def test_runs_at_hard_cap_are_incomplete_evidence(self):
+        self.runs([run(i, 'w') for i in range(1, 301)])
+        code, out, err = self.call('7')
+        self.assertEqual(code, 5)
+        self.assertIn('evidence incomplete', err)
+        self.assertNotIn('outcome=success', out)
+
+    def test_control_characters_stripped_non_ascii_kept(self):
+        self.runs([run(1, 'ci\x1b[31m-\u00fcber \u2713', conclusion='failure')])
+        code, out, _ = self.call('7')
+        self.assertEqual(code, 1)
+        self.assertNotIn('\x1b', out)
+        self.assertIn('ci[31m-\u00fcber \u2713', out)
+
+    def test_runs_vanishing_after_being_seen_is_unavailable(self):
+        self.runs([run(1, 'ci', status='in_progress', conclusion=None)], [])
+        code, out, _ = self.call('--interval', '5', '7')
+        self.assertEqual(code, 5)
+        self.assertIn('outcome=unavailable', out.splitlines()[-1])
+
+    def test_head_changes_after_run_fetch(self):
+        self.head(SHA, OTHER)
+        self.runs([run(1, 'ci')])
+        code, out, _ = self.call('--head', SHA, '7')
+        self.assertEqual(code, 4, out)
 
     def test_usage_errors(self):
         for args in ([], ['--bogus', '7'], ['abc'], ['--timeout', 'x', '7'], ['--interval', '0', '7'],
