@@ -1031,6 +1031,68 @@
       ],
       "type": "object"
     },
+    "V3DiscoveryRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "enum": [
+            "complete",
+            "incomplete"
+          ],
+          "type": "string"
+        },
+        "oid": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "pr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V3PRIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refs": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 512,
+          "minItems": 1,
+          "type": "array"
+        },
+        "result": {
+          "enum": [
+            "github-merged-head",
+            "no-merged-pr",
+            "discovery-incomplete",
+            "discovery-budget-exhausted",
+            "ambiguous-needs-hint"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "discovered",
+            "hint"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "oid",
+        "source",
+        "pr",
+        "refs",
+        "coverage",
+        "result"
+      ],
+      "type": "object"
+    },
     "V3LegacyProvenance": {
       "additionalProperties": false,
       "properties": {
@@ -1243,6 +1305,13 @@
           "pattern": "^[0-9a-f]{64}$",
           "type": "string"
         },
+        "discovery": {
+          "items": {
+            "$ref": "#/$defs/V3DiscoveryRecord"
+          },
+          "maxItems": 256,
+          "type": "array"
+        },
         "observation_digests": {
           "items": {
             "pattern": "^[0-9a-f]{64}$",
@@ -1331,6 +1400,30 @@
       },
       "required": [
         "oid",
+        "number"
+      ],
+      "type": "object"
+    },
+    "V3PRIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "node_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "number": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "node_id",
         "number"
       ],
       "type": "object"

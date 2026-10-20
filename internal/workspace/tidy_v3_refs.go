@@ -190,9 +190,11 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 			return failTidyV3(r, err)
 		}
 		discoveryNotes = notes
-		if err = revalidateTidyV3Provider(ctx, session, p); err != nil {
-			return failTidyV3(r, err)
-		}
+		// No provider re-read happens at plan time: discovery already read each
+		// chosen PR in full, and RevalidatePullRequest pairs run only at apply,
+		// outside the 128-request plan budget (Spec 031 FR-018, Spec 029
+		// amendment 5). A plan-time pass would spend the budget discovery
+		// reports as exhausted.
 	}
 	p.Effects = v3PlanEffects(p)
 	p.Digest, err = v3PlanDigest(p)
@@ -218,11 +220,6 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 			return failTidyV3(r, e)
 		}
 		defer s.Close()
-		if session != nil {
-			if e = revalidateTidyV3Provider(ctx, session, p); e != nil {
-				return failTidyV3(r, e)
-			}
-		}
 		fresh, e = c.observe(ctx, source, o.Base)
 		if e != nil {
 			return failTidyV3(r, e)
@@ -301,37 +298,114 @@ func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosti
 			}
 		}
 	}
-	return tidyV3DiscoveryNotes(rows, p.Candidates), nil
+	records := tidyV3DiscoveryRecords(rows, p.Candidates, requestHints)
+	notes := tidyV3DiscoveryNotes(records)
+	// The stored list has its own bounds and never makes a plan refuse: records
+	// beyond them are dropped in OID order with a note, after the notes above
+	// were built from the full set.
+	kept, refs, size := 0, 0, 0
+	for kept < len(records) && kept < v3DiscoveryRecordCap && refs+len(records[kept].Refs) <= v3DiscoveryRefCap && size+v3DiscoveryBytes(records[kept]) <= v3DiscoveryByteCap {
+		refs += len(records[kept].Refs)
+		size += v3DiscoveryBytes(records[kept])
+		kept++
+	}
+	if kept > 0 {
+		p.Online.Discovery = records[:kept]
+	}
+	if kept < len(records) {
+		notes = append(notes, fmt.Sprintf("discovery-records-truncated: stored %d of %d discovery records (at most %d records, %d refs and %d KiB); the plan decisions are unaffected.", kept, len(records), v3DiscoveryRecordCap, v3DiscoveryRefCap, v3DiscoveryByteCap>>10))
+	}
+	return notes, nil
 }
 
-// tidyV3DiscoveryNotes counts OIDs and refs whose discovery stayed undecided.
-// Those refs are retained as integration-not-proven; no note claims absence.
-func tidyV3DiscoveryNotes(rows []hosting.TidyHeadEvidence, candidates []V3Candidate) []string {
-	refs := map[string]int{}
+// tidyV3DiscoveryRecords builds one record per distinct head OID listing every
+// candidate ref that carries it, in ascending OID order. Rows from doubles that
+// predate result and coverage fall back to the closed-outcome reading.
+func tidyV3DiscoveryRecords(rows []hosting.TidyHeadEvidence, candidates []V3Candidate, hints map[string]int) []V3DiscoveryRecord {
+	refs := map[string][]string{}
 	for _, v := range candidates {
-		refs[v.OID]++
-	}
-	oids, covered := map[string]int{}, map[string]int{}
-	for _, row := range rows {
-		if row.Result == "discovery-incomplete" || row.Result == "discovery-budget-exhausted" {
-			oids[row.Result]++
-			covered[row.Result] += refs[row.HeadOID]
+		if v.Name != "" {
+			refs[v.OID] = append(refs[v.OID], v.Name)
 		}
 	}
+	records := []V3DiscoveryRecord{}
+	for _, row := range rows {
+		names := refs[row.HeadOID]
+		if len(names) == 0 {
+			continue
+		}
+		sort.Strings(names)
+		result, coverage := row.Result, row.Coverage
+		if result == "" {
+			switch row.Reason {
+			case "github-merged-head":
+				result = "github-merged-head"
+			case "pr-ambiguous":
+				result = "ambiguous-needs-hint"
+			default:
+				result = "no-merged-pr"
+			}
+		}
+		if coverage == "" {
+			coverage = "complete"
+		}
+		source := "discovered"
+		if _, ok := hints[row.HeadOID]; ok {
+			source = "hint"
+		}
+		record := V3DiscoveryRecord{OID: row.HeadOID, Source: source, Refs: names, Coverage: coverage, Result: result}
+		if row.PullRequest != nil && result == "github-merged-head" {
+			record.PR = &V3PRIdentity{ID: row.PullRequest.ID, NodeID: row.PullRequest.NodeID, Number: int64(row.PullRequest.Number)}
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+const tidyV3NoteBytes = 2048
+
+// tidyV3DiscoveryNotes names, per undecided result, the head OIDs and refs that
+// stay retained as integration-not-proven. The list is bounded; no note claims
+// absence of a merged PR.
+func tidyV3DiscoveryNotes(records []V3DiscoveryRecord) []string {
 	notes := []string{}
-	for _, result := range []string{"discovery-incomplete", "discovery-budget-exhausted"} {
-		if oids[result] == 0 {
+	for _, result := range []string{"discovery-incomplete", "discovery-budget-exhausted", "ambiguous-needs-hint"} {
+		selected := []V3DiscoveryRecord{}
+		covered := 0
+		for _, d := range records {
+			if d.Result == result {
+				selected = append(selected, d)
+				covered += len(d.Refs)
+			}
+		}
+		if len(selected) == 0 {
 			continue
 		}
 		unit := "head OIDs"
-		if oids[result] == 1 {
+		if len(selected) == 1 {
 			unit = "head OID"
 		}
 		explain := "the closed pull request collection reached its page bound; found merged heads remain proof, absence is not claimed"
-		if result == "discovery-budget-exhausted" {
+		switch result {
+		case "discovery-budget-exhausted":
 			explain = "the shared 128-request budget could not cover their candidate reads; rerun with --pr OID=N for these heads"
+		case "ambiguous-needs-hint":
+			explain = "several admissible merged pull requests exist; select one with --pr OID=N"
 		}
-		notes = append(notes, fmt.Sprintf("%s: %d %s (%d refs) retained as integration-not-proven; %s.", result, oids[result], unit, covered[result], explain))
+		note := fmt.Sprintf("%s: %d %s (%d refs) retained as integration-not-proven; %s.", result, len(selected), unit, covered, explain)
+		shown := 0
+		for _, d := range selected {
+			item := fmt.Sprintf(" %s [%s]", d.OID, strings.Join(d.Refs, " "))
+			if len(note)+len(item) > tidyV3NoteBytes {
+				break
+			}
+			note += item
+			shown++
+		}
+		if shown < len(selected) {
+			note += fmt.Sprintf(" and %d more", len(selected)-shown)
+		}
+		notes = append(notes, note)
 	}
 	return notes
 }
@@ -345,30 +419,4 @@ func tidyV3SymbolicTarget(n V3NativeState, name string) bool {
 		}
 	}
 	return false
-}
-func revalidateTidyV3Provider(ctx context.Context, s tidyV3Hosting, p V3Plan) error {
-	if p.Online == nil || tidyV3Repository(s.Repository()) != p.Online.Repository {
-		return failure("evidence-changed", "Selected provider repository identity changed.")
-	}
-	if err := s.RevalidateRepository(ctx); err != nil {
-		return tidyV3HostingError(err)
-	}
-	seen := map[string]bool{}
-	for _, c := range p.Candidates {
-		if c.Evidence == nil || c.Evidence.GitHub == nil {
-			continue
-		}
-		g := c.Evidence.GitHub
-		if seen[g.ObservationDigest] {
-			continue
-		}
-		seen[g.ObservationDigest] = true
-		proof := V3CommitProof{OID: c.OID, Decision: c.Decision, Reason: c.Reason, Proof: c.Proof, WorkspacePaths: c.WorkspacePaths, Evidence: c.Evidence}
-		if err := revalidateTidyV3Commit(ctx, s, p.Expected, proof, func(ctx context.Context, target, base string) (bool, error) {
-			return tidyV3NativeAncestry(ctx, p.Expected, target, base)
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
 }
