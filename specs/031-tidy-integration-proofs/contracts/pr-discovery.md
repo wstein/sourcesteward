@@ -28,12 +28,17 @@ Shared with Spec 029 FR-025: 30-second online plan deadline, at most 128 request
 
 | Input | Result |
 | --- | --- |
-| `--pr OID=N` twice, identical | accepted once |
+| `--pr OID=N` twice, identical (same number however spelled, `07` and `7`) | accepted once |
 | same OID, different N | usage error: `--pr OID=N1` conflicts with `--pr OID=N2` for OID; names both selectors |
 | OID not a tip of any selected ref | usage error naming the OID |
 | malformed OID or N | usage error naming the full flag value (escaped, at most 4,096 bytes) |
+| hinted PR that is not an admissible merged head | `discovery-incomplete` (a hint skips the collection, so no absence is claimed) |
 | multiple admissible PRs, no hint | `ambiguous-needs-hint` naming the OID and refs |
 
 ## Coverage
 
 `complete` when pagination terminates within 10 pages and 1,000 records; otherwise `incomplete`. This amends Spec 029's refusal of a full final page without proven exhaustion: positive evidence (an exact-head merged PR found and fully verified) stays proof; only absence is inconclusive, so OIDs without a found PR are retained `discovery-incomplete` and the plan never refuses for this reason.
+
+## Stored discovery list
+
+The plan stores one `DiscoveryRecord` per distinct unproven OID in `online.discovery` (additive, optional, absent for plans without provider discovery). It is informational and never makes a plan refuse: at most 256 records, 512 refs in total and 128 KiB (a fixed allowance per record plus the ref names), all outside the 1,024 aggregate-entry bound of Spec 029. Records beyond a cap are dropped in ascending OID order and a `discovery-records-truncated` note is added; the `limitations` notes for undecided results are built from the full set. The v3 schema uses the same caps (256 records, 512 refs per record).
