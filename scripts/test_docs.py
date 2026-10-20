@@ -178,10 +178,11 @@ class DocumentationTests(unittest.TestCase):
 
     def test_unpublished_schemas_stay_out_of_the_bundle_without_weakening_the_check(self):
         package = load('package_unpublished', 'package-pages.py')
-        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v3/tidy.schema.json'})
+        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v3/tidy.schema.json', 'v3/tidy-report.schema.json'})
         self.assertFalse(package.UNPUBLISHED_SCHEMAS & package.SCHEMA_PATHS)
         self.assertNotIn('v3', package.SCHEMAS)
         self.assertNotIn('v3/tidy.schema.json', package.SCHEMA_PATHS)
+        self.assertNotIn('v3/tidy-report.schema.json', package.SCHEMA_PATHS)
         for name in package.UNPUBLISHED_SCHEMAS:
             self.assertTrue((ROOT / 'schemas' / name).is_file(), name)
         with tempfile.TemporaryDirectory() as directory:
@@ -193,18 +194,24 @@ class DocumentationTests(unittest.TestCase):
             self.assertEqual(copied, package.SCHEMA_PATHS)
             self.assertFalse((destination / 'schemas/v3').exists())
             shutil.rmtree(destination)
-            # Only the exact hidden v3 source is admitted. Invalid content,
-            # aliases, extra files and unlisted versions cannot widen exports.
-            hidden = root / 'schemas/v3/tidy.schema.json'
-            hidden_bytes = hidden.read_bytes()
-            hidden.write_text('{')
-            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
-            self.assertFalse(destination.exists())
-            hidden.unlink()
-            hidden.symlink_to(root / 'schemas/v1/tidy.schema.json')
-            with self.assertRaises(ValueError): package.copy_schemas(root, destination)
-            hidden.unlink()
-            hidden.write_bytes(hidden_bytes)
+            # Only the exact hidden v3 sources are admitted. Validate each
+            # source's bytes and reject aliases before creating any exports.
+            for name in ('tidy.schema.json', 'tidy-report.schema.json'):
+                hidden = root / 'schemas/v3' / name
+                hidden_bytes = hidden.read_bytes()
+                for invalid in (b'{', b'\xff'):
+                    with self.subTest(schema=name, invalid=invalid):
+                        hidden.write_bytes(invalid)
+                        with self.assertRaises(ValueError):
+                            package.copy_schemas(root, destination)
+                        self.assertFalse(destination.exists())
+                hidden.unlink()
+                hidden.symlink_to(root / 'schemas/v1/tidy.schema.json')
+                with self.subTest(schema=name, linked=True), self.assertRaises(ValueError):
+                    package.copy_schemas(root, destination)
+                self.assertFalse(destination.exists())
+                hidden.unlink()
+                hidden.write_bytes(hidden_bytes)
             hidden_dir = hidden.parent
             saved_dir = root / 'saved-v3'
             hidden_dir.rename(saved_dir)
