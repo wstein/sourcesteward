@@ -150,3 +150,35 @@ sources, unsafe raw HTML is disabled, and templates cannot execute tools or fetc
 resources. Internal specifications, progress and agent instructions are not included in the
 public artifact. Published schemas retain source bytes. CI validates the exact artifact and
 main-only Pages deploys that same artifact after checks pass; `revision.txt` records its SHA.
+
+## Waiting for pull request CI
+
+`scripts/ci-wait.sh` is an interim, read-only, bounded wait for the workflow runs of a pull
+request head (it will be replaced by the `stw` hosting command specified for #93). It needs
+`gh` and `jq`.
+
+```sh
+scripts/ci-wait.sh [-R OWNER/REPO] [--head SHA] [--timeout SECONDS] \
+  [--appear-timeout SECONDS] [--interval SECONDS] [--json] PR_NUMBER
+```
+
+It resolves the PR head, waits until at least one run exists for it (default 120 s), then until
+every run for that head is completed. Both phases share one deadline (default 2700 s) that is
+computed once. Polls back off from `--interval` (default 20 s) to at most 60 s, and each sample
+re-checks the head; `--head` is the expected head. It prints one `workflow | conclusion | duration`
+line per run, up to ten failed test names for failed runs (from a filtered, size-bounded excerpt
+of `gh run view --log-failed`, never raw logs) and a final `outcome=<name> head=<sha7> elapsed=<s>`
+line; `--json` prints the same data as JSON.
+
+| Exit | Outcome | Meaning |
+| --- | --- | --- |
+| 0 | `success` | all runs succeeded or were skipped (skipped is neutral and listed) |
+| 1 | `failure` | a run failed, was cancelled, timed out or needs action |
+| 2 | `deadline` | the deadline passed with runs still active |
+| 3 | `no-runs` | no run appeared for the head in time |
+| 4 | `head-changed` | the PR head differs from the expected head |
+| 5 | `unavailable` | `gh` error, rate limit or authentication problem; never reads as green |
+| 64 | | usage error |
+
+The tool never re-runs, cancels or dispatches workflows and never merges or changes a PR. Tests
+use a fake `gh` through `GH`, with `CI_WAIT_SLEEP` and `CI_WAIT_NOW` replacing `sleep` and the clock.
