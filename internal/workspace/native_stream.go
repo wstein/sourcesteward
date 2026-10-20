@@ -43,24 +43,33 @@ func executeNativeStream(ctx context.Context, cancel context.CancelFunc, cmd *ex
 }
 
 func executeNativeStreamBudgeted(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, input []byte, limit int64, parse func(io.Reader) error, budget *tidyV3ProofBudget) (nativeStreamStats, error) {
+	stats, _, e := executeNativeStreamExit(ctx, cancel, cmd, bytes.NewReader(input), limit, parse, budget, false)
+	return stats, e
+}
+
+// executeNativeStreamExit is the shared executor. A nonzero exit is the typed
+// errNativeStreamCommandFailed unless tolerateExit is set, in which case the
+// exit code is returned for commands whose exit status is part of the result
+// (merge-base, merge-tree). stdin is streamed, never buffered.
+func executeNativeStreamExit(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, stdin io.Reader, limit int64, parse func(io.Reader) error, budget *tidyV3ProofBudget, tolerateExit bool) (nativeStreamStats, int, error) {
 	var stats nativeStreamStats
 	out, e := cmd.StdoutPipe()
 	if e != nil {
-		return stats, e
+		return stats, -1, e
 	}
 	defer out.Close()
 	stderrPipe, e := cmd.StderrPipe()
 	if e != nil {
-		return stats, e
+		return stats, -1, e
 	}
 	defer stderrPipe.Close()
 	var stderr nativeCapture
 	stderrCount := &nativeCountReader{r: stderrPipe, limit: nativeOutputLimit}
 	stderrDone := make(chan error, 1)
-	cmd.Stdin = bytes.NewReader(input)
+	cmd.Stdin = stdin
 	if e = cmd.Start(); e != nil {
 		_, e = nativeExitResult(e, nil)
-		return stats, e
+		return stats, -1, e
 	}
 	finished := make(chan struct{})
 	defer close(finished)
@@ -110,29 +119,29 @@ func executeNativeStreamBudgeted(ctx context.Context, cancel context.CancelFunc,
 	stats.Stdout = counted.count
 	stats.Stderr = stderrCount.count
 	if ctx.Err() != nil {
-		return stats, ctx.Err()
+		return stats, -1, ctx.Err()
 	}
 	if errors.Is(stderrErr, errTidyV3ProofLimit) {
-		return stats, stderrErr
+		return stats, -1, stderrErr
 	}
 	if errors.Is(stderrErr, errNativeStreamLimit) {
-		return stats, errNativeOutputLimit
+		return stats, -1, errNativeOutputLimit
 	}
 	code, e := nativeExitResult(waitErr, stderr.data)
 	if errors.Is(e, errNativeSandboxUnavailable) {
-		return stats, e
+		return stats, -1, e
 	}
 	if parseErr != nil {
-		return stats, parseErr
+		return stats, -1, parseErr
 	}
 	if stderrErr != nil {
-		return stats, stderrErr
+		return stats, -1, stderrErr
 	}
 	if e != nil {
-		return stats, e
+		return stats, -1, e
 	}
-	if code != 0 {
-		return stats, errNativeStreamCommandFailed
+	if code != 0 && !tolerateExit {
+		return stats, code, errNativeStreamCommandFailed
 	}
-	return stats, nil
+	return stats, code, nil
 }
