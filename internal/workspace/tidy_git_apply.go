@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -113,25 +114,28 @@ func gitTidyCurrentCandidate(ctx context.Context, p TidyPlanRecord, c TidyCandid
 }
 
 func gitTidyReferenceMap(ctx context.Context, bin, path string) (map[string]string, error) {
-	raw, e := gitRead(ctx, bin, path, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00")
-	if e != nil {
-		return nil, e
-	}
+	return readGitTidyReferenceMap(gitCollectionReaderFor(ctx, bin, path))
+}
+
+func readGitTidyReferenceMap(read gitCollectionReader) (map[string]string, error) {
 	refs := map[string]string{}
-	for raw != "" {
-		record, rest, ok := strings.Cut(raw, "\x00\n")
+	e := read(gitRecordLine, []string{"for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00"}, func(raw []byte) error {
+		record, ok := strings.CutSuffix(string(raw), "\x00\n")
 		if !ok {
-			return nil, failure("tidy-invalid-reference", "Malformed full reference state")
+			return failure("tidy-invalid-reference", "Malformed full reference state")
 		}
-		raw = rest
 		name, oid, ok := strings.Cut(record, "\x00")
 		if !ok || refs[name] != "" {
-			return nil, failure("tidy-invalid-reference", "Ambiguous full reference state")
+			return failure("tidy-invalid-reference", "Ambiguous full reference state")
 		}
 		refs[name] = oid
-		if len(refs) > observationLimit {
-			return nil, failure("tidy-observation-limit", "Full reference state exceeds 1024 records")
-		}
+		return nil
+	})
+	if errors.Is(e, io.ErrUnexpectedEOF) {
+		return nil, failure("tidy-invalid-reference", "Malformed full reference state")
+	}
+	if e != nil {
+		return nil, e
 	}
 	return refs, nil
 }

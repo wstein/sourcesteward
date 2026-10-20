@@ -4,6 +4,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"io"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -127,20 +128,11 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 	if err != nil {
 		return out, err
 	}
-	refs, err := gitRead(ctx, bin, path, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00%(objecttype)%00")
-	if err != nil {
+	read := gitCollectionReaderFor(ctx, bin, path)
+	if out.Native.References, err = readTidyV3References(read, before.Identity.ObjectFormat); err != nil {
 		return out, err
 	}
-	out.Native.References, err = parseTidyV3References(refs, before.Identity.ObjectFormat)
-	if err != nil {
-		return out, err
-	}
-	raw, err := gitRead(ctx, bin, path, "worktree", "list", "--porcelain", "-z")
-	if err != nil {
-		return out, err
-	}
-	out.Native.Registrations, err = parseTidyV3Registrations(raw, before.Identity.ObjectFormat)
-	if err != nil {
+	if out.Native.Registrations, err = readTidyV3Registrations(read, before.Identity.ObjectFormat); err != nil {
 		return out, err
 	}
 	out.Native.ProtectedRoots = []string{}
@@ -169,55 +161,95 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 	return out, nil
 }
 
-func parseTidyV3References(raw, format string) ([]V3Reference, error) {
-	out := []V3Reference{}
-	last := ""
-	for raw != "" {
-		row, rest, ok := strings.Cut(raw, "\x00\n")
-		f := strings.Split(row, "\x00")
-		if !ok || !utf8.ValidString(row) || len(f) != 4 || !v3Ref(f[0]) || f[0] <= last || !v3OID(f[1], format) || (f[2] != "" && !v3Ref(f[2])) {
-			return nil, failure("invalid-reference", "Complete ordered direct and symbolic native identities are required.")
-		}
-		if f[3] != "commit" && f[3] != "tag" && f[3] != "tree" && f[3] != "blob" || strings.HasPrefix(f[0], "refs/heads/") && f[3] != "commit" {
-			return nil, failure("invalid-reference", "Native reference object type is unsupported.")
-		}
-		out = append(out, V3Reference{Name: f[0], OID: f[1], Symbolic: f[2]})
-		if len(out) > observationLimit {
-			return nil, failure("record-limit", "Native references exceed 1024 records.")
-		}
-		last, raw = f[0], rest
-	}
-	return out, nil
+// tidyV3ReferenceParser accepts one for-each-ref record at a time and requires
+// strictly ordered names.
+type tidyV3ReferenceParser struct {
+	format string
+	last   string
+	out    []V3Reference
 }
 
-func parseTidyV3Registrations(raw, format string) ([]V3Registration, error) {
-	if _, err := parseGitTidyWorktrees(raw, format); err != nil {
-		return nil, err
+func newTidyV3ReferenceParser(format string) *tidyV3ReferenceParser {
+	return &tidyV3ReferenceParser{format: format, out: []V3Reference{}}
+}
+
+func (p *tidyV3ReferenceParser) add(record []byte) error {
+	row, ok := strings.CutSuffix(string(record), "\x00\n")
+	f := strings.Split(row, "\x00")
+	if !ok || !utf8.ValidString(row) || len(f) != 4 || !v3Ref(f[0]) || f[0] <= p.last || !v3OID(f[1], p.format) || (f[2] != "" && !v3Ref(f[2])) {
+		return failure("invalid-reference", "Complete ordered direct and symbolic native identities are required.")
 	}
-	out := []V3Registration{}
-	for _, row := range strings.Split(strings.TrimSuffix(raw, "\x00\x00"), "\x00\x00") {
-		r := V3Registration{}
-		for _, field := range strings.Split(row, "\x00") {
-			key, value, _ := strings.Cut(field, " ")
-			switch key {
-			case "worktree":
-				r.Path = value
-			case "HEAD":
-				r.HeadOID = value
-			case "branch":
-				r.HeadRef = value
-			case "locked":
-				r.Locked, r.LockReason = true, value
-			case "prunable":
-				r.Prunable = true
-			case "bare":
-				r.Bare = true
-			}
+	if f[3] != "commit" && f[3] != "tag" && f[3] != "tree" && f[3] != "blob" || strings.HasPrefix(f[0], "refs/heads/") && f[3] != "commit" {
+		return failure("invalid-reference", "Native reference object type is unsupported.")
+	}
+	p.out = append(p.out, V3Reference{Name: f[0], OID: f[1], Symbolic: f[2]})
+	p.last = f[0]
+	return nil
+}
+
+func readTidyV3References(read gitCollectionReader, format string) ([]V3Reference, error) {
+	p := newTidyV3ReferenceParser(format)
+	if e := read(gitRecordLine, []string{"for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00%(objecttype)%00"}, p.add); e != nil {
+		if errors.Is(e, io.ErrUnexpectedEOF) {
+			return nil, failure("invalid-reference", "Complete ordered direct and symbolic native identities are required.")
 		}
-		out = append(out, r)
+		return nil, e
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, nil
+	return p.out, nil
+}
+
+func readTidyV3Registrations(read gitCollectionReader, format string) ([]V3Registration, error) {
+	p := newTidyV3RegistrationParser(format)
+	if e := read(gitRecordBlock, []string{"worktree", "list", "--porcelain", "-z"}, p.add); e != nil {
+		return nil, gitTidyWorktreeStreamError(e)
+	}
+	return p.result()
+}
+
+// tidyV3RegistrationParser validates each record with the v1 registration
+// rules and keeps the typed v3 fields, sorted by path at the end.
+type tidyV3RegistrationParser struct {
+	validate *gitTidyWorktreeParser
+	out      []V3Registration
+}
+
+func newTidyV3RegistrationParser(format string) *tidyV3RegistrationParser {
+	return &tidyV3RegistrationParser{validate: newGitTidyWorktreeParser(format), out: []V3Registration{}}
+}
+
+func (p *tidyV3RegistrationParser) add(record []byte) error {
+	if e := p.validate.add(record); e != nil {
+		return e
+	}
+	r := V3Registration{}
+	text, _ := strings.CutSuffix(string(record), "\x00\x00")
+	for _, field := range strings.Split(text, "\x00") {
+		key, value, _ := strings.Cut(field, " ")
+		switch key {
+		case "worktree":
+			r.Path = value
+		case "HEAD":
+			r.HeadOID = value
+		case "branch":
+			r.HeadRef = value
+		case "locked":
+			r.Locked, r.LockReason = true, value
+		case "prunable":
+			r.Prunable = true
+		case "bare":
+			r.Bare = true
+		}
+	}
+	p.out = append(p.out, r)
+	return nil
+}
+
+func (p *tidyV3RegistrationParser) result() ([]V3Registration, error) {
+	if _, e := p.validate.result(); e != nil {
+		return nil, e
+	}
+	sort.Slice(p.out, func(i, j int) bool { return p.out[i].Path < p.out[j].Path })
+	return p.out, nil
 }
 
 func tidyV3NativeAncestry(ctx context.Context, expected Snapshot, target, base string) (bool, error) {

@@ -138,21 +138,15 @@ func observeGitWithPrimary(ctx context.Context, path, base string, primary *gitP
 	if err != nil {
 		return Snapshot{}, err
 	}
-	refs, err := gitRead(ctx, bin, id.WorkspaceRoot, "for-each-ref", "--format=%(refname)%00%(objectname)%00")
+	refsDigest, err := gitReadRecordsDigest(ctx, bin, id.WorkspaceRoot, gitRecordLine, "for-each-ref", "--format=%(refname)%00%(objectname)%00")
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if strings.Count(refs, "\n") > observationLimit {
-		return Snapshot{}, failure("git-observation-limit", "reference inventory exceeds the workspace observation limit")
-	}
-	registrations, err := gitRead(ctx, bin, id.WorkspaceRoot, "worktree", "list", "--porcelain", "-z")
+	registrationsDigest, err := gitReadRecordsDigest(ctx, bin, id.WorkspaceRoot, gitRecordBlock, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if strings.Count(registrations, "worktree ") > observationLimit {
-		return Snapshot{}, failure("git-observation-limit", "worktree inventory exceeds the workspace observation limit")
-	}
-	return Snapshot{Identity: id, BaseSelector: base, BaseCommit: commit, ReferenceDigest: gitDigest(refs), RegistrationDigest: gitDigest(registrations), SafetyDigest: safety}, nil
+	return Snapshot{Identity: id, BaseSelector: base, BaseCommit: commit, ReferenceDigest: refsDigest, RegistrationDigest: registrationsDigest, SafetyDigest: safety}, nil
 }
 
 func gitSafety(ctx context.Context, bin string, id NativeIdentity, commit string) (string, error) {

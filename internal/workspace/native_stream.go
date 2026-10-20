@@ -10,6 +10,7 @@ import (
 )
 
 var errNativeStreamLimit = errors.New("native stream exceeds its complete-evidence bound")
+var errNativeStreamCommandFailed = errors.New("native stream command failed")
 
 // Each stream starts only an already admitted command constructed by a fixed
 // typed Git operation. This executor does not select a binary, argv or grants.
@@ -131,7 +132,7 @@ func executeNativeStreamBudgeted(ctx context.Context, cancel context.CancelFunc,
 		return stats, e
 	}
 	if code != 0 {
-		return stats, errors.New("native stream command failed")
+		return stats, errNativeStreamCommandFailed
 	}
 	return stats, nil
 }
