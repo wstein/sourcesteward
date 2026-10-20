@@ -463,3 +463,54 @@ func TestTidyV3RetirementTextEscapesCompleteFacts(t *testing.T) {
 		t.Fatal("quoted evidence lost typed retirement facts")
 	}
 }
+
+func tidyV3HintRun(args ...string) (workspace.V3PlanOptions, error) {
+	var got workspace.V3PlanOptions
+	cmd := tidyCommandWithV3Operations(nil, nil, func(_ context.Context, o workspace.V3PlanOptions) workspace.V3Result {
+		got = o
+		return workspace.V3Result{SchemaVersion: 3, Command: "tidy-plan", Status: "ok", Backend: "git"}
+	}, nil)
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs(append([]string{"plan", "--contract", "3", "--base", "HEAD", "--online", "--remote", "origin"}, args...))
+	err := cmd.Execute()
+	return got, err
+}
+
+func TestTidyV3IdenticalRepeatedHintIsAcceptedOnce(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	got, err := tidyV3HintRun("--pr", oid+"=12", "--pr", oid+"=12")
+	if err != nil || len(got.PRHints) != 1 || got.PRHints[0].OID != oid || got.PRHints[0].Number != 12 {
+		t.Fatalf("%v %+v", err, got.PRHints)
+	}
+}
+
+func TestTidyV3HintUsageErrorsNameTheSelector(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	for name, tc := range map[string]struct {
+		args []string
+		want []string
+	}{
+		"conflict":  {[]string{"--pr", oid + "=1", "--pr", oid + "=2"}, []string{`--pr "` + oid + `=1"`, `--pr "` + oid + `=2"`}},
+		"no number": {[]string{"--pr", oid + "="}, []string{`--pr "` + oid + `="`}},
+		"short oid": {[]string{"--pr", "abc=1"}, []string{`--pr "abc=1"`}},
+		"escaped":   {[]string{"--pr", "x\ny=1"}, []string{`--pr "x\ny=1"`}},
+		"zero":      {[]string{"--pr", oid + "=0"}, []string{`--pr "` + oid + `=0"`}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := tidyV3HintRun(tc.args...)
+			if err == nil {
+				t.Fatal("accepted")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("%q lacks %q", err, want)
+				}
+			}
+		})
+	}
+	_, err := tidyV3HintRun("--pr", strings.Repeat("z", 10000))
+	if err == nil || len(err.Error()) > 4200 {
+		t.Fatalf("unbounded selector message: %d", len(err.Error()))
+	}
+}

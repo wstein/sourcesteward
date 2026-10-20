@@ -194,28 +194,34 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 		seen[ref] = true
 	}
 	o.PRHints = []workspace.V3PRHint{}
-	seen = map[string]bool{}
+	selectors := map[string]string{}
 	for _, hint := range hints {
 		oid, number, ok := strings.Cut(hint, "=")
-		if !ok || len(oid) != 40 || strings.Trim(oid, "0") == "" || number == "" || seen[oid] {
-			return bad()
+		if !ok || len(oid) != 40 || strings.Trim(oid, "0") == "" || number == "" {
+			return tidyV3MalformedHint(hint)
 		}
 		for _, c := range oid {
 			if !strings.ContainsRune("0123456789abcdef", c) {
-				return bad()
+				return tidyV3MalformedHint(hint)
 			}
 		}
 		for _, c := range number {
 			if c < '0' || c > '9' {
-				return bad()
+				return tidyV3MalformedHint(hint)
 			}
 		}
 		n, err := strconv.ParseInt(number, 10, 64)
 		if err != nil || n <= 0 {
-			return bad()
+			return tidyV3MalformedHint(hint)
+		}
+		if first, ok := selectors[oid]; ok {
+			if first == hint {
+				continue
+			}
+			return fmt.Errorf("--pr %s conflicts with --pr %s for head %s", tidyV3Quote(first), tidyV3Quote(hint), oid)
 		}
 		o.PRHints = append(o.PRHints, workspace.V3PRHint{OID: oid, Number: n})
-		seen[oid] = true
+		selectors[oid] = hint
 	}
 	return nil
 }
@@ -315,4 +321,16 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 	}
 	_, err := io.WriteString(w, text.String())
 	return err
+}
+
+// tidyV3Quote escapes a flag value and bounds it to the 4,096-byte message limit.
+func tidyV3Quote(v string) string {
+	q := strconv.Quote(v)
+	if len(q) > 4096 {
+		q = q[:4096]
+	}
+	return q
+}
+func tidyV3MalformedHint(v string) error {
+	return fmt.Errorf("--pr %s is not FULL_OID=POSITIVE_NUMBER", tidyV3Quote(v))
 }
