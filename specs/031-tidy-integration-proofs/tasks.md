@@ -1,18 +1,18 @@
 # Tasks: Tidy integration proofs, review report and bounded planning
 
-**Gate**: all boxes unchecked; this list is a design artifact. Each behavior task starts with an observed failing test (TDD), then the implementation task, then relevant checks. Focused Conventional Commits per task group. No build, release, tag, installation or `apply` on a real repository happens in any task; T040 and T041 are source test runner and manual steps, T042 and T044 require explicit owner authorization named for that operation.
+**Gate**: boxes are ticked only with evidence in [verification.md](verification.md) (`[~]` is partly done: T003 covers #80 only until packages B and C add #79 and #81); this list is a design artifact. Each behavior task starts with an observed failing test (TDD), then the implementation task, then relevant checks. Focused Conventional Commits per task group. No build, release, tag, installation or `apply` on a real repository happens in any task; T040 and T041 are source test runner and manual steps, T042 and T044 require explicit owner authorization named for that operation.
 
 ## Phase 1: Design gate and baseline
 
-- [ ] T001 Obtain independent executed cross-artifact review of the exact committed `spec.md`, `plan.md`, `tasks.md`, `data-model.md` and contracts; resolve findings and have changed rules re-reviewed.
-- [ ] T002 Characterize the stage2 baseline: confirm every path and symbol in the plan, freeze checksums of `schemas/v1/`, `schemas/v2/` and old stored-plan fixtures, and record the owner of each source file.
-- [ ] T003 Add failing reproduction tests for #79 (`submodule.*`, `core.hooksPath`), #80 (150 refs/120 worktrees over 64 KiB) and #81 (shared OID, duplicate hint, rebase-merge offline) against temporary repositories and transport doubles; record the observed failure text and the cause of #81 (page cap, duplicates or hint path).
+- [x] T001 Obtain independent executed cross-artifact review of the exact committed `spec.md`, `plan.md`, `tasks.md`, `data-model.md` and contracts; resolve findings and have changed rules re-reviewed.
+- [x] T002 Characterize the stage2 baseline: confirm every path and symbol in the plan, freeze checksums of `schemas/v1/`, `schemas/v2/` and old stored-plan fixtures, and record the owner of each source file.
+- [~] T003 Add failing reproduction tests for #79 (`submodule.*`, `core.hooksPath`), #80 (150 refs/120 worktrees over 64 KiB) and #81 (shared OID, duplicate hint, rebase-merge offline) against temporary repositories and transport doubles; record the observed failure text and the cause of #81 (page cap, duplicates or hint path).
 
 ## Phase 2: Bounded streaming reads (FR-024..FR-026; fixes #80)
 
-- [ ] T004 Add failing tests in `internal/workspace`: v1 and v3 plan with 150 refs and 120 worktrees; boundary fixtures 1,024 passes, 1,025 refuses `git-observation-limit`, 4,325,377 stdout bytes and 65,537 stderr bytes refuse with the named limit; a record longer than 4,224 bytes refuses; the parser holds one record (allocation assertion); v1/v2 output bytes unchanged.
-- [ ] T005 Implement streamed `for-each-ref` and `worktree list --porcelain -z` parsing through the bounded stream executor for v1 and v3 callers; pass T004; keep `nativeOutputLimit` for non-collection reads.
-- [ ] T006 Run the full v1/v2 conformance and published-schema byte checks after T005; fix regressions only.
+- [x] T004 Add failing tests in `internal/workspace`: v1 and v3 plan with 150 refs and 120 worktrees; boundary fixtures 1,024 records pass the collection read, 1,025 refuse `git-observation-limit` (the Spec 029 aggregate 1,024-record plan bound is unchanged, see FR-025), 4,325,377 stdout bytes and 65,537 stderr bytes refuse with the named limit; a record longer than 4,224 bytes refuses; the parser holds one record (allocation assertion); v1/v2 output bytes unchanged.
+- [x] T005 Implement streamed `for-each-ref` and `worktree list --porcelain -z` parsing through the bounded stream executor for v1 and v3 callers; pass T004; keep `nativeOutputLimit` for non-collection reads.
+- [x] T006 Run the full v1/v2 conformance and published-schema byte checks after T005; fix regressions only.
 
 ## Phase 3: Configuration policy (FR-019..FR-023; fixes #79)
 

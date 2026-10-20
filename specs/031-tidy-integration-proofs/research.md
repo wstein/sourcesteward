@@ -39,3 +39,13 @@ The cost of a wrong local-branch deletion is bounded by the recovery ref, so the
 
 1. Why did #81 need hints: more than 1,000 closed PRs (page cap), duplicate OIDs, or the unproven-hint path? T002 reproduces with fakes and records the cause before any change.
 2. Whether the closed-PR collection covers this repository's 149 refs; the Anchorage umbrella uses a different repository and remote.
+
+## Stage2 baseline (T002, source `37b56fbf`)
+
+Every path in the plan exists at this source; the new files (`tidy_v3_proof_native.go`, `tidy_v3_report*.go`, `tidy_v3_decisions.go`) do not exist yet, as intended. The plan's `native_stream.go` path is confirmed; the bounded stream executor is `executeNativeStream` there and the record readers are in `git_stream.go`. Symbols confirmed: `gitRead`, `gitSafetyWithPrimary` (`git.go`), `nativeOutputLimit` and `sandboxEnvironment` (`native_sandbox.go`), `observationLimit = 1024` (`result.go`), `gitMetadataRecordLimit = 4224` and `gitMetadataStreamLimit = 4325376` (`git_stream.go`), `maxPages = 10` (`internal/hosting/transport.go`), `DiscoverPullRequests` and `RevalidatePullRequest` (`tidy_evidence_pr.go`).
+
+Collection reads that were buffered at 64 KiB: `git.go` (`Observe`, reference and registration digests), `tidy_git.go` (v1), `tidy_v3_proof.go` (v3), `tidy_git_apply.go` (`gitTidyReferenceMap`). `retirement_git.go` still reads `worktree list` buffered during retirement apply; see verification.md.
+
+Frozen published bytes: `internal/contracts/schema_freeze_test.go` holds the SHA-256 of all 18 `schemas/v1/*.json` and 2 `schemas/v2/*.json` files. Old stored-plan fixtures are not files: they are constructed in tests (`v3LegacyTestPlan` in `internal/workspace/tidy_v3_state_test.go`, stored-plan cases in `workspace_test.go`), so the frozen evidence is those tests passing unchanged.
+
+Source owners: `.github/CODEOWNERS` assigns every path to `@wstein`; by area, `internal/workspace` (native Git reads, tidy v1/v3 observation and apply) and `internal/hosting` (forge evidence) belong to the tidy feature owner, `internal/cli` to the command surface, `schemas/` to the published contracts.
