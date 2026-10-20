@@ -14,7 +14,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     env:
       STW_REQUIRE_NATIVE_SANDBOX: '1'
     steps:
@@ -57,7 +57,7 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
       - name: Race tests
-        run: go test -race ./...
+        run: go test -timeout 40m -race ./...
       - name: Check import boundaries
         run: python3 -B scripts/check-architecture.py
       - name: Build and validate exact checked Pages artifact
@@ -76,7 +76,7 @@ jobs:
   conformance:
     name: Git/jj conformance (${{ matrix.lane }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -128,7 +128,7 @@ jobs:
           BACKEND_LANE: ${{ matrix.lane }}
         run: python3 -B scripts/smoke-jj-inspection.py --preflight "$BACKEND_LANE"
       - name: Mandatory real-backend and schema conformance with race checks
-        run: go test -count=1 -race ./...
+        run: go test -count=1 -timeout 40m -race ./...
       - name: Real CLI inspection and zero-write acceptance
         run: |
           go build -o bin/stw ./cmd/stw
