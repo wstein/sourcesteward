@@ -87,6 +87,11 @@ A single GitHub Actions workflow checks every PR and every push to `main`. Pushe
 branches do not start a run of their own: the `pull_request` run of the open PR covers them,
 so a branch push is never checked twice. The workflow has no tag trigger, and nothing else
 depends on branch push runs (the Pages job is main-only; Dependabot PRs use `pull_request`).
+Go module and build caches come from `actions/setup-go` (keyed by `go.sum`). The conformance
+lanes also cache the Git-from-source prefix with `actions/cache`, keyed by runner OS, arch,
+lane, the pinned Git version and the installer hash; a hit skips the build and the
+preflight still asserts the exact Git version. Caches written by a branch or PR are visible
+only to that ref and its children, and never to other forks' runs (GitHub's default scoping).
 Its check job builds and
 validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
 lanes must also pass before deployment. The deployment job runs only for main
