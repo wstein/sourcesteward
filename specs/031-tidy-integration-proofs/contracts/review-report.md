@@ -16,7 +16,7 @@ stw tidy plan [PATH] --contract 3 --base REF ... [--report-dir ABS] [--consolida
 
 ## Entry selection and order
 
-Entries omitted by the entry bound or whose commits or diff were truncated by a bound cannot be cleared by a decision (split the review per `--ref` or per named consolidation range, or raise the overridable `--report-max-*` bounds up to their ceilings; the per-entry commit, line and file bounds are fixed, see the spec's Known limits); see the [decisions contract](decisions.md).
+Entries omitted by the entry bound or whose commits or diff were truncated by a bound cannot be cleared by a decision (split the review per `--ref` or per named consolidation range, or raise the overridable `--report-max-*` bounds up to their ceilings; the per-entry commit, line and file bounds are fixed, see the spec's Limits); see the [decisions contract](decisions.md).
 
 Every `needs-review` ref, ordered by full ref name, up to 256 entries; the remaining are listed by name and reasons only with the omitted count. `retained` refs appear only in the summary with `clearable: false`.
 
