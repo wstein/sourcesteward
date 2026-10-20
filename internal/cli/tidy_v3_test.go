@@ -514,3 +514,30 @@ func TestTidyV3HintUsageErrorsNameTheSelector(t *testing.T) {
 		t.Fatalf("unbounded selector message: %d", len(err.Error()))
 	}
 }
+
+func TestTidyV3HintSameNumberSpelledTwoWaysIsIdempotent(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	got, err := tidyV3HintRun("--pr", oid+"=07", "--pr", oid+"=7")
+	if err != nil || len(got.PRHints) != 1 || got.PRHints[0].Number != 7 {
+		t.Fatalf("%v %+v", err, got.PRHints)
+	}
+	if _, err = tidyV3HintRun("--pr", oid+"=07", "--pr", oid+"=8"); err == nil || !strings.Contains(err.Error(), `"`+oid+`=07"`) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestTidyV3QuoteBoundsOnRuneAndEscapeBoundaries(t *testing.T) {
+	for _, v := range []string{strings.Repeat("é", 5000), strings.Repeat("\n", 5000), strings.Repeat("\xff", 5000), strings.Repeat("z", 5000)} {
+		q := tidyV3Quote(v)
+		if len(q) > 4096 || !strings.HasPrefix(q, `"`) || !strings.HasSuffix(q, `"`) || !strings.HasSuffix(q, `..."`) {
+			t.Fatalf("len=%d head=%q tail=%q", len(q), q[:8], q[len(q)-8:])
+		}
+		inner := strings.TrimSuffix(q[1:len(q)-1], "...")
+		if _, err := strconv.Unquote(`"` + inner + `"`); err != nil {
+			t.Fatalf("cut inside an escape or rune: %v", err)
+		}
+	}
+	if q := tidyV3Quote("a\nb"); q != `"a\nb"` {
+		t.Fatal(q)
+	}
+}
