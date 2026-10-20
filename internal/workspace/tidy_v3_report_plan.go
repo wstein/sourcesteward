@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 )
 
@@ -19,7 +20,7 @@ func validV3ReviewBinding(b V3ReviewBinding, p V3Plan) bool {
 	if err != nil || b.MaxEntries <= 0 || b.MaxBytes <= 0 || b.MaxDiffBytes <= 0 || r != (reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes}) {
 		return false
 	}
-	if b.Ranges == nil || len(b.Ranges) > reportMaxRanges {
+	if b.Ranges == nil || len(b.Ranges) > reportMaxRanges || !validV3ReviewNotes(b.Notes) || b.DecisionsDigest != "" && !v3Hash(b.DecisionsDigest) {
 		return false
 	}
 	for _, rg := range b.Ranges {
@@ -40,7 +41,7 @@ func reviewBindingFor(o V3PlanOptions, ranges []V3ReviewRange) (*V3ReviewBinding
 	if ranges == nil {
 		ranges = []V3ReviewRange{}
 	}
-	return &V3ReviewBinding{MaxEntries: bounds.MaxEntries, MaxBytes: bounds.MaxBytes, MaxDiffBytes: bounds.MaxDiffBytes, Ranges: ranges}, bounds, nil
+	return &V3ReviewBinding{MaxEntries: bounds.MaxEntries, MaxBytes: bounds.MaxBytes, MaxDiffBytes: bounds.MaxDiffBytes, Ranges: ranges, Notes: []V3ReviewNote{}}, bounds, nil
 }
 
 // reportRoots are the places a report must not be written into.
@@ -75,7 +76,7 @@ func reviewCounts(p V3Plan) V3ReportSummary {
 		default:
 			s.Retained++
 			reason := c.Reason
-			if c.Evidence != nil && c.Evidence.Integration != nil && len(c.Evidence.Integration.Reasons) > 0 {
+			if c.Reason != reviewedKeep && c.Evidence != nil && c.Evidence.Integration != nil && len(c.Evidence.Integration.Reasons) > 0 {
 				reason = c.Evidence.Integration.Reasons[0]
 				for _, r := range c.Evidence.Integration.Reasons {
 					s.Reasons[r]++
@@ -128,4 +129,61 @@ func reviewSummary(p V3Plan, rendered *renderedReport) *V3ReviewSummary {
 		s.ReportWritten, s.Entries, s.Omitted = true, len(rendered.Shown), len(rendered.Omitted)
 	}
 	return s
+}
+
+// applyDecisions applies the decisions to the needs-review references of the
+// plan, in file order (FR-040). A decision that does not apply is ignored with a
+// note; it is never an error. The report the reviewer saw decides whether an
+// entry was fully reviewed.
+func applyDecisions(p *V3Plan, file V3DecisionFile, rendered renderedReport) {
+	byName := map[string]int{}
+	for i, c := range p.Candidates {
+		byName[c.Name] = i
+	}
+	shown := map[string]bool{}
+	for _, name := range rendered.Shown {
+		shown[name] = true
+	}
+	note := func(code, branch, detail string) {
+		p.Review.Notes = append(p.Review.Notes, V3ReviewNote{Code: code, Branch: branch, Detail: detail})
+	}
+	for _, d := range file.Decisions {
+		i, ok := byName[d.Branch]
+		if !ok {
+			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: the reference is absent from the plan")
+			continue
+		}
+		c := p.Candidates[i]
+		switch {
+		case d.TipOID != c.OID || d.BaseOID != p.Expected.BaseCommit:
+			note(noteStaleDecision, d.Branch, fmt.Sprintf("decided tip %s and base %s; current tip %s and base %s", d.TipOID, d.BaseOID, c.OID, p.Expected.BaseCommit))
+		case c.Decision == "delete":
+			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: the reference is already proven")
+		case !needsReview(c):
+			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: the reference is protected or a hard stop ("+c.Reason+")")
+		case !shown[d.Branch] || rendered.Truncated[d.Branch]:
+			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: not-fully-reviewed")
+		default:
+			p.Candidates[i] = decided(*p, c, d)
+		}
+	}
+}
+
+// decided is the candidate after an applied decision.
+func decided(p V3Plan, c V3Candidate, d V3DecisionRecord) V3Candidate {
+	rec := d
+	prior := *c.Evidence.Integration
+	if d.Decision == "keep" {
+		prior.Decision, prior.Disposition = &rec, integrationRetainedDisposition
+		c.Reason, c.Evidence = reviewedKeep, &V3ProofEvidence{Integration: &prior}
+		return c
+	}
+	class := reviewedIntegrated
+	if d.Decision == "drop" {
+		class = reviewedDrop
+	}
+	c.Decision, c.Reason, c.Proof = "delete", class, class
+	c.Evidence = &V3ProofEvidence{Integration: &V3IntegrationEvidence{Class: class, Strength: "reviewer-decision", Disposition: integrationProvenDisposition, Reasons: []string{}, Flags: []string{},
+		BaseSelector: p.Expected.BaseSelector, BaseOID: p.Expected.BaseCommit, TipOID: c.OID, Decision: &rec}}
+	return c
 }

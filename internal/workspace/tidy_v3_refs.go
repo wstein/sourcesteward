@@ -83,6 +83,14 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err != nil {
 		return failTidyV3(r, err)
 	}
+	var decisions *V3DecisionFile
+	if o.DecisionsFile != "" {
+		file, e := ReadV3DecisionFile(o.DecisionsFile)
+		if e != nil {
+			return failTidyV3(r, e)
+		}
+		decisions = &file
+	}
 	// Grafts and alternates are hard stops of the proofs, not refusals.
 	ctx = withHistoryHardStops(ctx)
 	id := c.inspect(ctx, source)
@@ -224,12 +232,20 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		// reports as exhausted.
 	}
 	var rendered *renderedReport
-	if o.ReportDir != "" {
+	if o.ReportDir != "" || decisions != nil {
 		report, e := c.buildReviewReport(ctx, run, p, proofs.verdicts, reviewBounds)
 		if e != nil {
 			return failTidyV3(r, e)
 		}
 		rendered = &report
+	}
+	if decisions != nil {
+		p.Review.DecisionsDigest = decisions.Digest
+		applyDecisions(&p, *decisions, *rendered)
+	}
+	written := rendered
+	if o.ReportDir == "" {
+		written = nil
 	}
 	p.Effects = v3PlanEffects(p)
 	p.Digest, err = v3PlanDigest(p)
@@ -249,7 +265,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(fresh.Native), o.StateDir); err != nil {
 		return failTidyV3(r, err)
 	}
-	if rendered != nil {
+	if written != nil {
 		// The report is written before the plan is stored: a failed write stores
 		// no plan.
 		if err = c.writeReport(o.ReportDir, rendered.Markdown, rendered.JSON); err != nil {
@@ -284,7 +300,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		return failTidyV3(r, err)
 	}
 	r.Status, r.Plan, r.Boundary.Complete = "ok", &p, true
-	r.ReviewSummary = reviewSummary(p, rendered)
+	r.ReviewSummary = reviewSummary(p, written)
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), discoveryNotes...)
 	return r
 }

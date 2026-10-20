@@ -54,6 +54,8 @@ type V3JournalEntry struct {
 	RegistrationOutcome string         `json:"registration_outcome"`
 	FilesOutcome        string         `json:"files_outcome"`
 	Deltas              []V3StateDelta `json:"deltas"`
+	// Decision is the reviewer decision behind the entry's proof (FR-012).
+	Decision *V3DecisionRecord `json:"decision,omitempty"`
 }
 type V3Journal struct {
 	PrivatePlanDigest string           `json:"private_plan_digest"`
@@ -340,7 +342,7 @@ func newV3Journal(p V3Plan, native V3NativeState) V3Journal {
 		if p.Retirement != nil {
 			registration, files = "pending", "pending"
 		}
-		j.Entries = append(j.Entries, V3JournalEntry{ActionID: c.ActionID, Phase: "prepared", PlannedRecovery: v3RecoveryFor(p, c.ActionID, c.OID), Transaction: "none", Outcome: "pending", RegistrationOutcome: registration, FilesOutcome: files, Deltas: []V3StateDelta{}})
+		j.Entries = append(j.Entries, V3JournalEntry{ActionID: c.ActionID, Phase: "prepared", PlannedRecovery: v3RecoveryFor(p, c.ActionID, c.OID), Transaction: "none", Outcome: "pending", RegistrationOutcome: registration, FilesOutcome: files, Deltas: []V3StateDelta{}, Decision: decisionOf(c)})
 	}
 	return j
 }
@@ -428,7 +430,7 @@ func validateV3Journal(j V3Journal, p V3Plan) error {
 	unfinished := false
 	activePhase := "prepared"
 	for i, e := range j.Entries {
-		if e.ActionID != targets[i].ActionID || e.PlannedRecovery != v3RecoveryFor(p, e.ActionID, targets[i].OID) || e.Deltas == nil {
+		if e.ActionID != targets[i].ActionID || e.PlannedRecovery != v3RecoveryFor(p, e.ActionID, targets[i].OID) || e.Deltas == nil || !reflect.DeepEqual(e.Decision, decisionOf(targets[i])) {
 			return bad()
 		}
 		if unfinished && (e.Phase != "prepared" || e.RecoveryAttempted) {

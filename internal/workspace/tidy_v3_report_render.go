@@ -27,6 +27,9 @@ type renderedReport struct {
 	Markdown, JSON []byte
 	Shown          []string          // branch names of the entries in the files
 	Omitted        []V3ReportOmitted // everything left out by a bound, by name
+	// Truncated names the shown entries a bound cut: a reviewer did not see all
+	// of them (FR-039).
+	Truncated map[string]bool
 }
 
 type reportJSON struct {
@@ -79,6 +82,7 @@ func renderReport(d reportDocument) (renderedReport, error) {
 	var pieces []json.RawMessage
 	var mdPieces []string
 	var shown []string
+	cut := map[string]bool{}
 	var omitted []V3ReportOmitted
 	omitted = append(omitted, d.Omitted...)
 	for i, e := range d.Entries {
@@ -94,6 +98,7 @@ func renderReport(d reportDocument) (renderedReport, error) {
 		}
 		jsonUsed, mdUsed = jsonUsed+len(piece)+1, mdUsed+len(mdPiece)
 		pieces, mdPieces, shown = append(pieces, piece), append(mdPieces, mdPiece), append(shown, e.Branch.Text)
+		cut[e.Branch.Text] = e.Diff.Truncated != nil || e.CommitsTruncated != nil || e.Diff.Source == "unavailable" || e.RangePairing != nil && e.RangePairing.Truncated != nil
 	}
 	sort.SliceStable(omitted, func(i, j int) bool { return omitted[i].Branch.Text < omitted[j].Branch.Text })
 	summary := d.Counts
@@ -109,7 +114,7 @@ func renderReport(d reportDocument) (renderedReport, error) {
 	if len(js) > d.Bounds.MaxBytes || len(md) > d.Bounds.MaxBytes {
 		return renderedReport{}, failure("report-too-large", "The review report does not fit the byte bound even without entries; raise --report-max-bytes.")
 	}
-	return renderedReport{Markdown: md, JSON: js, Shown: shown, Omitted: omitted}, nil
+	return renderedReport{Markdown: md, JSON: js, Shown: shown, Omitted: omitted, Truncated: cut}, nil
 }
 
 // fenceFor returns a backtick fence longer than any backtick run in content.

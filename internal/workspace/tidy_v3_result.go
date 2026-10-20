@@ -80,6 +80,10 @@ type V3ReviewBinding struct {
 	MaxBytes     int             `json:"max_bytes"`
 	MaxDiffBytes int             `json:"max_diff_bytes"`
 	Ranges       []V3ReviewRange `json:"ranges"`
+	// DecisionsDigest is the SHA-256 of the decision file (FR-011); Notes list
+	// the decisions that were ignored (FR-039).
+	DecisionsDigest string         `json:"decisions_digest,omitempty"`
+	Notes           []V3ReviewNote `json:"notes"`
 }
 
 // V3ReviewSummary is the review summary of a local-reference plan result
@@ -484,11 +488,11 @@ func validV3CommitProof(c V3CommitProof, p V3Plan) bool {
 	if c.Evidence == nil || c.Evidence.Absence != nil {
 		return false
 	}
-	if c.Evidence.Integration != nil && !integrationProofTag(c.Proof) {
+	if c.Evidence.Integration != nil && !integrationProofTag(c.Proof) && !reviewedProofTag(c.Proof) {
 		return false
 	}
 	switch c.Proof {
-	case integrationPatchID, integrationMergeNoop, integrationNoNetChange:
+	case integrationPatchID, integrationMergeNoop, integrationNoNetChange, reviewedIntegrated, reviewedDrop:
 		return validV3IntegrationProven(c, p)
 	case "native-ancestry":
 		n := c.Evidence.Native
@@ -520,6 +524,9 @@ func validV3IntegrationReview(c V3CommitProof, p V3Plan) bool {
 	e := c.Evidence.Integration
 	if p.Mode != "local-refs" || e == nil || c.Evidence.Native != nil || c.Evidence.GitHub != nil || c.Evidence.Absence != nil || e.Disposition == integrationProvenDisposition || !validV3IntegrationEvidence(*e, c.OID, p) {
 		return false
+	}
+	if e.Decision != nil {
+		return c.Reason == reviewedKeep && e.Decision.Decision == "keep"
 	}
 	if e.Disposition == integrationRetainedDisposition {
 		return c.Reason == e.Reasons[0]
@@ -904,7 +911,7 @@ func v3Bounds(v any) error {
 				if !walk(v.Field(i), depth+1) {
 					return false
 				}
-				if v.Type() == reflect.TypeOf(V3IntegrationEvidence{}) && v.Field(i).Kind() == reflect.Slice {
+				if (v.Type() == reflect.TypeOf(V3IntegrationEvidence{}) || v.Type() == reflect.TypeOf(V3ReviewBinding{})) && v.Field(i).Kind() == reflect.Slice {
 					count = before
 				}
 			}
