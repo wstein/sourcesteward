@@ -45,7 +45,7 @@ A ref with no proven class and one or more clearable reasons is `needs-review`; 
 
 ## Command bounds
 
-Stdout is read by the bounded stream executor, one grammar per command; OID is `[0-9a-f]{40}` or `[0-9a-f]{64}` (SHA-256), so a line is at most 65 bytes with newline. A line outside its grammar, a bound exceeded, an unexpected exit, timeout or cancellation gives `proof-limit` (or `object-dir-unavailable`) for the affected class, never a partial proof. stderr is at most 65,536 bytes for all. Each row has a test at the bound (accepted) and one over (refused), for SHA-1 and SHA-256 widths.
+Stdout is read by the bounded stream executor, one grammar per command; PID (the patch-id) has the width of the repository object format, 40 hex digits for SHA-1 and 64 for SHA-256 (measured on Git 2.56.0); OID is `[0-9a-f]{40}` or `[0-9a-f]{64}` (SHA-256), so a line is at most 65 bytes with newline. A line outside its grammar, a bound exceeded, an unexpected exit, timeout or cancellation gives `proof-limit` (or `object-dir-unavailable`) for the affected class, never a partial proof. stderr is at most 65,536 bytes for all. Each row has a test at the bound (accepted) and one over (refused), for SHA-1 and SHA-256 widths.
 
 | Command | Max records | Max bytes | Line grammar |
 | --- | --- | --- | --- |
@@ -55,7 +55,7 @@ Stdout is read by the bounded stream executor, one grammar per command; OID is `
 | `rev-list --count` | 1 | 11 | `[0-9]{1,7}` |
 | `log --no-merges --format='%H %T %P'` | 1,024 | 201,728 | `OID OID OID` |
 | `log --no-merges -p --binary` stream | opaque | 64 MiB per tip | none; piped to `patch-id`, never buffered |
-| `patch-id` (default and verbatim) | 5,120 | 537,600 (5,120 x 105) | `[0-9a-f]{40} OID` |
+| `patch-id` (default and verbatim) | 5,120 | 537,600 for SHA-1 (5,120 x 105), 665,600 for SHA-256 (5,120 x 130) | `PID OID`, PID of the object format width |
 | `diff-tree -r --raw --no-renames --no-abbrev` (gitlink check) | 8,192 | 34,603,008 (8,192 x 4,224) | `:[0-7]{6} [0-7]{6} OID OID [A-Z]` TAB `PATH`, PATH at most 4,096 bytes |
 | `diff-tree --stdin --name-only -r -z` | 8,192 | 34,603,008 | PATH NUL, at most 4,096 bytes |
 | `diff-tree --stdin --numstat -r -z --no-renames` | 8,192 | 34,603,008 | `(\d+\|-)` TAB `(\d+\|-)` TAB PATH NUL |
