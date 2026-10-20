@@ -32,29 +32,11 @@ func (r *integrationRun) mergeNoop(ctx context.Context, base, tip, mergeBase, ti
 	if tipTree == mbTree {
 		return res, nil // nothing to merge: no-net-change territory
 	}
-	if tidyV3HasConfigClass(r.notes, "merge-driver") {
-		res.Reasons = append(res.Reasons, "merge-driver")
-	}
-	if tidyV3HasConfigClass(r.notes, "attribute-source") {
-		res.Reasons = append(res.Reasons, "attribute-source")
-	}
-	for _, side := range []string{tip, base} {
-		gitlink, err := r.gitlinkDiffers(ctx, tipTree, mergeBase, side)
-		if err != nil {
-			return fail(err)
-		}
-		if gitlink {
-			res.Reasons = append(res.Reasons, "gitlink-change")
-			break
-		}
-	}
-	mergeAttribute, err := r.mergeAttributes(ctx, baseTree, tipTree, mbTree)
+	gate, err := r.mergeGate(ctx, base, tip, mergeBase, tipTree, mbTree, baseTree)
 	if err != nil {
 		return fail(err)
 	}
-	if mergeAttribute {
-		res.Reasons = append(res.Reasons, "merge-attribute")
-	}
+	res.Reasons = append(res.Reasons, gate...)
 	if len(res.Reasons) > 0 {
 		return res, nil
 	}
@@ -71,6 +53,37 @@ func (r *integrationRun) mergeNoop(ctx context.Context, base, tip, mergeBase, ti
 		res.Reasons = append(res.Reasons, "would-add-content")
 	}
 	return res, nil
+}
+
+// mergeGate lists the reasons that forbid running merge-tree (the merge gate of
+// FR-033): a configured merge driver, info/attributes, a gitlink difference or a
+// merge attribute. It runs no helper. The review report asks the same question.
+func (r *integrationRun) mergeGate(ctx context.Context, base, tip, mergeBase, tipTree, mbTree, baseTree string) ([]string, error) {
+	var reasons []string
+	if tidyV3HasConfigClass(r.notes, "merge-driver") {
+		reasons = append(reasons, "merge-driver")
+	}
+	if tidyV3HasConfigClass(r.notes, "attribute-source") {
+		reasons = append(reasons, "attribute-source")
+	}
+	for _, side := range []string{tip, base} {
+		gitlink, err := r.gitlinkDiffers(ctx, tipTree, mergeBase, side)
+		if err != nil {
+			return nil, err
+		}
+		if gitlink {
+			reasons = append(reasons, "gitlink-change")
+			break
+		}
+	}
+	mergeAttribute, err := r.mergeAttributes(ctx, baseTree, tipTree, mbTree)
+	if err != nil {
+		return nil, err
+	}
+	if mergeAttribute {
+		reasons = append(reasons, "merge-attribute")
+	}
+	return reasons, nil
 }
 
 // mergeTree runs the merge in the private object directory. Exit 0 prints the
