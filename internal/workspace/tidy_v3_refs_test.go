@@ -198,7 +198,7 @@ func fixtureTidyV3Online(t *testing.T, dir string, repo hosting.TidyRepositoryId
 func TestTidyV3CoordinatorNineProviderHeadsAndStoredPlan(t *testing.T) {
 	dir, _, expected, repo, rows := fixtureTidyV3Merged(t)
 	c, session := fixtureTidyV3Online(t, dir, repo, rows)
-	o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", StateDir: privateDir(t), ProtectWorktrees: []string{}}
+	o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, StateDir: privateDir(t), ProtectWorktrees: []string{}}
 	before := gitFixture(t, dir, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
 	r := c.plan(context.Background(), o)
 	if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil {
@@ -259,7 +259,7 @@ func TestTidyV3CompleteNegativeAndUnavailableAreDistinct(t *testing.T) {
 			if kind == "unavailable" {
 				s.discoverErr = errors.New("provider unavailable")
 			}
-			o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", Refs: []string{"refs/heads/topic-x"}, ProtectWorktrees: []string{}}
+			o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, Refs: []string{"refs/heads/topic-x"}, ProtectWorktrees: []string{}}
 			r := c.plan(context.Background(), o)
 			incomplete := kind == "unavailable" || kind == "missing-object"
 			if incomplete {
@@ -300,7 +300,7 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 	gitFixture(t, dir, "worktree", "add", attached, "topic-xx")
 	gitFixture(t, dir, "worktree", "lock", "--reason", "active fixture", attached)
 	c, s := fixtureTidyV3Online(t, dir, repo, rows)
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("workspace-protected plan failed %+v", r)
 	}
@@ -326,7 +326,7 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 		calls++
 		return s, nil
 	}
-	r = c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r = c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Plan != nil || r.Status == "ok" || calls != 0 {
 		t.Fatalf("missing workspace observation reached auth/plan %+v calls=%d", r, calls)
 	}
@@ -341,7 +341,7 @@ func TestTidyV3OfflineAndUnsafePreflightHaveNoHostingCalls(t *testing.T) {
 				calls++
 				return s, nil
 			}
-			o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", ProtectWorktrees: []string{}}
+			o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			switch kind {
@@ -396,7 +396,7 @@ func TestTidyV3ChangedNativeEvidenceNeverStoresExecutablePlan(t *testing.T) {
 				}
 			}
 			state := privateDir(t)
-			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, StateDir: state, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, StateDir: state, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 			if r.Plan != nil || r.Boundary.Complete || r.Status == "ok" {
 				t.Fatalf("changed native authority stored %+v", r)
 			}
@@ -454,7 +454,7 @@ func TestTidyV3ConflictingPRHintsRefuseBeforeAuthentication(t *testing.T) {
 		calls++
 		return s, nil
 	}
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", ProtectWorktrees: []string{}, PRHints: []V3PRHint{{OID: rows[0].HeadOID, Number: 1}, {OID: rows[1].HeadOID, Number: 1}}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}, PRHints: []V3PRHint{{OID: rows[0].HeadOID, Number: 1}, {OID: rows[1].HeadOID, Number: 1}}})
 	if r.Status == "ok" || r.Plan != nil || calls != 0 {
 		t.Fatalf("conflicting hint mappings admitted before auth refusal: result=%+v calls=%d", r, calls)
 	}
@@ -496,7 +496,7 @@ func TestTidyV3FinalWorkspaceRootQualificationBeforePersistence(t *testing.T) {
 func TestTidyV3UnsupportedOwnershipAndChangedProviderHavePreciseRefusals(t *testing.T) {
 	dir, _, expected, repo, rows := fixtureTidyV3Merged(t)
 	c, s := fixtureTidyV3Online(t, dir, repo, rows)
-	o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", ProtectWorktrees: []string{}}
+	o := V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}}
 	originalInspect := c.inspect
 	c.inspect = func(context.Context, string) inspection.Result { return inspection.Result{Status: "ok", Backend: "jj"} }
 	r := c.plan(context.Background(), o)
@@ -523,7 +523,7 @@ func TestTidyV3FailedHTTPBoundPreservesActualDetectionCounter(t *testing.T) {
 	c.openHosting = func(context.Context, string, hosting.TidySessionOptions) (tidyV3Hosting, error) {
 		return s, hosting.ErrTidyLimit
 	}
-	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", ProtectWorktrees: []string{}})
+	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "error" || r.Plan != nil || r.Boundary.Complete || r.Boundary.Budget.HTTPBytes != (32<<20)+1 || r.Boundary.Budget.HTTPRequests != 128 || !r.Boundary.NetworkAttempted || validateV3Result(r) != nil {
 		t.Fatalf("failed HTTP bound lost actual counters or became executable: status=%s boundary=%+v diagnostics=%+v", r.Status, r.Boundary, r.Diagnostics)
 	}

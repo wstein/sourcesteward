@@ -182,7 +182,13 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 	if err != nil {
 		return "", err
 	}
-	for _, p := range []string{filepath.Join(id.GitDir, "config.worktree"), filepath.Join(id.GitDir, "info", "sparse-checkout"), filepath.Join(id.RepositoryDir, "objects", "info", "alternates")} {
+	unsupported := []string{filepath.Join(id.GitDir, "config.worktree"), filepath.Join(id.GitDir, "info", "sparse-checkout")}
+	if !historyHardStopsTolerated(ctx) {
+		// A planning context turns alternates into the hard stop
+		// unsupported-metadata of the proofs; every other path refuses.
+		unsupported = append(unsupported, filepath.Join(id.RepositoryDir, "objects", "info", "alternates"))
+	}
+	for _, p := range unsupported {
 		if _, e := os.Lstat(p); !os.IsNotExist(e) {
 			return "", failure("git-unsupported-metadata", "worktree-specific, sparse or alternate-object configuration is unsupported for task creation")
 		}
@@ -195,7 +201,13 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 	}
 	io.WriteString(digest, "\x00")
 	if session != nil {
-		session.setNotes(planningConfigNotes(config, hooks, executableHook, session.policy.scanInfoAttributes && infoAttributesActive(id.RepositoryDir), session.takeGitlinks()))
+		// System, global and XDG configuration are null under the planning
+		// environment, so only what Git would use there decides merge-driver.
+		effective, err := gitRead(ctx, bin, id.WorkspaceRoot, "config", "--null", "--list", "--includes")
+		if err != nil {
+			return "", err
+		}
+		session.setNotes(planningConfigNotes(config, effective, hooks, executableHook, session.policy.scanInfoAttributes && infoAttributesActive(id.RepositoryDir), session.takeGitlinks()))
 	}
 	if err = gitFilterEvidence(ctx, bin, id.WorkspaceRoot, commit, paths, digest); err != nil {
 		return "", err

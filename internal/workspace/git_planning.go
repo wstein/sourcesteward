@@ -240,15 +240,25 @@ func refusedPlanningKey(key, value string) bool {
 	return refused || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 }
 
-// planningConfigNotes classifies the admission read. Keys of one class share
-// one note whose digest covers the sorted sanitized key/value records.
-func planningConfigNotes(config, hooks string, hasExecutableHook bool, infoAttributes bool, gitlinks []string) []V3ConfigNote {
+// planningConfigNotes classifies the admission read. effective is the configuration
+// under the planning environment: only the repository and its includes. Keys of one
+// class share one note whose digest covers the sorted sanitized key/value records.
+func planningConfigNotes(config, effective, hooks string, hasExecutableHook bool, infoAttributes bool, gitlinks []string) []V3ConfigNote {
 	records := map[string][]string{}
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
-		if class := planningConfigClass(key); class != "" {
+		// merge-driver is decided by the configuration that is in effect under
+		// the planning environment (below), never by host-wide configuration.
+		if class := planningConfigClass(key); class != "" && class != "merge-driver" {
 			records[class] = append(records[class], key+"\n"+value)
+		}
+	}
+	for _, entry := range strings.Split(strings.TrimSuffix(effective, "\x00"), "\x00") {
+		key, value, _ := strings.Cut(entry, "\n")
+		key = strings.ToLower(key)
+		if planningConfigClass(key) == "merge-driver" {
+			records["merge-driver"] = append(records["merge-driver"], key+"\n"+value)
 		}
 	}
 	if hasExecutableHook {

@@ -422,3 +422,85 @@ func TestScanMergeAttributesIsConservative(t *testing.T) {
 		t.Error("second file not scanned")
 	}
 }
+
+// merge-tree must fail closed: an exit other than 0 or 1, extra output on a
+// clean exit or a malformed result tree is proof-limit, never a proof.
+func TestMergeNoopMergeTreeFailsClosed(t *testing.T) {
+	f := landedFix(t, true)
+	wantVerdict(t, f.verdict(f.main, "topic", noopOnly), "proven", "merge-noop")
+	baseTree := f.git("rev-parse", f.main+"^{tree}")
+	cases := map[string]string{
+		"exit 2":                       "echo " + baseTree + "; exit 2",
+		"exit 128":                     "exit 128",
+		"extra stdout on a clean exit": "echo " + baseTree + "; echo extra; exit 0",
+		"no output on a clean exit":    "exit 0",
+		"malformed tree":               "echo not-a-tree; exit 0",
+		"conflict exit without a tree": "exit 1",
+	}
+	for name, fragment := range cases {
+		t.Run(name, func(t *testing.T) {
+			f.bin = wrapGit(t, fragment)
+			v := f.verdict(f.main, "topic", noopOnly)
+			wantVerdict(t, v, "needs-review", "", "proof-limit")
+		})
+	}
+}
+
+// The private object directory may be handed out through a symbolic link.
+func TestMergeNoopObjectDirectoryThroughASymlink(t *testing.T) {
+	f := landedFix(t, true)
+	real := gitTempDir(t)
+	link := filepath.Join(gitTempDir(t), "via-link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	engine := defaultIntegrationEngine()
+	engine.makeObjectDir = func() (string, error) { return os.MkdirTemp(link, "objects-") }
+	v, err := f.verdictWith(f.main, "topic", noopOnly, engine, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantVerdict(t, v, "proven", "merge-noop")
+	if entries, _ := os.ReadDir(real); len(entries) != 0 {
+		t.Fatalf("the object directory was not removed: %v", entries)
+	}
+}
+
+// The proofs run under the private constant environment: a merge driver or a
+// clean/smudge filter (git-lfs installs them system wide) defined in the host's
+// global, XDG or system configuration cannot run and must not block merge-noop.
+// Only the repository's own configuration decides merge-driver.
+func TestMergeNoopIgnoresHostConfigurationDrivers(t *testing.T) {
+	hostConfig := "[merge \"host\"]\n\tdriver = true %O %A %B\n[filter \"lfs\"]\n\tclean = git-lfs clean -- %f\n\tsmudge = git-lfs smudge -- %f\n\tprocess = git-lfs filter-process\n\trequired = true\n[merge]\n\trenormalize = true\n"
+	for name, place := range map[string]func(t *testing.T){
+		"global": func(t *testing.T) { writeHostFile(t, filepath.Join(os.Getenv("HOME"), ".gitconfig"), hostConfig) },
+		"xdg": func(t *testing.T) {
+			writeHostFile(t, filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "git", "config"), hostConfig)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := landedFix(t, true)
+			t.Setenv("GIT_CONFIG_GLOBAL", "") // restored on cleanup
+			os.Unsetenv("GIT_CONFIG_GLOBAL")
+			place(t)
+			// The fixture bites: the host configuration is visible to plain Git.
+			if out := f.git("config", "--get-all", "filter.lfs.clean"); out == "" {
+				t.Fatal("the host configuration is not in effect for ordinary Git")
+			}
+			wantVerdict(t, f.verdict(f.main, "topic", noopOnly), "proven", "merge-noop")
+			// The same driver in the repository's own configuration still blocks.
+			f.git("config", "merge.host.driver", "true")
+			wantVerdict(t, f.verdict(f.main, "topic", noopOnly), "needs-review", "", "merge-driver")
+		})
+	}
+}
+
+func writeHostFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

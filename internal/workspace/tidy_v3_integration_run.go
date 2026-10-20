@@ -23,6 +23,9 @@ import (
 
 var errIntegrationLimit = errors.New("integration proof command exceeds its bound")
 
+// errIntegrationBudget is the per-tip or forge-free phase budget (FR-008).
+var errIntegrationBudget = errors.New("integration proof time budget exhausted")
+
 const (
 	integrationCommandTimeout = 10 * time.Second
 	integrationTipTimeout     = 20 * time.Second
@@ -36,30 +39,61 @@ const (
 // integrationEngine carries the seams of one planning or apply operation: the
 // clock of the proof budget and the private object directory factory.
 type integrationEngine struct {
-	now           func() time.Time
-	makeObjectDir func() (string, error)
+	now            func() time.Time
+	makeObjectDir  func() (string, error)
+	commandTimeout time.Duration
+	// trace, when set, sees the start of every class (tests assert the order).
+	trace func(class string)
 }
 
 func defaultIntegrationEngine() integrationEngine {
-	return integrationEngine{now: time.Now, makeObjectDir: func() (string, error) { return os.MkdirTemp("", "stw-proof-objects-") }}
+	return integrationEngine{now: time.Now, commandTimeout: integrationCommandTimeout, makeObjectDir: func() (string, error) { return os.MkdirTemp("", "stw-proof-objects-") }}
 }
 
 // integrationRun is the state of one operation: the repository, the private
 // object directory and the facts that hold for every tip.
 type integrationRun struct {
-	engine        integrationEngine
-	bin, dir      string
-	commonDir     string
-	format        string
-	width         int
-	session       *planningSession
-	objDir        string
-	objErr        error
-	notes         []V3ConfigNote
-	hardStops     []string
-	phaseStart    time.Time
-	phaseStarted  bool
-	phaseExceeded bool
+	engine       integrationEngine
+	bin, dir     string
+	commonDir    string
+	format       string
+	width        int
+	session      *planningSession
+	objDir       string
+	objErr       error
+	notes        []V3ConfigNote
+	hardStops    []string
+	phaseStart   time.Time
+	phaseStarted bool
+	tipStart     time.Time
+}
+
+// beginTip starts the budget of one distinct tip (20 s) inside the forge-free
+// phase (60 s, counters never reset). It reports the phase as exhausted.
+func (r *integrationRun) beginTip() error {
+	now := r.engine.now()
+	if !r.phaseStarted {
+		r.phaseStart, r.phaseStarted = now, true
+	}
+	r.tipStart = now
+	return r.checkBudget(now)
+}
+
+// checkBudget reads the clock once and compares both budgets.
+func (r *integrationRun) checkBudget(now time.Time) error {
+	if !r.phaseStarted {
+		return nil // no tip has started: nothing is budgeted yet
+	}
+	if now.Sub(r.phaseStart) >= integrationPhaseTimeout || now.Sub(r.tipStart) >= integrationTipTimeout {
+		return errIntegrationBudget
+	}
+	return nil
+}
+
+func (r *integrationRun) traceClass(class string) {
+	if r.engine.trace != nil {
+		r.engine.trace(class)
+	}
 }
 
 // begin prepares one run: hard stops of the history metadata, the private
@@ -74,14 +108,15 @@ func (e integrationEngine) begin(ctx context.Context, id NativeIdentity, notes [
 	if err != nil {
 		return nil, func() {}, err
 	}
-	if e.now == nil || e.makeObjectDir == nil {
-		d := defaultIntegrationEngine()
-		if e.now == nil {
-			e.now = d.now
-		}
-		if e.makeObjectDir == nil {
-			e.makeObjectDir = d.makeObjectDir
-		}
+	d := defaultIntegrationEngine()
+	if e.now == nil {
+		e.now = d.now
+	}
+	if e.makeObjectDir == nil {
+		e.makeObjectDir = d.makeObjectDir
+	}
+	if e.commandTimeout == 0 {
+		e.commandTimeout = d.commandTimeout
 	}
 	r := &integrationRun{engine: e, bin: bin, dir: id.WorkspaceRoot, commonDir: id.RepositoryDir, format: id.ObjectFormat, session: session, notes: notes}
 	r.width = 40
@@ -98,20 +133,40 @@ func (e integrationEngine) begin(ctx context.Context, id NativeIdentity, notes [
 	if exists("objects", "info", "alternates") {
 		r.hardStops = append(r.hardStops, "unsupported-metadata")
 	}
-	cleanup := func() {}
-	if len(r.hardStops) == 0 {
-		dir, err := e.makeObjectDir()
-		if err == nil {
-			err = os.Chmod(dir, 0o700)
+	// The private object directory is created by the first proof that needs it
+	// and removed on every exit path.
+	return r, func() {
+		if r.objDir != "" {
+			os.RemoveAll(r.objDir)
+		}
+	}, nil
+}
+
+// ensureObjectDir creates the private mode-0700 object directory once; failure
+// is the review reason object-dir-unavailable for every tip.
+func (r *integrationRun) ensureObjectDir() {
+	if r.objDir != "" || r.objErr != nil {
+		return
+	}
+	dir, err := r.engine.makeObjectDir()
+	if err == nil {
+		// The sandbox grants only canonical directories (a temporary directory
+		// reached through a symbolic link would otherwise fail every proof).
+		var canonical string
+		if err = os.Chmod(dir, 0o700); err == nil {
+			canonical, err = filepath.EvalSymlinks(dir)
 		}
 		if err != nil {
-			r.objErr = err
+			os.RemoveAll(dir)
 		} else {
-			r.objDir = dir
-			cleanup = func() { os.RemoveAll(dir) }
+			dir = canonical
 		}
 	}
-	return r, cleanup, nil
+	if err != nil {
+		r.objErr = err
+		return
+	}
+	r.objDir = dir
 }
 
 // command is one fixed native invocation.
@@ -128,9 +183,12 @@ type integrationCommand struct {
 // returned; an exit other than 0 is an error unless the command tolerates it.
 // All bound violations are errIntegrationLimit.
 func (r *integrationRun) run(ctx context.Context, c integrationCommand, parse func(io.Reader) error) (int, error) {
+	if err := r.checkBudget(r.engine.now()); err != nil {
+		return -1, err
+	}
 	timeout := c.timeout
 	if timeout == 0 {
-		timeout = integrationCommandTimeout
+		timeout = r.engine.commandTimeout
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -142,7 +200,7 @@ func (r *integrationRun) run(ctx context.Context, c integrationCommand, parse fu
 	}
 	cmd, err := prepareSandboxed(streamCtx, r.bin, args, r.dir, []string{r.objDir}, nil)
 	if err != nil {
-		return -1, gitExecutionError(err)
+		return -1, r.classify(ctx, err)
 	}
 	cmd.Env = append(cmd.Env, "GIT_OBJECT_DIRECTORY="+r.objDir, "GIT_ALTERNATE_OBJECT_DIRECTORIES="+filepath.Join(r.commonDir, "objects"))
 	stdin := c.stdin
@@ -160,6 +218,8 @@ func (r *integrationRun) classify(ctx context.Context, err error) error {
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, errIntegrationBudget):
+		return err
 	case ctx.Err() != nil:
 		return ctx.Err()
 	case errors.Is(err, errNativeSandboxUnavailable):

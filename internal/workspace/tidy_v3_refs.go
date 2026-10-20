@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/inspection"
@@ -27,10 +26,15 @@ type tidyV3RefsCoordinator struct {
 	observe     func(context.Context, string, string) (tidyV3NativeObservation, error)
 	ancestry    func(context.Context, Snapshot, string, string) (bool, error)
 	openHosting func(context.Context, string, hosting.TidySessionOptions) (tidyV3Hosting, error)
+	// integration is the forge-free proof engine (Spec 031).
+	integration integrationEngine
+	// proofRunner replaces the apply re-evaluation of a recorded class; tests
+	// use it to present a verdict that differs from the recorded evidence.
+	proofRunner func(context.Context, *integrationRun, string, string, V3ProofPolicy) (integrationVerdict, error)
 }
 
 func defaultTidyV3RefsCoordinator() tidyV3RefsCoordinator {
-	return tidyV3RefsCoordinator{inspect: inspection.Inspect, observe: observeTidyV3Git, ancestry: tidyV3NativeAncestry,
+	return tidyV3RefsCoordinator{inspect: inspection.Inspect, observe: observeTidyV3Git, ancestry: tidyV3NativeAncestry, integration: defaultIntegrationEngine(),
 		openHosting: func(ctx context.Context, path string, o hosting.TidySessionOptions) (tidyV3Hosting, error) {
 			return hosting.OpenTidySession(ctx, path, o)
 		}}
@@ -45,11 +49,7 @@ func failTidyV3(r V3Result, err error) V3Result {
 	return r
 }
 func (c tidyV3RefsCoordinator) plan(ctx context.Context, o V3PlanOptions) V3Result {
-	timeout := 10 * time.Second
-	if o.Online {
-		timeout = 30 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, v3ProofPlanTimeout(o))
 	defer cancel()
 	ctx, _, closeSession, err := withPlanningSession(ctx)
 	if err != nil {
@@ -76,6 +76,12 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if source != o.Path {
 		return failTidyV3(r, failure("invalid-input", "Source path must be canonical without aliases."))
 	}
+	policy, err := v3ProofPolicyFromOptions(o)
+	if err != nil {
+		return failTidyV3(r, err)
+	}
+	// Grafts and alternates are hard stops of the proofs, not refusals.
+	ctx = withHistoryHardStops(ctx)
 	id := c.inspect(ctx, source)
 	r.Backend = id.Backend
 	if id.Status != "ok" || id.Backend != "git" {
@@ -90,7 +96,13 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy}
+	run, closeRun, err := c.integration.begin(ctx, observation.Expected.Identity, observation.ConfigNotes)
+	if err != nil {
+		return failTidyV3(r, err)
+	}
+	defer closeRun()
+	proofs := c.localProofs(run, p.Expected, policy)
 	if p.StateDir != "" {
 		p.PlanID, err = randomID()
 		if err != nil {
@@ -121,9 +133,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		case len(candidate.WorkspacePaths) > 0:
 			candidate.Reason = "workspace-used"
 		default:
-			proof, e := proveTidyV3Commit(ctx, p.Expected, ref.OID, candidate.WorkspacePaths, nil, nil, func(ctx context.Context, target, base string) (bool, error) {
-				return c.ancestry(ctx, p.Expected, target, base)
-			})
+			proof, e := proofs.prove(ctx, ref.OID, candidate.WorkspacePaths)
 			if e != nil {
 				return failTidyV3(r, e)
 			}
@@ -252,7 +262,7 @@ func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosti
 	seen := map[string]bool{}
 	requestHints := map[string]int{}
 	for _, v := range p.Candidates {
-		if v.Reason == "integration-not-proven" && v.Proof == "none" && !seen[v.OID] {
+		if tidyV3OnlineEligible(v) && !seen[v.OID] {
 			targets = append(targets, v.OID)
 			seen[v.OID] = true
 			if n, ok := hints[v.OID]; ok {
@@ -280,15 +290,27 @@ func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosti
 	}
 	repo := s.Repository()
 	for i, v := range p.Candidates {
-		if v.Reason != "integration-not-proven" || v.Proof != "none" {
+		if !tidyV3OnlineEligible(v) {
 			continue
 		}
 		row := byOID[v.OID]
+		// The ancestry class runs only when selected: the first call of the
+		// proof is the tip's own ancestry.
+		tipChecked := false
 		proof, e := proveTidyV3Commit(ctx, p.Expected, v.OID, v.WorkspacePaths, &repo, &row, func(ctx context.Context, target, base string) (bool, error) {
+			if !tipChecked {
+				tipChecked = true
+				if !p.ProofPolicy.has(integrationAncestor) {
+					return false, nil
+				}
+			}
 			return c.ancestry(ctx, p.Expected, target, base)
 		})
 		if e != nil {
 			return nil, e
+		}
+		if proof.Proof == "none" && v.Reason == integrationReviewDisposition {
+			continue // no provider proof: the review reasons stay
 		}
 		setTidyV3CandidateProof(&p.Candidates[i], proof)
 		if proof.Evidence != nil && proof.Evidence.GitHub != nil {
@@ -408,6 +430,12 @@ func tidyV3DiscoveryNotes(records []V3DiscoveryRecord) []string {
 		notes = append(notes, note)
 	}
 	return notes
+}
+
+// tidyV3OnlineEligible selects the tips that online evidence may still prove:
+// not proven by a native class and not stopped by a hard stop.
+func tidyV3OnlineEligible(c V3Candidate) bool {
+	return c.Proof == "none" && (c.Reason == "integration-not-proven" || c.Reason == integrationReviewDisposition)
 }
 func setTidyV3CandidateProof(c *V3Candidate, p V3CommitProof) {
 	c.Decision, c.Reason, c.Proof, c.Evidence = p.Decision, p.Reason, p.Proof, p.Evidence

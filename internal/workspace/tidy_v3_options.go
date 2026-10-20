@@ -4,8 +4,10 @@ package workspace
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
+	"time"
 )
 
 // v3HintSelector renders a validated hint (40 hex digits and a number, far
@@ -41,6 +43,11 @@ type V3PlanOptions struct {
 	Online                             bool
 	Remote, TrackingRemote, Repo, Host string
 	PRHints                            []V3PRHint
+	// IntegrationProofs narrows the forge-free proof classes (FR-006); empty
+	// means all four. AcceptWhitespaceDifferences makes a patch-id match that
+	// differs only in whitespace deletable.
+	IntegrationProofs           []string
+	AcceptWhitespaceDifferences bool
 }
 type V3ApplyOptions struct {
 	StateDir, PlanID         string
@@ -104,6 +111,12 @@ func validateV3PlanOptions(o V3PlanOptions) error {
 		}
 		refs[name] = true
 	}
+	if (retire || o.TrackingRemote != "") && (len(o.IntegrationProofs) > 0 || o.AcceptWhitespaceDifferences) {
+		return bad()
+	}
+	if _, err := v3ProofPolicyFromOptions(o); err != nil {
+		return err
+	}
 	hints := map[string]int64{}
 	for _, h := range o.PRHints {
 		if !v3OID(h.OID, "sha1") || h.Number <= 0 {
@@ -135,4 +148,39 @@ func validateV3ApplyOptions(o V3ApplyOptions, p V3Plan) error {
 		return failure("invalid-options", "Completion declarations apply only to legacy retirement.")
 	}
 	return nil
+}
+
+// v3ProofPolicyFromOptions canonicalizes the selected kinds (FR-006): a subset
+// of the four classes in the order of FR-006, so the order given never changes
+// the plan identity. Unknown or duplicate kinds are usage errors.
+func v3ProofPolicyFromOptions(o V3PlanOptions) (V3ProofPolicy, error) {
+	policy := defaultIntegrationPolicy()
+	policy.AcceptWhitespaceDifferences = o.AcceptWhitespaceDifferences
+	if len(o.IntegrationProofs) == 0 {
+		return policy, nil
+	}
+	seen := map[string]bool{}
+	for _, kind := range o.IntegrationProofs {
+		if !slices.Contains(integrationKindOrder, kind) || seen[kind] {
+			return policy, failure("invalid-options", "Integration proof kinds must be distinct members of ancestor, patch-id, merge-noop and no-net-change.")
+		}
+		seen[kind] = true
+	}
+	policy.Kinds = []string{}
+	for _, kind := range integrationKindOrder {
+		if seen[kind] {
+			policy.Kinds = append(policy.Kinds, kind)
+		}
+	}
+	return policy, nil
+}
+
+// v3ProofPlanTimeout is the total planning time of a local-reference plan: the
+// 10 s observation, the 60 s forge-free proof phase and, online, the 30 s
+// online phase (Spec 029 contract amendment, FR-008).
+func v3ProofPlanTimeout(o V3PlanOptions) time.Duration {
+	if o.Online {
+		return 100 * time.Second
+	}
+	return 70 * time.Second
 }

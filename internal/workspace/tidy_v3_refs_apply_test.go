@@ -496,7 +496,7 @@ func fixtureTidyV3ProviderApply(t *testing.T, all bool) (string, V3Plan, *fixtur
 	if !all {
 		selected = []string{"refs/heads/topic-xxx"}
 	}
-	r := refs.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", StateDir: privateDir(t), Refs: selected, ProtectWorktrees: []string{}})
+	r := refs.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, StateDir: privateDir(t), Refs: selected, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("online plan failed %+v", r)
 	}
