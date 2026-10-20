@@ -5,7 +5,7 @@
 
 ## Summary
 
-Six slices over the existing contract 3 code, none adding a repository write effect: (A) bounded streaming reads, (B) configuration policy, (C) simple forge-free proofs (`ancestor`, git `patch-id`, `merge-noop`, `no-net-change`, with `whitespace-differs` flag and review reasons), (D) PR discovery per distinct OID, (E) review report and reviewer decisions, (F) real-repository plan-only acceptance. Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes. It also amends Spec 029's patch-similarity rule, collection completeness and planning time in `contract-amendments.md`.
+Seven slices over the existing contract 3 code, none adding a repository write effect except G: (A) bounded streaming reads, (B) configuration policy, (C) simple forge-free proofs (`ancestor`, git `patch-id`, `merge-noop`, `no-net-change`, with `whitespace-differs` flag and review reasons), (D) PR discovery per distinct OID, (E) review report and reviewer decisions, (F) real-repository plan-only acceptance, (G) restore and history of deleted branches (the one new local effect, authorized and compare-and-swap). Language and dependencies as Spec 029 (Go standard library, existing Cobra, go-gh, jsonschema); no new dependency, no new network permission in native sandboxes. It also amends Spec 029's patch-similarity rule, collection completeness and planning time in `contract-amendments.md`.
 
 ## Constitution check
 
@@ -13,7 +13,7 @@ Six slices over the existing contract 3 code, none adding a repository write eff
 | --- | --- |
 | I shared human/agent contract | One typed result and one report data set rendered for humans (Markdown) and agents (JSON); offline useful. |
 | II evidence before consequential actions | Proofs, reasons, reports and decisions bind into the plan; apply re-evaluates and needs owner authorization; a decision is never authorization. |
-| III ownership and recovery | Protected refs retain regardless of proof or decision; recovery refs unchanged and their limits stated; no new effect. |
+| III ownership and recovery | Protected refs retain regardless of proof or decision; recovery refs unchanged and their limits stated; restore is plan-first, authorized, never overwrites and is journaled. |
 | IV specify and verify | Failing tests first, golden reports, sentinel and mutant killers; independent review gate T001. |
 | V Tier 1 peers | Git-only proofs; jj/GitButler get no Git writes and no claimed proofs. |
 
@@ -24,7 +24,7 @@ No constitution exception.
 - `specs/029-tidy-dogfood-safety/contract-amendments.md` (the only Spec 029 file touched, documentation only);
 - `internal/workspace/git.go` (`gitSafetyWithPrimary` refusal list, `gitRead`), `native_sandbox.go` (`sandboxEnvironment`, `nativeOutputLimit`), `native_stream.go`, `tidy_v3_proof.go`, `tidy_v3_refs.go`, `tidy_v3_options.go`, `tidy_v3_result.go`; new `tidy_v3_proof_native.go` (patch-id, merge-noop, no-net-change, reasons), `tidy_v3_report.go` (data), `tidy_v3_report_render.go` (Markdown and JSON), `tidy_v3_decisions.go`, and a private object-directory helper;
 - `internal/hosting/tidy_evidence_pr.go` (`discoverPRHints`), `transport.go` route allow-list;
-- `internal/cli` for `--integration-proof`, `--accept-whitespace-differences`, `--report-dir`, `--consolidation-range`, `--decisions`, `--pr`; `schemas/v3` candidate plus candidate report and decision schemas; smoke scripts for real-binary lanes (owner-gated build).
+- `internal/cli` for `restore`, `history`, `--integration-proof`, `--accept-whitespace-differences`, `--report-dir`, `--consolidation-range`, `--decisions`, `--pr`; `schemas/v3` candidate plus candidate report and decision schemas; smoke scripts for real-binary lanes (owner-gated build).
 
 ## Decisions
 
@@ -44,6 +44,10 @@ Git's own `patch-id`, `merge-noop` and `no-net-change` are the deletable default
 
 The report and decision file make the judgment cheap for a human and an AI. `git range-diff` pairing against a user-named consolidation range, previously deferred, is in scope as evidence only. Bounded sizes, deterministic ordering and golden fixtures keep it testable. Decisions are bound to the exact tip OID, recorded in plan and journal, and never authorize apply.
 
+### Decision: restore and history (owner-approved amendment)
+
+Deletion is made more liberal by this Spec on the promise that recovery bounds the risk, so the restore path is specified, tested and proven on the dogfood set. `stw tidy restore` is plan then apply like tidy, reads the Spec 029 journal and recovery refs, never overwrites, creates the branch with a compare-and-swap, needs the same explicit authorization as `tidy apply` and appends a restore journal record; `stw tidy history` is a read-only view over the same reader. Worktree, configuration and reflog restore are excluded (T045 may add configuration keys later). Sequenced before the dogfood cleanup.
+
 ### Decision: discovery endpoint
 
 No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting, and share the Spec 029 online budget with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidates (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment.
@@ -61,6 +65,7 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 - **P5 Slice D discovery** (T021..T026).
 - **P6 Slice E review report and decisions** (T027..T036).
 - **P7 Slice F** docs, review, measurement, owner-gated acceptance (T037..T045).
+- **P8 Slice G restore and history** (T046..T053), before the dogfood cleanup.
 
 ## Risks
 
