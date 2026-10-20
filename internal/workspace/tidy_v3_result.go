@@ -27,6 +27,8 @@ type V3Result struct {
 	Actions       []ActionOutcome `json:"actions"`
 	Diagnostics   []Diagnostic    `json:"diagnostics"`
 	Limitations   []string        `json:"limitations"`
+	// ReviewSummary is present on a local-reference plan result.
+	ReviewSummary *V3ReviewSummary `json:"review_summary,omitempty"`
 }
 type V3Boundary struct {
 	Complete         bool             `json:"complete"`
@@ -67,6 +69,28 @@ type V3Plan struct {
 	// Proof policy of a local-reference plan (Spec 031 FR-011); absent in plans
 	// that predate it, which are evaluated by ancestry alone.
 	ProofPolicy *V3ProofPolicy `json:"proof_policy,omitempty"`
+	// Review binds the report bounds when a review report was requested
+	// (Spec 031 FR-011, FR-035); absent otherwise.
+	Review *V3ReviewBinding `json:"review,omitempty"`
+}
+
+// V3ReviewBinding is the effective report bounds bound into the plan identity.
+type V3ReviewBinding struct {
+	MaxEntries   int `json:"max_entries"`
+	MaxBytes     int `json:"max_bytes"`
+	MaxDiffBytes int `json:"max_diff_bytes"`
+}
+
+// V3ReviewSummary is the review summary of a local-reference plan result
+// (FR-032): counts per bucket and reason, and what the report holds.
+type V3ReviewSummary struct {
+	Proven        int            `json:"proven"`
+	NeedsReview   int            `json:"needs_review"`
+	Retained      int            `json:"retained"`
+	Reasons       map[string]int `json:"reasons"`
+	ReportWritten bool           `json:"report_written"`
+	Entries       int            `json:"entries"`
+	Omitted       int            `json:"omitted"`
 }
 type V3Candidate struct {
 	ActionID       string           `json:"action_id"`
@@ -359,7 +383,7 @@ func validateV3Plan(p V3Plan, state, id string) error {
 	if e != nil {
 		return e
 	}
-	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || p.ProofPolicy != nil && (p.Mode != "local-refs" || !validV3ProofPolicy(*p.ProofPolicy)) {
+	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || p.ProofPolicy != nil && (p.Mode != "local-refs" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review)) {
 		return bad()
 	}
 	if state == "" {

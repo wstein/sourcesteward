@@ -2280,6 +2280,9 @@
             }
           ]
         },
+        "review": {
+          "$ref": "#/$defs/V3ReviewBinding"
+        },
         "schema_version": {
           "const": 3,
           "minimum": 0,
@@ -2649,6 +2652,9 @@
             }
           ]
         },
+        "review_summary": {
+          "$ref": "#/$defs/V3ReviewSummary"
+        },
         "schema_version": {
           "const": 3,
           "minimum": 0,
@@ -2997,6 +3003,81 @@
         "decision",
         "reason",
         "blockers"
+      ],
+      "type": "object"
+    },
+    "V3ReviewBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "max_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_diff_bytes": {
+          "maximum": 1048576,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_entries": {
+          "maximum": 1024,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_entries",
+        "max_bytes",
+        "max_diff_bytes"
+      ],
+      "type": "object"
+    },
+    "V3ReviewSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "needs_review": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "omitted": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "proven": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reasons": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "propertyNames": {
+            "maxLength": 4096,
+            "minLength": 1
+          },
+          "type": "object"
+        },
+        "report_written": {
+          "type": "boolean"
+        },
+        "retained": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "proven",
+        "needs_review",
+        "retained",
+        "reasons",
+        "report_written",
+        "entries",
+        "omitted"
       ],
       "type": "object"
     }

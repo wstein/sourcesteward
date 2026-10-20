@@ -31,17 +31,20 @@ type tidyV3RefsCoordinator struct {
 	// proofRunner replaces the apply re-evaluation of a recorded class; tests
 	// use it to present a verdict that differs from the recorded evidence.
 	proofRunner func(context.Context, *integrationRun, string, string, V3ProofPolicy) (integrationVerdict, error)
+	// writeReport stores the rendered review report in the owner-named
+	// directory; tests replace it to fail the write.
+	writeReport func(dir string, markdown, jsonData []byte) error
 }
 
 func defaultTidyV3RefsCoordinator() tidyV3RefsCoordinator {
-	return tidyV3RefsCoordinator{inspect: inspection.Inspect, observe: observeTidyV3Git, ancestry: tidyV3NativeAncestry, integration: defaultIntegrationEngine(),
+	return tidyV3RefsCoordinator{inspect: inspection.Inspect, observe: observeTidyV3Git, ancestry: tidyV3NativeAncestry, integration: defaultIntegrationEngine(), writeReport: defaultWriteReport,
 		openHosting: func(ctx context.Context, path string, o hosting.TidySessionOptions) (tidyV3Hosting, error) {
 			return hosting.OpenTidySession(ctx, path, o)
 		}}
 }
 func failTidyV3(r V3Result, err error) V3Result {
 	failed := failResult(newResult(r.Command), err)
-	r.Status, r.Diagnostics, r.Plan, r.Boundary.Complete = failed.Status, failed.Diagnostics, nil, false
+	r.Status, r.Diagnostics, r.Plan, r.ReviewSummary, r.Boundary.Complete = failed.Status, failed.Diagnostics, nil, nil, false
 	switch failed.Diagnostics[0].Code {
 	case "unsupported-backend", "unsupported-mode", "hosting-proof-unsupported", "evidence-changed", "invalid-options", "invalid-input", "unknown-reference":
 		r.Status = "refused"
@@ -94,9 +97,18 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(observation.Native), o.StateDir); err != nil {
 		return failTidyV3(r, err)
 	}
+	review, reviewBounds, err := reviewBindingFor(o)
+	if err != nil {
+		return failTidyV3(r, err)
+	}
+	if o.ReportDir != "" {
+		if err = checkReportDirectory(o.ReportDir, reportRoots(source, o.StateDir, observation.Expected.Identity, v3NativeRoots(observation.Native))); err != nil {
+			return failTidyV3(r, err)
+		}
+	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy, Review: review}
 	run, closeRun, err := c.integration.begin(ctx, observation.Expected.Identity, observation.ConfigNotes)
 	if err != nil {
 		return failTidyV3(r, err)
@@ -206,6 +218,14 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		// amendment 5). A plan-time pass would spend the budget discovery
 		// reports as exhausted.
 	}
+	var rendered *renderedReport
+	if o.ReportDir != "" {
+		report, e := c.buildReviewReport(ctx, run, p, proofs.verdicts, reviewBounds)
+		if e != nil {
+			return failTidyV3(r, e)
+		}
+		rendered = &report
+	}
 	p.Effects = v3PlanEffects(p)
 	p.Digest, err = v3PlanDigest(p)
 	if err != nil {
@@ -223,6 +243,13 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	}
 	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(fresh.Native), o.StateDir); err != nil {
 		return failTidyV3(r, err)
+	}
+	if rendered != nil {
+		// The report is written before the plan is stored: a failed write stores
+		// no plan.
+		if err = c.writeReport(o.ReportDir, rendered.Markdown, rendered.JSON); err != nil {
+			return failTidyV3(r, err)
+		}
 	}
 	if p.StateDir != "" {
 		s, e := openV3Store(p.StateDir, true, v3NativeRoots(fresh.Native), fresh.Native.ProtectedRoots)
@@ -252,6 +279,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		return failTidyV3(r, err)
 	}
 	r.Status, r.Plan, r.Boundary.Complete = "ok", &p, true
+	r.ReviewSummary = reviewSummary(p, rendered)
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), discoveryNotes...)
 	return r
 }

@@ -48,6 +48,10 @@ type V3PlanOptions struct {
 	// differs only in whitespace deletable.
 	IntegrationProofs           []string
 	AcceptWhitespaceDifferences bool
+	// ReportDir is the owner-named absolute directory of the review report
+	// (FR-032). The three bounds are 0 for their defaults (FR-035).
+	ReportDir                                            string
+	ReportMaxEntries, ReportMaxBytes, ReportMaxDiffBytes int
 }
 type V3ApplyOptions struct {
 	StateDir, PlanID         string
@@ -117,6 +121,19 @@ func validateV3PlanOptions(o V3PlanOptions) error {
 	if _, err := v3ProofPolicyFromOptions(o); err != nil {
 		return err
 	}
+	if o.reviewRequested() {
+		if retire || o.TrackingRemote != "" {
+			return bad()
+		}
+		if _, err := resolveReportBounds(o.reportBounds()); err != nil {
+			return err
+		}
+		if o.ReportDir != "" {
+			if err := checkReportDirectory(o.ReportDir, nil); err != nil {
+				return err
+			}
+		}
+	}
 	hints := map[string]int64{}
 	for _, h := range o.PRHints {
 		if !v3OID(h.OID, "sha1") || h.Number <= 0 {
@@ -183,4 +200,13 @@ func v3ProofPlanTimeout(o V3PlanOptions) time.Duration {
 		return 100 * time.Second
 	}
 	return 70 * time.Second
+}
+
+// reviewRequested reports whether any review report option is set.
+func (o V3PlanOptions) reviewRequested() bool {
+	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0
+}
+
+func (o V3PlanOptions) reportBounds() reportBounds {
+	return reportBounds{MaxEntries: o.ReportMaxEntries, MaxBytes: o.ReportMaxBytes, MaxDiffBytes: o.ReportMaxDiffBytes}
 }
