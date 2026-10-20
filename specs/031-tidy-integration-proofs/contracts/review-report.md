@@ -38,16 +38,16 @@ Per branch, in this order:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `summary` | object | `entries`, `omitted`, counts per bucket (`proven`, `needs_review`, `retained`) and per reason |
+| `summary` | object | `entries`, `omitted`, counts per bucket (`proven`, `needs_review`, `retained`), per reason (`reasons`) and `retained_refs[]` (`branch` (untrusted object), `reason`, `clearable: false`, FR-031) |
 | `base` | object | `selector`, `oid` |
 | `entries[]` | array | one per entry, below |
 | `reviewer_guidance` | string | fixed text (see Untrusted content) |
 | `entries[].branch` | untrusted object `{untrusted: true, text}` | full ref name |
 | `entries[].tip_oid`, `base_oid`, `merge_base_oid` | string | full OIDs |
 | `entries[].reasons[]` | enum | review reasons |
-| `entries[].commits[]` | array | `oid`, `subject` (untrusted object), `author` (untrusted object), `date`; `truncated` marker `{shown,total}` |
+| `entries[].commits[]` | array | `oid`, `subject` (untrusted object), `author` (untrusted object), `date`; the sibling `entries[].commits_truncated` is the marker `{unit,shown,total}` or null |
 | `entries[].proofs_tried[]` | array | `class`, `outcome`, `why` |
-| `entries[].unintegrated_diff` | object | `stat` (`files`,`insertions`,`deletions`), `conflicted_paths[]`, `whitespace_only`, `binary_files[]` (`path` (untrusted object), `old_blob`, `new_blob`, `old_size`, `new_size`), `files[]` (`path` (untrusted object), `old_mode`, `new_mode`, `type_change` (for example `regular->executable`), `kind` (`content`, `mode-only`, `symlink`, `gitlink`, `binary`), for gitlinks `old_oid`, `new_oid`), `hunks[]` (`file` (untrusted object), `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]` (untrusted objects)), `truncated` (`{unit,shown,total}` or null) |
+| `entries[].unintegrated_diff` | object | `source` (`merge-result`, `branch-against-merge-base` under the merge gate, or `unavailable`), `stat` (`files`,`insertions`,`deletions`), `conflicted_paths[]`, `whitespace_only`, `binary_files[]` (`path` (untrusted object), `old_blob`, `new_blob`, `old_size`, `new_size`), `files[]` (`path` (untrusted object), `old_mode`, `new_mode`, `type_change` (for example `regular->executable`), `kind` (`content`, `mode-only`, `symlink`, `gitlink`, `binary`), for gitlinks `old_oid`, `new_oid`), `hunks[]` (`file` (untrusted object), `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]` (untrusted objects)), `truncated` (`{unit,shown,total}` or null) |
 | `entries[].candidate_base_commits[]` | array | `oid`, `subject` (untrusted object), `match` (`patch-id`, `subject`) |
 | `entries[].range_pairing` | object or null | `range`, `pairs[]` (`status`, `branch_commit`, `range_commit`), `truncated` |
 | `entries[].suggested_verdict` | object | `verdict`, `confidence`, `basis[]` |
@@ -81,6 +81,8 @@ Same grammar rules as the proof table; each with a bound test (at the bound acce
 | `range-diff --no-color` over named range | 256 rows | 256 x 4,224 |
 
 Totals (defaults, overridable as above): Markdown at most 4 MiB, JSON at most 4 MiB, at most 256 entries.
+
+The diff stream is read to the 64 MiB patch bound, the first 1 MiB is retained and the whole stream is counted, so truncation markers carry exact byte, line and file totals. The report commands run after the proof phase inside the plan deadline (70 s offline, 100 s online): a very large repository may need `--timeout` raised or a smaller `--report-max-entries`, and reaching the deadline fails closed (no report is written, nothing is deleted).
 
 ## Untrusted content and reviewer guidance
 
