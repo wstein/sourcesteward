@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -62,10 +63,11 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 		if e != nil {
 			return failTidyV3(r, e)
 		}
+		o.PRHints = normalizeV3PRHints(o.PRHints)
 		hints := map[string]int{}
 		for _, h := range o.PRHints {
 			if h.OID != first.Retirement.Target.CommitID || h.Number > int64(^uint(0)>>1) {
-				return failTidyV3(r, failure("invalid-options", "Retirement hints must name the exact selected native head."))
+				return failTidyV3(r, failure("invalid-options", fmt.Sprintf("%s does not name the exact selected native head.", v3HintSelector(h))))
 			}
 			hints[h.OID] = int(h.Number)
 		}
@@ -93,7 +95,7 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 		temporary := p
 		temporary.Retirement = nil
 		temporary.Candidates = []V3Candidate{retirementV3Candidate(first.Retirement)}
-		if e = c.refs.providerProofs(ctx, session, &temporary, hints); e != nil {
+		if _, e = c.refs.providerProofs(ctx, session, &temporary, hints); e != nil {
 			return failTidyV3(r, e)
 		}
 		proof := temporary.Candidates[0]
