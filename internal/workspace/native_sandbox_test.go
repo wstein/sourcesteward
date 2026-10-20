@@ -38,6 +38,15 @@ func TestNativeSandboxHelper(t *testing.T) {
 				os.Exit(45)
 			}
 			f.Close()
+			u, e := os.Open("/dev/urandom")
+			if e != nil {
+				os.Exit(46)
+			}
+			buf := make([]byte, 16)
+			if n, e := u.Read(buf); e != nil || n != 16 {
+				os.Exit(47)
+			}
+			u.Close()
 		case "network":
 			c, e := net.DialTimeout("tcp", a[1], time.Second)
 			if e == nil {
