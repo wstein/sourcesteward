@@ -36,12 +36,12 @@
 
 ## Phase 5: Merged-PR discovery (FR-013..FR-018; fixes #81)
 
-- [ ] T021 Research, with deterministic doubles and a recorded read-only measurement design, why #81 needed hints and whether the 1,000-record cap truncates this repository; record the evidence in `research.md`. No second endpoint is added.
-- [ ] T022 Add failing discovery tests: 40 refs sharing 12 OIDs plan without `--pr`; duplicate identical hint accepted; same OID with two numbers, hint for an unselected OID and malformed hints fail with messages naming the selector (escaped, bounded); multiple admissible PRs need a hint; request assertions show only allow-listed GETs, one PR read per candidate in ascending OID order and at most 128 requests; a 120-OID fixture (one candidate each, ten full collection pages) performs 2 repository reads, 10 page reads and exactly 116 candidate PR reads (128 requests) and reports the last 4 OIDs in ascending order `discovery-budget-exhausted`; `RevalidatePullRequest` reads occur only at apply.
-- [ ] T023 Implement per-OID hint aggregation, idempotent hints and selector-naming errors; pass T022.
-- [ ] T024 Add failing coverage tests: pagination ending within bounds is `complete`; a tenth full page is `incomplete`, found exact-head PRs still prove their OIDs, others are retained `discovery-incomplete`, the plan completes and claims no absence; error and 404 never prove absence.
-- [ ] T025 Implement coverage reporting; pass T024; the endpoint set stays closed.
-- [ ] T026 Re-run Spec 029 online and tracking-ref conformance unchanged after T023 and T025.
+- [x] T021 Research, with deterministic doubles and a recorded read-only measurement design, why #81 needed hints and whether the 1,000-record cap truncates this repository; record the evidence in `research.md`. No second endpoint is added.
+- [x] T022 Add failing discovery tests: 40 refs sharing 12 OIDs plan without `--pr`; duplicate identical hint accepted; same OID with two numbers, hint for an unselected OID and malformed hints fail with messages naming the selector (escaped, bounded); multiple admissible PRs need a hint; request assertions show only allow-listed GETs, one PR read per candidate in ascending OID order and at most 128 requests; a 120-OID fixture (one candidate each, ten full collection pages) performs 2 repository reads, 10 page reads and exactly 116 candidate PR reads (128 requests) and reports the last 4 OIDs in ascending order `discovery-budget-exhausted`; `RevalidatePullRequest` reads occur only at apply.
+- [x] T023 Implement per-OID hint aggregation, idempotent hints and selector-naming errors; pass T022.
+- [x] T024 Add failing coverage tests: pagination ending within bounds is `complete`; a tenth full page is `incomplete`, found exact-head PRs still prove their OIDs, others are retained `discovery-incomplete`, the plan completes and claims no absence; error and 404 never prove absence.
+- [x] T025 Implement coverage reporting; pass T024; the endpoint set stays closed.
+- [x] T026 Re-run Spec 029 online and tracking-ref conformance unchanged after T023 and T025.
 
 ## Phase 6: Review report and decisions (FR-031..FR-041)
 

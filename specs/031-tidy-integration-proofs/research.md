@@ -35,10 +35,49 @@ The cost of a wrong local-branch deletion is bounded by the recovery ref, so the
 
 `merge-ort` may open initialized submodule repositories to resolve gitlink conflicts, applies rename detection and (with `merge.renormalize`) content conversion, and may trigger auto maintenance. The Spec fixes these with constant `-c` arguments and pre-checks gitlink differences. A grafts file can fake ancestry and a shallow clone gives a wrong merge base, so both make proofs not-evaluated; the repository's alternates file is ignored once `GIT_OBJECT_DIRECTORY` is set.
 
-## Open measurements before implementation
+## Measurements before implementation (T003, T021; recorded 2026-10-20)
 
-1. Why did #81 need hints: more than 1,000 closed PRs (page cap), duplicate OIDs, or the unproven-hint path? T002 reproduces with fakes and records the cause before any change.
-2. Whether the closed-PR collection covers this repository's 149 refs; the Anchorage umbrella uses a different repository and remote.
+### Why #81 needed hints (deterministic doubles, observed failures before the change)
+
+The reproduction tests ran against the unchanged `DiscoverPullRequests`, the workspace coordinator and the CLI parser, with transport doubles and temporary repositories only (no live call from any test).
+
+| Question | Observation before the change |
+| --- | --- |
+| Page cap | A closed collection of ten full pages with no authoritative end (`tidyPagination` returns `ErrTidyLimit` at page 10) failed the whole plan: `tidy hosting operation exceeded its request, byte or deadline budget`; found exact-head PRs were discarded with it. A repository with more than 1,000 closed PRs therefore could only be planned with `--pr`, which skips the collection. |
+| Request budget | 120 distinct OIDs over ten full pages (1 session read, 1 revalidation, 10 pages) ran into the 128-request ceiling at the 117th candidate read and failed the whole plan with the same message instead of retaining the last 4 OIDs. |
+| Duplicate OIDs | Discovery already keyed targets by distinct OID (`providerProofs`), so shared OIDs did not multiply reads. The defect was the hint path: a repeated identical `--pr OID=N` was a usage error (`contract 3 requires one exact mode, canonical paths and explicit online selectors`, with no selector named), so an operator who copied one hint per ref hit "duplicate hint" and an unselected-OID hint said only `PR hints must name selected full native heads and supported numbers.` |
+| Ordering | Targets were sent in ref-name order while the budget rule needs ascending OID order; the coordinator now sorts them and hosting returns ascending rows. |
+| Offline rebase-merge | Not a discovery defect: it is the missing forge-free proofs (patch-id, merge-noop) of Phase 3, which is outside this slice and not changed here. |
+
+Cause of #81: hints were needed (1) when the closed collection hit its bound, which discarded all evidence, (2) when the request budget ran out, and (3) because identical repeated hints and shared OIDs were rejected at the usage layer. None of the three needs a second endpoint.
+
+### Does the 1,000-record cap truncate the real repositories (read-only GET measurement)
+
+Run with the owner's `gh` credentials, GET only, two requests per repository, one record per page so that only the `Link` header and no PR content is read:
+
+```text
+gh api -i 'repos/wstein/sourcesteward/pulls?state=closed&per_page=1&page=1'
+  Link: ...page=2>; rel="next", ...page=79>; rel="last"           -> 79 closed PRs
+gh api 'repos/wstein/sourcesteward/pulls?state=closed&per_page=100&page=10' --jq 'length'
+  0                                                                 -> page 10 empty
+gh api -i 'repos/wstein/anchorage-workspace/pulls?state=closed&per_page=1&page=1'
+  Link: ...page=2>; rel="next", ...page=16>; rel="last"           -> 16 closed PRs
+```
+
+Both repositories are far below 1,000 records and one page of 100 covers sourcesteward's 79 closed PRs, so the cap does not truncate either of them today; the collection is `complete` for both. The 149 local refs are not blocked by coverage. The cap stays a bound for much older repositories and is reported as `incomplete` rather than as a failure.
+
+### Request and byte accounting of the fixtures
+
+| Fixture | Requests | Raw bytes |
+| --- | --- | --- |
+| 120 distinct OIDs, one candidate each, ten full pages | 1 preloaded session read + 1 revalidation + 10 pages + 116 PR reads = 128; last 4 OIDs `discovery-budget-exhausted` | about 0.7 MiB, far below the 32 MiB ceiling (a page is about 56 KiB, a PR read about 0.6 KiB) |
+| 200 OIDs (budget never exceeded) | at most 128; 83 OIDs exhausted | same |
+| 40 refs sharing 12 OIDs (workspace) | 12 targets in one discovery call, no hints | not applicable (double) |
+| Tenth full page without an end | 1 + 10 pages + 1 PR read for the found OID | small |
+
+## Result of implementation (work package C)
+
+Per-OID results `github-merged-head`, `no-merged-pr`, `discovery-incomplete`, `discovery-budget-exhausted` and `ambiguous-needs-hint` and the coverage `complete` or `incomplete` travel in `TidyHeadEvidence` (`result`, `coverage`). The stored v3 plan is unchanged (undecided refs stay `integration-not-proven` retained); plan result `limitations` carry one bounded note per undecided result. A plan field carrying the full DiscoveryRecord list needs a v3 schema addition and is left to the owner decision recorded in the work package report.
 
 ## Stage2 baseline (T002, source `37b56fbf`)
 
