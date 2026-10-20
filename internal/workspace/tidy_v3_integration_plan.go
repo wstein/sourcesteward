@@ -29,10 +29,12 @@ type tidyV3LocalProofs struct {
 	expected Snapshot
 	policy   V3ProofPolicy
 	done     map[string]V3CommitProof
+	// verdicts keeps the verdict of every tip that needs review for the report.
+	verdicts map[string]integrationVerdict
 }
 
 func (c tidyV3RefsCoordinator) localProofs(run *integrationRun, expected Snapshot, policy V3ProofPolicy) *tidyV3LocalProofs {
-	return &tidyV3LocalProofs{c: c, run: run, expected: expected, policy: policy, done: map[string]V3CommitProof{}}
+	return &tidyV3LocalProofs{c: c, run: run, expected: expected, policy: policy, done: map[string]V3CommitProof{}, verdicts: map[string]integrationVerdict{}}
 }
 
 func (l *tidyV3LocalProofs) hasForgeFreeClass() bool {
@@ -60,6 +62,7 @@ func (l *tidyV3LocalProofs) proveTip(ctx context.Context, oid string, paths []st
 	}
 	review := func(v integrationVerdict) V3CommitProof {
 		out.Reason, out.Evidence = integrationReviewDisposition, &V3ProofEvidence{Integration: evidence(v)}
+		l.verdicts[oid] = v
 		return out
 	}
 	if len(l.run.hardStops) > 0 {
