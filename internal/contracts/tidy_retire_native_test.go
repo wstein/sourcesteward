@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/cli"
 	"github.com/wstein/sourcesteward/internal/workspace"
@@ -75,13 +76,27 @@ func TestRealOwnedRetirementSchema(t *testing.T) {
 						t.Helper()
 						var out, diagnostic bytes.Buffer
 						args = append(args, "--json")
+						// A plan only reads and stores its own plan, and every operation carries a
+						// fixed 10 s production deadline that a loaded two-core runner can exceed with
+						// a real jj. A plan whose result is an error with the diagnostic code canceled is
+						// repeated up to three times; no other result and no apply ever is.
+						var elapsed []time.Duration
+						started := time.Now()
 						code := cli.Run(context.Background(), "test", args, &out, &diagnostic)
+						elapsed = append(elapsed, time.Since(started).Round(time.Millisecond))
+						for retry := 0; retry < 3 && code != expected && canceledPlan(args, out.Bytes()); retry++ {
+							out.Reset()
+							diagnostic.Reset()
+							started = time.Now()
+							code = cli.Run(context.Background(), "test", args, &out, &diagnostic)
+							elapsed = append(elapsed, time.Since(started).Round(time.Millisecond))
+						}
 						valid(t, schemaAt(t, version, name), out.Bytes())
 						if code != expected {
 							if strings.Contains(out.String(), "sandbox-unavailable") && os.Getenv("STW_REQUIRE_JJ") != "1" && os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") != "1" {
 								t.Skip("native sandbox unavailable")
 							}
-							t.Fatalf("exit%d want%d %s %s", code, expected, out.String(), diagnostic.String())
+							t.Fatalf("exit%d want%d; attempts took %v (a tidy plan carries a fixed 10 s deadline) %s %s", code, expected, elapsed, out.String(), diagnostic.String())
 						}
 						return out.Bytes()
 					}
@@ -121,5 +136,51 @@ func TestRealOwnedRetirementSchema(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// canceledPlan reports whether a CLI result is a plan that stopped at its deadline.
+func canceledPlan(args []string, raw []byte) bool {
+	if len(args) < 2 || args[1] != "plan" {
+		return false
+	}
+	var result struct {
+		Status      string `json:"status"`
+		Diagnostics []struct {
+			Code string `json:"code"`
+		} `json:"diagnostics"`
+	}
+	if json.Unmarshal(raw, &result) != nil || result.Status != "error" {
+		return false
+	}
+	for _, d := range result.Diagnostics {
+		if d.Code == "canceled" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestCanceledPlanPredicateMatchesOnlyADeadlineErrorOfAPlan(t *testing.T) {
+	// The shape of a stopped jj tidy plan as the CI log shows it, reduced to its keys.
+	deadline := []byte(`{"retirement":{"schema_version":2},"schema_version":2,"command":"tidy-plan","status":"error","backend":"jj","plan":null,"actions":[{"name":"store-plan","status":"completed","detail":"stored"}],"diagnostics":[{"code":"canceled","message":"workspace operation canceled or deadline exceeded"}],"limitations":[]}`)
+	other := []byte(`{"command":"tidy-plan","status":"error","plan":null,"diagnostics":[{"code":"workspace-failed","message":"workspace operation could not complete"}]}`)
+	refused := []byte(`{"command":"tidy-plan","status":"refused","plan":null,"diagnostics":[{"code":"canceled","message":"x"}]}`)
+	for name, tc := range map[string]struct {
+		args []string
+		raw  []byte
+		want bool
+	}{
+		"canceled tidy plan":      {[]string{"tidy", "plan", "--json"}, deadline, true},
+		"canceled workspace plan": {[]string{"workspace", "plan", "--json"}, deadline, true},
+		"canceled apply":          {[]string{"tidy", "apply", "--json"}, deadline, false},
+		"other error code":        {[]string{"tidy", "plan", "--json"}, other, false},
+		"refused status":          {[]string{"tidy", "plan", "--json"}, refused, false},
+		"not json":                {[]string{"tidy", "plan", "--json"}, []byte("workspace operation canceled or deadline exceeded"), false},
+		"no arguments":            {nil, deadline, false},
+	} {
+		if got := canceledPlan(tc.args, tc.raw); got != tc.want {
+			t.Errorf("%s: got %v, want %v", name, got, tc.want)
+		}
 	}
 }
