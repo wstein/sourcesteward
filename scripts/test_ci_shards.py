@@ -81,9 +81,27 @@ class VerifyTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, 'unknown.*TestZ'):
             shards.verify(['TestA'], [['TestA', 'TestZ']])
 
+    def test_empty_full_list_fails(self):
+        with self.assertRaisesRegex(SystemExit, 'no tests'):
+            shards.verify([], [[], []])
+
     def test_test_run_twice_fails(self):
         with self.assertRaisesRegex(SystemExit, 'more than one shard.*TestA'):
             shards.verify(['TestA'], [['TestA'], ['TestA']])
+
+
+class PackagesTests(unittest.TestCase):
+    def test_exclusion_removes_only_the_sharded_package(self):
+        listed = ['m', 'm/internal/a', 'm/internal/workspace']
+        self.assertEqual(shards.exclude(listed, 'm/internal/workspace'), ['m', 'm/internal/a'])
+
+    def test_exclusion_fails_closed_when_the_sharded_package_is_not_listed(self):
+        with self.assertRaisesRegex(SystemExit, 'not in the package list'):
+            shards.exclude(['m', 'm/internal/a'], 'm/internal/workspace')
+
+    def test_exclusion_fails_when_nothing_remains(self):
+        with self.assertRaisesRegex(SystemExit, 'no other packages'):
+            shards.exclude(['m/internal/workspace'], 'm/internal/workspace')
 
 
 class WeightsFileTests(unittest.TestCase):

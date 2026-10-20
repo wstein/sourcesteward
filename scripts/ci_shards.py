@@ -53,7 +53,18 @@ def regex(names):
     return '^(' + '|'.join(sorted(names)) + ')$' if names else '^$'
 
 
+def exclude(listed, heavy):
+    if heavy not in listed:
+        sys.exit('sharded package %s is not in the package list' % heavy)
+    rest = [package for package in listed if package != heavy]
+    if not rest:
+        sys.exit('no other packages remain after excluding %s' % heavy)
+    return rest
+
+
 def verify(full, shard_lists):
+    if not full:
+        sys.exit('shard coverage check failed: no tests listed')
     seen = {}
     for index, names in enumerate(shard_lists, 1):
         for name in names:
@@ -96,7 +107,7 @@ def main():
         listed = subprocess.run(['go', 'list', './...'], cwd=ROOT, text=True, capture_output=True, check=True).stdout.split()
         module = subprocess.run(['go', 'list', '-m'], cwd=ROOT, text=True, capture_output=True, check=True).stdout.strip()
         heavy = module + '/' + package.removeprefix('./')
-        print(' '.join(p for p in listed if p != heavy))
+        print(' '.join(exclude(listed, heavy)))
         return
     package, tests, weights, default, shards = plan(args.shards)
     if args.command == 'regex':
