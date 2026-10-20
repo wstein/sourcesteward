@@ -23,6 +23,11 @@ func fullPolicy() V3ProofPolicy { return defaultIntegrationPolicy() }
 // observe is false for fixtures the planning admission refuses (symlinks).
 func (f *proofFix) reportEntry(base, tip string, observe bool, tweak func(*integrationRun)) (V3ReportEntry, integrationVerdict) {
 	f.t.Helper()
+	return f.reportEntryBounded(base, tip, observe, tweak, defaultReportBounds())
+}
+
+func (f *proofFix) reportEntryBounded(base, tip string, observe bool, tweak func(*integrationRun), bounds reportBounds) (V3ReportEntry, integrationVerdict) {
+	f.t.Helper()
 	ctx, _, closeSession, err := withPlanningSession(context.Background())
 	if err != nil {
 		f.t.Fatal(err)
@@ -55,7 +60,7 @@ func (f *proofFix) reportEntry(base, tip string, observe bool, tweak func(*integ
 	if err != nil {
 		f.t.Fatalf("evaluate: %v", err)
 	}
-	entry, err := run.collectReportEntry(ctx, reportRequest{Base: f.rev(base), Tip: f.rev(tip), Verdict: v, Policy: policy, Bounds: defaultReportBounds()})
+	entry, err := run.collectReportEntry(ctx, reportRequest{Base: f.rev(base), Tip: f.rev(tip), Verdict: v, Policy: policy, Bounds: bounds})
 	if err != nil {
 		f.t.Fatalf("collect: %v", err)
 	}

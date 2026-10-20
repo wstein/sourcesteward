@@ -153,3 +153,52 @@ type V3ReportEntry struct {
 	// rawDiff is the bounded diff text the Markdown rendering shows.
 	rawDiff string
 }
+
+type V3ReportBase struct {
+	Selector string `json:"selector"`
+	OID      string `json:"oid"`
+}
+
+// V3ReportRetained lists a retained reference in the summary; no decision can
+// clear it (FR-031).
+type V3ReportRetained struct {
+	Branch    V3Untrusted `json:"branch"`
+	Reason    string      `json:"reason"`
+	Clearable bool        `json:"clearable"`
+}
+
+// V3ReportOmitted is an entry left out by a bound: name and reasons only.
+type V3ReportOmitted struct {
+	Branch  V3Untrusted `json:"branch"`
+	Reasons []string    `json:"reasons"`
+}
+
+// V3ReportSummary counts the references per bucket and per reason.
+type V3ReportSummary struct {
+	Entries      int                `json:"entries"`
+	Omitted      int                `json:"omitted"`
+	Proven       int                `json:"proven"`
+	NeedsReview  int                `json:"needs_review"`
+	Retained     int                `json:"retained"`
+	Reasons      map[string]int     `json:"reasons"`
+	RetainedRefs []V3ReportRetained `json:"retained_refs"`
+}
+
+// resolveReportBounds replaces unset bounds by their defaults and refuses
+// values above the hard ceilings.
+func resolveReportBounds(b reportBounds) (reportBounds, error) {
+	d := defaultReportBounds()
+	if b.MaxEntries == 0 {
+		b.MaxEntries = d.MaxEntries
+	}
+	if b.MaxBytes == 0 {
+		b.MaxBytes = d.MaxBytes
+	}
+	if b.MaxDiffBytes == 0 {
+		b.MaxDiffBytes = d.MaxDiffBytes
+	}
+	if b.MaxEntries < 0 || b.MaxEntries > reportEntriesCeiling || b.MaxBytes < 0 || b.MaxBytes > reportBytesCeiling || b.MaxDiffBytes < 0 || b.MaxDiffBytes > reportDiffBytesCeiling {
+		return b, failure("invalid-options", "Report bounds must be positive and within 1,024 entries, 16 MiB per file and 1 MiB per diff.")
+	}
+	return b, nil
+}

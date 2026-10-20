@@ -39,13 +39,13 @@ var (
 	// Report command bounds (contracts/review-report.md#command-bounds).
 	specReportLog = integrationSpec{"log", reportMaxCommits, bothWidths(reportMaxCommits * reportRecordBytes), '\n', func(r []byte, w int) bool {
 		parts := bytes.Split(r, []byte{0})
-		return len(r) <= reportRecordBytes && len(parts) == 4 && hexExact(parts[0], w) && reportDatePattern.Match(parts[3])
+		return len(r)+1 <= reportRecordBytes && len(parts) == 4 && hexExact(parts[0], w) && reportDatePattern.Match(parts[3])
 	}}
 	// The base-side scan that finds candidate commits is bounded by the
 	// base-side commit bound of the proofs (FR-008).
 	specReportScan = integrationSpec{"log candidates", 4096, bothWidths(4096 * reportRecordBytes), '\n', func(r []byte, w int) bool {
 		parts := bytes.Split(r, []byte{0})
-		return len(r) <= reportRecordBytes && len(parts) == 2 && hexExact(parts[0], w)
+		return len(r)+1 <= reportRecordBytes && len(parts) == 2 && hexExact(parts[0], w)
 	}}
 	specReportBlobSizes = integrationSpec{"cat-file --batch-check", 2 * reportMaxFiles, [2]int64{2 * reportMaxFiles * 61, 2 * reportMaxFiles * 89}, '\n', func(r []byte, w int) bool {
 		fields := strings.Fields(string(r))
@@ -195,37 +195,9 @@ func (r *integrationRun) reportMergeTree(ctx context.Context, attrTree, base, ti
 	var tree string
 	var names []string
 	code, err := r.run(ctx, integrationCommand{attrTree: attrTree, args: []string{"merge-tree", "--write-tree", "--no-messages", "--name-only", "-z", base, tip}, tolerate: true, limit: reportTreeBytes}, func(out io.Reader) error {
-		reader := bufio.NewReaderSize(out, 64*1024)
-		field := func() (string, bool, error) {
-			b, e := reader.ReadSlice(0)
-			if e == io.EOF && len(b) == 0 {
-				return "", false, nil
-			}
-			if e != nil || len(b) > integrationPathLimit+1 {
-				return "", false, errIntegrationLimit
-			}
-			return string(b[:len(b)-1]), true, nil
-		}
-		first, ok, e := field()
-		if e != nil || !ok || !hexExact([]byte(first), r.width) {
-			return errIntegrationLimit
-		}
-		tree = first
-		for {
-			name, ok, e := field()
-			if e != nil {
-				return e
-			}
-			if !ok {
-				return nil
-			}
-			if len(names) >= reportRawRecords || !integrationPath([]byte(name)) {
-				return errIntegrationLimit
-			}
-			if !slices.Contains(names, name) {
-				names = append(names, name)
-			}
-		}
+		var e error
+		tree, names, e = parseReportMergeTree(out, r.width)
+		return e
 	})
 	if err == nil && (code != 0 && code != 1 || code == 0 && len(names) > 0) {
 		err = errIntegrationLimit
@@ -233,30 +205,82 @@ func (r *integrationRun) reportMergeTree(ctx context.Context, attrTree, base, ti
 	return tree, names, code, err
 }
 
+// parseReportMergeTree reads `OID NUL (PATH NUL)*`: the result tree and the
+// conflicted paths, at most 8,192 of them in 4,325,376 bytes.
+func parseReportMergeTree(out io.Reader, width int) (string, []string, error) {
+	reader := bufio.NewReaderSize(out, 64*1024)
+	var total int64
+	field := func() (string, bool, error) {
+		b, e := reader.ReadSlice(0)
+		total += int64(len(b))
+		if e == io.EOF && len(b) == 0 {
+			return "", false, nil
+		}
+		if e != nil || len(b) > integrationPathLimit+1 || total > reportTreeBytes {
+			return "", false, errIntegrationLimit
+		}
+		return string(b[:len(b)-1]), true, nil
+	}
+	tree, ok, err := field()
+	if err != nil || !ok || !hexExact([]byte(tree), width) {
+		return "", nil, errIntegrationLimit
+	}
+	var names []string
+	for {
+		name, ok, err := field()
+		if err != nil {
+			return "", nil, err
+		}
+		if !ok {
+			return tree, names, nil
+		}
+		if !integrationPath([]byte(name)) {
+			return "", nil, errIntegrationLimit
+		}
+		if !slices.Contains(names, name) {
+			if len(names) >= reportRawRecords {
+				return "", nil, errIntegrationLimit
+			}
+			names = append(names, name)
+		}
+	}
+}
+
 type reportChange struct {
 	oldMode, newMode, oldOID, newOID, status, path string
+}
+
+// parseReportRaw reads `:OLDMODE NEWMODE OID OID STATUS NUL PATH NUL` records,
+// at most 8,192 of them in 34,603,008 bytes.
+func parseReportRaw(src io.Reader, width int) ([]reportChange, error) {
+	var out []reportChange
+	var total int64
+	reader := bufio.NewReaderSize(src, 64*1024)
+	for {
+		meta, e := reader.ReadSlice(0)
+		if e == io.EOF && len(meta) == 0 {
+			return out, nil
+		}
+		path, pe := reader.ReadSlice(0)
+		total += int64(len(meta) + len(path))
+		if e != nil || pe != nil || len(out) >= reportRawRecords || total > reportRawBytes || len(meta) < 2 || meta[0] != ':' {
+			return nil, errIntegrationLimit
+		}
+		f := strings.Fields(string(meta[1 : len(meta)-1]))
+		if len(f) != 5 || !reportModePattern.MatchString(f[0]) || !reportModePattern.MatchString(f[1]) || !hexExact([]byte(f[2]), width) || !hexExact([]byte(f[3]), width) || len(f[4]) != 1 || !integrationPath(path[:len(path)-1]) {
+			return nil, errIntegrationLimit
+		}
+		out = append(out, reportChange{f[0], f[1], f[2], f[3], f[4], string(path[:len(path)-1])})
+	}
 }
 
 // reportRaw reads `diff-tree -r --raw --no-renames --no-abbrev -z` of two sides.
 func (r *integrationRun) reportRaw(ctx context.Context, attrTree string, pair [2]string) ([]reportChange, error) {
 	var out []reportChange
 	_, err := r.run(ctx, integrationCommand{attrTree: attrTree, args: []string{"diff-tree", "-r", "--raw", "--no-renames", "--no-abbrev", "-z", pair[0], pair[1]}, limit: reportRawBytes}, func(src io.Reader) error {
-		reader := bufio.NewReaderSize(src, 64*1024)
-		for {
-			meta, e := reader.ReadSlice(0)
-			if e == io.EOF && len(meta) == 0 {
-				return nil
-			}
-			path, pe := reader.ReadSlice(0)
-			if e != nil || pe != nil || len(out) >= reportRawRecords || len(meta) < 2 || meta[0] != ':' {
-				return errIntegrationLimit
-			}
-			f := strings.Fields(string(meta[1 : len(meta)-1]))
-			if len(f) != 5 || !reportModePattern.MatchString(f[0]) || !reportModePattern.MatchString(f[1]) || !hexExact([]byte(f[2]), r.width) || !hexExact([]byte(f[3]), r.width) || len(f[4]) != 1 || !integrationPath(path[:len(path)-1]) {
-				return errIntegrationLimit
-			}
-			out = append(out, reportChange{f[0], f[1], f[2], f[3], f[4], string(path[:len(path)-1])})
-		}
+		var e error
+		out, e = parseReportRaw(src, r.width)
+		return e
 	})
 	return out, err
 }
