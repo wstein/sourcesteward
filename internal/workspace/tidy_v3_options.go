@@ -1,7 +1,38 @@
 // SPDX-License-Identifier: EUPL-1.2
 package workspace
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+	"sort"
+	"strconv"
+)
+
+// v3HintSelector renders a hint as the flag text that selected it, escaped and
+// bounded to the Spec 029 4,096-byte message limit.
+func v3HintSelector(h V3PRHint) string {
+	q := strconv.Quote(h.OID + "=" + strconv.FormatInt(h.Number, 10))
+	if len(q) > 4096 {
+		q = q[:4096]
+	}
+	return "--pr " + q[1:len(q)-1]
+}
+
+// normalizeV3PRHints keys hints by head OID: identical repeats collapse to one
+// hint (Spec 031 FR-014) and the result is ordered by OID so equal selections
+// store equal plans. Callers validate conflicts first.
+func normalizeV3PRHints(hints []V3PRHint) []V3PRHint {
+	byOID := map[string]V3PRHint{}
+	for _, h := range hints {
+		byOID[h.OID] = h
+	}
+	out := make([]V3PRHint, 0, len(byOID))
+	for _, h := range byOID {
+		out = append(out, h)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].OID < out[j].OID })
+	return out
+}
 
 type V3PlanOptions struct {
 	Path, Base, StateDir               string
@@ -77,12 +108,15 @@ func validateV3PlanOptions(o V3PlanOptions) error {
 		}
 		refs[name] = true
 	}
-	hints := map[string]bool{}
+	hints := map[string]int64{}
 	for _, h := range o.PRHints {
-		if !v3OID(h.OID, "sha1") || h.Number <= 0 || hints[h.OID] {
+		if !v3OID(h.OID, "sha1") || h.Number <= 0 {
 			return bad()
 		}
-		hints[h.OID] = true
+		if n, ok := hints[h.OID]; ok && n != h.Number {
+			return failure("invalid-options", fmt.Sprintf("%s conflicts with %s for head %s.", v3HintSelector(V3PRHint{OID: h.OID, Number: n}), v3HintSelector(h), h.OID))
+		}
+		hints[h.OID] = h.Number
 	}
 	if len(o.Refs)+len(o.PRHints)+len(o.ProtectWorktrees) > observationLimit {
 		return bad()

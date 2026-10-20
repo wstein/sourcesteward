@@ -143,6 +143,7 @@ type fixtureTidyV3Hosting struct {
 	repo                        hosting.TidyRepositoryIdentity
 	rows                        map[string]hosting.TidyHeadEvidence
 	targets                     [][]string
+	hintCalls                   []map[string]int
 	rechecks                    []hosting.TidyPullRequest
 	discoverErr, errorOnRecheck error
 	budget                      hosting.TidyHTTPBudget
@@ -156,6 +157,7 @@ func (s *fixtureTidyV3Hosting) Close()                                         {
 func (s *fixtureTidyV3Hosting) RevalidateRepository(ctx context.Context) error { return ctx.Err() }
 func (s *fixtureTidyV3Hosting) DiscoverPullRequests(ctx context.Context, targets []string, hints map[string]int) ([]hosting.TidyHeadEvidence, error) {
 	s.targets = append(s.targets, append([]string{}, targets...))
+	s.hintCalls = append(s.hintCalls, hints)
 	if s.onDiscover != nil {
 		s.onDiscover()
 	}

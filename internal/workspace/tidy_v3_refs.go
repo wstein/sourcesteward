@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -135,14 +136,21 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 			return failTidyV3(r, failure("unknown-reference", "A selected exact local reference was not completely observed."))
 		}
 	}
+	o.PRHints = normalizeV3PRHints(o.PRHints)
 	hints := map[string]int{}
-	hintNumbers := map[int64]bool{}
+	hintSelectors := map[int64]V3PRHint{}
 	for _, h := range o.PRHints {
-		if !selectedOIDs[h.OID] || h.Number > int64(^uint(0)>>1) || hintNumbers[h.Number] {
-			return failTidyV3(r, failure("invalid-options", "PR hints must name selected full native heads and supported numbers."))
+		if !selectedOIDs[h.OID] {
+			return failTidyV3(r, failure("invalid-options", fmt.Sprintf("%s names a head that no selected reference carries.", v3HintSelector(h))))
+		}
+		if h.Number > int64(^uint(0)>>1) {
+			return failTidyV3(r, failure("invalid-options", fmt.Sprintf("%s names an unsupported PR number.", v3HintSelector(h))))
+		}
+		if first, ok := hintSelectors[h.Number]; ok {
+			return failTidyV3(r, failure("invalid-options", fmt.Sprintf("%s and %s name the same PR number for different heads.", v3HintSelector(first), v3HintSelector(h))))
 		}
 		hints[h.OID] = int(h.Number)
-		hintNumbers[h.Number] = true
+		hintSelectors[h.Number] = h
 	}
 	// Validate the complete native baseline before credentials, including every
 	// symbolic chain and all registration facts, not just selected references.
@@ -150,6 +158,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		return failTidyV3(r, failure("incomplete-evidence", "Complete native references and canonical registrations are required."))
 	}
 	var session tidyV3Hosting
+	var discoveryNotes []string
 	if o.Online {
 		raw, config, e := qualifyTidyV3Remote(observation, o.Remote, o.Repo)
 		if e != nil {
@@ -176,9 +185,11 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 			return failTidyV3(r, failure("evidence-changed", "Provider repository does not match the selected native remote."))
 		}
 		p.Online = &V3OnlineSelection{Repository: tidyV3Repository(repo), Remote: o.Remote, RemoteURL: raw, ConfigDigest: config, PRHints: append([]V3PRHint{}, o.PRHints...), ObservationDigests: []string{}, BudgetPolicy: "github-read-v3"}
-		if err = c.providerProofs(ctx, session, &p, hints); err != nil {
+		notes, err := c.providerProofs(ctx, session, &p, hints)
+		if err != nil {
 			return failTidyV3(r, err)
 		}
+		discoveryNotes = notes
 		if err = revalidateTidyV3Provider(ctx, session, p); err != nil {
 			return failTidyV3(r, err)
 		}
@@ -234,10 +245,12 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		return failTidyV3(r, err)
 	}
 	r.Status, r.Plan, r.Boundary.Complete = "ok", &p, true
-	r.Limitations = append([]string{}, p.RecoveryLimits...)
+	r.Limitations = append(append([]string{}, p.RecoveryLimits...), discoveryNotes...)
 	return r
 }
-func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosting, p *V3Plan, hints map[string]int) error {
+
+// providerProofs returns plan notes naming discovery that could not decide.
+func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosting, p *V3Plan, hints map[string]int) ([]string, error) {
 	targets := []string{}
 	seen := map[string]bool{}
 	requestHints := map[string]int{}
@@ -251,19 +264,20 @@ func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosti
 		}
 	}
 	if len(targets) == 0 {
-		return nil
+		return nil, nil
 	}
+	sort.Strings(targets)
 	rows, err := s.DiscoverPullRequests(ctx, targets, requestHints)
 	if err != nil {
-		return tidyV3HostingError(err)
+		return nil, tidyV3HostingError(err)
 	}
 	if len(rows) != len(targets) {
-		return failure("hosting-evidence-unavailable", "Provider discovery did not return every selected head.")
+		return nil, failure("hosting-evidence-unavailable", "Provider discovery did not return every selected head.")
 	}
 	byOID := map[string]hosting.TidyHeadEvidence{}
 	for i, row := range rows {
 		if row.HeadOID != targets[i] {
-			return failure("hosting-evidence-unavailable", "Provider discovery returned an inconsistent target order.")
+			return nil, failure("hosting-evidence-unavailable", "Provider discovery returned an inconsistent target order.")
 		}
 		byOID[row.HeadOID] = row
 	}
@@ -277,7 +291,7 @@ func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosti
 			return c.ancestry(ctx, p.Expected, target, base)
 		})
 		if e != nil {
-			return e
+			return nil, e
 		}
 		setTidyV3CandidateProof(&p.Candidates[i], proof)
 		if proof.Evidence != nil && proof.Evidence.GitHub != nil {
@@ -287,7 +301,39 @@ func (c tidyV3RefsCoordinator) providerProofs(ctx context.Context, s tidyV3Hosti
 			}
 		}
 	}
-	return nil
+	return tidyV3DiscoveryNotes(rows, p.Candidates), nil
+}
+
+// tidyV3DiscoveryNotes counts OIDs and refs whose discovery stayed undecided.
+// Those refs are retained as integration-not-proven; no note claims absence.
+func tidyV3DiscoveryNotes(rows []hosting.TidyHeadEvidence, candidates []V3Candidate) []string {
+	refs := map[string]int{}
+	for _, v := range candidates {
+		refs[v.OID]++
+	}
+	oids, covered := map[string]int{}, map[string]int{}
+	for _, row := range rows {
+		if row.Result == "discovery-incomplete" || row.Result == "discovery-budget-exhausted" {
+			oids[row.Result]++
+			covered[row.Result] += refs[row.HeadOID]
+		}
+	}
+	notes := []string{}
+	for _, result := range []string{"discovery-incomplete", "discovery-budget-exhausted"} {
+		if oids[result] == 0 {
+			continue
+		}
+		unit := "head OIDs"
+		if oids[result] == 1 {
+			unit = "head OID"
+		}
+		explain := "the closed pull request collection reached its page bound; found merged heads remain proof, absence is not claimed"
+		if result == "discovery-budget-exhausted" {
+			explain = "the shared 128-request budget could not cover their candidate reads; rerun with --pr OID=N for these heads"
+		}
+		notes = append(notes, fmt.Sprintf("%s: %d %s (%d refs) retained as integration-not-proven; %s.", result, oids[result], unit, covered[result], explain))
+	}
+	return notes
 }
 func setTidyV3CandidateProof(c *V3Candidate, p V3CommitProof) {
 	c.Decision, c.Reason, c.Proof, c.Evidence = p.Decision, p.Reason, p.Proof, p.Evidence
