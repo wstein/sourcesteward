@@ -27,6 +27,7 @@ func tidyCommandWithV3Operations(run func(context.Context, workspace.TidyPlanOpt
 	var v3 workspace.V3PlanOptions
 	var contract string
 	var hints []string
+	var proofKinds string
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("contract") {
 			if contract != "3" {
@@ -37,6 +38,13 @@ func tidyCommandWithV3Operations(run func(context.Context, workspace.TidyPlanOpt
 			}
 			v3.Path, v3.Base, v3.StateDir, v3.Refs = workspacePath(args), options.Base, options.StateDir, options.Refs
 			v3.Task, v3.Owner, v3.RemoveRegistration, v3.RemoveFiles = options.Task, options.Owner, options.RemoveRegistration, options.RemoveFiles
+			if cmd.Flags().Changed("integration-proof") {
+				kinds, err := parseTidyV3ProofKinds(proofKinds)
+				if err != nil {
+					return err
+				}
+				v3.IntegrationProofs = kinds
+			}
 			if err := validateTidyV3PlanCLI(args, &v3, hints); err != nil {
 				return err
 			}
@@ -63,7 +71,7 @@ func tidyCommandWithV3Operations(run func(context.Context, workspace.TidyPlanOpt
 	plan.Flags().BoolVar(&options.RemoveRegistration, "remove-registration", false, "Plan exact native registration removal; required for task retirement")
 	plan.Flags().StringVar(&options.RemoveFiles, "remove-files", "", "Separately select the exact owned absolute destination for filesystem removal")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
-	addTidyV3PlanFlags(plan, &contract, &v3, &hints)
+	addTidyV3PlanFlags(plan, &contract, &v3, &hints, &proofKinds)
 	var applyOptions workspace.TidyApplyOptions
 	var applyStructured bool
 	var applyContract string
