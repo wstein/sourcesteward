@@ -5,20 +5,20 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / '.github/workflows/ci.yml').read_text()
+CONFORMANCE = (ROOT / '.github/workflows/conformance.yml').read_text()
 MIN_TEST_MINUTES = 40
 JOB_MARGIN_MINUTES = 5
 
 
-def job_text(name):
-    match = re.search(r'^  %s:\n(.*?)(?=^  [a-z]+:\n|\Z)' % name, WORKFLOW, re.S | re.M)
+def job_text(name, workflow=WORKFLOW):
+    match = re.search(r'^  %s:\n(.*?)(?=^  [a-z-]+:\n|\Z)' % name, workflow, re.S | re.M)
     assert match, name
     return match.group(1)
 
 
 class CILimitTests(unittest.TestCase):
     def test_race_test_jobs_have_explicit_timeout_below_job_limit(self):
-        for job in ('check', 'conformance'):
-            text = job_text(job)
+        for job, text in (('check', job_text('check')), ('suite', job_text('suite', CONFORMANCE))):
             tests = re.findall(r'go test [^\n]*-race[^\n]*', text)
             self.assertTrue(tests, job)
             job_limit = int(re.search(r'timeout-minutes: (\d+)', text).group(1))

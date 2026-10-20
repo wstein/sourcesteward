@@ -9,10 +9,13 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / '.github/workflows/ci.yml').read_text()
+CONFORMANCE = (ROOT / '.github/workflows/conformance.yml').read_text()
+FULL = (ROOT / '.github/workflows/ci-full.yml').read_text()
+ALL = (WORKFLOW, CONFORMANCE, FULL)
 
 
-def job_text(name):
-    match = re.search(r'^  %s:\n(.*?)(?=^  [a-z-]+:\n|\Z)' % name, WORKFLOW, re.S | re.M)
+def job_text(name, text=WORKFLOW):
+    match = re.search(r'^  %s:\n(.*?)(?=^  [a-z-]+:\n|\Z)' % name, text, re.S | re.M)
     assert match, name
     return match.group(1)
 
@@ -54,27 +57,30 @@ class CheckJobTests(unittest.TestCase):
 
 class CacheTests(unittest.TestCase):
     def test_every_action_is_pinned_by_full_commit_sha_with_version_comment(self):
-        uses = re.findall(r'^\s*-?\s*uses: (\S+)(.*)$', WORKFLOW, re.M)
+        uses = [u for text in ALL for u in re.findall(r'^\s*-?\s*uses: (\S+)(.*)$', text, re.M)]
         self.assertTrue(uses)
         for action, rest in uses:
+            if action.startswith('./'):
+                continue  # local reusable workflow, same commit
             self.assertRegex(action, r'^[\w.-]+/[\w./-]+@[0-9a-f]{40}$')
             self.assertRegex(rest, r'^\s+# v\d+\.\d+\.\d+$', action)
 
     def test_setup_go_caches_modules_and_build_with_explicit_dependency_path(self):
-        for job in ('check', 'conformance'):
-            text = job_text(job)
+        for text in (job_text('check'), job_text('suite', CONFORMANCE)):
             self.assertRegex(text, r'actions/setup-go@[0-9a-f]{40} # v[\d.]+\n        with:\n          go-version-file: go.mod\n          cache: true\n          cache-dependency-path: go.sum\n')
 
     def test_git_build_is_cached_by_exact_version_os_and_arch(self):
-        text = job_text('conformance')
+        text = job_text('suite', CONFORMANCE)
         self.assertRegex(text, r'actions/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+')
-        self.assertIn('path: .tools/conformance/${{ matrix.lane }}/git', text)
+        self.assertIn('path: .tools/conformance/${{ inputs.lane }}/git', text)
         key = re.search(r'key: (stw-git-[^\n]+)', text).group(1)
-        for part in ('runner.os', 'runner.arch', 'steps.gitpin.outputs.version', 'matrix.lane'):
+        for part in ('runner.os', 'runner.arch', 'steps.gitpin.outputs.version', 'inputs.lane',
+                     "hashFiles('scripts/install-backends.py', 'scripts/backend-releases.json')"):
             self.assertIn(part, key)
+        self.assertNotIn('restore-keys', text)
 
     def test_cache_hit_skips_the_git_build_but_keeps_the_version_assertion(self):
-        text = job_text('conformance')
+        text = job_text('suite', CONFORMANCE)
         self.assertIn('GIT_CACHE_HIT: ${{ steps.gitcache.outputs.cache-hit }}', text)
         self.assertIn('"$GIT_CACHE_HIT" = true', text)
         self.assertIn('--tool jj', text)
@@ -83,19 +89,53 @@ class CacheTests(unittest.TestCase):
 
 
 class TieringTests(unittest.TestCase):
-    CONDITION = ("if: github.event_name != 'pull_request' || "
+    CONDITION = ("github.event_name != 'pull_request' || "
                  "github.event.pull_request.base.ref == github.event.repository.default_branch || "
                  "contains(github.event.pull_request.labels.*.name, 'ci-full')")
 
-    def test_conformance_is_tiered_by_base_branch_or_ci_full_label(self):
-        self.assertIn(self.CONDITION, job_text('conformance'))
+    def test_ci_conformance_is_tiered_by_base_branch_or_ci_full_label(self):
+        text = job_text('conformance')
+        self.assertIn('if: ' + self.CONDITION + '\n', text)
+        self.assertIn('uses: ./.github/workflows/conformance.yml', text)
+        self.assertIn('lane: [minimum, current]', text)
+        self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', text)
 
     def test_check_job_always_runs(self):
         self.assertNotRegex(job_text('check'), r'(?m)^    if:')
 
-    def test_label_changes_start_a_run_so_ci_full_takes_effect(self):
+    def test_ci_does_not_react_to_label_events(self):
         on = WORKFLOW.split('\npermissions:', 1)[0]
-        self.assertIn('types: [opened, synchronize, reopened, labeled]', on)
+        self.assertNotIn('labeled', on)
+        self.assertNotIn('types:', on)
+
+    def test_pages_waits_for_check_and_conformance(self):
+        self.assertIn('needs: [check, conformance]', job_text('pages'))
+
+
+class CiFullWorkflowTests(unittest.TestCase):
+    def test_runs_only_on_the_label_event_for_ci_full(self):
+        on = FULL.split('\npermissions:', 1)[0]
+        self.assertRegex(on, r'(?m)^  pull_request:\n    types: \[labeled\]\n')
+        self.assertNotIn('push:', on)
+        self.assertIn("if: github.event.label.name == 'ci-full'", job_text('conformance', FULL))
+
+    def test_permissions_are_read_only_and_match_ci(self):
+        for text in (FULL, CONFORMANCE, WORKFLOW):
+            head = text.split('\njobs:', 1)[0]
+            self.assertRegex(head, r'(?m)^permissions:\n  contents: read\n(?!  )')
+
+    def test_calls_the_reusable_suite_for_both_lanes(self):
+        text = job_text('conformance', FULL)
+        self.assertIn('uses: ./.github/workflows/conformance.yml', text)
+        self.assertIn('lane: [minimum, current]', text)
+        self.assertIn('lane: ${{ matrix.lane }}', text)
+
+    def test_reusable_workflow_is_call_only_with_a_stable_job_name(self):
+        head = CONFORMANCE.split('\npermissions:', 1)[0]
+        self.assertIn('workflow_call:', head)
+        for forbidden in ('push:', 'pull_request:', 'workflow_dispatch:', 'schedule:'):
+            self.assertNotIn(forbidden, head)
+        self.assertIn('name: suite', job_text('suite', CONFORMANCE))
 
 
 if __name__ == '__main__':
