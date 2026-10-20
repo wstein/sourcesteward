@@ -194,7 +194,7 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 		seen[ref] = true
 	}
 	o.PRHints = []workspace.V3PRHint{}
-	selectors := map[string]string{}
+	selectors := map[string]tidyV3Selector{}
 	for _, hint := range hints {
 		oid, number, ok := strings.Cut(hint, "=")
 		if !ok || len(oid) != 40 || strings.Trim(oid, "0") == "" || number == "" {
@@ -215,13 +215,13 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 			return tidyV3MalformedHint(hint)
 		}
 		if first, ok := selectors[oid]; ok {
-			if first == hint {
-				continue
+			if first.n == n {
+				continue // same PR number, however spelled (07 and 7)
 			}
-			return fmt.Errorf("--pr %s conflicts with --pr %s for head %s", tidyV3Quote(first), tidyV3Quote(hint), oid)
+			return fmt.Errorf("--pr %s conflicts with --pr %s for head %s", tidyV3Quote(first.text), tidyV3Quote(hint), oid)
 		}
 		o.PRHints = append(o.PRHints, workspace.V3PRHint{OID: oid, Number: n})
-		selectors[oid] = hint
+		selectors[oid] = tidyV3Selector{hint, n}
 	}
 	return nil
 }
@@ -323,14 +323,35 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 	return err
 }
 
-// tidyV3Quote escapes a flag value and bounds it to the 4,096-byte message limit.
+// tidyV3Quote escapes a flag value rune by rune and bounds the quoted result to
+// the 4,096-byte message limit, ending with "..." inside the closing quote when
+// it had to cut, so a cut never splits a rune or an escape sequence.
 func tidyV3Quote(v string) string {
+	const limit = 4096
 	q := strconv.Quote(v)
-	if len(q) > 4096 {
-		q = q[:4096]
+	if len(q) <= limit {
+		return q
 	}
-	return q
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := 0; i < len(v); {
+		_, size := utf8.DecodeRuneInString(v[i:])
+		part := strconv.Quote(v[i : i+size])
+		part = part[1 : len(part)-1]
+		if b.Len()+len(part)+len(`..."`) > limit {
+			break
+		}
+		b.WriteString(part)
+		i += size
+	}
+	b.WriteString(`..."`)
+	return b.String()
 }
 func tidyV3MalformedHint(v string) error {
 	return fmt.Errorf("--pr %s is not FULL_OID=POSITIVE_NUMBER", tidyV3Quote(v))
+}
+
+type tidyV3Selector struct {
+	text string
+	n    int64
 }
