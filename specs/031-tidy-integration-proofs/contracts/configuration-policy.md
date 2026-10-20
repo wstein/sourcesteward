@@ -4,7 +4,9 @@ Subordinate to the [specification](../spec.md) FR-019..FR-023.
 
 ## Planning environment
 
-One constant argument list `planningConfigArgs`, used by planning and by apply re-evaluation (a test asserts equality): `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c core.untrackedCache=false -c merge.renormalize=false -c merge.renames=true -c merge.directoryRenames=conflict -c merge.renameLimit=1000 -c diff.renames=true -c diff.renameLimit=1000 -c core.autocrlf=false -c gc.auto=0 -c maintenance.auto=false -c protocol.ext.allow=never` plus the output constants below, with `--no-optional-locks`, `--no-replace-objects`. Environment: the existing sandbox environment with no inherited `GIT_*` override (explicitly including `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER`, `GIT_ASKPASS`), `GIT_CONFIG_NOSYSTEM=1`, `GIT_ATTR_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` set to the platform null file, and a private empty `HOME` and `XDG_CONFIG_HOME` (temporary directories the process owns) for every proof command, `GIT_NO_LAZY_FETCH=1`, `GIT_TERMINAL_PROMPT=0`. Attribute-dependent commands pin `--attr-source` to the tip tree (spec FR-010a). One admission read lists effective configuration with origins (global and system included) for classification and notes; it runs no helper.
+One constant argument list `planningConfigArgs`, used by planning and by apply re-evaluation (a test asserts equality): `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c core.untrackedCache=false -c merge.renormalize=false -c merge.renames=true -c merge.directoryRenames=conflict -c merge.renameLimit=1000 -c diff.renames=true -c diff.renameLimit=1000 -c core.autocrlf=false -c gc.auto=0 -c maintenance.auto=false -c protocol.ext.allow=never` plus the output constants below (each is a `-c` argument; a test sets the opposite repository value for every constant and requires the constant to win), with `--no-optional-locks`, `--no-replace-objects`. Environment: the existing sandbox environment with no inherited `GIT_*` override (explicitly including `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER`, `GIT_ASKPASS`), `GIT_CONFIG_NOSYSTEM=1`, `GIT_ATTR_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` set to the platform null file, and a private empty `HOME` and `XDG_CONFIG_HOME` (temporary directories the process owns) for every proof command, `GIT_NO_LAZY_FETCH=1`, `GIT_TERMINAL_PROMPT=0`. Attribute-dependent commands pin `--attr-source` to the tip tree (spec FR-010a). One admission read lists effective configuration with origins (global and system included) for classification and notes; it runs no helper.
+
+**Planning accepts, apply refuses.** The five configuration classes that planning neutralizes and records (`core.hooksPath`, executable default hooks, `core.fsmonitor`, `submodule.*`, gitlinks) are all refused again by the strict apply admission that runs before any journal, recovery reference or effect. Consequence: a repository with submodule configuration or gitlinks (the Anchorage umbrella) can be planned but not applied until a later specification defines a supported apply policy for them. The plan note says `refuses-apply` for each.
 
 Why these keys change (versus Spec 029's blanket refusal): only `core.hooksPath`, `core.fsmonitor` and `submodule.*` become neutralized, because no read-only planning command runs hooks, fsmonitor or `git submodule` and the arguments disable them on every command (the precedent in inventory and release reads). `hook.*` and `core.attributesFile` stay refused (a command-line `core.hooksPath` does not neutralize config-based hooks; attributes change content evaluation). The default `.git/hooks` fingerprint stays bound into the safety digest.
 
@@ -24,6 +26,7 @@ Constants passed with `-c` (or explicit command-line options) wherever output pa
 | `core.abbrev` | `auto`; commands use `--no-abbrev` or full `%H` | OID widths |
 | `i18n.logOutputEncoding` | `UTF-8` | subject bytes |
 | `log.decorate`, `log.mailmap`, `log.follow` | `no`, `false`, `false` | log output shape and author names |
+| `diff.orderFile`, `diff.relative`, `diff.ignoreSubmodules` | `/dev/null` (the platform null file; an empty value fails `git log -p`), `false`, `none` | file order, path prefix and submodule rows in diff streams |
 | `format.pretty` | overridden by an explicit `--format=...` on every `log` | line grammar |
 
 ## Classification
@@ -35,8 +38,9 @@ Dispositions: **neutralized** (plan succeeds, plan note), **review reason** (pla
 | `core.hooksPath` | neutralized | refuses a hook-running effect |
 | `hook.*` | refused (`git-unsafe-configuration`) | refused |
 | default executable `.git/hooks/*` | fingerprint retained, noted | refuses a hook-running effect |
-| `core.fsmonitor` | neutralized | status checks neutralized, noted |
-| `submodule.*` | neutralized | retirement retains `submodule-present` |
+| `core.fsmonitor` | neutralized | refused by the strict apply admission (`git-unsafe-configuration`, class `core.fsmonitor`); note `apply_effect` `refuses-apply` |
+| `submodule.*` | neutralized | refused by the strict apply admission (class `submodule.*`); plan note `apply_effect` `refuses-apply`; a retirement target with initialized submodules (a submodule `url` or `active` entry or populated `$GIT_DIR/modules`, not `submodule.recurse` alone) is retained as `submodule-present` at planning |
+| gitlinks in the base tree | accepted as data, note class `gitlinks` | refused by the strict apply admission (`git-tree-refused`); note `apply_effect` `refuses-apply` |
 | `core.pager`, `core.editor`, `core.sshCommand`, `core.askPass`, `credential.*`, `gpg.*` | neutralized (never invoked, environment stripped), noted when set | unchanged |
 | `diff.external`, `diff.<d>.textconv` | neutralized for proof commands (`--no-ext-diff --no-textconv`); `git range-diff` ignores that, so range pairing is skipped when any textconv is configured | unchanged |
 | executable `filter.*`, `merge.*.driver` | review reason `merge-driver` (`merge-noop` only) | existing stage2 behavior retained |
@@ -59,15 +63,15 @@ Each row is a temporary-repository fixture; hooks, filters, drivers, pagers and 
 | --- | --- | --- | --- |
 | C1 | local `core.hooksPath` with a `reference-transaction` hook | neutralized, plan succeeds | refuses ref deletion, class named |
 | C2 | global `core.hooksPath` | neutralized | same |
-| C3 | `submodule.x.url`, `submodule.x.update=!helper`, a gitlink | neutralized | unchanged |
-| C4 | `submodule.recurse=true` | neutralized | unchanged |
-| C5 | `core.fsmonitor=helper` | neutralized | status neutralized |
+| C3 | `submodule.x.url`, `submodule.x.update=!helper`, a gitlink | neutralized, notes `submodule.*` and `gitlinks` | apply refuses (`git-unsafe-configuration`, `submodule.*`) |
+| C4 | `submodule.recurse=true` | neutralized | apply refuses (`submodule.*`) |
+| C5 | `core.fsmonitor=helper` | neutralized | apply refuses (`core.fsmonitor`) |
 | C6 | `filter.x.clean=helper` with matching attribute | `merge-driver` for `merge-noop`; other classes run | stage2 behavior |
 | C7 | `merge.x.driver=helper` with matching attribute | `merge-driver`; `merge-tree` is never run (proof or report), report shows `git diff-tree -p --no-ext-diff --no-textconv M B` (plumbing), verdict `unclear`, helper marker absent | stage2 behavior |
 | C8 | `diff.external=helper`, `diff.x.textconv=helper` | neutralized, proofs run; report with a named consolidation range skips range pairing with a note, helper marker absent | unchanged |
 | C9 | `includeIf` | refused, class named | refused |
 | C10 | `extensions.partialclone` | refused | refused |
-| C11 | umbrella: three gitlinks, `submodule.*` set | plan succeeds | unchanged |
+| C11 | umbrella: three gitlinks, `submodule.*` set | plan succeeds | apply refuses (`submodule.*`) |
 | C12 | `hook.<name>.command` | refused | refused |
 | C13 | `include.path` file defining `core.hooksPath` | neutralized via effective key | as C1 |
 | C14 | `core.pager`, `core.editor`, `credential.helper`, `core.sshCommand`, `gpg.program`, `core.askPass` set to helpers, and a signed commit with `log.showSignature=true` and `gpg.program=helper` | plan succeeds, notes; every `git log` and `range-diff` of proofs and report stays marker-free | unchanged |

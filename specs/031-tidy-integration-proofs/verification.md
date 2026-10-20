@@ -28,3 +28,10 @@ See "Stage2 baseline" in [research.md](research.md): paths and symbols confirmed
 ## Known limit
 
 `internal/workspace/retirement_git.go` (the `gitRead(..., "worktree", "list", "--porcelain", "-z")` call in the retirement apply path) still buffers at 64 KiB. Scenario: a repository whose `worktree list --porcelain -z` output exceeds 64 KiB (for example the 120-worktree long-path fixture used for T003) plans a retirement successfully with the streamed reads, but retirement apply then refuses with `git-output-limit`. No code change in this work package; a tracking issue is filed by the owner.
+
+## Known limits (Phase 3 configuration policy, work package B)
+
+- The `info/attributes` content digest is not bound into the plan identity; that binding belongs to T018. Planning only records the `attribute-source` note.
+- FR-020 "unknown executable-looking keys are refused by class" is not implemented: planning refuses the listed classes only. Unknown keys are not refused.
+- Tree-attribute scans (`merge-attribute`, `diff-attribute`), the hard stops (`history-override`, `unsupported-metadata`), `gitlink-change` and matrix rows C26, C28, C29, C33, C35, C36 belong to the proof tasks (T014, T016); grafts, shallow and alternates keep their existing planning refusals meanwhile.
+- Planning accepts hooksPath, executable default hooks, `core.fsmonitor`, `submodule.*` and gitlinks; the strict apply admission refuses all five, so an umbrella repository with submodules or gitlinks can be planned but not applied (owner decision recorded in the configuration policy contract).
