@@ -38,6 +38,12 @@ type TidyHeadEvidence struct {
 	HeadOID     string           `json:"head_oid"`
 	Reason      string           `json:"reason"`
 	PullRequest *TidyPullRequest `json:"pull_request"`
+	// Result and Coverage report how the row was reached (Spec 031 FR-017):
+	// github-merged-head, no-merged-pr, discovery-incomplete,
+	// discovery-budget-exhausted or ambiguous-needs-hint, and whether the
+	// closed collection was read to an authoritative end.
+	Result   string `json:"result"`
+	Coverage string `json:"coverage"`
 }
 
 type tidyPRRef struct {
@@ -199,7 +205,10 @@ type tidyPRHint struct {
 	Head   string
 }
 
-func (s *TidySession) discoverPRHints(ctx context.Context, targets map[string]bool) (map[string][]tidyPRHint, error) {
+// discoverPRHints reads the closed collection. The boolean reports an
+// authoritative end within the page and record bounds; a tenth full page
+// without one returns the rows found so far and false, never an error.
+func (s *TidySession) discoverPRHints(ctx context.Context, targets map[string]bool) (map[string][]tidyPRHint, bool, error) {
 	result := map[string][]tidyPRHint{}
 	ids := map[int64]bool{}
 	nodes := map[string]bool{}
@@ -209,11 +218,11 @@ func (s *TidySession) discoverPRHints(ctx context.Context, targets map[string]bo
 		endpoint := fmt.Sprintf("repos/%s/%s/pulls?state=closed&per_page=100&page=%d", s.selected.Owner, s.selected.Name, page)
 		raw, header, err := s.get(ctx, endpoint)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		var rows []json.RawMessage
 		if json.Unmarshal(raw, &rows) != nil || rows == nil || len(rows) > 100 {
-			return nil, errors.New("closed PR collection is incomplete or invalid")
+			return nil, false, errors.New("closed PR collection is incomplete or invalid")
 		}
 		for _, row := range rows {
 			var p struct {
@@ -226,13 +235,13 @@ func (s *TidySession) discoverPRHints(ctx context.Context, targets map[string]bo
 				} `json:"head"`
 			}
 			if decodeTidyJSON(row, &p) != nil || p.ID == nil || *p.ID <= 0 || p.NodeID == nil || !tidyAtom(*p.NodeID, 256) || p.Number == nil || *p.Number <= 0 || p.State == nil || *p.State != "closed" || p.Head == nil || p.Head.SHA == nil || !fullSHA(*p.Head.SHA) || ids[*p.ID] || nodes[*p.NodeID] || numbers[*p.Number] {
-				return nil, errors.New("closed PR collection has malformed or duplicate identities")
+				return nil, false, errors.New("closed PR collection has malformed or duplicate identities")
 			}
 			ids[*p.ID] = true
 			nodes[*p.NodeID] = true
 			numbers[*p.Number] = true
 			if len(ids) > maxRecords {
-				return nil, ErrTidyLimit
+				return nil, false, ErrTidyLimit
 			}
 			if targets[*p.Head.SHA] {
 				result[*p.Head.SHA] = append(result[*p.Head.SHA], tidyPRHint{ID: *p.ID, NodeID: *p.NodeID, Number: *p.Number, Head: *p.Head.SHA})
@@ -240,18 +249,26 @@ func (s *TidySession) discoverPRHints(ctx context.Context, targets map[string]bo
 		}
 		terminal, err := tidyPagination(header, endpoint, page, len(rows), &lastPage)
 		if err != nil {
-			return nil, err
+			if errors.Is(err, ErrTidyLimit) && page == maxPages && len(rows) == 100 {
+				return result, false, nil
+			}
+			return nil, false, err
 		}
 		if terminal {
-			return result, nil
+			return result, true, nil
 		}
 	}
-	return nil, ErrTidyLimit
+	return result, false, nil
 }
 
-// DiscoverPullRequests performs one complete unfiltered closed collection for
-// unhinted targets. Hints bypass only discovery, never full tuple validation.
-// It returns no rows on an observation error; negative rows are complete facts.
+// DiscoverPullRequests performs one unfiltered closed collection (at most ten
+// pages) for unhinted targets and reads each candidate PR in full. Hints bypass
+// only discovery, never full tuple validation. Rows are returned in ascending
+// OID order, one per distinct target. Positive evidence is proof whatever the
+// collection coverage; absence is reported, never claimed, when the collection
+// is incomplete, and OIDs the shared request budget cannot cover are reported
+// discovery-budget-exhausted (Spec 031 FR-017, FR-018). It returns no rows on
+// an observation error: an error or a 404 never proves absence.
 func (s *TidySession) DiscoverPullRequests(parent context.Context, targets []string, hints map[string]int) ([]TidyHeadEvidence, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -265,13 +282,16 @@ func (s *TidySession) DiscoverPullRequests(parent context.Context, targets []str
 	}
 	all := map[string]bool{}
 	unhinted := map[string]bool{}
+	ordered := make([]string, 0, len(targets))
 	for _, head := range targets {
 		if !fullSHA(head) || all[head] {
 			return nil, errors.New("invalid or duplicate full-OID target")
 		}
 		all[head] = true
 		unhinted[head] = true
+		ordered = append(ordered, head)
 	}
+	sort.Strings(ordered)
 	usedNumbers := map[int]bool{}
 	for head, number := range hints {
 		if !all[head] || number <= 0 || usedNumbers[number] {
@@ -284,20 +304,36 @@ func (s *TidySession) DiscoverPullRequests(parent context.Context, targets []str
 		return nil, err
 	}
 	discovered := map[string][]tidyPRHint{}
+	complete := true
 	if len(unhinted) > 0 {
-		discovered, err = s.discoverPRHints(ctx, unhinted)
+		discovered, complete, err = s.discoverPRHints(ctx, unhinted)
 		if err != nil {
 			return nil, err
 		}
 	}
-	result := make([]TidyHeadEvidence, 0, len(targets))
-	for _, head := range targets {
+	result := make([]TidyHeadEvidence, 0, len(ordered))
+	exhausted := false
+	for _, head := range ordered {
 		candidates := discovered[head]
+		hinted := false
 		if number, ok := hints[head]; ok {
 			candidates = []tidyPRHint{{Number: number, Head: head}}
+			hinted = true
+		}
+		coverage := "complete"
+		if !hinted && !complete {
+			coverage = "incomplete"
+		}
+		item := TidyHeadEvidence{HeadOID: head, Reason: "integration-not-proven", Coverage: coverage}
+		if !exhausted && len(candidates) > tidyMaxRequests-s.ledger.snapshot().Requests {
+			exhausted = true
+		}
+		if exhausted {
+			item.Result = "discovery-budget-exhausted"
+			result = append(result, item)
+			continue
 		}
 		sort.Slice(candidates, func(i, j int) bool { return candidates[i].Number < candidates[j].Number })
-		item := TidyHeadEvidence{HeadOID: head, Reason: "integration-not-proven"}
 		matches := []TidyPullRequest{}
 		for _, candidate := range candidates {
 			p, err := s.readPullRequest(ctx, candidate.Number)
@@ -314,12 +350,17 @@ func (s *TidySession) DiscoverPullRequests(parent context.Context, targets []str
 				item.Reason = reason
 			}
 		}
-		if len(matches) == 1 {
-			item.Reason = "github-merged-head"
+		switch {
+		case len(matches) == 1:
+			item.Reason, item.Result = "github-merged-head", "github-merged-head"
 			p := matches[0]
 			item.PullRequest = &p
-		} else if len(matches) > 1 {
-			item.Reason = "pr-ambiguous"
+		case len(matches) > 1:
+			item.Reason, item.Result = "pr-ambiguous", "ambiguous-needs-hint"
+		case coverage == "incomplete":
+			item.Result = "discovery-incomplete"
+		default:
+			item.Result = "no-merged-pr"
 		}
 		result = append(result, item)
 	}
