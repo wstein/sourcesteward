@@ -52,5 +52,35 @@ class CheckJobTests(unittest.TestCase):
             self.assertIn(required, static)
 
 
+class CacheTests(unittest.TestCase):
+    def test_every_action_is_pinned_by_full_commit_sha_with_version_comment(self):
+        uses = re.findall(r'^\s*-?\s*uses: (\S+)(.*)$', WORKFLOW, re.M)
+        self.assertTrue(uses)
+        for action, rest in uses:
+            self.assertRegex(action, r'^[\w.-]+/[\w./-]+@[0-9a-f]{40}$')
+            self.assertRegex(rest, r'^\s+# v\d+\.\d+\.\d+$', action)
+
+    def test_setup_go_caches_modules_and_build_with_explicit_dependency_path(self):
+        for job in ('check', 'conformance'):
+            text = job_text(job)
+            self.assertRegex(text, r'actions/setup-go@[0-9a-f]{40} # v[\d.]+\n        with:\n          go-version-file: go.mod\n          cache: true\n          cache-dependency-path: go.sum\n')
+
+    def test_git_build_is_cached_by_exact_version_os_and_arch(self):
+        text = job_text('conformance')
+        self.assertRegex(text, r'actions/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+')
+        self.assertIn('path: .tools/conformance/${{ matrix.lane }}/git', text)
+        key = re.search(r'key: (stw-git-[^\n]+)', text).group(1)
+        for part in ('runner.os', 'runner.arch', 'steps.gitpin.outputs.version', 'matrix.lane'):
+            self.assertIn(part, key)
+
+    def test_cache_hit_skips_the_git_build_but_keeps_the_version_assertion(self):
+        text = job_text('conformance')
+        self.assertIn('GIT_CACHE_HIT: ${{ steps.gitcache.outputs.cache-hit }}', text)
+        self.assertIn('"$GIT_CACHE_HIT" = true', text)
+        self.assertIn('--tool jj', text)
+        self.assertLess(text.index('actions/cache@'), text.index('scripts/install-backends.py'))
+        self.assertLess(text.index('scripts/install-backends.py'), text.index('--preflight "$BACKEND_LANE"'))
+
+
 if __name__ == '__main__':
     unittest.main()

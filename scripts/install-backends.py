@@ -3,7 +3,8 @@
 """Install reviewed conformance toolchains from checked official artifacts.
 
 Git is built locally from checked source, without HTTP/GUI/Perl/Python helpers.
-No installer scripts, package managers, remote shell code or cached binaries run.
+No installer scripts, package managers or remote shell code run. CI may restore the
+built Git prefix from actions/cache; its exact version is re-asserted before any test.
 """
 import argparse
 import hashlib
