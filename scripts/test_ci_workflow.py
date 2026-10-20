@@ -3,6 +3,7 @@
 
 Standard library only: the workflow is inspected as text.
 """
+import importlib.util
 import re
 from pathlib import Path
 import unittest
@@ -12,6 +13,9 @@ WORKFLOW = (ROOT / '.github/workflows/ci.yml').read_text()
 CONFORMANCE = (ROOT / '.github/workflows/conformance.yml').read_text()
 FULL = (ROOT / '.github/workflows/ci-full.yml').read_text()
 ALL = (WORKFLOW, CONFORMANCE, FULL)
+_SPEC = importlib.util.spec_from_file_location('ci_shards', ROOT / 'scripts/ci_shards.py')
+SHARDS = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(SHARDS)
 
 
 def job_text(name, text=WORKFLOW):
@@ -39,8 +43,11 @@ class CheckJobTests(unittest.TestCase):
         check = job_text('check')
         self.assertIn('run: make check-static', check)
         self.assertNotIn('run: make check\n', check)
-        self.assertEqual(len(re.findall(r'go test\b', check)), 1, 'check must run go test exactly once')
-        self.assertIn('run: go test -timeout 40m -race ./...', check)
+        runs = re.findall(r'go test\b[^\n]*', check)
+        self.assertEqual(len(runs), 2, 'one race run per tier branch, never both')
+        for run in runs:
+            self.assertIn('-timeout 40m -race', run)
+        self.assertIn('go test -timeout 40m -race ./...', runs[1])
 
     def test_make_check_keeps_every_step_and_check_static_omits_only_go_test(self):
         makefile = (ROOT / 'Makefile').read_text()
@@ -66,11 +73,11 @@ class CacheTests(unittest.TestCase):
             self.assertRegex(rest, r'^\s+# v\d+\.\d+\.\d+$', action)
 
     def test_setup_go_caches_modules_and_build_with_explicit_dependency_path(self):
-        for text in (job_text('check'), job_text('suite', CONFORMANCE)):
+        for text in (job_text('check'), job_text('shard', CONFORMANCE)):
             self.assertRegex(text, r'actions/setup-go@[0-9a-f]{40} # v[\d.]+\n        with:\n          go-version-file: go.mod\n          cache: true\n          cache-dependency-path: go.sum\n')
 
     def test_git_build_is_cached_by_exact_version_os_and_arch(self):
-        text = job_text('suite', CONFORMANCE)
+        text = job_text('shard', CONFORMANCE)
         self.assertRegex(text, r'actions/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+')
         self.assertIn('path: .tools/conformance/${{ inputs.lane }}/git', text)
         key = re.search(r'key: (stw-git-[^\n]+)', text).group(1)
@@ -80,7 +87,7 @@ class CacheTests(unittest.TestCase):
         self.assertNotIn('restore-keys', text)
 
     def test_cache_hit_skips_the_git_build_but_keeps_the_version_assertion(self):
-        text = job_text('suite', CONFORMANCE)
+        text = job_text('shard', CONFORMANCE)
         self.assertIn('GIT_CACHE_HIT: ${{ steps.gitcache.outputs.cache-hit }}', text)
         self.assertIn('"$GIT_CACHE_HIT" = true', text)
         self.assertIn('--tool jj', text)
@@ -136,6 +143,75 @@ class CiFullWorkflowTests(unittest.TestCase):
         for forbidden in ('push:', 'pull_request:', 'workflow_dispatch:', 'schedule:'):
             self.assertNotIn(forbidden, head)
         self.assertIn('name: suite', job_text('suite', CONFORMANCE))
+
+
+class ShardedConformanceTests(unittest.TestCase):
+    def test_shard_matrix_matches_script_default(self):
+        count = int(re.search(r"SHARD_COUNT: '(\d+)'", CONFORMANCE).group(1))
+        self.assertEqual(count, SHARDS.DEFAULT_SHARDS)
+        matrix = re.search(r'shard: \[([\d, ]+)\]', CONFORMANCE).group(1)
+        self.assertEqual([int(x) for x in matrix.split(',')], list(range(count + 1)))
+        self.assertIn('--shards 4', job_text('check'))
+
+    def test_aggregate_is_per_lane_stable_and_runs_after_failures(self):
+        text = job_text('suite', CONFORMANCE)
+        self.assertIn('name: suite', text)
+        self.assertIn('needs: [shard]', text)
+        self.assertIn('if: always()', text)
+        self.assertIn('test "$SHARDS_RESULT" = success', text)
+        self.assertNotIn('matrix', text)
+
+    def test_command_substitutions_are_assigned_before_go_test(self):
+        for text in (job_text('shard', CONFORMANCE), job_text('check')):
+            for line in re.findall(r'go test[^\n]*', text):
+                self.assertNotIn('$(', line)
+            self.assertNotRegex(text, r'go test[^\n]*\$\(python3')
+        shard = job_text('shard', CONFORMANCE)
+        self.assertRegex(shard, r'regex="\$\(python3 -B scripts/ci_shards.py regex[^\n]*\)"\n\s+test -n "\$regex"\n')
+        self.assertRegex(shard, r'packages="\$\(python3 -B scripts/ci_shards.py packages\)"\n\s+set -- \$packages\n\s+test "\$#" -gt 1\n')
+        self.assertRegex(job_text('check'), r'packages="\$\(python3 -B scripts/ci_shards.py packages\)"\n\s+set -- \$packages\n\s+test "\$#" -gt 1\n')
+
+    def test_only_the_workspace_package_is_sharded(self):
+        text = job_text('shard', CONFORMANCE)
+        self.assertIn('-run "$regex" ./internal/workspace', text)
+        self.assertIn('matrix.shard != 0', text)
+        self.assertIn('matrix.shard == 0', text)
+
+    def test_check_verifies_shard_coverage_before_the_race_suite(self):
+        text = job_text('check')
+        self.assertLess(text.index('scripts/ci_shards.py check'), text.index('go test -timeout 40m -race'))
+
+
+class LongPoleTests(unittest.TestCase):
+    def evaluate(self, expression, name, base=None, labels=()):
+        python = expression.replace('||', ' or ')
+        python = re.sub(r"contains\(github\.event\.pull_request\.labels\.\*\.name, '([^']+)'\)", r"('\1' in labels)", python)
+        python = python.replace('github.event.pull_request.base.ref', 'base')
+        python = python.replace('github.event.repository.default_branch', "'main'")
+        python = python.replace('github.event_name', 'event')
+        return eval(python, {}, {'event': name, 'base': base, 'labels': list(labels)})
+
+    def tier(self):
+        return re.search(r'(?m)^  CONFORMANCE_TIER: \$\{\{ (.+) \}\}$', WORKFLOW).group(1)
+
+    def test_tier_expression_is_the_conformance_condition(self):
+        self.assertEqual(self.tier(), TieringTests.CONDITION)
+        self.assertIn('if: ' + self.tier() + '\n', job_text('conformance'))
+
+    def test_tier_per_event(self):
+        tier = self.tier()
+        self.assertTrue(self.evaluate(tier, 'push', None))
+        self.assertTrue(self.evaluate(tier, 'pull_request', 'main'))
+        self.assertFalse(self.evaluate(tier, 'pull_request', 'codex/parent'))
+        self.assertTrue(self.evaluate(tier, 'pull_request', 'codex/parent', ['ci-full']))
+        self.assertFalse(self.evaluate(tier, 'pull_request', 'codex/parent', ['other']))
+
+    def test_check_skips_the_workspace_package_only_in_the_tier(self):
+        text = job_text('check')
+        self.assertIn('if [ "$CONFORMANCE_TIER" = true ]; then', text)
+        full = text.index('else\n')
+        self.assertIn('ci_shards.py packages', text[:full])
+        self.assertIn('go test -timeout 40m -race ./...', text[full:])
 
 
 if __name__ == '__main__':

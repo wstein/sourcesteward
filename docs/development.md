@@ -110,6 +110,22 @@ Check names of the conformance jobs are prefixed by the calling job: a lane repo
 `ci-full.yml` alike. No branch protection exists today; a future required check should
 reference `Git/jj conformance (minimum) / suite` and `Git/jj conformance (current) / suite`.
 The cache key also hashes `scripts/backend-releases.json`.
+
+The heavy `internal/workspace` package is sharded. `scripts/ci_shards.py` lists its top-level
+tests, assigns them to four shards by greedy longest-processing-time using the committed
+`scripts/ci-test-weights.json` (unlisted tests get the default weight, so a new test is always
+assigned) and prints each shard's `-run` regex. In `conformance.yml`, jobs `shard 1` to
+`shard 4` run one shard each with `-race -count=1 -timeout 40m`; `shard 0` runs every other
+package and the real-CLI smoke checks. The aggregate job `suite` needs the shards of its own
+lane only, so the lane's check name stays stable. The `check` job runs
+`python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
+list none. When the conformance tier applies to the event (the same expression as the
+conformance `if:`, held once in the workflow-level `CONFORMANCE_TIER` value), `check` runs
+`-race` on every package except `internal/workspace`, which the shards cover under `-race` on
+both lanes with jj; otherwise it runs `./...`, so nothing is skipped. The weights are local
+non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change
+(the fixture speed-up work will do that).
+
 Its check job builds and
 validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
 lanes must also pass before deployment. The deployment job runs only for main

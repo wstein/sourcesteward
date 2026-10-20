@@ -112,7 +112,7 @@ class BackendInstallerTests(unittest.TestCase):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         conformance = (ROOT / '.github/workflows/conformance.yml').read_text()
         for name, workflow, following, test_command in (('check', ci, 'conformance', 'run: make check-static'),
-                                                        ('suite', conformance, None, 'run: go test -count=1 -timeout 40m -race ./...')):
+                                                        ('shard', conformance, 'suite', 'go test -count=1 -timeout 40m -race -run "$regex"')):
             with self.subTest(job=name):
                 job = workflow.split('  ' + name + ':\n', 1)[1]
                 if following:
