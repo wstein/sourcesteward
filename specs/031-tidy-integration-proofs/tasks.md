@@ -68,6 +68,19 @@
 - [ ] T044 Owner gate: any `apply`, release, tag, publication or consumer activation is separately authorized and out of this task list.
 - [ ] T045 Follow-up decision, not a requirement of this Spec: if cheap, also record the `branch.<name>.*` configuration and the branch reflog tip in the Spec 029 recovery journal so restoring a deleted branch is less manual; decide and, if accepted, specify in a later amendment before any implementation.
 
+## Phase 8: Restore and history (FR-042..FR-047, SC-009)
+
+Sequencing (stated once): T046..T051 finish before the dogfood cleanup apply T044, which stays an owner gate performed by no task; T052 depends on T044. Restore must be implemented and verified on fixtures first, so the cleanup is demonstrably reversible. The journal reader of T047 is shared by restore and history.
+
+- [ ] T046 Add failing restore plan tests from the [restore contract](contracts/restore.md) on temporary repositories with a real tidy v3 apply: every deleted entry is `restorable` with tip OID equal to the journal and the recovery ref; a name recreated at another OID is `name-taken` and never overwritten, `--as` restores it under another name; a symbolic target ref is `name-taken` with reason `symbolic-reference`; a deleted recovery ref (`recovery-ref-absent`), a retargeted one (`recovery-ref-retargeted`), a symbolic one (`recovery-ref-symbolic`) or a pruned commit (`object-unreadable`) is `recovery-missing` with that reason and nothing is written; an incomplete journal lists only entries with a confirmed recovery, the others `journal-incomplete`, and is never replayed; a `tracking-refs` and a retirement journal are refused `unsupported-mode`; hostile names in a journal (leading `-`, `..`, control characters, outside `refs/heads/`) are refused by ref-name validation and never reach argv as options; unknown plan or action refuses with exit 1; argument errors exit 2 before any store work; plan and apply status when nothing is restorable.
+- [ ] T047 Implement the shared journal reader (bounded, read-only, V3Journal unchanged) and the read-only restore plan with the entry states and JSON result; pass T046.
+- [ ] T048 Add failing restore apply tests: a branch created between plan and apply fails closed with `name-taken` (CAS) and a symbol created between plan and apply gives `symbolic-reference` (`--no-deref`); a rerun is idempotent (`already-present`, no new record); the `restore` records hold exactly the intent and outcome fields, are append-only (earlier records byte-identical) and the V3Journal is byte-identical after a restore; a simulated crash between intent and outcome recovers as `created-recovered` or retries without overwrite; a failed intent write touches no ref; state snapshot equality of worktrees, configuration, remotes, recovery refs and other refs before and after apart from the new branch and its reflog entry (message `stw restore PLAN ACTION`); the planned states are re-evaluated immediately before the CAS (a recovery ref changed after the plan is `recovery-missing` with `recovery-ref-retargeted`); an entry created by another actor at the same OID after a crash is reported `created-recovered`, which is accepted; apply without `--authorize` refuses before any effect; a `reference-transaction` hook refuses naming the class; mutants M8 (drop the CAS), M9 (drop the OID cross-check between journal and recovery ref) and M10 (allow an overwrite) each fail a named test.
+- [ ] T049 Implement apply: authorization, per-entry re-evaluation, write-ahead intent, `--no-deref` CAS ref creation, the outcome record and idempotent rerun in the `restore` namespace of the private store; pass T048.
+- [ ] T050 Add failing history and CLI tests: `stw tidy history` and `restore --list` order newest first with counts, mode, recovery-ref presence, decision kinds, `restorable` counted with the bounded reads and unreadable or other-mode journals listed (`restorable` 0); `--limit` and the 4,096-record scan bound with the truncation marker and `scan_truncated`; usage errors (duplicate `--action`, `--as` without one action, `--authorize` without `--apply`) exit 2 before native work; human and JSON agreement; no effect.
+- [ ] T051 Implement `history`, the `restore` and `--list` CLI wiring and the candidate schemas for the restore plan and result; pass T050; keep v1/v2 schemas and fixtures byte-identical.
+- [ ] T052 Acceptance after the owner-authorized cleanup apply (T044, a separately named operation): restore every deleted branch of the dogfood data set into a throwaway clone (`git clone --no-local`) with a source test runner or an authorized build, and compare each restored tip OID with `~/.private-backup/sourcesteward-dogfood-baseline-2026-10-20/` (`local-branches.tsv`); record the match count, every `name-taken` or `recovery-missing` entry and the unrestored limits (configuration, reflog, worktrees) in `verification.md`. Until T044 has been performed by the owner this task stays unchecked; the fixture results of T046..T051 are the evidence meanwhile.
+- [ ] T053 Update public tidy docs for `restore` and `history`, `docs/progress.md` and `docs/feature-status.json` only to behavior that exists; state the FR-046 limits; keep status `planned` until T052.
+
 ## Dependencies and ownership
 
 Table guard: one table, one row per task, prerequisites sorted and acyclic.
@@ -117,8 +130,16 @@ Table guard: one table, one row per task, prerequisites sorted and acyclic.
 | T041 | T040 |
 | T042 | T040 |
 | T043 | T041, T042 |
-| T044 | T043 |
+| T044 | T043, T051 |
 | T045 | T034 |
+| T046 | T034 |
+| T047 | T046 |
+| T048 | T047 |
+| T049 | T048 |
+| T050 | T047 |
+| T051 | T049, T050 |
+| T052 | T040, T044, T051 |
+| T053 | T051 |
 
 Slices A, B, D and the decision part of E (T033..T034) may proceed in parallel in separate worktrees after their prerequisites with disjoint files; slice C needs the planning environment (T009) because proof commands run under it; the report (T027..T032) needs the proofs (T018). At most two editing authors. Shared files (`tidy_v3_result.go`, schema) have one owner at a time.
 
@@ -137,7 +158,9 @@ Slices A, B, D and the decision part of E (T033..T034) may proceed in parallel i
 | FR-024..FR-026 | T004..T006 | streaming and hard bounds |
 | FR-031..FR-038 | T027..T032, T035, T036 | review reasons, report, bounds, safety, range pairing, verdict |
 | FR-039..FR-041 | T033..T036 | decisions |
-| FR-027, FR-029, FR-030 | T037..T043 | acceptance, schema, no new effects |
+| FR-027, FR-029, FR-030 | T037..T043 | acceptance, schema, no new effects beyond restore |
+| FR-042..FR-046 | T046..T049, T052 | restore plan, no overwrite, CAS apply, restore journal, scope limits |
+| FR-047 | T047, T050, T051 | history view, shared journal reader |
 | FR-028 | all behavior tasks | failing tests first |
 | SC-001 | T013..T018 | proof fixtures |
 | SC-002 | T004..T006 | large plan fixtures |
@@ -147,5 +170,6 @@ Slices A, B, D and the decision part of E (T033..T034) may proceed in parallel i
 | SC-006 | T039, T040, T041, T043 | recorded counts, samples, AI review |
 | SC-007 | T027..T032 | golden reports |
 | SC-008 | T033..T036 | decisions |
+| SC-009 | T046..T052 | restore, mutants, dogfood tip OIDs |
 
-There are 45 tasks (T045 is a follow-up decision). Every task has an unchecked sequential ID.
+There are 53 tasks (T045 is a follow-up decision; T046..T053 are the restore and history amendment). Every task has an unchecked sequential ID.
