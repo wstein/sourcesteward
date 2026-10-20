@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # labeled: adding ci-full to a PR starts the full conformance run.
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -79,6 +81,9 @@ jobs:
 
   conformance:
     name: Git/jj conformance (${{ matrix.lane }})
+    # Tiered: main pushes and PRs against the default branch run it; a PR stacked on another
+    # PR branch runs it only with the ci-full label. A skipped job is neutral.
+    if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == github.event.repository.default_branch || contains(github.event.pull_request.labels.*.name, 'ci-full')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     strategy:
