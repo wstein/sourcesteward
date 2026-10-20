@@ -83,7 +83,11 @@ Visitors need no packages, external assets or service connection.
 are generated through the controlled build below; a raw HTTP server over docs/ previews
 only the authored landing, not the final generated routes.
 
-A single GitHub Actions workflow checks every PR and push. Its check job builds and
+A single GitHub Actions workflow checks every PR and every push to `main`. Pushes to other
+branches do not start a run of their own: the `pull_request` run of the open PR covers them,
+so a branch push is never checked twice. The workflow has no tag trigger, and nothing else
+depends on branch push runs (the Pages job is main-only; Dependabot PRs use `pull_request`).
+Its check job builds and
 validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
 lanes must also pass before deployment. The deployment job runs only for main
 pushes after all required jobs succeed, consuming its identical uploaded artifact without

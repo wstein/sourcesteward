@@ -1,7 +1,10 @@
 name: CI
 
 on:
+  # Branch pushes are covered by the pull_request run; push runs only on the default
+  # branch (the Pages deploy and the post-merge check).
   push:
+    branches: [main]
   pull_request:
 
 permissions:
