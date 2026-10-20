@@ -331,3 +331,16 @@ the mutation evidence and what was not verified: the Darwin observer has only be
 compiled and vetted, `internal/release` does not compile for Windows (also true before
 this work), and no real checkout, build, workflow or release was run. The earlier
 dead-code state of the view, which had no production caller, is closed by this wiring.
+
+## PR 104 unpublished report schema CI correction
+
+The Pages source validator now recognizes the exact candidate
+`v3/tidy-report.schema.json` as unpublished. The public schema allowlist is
+unchanged. The failing-first regression reproduced the missing registration;
+source tests cover exclusion of both v3 schemas, invalid JSON/UTF-8, linked
+files/directories, unlisted sources and byte-identical published schema copies.
+All 165 source Python tests passed, excluding the one test that invokes the
+actual Hugo/Go documentation build. Documentation and architecture source
+checks and whitespace checks passed. The theme tests could not run locally
+because Node is unavailable. No documentation/product build was run; hosted
+checks and independent exact-head review remain pending.
