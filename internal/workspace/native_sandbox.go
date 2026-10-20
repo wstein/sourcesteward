@@ -71,8 +71,9 @@ func canonicalSandboxDir(path string) (string, error) {
 }
 
 // runSandboxed allows only declared directory writes and denies network access.
-// The fixed /dev/null sink admits O_RDWR used by native Git; no directory or
-// persistent data write is granted by this device exception.
+// The fixed /dev/null and /dev/urandom device exceptions admit standard I/O
+// and CSPRNG reads used by native Git; no directory or persistent data write is
+// granted by these device exceptions.
 // Granted directory roots themselves remain present: Linux bind mounts protect
 // mount roots, and macOS denies unlinking each literal root while allowing children.
 // Existing linked-worktree metadata is rebound read-only after broad parent
@@ -165,7 +166,7 @@ func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string
 		if e != nil {
 			return nil, errNativeSandboxUnavailable
 		}
-		argv = []string{"--ro-bind", "/", "/", "--dev-bind", "/dev/null", "/dev/null", "--unshare-net", "--die-with-parent", "--new-session", "--cap-drop", "ALL"}
+		argv = []string{"--ro-bind", "/", "/", "--dev-bind", "/dev/null", "/dev/null", "--dev-bind", "/dev/urandom", "/dev/urandom", "--unshare-net", "--die-with-parent", "--new-session", "--cap-drop", "ALL"}
 		for _, r := range writeRoots {
 			argv = append(argv, "--bind", r, r)
 		}
