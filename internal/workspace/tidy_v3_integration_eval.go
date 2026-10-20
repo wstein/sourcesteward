@@ -55,7 +55,7 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 		v.Disposition, v.Reasons = integrationReviewDisposition, []string{"ambiguous-merge-base"}
 		return v, nil
 	}
-	tipTree, _, baseTree, err := r.trees(ctx, tip, bases[0], base)
+	tipTree, mbTree, baseTree, err := r.trees(ctx, tip, bases[0], base)
 	if err != nil {
 		if err == errIntegrationLimit {
 			v.Disposition, v.Reasons = integrationReviewDisposition, []string{"proof-limit"}
@@ -64,6 +64,11 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 		return v, err
 	}
 	var reasons []string
+	// Order of FR-007: no-net-change, patch-id (default and verbatim in one
+	// pass), merge-noop. Every selected class runs; the strongest deletable
+	// class is reported: patch-id, then merge-noop, then no-net-change.
+	netNothing := policy.has(integrationNoNetChange) && tipTree == mbTree
+	patchProven := false
 	if policy.has(integrationPatchID) {
 		pr, err := r.patchID(ctx, base, tip, bases[0], tipTree, baseTree)
 		if err != nil {
@@ -73,13 +78,32 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 		reasons = append(reasons, pr.Reasons...)
 		switch {
 		case pr.Proven && !pr.Whitespace:
-			v.Disposition, v.Class = integrationProvenDisposition, integrationPatchID
+			patchProven = true
 		case pr.Proven && pr.Whitespace && policy.acceptsWhitespace():
-			v.Disposition, v.Class, v.Flags = integrationProvenDisposition, integrationPatchID, []string{integrationFlagAcceptedWhitespace}
+			patchProven, v.Flags = true, []string{integrationFlagAcceptedWhitespace}
 		case pr.Proven && pr.Whitespace:
 			reasons = append(reasons, integrationFlagWhitespace)
 			v.Flags = []string{integrationFlagWhitespace}
 		}
+	}
+	noopProven := false
+	if policy.has(integrationMergeNoop) {
+		mr, err := r.mergeNoop(ctx, base, tip, bases[0], tipTree, mbTree, baseTree)
+		if err != nil {
+			return v, err
+		}
+		noopProven = mr.Proven
+		reasons = append(reasons, mr.Reasons...)
+	}
+	switch {
+	case patchProven:
+		v.Disposition, v.Class = integrationProvenDisposition, integrationPatchID
+	case noopProven:
+		v.Disposition, v.Class, v.Flags = integrationProvenDisposition, integrationMergeNoop, []string{}
+		v.Matched, v.Unmatched, v.Empty, v.SkippedMerges = 0, 0, 0, 0
+	case netNothing:
+		v.Disposition, v.Class, v.Flags = integrationProvenDisposition, integrationNoNetChange, []string{}
+		v.Matched, v.Unmatched, v.Empty, v.SkippedMerges = 0, 0, 0, 0
 	}
 	if v.Disposition != integrationProvenDisposition && len(reasons) > 0 {
 		v.Disposition, v.Reasons = integrationReviewDisposition, reasonOrder(reasons)
