@@ -87,12 +87,20 @@ fetch_head() {
   [ -n "$head" ] || return 1
 }
 
+RUN_LIMITS="100 200 300"
+
 fetch_runs() {
-  out=$("$GH" run list ${repo:+-R "$repo"} --commit "$1" --limit 100 \
-    --json databaseId,workflowName,status,conclusion,startedAt,updatedAt 2>"$work/err") || return 1
-  printf '%s' "$out" | jq -e 'type == "array"' >/dev/null || return 1
-  runs=$out
-  nruns=$(printf '%s' "$runs" | jq 'length')
+  for lim in $RUN_LIMITS; do
+    out=$("$GH" run list ${repo:+-R "$repo"} --commit "$1" --limit "$lim" \
+      --json databaseId,workflowName,status,conclusion,startedAt,updatedAt 2>"$work/err") || return 1
+    printf '%s' "$out" | jq -e 'type == "array"' >/dev/null || return 1
+    nruns=$(printf '%s' "$out" | jq 'length')
+    runs=$out
+    [ "$nruns" -ge "$lim" ] || return 0
+  done
+  # still full at the hard cap: the list may be truncated, never green
+  echo "evidence incomplete: $nruns runs reached the limit" > "$work/err"
+  return 1
 }
 
 finish() {
@@ -125,9 +133,9 @@ report() {
       *) tests=$(failed_tests "$id") ;;
     esac
     printf '%s' "$row" | jq -c --arg c "$concl" --arg t "$tests" '
-      def clean: gsub("[^ -~]"; "?");
+      def clean: gsub("\\p{Cc}"; "");
       def secs: (try (((.updatedAt | fromdateiso8601) - (.startedAt | fromdateiso8601)) | if . < 0 then 0 else . end) catch null);
-      {workflow: ((.workflowName // "unknown") | clean), conclusion: $c, duration_seconds: secs,
+      {workflow: ((.workflowName // "unknown") | clean), conclusion: ($c | clean), duration_seconds: secs,
        failed_tests: ($t | split("\n") | map(select(length > 0)))}' >> "$work/rows"
   done < "$work/runs.jsonl"
   if [ "$json" = 1 ]; then
@@ -169,6 +177,9 @@ while :; do
     case $expected in "$head"*) ;; *) finish head-changed 4 ;; esac ;;
   esac
   fetch_runs "$head" || unavailable
+  seen_head=$head
+  fetch_head || unavailable
+  [ "$head" = "$seen_head" ] || finish head-changed 4
   if [ "$nruns" -gt 0 ]; then
     seen=1
     active=$(printf '%s' "$runs" | jq '[.[] | select(.status != "completed")] | length')
