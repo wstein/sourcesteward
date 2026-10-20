@@ -177,7 +177,7 @@ line; `--json` prints the same data as JSON.
 | 2 | `deadline` | the deadline passed with runs still active |
 | 3 | `no-runs` | no run appeared for the head in time |
 | 4 | `head-changed` | the PR head differs from the expected head |
-| 5 | `unavailable` | `gh` error, rate limit or authentication problem; never reads as green |
+| 5 | `unavailable` | `gh` error, rate limit or authentication problem, runs that vanished after being seen, or a run list that is still full at the hard limit of 300 (`evidence incomplete`); never reads as green |
 | 64 | | usage error |
 
 The tool never re-runs, cancels or dispatches workflows and never merges or changes a PR. Tests
