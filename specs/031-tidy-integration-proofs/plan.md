@@ -38,7 +38,7 @@ Refuse what a planning command would execute or cannot evaluate reproducibly; ne
 
 ### Decision: simple proofs, visible flags (owner direction)
 
-Git's own `patch-id`, `merge-noop` and `no-net-change` are the deletable defaults. Whitespace is a visible flag (`whitespace-differs`) from git's own `--verbatim` comparison, not a normalization or a file list; binary decisions are left to Git (`diff-tree --numstat`) and used only for rendering and for never raising the whitespace flag. Cheap guards that prevent real loss (merge commits in range, partial or multiset mismatch, gitlinks, attribute sources, diff attributes, merge drivers) produce review reasons and report entries. Residual low-probability risks are listed under Known limits instead of becoming rules.
+Git's own `patch-id`, `merge-noop` and `no-net-change` are the deletable defaults. Whitespace is a visible flag (`whitespace-differs`) from git's own `--verbatim` comparison, not a normalization or a file list; binary decisions are left to Git (`diff-tree --numstat`) and used only for rendering and for never raising the whitespace flag. Cheap guards that prevent real loss (merge commits in range, partial or multiset mismatch, gitlinks, attribute sources, diff attributes, merge drivers) produce review reasons and report entries. Known limits are listed under Limits in the spec instead of becoming rules.
 
 ### Decision: review report and decisions in scope
 
@@ -46,7 +46,7 @@ The report and decision file make the judgment cheap for a human and an AI. `git
 
 ### Decision: restore and history (owner-approved amendment)
 
-Deletion is made more liberal by this Spec on the promise that recovery bounds the risk, so the restore path is specified, tested and proven on the dogfood set. `stw tidy restore` is plan then apply like tidy, reads the Spec 029 journal and recovery refs, never overwrites, creates the branch with a compare-and-swap, needs the same explicit authorization as `tidy apply` and appends a restore journal record; `stw tidy history` is a read-only view over the same reader. Worktree, configuration and reflog restore are excluded (T045 may add configuration keys later). Sequenced before the dogfood cleanup.
+Deletion is made more liberal by this Spec on the promise that recovery covers it, so the restore path is specified, tested and proven on the dogfood set. `stw tidy restore` is plan then apply like tidy, reads the Spec 029 journal and recovery refs, never overwrites, creates the branch with a compare-and-swap, needs the same explicit authorization as `tidy apply` and appends a restore journal record; `stw tidy history` is a read-only view over the same reader. Worktree, configuration and reflog restore are excluded (T045 may add configuration keys later). Sequenced before the dogfood cleanup.
 
 ### Decision: discovery endpoint
 
@@ -67,9 +67,9 @@ The forge-free proof phase has its own 60 seconds (per command 10 s, per tip 20 
 - **P7 Slice F** docs, review, measurement, owner-gated acceptance (T037..T045).
 - **P8 Slice G restore and history** (T046..T053), before the dogfood cleanup.
 
-## Risks
+## Protections
 
-| Risk | Mitigation |
+| Concern | Protection |
 | --- | --- |
 | `merge-tree` writes objects | private object directory (FR-009), byte-compare test, alternates hard stop |
 | Whitespace-insensitive patch-id | visible `whitespace-differs` flag, report with visible whitespace, opt-in flag or decision |

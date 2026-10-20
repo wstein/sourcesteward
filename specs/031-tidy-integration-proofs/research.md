@@ -25,7 +25,7 @@ Replaying each commit of `M..B` onto the base conflicts for 1,087 of 1,750 commi
 - `merge-noop` recognizes rebase-merge and squash-merge whose content landed unchanged, and present content only. It also proves reformatting-only branches when the base already contains the final content.
 - A branch with no net change (added and reverted work) merges cleanly to the base tree but was never integrated; it has nothing unmerged, so it is its own deletable class `no-net-change`.
 
-Everything else (the 99 consolidated branches) is not provable forge-free. Rounds 3 to 7 of review explored custom normalized digests, whitespace-significant file lists and binary-by-attribute classification; the owner decided that this is over-engineering for an edge case. The Spec instead flags, reports and lets a reviewer clear, and documents residual risks under Known limits.
+Everything else (the 99 consolidated branches) is not provable forge-free. Rounds 3 to 7 of review explored custom normalized digests, whitespace-significant file lists and binary-by-attribute classification; the owner decided that this is over-engineering for an edge case. The Spec instead flags, reports and lets a reviewer clear, and documents its scope limits under Limits.
 
 ## Why a review report and decisions
 

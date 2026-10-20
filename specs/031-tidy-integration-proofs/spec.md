@@ -171,9 +171,9 @@ After `stw tidy apply` deleted branches, a maintainer runs `stw tidy history .` 
 
 - **SC-009**: Restore fixtures (US7, FR-042..FR-047) behave as stated, mutants M8 (no CAS), M9 (no OID cross-check) and M10 (overwrite allowed) are killed, the V3Journal is byte-identical after a restore, state before and after a restore plan is byte-identical, and the dogfood cleanup restores to tip OIDs equal to the baseline.
 
-## Known limits
+## Limits
 
-Residual low-probability risks are documented here instead of becoming rules: patch equivalence does not show that a change is still present on the base (labelled, recoverable); a diff can contain secrets from the branch (report files are 0600 and sensitive); the unintegrated diff of a conflicting merge contains conflict markers; unobserved concurrent changes during planning (Spec 029 ABA qualification); attribute sources other than the pinned tree are covered only by the blanket reasons of FR-010a, and the three attribute reasons (`attribute-source`, `merge-attribute`, `diff-attribute`) are cheap custom scans, not a full attribute interpreter; Git behaviour was measured on 2.47.3 and 2.56.0 only; the recovery ref preserves the tip history only (design rationale); a large consolidated branch whose commits, files or lines exceed the fixed per-entry bounds cannot be cleared by a decision (only the entry count, per-file bytes and per-diff bytes are overridable, up to their hard ceilings): split the review per `--ref` or per named consolidation range, or raise those overridable bounds; a reviewer, human or AI, can be wrong, which is why a decision is bounded by the exact tip OID and never authorizes apply.
+Patch equivalence does not show that a change is still present on the base (it is labelled and recoverable). Report files are 0600 and sensitive because a diff can contain branch content. Attribute sources other than the pinned tree are covered only by the blanket reasons of FR-010a; the three attribute reasons (`attribute-source`, `merge-attribute`, `diff-attribute`) are cheap custom scans, not a full attribute interpreter. The recovery ref preserves the tip history only (design rationale). A large consolidated branch whose commits, files or lines exceed the fixed per-entry bounds cannot be cleared by a decision (only the entry count, per-file bytes and per-diff bytes are overridable, up to their hard ceilings): split the review per `--ref` or per named consolidation range, or raise those overridable bounds. A decision is bounded by the exact tip OID and never authorizes apply. The unintegrated diff of a conflicting merge shows conflict markers. A plan observes the repository at planning time; changes made afterwards are caught by the apply re-check (FR-012).
 
 ## Owner-gated work
 
@@ -190,7 +190,7 @@ Not permitted without explicit owner authorization naming the one operation (wor
 
 ## Assumptions and scope
 
-Same-user cooperative repositories (Spec 029). Native Git minimum/current lanes as Spec 029 (2.46.0 / 2.56.0); `merge-tree --write-tree` requires Git 2.38+ and `--attr-source` 2.40+. jj and GitButler backends are out of scope. `merge-noop` proves present content; patch equivalence proves that an equal change existed on the base at some point, not that it is still present; the plan labels it and recovery bounds the risk. Consolidated work is retained unless a reviewer decision clears it.
+Same-user cooperative repositories (Spec 029). Native Git minimum/current lanes as Spec 029 (2.46.0 / 2.56.0); `merge-tree --write-tree` requires Git 2.38+ and `--attr-source` 2.40+. jj and GitButler backends are out of scope. `merge-noop` proves present content; patch equivalence proves that an equal change existed on the base at some point, not that it is still present; the plan labels it and recovery covers it. Consolidated work is retained unless a reviewer decision clears it.
 
 ## References
 
