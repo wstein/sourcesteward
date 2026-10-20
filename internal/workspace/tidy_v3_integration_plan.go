@@ -150,3 +150,45 @@ func (c tidyV3RefsApplyCoordinator) revalidateIntegrationProof(ctx context.Conte
 	}
 	return nil
 }
+
+// revalidateReviewedDecision re-checks a reviewer decision for apply (FR-012):
+// the reference still points at the exact decided tip, the plan's base is the
+// decided base and no protection applies now. A decision never skips a check.
+func (c tidyV3RefsApplyCoordinator) revalidateReviewedDecision(ctx context.Context, p V3Plan, expected Snapshot, target V3Candidate) error {
+	changed := func() error {
+		return failure("evidence-changed", "The reviewed decision no longer holds with fresh native state; retained.")
+	}
+	d := decisionOf(target)
+	if d == nil || d.TipOID != target.OID || d.BaseOID != p.Expected.BaseCommit || d.Branch != target.Name {
+		return failure("invalid-evidence", "Stored reviewer decision does not bind the exact tip and base.")
+	}
+	ctx, _, closeSession, err := withPlanningSession(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeSession()
+	observation, err := c.refs.observe(ctx, p.SourcePath, p.Expected.BaseSelector)
+	if err != nil {
+		return err
+	}
+	if observation.Expected != expected {
+		return changed()
+	}
+	n := observation.Native
+	found := false
+	for _, ref := range n.References {
+		if ref.Name != target.Name {
+			continue
+		}
+		found = ref.OID == target.OID && ref.Symbolic == ""
+	}
+	if !found || tidyV3SymbolicTarget(n, target.Name) || target.Name == p.Expected.BaseSelector || target.OID == p.Expected.BaseCommit {
+		return changed()
+	}
+	for _, w := range n.Registrations {
+		if w.HeadRef == target.Name || w.HeadOID == target.OID {
+			return changed()
+		}
+	}
+	return nil
+}

@@ -93,6 +93,8 @@ type V3IntegrationEvidence struct {
 	Unmatched     int      `json:"unmatched"`
 	Empty         int      `json:"empty"`
 	SkippedMerges int      `json:"skipped_merges"`
+	// Decision is the reviewer decision behind a reviewed class or a kept tip.
+	Decision *V3DecisionRecord `json:"decision,omitempty"`
 }
 
 func defaultIntegrationPolicy() V3ProofPolicy {
@@ -139,9 +141,18 @@ func validV3IntegrationEvidence(e V3IntegrationEvidence, tip string, p V3Plan) b
 			return false
 		}
 	}
+	if e.Decision != nil && !validV3DecisionRecord(*e.Decision) {
+		return false
+	}
 	switch e.Disposition {
 	case integrationProvenDisposition:
-		if e.Class == "" || e.Class == integrationAncestor || e.Strength != integrationStrength[e.Class] || len(e.Reasons) != 0 || !p.ProofPolicy.has(e.Class) {
+		if reviewedProofTag(e.Class) {
+			d := e.Decision
+			return d != nil && d.TipOID == tip && d.BaseOID == p.Expected.BaseCommit && e.Strength == "reviewer-decision" && len(e.Reasons) == 0 && len(e.Flags) == 0 &&
+				e.Matched == 0 && e.Unmatched == 0 && e.Empty == 0 && e.SkippedMerges == 0 && p.Review != nil && p.Review.DecisionsDigest != "" &&
+				(e.Class == reviewedIntegrated && d.Decision == "integrated" || e.Class == reviewedDrop && d.Decision == "drop")
+		}
+		if e.Decision != nil || e.Class == "" || e.Class == integrationAncestor || e.Strength != integrationStrength[e.Class] || len(e.Reasons) != 0 || !p.ProofPolicy.has(e.Class) {
 			return false
 		}
 		if e.Class != integrationPatchID {
@@ -162,6 +173,10 @@ func validV3IntegrationEvidence(e V3IntegrationEvidence, tip string, p V3Plan) b
 		}
 		// A hard stop retains the tip (and only hard stops do); every other
 		// reason leaves it for review.
+		if e.Decision != nil {
+			// A kept tip: retained by the reviewer with its soft reasons.
+			return e.Disposition == integrationRetainedDisposition && !hard && e.Decision.Decision == "keep" && e.Decision.TipOID == tip && e.Decision.BaseOID == p.Expected.BaseCommit && p.Review != nil && p.Review.DecisionsDigest != ""
+		}
 		return hard == (e.Disposition == integrationRetainedDisposition) && !(hard && soft) && (len(e.Flags) == 0 || e.Flags[0] == integrationFlagWhitespace && seen[integrationFlagWhitespace])
 	}
 	return false

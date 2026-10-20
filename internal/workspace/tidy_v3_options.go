@@ -55,6 +55,8 @@ type V3PlanOptions struct {
 	// ConsolidationRanges are `A..B` selectors whose commits the report pairs
 	// with each reported branch (FR-037), at most four.
 	ConsolidationRanges []string
+	// DecisionsFile is the absolute path of a reviewer decision file (FR-039).
+	DecisionsFile string
 }
 type V3ApplyOptions struct {
 	StateDir, PlanID         string
@@ -215,7 +217,7 @@ func v3ProofPlanTimeout(o V3PlanOptions) time.Duration {
 
 // reviewRequested reports whether any review report option is set.
 func (o V3PlanOptions) reviewRequested() bool {
-	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0 || len(o.ConsolidationRanges) > 0
+	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0 || len(o.ConsolidationRanges) > 0 || o.DecisionsFile != ""
 }
 
 func (o V3PlanOptions) reportBounds() reportBounds {

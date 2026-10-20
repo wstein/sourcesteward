@@ -365,6 +365,9 @@ func (c tidyV3RefsApplyCoordinator) revalidateProof(ctx context.Context, p V3Pla
 			return tidyV3HostingError(err)
 		}
 	}
+	if reviewedProofTag(target.Proof) {
+		return c.revalidateReviewedDecision(ctx, p, expected, target)
+	}
 	if integrationProofTag(target.Proof) {
 		return c.revalidateIntegrationProof(ctx, p, expected, target)
 	}

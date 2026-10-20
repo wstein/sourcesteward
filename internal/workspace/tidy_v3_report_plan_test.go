@@ -178,7 +178,7 @@ func TestPlanWritesTheReportForEveryNeedsReviewRef(t *testing.T) {
 	if s == nil || !s.ReportWritten || s.NeedsReview != len(review) || s.Entries != len(review) || s.Omitted != 0 || s.Proven < 2 || s.Reasons["would-add-content"] == 0 || s.Reasons["gitlink-change"] != 1 {
 		t.Fatalf("summary %+v", s)
 	}
-	if r.Plan.Review == nil || !reflect.DeepEqual(*r.Plan.Review, V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []V3ReviewRange{}}) {
+	if r.Plan.Review == nil || !reflect.DeepEqual(*r.Plan.Review, V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []V3ReviewRange{}, Notes: []V3ReviewNote{}}) {
 		t.Errorf("review binding %+v", r.Plan.Review)
 	}
 }
