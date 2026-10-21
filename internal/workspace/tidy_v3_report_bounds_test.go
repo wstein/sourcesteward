@@ -2,6 +2,7 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -49,15 +50,15 @@ func TestReportCommandBoundsAtAndOverTheBound(t *testing.T) {
 				if err := readIntegrationRecords(stream(r.spec.maxRecords, pad, ""), r.spec, width, accept); err != nil || count != r.spec.maxRecords {
 					t.Fatalf("at the bound: %v after %d records", err, count)
 				}
-				if err := readIntegrationRecords(stream(r.spec.maxRecords+1, 1, ""), r.spec, width, accept); err != errIntegrationLimit {
+				if err := readIntegrationRecords(stream(r.spec.maxRecords+1, 1, ""), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 					t.Fatalf("one record over: %v", err)
 				}
 				if r.cap > 0 {
-					if err := readIntegrationRecords(stream(1, pad+1, ""), r.spec, width, accept); err != errIntegrationLimit {
+					if err := readIntegrationRecords(stream(1, pad+1, ""), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 						t.Fatalf("one byte over the record bound: %v", err)
 					}
 				}
-				if err := readIntegrationRecords(stream(0, 0, r.bad+string(r.spec.sep)), r.spec, width, accept); err != errIntegrationLimit {
+				if err := readIntegrationRecords(stream(0, 0, r.bad+string(r.spec.sep)), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 					t.Fatalf("malformed record: %v", err)
 				}
 			})
@@ -72,13 +73,13 @@ func TestReportCommandBoundsAtAndOverTheBound(t *testing.T) {
 			if got, err := parseReportRaw(stream(reportRawRecords, "p"), width); err != nil || len(got) != reportRawRecords {
 				t.Fatalf("raw at the bound: %d %v", len(got), err)
 			}
-			if _, err := parseReportRaw(stream(reportRawRecords+1, "p"), width); err != errIntegrationLimit {
+			if _, err := parseReportRaw(stream(reportRawRecords+1, "p"), width); !errors.Is(err, errIntegrationLimit) {
 				t.Fatalf("raw one over: %v", err)
 			}
-			if _, err := parseReportRaw(stream(1, strings.Repeat("p", integrationPathLimit+1)), width); err != errIntegrationLimit {
+			if _, err := parseReportRaw(stream(1, strings.Repeat("p", integrationPathLimit+1)), width); !errors.Is(err, errIntegrationLimit) {
 				t.Fatalf("raw path one over: %v", err)
 			}
-			if _, err := parseReportRaw(strings.NewReader(":100644 100755 "+hex('a')+" "+hex('b')+"\x00p\x00"), width); err != errIntegrationLimit {
+			if _, err := parseReportRaw(strings.NewReader(":100644 100755 "+hex('a')+" "+hex('b')+"\x00p\x00"), width); !errors.Is(err, errIntegrationLimit) {
 				t.Fatalf("raw malformed: %v", err)
 			}
 			names := func(n int) string {
@@ -92,10 +93,10 @@ func TestReportCommandBoundsAtAndOverTheBound(t *testing.T) {
 			if tree, got, err := parseReportMergeTree(strings.NewReader(names(reportRawRecords)), width); err != nil || len(got) != reportRawRecords || tree != hex('c') {
 				t.Fatalf("merge-tree at the bound: %d %v", len(got), err)
 			}
-			if _, _, err := parseReportMergeTree(strings.NewReader(names(reportRawRecords+1)), width); err != errIntegrationLimit {
+			if _, _, err := parseReportMergeTree(strings.NewReader(names(reportRawRecords+1)), width); !errors.Is(err, errIntegrationLimit) {
 				t.Fatalf("merge-tree one over: %v", err)
 			}
-			if _, _, err := parseReportMergeTree(strings.NewReader(hex('c')[1:]+"\x00"), width); err != errIntegrationLimit {
+			if _, _, err := parseReportMergeTree(strings.NewReader(hex('c')[1:]+"\x00"), width); !errors.Is(err, errIntegrationLimit) {
 				t.Fatalf("merge-tree malformed tree: %v", err)
 			}
 		})

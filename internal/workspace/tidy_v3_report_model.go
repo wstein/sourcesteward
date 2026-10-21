@@ -126,6 +126,9 @@ type V3ReportDiff struct {
 	Files           []V3ReportFile      `json:"files"`
 	Hunks           []V3ReportHunk      `json:"hunks"`
 	Truncated       *V3ReportTruncation `json:"truncated"`
+	// UnavailableReason says why there is no diff (source unavailable): the
+	// bound hit or the condition that stopped the collection.
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 
 	// Counts for the Markdown truncation line.
 	shownFiles, totalFiles, shownLines, totalLines int
@@ -135,6 +138,17 @@ type V3ReportCandidate struct {
 	OID     string      `json:"oid"`
 	Subject V3Untrusted `json:"subject"`
 	Match   string      `json:"match"`
+}
+
+// V3ReportLimit is the bound that was hit: the command or grammar, the unit
+// (records, bytes, commits, grammar, exit, command), the limit and the first
+// value observed over it. Limit and observed are 0 where the unit has no count;
+// for exit the observed value is the exit code.
+type V3ReportLimit struct {
+	Name     string `json:"name"`
+	Unit     string `json:"unit"`
+	Limit    int64  `json:"limit"`
+	Observed int64  `json:"observed"`
 }
 
 // V3ReportEntry is one needs-review reference.
@@ -151,6 +165,8 @@ type V3ReportEntry struct {
 	Candidates       []V3ReportCandidate `json:"candidate_base_commits"`
 	RangePairing     *V3ReportPairing    `json:"range_pairing"`
 	Verdict          V3ReportVerdict     `json:"suggested_verdict"`
+	// ProofLimit names the bound a proof-limit reason came from.
+	ProofLimit *V3ReportLimit `json:"proof_limit,omitempty"`
 
 	// rawDiff is the bounded diff text the Markdown rendering shows.
 	rawDiff string

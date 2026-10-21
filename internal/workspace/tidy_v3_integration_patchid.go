@@ -13,11 +13,13 @@ import (
 
 // patchIDResult is the outcome of the patch-id class (FR-003, FR-003w, FR-003b).
 type patchIDResult struct {
-	Proven        bool // every non-empty branch commit matched, no reason
-	Whitespace    bool // some matched commit has no equal verbatim patch-id
-	Reasons       []string
-	Matched       int
-	Unmatched     int
+	Proven     bool // every non-empty branch commit matched, no reason
+	Whitespace bool // some matched commit has no equal verbatim patch-id
+	Reasons    []string
+	Matched    int
+	Unmatched  int
+	// Limit is the bound a proof-limit reason came from, when known.
+	Limit         *integrationLimitError
 	Empty         int
 	SkippedMerges int
 	BinaryPaths   []string
@@ -92,8 +94,10 @@ func (r *integrationRun) patchIDs(ctx context.Context, attrTree, rangeSpec strin
 func (r *integrationRun) patchID(ctx context.Context, base, tip, mergeBase, tipTree, baseTree string) (patchIDResult, error) {
 	var res patchIDResult
 	fail := func(err error) (patchIDResult, error) {
-		if err == errIntegrationLimit {
-			return patchIDResult{Reasons: []string{"proof-limit"}}, nil
+		if errors.Is(err, errIntegrationLimit) {
+			var le *integrationLimitError
+			errors.As(err, &le)
+			return patchIDResult{Reasons: []string{"proof-limit"}, Limit: le}, nil
 		}
 		return patchIDResult{}, err
 	}
@@ -110,8 +114,11 @@ func (r *integrationRun) patchID(ctx context.Context, base, tip, mergeBase, tipT
 	if err != nil {
 		return fail(err)
 	}
-	if branchCount > 1024 || baseCount > 4096 {
-		return patchIDResult{Reasons: []string{"proof-limit"}}, nil
+	if branchCount > 1024 {
+		return patchIDResult{Reasons: []string{"proof-limit"}, Limit: &integrationLimitError{Name: "branch commits", Unit: "commits", Limit: 1024, Observed: int64(branchCount)}}, nil
+	}
+	if baseCount > 4096 {
+		return patchIDResult{Reasons: []string{"proof-limit"}, Limit: &integrationLimitError{Name: "base commits since merge base", Unit: "commits", Limit: 4096, Observed: int64(baseCount)}}, nil
 	}
 	res.SkippedMerges = merges
 	if merges > 0 {

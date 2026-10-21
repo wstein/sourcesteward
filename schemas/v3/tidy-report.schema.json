@@ -165,6 +165,11 @@
             }
           ]
         },
+        "unavailable_reason": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
         "whitespace_only": {
           "type": "boolean"
         }
@@ -216,6 +221,9 @@
         },
         "merge_base_oid": {
           "$ref": "#/$defs/OIDOrEmpty"
+        },
+        "proof_limit": {
+          "$ref": "#/$defs/Limit"
         },
         "proofs_tried": {
           "items": {
@@ -382,6 +390,41 @@
         "new_start",
         "old_lines",
         "old_start"
+      ],
+      "type": "object"
+    },
+    "Limit": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "observed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "records",
+            "bytes",
+            "commits",
+            "grammar",
+            "exit",
+            "command"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "unit",
+        "limit",
+        "observed"
       ],
       "type": "object"
     },

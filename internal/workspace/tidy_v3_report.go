@@ -70,6 +70,12 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 	reasons := slices.Clone(q.Verdict.Reasons)
 	finish := func() (V3ReportEntry, error) {
 		e.Reasons = reasonOrder(reasons)
+		if slices.Contains(e.Reasons, "proof-limit") && e.ProofLimit == nil && q.Verdict.Limit != nil {
+			e.ProofLimit = reportLimitOf(q.Verdict.Limit)
+		}
+		if e.Diff.Source == "unavailable" {
+			e.Diff.UnavailableReason = unavailableReason(e)
+		}
 		e.Proofs = reportProofs(q.Policy, e.Reasons, q.Verdict)
 		e.Verdict = suggestVerdict(e)
 		return e, nil
@@ -78,6 +84,10 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 	degrade := func(err error) error {
 		if errors.Is(err, errIntegrationLimit) {
 			reasons = append(reasons, "proof-limit")
+			var le *integrationLimitError
+			if e.ProofLimit == nil && errors.As(err, &le) {
+				e.ProofLimit = reportLimitOf(le)
+			}
 			return nil
 		}
 		return err
@@ -163,6 +173,27 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 	return finish()
 }
 
+func reportLimitOf(le *integrationLimitError) *V3ReportLimit {
+	return &V3ReportLimit{Name: le.Name, Unit: le.Unit, Limit: le.Limit, Observed: le.Observed}
+}
+
+// unavailableReason says why an entry has no diff: the bound hit, or the other
+// condition that stopped the collection.
+func unavailableReason(e V3ReportEntry) string {
+	switch {
+	case e.ProofLimit != nil:
+		l := e.ProofLimit
+		return fmt.Sprintf("proof-limit: %s hit its %s bound (limit %d, observed %d); no diff was collected, check the branch with git diff against the base", l.Name, l.Unit, l.Limit, l.Observed)
+	case slices.Contains(e.Reasons, "proof-limit"):
+		return "proof-limit: a command bound was hit and the entry could not be collected; no diff was collected, check the branch with git diff against the base"
+	case slices.Contains(e.Reasons, "object-dir-unavailable"):
+		return "object-dir-unavailable: the private object directory could not be created, so no merge was computed"
+	case slices.Contains(e.Reasons, "ambiguous-merge-base"):
+		return "ambiguous-merge-base: the branch and the base have no single merge base, so no merge was computed"
+	}
+	return "no diff was collected"
+}
+
 func emptyReportDiff(source string) V3ReportDiff {
 	return V3ReportDiff{Source: source, ConflictedPaths: []V3Untrusted{}, BinaryFiles: []V3ReportBinary{}, Files: []V3ReportFile{}, Hunks: []V3ReportHunk{}}
 }
@@ -210,7 +241,11 @@ func (r *integrationRun) reportMergeTree(ctx context.Context, attrTree, base, ti
 		return e
 	})
 	if err == nil && (code != 0 && code != 1 || code == 0 && len(names) > 0) {
-		err = errIntegrationLimit
+		if code != 0 && code != 1 {
+			err = limitHit("merge-tree", "exit", 0, int64(code))
+		} else {
+			err = limitHit("merge-tree", "grammar", 0, 0)
+		}
 	}
 	return tree, names, code, err
 }
@@ -226,14 +261,20 @@ func parseReportMergeTree(out io.Reader, width int) (string, []string, error) {
 		if e == io.EOF && len(b) == 0 {
 			return "", false, nil
 		}
-		if e != nil || len(b) > integrationPathLimit+1 || total > reportTreeBytes {
-			return "", false, errIntegrationLimit
+		if total > reportTreeBytes {
+			return "", false, limitHit("merge-tree", "bytes", reportTreeBytes, total)
+		}
+		if e != nil || len(b) > integrationPathLimit+1 {
+			return "", false, limitHit("merge-tree", "grammar", 0, 0)
 		}
 		return string(b[:len(b)-1]), true, nil
 	}
 	tree, ok, err := field()
-	if err != nil || !ok || !hexExact([]byte(tree), width) {
-		return "", nil, errIntegrationLimit
+	if err != nil {
+		return "", nil, err
+	}
+	if !ok || !hexExact([]byte(tree), width) {
+		return "", nil, limitHit("merge-tree", "grammar", 0, 0)
 	}
 	var names []string
 	for {
@@ -245,11 +286,11 @@ func parseReportMergeTree(out io.Reader, width int) (string, []string, error) {
 			return tree, names, nil
 		}
 		if !integrationPath([]byte(name)) {
-			return "", nil, errIntegrationLimit
+			return "", nil, limitHit("merge-tree", "grammar", 0, 0)
 		}
 		if !slices.Contains(names, name) {
 			if len(names) >= reportRawRecords {
-				return "", nil, errIntegrationLimit
+				return "", nil, limitHit("merge-tree", "records", reportRawRecords, int64(len(names)+1))
 			}
 			names = append(names, name)
 		}
@@ -273,12 +314,17 @@ func parseReportRaw(src io.Reader, width int) ([]reportChange, error) {
 		}
 		path, pe := reader.ReadSlice(0)
 		total += int64(len(meta) + len(path))
-		if e != nil || pe != nil || len(out) >= reportRawRecords || total > reportRawBytes || len(meta) < 2 || meta[0] != ':' {
-			return nil, errIntegrationLimit
+		switch {
+		case len(out) >= reportRawRecords:
+			return nil, limitHit("diff-tree --raw", "records", reportRawRecords, int64(len(out)+1))
+		case total > reportRawBytes:
+			return nil, limitHit("diff-tree --raw", "bytes", reportRawBytes, total)
+		case e != nil || pe != nil || len(meta) < 2 || meta[0] != ':':
+			return nil, limitHit("diff-tree --raw", "grammar", 0, 0)
 		}
 		f := strings.Fields(string(meta[1 : len(meta)-1]))
 		if len(f) != 5 || !reportModePattern.MatchString(f[0]) || !reportModePattern.MatchString(f[1]) || !hexExact([]byte(f[2]), width) || !hexExact([]byte(f[3]), width) || len(f[4]) != 1 || !integrationPath(path[:len(path)-1]) {
-			return nil, errIntegrationLimit
+			return nil, limitHit("diff-tree --raw", "grammar", 0, 0)
 		}
 		out = append(out, reportChange{f[0], f[1], f[2], f[3], f[4], string(path[:len(path)-1])})
 	}
@@ -429,13 +475,16 @@ func (r *integrationRun) reportBinaries(ctx context.Context, files []V3ReportFil
 	sizes := map[string]int64{}
 	if len(want) > 0 {
 		lines, err := r.lines(ctx, integrationCommand{args: []string{"cat-file", "--batch-check"}, stdin: bytes.NewReader(joinRecords(want, '\n'))}, specReportBlobSizes)
-		if err != nil || len(lines) != len(want) {
-			return nil, errIntegrationLimit
+		if err != nil {
+			return nil, err
+		}
+		if len(lines) != len(want) {
+			return nil, limitHit("cat-file --batch-check", "grammar", 0, 0)
 		}
 		for i, line := range lines {
 			f := strings.Fields(line)
 			if f[0] != want[i] {
-				return nil, errIntegrationLimit
+				return nil, limitHit("cat-file --batch-check", "grammar", 0, 0)
 			}
 			sizes[f[0]], _ = strconv.ParseInt(f[2], 10, 64)
 		}

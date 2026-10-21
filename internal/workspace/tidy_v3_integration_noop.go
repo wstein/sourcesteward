@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"slices"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 type mergeNoopResult struct {
 	Proven  bool
 	Reasons []string
+	Limit   *integrationLimitError
 }
 
 // mergeNoop evaluates the class. The pre-checks never run a helper: only when
@@ -24,8 +26,10 @@ type mergeNoopResult struct {
 func (r *integrationRun) mergeNoop(ctx context.Context, base, tip, mergeBase, tipTree, mbTree, baseTree string) (mergeNoopResult, error) {
 	var res mergeNoopResult
 	fail := func(err error) (mergeNoopResult, error) {
-		if err == errIntegrationLimit {
-			return mergeNoopResult{Reasons: []string{"proof-limit"}}, nil
+		if errors.Is(err, errIntegrationLimit) {
+			var le *integrationLimitError
+			errors.As(err, &le)
+			return mergeNoopResult{Reasons: []string{"proof-limit"}, Limit: le}, nil
 		}
 		return mergeNoopResult{}, err
 	}
