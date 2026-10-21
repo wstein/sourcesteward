@@ -170,3 +170,95 @@ func (n restoreNative) planBranchConfigs(ctx context.Context, items []restoreIte
 	}
 	return nil
 }
+
+// restoreConfigResult is the per-key outcome the restore journal records.
+type restoreConfigResult struct {
+	Var     string `json:"var"`
+	Outcome string `json:"outcome"`
+}
+
+func hasConfigFailure(e V3RestoreEntry) bool {
+	if e.BranchConfig == nil {
+		return false
+	}
+	for _, k := range e.BranchConfig.Keys {
+		if k.Outcome == configFailed {
+			return true
+		}
+	}
+	return false
+}
+
+// setBranchConfig writes one key of the local configuration. The key and the
+// value are separate arguments after `--`; only the configuration file and its
+// lock are writable.
+func (n restoreNative) setBranchConfig(ctx context.Context, key, value string) error {
+	ro, err := gitTidyWriteProtectionFiles(n.id, nil, []string{"config"})
+	if err != nil {
+		return err
+	}
+	args := []string{"config", "--local", "--", key, value}
+	if n.observe != nil {
+		n.observe(args)
+	}
+	_, code, err := runSandboxed(ctx, n.bin, args, n.id.WorkspaceRoot, []string{n.id.RepositoryDir}, ro)
+	if err != nil {
+		return gitExecutionError(err)
+	}
+	if code != 0 {
+		return failure("restore-config-failed", "A configuration key could not be written.")
+	}
+	return nil
+}
+
+// reapplyConfig reapplies the keys of one restored entry that the plan marks
+// `reapply`, after re-evaluating them against the remotes and keys of the clone
+// right now. A failure never undoes the branch: it is reported per key and as a
+// diagnostic. The result lists the variables with their outcome for the restore
+// journal.
+func (c tidyV3RestoreCoordinator) reapplyConfig(ctx context.Context, n restoreNative, item *restoreItem, r *V3RestoreResult, restorable bool) []restoreConfigResult {
+	ev := item.journal.Branch
+	if ev == nil || len(ev.Config) == 0 {
+		return nil
+	}
+	short := strings.TrimPrefix(item.origin, restoreRefPrefix)
+	remotes, rerr := n.readRemotes(ctx)
+	current, cerr := n.readBranchVars(ctx, short)
+	bc := planBranchConfig(*item, restorable, remotes, current)
+	results := []restoreConfigResult{}
+	failed := false
+	for i := range bc.Keys {
+		k := &bc.Keys[i]
+		k.Outcome = configSkipped
+		if k.State != configReapply {
+			results = append(results, restoreConfigResult{Var: ev.Config[i].Var, Outcome: k.Outcome})
+			continue
+		}
+		var err error
+		if rerr != nil || cerr != nil {
+			err = failure("restore-config-failed", "The clone could not be read before the key was reapplied.")
+		} else {
+			err = n.setBranchConfig(ctx, k.Key, ev.Config[i].Value)
+		}
+		if err != nil {
+			k.Outcome, failed = configFailed, true
+		} else {
+			k.Outcome = configApplied
+		}
+		results = append(results, restoreConfigResult{Var: ev.Config[i].Var, Outcome: k.Outcome})
+	}
+	item.entry.BranchConfig = bc
+	if failed && !hasDiagnostic(r.Diagnostics, "restore-config-failed") {
+		r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "restore-config-failed", Message: "Branch configuration could not be reapplied for at least one restored branch; the branches were created."})
+	}
+	return results
+}
+
+func hasDiagnostic(ds []Diagnostic, code string) bool {
+	for _, d := range ds {
+		if d.Code == code {
+			return true
+		}
+	}
+	return false
+}
