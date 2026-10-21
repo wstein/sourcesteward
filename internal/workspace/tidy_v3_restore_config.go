@@ -104,12 +104,8 @@ func planBranchConfig(item restoreItem, restorable bool, remotes, current map[st
 	short := strings.TrimPrefix(item.origin, restoreRefPrefix)
 	bc := &V3RestoreBranchConfig{Status: ev.ConfigStatus, ReflogTip: ev.ReflogTip, BranchOID: ev.BranchOID, Truncated: ev.ConfigTruncated, Keys: []V3RestoreConfigKey{}}
 	count := map[string]int{}
-	var recordedRemote *V3BranchConfigItem
-	for i, item := range ev.Config {
+	for _, item := range ev.Config {
 		count[item.Var]++
-		if item.Var == "remote" && recordedRemote == nil {
-			recordedRemote = &ev.Config[i]
-		}
 	}
 	remoteUsable := func(name string) bool { return name == "." || remotes[name] }
 	for _, k := range ev.Config {
@@ -119,7 +115,7 @@ func planBranchConfig(item restoreItem, restorable bool, remotes, current map[st
 			key.Remote = &remote
 		}
 		switch {
-		case !reappliedConfigVar(k.Var):
+		case !reappliedConfigVar(k.Var) || k.NoValue:
 			key.State = configSkipNotRecorded
 		case !restorable:
 			key.State = configSkipNotRestored
@@ -133,12 +129,23 @@ func planBranchConfig(item restoreItem, restorable bool, remotes, current map[st
 			key.State = configSkipSet
 		case (k.Var == "remote" || k.Var == "pushremote") && !remoteUsable(k.Value):
 			key.State = configSkipRemote
-		case (k.Var == "merge" || k.Var == "rebase") && recordedRemote != nil && (recordedRemote.Truncated || !remoteUsable(recordedRemote.Value)):
-			key.State = configSkipRemote
 		default:
 			key.State = configReapply
 		}
 		bc.Keys = append(bc.Keys, key)
+	}
+	// A recorded remote that is not reapplied leaves merge and rebase alone, so
+	// the branch never ends with a mixed upstream.
+	remoteApplies := false
+	for _, key := range bc.Keys {
+		remoteApplies = remoteApplies || key.Key == "branch."+short+".remote" && key.State == configReapply
+	}
+	if count["remote"] > 0 && !remoteApplies {
+		for i := range bc.Keys {
+			if k := ev.Config[i].Var; (k == "merge" || k == "rebase") && bc.Keys[i].State == configReapply {
+				bc.Keys[i].State = configSkipRemote
+			}
+		}
 	}
 	return bc
 }

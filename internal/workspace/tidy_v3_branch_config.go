@@ -25,11 +25,14 @@ const (
 
 // V3BranchConfigItem is one recorded `branch.<name>.<var>` entry. Var is the
 // lower-case variable name; the section prefix is derived from the plan's branch
-// name and is not stored. A value cut at the bound is marked Truncated.
+// name and is not stored. A value cut at the bound is marked Truncated. NoValue
+// marks a key written without a value (git reads it as true); older journals
+// lack the field.
 type V3BranchConfigItem struct {
 	Var       string `json:"var"`
 	Value     string `json:"value"`
 	Truncated bool   `json:"truncated"`
+	NoValue   bool   `json:"no_value,omitempty"`
 }
 
 // V3BranchEvidence is the evidence of one deleted branch. ConfigTruncated marks
@@ -89,7 +92,7 @@ func parseBranchConfig(out, short string) (items []V3BranchConfigItem, truncated
 	prefix := "branch." + short + "."
 	items = []V3BranchConfigItem{}
 	for _, record := range strings.Split(out, "\x00") {
-		key, value, _ := strings.Cut(record, "\n")
+		key, value, hasValue := strings.Cut(record, "\n")
 		rest, ok := strings.CutPrefix(key, prefix)
 		if !ok || !validBranchVar(rest) {
 			continue
@@ -98,7 +101,7 @@ func parseBranchConfig(out, short string) (items []V3BranchConfigItem, truncated
 			truncated = true
 			break
 		}
-		item := V3BranchConfigItem{Var: rest, Value: value}
+		item := V3BranchConfigItem{Var: rest, Value: value, NoValue: !hasValue}
 		if len(value) > branchConfigValueLimit {
 			cut := branchConfigValueLimit
 			for cut > 0 && !utf8.ValidString(value[:cut]) {
@@ -158,7 +161,7 @@ func validBranchEvidence(e V3BranchEvidence, c V3Candidate) bool {
 		return false
 	}
 	for _, item := range e.Config {
-		if !validBranchVar(item.Var) || len(item.Value) > branchConfigValueLimit || !utf8.ValidString(item.Value) || strings.ContainsRune(item.Value, 0) {
+		if !validBranchVar(item.Var) || len(item.Value) > branchConfigValueLimit || !utf8.ValidString(item.Value) || (item.NoValue && item.Value != "") || strings.ContainsRune(item.Value, 0) {
 			return false
 		}
 	}

@@ -327,8 +327,8 @@ configuration of exactly that branch (at most 16 keys, 256 bytes per value, a tr
 reflog tip or `unavailable`; an unreadable reflog never stops a deletion. Journals written earlier
 lack the record and restore exactly as before. The plan then adds per entry a `branch_config` with
 the key names, the remote name of `remote` and `pushremote` (never another value) and one state per
-key: `reapply`, `skip-remote-missing` (the remote is gone from this clone), `skip-not-recorded` (a key
-other than `remote`, `merge`, `rebase` and `pushRemote`, which are never reapplied) or another `skip-*`
+key: `reapply`, `skip-remote-missing` (the remote is gone from this clone, or a recorded remote is not reapplied, which also leaves `merge` and `rebase` alone), `skip-not-recorded` (a key
+other than `remote`, `merge`, `rebase` and `pushRemote`, which are never reapplied, or a key written without a value) or another `skip-*`
 reason (`skip-already-set`, `skip-renamed` under `--as`, `skip-truncated`, `skip-multi-valued`,
 `skip-not-restorable`). `--apply --authorize` writes only the `reapply` keys with `git config --local`
 after the branch exists and reports each key `applied`, `skipped` or `failed`; a failed key never

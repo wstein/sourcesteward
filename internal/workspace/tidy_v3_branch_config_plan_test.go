@@ -3,6 +3,8 @@ package workspace
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -84,5 +86,56 @@ func TestRestorePlanWithAnotherNameDoesNotReapply(t *testing.T) {
 	o.Actions, o.As = []string{f.action("alpha")}, "refs/heads/renamed"
 	if got := keyStates(entryFor(t, restorePlan(t, o), "renamed")); got["branch.alpha.remote"] != "skip-renamed" {
 		t.Errorf("%v", got)
+	}
+}
+
+func TestRestorePlanDoesNotReapplyAKeyWrittenWithoutAValue(t *testing.T) {
+	setup := withUpstream(map[string][][2]string{"alpha": upstreamOf("alpha")})
+	f := newRestoreFixWith(t, restoreFixOptions{setup: func(f *restoreFix) {
+		setup(f)
+		cfg := filepath.Join(f.dir, ".git", "config")
+		b, err := os.ReadFile(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(cfg, append(b, []byte("[branch \"alpha\"]\n\trebase\n")...), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}}, "alpha")
+	f.git("config", "--remove-section", "branch.alpha")
+	if got := keyStates(entryFor(t, restorePlan(t, f.options()), "alpha"))["branch.alpha.rebase"]; got != "skip-not-recorded" {
+		t.Errorf("a key without a value: %q", got)
+	}
+	applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if got, err := f.tryGit("config", "--local", "--get", "branch.alpha.rebase"); err == nil {
+		t.Errorf("rebase was written as %q although it had no value", got)
+	}
+}
+
+func TestRestorePlanSkipsMergeWhenTheRemoteIsNotReapplied(t *testing.T) {
+	f := restoreConfigFix(t, "alpha")
+	f.git("remote", "add", "other", "https://example.invalid/other.git")
+	f.git("config", "branch.alpha.remote", "other")
+	got := keyStates(entryFor(t, restorePlan(t, f.options()), "alpha"))
+	if got["branch.alpha.remote"] != "skip-already-set" || got["branch.alpha.merge"] != "skip-remote-missing" {
+		t.Errorf("%v", got)
+	}
+	applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if got, err := f.tryGit("config", "--local", "--get", "branch.alpha.merge"); err == nil {
+		t.Errorf("merge %q was reapplied next to another remote", got)
+	}
+}
+
+func TestRestorePlanSkipsAMultiValuedKey(t *testing.T) {
+	cfg := map[string][][2]string{"alpha": append(upstreamOf("alpha"), [2]string{"merge", "refs/heads/other"})}
+	f := newRestoreFixWith(t, restoreFixOptions{setup: withUpstream(cfg)}, "alpha")
+	f.git("config", "--remove-section", "branch.alpha")
+	got := keyStates(entryFor(t, restorePlan(t, f.options()), "alpha"))
+	if got["branch.alpha.merge"] != "skip-multi-valued" || got["branch.alpha.remote"] != "reapply" {
+		t.Errorf("%v", got)
+	}
+	applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if got, err := f.tryGit("config", "--local", "--get-all", "branch.alpha.merge"); err == nil {
+		t.Errorf("a multi-valued key was reapplied as %q", got)
 	}
 }
