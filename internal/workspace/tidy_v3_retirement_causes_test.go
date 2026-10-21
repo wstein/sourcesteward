@@ -103,7 +103,7 @@ func TestV3BoundsStillRefuseAggregateEntriesOutsideTheManifest(t *testing.T) {
 	over := struct {
 		R []string
 		M V3Manifest
-	}{make([]string, 1025), V3Manifest{Entries: make([]V3ManifestEntry, 1)}}
+	}{make([]string, v3AggregateLimit+1), V3Manifest{Entries: make([]V3ManifestEntry, 1)}}
 	if e := v3Bounds(over); e == nil {
 		t.Fatal("aggregate bound not enforced")
 	}

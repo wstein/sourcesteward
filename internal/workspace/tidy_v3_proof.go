@@ -146,8 +146,8 @@ func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObser
 		return out, err
 	}
 	out.Native.ProtectedRoots = []string{}
-	if len(out.Native.References)+len(out.Native.Registrations) > observationLimit {
-		return out, failure("record-limit", "Complete native facts exceed 1024 records.")
+	if len(out.Native.References)+len(out.Native.Registrations) > v3NativeFactsLimit {
+		return out, failure("record-limit", "Complete native facts exceed 16384 records.")
 	}
 	out.Config, err = gitRead(withoutPlanningSession(ctx), bin, path, "config", "--null", "--list", "--includes", "--show-origin")
 	if err != nil {

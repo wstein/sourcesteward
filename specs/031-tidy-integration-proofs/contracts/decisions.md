@@ -29,7 +29,7 @@ A decision file is written by a human or an AI reviewer after reading the [revie
 
 ## Limits and refusals
 
-File at most 1 MiB, at most 1,024 decisions, absolute path to a regular file (no symlink, no special file). Usage error (exit 2, before any native work, message names the selector and the offending decision index): unreadable or oversized file, malformed JSON, unknown `schema_version` (1 and 2 are known), unknown field (anything but the fixed fields is refused, so report content cannot smuggle data), missing field, invalid enum, duplicate `branch`, missing reason where required.
+File at most 4 MiB, at most 4,096 decisions, absolute path to a regular file (no symlink, no special file). Usage error (exit 2, before any native work, message names the selector and the offending decision index): unreadable or oversized file, malformed JSON, unknown `schema_version` (1 and 2 are known), unknown field (anything but the fixed fields is refused, so report content cannot smuggle data), missing field, invalid enum, duplicate `branch`, missing reason where required.
 
 ## Consumption
 

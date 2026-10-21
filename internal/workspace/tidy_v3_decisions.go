@@ -17,8 +17,8 @@ import (
 // for a plan, never authorization.
 
 const (
-	decisionFileLimit      = 1 << 20
-	decisionCountLimit     = 1024
+	decisionFileLimit      = 4 << 20
+	decisionCountLimit     = 4096
 	decisionReasonLimit    = 1024
 	decisionReviewerLimit  = 128
 	reviewedIntegrated     = "reviewed-integrated"
@@ -80,7 +80,7 @@ func decisionOID(s string) bool {
 }
 
 // ReadV3DecisionFile reads and validates a decision file: an absolute path to a
-// regular file (no symbolic link) of at most 1 MiB with the fixed fields only.
+// regular file (no symbolic link) of at most 4 MiB with the fixed fields only.
 func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 	var out V3DecisionFile
 	if !v3CanonicalPath(path) {
@@ -100,7 +100,7 @@ func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 	}
 	data, err := io.ReadAll(io.LimitReader(f, decisionFileLimit+1))
 	if err != nil || len(data) > decisionFileLimit {
-		return out, decisionError(path, "", "must be readable and at most 1 MiB")
+		return out, decisionError(path, "", "must be readable and at most 4 MiB")
 	}
 	version := decisionSchemaVersion(data)
 	if err = strictDecisionJSON(data, version); err != nil {

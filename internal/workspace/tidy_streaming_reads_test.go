@@ -95,10 +95,10 @@ func fixtureGitBranchCount(t *testing.T, n int) (dir, base string) {
 	return dir, base
 }
 
-// The collection reads admit 1,024 records. The stored plan and result keep the
-// Spec 029 aggregate bound of 1,024 records over references, registrations and
-// the other plan lists, so 1,024 references plus the primary registration still
-// refuse with the existing combined code; see Spec 031 FR-025.
+// The collection reads admit collectionRecordLimit records and v3 plans admit
+// v3NativeFactsLimit references plus registrations, so a repository with a
+// thousand branches next to remote-tracking references plans in v3; the v1
+// tidy plan keeps the Spec 029 aggregate bound of 1,024 records.
 func TestTidyPlansRefCountBoundaryThroughStreamedReads(t *testing.T) {
 	ctx := context.Background()
 	// 1,023 branches plus the primary registration are 1,024 aggregate records.
@@ -107,28 +107,17 @@ func TestTidyPlansRefCountBoundaryThroughStreamedReads(t *testing.T) {
 		t.Fatalf("v1 at the aggregate bound: %v", e)
 	}
 	if _, e := observeTidyV3Git(ctx, dir, base); e != nil {
-		t.Fatalf("v3 at the aggregate bound: %v", e)
+		t.Fatalf("v3 at the v1 aggregate bound: %v", e)
 	}
-	// 1,024 references: the streamed collection read passes, the aggregate bound refuses.
-	dir, base = fixtureGitBranchCount(t, 1024)
+	// 1,025 references: v1 keeps its aggregate bound, snapshots and v3 read on.
+	dir, base = fixtureGitBranchCount(t, 1025)
 	if _, e := (gitAdapter{}).Observe(ctx, dir, base); e != nil {
-		t.Fatalf("1,024 references through the streamed read: %v", e)
+		t.Fatalf("1,025 references through the streamed read: %v", e)
 	}
 	if _, e := (gitTidyAdapter{}).Observe(ctx, dir, base); !strings.HasPrefix(collectionCode(e), "tidy-observation-limit:") {
 		t.Fatalf("v1 aggregate bound: %s", collectionCode(e))
 	}
-	if _, e := observeTidyV3Git(ctx, dir, base); !strings.HasPrefix(collectionCode(e), "record-limit:") {
-		t.Fatalf("v3 aggregate bound: %s", collectionCode(e))
-	}
-	// 1,025 references exceed the collection bound itself.
-	dir, base = fixtureGitBranchCount(t, 1025)
-	if _, e := (gitAdapter{}).Observe(ctx, dir, base); !strings.HasPrefix(collectionCode(e), "git-observation-limit:") {
-		t.Fatalf("snapshot over the bound: %s", collectionCode(e))
-	}
-	if _, e := (gitTidyAdapter{}).Observe(ctx, dir, base); !strings.HasPrefix(collectionCode(e), "git-observation-limit:") {
-		t.Fatalf("v1 over the bound: %s", collectionCode(e))
-	}
-	if _, e := observeTidyV3Git(ctx, dir, base); !strings.HasPrefix(collectionCode(e), "git-observation-limit:") {
-		t.Fatalf("v3 over the bound: %s", collectionCode(e))
+	if _, e := observeTidyV3Git(ctx, dir, base); e != nil {
+		t.Fatalf("v3 above the old bound: %v", e)
 	}
 }

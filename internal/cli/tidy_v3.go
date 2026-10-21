@@ -84,7 +84,7 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.StringVar(proofs, "integration-proof", "", "Comma-separated forge-free proof classes: ancestor, patch-id, merge-noop, no-net-change (default all four)")
 	f.BoolVar(&o.AcceptWhitespaceDifferences, "accept-whitespace-differences", false, "Allow deletion when a patch-id match differs only in whitespace")
 	f.StringVar(&o.ReportDir, "report-dir", "", "Absolute existing directory that receives tidy-report.md and tidy-report.json for every ref that needs review (local-reference plans only; not with retirement)")
-	f.IntVar(&o.ReportMaxEntries, "report-max-entries", 0, "Most report entries (default 256, ceiling 1024)")
+	f.IntVar(&o.ReportMaxEntries, "report-max-entries", 0, "Most report entries (default 512, ceiling 4096)")
 	f.IntVar(&o.ReportMaxBytes, "report-max-bytes", 0, "Most bytes per report file (default 4 MiB, ceiling 16 MiB)")
 	f.IntVar(&o.ReportMaxDiffBytes, "report-max-diff-bytes", 0, "Most diff bytes per report entry (default 64 KiB, ceiling 1 MiB)")
 	f.StringArrayVar(&o.ConsolidationRanges, "consolidation-range", nil, "A..B range whose commits the report pairs with each branch (repeatable, at most four)")
@@ -98,7 +98,7 @@ func validateTidyV3ReviewFlags(cmd *cobra.Command, o *workspace.V3PlanOptions) e
 		name    string
 		value   int
 		ceiling int
-	}{{"report-max-entries", o.ReportMaxEntries, 1024}, {"report-max-bytes", o.ReportMaxBytes, 16 << 20}, {"report-max-diff-bytes", o.ReportMaxDiffBytes, 1 << 20}} {
+	}{{"report-max-entries", o.ReportMaxEntries, 4096}, {"report-max-bytes", o.ReportMaxBytes, 16 << 20}, {"report-max-diff-bytes", o.ReportMaxDiffBytes, 1 << 20}} {
 		if cmd.Flags().Changed(bound.name) && (bound.value < 1 || bound.value > bound.ceiling) {
 			return fmt.Errorf("--%s must be between 1 and %d", bound.name, bound.ceiling)
 		}

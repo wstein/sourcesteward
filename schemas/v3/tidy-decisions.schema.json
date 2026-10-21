@@ -205,7 +205,7 @@
   ],
   "properties": {
     "decisions": {
-      "maxItems": 1024,
+      "maxItems": 4096,
       "type": "array"
     },
     "schema_version": {
