@@ -375,6 +375,9 @@ func submodulesInitialized(config, commonDir string) bool {
 var creationConfigArgs = []string{
 	"-c", "core.hooksPath=" + os.DevNull,
 	"-c", "core.fsmonitor=false",
+	// Defence in depth: gitlinks become empty directories and `git worktree add`
+	// is not given --recurse-submodules, so recursion is already off; this
+	// argument keeps a configured submodule.recurse from ever applying.
 	"-c", "submodule.recurse=false",
 }
 
