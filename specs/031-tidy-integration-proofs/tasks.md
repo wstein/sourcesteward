@@ -66,7 +66,7 @@
 - [ ] T042 Owner gate: with explicit authorization naming one CLI build, repeat the plan-only runs with the built `stw`; without it, record the binary lane as a gap.
 - [ ] T043 Record acceptance outcomes (including the gap if T042 is not authorized) in `verification.md` and `docs/progress.md`; mark verified only with this evidence.
 - [ ] T044 Owner gate: any `apply`, release, tag, publication or consumer activation is separately authorized and out of this task list.
-- [ ] T045 Follow-up decision, not a requirement of this Spec: if cheap, also record the `branch.<name>.*` configuration and the branch reflog tip in the Spec 029 recovery journal so restoring a deleted branch is less manual; decide and, if accepted, specify in a later amendment before any implementation.
+- [x] T045 Accepted by the owner on 2026-10-21 and specified as FR-048: record the `branch.<name>.*` configuration and the branch reflog tip in the Spec 029 recovery journal before the deletion, show the reapply states in the restore plan and reapply `remote`, `merge`, `rebase` and `pushRemote` on restore. Evidence: [verification.md](verification.md) section T045.
 
 ## Phase 8: Restore and history (FR-042..FR-047, SC-009)
 
@@ -161,6 +161,7 @@ Slices A, B, D and the decision part of E (T033..T034) may proceed in parallel i
 | FR-027, FR-029, FR-030 | T037..T043 | acceptance, schema, no new effects beyond restore |
 | FR-042..FR-046 | T046..T049, T052 | restore plan, no overwrite, CAS apply, restore journal, scope limits |
 | FR-047 | T047, T050, T051 | history view, shared journal reader |
+| FR-048 | T045 | branch evidence in the journal, reapply states in the plan, reapply on restore |
 | FR-028 | all behavior tasks | failing tests first |
 | SC-001 | T013..T018 | proof fixtures |
 | SC-002 | T004..T006 | large plan fixtures |
@@ -172,4 +173,4 @@ Slices A, B, D and the decision part of E (T033..T034) may proceed in parallel i
 | SC-008 | T033..T036 | decisions |
 | SC-009 | T046..T052 | restore, mutants, dogfood tip OIDs |
 
-There are 53 tasks (T045 is a follow-up decision; T046..T053 are the restore and history amendment). Every task has an unchecked sequential ID.
+There are 53 tasks (T045 is the accepted follow-up; T046..T053 are the restore and history amendment). Every task has an unchecked sequential ID.
