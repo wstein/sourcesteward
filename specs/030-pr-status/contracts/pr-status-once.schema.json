@@ -162,7 +162,7 @@
           ]
         },
         "identity_changed": {
-          "type": "boolean"
+          "const": false
         }
       }
     },
@@ -202,6 +202,11 @@
           "type": "array",
           "items": {
             "type": "string"
+          },
+          "not": {
+            "contains": {
+              "const": "native-descendant-state-unverified"
+            }
           }
         }
       }
