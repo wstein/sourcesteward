@@ -7,7 +7,8 @@ Task T001. This file records the independent design review; the foreman ticks T0
 | Round | Reviewed | Reviewer | Verdict |
 | --- | --- | --- | --- |
 | 1 | origin/main b0cc02d with PR #121 head 5738ba998cea2cf896328e1fa77920987cd56787 (design documents and implementation) | independent strongest-tier review (Opus) | NOT CLEAR: 1 medium, several low |
-| 2 | delta of the docs-only fix commit on the restacked branch | pending | pending |
+| 2 | delta at 3307bc49c224a5a8458f98bc5d55dceb0425ce1c (docs-only fixes on the restacked branch) | independent review | NOT CLEAR: 2 open (no task tracked emitting `rewrite-committer-not-predicted`; a stale `state` clause in the data model) and one nit (tasks.md header) |
+| 3 | delta of the commit that fixes round 2 | pending | pending |
 
 An earlier review of the exact implementation head cb6bb64 was CLEAR with two wording follow-ups (object mtime caveat, WP2 wording), fixed in 5738ba9.
 
@@ -15,7 +16,7 @@ An earlier review of the exact implementation head cb6bb64 was CLEAR with two wo
 
 | Id | Severity | Finding | Resolution |
 | --- | --- | --- | --- |
-| F1 | medium | The identity check covers only the old moved commits; a by-hand rebase takes the new committer from the rebaser's configuration or environment, so `pass` can still feed `evidence-clean`. | Stated in FR-015, the data model, the contract and the quickstart (which adds the AGENTS.md `git log --format` check before a push). The limitation `rewrite-committer-not-predicted` is specified; the first-slice code does not yet emit the string, which needs a small code follow-up (not done in this docs-only change). |
+| F1 | medium | The identity check covers only the old moved commits; a by-hand rebase takes the new committer from the rebaser's configuration or environment, so `pass` can still feed `evidence-clean`. | Stated in FR-015, the data model, the contract and the quickstart (which adds the AGENTS.md `git log --format` check before a push). The limitation `rewrite-committer-not-predicted` is specified; the first-slice code does not yet emit the string, which is reserved and tracked by task T024 (not done in this docs-only change). |
 | F2 | low | The contract promised partial evidence for `incomplete` and `evidence: null` elsewhere. | Both say `evidence: null` (what the code does); `boundary.reached` and the diagnostic name what stopped. |
 | F3 | low | The data model listed `patch-equivalent-tree` and an undefined `present` state inconsistently. | `present` removed; the states are `dropped`, `patch-equivalent-tree`, `missing`, `unknown`. |
 | F4 | low | Plan, tasks and spec still described reusing or extracting the tidy helpers. | Aligned with the T004 skip: own small helpers, `internal/workspace` unchanged. |
@@ -26,4 +27,4 @@ An earlier review of the exact implementation head cb6bb64 was CLEAR with two wo
 
 ## Verdict
 
-Findings F1 to F6 are resolved in the documents, except the code emission of the F1 limitation string, which stays an open follow-up. The verdict after the delta review is pending.
+Findings F1 to F6 are resolved in the documents, except the code emission of the F1 limitation string, tracked by T024. Round 2 found a stale `state` clause in the data model, a missing tracking task and a tasks.md header nit; all three are fixed in the round 3 commit. The verdict after the delta review is pending.
