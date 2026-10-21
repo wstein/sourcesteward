@@ -29,7 +29,7 @@ done) and [contracts](../specs/015-local-restacking/contracts/restack-plan.md). 
 
 ## Active work: Spec 032 stw sync (design only, 2026-10-21, runtime not started)
 
-[The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (0/14 done) describe a manual `stw sync plan|apply|restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). Status stays `planned`; the independent design review of the exact head is pending and nothing is implemented.
+[The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (0/14 done) describe a manual one-step `stw sync [--plan]` and `stw sync restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). Status stays `planned`; the independent design review of the exact head is pending and nothing is implemented.
 
 ## Active work: Spec 030 PR status (slice 1 source implemented, verification pending)
 
