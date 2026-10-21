@@ -30,6 +30,7 @@ Status: implemented in source on `feat/015-restack-plan`, hidden command, unpubl
 
 ## Not verified
 
+- Object mtimes: Git may freshen the mtime of an already-existing object in the user's `.git/objects` when `merge-tree` or `commit-tree` writes an identical object (content byte-identical). The sentinel compares content, so `objects: quarantine-only` is not claimed for mtimes.
 - Git 2.46.0 and the pinned CI lanes; macOS; the jj lanes (only the `.jj` directory refusal ran). The quarantine behaviour of the reviewer experiment on other Git versions and pack-threshold packing are unmeasured.
 - Ambiguous and GitButler ownership have no offline fixture.
 - The 60 s time bound is tested by deadline expiry, not by waiting.
