@@ -201,9 +201,9 @@ validated offline but, like the release source schemas, excluded from Pages pack
 accepted, so its first shape changed in place before publication. One object with `schema_version` 1, `command`
 `sync`, `mode` (`plan` or `sync`), `run_id` (null for a plan and for a run that changed no branch, else the ID of the
 journal and the recovery refs), `options` (`rebase`, `prune`, `autostash`: the requested override or null when the Git
-configuration decides), `repos`, `summary` (`total`, `by_result`) and `error` (null, or `code` and `message` of a
+configuration decides), `note` (set when the command ran inside a linked worktree, which it did not touch), `repos`, `summary` (`total`, `by_result`) and `error` (null, or `code` and `message` of a
 refused run, with no repos). No key is omitted; absent values are null. A repository (`kind` `root` or `submodule`) has
-`name` (`.` or the submodule path), `path`, `branch`, `remote`, `result`, `old_oid`, `new_oid`, `ahead`, `behind`,
+`name` (`.` or the path relative to the workspace root, such as `app/lib`), `path`, `branch`, `remote`, `result`, `old_oid`, `new_oid`, `ahead`, `behind`,
 `pruned` (remote-tracking refs the fetch removed), `reason` (set for every skip and failure) and `detail` (Git's own
 message of a `conflict` or `autostash-conflict`). Results: plan `fast-forward`, `rebase`, `merge`; run `fast-forwarded`,
 `rebased`, `merged`, `conflict`, `autostash-conflict`, `failed`; both `up-to-date`, `ahead`, `diverged`, `skipped-dirty`,
