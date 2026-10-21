@@ -60,7 +60,7 @@ Stdout is read by the bounded stream executor, one grammar per command; PID (the
 | `diff-tree --stdin --name-only -r -z` | 8,192 | 34,603,008 | PATH NUL, at most 4,096 bytes |
 | `diff-tree --stdin --numstat -r -z --no-renames` | 8,192 | 34,603,008 | `(\d+\|-)` TAB `(\d+\|-)` TAB PATH NUL |
 | `check-attr -z --stdin diff` | 8,192 | 34,603,008 | PATH NUL `diff` NUL VALUE NUL |
-| `ls-tree -r -z` (attribute files) | 1,024 (this proof's own record bound; not the shared 16,384 tree-channel leaf limit of Spec 029) | 4,325,376 | `MODE TYPE OID` TAB `PATH`, NUL terminated |
+| `ls-tree -r -z` (attribute files) | 16,384 (the shared tree-channel leaf limit of Spec 029; 1,024 refused every repository with more leaves) | 69,206,016 | `MODE TYPE OID` TAB `PATH`, NUL terminated |
 | `cat-file --batch` (attribute files) | 64 files | 1 MiB each | batch header then content |
 | `merge-tree --write-tree --no-messages` | first line `OID`; a conflict listing counts only against the byte bound | 4,325,376 | first line `OID` |
 

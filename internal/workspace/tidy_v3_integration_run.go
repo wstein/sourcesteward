@@ -299,7 +299,7 @@ var (
 		h := integrationNumstatHeader.Find(r)
 		return h != nil && integrationPath(r[len(h):])
 	}}
-	specLsTree = integrationSpec{"ls-tree -r", 1024, bothWidths(4325376), 0, func(r []byte, w int) bool {
+	specLsTree = integrationSpec{"ls-tree -r", 16384, bothWidths(69206016), 0, func(r []byte, w int) bool {
 		h := integrationLsTreeHeader.Find(r)
 		if h == nil || len(r) < len(h)+w+2 {
 			return false

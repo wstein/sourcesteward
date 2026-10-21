@@ -335,13 +335,45 @@ func TestMergeNoopLeavesObjectsRefsAndPackedRefsUntouched(t *testing.T) {
 	}
 }
 
-// Attribute-scan bounds: at most 1,024 tree records, 64 files of 1 MiB.
+// Attribute-scan bounds: at most 16,384 tree records, 64 files of 1 MiB.
 func TestMergeNoopAttributeScanBounds(t *testing.T) {
-	t.Run("more than 1,024 leaves", func(t *testing.T) {
+	// wideTrees builds a shared root of n leaves and two branches that both
+	// change p0: "conflict" for different content, "same" for equal content.
+	wideTrees := func(t *testing.T, n int, same bool) *proofFix {
 		f := newProofFix(t)
-		root := f.rev("HEAD")
-		f.fastImport(importChain("m", 1025, "refs/heads/topic", root, 1000000) + importChain("n", 1, "refs/heads/baseline", root, 2000000))
-		wantVerdict(t, f.verdictBare("baseline", "topic", noopOnly), "needs-review", "", "proof-limit")
+		var b strings.Builder
+		fmt.Fprintf(&b, "commit refs/heads/wide\ncommitter T <t@t> 900000 +0000\ndata 1\nc\nfrom %s\n", f.rev("HEAD"))
+		for i := 0; i < n; i++ {
+			fmt.Fprintf(&b, "M 100644 inline w/p%d\ndata 2\nx\n", i)
+		}
+		side := func(ref string, clock int, content string) {
+			fmt.Fprintf(&b, "\ncommit refs/heads/%s\ncommitter T <t@t> %d +0000\ndata 1\nc\nfrom refs/heads/wide\nM 100644 inline w/p0\ndata %d\n%s\n", ref, clock, len(content), content)
+		}
+		tip := "topic\n"
+		if same {
+			side("baseline", 2000000, tip)
+		} else {
+			side("baseline", 2000000, "base side\n")
+		}
+		side("topic", 1000000, tip)
+		f.fastImport(b.String())
+		return f
+	}
+	// Spec 031 T040: the dogfood base had 1,101 leaves and every merge-noop
+	// proof ended as proof-limit instead of its real verdict.
+	t.Run("1,100 leaves are scanned", func(t *testing.T) {
+		wantVerdict(t, wideTrees(t, 1100, false).verdictBare("baseline", "topic", noopOnly), "needs-review", "", "conflict")
+		wantVerdict(t, wideTrees(t, 1100, true).verdictBare("baseline", "topic", noopOnly), "proven", "merge-noop")
+	})
+	t.Run("16,384 leaves are scanned, 16,385 are over the bound", func(t *testing.T) {
+		root := len(strings.Fields(newProofFix(t).git("ls-tree", "-r", "--name-only", "HEAD")))
+		wantVerdict(t, wideTrees(t, 16384-root, false).verdictBare("baseline", "topic", noopOnly), "needs-review", "", "conflict")
+		wantVerdict(t, wideTrees(t, 16385-root, false).verdictBare("baseline", "topic", noopOnly), "needs-review", "", "proof-limit")
+	})
+	t.Run("the bound is pinned", func(t *testing.T) {
+		if specLsTree.maxRecords != 16384 || specLsTree.bytes(40) != 69206016 || specLsTree.bytes(64) != 69206016 {
+			t.Fatalf("ls-tree -r bound: %d records, %d bytes", specLsTree.maxRecords, specLsTree.bytes(40))
+		}
 	})
 	attrFiles := func(n int, size int) string {
 		var b strings.Builder
