@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/sync.schema.json",
+  "title": "SourceSteward sync plan (schema 1)",
+  "description": "Result of stw sync --plan: one fetch of the remote-tracking refs, then a classification of every local branch that tracks the remote. Exit statuses: 0 nothing needs attention, 1 a failed run (error is set) or a skipped-dirty or diverged item, 2 usage error with no JSON. Keys are never omitted; absent values are null. Later slices add modes and results compatibly. Added properties are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "mode",
+    "run_id",
+    "remote",
+    "options",
+    "fetch",
+    "items",
+    "submodules",
+    "summary",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "sync"
+    },
+    "mode": {
+      "const": "plan"
+    },
+    "run_id": {
+      "type": "null"
+    },
+    "remote": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "options": {
+      "type": "object",
+      "required": [
+        "rebase",
+        "prune",
+        "autostash",
+        "submodules"
+      ],
+      "properties": {
+        "rebase": {
+          "type": "boolean"
+        },
+        "prune": {
+          "type": "boolean"
+        },
+        "autostash": {
+          "type": "boolean"
+        },
+        "submodules": {
+          "type": "boolean"
+        }
+      }
+    },
+    "fetch": {
+      "type": "object",
+      "required": [
+        "performed",
+        "pruned_refs",
+        "pruned_total"
+      ],
+      "properties": {
+        "performed": {
+          "type": "boolean"
+        },
+        "pruned_refs": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "pruned_total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "submodules": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "by_result",
+        "untracked"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "by_result": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "fast-forward",
+              "up-to-date",
+              "ahead",
+              "diverged",
+              "skipped-dirty",
+              "upstream-gone"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "untracked": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^sync-[a-z-]+$"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 260
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "item": {
+      "type": "object",
+      "required": [
+        "branch",
+        "worktree",
+        "result",
+        "old_oid",
+        "new_oid",
+        "reason"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "worktree": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "result": {
+          "enum": [
+            "fast-forward",
+            "up-to-date",
+            "ahead",
+            "diverged",
+            "skipped-dirty",
+            "upstream-gone"
+          ]
+        },
+        "old_oid": {
+          "$ref": "#/$defs/oid"
+        },
+        "new_oid": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/oid"
+            }
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": [
+                  "fast-forward",
+                  "skipped-dirty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "new_oid": {
+                "$ref": "#/$defs/oid"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "new_oid": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": [
+                  "skipped-dirty",
+                  "diverged",
+                  "upstream-gone"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
