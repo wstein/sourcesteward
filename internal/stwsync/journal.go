@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: EUPL-1.2
+package stwsync
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// Journal states of one branch ref change.
+const (
+	statePrepared  = "prepared"
+	stateCompleted = "completed"
+	stateFailed    = "failed"
+)
+
+// journalEntry is the record of one branch ref change. It is written (state prepared, with its
+// recovery ref already created) before the change and rewritten after it.
+type journalEntry struct {
+	N             int    `json:"n"`
+	Ref           string `json:"ref"`
+	Worktree      string `json:"worktree"`
+	OldOID        string `json:"old_oid"`
+	PlannedNewOID string `json:"planned_new_oid"`
+	NewOID        string `json:"new_oid"`
+	OrigHead      string `json:"orig_head"`
+	StashOID      string `json:"stash_oid"`
+	RecoveryRef   string `json:"recovery_ref"`
+	State         string `json:"state"`
+	Reason        string `json:"reason"`
+}
+
+// journalRecord is the `sync` record type: one file per run in <git-common-dir>/stw/sync. It follows the
+// Spec 029/031 conventions (recovery refs under refs/stw/recovery, durable atomic rewrites) but is keyed
+// by run ID and needs no plan, state directory or sandboxed reader.
+type journalRecord struct {
+	Type          string         `json:"type"`
+	SchemaVersion int            `json:"schema_version"`
+	RunID         string         `json:"run_id"`
+	Remote        string         `json:"remote"`
+	Started       string         `json:"started"`
+	Entries       []journalEntry `json:"entries"`
+}
+
+type journal struct {
+	e    env
+	path string // empty until the first entry: a run without a ref change leaves no file
+	dir  string
+	rec  journalRecord
+}
+
+func newRunID() (string, error) {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return time.Now().UTC().Format("20060102T150405Z") + "-" + hex.EncodeToString(b), nil
+}
+
+func newJournal(ctx context.Context, e env, id, remote string) (*journal, error) {
+	out, err := e.g(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil || out.Code != 0 || strings.TrimSpace(out.Out) == "" {
+		return nil, fmt.Errorf("cannot locate the Git directory")
+	}
+	dir := filepath.Join(strings.TrimSpace(out.Out), "stw", "sync")
+	return &journal{e: e, dir: dir, path: filepath.Join(dir, id+".json"),
+		rec: journalRecord{Type: "sync", SchemaVersion: 1, RunID: id, Remote: remote, Started: time.Now().UTC().Format(time.RFC3339), Entries: []journalEntry{}}}, nil
+}
+
+func (j *journal) runID() string { return j.rec.RunID }
+
+// prepare creates the recovery ref (old OID, create-only) and durably records the planned change.
+func (j *journal) prepare(ctx context.Context, ref, worktree, oldOID, newOID string) (int, error) {
+	n := len(j.rec.Entries) + 1
+	recovery := fmt.Sprintf("refs/stw/recovery/sync/%s/%d", j.rec.RunID, n)
+	if out, err := j.e.g(ctx, "update-ref", "--create-reflog", recovery, oldOID, strings.Repeat("0", len(oldOID))); err != nil || out.Code != 0 {
+		return 0, fmt.Errorf("recovery ref: %s", oneLine(out.Diagnostic))
+	}
+	j.rec.Entries = append(j.rec.Entries, journalEntry{N: n, Ref: ref, Worktree: worktree, OldOID: oldOID, PlannedNewOID: newOID, RecoveryRef: recovery, State: statePrepared})
+	if err := j.write(); err != nil {
+		j.rec.Entries = j.rec.Entries[:n-1]
+		j.e.g(ctx, "update-ref", "-d", recovery, oldOID)
+		return 0, err
+	}
+	return n - 1, nil
+}
+
+// stash records the autostash OID of entry i before the branch change.
+func (j *journal) stash(i int, oid string) error {
+	j.rec.Entries[i].StashOID = oid
+	return j.write()
+}
+
+// finish records the outcome of entry i.
+func (j *journal) finish(i int, state, newOID, origHead, reason string) error {
+	en := &j.rec.Entries[i]
+	en.State, en.NewOID, en.OrigHead, en.Reason = state, newOID, origHead, reason
+	return j.write()
+}
+
+func (j *journal) write() error {
+	if err := os.MkdirAll(j.dir, 0o700); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(j.rec)
+	if err != nil {
+		return err
+	}
+	tmp := j.path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err = f.Write(raw); err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err = os.Rename(tmp, j.path); err != nil {
+		return err
+	}
+	if d, derr := os.Open(j.dir); derr == nil {
+		d.Sync()
+		d.Close()
+	}
+	return nil
+}

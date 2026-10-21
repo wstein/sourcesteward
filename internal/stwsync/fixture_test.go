@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -35,74 +36,82 @@ func commit(t *testing.T, dir, file, content string) {
 	runGit(t, dir, "commit", "-q", "-m", "change "+file)
 }
 
-// fixture is a repository with a bare remote, a second clone that moves the remote, and linked worktrees.
-type fixture struct {
-	root, bare, repo, other string
+// workspace is a root repository "ws" with submodules a, b (on main) and c (detached), each with its own bare remote.
+type workspace struct {
+	root, ws string
+	bare     map[string]string // "ws", "a", "b", "c"
 }
 
-// newFixture builds, in a temporary directory: a bare origin, a primary clone "repo" (main checked
-// out) and a second clone "other" used to move the remote.
-func newFixture(t *testing.T) *fixture {
+func newWorkspace(t *testing.T) *workspace {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{root: root, bare: filepath.Join(root, "origin.git"), repo: filepath.Join(root, "repo"), other: filepath.Join(root, "other")}
-	runGit(t, root, "init", "-q", "--bare", "-b", "main", f.bare)
-	runGit(t, root, "init", "-q", "-b", "main", f.repo)
-	runGit(t, f.repo, "remote", "add", "origin", f.bare)
-	commit(t, f.repo, "a.txt", "one\n")
-	runGit(t, f.repo, "push", "-q", "-u", "origin", "main")
-	runGit(t, root, "clone", "-q", f.bare, f.other)
-	return f
+	w := &workspace{root: root, ws: filepath.Join(root, "ws"), bare: map[string]string{}}
+	for _, name := range []string{"ws", "a", "b", "c"} {
+		w.bare[name] = filepath.Join(root, name+".git")
+		runGit(t, root, "init", "-q", "--bare", "-b", "main", w.bare[name])
+		seed := filepath.Join(root, "seed-"+name)
+		runGit(t, root, "clone", "-q", w.bare[name], seed)
+		runGit(t, seed, "checkout", "-q", "-b", "main")
+		commit(t, seed, name+".txt", "one\n")
+		runGit(t, seed, "push", "-q", "origin", "main")
+	}
+	runGit(t, root, "clone", "-q", w.bare["ws"], w.ws)
+	for _, name := range []string{"a", "b", "c"} {
+		runGit(t, w.ws, "submodule", "add", "-q", "-b", "main", w.bare[name], name)
+	}
+	runGit(t, w.ws, "commit", "-q", "-m", "add submodules")
+	runGit(t, w.ws, "push", "-q", "origin", "main")
+	runGit(t, filepath.Join(w.ws, "c"), "checkout", "-q", "--detach")
+	return w
 }
 
-// branchOnRemote creates branch NAME at the current main on the remote and as a tracking local branch.
-func (f *fixture) branchOnRemote(t *testing.T, name string) {
-	t.Helper()
-	runGit(t, f.repo, "branch", name, "main")
-	runGit(t, f.repo, "push", "-q", "-u", "origin", name)
+func (w *workspace) dir(name string) string {
+	if name == "." {
+		return w.ws
+	}
+	return filepath.Join(w.ws, name)
 }
 
-// advanceRemote adds a commit to branch NAME of the remote through the second clone.
-func (f *fixture) advanceRemote(t *testing.T, name string) {
-	t.Helper()
-	runGit(t, f.other, "fetch", "-q", "origin")
-	runGit(t, f.other, "checkout", "-q", "-B", name, "origin/"+name)
-	commit(t, f.other, name+"-remote.txt", name+"\n")
-	runGit(t, f.other, "push", "-q", "origin", name)
+func (w *workspace) bareKey(name string) string {
+	if name == "." {
+		return "ws"
+	}
+	return name
 }
 
-// advanceLocal adds a commit to local branch NAME without leaving the primary worktree on it.
-func (f *fixture) advanceLocal(t *testing.T, name string) {
+// advance adds a commit to branch (default main) of the remote of repo name through a throwaway clone.
+func (w *workspace) advance(t *testing.T, name, branch string) {
 	t.Helper()
-	tree := filepath.Join(f.root, "tmp-"+name)
-	runGit(t, f.repo, "worktree", "add", "-q", tree, name)
-	commit(t, tree, name+"-local.txt", name+"\n")
-	runGit(t, f.repo, "worktree", "remove", "--force", tree)
+	w.advanceFile(t, name, branch, "")
 }
 
-func (f *fixture) worktree(t *testing.T, branch string) string {
+// advanceFile is advance with the commit changing FILE (a new file when empty).
+func (w *workspace) advanceFile(t *testing.T, name, branch, file string) {
 	t.Helper()
-	tree := filepath.Join(f.root, "wt-"+branch)
-	runGit(t, f.repo, "worktree", "add", "-q", tree, branch)
-	return tree
+	clone := filepath.Join(w.root, "adv-"+name+"-"+itoa(len(w.bare)))
+	w.bare[name+"#"+itoa(len(w.bare))] = clone
+	runGit(t, w.root, "clone", "-q", w.bare[w.bareKey(name)], clone)
+	runGit(t, clone, "checkout", "-q", "-B", branch, "origin/"+branch)
+	if file == "" {
+		file = "remote-" + itoa(len(w.bare)) + ".txt"
+	}
+	commit(t, clone, file, "remote edit "+itoa(len(w.bare))+"\n")
+	runGit(t, clone, "push", "-q", "origin", branch)
 }
 
-func (f *fixture) oid(t *testing.T, ref string) string {
+func (w *workspace) oid(t *testing.T, name, ref string) string {
 	t.Helper()
-	return runGit(t, f.repo, "rev-parse", "--verify", ref)
+	return runGit(t, w.dir(name), "rev-parse", "--verify", ref)
 }
 
-func itemsByBranch(t *testing.T, r Result) map[string]Item {
+func repoByName(t *testing.T, r Result) map[string]Repo {
 	t.Helper()
-	m := map[string]Item{}
-	for _, it := range r.Items {
-		if _, dup := m[it.Branch]; dup {
-			t.Fatalf("duplicate item %s", it.Branch)
-		}
-		m[it.Branch] = it
+	m := map[string]Repo{}
+	for _, it := range r.Repos {
+		m[it.Name] = it
 	}
 	return m
 }
@@ -113,4 +122,52 @@ func gitCmd(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	return cmd
+}
+
+func hookScript(t *testing.T, repoGitDir, name, body string) {
+	t.Helper()
+	path := filepath.Join(repoGitDir, "hooks", name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, path, "#!/bin/sh\n"+body)
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func sortStrings(s []string) { sort.Strings(s) }
+
+func worktreeState(t *testing.T, tree string) string {
+	t.Helper()
+	var keep []string
+	for _, l := range strings.Split(runGit(t, tree, "status", "--porcelain=v2", "--branch"), "\n") {
+		if !strings.HasPrefix(l, "# branch.ab") {
+			keep = append(keep, l)
+		}
+	}
+	return strings.Join(keep, "\n") + runGit(t, tree, "rev-parse", "HEAD")
+}
+
+func snapshotTree(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if info.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		raw, err := os.ReadFile(p)
+		out[strings.TrimPrefix(p, dir)] = string(raw) + "|" + info.Mode().String()
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
