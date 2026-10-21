@@ -14,16 +14,20 @@ import (
 
 // planner carries the observations of one plan.
 type planner struct {
-	opts       Options
-	res        *Result
-	git        *gitRunner
-	now        func() time.Time
-	root       string // worktree root of the target checkout
-	gdir       string // absolute git directory of the target worktree
-	cdir       string // common git directory
-	moved      []rawCommit
-	touched    []string
-	quarantine string
+	opts          Options
+	res           *Result
+	git           *gitRunner
+	now           func() time.Time
+	root          string // worktree root of the target checkout
+	gdir          string // absolute git directory of the target worktree
+	cdir          string // common git directory
+	moved         []rawCommit
+	touched       []string
+	replayed      []string // quarantine commit per moved commit; empty when dropped or not replayed
+	replayedCount int
+	emptyAfter    []string
+	inspect       func(context.Context, *planner) // test seam: sees the planner before the quarantine is removed
+	quarantine    string
 }
 
 // Plan reads the explicit input and returns one restack-plan result. It writes nothing to the
@@ -31,10 +35,14 @@ type planner struct {
 func Plan(ctx context.Context, o Options) Result { return plan(ctx, o, time.Now) }
 
 func plan(ctx context.Context, o Options, now func() time.Time) Result {
+	return planWith(ctx, o, now, nil)
+}
+
+func planWith(ctx context.Context, o Options, now func() time.Time, inspect func(context.Context, *planner)) Result {
 	res := newResult(o, now)
 	ctx, cancel := context.WithTimeout(ctx, TimeoutSeconds*time.Second)
 	defer cancel()
-	p := &planner{opts: o, res: &res, now: now}
+	p := &planner{opts: o, res: &res, now: now, inspect: inspect}
 	err := p.run(ctx)
 	p.res.ObservedAt = now().UTC().Format(time.RFC3339)
 	if err != nil {
@@ -85,7 +93,16 @@ func (p *planner) run(ctx context.Context) error {
 	if err := p.resolve(ctx); err != nil {
 		return err
 	}
-	return p.checkAttributes(ctx)
+	if err := p.checkAttributes(ctx); err != nil {
+		return err
+	}
+	if err := p.collect(ctx); err != nil {
+		return err
+	}
+	if p.inspect != nil {
+		p.inspect(ctx, p)
+	}
+	return nil
 }
 
 // admit decides ownership and canonical paths with the shared read-only inspection (FR-003, FR-014).
