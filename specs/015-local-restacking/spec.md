@@ -115,6 +115,13 @@ A caller receives the same evidence in human and structured output without hidde
 - Rewrite outcome: old/new identities, conflicts and recovery evidence.
 - Evidence bundle (first slice): the read-only observations of FR-013, see [data model](data-model.md) and [contract](contracts/restack-plan.md).
 
+## Known limits
+
+- Semantic breaks after a clean replay are not detected; only the overlap indicator is reported.
+- The prediction can differ from a real rebase (renames, rerere, whitespace options); apply recomputes it.
+- Exotic traps (author-date edge cases, unusual attributes beyond the hazard gate, other Git versions than the CI lanes, pack-threshold packing in the quarantine) are not covered by fixtures; the plan then refuses or reports `unknown` where it can detect them, and otherwise the limit stands.
+- Mutation controls are required for the safety-critical tasks only (refusals, identity, quarantine, texts, outcome table); other tasks rely on their tests.
+
 ## Success Criteria
 
 ### Measurable Outcomes

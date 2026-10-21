@@ -44,9 +44,9 @@ State values never mean authorization; any `unknown` is reported with its reason
 | `hazards` | string[] | configuration/hook hazard names found (FR-014) |
 | `writes` | `{refs: false, index: false, worktree: false, config: false, objects: "quarantine-only"}` | constant disclosure |
 
-## Names and dates
+## Names
 
-`input.branch.short` is the full ref with exactly the leading `refs/heads/` stripped (`refs/heads/a/b` gives `a/b`); other namespaces are refused. Author and committer dates are recorded per moved commit (RFC 3339 with offset); a replay preserves author dates, and neither date takes part in the identity check or the pairing.
+`input.branch.short` is the full ref without the leading `refs/heads/` (`refs/heads/a/b` gives `a/b`); other namespaces are refused.
 
 ## Texts
 

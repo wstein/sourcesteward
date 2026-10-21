@@ -35,6 +35,8 @@ git cherry <new parent> <old parent>                             # all -
 - A parent change to `a.go` that `C1` also edits cleanly: `overlap.indicator: some`, a risk indicator only.
 - A parent that changed a signature the branch calls in another file: replay is clean, `overlap` is `none`, and the plan cannot see the break: build and test after restacking.
 
+Branch names in the texts are the full ref without `refs/heads/` (`refs/heads/a/b` gives `a/b`); author dates are preserved by the replay.
+
 ## Offline checks
 
 ```sh
