@@ -26,6 +26,18 @@ type restoreFix struct {
 // plans their deletion and applies the plan.
 func newRestoreFix(t *testing.T, names ...string) *restoreFix {
 	t.Helper()
+	return newRestoreFixWith(t, restoreFixOptions{}, names...)
+}
+
+// restoreFixOptions lets a test prepare the repository (branch configuration,
+// remotes) before the real apply and wrap the apply coordinator's seams.
+type restoreFixOptions struct {
+	setup func(*restoreFix)
+	tweak func(*restoreFix, *tidyV3RefsApplyCoordinator)
+}
+
+func newRestoreFixWith(t *testing.T, opts restoreFixOptions, names ...string) *restoreFix {
+	t.Helper()
 	f := &restoreFix{proofFix: newProofFix(t), tips: map[string]string{}}
 	for _, name := range names {
 		f.git("checkout", "-q", "--detach", f.main)
@@ -39,19 +51,28 @@ func newRestoreFix(t *testing.T, names ...string) *restoreFix {
 	for _, name := range names {
 		refs = append(refs, "refs/heads/"+name)
 	}
-	f.applyPlan(t, V3PlanOptions{Refs: refs})
+	if opts.setup != nil {
+		opts.setup(f)
+	}
+	f.applyPlanWith(t, opts.tweak, V3PlanOptions{Refs: refs})
 	return f
 }
 
 // applyPlan plans with the options and applies the stored plan for real.
-func (f *restoreFix) applyPlan(t *testing.T, o V3PlanOptions) {
+func (f *restoreFix) applyPlan(t *testing.T, o V3PlanOptions) { f.applyPlanWith(t, nil, o) }
+
+func (f *restoreFix) applyPlanWith(t *testing.T, tweak func(*restoreFix, *tidyV3RefsApplyCoordinator), o V3PlanOptions) {
 	t.Helper()
 	r := f.plan(o)
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("fixture plan: %+v", r.Diagnostics)
 	}
 	f.stored, f.state = *r.Plan, r.Plan.StateDir
-	a := defaultTidyV3RefsApplyCoordinator().apply(context.Background(), V3ApplyOptions{StateDir: f.state, PlanID: f.stored.PlanID, Authorize: true, ProtectWorktrees: []string{}})
+	c := defaultTidyV3RefsApplyCoordinator()
+	if tweak != nil {
+		tweak(f, &c)
+	}
+	a := c.apply(context.Background(), V3ApplyOptions{StateDir: f.state, PlanID: f.stored.PlanID, Authorize: true, ProtectWorktrees: []string{}})
 	if a.Status != "ok" {
 		t.Fatalf("fixture apply: %s %+v", a.Status, a.Diagnostics)
 	}
