@@ -274,7 +274,8 @@
             "dirty",
             "locked",
             "prunable",
-            "list"
+            "list",
+            "missing"
           ],
           "properties": {
             "linked": {
@@ -298,6 +299,10 @@
               "items": {
                 "$ref": "#/$defs/worktree"
               }
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         },
@@ -341,6 +346,7 @@
                     "ahead",
                     "behind",
                     "diverged",
+                    "unrelated",
                     "unknown",
                     null
                   ]
@@ -482,7 +488,8 @@
         "detached",
         "dirty",
         "locked",
-        "prunable"
+        "prunable",
+        "missing"
       ],
       "properties": {
         "path": {
@@ -507,6 +514,9 @@
           ]
         },
         "prunable": {
+          "type": "boolean"
+        },
+        "missing": {
           "type": "boolean"
         }
       }

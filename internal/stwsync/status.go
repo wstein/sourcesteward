@@ -54,6 +54,7 @@ type WorktreeInfo struct {
 	Branch   *string `json:"branch"`
 	Detached bool    `json:"detached"`
 	Dirty    bool    `json:"dirty"`
+	Missing  bool    `json:"missing"`
 	Locked   *string `json:"locked"`
 	Prunable bool    `json:"prunable"`
 }
@@ -64,12 +65,13 @@ type WorktreeCounts struct {
 	Dirty    int            `json:"dirty"`
 	Locked   int            `json:"locked"`
 	Prunable int            `json:"prunable"`
+	Missing  int            `json:"missing"`
 	List     []WorktreeInfo `json:"list"`
 }
 
 // Gitlink compares the commit the superproject records for a submodule with the commit checked out.
 // State is ok, drift or uninitialized; Relation (drift only) is where the checked-out commit stands
-// relative to the recorded one: ahead, behind, diverged or unknown.
+// relative to the recorded one: ahead, behind, diverged, unrelated (no common ancestor) or unknown.
 type Gitlink struct {
 	Recorded   *string `json:"recorded"`
 	CheckedOut *string `json:"checked_out"`
@@ -257,6 +259,10 @@ func gitlinkRelation(ctx context.Context, e env, recorded, checked string) strin
 	} else if !ok {
 		return "unknown"
 	}
+	// no common ancestor at all: unrelated histories, not a diverged branch
+	if out, err := e.g(ctx, "merge-base", recorded, checked); err == nil && out.Code == 1 {
+		return "unrelated"
+	}
 	return "diverged"
 }
 
@@ -349,7 +355,8 @@ func parseStatus(raw string, rp *RepoStatus) {
 		case strings.HasPrefix(f, "# stash "):
 			rp.Stash, _ = strconv.Atoi(strings.TrimPrefix(f, "# stash "))
 		case strings.HasPrefix(f, "1 ") || strings.HasPrefix(f, "2 "):
-			if len(f) > 4 {
+			// a changed submodule (S... flag) is a gitlink change; the gitlink check reports it, not the file counts
+			if len(f) > 4 && !(f[0] == '1' && len(f) > 8 && f[5] == 'S') && !(f[0] == '2' && len(f) > 8 && f[5] == 'S') {
 				if f[2] != '.' {
 					rp.Changes.Staged++
 				}
@@ -473,6 +480,10 @@ func (s *statusRun) worktrees(ctx context.Context, e env, rp *RepoStatus) bool {
 	flush()
 	var wg sync.WaitGroup
 	for i := range list {
+		if _, err := os.Stat(list[i].Path); err != nil {
+			list[i].Missing = true // a locked worktree whose directory is gone: no dirty claim
+			continue
+		}
 		if list[i].Prunable {
 			continue
 		}
@@ -494,6 +505,9 @@ func (s *statusRun) worktrees(ctx context.Context, e env, rp *RepoStatus) bool {
 		}
 		if w.Prunable {
 			rp.Worktrees.Prunable++
+		}
+		if w.Missing {
+			rp.Worktrees.Missing++
 		}
 	}
 	if s.opts.Worktrees {

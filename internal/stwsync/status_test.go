@@ -3,12 +3,14 @@ package stwsync
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func statusOf(t *testing.T, path string, o StatusOptions) StatusResult {
@@ -249,6 +251,9 @@ func TestStatusGitlinkDrift(t *testing.T) {
 	if d := rp["dev"]; d.Gitlink.State != "drift" || *d.Gitlink.Relation != "behind" || !has(d.Reasons, "gitlink-drift") {
 		t.Fatalf("%+v", d.Gitlink)
 	}
+	if root := rp["."]; root.Changes.Unstaged != 0 || root.Changes.Staged != 0 || root.Attention {
+		t.Fatalf("a changed gitlink is not a dirty file: %+v %v", root.Changes, root.Reasons)
+	}
 	if c := rp["c"]; c.Gitlink.State != "drift" || *c.Gitlink.Relation != "ahead" || has(c.Reasons, "gitlink-drift") {
 		t.Fatalf("%+v", c.Gitlink)
 	}
@@ -269,10 +274,29 @@ func TestStatusIsReadOnly(t *testing.T) {
 	runGit(t, w.ws, "worktree", "add", "-q", "-b", "wt", filepath.Join(w.root, "wt"))
 	write(t, filepath.Join(w.ws, "untracked.txt"), "u\n")
 	write(t, filepath.Join(w.dir("a"), "a.txt"), "changed\n")
+	repos := []string{".", "a", "a/n", "b", "c", "dev"}
+	// make every index stale on purpose: a plain `git status` would now rewrite it with refreshed stat data
+	old := time.Now().Add(-48 * time.Hour)
+	for _, n := range repos {
+		for _, f := range splitLines(runGit(t, w.dir(n), "ls-files")) {
+			if err := os.Chtimes(filepath.Join(w.dir(n), f), old, old); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// the snapshot never runs a Git command that could refresh the index: refs and stashes come from
+	// for-each-ref, the index is hashed as bytes, files by content
 	snap := func() string {
 		var b strings.Builder
-		for _, n := range []string{".", "a", "a/n", "b", "c", "dev"} {
-			b.WriteString(runGit(t, w.dir(n), "for-each-ref") + runGit(t, w.dir(n), "status", "--porcelain=v2", "--branch", "--show-stash") + runGit(t, w.dir(n), "stash", "list"))
+		for _, n := range repos {
+			b.WriteString(runGit(t, w.dir(n), "for-each-ref") + runGit(t, w.dir(n), "stash", "list"))
+			idx := filepath.Join(runGit(t, w.dir(n), "rev-parse", "--absolute-git-dir"), "index")
+			raw, err := os.ReadFile(idx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			info, _ := os.Stat(idx)
+			b.WriteString(fmt.Sprintf("%s %x %v\n", n, sha256.Sum256(raw), info.ModTime()))
 		}
 		files := snapshotTree(t, w.ws)
 		keys := make([]string, 0, len(files))
@@ -286,11 +310,15 @@ func TestStatusIsReadOnly(t *testing.T) {
 		return b.String()
 	}
 	before := snap()
-	idx := runGit(t, w.ws, "ls-files", "--stage")
 	statusOf(t, w.ws, StatusOptions{Worktrees: true})
 	statusOf(t, w.dir("a/n"), StatusOptions{})
-	if after := snap(); after != before || runGit(t, w.ws, "ls-files", "--stage") != idx {
+	if after := snap(); after != before {
 		t.Fatalf("status changed the workspace:\n%s\n----\n%s", before, after)
+	}
+	// mutation check: a plain git status refreshes the stale index, and the snapshot sees it
+	runGit(t, w.ws, "status", "--porcelain")
+	if snap() == before {
+		t.Fatal("the snapshot cannot see an index refresh, so the read-only check proves nothing")
 	}
 }
 
@@ -302,5 +330,42 @@ func TestStatusRefusesAPathOutsideAnyRepository(t *testing.T) {
 	r := Status(context.Background(), StatusOptions{Path: dir})
 	if r.Error == nil || r.Error.Code != "status-not-a-repository" || r.Repos == nil || len(r.Repos) != 0 {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestStatusRealDirtyFileInRootStillNeedsAttention(t *testing.T) {
+	w := newWorkspace(t)
+	commit(t, w.dir("b"), "ahead.txt", "a\n") // gitlink change: not a dirty file
+	write(t, filepath.Join(w.ws, "ws.txt"), "really changed\n")
+	root := statusRepos(statusOf(t, w.ws, StatusOptions{}))["."]
+	if root.Changes.Unstaged != 1 || !root.Attention || !has(root.Reasons, "unstaged") {
+		t.Fatalf("%+v %v", root.Changes, root.Reasons)
+	}
+}
+
+func TestStatusUnrelatedGitlink(t *testing.T) {
+	w := newWorkspace(t)
+	b := w.dir("b")
+	runGit(t, b, "checkout", "-q", "--orphan", "island")
+	runGit(t, b, "rm", "-rfq", ".")
+	commit(t, b, "island.txt", "i\n")
+	br := statusRepos(statusOf(t, w.ws, StatusOptions{}))["b"]
+	if br.Gitlink == nil || br.Gitlink.State != "drift" || br.Gitlink.Relation == nil || *br.Gitlink.Relation != "unrelated" || !has(br.Reasons, "gitlink-drift") {
+		t.Fatalf("%+v %v", br.Gitlink, br.Reasons)
+	}
+}
+
+func TestStatusLockedWorktreeWithMissingDirectoryIsNotDirty(t *testing.T) {
+	w := newWorkspace(t)
+	gone := filepath.Join(w.root, "wt-gone")
+	runGit(t, w.ws, "worktree", "add", "-q", "--detach", gone)
+	runGit(t, w.ws, "worktree", "lock", "--reason", "removable", gone)
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatal(err)
+	}
+	r := statusOf(t, w.ws, StatusOptions{Worktrees: true})
+	wt := statusRepos(r)["."].Worktrees
+	if wt.Missing != 1 || wt.Dirty != 0 || len(wt.List) != 1 || !wt.List[0].Missing || wt.List[0].Dirty || wt.Locked != 1 {
+		t.Fatalf("%+v", wt)
 	}
 }

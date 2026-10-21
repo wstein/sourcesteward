@@ -50,6 +50,10 @@ func TestStatusSchemaRejectsBrokenResults(t *testing.T) {
 		"error on an ok repo":   func(m map[string]any) { repoAt(m, 0)["error"] = map[string]any{"code": "status-x", "message": "m"} },
 		"bad error code":        func(m map[string]any) { repoAt(m, 4)["error"].(map[string]any)["code"] = "sync-x" },
 		"string option":         func(m map[string]any) { m["options"].(map[string]any)["fetch"] = "yes" },
+		"unknown relation":      func(m map[string]any) { repoAt(m, 1)["gitlink"].(map[string]any)["relation"] = "sideways" },
+		"worktree without missing": func(m map[string]any) {
+			delete(repoAt(m, 1)["worktrees"].(map[string]any)["list"].([]any)[0].(map[string]any), "missing")
+		},
 		"worktree without dirty": func(m map[string]any) {
 			delete(repoAt(m, 1)["worktrees"].(map[string]any)["list"].([]any)[0].(map[string]any), "dirty")
 		},
