@@ -76,7 +76,7 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	}
 	// The deadline scales with the stored plan (60 s + 5 s + 50 ms per recorded
 	// entry); reading the plan, bounded local state I/O, precedes it.
-	ctx, cancelDeadline := context.WithTimeout(ctx, v3PlanApplyTimeout(p))
+	ctx, cancelDeadline := context.WithTimeout(ctx, v3Timeout(ctx, v3PlanApplyTimeout(p)))
 	defer cancelDeadline()
 	r.Backend = "git"
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), "Recovery journal: "+filepath.Join(p.StateDir, "tidy-v3-operations", p.PlanID+".json"))

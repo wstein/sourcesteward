@@ -32,3 +32,37 @@ func TestV3TimeoutOverrideReplacesDefaults(t *testing.T) {
 		t.Fatalf("zero override %s", got)
 	}
 }
+
+// --timeout replaces the scaled default for the whole retirement apply and its
+// subordinate contexts, both ways: a short one stops the apply with a named
+// code, a long one succeeds although the default is deliberately tiny.
+func TestTidyV3RetirementApplyHonoursTimeoutBothWays(t *testing.T) {
+	oldBase, oldEffect, oldEntry := v3ApplyBaseTimeout, v3ApplyPerEffect, v3ApplyPerEntry
+	t.Cleanup(func() { v3ApplyBaseTimeout, v3ApplyPerEffect, v3ApplyPerEntry = oldBase, oldEffect, oldEntry })
+	run := func(t *testing.T, base, override time.Duration) V3Result {
+		o, _ := tidyV3LegacyFixture(t, false)
+		o.StateDir = privateDir(t)
+		c := defaultTidyV3RetirementCoordinator()
+		planned := c.plan(context.Background(), o)
+		if planned.Status != "ok" || planned.Plan == nil || !v3RetirementEligible(*planned.Plan.Retirement) {
+			t.Fatalf("plan: %+v", planned.Diagnostics)
+		}
+		v3ApplyBaseTimeout, v3ApplyPerEffect, v3ApplyPerEntry = base, 0, 0
+		ctx := context.Background()
+		if override > 0 {
+			ctx = withV3Timeout(ctx, override)
+		}
+		return c.apply(ctx, V3ApplyOptions{StateDir: o.StateDir, PlanID: planned.Plan.PlanID, Authorize: true, CompletedWorktree: o.CompletedWorktree, Owner: o.Owner, ProtectWorktrees: o.ProtectWorktrees})
+	}
+	t.Run("long override beats a tiny default", func(t *testing.T) {
+		if r := run(t, time.Nanosecond, 5*time.Minute); r.Status != "ok" {
+			t.Fatalf("%s %+v", r.Status, r.Diagnostics)
+		}
+	})
+	t.Run("short override stops a generous default", func(t *testing.T) {
+		r := run(t, 10*time.Minute, time.Nanosecond)
+		if r.Status == "ok" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "canceled" {
+			t.Fatalf("%s %+v", r.Status, r.Diagnostics)
+		}
+	})
+}

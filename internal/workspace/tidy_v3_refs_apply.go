@@ -37,8 +37,16 @@ func defaultTidyV3RefsApplyCoordinator() tidyV3RefsApplyCoordinator {
 // manifest entry, because every apply observation re-reads each file. It has no
 // ceiling: the work, not a constant, bounds the time, and the caller's own
 // context (or --timeout) still ends it.
+// v3ApplyBaseTimeout is the fixed part of the apply deadline; a variable only
+// so tests can make the default small and prove that --timeout overrides it.
+var (
+	v3ApplyBaseTimeout = 60 * time.Second
+	v3ApplyPerEffect   = 5 * time.Second
+	v3ApplyPerEntry    = 50 * time.Millisecond
+)
+
 func v3ApplyTimeout(effects, entries int) time.Duration {
-	return 60*time.Second + time.Duration(effects)*5*time.Second + time.Duration(entries)*50*time.Millisecond
+	return v3ApplyBaseTimeout + time.Duration(effects)*v3ApplyPerEffect + time.Duration(entries)*v3ApplyPerEntry
 }
 
 // v3PlanApplyTimeout derives the apply deadline from the stored plan.

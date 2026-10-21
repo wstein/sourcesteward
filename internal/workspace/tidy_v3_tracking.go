@@ -207,7 +207,7 @@ func defaultTidyV3TrackingCoordinator() tidyV3TrackingCoordinator {
 const tidyV3TrackingSamplingLimit = "Remote branch absence is sampled; server recreation after a sample remains possible. Apply declares local tracking deletions, recovery roots and journal writes; no fetch, synchronization or server deletion is performed."
 
 func (c tidyV3TrackingCoordinator) plan(ctx context.Context, o V3PlanOptions) V3Result {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, 30*time.Second))
 	defer cancel()
 	ctx, _, closeSession, err := withPlanningSession(ctx)
 	if err != nil {
