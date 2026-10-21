@@ -20,10 +20,26 @@ import (
 // restores them from the history with equal object ids. No manual
 // `git worktree remove` or `git branch -D` is involved.
 func TestTidyV3ScaleSixtyWorktreesAndOneHundredTwentyBranches(t *testing.T) {
-	if testing.Short() {
-		t.Skip("long: 60 worktrees and 120 branches")
+	requireScaleAcceptance(t)
+	tidyV3WorktreesAndBranches(t, 60)
+}
+
+// The CI-sized version of the acceptance above: 3 worktrees and 6 branches go
+// through the same retirement, one-plan branch deletion and restore.
+func TestTidyV3ThreeWorktreesAndSixBranches(t *testing.T) {
+	tidyV3WorktreesAndBranches(t, 3)
+}
+
+// requireScaleAcceptance gates the owner-size acceptance tests (minutes to
+// tens of minutes): they run by hand before releases, not in the normal CI.
+func requireScaleAcceptance(t *testing.T) {
+	t.Helper()
+	if os.Getenv("STW_ACCEPTANCE_SCALE") != "1" {
+		t.Skip("owner-size acceptance; run with STW_ACCEPTANCE_SCALE=1 (see docs/tidy.md)")
 	}
-	const n = 60
+}
+
+func tidyV3WorktreesAndBranches(t *testing.T, n int) {
 	f := &restoreFix{proofFix: newProofFix(t), tips: map[string]string{}}
 	tips := map[string]string{}
 	integrate := func(name string) {
@@ -104,13 +120,20 @@ func TestTidyV3ScaleSixtyWorktreesAndOneHundredTwentyBranches(t *testing.T) {
 // equal object ids: no count in the plan, the journal or the native facts may
 // make the owner's real repository unusable.
 func TestTidyV3ManyBranchesPlanApplyRestore(t *testing.T) {
-	if testing.Short() {
-		t.Skip("long: 200 branches")
-	}
+	requireScaleAcceptance(t)
 	count := 120
 	if v, err := strconv.Atoi(os.Getenv("STW_SCALE_BRANCHES")); err == nil && v > 0 {
 		count = v
 	}
+	tidyV3BranchesPlanApplyRestore(t, count)
+}
+
+// The CI-sized version: 20 branches in one plan, apply and restore.
+func TestTidyV3TwentyBranchesPlanApplyRestore(t *testing.T) {
+	tidyV3BranchesPlanApplyRestore(t, 20)
+}
+
+func tidyV3BranchesPlanApplyRestore(t *testing.T, count int) {
 	names := make([]string, count)
 	for i := range names {
 		names[i] = fmt.Sprintf("topic/b-%03d", i)

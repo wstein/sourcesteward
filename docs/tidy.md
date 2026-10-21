@@ -380,3 +380,14 @@ exits 2. Incomplete evidence has no executable plan. Interrupted effects retain 
 report known outcomes; only a completed journal can retry after read-only postcondition
 verification. Recovery preserves selected committed history, not untracked files, original
 index/reflog/configuration, automatic worktree restoration or a general undo command.
+
+### Owner-size acceptance tests
+
+The normal test run covers worktree retirement, one-plan branch deletion and restore with small
+fixtures (3 worktrees with 6 branches, and 20 branches). The owner-size runs (60 worktrees with 120
+branches, and 120 branches, or `STW_SCALE_BRANCHES=200`) take many minutes and are not part of CI.
+Run them by hand before a release:
+
+```sh
+STW_ACCEPTANCE_SCALE=1 go test ./internal/workspace -run 'TestTidyV3ScaleSixty|TestTidyV3ManyBranches' -timeout 60m -v
+```
