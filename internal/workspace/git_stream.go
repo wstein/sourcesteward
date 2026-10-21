@@ -203,7 +203,7 @@ func parseGitFilterStream(out io.Reader, paths []string, digest hash.Hash) error
 			return failure("git-attributes-refused", "checkout filter evidence does not match the selected base paths")
 		}
 		if fields[2] != "unspecified" && fields[2] != "unset" {
-			return failure("git-active-filter-refused", "base checkout has an active filter attribute; task creation never runs or silently suppresses configured filter helpers")
+			return failure("git-active-filter-refused", "base checkout has an active filter attribute; stw (task creation, tidy plan and apply) never runs or silently suppresses configured filter helpers. Remove the filter attribute or the filter.<name> configuration for this run")
 		}
 		digest.Write([]byte(triple.String()))
 	}
