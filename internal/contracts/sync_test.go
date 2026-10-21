@@ -100,6 +100,11 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 // bare remotes and checks schema validity, the exit code and the JSON for each outcome.
 func TestSyncRealOutputValidates(t *testing.T) {
 	root := t.TempDir()
+	// the product's own git commands (the rebase) need an identity on runners that have none
+	for _, k := range []string{"GIT_AUTHOR", "GIT_COMMITTER"} {
+		t.Setenv(k+"_NAME", "Tester")
+		t.Setenv(k+"_EMAIL", "test@example.org")
+	}
 	git := func(dir string, args ...string) {
 		t.Helper()
 		reposRealGit(t, dir, args...)
