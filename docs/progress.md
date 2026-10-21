@@ -362,7 +362,10 @@ the stored journals. The plan is read-only; apply creates only local branches by
 with `git update-ref --no-deref`, never overwrites or follows a ref, writes an intent record before
 and an outcome record after each creation in the `tidy-v3-restores` namespace of the private
 store, and keeps the recovery refs. Only the tip commit and its history of this clone come back;
-reflog tips, `branch.NAME.*` configuration and worktree registrations do not. The tests build their
+reflog tips and worktree registrations do not. Journals now also record `branch.NAME.*` and the reflog
+tip before a deletion (Spec 031 T045), the plan shows which keys can be reapplied and apply reapplies
+`remote`, `merge`, `rebase` and `pushRemote` when the remote still exists; older journals restore as
+before. The tests build their
 repositories with a real tidy v3 apply (see [the evidence](../specs/031-tidy-integration-proofs/verification.md)).
 The result schemas `schemas/v3/tidy-restore.schema.json` and `schemas/v3/tidy-history.schema.json`
 are unpublished candidates registered in the Pages source validator. This is source only: the
