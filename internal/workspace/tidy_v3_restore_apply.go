@@ -47,8 +47,11 @@ type restoreRecord struct {
 	Ref           string `json:"ref"`
 	OID           string `json:"oid"`
 	Outcome       string `json:"outcome,omitempty"`
-	By            string `json:"by"`
-	At            string `json:"at"`
+	// Config is the per-key result of the branch configuration reapply: variable
+	// names and outcomes only, never a value (Spec 031 T045).
+	Config []restoreConfigResult `json:"config,omitempty"`
+	By     string                `json:"by"`
+	At     string                `json:"at"`
 }
 
 // V3RestoreRecordRef names the records an apply wrote for one entry.
@@ -75,9 +78,17 @@ func validRestoreRecord(r restoreRecord, planID, actionID string) bool {
 	if r.SchemaVersion != 1 || r.PlanID != planID || r.ActionID != actionID || !validRestoreRefName(r.Ref) || !validRestoreHexOID(r.OID) || r.By == "" || !validText(r.By) || r.At == "" || !validText(r.At) {
 		return false
 	}
+	if len(r.Config) > branchConfigKeyLimit {
+		return false
+	}
+	for _, c := range r.Config {
+		if !validBranchVar(c.Var) || (c.Outcome != configApplied && c.Outcome != configSkipped && c.Outcome != configFailed) {
+			return false
+		}
+	}
 	switch r.Kind {
 	case restoreIntent:
-		return r.Outcome == ""
+		return r.Outcome == "" && len(r.Config) == 0
 	case restoreOutcome:
 		for _, o := range restoreOutcomes {
 			if o == r.Outcome {
@@ -196,6 +207,11 @@ func restoreApplyStatus(items []restoreItem) string {
 			failed++
 			errored = errored || item.entry.Outcome == outcomeError || item.entry.Outcome == outcomeNotAttempted
 		}
+		// A configuration that could not be reapplied leaves the branch created
+		// and makes the run partial.
+		if hasConfigFailure(item.entry) {
+			failed++
+		}
 	}
 	switch {
 	case failed == 0:
@@ -312,7 +328,9 @@ func (c tidyV3RestoreCoordinator) applyRestore(ctx context.Context, n restoreNat
 			if p, ok := pendingIntent(records); !ok || p.Ref != e.Ref || p.OID != e.OID {
 				continue // completed or recorded for another name meanwhile
 			}
-			id, err := c.record(s, c.stamp(restoreOutcome, *e, o.PlanID, outcomeCreatedRecovered), len(records)+1)
+			rec := c.stamp(restoreOutcome, *e, o.PlanID, outcomeCreatedRecovered)
+			rec.Config = c.reapplyConfig(ctx, n, &items[i], &r, true)
+			id, err := c.record(s, rec, len(records)+1)
 			if err != nil {
 				e.Outcome, stopped = outcomeError, true
 				r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "restore-journal-unwritten", Message: "The outcome of an interrupted restore could not be recorded."})
@@ -320,7 +338,7 @@ func (c tidyV3RestoreCoordinator) applyRestore(ctx context.Context, n restoreNat
 			}
 			e.Outcome, e.RestoreJournal = outcomeCreatedRecovered, &V3RestoreRecordRef{Outcome: id}
 		case restoreRestorable:
-			if c.restoreOne(ctx, n, s, o, e, &r) {
+			if c.restoreOne(ctx, n, s, o, &items[i], &r) {
 				stopped = true
 			}
 		}
@@ -330,7 +348,8 @@ func (c tidyV3RestoreCoordinator) applyRestore(ctx context.Context, n restoreNat
 
 // restoreOne re-evaluates one entry immediately before its compare-and-swap and
 // creates the branch. It reports whether the run has to stop.
-func (c tidyV3RestoreCoordinator) restoreOne(ctx context.Context, n restoreNative, s *store, o V3RestoreOptions, e *V3RestoreEntry, r *V3RestoreResult) (stop bool) {
+func (c tidyV3RestoreCoordinator) restoreOne(ctx context.Context, n restoreNative, s *store, o V3RestoreOptions, item *restoreItem, r *V3RestoreResult) (stop bool) {
+	e := &item.entry
 	fail := func(code, message string) bool {
 		e.Outcome = outcomeError
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: code, Message: message})
@@ -409,7 +428,11 @@ func (c tidyV3RestoreCoordinator) restoreOne(ctx context.Context, n restoreNativ
 			return fail("interrupted", "The restore was interrupted before its outcome was recorded.")
 		}
 	}
-	id, err := c.record(s, c.stamp(restoreOutcome, *e, o.PlanID, outcome), len(records)+2)
+	rec := c.stamp(restoreOutcome, *e, o.PlanID, outcome)
+	if outcome == outcomeCreated {
+		rec.Config = c.reapplyConfig(ctx, n, item, r, true)
+	}
+	id, err := c.record(s, rec, len(records)+2)
 	if err != nil {
 		e.Outcome = outcome
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "restore-journal-unwritten", Message: "The outcome could not be recorded; the reference effect is as reported."})

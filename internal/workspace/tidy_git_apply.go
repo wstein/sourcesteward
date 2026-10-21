@@ -18,7 +18,16 @@ import (
 // reference/recovery files, their locks/reflogs, and packed-refs plus its lock.
 // No broad refs, objects, worktree, configuration or source-index grant remains.
 func gitTidyWriteProtection(id NativeIdentity, refs []string) ([]string, error) {
+	return gitTidyWriteProtectionFiles(id, refs, nil)
+}
+
+// gitTidyWriteProtectionFiles also leaves the named repository files writable
+// (and their lock files), for the one effect that edits the local configuration.
+func gitTidyWriteProtectionFiles(id NativeIdentity, refs, files []string) ([]string, error) {
 	allowed := map[string]bool{"packed-refs": true, "packed-refs.lock": true}
+	for _, f := range files {
+		allowed[f], allowed[f+".lock"] = true, true
+	}
 	for _, ref := range refs {
 		if !strings.HasPrefix(ref, "refs/") || len(ref) > 4096 || strings.ContainsAny(ref, "\x00\r\n ~^:?*[\\") || strings.Contains(ref, "..") || strings.Contains(ref, "@{") || strings.HasSuffix(ref, ".") {
 			return nil, failure("tidy-invalid-reference", "Invalid exact mutable Git reference")
