@@ -124,17 +124,14 @@ func (e env) operation(ctx context.Context, tree string) (string, []string) {
 	return reason, involved
 }
 
-// block explains why the current branch of a repository must not be touched, or returns "". The
-// repository's own worktree holds the branch (as HEAD, or as the branch of its rebase or bisect); a second
-// holder, an operation in progress or a lock makes it busy. (In a submodule `git worktree list` names the
-// Git directory instead of the working tree, so the holders are counted, not compared by path.)
+// block explains why the current branch of a repository must not be touched, or returns "": an operation
+// in progress or a lock in the worktree that holds it (as HEAD, or as the branch of its rebase or bisect).
+// The command acts only on the worktree it runs in; Git itself forbids one branch in two worktrees.
 func (h holders) block(ref string) string {
-	l := h[ref]
-	if len(l) > 1 {
-		return "the branch is also checked out in another worktree"
-	}
-	if len(l) == 1 && l[0].busy != "" {
-		return l[0].busy
+	for _, w := range h[ref] {
+		if w.busy != "" {
+			return w.busy
+		}
 	}
 	return ""
 }

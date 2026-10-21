@@ -16,10 +16,10 @@ import (
 func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Sync) }
 
 func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result) *cobra.Command {
-	var jsonOutput, planOnly, dryRun, rebase, ffOnly, autostash, noAutostash, prune, noPrune bool
+	var jsonOutput, planOnly, dryRun, rebase, ffOnly, noRebase, noFF, autostash, noAutostash, prune, noPrune bool
 	var options stwsync.Options
 	command := &cobra.Command{
-		Use:   "sync [PATH] [--plan] [--rebase|--ff-only] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
+		Use:   "sync [PATH] [--plan] [--rebase|--ff-only|--no-rebase] [--no-ff] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
 		Short: "Bring the workspace root and its submodules up to date, like git pull",
 		Long: "Replace git pull in the workspace root repository (PATH, default the current directory) and in each of\n" +
 			"its submodules that sits on a branch: fetch the upstream remote, then fast-forward the current branch.\n" +
@@ -28,7 +28,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 			"and fetch.prune apply as they do for git pull, so with pull.rebase=true a diverged branch is rebased and with\n" +
 			"rebase.autoStash=true a dirty tree is stashed and restored. --rebase, --ff-only, --autostash, --no-autostash,\n" +
 			"--prune and --no-prune override the configuration. Without pull.rebase a diverged branch is reported as needing\n" +
-			"a choice; stw sync never creates a merge commit. A rebase conflict is left in progress as git leaves it.\n" +
+			"a choice; a merge commit is created only when pull.rebase=false, pull.ff=false, --no-rebase or --no-ff asks for it. A rebase conflict is left in progress as git leaves it.\n" +
 			"A detached HEAD, a branch without an upstream, an operation in progress, a branch also checked out in another\n" +
 			"worktree, and local changes the update would overwrite are reported and skipped. --plan (alias --dry-run) fetches\n" +
 			"the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
@@ -43,6 +43,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 			options.Path = workspacePath(args)
 			options.Plan = planOnly || dryRun
 			options.Rebase = triFlag(rebase, ffOnly)
+			options.NoRebase, options.NoFF = noRebase, noFF
 			options.Autostash = triFlag(autostash, noAutostash)
 			options.Prune = triFlag(prune, noPrune)
 			if err := stwsync.ValidateOptions(options); err != nil {
@@ -78,12 +79,14 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 	flags.BoolVar(&dryRun, "dry-run", false, "Alias of --plan")
 	flags.BoolVar(&rebase, "rebase", false, "Rebase a diverged branch onto its upstream (overrides pull.rebase)")
 	flags.BoolVar(&ffOnly, "ff-only", false, "Only fast-forward; a diverged branch is reported (overrides pull.rebase)")
+	flags.BoolVar(&noRebase, "no-rebase", false, "Merge a diverged branch, as pull.rebase=false does (the only way besides that setting to get a merge commit)")
+	flags.BoolVar(&noFF, "no-ff", false, "Create a merge commit even when a fast-forward is possible, as pull.ff=false does (with --no-rebase)")
 	flags.BoolVar(&autostash, "autostash", false, "Stash local changes around the update and reapply them (overrides rebase.autoStash)")
 	flags.BoolVar(&noAutostash, "no-autostash", false, "Never stash local changes")
 	flags.BoolVar(&prune, "prune", false, "Fetch with --prune (overrides fetch.prune)")
 	flags.BoolVar(&noPrune, "no-prune", false, "Fetch without pruning")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	command.MarkFlagsMutuallyExclusive("rebase", "ff-only")
+	command.MarkFlagsMutuallyExclusive("rebase", "ff-only", "no-rebase")
 	command.MarkFlagsMutuallyExclusive("autostash", "no-autostash")
 	command.MarkFlagsMutuallyExclusive("prune", "no-prune")
 	return command
@@ -146,6 +149,10 @@ func syncText(rp stwsync.Repo, plan bool) (text, class string) {
 		return fmt.Sprintf("would rebase %s onto %d new", plural(rp.Ahead, "local commit", "local commits"), rp.Behind), "green"
 	case stwsync.ResultRebased:
 		return fmt.Sprintf("rebased %s onto %d new %s", plural(rp.Ahead, "local commit", "local commits"), rp.Behind, moved), "green"
+	case stwsync.ResultMerge:
+		return fmt.Sprintf("would merge %s into %s", plural(rp.Behind, "upstream commit", "upstream commits"), plural(rp.Ahead, "local commit", "local commits")), "green"
+	case stwsync.ResultMerged:
+		return fmt.Sprintf("merged %s %s", plural(rp.Behind, "upstream commit", "upstream commits"), moved), "green"
 	case stwsync.ResultDiverged:
 		text, class = skipped("diverged (" + fmt.Sprintf("%d ahead, %d behind", rp.Ahead, rp.Behind) + ")")
 		return strings.Replace(text, "): ", ") - ", 1), class
@@ -207,7 +214,7 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 		}
 	}
 	var counts []string
-	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultFailed}
+	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultFailed}
 	for _, name := range order {
 		if n := r.Summary.ByResult[name]; n > 0 {
 			counts = append(counts, fmt.Sprintf("%d %s", n, strings.ReplaceAll(name, "-", " ")))

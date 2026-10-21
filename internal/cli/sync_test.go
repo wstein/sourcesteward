@@ -52,6 +52,7 @@ func TestSyncUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
 	for _, args := range [][]string{
 		{"a", "b"},                        // two paths
 		{"--rebase", "--ff-only"},         // contradictory
+		{"--rebase", "--no-rebase"},       // contradictory
 		{"--autostash", "--no-autostash"}, // contradictory
 		{"--prune", "--no-prune"},         // contradictory
 		{"--remote", "origin"},            // a repository fetches its own upstream remote
@@ -84,6 +85,8 @@ func TestSyncFlagsMapToOptions(t *testing.T) {
 		"--dry-run":      func(o stwsync.Options) bool { return o.Plan },
 		"--rebase":       func(o stwsync.Options) bool { return o.Rebase == stwsync.On },
 		"--ff-only":      func(o stwsync.Options) bool { return o.Rebase == stwsync.Off },
+		"--no-rebase":    func(o stwsync.Options) bool { return o.NoRebase },
+		"--no-ff":        func(o stwsync.Options) bool { return o.NoFF },
 		"--autostash":    func(o stwsync.Options) bool { return o.Autostash == stwsync.On },
 		"--no-autostash": func(o stwsync.Options) bool { return o.Autostash == stwsync.Off },
 		"--prune":        func(o stwsync.Options) bool { return o.Prune == stwsync.On },

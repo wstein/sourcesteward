@@ -36,8 +36,12 @@ func TestSyncFollowsGitPull(t *testing.T) {
 			for _, diverged := range []bool{false, true} {
 				want := ResultFastForwarded
 				switch {
-				case diverged && rb != "true":
+				case diverged && rb == "":
 					want = ResultDiverged
+				case diverged && rb == "false" && dirty:
+					want = ResultSkippedDirty // git merge refuses a non-fast-forward with staged changes
+				case diverged && rb == "false":
+					want = ResultMerged // an explicit pull.rebase=false: git merges, so stw sync does
 				case diverged && rb == "true" && dirty:
 					want = ResultSkippedDirty // git pull --rebase refuses a dirty tree without autostash
 				case diverged && rb == "true":
@@ -78,11 +82,15 @@ func TestSyncFollowsGitPull(t *testing.T) {
 			if got.Result != c.want {
 				t.Fatalf("got %s (%v), want %s", got.Result, deref(got.Reason), c.want)
 			}
-			if n := runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD"); n != "0" {
-				t.Errorf("a merge commit was created")
+			wantMerges := "0"
+			if c.want == ResultMerged {
+				wantMerges = "1" // only when the configuration chose a merge
+			}
+			if n := runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD"); n != wantMerges {
+				t.Errorf("%s merge commits, want %s", n, wantMerges)
 			}
 			switch c.want {
-			case ResultFastForwarded, ResultRebased:
+			case ResultFastForwarded, ResultRebased, ResultMerged:
 				if w.oid(t, ".", "HEAD") == oldHead {
 					t.Error("HEAD did not move")
 				}
@@ -302,5 +310,63 @@ func TestPlanPredictsWhatARunWouldDoWithADirtyTree(t *testing.T) {
 	}
 	if got := repoByName(t, run(t, w, Options{Plan: true, Autostash: On})); got["."].Result != ResultFastForward {
 		t.Fatalf("%+v", got["."])
+	}
+}
+
+func TestSyncMergesOnlyWhenTheConfigurationOrAFlagAsksForIt(t *testing.T) {
+	// unset: needs a choice, nothing changes
+	w := newWorkspace(t)
+	commit(t, w.ws, "local.txt", "l\n")
+	w.advance(t, ".", "main")
+	old := w.oid(t, ".", "HEAD")
+	if g := repoByName(t, run(t, w, Options{}))["."]; g.Result != ResultDiverged || w.oid(t, ".", "HEAD") != old {
+		t.Fatalf("%+v", g)
+	}
+	// --no-rebase asks for the merge explicitly
+	g := repoByName(t, run(t, w, Options{NoRebase: true}))["."]
+	if g.Result != ResultMerged || runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD") != "1" || !fileExists(filepath.Join(w.ws, "local.txt")) {
+		t.Fatalf("%+v %v", g, deref(g.Reason))
+	}
+	if err := gitCmd(w.ws, "merge-base", "--is-ancestor", old, "HEAD").Run(); err != nil {
+		t.Error("the local commit is not contained")
+	}
+	// pull.ff=false: a fast-forward becomes a merge commit, as for git pull
+	w2 := newWorkspace(t)
+	runGit(t, w2.ws, "config", "pull.ff", "false")
+	w2.advance(t, ".", "main")
+	if g := repoByName(t, run(t, w2, Options{}))["."]; g.Result != ResultMerged || runGit(t, w2.ws, "rev-list", "--merges", "--count", "HEAD") != "1" {
+		t.Fatalf("%+v", g)
+	}
+	// --ff-only wins over the configuration
+	w3 := newWorkspace(t)
+	runGit(t, w3.ws, "config", "pull.rebase", "false")
+	commit(t, w3.ws, "local.txt", "l\n")
+	w3.advance(t, ".", "main")
+	if g := repoByName(t, run(t, w3, Options{Rebase: Off}))["."]; g.Result != ResultDiverged {
+		t.Fatalf("%+v", g)
+	}
+	// a merge conflict stops as git stops
+	w4 := newWorkspace(t)
+	runGit(t, w4.ws, "config", "pull.rebase", "false")
+	commit(t, w4.ws, "ws.txt", "local\n")
+	w4.advanceFile(t, ".", "main", "ws.txt")
+	r := run(t, w4, Options{})
+	if g := repoByName(t, r)["."]; g.Result != ResultConflict || !strings.Contains(*g.Reason, "git merge --abort") || r.ExitCode() != 1 {
+		t.Fatalf("%+v", g)
+	}
+}
+
+func TestPlanRefusesRefspecsThatWriteLocalRefsButARunFollowsGitPull(t *testing.T) {
+	w := newWorkspace(t)
+	runGit(t, w.ws, "push", "-q", "origin", "main:side")
+	runGit(t, w.ws, "config", "--add", "remote.origin.fetch", "+refs/heads/side:refs/heads/side")
+	w.advance(t, ".", "main")
+	before := runGit(t, w.ws, "for-each-ref", "refs/heads", "refs/remotes")
+	g := repoByName(t, run(t, w, Options{Plan: true}))["."]
+	if g.Result != ResultFailed || !strings.Contains(*g.Reason, "sync-refspec-unsafe") || runGit(t, w.ws, "for-each-ref", "refs/heads", "refs/remotes") != before {
+		t.Fatalf("%+v", g)
+	}
+	if g := repoByName(t, run(t, w, Options{}))["."]; g.Result != ResultFastForwarded {
+		t.Fatalf("a real run follows git pull: %+v %v", g, deref(g.Reason))
 	}
 }

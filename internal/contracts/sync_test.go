@@ -84,7 +84,7 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"detail on a success":     {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "fast-forwarded")["detail"] = "x" }},
 		"negative ahead":          {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["ahead"] = -1 }},
 		"unknown summary result": {"plan", func(m map[string]any, _ []any) {
-			m["summary"].(map[string]any)["by_result"].(map[string]any)["merged"] = 1
+			m["summary"].(map[string]any)["by_result"].(map[string]any)["bogus"] = 1
 		}},
 		"error without code": {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
 		"string option":      {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
@@ -169,8 +169,7 @@ func TestSyncRealOutputValidates(t *testing.T) {
 	if v["mode"] != "sync" || v["run_id"] == nil || results(v)["."] != "fast-forwarded" {
 		t.Fatalf("%v", v)
 	}
-	git(ws, "config", "pull.rebase", "false") // independent of the user's global configuration
-	// diverged without pull.rebase is reported, exit 0; --rebase resolves it
+	// --ff-only reports a diverged branch (exit 0, independent of the user's global configuration); --rebase resolves it
 	if err := os.WriteFile(filepath.Join(ws, "local"), []byte("l\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +181,7 @@ func TestSyncRealOutputValidates(t *testing.T) {
 	git(other, "add", ".")
 	git(other, "commit", "-qm", "remote 2")
 	git(other, "push", "-q", "origin", "main")
-	if r := results(run(0, "--json", ws)); r["."] != "diverged" {
+	if r := results(run(0, "--json", "--ff-only", ws)); r["."] != "diverged" {
 		t.Fatalf("%v", r)
 	}
 	if r := results(run(0, "--json", "--rebase", ws)); r["."] != "rebased" {

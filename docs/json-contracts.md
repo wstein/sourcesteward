@@ -205,8 +205,8 @@ configuration decides), `repos`, `summary` (`total`, `by_result`) and `error` (n
 refused run, with no repos). No key is omitted; absent values are null. A repository (`kind` `root` or `submodule`) has
 `name` (`.` or the submodule path), `path`, `branch`, `remote`, `result`, `old_oid`, `new_oid`, `ahead`, `behind`,
 `pruned` (remote-tracking refs the fetch removed), `reason` (set for every skip and failure) and `detail` (Git's own
-message of a `conflict` or `autostash-conflict`). Results: plan `fast-forward`, `rebase`; run `fast-forwarded`,
-`rebased`, `conflict`, `autostash-conflict`, `failed`; both `up-to-date`, `ahead`, `diverged`, `skipped-dirty`,
+message of a `conflict` or `autostash-conflict`). Results: plan `fast-forward`, `rebase`, `merge`; run `fast-forwarded`,
+`rebased`, `merged`, `conflict`, `autostash-conflict`, `failed`; both `up-to-date`, `ahead`, `diverged`, `skipped-dirty`,
 `skipped-detached`, `skipped-no-upstream`, `skipped-busy`, `skipped-uninitialized`. Exit 1 only for a refused run or a
 `failed`, `conflict` or `autostash-conflict` repository; 2 for usage errors with no JSON. Tests validate the fixtures,
 reject broken variants and check real command output from temporary repositories with bare remotes. See

@@ -17,6 +17,8 @@ const (
 	ResultFastForwarded        = "fast-forwarded"
 	ResultRebase               = "rebase"
 	ResultRebased              = "rebased"
+	ResultMerge                = "merge"
+	ResultMerged               = "merged"
 	ResultDiverged             = "diverged"
 	ResultSkippedDirty         = "skipped-dirty"
 	ResultSkippedDetached      = "skipped-detached"
@@ -45,6 +47,8 @@ func (t Tri) json() *bool {
 	return &v
 }
 
+// Options selects one run. NoRebase and NoFF are the only ways, besides pull.rebase=false and pull.ff=false in the
+// configuration, to get a merge commit.
 // Options selects one run. Path is the workspace root repository (default the current directory).
 // Rebase On is --rebase and Off is --ff-only; Autostash and Prune On/Off are --autostash/--no-autostash and
 // --prune/--no-prune. Unset follows pull.rebase, branch.NAME.rebase, pull.ff, rebase.autoStash,
@@ -55,6 +59,8 @@ type Options struct {
 	Rebase    Tri
 	Autostash Tri
 	Prune     Tri
+	NoRebase  bool // --no-rebase: merge a diverged branch like pull.rebase=false
+	NoFF      bool // --no-ff: always create a merge commit like pull.ff=false
 }
 
 // ResultOptions echoes the requested options; null means the Git configuration decides.
