@@ -192,6 +192,12 @@
       "status": "planned",
       "spec": "../specs/032-stw-sync/spec.md",
       "evidence": null
+    },
+    {
+      "id": "033-stw-status",
+      "status": "planned",
+      "spec": "../specs/033-stw-status/spec.md",
+      "evidence": null
     }
   ]
 }

@@ -212,6 +212,20 @@ message of a `conflict` or `autostash-conflict`). Results: plan `fast-forward`, 
 reject broken variants and check real command output from temporary repositories with bare remotes. See
 [commands](commands.md#bring-the-workspace-and-its-submodules-up-to-date).
 
+## Status schema v1 (unpublished)
+
+[Status schema](../schemas/v1/status.schema.json) describes `stw status --json` (Spec 033). Like the sync schema it is
+checked in and byte-frozen but excluded from Pages packaging until the feature is accepted. One object with
+`schema_version` 1, `command` `status`, `options` (`fetch`, `worktrees`), `root`, `note`, `repos`, `summary` (`total`,
+`attention`, `errors`) and `error` (null, or `code` and `message` of a refused or failed run, with no repositories). A
+repository has `name`, `path`, `kind` (`root`, `submodule`), `state` (`ok`, `uninitialized`, `error`), `branch`,
+`detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`, `changes`, `operation`, `stash`, `branches`,
+`worktrees` (counts, and `list` only with `--worktrees`), `gitlink` (null for the root), `fetch_error`, `attention` and
+`error`. No key is omitted; absent values are null. Exit 0 also when repositories need attention, 1 for an unreadable
+repository or a failed run, 2 for usage errors with no JSON. Tests validate the fixtures, reject broken variants and
+check real command output from temporary repositories. The exact rules are in the
+[spec](../specs/033-stw-status/spec.md).
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files

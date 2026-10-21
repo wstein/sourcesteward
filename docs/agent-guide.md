@@ -133,6 +133,15 @@ exit statuses and native capability limits. `stw inventory --json` uses inventor
 while `stw inspect` retains its existing identity contracts. A known false query exits 0;
 unknown/partial evidence exits 1 and must never be treated as clean or safe to delete.
 
+## Where am I in the workspace
+
+`stw status [PATH] [--fetch] [--worktrees] [--json]` is the read-only overview of the workspace root and every
+initialized submodule from any directory inside it: branch, upstream ahead/behind, staged/unstaged/untracked counts,
+conflicts, an operation in progress, stashes, unmerged branches, linked worktrees and gitlink drift. Run it before
+`stw sync` or before starting work. Exit 0 also when repositories need attention (read `summary.attention` and each
+repository's `attention` list); exit 1 only when a repository cannot be read or the run fails. `--fetch` is the only
+option that writes (remote-tracking refs). See [commands](commands.md#show-where-you-are-in-the-workspace).
+
 ## Several repositories at once
 
 `stw repos PATH... [--submodules] [--json]` inventories up to 16 repositories (Git and jj) and
