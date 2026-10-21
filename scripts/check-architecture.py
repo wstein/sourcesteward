@@ -16,7 +16,7 @@ def validate(lines):
         package, *imports = line.split()
         if package == MODULE + 'internal/cli':
             for dependency in imports:
-                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace', MODULE + 'internal/hosting', MODULE + 'internal/release')):
+                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace', MODULE + 'internal/hosting', MODULE + 'internal/release', MODULE + 'internal/restack')):
                     raise ValueError('CLI may access only reviewed inspection/workspace/hosting operations: ' + dependency)
         if package.startswith(MODULE + 'cmd/'):
             for dependency in imports:
@@ -38,7 +38,7 @@ PROCESS_IMPORTS = ('os/exec', 'syscall', 'plugin')
 OPEN_FILES = re.compile(r'^internal/release/openfile_[a-z0-9_]+\.go$')
 SYSCALL_OPEN_FLAGS = re.compile(r'\bsyscall\.(?!O_[A-Z]+\b)[A-Za-z_]+')
 LINKNAME = re.compile(r'^\s*//go:linkname\b', re.M)
-NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace')
+NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace', 'internal/restack')
 
 
 def is_network_import(path):
@@ -75,6 +75,22 @@ def validate_sources(sources, imports=None):
                     raise ValueError('Only internal/hosting may use the network: ' + path + ' imports ' + dependency)
         if path.startswith('internal/release/'):
             validate_release_file(path, text, imported)
+        if path.startswith('internal/restack/'):
+            validate_restack_file(path, imported)
+
+
+# Spec 015: the read-only restack plan starts Git only in its one reviewed runner and may import
+# from the module only the read-only inspection.
+RESTACK_PROCESS_FILE = 'internal/restack/git.go'
+RESTACK_MODULE_IMPORTS = (MODULE + 'internal/inspection',)
+
+
+def validate_restack_file(path, imported):
+    for dependency in imported:
+        if is_process_import(dependency) and not (path == RESTACK_PROCESS_FILE and dependency == 'os/exec'):
+            raise ValueError('internal/restack starts Git only in ' + RESTACK_PROCESS_FILE + ': ' + path + ' imports ' + dependency)
+        if dependency.startswith(MODULE) and dependency not in RESTACK_MODULE_IMPORTS:
+            raise ValueError('internal/restack may import only the read-only inspection from the module: ' + path + ' imports ' + dependency)
 
 
 @lru_cache(maxsize=1)

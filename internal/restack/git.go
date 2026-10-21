@@ -169,3 +169,6 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	b.Buffer.Write(p)
 	return n, nil
 }
+
+// locateGit finds the Git executable on PATH; it starts nothing.
+func locateGit() (string, error) { return exec.LookPath("git") }

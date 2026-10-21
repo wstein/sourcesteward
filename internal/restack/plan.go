@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -82,7 +81,7 @@ func (p *planner) run(ctx context.Context) error {
 		return refuse("plan-environment-unavailable", "A private plan environment could not be created.", nil)
 	}
 	defer os.RemoveAll(objects)
-	bin, err := exec.LookPath("git")
+	bin, err := locateGit()
 	if err != nil {
 		return refuse("git-unsupported", "The Git executable is unavailable.", nil)
 	}
