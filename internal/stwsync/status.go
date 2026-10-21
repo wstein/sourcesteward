@@ -97,7 +97,8 @@ type RepoStatus struct {
 	Worktrees    WorktreeCounts `json:"worktrees"`
 	Gitlink      *Gitlink       `json:"gitlink"`
 	FetchError   *string        `json:"fetch_error"`
-	Attention    []string       `json:"attention"`
+	Attention    bool           `json:"attention"`
+	Reasons      []string       `json:"reasons"`
 	Error        *Failure       `json:"error"`
 }
 
@@ -183,7 +184,7 @@ func Status(ctx context.Context, o StatusOptions) StatusResult {
 		if rp.Error != nil {
 			r.Summary.Errors++
 		}
-		if len(rp.Attention) > 0 {
+		if rp.Attention {
 			r.Summary.Attention++
 		}
 	}
@@ -272,7 +273,7 @@ func (s *statusRun) g(ctx context.Context, e env, dir string, args ...string) (g
 }
 
 func (s *statusRun) repo(ctx context.Context, sp statusSpec) RepoStatus {
-	rp := RepoStatus{Name: sp.name, Path: sp.e.dir, Kind: sp.kind, State: "ok", Gitlink: sp.gitlink, Attention: []string{}, Worktrees: WorktreeCounts{List: []WorktreeInfo{}}}
+	rp := RepoStatus{Name: sp.name, Path: sp.e.dir, Kind: sp.kind, State: "ok", Gitlink: sp.gitlink, Reasons: []string{}, Worktrees: WorktreeCounts{List: []WorktreeInfo{}}}
 	if sp.uninitalized {
 		rp.State = "uninitialized"
 		return rp
@@ -280,7 +281,7 @@ func (s *statusRun) repo(ctx context.Context, sp statusSpec) RepoStatus {
 	fail := func(what string) RepoStatus {
 		rp.State = "error"
 		rp.Error = &Failure{Code: "status-read-failed", Message: "cannot read " + what}
-		rp.Attention = append(rp.Attention, "error")
+		rp.Reasons, rp.Attention = append(rp.Reasons, "error"), true
 		return rp
 	}
 	e, dir := sp.e, sp.e.dir
@@ -307,7 +308,8 @@ func (s *statusRun) repo(ctx context.Context, sp statusSpec) RepoStatus {
 	if !s.worktrees(ctx, e, &rp) {
 		return fail("the worktrees")
 	}
-	rp.Attention = attention(rp)
+	rp.Reasons = attention(rp)
+	rp.Attention = len(rp.Reasons) > 0
 	return rp
 }
 
@@ -500,8 +502,9 @@ func (s *statusRun) worktrees(ctx context.Context, e env, rp *RepoStatus) bool {
 	return true
 }
 
-// attention is the exact rule for "needs attention": any of these facts, in this order. Stashes, branches
-// not yet integrated, a detached HEAD and an uninitialized submodule are shown but never count.
+// attention is the exact rule for "needs attention": any of these facts, in this order. Everything else (commits
+// ahead, a gone upstream, stashes, branches not integrated, linked worktrees, a failed fetch, a gitlink whose
+// checked-out commit is ahead of the recorded one, an uninitialized submodule) is shown but never counts.
 func attention(rp RepoStatus) []string {
 	reasons := []string{}
 	add := func(cond bool, name string) {
@@ -514,14 +517,10 @@ func attention(rp RepoStatus) []string {
 	add(rp.Changes.Staged > 0, "staged")
 	add(rp.Changes.Unstaged > 0, "unstaged")
 	add(rp.Changes.Untracked > 0, "untracked")
-	add(rp.Ahead != nil && *rp.Ahead > 0, "ahead")
 	add(rp.Behind != nil && *rp.Behind > 0, "behind")
-	add(rp.UpstreamGone, "upstream-gone")
+	add(rp.Ahead != nil && *rp.Ahead > 0 && rp.Behind != nil && *rp.Behind > 0, "diverged")
 	add(rp.Branch != nil && rp.Upstream == nil, "no-upstream")
-	add(rp.Gitlink != nil && rp.Gitlink.State == "drift", "gitlink-drift")
-	add(rp.Worktrees.Dirty > 0, "worktree-dirty")
-	add(rp.Worktrees.Locked > 0, "worktree-locked")
-	add(rp.Worktrees.Prunable > 0, "worktree-prunable")
-	add(rp.FetchError != nil, "fetch-failed")
+	add(rp.Detached, "detached")
+	add(rp.Gitlink != nil && rp.Gitlink.State == "drift" && (rp.Gitlink.Relation == nil || *rp.Gitlink.Relation != "ahead"), "gitlink-drift")
 	return reasons
 }

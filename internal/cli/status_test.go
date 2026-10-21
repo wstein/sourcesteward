@@ -20,7 +20,7 @@ func statusCLIResult() stwsync.StatusResult {
 	return stwsync.StatusResult{
 		SchemaVersion: 1, Command: "status", Root: statusPtr("/ws"),
 		Repos: []stwsync.RepoStatus{
-			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtr("main"), Upstream: statusPtr("origin/main"), Ahead: statusInt(0), Behind: statusInt(0), Attention: []string{}, Worktrees: stwsync.WorktreeCounts{List: []stwsync.WorktreeInfo{}}},
+			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtr("main"), Upstream: statusPtr("origin/main"), Ahead: statusInt(0), Behind: statusInt(0), Reasons: []string{}, Worktrees: stwsync.WorktreeCounts{List: []stwsync.WorktreeInfo{}}},
 			{Name: "sub\x1b[31m", Path: "/ws/sub", Kind: "submodule", State: "ok", Branch: statusPtr("feat"), Upstream: statusPtr("origin/feat"), Ahead: statusInt(2), Behind: statusInt(1),
 				Changes: stwsync.Changes{Staged: 1, Unstaged: 2, Untracked: 3, Conflicts: 1}, Operation: statusPtr("rebase"), Stash: 2,
 				Branches: stwsync.BranchCounts{Local: 4, Base: statusPtr("origin/main"), Integrated: statusInt(1), NotIntegrated: statusInt(2)},
@@ -29,8 +29,8 @@ func statusCLIResult() stwsync.StatusResult {
 					{Path: "/wt/two", Detached: true, Locked: statusPtr("usb")},
 				}},
 				Gitlink:   &stwsync.Gitlink{Recorded: &long, CheckedOut: statusPtr(strings.Repeat("b", 40)), State: "drift", Relation: statusPtr("ahead")},
-				Attention: []string{"operation", "staged", "ahead"}},
-			{Name: "gone", Path: "/ws/gone", Kind: "submodule", State: "uninitialized", Attention: []string{}, Gitlink: &stwsync.Gitlink{Recorded: &long, State: "uninitialized"}},
+				Attention: true, Reasons: []string{"operation", "staged"}},
+			{Name: "gone", Path: "/ws/gone", Kind: "submodule", State: "uninitialized", Reasons: []string{}, Gitlink: &stwsync.Gitlink{Recorded: &long, State: "uninitialized"}},
 		},
 		Summary: stwsync.StatusSummary{Total: 3, Attention: 1},
 	}
@@ -80,7 +80,7 @@ func TestStatusTextIsOneBlockPerRepositoryWithASummary(t *testing.T) {
 	}
 	for _, want := range []string{
 		"ahead 2, behind 1", "origin/feat", "1 staged, 2 unstaged, 3 untracked, 1 conflict", "rebase in progress", "stash 2",
-		"2 not integrated into origin/main", "2 linked worktrees (1 dirty, 1 locked)", "aaaaaaa", "bbbbbbb", "checked out is ahead", "not initialized",
+		"2 not integrated into origin/main", "2 linked worktrees (1 dirty, 1 locked)", "aaaaaaa", "bbbbbbb", "checked out ahead (bbbbbbb)", "not initialized",
 		"1 of 3 repositories need attention",
 	} {
 		if !strings.Contains(out, want) {

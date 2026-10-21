@@ -43,16 +43,16 @@ func TestStatusCleanWorkspaceNeedsNoAttention(t *testing.T) {
 	if got := statusNames(r); got != ". a a/n b c dev" {
 		t.Fatalf("names %q", got)
 	}
-	if r.Summary.Total != 6 || r.Summary.Attention != 0 || r.SchemaVersion != 1 || r.Command != "status" {
+	if r.Summary.Total != 6 || r.Summary.Attention != 1 || r.SchemaVersion != 1 || r.Command != "status" {
 		t.Fatalf("%+v", r.Summary)
 	}
 	rp := statusRepos(r)
 	root := rp["."]
 	if root.Kind != "root" || root.Branch == nil || *root.Branch != "main" || root.Upstream == nil || *root.Upstream != "origin/main" ||
-		root.Ahead == nil || *root.Ahead != 0 || root.Behind == nil || *root.Behind != 0 || root.Gitlink != nil || len(root.Attention) != 0 {
+		root.Ahead == nil || *root.Ahead != 0 || root.Behind == nil || *root.Behind != 0 || root.Gitlink != nil || root.Attention {
 		t.Fatalf("%+v", root)
 	}
-	if c := rp["c"]; c.Branch != nil || !c.Detached || c.Gitlink == nil || c.Gitlink.State != "ok" || len(c.Attention) != 0 {
+	if c := rp["c"]; c.Branch != nil || !c.Detached || c.Gitlink == nil || c.Gitlink.State != "ok" || !c.Attention || !has(c.Reasons, "detached") {
 		t.Fatalf("detached submodule: %+v", c)
 	}
 	if rp["a/n"].Kind != "submodule" || rp["dev"].Branch == nil || *rp["dev"].Branch != "develop" {
@@ -110,8 +110,8 @@ func TestStatusChangesConflictsOperationAndStash(t *testing.T) {
 	if ar.Changes.Conflicts != 1 || ar.Operation == nil || *ar.Operation != "merge" {
 		t.Fatalf("a %+v op %v", ar.Changes, ar.Operation)
 	}
-	if !has(ar.Attention, "conflicts") || !has(ar.Attention, "operation") || !has(root.Attention, "staged") || !has(root.Attention, "unstaged") || !has(root.Attention, "untracked") {
-		t.Fatalf("attention %v %v", ar.Attention, root.Attention)
+	if !has(ar.Reasons, "conflicts") || !has(ar.Reasons, "operation") || !has(root.Reasons, "staged") || !has(root.Reasons, "unstaged") || !has(root.Reasons, "untracked") {
+		t.Fatalf("attention %v %v", ar.Reasons, root.Reasons)
 	}
 	if r.Summary.Attention < 2 {
 		t.Fatalf("summary %+v", r.Summary)
@@ -134,7 +134,7 @@ func TestStatusAheadBehindAndFetchIsOptIn(t *testing.T) {
 	before := runGit(t, w.dir("b"), "for-each-ref")
 	r := statusOf(t, w.ws, StatusOptions{})
 	b := statusRepos(r)["b"]
-	if *b.Ahead != 1 || *b.Behind != 0 || !has(b.Attention, "ahead") {
+	if *b.Ahead != 1 || *b.Behind != 0 || b.Attention {
 		t.Fatalf("without fetch: %d %d", *b.Ahead, *b.Behind)
 	}
 	if after := runGit(t, w.dir("b"), "for-each-ref"); after != before {
@@ -142,7 +142,7 @@ func TestStatusAheadBehindAndFetchIsOptIn(t *testing.T) {
 	}
 	r = statusOf(t, w.ws, StatusOptions{Fetch: true})
 	b = statusRepos(r)["b"]
-	if *b.Ahead != 1 || *b.Behind != 1 || !has(b.Attention, "behind") || b.FetchError != nil {
+	if *b.Ahead != 1 || *b.Behind != 1 || !has(b.Reasons, "behind") || !has(b.Reasons, "diverged") || b.FetchError != nil {
 		t.Fatalf("with fetch: %d %d", *b.Ahead, *b.Behind)
 	}
 }
@@ -155,10 +155,10 @@ func TestStatusNoUpstreamAndGone(t *testing.T) {
 	runGit(t, w.dir("dev"), "push", "-q", "origin", "--delete", "gone")
 	runGit(t, w.dir("dev"), "fetch", "-q", "--prune", "origin")
 	rp := statusRepos(statusOf(t, w.ws, StatusOptions{}))
-	if b := rp["b"]; b.Upstream != nil || b.Ahead != nil || !has(b.Attention, "no-upstream") {
+	if b := rp["b"]; b.Upstream != nil || b.Ahead != nil || !has(b.Reasons, "no-upstream") {
 		t.Fatalf("%+v", b)
 	}
-	if d := rp["dev"]; d.Upstream == nil || !d.UpstreamGone || d.Ahead != nil || !has(d.Attention, "upstream-gone") {
+	if d := rp["dev"]; d.Upstream == nil || !d.UpstreamGone || d.Ahead != nil || d.Attention {
 		t.Fatalf("%+v", d)
 	}
 }
@@ -197,8 +197,8 @@ func TestStatusLinkedWorktrees(t *testing.T) {
 		t.Fatalf("%+v", wt)
 	}
 	for _, reason := range []string{"worktree-dirty", "worktree-locked", "worktree-prunable"} {
-		if !has(statusRepos(r)["."].Attention, reason) {
-			t.Errorf("missing %s", reason)
+		if has(statusRepos(r)["."].Reasons, reason) {
+			t.Errorf("%s is info, not attention", reason)
 		}
 	}
 	r = statusOf(t, w.ws, StatusOptions{Worktrees: true})
@@ -243,13 +243,13 @@ func TestStatusGitlinkDrift(t *testing.T) {
 	rp := statusRepos(statusOf(t, w.ws, StatusOptions{}))
 	b := rp["b"]
 	if b.Gitlink == nil || b.Gitlink.State != "drift" || b.Gitlink.Relation == nil || *b.Gitlink.Relation != "ahead" ||
-		b.Gitlink.Recorded == nil || b.Gitlink.CheckedOut == nil || *b.Gitlink.Recorded == *b.Gitlink.CheckedOut || !has(b.Attention, "gitlink-drift") {
+		b.Gitlink.Recorded == nil || b.Gitlink.CheckedOut == nil || *b.Gitlink.Recorded == *b.Gitlink.CheckedOut || has(b.Reasons, "gitlink-drift") {
 		t.Fatalf("%+v", b.Gitlink)
 	}
-	if d := rp["dev"]; d.Gitlink.State != "drift" || *d.Gitlink.Relation != "behind" {
+	if d := rp["dev"]; d.Gitlink.State != "drift" || *d.Gitlink.Relation != "behind" || !has(d.Reasons, "gitlink-drift") {
 		t.Fatalf("%+v", d.Gitlink)
 	}
-	if c := rp["c"]; c.Gitlink.State != "drift" || *c.Gitlink.Relation != "ahead" {
+	if c := rp["c"]; c.Gitlink.State != "drift" || *c.Gitlink.Relation != "ahead" || has(c.Reasons, "gitlink-drift") {
 		t.Fatalf("%+v", c.Gitlink)
 	}
 }
@@ -259,7 +259,7 @@ func TestStatusUninitializedSubmodule(t *testing.T) {
 	runGit(t, w.ws, "submodule", "deinit", "-q", "-f", "b")
 	rp := statusRepos(statusOf(t, w.ws, StatusOptions{}))
 	b := rp["b"]
-	if b.State != "uninitialized" || b.Gitlink == nil || b.Gitlink.State != "uninitialized" || b.Gitlink.Recorded == nil || b.Gitlink.CheckedOut != nil || len(b.Attention) != 0 {
+	if b.State != "uninitialized" || b.Gitlink == nil || b.Gitlink.State != "uninitialized" || b.Gitlink.Recorded == nil || b.Gitlink.CheckedOut != nil || b.Attention {
 		t.Fatalf("%+v", b)
 	}
 }

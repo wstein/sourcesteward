@@ -149,9 +149,10 @@ stw status --fetch --json   # fetch first, then one JSON object
 `git worktree list` and `git branch -vv` tell, for the workspace root and each initialized submodule, in one screen. It
 finds the workspace the way `stw sync` does and changes nothing; only `--fetch` runs one `git fetch` per repository
 (remote-tracking refs only). A repository is marked `!` when it needs attention: an operation in progress, conflicts,
-staged, unstaged or untracked files, commits ahead or behind the upstream, a gone or missing upstream, a drifted gitlink
-(the commit the superproject records differs from the one checked out), or a dirty, locked or prunable linked worktree.
-Stashes, branches not yet merged into the default branch, and a detached HEAD are shown but never count. Exit status 0,
+staged, unstaged or untracked files, commits behind the upstream (or diverged), a branch without an upstream, a detached
+HEAD, or a gitlink whose checked-out commit is behind or unrelated to the recorded one. Commits ahead, stashes, branches
+not yet merged into the default branch, linked worktrees and a checkout that is merely *ahead* of the recorded gitlink
+are shown but never count. Exit status 0,
 also when repositories need attention; 1 when a repository cannot be read or the run fails; 2 for usage errors.
 
 ```
@@ -161,7 +162,7 @@ SourceSteward status: 3 repositories in /work/ws
     9 linked worktrees (7 locked)
   app       develop  origin/develop up to date  clean
 ! app/lib   (detached)  detached at 8d1e2f3  clean
-    gitlink drift: recorded 7d8a55f, checked out 89a4673 (checked out is ahead)
+    gitlink: recorded 7d8a55f, checked out ahead (89a4673)
 summary: 2 of 3 repositories need attention
 ```
 
