@@ -103,6 +103,9 @@ func Plan(ctx context.Context, o Options) Result {
 		return r.fail("sync-limit", fmt.Sprintf("the repository has more than %d local branches", branchLimit))
 	}
 	prefix := "refs/remotes/" + o.Remote + "/"
+	if err := checkRefspecs(g, o.Remote, prefix); err != nil {
+		return r.fail("sync-refspec-unsafe"[:0]+"sync-refspec-unsafe", err.Error())
+	}
 	before, err := listRefs(g, prefix)
 	if err != nil {
 		return r.fail("sync-read-failed", err.Error())
@@ -112,6 +115,8 @@ func Plan(ctx context.Context, o Options) Result {
 	args := []string{"fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules"}
 	if o.Prune {
 		args = append(args, "--prune")
+	} else {
+		args = append(args, "--no-prune") // a fetch.prune setting must not remove refs without --prune
 	}
 	if out, err := g(append(args, "--", o.Remote)...); err != nil || out.Code != 0 {
 		return r.fail("sync-fetch-failed", "git fetch failed: "+out.Diagnostic)
@@ -267,4 +272,23 @@ func classify(g func(...string) (gitOutput, error), local, upstream string) (str
 func hasTrackedChanges(inTree func(string, ...string) (gitOutput, error), worktree string) bool {
 	out, err := inTree(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=no")
 	return err != nil || out.Code != 0 || out.Out != ""
+}
+
+// checkRefspecs refuses a remote whose configured fetch refspecs would write anywhere but
+// refs/remotes/REMOTE/, because the plan must change no local branch or tag.
+func checkRefspecs(g func(...string) (gitOutput, error), remote, prefix string) error {
+	out, err := g("config", "--get-all", "remote."+remote+".fetch")
+	if err != nil || out.Code > 1 {
+		return errors.New("cannot read the fetch refspecs of the remote")
+	}
+	for _, spec := range strings.Split(out.Out, "\n") {
+		spec = strings.TrimPrefix(spec, "+")
+		if spec == "" || strings.HasPrefix(spec, "^") {
+			continue
+		}
+		if _, dst, ok := strings.Cut(spec, ":"); ok && dst != "" && !strings.HasPrefix(dst, prefix) {
+			return fmt.Errorf("the fetch refspec %q of remote %s writes outside %s", spec, remote, prefix+"*")
+		}
+	}
+	return nil
 }
