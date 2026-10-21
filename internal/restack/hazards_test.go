@@ -194,3 +194,24 @@ func TestAttributeOfTheBranchTipTreeAloneIsAHazard(t *testing.T) {
 		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
 	}
 }
+
+func TestJJAndNonRepositoriesAreRefusedWithoutAGitFallback(t *testing.T) {
+	s := rebaseMerged(t)
+	if err := os.Mkdir(filepath.Join(s.dir, ".jj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res := s.plan(t)
+	if res.Status != StatusError || firstCode(res) != "unsupported-backend" || res.Evidence != nil {
+		t.Fatalf("jj: %s %s %+v", res.Status, res.Backend, res.Diagnostics)
+	}
+	os.Remove(filepath.Join(s.dir, ".jj"))
+	plain := t.TempDir()
+	o := s.options()
+	o.Path = plain
+	if resolved, err := filepath.EvalSymlinks(plain); err == nil {
+		o.Path = resolved
+	}
+	if res := Plan(context.Background(), o); res.Status != StatusError || firstCode(res) != "not-repository" {
+		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
+	}
+}
