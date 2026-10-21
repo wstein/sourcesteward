@@ -4,7 +4,10 @@
 Standard library only: the workflow is inspected as text.
 """
 import importlib.util
+import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -16,6 +19,9 @@ ALL = (WORKFLOW, CONFORMANCE, FULL)
 _SPEC = importlib.util.spec_from_file_location('ci_shards', ROOT / 'scripts/ci_shards.py')
 SHARDS = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(SHARDS)
+_CSPEC = importlib.util.spec_from_file_location('ci_changes', ROOT / 'scripts/ci_changes.py')
+CHANGES = importlib.util.module_from_spec(_CSPEC)
+_CSPEC.loader.exec_module(CHANGES)
 
 
 def job_text(name, text=WORKFLOW):
@@ -165,7 +171,7 @@ class ShardedConformanceTests(unittest.TestCase):
         self.assertIn('name: suite', text)
         self.assertIn('needs: [shard]', text)
         self.assertIn('if: always()', text)
-        self.assertIn('test "$SHARDS_RESULT" = success', text)
+        self.assertIn('SHARDS_RESULT: ${{ needs.shard.result }}', text)
         self.assertNotIn('matrix', text)
 
     def test_command_substitutions_are_assigned_before_go_test(self):
@@ -220,6 +226,183 @@ class LongPoleTests(unittest.TestCase):
         full = text.index('else\n')
         self.assertIn('ci_shards.py packages', text[:full])
         self.assertIn('go test -timeout 40m -race ./...', text[full:])
+
+
+class DocsOnlyClassifierTests(unittest.TestCase):
+    def test_documentation_and_spec_prose_is_docs_only(self):
+        for path in ('specs/032-x/spec.md', 'specs/032-x/checklists/requirements.md', 'docs/development.md',
+                     'docs/roadmap.md', 'README.md', 'AGENTS.md'):
+            self.assertTrue(CHANGES.is_docs_path(path), path)
+        self.assertTrue(CHANGES.docs_only(['docs/a.md', 'specs/1/plan.md', 'README.md']))
+
+    def test_anything_the_code_or_ci_reads_is_not_docs_only(self):
+        for path in ('.github/workflows/ci.yml', '.github/CODEOWNERS', 'scripts/ci_changes.py',
+                     'scripts/ci-test-weights.json', 'internal/x/x.go', 'cmd/stw/main.go', 'schemas/v2/a.json',
+                     'go.mod', 'go.sum', 'Makefile', 'specs/026-release-process/examples/go-cli.record.json',
+                     'specs/030-pr-status/contracts/once/once-open.json',
+                     'specs/031-tidy-integration-proofs/contracts/integration-proofs.md',
+                     'specs/026-release-process/examples/notes.md', 'docs/feature-status.json', 'docs/index.html',
+                     'docs/assets/a.png', 'docs/sub/dir.md', 'site/hugo.toml', 'third_party/x.md',
+                     'llms.txt', 'specs/x/data.json', '.specify/memory/constitution.md', 'docs/../scripts/a.md'):
+            self.assertFalse(CHANGES.is_docs_path(path), path)
+
+    def test_one_non_docs_file_makes_the_change_set_not_docs_only(self):
+        self.assertFalse(CHANGES.docs_only(['docs/a.md', 'scripts/check-docs.py']))
+        self.assertFalse(CHANGES.docs_only(['docs/a.md', 'go.mod']))
+
+    def test_an_empty_change_set_is_not_docs_only(self):
+        self.assertFalse(CHANGES.docs_only([]))
+
+
+class DocsOnlyGitTests(unittest.TestCase):
+    def git(self, cwd, *args):
+        env = dict(os.environ, GIT_AUTHOR_NAME='t', GIT_AUTHOR_EMAIL='t@t', GIT_COMMITTER_NAME='t',
+                   GIT_COMMITTER_EMAIL='t@t', GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_SYSTEM='/dev/null')
+        subprocess.run(['git', '-c', 'commit.gpgsign=false', *args], cwd=cwd, env=env, check=True,
+                       capture_output=True)
+
+    def merge_repo(self, tmp, files):
+        self.git(tmp, 'init', '-q', '-b', 'main')
+        Path(tmp, 'a.go').write_text('package a\n')
+        self.git(tmp, 'add', '.')
+        self.git(tmp, 'commit', '-q', '-m', 'base')
+        self.git(tmp, 'checkout', '-q', '-b', 'topic')
+        for name in files:
+            target = Path(tmp, name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text('x\n')
+        self.git(tmp, 'add', '.')
+        self.git(tmp, 'commit', '-q', '-m', 'topic')
+        self.git(tmp, 'checkout', '-q', 'main')
+        Path(tmp, 'b.go').write_text('package b\n')  # base moved on: not part of the PR
+        self.git(tmp, 'add', '.')
+        self.git(tmp, 'commit', '-q', '-m', 'main moved')
+        self.git(tmp, 'merge', '-q', '--no-ff', '-m', 'merge', 'topic')
+
+    def result(self, files, event='pull_request'):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.merge_repo(tmp, files)
+            return CHANGES.compute(event, cwd=tmp)
+
+    def test_docs_only_pull_request_ignores_what_the_base_gained_meanwhile(self):
+        self.assertTrue(self.result(['docs/a.md', 'specs/1/spec.md']))
+
+    def test_mixed_pull_request_is_not_docs_only(self):
+        self.assertFalse(self.result(['docs/a.md', 'scripts/x.py']))
+
+    def test_moving_a_source_file_into_docs_is_not_docs_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.git(tmp, 'init', '-q', '-b', 'main')
+            Path(tmp, 'scripts').mkdir()
+            Path(tmp, 'docs').mkdir()
+            Path(tmp, 'scripts/x.md').write_text('# x\n' * 50)
+            self.git(tmp, 'add', '.')
+            self.git(tmp, 'commit', '-q', '-m', 'base')
+            self.git(tmp, 'checkout', '-q', '-b', 'topic')
+            self.git(tmp, 'mv', 'scripts/x.md', 'docs/x.md')
+            self.git(tmp, 'commit', '-q', '-m', 'move')
+            self.git(tmp, 'checkout', '-q', 'main')
+            Path(tmp, 'other').write_text('x\n')
+            self.git(tmp, 'add', '.')
+            self.git(tmp, 'commit', '-q', '-m', 'main moved')
+            self.git(tmp, 'merge', '-q', '--no-ff', '-m', 'merge', 'topic')
+            self.assertFalse(CHANGES.compute('pull_request', cwd=tmp))
+
+    def test_only_pull_request_events_may_be_docs_only(self):
+        for event in ('push', 'workflow_dispatch', 'schedule', 'release', 'create'):
+            self.assertFalse(self.result(['docs/a.md'], event), event)
+
+    def test_a_checkout_without_a_merge_commit_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.git(tmp, 'init', '-q', '-b', 'main')
+            Path(tmp, 'docs').mkdir()
+            Path(tmp, 'docs/a.md').write_text('x\n')
+            self.git(tmp, 'add', '.')
+            self.git(tmp, 'commit', '-q', '-m', 'only')
+            self.assertFalse(CHANGES.compute('pull_request', cwd=tmp))
+            Path(tmp, 'docs/b.md').write_text('y\n')
+            self.git(tmp, 'add', '.')
+            self.git(tmp, 'commit', '-q', '-m', 'second, linear')
+            self.assertFalse(CHANGES.compute('pull_request', cwd=tmp))
+        self.assertFalse(CHANGES.compute('pull_request', cwd='/nonexistent-dir-for-ci-changes'))
+
+
+class DocsOnlyWorkflowTests(unittest.TestCase):
+    def test_no_workflow_uses_path_filters(self):
+        for text in ALL:
+            self.assertNotIn('paths-ignore', text)
+            self.assertNotRegex(text, r'(?m)^\s+paths:')
+
+    def test_changes_job_classifies_with_the_script_and_exposes_docs_only(self):
+        text = job_text('changes')
+        self.assertNotRegex(text, r'(?m)^    if:')
+        self.assertIn('fetch-depth: 2', text)
+        self.assertIn('docs_only: ${{ steps.classify.outputs.docs_only }}', text)
+        self.assertIn('EVENT_NAME: ${{ github.event_name }}', text)
+        self.assertIn('python3 -B scripts/ci_changes.py', text)
+        self.assertIn('GITHUB_OUTPUT', text)
+
+    def test_conformance_runs_after_changes_and_receives_docs_only(self):
+        text = job_text('conformance')
+        self.assertIn('needs: [changes]', text)
+        self.assertIn('docs_only: ${{ needs.changes.outputs.docs_only }}', text)
+        self.assertNotIn('docs_only', text.split('\n    if:', 1)[1].split('\n', 1)[0])
+
+    def test_check_job_and_docs_checks_never_depend_on_docs_only(self):
+        text = job_text('check')
+        self.assertNotIn('docs_only', text)
+        self.assertNotIn('needs:', text)
+        self.assertIn('make check-static', text)
+        self.assertIn('scripts/check-architecture.py', text)
+
+    def test_ci_full_label_runs_never_skip(self):
+        self.assertNotIn('docs_only', FULL)
+
+    def test_shards_skip_only_for_a_docs_only_pull_request(self):
+        text = job_text('shard', CONFORMANCE)
+        self.assertIn("if: inputs.docs_only != 'true' || github.event_name != 'pull_request'\n", text)
+        self.assertRegex(CONFORMANCE, r"docs_only:\n(?:\s+[a-z]+: .*\n)*?\s+default: 'false'")
+
+    def test_every_step_of_the_shard_job_stays_unconditional_on_docs_only(self):
+        self.assertEqual(job_text('shard', CONFORMANCE).count('docs_only'), 1)
+
+
+class SuiteAggregateTests(unittest.TestCase):
+    @staticmethod
+    def script():
+        text = job_text('suite', CONFORMANCE)
+        return re.search(r'run: \|\n((?:          .*\n?)+)', text).group(1)
+
+    def passes(self, result, docs_only, event='pull_request'):
+        env = dict(os.environ, SHARDS_RESULT=result, DOCS_ONLY=docs_only, EVENT_NAME=event)
+        done = subprocess.run(['bash', '-e', '-c', self.script()], env=env, capture_output=True, text=True)
+        return done.returncode == 0
+
+    def test_suite_wiring(self):
+        text = job_text('suite', CONFORMANCE)
+        self.assertIn('if: always()', text)
+        self.assertIn('needs: [shard]', text)
+        self.assertIn('SHARDS_RESULT: ${{ needs.shard.result }}', text)
+        self.assertIn('DOCS_ONLY: ${{ inputs.docs_only }}', text)
+        self.assertIn('EVENT_NAME: ${{ github.event_name }}', text)
+
+    def test_success_passes_everywhere(self):
+        for docs_only in ('true', 'false'):
+            for event in ('pull_request', 'push', 'workflow_dispatch'):
+                self.assertTrue(self.passes('success', docs_only, event), (docs_only, event))
+
+    def test_failed_or_cancelled_shards_fail_even_for_docs_only(self):
+        for result in ('failure', 'cancelled', '', 'bogus'):
+            for docs_only in ('true', 'false'):
+                self.assertFalse(self.passes(result, docs_only), (result, docs_only))
+
+    def test_skipped_shards_pass_only_for_a_docs_only_pull_request(self):
+        self.assertTrue(self.passes('skipped', 'true', 'pull_request'))
+        self.assertFalse(self.passes('skipped', 'false', 'pull_request'))
+        self.assertFalse(self.passes('skipped', '', 'pull_request'))
+        for event in ('push', 'workflow_dispatch', 'schedule', 'release', 'create'):
+            self.assertFalse(self.passes('skipped', 'true', event), event)
+            self.assertFalse(self.passes('skipped', 'false', event), event)
 
 
 if __name__ == '__main__':
