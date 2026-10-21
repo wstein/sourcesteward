@@ -1,0 +1,71 @@
+{
+  "backend": "git",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "diagnostics": []
+  },
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "project",
+    "selection": "unique-candidate"
+  },
+  "candidates": [
+    {
+      "remote": "upstream",
+      "host": "github.com",
+      "owner": "example",
+      "name": "project"
+    }
+  ],
+  "schema_version": 2,
+  "kind": "pr",
+  "status": "error",
+  "pull_request": null,
+  "diagnostics": [
+    {
+      "code": "hosting-canceled",
+      "message": "The inspection was canceled or reached its deadline."
+    }
+  ],
+  "observed_at": "2026-10-18T12:00:00Z",
+  "sampled_at": null,
+  "observation": {
+    "mode": "once",
+    "stop": "canceled",
+    "samples": 0,
+    "initial_head_sha": null,
+    "expected_head": null,
+    "expectation": "not-requested",
+    "identity_changed": false
+  },
+  "boundary": {
+    "complete": false,
+    "network": false,
+    "max_bytes": 1048576,
+    "timeout_seconds": 30,
+    "max_requests": 1,
+    "requests": 0,
+    "limitations": [
+      "One sample only; the PR may have changed since it was read.",
+      "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."
+    ]
+  }
+}

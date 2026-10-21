@@ -1,0 +1,103 @@
+{
+  "schema_version": 2,
+  "kind": "prs",
+  "status": "ok",
+  "backend": "git",
+  "identity": {
+    "schema_version": 1,
+    "status": "ok",
+    "backend": "git",
+    "input_path": "/repo",
+    "evidence": [],
+    "repository": {
+      "git_dir": "/repo/.git",
+      "common_dir": "/repo/.git",
+      "worktree": "/repo",
+      "bare": false,
+      "linked_worktree": false,
+      "object_format": "sha1",
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "diagnostics": []
+  },
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "project",
+    "selection": "unique-candidate"
+  },
+  "candidates": [
+    {
+      "remote": "upstream",
+      "host": "github.com",
+      "owner": "example",
+      "name": "project"
+    }
+  ],
+  "query": {
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "pull_requests": [
+    {
+      "number": 42,
+      "title": "Example PR",
+      "url": "https://github.com/example/project/pull/42",
+      "state": "open",
+      "draft": false,
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "head_ref": "feature",
+      "base_ref": "main",
+      "head_repository": "example/fork",
+      "base_repository": "example/project",
+      "merged": false,
+      "merged_at": null,
+      "closed_at": null,
+      "merge_commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "result_sha": null,
+      "lifecycle": "open",
+      "head_match": true
+    },
+    {
+      "number": 41,
+      "title": "Example PR",
+      "url": "https://github.com/example/project/pull/41",
+      "state": "closed",
+      "draft": false,
+      "head_sha": "dddddddddddddddddddddddddddddddddddddddd",
+      "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "head_ref": "feature",
+      "base_ref": "main",
+      "head_repository": "example/fork",
+      "base_repository": "example/project",
+      "merged": true,
+      "merged_at": "2026-10-18T12:00:00Z",
+      "closed_at": "2026-10-18T12:00:00Z",
+      "merge_commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "result_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "lifecycle": "merged",
+      "head_match": false
+    }
+  ],
+  "count": 2,
+  "truncated": false,
+  "diagnostics": [],
+  "observed_at": "2026-10-18T12:00:00Z",
+  "sampled_at": "2026-10-18T12:00:00Z",
+  "boundary": {
+    "complete": true,
+    "network": true,
+    "max_bytes": 1048576,
+    "timeout_seconds": 30,
+    "max_requests": 1,
+    "requests": 1,
+    "limitations": [
+      "Lists the PRs GitHub associates with the commit; it does not select one or state that the SHA is a branch tip.",
+      "One page only; the PR set may have changed since it was read."
+    ]
+  }
+}

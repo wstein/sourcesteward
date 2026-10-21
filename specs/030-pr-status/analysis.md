@@ -1,5 +1,7 @@
 > Current candidate: [accepted-baseline replacement](baseline-lifetime.md), technically assessed as honest, awaiting formal round4 at the frozen exact candidate. Three prior NOT CLEAR results retained; the technical assessment did not consume round4. Historical candidate/gate discussions below do not authorize runtime.
 
+> **Slice marker (2026-10-21).** This analysis, its counterexample audit and every review round below concern the full pre-split design. After the owner split, rows about watch, polling budgets, final delivery, the arbiter, descendants and continuity are **deferred-slice** items; the rows about lifecycle/evidence, expected head, v1/CI preservation, hostile response bytes and one-shot request count apply to slice 1. The three NOT CLEAR rounds and pending round 4 gate only the deferred slice. The slice-1 design needs its own independent review of the exact head.
+
 # Cross-artifact analysis and frozen-gate brief
 
 **Candidate status**: Complete artifact package for independent analysis; not self-reviewed CLEAR and not implementation-ready. This author owns these decisions and cannot provide their independent stamp.
@@ -24,6 +26,12 @@
 | New decoder quietly breaks CI or legacy v1 validation | Separate enhanced path; characterization/frozen bytes and shared-caller ledger T004/T006/T009 |
 | Last sample survives HTTP failure but appears fresh | Separate sampled_at/observed_at; error/incomplete and stop; denied-after-sample fixture |
 | Hostile response supplies endpoint/credentials | Fixed GET only, inherited guard, redaction and bounded escaping tests T008/T009 |
+| Lookup follows pages, picks one of many PRs, or reads `head_match:false` as the head | Slice 1: `prs` makes one GET, never selects, flags `head_match`; zero/many/30 fixtures; T013 |
+| 100-item page with full repo objects exceeds the 1 MiB body cap before `truncated` can be set | Slice 1: `per_page=30`; oversize body is an error with no partial list; fixtures for both sides; T013 |
+| Lookup answers "whose branch contains the SHA" | Slice 1: documented as "associated PRs" only; API semantics unverified offline, fixtures only, first live call by the owner |
+| Slice-1 schema still admits watch mode or a deferred stop | `pr-status-once.schema.json` is a strict subset; counterexamples T015; once-deadline is stop `canceled` |
+| Allowlist extension opens other `commits/SHA/...` routes or non-GET | Exact route regex plus method tests; T013 |
+| 403/429/422 retried or slept on | One request, stop, safe message; both endpoints; T006/T013 |
 
 FR/SC-to-task traceability is in [tasks.md](tasks.md); proposed file ownership and F/Ready integration dependencies are in [plan.md](plan.md). The schema encodes structure, required null members, lifecycle/state coherence, mode/stop/budget and success/error constraints. Equality of two arbitrary non-null SHA fields, expectation comparison and timestamps/counter provenance require result/operation tests; backend agreement and expressible nullness/count relationships are schema-enforced; JSON Schema alone is not acceptance proof. Round 1 exposed missing schema-expressible relationships; those are now encoded rather than deferred to Go tests.
 
