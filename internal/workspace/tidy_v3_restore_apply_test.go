@@ -476,3 +476,42 @@ func TestRestoreApplyRefusesAChangedJournal(t *testing.T) {
 		t.Fatal("restored from a journal that changed")
 	}
 }
+
+func TestRestoreApplyWritesNoRecordForAnEntryThatIsAlreadyPresent(t *testing.T) {
+	f := newRestoreFix(t, "present", "missing")
+	f.git("update-ref", "refs/heads/present", f.tips["present"])
+	r := applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if r.Status != "ok" || outcomeFor(t, r, "present") != "already-present" || outcomeFor(t, r, "missing") != "created" {
+		t.Fatalf("%+v", r)
+	}
+	if records := f.restoreRecords(); len(records) != 2 {
+		t.Fatalf("only the created branch has records: %v", sortedKeys(records))
+	}
+}
+
+// With nothing restorable the plan is still ok; apply is refused when an entry
+// is not already present, and writes neither a record nor the namespace.
+func TestRestoreWithNothingRestorableWritesNothing(t *testing.T) {
+	f := newRestoreFix(t, "taken", "present")
+	f.git("update-ref", "refs/heads/taken", f.git("rev-parse", "HEAD"))
+	f.git("update-ref", "refs/heads/present", f.tips["present"])
+	if plan := RestoreTidyV3(context.Background(), f.options()); plan.Status != "ok" || plan.Counts.Restorable != 0 {
+		t.Fatalf("%+v", plan)
+	}
+	before := f.snapshot()
+	r := applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if r.Status != "refused" || outcomeFor(t, r, "taken") != "name-taken" || outcomeFor(t, r, "present") != "already-present" {
+		t.Fatalf("%+v", r)
+	}
+	if !reflect.DeepEqual(before, f.snapshot()) {
+		t.Fatal("an apply without an effect changed state")
+	}
+	if _, err := os.Lstat(filepath.Join(f.state, "tidy-v3-restores")); !os.IsNotExist(err) {
+		t.Fatal("the restore namespace was created without an effect")
+	}
+	onlyPresent := f.options()
+	onlyPresent.Actions, onlyPresent.Apply, onlyPresent.Authorize = []string{f.action("present")}, true, true
+	if ok := applyRestore(t, defaultTidyV3RestoreCoordinator(), onlyPresent); ok.Status != "ok" {
+		t.Fatalf("%+v", ok)
+	}
+}
