@@ -349,3 +349,19 @@ actual Hugo/Go documentation build. Documentation and architecture source
 checks and whitespace checks passed. The theme tests could not run locally
 because Node is unavailable. No documentation/product build was run; hosted
 checks and independent exact-head review remain pending.
+
+## Spec 031 restore and history source candidate
+
+`stw tidy restore` plans, and with `--apply --authorize` carries out, the restore of branches that
+a contract 3 local-reference apply deleted. `stw tidy restore --list` and `stw tidy history` list
+the stored journals. The plan is read-only; apply creates only local branches by compare-and-swap
+with `git update-ref --no-deref`, never overwrites or follows a ref, writes an intent record before
+and an outcome record after each creation in the `tidy-v3-restores` namespace of the private
+store, and keeps the recovery refs. Only the tip commit and its history of this clone come back;
+reflog tips, `branch.NAME.*` configuration and worktree registrations do not. The tests build their
+repositories with a real tidy v3 apply (see [the evidence](../specs/031-tidy-integration-proofs/verification.md)).
+The result schemas `schemas/v3/tidy-restore.schema.json` and `schemas/v3/tidy-history.schema.json`
+are unpublished candidates registered in the Pages source validator. This is source only: the
+acceptance on the dogfood data set (T052) follows the owner-authorized cleanup apply and is not
+done, so Spec 031 stays planned. No product or documentation build, release, tag or `apply` on a
+real repository was run for this work.
