@@ -135,6 +135,8 @@ func TestTidyRestoreUsageErrorsExitTwoBeforeAnyWork(t *testing.T) {
 		"history without state dir":  {"history", "--contract", "3"},
 		"history limit over":         {"history", "--contract", "3", "--state-dir", stateArg, "--limit", "1025"},
 		"history limit zero":         {"history", "--contract", "3", "--state-dir", stateArg, "--limit", "0"},
+		"history relative state dir": {"history", "--contract", "3", "--state-dir", "state"},
+		"list relative state dir":    {"restore", "--contract", "3", "--list", "--state-dir", "state"},
 		"history takes no plan":      {"history", "--contract", "3", "--state-dir", stateArg, "--plan", "p"},
 		"history relative path":      {"history", "repo", "--contract", "3", "--state-dir", stateArg},
 		"history state dir repeated": {"history", "--contract", "3", "--state-dir", stateArg, "--state-dir", stateArg},
