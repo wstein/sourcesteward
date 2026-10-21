@@ -4,6 +4,7 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -163,21 +164,25 @@ func gitRetirementStoredFilesWithPolicy(ctx context.Context, bin string, id Nati
 			return nil, e
 		}
 	}
-	index, e := gitRead(ctx, bin, id.WorkspaceRoot, "ls-files", "--stage", "-z")
-	if e != nil {
-		return nil, e
-	}
+	// The index listing grows with the repository (a real 800-file repository
+	// exceeds the 64 KiB buffered bound), so it streams record by record under
+	// the checkout leaf bound; a partial stream is never compared.
 	count := 0
 	seen := map[string]bool{}
-	if index != "" {
-		for _, record := range strings.Split(strings.TrimSuffix(index, "\x00"), "\x00") {
-			meta, path, ok := strings.Cut(record, "\t")
-			if !ok || seen[path] || expectedIndex[path] != meta {
-				return nil, failure("retirement-index-not-clean", "Git index differs from the exact current stored tree; retain staged/conflicted work")
-			}
-			seen[path] = true
-			count++
+	e = gitReadRecordsLimit(ctx, bin, id.WorkspaceRoot, gitRecordNUL, checkoutLeafLimit, []string{"ls-files", "--stage", "-z"}, func(record []byte) error {
+		meta, path, ok := strings.Cut(strings.TrimSuffix(string(record), "\x00"), "\t")
+		if !ok || seen[path] || expectedIndex[path] != meta {
+			return failure("retirement-index-not-clean", "Git index differs from the exact current stored tree; retain staged/conflicted work")
 		}
+		seen[path] = true
+		count++
+		return nil
+	})
+	if errors.Is(e, io.ErrUnexpectedEOF) {
+		return nil, failure("git-query-refused", "bounded native Git safety evidence is unavailable")
+	}
+	if e != nil {
+		return nil, e
 	}
 	if count != len(expectedIndex) {
 		return nil, failure("retirement-index-not-clean", "Git index is incomplete relative to the stored tree")

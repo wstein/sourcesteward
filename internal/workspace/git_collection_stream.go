@@ -24,6 +24,8 @@ const (
 	// gitRecordBlock records are NUL-terminated fields ended by an empty field
 	// (worktree list --porcelain -z).
 	gitRecordBlock
+	// gitRecordNUL records are single NUL-terminated fields (ls-files -z).
+	gitRecordNUL
 )
 
 var (
@@ -35,6 +37,11 @@ var (
 // The slice is valid only until accept returns. A final record without its
 // delimiter is io.ErrUnexpectedEOF: no prefix is ever actionable.
 func parseGitRecords(source io.Reader, kind gitRecordKind, accept func([]byte) error) error {
+	return parseGitRecordsLimit(source, kind, observationLimit, accept)
+}
+
+// parseGitRecordsLimit is parseGitRecords with an explicit record-count bound.
+func parseGitRecordsLimit(source io.Reader, kind gitRecordKind, limit int, accept func([]byte) error) error {
 	reader := newGitMetadataReader(source)
 	var block []byte
 	for count := 0; ; {
@@ -44,6 +51,9 @@ func parseGitRecords(source io.Reader, kind gitRecordKind, accept func([]byte) e
 		if kind == gitRecordBlock {
 			block, e = readGitBlockRecord(reader, block[:0])
 			record = block
+		} else if kind == gitRecordNUL {
+			record, e = reader.buffer.ReadSlice(0)
+			e = reader.recordError(e, len(record), gitMetadataRecordLimit)
 		} else {
 			record, e = reader.buffer.ReadSlice('\n')
 			e = reader.recordError(e, len(record), gitMetadataRecordLimit)
@@ -57,7 +67,7 @@ func parseGitRecords(source io.Reader, kind gitRecordKind, accept func([]byte) e
 			}
 			return e
 		}
-		if count++; count > observationLimit {
+		if count++; count > limit {
 			return errGitRecordCount
 		}
 		if e = accept(record); e != nil {
@@ -90,21 +100,32 @@ func (r *gitMetadataReader) recordError(e error, length, limit int) error {
 }
 
 func gitStreamRecords(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, kind gitRecordKind, accept func([]byte) error) error {
+	return gitStreamRecordsLimit(ctx, cancel, cmd, kind, observationLimit, accept)
+}
+
+func gitStreamRecordsLimit(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, kind gitRecordKind, limit int, accept func([]byte) error) error {
 	_, e := executeNativeStream(ctx, cancel, cmd, nil, gitMetadataStreamLimit, func(out io.Reader) error {
-		return parseGitRecords(out, kind, accept)
+		return parseGitRecordsLimit(out, kind, limit, accept)
 	})
 	return gitCollectionError(e)
 }
 
 // gitReadRecords is the streamed counterpart of gitRead for collections.
 func gitReadRecords(ctx context.Context, bin, dir string, kind gitRecordKind, args []string, accept func([]byte) error) error {
+	return gitReadRecordsLimit(ctx, bin, dir, kind, observationLimit, args, accept)
+}
+
+// gitReadRecordsLimit reads a collection of at most limit records. Exceeding
+// the limit, the per-record bound, the stream bound, a missing final
+// delimiter or a failed exit refuses; nothing is ever truncated.
+func gitReadRecordsLimit(ctx context.Context, bin, dir string, kind gitRecordKind, limit int, args []string, accept func([]byte) error) error {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd, e := prepareSandboxed(streamCtx, bin, append([]string{"--no-replace-objects"}, args...), dir, nil, nil)
 	if e != nil {
 		return gitExecutionError(e)
 	}
-	return gitStreamRecords(ctx, cancel, cmd, kind, func(record []byte) error {
+	return gitStreamRecordsLimit(ctx, cancel, cmd, kind, limit, func(record []byte) error {
 		if !utf8.Valid(record) {
 			return failure("git-query-refused", "bounded native Git safety evidence is unavailable")
 		}
