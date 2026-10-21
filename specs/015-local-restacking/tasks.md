@@ -1,7 +1,7 @@
 # Tasks: Local restacking, first slice (`stw restack plan`)
 
 **Input**: `spec.md`, `plan.md`, `data-model.md`, `contracts/restack-plan.md`, `quickstart.md`.
-**Tests**: Required by constitution principle IV. Write each behavior test, observe it fail, then implement; characterization tests (T004) are committed green before the refactor they guard. Every task names the requirements (FR) it covers; a mutation control (MC) is a deliberate defect the tests must catch, run and recorded in the task commit message. Task checkboxes record execution, not design approval. No task runs a standalone build, `go install`, a Pages build, a release or a push of anything but the author's topic branch.
+**Tests**: Required by constitution principle IV. Write each behavior test, observe it fail, then implement; the characterization tests and refactor of T004 were skipped (see its line). Every task names the requirements (FR) it covers; a mutation control (MC) is a deliberate defect the tests must catch, run and recorded in the task commit message. Task checkboxes record execution, not design approval. No task runs a standalone build, `go install`, a Pages build, a release or a push of anything but the author's topic branch.
 **Progress (2026-10-21)**: T002 to T003, T005 to T020 and T022 are implemented in source on `feat/015-restack-plan` (evidence in [verification](verification.md)); T001 (independent design review), T004 (not done by design, see its line), T021 (minimum/current Git lanes) and T023 (independent review of the exact head) remain open. The command stays hidden and the schema unpublished until T021 and T023 hold.
 **Work items**: WI1 (T002 to T005), WI2 (T006 to T010), WI3 (T011 to T016), WI4 (T017 to T020), WI5 (T021 to T023). Each ends with `make check` green and is one reviewable change; stack them linearly.
 
@@ -45,6 +45,10 @@
 - [ ] T021 [FR-010, SC-001] Conformance run on minimum and current Git for every acceptance scenario of the first slice; missing lane is not a pass. **Open**: only the local Git 2.56.0 ran the suite; Git 2.46.0 and the pinned CI lanes did not.
 - [x] T022 [SC-002, SC-004] Traceability table FR to test; effect sentinels recorded; update `docs/commands.md`, `docs/progress.md` and, only with acceptance evidence, `docs/feature-status.json`. **Done 2026-10-21**: traceability and sentinel evidence are in [verification](verification.md); `docs/commands.md` and `docs/feature-status.json` stay unchanged because the command is hidden and there is no acceptance evidence.
 - [ ] T023 Independent review of the exact head; at most two rounds per lineage.
+
+## Follow-up work package (not part of the first slice)
+
+- [ ] T024 [FR-013, FR-015] Failing test and fixture first (a clean `evidence-clean` plan must carry `rewrite-committer-not-predicted` in `limitations`, and the schema must accept it), then emit the limitation string in `internal/restack/result.go` and mark it emitted in the contract and data model. MC: drop the string.
 
 ## Later slices (not scheduled by this task list)
 

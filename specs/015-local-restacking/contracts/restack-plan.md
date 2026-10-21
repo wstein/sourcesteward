@@ -62,7 +62,7 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 | `evidence` | Evidence or `null` | the evidence bundle |
 | `effects` | Effects | affected refs and worktrees, hook and configuration disclosure |
 | `texts` | Texts | inert command texts: lease push and owner resync |
-| `limitations` | string[] | always includes `semantic-breaks-not-detected` and `prediction-is-not-apply`; the limitation `rewrite-committer-not-predicted` (the identity check covers the existing commits; a by-hand rebase takes the new committer from the rebaser's configuration or environment) is specified here and in the data model, but the first-slice code does not yet emit the string (follow-up code change) |
+| `limitations` | string[] | always includes `semantic-breaks-not-detected` and `prediction-is-not-apply`; the limitation string `rewrite-committer-not-predicted` (the identity check covers the existing commits; a by-hand rebase takes the new committer from the rebaser's configuration or environment) is reserved and not emitted until task T024 lands |
 | `diagnostics` | Diagnostic[] | empty for `ok` |
 | `boundary` | Boundary | bounds applied and `truncated: false` or the reached bound |
 | `observed_at` | RFC 3339 UTC | time of the final sample |
