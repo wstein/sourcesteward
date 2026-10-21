@@ -6,7 +6,7 @@
 
 Decision and justification: the existing hosting leaves are `KIND ARG [PATH]` (`pr NUMBER`, `ci NUMBER`) with `Kind` in `hosting.Options`, and `NUMBER` is a required positional validated in the argument hook. A `--by-head SHA` flag on `pr` would make the required NUMBER optional and switch the result between a single PR and a collection, so one command would have two result shapes and an arity that depends on a flag. A new sibling leaf `prs SHA` keeps one shape per command, lets `pr` stay exactly as specified, matches the positional convention (the SHA takes NUMBER's place) and reuses selection, authentication, native resolution and exit rules unchanged. The plural name signals a collection result. Rejected alternatives: `pr --by-head` (arity/shape switch), `ci --find` (CI is not a PR lookup).
 
-JSON is always schema version 2 of kind `prs`; `--json-version` is not accepted on `prs` (there is no v1 form). Human output is the detailed line list and `--compact` (one escaped line per PR) as for `pr`.
+JSON is always schema version 2 of kind `prs`; `--json-version` is not accepted on `prs` (there is no v1 form). Human output is the detailed line list and `--compact` (a header line plus one escaped line per PR) as for `pr`.
 
 ## Request and bounds
 

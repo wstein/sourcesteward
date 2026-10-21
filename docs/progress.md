@@ -27,9 +27,9 @@ and predicted conflicts in the plan) are recorded in
 done) and [contracts](../specs/015-local-restacking/contracts/restack-plan.md). Status stays
 `planned`; the independent design review is pending and nothing is implemented.
 
-## Active work: Spec 030 PR status (design only, re-scoped 2026-10-21, runtime not started)
+## Active work: Spec 030 PR status (slice 1 source implemented, verification pending)
 
-The owner split Spec 030 on 2026-10-21 ([spec](../specs/030-pr-status/spec.md)). Slice 1 is the one-shot `stw hosting pr NUMBER --json --json-version 2 [--expect-head SHA] [--compact]` and the new head lookup `stw hosting prs SHA`; its design awaits an independent review of the exact head and no runtime is merged. `--watch`, the delivery arbiter and descendant verification are a deferred slice that keeps the three DESIGN NOT CLEAR rounds and the pending round 4 ([round 3](../specs/030-pr-status/round3-disposition.md)); those blockers do not apply to slice 1 because a one-shot read has no final-delivery arbiter or teardown phase. Earlier runtime commits (typed lifecycle model and decoder, one-shot assembly) are preserved unmerged on `codex/hold-spec030-runtime` and may be reused after review. Long waits keep using `scripts/ci-wait.sh`. The feature stays `planned`.
+Slice 1 of [Spec 030](../specs/030-pr-status/spec.md) is implemented in source on `feat/030-pr-status-one-shot`: the schema 2 one-shot `stw hosting pr` / `gh jj pr` (`--json-version 2`, `--compact`, `--expect-head`; `--watch` is a usage error) and the head lookup `stw hosting prs SHA` / `gh jj prs` over the allowlisted `commits/SHA/pulls?per_page=30&page=1` GET. Source tests use HTTP fixtures only; no build, binary smoke, live API or keyring acceptance was run, and GitHub's association behaviour for the lookup is unverified. The feature stays `planned`. The watch, delivery arbiter and descendant verification remain a deferred slice with their NOT CLEAR history ([round 3](../specs/030-pr-status/round3-disposition.md)).
 
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 

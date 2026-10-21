@@ -190,6 +190,10 @@ their bytes. Exit status 3 (`--strict` with error findings in a complete result)
 
 [hosting.schema.json](../schemas/v1/hosting.schema.json) is a separate contract shared by `stw hosting` and `gh jj`. It retains native identity, candidates, explicit hosting selection, PR head/base identities, individual CI checks/statuses, diagnostics, sample time and bounded completeness/network effects. Errors may occur before any remote read; missing evidence is never empty successful CI. Existing version/inspection/inventory/workspace/tidy schemas retain their bytes and meanings. See [hosting](hosting.md).
 
+## PR status and lookup (v2)
+
+[hosting-pr.schema.json](../schemas/v2/hosting-pr.schema.json) is the explicit opt-in `stw hosting pr --json --json-version 2` / `gh jj pr` contract and [hosting-prs.schema.json](../schemas/v2/hosting-prs.schema.json) the `hosting prs SHA --json` contract. Ordinary `--json` stays hosting schema 1 and its bytes. v2 has explicit nulls for merge/close dates, the raw GitHub merge SHA and the method-dependent `result_sha`; `observation` (`mode` always `once`, `stop`, expected head and expectation) and `boundary` (one request). Consumers ignore unknown properties, reject an unsupported `schema_version` and treat an unknown `observation.stop` as failure. The watch-only members of the design (`watch` mode, `timeout`, `changed`, `merged`/`closed-unmerged` stops) are reserved and rejected by this schema. See [hosting](hosting.md).
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files
