@@ -234,7 +234,7 @@ func (api *ghAPI) token(parent context.Context) (string, error) {
 	return token, nil
 }
 
-var fixedEndpoint = regexp.MustCompile(`^repos/[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*/(pulls/[1-9][0-9]*|commits/[0-9a-f]{40}/(check-runs|statuses)\?per_page=100&page=([1-9]|10))$`)
+var fixedEndpoint = regexp.MustCompile(`^repos/[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*/(pulls/[1-9][0-9]*|commits/[0-9a-f]{40}/(check-runs|statuses)\?per_page=100&page=([1-9]|10)|commits/[0-9a-f]{40}/pulls\?per_page=30&page=1)$`)
 
 func apiDestination(host string) (string, string) {
 	if host == "github.com" || strings.HasSuffix(host, ".ghe.com") {
