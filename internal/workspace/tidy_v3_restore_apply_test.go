@@ -515,3 +515,23 @@ func TestRestoreWithNothingRestorableWritesNothing(t *testing.T) {
 		t.Fatalf("%+v", ok)
 	}
 }
+
+// An interrupted intent belongs to the name it was recorded for: the original
+// name existing at the OID is not a recovery of an --as restore.
+func TestRestoreApplyPendingIntentOfAnotherNameIsNotRecovered(t *testing.T) {
+	f := newRestoreFix(t, "alpha")
+	c := defaultTidyV3RestoreCoordinator()
+	c.afterIntent = func(V3RestoreEntry) error { return errors.New("simulated crash") }
+	o := f.applyOptions()
+	o.Actions, o.As = []string{f.action("alpha")}, "refs/heads/elsewhere-name"
+	applyRestore(t, c, o)
+	f.git("update-ref", "refs/heads/alpha", f.tips["alpha"])
+	before := f.restoreRecords()
+	if len(before) != 1 {
+		t.Fatalf("%v", sortedKeys(before))
+	}
+	r := applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if r.Status != "ok" || outcomeFor(t, r, "alpha") != "already-present" || !reflect.DeepEqual(before, f.restoreRecords()) {
+		t.Fatalf("%+v", r)
+	}
+}

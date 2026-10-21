@@ -309,6 +309,9 @@ func (c tidyV3RestoreCoordinator) applyRestore(ctx context.Context, n restoreNat
 				r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "restore-journal-unreadable", Message: "The restore journal of an action could not be read."})
 				continue
 			}
+			if p, ok := pendingIntent(records); !ok || p.Ref != e.Ref || p.OID != e.OID {
+				continue // completed or recorded for another name meanwhile
+			}
 			id, err := c.record(s, c.stamp(restoreOutcome, *e, o.PlanID, outcomeCreatedRecovered), len(records)+1)
 			if err != nil {
 				e.Outcome, stopped = outcomeError, true
