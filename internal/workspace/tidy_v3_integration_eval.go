@@ -20,6 +20,15 @@ type integrationVerdict struct {
 	SkippedMerges int
 	BinaryPaths   []string
 	BaseMatches   []string
+	// Limit is the first bound a proof-limit reason came from (report only).
+	Limit *integrationLimitError
+}
+
+func firstLimit(a, b *integrationLimitError) *integrationLimitError {
+	if a != nil {
+		return a
+	}
+	return b
 }
 
 // reasonOrder sorts reasons by the contract's table order, without duplicates.
@@ -62,6 +71,7 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 		case errors.Is(err, errIntegrationBudget):
 			return reviewVerdict(v, append(reasons, "proof-budget-exhausted")...), true, nil
 		case errors.Is(err, errIntegrationLimit):
+			errors.As(err, &v.Limit)
 			return reviewVerdict(v, append(reasons, "proof-limit")...), true, nil
 		}
 		return v, true, err
@@ -94,6 +104,7 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 		}
 		v.Matched, v.Unmatched, v.Empty, v.SkippedMerges, v.BinaryPaths, v.BaseMatches = pr.Matched, pr.Unmatched, pr.Empty, pr.SkippedMerges, pr.BinaryPaths, pr.BaseMatches
 		reasons = append(reasons, pr.Reasons...)
+		v.Limit = firstLimit(v.Limit, pr.Limit)
 		switch {
 		case pr.Proven && !pr.Whitespace:
 			patchProven = true
@@ -117,6 +128,7 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 		}
 		noopProven = mr.Proven
 		reasons = append(reasons, mr.Reasons...)
+		v.Limit = firstLimit(v.Limit, mr.Limit)
 	}
 	switch {
 	case patchProven:

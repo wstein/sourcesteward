@@ -224,6 +224,9 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 		mergeBase = "none (no single merge base)"
 	}
 	fmt.Fprintf(&b, "- Tip: `%s`\n- Base: `%s`\n- Merge base: %s\n- Reasons: %s\n- Suggested verdict: `%s`, confidence %s (basis %s)\n\nBranch:\n\n%s\n", e.TipOID, e.BaseOID, mergeBase, backticked(e.Reasons), e.Verdict.Verdict, e.Verdict.Confidence, backticked(e.Verdict.Basis), untrustedBlock(e.Branch.Text))
+	if l := e.ProofLimit; l != nil {
+		fmt.Fprintf(&b, "- Proof limit: `%s` %s, limit %d, observed %d\n", l.Name, l.Unit, l.Limit, l.Observed)
+	}
 	total := len(e.Commits)
 	if e.CommitsTruncated != nil {
 		total = e.CommitsTruncated.Total
@@ -249,7 +252,7 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 	case "branch-against-merge-base":
 		b.WriteString("Branch against merge base: the merge gate applies, so merge-tree was not run and the suggested verdict is unclear.\n\n")
 	default:
-		b.WriteString("Not available.\n\n")
+		b.WriteString("Not available: " + d.UnavailableReason + "\n\n")
 	}
 	if len(d.ConflictedPaths) > 0 {
 		b.WriteString("Conflicted paths:\n\n")

@@ -2,6 +2,7 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -384,19 +385,19 @@ func TestIntegrationCatFileBatchBounds(t *testing.T) {
 	if err != nil || len(files[oid]) != 1<<20 {
 		t.Fatalf("1 MiB accepted: %v", err)
 	}
-	if _, err = parseCatFileBatch(batch(1<<20+1, strings.Repeat("x", 1<<20+1)), []string{oid}, 40); err != errIntegrationLimit {
+	if _, err = parseCatFileBatch(batch(1<<20+1, strings.Repeat("x", 1<<20+1)), []string{oid}, 40); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("1 MiB + 1: %v", err)
 	}
-	if _, err = parseCatFileBatch(strings.NewReader(oid+" missing\n"), []string{oid}, 40); err != errIntegrationLimit {
+	if _, err = parseCatFileBatch(strings.NewReader(oid+" missing\n"), []string{oid}, 40); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("missing object: %v", err)
 	}
-	if _, err = parseCatFileBatch(strings.NewReader(oid+" tree 3\nabc\n"), []string{oid}, 40); err != errIntegrationLimit {
+	if _, err = parseCatFileBatch(strings.NewReader(oid+" tree 3\nabc\n"), []string{oid}, 40); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("non-blob: %v", err)
 	}
-	if _, err = parseCatFileBatch(batch(5, "abc"), []string{oid}, 40); err != errIntegrationLimit {
+	if _, err = parseCatFileBatch(batch(5, "abc"), []string{oid}, 40); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("short content: %v", err)
 	}
-	if _, err = parseCatFileBatch(strings.NewReader(strings.Repeat("b", 40)+" blob 1\nx\n"), []string{oid}, 40); err != errIntegrationLimit {
+	if _, err = parseCatFileBatch(strings.NewReader(strings.Repeat("b", 40)+" blob 1\nx\n"), []string{oid}, 40); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("unrequested object: %v", err)
 	}
 	wide := strings.Repeat("c", 64)

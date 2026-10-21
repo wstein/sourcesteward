@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -22,6 +23,38 @@ import (
 // is errIntegrationLimit for the affected class, never a partial proof.
 
 var errIntegrationLimit = errors.New("integration proof command exceeds its bound")
+
+// integrationLimitError is errIntegrationLimit with the bound that was hit: the
+// name of the command or grammar, the unit (records, bytes, grammar, exit or
+// command), the limit and the first value observed over it. A unit without a
+// count (grammar, command) has limit and observed 0; exit has the exit code as
+// observed. It matches errIntegrationLimit with errors.Is.
+type integrationLimitError struct {
+	Name, Unit      string
+	Limit, Observed int64
+}
+
+func (e *integrationLimitError) Error() string        { return errIntegrationLimit.Error() }
+func (e *integrationLimitError) Is(target error) bool { return target == errIntegrationLimit }
+
+func limitHit(name, unit string, limit, observed int64) error {
+	return &integrationLimitError{Name: name, Unit: unit, Limit: limit, Observed: observed}
+}
+
+// commandName is the git command and its leading options, for a limit message.
+func commandName(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	name := []string{args[0]}
+	for _, a := range args[1:min(len(args), 4)] {
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		name = append(name, a)
+	}
+	return strings.Join(name, " ")
+}
 
 // errIntegrationBudget is the per-tip or forge-free phase budget (FR-008).
 var errIntegrationBudget = errors.New("integration proof time budget exhausted")
@@ -211,7 +244,19 @@ func (r *integrationRun) run(ctx context.Context, c integrationCommand, parse fu
 		stdin = bytes.NewReader(nil)
 	}
 	_, code, err := executeNativeStreamExit(cmdCtx, stop, cmd, stdin, c.limit, parse, nil, c.tolerate)
-	return code, r.classify(ctx, err)
+	out := r.classify(ctx, err)
+	if out == errIntegrationLimit {
+		name := commandName(c.args)
+		switch {
+		case errors.Is(err, errNativeStreamLimit):
+			out = limitHit(name, "bytes", c.limit, c.limit+1)
+		case errors.Is(err, errNativeStreamCommandFailed):
+			out = limitHit(name, "exit", 0, int64(code))
+		default:
+			out = limitHit(name, "command", 0, 0)
+		}
+	}
+	return code, out
 }
 
 // classify maps an execution error: a cancelled operation is returned as is, a
@@ -227,6 +272,8 @@ func (r *integrationRun) classify(ctx context.Context, err error) error {
 		return ctx.Err()
 	case errors.Is(err, errNativeSandboxUnavailable):
 		return gitExecutionError(err)
+	case errors.Is(err, errIntegrationLimit):
+		return err
 	}
 	return errIntegrationLimit
 }
@@ -319,20 +366,20 @@ func readIntegrationRecords(src io.Reader, s integrationSpec, width int, accept 
 		record, err := reader.ReadSlice(s.sep)
 		total += int64(len(record))
 		if total > s.bytes(width) {
-			return errIntegrationLimit
+			return limitHit(s.name, "bytes", s.bytes(width), total)
 		}
 		if err == io.EOF && len(record) == 0 {
 			return nil
 		}
 		if err != nil {
-			return errIntegrationLimit // truncated record, or longer than any grammar
+			return limitHit(s.name, "grammar", 0, 0) // truncated record, or longer than any grammar
 		}
 		if count++; count > s.maxRecords {
-			return errIntegrationLimit
+			return limitHit(s.name, "records", int64(s.maxRecords), int64(count))
 		}
 		record = record[:len(record)-1]
 		if !s.check(record, width) {
-			return errIntegrationLimit
+			return limitHit(s.name, "grammar", 0, 0)
 		}
 		if err = accept(record); err != nil {
 			return err
@@ -357,7 +404,7 @@ func (r *integrationRun) records(ctx context.Context, c integrationCommand, s in
 func (r *integrationRun) lines(ctx context.Context, c integrationCommand, s integrationSpec) ([]string, error) {
 	out, code, err := r.records(ctx, c, s)
 	if err == nil && code != 0 {
-		err = errIntegrationLimit
+		err = limitHit(commandName(c.args), "exit", 0, int64(code))
 	}
 	return out, err
 }

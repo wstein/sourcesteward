@@ -2,6 +2,7 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -498,23 +499,23 @@ func TestIntegrationCommandBoundsAtAndOverTheBound(t *testing.T) {
 				if err := readIntegrationRecords(stream(r.spec.maxRecords, pathLen, ""), r.spec, width, accept); err != nil || count != r.spec.maxRecords {
 					t.Fatalf("at the bound: %v after %d records", err, count)
 				}
-				if err := readIntegrationRecords(stream(r.spec.maxRecords+1, 1, ""), r.spec, width, accept); err != errIntegrationLimit {
+				if err := readIntegrationRecords(stream(r.spec.maxRecords+1, 1, ""), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 					t.Fatalf("one record over: %v", err)
 				}
 				if r.paths && pathLen < 4096 {
-					if err := readIntegrationRecords(stream(r.spec.maxRecords, pathLen+1, ""), r.spec, width, accept); err != errIntegrationLimit {
+					if err := readIntegrationRecords(stream(r.spec.maxRecords, pathLen+1, ""), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 						t.Fatalf("one byte over the byte bound: %v", err)
 					}
 				}
 				if r.paths {
-					if err := readIntegrationRecords(stream(0, 0, r.record(4097)+string(r.spec.sep)), r.spec, width, accept); err != errIntegrationLimit {
+					if err := readIntegrationRecords(stream(0, 0, r.record(4097)+string(r.spec.sep)), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 						t.Fatalf("4,097-byte path: %v", err)
 					}
 				}
-				if err := readIntegrationRecords(stream(0, 0, r.bad+string(r.spec.sep)), r.spec, width, accept); err != errIntegrationLimit {
+				if err := readIntegrationRecords(stream(0, 0, r.bad+string(r.spec.sep)), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 					t.Fatalf("malformed record: %v", err)
 				}
-				if err := readIntegrationRecords(stream(1, 1, r.record(1)), r.spec, width, accept); err != errIntegrationLimit {
+				if err := readIntegrationRecords(stream(1, 1, r.record(1)), r.spec, width, accept); !errors.Is(err, errIntegrationLimit) {
 					t.Fatalf("truncated final record: %v", err)
 				}
 			})
@@ -539,19 +540,19 @@ func TestIntegrationCheckAttrStreamBounds(t *testing.T) {
 	if err != nil || found {
 		t.Fatalf("8,192 paths at the bound: found=%t %v", found, err)
 	}
-	if _, err = parseCheckAttrStream(stream(many, "unspecified"), append(many, "x")); err != errIntegrationLimit {
+	if _, err = parseCheckAttrStream(stream(many, "unspecified"), append(many, "x")); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("8,193 paths: %v", err)
 	}
-	if _, err = parseCheckAttrStream(stream([]string{long + "x"}, "set"), []string{long + "x"}); err != errIntegrationLimit {
+	if _, err = parseCheckAttrStream(stream([]string{long + "x"}, "set"), []string{long + "x"}); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("4,097-byte path: %v", err)
 	}
 	if found, err = parseCheckAttrStream(stream([]string{"a", "b"}, "d"), []string{"a", "b"}); err != nil || !found {
 		t.Fatalf("driver value not reported: %t %v", found, err)
 	}
-	if _, err = parseCheckAttrStream(strings.NewReader("a\x00other\x00set\x00"), []string{"a"}); err != errIntegrationLimit {
+	if _, err = parseCheckAttrStream(strings.NewReader("a\x00other\x00set\x00"), []string{"a"}); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("wrong attribute name: %v", err)
 	}
-	if _, err = parseCheckAttrStream(strings.NewReader("b\x00diff\x00set\x00"), []string{"a"}); err != errIntegrationLimit {
+	if _, err = parseCheckAttrStream(strings.NewReader("b\x00diff\x00set\x00"), []string{"a"}); !errors.Is(err, errIntegrationLimit) {
 		t.Fatalf("wrong path: %v", err)
 	}
 }

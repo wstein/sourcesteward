@@ -95,3 +95,37 @@ func TestTidyV3PlanSchemaCarriesTheReviewBindingAndSummary(t *testing.T) {
 		})
 	}
 }
+
+// A proof-limit entry names the bound and says why its diff is missing.
+func TestTidyV3ReportSchemaDescribesAProofLimitEntry(t *testing.T) {
+	s := schemaAt(t, "v3", "tidy-report")
+	raw, err := os.ReadFile(filepath.Join(root(t), "internal", "workspace", "testdata", "tidy_v3_report", "tidy-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := func(v map[string]any) map[string]any { return v["entries"].([]any)[0].(map[string]any) }
+	with := func(mutate func(map[string]any)) map[string]any {
+		v := value(t, raw).(map[string]any)
+		e := entry(v)
+		e["proof_limit"] = map[string]any{"name": "diff-tree --raw", "unit": "records", "limit": 8192, "observed": 8193}
+		e["unintegrated_diff"].(map[string]any)["source"] = "unavailable"
+		e["unintegrated_diff"].(map[string]any)["unavailable_reason"] = "proof-limit: diff-tree --raw hit its records bound"
+		mutate(v)
+		return v
+	}
+	if err := s.Validate(with(func(map[string]any) {})); err != nil {
+		t.Fatalf("a proof-limit entry was refused: %v", err)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"unit outside the table": func(v map[string]any) { entry(v)["proof_limit"].(map[string]any)["unit"] = "pages" },
+		"missing observed":       func(v map[string]any) { delete(entry(v)["proof_limit"].(map[string]any), "observed") },
+		"negative limit":         func(v map[string]any) { entry(v)["proof_limit"].(map[string]any)["limit"] = -1 },
+		"empty reason":           func(v map[string]any) { entry(v)["unintegrated_diff"].(map[string]any)["unavailable_reason"] = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			if s.Validate(with(mutate)) == nil {
+				t.Fatal("the schema admitted a violation")
+			}
+		})
+	}
+}
