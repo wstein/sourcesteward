@@ -137,7 +137,7 @@ func statusDetails(rp stwsync.RepoStatus) []string {
 		for _, f := range []struct {
 			n    int
 			text string
-		}{{w.Dirty, "dirty"}, {w.Locked, "locked"}, {w.Prunable, "prunable"}} {
+		}{{w.Dirty, "dirty"}, {w.Locked, "locked"}, {w.Prunable, "prunable"}, {w.Missing, "missing"}} {
 			if f.n > 0 {
 				flags = append(flags, fmt.Sprintf("%d %s", f.n, f.text))
 			}
@@ -229,6 +229,9 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 				}
 				if wt.Prunable {
 					text += "  prunable"
+				}
+				if wt.Missing {
+					text += "  missing"
 				}
 				line(text)
 			}
