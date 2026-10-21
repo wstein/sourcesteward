@@ -7,35 +7,37 @@ Status: proposed first-slice contract, subordinate to the [specification](../spe
 ```text
 stw restack plan [PATH] --branch REF --old-parent REF|OID --new-parent REF|OID
                  [--expect-head OID] [--remote NAME] [--identity "NAME <EMAIL>" ...]
-                 [--keep-both-config ABS] [--json]
+                 [--json]
 ```
 
 - `PATH` defaults to the current directory; it must be a canonical path of a native Git checkout owned by Git (no jj, GitButler or ambiguous ownership: `unsupported-backend`, `ambiguous-ownership`).
 - `--branch` must be a fully qualified `refs/heads/...` ref. `--old-parent` and `--new-parent` are a 40-hex lowercase commit id or a fully qualified ref that peels to exactly one commit. Short names, `HEAD`, abbreviations, revision expressions (`^`, `~`, `..`, `@{}`) and duplicate flags are syntax errors (exit 2).
 - `--expect-head OID` refuses (`head-changed`) when the observed branch tip differs.
 - `--remote NAME` (default `origin`) only names the remote in the printed texts; it is never contacted and never resolved against the network.
-- `--identity` is repeatable; each value is `NAME <EMAIL>`. With none, the identities of the process environment (`GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`/`GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL`) are used when set. stw never reads `user.*` configuration for this purpose and never writes configuration.
-- `--keep-both-config ABS` names a stw configuration file whose `[restack] keep_both_paths` is an explicit list of exact repository paths or directory prefixes (default: empty, no file needed). It is read as data; repository-controlled files are never read as configuration.
+- `--identity` is repeatable; each value is `NAME <EMAIL>` and is the only source of expected identities (reported as `source: "flag"`). The environment and configuration never supply them: a placeholder identity that leaked into the environment (for example `t <t@t>`) must not count as expected. Without any `--identity` the identity check is `unknown`, never `pass`. stw never writes configuration.
+- There is no configuration input in this slice; the keep-both allowlist and its flag belong to a later classification slice (WP6).
 - `--json` emits exactly one `RestackPlanResult` object on standard output, including `incomplete` and `error` results; human output is rendered from the same result.
 
 ## Effects (disclosed, enforced)
 
-Allowed: fixed read-only Git plumbing through the reviewed isolated runner (`rev-parse`, `cat-file`, `rev-list`, `merge-base`, `diff-tree`, `patch-id`, `for-each-ref`, `worktree list --porcelain`, `merge-tree --write-tree`, `commit-tree`, `range-diff`, `cherry`), with no hooks, helpers, pager, editor, terminal prompt or network; temporary objects only in a private quarantine directory under the stw state area, removed on every exit path. Refused: any ref, index, worktree, configuration, hook, `.git` or object-store change; fetch, push, `rebase`, `reset`, `checkout`, `gc`.
+Allowed: fixed read-only Git plumbing through the reviewed isolated runner (`rev-parse`, `cat-file`, `rev-list`, `merge-base`, `merge-base --is-ancestor`, `diff-tree`, `patch-id`, `check-attr` with the attribute source pinned to the base tree as Spec 031 does (`--source`/`GIT_ATTR_SOURCE`, never the worktree), `status --porcelain=v2 --untracked-files=no --no-renames` for the dirty-target check, `for-each-ref`, `worktree list --porcelain`, `merge-tree --write-tree`, `commit-tree`, `range-diff`, `cherry`), each with the hardened environment of the tidy runner (`GIT_CONFIG_NOSYSTEM=1`, `HOME` and global configuration neutralized, `gc.auto=0`, `core.hooksPath=/dev/null`, `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, no pager, no external diff or textconv) and with no hooks, helpers, pager, editor, terminal prompt or network; temporary objects only in a private quarantine directory (`GIT_OBJECT_DIRECTORY`, with the repository objects as `GIT_ALTERNATE_OBJECT_DIRECTORIES`; replay commits carry the fixed constant identity and date of the [plan](../plan.md), so no `user.*` is read) under the stw state area, removed on every exit path. Refused: any ref, index, worktree, configuration, hook, `.git` or object-store change; fetch, push, `rebase`, `reset`, `checkout`, `gc`.
 
 ## Exit status
 
 | `status` | Meaning | Exit |
 | --- | --- | --- |
 | `ok` | complete evidence, whatever it shows (clean, differing, predicted conflicts, unknown identity check) | 0 |
-| `incomplete` | a bound, cancellation or a timeout stopped evidence collection (`bound-exceeded`, `canceled`, `timeout`) | 1 |
-| `error` | a refusal or a failure (diagnostics below); no `evidence` | 1 |
+| `error` | a refusal or a failure (diagnostics below); `evidence` is `null` | 1 |
 | (syntax) | malformed flags or refs | 2 |
+| `incomplete` | a bound, cancellation or a timeout stopped evidence collection (`bound-exceeded`, `canceled`, `timeout`); partial `evidence` names what is missing | 3 |
 
 Success never means "safe to push" (FR-016). Standard error carries one concise `Error:` line for exit 1.
 
 ## Refusals and diagnostics (stable codes)
 
-`unsupported-backend`, `ambiguous-ownership`, `path-not-canonical`, `symlink-hazard`, `repository-hazard` (`core.hooksPath`, `core.fsmonitor`, `include`/`includeIf`, `extensions.*`, `replace` refs or grafts, shallow history, `merge.*.driver`, filter drivers or non-default `.gitattributes` merge/diff attributes on any touched path, reported with `hazard` names, none executed), `target-dirty`, `operation-in-progress` (rebase, merge, cherry-pick, bisect, sequencer state), `branch-checked-out-elsewhere` (reported with the worktree path, never touched), `ref-not-found`, `ref-ambiguous`, `ref-not-commit`, `object-missing`, `head-changed`, `unrelated-histories`, `merge-commit-in-range`, `range-too-large` (bound), `bound-exceeded`, `canceled`, `timeout`, `git-unsupported` (below the minimum Git version of the existing runner).
+`unsupported-backend`, `ambiguous-ownership`, `path-not-canonical`, `symlink-hazard`, `repository-hazard` (`core.hooksPath`, `core.fsmonitor`, `include`/`includeIf`, `extensions.*`, `replace` refs or grafts, shallow history, `merge.*.driver`, filter drivers or non-default `.gitattributes` merge/diff attributes on any touched path, reported with `hazard` names, none executed), `target-dirty`, `operation-in-progress` (rebase, merge, cherry-pick, bisect, sequencer state), `branch-checked-out-elsewhere` (reported with the worktree path, never touched), `ref-not-found`, `ref-ambiguous`, `ref-not-commit`, `object-missing`, `head-changed`, `old-parent-not-ancestor` (`merge-base --is-ancestor <old parent> <old head>` failed: the parent's own commits would be moved), `unrelated-histories` (no merge base between old parent and new parent), `merge-commit-in-range`, `range-too-large` (bound), `bound-exceeded`, `canceled`, `timeout`, `git-unsupported` (below the minimum Git version of the existing runner).
+
+Hazard diagnostics that do not refuse (status stays `ok`, listed in `effects.hazards` and `diagnostics`): `local-identity-config` (a repository-local `user.name` or `user.email` exists; it is never read or used).
 
 A refusal is `status: error`, `evidence: null`, with `diagnostics[]` of `{code, message, details}`; messages are fixed text, details are bounded data.
 
@@ -61,27 +63,49 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 | `boundary` | Boundary | bounds applied and `truncated: false` or the reached bound |
 | `observed_at` | RFC 3339 UTC | time of the final sample |
 
+## Outcome decision table
+
+`outcome` is computed by a pure function of the evidence, first matching row wins. `unknown` in any item never yields `evidence-clean`.
+
+| Row | Condition | `outcome` |
+| --- | --- | --- |
+| 1 | `status` is `incomplete` or `error` | `none` |
+| 2 | `replay.state` is `conflict` | `conflicts-predicted` |
+| 3 | any of: `range_pairing` has a mark other than `=`; `own_diff_equality` has a `differs` or `unknown` row; `parent_dropped` is `unknown` (including an empty parent range) or has a `+` row whose tree-equivalence probe is not `equal`; `empty_after_replay` is non-empty; `identity.state` is `fail` or `unknown`; `overlap.indicator` is `some` or `unknown`; `affected_refs` or `worktrees` hold the branch elsewhere | `needs-attention` |
+| 4 | otherwise (all pairing marks `=`, all own diffs `equal`, parent dropped, identity `pass`, overlap `none`) | `evidence-clean` |
+
+`evidence-clean` never means safe: the notice and `limitations` still apply. Examples (abridged):
+
+```json
+{"schema_version":1,"kind":"restack-plan","status":"ok","outcome":"evidence-clean","evidence":{"parent_dropped":{"all_dropped":true},"range_pairing":{"all_equal":true},"identity":{"state":"pass","source":"flag"},"overlap":{"indicator":"none"}},"limitations":["semantic-breaks-not-detected","prediction-is-not-apply"]}
+{"schema_version":1,"kind":"restack-plan","status":"ok","outcome":"needs-attention","evidence":{"identity":{"state":"unknown","source":"none","reason":"no-expected-identity"},"overlap":{"indicator":"some","count":2}}}
+{"schema_version":1,"kind":"restack-plan","status":"ok","outcome":"conflicts-predicted","evidence":{"replay":{"state":"conflict","commits_replayed":1},"conflicts":{"predicted":true,"items":[{"path":"src/a.go","kind":"content"}]}}}
+{"schema_version":1,"kind":"restack-plan","status":"error","outcome":"none","evidence":null,"diagnostics":[{"code":"old-parent-not-ancestor","message":"The old parent is not an ancestor of the branch tip.","details":{}}]}
+{"schema_version":1,"kind":"restack-plan","status":"incomplete","outcome":"none","diagnostics":[{"code":"bound-exceeded","message":"A documented bound was reached.","details":{"bound":"max_commits"}}]}
+```
+
 ## Stability
 
 The schema is versioned by `schema_version`. Within version 1 only additive changes are allowed: new optional fields, new enum values for `diagnostics[].code` and `evidence.*.state` where consumers must treat unknown values as `unknown`, and new `limitations` strings. Removing or renaming a field, changing a type or a meaning, or changing an exit code requires `schema_version: 2` as an explicit opt-in. Arrays are non-null; absent optional objects are `null`; all strings are valid UTF-8, bounded, and data.
 
 ## Printed command texts
 
-`texts.lease_push` is a single line with the observed old tip and a placeholder for the new tip, because the new commit ids exist only after a replay (by hand or by a later `restack apply`):
+The texts are inert and safe to paste into a POSIX shell: every value that stw knows is a single-quoted literal (ref names validated against Git ref-name rules; a value with a single quote or control character is omitted with a diagnostic rather than emitted), and the only unknown, the new commit id, is a shell variable that the owner must set, never an angle-bracket placeholder (which a shell parses as redirections). `texts.lease_push` is two lines: an assignment line with a refusing default, then the push.
 
 ```text
-git push --force-with-lease=refs/heads/<branch>:<OBSERVED_OLD_FULL_SHA> <remote> <NEW_FULL_SHA>:refs/heads/<branch>
+NEW_FULL_SHA=   # set to the full 40-hex id of the new branch tip before running the next line
+git push --force-with-lease='refs/heads/feat/x:<observed old 40-hex SHA>' 'origin' "${NEW_FULL_SHA:?set to the full new commit id}:refs/heads/feat/x"
 ```
 
-`new_sha_known` is `false` in this slice and the placeholder `<NEW_FULL_SHA>` is printed literally. The text never contains `--force` without `-with-lease=ref:sha`, never a bare `--force-with-lease`, and is not executed. `texts.resync` holds the two owner alternatives, the second named destructive:
+`new_sha_known` is `false` in this slice. The pushed value is the full id behind the shell variable; an unset or empty variable aborts the command before git runs. The text never contains `--force` without `-with-lease=ref:sha`, never a bare `--force-with-lease`, and is not executed. Tests assert that the rendered text, with the variable line removed, contains no unquoted `<` or `>`. `texts.resync` holds the two owner alternatives with the concrete short branch name (`refs/heads/a/b` gives `a/b`), the second named destructive:
 
 ```text
 git fetch --prune
-git rebase --onto origin/<branch> <OBSERVED_OLD_FULL_SHA> <branch>        # the owner has local commits on the branch
-git switch <branch> && git reset --hard origin/<branch>                   # DESTRUCTIVE for local-only work and uncommitted changes
+git rebase --onto 'origin/feat/x' '<observed old 40-hex SHA>' 'feat/x'        # the owner has local commits on the branch
+git switch 'feat/x' && git reset --hard 'origin/feat/x'                       # DESTRUCTIVE for local-only work and uncommitted changes
 ```
 
-Branch, remote and ref text is validated against Git ref-name rules and shell-quoted when it contains anything outside `[A-Za-z0-9._/-]`; texts with an unquotable value are omitted with a diagnostic rather than emitted unsafely.
+(The angle brackets above stand for the concrete value in this document only; the rendered text holds the 40-hex id.)
 
 ## Human output
 
@@ -89,8 +113,8 @@ Branch, remote and ref text is validated against Git ref-name rules and shell-qu
 Restack plan: refs/heads/feat/x onto 9f3c... (old parent 41ab...), 3 commits
 Replay (plumbing, nothing written): clean for 3 of 3 commits
 Range pairing: = = =    Parent commits dropped: 2 of 2 (cherry -)   Own diffs equal: 3 of 3
-Identity: pass (3 authors, 3 committers match 1 expected)
+Identity: pass (source: flag; 3 authors, 3 committers match 1 expected)
 Overlap risk: 2 paths changed by the new parent and by the branch (src/a.go, src/b.go)
 Limitation: semantic breaks are not detected; build and test the result.
-Lease push (not run): git push --force-with-lease=refs/heads/feat/x:<old sha> origin <NEW_FULL_SHA>:refs/heads/feat/x
+Lease push (not run): git push --force-with-lease='refs/heads/feat/x:<old sha>' origin "${NEW_FULL_SHA:?set to the full new commit id}:refs/heads/feat/x"
 ```
