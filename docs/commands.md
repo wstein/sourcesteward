@@ -14,7 +14,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
-| `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--no-rebase] [--no-ff] [--autostash\|--no-autostash] [--prune\|--no-prune]` | Replace `git pull` in the workspace root and each submodule that sits on a branch: fetch, then fast-forward (or rebase) the current branch; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
+| `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--no-rebase] [--no-ff] [--autostash\|--no-autostash] [--prune\|--no-prune]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -92,26 +92,31 @@ stw sync --plan ~/work/ws     # fetch only, say what a run would do
 stw sync --rebase --autostash # override the configuration for one run
 ```
 
-`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)) that replaces `git pull`
-in the workspace root repository (`PATH`, default the current directory) and in each direct submodule that sits
-on a branch with an upstream. There is no apply step: `stw sync` is the action, `--plan` (alias `--dry-run`)
-is the preview. Other branches and linked worktrees are never listed or touched.
+`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)) that does what `git pull`
+would do in every repository of a workspace, from any directory inside it. It resolves the top-level superproject (also
+from inside a submodule, a nested submodule or a linked worktree) and syncs that root and every initialized submodule,
+nested ones included, parent first and then submodules depth-first. Only the main worktree of each repository is
+synced, on whatever branch it sits (main, develop, a feature branch) when that branch has an upstream; linked worktrees
+are never touched or listed (started inside one, a note says so). A detached HEAD (a pinned submodule) is reported
+with its short OID and left alone, an uninitialized submodule is reported and never cloned. There is no apply step:
+`stw sync` is the action, `--plan` (alias `--dry-run`) is the preview.
 
 It is never stricter than `git pull`. Per repository it runs `git fetch --no-tags --no-write-fetch-head
 --no-recurse-submodules` for the branch's upstream remote, then follows your Git configuration as `git pull`
 does: `pull.rebase` and `branch.NAME.rebase` decide whether a diverged branch is rebased (`--rebase`/`--ff-only`
 override), `pull.ff=only` forbids it, `rebase.autoStash` and `merge.autoStash` stash and restore a dirty tree
 (`--autostash`/`--no-autostash` override) and `fetch.prune` prunes (`--prune`/`--no-prune` override). Without
-`pull.rebase` a diverged branch is reported as needing a choice; a merge commit is created only when `pull.rebase=false`, `pull.ff=false`, `--no-rebase` or `--no-ff` asks for it, never by default. A
-dirty tree is fine when the update touches none of its files, as for `git merge --ff-only`.
+`pull.rebase` a diverged branch is reported as needing a choice; a merge commit is created only when `pull.rebase=false`,
+`pull.ff=false`, `--no-rebase` or `--no-ff` asks for it, never by default. A dirty tree is fine when the update touches
+none of its files, as for `git merge --ff-only`. A failure in one repository does not stop the others.
 
 Output is one line per repository, then a summary line (colour only on a terminal with `NO_COLOR` unset):
 
 ```
 SourceSteward sync: 3 repositories
-.    main  fast-forwarded 2 commits 3f2a1b0..9c4d7e1
-app  main  skipped: diverged (2 ahead, 5 behind) - needs a choice: use --rebase or set pull.rebase (stw sync never merges)
-lib  -     skipped: detached HEAD (reported only)
+.        main     fast-forwarded 2 commits 3f2a1b0..9c4d7e1
+app      develop  skipped: diverged (2 ahead, 5 behind) - needs a choice: use --rebase or set pull.rebase (stw sync never merges)
+app/lib  -        skipped: detached at 8d1e2f3 (pinned)
 summary: 1 fast-forwarded, 1 diverged, 1 skipped detached
 ```
 
