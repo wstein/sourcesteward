@@ -14,6 +14,9 @@ const (
 	ResultDiverged     = "diverged"
 	ResultSkippedDirty = "skipped-dirty"
 	ResultUpstreamGone = "upstream-gone"
+	// Results that only a real run reports.
+	ResultFastForwarded = "fast-forwarded"
+	ResultFailed        = "failed"
 )
 
 // Options selects one plan. Remote defaults to origin.
@@ -91,7 +94,7 @@ func (r Result) ExitCode() int {
 		return 1
 	}
 	for _, it := range r.Items {
-		if it.Result == ResultSkippedDirty || it.Result == ResultDiverged {
+		if it.Result == ResultSkippedDirty || it.Result == ResultDiverged || it.Result == ResultFailed {
 			return 1
 		}
 	}

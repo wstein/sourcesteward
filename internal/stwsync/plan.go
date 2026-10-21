@@ -66,26 +66,48 @@ func oneLine(s string) string {
 // that tracks it. It changes no local branch, worktree, stash or tag, and refuses before the fetch
 // for a jj-owned or unsupported path, an unknown remote or too many branches.
 func Plan(ctx context.Context, o Options) Result {
+	r, _ := plan(ctx, o)
+	return r
+}
+
+// env is what a run needs after planning: the resolved Git executable and the repository directory.
+type env struct {
+	bin, dir string
+}
+
+func (e env) g(ctx context.Context, args ...string) (gitOutput, error) {
+	return git(ctx, e.bin, e.dir, args...)
+}
+
+func (e env) in(ctx context.Context, tree string, args ...string) (gitOutput, error) {
+	return git(ctx, e.bin, tree, args...)
+}
+
+func (e env) in2(ctx context.Context) func(string, ...string) (gitOutput, error) {
+	return func(tree string, args ...string) (gitOutput, error) { return e.in(ctx, tree, args...) }
+}
+
+func plan(ctx context.Context, o Options) (Result, env) {
 	if o.Remote == "" {
 		o.Remote = defaultRemote
 	}
 	r := newResult(o)
 	if err := ValidateOptions(o); err != nil {
-		return r.fail("sync-invalid-options", err.Error())
+		return r.fail("sync-invalid-options", err.Error()), env{}
 	}
 	bin, err := exec.LookPath("git")
 	if err != nil {
-		return r.fail("sync-git-unavailable", "the Git executable is unavailable")
+		return r.fail("sync-git-unavailable", "the Git executable is unavailable"), env{}
 	}
 	if bin, err = filepath.Abs(bin); err != nil {
-		return r.fail("sync-git-unavailable", "the Git executable is unavailable")
+		return r.fail("sync-git-unavailable", "the Git executable is unavailable"), env{}
 	}
 	id := inspection.Inspect(ctx, o.Path)
 	if len(id.Evidence) > 0 || id.Backend == "jj" {
-		return r.fail("sync-unsupported-backend", "jj-owned paths are not supported by stw sync; use jj git fetch (Git only, Spec 032)")
+		return r.fail("sync-unsupported-backend", "jj-owned paths are not supported by stw sync; use jj git fetch (Git only, Spec 032)"), env{}
 	}
 	if id.Status != "ok" || id.Backend != "git" || id.Repository == nil {
-		return r.fail("sync-unsupported-backend", "stw sync needs an unambiguous Git repository: "+id.Error())
+		return r.fail("sync-unsupported-backend", "stw sync needs an unambiguous Git repository: "+id.Error()), env{}
 	}
 	dir := id.InputPath
 	g := func(args ...string) (gitOutput, error) { return git(ctx, bin, dir, args...) }
@@ -93,22 +115,22 @@ func Plan(ctx context.Context, o Options) Result {
 
 	remotes, err := g("remote")
 	if err != nil || remotes.Code != 0 || !contains(strings.Split(remotes.Out, "\n"), o.Remote) {
-		return r.fail("sync-remote-unknown", "the repository has no remote "+o.Remote)
+		return r.fail("sync-remote-unknown", "the repository has no remote "+o.Remote), env{}
 	}
 	branches, err := listBranches(g)
 	if err != nil {
-		return r.fail("sync-read-failed", err.Error())
+		return r.fail("sync-read-failed", err.Error()), env{}
 	}
 	if len(branches) > branchLimit {
-		return r.fail("sync-limit", fmt.Sprintf("the repository has more than %d local branches", branchLimit))
+		return r.fail("sync-limit", fmt.Sprintf("the repository has more than %d local branches", branchLimit)), env{}
 	}
 	prefix := "refs/remotes/" + o.Remote + "/"
 	if err := checkRefspecs(g, o.Remote, prefix); err != nil {
-		return r.fail("sync-refspec-unsafe"[:0]+"sync-refspec-unsafe", err.Error())
+		return r.fail("sync-refspec-unsafe", err.Error()), env{}
 	}
 	before, err := listRefs(g, prefix)
 	if err != nil {
-		return r.fail("sync-read-failed", err.Error())
+		return r.fail("sync-read-failed", err.Error()), env{}
 	}
 
 	// The one network effect; it may only change refs/remotes/REMOTE/*.
@@ -119,12 +141,12 @@ func Plan(ctx context.Context, o Options) Result {
 		args = append(args, "--no-prune") // a fetch.prune setting must not remove refs without --prune
 	}
 	if out, err := g(append(args, "--", o.Remote)...); err != nil || out.Code != 0 {
-		return r.fail("sync-fetch-failed", "git fetch failed: "+out.Diagnostic)
+		return r.fail("sync-fetch-failed", "git fetch failed: "+out.Diagnostic), env{}
 	}
 	r.Fetch.Performed = true
 	after, err := listRefs(g, prefix)
 	if err != nil {
-		return r.fail("sync-read-failed", err.Error())
+		return r.fail("sync-read-failed", err.Error()), env{}
 	}
 	var pruned []string
 	for name := range before {
@@ -141,7 +163,7 @@ func Plan(ctx context.Context, o Options) Result {
 
 	checkedOut, err := listWorktrees(g)
 	if err != nil {
-		return r.fail("sync-read-failed", err.Error())
+		return r.fail("sync-read-failed", err.Error()), env{}
 	}
 	dirty := map[string]bool{}
 	for _, b := range branches {
@@ -177,7 +199,7 @@ func Plan(ctx context.Context, o Options) Result {
 	}
 	sort.Slice(r.Items, func(i, j int) bool { return r.Items[i].Branch < r.Items[j].Branch })
 	r.Summary.Total = len(r.Items)
-	return r
+	return r, env{bin, dir}
 }
 
 func ptr(s string) *string { return &s }

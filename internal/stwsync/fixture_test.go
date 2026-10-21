@@ -2,6 +2,7 @@
 package stwsync
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -113,4 +114,13 @@ func gitCmd(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	return cmd
+}
+
+func newTestJournal(t *testing.T, e env) *journal {
+	t.Helper()
+	j, err := newJournal(context.Background(), e, "origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return j
 }
