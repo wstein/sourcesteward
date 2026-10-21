@@ -292,3 +292,33 @@ func TestReportMarkdownByteBoundAppliesOnItsOwn(t *testing.T) {
 		t.Fatalf("markdown %d json %d bound %d shown %d", len(r.Markdown), len(r.JSON), d.Bounds.MaxBytes, len(r.Shown))
 	}
 }
+
+// A decision needs the whole entry to have been reviewed: every kind of cut is
+// reported by the rendering.
+func TestReportRenderingNamesTheEntriesABoundCut(t *testing.T) {
+	cuts := map[string]func(*V3ReportEntry){
+		"diff truncated":    func(e *V3ReportEntry) { e.Diff.Truncated = &V3ReportTruncation{Unit: "lines", Shown: 1, Total: 2} },
+		"commits truncated": func(e *V3ReportEntry) { e.CommitsTruncated = &V3ReportTruncation{Unit: "commits", Shown: 1, Total: 2} },
+		"pairing truncated": func(e *V3ReportEntry) {
+			e.RangePairing = &V3ReportPairing{Range: "a..b", Evidence: "superseded-candidate", Pairs: []V3ReportPair{}, Truncated: &V3ReportTruncation{Unit: "rows", Shown: 1, Total: 2}}
+		},
+		"no diff available": func(e *V3ReportEntry) { e.Diff = emptyReportDiff("unavailable") },
+	}
+	var entries []V3ReportEntry
+	entries = append(entries, syntheticEntry("a-clean", 5))
+	for name, cut := range cuts {
+		e := syntheticEntry("cut-"+strings.ReplaceAll(name, " ", "-"), 5)
+		cut(&e)
+		entries = append(entries, e)
+	}
+	r, err := renderReport(syntheticDocument(entries...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		want := strings.HasPrefix(e.Branch.Text, "refs/heads/cut-")
+		if r.Truncated[e.Branch.Text] != want {
+			t.Errorf("%s: cut %t, want %t", e.Branch.Text, r.Truncated[e.Branch.Text], want)
+		}
+	}
+}
