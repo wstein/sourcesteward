@@ -27,6 +27,10 @@ and predicted conflicts in the plan) are recorded in
 done) and [contracts](../specs/015-local-restacking/contracts/restack-plan.md). Status stays
 `planned`; the independent design review is pending and nothing is implemented.
 
+## Active work: Spec 032 stw sync (design only, 2026-10-21, runtime not started)
+
+[The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (0/14 done) describe a manual `stw sync plan|apply|restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). Status stays `planned`; the independent design review of the exact head is pending and nothing is implemented.
+
 ## Active work: Spec 030 PR status (slice 1 source implemented, verification pending)
 
 Slice 1 of [Spec 030](../specs/030-pr-status/spec.md) is implemented in source on `feat/030-pr-status-one-shot`: the schema 2 one-shot `stw hosting pr` / `gh jj pr` (`--json-version 2`, `--compact`, `--expect-head`; `--watch` is a usage error) and the head lookup `stw hosting prs SHA` / `gh jj prs` over the allowlisted `commits/SHA/pulls?per_page=30&page=1` GET. Source tests use HTTP fixtures only; no build, binary smoke, live API or keyring acceptance was run, and GitHub's association behaviour for the lookup is unverified. The feature stays `planned`. The watch, delivery arbiter and descendant verification remain a deferred slice with their NOT CLEAR history ([round 3](../specs/030-pr-status/round3-disposition.md)).
