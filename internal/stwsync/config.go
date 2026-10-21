@@ -9,12 +9,13 @@ import (
 
 // pullMode is what `git pull` would do for a diverged branch under the user's configuration.
 type pullMode struct {
-	rebase  bool // --rebase, pull.rebase or branch.NAME.rebase is true, merges or interactive
-	merges  bool // pull.rebase=merges: keep merge commits while rebasing
-	ffOnly  bool // --ff-only or pull.ff=only: a diverged branch is an error
-	merge   bool // --no-rebase or an explicit pull.rebase=false: a diverged branch is merged
-	noFF    bool // --no-ff or pull.ff=false: always create a merge commit
-	flagged bool
+	rebaseCfg bool // pull.ff=only forbids the rebase, but git still treats the pull as a rebase pull (dirty check, autostash)
+	rebase    bool // --rebase, pull.rebase or branch.NAME.rebase is true, merges or interactive
+	merges    bool // pull.rebase=merges: keep merge commits while rebasing
+	ffOnly    bool // --ff-only or pull.ff=only: a diverged branch is an error
+	merge     bool // --no-rebase or an explicit pull.rebase=false: a diverged branch is merged
+	noFF      bool // --no-ff or pull.ff=false: always create a merge commit
+	flagged   bool
 }
 
 func (e env) config(ctx context.Context, key string) string {
@@ -30,7 +31,10 @@ func (e env) configBool(ctx context.Context, key string) bool {
 	return err == nil && out.Code == 0 && strings.TrimSpace(out.Out) == "true"
 }
 
-// pullMode resolves --rebase/--ff-only over branch.NAME.rebase over pull.rebase, and pull.ff.
+// pullMode resolves, in git pull's own precedence: --rebase, --ff-only and --no-rebase over the
+// configuration; then pull.ff=only (which refuses a diverged branch even when pull.rebase is true);
+// then branch.NAME.rebase over pull.rebase; and, when no rebase setting exists, any explicit pull.ff
+// (true, false) or --no-ff, which makes git merge.
 func (e env) pullMode(ctx context.Context, o Options, branch string) pullMode {
 	switch {
 	case o.Rebase == On:
@@ -40,11 +44,12 @@ func (e env) pullMode(ctx context.Context, o Options, branch string) pullMode {
 	case o.NoRebase:
 		return pullMode{merge: true, noFF: o.NoFF, flagged: true}
 	}
+	ff := strings.ToLower(e.config(ctx, "pull.ff"))
+	m := pullMode{noFF: o.NoFF || ff == "false" || ff == "no" || ff == "off" || ff == "0"}
 	value := e.config(ctx, "branch."+branch+".rebase")
 	if value == "" {
 		value = e.config(ctx, "pull.rebase")
 	}
-	m := pullMode{}
 	switch strings.ToLower(value) {
 	case "true", "yes", "on", "1", "interactive", "i":
 		m.rebase = true
@@ -52,14 +57,12 @@ func (e env) pullMode(ctx context.Context, o Options, branch string) pullMode {
 		m.rebase, m.merges = true, true
 	case "false", "no", "off", "0":
 		m.merge = true // an explicit choice: git merges
+	case "":
+		// no rebase setting: an explicit pull.ff or --no-ff is also a choice to merge (git pull merges then)
+		m.merge = ff != "" || o.NoFF
 	}
-	switch strings.ToLower(e.config(ctx, "pull.ff")) {
-	case "false", "no", "off", "0":
-		m.noFF = true
-	}
-	m.noFF = m.noFF || o.NoFF
-	if !m.rebase && !m.merge && strings.ToLower(e.config(ctx, "pull.ff")) == "only" {
-		m.ffOnly = true
+	if ff == "only" {
+		m.ffOnly, m.rebaseCfg, m.rebase, m.merges, m.merge = true, m.rebase, false, false, false
 	}
 	return m
 }
@@ -72,7 +75,7 @@ func (e env) autostash(ctx context.Context, o Options, m pullMode) bool {
 	case Off:
 		return false
 	}
-	if m.rebase {
+	if m.rebase || m.rebaseCfg {
 		return e.configBool(ctx, "rebase.autoStash")
 	}
 	return e.configBool(ctx, "merge.autoStash")
@@ -81,7 +84,7 @@ func (e env) autostash(ctx context.Context, o Options, m pullMode) bool {
 // dirtyOverlap lists tracked files with local changes that the update from oldOID to newOID also changes:
 // the files for which `git merge --ff-only` would refuse to run on a dirty worktree.
 func (e env) dirtyOverlap(ctx context.Context, oldOID, newOID string) []string {
-	st, err := e.g(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=no")
+	st, err := e.g(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=no", "--ignore-submodules=all")
 	if err != nil || st.Code != 0 {
 		return []string{"(the worktree cannot be read)"}
 	}

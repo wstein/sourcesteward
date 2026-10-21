@@ -284,13 +284,6 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	if !remoteName.MatchString(remote) || !strings.HasPrefix(upstream, prefix) {
 		return skip(ResultSkippedNoUpstream, "no upstream for branch "+*rp.Branch+" on a plain remote")
 	}
-	h, err := e.inventory(ctx)
-	if err != nil {
-		return fail("cannot list the worktrees")
-	}
-	if reason := h.block(ref); reason != "" {
-		return skip(ResultSkippedBusy, reason)
-	}
 	if s.opts.Plan {
 		if err := checkRefspecs(ctx, e, remote, prefix); err != nil {
 			return fail(err.Error())
@@ -350,14 +343,14 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	case mode.ffOnly:
 		return skip(ResultDiverged, "not a fast-forward and --ff-only or pull.ff=only forbids anything else")
 	default:
-		return skip(ResultDiverged, "needs a choice: use --rebase or set pull.rebase (stw sync never merges)")
+		return skip(ResultDiverged, "needs a choice: use --rebase or --no-rebase, or set pull.rebase (stw sync merges only when asked)")
 	}
 	autostash := e.autostash(ctx, s.opts, mode)
 	if action == ResultFastForward {
 		rp.NewOID = ptr(upstreamOID)
 	}
 	if hasTrackedChanges(ctx, e, e.dir) && !autostash {
-		if action == ResultRebase {
+		if mode.rebase || mode.rebaseCfg { // git pull --rebase refuses a dirty tree, even for a fast-forward
 			return skip(ResultSkippedDirty, "cannot rebase with local changes (use --autostash or rebase.autoStash)")
 		}
 		if files := e.dirtyOverlap(ctx, oldOID, upstreamOID); len(files) > 0 {
@@ -374,7 +367,7 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 // hasTrackedChanges reports staged or unstaged changes of tracked files; untracked files do not count.
 // A worktree that cannot be read counts as dirty so that nothing is ever changed in it.
 func hasTrackedChanges(ctx context.Context, e env, tree string) bool {
-	out, err := e.in(ctx, tree, "status", "--porcelain=v1", "-z", "--untracked-files=no")
+	out, err := e.in(ctx, tree, "status", "--porcelain=v1", "-z", "--untracked-files=no", "--ignore-submodules=all")
 	return err != nil || out.Code != 0 || out.Out != ""
 }
 

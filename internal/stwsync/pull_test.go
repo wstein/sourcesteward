@@ -36,6 +36,8 @@ func TestSyncFollowsGitPull(t *testing.T) {
 			for _, diverged := range []bool{false, true} {
 				want := ResultFastForwarded
 				switch {
+				case rb == "true" && dirty:
+					want = ResultSkippedDirty // git pull --rebase refuses a dirty tree without autostash, even for a fast-forward
 				case diverged && rb == "":
 					want = ResultDiverged
 				case diverged && rb == "false" && dirty:
