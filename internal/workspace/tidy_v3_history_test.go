@@ -65,6 +65,17 @@ func TestHistoryCountsFollowTheRepository(t *testing.T) {
 	}
 }
 
+func TestHistoryDoesNotCountAPrunedCommitAsRestorable(t *testing.T) {
+	f := newHistoryFix(t, []string{"a1", "a2"})
+	tip := f.tips["a2"]
+	if err := os.Remove(filepath.Join(f.dir, ".git", "objects", tip[:2], tip[2:])); err != nil {
+		t.Fatal(err)
+	}
+	if e := historyEntry(t, historyOf(t, f.historyOptions()), f.plans[0].PlanID); e.Restorable != 1 || e.RecoveryRefs != "present" {
+		t.Fatalf("%+v", e)
+	}
+}
+
 func actionOf(t *testing.T, p V3Plan, name string) string {
 	t.Helper()
 	for _, c := range p.Candidates {
