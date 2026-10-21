@@ -38,8 +38,9 @@ func retirementPolicy(backend string, version int) (retirementContentPolicy, err
 	}
 }
 
-// retirementIndexBytes bounds the Git v3 registration index: 16,384 leaves of
-// about 62 bytes plus path, padded, stay far below it.
+// retirementIndexBytes bounds the Git v3 registration index. Retirement admits
+// at most 1,024 files and directories (retirementManifestEntries), whose index
+// stays far below it.
 const retirementIndexBytes = 4 << 20
 
 func (p retirementContentPolicy) fileLimit(metadata bool) (int64, error) {
@@ -289,7 +290,7 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 				if isMetadata && rel == "index" && policy == retirementGitV3Content {
 					// The Git index grows with the tracked file count (about 600
 					// files exceed 64 KiB). It is streamed in 64 KiB buffers like
-					// every metadata file and bounded by the 16,384 leaf limit.
+					// every metadata file and bounded by retirementIndexBytes.
 					limit = retirementIndexBytes
 				}
 				if id.Size > limit {

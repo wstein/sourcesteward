@@ -88,6 +88,9 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	if err != nil {
 		return failTidyV3(r, err)
 	}
+	// The stored plan is read before the deadline exists because the deadline
+	// depends on its size; that read is bounded local state I/O and still ends
+	// with the caller's own context.
 	effects := 0
 	for _, candidate := range p.Candidates {
 		if candidate.Decision == "delete" {

@@ -258,8 +258,21 @@ func (c tidyV3RestoreCoordinator) applyRestore(ctx context.Context, n restoreNat
 			r.Counts.add(item.entry.State)
 		}
 		r.Status = restoreApplyStatus(items)
-		if r.Counts.JournalIncomplete > 0 {
-			r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "journal-incomplete", Message: fmt.Sprintf("%d branch(es) were not confirmed deleted by the earlier apply (its journal is incomplete), so there is nothing to restore for them; they count as not restored in this status, not as a failure of this restore", r.Counts.JournalIncomplete)})
+		unconfirmed, invalid := 0, 0
+		for _, item := range items {
+			if item.entry.State == restoreJournalIncomplete {
+				if reasonOf(item.entry) == "invalid-ref-name" {
+					invalid++
+				} else {
+					unconfirmed++
+				}
+			}
+		}
+		if unconfirmed > 0 {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "journal-incomplete", Message: fmt.Sprintf("%d branch(es) were not confirmed deleted by the earlier apply (its journal is incomplete), so there is nothing to restore for them; they count as not restored in this status, not as a failure of this restore", unconfirmed)})
+		}
+		if invalid > 0 {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: "journal-incomplete", Message: fmt.Sprintf("%d journal entry(ies) name an invalid branch ref and cannot be restored", invalid)})
 		}
 		return r
 	}

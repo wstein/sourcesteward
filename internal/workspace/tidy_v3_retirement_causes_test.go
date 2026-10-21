@@ -87,11 +87,24 @@ func TestV3BoundsDoNotCountPhysicalManifestEntriesAgainstTheAggregate(t *testing
 	if e := v3Bounds(struct{ M V3Manifest }{m}); e == nil {
 		t.Fatal("manifest above its own bound admitted")
 	}
+	// The other entries come first, so a manifest wrongly counted would cross
+	// the 1,024 aggregate bound (200 + 900) while counted alone it would not.
 	refs := struct {
-		M V3Manifest
 		R []string
-	}{V3Manifest{Entries: make([]V3ManifestEntry, 900)}, make([]string, 200)}
+		M V3Manifest
+	}{make([]string, 200), V3Manifest{Entries: make([]V3ManifestEntry, 900)}}
 	if e := v3Bounds(refs); e != nil {
 		t.Fatalf("manifest entries counted against references: %v", e)
+	}
+}
+
+// Entries beyond the aggregate bound outside a manifest still refuse.
+func TestV3BoundsStillRefuseAggregateEntriesOutsideTheManifest(t *testing.T) {
+	over := struct {
+		R []string
+		M V3Manifest
+	}{make([]string, 1025), V3Manifest{Entries: make([]V3ManifestEntry, 1)}}
+	if e := v3Bounds(over); e == nil {
+		t.Fatal("aggregate bound not enforced")
 	}
 }
