@@ -170,6 +170,19 @@ func renderTidyRestoreText(w io.Writer, r workspace.V3RestoreResult) error {
 		if d := e.Decision; d != nil {
 			fmt.Fprintf(&text, "  Decision: reviewer=%q kind=%q decision=%q reason=%q\n", d.Reviewer, d.Kind, d.Decision, d.Reason)
 		}
+		if bc := e.BranchConfig; bc != nil {
+			fmt.Fprintf(&text, "  Branch config: status=%q reflog_tip=%q branch_oid=%q truncated=%t\n", bc.Status, bc.ReflogTip, bc.BranchOID, bc.Truncated)
+			for _, k := range bc.Keys {
+				fmt.Fprintf(&text, "    Key: key=%q state=%q", k.Key, k.State)
+				if k.Remote != nil {
+					fmt.Fprintf(&text, " remote=%q", *k.Remote)
+				}
+				if k.Outcome != "" {
+					fmt.Fprintf(&text, " outcome=%q", k.Outcome)
+				}
+				text.WriteString("\n")
+			}
+		}
 		if j := e.RestoreJournal; j != nil {
 			fmt.Fprintf(&text, "  Restore journal: intent=%q outcome=%q\n", j.Intent, j.Outcome)
 		}
