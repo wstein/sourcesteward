@@ -37,6 +37,14 @@ git cherry <new parent> <old parent>                             # all -
 
 Branch names in the texts are the full ref without `refs/heads/` (`refs/heads/a/b` gives `a/b`); author dates are preserved by the replay.
 
+## Before any push of the restacked branch
+
+The identity check covers only the existing commits. A by-hand rebase sets the committer of the rewritten commits from the rebaser's configuration or environment (a leaked placeholder such as `t <t@t>`), which the plan cannot predict, so run the AGENTS.md check on the new branch and push only if it shows the owner alone:
+
+```sh
+git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD
+```
+
 ## Offline checks
 
 ```sh
