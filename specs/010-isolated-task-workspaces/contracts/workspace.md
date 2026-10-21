@@ -193,6 +193,7 @@ project's own repositories, although none protected a real effect.
    (`git-checkout-limit`). It is a documented constant, not a configuration option. The 16 MiB/blob,
    64 MiB total, 4,224-byte record, 4,096-byte path and 4,325,376-byte stream bounds are unchanged, so the
    total cost stays bounded (the stream bound admits an average of about 264 bytes per entry at the cap).
+   The stored-file sample of owned retirement keeps its own 1,024-file bound, so a worktree beyond it is retained, not retired.
    The cap follows the [measurement](../verification.md#creation-refusals-measurement).
 2. **Hooks and recursion never run.** `stw` never runs a hook of the repository it manages. The one
    native command of creation that could run one (`git worktree add`, a `post-checkout` hook) is invoked with
