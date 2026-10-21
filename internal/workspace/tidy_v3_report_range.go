@@ -23,7 +23,7 @@ const (
 	reportPairingRows = 1280
 )
 
-var reportRangeRow = regexp.MustCompile(`^\s*(?:-|[0-9]+):\s+(?:[0-9a-f]+|-+) ([=!<>]) (?:-|[0-9]+):\s+(?:[0-9a-f]+|-+)(?: .*)?$`)
+var reportRangeRow = regexp.MustCompile(`^\s*(?:-|[0-9]+):\s+(?:[0-9a-f]+|-+)\s+([=!<>])\s+(?:-|[0-9]+):\s+(?:[0-9a-f]+|-+)(?:\s.*)?$`)
 
 var specReportRangeDiff = integrationSpec{"range-diff", reportPairingRows, bothWidths(reportPairingRows * reportRecordBytes), '\n', func(r []byte, _ int) bool {
 	return len(r)+1 <= reportRecordBytes && reportRangeRow.Match(r)
