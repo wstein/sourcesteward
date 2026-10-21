@@ -34,7 +34,7 @@ See "Stage2 baseline" in [research.md](research.md): paths and symbols confirmed
 - The `info/attributes` content digest is not bound into the plan identity; that binding belongs to T018. Planning only records the `attribute-source` note.
 - FR-020 "unknown executable-looking keys are refused by class" is not implemented: planning refuses the listed classes only. Unknown keys are not refused.
 - Tree-attribute scans (`merge-attribute`, `diff-attribute`), the hard stops (`history-override`, `unsupported-metadata`), `gitlink-change` and matrix rows C26, C28, C29, C33, C35, C36 belong to the proof tasks (T014, T016); grafts, shallow and alternates keep their existing planning refusals meanwhile.
-- Planning accepts hooksPath, executable default hooks, `core.fsmonitor`, `submodule.*` and gitlinks; the strict apply admission refuses all five, so an umbrella repository with submodules or gitlinks can be planned but not applied (owner decision recorded in the configuration policy contract).
+- Planning accepts hooksPath, executable default hooks, `core.fsmonitor`, `submodule.*` and gitlinks; the strict apply admission refuses all five, so an umbrella repository with submodules or gitlinks can be planned but not applied (owner decision recorded in the configuration policy contract). This concerns tidy only; worktree creation is covered by the Spec 010 creation refusals amendment.
 
 ## T012 to T020 simple forge-free proofs (work package D)
 
