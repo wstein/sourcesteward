@@ -99,6 +99,10 @@ func (p *planner) run(ctx context.Context) error {
 	if err := p.collect(ctx); err != nil {
 		return err
 	}
+	if err := p.effects(ctx); err != nil {
+		return err
+	}
+	p.texts()
 	if p.inspect != nil {
 		p.inspect(ctx, p)
 	}
