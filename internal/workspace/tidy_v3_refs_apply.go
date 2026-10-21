@@ -56,7 +56,7 @@ func v3PlanApplyTimeout(p V3Plan) time.Duration {
 	return v3ApplyTimeout(effects, entries)
 }
 func (c tidyV3RefsApplyCoordinator) apply(ctx context.Context, o V3ApplyOptions) V3Result {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(withTidyApplyPolicy(ctx))
 	defer cancel()
 	return boundV3Result(c.applyRefs(ctx, o))
 }

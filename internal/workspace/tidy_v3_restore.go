@@ -472,6 +472,7 @@ func readRestoreJournal(stateDir, planID string) (v3JournalView, error) {
 }
 
 func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOptions) V3RestoreResult {
+	ctx = withTidyApplyPolicy(ctx)
 	mode := "plan"
 	if o.Apply {
 		mode = "apply"

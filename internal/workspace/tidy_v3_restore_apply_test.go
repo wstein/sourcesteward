@@ -391,18 +391,21 @@ func TestRestoreApplyWithoutAuthorizationRefusesBeforeAnyEffect(t *testing.T) {
 	}
 }
 
-func TestRestoreApplyRefusesWhereAReferenceTransactionHookWouldRun(t *testing.T) {
+// An executable default hook never runs for stw's own restore: hooks are
+// pinned off on the writing command, so the restore applies.
+func TestRestoreApplyPinsDefaultHooksOff(t *testing.T) {
 	f := newRestoreFix(t, "alpha")
+	marker := filepath.Join(gitTempDir(t), "marker")
 	hook := filepath.Join(f.dir, ".git", "hooks", "reference-transaction")
-	if err := os.WriteFile(hook, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho ran >> '"+marker+"'\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	r := applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
-	if r.Status != "refused" || len(r.Diagnostics) != 1 || !strings.Contains(r.Diagnostics[0].Message, "default-hooks") {
+	if r.Status != "ok" || f.git("rev-parse", "refs/heads/alpha") != f.tips["alpha"] {
 		t.Fatalf("%+v", r)
 	}
-	if _, err := f.tryGit("rev-parse", "--verify", "-q", "refs/heads/alpha"); err == nil || len(f.restoreRecords()) != 0 {
-		t.Fatal("the refused apply had an effect")
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("the repository hook ran")
 	}
 }
 

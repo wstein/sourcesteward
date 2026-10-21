@@ -65,7 +65,7 @@ A repository with 149 branches/111 worktrees (and up to 1,024 of each) plans suc
 
 ### US6 — Plan in repositories with submodules or hooks configuration (P1)
 
-A repository or umbrella with `submodule.*`, `core.hooksPath` or `core.fsmonitor` configuration plans read-only; configured helpers provably never execute. Configuration that cannot be evaluated or would execute under a planning command is refused with the key class named. Apply keeps its existing refusals.
+A repository or umbrella with `submodule.*`, `core.hooksPath` or `core.fsmonitor` configuration plans read-only; configured helpers provably never execute. Configuration that cannot be evaluated or would execute under a planning command is refused with the key class named. Apply pins hooks off on its own writing commands and admits the same benign configuration (`core.hooksPath`, `core.fsmonitor`, `submodule.*`, default hooks, gitlinks); only the refusal list of FR-020 still refuses.
 
 ### US7 — Get a deleted branch back (P1)
 

@@ -17,7 +17,7 @@ import (
 // Issue #79 through the real CLI: a repository carrying hooksPath and submodule
 // configuration plans, the plan records neutralization notes that validate
 // against the v3 candidate schema, and apply refuses the hook-running effect.
-func TestTidyV3PlanNotesNeutralizedConfigurationAndApplyRefuses(t *testing.T) {
+func TestTidyV3PlanNotesNeutralizedConfigurationAndApplyAdmits(t *testing.T) {
 	binary := tidyV3FixtureGitBinary(t)
 	t.Setenv("PATH", filepath.Dir(binary)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	home := t.TempDir()
@@ -78,7 +78,7 @@ func TestTidyV3PlanNotesNeutralizedConfigurationAndApplyRefuses(t *testing.T) {
 	for _, n := range plan.Plan.ConfigNotes {
 		classes[n.KeyClass] = n.Disposition + "/" + n.ApplyEffect
 	}
-	if classes["core.hooksPath"] != "neutralized/refuses-apply" || classes["submodule.*"] != "neutralized/refuses-apply" {
+	if classes["core.hooksPath"] != "neutralized/none" || classes["submodule.*"] != "neutralized/none" {
 		t.Fatalf("notes %v (system or global configuration may add further classes)", classes)
 	}
 	// The v3 candidate schema is closed: a forged class or disposition fails.
@@ -97,11 +97,11 @@ func TestTidyV3PlanNotesNeutralizedConfigurationAndApplyRefuses(t *testing.T) {
 			}
 		})
 	}
-	refused, _ := invoke(1, "tidy", "apply", "--contract", "3", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
-	if refused.Status == "ok" || len(refused.Diagnostics) == 0 || refused.Diagnostics[0].Code != "git-unsafe-configuration" || !strings.Contains(refused.Diagnostics[0].Message, "core.hooksPath") {
-		t.Fatalf("apply did not refuse by key class: %+v", refused)
+	applied, _ := invoke(0, "tidy", "apply", "--contract", "3", "--plan", plan.Plan.PlanID, "--state-dir", state, "--authorize")
+	if applied.Status != "ok" {
+		t.Fatalf("apply refused the benign configuration: %+v", applied)
 	}
-	if err := tidyV3FixtureCommand(binary, env, "-C", source, "show-ref", "--verify", "--quiet", "refs/heads/integrated").Run(); err != nil {
-		t.Fatal("refused apply deleted the reference")
+	if err := tidyV3FixtureCommand(binary, env, "-C", source, "show-ref", "--verify", "--quiet", "refs/heads/integrated").Run(); err == nil {
+		t.Fatal("apply left the reference")
 	}
 }

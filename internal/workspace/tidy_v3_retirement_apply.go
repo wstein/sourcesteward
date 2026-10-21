@@ -62,7 +62,7 @@ func retirementV3Options(p V3Plan) V3PlanOptions {
 	return o
 }
 func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions) (r V3Result) {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(withTidyApplyPolicy(ctx))
 	defer cancel()
 	budget := newTidyV3ProofBudget(true)
 	defer func() { retirementV3BudgetResult(&r, budget); r = boundV3Result(r) }()
