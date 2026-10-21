@@ -128,3 +128,29 @@ func TestRetirementV3StoredFilesRefuseAboveTheManifestBoundByName(t *testing.T) 
 		t.Fatalf("want retirement-file-limit, got %v", e)
 	}
 }
+
+// Contract 2 (v2) records stay inside one MiB, so a 6,000 file worktree that the
+// v3 retirement admits is refused by name under v2 instead of failing later on
+// the encoded limit.
+func TestRetirementV2StoredFilesRefuseWhatOnlyV3Admits(t *testing.T) {
+	source := fixtureGit(t)
+	for i := 0; i < 6000; i++ {
+		if e := os.WriteFile(filepath.Join(source, fmt.Sprintf("f%05d", i)), []byte("x\n"), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	gitFixture(t, source, "add", ".")
+	gitFixture(t, source, "commit", "-qm", "many")
+	dest := filepath.Join(gitTempDir(t), "many")
+	gitFixture(t, source, "worktree", "add", "-q", "-b", "many", dest, "HEAD")
+	id := NativeIdentity{Backend: "git", WorkspaceRoot: dest, CommitID: gitFixture(t, dest, "rev-parse", "HEAD"), ObjectFormat: "sha1"}
+	bin, e := gitExecutable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = gitRetirementStoredFiles(context.Background(), bin, id)
+	var op operationError
+	if !errors.As(e, &op) || op.Code != "retirement-file-limit" || !strings.Contains(op.Message, "1024") {
+		t.Fatalf("v2 must refuse by name: %v", e)
+	}
+}
