@@ -50,7 +50,7 @@ is still evidence, not authorization. Apply supports authorized local reference 
 
 ## Bounds, output and failures
 
-Offline planning has a ten-second total deadline, a 1 MiB encoded record/result limit and
+Offline planning has a ten-second total deadline, a 1 MiB encoded record/result limit (8 MiB for retirement plans, which record every file) and
 an aggregate observation limit of 1024 entries. Complete base/target tree metadata and
 all-path filter observations use at most 4,325,376 stdout bytes and 4,224 bytes per logical
 record, retaining the 16,384-leaf, 4,096-byte path, 16 MiB/blob and 64 MiB aggregate blob

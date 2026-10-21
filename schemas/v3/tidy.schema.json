@@ -1638,7 +1638,7 @@
           "items": {
             "$ref": "#/$defs/V3ManifestEntry"
           },
-          "maxItems": 1024,
+          "maxItems": 8192,
           "type": "array"
         }
       },

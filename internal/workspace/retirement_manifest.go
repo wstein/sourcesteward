@@ -153,7 +153,7 @@ func walkRetirementManifest(ctx context.Context, root *os.Root) (RetirementManif
 				return errors.New("unsafe physical manifest path")
 			}
 			if len(m.Entries) >= retirementManifestEntries {
-				return failure("retirement-file-limit", "The worktree holds more than 1,024 files and directories, the most a retirement manifest admits; retain the target")
+				return failure("retirement-file-limit", "The worktree holds more than 8,192 files and directories, the most a retirement manifest admits; retain the target")
 			}
 			folded := strings.ToLower(norm.NFC.String(p))
 			if old, ok := aliases[folded]; ok && old != p {
