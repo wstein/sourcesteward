@@ -158,15 +158,19 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 	}
 	session := planningSessionFrom(ctx)
 	creation := creationPolicyFrom(ctx)
+	// Tidy apply pins hooks, fsmonitor and submodule recursion off on every
+	// writing command (pinnedWriterArgs): hooksPath, default hooks, submodule.*
+	// and gitlinks are data there, never a refusal.
+	pinned := tidyApplyPolicyFrom(ctx)
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
-		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" && !creation || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
+		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" && !creation && !pinned || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
 		// check-attr's textual sentinel values can also be literal driver names.
 		// Refuse those definitions rather than mistake an executable literal for
 		// absent/unset attributes. Case-insensitive refusal is conservative.
 		unsafe = unsafe || strings.HasPrefix(key, "filter.unspecified.") || strings.HasPrefix(key, "filter.unset.") || strings.HasPrefix(key, "filter.set.")
-		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || !creation && strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
+		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) && !pinned || !creation && !pinned && strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 		if session != nil {
 			// Planning (Spec 031 FR-020/FR-021): only hooksPath, fsmonitor and
 			// submodule.* leave the refusal list; they are neutralized by the
@@ -178,7 +182,7 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 		}
 	}
 	// Relative/conditional hook paths are refused above; default hooks are shared.
-	hooks, executableHook, err := gitHooksFingerprint(filepath.Join(id.RepositoryDir, "hooks"), session != nil)
+	hooks, executableHook, err := gitHooksFingerprint(filepath.Join(id.RepositoryDir, "hooks"), session != nil || pinned)
 	if err != nil {
 		return "", err
 	}

@@ -13,7 +13,7 @@ func TestTidyV3PlanValidationRejectsForgedConfigNotes(t *testing.T) {
 	f := newPolicyFix(t)
 	f.cfg("core.hooksPath", f.hooksDir)
 	f.cfg("submodule.member.url", "https://example.invalid/member.git")
-	r, err := f.planNoted(neutral("core.hooksPath", applyRefuses), neutral("submodule.*", applyRefuses))
+	r, err := f.planNoted(neutral("core.hooksPath", applyNone), neutral("submodule.*", applyNone))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestTidyV3PlanValidationRejectsForgedConfigNotes(t *testing.T) {
 		"duplicate":     func(p *V3Plan) { p.ConfigNotes = append(p.ConfigNotes, p.ConfigNotes[len(p.ConfigNotes)-1]) },
 		"unknown-class": func(p *V3Plan) { p.ConfigNotes[0].KeyClass = "core.other" },
 		"disposition":   func(p *V3Plan) { p.ConfigNotes[0].Disposition = "refused" },
-		"apply-effect":  func(p *V3Plan) { p.ConfigNotes[0].ApplyEffect = "none" },
+		"apply-effect":  func(p *V3Plan) { p.ConfigNotes[0].ApplyEffect = applyRefuses },
 		"digest":        func(p *V3Plan) { p.ConfigNotes[0].Digest = "abc" },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -49,7 +49,7 @@ func TestTidyV3PlanValidationRejectsForgedConfigNotes(t *testing.T) {
 func TestTidyV3PlanConfigNotesAreOptionalOnTheWire(t *testing.T) {
 	f := newPolicyFix(t)
 	f.cfg("core.hooksPath", f.hooksDir)
-	r, err := f.planNoted(neutral("core.hooksPath", applyRefuses))
+	r, err := f.planNoted(neutral("core.hooksPath", applyNone))
 	if err != nil {
 		t.Fatal(err)
 	}

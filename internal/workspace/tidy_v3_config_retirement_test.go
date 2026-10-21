@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -54,12 +53,18 @@ func TestTidyV3RetirementRetainsSubmodulePresent(t *testing.T) {
 	}
 }
 
-// A retirement planned under core.hooksPath refuses at apply, naming the class,
-// before any journal, recovery reference or removal.
-func TestTidyV3RetirementApplyRefusesHookConfigurationBeforeAnyEffect(t *testing.T) {
+// A retirement planned under core.hooksPath applies: stw pins hooks off for its
+// own commands, so a reference-transaction hook never runs and the worktree is
+// retired with its recovery reference.
+func TestTidyV3RetirementApplyPinsHooksOffUnderHooksPath(t *testing.T) {
 	o, _ := tidyV3LegacyFixture(t, false)
 	o.StateDir = privateDir(t)
 	hooks := gitTempDir(t)
+	marker := filepath.Join(gitTempDir(t), "marker")
+	hook := "#!/bin/sh\necho \"hook $*\" >> '" + marker + "'\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(hooks, "reference-transaction"), []byte(hook), 0700); err != nil {
+		t.Fatal(err)
+	}
 	gitFixture(t, o.Path, "config", "core.hooksPath", hooks)
 	c := defaultTidyV3RetirementCoordinator()
 	planned := c.plan(context.Background(), o)
@@ -67,16 +72,13 @@ func TestTidyV3RetirementApplyRefusesHookConfigurationBeforeAnyEffect(t *testing
 		t.Fatalf("plan: %+v", planned.Diagnostics)
 	}
 	r := c.apply(context.Background(), V3ApplyOptions{StateDir: o.StateDir, PlanID: planned.Plan.PlanID, Authorize: true, CompletedWorktree: o.CompletedWorktree, Owner: o.Owner, ProtectWorktrees: o.ProtectWorktrees})
-	if r.Status == "ok" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "git-unsafe-configuration" || !strings.Contains(r.Diagnostics[0].Message, "core.hooksPath") {
-		t.Fatalf("apply did not refuse by key class: %+v", r)
+	if r.Status != "ok" {
+		t.Fatalf("apply refused: %+v", r.Diagnostics)
 	}
-	if _, err := os.Stat(filepath.Join(o.StateDir, "tidy-v3-operations", planned.Plan.PlanID+".json")); !os.IsNotExist(err) {
-		t.Fatal("a journal was written before the refusal")
+	if _, err := os.Stat(o.CompletedWorktree); !os.IsNotExist(err) {
+		t.Fatal("worktree not removed")
 	}
-	if out := gitFixture(t, o.Path, "for-each-ref", "refs/stw/recovery"); out != "" {
-		t.Fatalf("recovery reference created: %s", out)
-	}
-	if _, err := os.Stat(o.CompletedWorktree); err != nil {
-		t.Fatal("worktree removed")
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("the repository hook ran")
 	}
 }

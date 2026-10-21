@@ -185,11 +185,13 @@ const (
 // v3ConfigClassPolicy is the closed set of note classes with the disposition
 // and apply effect of each. Planning accepts hooksPath, default hooks, fsmonitor,
 // submodule configuration and gitlinks because every planning command is
-// neutralized; the strict apply admission refuses all five, so each note says
-// refuses-apply (an umbrella repository can plan but not apply).
+// neutralized. Apply pins hooks, fsmonitor and submodule recursion off on every
+// writing command (pinnedWriterArgs), so hooksPath, default hooks, submodule.*
+// and gitlinks apply as well (apply effect none). core.fsmonitor is pinned off
+// the same way, so it no longer refuses apply either.
 var v3ConfigClassPolicy = map[string][2]string{
-	"core.hooksPath": {configNeutralized, applyRefuses}, "default-hooks": {configNeutralized, applyRefuses},
-	"core.fsmonitor": {configNeutralized, applyRefuses}, "submodule.*": {configNeutralized, applyRefuses}, "gitlinks": {configNeutralized, applyRefuses},
+	"core.hooksPath": {configNeutralized, applyNone}, "default-hooks": {configNeutralized, applyNone},
+	"core.fsmonitor": {configNeutralized, applyNone}, "submodule.*": {configNeutralized, applyNone}, "gitlinks": {configNeutralized, applyNone},
 	"core.pager": {configNeutralized, applyNone}, "core.editor": {configNeutralized, applyNone},
 	"core.sshCommand": {configNeutralized, applyNone}, "core.askPass": {configNeutralized, applyNone},
 	"credential.*": {configNeutralized, applyNone}, "gpg.*": {configNeutralized, applyNone},
@@ -379,6 +381,32 @@ var creationConfigArgs = []string{
 	// is not given --recurse-submodules, so recursion is already off; this
 	// argument keeps a configured submodule.recurse from ever applying.
 	"-c", "submodule.recurse=false",
+}
+
+// pinnedWriterArgs puts the creation pins in front of the arguments of a writing
+// command outside a planning session (reference deletion, recovery creation,
+// worktree removal), so a repository hook or submodule helper never runs for
+// stw's own Git invocations. A command that already carries them is unchanged.
+func pinnedWriterArgs(args []string) []string {
+	for _, a := range args {
+		if strings.HasPrefix(a, "core.hooksPath=") {
+			return args
+		}
+	}
+	return append(append([]string{}, creationConfigArgs...), args...)
+}
+
+type tidyApplyPolicyKey struct{}
+
+// withTidyApplyPolicy marks the context of a V3 tidy apply or restore: writing
+// Git commands carry the pins of pinnedWriterArgs and the safety admission
+// treats hooksPath, default hooks, submodule configuration and gitlinks as data.
+func withTidyApplyPolicy(ctx context.Context) context.Context {
+	return context.WithValue(ctx, tidyApplyPolicyKey{}, true)
+}
+func tidyApplyPolicyFrom(ctx context.Context) bool {
+	v, _ := ctx.Value(tidyApplyPolicyKey{}).(bool)
+	return v
 }
 
 type creationPolicyKey struct{}

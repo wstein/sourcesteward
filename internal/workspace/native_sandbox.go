@@ -89,6 +89,9 @@ func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string
 	session := planningSessionFrom(ctx)
 	if session != nil {
 		args = session.arguments(args)
+	} else if len(writeRoots) > 0 && tidyApplyPolicyFrom(ctx) {
+		// A writing Git command never runs a repository hook or submodule helper.
+		args = pinnedWriterArgs(args)
 	}
 	total := len(bin) + len(cwd)
 	if len(args) > 1024 {

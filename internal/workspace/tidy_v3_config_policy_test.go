@@ -39,7 +39,7 @@ func newPolicyFix(t *testing.T) *policyFix {
 	if err := os.MkdirAll(f.hooksDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	f.write(filepath.Join(f.hooksDir, "reference-transaction"), "#!/bin/sh\necho \"hook $*\" >> '"+f.marker+"'\nexit 0\n", 0700)
+	f.write(filepath.Join(f.hooksDir, "reference-transaction"), "#!/bin/sh\necho \"hook $*\" >> '"+f.marker+"'\nexit 1\n", 0700)
 	gitFixture(t, dir, "branch", "integrated", "HEAD")
 	gitFixture(t, dir, "commit", "--allow-empty", "-qm", "advance source")
 	return f
@@ -144,6 +144,26 @@ func (f *policyFix) applyRefuses(r V3Result, code, rule string) error {
 	}
 	if f.markerPresent() {
 		return fmt.Errorf("helper marker present after apply refusal")
+	}
+	return nil
+}
+
+// applyAdmitted requires apply to delete the branch, keep the recovery
+// reference and never run the fixture's hook or helper: stw pins hooks off and
+// admits benign configuration for its own Git commands.
+func (f *policyFix) applyAdmitted(r V3Result) error {
+	a := defaultTidyV3RefsApplyCoordinator().apply(context.Background(), V3ApplyOptions{StateDir: r.Plan.StateDir, PlanID: r.Plan.PlanID, Authorize: true, ProtectWorktrees: []string{}})
+	if a.Status != "ok" {
+		return fmt.Errorf("apply refused: %+v", a)
+	}
+	if out := gitFixture(f.t, f.dir, "for-each-ref", "refs/heads/integrated"); out != "" {
+		return fmt.Errorf("branch still present after apply: %q", out)
+	}
+	if out := gitFixture(f.t, f.dir, "for-each-ref", "refs/stw/recovery"); out == "" {
+		return fmt.Errorf("no recovery reference after apply")
+	}
+	if f.markerPresent() {
+		return fmt.Errorf("hook or helper ran during apply")
 	}
 	return nil
 }
@@ -317,14 +337,14 @@ func rowC1(t *testing.T) error {
 		return err
 	}
 	f.dropProbeRefs()
-	r, err := f.planNoted(neutral("core.hooksPath", applyRefuses))
+	r, err := f.planNoted(neutral("core.hooksPath", applyNone))
 	if err != nil {
 		return err
 	}
 	if err = f.audit(); err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "core.hooksPath")
+	return f.applyAdmitted(r)
 }
 func rowC2(t *testing.T) error {
 	f := newPolicyFix(t)
@@ -336,14 +356,14 @@ func rowC2(t *testing.T) error {
 		return err
 	}
 	f.dropProbeRefs()
-	r, err := f.planNoted(neutral("core.hooksPath", applyRefuses))
+	r, err := f.planNoted(neutral("core.hooksPath", applyNone))
 	if err != nil {
 		return err
 	}
 	if err = f.audit(); err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "core.hooksPath")
+	return f.applyAdmitted(r)
 }
 func rowC3(t *testing.T) error {
 	f := newPolicyFix(t)
@@ -352,11 +372,11 @@ func rowC3(t *testing.T) error {
 	gitFixture(t, f.dir, "commit", "-qm", "gitlink")
 	f.cfg("submodule.member.url", "https://example.invalid/member.git")
 	f.cfg("submodule.member.update", "!"+f.helper)
-	r, err := f.planNoted(neutral("submodule.*", applyRefuses), neutral("gitlinks", applyRefuses))
+	r, err := f.planNoted(neutral("submodule.*", applyNone), neutral("gitlinks", applyNone))
 	if err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "submodule.*")
+	return f.applyAdmitted(r)
 }
 
 // rowGitlinks: gitlinks are data for planning; the strict apply admission
@@ -366,11 +386,11 @@ func rowGitlinks(t *testing.T) error {
 	oid := gitFixture(t, f.dir, "rev-parse", "HEAD")
 	gitFixture(t, f.dir, "update-index", "--add", "--cacheinfo", "160000,"+oid+",member")
 	gitFixture(t, f.dir, "commit", "-qm", "gitlink")
-	r, err := f.planNoted(neutral("gitlinks", applyRefuses))
+	r, err := f.planNoted(neutral("gitlinks", applyNone))
 	if err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-tree-refused", "gitlinks")
+	return f.applyAdmitted(r)
 }
 
 // rowFilterAttributeSource: an uncommitted worktree attribute naming a
@@ -385,14 +405,14 @@ func rowFilterAttributeSource(t *testing.T) error {
 func rowC4(t *testing.T) error {
 	f := newPolicyFix(t)
 	f.cfg("submodule.recurse", "true")
-	r, err := f.planNoted(neutral("submodule.*", applyRefuses))
+	r, err := f.planNoted(neutral("submodule.*", applyNone))
 	if err != nil {
 		return err
 	}
 	if err = f.neutralized("status", "--porcelain"); err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "submodule.*")
+	return f.applyAdmitted(r)
 }
 func rowC5(t *testing.T) error {
 	f := newPolicyFix(t)
@@ -400,14 +420,14 @@ func rowC5(t *testing.T) error {
 	if err := f.control("status", "--porcelain"); err != nil {
 		return err
 	}
-	r, err := f.planNoted(neutral("core.fsmonitor", applyRefuses))
+	r, err := f.planNoted(neutral("core.fsmonitor", applyNone))
 	if err != nil {
 		return err
 	}
 	if err = f.neutralized("status", "--porcelain"); err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "core.fsmonitor")
+	return f.applyAdmitted(r)
 }
 func rowC6(t *testing.T) error {
 	f := newPolicyFix(t)
@@ -447,11 +467,11 @@ func rowC11(t *testing.T) error {
 		f.cfg("submodule."+name+".active", "true")
 	}
 	gitFixture(t, f.dir, "commit", "-qm", "umbrella gitlinks")
-	r, err := f.planNoted(neutral("submodule.*", applyRefuses), neutral("gitlinks", applyRefuses))
+	r, err := f.planNoted(neutral("submodule.*", applyNone), neutral("gitlinks", applyNone))
 	if err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "submodule.*")
+	return f.applyAdmitted(r)
 }
 func rowC13(t *testing.T) error {
 	f := newPolicyFix(t)
@@ -465,11 +485,11 @@ func rowC13(t *testing.T) error {
 		return err
 	}
 	f.dropProbeRefs()
-	r, err := f.planNoted(neutral("core.hooksPath", applyRefuses))
+	r, err := f.planNoted(neutral("core.hooksPath", applyNone))
 	if err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-unsafe-configuration", "core.hooksPath")
+	return f.applyAdmitted(r)
 }
 func rowC14(t *testing.T) error {
 	f := newPolicyFix(t)
@@ -518,12 +538,12 @@ func rowC20(t *testing.T) error {
 }
 func rowC21(t *testing.T) error {
 	f := newPolicyFix(t)
-	f.write(filepath.Join(f.dir, ".git", "hooks", "reference-transaction"), "#!/bin/sh\necho \"default $*\" >> '"+f.marker+"'\nexit 0\n", 0700)
-	r, err := f.planNoted(neutral("default-hooks", applyRefuses))
+	f.write(filepath.Join(f.dir, ".git", "hooks", "reference-transaction"), "#!/bin/sh\necho \"default $*\" >> '"+f.marker+"'\nexit 1\n", 0700)
+	r, err := f.planNoted(neutral("default-hooks", applyNone))
 	if err != nil {
 		return err
 	}
-	return f.applyRefuses(r, "git-hooks-refused", "executable hooks")
+	return f.applyAdmitted(r)
 }
 func rowC22(t *testing.T) error {
 	f := newPolicyFix(t)
