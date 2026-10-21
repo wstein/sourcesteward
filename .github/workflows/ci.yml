@@ -21,6 +21,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Classifies the change set. docs_only is true only for a pull_request whose every changed
+  # file is documentation prose (scripts/ci_changes.py); it lets conformance skip its shards.
+  # No path filter is used, so every check still reports a status.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Detect documentation-only pull requests
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 -B scripts/ci_changes.py >> "$GITHUB_OUTPUT"
+
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -104,9 +123,11 @@ jobs:
       fail-fast: false
       matrix:
         lane: [minimum, current]
+    needs: [changes]
     uses: ./.github/workflows/conformance.yml
     with:
       lane: ${{ matrix.lane }}
+      docs_only: ${{ needs.changes.outputs.docs_only }}
 
   pages:
     needs: [check, conformance]
