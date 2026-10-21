@@ -263,11 +263,22 @@ legacy removal has no force/unlock fallback and keeps its attached branch. Gener
 reference plan after retirement before selecting that branch for cleanup. Online retirement
 adds the same explicit remote selection and apply acknowledgment as other v3 online plans.
 
+A plan retires exactly one worktree and needs `--state-dir`; `--report-dir` and the other review
+report flags apply to reference plans only. Retirement refuses, with a named code and reason (also
+without `--json`): `retirement-file-limit` (more than 1,024 files and directories, or an oversized
+file), `retirement-unrecorded-entry` (an untracked, ignored or generated path the stored tree does
+not contain), `retirement-sibling-refused` (the parent directory holds a symbolic link, device or
+socket; its siblings are recorded as plain files and directories) and `git-tree-refused` (the
+commit holds symbolic links or submodule gitlinks: native removal would also delete the Git
+directory of an initialized submodule, so retirement, unlike creation, does not admit gitlinks).
+Batching several worktrees in one plan is not supported.
+
 Owned v3 retirement instead selects `--task ID --owner LABEL` with the original completed
 creation records and exact owned-lock rules. It never substitutes a completion declaration
 for owned provenance. Both Git-v3 retirement modes stream regular user files up to 16 MiB
 and 64 MiB per user-content pass in buffers no larger than 64 KiB. Metadata remains 64 KiB
-per file; old v2/jj policy is unchanged. Full content/identity checks run at three plan/eight
+per file, except the registration `index` (up to 4 MiB, since it grows with the tracked file
+count); old v2/jj policy is unchanged. Full content/identity checks run at three plan/eight
 apply observations, with one shared byte/process/deadline budget and no reused fresh hashes.
 Timestamp and inode checks do not exclude every same-user/ABA race.
 

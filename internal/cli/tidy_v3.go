@@ -79,11 +79,11 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.StringVar(&o.Repo, "repo", "", "Expected OWNER/NAME; must agree with the selected remote")
 	f.StringVar(&o.Host, "host", "", "Selected online host; initially github.com only")
 	f.StringArrayVar(hints, "pr", nil, "Select an exact full head OID=positive PR number (repeatable)")
-	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Exact completed legacy path; asserts exclusive retirement authority")
+	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Exact completed legacy path; asserts exclusive retirement authority. One worktree per plan; retirement also requires --state-dir, --owner, --remove-registration and --remove-files naming the same path")
 	f.StringArrayVar(&o.ProtectWorktrees, "protect-worktree", []string{}, "Declare every caller-known active absolute workspace (repeatable)")
 	f.StringVar(proofs, "integration-proof", "", "Comma-separated forge-free proof classes: ancestor, patch-id, merge-noop, no-net-change (default all four)")
 	f.BoolVar(&o.AcceptWhitespaceDifferences, "accept-whitespace-differences", false, "Allow deletion when a patch-id match differs only in whitespace")
-	f.StringVar(&o.ReportDir, "report-dir", "", "Absolute existing directory that receives tidy-report.md and tidy-report.json for every ref that needs review")
+	f.StringVar(&o.ReportDir, "report-dir", "", "Absolute existing directory that receives tidy-report.md and tidy-report.json for every ref that needs review (local-reference plans only; not with retirement)")
 	f.IntVar(&o.ReportMaxEntries, "report-max-entries", 0, "Most report entries (default 256, ceiling 1024)")
 	f.IntVar(&o.ReportMaxBytes, "report-max-bytes", 0, "Most bytes per report file (default 4 MiB, ceiling 16 MiB)")
 	f.IntVar(&o.ReportMaxDiffBytes, "report-max-diff-bytes", 0, "Most diff bytes per report entry (default 64 KiB, ceiling 1 MiB)")
@@ -119,7 +119,7 @@ func validateTidyV3ReviewFlags(cmd *cobra.Command, o *workspace.V3PlanOptions) e
 	}
 	retirement := o.Task != "" || o.CompletedWorktree != ""
 	if (retirement || o.TrackingRemote != "") && (o.ReportDir != "" || o.DecisionsFile != "" || len(o.ConsolidationRanges) > 0 || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0) {
-		return fmt.Errorf("the review report flags apply to local-reference plans only")
+		return fmt.Errorf("--report-dir, --decisions, --consolidation-range and --report-max-* apply to local-reference plans only: a retirement plan writes no review report, and its result (use --json) is the record")
 	}
 	return nil
 }
@@ -197,8 +197,17 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 		return fmt.Errorf("--integration-proof and --accept-whitespace-differences apply to local-reference plans only")
 	}
 	if retirement {
-		if o.Task != "" && o.CompletedWorktree != "" || o.StateDir == "" || !o.RemoveRegistration || !tidyV3Path(o.RemoveFiles) || len(o.Refs) > 0 || o.TrackingRemote != "" {
-			return bad()
+		switch {
+		case o.Task != "" && o.CompletedWorktree != "":
+			return fmt.Errorf("--task and --completed-worktree select two different retirement modes; give one (a plan retires exactly one worktree)")
+		case o.StateDir == "":
+			return fmt.Errorf("retirement requires --state-dir: an existing private (mode 0700) directory that holds the plan and journal; only reference planning may omit it")
+		case !o.RemoveRegistration:
+			return fmt.Errorf("retirement requires --remove-registration: native Git removes the registration and the files together")
+		case !tidyV3Path(o.RemoveFiles):
+			return fmt.Errorf("retirement requires --remove-files with the absolute canonical path of the worktree to remove")
+		case len(o.Refs) > 0 || o.TrackingRemote != "":
+			return fmt.Errorf("--ref and --tracking-remote select references and cannot be combined with retirement")
 		}
 		if err := validateWorkspaceCLI("owner", o.Owner); err != nil {
 			return err
@@ -208,10 +217,12 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 				return err
 			}
 			if len(o.ProtectWorktrees) > 0 {
-				return bad()
+				return fmt.Errorf("--protect-worktree applies to --completed-worktree retirement only")
 			}
-		} else if !tidyV3Path(o.CompletedWorktree) || o.CompletedWorktree != o.RemoveFiles {
-			return bad()
+		} else if !tidyV3Path(o.CompletedWorktree) {
+			return fmt.Errorf("--completed-worktree requires an absolute canonical path")
+		} else if o.CompletedWorktree != o.RemoveFiles {
+			return fmt.Errorf("--remove-files must repeat --completed-worktree exactly; one plan retires one worktree")
 		}
 	} else if o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" || len(o.ProtectWorktrees) > 0 {
 		return bad()
@@ -331,9 +342,18 @@ func writeTidyV3Result(cmd *cobra.Command, r workspace.V3Result, structured bool
 				}
 			}
 		}
-		return runtimeFailure{fmt.Errorf("tidy operation %q: %q", r.Command, r.Status)}
+		return runtimeFailure{fmt.Errorf("tidy operation %q: %q%s", r.Command, r.Status, firstDiagnostic(r.Diagnostics))}
 	}
 	return nil
+}
+
+// firstDiagnostic names the cause in the failure text itself, so a caller
+// that did not pass --json still sees the code and the first reason.
+func firstDiagnostic(diagnostics []workspace.Diagnostic) string {
+	if len(diagnostics) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(": %s: %s", diagnostics[0].Code, diagnostics[0].Message)
 }
 func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 	var text strings.Builder
