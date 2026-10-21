@@ -169,7 +169,7 @@ require manual review; no automatic rollback or blind retry is attempted. Comple
 recorded postconditions and remaining files. Native writes and disk removal still have sampled
 external/ABA race limits rather than a repository-wide transaction.
 
-Retirement uses the same sixty-second planning/sixty-second apply deadlines, 8 MiB encoded record
+Retirement uses the same sixty-second planning deadline and an apply deadline that scales with the plan (60 s + 5 s + 50 ms per recorded entry), 8 MiB encoded record
 bound (a retirement plan records every file and directory) and aggregate 1024-entry bound for references; each stored/disk raw file in the default v2 contract
 is bounded to 64 KiB; the retirement blob sample and the manifest are 8,192 entries and user content
 64 MiB in total, while the shared 16,384-leaf tree limit only bounds cost. Hooks, fsmonitor and submodule
@@ -263,8 +263,8 @@ legacy removal has no force/unlock fallback and keeps its attached branch. Gener
 reference plan after retirement before selecting that branch for cleanup. Online retirement
 adds the same explicit remote selection and apply acknowledgment as other v3 online plans.
 
-Apply of a reference plan has a deadline of 60 s plus 3 s per planned deletion, at most 10
-minutes; a plan above about 180 deletions needs more than one plan. If the deadline still fires,
+Apply has a deadline of 60 s plus 5 s per planned effect plus 50 ms per recorded manifest entry,
+with no ceiling (the work bounds it, and the caller's context still ends it). If the deadline still fires,
 the result is `partial` and lists each ref's journaled outcome; unconfirmed deletions are never
 replayed automatically. Restore needs the original absolute repository and state-directory paths
 (a copy is refused as `journal-unreadable`); refs of an incomplete journal were not confirmed

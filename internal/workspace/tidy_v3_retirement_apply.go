@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"time"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 )
@@ -63,7 +62,7 @@ func retirementV3Options(p V3Plan) V3PlanOptions {
 	return o
 }
 func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions) (r V3Result) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	budget := newTidyV3ProofBudget(true)
 	defer func() { retirementV3BudgetResult(&r, budget); r = boundV3Result(r) }()
@@ -75,6 +74,10 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	if e != nil {
 		return failTidyV3(r, e)
 	}
+	// The deadline scales with the stored plan (60 s + 5 s + 50 ms per recorded
+	// entry); reading the plan, bounded local state I/O, precedes it.
+	ctx, cancelDeadline := context.WithTimeout(ctx, v3PlanApplyTimeout(p))
+	defer cancelDeadline()
 	r.Backend = "git"
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), "Recovery journal: "+filepath.Join(p.StateDir, "tidy-v3-operations", p.PlanID+".json"))
 	if prior != nil && prior.Phase != "complete" {
@@ -187,7 +190,7 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	}
 	// Recovery keeps its original tighter 30-second context, subordinate to
 	// the non-resetting whole-operation deadline.
-	recoveryCtx, recoveryCancel := context.WithTimeout(ctx, 30*time.Second)
+	recoveryCtx, recoveryCancel := context.WithTimeout(ctx, v3PlanApplyTimeout(p))
 	defer recoveryCancel()
 	// #3 recovery adapter before creation.
 	if e = sample(recoveryCtx, j.CurrentExpected, j.CurrentNative); e != nil {
@@ -241,7 +244,7 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	if e = sample(ctx, j.CurrentExpected, j.CurrentNative); e != nil {
 		return stop(e)
 	}
-	removeCtx, removeCancel := context.WithTimeout(ctx, 30*time.Second)
+	removeCtx, removeCancel := context.WithTimeout(ctx, v3PlanApplyTimeout(p))
 	defer removeCancel()
 	// #7 native removal adapter before parent grant construction.
 	if _, e = c.observeCurrent(removeCtx, options, p, j.CurrentExpected, j.CurrentNative, first, budget, session); e != nil {
