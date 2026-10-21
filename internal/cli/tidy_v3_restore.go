@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/workspace"
@@ -21,6 +22,7 @@ type tidyRestoreFlags struct {
 	actions                      []string
 	apply, authorize, list       bool
 	limit                        int
+	timeout                      time.Duration
 	structured                   bool
 }
 
@@ -35,7 +37,7 @@ func tidyRestoreCommand(restore func(context.Context, workspace.V3RestoreOptions
 			o := workspace.V3HistoryOptions{Path: path, StateDir: f.stateDir, Limit: f.limit, List: true}
 			return writeTidyHistoryResult(cmd, history(cmd.Context(), o), f.structured)
 		}
-		o := workspace.V3RestoreOptions{Path: path, StateDir: f.stateDir, PlanID: f.plan, Actions: f.actions, As: f.as, Apply: f.apply, Authorize: f.authorize}
+		o := workspace.V3RestoreOptions{Path: path, StateDir: f.stateDir, PlanID: f.plan, Actions: f.actions, As: f.as, Apply: f.apply, Authorize: f.authorize, Timeout: f.timeout}
 		return writeTidyRestoreResult(cmd, restore(cmd.Context(), o), f.structured)
 	}}
 	fl := command.Flags()
@@ -48,6 +50,7 @@ func tidyRestoreCommand(restore func(context.Context, workspace.V3RestoreOptions
 	fl.BoolVar(&f.authorize, "authorize", false, "Authorize exactly the local branch creations of --apply")
 	fl.BoolVar(&f.list, "list", false, "List the stored journals instead of planning a restore")
 	fl.IntVar(&f.limit, "limit", 0, "Most journals listed (default 256, ceiling 1024); only with --list")
+	fl.DurationVar(&f.timeout, "timeout", 0, "Replace the default deadline (60 s plus 5 s per restored branch); not with --list")
 	fl.BoolVar(&f.structured, "json", false, "Output one versioned result")
 	trackTidyV3Singletons(command)
 	return command
@@ -104,6 +107,9 @@ func validateTidyRestoreCLI(cmd *cobra.Command, args []string, f tidyRestoreFlag
 	}
 	changed := cmd.Flags().Changed
 	if f.list {
+		if changed("timeout") {
+			return fmt.Errorf("--timeout does not apply to --list")
+		}
 		if changed("plan") || changed("action") || changed("as") || f.apply || f.authorize {
 			return fmt.Errorf("--list takes only --state-dir, --limit and --json")
 		}
@@ -111,6 +117,9 @@ func validateTidyRestoreCLI(cmd *cobra.Command, args []string, f tidyRestoreFlag
 	}
 	if changed("limit") {
 		return fmt.Errorf("--limit applies only with --list")
+	}
+	if changed("timeout") && f.timeout <= 0 {
+		return fmt.Errorf("--timeout must be a positive duration")
 	}
 	if f.plan == "" {
 		return fmt.Errorf("--plan is required unless --list is given")

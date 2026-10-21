@@ -66,3 +66,34 @@ func TestTidyV3RetirementApplyHonoursTimeoutBothWays(t *testing.T) {
 		}
 	})
 }
+
+// The restore deadline scales with the branches restored, without a ceiling, and
+// --timeout replaces it: under a deliberately tiny default a restore stops with
+// the default and completes with a long --timeout.
+func TestTidyV3RestoreDeadlineScalesAndHonoursTimeout(t *testing.T) {
+	oldBase, oldEffect, oldEntry := v3ApplyBaseTimeout, v3ApplyPerEffect, v3ApplyPerEntry
+	t.Cleanup(func() { v3ApplyBaseTimeout, v3ApplyPerEffect, v3ApplyPerEntry = oldBase, oldEffect, oldEntry })
+	if got := v3RestoreTimeout(120); got != 60*time.Second+600*time.Second {
+		t.Fatalf("120 branches: %s", got)
+	}
+	if got := v3RestoreTimeout(5000); got != 60*time.Second+25000*time.Second {
+		t.Fatalf("5000 branches: %s", got)
+	}
+	f := newRestoreFix(t, "alpha", "beta", "gamma")
+	v3ApplyBaseTimeout, v3ApplyPerEffect, v3ApplyPerEntry = time.Nanosecond, 0, 0
+	r := applyRestore(t, defaultTidyV3RestoreCoordinator(), f.applyOptions())
+	if r.Status == "ok" {
+		t.Fatalf("a tiny default deadline did not stop the restore: %+v", r)
+	}
+	o := f.applyOptions()
+	o.Timeout = 5 * time.Minute
+	r = applyRestore(t, defaultTidyV3RestoreCoordinator(), o)
+	if r.Status != "ok" {
+		t.Fatalf("--timeout did not replace the default: %s %+v", r.Status, r.Diagnostics)
+	}
+	for _, name := range []string{"alpha", "beta", "gamma"} {
+		if f.git("rev-parse", "refs/heads/"+name) != f.tips[name] {
+			t.Fatalf("%s not restored", name)
+		}
+	}
+}

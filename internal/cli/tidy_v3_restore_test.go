@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
@@ -261,5 +262,24 @@ func TestTidyRestoreTextShowsBranchConfigKeysQuoted(t *testing.T) {
 	}
 	if strings.ContainsAny(text, "\x1b") || strings.Contains(text, "igin\nx") {
 		t.Errorf("unescaped remote name:\n%q", text)
+	}
+}
+
+func TestTidyRestoreTimeoutFlag(t *testing.T) {
+	base := []string{"restore", "--contract", "3", "--plan", "plan1", "--state-dir", "/tmp/state"}
+	var spy restoreSpy
+	spy.restoreResult = okRestore()
+	if _, err := spy.run(append(append([]string{}, base...), "--timeout", "45m")); err != nil || spy.restore.Timeout != 45*time.Minute {
+		t.Fatalf("timeout not passed: %v %+v", err, spy.restore)
+	}
+	for _, bad := range [][]string{{"--timeout", "0"}, {"--timeout", "-1m"}, {"--timeout", "soon"}} {
+		spy = restoreSpy{restoreResult: okRestore()}
+		if _, err := spy.run(append(append([]string{}, base...), bad...)); err == nil || spy.restoreCalls != 0 {
+			t.Fatalf("%v accepted", bad)
+		}
+	}
+	spy = restoreSpy{}
+	if _, err := spy.run([]string{"restore", "--contract", "3", "--state-dir", "/tmp/state", "--list", "--timeout", "1m"}); err == nil {
+		t.Fatal("--timeout with --list accepted")
 	}
 }

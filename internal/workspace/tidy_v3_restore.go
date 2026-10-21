@@ -35,6 +35,8 @@ type V3RestoreOptions struct {
 	Actions                []string
 	As                     string
 	Apply, Authorize       bool
+	// Timeout replaces the scaled default deadline when positive.
+	Timeout time.Duration
 }
 
 // V3RestoreDecision is the journal's reviewer decision, shown as data.
@@ -481,13 +483,11 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	if err := validateV3RestoreOptions(o); err != nil {
 		return failRestore(r, err)
 	}
-	// An apply spends about four native processes per entry and at most
-	// v3NativeFactsLimit entries exist (16,384); a rerun continues where a deadline stopped it.
-	deadline := 60 * time.Second
-	if o.Apply {
-		deadline = 5 * time.Minute
-	}
-	ctx, cancel := context.WithTimeout(ctx, deadline)
+	// The deadline scales with the journal (see v3RestoreTimeout) and is set once
+	// it is read; reading the journal and the repository is bounded local I/O
+	// that ends with the caller's own context.
+	ctx = withV3Timeout(ctx, o.Timeout)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ctx, _, closeSession, err := withPlanningSession(ctx)
 	if err != nil {
@@ -509,6 +509,8 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	if err != nil {
 		return failRestore(r, err)
 	}
+	ctx, cancelDeadline := context.WithTimeout(ctx, v3Timeout(ctx, v3RestoreTimeout(len(items))))
+	defer cancelDeadline()
 	if err = evaluateRestoreItems(ctx, n, items); err != nil {
 		return failRestore(r, err)
 	}
@@ -522,3 +524,9 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	r.Status = "ok"
 	return r
 }
+
+// v3RestoreTimeout is the restore deadline: the same rule as the apply (60 s
+// plus 5 s per restored branch, no ceiling); restore is the safety path and must
+// not die on a large history. --timeout replaces it. A rerun continues where a
+// deadline stopped it.
+func v3RestoreTimeout(items int) time.Duration { return v3ApplyTimeout(items, 0) }
