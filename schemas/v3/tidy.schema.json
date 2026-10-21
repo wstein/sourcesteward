@@ -2993,7 +2993,7 @@
                       "identity": {
                         "properties": {
                           "size": {
-                            "maximum": 65536
+                            "maximum": 4194304
                           }
                         }
                       }

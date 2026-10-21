@@ -806,6 +806,9 @@ func validV3Manifest(m V3Manifest, root string, metadata bool) bool {
 			if metadata || i.Path == filepath.Join(root, ".git") {
 				limit = 64 << 10
 			}
+			if metadata && i.Path == filepath.Join(root, "index") {
+				limit = retirementIndexBytes
+			}
 			if i.Nlink != 1 || i.Size > limit || !v3Hash(entry.Digest) || entry.Executable != (i.Mode&0111 != 0) {
 				return false
 			}
@@ -908,10 +911,24 @@ func v3Bounds(v any) error {
 				// the strings of a record they do not count against the 1,024
 				// record plan bound, so reviewing many refs never refuses a plan.
 				before := count
+				// A physical manifest holds one entry per file and directory of the
+				// worktree. It has its own bound (retirementManifestEntries per
+				// manifest, checked here) and counts against the one-MiB encoded
+				// bound below, so a worktree of several hundred files no longer
+				// exhausts the aggregate plan bound meant for references.
+				if v.Type() == reflect.TypeOf(V3Manifest{}) && v.Field(i).Kind() == reflect.Slice {
+					if v.Field(i).Len() > retirementManifestEntries {
+						return false
+					}
+					count -= v.Field(i).Len()
+				}
 				if !walk(v.Field(i), depth+1) {
 					return false
 				}
 				if (v.Type() == reflect.TypeOf(V3IntegrationEvidence{}) || v.Type() == reflect.TypeOf(V3ReviewBinding{})) && v.Field(i).Kind() == reflect.Slice {
+					count = before
+				}
+				if v.Type() == reflect.TypeOf(V3Manifest{}) && v.Field(i).Kind() == reflect.Slice {
 					count = before
 				}
 			}

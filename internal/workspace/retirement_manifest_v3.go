@@ -37,6 +37,11 @@ func retirementPolicy(backend string, version int) (retirementContentPolicy, err
 		return 0, errors.New("unsupported retirement backend/version content policy")
 	}
 }
+
+// retirementIndexBytes bounds the Git v3 registration index: 16,384 leaves of
+// about 62 bytes plus path, padded, stay far below it.
+const retirementIndexBytes = 4 << 20
+
 func (p retirementContentPolicy) fileLimit(metadata bool) (int64, error) {
 	if p != retirementLegacyContent && p != retirementGitV3Content {
 		return 0, errors.New("unknown retirement content policy")
@@ -115,7 +120,7 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 			known[d] = true
 		}
 		if len(known) > retirementManifestEntries {
-			return errors.New("aggregate manifest admission exceeds 1024 entries")
+			return failure("retirement-file-limit", "The worktree holds more than 1,024 tracked files and directories, the most a retirement manifest admits; retain the target")
 		}
 		return nil
 	}
@@ -212,8 +217,11 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 			if prefix != "" {
 				rel = prefix + "/" + name
 			}
-			if !known[rel] || len(m.Entries) >= retirementManifestEntries {
-				return errors.New("unknown or excessive v3 physical payload")
+			if !known[rel] {
+				return failure("retirement-unrecorded-entry", fmt.Sprintf("The worktree holds %q, which the stored Git tree does not contain (untracked, ignored or generated); retire only a worktree whose files are all tracked, or remove it first", rel))
+			}
+			if len(m.Entries) >= retirementManifestEntries {
+				return failure("retirement-file-limit", "The worktree holds more than 1,024 files and directories, the most a retirement manifest admits; retain the target")
 			}
 			folded := strings.ToLower(norm.NFC.String(rel))
 			if aliases[folded] {
@@ -275,11 +283,17 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 				}
 				fact, ok := stored[rel]
 				if !ok && !metadata[rel] {
-					return errors.New("unexpected physical file")
+					return failure("retirement-unrecorded-entry", fmt.Sprintf("The worktree holds %q, which the stored Git tree does not contain (untracked, ignored or generated); retire only a worktree whose files are all tracked, or remove it first", rel))
 				}
 				limit, _ := policy.fileLimit(isMetadata)
+				if isMetadata && rel == "index" && policy == retirementGitV3Content {
+					// The Git index grows with the tracked file count (about 600
+					// files exceed 64 KiB). It is streamed in 64 KiB buffers like
+					// every metadata file and bounded by the 16,384 leaf limit.
+					limit = retirementIndexBytes
+				}
 				if id.Size > limit {
-					return errors.New("oversized v3 physical file")
+					return failure("retirement-file-limit", fmt.Sprintf("A physical file (%s, %d bytes) exceeds the %d byte per-file bound of a retirement manifest; retain the target", rel, id.Size, limit))
 				}
 				if !isMetadata {
 					walkedUserBytes += id.Size
