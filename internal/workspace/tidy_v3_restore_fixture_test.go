@@ -4,6 +4,7 @@ package workspace
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -169,4 +170,48 @@ func newPartialRestoreFix(t *testing.T, names ...string) *restoreFix {
 		t.Fatalf("the fixture apply did not stop: %s %+v", a.Status, a.Diagnostics)
 	}
 	return f
+}
+
+func (f *restoreFix) applyOptions() V3RestoreOptions {
+	o := f.options()
+	o.Apply, o.Authorize = true, true
+	return o
+}
+
+// restoreRecords reads the raw restore records of the fixture's plan, by file name.
+func (f *restoreFix) restoreRecords() map[string]string {
+	f.t.Helper()
+	dir := filepath.Join(f.state, "tidy-v3-restores")
+	if _, err := os.Lstat(dir); os.IsNotExist(err) {
+		return map[string]string{}
+	}
+	return treeBytes(f.t, dir)
+}
+
+func (f *restoreFix) reflog(name string) string {
+	f.t.Helper()
+	b, err := os.ReadFile(filepath.Join(f.dir, ".git", "logs", "refs", "heads", filepath.FromSlash(name)))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(b)
+}
+
+// worktreeBytes is everything of the primary worktree except the repository.
+func (f *restoreFix) worktreeBytes() map[string]string {
+	f.t.Helper()
+	out := map[string]string{}
+	for k, v := range treeBytes(f.t, f.dir) {
+		if !strings.HasPrefix(k, ".git"+string(filepath.Separator)) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// tryGit runs git in the fixture and reports its failure instead of failing the test.
+func (f *restoreFix) tryGit(args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"-C", f.dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
 }
