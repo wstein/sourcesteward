@@ -124,6 +124,17 @@ func TestRangePairingPicksTheRangeThatPairsMost(t *testing.T) {
 	if e.RangePairing == nil || e.RangePairing.Range != rng {
 		t.Fatalf("pairing %+v", e.RangePairing)
 	}
+	// On a tie the first range named is reported, in either order.
+	same := rng[:strings.Index(rng, "..")] + ".." + f.main
+	if same == rng {
+		t.Fatal("fixture: the alias must differ in spelling")
+	}
+	for _, order := range [][]string{{rng, same}, {same, rng}} {
+		e, err = f.reportWithRanges("topic", order)
+		if err != nil || e.RangePairing == nil || e.RangePairing.Range != order[0] {
+			t.Fatalf("tie order %v: %+v %v", order, e.RangePairing, err)
+		}
+	}
 	e, err = f.reportWithRanges("topic", nil)
 	if err != nil || e.RangePairing != nil {
 		t.Fatalf("no range named: %+v %v", e.RangePairing, err)
@@ -224,4 +235,37 @@ func errorsAs(err error, target *operationError) bool {
 		err = u.Unwrap()
 	}
 	return false
+}
+
+func TestRangePairingKeepsAtMost256RowsAndCountsTheRest(t *testing.T) {
+	f, _ := rangeFixture(t)
+	f.fastImport(importChain("rows", 256, "refs/heads/rows", f.rev(f.main), 1900000000))
+	rng := f.rev(f.main) + ".." + f.rev("refs/heads/rows")
+	e, err := f.reportWithRanges("topic", []string{rng})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := e.RangePairing
+	// 256 range-only rows and the three branch commits.
+	if p == nil || len(p.Pairs) != 256 || p.Truncated == nil || *p.Truncated != (V3ReportTruncation{Unit: "rows", Shown: 256, Total: 259}) {
+		t.Fatalf("pairing %+v", p)
+	}
+	if e.Verdict.Verdict != "unclear" {
+		t.Errorf("a truncated pairing must give an unclear verdict: %+v", e.Verdict)
+	}
+}
+
+func TestRangePairingMarksOneRowOverTheBoundAndNotTheBound(t *testing.T) {
+	for rows, want := range map[int]*V3ReportTruncation{253: nil, 254: {Unit: "rows", Shown: 256, Total: 257}} {
+		f, _ := rangeFixture(t)
+		f.fastImport(importChain("edge", rows, "refs/heads/edge", f.rev(f.main), 1900000000))
+		e, err := f.reportWithRanges("topic", []string{f.rev(f.main) + ".." + f.rev("refs/heads/edge")})
+		if err != nil || e.RangePairing == nil {
+			t.Fatalf("%d: %v", rows, err)
+		}
+		got := e.RangePairing.Truncated
+		if (got == nil) != (want == nil) || got != nil && *got != *want {
+			t.Errorf("%d range commits and 3 branch commits: marker %+v, want %+v", rows, got, want)
+		}
+	}
 }
