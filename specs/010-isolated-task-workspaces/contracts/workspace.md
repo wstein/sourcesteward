@@ -53,8 +53,10 @@ locks. Recheck outcome and source state after execution. External races/ABA chan
 prevented; disclose sampling limits and incomplete effects instead of claiming transactionality.
 Paths/base ≤4,096 bytes; identifiers ≤128 bytes; reads10seconds; apply60seconds; each native output
 ≤64KiB; each encoded store/result record ≤1MiB; registrations/aggregate observations≤1,024.
-Cancellation is propagated; after action start cancellation cannot imply rollback. Git preflight bounds the checkout to 1,024 tree entries and 64 MiB total stored blob size; reject
-unsupported tree objects/paths, symlink escape risks and gitlinks before action. No automatic
+Cancellation is propagated; after action start cancellation cannot imply rollback. Git preflight bounds the checkout to 16,384 leaf tree entries (`checkoutLeafLimit`, a fixed constant; see
+[Creation refusals amendment](#creation-refusals-amendment)) and 64 MiB total stored blob size; reject
+unsupported tree objects/paths and symlink escape risks before action. Gitlinks are accepted as data
+(see the amendment). No automatic
 cleanup or adoption. Destination registration after failure remains evidence for manual recovery.
 
 ## Public Go boundary
@@ -82,8 +84,8 @@ an executable allowlist. Fixed native commands, admitted/fingerprinted config, p
 executables and cooperative caller-owned repositories prevent declared helper paths. External
 adversarial concurrent replacement/ABA is not prevented; never claim an adversarial transaction.
 Git write grants protect every preexisting linked-worktree metadata directory read-only; only new
-registration/destination writes are allowed. Git checkout blob limit is16MiB/file,64MiB total,1024leaf
-entries,64KiB tree metadata. Gitlinks and unsafe paths are unsupported; missing proof refuses.
+registration/destination writes are allowed. Git checkout blob limit is16MiB/file,64MiB total,16,384 leaf
+entries,64KiB tree metadata. Unsafe paths are unsupported; missing proof refuses.
 
 Native jj checkout size is bounded by its60second action deadline and partial-materialization
 reporting, not a precomputed Git tree budget; store/result/output bounds still apply. Large jj
@@ -178,3 +180,35 @@ byte/entry overrun or changed evidence refuses. All other native-output caps rem
 This amendment applies to creation, reference tidy and old/new retirement consumers. It does
 not reuse partial inventory proof or broaden old user-content policies. Separate contract-3
 legacy completion never invents original creation provenance or bypasses native ownership.
+
+## Creation refusals amendment
+
+Amends this contract and the creation parts above; it adds no command, no public schema field and
+no configuration-writing effect. Three refusals of `stw workspace plan` and `apply` blocked the
+project's own repositories, although none protected a real effect.
+
+1. **Leaf limit.** The 1,024 leaf-entry bound of the checkout preflight reused the generic
+   observation constant (`observationLimit`, which still bounds results and records). A separate fixed constant
+   `checkoutLeafLimit` of 16,384 now bounds the tree validator and the filter-path inventory
+   (`git-checkout-limit`). It is a documented constant, not a configuration option. The 16 MiB/blob,
+   64 MiB total, 4,224-byte record, 4,096-byte path and 4,325,376-byte stream bounds are unchanged, so the
+   total cost stays bounded (the stream bound admits an average of about 264 bytes per entry at the cap).
+   The cap follows the [measurement](../verification.md#creation-refusals-measurement).
+2. **Hooks and recursion never run.** `stw` never runs a hook of the repository it manages. The one
+   native command of creation that could run one (`git worktree add`, a `post-checkout` hook) is invoked with
+   `-c core.hooksPath=<null file> -c core.fsmonitor=false -c submodule.recurse=false`, the same arguments as
+   Spec 031 `planningConfigArgs` for tidy planning. `core.hooksPath` and `submodule.*` therefore leave
+   the creation refusal list; managed worktrees run no repository hooks, and the source
+   configuration is neither read for execution nor changed. Still refused for creation, unchanged: `hook.*`, `includeIf.*`,
+   `core.attributesFile`, `core.alternateRefsCommand`, `extensions.worktreeConfig`, `extensions.partialclone`,
+   `core.sparseCheckout*`, sentinel `filter.*`, `remote.*.promisor`, a `core.fsmonitor` that is not false,
+   and executable default hooks (`.git/hooks`).
+3. **Gitlinks are data.** A base tree may contain gitlinks (mode 160000). The checkout does not
+   recurse: each gitlink becomes an empty directory, no submodule is initialized, cloned or fetched and no
+   `.git/modules` entry is written. Symlinks and every other non-blob object stay refused. Work on a member repository
+   uses its own workspace plan.
+
+Scope: the amendment applies only to `workspace plan` and `apply` (creation) and to the verification inside
+that apply. Tidy planning and apply, retirement and restore keep their own admissions: the strict apply
+admission still refuses `core.hooksPath`, `submodule.*` and gitlinks (Spec 031), so a worktree created under this amendment from
+such a repository is not retired by `stw` until a later specification defines that policy; retention is the safe outcome.

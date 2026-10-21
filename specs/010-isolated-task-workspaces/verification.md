@@ -72,7 +72,9 @@ Review-driven tests/fixes cover encoded escaping and aggregate records, semantic
 state, duplicate/case-folded JSON keys, FIFO/hardlink/rename/lock replacement, precise effects,
 exact initial finalization identity, jj name/manager preflight and Unicode checkout aliases.
 Git checkout is detached and locked; helper/hook configuration, symlink/gitlink trees and
-unsupported sparse/promisor/worktree configuration refuse. Limits: 1,024 leaf entries,
+unsupported sparse/promisor/worktree configuration refuse (amended by the
+[creation refusals amendment](contracts/workspace.md#creation-refusals-amendment): hooksPath,
+`submodule.*` and gitlinks no longer refuse). Limits: 16,384 leaf entries (was 1,024),
 16 MiB per blob, 64 MiB total stored bytes. Unicode normalization reuses already pinned
 x/text v0.14.0 as an explicit dependency; standard library has no canonical normalization API.
 
@@ -270,3 +272,25 @@ Both full corrected suites retained only the intentional opt-in `TestTOMLCorpusD
 Tool versions, allowed temporary generic CLI fixture compilation and every unrun gate remain
 as recorded above. Same-reviewer review of the exact final amended head is pending; these
 checks do not assert CLEAR or essential v0.1.0 acceptance.
+
+## Creation refusals measurement
+
+Evidence for the 16,384 `checkoutLeafLimit` of the
+[creation refusals amendment](contracts/workspace.md#creation-refusals-amendment). Measured on
+Linux arm64 (10 cores), Git 2.56.0, Go 1.27.2, with a throwaway test (not committed) that builds a
+temporary repository with N tracked files in 200 directories (about 25-byte paths, 10-byte blobs) and times
+`gitAdapter.Observe` (the plan read) and `gitAdapter.Create` (re-observation, sandboxed `git worktree add`
+and verification, the apply) with the leaf limit raised for the probe. Two runs; the range is shown.
+
+| Tracked files | Observe (plan) | Create (apply) |
+| ---: | ---: | ---: |
+| 1,001 | 27-113 ms | 75-105 ms |
+| 4,001 | 35-36 ms | 142-192 ms |
+| 16,001 | 73-85 ms | 365-447 ms |
+| 32,001 | 120-125 ms | 733-811 ms |
+
+Both are far below the ten-second read and sixty-second apply deadlines even at twice the cap, and
+growth is linear, so 16,384 is bounded by a documented constant with about two orders of magnitude of
+time headroom. Path length is the other cost driver: the unchanged 4,325,376-byte stream bound ends a
+tree of long paths earlier than the leaf cap. SourceSteward itself has 1,062 leaf entries, the
+Anchorage umbrella 34 files and three gitlinks, WorkHarbor 745 leaves with `core.hooksPath=.githooks`.

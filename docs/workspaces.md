@@ -34,8 +34,11 @@ back to the independently proven primary checkout; that primary can differ from 
 source. Configuration is never rewritten to admit a layout. Missing or aliased mapping
 metadata refuses with `git-layout-refused`; duplicate or external `core.worktree` origins
 refuse with `git-worktree-config-refused`. Other unsafe settings identify the matched rule
-without exposing its value. Executable hooks, active filters, unsupported sparse state,
-nested-submodule activation and external helpers retain their refusals.
+without exposing its value. Executable default hooks, active filters, unsupported sparse state
+and external helpers retain their refusals. `core.hooksPath` and `submodule.*` configuration no
+longer refuse creation: `stw` runs the checkout with hooks, fsmonitor and submodule recursion
+disabled on the command line, so it never runs a repository hook, and a managed worktree runs none
+of the project's hooks (run them by hand or through `make`). Submodules are never initialized.
 
 Literal layout/config bytes and physical identities are part of stale-plan evidence,
 including during completed creation verification. Replan historical records whose safety
@@ -67,7 +70,7 @@ fresh disk cleanliness; unknown state is retention evidence, never deletion perm
 
 Observation commands have a ten-second deadline; apply has sixty seconds. Native command output
 is bounded at64KiB, encoded state/results at1MiB and aggregate observations at1,024. Git checkout
-preflight additionally limits tracked leaf entries to1,024, each file to16MiB and total stored file bytes to64MiB. Symlink/gitlink trees, checkout path aliases and unsafe metadata are refused. jj's time bound
+preflight additionally limits tracked leaf entries to16,384, each file to16MiB and total stored file bytes to64MiB. Symlink trees, checkout path aliases and unsafe metadata are refused. Gitlinks are accepted as data: the checkout never recurses, so a gitlink becomes an empty directory and no submodule is initialized. jj's time bound
 can interrupt materialization with partial effects; this is not a disk-size quota. Native jj source working-copy metadata is limited to16 files, with each sampled metadata/index/config file limited to64KiB; unsupported or oversized evidence refuses creation. Paths/base are
 at most4,096 bytes; task/owner labels use ASCII letters/digits plus `.`, `_`, `-`, start with a
 letter/digit and are at most128bytes. Sampling cannot detect every external race or ABA change.
