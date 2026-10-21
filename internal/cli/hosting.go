@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -20,7 +19,7 @@ type hostingStatusOperation func(context.Context, string, hosting.Options) hosti
 type hostingLookupOperation func(context.Context, string, hosting.Options) hosting.LookupResult
 
 // hostingTransport is a test seam for in-process HTTP fixtures; production leaves it nil (HTTPS).
-var hostingTransport http.RoundTripper
+var hostingTransport hosting.Transport
 
 func defaultHostingStatus(ctx context.Context, path string, o hosting.Options) hosting.PRStatusResult {
 	return hosting.InspectPRStatusWithTransport(ctx, path, o, hostingTransport)
