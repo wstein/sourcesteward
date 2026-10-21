@@ -42,7 +42,7 @@ func TestSyncCoversTheRootAndEverySubmoduleOnABranch(t *testing.T) {
 	if r.Error != nil || r.Mode != "sync" || r.Command != "sync" || r.RunID == nil {
 		t.Fatalf("%+v", r)
 	}
-	if len(r.Repos) != 4 {
+	if len(r.Repos) != 6 {
 		t.Fatalf("one entry per repository, no branches or worktrees: %+v", r.Repos)
 	}
 	got := repoByName(t, r)
@@ -64,7 +64,7 @@ func TestSyncCoversTheRootAndEverySubmoduleOnABranch(t *testing.T) {
 	if r.ExitCode() != 0 {
 		t.Errorf("a successful run exits 0, got %d", r.ExitCode())
 	}
-	if r.Summary.Total != 4 || r.Summary.ByResult[ResultFastForwarded] != 2 {
+	if r.Summary.Total != 6 || r.Summary.ByResult[ResultFastForwarded] != 2 {
 		t.Errorf("%+v", r.Summary)
 	}
 	// a second run has nothing to do

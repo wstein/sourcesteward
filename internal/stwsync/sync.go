@@ -98,26 +98,20 @@ func Sync(ctx context.Context, o Options) Result {
 		return r.fail("sync-unsupported-backend", "stw sync needs an unambiguous Git repository: "+id.Error())
 	}
 	e := env{bin, id.InputPath}
-	top, err := e.g(ctx, "rev-parse", "--show-toplevel")
-	if err != nil || top.Code != 0 || strings.TrimSpace(top.Out) == "" {
-		return r.fail("sync-read-failed", "the repository has no working tree")
-	}
-	root := env{bin, strings.TrimSpace(top.Out)}
-	subs, err := root.submodules(ctx)
+	root, linked, err := e.workspaceRoot(ctx)
 	if err != nil {
 		return r.fail("sync-read-failed", err.Error())
 	}
-	if len(subs) >= repoLimit {
-		return r.fail("sync-limit", fmt.Sprintf("the repository has more than %d submodules", repoLimit-1))
+	if linked != "" {
+		r.Note = ptr("started inside the linked worktree " + oneLine(linked) + "; it was not touched, the main worktrees of the workspace were synced")
 	}
 	runID, err := newRunID()
 	if err != nil {
 		return r.fail("sync-read-failed", "cannot create a run ID")
 	}
 	s := &session{opts: o, runID: runID}
-	r.Repos = append(r.Repos, s.repo(ctx, root, ".", "root"))
-	for _, p := range subs {
-		r.Repos = append(r.Repos, s.repo(ctx, root.withDir(filepath.Join(root.dir, filepath.FromSlash(p))), p, "submodule"))
+	if err := s.walk(ctx, root, ".", &r.Repos); err != nil {
+		return r.fail("sync-limit", err.Error())
 	}
 	if s.journaled {
 		r.RunID = ptr(runID)
@@ -127,6 +121,93 @@ func Sync(ctx context.Context, o Options) Result {
 	}
 	r.Summary.Total = len(r.Repos)
 	return r
+}
+
+// walk syncs the repository at e and then, depth-first, each of its submodules that is initialized. An
+// uninitialized submodule is reported and never cloned, and its own submodules are not visited.
+func (s *session) walk(ctx context.Context, e env, name string, out *[]Repo) error {
+	kind := "submodule"
+	if name == "." {
+		kind = "root"
+	}
+	rp := s.repo(ctx, e, name, kind)
+	*out = append(*out, rp)
+	if len(*out) > repoLimit {
+		return fmt.Errorf("the workspace has more than %d repositories", repoLimit)
+	}
+	if rp.Result == ResultSkippedUninitialized {
+		return nil
+	}
+	subs, err := e.submodules(ctx)
+	if err != nil {
+		rp.Result, rp.Reason = ResultFailed, ptr(err.Error())
+		(*out)[len(*out)-1] = rp
+		return nil
+	}
+	for _, p := range subs {
+		child := name + "/" + p
+		if name == "." {
+			child = p
+		}
+		if err := s.walk(ctx, e.withDir(filepath.Join(e.dir, filepath.FromSlash(p))), child, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// workspaceRoot finds the main worktree of the top-level superproject that contains e, so that running
+// inside a submodule syncs the whole workspace. linked is the starting linked worktree, if it was one.
+func (e env) workspaceRoot(ctx context.Context) (root env, linked string, err error) {
+	top, err := e.g(ctx, "rev-parse", "--show-toplevel")
+	if err != nil || top.Code != 0 || strings.TrimSpace(top.Out) == "" {
+		return e, "", errors.New("the repository has no working tree")
+	}
+	start := strings.TrimSpace(top.Out)
+	cur, err := e.mainWorktree(ctx, start)
+	if err != nil {
+		return e, "", err
+	}
+	if !samePath(cur, start) {
+		linked = start
+	}
+	for i := 0; i < 16; i++ {
+		sp, err := e.in(ctx, cur, "rev-parse", "--show-superproject-working-tree")
+		if err != nil || sp.Code != 0 || strings.TrimSpace(sp.Out) == "" {
+			break
+		}
+		if cur, err = e.mainWorktree(ctx, strings.TrimSpace(sp.Out)); err != nil {
+			return e, "", err
+		}
+	}
+	return env{e.bin, cur}, linked, nil
+}
+
+// mainWorktree is the checkout a repository's Git directory belongs to: for a linked worktree, the main one.
+// (In a submodule `git worktree list` names the Git directory, so core.worktree is read instead.)
+func (e env) mainWorktree(ctx context.Context, tree string) (string, error) {
+	out, err := e.in(ctx, tree, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	common := strings.TrimSpace(out.Out)
+	if err != nil || out.Code != 0 || common == "" {
+		return "", errors.New("cannot locate the Git directory")
+	}
+	if wt, err := e.in(ctx, tree, "--git-dir="+common, "config", "--get", "core.worktree"); err == nil && wt.Code == 0 && strings.TrimSpace(wt.Out) != "" {
+		p := strings.TrimSpace(wt.Out)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(common, p)
+		}
+		return filepath.Clean(p), nil
+	}
+	if filepath.Base(common) == ".git" {
+		return filepath.Dir(common), nil
+	}
+	return "", errors.New("the repository has no main working tree")
+}
+
+func samePath(a, b string) bool {
+	ra, err1 := filepath.EvalSymlinks(a)
+	rb, err2 := filepath.EvalSymlinks(b)
+	return err1 == nil && err2 == nil && ra == rb
 }
 
 // session carries the run ID and whether any journal record was written.
@@ -165,7 +246,7 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 		return rp
 	}
 	if _, err := os.Lstat(filepath.Join(e.dir, ".git")); err != nil {
-		return skip(ResultSkippedUninitialized, "the submodule is not initialized")
+		return skip(ResultSkippedUninitialized, "not initialised")
 	}
 	if reason, _ := e.operation(ctx, e.dir); reason != "" {
 		return skip(ResultSkippedBusy, reason)
@@ -176,7 +257,15 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	}
 	ref := strings.TrimSpace(sym.Out)
 	if sym.Code != 0 || !strings.HasPrefix(ref, "refs/heads/") {
-		return skip(ResultSkippedDetached, "HEAD is detached; stw sync never moves a detached HEAD")
+		if oid := e.revParse(ctx, e.dir, "HEAD"); oid != "" {
+			rp.OldOID = ptr(oid)
+			note := "pinned"
+			if kind == "root" {
+				note = "left as is"
+			}
+			return skip(ResultSkippedDetached, "detached at "+oid[:7]+" ("+note+")")
+		}
+		return skip(ResultSkippedDetached, "detached HEAD without a commit")
 	}
 	rp.Branch = ptr(strings.TrimPrefix(ref, "refs/heads/"))
 	oldOID := e.revParse(ctx, e.dir, "HEAD")
@@ -187,13 +276,13 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	up, err := e.g(ctx, "for-each-ref", "--format=%(upstream)%00%(upstream:remotename)", ref)
 	fields := strings.Split(strings.TrimSpace(up.Out), "\x00")
 	if err != nil || up.Code != 0 || len(fields) != 2 || fields[0] == "" || fields[1] == "" || fields[1] == "." {
-		return skip(ResultSkippedNoUpstream, "the branch has no upstream on a remote")
+		return skip(ResultSkippedNoUpstream, "no upstream for branch "+*rp.Branch)
 	}
 	upstream, remote := fields[0], fields[1]
 	rp.Remote = ptr(remote)
 	prefix := "refs/remotes/" + remote + "/"
 	if !remoteName.MatchString(remote) || !strings.HasPrefix(upstream, prefix) {
-		return skip(ResultSkippedNoUpstream, "the upstream is not a remote-tracking branch of a plain remote name")
+		return skip(ResultSkippedNoUpstream, "no upstream for branch "+*rp.Branch+" on a plain remote")
 	}
 	h, err := e.inventory(ctx)
 	if err != nil {

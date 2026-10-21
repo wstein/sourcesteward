@@ -106,6 +106,7 @@ type Result struct {
 	Mode          string        `json:"mode"`
 	RunID         *string       `json:"run_id"`
 	Options       ResultOptions `json:"options"`
+	Note          *string       `json:"note"` // set when the command ran inside a linked worktree, which it did not touch
 	Repos         []Repo        `json:"repos"`
 	Summary       Summary       `json:"summary"`
 	Error         *Failure      `json:"error"`

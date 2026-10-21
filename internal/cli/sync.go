@@ -21,17 +21,19 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 	command := &cobra.Command{
 		Use:   "sync [PATH] [--plan] [--rebase|--ff-only|--no-rebase] [--no-ff] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
 		Short: "Bring the workspace root and its submodules up to date, like git pull",
-		Long: "Replace git pull in the workspace root repository (PATH, default the current directory) and in each of\n" +
-			"its submodules that sits on a branch: fetch the upstream remote, then fast-forward the current branch.\n" +
-			"There is no separate apply step; stw sync is the action. Other branches and linked worktrees are not touched.\n" +
+		Long: "Do what git pull would do in every repository of the workspace, from any directory inside it: the top-level\n" +
+			"superproject and, depth-first, each initialized submodule (nested ones too; uninitialized ones are reported, never cloned).\n" +
+			"Only the main worktree of each repository is synced, on whatever branch it sits (main, develop, a feature branch) as long as\n" +
+			"that branch has an upstream; linked worktrees are never touched. A detached HEAD (a pinned submodule) is reported only.\n" +
+			"There is no separate apply step; stw sync is the action, --plan (alias --dry-run) the preview.\n" +
 			"It is never stricter than git pull: pull.rebase, branch.NAME.rebase, pull.ff, rebase.autoStash, merge.autoStash\n" +
 			"and fetch.prune apply as they do for git pull, so with pull.rebase=true a diverged branch is rebased and with\n" +
-			"rebase.autoStash=true a dirty tree is stashed and restored. --rebase, --ff-only, --autostash, --no-autostash,\n" +
-			"--prune and --no-prune override the configuration. Without pull.rebase a diverged branch is reported as needing\n" +
-			"a choice; a merge commit is created only when pull.rebase=false, pull.ff=false, --no-rebase or --no-ff asks for it. A rebase conflict is left in progress as git leaves it.\n" +
-			"A detached HEAD, a branch without an upstream, an operation in progress, a branch also checked out in another\n" +
-			"worktree, and local changes the update would overwrite are reported and skipped. --plan (alias --dry-run) fetches\n" +
-			"the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
+			"rebase.autoStash=true a dirty tree is stashed and restored. --rebase, --ff-only, --no-rebase, --no-ff, --autostash,\n" +
+			"--no-autostash, --prune and --no-prune override the configuration. Without pull.rebase a diverged branch is reported\n" +
+			"as needing a choice; a merge commit is created only when pull.rebase=false, pull.ff=false, --no-rebase or --no-ff asks\n" +
+			"for it. A rebase or merge conflict is left in progress as git leaves it. A branch without an upstream, an operation in\n" +
+			"progress, and local changes the update would overwrite are reported and skipped; a failure in one repository does not\n" +
+			"stop the others. --plan fetches the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
 			"Each branch change is journaled with a recovery ref under refs/stw/recovery/sync/RUN_ID. Git only: a jj-owned path is refused.\n" +
 			"Exit statuses: 0 unless a repository failed (failed, conflict, autostash-conflict) or the run was refused, 1 then, 2 usage error.",
 		Args:         cobra.MaximumNArgs(1),
@@ -159,13 +161,13 @@ func syncText(rp stwsync.Repo, plan bool) (text, class string) {
 	case stwsync.ResultSkippedDirty:
 		return skipped("dirty")
 	case stwsync.ResultSkippedDetached:
-		return "skipped: detached HEAD (reported only)", "yellow"
+		return "skipped: " + reason, "yellow"
 	case stwsync.ResultSkippedNoUpstream:
-		return skipped("no upstream")
+		return "skipped: " + reason, "yellow"
 	case stwsync.ResultSkippedBusy:
 		return skipped("busy")
 	case stwsync.ResultSkippedUninitialized:
-		return "skipped: not initialized", "yellow"
+		return "skipped: " + reason, "yellow"
 	case stwsync.ResultConflict:
 		return "conflict: " + reason, "red"
 	case stwsync.ResultAutostashConflict:
@@ -190,6 +192,9 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 		line("SourceSteward sync plan: " + plural(len(r.Repos), "repository", "repositories") + "; only remote-tracking refs were fetched")
 	} else {
 		line("SourceSteward sync: " + plural(len(r.Repos), "repository", "repositories"))
+	}
+	if r.Note != nil {
+		line("note: " + *r.Note)
 	}
 	nameWidth, branchWidth := 1, 1
 	for _, rp := range r.Repos {

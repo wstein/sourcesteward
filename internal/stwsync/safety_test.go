@@ -218,7 +218,7 @@ func TestSyncIgnoresInheritedRepositoryVariables(t *testing.T) {
 	runGit(t, decoy, "init", "-q", "-b", "main", ".")
 	t.Setenv("GIT_DIR", filepath.Join(decoy, ".git"))
 	t.Setenv("GIT_WORK_TREE", decoy)
-	if r := Sync(context.Background(), Options{Path: w.ws, Plan: true}); r.Error != nil || len(r.Repos) != 4 {
+	if r := Sync(context.Background(), Options{Path: w.ws, Plan: true}); r.Error != nil || len(r.Repos) != 6 {
 		t.Fatalf("%+v", r)
 	}
 }

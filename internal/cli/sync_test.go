@@ -160,7 +160,7 @@ func TestSyncHumanOutputIsOneLinePerRepositoryAndReadable(t *testing.T) {
 	dt := syncRepo("d", "submodule", "skipped-dirty")
 	dt.Reason = syncStr("local changes would be overwritten: x.txt")
 	det := syncRepo("e", "submodule", "skipped-detached")
-	det.Branch = nil
+	det.Branch, det.Reason = nil, syncStr("detached at 1111111 (pinned)")
 	cf := syncRepo("f", "submodule", "conflict")
 	cf.Reason, cf.Detail = syncStr("rebase stopped on a conflict; run git rebase --continue"), syncStr("CONFLICT (content): x\nhint: git rebase --abort")
 	fl := syncRepo("g", "submodule", "failed")
@@ -178,7 +178,7 @@ func TestSyncHumanOutputIsOneLinePerRepositoryAndReadable(t *testing.T) {
 		"rebased 2 local commits onto 5 new 1111111..2222222",
 		"skipped: diverged (2 ahead, 5 behind)",
 		"skipped: dirty",
-		"skipped: detached HEAD",
+		"skipped: detached at 1111111 (pinned)",
 		"conflict: rebase stopped",
 		"    CONFLICT (content): x",
 		"failed: git fetch failed",
