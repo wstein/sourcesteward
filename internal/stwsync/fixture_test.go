@@ -49,7 +49,7 @@ func newWorkspace(t *testing.T) *workspace {
 		t.Fatal(err)
 	}
 	w := &workspace{root: root, ws: filepath.Join(root, "ws"), bare: map[string]string{}}
-	for _, name := range []string{"ws", "a", "b", "c"} {
+	for _, name := range []string{"ws", "a", "b", "c", "n", "dev"} {
 		w.bare[name] = filepath.Join(root, name+".git")
 		runGit(t, root, "init", "-q", "--bare", "-b", "main", w.bare[name])
 		seed := filepath.Join(root, "seed-"+name)
@@ -58,10 +58,18 @@ func newWorkspace(t *testing.T) *workspace {
 		commit(t, seed, name+".txt", "one\n")
 		runGit(t, seed, "push", "-q", "origin", "main")
 	}
+	runGit(t, filepath.Join(root, "seed-dev"), "checkout", "-q", "-b", "develop")
+	commit(t, filepath.Join(root, "seed-dev"), "develop.txt", "d\n")
+	runGit(t, filepath.Join(root, "seed-dev"), "push", "-q", "origin", "develop")
 	runGit(t, root, "clone", "-q", w.bare["ws"], w.ws)
 	for _, name := range []string{"a", "b", "c"} {
 		runGit(t, w.ws, "submodule", "add", "-q", "-b", "main", w.bare[name], name)
 	}
+	runGit(t, w.ws, "submodule", "add", "-q", "-b", "develop", w.bare["dev"], "dev")
+	runGit(t, filepath.Join(w.ws, "a"), "submodule", "add", "-q", "-b", "main", w.bare["n"], "n")
+	runGit(t, filepath.Join(w.ws, "a"), "commit", "-q", "-m", "add nested submodule")
+	runGit(t, filepath.Join(w.ws, "a"), "push", "-q", "origin", "main")
+	runGit(t, w.ws, "add", "a")
 	runGit(t, w.ws, "commit", "-q", "-m", "add submodules")
 	runGit(t, w.ws, "push", "-q", "origin", "main")
 	runGit(t, filepath.Join(w.ws, "c"), "checkout", "-q", "--detach")
@@ -76,8 +84,11 @@ func (w *workspace) dir(name string) string {
 }
 
 func (w *workspace) bareKey(name string) string {
-	if name == "." {
+	switch name {
+	case ".":
 		return "ws"
+	case "a/n":
+		return "n"
 	}
 	return name
 }
