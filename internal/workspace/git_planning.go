@@ -366,3 +366,28 @@ func submodulesInitialized(config, commonDir string) bool {
 	entries, err := os.ReadDir(filepath.Join(commonDir, "modules"))
 	return err == nil && len(entries) > 0
 }
+
+// creationConfigArgs are passed to the one native command of worktree creation
+// that could run repository code (`git worktree add` runs post-checkout and
+// recurses into submodules when configured). stw never runs a hook of the
+// repository it manages and never recurses; the source configuration is only
+// read, never rewritten. They are the first three planningConfigArgs.
+var creationConfigArgs = []string{
+	"-c", "core.hooksPath=" + os.DevNull,
+	"-c", "core.fsmonitor=false",
+	"-c", "submodule.recurse=false",
+}
+
+type creationPolicyKey struct{}
+
+// withCreationPolicy marks the context of `workspace plan` and `apply`
+// (worktree creation). Only creation neutralizes core.hooksPath and
+// submodule.* through creationConfigArgs and accepts gitlinks as data; tidy,
+// retirement and restore keep the strict admission of Specs 029 and 031.
+func withCreationPolicy(ctx context.Context) context.Context {
+	return context.WithValue(ctx, creationPolicyKey{}, true)
+}
+func creationPolicyFrom(ctx context.Context) bool {
+	v, _ := ctx.Value(creationPolicyKey{}).(bool)
+	return v
+}

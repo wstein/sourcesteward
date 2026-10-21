@@ -72,7 +72,7 @@ type gitTreeEntry struct {
 }
 
 func gitTreeEvidence(ctx context.Context, bin, dir, commit, format string, digest hash.Hash) ([]string, error) {
-	entries, e := gitTreeEntriesMode(ctx, bin, dir, commit, format, digest, planningSessionFrom(ctx) != nil)
+	entries, e := gitTreeEntriesMode(ctx, bin, dir, commit, format, digest, planningSessionFrom(ctx) != nil || creationPolicyFrom(ctx))
 	if e != nil {
 		return nil, e
 	}
