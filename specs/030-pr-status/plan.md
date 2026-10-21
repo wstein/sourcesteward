@@ -1,6 +1,16 @@
 # Implementation Plan: PR status
 
-**Base**: `2e9b9fc99888b605bcce08afa6ef98846359e06a` | **Status**: Complete design candidate; round2 NOT CLEAR; three prior DESIGN NOT CLEAR results; accepted-baseline replacement technically assessed as honest; corrected exact candidate awaiting formal round4; runtime gated.
+**Base**: `2e9b9fc99888b605bcce08afa6ef98846359e06a` | **Status**: Re-scoped 2026-10-21. Slice 1 (one-shot v2, expected head, compact, head lookup) awaits its own independent design review; runtime gated on it. The watch design (D2, D3 and work items WI2 watcher/WI3 delivery) is a deferred slice that keeps its three DESIGN NOT CLEAR results and pending round4.
+
+## Slice split (owner decisions, 2026-10-21)
+
+Slice 1 = WI1 (work package A: v2 schema and decoder), the one-shot half of WI2 (B: one GET, expect-head, minimal shared prelude extraction with characterization), the flag/render half of WI3 (C: `--json-version 2`, `--compact`, `--expect-head`, both entry points; no `--watch`, no delivery arbiter) and the WI4 docs/conformance for those, plus the head lookup `hosting prs SHA` ([contract](contracts/pr-lookup.md)). Deferred slice = the watcher (D), the delivery arbiter and process guard (E), D2's 30s/8 GET/backoff/reserve constants as watch parameters, D3 and descendant verification; they are untouched design history. A separate small spec later adds a checks class reusing `hosting ci`; `scripts/ci-wait.sh` stays the long-wait tool until a watch exists.
+
+Slice 1 and the design blockers: the blockers of rounds 1 to 3 and the pending round 4 concern only watch final delivery; one-shot keeps the existing 30 second operation context and writer contract, adds no teardown phase, helper, process exit or descendant claim, so they do not apply to slice 1 (see the spec). Slice 1 still needs its own exact-head review.
+
+Head lookup design: new leaf kind `prs` (not a `pr` flag; reasons in the contract). One additive allowlist route `commits/SHA/pulls?per_page=100&page=1` in `internal/hosting/transport.go` (`fixedEndpoint`), one typed reader and list decoder reusing the lifecycle table with `merged` derived from `merged_at`; no pagination (truncation disclosed), no follow-up request, GET only, same 401/403/404/429 stop with no retry. The new route is the only transport change; existing `tidyRoute` is untouched.
+
+Slice-1 file scope (still not runtime ownership authorization): new `internal/hosting/pr_status_result.go`, `pr_status_decode.go`, `pr_status.go`, `pr_lookup.go` and tests; new `schemas/v2/hosting-pr.schema.json` and `hosting-prs.schema.json`; minimal edits to `operations.go`/`result.go`/`transport.go` (shared with Ready/tidy consumers: dispatch hands off current heads first), `internal/cli/hosting.go`, both cmd entry points for the new flags and leaf. The held runtime branch `origin/codex/hold-spec030-runtime` (typed lifecycle model and decoder, one-shot assembly) may be reused for A and B after review.
 
 ## Context and inspected evidence
 

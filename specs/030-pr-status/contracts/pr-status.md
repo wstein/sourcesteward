@@ -1,4 +1,8 @@
-> Current proposed lifetime: [accepted-baseline replacement](../baseline-lifetime.md), technically assessed as honest and awaiting formal round4 at the frozen exact candidate. Three prior NOT CLEAR results remain counted; no runtime authorization.
+> **Re-scoped 2026-10-21.** Slice 1 (this PR's scope) is the one-shot v2 observation: `stw hosting pr NUMBER --json --json-version 2 [--expect-head SHA] [--compact]` and `gh jj pr`, plus the head lookup in [pr-lookup.md](pr-lookup.md). Everything about `--watch` below, namely the watch rules in the CLI paragraph, the Watch algorithm, the Delivery decision and Owned completion sections, the W/T/D split, the delivery arbiter and `native-descendant-state-unverified`, is **DEFERRED**: retained as design history for a later slice, not part of slice-1 acceptance, and its DESIGN NOT CLEAR rounds do not gate slice 1.
+>
+> Slice-1 subset of the schema: `observation.mode` is only `once`; `observation.stop` is `sampled`, `expectation-mismatch`, `failed`, `output-limit` or `canceled` (the other values are reserved for the deferred slice; consumers must treat any unknown stop as a non-success); `boundary.max_requests` is 1; `identity_changed` is always false and `limitations` never carries the watch qualification. Slice 1 rejects `--watch` as a usage error (exit 2) before native/auth/network. Because the shipped slice-1 schema is a strict subset of this candidate, widening it for watch later is additive within v2.
+>
+> Current proposed lifetime (deferred slice only): [accepted-baseline replacement](../baseline-lifetime.md), technically assessed as honest and awaiting formal round4 at the frozen exact candidate. Three prior NOT CLEAR results remain counted; no runtime authorization.
 
 # PR status contract candidate
 
@@ -30,6 +34,8 @@ The standalone schema embeds unchanged copies of the existing git_identity, jj_i
 
 ## Sampling, terminal and exit rules
 
+> Slice 1 applies only the one-shot rows (`sampled`, `expectation-mismatch`, `failed`, `output-limit`, `canceled`) and the HTTP failure rule; watch rows and observed-change rules are deferred.
+
 For enhanced one-shot: resolve/auth once, make exactly one GET, validate, apply expectation, finalize/render once. An open sample succeeds. Watch: resolve/auth once; first sample establishes continuity. On every later sample compare `head_sha`, `head_ref`, `head_repository`, `base_ref`, `base_repository` to the first sample. Any difference sets `identity_changed:true` and terminates `changed`, even if the head is the same. `base_sha`, draft, title and lifecycle may change and are reported from the latest sample. An observed A→B terminates at B; it cannot later recover at A. An A→B→A change entirely between requests is undetectable; there is no transactional or exhaustive history guarantee.
 
 After a fully validated sample and a live context: apply mismatch first, then observed identity change, then terminal lifecycle, then one-shot success, then budget. Thus a merged sample with unexpected head is not success. For a watch with no expected head, a changed-head merged sample is also not success. Field/HTTP failure stops before these predicates; it never creates a sample. Deadline/cancellation observed before finalization overrides success. A cancellation during delivery changes process outcome to failure even if already serialized JSON says ok; consumers must check exit and complete JSON as with existing writer failures.
@@ -47,7 +53,7 @@ After a fully validated sample and a live context: apply mismatch first, then ob
 
 A 401/403/404/429, redirect, compression, malformed/oversized body or transport failure terminates immediately; no retry, `Retry-After` sleep, synthetic closed state or guessed merged flag. Retain a prior valid sample as incomplete evidence. Use existing safe generic messages, never API bodies/token/URL credentials. `boundary.network` is set when the first guarded GET is invoked; early sink/native/auth failure is false.
 
-## Watch algorithm and bounds
+## Watch algorithm and bounds (DEFERRED slice)
 
 Proposed constants: one 30-second operation budget, at most 8 numbered PR GET invocations, 1 MiB raw body, normalized body and final encoded result (each, not combined); auth stdout/stderr 16 KiB each; existing native sublimits remain tighter. No collection or pagination is introduced. One-shot enhanced PR has max_requests 1; watch 8. Parent deadline always tightens the budget. No existing Tier 1 bound is raised.
 
@@ -57,7 +63,7 @@ First GET is immediate after resolution/auth. Before each GET check parent cance
 
 Buffer the complete final representation under 1 MiB including newline before any stdout write. Oversize drops identity/candidates/repository/PR and clears sampled_at/initial_head/expectation to unobserved as applicable; samples/requests counters remain historical, stop becomes output-limit and a fixed small error envelope replaces the large output. Bound human escaping expansion by the same cap. No intermediate progress, sleeps, sample arrays or JSON stream. Rendering/encoding after W must still finish before D; if they consume the reserve, return failure without starting output. Scheduling/OS failure can prevent a well-formed result; hard realtime scheduling is not claimed.
 
-## Delivery decision
+## Delivery decision (DEFERRED slice)
 
 **Proposed preferred option C — command-owned final-delivery guard.** This is a reviewed alternative under assessment, not implemented runtime behavior. It retains ordinary stdout/file usability without excluding blocked delivery from the original deadline. A command-owned guard may terminate only its own executable process with exit 1 during final delivery, after direct native/auth Run/Wait and capture tasks, owned HTTP body/connection calls, the private cleanup helper Wait, descriptor closures and operation-level defers have returned with an explicit success/failure outcome. No library may call os.Exit. Neither the guard nor a timer may kill the process while any such cleanup remains pending.
 
@@ -75,6 +81,6 @@ Disposable Go1.27.2/linux/arm64 model evidence: actual child Wait and a cleanup-
 
 **Compared alternatives:** A accepts only already deadline-capable stdout/stderr and joins its monitor without exiting a host process, but measured inherited captured stdout, regular files and /dev/null reject SetWriteDeadline (owned os.Pipe works; no terminal available), so it fails ordinary CLI watch usability. B excludes blocked physical delivery from the proposed bound and is not selected; revising this unapproved proposal alone does not automatically require an owner decision. C preserves ordinary sinks and the requested inclusive intent through a narrowly scoped final process boundary, with added cleanup/entry/race/platform verification obligations. C is now the concrete engineering proposal for the same independent review. Do not mark watch implemented/CLEAR while those obligations are unresolved; do not silently choose B or add a library os.Exit.
 
-## Owned completion and inherited limits
+## Owned completion and inherited limits (DEFERRED slice)
 
 The [baseline lifetime design](../baseline-lifetime.md) is current. Native/auth cancellation uses established direct CommandContext/Run/Wait/capture behavior, with all existing sandbox flags/auth support and native sublimits. It makes no process-tree query, group signal or descendant-stop assertion. Explicit watch authenticates/resolves once, then only fixed GETs. The schema requires `native-descendant-state-unverified` in every watch boundary.limitations, including early/output-limit errors. `boundary.complete` describes successful PR observation and the enumerated owned-call outcomes, not transitive process cleanup. Bounded private helper failure gives exit1/incomplete and `private-metadata-residue-possible`; never invent orphan status or claim failed deletion completed. Final-delivery C begins after owned completion, not an unqualified resource-free certificate. Three prior NOT CLEAR results remain; separate risk assessment is not formal round4.

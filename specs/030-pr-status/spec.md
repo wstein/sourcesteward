@@ -1,14 +1,31 @@
 # Feature Specification: Explicit PR status observations
 
 **Branch**: `codex/hosting-pr-status-design` | **Created**: 2026-10-18
-**Status**: Round2 NOT CLEAR; final-delivery component reviewed, pre-delivery teardown mechanism incomplete; implementation blocked.
-**Input**: Extend existing PR inspection with merged/closed evidence, compact human output, stable versioned JSON, expected-head validation and explicit bounded watching.
+**Status**: Re-scoped on 2026-10-21 into slice 1 (one-shot v2 plus head lookup; awaiting independent design review of the exact head) and a deferred watch slice (the three NOT CLEAR rounds and pending round 4 stay attached to it). Runtime implementation not started.
+**Input**: Extend existing PR inspection with merged/closed evidence, compact human output, stable versioned JSON, expected-head validation and head-SHA-to-PR lookup. Explicit bounded watching is deferred to a later slice.
 
-## Scope and decision status
+## Owner decisions (2026-10-21)
 
-Extend `stw hosting pr NUMBER [PATH]` and `gh jj pr` through shared operations. Reuse native Git/jj ownership and bounded fixed GitHub GETs. No generic gh wrapper, provisioning, Ready evaluation, merge action, review transfer, installation or publication. Specs 020/022 remain the hosting foundation; 028/029 own separate capabilities.
+1. Split Spec 030: ship the one-shot v2 observation now; move `--watch` (injected-clock watcher, final-delivery arbiter) to a later slice.
+2. A later, separate small spec adds a checks class (pending/green/red) by reusing `hosting ci`; it yields no Ready verdict and is not part of this spec.
+3. Add head-SHA-to-PR lookup through the allowlisted `GET repos/OWNER/NAME/commits/SHA/pulls` (a bounded additive extension of the Spec 022 transport allowlist).
+5. Keep `scripts/ci-wait.sh` for long waits until a `stw` watch exists.
+10. Slice order: this slice-1 design PR first, then runtime for work packages A, B, C and the lookup after explicit go.
 
-The five outcomes are requested scope. The exact CLI compatibility, eight-read ceiling, backoff and one-second delivery reserve below are **proposed design decisions**, not existing policy or additional user approval. The proposed command-owned final-delivery guard and its acceptance limits in [contracts/pr-status.md](contracts/pr-status.md#delivery-decision) remain behind an independent design/implementation gate. Independent review must evaluate the complete candidate before runtime implementation; no automatic policy relaxation is selected.
+## Slice 1 scope
+
+Slice 1 is exactly:
+
+- `stw hosting pr NUMBER [PATH] --json --json-version 2 [--expect-head SHA] [--compact]` and the same flags on `gh jj pr`: the v2 schema and decoder (work package A), the one-shot enhanced operation with expected-head binding (B), the CLI flags in both entry points (C), and conformance, fixtures and documentation for those (the part of F that covers them).
+- `stw hosting prs SHA [PATH]` (and `gh jj prs SHA [PATH]`), the head-SHA lookup, described in [contracts/pr-lookup.md](contracts/pr-lookup.md).
+
+Extend `stw hosting pr` and `gh jj pr` through shared operations. Reuse native Git/jj ownership and bounded fixed GitHub GETs. No generic gh wrapper, provisioning, Ready evaluation, merge action, review transfer, checks classification, installation or publication. Specs 020/022 remain the hosting foundation; 028/029 own separate capabilities.
+
+`--watch`, `--json-version` combined with watch, the delivery arbiter, the W/T/D time split and descendant-process verification are NOT in slice 1: see [Deferred slice](#deferred-slice-watch). Slice 1 does not accept a `--watch` flag; it is a usage error (exit 2) until the deferred slice ships.
+
+### Why the old design-review blockers do not apply to slice 1
+
+Rounds 1 to 3 returned DESIGN NOT CLEAR, and the pending round 4 concerns one thing: final delivery of the `--watch` output within the inclusive 30 second bound (the command-owned exit arbiter, the 27s/2s/1s time split and the unverifiable state of inherited native/auth descendants). A one-shot read has none of that: it makes exactly one GET (the lookup exactly one), runs under the existing hosting operation 30 second context and writer contract, and "retains its existing operation/writer contract" (contract section Watch algorithm). It adds no teardown phase, no process exit from command code, no helper, no per-poll authentication and no new claim about descendants. Slice 1 therefore has no dependency on the delivery decision, on `baseline-lifetime.md` or on round 4; those documents keep their status and counts for the deferred slice. Slice 1 still needs its own independent design review of the exact head (it is a new artifact scope), and nothing in the old rounds is treated as clearance of it.
 
 ## User scenarios and acceptance
 
@@ -23,19 +40,19 @@ A caller distinguishes a merged PR from an unmerged closure without interpreting
 
 ### US2 — Choose concise or detailed human output (P1)
 
-`--compact` emits one escaped line from the same enhanced result that powers v2 JSON. Without it human output retains the existing detailed sections and adds labelled merge evidence, expectation and watch outcome. Malicious title/ref/URL bytes never become terminal controls, endpoints or commands. Both forms expose errors and stale last-sample timestamps.
+`--compact` emits one escaped line from the same enhanced result that powers v2 JSON. Without it human output retains the existing detailed sections and adds labelled merge evidence and expectation. Malicious title/ref/URL bytes never become terminal controls, endpoints or commands. Both forms expose errors.
 
 ### US3 — Consume an explicit stable machine contract (P1)
 
-`--json --json-version 2` emits exactly one final object conforming to [the candidate schema](contracts/pr-status.schema.json); nullable data is explicit. Ordinary `--json` remains v1; repo/ci, v1 schema and v1 fixtures remain byte unchanged. v1 consumers must explicitly select v2 to get new fields. Full compatibility details and limitations are in the contract.
+`--json --json-version 2` emits exactly one final object conforming to [the candidate schema](contracts/pr-status.schema.json) (slice-1 subset: `mode:once`); nullable data is explicit. Ordinary `--json` remains v1; repo/ci, v1 schema and v1 fixtures remain byte unchanged. v1 consumers must explicitly select v2 to get new fields. Full compatibility details and limitations are in the contract.
 
 ### US4 — Bind observations to an expected head (P1)
 
 `--expect-head` accepts only 40 lowercase hexadecimal digits, matching the existing hosting contract. A mismatching head fails immediately, even on an otherwise merged sample; expectation is never compared to the result SHA. Unsupported SHA-256 OIDs and jj change/operation IDs are refused as usage errors. A matching head says nothing about review, CI or ancestry.
 
-### US5 — Explicitly wait for a terminal PR observation (P1)
+### US5 — Find the PRs for a head SHA (P1)
 
-Without `--watch`, one numbered PR GET is made, even for open/null-mergeability PRs. Explicit watch samples until merged or closed-unmerged, or stops on mismatch, observed identity movement, failure, eight requests, cancellation or the inclusive deadline. It emits one final observation, not a stream. A terminal state first observed on the last permitted read succeeds; an open last read exhausts the request budget. Timeout is operational failure, not evidence of closure.
+`stw hosting prs SHA` makes one bounded GET of `commits/SHA/pulls` and returns zero, one or many PRs, each with number, state, draft, base, head, merged flag and merge commit, and says explicitly when the single page may be incomplete. It never selects one of several PRs, infers a verdict or follows up with another request. Details: [contracts/pr-lookup.md](contracts/pr-lookup.md).
 
 ## Requirements
 
@@ -45,15 +62,33 @@ Without `--watch`, one numbered PR GET is made, even for open/null-mergeability 
 | FR-002 | Retain detailed human presentation and add opt-in compact single line from the enhanced model | US2; presentation |
 | FR-003 | Explicit v2 JSON, explicit nulls/timestamps, documented compatibility; one final object | US3; schema/compatibility |
 | FR-004 | Exact hosting full-SHA expectation; mismatch wins before lifecycle success | US4; precedence |
-| FR-005 | Watch only by explicit flag; finite total clock, requests, backoff and bytes; no reset per poll | US5; watch algorithm |
 | FR-006 | Exit 0/1/2; closed-unmerged is an observed terminal result, not a merge failure | exit table |
-| FR-007 | Caller-owned bounded auth, fixed typed GET, redaction, redirect/compression refusal; no new network writes | effects/bounds |
+| FR-007 | Caller-owned bounded auth, fixed typed GET, redaction, redirect/compression refusal; no new network writes; HTTP 401/403/404/429 and transport failures stop at once with no retry or `Retry-After` sleep | effects/bounds; [network policy](#network-policy-and-rate-limits) |
 | FR-008 | Preserve native Git/jj capabilities and read-only effects; gh jj still refuses Git ownership | Tier 1 tasks |
-| FR-009 | Reject missing/malformed/inconsistent new fields; retain last valid sample only as timestamped incomplete evidence | state/error table |
-| FR-010 | Stop on observed head/ref/repository movement; disclose undetectable unobserved ABA and nontransactional sampling | sampling rule |
-| FR-011 | Specify bounded operation/owned teardown/final output phases honestly; preserve accepted hosting bounds and joined owned calls; disclose inherited descendant uncertainty | delivery decision / teardown assessment |
+| FR-009 | Reject missing/malformed/inconsistent new fields; no sample is accepted from an invalid response | state/error table |
+| FR-010 | Report observed head/ref/repository identity from the one sample; disclose that one sample is not transactional | sampling rule |
 | FR-012 | Reviewed spec/plan/tasks/analysis before code; meaningful failing tests and mutants; actual acceptance limits recorded | gate/tasks |
+| FR-013 | `hosting prs SHA` finds PRs by head SHA through one fixed allowlisted GET, zero/one/many, bounded, no selection, truncation disclosed | US5; [pr-lookup contract](contracts/pr-lookup.md) |
+
+Deferred requirements (not in slice 1, retained verbatim for the deferred slice): FR-005 explicit watch with finite total clock, requests, backoff and bytes, no reset per poll; FR-011 bounded operation, owned teardown and final output phases with disclosed descendant uncertainty; the continuity half of FR-010 (stop on observed identity movement across samples).
+
+## Network policy and rate limits
+
+Slice 1 performs reads only, on an explicit command, GET only, through the existing guarded transport: authenticated by the caller-owned `gh` token path, fixed typed endpoints from the allowlist (`pulls/NUMBER`, and for the lookup `commits/SHA/pulls?per_page=100&page=1`), no redirects, no compression, 1 MiB body cap, 30 second operation context. Behaviour by HTTP outcome, identical for both endpoints:
+
+| Outcome | Behaviour |
+| --- | --- |
+| 200 with valid body | decode, validate, report |
+| 401, 403 (including primary or secondary rate limit), 404 | stop immediately; one request counted; no retry; safe generic message (`hosting-pr-failed`, existing wording naming authentication, access and rate limits); no API body, token or URL credential |
+| 429 | stop immediately; no retry, no `Retry-After` or `X-RateLimit-*` sleep; same safe message |
+| redirect, compressed body, oversize or malformed body, transport failure | stop immediately with the existing safe messages |
+
+A rate-limit stop is an operational failure (exit 1), not an observation of PR state. Rate-limit headers are not parsed in slice 1; a caller that polls must implement its own spacing, or use `scripts/ci-wait.sh`. A sandbox without network yields the existing authentication/transport failure with `boundary.network` as the existing contract defines it.
+
+## Deferred slice (watch)
+
+The following moves out of slice 1 and is not authorized by this spec's slice-1 design review: `--watch` (explicit bounded polling to a terminal PR state with up to 8 GETs and 1/2/4s backoff); the injected-clock watcher (work package D); the command-owned final-delivery arbiter and the guarded process exit (E); the W/T/D time split (27s/2s/1s); descendant-process verification and the `native-descendant-state-unverified` qualification; the continuity checks across samples. Their design text stays where it is and is marked deferred: [contracts/pr-status.md](contracts/pr-status.md) sections Watch algorithm, Delivery decision and Owned completion; [baseline-lifetime.md](baseline-lifetime.md), [watch-lifetime.md](watch-lifetime.md), [auth-lifetime.md](auth-lifetime.md), [teardown-assessment.md](teardown-assessment.md) and [round3-disposition.md](round3-disposition.md) hold the review history, including the three DESIGN NOT CLEAR rounds and the pending round 4. A later slice must obtain its own formal design CLEAR. Until a `stw` watch exists, long waits use `scripts/ci-wait.sh`. A checks class (pending/green/red per head SHA) is a separate later small spec that reuses `hosting ci` and gives no Ready verdict.
 
 ## Success criteria
 
-SC-001: all state and exit table rows are exercised through the shared operation and CLI fixtures with exact request assertions. SC-002: schema accepts valid results and rejects documented invalid/missing/null invariants; legacy contract bytes and behavior pass unchanged. SC-003: fake-clock and blocked real-pipe tests prove no request after cancellation/deadline and bounded delivery without leaked goroutines. SC-004: native minimum/current Git and jj fixture conformance preserves target state. SC-005: no implementation begins until independent complete-artifact review is CLEAR and the final-delivery guard design is independently CLEAR and its acceptance prerequisites are assigned; source tests never imply CLI build/live API acceptance.
+SC-001: all slice-1 state and exit table rows are exercised through the shared operation and CLI fixtures with exact request assertions (one GET per invocation). SC-002: schema accepts valid results and rejects documented invalid/missing/null invariants; legacy contract bytes and behavior pass unchanged. SC-004: native minimum/current Git and jj fixture conformance preserves target state. SC-005: no implementation begins until independent complete-artifact review of the slice-1 head is CLEAR; source tests never imply CLI build/live API acceptance. SC-006: the lookup is exercised for zero, one, many and truncated results, every HTTP outcome above and an allowlist test proving no other `commits/SHA/...` route and no non-GET is reachable. SC-003 (fake-clock watcher and blocked-pipe delivery) is deferred with the watch.
