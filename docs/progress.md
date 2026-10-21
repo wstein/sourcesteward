@@ -377,3 +377,5 @@ are unpublished candidates registered in the Pages source validator. This is sou
 acceptance on the dogfood data set (T052) follows the owner-authorized cleanup apply and is not
 done, so Spec 031 stays planned. No product or documentation build, release, tag or `apply` on a
 real repository was run for this work.
+
+T040 evidence (2026-10-21): the plan-only source acceptance runner ran in process (`go test`, no build, never `apply`) on throwaway `--no-local` clones of the sourcesteward dogfood data (198 branches: 42 deletable by `patch-id`, 155 needs-review, 1 retained) and of the Anchorage umbrella (19 branches: 16 deletable, 2 `gitlink-change` needs-review, 1 retained). Report samples stay outside the repository; the comparison with the T039 baseline is partial and T040 stays partly done. See [the evidence](../specs/031-tidy-integration-proofs/verification.md).
