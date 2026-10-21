@@ -104,7 +104,7 @@ Exit codes: 0 when no item needed the owner's attention (`fast-forwarded`, `reba
 
 ## Open items
 
-1. **`stw workspace plan` fails on this repository.** `stw workspace plan` on the SourceSteward repository itself fails with `git-checkout-limit: base checkout exceeds 1024 leaf entries`, so the stw worktree helper cannot create isolated worktrees here. To be addressed separately (a limit or a sparse/partial-base decision for workspace plans); it is not part of this spec. Authors of this spec's slices use a throwaway `git clone --no-local` meanwhile.
+1. **`stw workspace plan` fails on this repository.** `stw workspace plan` on the SourceSteward repository itself fails with `git-checkout-limit: base checkout exceeds 1024 leaf entries`, so the stw worktree helper cannot create isolated worktrees here. Addressed separately by the [creation refusals amendment](../010-isolated-task-workspaces/contracts/workspace.md#creation-refusals-amendment) (the leaf limit becomes 16,384); it is not part of this spec. Authors of this spec's slices use a throwaway `git clone --no-local` meanwhile.
 2. **Consequence for dogfooding.** Until item 1 is solved, `stw sync` itself cannot be developed through its own workspace flow on this repository, and a repository above the same inventory limits will make `stw sync` report a bounded partial result; slice 1 must use the existing bounded readers (Spec 027) rather than a new unbounded one.
 3. Whether `stw sync` should later offer an all-repositories form like `stw repos PATH...` (up to 16 paths) is deferred until slice 1 is used.
 4. jj support (`jj git fetch` and bookmark moves) is a later spec.

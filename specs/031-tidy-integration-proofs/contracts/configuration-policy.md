@@ -104,3 +104,19 @@ Each row is a temporary-repository fixture; hooks, filters, drivers, pagers and 
 | M5 | mutant: omit the attribute scan or `--attr-source` | C28..C30 must fail | n/a |
 | M6 | mutant: inherit the caller's `HOME`/`XDG_CONFIG_HOME` or drop `GIT_ATTR_NOSYSTEM` | C32 or C34 must fail | n/a |
 | M7 | mutant: ignore `info/attributes` | C31 must fail | n/a |
+
+## Worktree creation (amendment)
+
+`stw workspace plan` and `apply` create a worktree; they are not tidy planning or tidy apply. The
+[creation refusals amendment](../../010-isolated-task-workspaces/contracts/workspace.md#creation-refusals-amendment)
+of Spec 010 passes `-c core.hooksPath=<null file> -c core.fsmonitor=false -c submodule.recurse=false`
+(the first three arguments of `planningConfigArgs`) to `git worktree add`, drops `core.hooksPath` and
+`submodule.*` from the creation refusal list and accepts gitlinks as data without descending. The
+strict apply admission of the tidy classes above is unchanged: this table's Apply column still
+describes tidy apply, retirement and restore.
+
+| ID | Condition | Creation plan and apply |
+| --- | --- | --- |
+| W1 | `core.hooksPath=.githooks` (relative) or absolute, with a `post-checkout` hook that writes a marker | succeeds, marker absent |
+| W2 | `submodule.x.url`, `submodule.x.update=!helper`, `submodule.recurse=true`, three gitlinks (umbrella) | succeeds, helper marker absent, gitlink directories empty, no `.git/modules` write |
+| W3 | `core.fsmonitor=helper`, `hook.*`, `includeIf.*`, executable default hook | refused, unchanged |
