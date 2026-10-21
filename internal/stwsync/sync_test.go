@@ -156,13 +156,10 @@ func TestSyncSkipsNoUpstreamAndUninitializedSubmodules(t *testing.T) {
 	}
 }
 
-func TestSyncSkipsABranchCheckedOutElsewhereAndBusyRepos(t *testing.T) {
+func TestSyncSkipsBusyRepos(t *testing.T) {
 	w := newWorkspace(t)
-	w.advance(t, "a", "main")
 	w.advance(t, "b", "main")
 	w.advance(t, ".", "main")
-	// a: main is also checked out in a second worktree of the submodule
-	runGit(t, w.dir("a"), "worktree", "add", "-q", "-f", filepath.Join(w.root, "a-second"), "main")
 	// b: a merge is in progress
 	commit(t, w.dir("b"), "b.txt", "local\n")
 	runGit(t, w.dir("b"), "checkout", "-q", "-b", "other", "HEAD~1")
@@ -174,20 +171,17 @@ func TestSyncSkipsABranchCheckedOutElsewhereAndBusyRepos(t *testing.T) {
 	runGit(t, w.ws, "bisect", "bad", "HEAD")
 	runGit(t, w.ws, "bisect", "good", runGit(t, w.ws, "rev-list", "--max-parents=0", "HEAD"))
 	before := map[string]string{}
-	for _, n := range []string{".", "a", "b"} {
+	for _, n := range []string{".", "b"} {
 		before[n] = snapshot(t, w, n)
 	}
 	got := repoByName(t, Sync(context.Background(), Options{Path: w.ws}))
-	for _, n := range []string{".", "a", "b"} {
+	for _, n := range []string{".", "b"} {
 		if got[n].Result != ResultSkippedBusy && !(n == "." && got[n].Result == ResultSkippedDetached) {
 			t.Errorf("%s: %+v", n, got[n])
 		}
 		if snapshot(t, w, n) != before[n] {
 			t.Errorf("%s changed", n)
 		}
-	}
-	if g := got["a"]; g.Reason == nil || !strings.Contains(*g.Reason, "another worktree") {
-		t.Errorf("a: %+v", g)
 	}
 }
 

@@ -12,6 +12,8 @@ type pullMode struct {
 	rebase  bool // --rebase, pull.rebase or branch.NAME.rebase is true, merges or interactive
 	merges  bool // pull.rebase=merges: keep merge commits while rebasing
 	ffOnly  bool // --ff-only or pull.ff=only: a diverged branch is an error
+	merge   bool // --no-rebase or an explicit pull.rebase=false: a diverged branch is merged
+	noFF    bool // --no-ff or pull.ff=false: always create a merge commit
 	flagged bool
 }
 
@@ -30,11 +32,13 @@ func (e env) configBool(ctx context.Context, key string) bool {
 
 // pullMode resolves --rebase/--ff-only over branch.NAME.rebase over pull.rebase, and pull.ff.
 func (e env) pullMode(ctx context.Context, o Options, branch string) pullMode {
-	switch o.Rebase {
-	case On:
+	switch {
+	case o.Rebase == On:
 		return pullMode{rebase: true, flagged: true}
-	case Off:
+	case o.Rebase == Off:
 		return pullMode{ffOnly: true, flagged: true}
+	case o.NoRebase:
+		return pullMode{merge: true, noFF: o.NoFF, flagged: true}
 	}
 	value := e.config(ctx, "branch."+branch+".rebase")
 	if value == "" {
@@ -46,8 +50,15 @@ func (e env) pullMode(ctx context.Context, o Options, branch string) pullMode {
 		m.rebase = true
 	case "merges", "m":
 		m.rebase, m.merges = true, true
+	case "false", "no", "off", "0":
+		m.merge = true // an explicit choice: git merges
 	}
-	if !m.rebase && strings.ToLower(e.config(ctx, "pull.ff")) == "only" {
+	switch strings.ToLower(e.config(ctx, "pull.ff")) {
+	case "false", "no", "off", "0":
+		m.noFF = true
+	}
+	m.noFF = m.noFF || o.NoFF
+	if !m.rebase && !m.merge && strings.ToLower(e.config(ctx, "pull.ff")) == "only" {
 		m.ffOnly = true
 	}
 	return m

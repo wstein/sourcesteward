@@ -202,6 +202,11 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	if reason := h.block(ref); reason != "" {
 		return skip(ResultSkippedBusy, reason)
 	}
+	if s.opts.Plan {
+		if err := checkRefspecs(ctx, e, remote, prefix); err != nil {
+			return fail(err.Error())
+		}
+	}
 	before, err := listRefs(ctx, e, prefix)
 	if err != nil {
 		return fail(err.Error())
@@ -245,10 +250,14 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	case rp.Behind == 0:
 		rp.Result = ResultAhead
 		return rp
+	case rp.Ahead == 0 && mode.noFF && !mode.rebase:
+		action = ResultMerge
 	case rp.Ahead == 0:
 		action = ResultFastForward
 	case mode.rebase:
 		action = ResultRebase
+	case mode.merge && !mode.ffOnly:
+		action = ResultMerge
 	case mode.ffOnly:
 		return skip(ResultDiverged, "not a fast-forward and --ff-only or pull.ff=only forbids anything else")
 	default:
@@ -292,4 +301,23 @@ func listRefs(ctx context.Context, e env, prefix string) (map[string]string, err
 		}
 	}
 	return refs, nil
+}
+
+// checkRefspecs refuses, for a plan only, a remote whose configured fetch refspecs write anywhere but
+// refs/remotes/REMOTE/: a preview must not move a local ref. A real run follows git pull.
+func checkRefspecs(ctx context.Context, e env, remote, prefix string) error {
+	out, err := e.g(ctx, "config", "--get-all", "remote."+remote+".fetch")
+	if err != nil || out.Code > 1 {
+		return errors.New("cannot read the fetch refspecs of the remote")
+	}
+	for _, spec := range strings.Split(out.Out, "\n") {
+		spec = strings.TrimPrefix(spec, "+")
+		if spec == "" || strings.HasPrefix(spec, "^") {
+			continue
+		}
+		if _, dst, ok := strings.Cut(spec, ":"); ok && dst != "" && !strings.HasPrefix(dst, prefix) {
+			return fmt.Errorf("sync-refspec-unsafe: the fetch refspec %q of remote %s writes outside %s", spec, remote, prefix+"*")
+		}
+	}
+	return nil
 }

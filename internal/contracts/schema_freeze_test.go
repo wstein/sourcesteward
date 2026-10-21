@@ -29,7 +29,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v1/release-verify.schema.json":         "c6bd29dea143ea369b489f87341f22a1e57563423d5729a55701f855fcc659a3",
 	"schemas/v1/repos.schema.json":                  "05b1ef5a78cb3b3dbc87a32c720188c0fd46f574cd742d4df9f5cad6d09c6182",
 	"schemas/v1/restack-plan.schema.json":           "da0bdc60273a30a0f2e39482f534cb80f15f619451f2167ad0780cc44a2b5b48",
-	"schemas/v1/sync.schema.json":                   "da051c2e7a25616734a31e8578752a468c7f3c8363709421e0249907089cede1",
+	"schemas/v1/sync.schema.json":                   "2b129c1c401e7bdfb10d47d8be6a6fe59df19929b3e2cf784ca8f91ff469a08e",
 	"schemas/v1/tidy.schema.json":                   "7b32f169e81b5351c9b542af7b09025a068279de98f3441ec8966d1239ec1161",
 	"schemas/v1/version.schema.json":                "886864837547ded4992af89e8e8e04d38fe7bf77724f91a8960a184c51a0659f",
 	"schemas/v1/workspace.schema.json":              "fb4d4623c7b3f329e596e7a3608116d10d3bb3c6801aaece6a073e154ccfd825",

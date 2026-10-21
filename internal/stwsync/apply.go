@@ -70,7 +70,14 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 		stash = "--autostash"
 	}
 	var out gitOutput
-	if action == ResultFastForward {
+	if action == ResultMerge {
+		// the one case where a merge commit is wanted: the owner configured or requested it, and git's own merge makes it
+		args := []string{"-c", "submodule.recurse=false", "merge", "--no-edit", stash}
+		if mode.noFF {
+			args = append(args, "--no-ff")
+		}
+		out, err = e.g(ctx, append(args, upstreamOID)...)
+	} else if action == ResultFastForward {
 		out, err = e.g(ctx, "-c", "submodule.recurse=false", "merge", "--ff-only", stash, upstreamOID)
 	} else {
 		args := []string{"-c", "submodule.recurse=false", "-c", "rebase.updateRefs=false", "rebase", "--no-update-refs", stash, "--fork-point"}
@@ -82,9 +89,12 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 	text := strings.TrimSpace(out.Out + "\n" + out.Diagnostic)
 	if err != nil || out.Code != 0 {
 		if e.merging(ctx) { // a rebase stopped on a conflict: leave it for the owner, as git does
-			j.finish(i, "conflict", "", "", "rebase stopped; resolve it, then git rebase --continue or --abort")
+			j.finish(i, "conflict", "", "", "stopped on a conflict")
 			rp.Result, rp.NewOID = ResultConflict, nil
 			rp.Reason = ptr("rebase stopped on a conflict; resolve it, then run git rebase --continue (or git rebase --abort)")
+			if action == ResultMerge {
+				rp.Reason = ptr("merge stopped on a conflict; resolve it, then run git commit (or git merge --abort)")
+			}
 			rp.Detail = ptr(detail(text))
 			return rp
 		}
@@ -102,7 +112,7 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 	if newOID == "" || origHead != oldOID || (planned != "" && newOID != planned) || e.revParse(ctx, e.dir, ref) != newOID {
 		return finish(stateFailed, "raced")
 	}
-	if action == ResultRebase {
+	if action == ResultRebase || action == ResultMerge {
 		if out, err := e.g(ctx, "merge-base", "--is-ancestor", upstreamOID, newOID); err != nil || out.Code != 0 {
 			return finish(stateFailed, "raced")
 		}
@@ -112,8 +122,11 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 	}
 	rp.NewOID = ptr(newOID)
 	rp.Result = ResultFastForwarded
-	if action == ResultRebase {
+	switch action {
+	case ResultRebase:
 		rp.Result = ResultRebased
+	case ResultMerge:
+		rp.Result = ResultMerged
 	}
 	if strings.Contains(text, "resulted in conflicts") {
 		rp.Result, rp.Reason = ResultAutostashConflict, ptr("your changes are kept in the stash; resolve with git stash pop or git stash drop")
