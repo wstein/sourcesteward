@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// Transport names the injectable HTTP round tripper so command packages need no network import.
+type Transport = http.RoundTripper
+
 // InspectPRStatus is the explicit schema 2 one-shot PR observation: one numbered
 // GET after native resolution and authentication, optionally bound to an expected head.
 func InspectPRStatus(ctx context.Context, path string, o Options) PRStatusResult {
