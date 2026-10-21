@@ -264,7 +264,12 @@ reference plan after retirement before selecting that branch for cleanup. Online
 adds the same explicit remote selection and apply acknowledgment as other v3 online plans.
 
 Apply has a deadline of 60 s plus 5 s per planned effect plus 50 ms per recorded manifest entry,
-with no ceiling (the work bounds it, and the caller's context still ends it). If the deadline still fires,
+with no ceiling (the work bounds it, and the caller's context still ends it). Restore uses the
+same rule (60 s plus 5 s per restored branch). `--timeout DURATION` on `tidy plan`, `tidy apply`
+and `tidy restore` (contract 3) replaces the default deadline of the whole operation; the default
+is the scaled formula above, and `0` or a negative value is a usage error. Restore reads the
+repository and the journal before its deadline is set (bounded local reads that end only with the
+caller's own context); the deadline then covers the evaluation and the branch creations. If the deadline still fires,
 the result is `partial` and lists each ref's journaled outcome; unconfirmed deletions are never
 replayed automatically. Restore needs the original absolute repository and state-directory paths
 (a copy is refused as `journal-unreadable`); refs of an incomplete journal were not confirmed
