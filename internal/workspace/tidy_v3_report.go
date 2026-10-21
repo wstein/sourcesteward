@@ -66,7 +66,7 @@ const (
 func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest) (V3ReportEntry, error) {
 	r.reporting = true
 	defer func() { r.reporting = false }()
-	e := V3ReportEntry{TipOID: q.Tip, BaseOID: q.Base, Commits: []V3ReportCommit{}, Candidates: []V3ReportCandidate{}, Diff: emptyReportDiff("unavailable"), Questions: reportQuestions(), AllowedDecisions: reportAllowedDecisions()}
+	e := V3ReportEntry{TipOID: q.Tip, BaseOID: q.Base, Commits: []V3ReportCommit{}, Candidates: []V3ReportCandidate{}, Diff: emptyReportDiff("unavailable")}
 	reasons := slices.Clone(q.Verdict.Reasons)
 	finish := func() (V3ReportEntry, error) {
 		e.Reasons = reasonOrder(reasons)

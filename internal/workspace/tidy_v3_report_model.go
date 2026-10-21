@@ -11,7 +11,7 @@ import (
 // order of the JSON report, so identical input gives identical bytes.
 
 const (
-	reportSchemaVersion = 1
+	reportSchemaVersion = 2
 
 	reportDefaultEntries   = 256
 	reportEntriesCeiling   = 1024
@@ -151,8 +151,6 @@ type V3ReportEntry struct {
 	Candidates       []V3ReportCandidate `json:"candidate_base_commits"`
 	RangePairing     *V3ReportPairing    `json:"range_pairing"`
 	Verdict          V3ReportVerdict     `json:"suggested_verdict"`
-	Questions        []V3ReportQuestion  `json:"questions"`
-	AllowedDecisions []string            `json:"allowed_decisions"`
 
 	// rawDiff is the bounded diff text the Markdown rendering shows.
 	rawDiff string
@@ -228,6 +226,20 @@ type V3ReportVerdict struct {
 	Verdict    string   `json:"verdict"`
 	Confidence string   `json:"confidence"`
 	Basis      []string `json:"basis"`
+}
+
+// V3ReportDecisionGuide says what evidence a decision needs.
+type V3ReportDecisionGuide struct {
+	Decision string `json:"decision"`
+	Evidence string `json:"evidence"`
+}
+
+// V3ReportGuidance is the reviewer guidance of the report header.
+type V3ReportGuidance struct {
+	Untrusted   string                  `json:"untrusted"`
+	Questions   []V3ReportQuestion      `json:"questions"`
+	Decisions   []V3ReportDecisionGuide `json:"decisions"`
+	ReadOnlyGit string                  `json:"read_only_git"`
 }
 
 type V3ReportQuestion struct {

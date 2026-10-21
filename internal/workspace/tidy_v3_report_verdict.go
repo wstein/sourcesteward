@@ -83,16 +83,23 @@ func suggestVerdict(e V3ReportEntry) V3ReportVerdict {
 	return V3ReportVerdict{Verdict: "has-real-unmerged-content", Confidence: "medium", Basis: []string{"unintegrated-diff-has-content", "range-does-not-pair-every-branch-commit"}}
 }
 
-// reportQuestions are the fixed templates Q1..Q4 and the reviewer guidance, so
-// the guidance travels with every question set (contract "Untrusted content").
-func reportQuestions() []V3ReportQuestion {
-	return []V3ReportQuestion{
-		{ID: "Q1", Text: "Is every change in unintegrated_diff already present elsewhere on the base in another form?"},
-		{ID: "Q2", Text: "Is the unintegrated diff only whitespace or formatting?"},
-		{ID: "Q3", Text: "Does the range pairing show the branch's commits were consolidated?"},
-		{ID: "Q4", Text: "Is any change in the diff something the owner would want to keep?"},
-		{ID: "guidance", Text: reviewerGuidance},
+// reportGuidance is the reviewer guidance of the report header: the questions,
+// the evidence each decision needs and the rules for checking and for untrusted
+// content. It is written once per report, never per entry.
+func reportGuidance() V3ReportGuidance {
+	return V3ReportGuidance{
+		Untrusted: reviewerGuidance,
+		Questions: []V3ReportQuestion{
+			{ID: "Q1", Text: "Is every change in unintegrated_diff already present elsewhere on the base in another form?"},
+			{ID: "Q2", Text: "Is the unintegrated diff only whitespace or formatting?"},
+			{ID: "Q3", Text: "Does the range pairing show the branch's commits were consolidated?"},
+			{ID: "Q4", Text: "Is any change in the diff something the owner would want to keep?"},
+		},
+		Decisions: []V3ReportDecisionGuide{
+			{Decision: "integrated", Evidence: "Every change of the branch is already on the base in another form. Cite the base commit OIDs (or the path and line) that carry it. A similar subject alone is not evidence."},
+			{Decision: "keep", Evidence: "The branch holds content the owner may want, or you cannot show that the base carries it. When in doubt, keep."},
+			{Decision: "drop", Evidence: "The content is deliberately abandoned, for example stale or replaced by a different design. Cite why."},
+		},
+		ReadOnlyGit: "You may check with read-only git in a clone of the repository: git log, git diff, git cherry, git range-diff, git merge-base --is-ancestor, git show, git grep, git ls-tree. Run nothing that writes; cite the command and the base commit or path that settles the point. Where an entry says unavailable or truncated, run the check yourself or keep the branch.",
 	}
 }
-
-func reportAllowedDecisions() []string { return []string{"integrated", "keep", "drop"} }

@@ -38,9 +38,12 @@ func TestReportRenderingCarriesTheSameEntriesInBothFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	var doc struct {
-		SchemaVersion    int    `json:"schema_version"`
-		ReviewerGuidance string `json:"reviewer_guidance"`
-		Summary          struct {
+		SchemaVersion    int `json:"schema_version"`
+		ReviewerGuidance struct {
+			Untrusted string                `json:"untrusted"`
+			Questions []struct{ ID string } `json:"questions"`
+		} `json:"reviewer_guidance"`
+		Summary struct {
 			Entries, Omitted int
 			NeedsReview      int `json:"needs_review"`
 		} `json:"summary"`
@@ -52,7 +55,7 @@ func TestReportRenderingCarriesTheSameEntriesInBothFiles(t *testing.T) {
 	if err = json.Unmarshal(r.JSON, &doc); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	if doc.SchemaVersion != 1 || doc.ReviewerGuidance != reviewerGuidance || doc.Summary.Entries != 2 || doc.Summary.Omitted != 0 || doc.Summary.NeedsReview != 2 || len(doc.Entries) != 2 || doc.Entries[1].Branch.Text != "refs/heads/b" || doc.Base.OID != strings.Repeat("b", 40) {
+	if doc.SchemaVersion != 2 || doc.ReviewerGuidance.Untrusted != reviewerGuidance || len(doc.ReviewerGuidance.Questions) != 4 || doc.Summary.Entries != 2 || doc.Summary.Omitted != 0 || doc.Summary.NeedsReview != 2 || len(doc.Entries) != 2 || doc.Entries[1].Branch.Text != "refs/heads/b" || doc.Base.OID != strings.Repeat("b", 40) {
 		t.Errorf("document %+v", doc)
 	}
 	if got := strings.Count(string(r.Markdown), "\n## Entry "); got != 2 {
@@ -60,6 +63,11 @@ func TestReportRenderingCarriesTheSameEntriesInBothFiles(t *testing.T) {
 	}
 	if !bytes.HasSuffix(r.JSON, []byte("\n")) || !strings.Contains(string(r.Markdown), reviewerGuidance) {
 		t.Error("guidance or trailing newline missing")
+	}
+	// The questions and decisions are written once, in the header; an entry
+	// carries data only.
+	if strings.Count(string(r.JSON), "Is every change in unintegrated_diff") != 1 || strings.Count(string(r.Markdown), "Is every change in unintegrated_diff") != 1 || strings.Contains(string(r.JSON), "allowed_decisions") || strings.Contains(string(r.Markdown), "### Questions") {
+		t.Errorf("questions repeated per entry\n%s", r.Markdown)
 	}
 	again, _ := renderReport(syntheticDocument(syntheticEntry("a", 10), syntheticEntry("b", 10)))
 	if !bytes.Equal(r.JSON, again.JSON) || !bytes.Equal(r.Markdown, again.Markdown) {
@@ -130,8 +138,8 @@ func TestReportByteBoundKeepsBothFilesWithinTheirBoundAndOmitsTheRest(t *testing
 		t.Errorf("markdown shows %d entries, json %d", got, len(r.Shown))
 	}
 	// An entry larger than the bound by itself is omitted, never truncated.
-	d.Bounds.MaxBytes = 1500
-	if r, err = renderReport(d); err != nil || len(r.Shown) != 0 || len(r.Omitted) != 8 || len(r.JSON) > 1500 || len(r.Markdown) > 1500 {
+	d.Bounds.MaxBytes = 4000
+	if r, err = renderReport(d); err != nil || len(r.Shown) != 0 || len(r.Omitted) != 8 || len(r.JSON) > 4000 || len(r.Markdown) > 4000 {
 		t.Errorf("tiny bound: %v shown %d omitted %d (%d, %d bytes)", err, len(r.Shown), len(r.Omitted), len(r.JSON), len(r.Markdown))
 	}
 }

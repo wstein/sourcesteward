@@ -38,7 +38,7 @@ type reportJSON struct {
 	Base             V3ReportBase      `json:"base"`
 	Entries          []json.RawMessage `json:"entries"`
 	OmittedEntries   []V3ReportOmitted `json:"omitted_entries"`
-	ReviewerGuidance string            `json:"reviewer_guidance"`
+	ReviewerGuidance V3ReportGuidance  `json:"reviewer_guidance"`
 }
 
 func marshalReport(v any) ([]byte, error) {
@@ -73,7 +73,7 @@ func renderReport(d reportDocument) (renderedReport, error) {
 	}
 	worst := d.Counts
 	worst.Entries, worst.Omitted = worstCount, worstCount
-	jsonSkeleton, err := marshalReport(reportJSON{SchemaVersion: reportSchemaVersion, Summary: worst, Base: d.Base, Entries: []json.RawMessage{}, OmittedEntries: all, ReviewerGuidance: reviewerGuidance})
+	jsonSkeleton, err := marshalReport(reportJSON{SchemaVersion: reportSchemaVersion, Summary: worst, Base: d.Base, Entries: []json.RawMessage{}, OmittedEntries: all, ReviewerGuidance: reportGuidance()})
 	if err != nil {
 		return renderedReport{}, err
 	}
@@ -106,7 +106,7 @@ func renderReport(d reportDocument) (renderedReport, error) {
 	if pieces == nil {
 		pieces = []json.RawMessage{}
 	}
-	js, err := marshalReport(reportJSON{SchemaVersion: reportSchemaVersion, Summary: summary, Base: d.Base, Entries: pieces, OmittedEntries: append([]V3ReportOmitted{}, omitted...), ReviewerGuidance: reviewerGuidance})
+	js, err := marshalReport(reportJSON{SchemaVersion: reportSchemaVersion, Summary: summary, Base: d.Base, Entries: pieces, OmittedEntries: append([]V3ReportOmitted{}, omitted...), ReviewerGuidance: reportGuidance()})
 	if err != nil {
 		return renderedReport{}, err
 	}
@@ -179,6 +179,7 @@ func short(oid string) string { return oid[:min(12, len(oid))] }
 func renderMarkdown(d reportDocument, s V3ReportSummary, entries []string, omitted []V3ReportOmitted) string {
 	var b strings.Builder
 	b.WriteString("# Tidy review report\n\n> " + reviewerGuidance + "\n\n")
+	b.WriteString(renderGuidanceMarkdown(reportGuidance()))
 	fmt.Fprintf(&b, "Schema version: %d\n\nBase OID: `%s`\n\nBase selector:\n\n%s\n", reportSchemaVersion, d.Base.OID, untrustedBlock(d.Base.Selector))
 	b.WriteString("## Summary\n\n")
 	fmt.Fprintf(&b, "- Entries shown: %d\n- Omitted entries: %d\n- Proven: %d\n- Needs review: %d\n- Retained: %d\n", s.Entries, s.Omitted, s.Proven, s.NeedsReview, s.Retained)
@@ -309,11 +310,22 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 			}
 		}
 	}
-	b.WriteString("\n### Questions\n\n")
-	for _, q := range e.Questions {
+	b.WriteString("\nAnswer Q1..Q4 and decide as the reviewer guidance in the report header says.\n")
+	return b.String()
+}
+
+// renderGuidanceMarkdown is the reviewer guidance, written once in the header.
+func renderGuidanceMarkdown(g V3ReportGuidance) string {
+	var b strings.Builder
+	b.WriteString("## Reviewer guidance\n\n")
+	for _, q := range g.Questions {
 		fmt.Fprintf(&b, "- %s: %s\n", q.ID, q.Text)
 	}
-	fmt.Fprintf(&b, "\nAllowed decisions: %s\n", backticked(e.AllowedDecisions))
+	b.WriteString("\nDecisions and the evidence each needs:\n\n")
+	for _, d := range g.Decisions {
+		fmt.Fprintf(&b, "- `%s`: %s\n", d.Decision, d.Evidence)
+	}
+	b.WriteString("\n" + g.ReadOnlyGit + "\n\n")
 	return b.String()
 }
 
