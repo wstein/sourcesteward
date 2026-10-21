@@ -13,26 +13,29 @@ import (
 	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
-func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Plan) }
+func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Plan, stwsync.Run) }
 
-func syncCommandWith(plan func(context.Context, stwsync.Options) stwsync.Result) *cobra.Command {
+func syncCommandWith(plan, run func(context.Context, stwsync.Options) stwsync.Result) *cobra.Command {
 	var jsonOutput, planOnly, dryRun bool
 	var options stwsync.Options
 	command := &cobra.Command{
-		Use:   "sync --plan [PATH] [--remote NAME] [--prune] [--json]",
-		Short: "Plan how local branches would follow their upstream after one fetch",
+		Use:   "sync [PATH] [--remote NAME] [--prune] [--json]",
+		Short: "Fetch one remote and fast-forward every local branch that tracks it (--plan only reports)",
 		Long: "Fetch one remote (remote-tracking refs only) and classify every local branch that tracks it:\n" +
 			"fast-forward, up-to-date, ahead, diverged, skipped-dirty (a checked-out branch whose worktree has\n" +
 			"tracked or staged changes) and upstream-gone (only after --prune removed the remote-tracking ref).\n" +
 			"Branches without an upstream under the remote are counted, not listed. The plan changes no local branch,\n" +
 			"worktree or stash and never creates a merge commit; the repository's own hooks run as Git runs them for a fetch.\n" +
-			"Git only: a jj-owned path is refused. Applying the plan is not available yet (--plan is required).\n" +
-			"Exit statuses: 0 nothing needs attention, 1 a run failure or a skipped-dirty or diverged branch, 2 usage error.",
+			"Without --plan the run then fast-forwards every fast-forward branch (git merge --ff-only in the worktree of a\n" +
+			"checked-out branch, a ref update with the expected old value for any other), journals each ref change with a\n" +
+			"recovery ref under refs/stw/recovery/sync/RUN_ID and reports fast-forwarded or failed per branch.\n" +
+			"Git only: a jj-owned path is refused.\n" +
+			"Exit statuses: 0 nothing needs attention, 1 a run failure or a skipped-dirty, diverged or failed branch, 2 usage error.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !planOnly && !dryRun {
-				return errors.New("a real run is not available yet; add --plan (or --dry-run) to fetch and print the plan")
+			if len(args) == 1 && args[0] == "restore" {
+				return errors.New("stw sync restore is not available yet; use ./restore for a directory of that name")
 			}
 			options.Path = workspacePath(args)
 			if cmd.Flags().Changed("remote") && options.Remote == "" {
@@ -41,9 +44,13 @@ func syncCommandWith(plan func(context.Context, stwsync.Options) stwsync.Result)
 			if err := stwsync.ValidateOptions(options); err != nil {
 				return err
 			}
-			result := plan(cmd.Context(), options)
+			mode, operation := "sync", run
+			if planOnly || dryRun {
+				mode, operation = "sync plan", plan
+			}
+			result := operation(cmd.Context(), options)
 			if result.Error != nil && !jsonOutput {
-				return runtimeFailure{fmt.Errorf("sync plan: %s: %s", result.Error.Code, result.Error.Message)}
+				return runtimeFailure{fmt.Errorf("%s: %s: %s", mode, result.Error.Code, result.Error.Message)}
 			}
 			var err error
 			if jsonOutput {
@@ -58,10 +65,10 @@ func syncCommandWith(plan func(context.Context, stwsync.Options) stwsync.Result)
 				return runtimeFailure{err}
 			}
 			if result.Error != nil {
-				return runtimeFailure{fmt.Errorf("sync plan: %s: %s", result.Error.Code, result.Error.Message)}
+				return runtimeFailure{fmt.Errorf("%s: %s: %s", mode, result.Error.Code, result.Error.Message)}
 			}
 			if result.ExitCode() != 0 {
-				return runtimeFailure{fmt.Errorf("sync plan: %d of %d branches need attention", syncAttention(result), len(result.Items))}
+				return runtimeFailure{fmt.Errorf("%s: %d of %d branches need attention", mode, syncAttention(result), len(result.Items))}
 			}
 			return nil
 		},
@@ -78,7 +85,7 @@ func syncCommandWith(plan func(context.Context, stwsync.Options) stwsync.Result)
 func syncAttention(r stwsync.Result) int {
 	n := 0
 	for _, it := range r.Items {
-		if it.Result == stwsync.ResultSkippedDirty || it.Result == stwsync.ResultDiverged {
+		if it.Result == stwsync.ResultSkippedDirty || it.Result == stwsync.ResultDiverged || it.Result == stwsync.ResultFailed {
 			n++
 		}
 	}
@@ -95,8 +102,17 @@ func syncOID(oid *string) string {
 func renderSyncText(w io.Writer, r stwsync.Result) error {
 	var b strings.Builder
 	line := func(s string) { b.WriteString(escapeReposLine(s) + "\n") }
-	line(fmt.Sprintf("SourceSteward sync plan: remote %s, %d branches", r.Remote, len(r.Items)))
-	line("effects: one fetch of the remote-tracking refs; no local branch, worktree or stash changed")
+	if r.Mode == "plan" {
+		line(fmt.Sprintf("SourceSteward sync plan: remote %s, %d branches", r.Remote, len(r.Items)))
+		line("effects: one fetch of the remote-tracking refs; no local branch, worktree or stash changed")
+	} else {
+		id := "-"
+		if r.RunID != nil {
+			id = *r.RunID
+		}
+		line(fmt.Sprintf("SourceSteward sync: remote %s, %d branches, run %s", r.Remote, len(r.Items), id))
+		line("effects: one fetch; fast-forwarded branches journaled with recovery refs under refs/stw/recovery/sync")
+	}
 	for _, it := range r.Items {
 		tree := "-"
 		if it.Worktree != nil {
@@ -113,7 +129,7 @@ func renderSyncText(w io.Writer, r stwsync.Result) error {
 		line(text)
 	}
 	var counts []string
-	for _, name := range []string{stwsync.ResultFastForward, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultUpstreamGone} {
+	for _, name := range []string{stwsync.ResultFastForward, stwsync.ResultFastForwarded, stwsync.ResultFailed, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultUpstreamGone} {
 		if n := r.Summary.ByResult[name]; n > 0 {
 			counts = append(counts, fmt.Sprintf("%s %d", name, n))
 		}

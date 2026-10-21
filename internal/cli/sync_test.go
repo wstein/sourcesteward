@@ -31,11 +31,12 @@ func syncCLIResult(results ...string) stwsync.Result {
 func runSync(result stwsync.Result, args ...string) (stwsync.Options, int, string, error) {
 	var got stwsync.Options
 	calls := 0
-	cmd := syncCommandWith(func(_ context.Context, o stwsync.Options) stwsync.Result {
+	fake := func(_ context.Context, o stwsync.Options) stwsync.Result {
 		calls++
 		got = o
 		return result
-	})
+	}
+	cmd := syncCommandWith(fake, fake)
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
@@ -46,8 +47,6 @@ func runSync(result stwsync.Result, args ...string) (stwsync.Options, int, strin
 
 func TestSyncUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
 	for _, args := range [][]string{
-		{},                            // a real run is a later slice
-		{"--json"},                    // still no plan
 		{"--plan", "a", "b"},          // two paths
 		{"--plan", "--remote", ""},    // empty remote
 		{"--plan", "--remote", "-x"},  // option-like remote
@@ -163,8 +162,9 @@ func TestSyncHumanOutputIsEscapedAndBounded(t *testing.T) {
 }
 
 func TestSyncWriterFailureIsARuntimeFailure(t *testing.T) {
+	fake := func(context.Context, stwsync.Options) stwsync.Result { return syncCLIResult("up-to-date") }
 	for _, args := range [][]string{{"--plan"}, {"--plan", "--json"}} {
-		cmd := syncCommandWith(func(context.Context, stwsync.Options) stwsync.Result { return syncCLIResult("up-to-date") })
+		cmd := syncCommandWith(fake, fake)
 		cmd.SetOut(&failOnWrite{fail: 1})
 		cmd.SetArgs(args)
 		var failure runtimeFailure
@@ -183,5 +183,35 @@ func TestSyncIsRegisteredAndDocumentedInHelp(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("help lacks %s", want)
 		}
+	}
+}
+
+func TestSyncWithoutPlanRunsAndPlanDoesNotRun(t *testing.T) {
+	var ran, planned int
+	cmd := syncCommandWith(
+		func(context.Context, stwsync.Options) stwsync.Result { planned++; return syncCLIResult("up-to-date") },
+		func(context.Context, stwsync.Options) stwsync.Result {
+			ran++
+			r := syncCLIResult("fast-forwarded", "failed")
+			r.Mode, r.RunID = "sync", syncStr("r1")
+			return r
+		})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--prune", "--json"})
+	var failure runtimeFailure
+	if err := cmd.Execute(); !errors.As(err, &failure) || ran != 1 || planned != 0 {
+		t.Fatalf("err=%v ran=%d planned=%d", err, ran, planned)
+	}
+	var v map[string]any
+	if err := json.Unmarshal(out.Bytes(), &v); err != nil || v["mode"] != "sync" || v["run_id"] != "r1" {
+		t.Fatalf("%v %s", err, out.String())
+	}
+	cmd = syncCommandWith(func(context.Context, stwsync.Options) stwsync.Result { return syncCLIResult("up-to-date") },
+		func(context.Context, stwsync.Options) stwsync.Result { return syncCLIResult("fast-forwarded") })
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{})
+	if err := cmd.Execute(); err != nil || !strings.Contains(out.String(), "fast-forwarded") {
+		t.Fatalf("a clean run exits 0: %v", err)
 	}
 }
