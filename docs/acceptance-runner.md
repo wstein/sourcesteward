@@ -30,16 +30,19 @@ Optional: `STW_ACCEPT_ONLINE=1` adds the forge-backed proof for the remote named
   alternates), so they never land in the target.
 - Constant Git environment: no global or system configuration, hooks path `/dev/null`,
   `GIT_OPTIONAL_LOCKS=0`, no prompts.
-- Non-mutation: before and after the plan the runner records SHA-256 digests of
-  `for-each-ref`, `worktree list --porcelain`, `config --local --list` and
-  `status --porcelain` (plus its line count) and the number of files below the common
-  object directory. Any difference fails the run and names the part.
+- Non-mutation: before anything else (the runner's own reads included) and again after
+  the plan, the runner snapshots the target: SHA-256 of every regular file below the
+  common Git directory (packed-refs, index, logs, config, hooks, description, HEAD, refs,
+  `worktrees/*`), path and size of every object-store file (packs are not hashed), the
+  `worktree list --porcelain` digest and `git status --porcelain=v2 -z` of every
+  worktree. Any difference fails the run and lists the changed paths. Contents of
+  tracked files inside a worktree are covered through `status`, not hashed. The cost is
+  linear in the size of the Git directory.
 
 ## Output
 
 The summary has the counts per decision class (`delete:<proof>`, `retain:<reason>`),
-the plan's review summary per reason, the runtime and the planner's process and request
-counts. The report directory receives `tidy-report.md`, `tidy-report.json`,
+the plan's review summary per reason, the runtime (the plan path does not measure process or request counts). The report directory receives `tidy-report.md`, `tidy-report.json`,
 `result.json` (the full plan result) and `summary.txt`.
 
 A separate section, "worktree facts (not part of the plan)", lists linked worktrees
