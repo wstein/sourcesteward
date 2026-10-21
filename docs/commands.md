@@ -14,7 +14,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
-| `stw sync --plan [PATH] [--remote NAME] [--prune]` (alias `--dry-run`) | Fetch one remote and classify every tracking branch (fast-forward, up-to-date, ahead, diverged, skipped-dirty, upstream-gone); Git only | One `git fetch` that changes remote-tracking refs only; no local branch, worktree or stash change. Applying the plan is a later slice |
+| `stw sync [PATH] [--plan] [--rebase\|--ff-only] [--autostash\|--no-autostash] [--prune\|--no-prune]` | Replace `git pull` in the workspace root and each submodule that sits on a branch: fetch, then fast-forward (or rebase) the current branch; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -84,32 +84,50 @@ means a member is partial or failed, with the cause on its entry (gitlinks and s
 commonly are, and very long change or reference listings are truncated with a disclosure, because
 the limits of single-repository inventory apply to each member). See [multi-repository inventory](repos.md).
 
-## Plan how local branches follow their upstream
+## Bring the workspace and its submodules up to date
 
 ```sh
-stw sync --plan .
-stw sync --plan --prune --remote upstream --json ~/work/app
+stw sync                      # root repository and submodules on a branch, like git pull
+stw sync --plan ~/work/ws     # fetch only, say what a run would do
+stw sync --rebase --autostash # override the configuration for one run
 ```
 
-`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)); this slice ships
-the plan (`--plan`, alias `--dry-run`, required for now: a real run is a usage error until a later
-slice). It runs one `git fetch --no-tags REMOTE` (default `origin`; `--prune` adds `--prune` and lists the
-removed remote-tracking refs) and classifies each local branch that tracks that remote from the fresh
-refs. Local branches, worktrees, the index, tags, `FETCH_HEAD` and stashes are never changed, the repository's own hooks
-run as Git runs them for a fetch, and no merge commit is ever planned. Results:
+`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)) that replaces `git pull`
+in the workspace root repository (`PATH`, default the current directory) and in each direct submodule that sits
+on a branch with an upstream. There is no apply step: `stw sync` is the action, `--plan` (alias `--dry-run`)
+is the preview. Other branches and linked worktrees are never listed or touched.
 
-| Result | Meaning | Exit |
-| --- | --- | --- |
-| `fast-forward` | upstream is ahead; a run would fast-forward it (the worktree is clean or the branch is checked out nowhere) | 0 |
-| `up-to-date`, `ahead` | equal to, or only ahead of, its upstream | 0 |
-| `upstream-gone` | the remote-tracking ref is missing (visible after `--prune`); the branch is kept | 0 |
-| `skipped-dirty` | a fast-forward is due but its worktree has tracked or staged changes (untracked files do not count) | 1 |
-| `diverged` | local and upstream both have new commits; never merged | 1 |
+It is never stricter than `git pull`. Per repository it runs `git fetch --no-tags --no-write-fetch-head
+--no-recurse-submodules` for the branch's upstream remote, then follows your Git configuration as `git pull`
+does: `pull.rebase` and `branch.NAME.rebase` decide whether a diverged branch is rebased (`--rebase`/`--ff-only`
+override), `pull.ff=only` forbids it, `rebase.autoStash` and `merge.autoStash` stash and restore a dirty tree
+(`--autostash`/`--no-autostash` override) and `fetch.prune` prunes (`--prune`/`--no-prune` override). Without
+`pull.rebase` a diverged branch is reported as needing a choice; `stw sync` never creates a merge commit. A
+dirty tree is fine when the update touches none of its files, as for `git merge --ff-only`.
 
-Branches without an upstream under the selected remote are only counted (`untracked`). Exit 1 also means
-the run failed (a jj-owned or non-Git path, an unknown remote, a failed fetch, more than 1024 branches); `--json`
-then still prints the result with `error` set. Usage errors (including a missing `--plan`) exit 2 before any effect.
-Output is one line per branch (`BRANCH WORKTREE RESULT OLD..NEW`) and a summary; see the
+Output is one line per repository, then a summary line (colour only on a terminal with `NO_COLOR` unset):
+
+```
+SourceSteward sync: 3 repositories
+.    main  fast-forwarded 2 commits 3f2a1b0..9c4d7e1
+app  main  skipped: diverged (2 ahead, 5 behind) - needs a choice: use --rebase or set pull.rebase (stw sync never merges)
+lib  -     skipped: detached HEAD (reported only)
+summary: 1 fast-forwarded, 1 diverged, 1 skipped detached
+```
+
+Results per repository: `up-to-date`, `ahead`, `fast-forwarded`, `rebased` (plan: `fast-forward`, `rebase`),
+`diverged`, `skipped-dirty` (local changes the update would overwrite, or git refused), `skipped-detached`,
+`skipped-no-upstream` (also when the remote branch is gone), `skipped-busy` (rebase, merge, cherry-pick, revert or
+bisect in progress, locked, or the branch is also checked out in another worktree), `skipped-uninitialized`,
+`conflict` (a rebase stopped on a conflict and is left in progress, as git leaves it; git's own message is printed),
+`autostash-conflict` (the update is done, the stash is kept) and `failed`. Exit status: 1 only when the run is
+refused (a jj-owned or non-Git path) or a repository ended `failed`, `conflict` or `autostash-conflict`; skipped
+repositories exit 0; usage errors exit 2 before any effect.
+
+Before each branch change a `sync` journal record (`.git/stw/sync/RUN_ID.json` of that repository) and a recovery
+ref `refs/stw/recovery/sync/RUN_ID/N` are written and the record is completed afterwards; HEAD and `ORIG_HEAD` are
+checked around `git merge --ff-only NEW_OID` and `git rebase`. A submodule HEAD moved by the superproject is not
+touched. `stw sync restore` and retention of old runs come in a later slice. See the
 [JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 
 ## Create an isolated task workspace
