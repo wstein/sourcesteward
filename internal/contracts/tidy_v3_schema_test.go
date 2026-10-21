@@ -209,6 +209,28 @@ func TestTidyV3SchemaPositiveModesAndExclusiveProvenance(t *testing.T) {
 	p.Retirement.Siblings = []workspace.V3PhysicalIdentity{neighborFile}
 	raw, _ = json.Marshal(r)
 	valid(t, s, raw)
+	// A retirement plan records every file of the worktree: the published schema
+	// admits up to 8,192 manifest entries (the code bound) and no more.
+	bigDisk := func(n int) []workspace.V3ManifestEntry {
+		entries := make([]workspace.V3ManifestEntry, n)
+		for i := range entries {
+			identity := physical(fmt.Sprintf("/old/f%05d", i), uint64(100+i))
+			identity.Kind, identity.Nlink, identity.Mode, identity.Size = "regular", 1, 0600, 1
+			entries[i] = workspace.V3ManifestEntry{Identity: identity, Digest: hash}
+		}
+		return entries
+	}
+	smallDisk := p.Retirement.Disk
+	p.Retirement.Disk = workspace.V3Manifest{Complete: true, Entries: bigDisk(8192), Digest: hash}
+	raw, _ = json.Marshal(r)
+	valid(t, s, raw)
+	p.Retirement.Disk.Entries = bigDisk(8193)
+	raw, _ = json.Marshal(r)
+	if s.Validate(value(t, raw)) == nil {
+		t.Fatal("schema admitted more than 8,192 manifest entries")
+	}
+	p.Retirement.Disk = smallDisk
+	raw, _ = json.Marshal(r)
 	// A detached legacy target retains the same commit proof and paths without
 	// inventing a local branch or reference action identity.
 	p.Retirement.Target.HeadRef = ""

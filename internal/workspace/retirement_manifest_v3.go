@@ -39,7 +39,7 @@ func retirementPolicy(backend string, version int) (retirementContentPolicy, err
 }
 
 // retirementIndexBytes bounds the Git v3 registration index. Retirement admits
-// at most 1,024 files and directories (retirementManifestEntries), whose index
+// at most 8,192 files and directories (retirementManifestEntries), whose index
 // stays far below it.
 const retirementIndexBytes = 4 << 20
 
@@ -121,7 +121,7 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 			known[d] = true
 		}
 		if len(known) > retirementManifestEntries {
-			return failure("retirement-file-limit", "The worktree holds more than 1,024 tracked files and directories, the most a retirement manifest admits; retain the target")
+			return failure("retirement-file-limit", "The worktree holds more than 8,192 tracked files and directories, the most a retirement manifest admits; retain the target")
 		}
 		return nil
 	}
@@ -222,7 +222,7 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 				return failure("retirement-unrecorded-entry", fmt.Sprintf("The worktree holds %q, which the stored Git tree does not contain (untracked, ignored or generated); retire only a worktree whose files are all tracked, or remove it first", rel))
 			}
 			if len(m.Entries) >= retirementManifestEntries {
-				return failure("retirement-file-limit", "The worktree holds more than 1,024 files and directories, the most a retirement manifest admits; retain the target")
+				return failure("retirement-file-limit", "The worktree holds more than 8,192 files and directories, the most a retirement manifest admits; retain the target")
 			}
 			folded := strings.ToLower(norm.NFC.String(rel))
 			if aliases[folded] {
