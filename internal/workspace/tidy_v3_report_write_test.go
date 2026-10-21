@@ -125,15 +125,15 @@ func TestReportFilesArePrivateExclusiveAndLeaveNoTemporaryFile(t *testing.T) {
 
 func TestReportWriteFailureLeavesNothingBehind(t *testing.T) {
 	boom := errors.New("disk full")
-	t.Run("the second rename fails", func(t *testing.T) {
+	t.Run("the second publish fails", func(t *testing.T) {
 		dir := gitTempDir(t)
 		ops := defaultReportFileOps()
 		renames := 0
-		ops.rename = func(from, to string) error {
+		ops.link = func(from, to string) error {
 			if renames++; renames == 2 {
 				return boom
 			}
-			return os.Rename(from, to)
+			return os.Link(from, to)
 		}
 		if err := writeReportFiles(dir, []byte("m"), []byte("j"), ops); !errors.Is(err, boom) {
 			t.Fatalf("error %v", err)
@@ -153,6 +153,29 @@ func TestReportWriteFailureLeavesNothingBehind(t *testing.T) {
 			t.Fatalf("partial files remain: %v", got)
 		}
 	})
+	for _, name := range []string{reportMarkdownName, reportJSONName} {
+		t.Run("a target created before publishing is never overwritten: "+name, func(t *testing.T) {
+			dir := gitTempDir(t)
+			ops := defaultReportFileOps()
+			real := ops.link
+			ops.link = func(from, to string) error {
+				if filepath.Base(to) == name {
+					os.WriteFile(to, []byte("theirs"), 0o600)
+				}
+				return real(from, to)
+			}
+			if err := writeReportFiles(dir, []byte("m"), []byte("j"), ops); err == nil {
+				t.Fatal("published over a file created after the check")
+			}
+			if b, _ := os.ReadFile(filepath.Join(dir, name)); string(b) != "theirs" {
+				t.Errorf("the file of the other writer changed: %q", b)
+			}
+			names := reportNames(t, dir)
+			if len(names) != 1 || names[0] != name {
+				t.Errorf("files left behind: %v", names)
+			}
+		})
+	}
 	t.Run("the temporary name already exists", func(t *testing.T) {
 		dir := gitTempDir(t)
 		planted := filepath.Join(dir, ".planted.tmp")

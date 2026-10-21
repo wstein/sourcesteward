@@ -12,7 +12,7 @@ import (
 
 // The owner-named report directory and the bounded writer (FR-032): files are
 // created mode 0600 exclusively without following symlinks, written to
-// temporary names and renamed; nothing partial remains after a failure.
+// temporary names and published by an exclusive hard link; nothing partial remains after a failure.
 
 const (
 	reportMarkdownName = "tidy-report.md"
@@ -63,7 +63,7 @@ type reportFileOps struct {
 	tempName func(dir string) string
 	create   func(path string) (*os.File, error)
 	write    func(f *os.File, data []byte) error
-	rename   func(from, to string) error
+	link     func(from, to string) error
 	remove   func(path string) error
 }
 
@@ -85,7 +85,7 @@ func defaultReportFileOps() reportFileOps {
 			}
 			return f.Sync()
 		},
-		rename: os.Rename,
+		link:   os.Link,
 		remove: os.Remove,
 	}
 }
@@ -123,11 +123,18 @@ func writeReportFiles(dir string, markdown, jsonData []byte, ops reportFileOps) 
 		}
 	}
 	for i, temp := range temps {
-		if rerr := ops.rename(temp, targets[i]); rerr != nil {
+		// A link fails when the target exists, so a file created after the
+		// check is never overwritten.
+		if rerr := ops.link(temp, targets[i]); rerr != nil {
 			return errors.Join(failure("report-write-failed", "The review report could not be written."), rerr)
 		}
 		renamed = append(renamed, targets[i])
-		temps[i] = ""
 	}
+	for _, temp := range temps {
+		if rerr := ops.remove(temp); rerr != nil {
+			return errors.Join(failure("report-write-failed", "The review report could not be written."), rerr)
+		}
+	}
+	temps = nil
 	return nil
 }
