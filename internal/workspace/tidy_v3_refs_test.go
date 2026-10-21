@@ -19,6 +19,24 @@ import (
 // production sandbox and must never inherit another repository's controls.
 func fixtureTidyV3Git(t *testing.T) (string, string) {
 	t.Helper()
+	var bin string
+	if _, shared := parallelFixtures.Load(t.Name()); shared {
+		// A parallel test cannot change the environment: its serial parent already
+		// called isolateTidyV3Environment.
+		var err error
+		if bin, err = gitExecutable(); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		bin = isolateTidyV3Environment(t)
+	}
+	return fixtureGit(t), bin
+}
+
+// isolateTidyV3Environment changes the process environment for the test and its
+// cleanup, so only a serial test or the serial parent of parallel subtests may call it.
+func isolateTidyV3Environment(t *testing.T) string {
+	t.Helper()
 	for _, item := range os.Environ() {
 		key, value, _ := strings.Cut(item, "=")
 		if strings.HasPrefix(key, "GIT_") {
@@ -47,8 +65,7 @@ func fixtureTidyV3Git(t *testing.T) (string, string) {
 		t.Skip("supported native Git unavailable: ", err)
 	}
 	t.Setenv("PATH", filepath.Dir(bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
-	dir := fixtureGit(t)
-	return dir, bin
+	return bin
 }
 
 func tidyV3AncestryAt(bin, dir string) tidyV3Ancestry {
