@@ -64,3 +64,14 @@ func TestTidyV3ErrorResultNamesCodeAndReasonWithoutJSON(t *testing.T) {
 		t.Fatalf("error lacks the code and first reason: %v", err)
 	}
 }
+
+func TestTidyHistoryWithoutStateDirSaysItIsRequired(t *testing.T) {
+	cmd := tidyCommandWithV3Operations(nil, nil, nil, nil)
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"history", "--contract", "3"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "--state-dir is required") {
+		t.Fatalf("unhelpful error: %v", err)
+	}
+}

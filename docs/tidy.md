@@ -263,6 +263,13 @@ legacy removal has no force/unlock fallback and keeps its attached branch. Gener
 reference plan after retirement before selecting that branch for cleanup. Online retirement
 adds the same explicit remote selection and apply acknowledgment as other v3 online plans.
 
+Apply of a reference plan has a deadline of 60 s plus 3 s per planned deletion, at most 10
+minutes; a plan above about 180 deletions needs more than one plan. If the deadline still fires,
+the result is `partial` and lists each ref's journaled outcome; unconfirmed deletions are never
+replayed automatically. Restore needs the original absolute repository and state-directory paths
+(a copy is refused as `journal-unreadable`); refs of an incomplete journal were not confirmed
+deleted and restoring them is a no-op.
+
 A plan retires exactly one worktree and needs `--state-dir`; `--report-dir` and the other review
 report flags apply to reference plans only. Retirement refuses, with a named code and reason (also
 without `--json`): `retirement-file-limit` (more than 1,024 files and directories, or an oversized
