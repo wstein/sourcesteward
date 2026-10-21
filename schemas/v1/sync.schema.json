@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v1/sync.schema.json",
-  "title": "SourceSteward sync plan (schema 1)",
-  "description": "Result of stw sync --plan: one fetch of the remote-tracking refs, then a classification of every local branch that tracks the remote. Exit statuses: 0 nothing needs attention, 1 a failed run (error is set) or a skipped-dirty or diverged item, 2 usage error with no JSON. Keys are never omitted; absent values are null. Later slices add modes and results compatibly. Added properties are compatible extensions.",
+  "title": "SourceSteward sync (schema 1)",
+  "description": "Result of stw sync: --plan (mode plan) fetches the remote-tracking refs and classifies every local branch that tracks the remote; a real run (mode sync) then fast-forwards them, journaling each branch ref change. Exit statuses: 0 nothing needs attention, 1 a failed run (error is set) or a skipped-dirty, diverged or failed item, 2 usage error with no JSON. Keys are never omitted; absent values are null. Later slices add modes and results compatibly. Added properties are compatible extensions.",
   "type": "object",
   "required": [
     "schema_version",
@@ -25,10 +25,21 @@
       "const": "sync"
     },
     "mode": {
-      "const": "plan"
+      "enum": [
+        "plan",
+        "sync"
+      ]
     },
     "run_id": {
-      "type": "null"
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$"
+        }
+      ]
     },
     "remote": {
       "type": "string",
@@ -116,7 +127,9 @@
               "ahead",
               "diverged",
               "skipped-dirty",
-              "upstream-gone"
+              "upstream-gone",
+              "fast-forwarded",
+              "failed"
             ]
           },
           "additionalProperties": {
@@ -190,7 +203,9 @@
             "ahead",
             "diverged",
             "skipped-dirty",
-            "upstream-gone"
+            "upstream-gone",
+            "fast-forwarded",
+            "failed"
           ]
         },
         "old_oid": {
@@ -221,7 +236,8 @@
               "result": {
                 "enum": [
                   "fast-forward",
-                  "skipped-dirty"
+                  "skipped-dirty",
+                  "fast-forwarded"
                 ]
               }
             }
@@ -248,7 +264,8 @@
                 "enum": [
                   "skipped-dirty",
                   "diverged",
-                  "upstream-gone"
+                  "upstream-gone",
+                  "failed"
                 ]
               }
             }
@@ -263,5 +280,69 @@
         }
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "plan"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "run_id": {
+            "type": "null"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "fast-forward",
+                    "up-to-date",
+                    "ahead",
+                    "diverged",
+                    "skipped-dirty",
+                    "upstream-gone"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "sync"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "fast-forwarded",
+                    "failed",
+                    "up-to-date",
+                    "ahead",
+                    "diverged",
+                    "skipped-dirty",
+                    "upstream-gone"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -23,7 +23,7 @@ func syncFixture(t *testing.T, name string) []byte {
 
 func TestSyncSchemaFixtures(t *testing.T) {
 	s := schema(t, "sync")
-	for _, name := range []string{"plan", "refused"} {
+	for _, name := range []string{"plan", "refused", "run"} {
 		valid(t, s, syncFixture(t, name))
 	}
 }
@@ -49,8 +49,9 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"missing key":              func(m, _ map[string]any) { delete(m, "error") },
 		"missing item key":         func(_, it map[string]any) { delete(it, "reason") },
 		"wrong command":            func(m, _ map[string]any) { m["command"] = "repos" },
-		"run id on a plan":         func(m, _ map[string]any) { m["run_id"] = "r1" },
-		"unknown mode":             func(m, _ map[string]any) { m["mode"] = "sync" },
+		"run id on a plan":         func(m, _ map[string]any) { m["run_id"] = "20261021T101500Z-0a1b2c3d" },
+		"unknown mode":             func(m, _ map[string]any) { m["mode"] = "restore" },
+		"sync result on a plan":    func(_, it map[string]any) { it["result"] = "fast-forwarded" },
 		"null items":               func(m, _ map[string]any) { m["items"] = nil },
 		"unknown result":           func(_, it map[string]any) { it["result"] = "merged" },
 		"short oid":                func(_, it map[string]any) { it["old_oid"] = "abc" },
@@ -70,6 +71,43 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 			t.Errorf("%s: the schema accepted a broken result", name)
 		}
 	}
+}
+
+func TestSyncSchemaRejectsBrokenRuns(t *testing.T) {
+	s := schema(t, "sync")
+	for name, fn := range map[string]func(map[string]any, []any){
+		"plan result in a run":  func(_ map[string]any, items []any) { items[0].(map[string]any)["result"] = "fast-forward" },
+		"bad run id":            func(m map[string]any, _ []any) { m["run_id"] = "r1" },
+		"fast-forwarded no new": func(_ map[string]any, items []any) { findResult(items, "fast-forwarded")["new_oid"] = nil },
+		"failed without reason": func(_ map[string]any, items []any) { findResult(items, "failed")["reason"] = nil },
+		"failed with new oid": func(_ map[string]any, items []any) {
+			findResult(items, "failed")["new_oid"] = "1111111111111111111111111111111111111111"
+		},
+	} {
+		var m map[string]any
+		if err := json.Unmarshal(syncFixture(t, "run"), &m); err != nil {
+			t.Fatal(err)
+		}
+		fn(m, m["items"].([]any))
+		raw, _ := json.Marshal(m)
+		if name == "plan result in a run" {
+			// a run may still report a plan-only result name only in plan mode
+			m["mode"] = "sync"
+			raw, _ = json.Marshal(m)
+		}
+		if err := s.Validate(value(t, raw)); err == nil {
+			t.Errorf("%s: the schema accepted a broken run", name)
+		}
+	}
+}
+
+func findResult(items []any, result string) map[string]any {
+	for _, it := range items {
+		if m := it.(map[string]any); m["result"] == result {
+			return m
+		}
+	}
+	return nil
 }
 
 // TestSyncRealOutputValidates runs the real command against temporary repositories with a bare remote
@@ -131,6 +169,19 @@ func TestSyncRealOutputValidates(t *testing.T) {
 	if v["error"] == nil {
 		t.Fatalf("%v", v)
 	}
-	run(2, f.clean)
+	// a real run: the dirty worktree is skipped (exit 1), then the clean one is fast-forwarded (exit 0)
+	v = run(1, "--json", f.clean)
+	if v["mode"] != "sync" || v["items"].([]any)[0].(map[string]any)["result"] != "skipped-dirty" {
+		t.Fatalf("%v", v)
+	}
+	reposRealGit(t, f.clean, "checkout", "--", "f")
+	v = run(0, "--json", f.clean)
+	if it := v["items"].([]any)[0].(map[string]any); v["run_id"] == nil || it["result"] != "fast-forwarded" || it["new_oid"] == nil {
+		t.Fatalf("%v", v)
+	}
+	v = run(0, "--json", f.clean)
+	if v["run_id"] != nil || v["items"].([]any)[0].(map[string]any)["result"] != "up-to-date" {
+		t.Fatalf("a run without a change has no run id: %v", v)
+	}
 	run(2, "--plan", "--remote", "-x", f.clean)
 }
