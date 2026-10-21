@@ -28,7 +28,7 @@ Add the read-only `stw restack plan` for native Git: one operation in a new `int
 
 1. **Resolve** (`internal/restack/input.go`): validate syntax (FR-011), resolve through the isolated runner to commit ids, observe `old_head`, compute both merge bases, collect the moved range with `rev-list --topo-order --reverse`; refuse per FR-014 before any evidence work.
 2. **Hazards** (`hazards.go`): reuse the Spec 029/031 repository, config, attribute and hook safeguards; report only names. Any hazard on a path the replay touches refuses (`repository-hazard`), because `merge-tree` may run merge drivers.
-3. **Replay** (`replay.go`): for each moved commit, `merge-tree --write-tree --merge-base=<commit^> <tip> <commit>`; on a clean result `commit-tree` with the original author, the replay committer from the environment, in a quarantine object directory (`GIT_OBJECT_DIRECTORY` private, repository objects as alternates). The first conflict stops replay and is reported with its paths, kinds and allowlist class; later commits are `unpaired`. The quarantine is removed on every path and a sentinel test compares the object store.
+3. **Replay** (`replay.go`): for each moved commit, `merge-tree --write-tree --merge-base=<commit^> <tip> <commit>`; on a clean result `commit-tree` with a fixed constant author and committer given only through the environment (`GIT_AUTHOR_NAME=stw-restack-plan`, `GIT_AUTHOR_EMAIL=restack-plan@invalid`, the same for `GIT_COMMITTER_*`, `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE` fixed to `1970-01-01T00:00:00Z`; process `HOME`, global and system configuration neutralized), so no repository-local or global `user.*` is ever read; the replay commits live only in the quarantine and are never pushed, so their identity is never evidence about the branch. The quarantine is a private object directory (`GIT_OBJECT_DIRECTORY` private, repository objects as alternates). The first conflict stops replay and is reported with its paths, kinds and allowlist class; later commits are `unpaired`. The quarantine is removed on every path and a sentinel test compares the object store.
 4. **Evidence** (`evidence.go`): `git range-diff` and `git cherry` through the runner; tree equivalence of touched paths for `+` rows (reusing the patch-id and touched-path code of `internal/workspace/tidy_v3_integration_patchid.go` after extraction, WP2); own-diff patch-id equality; identity check; overlap indicator from `old_parent..new_parent` paths against moved paths.
 5. **Effects and texts** (`effects.go`, `texts.go`): affected refs and worktrees from `for-each-ref --contains` and `worktree list --porcelain`; hook names by file presence only; lease and resync texts with strict ref-name validation and quoting.
 6. **Result and CLI** (`result.go`, `internal/cli/restack.go`): one typed result, human rendering from it, `schemas/v1/restack-plan.schema.json`, exit mapping. The CLI imports only the reviewed `restack` operation (architecture check updated).
@@ -47,13 +47,17 @@ S about 0.5 author day, M about 1, L about 2 to 3 (each includes the repo's own 
 | WP3 | Replay and conflict prediction in quarantine, effects, hazards, texts (015-3 remainder) | L | WP2 |
 | WP4 | Result, schema, CLI, human output, architecture and docs checks | M | WP3 |
 | WP5 | Conformance: minimum/current Git, effect sentinels, mutation controls, quickstart evidence (015-9, plan part) | M | WP4 |
-| WP6 | Keep-both ledger classification from configuration (015-4); the plan slice reports `allowlisted` only | M | WP3 |
+| WP6 | Keep-both ledger classification from stw configuration (015-4), including the `--keep-both-config` flag and its tasks; the plan slice has no such flag and classifies nothing | M | WP3 |
 | WP7 | `restack apply` Git: recovery refs and journal, compare-and-swap ref update, revalidation, stop on conflict (015-5); own spec amendment and review | L | WP5; Spec 010 |
 | WP8 | jj peer with change/commit identity mapping (015-6) | L | WP7 |
 | WP9 | Push with lease: Spec 016 L2 amendment (015-7), outside Spec 015 | M | Spec 016 FR-006, Spec 024 |
 | WP10 | Declared verify commands in a sandbox (015-8) | M | owner decision, configuration contract |
 
-First slice (plan only, WP1 to WP5): about 5 to 6 author days with one editing author, sequential on `internal/restack` and the shared CLI root; WP6 may follow in parallel. Together with WP0 the estimate's slice 2 of 6 to 8 days stands. Git-only plan plus apply (WP1 to WP7): about 8 to 10 days; with jj (WP8) 14 to 16 days.
+First slice (plan only, WP1 to WP5, without the keep-both flag): about 5 to 6 author days with one editing author, sequential on `internal/restack` and the shared CLI root; WP6 may follow in parallel. Together with WP0 the estimate's slice 2 of 6 to 8 days stands. Git-only plan plus apply (WP1 to WP7): about 8 to 10 days; with jj (WP8) 14 to 16 days.
+
+## Quarantine evidence (reviewer experiment, not a guarantee)
+
+An independent reviewer measured with Git 2.56.0 in a scratch repository, global and system configuration set to `/dev/null`: with `GIT_OBJECT_DIRECTORY=<quarantine>` and `GIT_ALTERNATE_OBJECT_DIRECTORIES=<real objects>`, `merge-tree --write-tree` (clean and conflicting), `commit-tree`, `range-diff`, `cherry` and `patch-id` left the real `.git` byte-identical (sha256 listing and `find -newer`). A plain `git merge-tree --write-tree` without the quarantine writes objects into the real store (9 to 11 objects). Not verified on other Git versions or for pack-threshold triggered packing. It matches the runner environment of `internal/workspace/tidy_v3_integration_run.go` (`gc.auto=0`, `core.hooksPath=/dev/null`, `GIT_OPTIONAL_LOCKS=0`). The same experiment becomes a test on the CI Git versions (T012). It also showed that `commit-tree` reads a repository-local `user.*` when the environment has no identity, which is why the replay identity is fixed (FR-015).
 
 ## Risks
 
@@ -63,11 +67,11 @@ First slice (plan only, WP1 to WP5): about 5 to 6 author days with one editing a
 | Quarantine objects leak into the repository | private object directory, alternates only for reads, sentinel test, removal on every path |
 | Predicted tree differs from a real rebase (renames, whitespace, rerere) | stated in `limitations` (`prediction-is-not-apply`); apply (WP7) recomputes and revalidates |
 | False confidence from `evidence-clean` | notice and `limitations` in every result; overlap indicator; verify commands are a later slice |
-| Identity unknown in a sandbox | check is `unknown`, never `pass`; flag `--identity` |
+| Identity unknown in a sandbox | check is `unknown`, never `pass`; `--identity` is required for a pass; the environment never counts |
 | Shared files `cli/root.go`, schema allowlists with other authors | rebase before CLI wiring (WP4); keep each commit to one logical change |
 
 ## Open questions for review
 
-1. Whether read-only `git config user.*` may feed the expected identity when no flag or environment value exists (currently: no).
-2. Whether `--keep-both-config` belongs in WP1 or only in WP6.
+1. (Resolved by the review) No `user.*` configuration feeds the expected identity; repository-local `user.*` is reported as a hazard.
+2. (Resolved by the review) `--keep-both-config` moves to WP6; the first slice has no configuration input.
 3. Whether `range-diff` should also be available as post-check text after a by-hand rebase (printed in quickstart only).

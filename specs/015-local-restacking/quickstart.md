@@ -15,7 +15,7 @@ stw restack plan \
   --identity "Owner Name <owner@example.org>" --json
 ```
 
-Expected: `status: ok`, `evidence.parent_dropped.all_dropped: true` (cherry rows `-`), `evidence.range_pairing.all_equal: true` for `C1 C2`, `evidence.identity.state: pass`, `texts.lease_push` printing the observed child tip and the literal `<NEW_FULL_SHA>`, and `limitations` containing `semantic-breaks-not-detected`.
+Expected: `status: ok`, `evidence.parent_dropped.all_dropped: true` (cherry rows `-`), `evidence.range_pairing.all_equal: true` for `C1 C2`, `evidence.identity.state: pass`, `texts.lease_push` printing the observed child tip and a `${NEW_FULL_SHA:?...}` variable the owner sets, and `limitations` containing `semantic-breaks-not-detected`.
 
 ## By hand, to compare with the plan
 
@@ -29,6 +29,9 @@ git cherry <new parent> <old parent>                             # all -
 
 - A parent change that touches the same lines as `C1`: `outcome: conflicts-predicted`, `conflicts.items[].path`, exit 0.
 - Dirty target, branch checked out in another worktree, a merge commit in the range, unrelated histories: `status: error`, the diagnostic code of the contract, exit 1, no `evidence`.
+- No `--identity` flag, or a placeholder identity only in the environment: `identity.state: unknown`, `outcome: needs-attention`.
+- A branch whose head is not a descendant of `--old-parent`: `old-parent-not-ancestor`, exit 1.
+- A moved commit whose change the new parent already contains: listed in `empty_after_replay`, `needs-attention`.
 - A parent change to `a.go` that `C1` also edits cleanly: `overlap.indicator: some`, a risk indicator only.
 - A parent that changed a signature the branch calls in another file: replay is clean, `overlap` is `none`, and the plan cannot see the break: build and test after restacking.
 
