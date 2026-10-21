@@ -233,6 +233,16 @@
             }
           ]
         },
+        "gitlink_changes": {
+          "items": {
+            "$ref": "#/$defs/Gitlink"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "gitlink_changes_truncated": {
+          "$ref": "#/$defs/Truncation"
+        },
         "merge_base_oid": {
           "$ref": "#/$defs/OIDOrEmpty"
         },
@@ -330,6 +340,33 @@
         "new_mode",
         "type_change",
         "kind"
+      ],
+      "type": "object"
+    },
+    "Gitlink": {
+      "additionalProperties": false,
+      "properties": {
+        "new_oid": {
+          "$ref": "#/$defs/OIDOrEmpty"
+        },
+        "old_oid": {
+          "$ref": "#/$defs/OIDOrEmpty"
+        },
+        "path": {
+          "$ref": "#/$defs/Untrusted"
+        },
+        "side": {
+          "enum": [
+            "branch",
+            "base"
+          ]
+        }
+      },
+      "required": [
+        "side",
+        "path",
+        "old_oid",
+        "new_oid"
       ],
       "type": "object"
     },
@@ -712,7 +749,8 @@
             "files",
             "lines",
             "bytes",
-            "rows"
+            "rows",
+            "gitlinks"
           ],
           "type": "string"
         }

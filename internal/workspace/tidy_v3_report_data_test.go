@@ -374,6 +374,9 @@ func TestReportGitlinkChangeUsesTheBranchAgainstMergeBaseAndNeverMerges(t *testi
 	if !containsAll(e.Reasons, "gitlink-change") || e.Diff.Source != "branch-against-merge-base" || e.Verdict.Verdict != "unclear" || e.Verdict.Confidence != "low" {
 		t.Fatalf("entry %+v", e)
 	}
+	if len(e.Gitlinks) != 1 || e.Gitlinks[0].Side != "branch" || e.Gitlinks[0].Path.Text != "sub" || e.Gitlinks[0].NewOID != bumped {
+		t.Errorf("gitlinks %+v", e.Gitlinks)
+	}
 	if len(e.Diff.Files) != 1 || e.Diff.Files[0].Kind != "gitlink" || e.Diff.Files[0].OldOID != old || e.Diff.Files[0].NewOID != bumped || e.Diff.Files[0].TypeChange != "" {
 		t.Errorf("files %+v", e.Diff.Files)
 	}
@@ -381,6 +384,33 @@ func TestReportGitlinkChangeUsesTheBranchAgainstMergeBaseAndNeverMerges(t *testi
 	want := f.git("diff-tree", "-p", "--no-ext-diff", "--no-textconv", "--no-renames", m0, "bump")
 	if got := strings.TrimRight(e.rawDiff, "\n"); got != want {
 		t.Errorf("gate diff\n%s\nwant\n%s", got, want)
+	}
+}
+
+// The gitlink-change reason names the path and the side that changed it, also
+// when only the base moved the pointer since the merge base.
+func TestReportGitlinkChangeNamesThePathAndTheSide(t *testing.T) {
+	f := newProofFix(t)
+	old, bumped := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	f.git("update-index", "--add", "--cacheinfo", "160000,"+old+",libs/sub")
+	f.git("commit", "-qm", "add submodule pointer")
+	m0 := f.rev("HEAD")
+	f.branch("plain", m0)
+	f.git("commit", "--allow-empty", "-qm", "plain work")
+	f.checkout(f.main)
+	f.git("update-index", "--cacheinfo", "160000,"+bumped+",libs/sub")
+	f.git("commit", "-qm", "main bumps the pointer")
+	e, _ := f.reportEntry(f.main, "plain", true, nil)
+	if !containsAll(e.Reasons, "gitlink-change") {
+		t.Fatalf("reasons %v", e.Reasons)
+	}
+	want := []V3ReportGitlink{{Side: "base", Path: untrusted("libs/sub"), OldOID: old, NewOID: bumped}}
+	if !reflect.DeepEqual(e.Gitlinks, want) {
+		t.Errorf("gitlinks %+v, want %+v", e.Gitlinks, want)
+	}
+	md := renderEntryMarkdown(1, e)
+	if !strings.Contains(md, "Gitlink changes") || !strings.Contains(md, "base libs/sub "+old+" -> "+bumped) {
+		t.Errorf("markdown\n%s", md)
 	}
 }
 

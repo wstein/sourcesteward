@@ -138,6 +138,13 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 		return finish()
 	}
 	reasons = append(reasons, gate...)
+	if slices.Contains(gate, "gitlink-change") {
+		if err = r.reportGitlinks(ctx, &e, tipTree, mergeBase, q); err != nil {
+			if err = degrade(err); err != nil {
+				return e, err
+			}
+		}
+	}
 	// pair is the two sides of the diff shown; attr pins the attribute source.
 	var pair [2]string
 	var attr, source string
@@ -199,6 +206,31 @@ func unavailableReason(e V3ReportEntry) string {
 		return "ambiguous-merge-base: the branch and the base have no single merge base, so no merge was computed"
 	}
 	return "no diff was collected"
+}
+
+// reportGitlinks names the gitlink paths the gate saw, per side: what the
+// branch and what the base changed since the merge base. The first
+// reportMaxFiles are named, the rest counted.
+func (r *integrationRun) reportGitlinks(ctx context.Context, e *V3ReportEntry, attr, mergeBase string, q reportRequest) error {
+	total := 0
+	for _, side := range []struct{ name, oid string }{{"branch", q.Tip}, {"base", q.Base}} {
+		raw, err := r.reportRaw(ctx, attr, [2]string{mergeBase, side.oid})
+		if err != nil {
+			return err
+		}
+		for _, c := range raw {
+			if c.oldMode != "160000" && c.newMode != "160000" {
+				continue
+			}
+			if total++; total <= reportMaxFiles {
+				e.Gitlinks = append(e.Gitlinks, V3ReportGitlink{Side: side.name, Path: untrusted(c.path), OldOID: zeroAsEmpty(c.oldOID), NewOID: zeroAsEmpty(c.newOID)})
+			}
+		}
+	}
+	if total > reportMaxFiles {
+		e.GitlinksTruncated = &V3ReportTruncation{Unit: "gitlinks", Shown: reportMaxFiles, Total: total}
+	}
+	return nil
 }
 
 func emptyReportDiff(source string) V3ReportDiff {
