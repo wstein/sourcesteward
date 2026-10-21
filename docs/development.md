@@ -116,7 +116,8 @@ tests, assigns them to four shards by greedy longest-processing-time using the c
 `scripts/ci-test-weights.json` (unlisted tests get the default weight, so a new test is always
 assigned) and prints each shard's `-run` regex. In `conformance.yml`, jobs `shard 1` to
 `shard 4` run one shard each with `-race -count=1 -timeout 40m`; `shard 0` runs every other
-package and the real-CLI smoke checks. The aggregate job `suite` needs the shards of its own
+package and `shard 5` the real-CLI smoke checks
+(its own job, so the smoke scripts no longer lengthen shard 0). The aggregate job `suite` needs the shards of its own
 lane only, so the lane's check name stays stable. The `check` job runs
 `python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
 list none. When the conformance tier applies to the event (the same expression as the
