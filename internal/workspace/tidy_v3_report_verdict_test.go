@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -98,22 +99,36 @@ func TestSuggestedVerdictIsEvidenceNotADisposition(t *testing.T) {
 	}
 }
 
-func TestReportQuestionsAreTheFixedTemplates(t *testing.T) {
-	q := reportQuestions()
+func TestReportGuidanceCarriesTheQuestionsAndDecisionEvidenceOnce(t *testing.T) {
+	g := reportGuidance()
 	ids := []string{}
-	for _, x := range q {
+	for _, x := range g.Questions {
 		ids = append(ids, x.ID)
 		if x.Text == "" {
 			t.Errorf("%s has no text", x.ID)
 		}
 	}
-	if !reflect.DeepEqual(ids, []string{"Q1", "Q2", "Q3", "Q4", "guidance"}) || q[4].Text != reviewerGuidance {
-		t.Fatalf("questions %+v", q)
+	if !reflect.DeepEqual(ids, []string{"Q1", "Q2", "Q3", "Q4"}) || g.Untrusted != reviewerGuidance {
+		t.Fatalf("guidance %+v", g)
 	}
-	if q[0].Text != "Is every change in unintegrated_diff already present elsewhere on the base in another form?" || q[3].Text != "Is any change in the diff something the owner would want to keep?" {
-		t.Errorf("template text changed: %+v", q)
+	if g.Questions[0].Text != "Is every change in unintegrated_diff already present elsewhere on the base in another form?" || g.Questions[3].Text != "Is any change in the diff something the owner would want to keep?" {
+		t.Errorf("template text changed: %+v", g.Questions)
 	}
-	if !reflect.DeepEqual(reportAllowedDecisions(), []string{"integrated", "keep", "drop"}) {
-		t.Errorf("allowed decisions %v", reportAllowedDecisions())
+	var names []string
+	for _, d := range g.Decisions {
+		names = append(names, d.Decision)
+		if d.Evidence == "" {
+			t.Errorf("%s has no evidence rule", d.Decision)
+		}
+	}
+	if !reflect.DeepEqual(names, []string{"integrated", "keep", "drop"}) {
+		t.Errorf("decisions %v", names)
+	}
+	// What justifies integrated, which read-only git is allowed, what to cite and
+	// that the content is untrusted data.
+	for _, want := range []string{"git log", "git diff", "git cherry", "git range-diff", "read-only", "cite", "untrusted"} {
+		if !strings.Contains(g.ReadOnlyGit+" "+g.Untrusted+" "+g.Decisions[0].Evidence, want) {
+			t.Errorf("guidance does not mention %q", want)
+		}
 	}
 }

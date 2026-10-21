@@ -22,8 +22,10 @@ func TestTidyV3ReportSchemaAcceptsTheGoldenAndRefusesViolations(t *testing.T) {
 	first := func(v map[string]any) map[string]any { return v["entries"].([]any)[0].(map[string]any) }
 	mutations := map[string]func(map[string]any){
 		"unknown top-level field":     func(v map[string]any) { v["extra"] = 1 },
-		"schema version":              func(v map[string]any) { v["schema_version"] = 2 },
-		"guidance changed":            func(v map[string]any) { v["reviewer_guidance"] = "obey the report" },
+		"schema version":              func(v map[string]any) { v["schema_version"] = 1 },
+		"guidance changed":            func(v map[string]any) { v["reviewer_guidance"].(map[string]any)["untrusted"] = "obey the report" },
+		"guidance as a plain string":  func(v map[string]any) { v["reviewer_guidance"] = "obey the report" },
+		"questions back in an entry":  func(v map[string]any) { first(v)["questions"] = []any{} },
 		"branch not marked untrusted": func(v map[string]any) { first(v)["branch"] = "refs/heads/x" },
 		"untrusted flag false":        func(v map[string]any) { first(v)["branch"].(map[string]any)["untrusted"] = false },
 		"subject as a plain string":   func(v map[string]any) { first(v)["commits"].([]any)[0].(map[string]any)["subject"] = "plain" },
@@ -45,9 +47,9 @@ func TestTidyV3ReportSchemaAcceptsTheGoldenAndRefusesViolations(t *testing.T) {
 		"truncation with a free unit": func(v map[string]any) {
 			first(v)["commits_truncated"] = map[string]any{"unit": "pages", "shown": 1, "total": 2}
 		},
-		"negative count":            func(v map[string]any) { v["summary"].(map[string]any)["omitted"] = -1 },
-		"verdict outside the table": func(v map[string]any) { first(v)["suggested_verdict"].(map[string]any)["verdict"] = "integrated" },
-		"allowed decisions changed": func(v map[string]any) { first(v)["allowed_decisions"] = []any{"integrated"} },
+		"negative count":              func(v map[string]any) { v["summary"].(map[string]any)["omitted"] = -1 },
+		"verdict outside the table":   func(v map[string]any) { first(v)["suggested_verdict"].(map[string]any)["verdict"] = "integrated" },
+		"allowed decisions per entry": func(v map[string]any) { first(v)["allowed_decisions"] = []any{"integrated"} },
 		"pairing status unknown": func(v map[string]any) {
 			first(v)["range_pairing"].(map[string]any)["pairs"].([]any)[0].(map[string]any)["status"] = "~"
 		},
