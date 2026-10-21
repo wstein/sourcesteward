@@ -25,6 +25,7 @@ func validateGitBlobRequests(requests []gitBlobRequest, format string) ([]byte, 
 		return nil, errNativeBlobProtocol
 	}
 	v := newGitTreeValidator()
+	v.limit = observationLimit
 	var input strings.Builder
 	for _, r := range requests {
 		if !fullGitOID(r.OID, format) {

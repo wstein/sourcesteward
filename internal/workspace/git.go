@@ -260,6 +260,14 @@ func gitHooksFingerprint(dir string, allowExecutable bool) (string, bool, error)
 	return fingerprint.String(), executable, nil
 }
 
+// checkoutLeafLimit bounds the tracked leaf entries of a base checkout (tree
+// validator and filter-path inventory). It is a fixed documented constant, not
+// a configuration option, and is separate from observationLimit, which bounds
+// results and records. Measured in the Spec 010 creation refusals amendment:
+// 16,001 leaves observe in under 0.1 s and create in under 0.5 s, far inside
+// the 10 s and 60 s deadlines. Blob, aggregate, record and stream limits stay.
+const checkoutLeafLimit = 16384
+
 type gitTreePathNode struct {
 	name     string
 	file     bool
@@ -269,18 +277,21 @@ type gitTreePathNode struct {
 type gitTreeValidator struct {
 	// gitlinks admits submodule commits as data; planning never descends.
 	gitlinks bool
-	count    int
-	total    int64
-	root     gitTreePathNode
+	// limit is the leaf bound: checkoutLeafLimit, except for the stored-file
+	// sample of retirement, which keeps its own 1,024-file bound.
+	limit int
+	count int
+	total int64
+	root  gitTreePathNode
 }
 
 func newGitTreeValidator() *gitTreeValidator {
-	return &gitTreeValidator{}
+	return &gitTreeValidator{limit: checkoutLeafLimit}
 }
 func (v *gitTreeValidator) add(entry string) error {
 	v.count++
-	if v.count > observationLimit {
-		return failure("git-checkout-limit", "base checkout exceeds 1024 leaf entries")
+	if v.count > v.limit {
+		return failure("git-checkout-limit", fmt.Sprintf("base checkout exceeds %d leaf entries", v.limit))
 	}
 	if len(entry)+1 > gitMetadataRecordLimit {
 		return failure("git-checkout-limit", "base tree logical record exceeds 4224 bytes")

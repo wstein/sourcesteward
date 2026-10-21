@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"strconv"
@@ -149,8 +150,8 @@ func parseGitTreeStream(out io.Reader, format string, validator *gitTreeValidato
 
 func gitFilterEvidence(ctx context.Context, bin, dir, commit string, paths []string, digest hash.Hash) error {
 	var input strings.Builder
-	if len(paths) > observationLimit {
-		return failure("git-checkout-limit", "filter path inventory exceeds 1024 entries")
+	if len(paths) > checkoutLeafLimit {
+		return failure("git-checkout-limit", fmt.Sprintf("filter path inventory exceeds %d entries", checkoutLeafLimit))
 	}
 	for _, path := range paths {
 		if len(path) == 0 || len(path) > 4096 || strings.ContainsRune(path, 0) {

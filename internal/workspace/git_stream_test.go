@@ -76,14 +76,14 @@ func TestGitTreeStreamCompleteBoundaries(t *testing.T) {
 		})
 	}
 	var records strings.Builder
-	for i := 0; i < 1024; i++ {
+	for i := 0; i < checkoutLeafLimit; i++ {
 		records.WriteString(row(fmt.Sprint(i), 0))
 	}
 	if e := parse(records.String()); e != nil {
 		t.Fatal(e)
 	}
 	if e := parse(records.String() + row("last", 0)); e == nil {
-		t.Fatal("1025 leaves admitted")
+		t.Fatalf("%d leaves admitted", checkoutLeafLimit+1)
 	}
 	var aggregate strings.Builder
 	for i := 0; i < 4; i++ {
