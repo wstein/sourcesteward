@@ -118,7 +118,7 @@ workflow still starts and reports. `conformance.yml` receives `docs_only`; its `
 skipped only when `docs_only` is `true` on a `pull_request`, and the lane's `suite` job (always
 runs) passes on `success`, or on `skipped` only for that same docs-only pull request; failed,
 cancelled or skipped-otherwise fails it. `check` (static and documentation checks, the race
-suite) and the docs, architecture and spec checks inside it always run. Widen the allowlist
+suite) and the docs, architecture and spec checks inside it always run.
 Never require a per-shard check: a shard skipped inside a matrix reports under the
 unexpanded matrix name and would stay pending. Require only checks that always report:
 `check` and `Git/jj conformance (<lane>) / suite`. Widen the allowlist
