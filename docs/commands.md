@@ -21,9 +21,10 @@ Every data command supports human output and `--json`; help is available at each
 | `stw tidy plan [PATH]` | Review branch/bookmark integration or owned-workspace retirement | No deletion; optional private stored plan |
 | `stw tidy apply` | Apply the reviewed reference or retirement plan | Explicit local authorization; recovery evidence and fresh checks |
 | `stw hosting repo [PATH]` | Resolve local GitHub repository candidates | Local only; no gh or authentication required |
-| `stw hosting pr NUMBER [PATH]` | Inspect one explicitly numbered PR | Authenticated, bounded GitHub reads |
+| `stw hosting pr NUMBER [PATH]` | Inspect one explicitly numbered PR; `--json-version 2`, `--compact` and `--expect-head SHA` add lifecycle and merge evidence | Authenticated, bounded GitHub reads; one GET; no retry on rate limits |
+| `stw hosting prs SHA [PATH]` | List the PRs GitHub associates with a commit (one page of 30) | Authenticated, one bounded GET; no PR selection, no retry |
 | `stw hosting ci NUMBER [PATH]` | Inspect checks/statuses at that PR's exact head | Authenticated, bounded reads; no rerun or merge-eligibility claim |
-| `gh jj repo`, `gh jj pr`, `gh jj ci` | Use the same hosting operations as a gh extension | Requires jj ownership; `repo` is local, PR/CI read GitHub |
+| `gh jj repo`, `gh jj pr`, `gh jj prs`, `gh jj ci` | Use the same hosting operations as a gh extension | Requires jj ownership; `repo` is local, PR/CI read GitHub |
 
 Native ownership chooses Git or jj, including jj for colocated repositories. Unsupported
 or uncertain states refuse; raw Git never substitutes for jj. Read-only native jj
@@ -142,6 +143,8 @@ paths, completion/protection repeats, precise native/provider proof and recovery
 stw hosting repo . --json
 stw hosting pr 42 . --repo owner/project --json
 stw hosting ci 42 . --repo owner/project --json
+stw hosting pr 42 . --repo owner/project --json --json-version 2 --expect-head FULL_SHA
+stw hosting prs FULL_SHA . --repo owner/project --compact
 ```
 
 Repository resolution is offline. PR/CI requires gh 2.102.0+ and the caller's selected-host

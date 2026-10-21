@@ -10,6 +10,9 @@ Jujutsu is a supported runtime CLI dependency, not a linked Rust library.
 stw hosting repo PATH --json
 stw hosting pr 42 PATH --repo owner/project --json
 stw hosting ci 42 PATH --repo owner/project --json
+stw hosting pr 42 PATH --repo owner/project --json --json-version 2 --expect-head FULL_SHA
+stw hosting pr 42 PATH --repo owner/project --compact
+stw hosting prs FULL_SHA PATH --repo owner/project --json
 
 gh jj repo JJ_PATH --json
 gh jj pr 42 JJ_PATH --repo owner/project --json
@@ -59,6 +62,39 @@ All data commands offer human and `--json` output. Success exits 0, operational
 failure exits 1 with a structured error observation, and usage errors exit 2.
 Pre-dispatch cancellation may return only the process diagnostic, and writer/process failures may leave partial output. Consumers must check both exit status and JSON validity. Network-attempt and
 completeness fields distinguish early local failures from remote observations.
+
+## PR status (schema 2) and lookup by head SHA
+
+`stw hosting pr` keeps its detailed human output and its v1 JSON byte for byte. Three
+opt-ins select the one-shot status observation, which makes exactly one numbered PR GET:
+`--json --json-version 2` ([hosting-pr.schema.json](../schemas/v2/hosting-pr.schema.json)),
+`--compact` (one escaped line) and `--expect-head FULL_SHA`. They report `lifecycle`
+(`open`, `closed-unmerged`, `merged`), `merged`, `merged_at`, `closed_at`, GitHub's raw
+`merge_commit_sha` and `result_sha`. A test-merge SHA on an open PR is never a result;
+the result is set only for a merged PR and is method-dependent, not proof that the head
+or the base tip contains the work. Missing or contradictory evidence is an error, never
+a guessed state. `--expect-head` takes only a full 40-character lowercase SHA and compares
+the PR head, never `result_sha`; a mismatch exits 1 like any failure and is
+distinguishable by `observation.stop` `expectation-mismatch` / diagnostic
+`hosting-head-mismatch`, even for a merged PR. A match says nothing about review, CI or
+ancestry. `--watch` is not available (usage error, exit 2): use `scripts/ci-wait.sh` for
+long waits.
+
+`stw hosting prs SHA` (and `gh jj prs SHA`) lists the PRs GitHub associates with a commit
+through one `GET commits/SHA/pulls?per_page=30&page=1` (schema
+[hosting-prs.schema.json](../schemas/v2/hosting-prs.schema.json)): zero, one or many, each
+with number, state, draft, base, head, `merged`, merge commit and `head_match` (the PR's
+current head equals the SHA). It never selects one PR, follows no further page (exactly 30
+entries set `truncated` and the limitation `lookup-single-page`) and an oversize body is an
+error with no partial list. It answers "which PRs are associated with this commit", not
+"whose branch contains it"; GitHub's association rules were not verified against the live
+API, which the first authorized live call must do.
+
+Network policy: GET only, fixed allowlist, no redirects or compression. HTTP 401, 403
+(including rate limits), 404, 422, 429 and any other non-2xx, and transport failures, stop
+at once with exit 1 and a safe message: no retry, no `Retry-After` or backoff sleep, and
+no token or API body in output. Rate-limit headers are not read; callers that poll must space
+their calls.
 
 ## Optional local extension installation
 
