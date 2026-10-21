@@ -116,7 +116,7 @@ func parseMergeConflict(out []byte) (*mergeConflict, error) {
 		}
 		i += n + 3
 	}
-	c := &mergeConflict{}
+	c := &mergeConflict{items: []ConflictItem{}}
 	for _, name := range names {
 		kind := kinds[name]
 		if kind == "" {
