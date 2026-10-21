@@ -149,7 +149,7 @@ func (s *store) read(kind, id string, value any) error {
 	if e != nil {
 		return e
 	}
-	if !regularPrivate(before) || before.Size() > recordLimit {
+	if !regularPrivate(before) || before.Size() > int64(v3RecordLimit) {
 		return failure("invalid-state", "Record must be a private bounded single-link regular file.")
 	}
 	f, e := s.dirs[kind].OpenFile(id+".json", os.O_RDONLY|noFollow, 0)
@@ -158,15 +158,15 @@ func (s *store) read(kind, id string, value any) error {
 	}
 	defer f.Close()
 	st, e := f.Stat()
-	if e != nil || !regularPrivate(st) || !os.SameFile(before, st) || st.Size() > recordLimit {
+	if e != nil || !regularPrivate(st) || !os.SameFile(before, st) || st.Size() > int64(v3RecordLimit) {
 		return failure("invalid-state", "Record must be a private bounded single-link regular file.")
 	}
-	b, e := io.ReadAll(io.LimitReader(f, recordLimit+1))
+	b, e := io.ReadAll(io.LimitReader(f, int64(v3RecordLimit)+1))
 	if e != nil {
 		return e
 	}
-	if len(b) > recordLimit {
-		return failure("record-limit", "State record exceeds oneMiB.")
+	if len(b) > v3RecordLimit {
+		return failure("record-limit", "State record exceeds its bound.")
 	}
 	return decodeStrict(b, value)
 }
@@ -234,8 +234,8 @@ func (s *store) write(kind, id string, value any, exclusive bool) error {
 		return e
 	}
 	b, e := json.Marshal(value)
-	if e != nil || len(b) > recordLimit {
-		return failure("record-limit", "State record exceeds oneMiB or cannot be encoded.")
+	if e != nil || len(b) > v3RecordLimit {
+		return failure("record-limit", "State record exceeds its bound or cannot be encoded.")
 	}
 	dir := s.dirs[kind]
 	name := id + ".json"

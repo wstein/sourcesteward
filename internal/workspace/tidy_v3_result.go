@@ -282,10 +282,18 @@ func (r V3Result) Error() string {
 	}
 	return "tidy v3 operation failed"
 }
+
+// v3RecordLimit bounds a stored or printed tidy v3 record. A retirement plan
+// records every file and directory of the worktree (about 330 bytes each, up to
+// retirementManifestEntries), which needs more than the one MiB of the older
+// contracts.
+// A variable only so tests can exercise the exact boundary with a small record.
+var v3RecordLimit = 8 << 20
+
 func v3RecordDigest(v any) (string, error) {
 	b, e := json.Marshal(v)
-	if e != nil || len(b) > recordLimit {
-		return "", failure("record-limit", "V3 complete evidence exceeds one MiB.")
+	if e != nil || len(b) > v3RecordLimit {
+		return "", failure("record-limit", "V3 complete evidence exceeds its 8 MiB bound.")
 	}
 	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
@@ -821,7 +829,7 @@ func validV3Manifest(m V3Manifest, root string, metadata bool) bool {
 			return false
 		}
 	}
-	return total <= 64<<20 && len(m.Entries) <= observationLimit
+	return total <= 64<<20 && len(m.Entries) <= retirementManifestEntries
 }
 
 const (
@@ -939,8 +947,8 @@ func v3Bounds(v any) error {
 		return failure("record-limit", "V3 record contains invalid text, null arrays or exceeds 1024 aggregate entries.")
 	}
 	b, e := json.Marshal(v)
-	if e != nil || len(b) > recordLimit {
-		return failure("record-limit", "V3 encoded record exceeds one MiB.")
+	if e != nil || len(b) > v3RecordLimit {
+		return failure("record-limit", "V3 encoded record exceeds its 8 MiB bound.")
 	}
 	return nil
 }
@@ -948,7 +956,7 @@ func v3Bounds(v any) error {
 // encoding/json accepts null scalars and omitted zero-value fields. V3's closed
 // wire contract requires every typed field, and null is reserved for pointers.
 func decodeV3Record(b []byte, value any) error {
-	if len(b) > recordLimit || !utf8.Valid(b) {
+	if len(b) > v3RecordLimit || !utf8.Valid(b) {
 		return failure("invalid-state", "V3 record is oversized or not UTF-8.")
 	}
 	if e := decodeStrict(b, value); e != nil {
@@ -1057,7 +1065,7 @@ func validateV3Result(r V3Result) error {
 	return v3Bounds(r)
 }
 func decodeV3Result(b []byte, r *V3Result) error {
-	if len(b) > recordLimit || !utf8.Valid(b) {
+	if len(b) > v3RecordLimit || !utf8.Valid(b) {
 		return failure("record-limit", "V3 result is oversized or not UTF-8.")
 	}
 	var value V3Result

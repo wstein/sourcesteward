@@ -225,6 +225,7 @@ func TestRetirementV3AggregateEntriesAndUserPassOverrun(t *testing.T) {
 }
 
 func TestRetirementV3EncodedManifestExactBoundary(t *testing.T) {
+	smallV3RecordLimit(t)
 	root := "/fixture"
 	m := V3Manifest{Complete: true, Entries: []V3ManifestEntry{}}
 	for i := 0; i < 1024; i++ {
