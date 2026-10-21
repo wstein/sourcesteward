@@ -136,6 +136,13 @@ func failResult(r Result, err error) Result {
 	code, message := "workspace-failed", "workspace operation could not complete"
 	if errors.As(err, &e) {
 		code, message = e.Code, e.Message
+	} else if err != nil {
+		// An unclassified internal failure still names its cause; the text is
+		// the bounded, valid-UTF-8 prefix of the error, never a stack or a path
+		// listing.
+		if cause := causeText(err); cause != "" {
+			message += ": " + cause
+		}
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		code, message = "canceled", "workspace operation canceled or deadline exceeded"
@@ -143,6 +150,16 @@ func failResult(r Result, err error) Result {
 	r.Status = "error"
 	r.Diagnostics = []Diagnostic{{code, message}}
 	return r
+}
+func causeText(err error) string {
+	text := strings.TrimSpace(err.Error())
+	if len(text) > 240 {
+		text = strings.ToValidUTF8(text[:240], "")
+	}
+	if !validText(text) || strings.ContainsAny(text, "\r\n") {
+		return ""
+	}
+	return text
 }
 func validID(s string) bool {
 	if len(s) == 0 || len(s) > 128 {

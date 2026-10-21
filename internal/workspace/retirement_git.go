@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -128,6 +129,14 @@ func gitRetirementStoredFilesWithPolicy(ctx context.Context, bin string, id Nati
 	}
 	entries, e := gitTreeEntries(ctx, bin, id.WorkspaceRoot, id.CommitID, id.ObjectFormat, nil)
 	if e != nil {
+		var op operationError
+		if errors.As(e, &op) && op.Code == "git-tree-refused" {
+			// Creation admits gitlinks as empty directories; retirement does not.
+			// A forced native removal deletes the whole registration directory,
+			// including the Git directory of an initialized submodule, and the
+			// manifest records no content for a submodule checkout.
+			return nil, failure("git-tree-refused", "The worktree's commit holds symbolic links, submodule gitlinks or other unsupported tree objects ("+op.Message+"); retirement admits only regular files and directories because removing the worktree would also delete the Git directory of an initialized submodule. Retain the target")
+		}
 		return nil, e
 	}
 	// Legacy v2 reads every leaf with its own sandboxed cat-file, and the manifest
@@ -224,7 +233,7 @@ func gitRetirementSiblings(parents []PathIdentity) ([]RetirementSibling, error) 
 			seen[path] = true
 			st, e := os.Lstat(path)
 			if e != nil || (!st.IsDir() && !st.Mode().IsRegular()) {
-				return nil, failure("retirement-sibling-refused", "Removal parent contains symbolic or unsupported sibling entries")
+				return nil, failure("retirement-sibling-refused", fmt.Sprintf("Removal parent %s contains %q, which is a symbolic link, device, socket or unreadable entry; the retirement records every sibling of the worktree's parent directory as a plain file or directory so that an unrelated change is detected. Move the worktree under a directory that holds only plain files and directories", parent.Path, entry.Name()))
 			}
 			id, e := pathIdentity(path, st)
 			if e != nil {
