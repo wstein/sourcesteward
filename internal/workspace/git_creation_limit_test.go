@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,4 +89,35 @@ func TestCreationRefusesAboveTheCheckoutLimit(t *testing.T) {
 		t.Skip("large fixture")
 	}
 	requireCreationRefused(t, fixtureGitLeaves(t, checkoutLeafLimit+1), "git-checkout-limit")
+}
+
+// The legacy v2 retirement read starts one sandboxed cat-file per leaf. The
+// manifest refuses above retirementManifestEntries anyway, so the read must
+// refuse first instead of spending up to checkoutLeafLimit processes. Short
+// paths keep the 64 KiB index listing below its own cap, so only the leaf
+// count can refuse here.
+func TestLegacyRetirementStoredFilesRefusesAboveTheManifestBoundBeforeReading(t *testing.T) {
+	d := fixtureGit(t)
+	for i := 0; i < retirementManifestEntries+10; i++ {
+		if e := os.WriteFile(filepath.Join(d, fmt.Sprintf("f%04d", i)), []byte("x\n"), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	gitFixture(t, d, "add", ".")
+	gitFixture(t, d, "commit", "-qm", "many")
+	dest := filepath.Join(gitTempDir(t), "legacy-many")
+	gitFixture(t, d, "worktree", "add", "--detach", "--lock", "--reason", "stw:legacy", dest, "HEAD")
+	bin, e := gitExecutable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	id, e := gitNativeIdentity(context.Background(), dest)
+	if e != nil {
+		t.Fatal(e)
+	}
+	files, e := gitRetirementStoredFiles(context.Background(), bin, id)
+	var op operationError
+	if !errors.As(e, &op) || op.Code != "retirement-file-limit" || len(files) != 0 {
+		t.Fatalf("legacy read admitted or refused wrongly above the manifest bound: %d files, %v", len(files), e)
+	}
 }
