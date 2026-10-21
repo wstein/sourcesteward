@@ -1,5 +1,85 @@
 {
   "$defs": {
+    "BranchConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_oid": {
+          "$ref": "#/$defs/OID"
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/ConfigKey"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "reflog_tip": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OID"
+            },
+            {
+              "const": "unavailable"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "recorded",
+            "unavailable"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status",
+        "reflog_tip",
+        "branch_oid",
+        "truncated",
+        "keys"
+      ],
+      "type": "object"
+    },
+    "ConfigKey": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 4200,
+          "pattern": "^branch\\..+\\.[a-z0-9-]+$",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "applied",
+            "skipped",
+            "failed"
+          ]
+        },
+        "remote": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "reapply",
+            "skip-remote-missing",
+            "skip-not-recorded",
+            "skip-truncated",
+            "skip-multi-valued",
+            "skip-already-set",
+            "skip-renamed",
+            "skip-not-restorable"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "state"
+      ],
+      "type": "object"
+    },
     "Decision": {
       "additionalProperties": false,
       "properties": {
@@ -60,6 +140,9 @@
           "minLength": 1,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
           "type": "string"
+        },
+        "branch_config": {
+          "$ref": "#/$defs/BranchConfig"
         },
         "class": {
           "maxLength": 128,
