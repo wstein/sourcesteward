@@ -31,8 +31,14 @@ func defaultTidyV3RefsApplyCoordinator() tidyV3RefsApplyCoordinator {
 			return prepareGitRefDeletion(ctx, bin, id, ref, oid, write, ro)
 		}}
 }
+
+// v3ApplyTimeout is the apply deadline: 60 s plus 3 s per planned deletion
+// (a sandboxed native process costs about 1.8 s each), capped at 10 minutes.
+func v3ApplyTimeout(effects int) time.Duration {
+	return min(60*time.Second+time.Duration(effects)*3*time.Second, 10*time.Minute)
+}
 func (c tidyV3RefsApplyCoordinator) apply(ctx context.Context, o V3ApplyOptions) V3Result {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	return boundV3Result(c.applyRefs(ctx, o))
 }
@@ -82,6 +88,15 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	if err != nil {
 		return failTidyV3(r, err)
 	}
+	effects := 0
+	for _, candidate := range p.Candidates {
+		if candidate.Decision == "delete" {
+			effects++
+		}
+	}
+	var stop context.CancelFunc
+	ctx, stop = context.WithTimeout(ctx, v3ApplyTimeout(effects))
+	defer stop()
 	r.Backend = p.Expected.Identity.Backend
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), "Recovery journal: "+filepath.Join(p.StateDir, "tidy-v3-operations", p.PlanID+".json"))
 	if p.Mode == "tracking-refs" {
