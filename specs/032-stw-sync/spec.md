@@ -6,27 +6,27 @@
 
 ## Scope and decisions
 
-`stw sync` is a manual, explicit, Git-only command. It is not a daemon, a hook, a schedule or an agent background task, and nothing in SourceSteward starts it implicitly. Like `git pull` it is a **one-step command**: it fetches, classifies every branch from the fresh refs and applies the result. `--plan` (alias `--dry-run`) fetches (remote-tracking refs only; no local branch, worktree or stash changes) and prints what a real run would do, writing nothing else. Every local branch ref a run changes is journaled first (recovery ref plus journal record, Spec 029/031 mechanism), and `stw sync restore` undoes a run. What is journaled and what is only reported is stated in [Journal and restore](#journal-and-restore). The explicit two-step `plan`/`apply --plan ID` forms of `stw tidy` are deliberately **not** offered: a stored plan would be stale against a fetch and adds a re-classification step for no gain in a command that only fast-forwards or rebases the owner's own branches.
+`stw sync` is a manual, explicit, Git-only command that replaces `git pull` in the workspace root repository and in each direct submodule that currently sits on a branch with an upstream (owner decision 2026-10-21, replacing the earlier all-branches and all-worktrees scope). It is not a daemon, a hook, a schedule or an agent background task. `stw sync` **is** the action: there is no `apply` step. `--plan` (alias `--dry-run`) fetches the remote-tracking refs (the one change it makes) and prints what a run would do. Branches other than the current one and linked worktrees are neither listed nor touched. Every branch ref a run changes is journaled first (recovery ref plus journal record, see [Journal and restore](#journal-and-restore)).
 
-Decisions (owner preference: simple logic over covering every edge case; the repositories are the owner's own, so there is no hostile-repository threat model beyond the existing rule that repository content is data and ref names are never passed as options):
+Decisions:
 
-1. **Small option set.** `--rebase`, `--prune`, `--autostash`, `--submodules`, `--remote NAME` (default `origin`), `--json`. No `--force`, no merge strategy, no `--no-rebase`.
-2. **Never a merge commit.** Without `--rebase` a branch is only fast-forwarded. A diverged branch is reported, never merged or rewritten.
-3. **Dirty worktrees are skipped and reported** unless `--autostash` is given. A dirty worktree means tracked or staged changes; untracked files do not count (the Git operation itself refuses on a real collision and that branch is reported failed).
-4. **Rebase is conflict-free or nothing.** With `--rebase`, local commits of a checked-out branch are rebased onto its upstream. On any conflict the rebase is aborted (`git rebase --abort`), the branch is unchanged and reported `conflict`.
-5. **Branches not checked out anywhere** are updated by a ref update only when the move is a pure fast-forward. `--rebase` never applies to them (it would need a temporary worktree); a diverged one is reported `diverged`.
-6. **Git only.** A jj-owned path (including a colocated one) is refused with a clear message; jj has its own fetch and is a later spec. This is a declared limit, not a silent fallback to raw Git.
-7. **Network.** One `git fetch --no-tags --no-write-fetch-head --no-recurse-submodules [--prune|--no-prune] REMOTE` per run for the selected remote is the only network effect, also with `--plan`; `--no-prune` is passed explicitly so a `fetch.prune` setting never removes refs without `--prune`. A remote whose configured fetch refspecs write outside `refs/remotes/REMOTE/*` is refused before the fetch (`sync-refspec-unsafe`). `--submodules` adds no network effect (US5). Classification always uses the refs the fetch just produced.
-8. **Configuration and hooks.** `stw sync` runs on the owner's own repository, so the owner's Git configuration and hooks apply as for plain Git; the strict admission of `stw tidy apply` (refusing `core.hooksPath`, `submodule.*` and similar) does **not** apply, and a repository with such settings is not refused. Hooks run during real runs and during the plan's fetch (for example `post-merge`, `post-rewrite`, `post-checkout`, `reference-transaction`); stw installs none and does not skip any. A hook that makes Git exit non-zero makes that item `failed`; a hook that moves a branch is caught by the expected-value checks (FR-002). The only configuration stw overrides is what would make Git write beyond the journaled ref, in one fixed table:
+1. **Never stricter than `git pull`.** The default behaviour equals what `git pull` does for the same repository under the user's Git configuration, and stw adds no refusal that `git pull` does not have: `pull.rebase`, `branch.NAME.rebase`, `pull.ff`, `rebase.autoStash`, `merge.autoStash` and `fetch.prune` are honoured (the devcontainer's `pull.rebase=true`, `rebase.autoStash=true` and `fetch.prune=true` make a plain `stw sync` rebase local commits onto the upstream, autostash a dirty tree and prune, as `git pull` does). `--rebase` and `--ff-only` override `pull.rebase`; `--autostash` and `--no-autostash` override the autostash settings; `--prune` and `--no-prune` override `fetch.prune`. A repository is skipped, with a one-line reason, only where `git pull` itself would fail or would have to ask: a detached HEAD, no upstream, an operation in progress, a dirty tree whose changes the update would overwrite (and, for a rebase, a dirty tree without autostash), an untracked-file collision, and a diverged branch when neither `pull.rebase` nor `--rebase` is set (`needs a choice`, like git's "Need to specify how to reconcile divergent branches") or `pull.ff=only`/`--ff-only` forbids it. A rebase conflict stops as git stops: the rebase is left in progress, git's own continue/abort message is printed, the exit status is non-zero.
+2. **Never a merge commit.** This is the one deliberate difference from `git pull`: `pull.rebase=false` or `pull.ff=false` would make git create a merge commit; stw reports the diverged branch as `needs a choice` and fast-forwards when it can. (Open for the owner: whether `pull.rebase=false` should merge.)
+3. **Unit and discovery.** The unit is the current branch of one repository: the root (`PATH`, default `.`) and each direct submodule found as a gitlink of the index. A submodule that is not initialized, is detached (only reported, never moved and never checked out to the superproject pin) or has no upstream is reported and skipped. Nested submodules are out of scope. A branch that is also checked out in another worktree is skipped with one line.
+4. **Output.** Human output is the default: one line per repository (name, branch, outcome) and a summary line, colour only when stdout is a terminal and `NO_COLOR` is unset; `--json` keeps the machine format.
+5. **Exit status.** 0 unless the run is refused or a repository ended `failed`, `conflict` or `autostash-conflict`; skips are not errors; 2 for usage errors.
+6. **Git only.** A jj-owned path (including a colocated one) is refused with a clear message; jj has its own fetch and is a later spec.
+7. **Network.** One `git fetch --no-tags --no-write-fetch-head --no-recurse-submodules [--prune|--no-prune]` per repository for the upstream remote of its current branch is the only network effect, also with `--plan`; without `--prune`/`--no-prune` the configuration decides, as for `git pull`. Classification uses the refs the fetch just produced.
+8. **Configuration and hooks.** The owner's Git configuration and hooks apply as for plain Git. The only configuration stw overrides is what would make Git write beyond the journaled ref, in one fixed table:
 
 | Git call | Fixed override | Why |
 | --- | --- | --- |
-| every Git call that can touch a worktree (`merge`, `rebase`, `stash`, `reset`, `submodule`) | `-c submodule.recurse=false` | a configured recursion would move submodule HEADs outside the journal |
-| `rebase` | `--no-autostash --no-update-refs` and `-c rebase.updateRefs=false` | `rebase.updateRefs` would move other branch refs that have no journal record; stw does its own autostash (D4) |
-| `merge` | `--ff-only --no-autostash` | no merge commit; no hidden stash |
-| `fetch` | `--no-tags --no-write-fetch-head --no-recurse-submodules` and `--prune` or `--no-prune` as chosen | decision 7 |
+| `merge`, `rebase` | `-c submodule.recurse=false` | a configured recursion would move submodule HEADs outside the journal |
+| `rebase` | `--no-update-refs` and `-c rebase.updateRefs=false` | `rebase.updateRefs` would move other branch refs that have no journal record |
+| `merge` | `--ff-only` and the explicit `--autostash` or `--no-autostash` resolved from the configuration | no merge commit |
+| `fetch` | `--no-tags --no-write-fetch-head --no-recurse-submodules` | no tag or `FETCH_HEAD` writes, no submodule fetch |
 
-Everything else (user hooks, `core.hooksPath`, credential and URL settings) is left as the owner configured it.
+The earlier `sync-refspec-unsafe` refusal (a configured fetch refspec writing outside `refs/remotes/REMOTE/*`) is dropped because it is a refusal `git pull` does not have (open for the owner).
 
 ### Mapping to `git pull --rebase --prune`
 
@@ -41,6 +41,8 @@ Everything else (user hooks, `core.hooksPath`, credential and URL settings) is l
 | `--plan` / `--dry-run` | no direct equivalent (`git fetch` then inspect) | fetch only; no local change |
 
 ## User scenarios and acceptance
+
+The scenarios below were written for the earlier all-branches scope. Read them for the current branch of each repository (the root and the submodules on a branch): branch lists, non-checked-out branches, worktree items and `skipped-busy` for other worktrees no longer exist, `--remote` and `--submodules` are replaced by the discovery of decision 3, and the options follow decision 1.
 
 ### US1 — Fast-forward every tracking branch of one repository (P1, slice 1)
 
