@@ -242,3 +242,24 @@ func TestTidyRestoreCommandsAreListedInHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestTidyRestoreTextShowsBranchConfigKeysQuoted(t *testing.T) {
+	var s restoreSpy
+	s.restoreResult = okRestore()
+	remote := "or\x1b[31migin\nx"
+	oid := strings.Repeat("a", 40)
+	s.restoreResult.Entries[0].BranchConfig = &workspace.V3RestoreBranchConfig{Status: "recorded", ReflogTip: oid, BranchOID: oid, Keys: []workspace.V3RestoreConfigKey{
+		{Key: "branch.topic.remote", Remote: &remote, State: "reapply", Outcome: "applied"}, {Key: "branch.topic.description", State: "skip-not-recorded"}}}
+	text, err := s.run([]string{"restore", "--contract", "3", "--plan", "plan1", "--state-dir", stateArg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`Branch config: status="recorded" reflog_tip="` + oid + `"`, `key="branch.topic.remote"`, `state="reapply"`, `outcome="applied"`, `key="branch.topic.description" state="skip-not-recorded"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text lacks %s:\n%s", want, text)
+		}
+	}
+	if strings.ContainsAny(text, "\x1b") || strings.Contains(text, "igin\nx") {
+		t.Errorf("unescaped remote name:\n%q", text)
+	}
+}
