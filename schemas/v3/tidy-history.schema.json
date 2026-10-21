@@ -1,0 +1,228 @@
+{
+  "$defs": {
+    "Entry": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "not": {
+                  "const": "local-refs"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "restorable": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "journal_status": {
+                "const": "unreadable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "mode": {
+                "const": "unknown"
+              },
+              "restorable": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "decision_kinds": {
+          "additionalProperties": false,
+          "properties": {
+            "ai": {
+              "maximum": 1024,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "human": {
+              "maximum": 1024,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human",
+            "ai"
+          ],
+          "type": "object"
+        },
+        "deleted": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "journal_status": {
+          "enum": [
+            "complete",
+            "incomplete",
+            "unreadable"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "local-refs",
+            "tracking-refs",
+            "owned-retirement",
+            "legacy-retirement",
+            "unknown"
+          ]
+        },
+        "plan_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "recovery_refs": {
+          "enum": [
+            "present",
+            "partial",
+            "absent"
+          ]
+        },
+        "restorable": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retained": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "time": {
+          "maxLength": 64,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id",
+        "time",
+        "mode",
+        "deleted",
+        "retained",
+        "restorable",
+        "recovery_refs",
+        "decision_kinds",
+        "journal_status"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v3/tidy-history.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "command": {
+      "enum": [
+        "tidy-history",
+        "tidy-restore"
+      ]
+    },
+    "diagnostics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 4096,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/Entry"
+      },
+      "maxItems": 1024,
+      "type": "array"
+    },
+    "scan_truncated": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "refused",
+        "error"
+      ]
+    },
+    "total": {
+      "maximum": 4096,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "truncated": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "shown": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unit": {
+            "enum": [
+              "journals",
+              "objects",
+              "checked-journals"
+            ]
+          }
+        },
+        "required": [
+          "unit",
+          "shown",
+          "total"
+        ],
+        "type": "object"
+      },
+      "maxItems": 3,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "entries",
+    "total",
+    "scan_truncated",
+    "truncated",
+    "diagnostics"
+  ],
+  "type": "object"
+}
