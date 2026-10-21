@@ -21,7 +21,7 @@ Add the read-only `stw restack plan` for native Git: one operation in a new `int
 | Read-only first, inspectable plans | Yes (D5); apply is a later slice with its own plan and analysis |
 | No undeclared executable/network | Fixed Git plumbing only; `internal/restack` joins `NETWORK_FREE_PACKAGES` in `scripts/check-architecture.py`; process starts only in reviewed files |
 | Published contracts preserved | New schema file only; allowlist/copy tests extended; no existing byte changes |
-| No Git configuration write | Identity from environment and flags only (D9, FR-015) |
+| No Git configuration write | Expected identity from the `--identity` flag only; fixed constant replay identity; nothing written (D9, FR-015) |
 | Push/force | Text only, `--force-with-lease=ref:sha` form, never run (D8) |
 
 ## Design

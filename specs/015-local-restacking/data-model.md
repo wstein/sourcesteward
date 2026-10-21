@@ -32,7 +32,7 @@ The top-level fields are those of the [contract](contracts/restack-plan.md#resul
 
 Replay: `{state: "clean"|"conflict"|"incomplete", commits_replayed, final_tree, tree_equals_branch_tip_plus_parent_delta}`. No commit id of the quarantine is a claim: predicted commit ids depend on committer date and identity and are not reported.
 
-State values never mean authorization; any `unknown` is reported with its reason (`reason` enum: `limit`, `attribute-hazard`, `object-missing`, `no-expected-identity`).
+State values never mean authorization; any `unknown` is reported with its reason (`reason` enum: `limit`, `attribute-hazard`, `object-missing`, `no-expected-identity`, `empty-parent-range`).
 
 ## Effects
 
