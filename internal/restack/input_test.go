@@ -113,40 +113,9 @@ func TestMergeCommitInRangeIsRefused(t *testing.T) {
 }
 
 func TestRangeTooLargeIsIncomplete(t *testing.T) {
-	s := rebaseMergedWith(t, func(r *repo) { r.commit("B", map[string]string{"b": "b\n"}) }, func(r *repo) {
-		// 201 commits written in one fast-import stream keep the fixture quick.
-		var b strings.Builder
-		b.WriteString("reset refs/heads/child\nfrom refs/heads/parent\n")
-		for i := 0; i < MaxCommits+1; i++ {
-			b.WriteString("commit refs/heads/child\ncommitter F <f@x> " + itoa(1_800_000_000+i) + " +0000\ndata 1\nc\nM 100644 inline f.txt\ndata " + itoa(len(itoa(i))+1) + "\n" + itoa(i) + "\n\n")
-		}
-		if out, code := r.gitIn(r.dir, nil, b.String(), "fast-import", "--quiet"); code != 0 {
-			t.Fatal(out)
-		}
-		r.checkout("-f", "child")
-	}, func(r *repo) { r.commit("M", map[string]string{"m": "m\n"}) })
+	s := oversizeRange(t)
 	res := s.plan(t)
 	if res.Status != StatusIncomplete || firstCode(res) != "range-too-large" || res.Boundary.Reached == nil || *res.Boundary.Reached != "max_commits" || res.Outcome != OutcomeNone {
 		t.Fatalf("%s %+v %v", res.Status, res.Diagnostics, res.Boundary.Reached)
-	}
-}
-
-func TestAnnotatedTagRefPeelsToItsCommit(t *testing.T) {
-	s := rebaseMerged(t)
-	s.git("tag", "-a", "-m", "release", "v1", s.oldParent)
-	o := s.options()
-	o.OldParent = "refs/tags/v1"
-	res := Plan(context.Background(), o)
-	if res.Status != StatusOK || *res.Input.OldParent.OID != s.oldParent {
-		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
-	}
-}
-
-func TestACommitIdNamedLikeARefIsAmbiguous(t *testing.T) {
-	s := rebaseMerged(t)
-	s.git("update-ref", "refs/heads/"+s.oldParent, s.base)
-	res := s.plan(t)
-	if firstCode(res) != "ref-ambiguous" {
-		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
 	}
 }

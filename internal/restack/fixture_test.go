@@ -45,6 +45,8 @@ func (r *repo) env() []string {
 		"PATH=" + os.Getenv("PATH"), "HOME=" + r.dir, "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_NOSYSTEM=1",
 		"GIT_AUTHOR_NAME=Fixture Owner", "GIT_AUTHOR_EMAIL=owner@example.org", "GIT_COMMITTER_NAME=Fixture Owner", "GIT_COMMITTER_EMAIL=owner@example.org",
 		"GIT_AUTHOR_DATE=" + date, "GIT_COMMITTER_DATE=" + date, "GIT_EDITOR=:", "LC_ALL=C",
+		// The fixture itself never starts background maintenance that would race a snapshot.
+		"GIT_CONFIG_COUNT=2", "GIT_CONFIG_KEY_0=gc.auto", "GIT_CONFIG_VALUE_0=0", "GIT_CONFIG_KEY_1=maintenance.auto", "GIT_CONFIG_VALUE_1=false",
 	}
 }
 
@@ -169,4 +171,20 @@ func firstCode(r Result) string {
 		return ""
 	}
 	return r.Diagnostics[0].Code
+}
+
+// oversizeRange is a branch with MaxCommits+1 commits above the old parent, written with one
+// fast-import stream to keep the fixture quick.
+func oversizeRange(t *testing.T) *scenario {
+	return rebaseMergedWith(t, func(r *repo) { r.commit("B", map[string]string{"b": "b\n"}) }, func(r *repo) {
+		var b strings.Builder
+		b.WriteString("reset refs/heads/child\nfrom refs/heads/parent\n")
+		for i := 0; i < MaxCommits+1; i++ {
+			b.WriteString("commit refs/heads/child\ncommitter F <f@x> " + itoa(1_800_000_000+i) + " +0000\ndata 1\nc\nM 100644 inline f.txt\ndata " + itoa(len(itoa(i))+1) + "\n" + itoa(i) + "\n\n")
+		}
+		if out, code := r.gitIn(r.dir, nil, b.String(), "fast-import", "--quiet"); code != 0 {
+			t.Fatal(out)
+		}
+		r.checkout("-f", "child")
+	}, func(r *repo) { r.commit("M", map[string]string{"m": "m\n"}) })
 }
