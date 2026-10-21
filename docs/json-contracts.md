@@ -196,19 +196,19 @@ their bytes. Exit status 3 (`--strict` with error findings in a complete result)
 
 ## Sync schema v1 (unpublished)
 
-[Sync schema](../schemas/v1/sync.schema.json) describes `stw sync --plan --json` (Spec 032, slice 1a). It is
+[Sync schema](../schemas/v1/sync.schema.json) describes `stw sync [--plan] --json` (Spec 032, slices 1a and 1b). It is
 checked in and validated offline but, like the release source schemas, excluded from Pages packaging until the
-feature is accepted. One object with `schema_version` 1, `command` `sync`, `mode` `plan`, `run_id` null,
+feature is accepted. One object with `schema_version` 1, `command` `sync`, `mode` (`plan`, or `sync` for a real run), `run_id` (null for a plan and for a run that changed no branch, else the run ID of the journal and recovery refs),
 `remote`, `options` (`rebase`, `prune`, `autostash`, `submodules`, the last three false until their slices),
 `fetch` (`performed`, `pruned_refs` at most 256 with the full `pruned_total`), `items`, an always empty
 `submodules`, `summary` (`total`, `by_result`, `untracked`) and `error` (null, or `code` and `message` of a refused
 or failed run, with no items). No key is omitted; absent values are null. An item has `branch`, `worktree` (path or
-null when checked out nowhere), `result` (`fast-forward`, `up-to-date`, `ahead`, `diverged`, `skipped-dirty`,
-`upstream-gone`), `old_oid`, `new_oid` (the would-be tip, only for `fast-forward` and `skipped-dirty`) and `reason`
-(set for `skipped-dirty`, `diverged` and `upstream-gone`). Exit 0 when nothing needs attention, 1 for a failed run or
-any `skipped-dirty`/`diverged` item, 2 for usage errors with no JSON. Tests validate the fixtures, reject broken
+null when checked out nowhere), `result` (plan: `fast-forward`, `up-to-date`, `ahead`, `diverged`, `skipped-dirty`,
+`upstream-gone`; run: `fast-forward` becomes `fast-forwarded` and `failed` is added), `old_oid`, `new_oid` (the would-be or new tip, only for `fast-forward`, `fast-forwarded` and `skipped-dirty`) and `reason`
+(set for `skipped-dirty`, `diverged`, `upstream-gone` and `failed`). Exit 0 when nothing needs attention, 1 for a failed run or
+any `skipped-dirty`/`diverged`/`failed` item, 2 for usage errors with no JSON. Tests validate the fixtures, reject broken
 variants and check real command output from temporary repositories with a bare remote. See
-[commands](commands.md#plan-how-local-branches-follow-their-upstream).
+[commands](commands.md#bring-local-branches-up-to-date).
 
 ## Release source schemas (unpublished)
 

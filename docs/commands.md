@@ -14,7 +14,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
-| `stw sync --plan [PATH] [--remote NAME] [--prune]` (alias `--dry-run`) | Fetch one remote and classify every tracking branch (fast-forward, up-to-date, ahead, diverged, skipped-dirty, upstream-gone); Git only | One `git fetch` that changes remote-tracking refs only; no local branch, worktree or stash change. Applying the plan is a later slice |
+| `stw sync [PATH] [--plan] [--remote NAME] [--prune]` (`--dry-run` is an alias of `--plan`) | Fetch one remote, classify every tracking branch and fast-forward it (`--plan` stops before the change); Git only | One `git fetch`; then fast-forwards of local branches, each journaled with a recovery ref. `--plan` changes remote-tracking refs only |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -84,23 +84,31 @@ means a member is partial or failed, with the cause on its entry (gitlinks and s
 commonly are, and very long change or reference listings are truncated with a disclosure, because
 the limits of single-repository inventory apply to each member). See [multi-repository inventory](repos.md).
 
-## Plan how local branches follow their upstream
+## Bring local branches up to date
 
 ```sh
 stw sync --plan .
+stw sync --prune .
 stw sync --plan --prune --remote upstream --json ~/work/app
 ```
 
-`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)); this slice ships
-the plan (`--plan`, alias `--dry-run`, required for now: a real run is a usage error until a later
-slice). It runs one `git fetch --no-tags REMOTE` (default `origin`; `--prune` adds `--prune` and lists the
-removed remote-tracking refs) and classifies each local branch that tracks that remote from the fresh
-refs. Local branches, worktrees, the index, tags, `FETCH_HEAD` and stashes are never changed, the repository's own hooks
-run as Git runs them for a fetch, and no merge commit is ever planned. Results:
+`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)). `--plan` (alias
+`--dry-run`) only reports; without it the command applies the plan (fast-forward only: `--rebase`,
+`--autostash`, `--submodules` and `restore` are later slices). It runs one
+`git fetch --no-tags --no-write-fetch-head --no-recurse-submodules REMOTE` (default `origin`; `--prune` adds `--prune` and lists the
+removed remote-tracking refs; without it no ref is pruned even if `fetch.prune` is set) and classifies each local branch that tracks that remote from the fresh
+refs. The plan never changes local branches, worktrees, the index, tags, `FETCH_HEAD` or stashes. A run
+fast-forwards a checked-out clean branch with `git merge --ff-only NEW_OID` in its worktree (HEAD must still be the
+planned old OID before, the planned new OID and `ORIG_HEAD` the old OID after) and any other branch with `git update-ref`
+and the expected old OID. Before each change a `sync` journal record (`.git/stw/sync/RUN_ID.json`) and a recovery ref
+`refs/stw/recovery/sync/RUN_ID/N` are written; the record is completed afterwards. No merge commit is ever created, a
+dirty worktree (tracked or staged changes) is skipped untouched, local branches are never deleted, and one failing
+branch never stops the others. The repository's own hooks run as Git runs them. Results:
 
 | Result | Meaning | Exit |
 | --- | --- | --- |
-| `fast-forward` | upstream is ahead; a run would fast-forward it (the worktree is clean or the branch is checked out nowhere) | 0 |
+| `fast-forward` (plan) / `fast-forwarded` (run) | upstream is ahead; the branch is (run) or would be (plan) fast-forwarded | 0 |
+| `failed` | a run only: the change did not happen or was not verified; `reason` is `head-moved`, `raced`, `not-fast-forward`, `journal-failed: ...` or `git-failed: ...` (a hook exiting non-zero) | 1 |
 | `up-to-date`, `ahead` | equal to, or only ahead of, its upstream | 0 |
 | `upstream-gone` | the remote-tracking ref is missing (visible after `--prune`); the branch is kept | 0 |
 | `skipped-dirty` | a fast-forward is due but its worktree has tracked or staged changes (untracked files do not count) | 1 |
@@ -108,7 +116,7 @@ run as Git runs them for a fetch, and no merge commit is ever planned. Results:
 
 Branches without an upstream under the selected remote are only counted (`untracked`). Exit 1 also means
 the run failed (a jj-owned or non-Git path, an unknown remote, a failed fetch, more than 1024 branches); `--json`
-then still prints the result with `error` set. Usage errors (including a missing `--plan`) exit 2 before any effect.
+then still prints the result with `error` set. Usage errors exit 2 before any effect. Retention of old runs and `stw sync restore` come in later slices.
 Output is one line per branch (`BRANCH WORKTREE RESULT OLD..NEW`) and a summary; see the
 [JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 
