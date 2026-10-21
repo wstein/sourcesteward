@@ -24,8 +24,8 @@ The read-only `stw restack plan` for native Git is implemented in source on `fea
 quarantine, `range-diff` pairing, `cherry` classification of the parent's commits, own-diff and identity evidence, predicted
 conflicts, the overlap risk indicator, effects, and the inert lease push and resync texts, with a closed outcome table that never
 reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [tasks](../specs/015-local-restacking/tasks.md)
-(19 of 23 done) and [verification](../specs/015-local-restacking/verification.md). Open: the independent design review (T001),
-the minimum/current Git lanes (T021) and the independent review of the exact head (T023); T004 was not done by design. Status
+(20 of 24 done) and [verification](../specs/015-local-restacking/verification.md). Open:
+the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply`, jj and the push are later slices.
 
 ## Active work: Spec 032 stw sync (design only, 2026-10-21, runtime not started)

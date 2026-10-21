@@ -2,12 +2,12 @@
 
 **Input**: `spec.md`, `plan.md`, `data-model.md`, `contracts/restack-plan.md`, `quickstart.md`.
 **Tests**: Required by constitution principle IV. Write each behavior test, observe it fail, then implement; the characterization tests and refactor of T004 were skipped (see its line). Every task names the requirements (FR) it covers; a mutation control (MC) is a deliberate defect the tests must catch, run and recorded in the task commit message. Task checkboxes record execution, not design approval. No task runs a standalone build, `go install`, a Pages build, a release or a push of anything but the author's topic branch.
-**Progress (2026-10-21)**: T002 to T003, T005 to T020 and T022 are implemented in source on `feat/015-restack-plan` (evidence in [verification](verification.md)); T001 (independent design review), T004 (not done by design, see its line), T021 (minimum/current Git lanes) and T023 (independent review of the exact head) remain open. The command stays hidden and the schema unpublished until T021 and T023 hold.
+**Progress (2026-10-21)**: T001, T002 to T003, T005 to T020 and T022 are done (implemented in source) in source on `feat/015-restack-plan` (evidence in [verification](verification.md)); T004 (not done by design, see its line), T021 (minimum/current Git lanes), T023 (independent review of the exact head) and T024 (emit the reserved limitation, follow-up) remain open. The command stays hidden and the schema unpublished until T021 and T023 hold.
 **Work items**: WI1 (T002 to T005), WI2 (T006 to T010), WI3 (T011 to T016), WI4 (T017 to T020), WI5 (T021 to T023). Each ends with `make check` green and is one reviewable change; stack them linearly.
 
 ## Phase 1: Design and analysis
 
-- [ ] T001 Independent design review of this specification set and cross-artifact analysis in `specs/015-local-restacking/analysis.md`; resolve critical, high and medium findings before any code; preserve provenance. (WP0)
+- [x] T001 Independent design review of this specification set and cross-artifact analysis in `specs/015-local-restacking/analysis.md`; resolve critical, high and medium findings before any code; preserve provenance. (WP0) **Done 2026-10-21**: Opus design review rounds 1 to 3, CLEAR at 08cf56dd283367bc0e85d47c86cfd5dbe2db6ec0; see [analysis](analysis.md).
 
 ## WI1 — Input, resolver and refusals
 

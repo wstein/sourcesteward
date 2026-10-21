@@ -8,7 +8,7 @@ Task T001. This file records the independent design review; the foreman ticks T0
 | --- | --- | --- | --- |
 | 1 | origin/main b0cc02d with PR #121 head 5738ba998cea2cf896328e1fa77920987cd56787 (design documents and implementation) | independent strongest-tier review (Opus) | NOT CLEAR: 1 medium, several low |
 | 2 | delta at 3307bc49c224a5a8458f98bc5d55dceb0425ce1c (docs-only fixes on the restacked branch) | independent review | NOT CLEAR: 2 open (no task tracked emitting `rewrite-committer-not-predicted`; a stale `state` clause in the data model) and one nit (tasks.md header) |
-| 3 | delta of the commit that fixes round 2 | pending | pending |
+| 3 | delta at 08cf56dd283367bc0e85d47c86cfd5dbe2db6ec0 (fixes of round 2) | independent review (Opus) | CLEAR |
 
 An earlier review of the exact implementation head cb6bb64 was CLEAR with two wording follow-ups (object mtime caveat, WP2 wording), fixed in 5738ba9.
 
@@ -27,4 +27,4 @@ An earlier review of the exact implementation head cb6bb64 was CLEAR with two wo
 
 ## Verdict
 
-Findings F1 to F6 are resolved in the documents, except the code emission of the F1 limitation string, tracked by T024. Round 2 found a stale `state` clause in the data model, a missing tracking task and a tasks.md header nit; all three are fixed in the round 3 commit. The verdict after the delta review is pending.
+Findings F1 to F6 are resolved in the documents, except the code emission of the F1 limitation string, tracked by T024. Round 2 found a stale `state` clause in the data model, a missing tracking task and a tasks.md header nit; all three are fixed in the round 3 commit. Verdict after the delta review: CLEAR at 08cf56dd283367bc0e85d47c86cfd5dbe2db6ec0.
