@@ -56,6 +56,9 @@ type V3RestoreEntry struct {
 	Class       string             `json:"class"`
 	Flags       []string           `json:"flags"`
 	Decision    *V3RestoreDecision `json:"decision"`
+	// Outcome and RestoreJournal are present on an apply result only.
+	Outcome        string              `json:"outcome,omitempty"`
+	RestoreJournal *V3RestoreRecordRef `json:"restore_journal,omitempty"`
 }
 
 // V3RestoreCounts counts the in-scope entries per state.
@@ -381,7 +384,16 @@ func classifyRestoreEntries(ctx context.Context, n restoreNative, entries []*V3R
 type tidyV3RestoreCoordinator struct {
 	identity    func(context.Context, string) (NativeIdentity, error)
 	now         func() time.Time
+	who         func() string
 	observeArgs func([]string)
+	// writeRecord stores one restore record; tests fail it.
+	writeRecord func(*store, string, restoreRecord) error
+	// afterEvaluate runs once the effects are computed, beforeCAS between the
+	// last re-evaluation and the compare-and-swap, afterIntent and afterCAS
+	// after the intent and after the effect (a returned error simulates a crash).
+	afterEvaluate         func()
+	beforeCAS             func(V3RestoreEntry)
+	afterIntent, afterCAS func(V3RestoreEntry) error
 }
 
 func defaultTidyV3RestoreCoordinator() tidyV3RestoreCoordinator {
@@ -398,7 +410,7 @@ func failRestore(r V3RestoreResult, err error) V3RestoreResult {
 	code := failed.Diagnostics[0].Code
 	r.Status, r.Diagnostics, r.Entries, r.Counts = "error", failed.Diagnostics, []V3RestoreEntry{}, V3RestoreCounts{}
 	switch code {
-	case "invalid-options", "authorization-required", "plan-not-found", "action-not-found", "unsupported-mode", "journal-unreadable":
+	case "invalid-options", "authorization-required", "plan-not-found", "action-not-found", "unsupported-mode", "journal-unreadable", "git-hooks-refused", "git-unsafe-configuration":
 		r.Status = "refused"
 	}
 	return r
@@ -456,9 +468,6 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	if err := validateV3RestoreOptions(o); err != nil {
 		return failRestore(r, err)
 	}
-	if o.Apply {
-		return failRestore(r, failure("invalid-options", "Restore apply is not available yet."))
-	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	ctx, _, closeSession, err := withPlanningSession(ctx)
@@ -483,6 +492,9 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	}
 	if err = evaluateRestoreItems(ctx, n, items); err != nil {
 		return failRestore(r, err)
+	}
+	if o.Apply {
+		return c.applyRestore(ctx, n, o, view, items, r)
 	}
 	for _, item := range items {
 		r.Entries = append(r.Entries, item.entry)
