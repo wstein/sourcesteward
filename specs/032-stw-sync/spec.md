@@ -16,7 +16,7 @@ Decisions (owner preference: simple logic over covering every edge case; the rep
 4. **Rebase is conflict-free or nothing.** With `--rebase`, local commits of a checked-out branch are rebased onto its upstream. On any conflict the rebase is aborted (`git rebase --abort`), the branch is unchanged and reported `conflict`.
 5. **Branches not checked out anywhere** are updated by a ref update only when the move is a pure fast-forward. `--rebase` never applies to them (it would need a temporary worktree); a diverged one is reported `diverged`.
 6. **Git only.** A jj-owned path (including a colocated one) is refused with a clear message; jj has its own fetch and is a later spec. This is a declared limit, not a silent fallback to raw Git.
-7. **Network.** One `git fetch --no-tags [--prune|--no-prune] REMOTE` per run for the selected remote is the only network effect, also with `--plan`; `--no-prune` is passed explicitly so a `fetch.prune` setting never removes refs without `--prune`. A remote whose configured fetch refspecs write outside `refs/remotes/REMOTE/*` is refused before the fetch (`sync-refspec-unsafe`). `--submodules` adds no network effect (US5). Classification always uses the refs the fetch just produced.
+7. **Network.** One `git fetch --no-tags --no-write-fetch-head --no-recurse-submodules [--prune|--no-prune] REMOTE` per run for the selected remote is the only network effect, also with `--plan`; `--no-prune` is passed explicitly so a `fetch.prune` setting never removes refs without `--prune`. A remote whose configured fetch refspecs write outside `refs/remotes/REMOTE/*` is refused before the fetch (`sync-refspec-unsafe`). `--submodules` adds no network effect (US5). Classification always uses the refs the fetch just produced.
 8. **Configuration and hooks.** `stw sync` runs on the owner's own repository, so the owner's Git configuration and hooks apply as for plain Git; the strict admission of `stw tidy apply` (refusing `core.hooksPath`, `submodule.*` and similar) does **not** apply, and a repository with such settings is not refused. Hooks run during real runs and during the plan's fetch (for example `post-merge`, `post-rewrite`, `post-checkout`, `reference-transaction`); stw installs none and does not skip any. A hook that makes Git exit non-zero makes that item `failed`; a hook that moves a branch is caught by the expected-value checks (FR-002). The only configuration stw overrides is what would make Git write beyond the journaled ref, in one fixed table:
 
 | Git call | Fixed override | Why |
@@ -24,7 +24,7 @@ Decisions (owner preference: simple logic over covering every edge case; the rep
 | every Git call that can touch a worktree (`merge`, `rebase`, `stash`, `reset`, `submodule`) | `-c submodule.recurse=false` | a configured recursion would move submodule HEADs outside the journal |
 | `rebase` | `--no-autostash --no-update-refs` and `-c rebase.updateRefs=false` | `rebase.updateRefs` would move other branch refs that have no journal record; stw does its own autostash (D4) |
 | `merge` | `--ff-only --no-autostash` | no merge commit; no hidden stash |
-| `fetch` | `--no-tags` and `--prune` or `--no-prune` as chosen | decision 7 |
+| `fetch` | `--no-tags --no-write-fetch-head --no-recurse-submodules` and `--prune` or `--no-prune` as chosen | decision 7 |
 
 Everything else (user hooks, `core.hooksPath`, credential and URL settings) is left as the owner configured it.
 

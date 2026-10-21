@@ -4,7 +4,7 @@
 
 ## Slice 0 — Design
 
-- [ ] T001 Independent review of the exact committed head of this spec (strongest tier, executed checks).
+- [x] T001 Independent review of the exact committed head of this spec (strongest tier, executed checks). Evidence: Opus design review NOT CLEAR at b0cc02d with F1-F8, resolved by the amendment; Opus delta review CLEAR at 3d8d1da.
 
 ## Slice 1a — Classification and `--plan`
 
