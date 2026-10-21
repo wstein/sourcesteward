@@ -1,0 +1,1174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v2/hosting-prs.schema.json",
+  "title": "SourceSteward hosting PR lookup by head SHA, schema 2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "status",
+    "backend",
+    "identity",
+    "repository",
+    "candidates",
+    "query",
+    "pull_requests",
+    "count",
+    "truncated",
+    "diagnostics",
+    "observed_at",
+    "sampled_at",
+    "boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "prs"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "git",
+        "jj",
+        "unknown",
+        "ambiguous",
+        "gitbutler"
+      ]
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/git_identity"
+            },
+            {
+              "$ref": "#/$defs/jj_identity"
+            }
+          ]
+        }
+      ]
+    },
+    "repository": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/repository"
+        }
+      ]
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "query": {
+      "type": "object",
+      "required": [
+        "head_sha"
+      ],
+      "properties": {
+        "head_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "pull_requests": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "$ref": "#/$defs/lookup_pr"
+      }
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      },
+      "maxItems": 1
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sampled_at": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "date-time"
+        }
+      ]
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "complete",
+        "network",
+        "max_bytes",
+        "timeout_seconds",
+        "max_requests",
+        "requests",
+        "limitations"
+      ],
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "network": {
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "const": 1048576
+        },
+        "timeout_seconds": {
+          "const": 30
+        },
+        "max_requests": {
+          "const": 1
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "git_identity": {
+      "title": "SourceSteward inspection result (schema 1)",
+      "description": "Success and operational failure results. Usage and writer failures may not emit JSON. Unknown object properties and diagnostic codes are compatible extensions.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status",
+        "backend",
+        "input_path",
+        "evidence",
+        "repository",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unsupported",
+            "error"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj",
+            "gitbutler",
+            "ambiguous",
+            "unknown"
+          ]
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Absolute path when available; empty if input cannot be represented or resolved."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/evidence"
+          }
+        },
+        "repository": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/git_identity/$defs/repository"
+            }
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/diagnostic"
+          }
+        }
+      },
+      "$defs": {
+        "head": {
+          "type": "object",
+          "required": [
+            "state",
+            "ref",
+            "oid"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "attached",
+                "detached",
+                "unborn"
+              ]
+            },
+            "ref": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^refs/heads/.+"
+                }
+              ]
+            },
+            "oid": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "attached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "detached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "null"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "unborn"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "repository": {
+          "type": "object",
+          "required": [
+            "git_dir",
+            "common_dir",
+            "worktree",
+            "bare",
+            "linked_worktree",
+            "object_format",
+            "head"
+          ],
+          "properties": {
+            "git_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "common_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worktree": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bare": {
+              "type": "boolean"
+            },
+            "linked_worktree": {
+              "type": "boolean"
+            },
+            "object_format": {
+              "enum": [
+                "sha1",
+                "sha256"
+              ]
+            },
+            "head": {
+              "$ref": "#/$defs/git_identity/$defs/head"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "bare": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "worktree": {
+                    "type": "null"
+                  },
+                  "linked_worktree": {
+                    "const": false
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "worktree": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha1"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{40}$",
+                            "minLength": 40,
+                            "maxLength": 40
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha256"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$",
+                            "minLength": 64,
+                            "maxLength": 64
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "kind",
+            "location"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "jj-metadata",
+                "gitbutler-metadata",
+                "gitbutler-reference"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              },
+              "repository": {
+                "$ref": "#/$defs/git_identity/$defs/repository"
+              },
+              "diagnostics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "repository": {
+                "type": "null"
+              },
+              "diagnostics": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unsupported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "enum": [
+                  "jj",
+                  "gitbutler",
+                  "ambiguous"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "jj_identity": {
+      "title": "SourceSteward native jj inspection result (schema 2)",
+      "description": "Native jj stored identity and operational failures. Git/version retain schema 1. Additional object properties and diagnostic codes are compatible extensions. Usage/writer failures may not emit complete JSON.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status",
+        "backend",
+        "input_path",
+        "evidence",
+        "repository",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "backend": {
+          "const": "jj"
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Absolute path when available; empty if input cannot be represented or resolved."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jj_identity/$defs/evidence"
+          }
+        },
+        "repository": {
+          "type": "null"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jj_identity/$defs/diagnostic"
+          }
+        },
+        "jj_repository": {
+          "$ref": "#/$defs/jj_identity/$defs/jj_repository"
+        }
+      },
+      "$defs": {
+        "evidence": {
+          "type": "object",
+          "required": [
+            "kind",
+            "location"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "jj-metadata",
+                "gitbutler-metadata",
+                "gitbutler-reference"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "jj_repository": {
+          "type": "object",
+          "required": [
+            "workspace_root",
+            "metadata_dir",
+            "repository_dir",
+            "workspace_name",
+            "change_id",
+            "commit_id",
+            "operation_id",
+            "observation"
+          ],
+          "properties": {
+            "workspace_root": {
+              "type": "string",
+              "minLength": 1
+            },
+            "metadata_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "repository_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "change_id": {
+              "type": "string",
+              "pattern": "^[k-z]{32}$",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            "commit_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$",
+              "minLength": 40,
+              "maxLength": 40
+            },
+            "operation_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{128}$",
+              "minLength": 128,
+              "maxLength": 128
+            },
+            "observation": {
+              "type": "object",
+              "required": [
+                "working_copy",
+                "limitation"
+              ],
+              "properties": {
+                "working_copy": {
+                  "const": "stored-unsnapshotted"
+                },
+                "limitation": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "jj_repository"
+            ],
+            "properties": {
+              "diagnostics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "jj_repository"
+              ]
+            },
+            "properties": {
+              "diagnostics": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "host",
+        "owner",
+        "name",
+        "selection"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selection": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "remote",
+        "host",
+        "owner",
+        "name"
+      ],
+      "properties": {
+        "remote": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "lookup_pr": {
+      "type": "object",
+      "required": [
+        "number",
+        "title",
+        "url",
+        "state",
+        "draft",
+        "head_sha",
+        "base_sha",
+        "head_ref",
+        "base_ref",
+        "head_repository",
+        "base_repository",
+        "merged",
+        "merged_at",
+        "closed_at",
+        "merge_commit_sha",
+        "result_sha",
+        "lifecycle",
+        "head_match"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "head_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "base_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "head_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "head_repository": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+            }
+          ]
+        },
+        "base_repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+        },
+        "merged": {
+          "type": "boolean"
+        },
+        "merged_at": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "date-time"
+            }
+          ]
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "date-time"
+            }
+          ]
+        },
+        "merge_commit_sha": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          ]
+        },
+        "result_sha": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          ]
+        },
+        "lifecycle": {
+          "enum": [
+            "open",
+            "closed-unmerged",
+            "merged"
+          ]
+        },
+        "head_match": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lifecycle": {
+                "const": "open"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "const": "open"
+              },
+              "merged": {
+                "const": false
+              },
+              "merged_at": {
+                "type": "null"
+              },
+              "closed_at": {
+                "type": "null"
+              },
+              "result_sha": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lifecycle": {
+                "const": "closed-unmerged"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "const": "closed"
+              },
+              "merged": {
+                "const": false
+              },
+              "merged_at": {
+                "type": "null"
+              },
+              "closed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "result_sha": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lifecycle": {
+                "const": "merged"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "const": "closed"
+              },
+              "merged": {
+                "const": true
+              },
+              "merged_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "closed_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "merge_commit_sha": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result_sha": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lifecycle": {
+                "const": "merged"
+              },
+              "merge_commit_sha": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result_sha": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "repository": {
+            "type": "object"
+          },
+          "sampled_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "diagnostics": {
+            "maxItems": 0
+          },
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": true
+              },
+              "network": {
+                "const": true
+              },
+              "requests": {
+                "const": 1
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "pull_requests": {
+            "maxItems": 0
+          },
+          "count": {
+            "const": 0
+          },
+          "truncated": {
+            "const": false
+          },
+          "sampled_at": {
+            "type": "null"
+          },
+          "diagnostics": {
+            "minItems": 1
+          },
+          "boundary": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "truncated": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "count": {
+            "const": 30
+          },
+          "boundary": {
+            "properties": {
+              "limitations": {
+                "contains": {
+                  "const": "lookup-single-page"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "truncated": {
+            "const": false
+          },
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "count": {
+            "maximum": 29
+          }
+        }
+      }
+    }
+  ]
+}
