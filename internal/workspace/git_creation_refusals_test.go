@@ -124,10 +124,22 @@ func TestCreationKeepsOtherRefusals(t *testing.T) {
 
 // Tidy keeps its strict admission: only creation changed.
 func TestTidyAdmissionStaysStrictForHooksPathAndGitlinks(t *testing.T) {
-	d := fixtureGit(t)
-	gitFixture(t, d, "config", "core.hooksPath", "empty-hooks")
-	base := gitFixture(t, d, "rev-parse", "HEAD")
-	if _, e := (gitAdapter{}).Observe(context.Background(), d, base); e == nil {
-		t.Fatal("strict admission accepted core.hooksPath")
-	}
+	t.Run("hooks-path", func(t *testing.T) {
+		d := fixtureGit(t)
+		gitFixture(t, d, "config", "core.hooksPath", "empty-hooks")
+		base := gitFixture(t, d, "rev-parse", "HEAD")
+		if _, e := (gitAdapter{}).Observe(context.Background(), d, base); e == nil {
+			t.Fatal("strict admission accepted core.hooksPath")
+		}
+	})
+	t.Run("gitlink", func(t *testing.T) {
+		d := fixtureGit(t)
+		head := gitFixture(t, d, "rev-parse", "HEAD")
+		gitFixture(t, d, "update-index", "--add", "--cacheinfo", "160000,"+head+",module")
+		gitFixture(t, d, "commit", "-qm", "gitlink")
+		base := gitFixture(t, d, "rev-parse", "HEAD")
+		if _, e := (gitAdapter{}).Observe(context.Background(), d, base); e == nil {
+			t.Fatal("strict admission accepted a gitlink")
+		}
+	})
 }
