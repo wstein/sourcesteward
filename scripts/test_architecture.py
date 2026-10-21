@@ -17,6 +17,38 @@ class ArchitectureTests(unittest.TestCase):
         architecture.validate([prefix+'internal/cli '+prefix+'internal/release'])
         with self.assertRaises(ValueError): architecture.validate([prefix+'internal/cli '+prefix+'internal/releasex'])
 
+    def test_cli_may_import_the_restack_operation(self):
+        prefix = architecture.MODULE
+        architecture.validate([prefix + 'internal/cli ' + prefix + 'internal/restack'])
+        with self.assertRaises(ValueError): architecture.validate([prefix + 'internal/cli ' + prefix + 'internal/restackx'])
+
+    def test_restack_starts_processes_only_in_its_git_runner_and_stays_offline(self):
+        spawning = 'package restack\n\nimport "os/exec"\n'
+        architecture.validate_sources({'internal/restack/git.go': spawning, 'internal/restack/plan_test.go': spawning})
+        for name in ('plan.go', 'input.go', 'hazards.go', 'replay.go', 'evidence.go', 'gitx.go'):
+            with self.assertRaises(ValueError, msg=name): architecture.validate_sources({'internal/restack/' + name: spawning})
+        for process in ('syscall', 'plugin', 'golang.org/x/sys/unix'):
+            with self.assertRaises(ValueError, msg=process): architecture.validate_sources({'internal/restack/plan.go': 'package restack\n\nimport "' + process + '"\n'})
+        for imported in ('net', 'net/http', 'crypto/tls'):
+            with self.assertRaises(ValueError, msg=imported): architecture.validate_sources({'internal/restack/git.go': 'package restack\n\nimport "' + imported + '"\n'})
+        # Only the read-only inspection may be imported from the module.
+        architecture.validate_sources({'internal/restack/plan.go': 'package restack\n\nimport "' + architecture.MODULE + 'internal/inspection"\n'})
+        for other in ('internal/workspace', 'internal/hosting', 'internal/release', 'internal/cli'):
+            with self.assertRaises(ValueError, msg=other): architecture.validate_sources({'internal/restack/plan.go': 'package restack\n\nimport "' + architecture.MODULE + other + '"\n'})
+
+    def test_restack_reaches_no_network_even_through_inspection(self):
+        prefix = architecture.MODULE
+        graph = {prefix + 'internal/restack': [prefix + 'internal/inspection'], prefix + 'internal/inspection': ['os/exec']}
+        architecture.validate_dependencies(graph)
+        for through in (prefix + 'internal/restack', prefix + 'internal/inspection'):
+            mutant = dict(graph)
+            mutant[through] = mutant[through] + ['net/http']
+            with self.assertRaises(ValueError, msg=through): architecture.validate_dependencies(mutant)
+        mutant = dict(graph)
+        mutant[prefix + 'internal/restack'] = [prefix + 'internal/hosting']
+        mutant[prefix + 'internal/hosting'] = ['net/http']
+        with self.assertRaises(ValueError): architecture.validate_dependencies(mutant)
+
     def test_release_starts_processes_only_in_reviewed_files(self):
         clean = 'package release\n\nimport "os"\n'
         spawning = 'package release\n\nimport (\n\t"os"\n\t"os/exec"\n)\n'
