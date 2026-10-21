@@ -481,8 +481,8 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	if err := validateV3RestoreOptions(o); err != nil {
 		return failRestore(r, err)
 	}
-	// An apply spends about four native processes per entry and at most 1,024
-	// entries exist; a rerun continues where a deadline stopped it.
+	// An apply spends about four native processes per entry and at most
+	// v3NativeFactsLimit entries exist (16,384); a rerun continues where a deadline stopped it.
 	deadline := 60 * time.Second
 	if o.Apply {
 		deadline = 5 * time.Minute

@@ -178,7 +178,7 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 			unsafe = refusedPlanningKey(key, value)
 		}
 		if unsafe {
-			return "", failure("git-unsafe-configuration", fmt.Sprintf("Git safety setting %q requires an explicit supported policy; configuration was preserved", gitSafetyRule(key)))
+			return "", failure("git-unsafe-configuration", fmt.Sprintf("Git safety setting %q is refused: stw neither runs nor overrides it. Remove it from the repository or an included configuration file, then plan again; configuration was preserved", gitSafetyRule(key)))
 		}
 	}
 	// Relative/conditional hook paths are refused above; default hooks are shared.
