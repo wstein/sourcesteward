@@ -111,7 +111,7 @@ func selectTidyV3Tracking(o tidyV3NativeObservation, remote, override string, se
 	bad := func() (tidyV3TrackingMapping, []tidyV3TrackingRef, error) {
 		return mapping, nil, failure("incomplete-evidence", "Complete direct references and resolved symbolic relations are required for tracking protection.")
 	}
-	if len(o.Native.References)+len(o.Native.Registrations) > observationLimit || len(selected) > observationLimit {
+	if len(o.Native.References)+len(o.Native.Registrations) > v3NativeFactsLimit || len(selected) > observationLimit {
 		return bad()
 	}
 	byName := map[string]V3Reference{}

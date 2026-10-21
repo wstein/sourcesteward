@@ -28,6 +28,11 @@ const (
 	gitRecordNUL
 )
 
+// collectionRecordLimit bounds the records of one native collection read (all
+// references, all registrations). It is sized for the owner's own repositories
+// with hundreds of branches next to remote-tracking references and tags.
+const collectionRecordLimit = 16 * observationLimit
+
 var (
 	errGitRecordLimit = errors.New("git record exceeds its bound")
 	errGitRecordCount = errors.New("git collection exceeds its record bound")
@@ -112,7 +117,7 @@ func gitStreamRecordsLimit(ctx context.Context, cancel context.CancelFunc, cmd *
 
 // gitReadRecords is the streamed counterpart of gitRead for collections.
 func gitReadRecords(ctx context.Context, bin, dir string, kind gitRecordKind, args []string, accept func([]byte) error) error {
-	return gitReadRecordsLimit(ctx, bin, dir, kind, observationLimit, args, accept)
+	return gitReadRecordsLimit(ctx, bin, dir, kind, collectionRecordLimit, args, accept)
 }
 
 // gitReadRecordsLimit reads a collection of at most limit records. Exceeding

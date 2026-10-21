@@ -948,7 +948,7 @@ func requireTidyV3PrepareDiagnosticBounds(t *testing.T, p V3Plan, j V3Journal, r
 		t.Fatal("maximum paired diagnostic fields lost bounded result/journal")
 	}
 	maxFit := func(fits func(int) bool) int {
-		low, high := 0, 1025
+		low, high := 0, v3AggregateLimit+1
 		for low+1 < high {
 			mid := (low + high) / 2
 			if fits(mid) {

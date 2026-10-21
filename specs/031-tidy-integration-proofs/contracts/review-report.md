@@ -10,7 +10,7 @@ stw tidy plan [PATH] --contract 3 --base REF ... [--report-dir ABS] [--consolida
 
 - `--report-dir ABS`: absolute directory owned by the caller; files `tidy-report.md` and `tidy-report.json` are written there. Refused (usage error, exit 2, before native work) when the path is relative, inside any repository, worktree, git directory, workspace root or the state directory, a symlink, not an existing directory, or when either target exists. Files are created mode 0600 with exclusive no-follow creation, written to temporary names and renamed. A write failure exits 1, nothing partial remains, and no plan is stored.
 - `--consolidation-range A..B` (repeatable, at most 4): each side resolved to a full OID before use; malformed, unresolvable or more than 256 commits is a usage error naming the selector.
-- Bounds are defaults overridable within hard ceilings: `--report-max-entries` (default 256, ceiling 1,024), `--report-max-bytes` per file (default 4 MiB, ceiling 16 MiB), `--report-max-diff-bytes` per entry (default 64 KiB, ceiling 1 MiB); values above a ceiling are usage errors and the values are bound into the plan identity.
+- Bounds are defaults overridable within hard ceilings: `--report-max-entries` (default 512, ceiling 4,096), `--report-max-bytes` per file (default 4 MiB, ceiling 16 MiB), `--report-max-diff-bytes` per entry (default 64 KiB, ceiling 1 MiB); values above a ceiling are usage errors and the values are bound into the plan identity.
 - Without `--report-dir` the v3 result still carries `review_summary` (counts per bucket and reason).
 - Exit codes are those of `stw tidy plan` (0 plan produced, even with review entries; 1 operational failure; 2 usage). The report never changes an exit code.
 
@@ -18,7 +18,7 @@ stw tidy plan [PATH] --contract 3 --base REF ... [--report-dir ABS] [--consolida
 
 Entries omitted by the entry bound or whose commits or diff were truncated by a bound cannot be cleared by a decision (split the review per `--ref` or per named consolidation range, or raise the overridable `--report-max-*` bounds up to their ceilings; the per-entry commit, line and file bounds are fixed, see the spec's Limits); see the [decisions contract](decisions.md).
 
-Every `needs-review` ref, ordered by full ref name, up to 256 entries; the remaining are listed by name and reasons only with the omitted count. `retained` refs appear only in the summary with `clearable: false`.
+Every `needs-review` ref, ordered by full ref name, up to 512 entries; the remaining are listed by name and reasons only with the omitted count. `retained` refs appear only in the summary with `clearable: false`.
 
 ## Markdown rendering (humans)
 
@@ -80,7 +80,7 @@ Same grammar rules as the proof table; each with a bound test (at the bound acce
 | candidate commit lookup (`log` over `M..U` limited to the patch-id and subject matches already computed) | 5 per entry | 5 x 4,224 |
 | `range-diff --no-color` over named range | 256 rows | 256 x 4,224 |
 
-Totals (defaults, overridable as above): Markdown at most 4 MiB, JSON at most 4 MiB, at most 256 entries.
+Totals (defaults, overridable as above): Markdown at most 4 MiB, JSON at most 4 MiB, at most 512 entries.
 
 The diff stream is read to the 64 MiB patch bound, the first 1 MiB is retained and the whole stream is counted, so truncation markers carry exact byte, line and file totals. The report commands run after the proof phase inside the plan deadline (70 s offline, 100 s online): a very large repository may need `--timeout` raised or a smaller `--report-max-entries`, and reaching the deadline fails closed (no report is written, nothing is deleted).
 

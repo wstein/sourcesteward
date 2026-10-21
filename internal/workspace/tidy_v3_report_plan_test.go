@@ -178,7 +178,7 @@ func TestPlanWritesTheReportForEveryNeedsReviewRef(t *testing.T) {
 	if s == nil || !s.ReportWritten || s.NeedsReview != len(review) || s.Entries != len(review) || s.Omitted != 0 || s.Proven < 2 || s.Reasons["would-add-content"] == 0 || s.Reasons["gitlink-change"] != 1 {
 		t.Fatalf("summary %+v", s)
 	}
-	if r.Plan.Review == nil || !reflect.DeepEqual(*r.Plan.Review, V3ReviewBinding{MaxEntries: 256, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []V3ReviewRange{}, Notes: []V3ReviewNote{}}) {
+	if r.Plan.Review == nil || !reflect.DeepEqual(*r.Plan.Review, V3ReviewBinding{MaxEntries: 512, MaxBytes: 4 << 20, MaxDiffBytes: 64 << 10, Ranges: []V3ReviewRange{}, Notes: []V3ReviewNote{}}) {
 		t.Errorf("review binding %+v", r.Plan.Review)
 	}
 }
@@ -243,7 +243,7 @@ func TestPlanRefusesBoundsAboveTheirCeilingsAndUnusableDirectories(t *testing.T)
 	inState := filepath.Join(state, "reports")
 	os.Mkdir(inState, 0o700)
 	cases := map[string]V3PlanOptions{
-		"entries over the ceiling":  {ReportDir: good, ReportMaxEntries: 1025},
+		"entries over the ceiling":  {ReportDir: good, ReportMaxEntries: 4097},
 		"bytes over the ceiling":    {ReportDir: good, ReportMaxBytes: 16<<20 + 1},
 		"diff bytes over":           {ReportDir: good, ReportMaxDiffBytes: 1<<20 + 1},
 		"negative bound":            {ReportDir: good, ReportMaxEntries: -1},

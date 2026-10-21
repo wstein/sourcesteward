@@ -13,8 +13,8 @@ import (
 const (
 	reportSchemaVersion = 2
 
-	reportDefaultEntries   = 256
-	reportEntriesCeiling   = 1024
+	reportDefaultEntries   = 512
+	reportEntriesCeiling   = 4096
 	reportDefaultBytes     = 4 << 20
 	reportBytesCeiling     = 16 << 20
 	reportDefaultDiffBytes = 64 << 10
@@ -233,7 +233,7 @@ func resolveReportBounds(b reportBounds) (reportBounds, error) {
 		b.MaxDiffBytes = d.MaxDiffBytes
 	}
 	if b.MaxEntries < 0 || b.MaxEntries > reportEntriesCeiling || b.MaxBytes < 0 || b.MaxBytes > reportBytesCeiling || b.MaxDiffBytes < 0 || b.MaxDiffBytes > reportDiffBytesCeiling {
-		return b, failure("invalid-options", "Report bounds must be positive and within 1,024 entries, 16 MiB per file and 1 MiB per diff.")
+		return b, failure("invalid-options", "Report bounds must be positive and within 4,096 entries, 16 MiB per file and 1 MiB per diff.")
 	}
 	return b, nil
 }

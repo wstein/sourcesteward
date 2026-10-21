@@ -892,7 +892,7 @@ func v3Bounds(v any) error {
 				return false
 			}
 			count += v.Len()
-			if count > observationLimit {
+			if count > v3AggregateLimit {
 				return false
 			}
 			for i := 0; i < v.Len(); i++ {
@@ -944,7 +944,7 @@ func v3Bounds(v any) error {
 		return true
 	}
 	if !walk(reflect.ValueOf(v), 0) {
-		return failure("record-limit", "V3 record contains invalid text, null arrays or exceeds 1024 aggregate entries.")
+		return failure("record-limit", "V3 record contains invalid text, null arrays or exceeds the aggregate entry limit of 16,384.")
 	}
 	b, e := json.Marshal(v)
 	if e != nil || len(b) > v3RecordLimit {

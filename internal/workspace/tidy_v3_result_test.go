@@ -523,21 +523,21 @@ func TestV3RetirementRegistrationFactsShareAggregateLimit(t *testing.T) {
 	// All slice entries in this closed legacy fixture, excluding the new list.
 	used := len(p.SelectedRefs) + len(p.Candidates) + len(p.Effects) + len(p.RecoveryLimits) + len(r.Actions) + len(r.RegisteredRoots) + len(r.ProtectedRoots) + len(r.Disk.Entries) + len(r.Metadata.Entries) + len(r.Siblings) + len(r.Integration.WorkspacePaths) + len(r.Provenance.Legacy.ProtectedRoots)
 	r.RegistrationSiblings = []V3PhysicalIdentity{}
-	for i := 0; i < observationLimit-used; i++ {
+	for i := 0; i < v3AggregateLimit-used; i++ {
 		s := r.RegistrationParent
-		s.Path, s.Inode = fmt.Sprintf("%s/s%04d", r.RegistrationParent.Path, i), uint64(100+i)
+		s.Path, s.Inode = fmt.Sprintf("%s/s%06d", r.RegistrationParent.Path, i), uint64(100+i)
 		r.RegistrationSiblings = append(r.RegistrationSiblings, s)
 	}
 	p.Digest, _ = v3PlanDigest(p)
 	if err := validateV3Plan(p, p.StateDir, p.PlanID); err != nil {
-		t.Fatalf("exact aggregate 1024 refused: %v", err)
+		t.Fatalf("exact aggregate limit refused: %v", err)
 	}
 	s := r.RegistrationParent
 	s.Path, s.Inode = r.RegistrationParent.Path+"/z-extra", 10000
 	r.RegistrationSiblings = append(r.RegistrationSiblings, s)
 	p.Digest, _ = v3PlanDigest(p)
 	if validateV3Plan(p, p.StateDir, p.PlanID) == nil {
-		t.Fatal("new registration siblings escaped aggregate 1024 limit")
+		t.Fatal("new registration siblings escaped the aggregate limit")
 	}
 }
 
@@ -764,4 +764,27 @@ func smallV3RecordLimit(t *testing.T) {
 	old := v3RecordLimit
 	v3RecordLimit = 1 << 20
 	t.Cleanup(func() { v3RecordLimit = old })
+}
+
+// A reviewed plan of about 200 branches carries, with its journal, native
+// snapshots and recovery references, several thousand slice entries: the
+// aggregate bound must admit that and still refuse an unbounded record.
+func TestV3BoundsAdmitRecordsOfTwoHundredBranches(t *testing.T) {
+	type record struct{ Names []string }
+	of := func(n int) record {
+		r := record{Names: make([]string, n)}
+		for i := range r.Names {
+			r.Names[i] = fmt.Sprintf("refs/heads/topic/%04d", i)
+		}
+		return r
+	}
+	if err := v3Bounds(of(5000)); err != nil {
+		t.Fatalf("5000 entries refused: %v", err)
+	}
+	if err := v3Bounds(of(v3AggregateLimit)); err != nil {
+		t.Fatalf("the exact aggregate limit refused: %v", err)
+	}
+	if err := v3Bounds(of(v3AggregateLimit + 1)); err == nil {
+		t.Fatal("entries over the aggregate limit admitted")
+	}
 }

@@ -14,6 +14,15 @@ import (
 const recordLimit = 1024 * 1024
 const observationLimit = 1024
 
+// v3AggregateLimit bounds the slice entries of one V3 plan, journal or result
+// record, and v3NativeFactsLimit the references and registrations of one
+// repository. Both scale the old 1,024 so that 200 branches, their recovery
+// references and 100 worktrees fit with room to spare.
+const (
+	v3AggregateLimit   = 16 * observationLimit
+	v3NativeFactsLimit = 16 * observationLimit
+)
+
 type PlanOptions struct{ Path, Base, Destination, Task, Owner, StateDir string }
 type ApplyOptions struct {
 	StateDir, PlanID string

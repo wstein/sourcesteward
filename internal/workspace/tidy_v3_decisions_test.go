@@ -140,16 +140,16 @@ func TestDecisionFileParsing(t *testing.T) {
 			}
 			return decisionJSON(ds...)
 		}
-		if f, err := ReadV3DecisionFile(writeDecisionFile(t, many(1024))); err != nil || len(f.Decisions) != 1024 {
-			t.Fatalf("1,024: %v", err)
+		if f, err := ReadV3DecisionFile(writeDecisionFile(t, many(4096))); err != nil || len(f.Decisions) != 4096 {
+			t.Fatalf("4,096: %v", err)
 		}
-		usageMessage(t, func() error { _, e := ReadV3DecisionFile(writeDecisionFile(t, many(1025))); return e }())
+		usageMessage(t, func() error { _, e := ReadV3DecisionFile(writeDecisionFile(t, many(4097))); return e }())
 	})
-	t.Run("one MiB passes and one byte more refuses", func(t *testing.T) {
+	t.Run("4 MiB passes and one byte more refuses", func(t *testing.T) {
 		content := good(nil)
-		content += strings.Repeat(" ", 1<<20-len(content))
+		content += strings.Repeat(" ", 4<<20-len(content))
 		if _, err := ReadV3DecisionFile(writeDecisionFile(t, content)); err != nil {
-			t.Fatalf("exactly 1 MiB: %v", err)
+			t.Fatalf("exactly 4 MiB: %v", err)
 		}
 		usageMessage(t, func() error { _, e := ReadV3DecisionFile(writeDecisionFile(t, content+" ")); return e }())
 	})
