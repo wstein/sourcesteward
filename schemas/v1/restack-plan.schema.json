@@ -1,0 +1,1337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/restack-plan.schema.json",
+  "title": "SourceSteward restack plan (schema 1)",
+  "description": "Read-only plan of the local restack of one Git branch after its parent was rebase-merged: evidence, never a verdict. Nothing is written to the repository, no network is used, and semantic breaks after a clean replay are not detected. Within schema_version 1 only additive changes are made: new optional fields, new diagnostic codes, new state values (consumers treat an unknown state as unknown) and new limitation strings. Usage and writer failures may not emit complete JSON.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "status",
+    "backend",
+    "identity",
+    "input",
+    "outcome",
+    "notice",
+    "evidence",
+    "effects",
+    "texts",
+    "limitations",
+    "diagnostics",
+    "boundary",
+    "observed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "restack-plan"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "incomplete",
+        "error"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "git",
+        "jj",
+        "gitbutler",
+        "ambiguous",
+        "unknown"
+      ]
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/git_identity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "input": {
+      "$ref": "#/$defs/input"
+    },
+    "outcome": {
+      "enum": [
+        "evidence-clean",
+        "needs-attention",
+        "conflicts-predicted",
+        "none"
+      ]
+    },
+    "notice": {
+      "const": "Read-only evidence; it does not assert that the restacked branch builds, passes tests or is semantically correct, and it authorizes nothing."
+    },
+    "evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/evidence"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "effects": {
+      "$ref": "#/$defs/effects"
+    },
+    "texts": {
+      "$ref": "#/$defs/texts"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "contains": {
+        "const": "semantic-breaks-not-detected"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "boundary": {
+      "$ref": "#/$defs/boundary"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backend": {
+            "const": "git"
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "outcome": {
+            "enum": [
+              "evidence-clean",
+              "needs-attention",
+              "conflicts-predicted"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "null"
+          },
+          "outcome": {
+            "const": "none"
+          },
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "incomplete"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "outcome": {
+            "const": "none"
+          },
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "evidence-clean"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "replay": {
+                "properties": {
+                  "state": {
+                    "const": "clean"
+                  }
+                }
+              },
+              "identity": {
+                "properties": {
+                  "state": {
+                    "const": "pass"
+                  },
+                  "source": {
+                    "const": "flag"
+                  }
+                }
+              },
+              "overlap": {
+                "properties": {
+                  "indicator": {
+                    "const": "none"
+                  }
+                }
+              },
+              "parent_dropped": {
+                "properties": {
+                  "all_dropped": {
+                    "const": true
+                  }
+                }
+              },
+              "range_pairing": {
+                "properties": {
+                  "all_equal": {
+                    "const": true
+                  }
+                }
+              },
+              "own_diff_equality": {
+                "properties": {
+                  "all_equal": {
+                    "const": true
+                  }
+                }
+              },
+              "empty_after_replay": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "git_identity": {
+      "title": "SourceSteward inspection result (schema 1)",
+      "description": "Success and operational failure results. Usage and writer failures may not emit JSON. Unknown object properties and diagnostic codes are compatible extensions.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status",
+        "backend",
+        "input_path",
+        "evidence",
+        "repository",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unsupported",
+            "error"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "jj",
+            "gitbutler",
+            "ambiguous",
+            "unknown"
+          ]
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Absolute path when available; empty if input cannot be represented or resolved."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/evidence"
+          }
+        },
+        "repository": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/git_identity/$defs/repository"
+            }
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/git_identity/$defs/diagnostic"
+          }
+        }
+      },
+      "$defs": {
+        "head": {
+          "type": "object",
+          "required": [
+            "state",
+            "ref",
+            "oid"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "attached",
+                "detached",
+                "unborn"
+              ]
+            },
+            "ref": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^refs/heads/.+"
+                }
+              ]
+            },
+            "oid": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "attached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "detached"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "null"
+                  },
+                  "oid": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "unborn"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "oid": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "repository": {
+          "type": "object",
+          "required": [
+            "git_dir",
+            "common_dir",
+            "worktree",
+            "bare",
+            "linked_worktree",
+            "object_format",
+            "head"
+          ],
+          "properties": {
+            "git_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "common_dir": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worktree": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bare": {
+              "type": "boolean"
+            },
+            "linked_worktree": {
+              "type": "boolean"
+            },
+            "object_format": {
+              "enum": [
+                "sha1",
+                "sha256"
+              ]
+            },
+            "head": {
+              "$ref": "#/$defs/git_identity/$defs/head"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "bare": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "worktree": {
+                    "type": "null"
+                  },
+                  "linked_worktree": {
+                    "const": false
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "worktree": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha1"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{40}$",
+                            "minLength": 40,
+                            "maxLength": 40
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha256"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "head": {
+                    "properties": {
+                      "oid": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$",
+                            "minLength": 64,
+                            "maxLength": 64
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "kind",
+            "location"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "jj-metadata",
+                "gitbutler-metadata",
+                "gitbutler-reference"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              },
+              "repository": {
+                "$ref": "#/$defs/git_identity/$defs/repository"
+              },
+              "diagnostics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "repository": {
+                "type": "null"
+              },
+              "diagnostics": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unsupported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "enum": [
+                  "jj",
+                  "gitbutler",
+                  "ambiguous"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    },
+    "parent_input": {
+      "type": "object",
+      "required": [
+        "given",
+        "oid"
+      ],
+      "properties": {
+        "given": {
+          "type": "string"
+        },
+        "oid": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/oid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "branch",
+        "old_parent",
+        "new_parent",
+        "base",
+        "moved",
+        "remote"
+      ],
+      "properties": {
+        "branch": {
+          "type": "object",
+          "required": [
+            "ref",
+            "short",
+            "old_head"
+          ],
+          "properties": {
+            "ref": {
+              "type": "string"
+            },
+            "short": {
+              "type": "string"
+            },
+            "old_head": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/oid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "old_parent": {
+          "$ref": "#/$defs/parent_input"
+        },
+        "new_parent": {
+          "$ref": "#/$defs/parent_input"
+        },
+        "base": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "old",
+                "new"
+              ],
+              "properties": {
+                "old": {
+                  "$ref": "#/$defs/oid"
+                },
+                "new": {
+                  "$ref": "#/$defs/oid"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "moved": {
+          "type": "object",
+          "required": [
+            "count",
+            "commits"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 200
+            },
+            "commits": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/moved_commit"
+              }
+            }
+          }
+        },
+        "remote": {
+          "type": "string"
+        }
+      }
+    },
+    "moved_commit": {
+      "type": "object",
+      "required": [
+        "oid",
+        "parents",
+        "tree",
+        "author",
+        "committer",
+        "subject",
+        "subject_sha256"
+      ],
+      "properties": {
+        "oid": {
+          "$ref": "#/$defs/oid"
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/oid"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "tree": {
+          "$ref": "#/$defs/oid"
+        },
+        "author": {
+          "type": "string"
+        },
+        "committer": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "subject_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "replay",
+        "range_pairing",
+        "parent_dropped",
+        "empty_after_replay",
+        "own_diff_equality",
+        "identity",
+        "conflicts",
+        "overlap"
+      ],
+      "properties": {
+        "replay": {
+          "type": "object",
+          "required": [
+            "state",
+            "commits_replayed",
+            "final_tree"
+          ],
+          "properties": {
+            "state": {
+              "type": "string"
+            },
+            "commits_replayed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "final_tree": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/oid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tree_equals_branch_tip_plus_parent_delta": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "range_pairing": {
+          "type": "object",
+          "required": [
+            "rows",
+            "all_equal"
+          ],
+          "properties": {
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "old",
+                  "mark"
+                ],
+                "properties": {
+                  "old": {
+                    "$ref": "#/$defs/oid"
+                  },
+                  "mark": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "all_equal": {
+              "type": "boolean"
+            }
+          }
+        },
+        "parent_dropped": {
+          "type": "object",
+          "required": [
+            "rows",
+            "all_dropped",
+            "state"
+          ],
+          "properties": {
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "oid",
+                  "mark",
+                  "state"
+                ],
+                "properties": {
+                  "oid": {
+                    "$ref": "#/$defs/oid"
+                  },
+                  "mark": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "all_dropped": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "string"
+            }
+          }
+        },
+        "empty_after_replay": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        },
+        "own_diff_equality": {
+          "type": "object",
+          "required": [
+            "rows",
+            "all_equal"
+          ],
+          "properties": {
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "old",
+                  "state",
+                  "old_patch_id",
+                  "predicted_patch_id"
+                ],
+                "properties": {
+                  "old": {
+                    "$ref": "#/$defs/oid"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "old_patch_id": {
+                    "type": "string"
+                  },
+                  "predicted_patch_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "all_equal": {
+              "type": "boolean"
+            }
+          }
+        },
+        "identity": {
+          "type": "object",
+          "required": [
+            "state",
+            "source",
+            "expected",
+            "mismatches"
+          ],
+          "properties": {
+            "state": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "expected": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mismatches": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "commit",
+                  "role",
+                  "value"
+                ],
+                "properties": {
+                  "commit": {
+                    "$ref": "#/$defs/oid"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "conflicts": {
+          "type": "object",
+          "required": [
+            "predicted",
+            "commit",
+            "items",
+            "replay_stopped_at"
+          ],
+          "properties": {
+            "predicted": {
+              "type": "boolean"
+            },
+            "commit": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/oid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "kind"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "replay_stopped_at": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/oid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "overlap": {
+          "type": "object",
+          "required": [
+            "paths",
+            "count",
+            "indicator",
+            "note"
+          ],
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "indicator": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "required": [
+        "affected_refs",
+        "worktrees",
+        "hooks",
+        "hazards",
+        "writes"
+      ],
+      "properties": {
+        "affected_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "ref",
+              "oid",
+              "contains_old_head"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "oid": {
+                "$ref": "#/$defs/oid"
+              },
+              "contains_old_head": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "worktrees": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "branch",
+              "state"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "branch": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "state": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "present",
+              "would_run_by_porcelain_rebase",
+              "run_by_stw"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "present": {
+                "type": "boolean"
+              },
+              "would_run_by_porcelain_rebase": {
+                "type": "boolean"
+              },
+              "run_by_stw": {
+                "const": false
+              }
+            }
+          }
+        },
+        "hazards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "writes": {
+          "type": "object",
+          "required": [
+            "refs",
+            "index",
+            "worktree",
+            "config",
+            "objects"
+          ],
+          "properties": {
+            "refs": {
+              "const": false
+            },
+            "index": {
+              "const": false
+            },
+            "worktree": {
+              "const": false
+            },
+            "config": {
+              "const": false
+            },
+            "objects": {
+              "const": "quarantine-only"
+            }
+          }
+        }
+      }
+    },
+    "texts": {
+      "type": "object",
+      "required": [
+        "lease_push",
+        "resync"
+      ],
+      "properties": {
+        "lease_push": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "assignment",
+                "text",
+                "observed_old_sha",
+                "new_sha_known"
+              ],
+              "properties": {
+                "assignment": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "observed_old_sha": {
+                  "$ref": "#/$defs/oid"
+                },
+                "new_sha_known": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resync": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "fetch",
+                "rebase_onto",
+                "reset_hard",
+                "destructive_note"
+              ],
+              "properties": {
+                "fetch": {
+                  "type": "string"
+                },
+                "rebase_onto": {
+                  "type": "string"
+                },
+                "reset_hard": {
+                  "type": "string"
+                },
+                "destructive_note": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "max_commits",
+        "max_paths",
+        "max_result_bytes",
+        "timeout_seconds",
+        "reached"
+      ],
+      "properties": {
+        "max_commits": {
+          "const": 200
+        },
+        "max_paths": {
+          "const": 2000
+        },
+        "max_result_bytes": {
+          "const": 1048576
+        },
+        "timeout_seconds": {
+          "const": 60
+        },
+        "reached": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
