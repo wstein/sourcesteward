@@ -180,6 +180,12 @@
       "status": "planned",
       "spec": "../specs/030-pr-status/spec.md",
       "evidence": null
+    },
+    {
+      "id": "031-tidy-integration-proofs",
+      "status": "planned",
+      "spec": "../specs/031-tidy-integration-proofs/spec.md",
+      "evidence": "../specs/031-tidy-integration-proofs/verification.md"
     }
   ]
 }
