@@ -145,6 +145,15 @@ type V3ReportCandidate struct {
 	Match   string      `json:"match"`
 }
 
+// V3ReportGitlink is one gitlink the merge gate saw changing since the merge
+// base: Side is branch or base, the OIDs are empty for an added or removed path.
+type V3ReportGitlink struct {
+	Side   string      `json:"side"`
+	Path   V3Untrusted `json:"path"`
+	OldOID string      `json:"old_oid"`
+	NewOID string      `json:"new_oid"`
+}
+
 // V3ReportLimit is the bound that was hit: the command or grammar, the unit
 // (records, bytes, commits, grammar, exit, command), the limit and the first
 // value observed over it. Limit and observed are 0 where the unit has no count;
@@ -170,6 +179,9 @@ type V3ReportEntry struct {
 	Candidates       []V3ReportCandidate `json:"candidate_base_commits"`
 	RangePairing     *V3ReportPairing    `json:"range_pairing"`
 	Verdict          V3ReportVerdict     `json:"suggested_verdict"`
+	// Gitlinks names the submodule pointers behind the reason gitlink-change.
+	Gitlinks          []V3ReportGitlink   `json:"gitlink_changes,omitempty"`
+	GitlinksTruncated *V3ReportTruncation `json:"gitlink_changes_truncated,omitempty"`
 	// ProofLimit names the bound a proof-limit reason came from.
 	ProofLimit *V3ReportLimit `json:"proof_limit,omitempty"`
 

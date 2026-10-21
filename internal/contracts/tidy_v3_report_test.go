@@ -158,3 +158,39 @@ func TestTidyV3ReportSchemaMarksMatchedAndUnmatchedCommits(t *testing.T) {
 		})
 	}
 }
+
+// The gitlink-change reason names the path and the side that changed it.
+func TestTidyV3ReportSchemaNamesGitlinkChanges(t *testing.T) {
+	s := schemaAt(t, "v3", "tidy-report")
+	raw, err := os.ReadFile(filepath.Join(root(t), "internal", "workspace", "testdata", "tidy_v3_report", "tidy-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	with := func(mutate func(map[string]any)) map[string]any {
+		v := value(t, raw).(map[string]any)
+		e := v["entries"].([]any)[0].(map[string]any)
+		e["gitlink_changes"] = []any{map[string]any{"side": "base", "path": map[string]any{"untrusted": true, "text": "libs/sub"}, "old_oid": strings.Repeat("a", 40), "new_oid": ""}}
+		mutate(e)
+		return v
+	}
+	if err := s.Validate(with(func(map[string]any) {})); err != nil {
+		t.Fatalf("a gitlink entry was refused: %v", err)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"side outside the table": func(e map[string]any) { e["gitlink_changes"].([]any)[0].(map[string]any)["side"] = "tip" },
+		"path not untrusted":     func(e map[string]any) { e["gitlink_changes"].([]any)[0].(map[string]any)["path"] = "libs/sub" },
+		"more than 16": func(e map[string]any) {
+			g := e["gitlink_changes"].([]any)
+			for len(g) <= 16 {
+				g = append(g, g[0])
+			}
+			e["gitlink_changes"] = g
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if s.Validate(with(mutate)) == nil {
+				t.Fatal("the schema admitted a violation")
+			}
+		})
+	}
+}

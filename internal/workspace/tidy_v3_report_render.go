@@ -275,6 +275,17 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 	if e.CommitsTruncated != nil {
 		fmt.Fprintf(&b, "\n... %d more commits\n", e.CommitsTruncated.Total-e.CommitsTruncated.Shown)
 	}
+	if len(e.Gitlinks) > 0 {
+		b.WriteString("\n### Gitlink changes since the merge base\n\n")
+		var links strings.Builder
+		for _, g := range e.Gitlinks {
+			fmt.Fprintf(&links, "%s %s %s -> %s\n", g.Side, g.Path.Text, orNone(g.OldOID), orNone(g.NewOID))
+		}
+		b.WriteString(untrustedBlock(links.String()))
+		if t := e.GitlinksTruncated; t != nil {
+			fmt.Fprintf(&b, "\ntruncated: shown %d of %d gitlinks\n", t.Shown, t.Total)
+		}
+	}
 	b.WriteString("\n### Proofs tried\n\n")
 	for _, p := range e.Proofs {
 		fmt.Fprintf(&b, "- %s: %s (%s)\n", p.Class, p.Outcome, p.Why)
