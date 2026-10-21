@@ -22,6 +22,11 @@ import (
 // worktree. A plan records every entry (about 330 bytes each), so the bound is
 // sized with v3RecordLimit; larger trees need a digest-only record (follow-up).
 const retirementManifestEntries = 8192
+
+// retirementV2ManifestEntries keeps the original contract 2 bound: its records
+// stay inside the one MiB encoded limit (about 200 bytes per entry), so the v2
+// manifest cannot carry more. Only the Git v3 retirement admits larger trees.
+const retirementV2ManifestEntries = 1024
 const retirementFileBytes = 64 << 10
 
 func retirementLiteralPath(p string) bool {
@@ -46,7 +51,7 @@ func observeRetirementManifest(ctx context.Context, path string, a retirementMan
 	if e != nil {
 		return RetirementManifest{}, e
 	}
-	if len(a.NativeMetadataPaths)+len(a.StoredFiles) > retirementManifestEntries {
+	if len(a.NativeMetadataPaths)+len(a.StoredFiles) > retirementV2ManifestEntries {
 		return RetirementManifest{}, errors.New("manifest admission exceeds limit")
 	}
 	known := map[string]bool{}
@@ -135,7 +140,7 @@ func walkRetirementManifest(ctx context.Context, root *os.Root) (RetirementManif
 		if e != nil {
 			return e
 		}
-		names, e := f.Readdirnames(retirementManifestEntries + 1)
+		names, e := f.Readdirnames(retirementV2ManifestEntries + 1)
 		f.Close()
 		if e != nil && !errors.Is(e, io.EOF) {
 			return e
@@ -152,8 +157,8 @@ func walkRetirementManifest(ctx context.Context, root *os.Root) (RetirementManif
 			if !retirementLiteralPath(p) {
 				return errors.New("unsafe physical manifest path")
 			}
-			if len(m.Entries) >= retirementManifestEntries {
-				return failure("retirement-file-limit", "The worktree holds more than 8,192 files and directories, the most a retirement manifest admits; retain the target")
+			if len(m.Entries) >= retirementV2ManifestEntries {
+				return failure("retirement-file-limit", "The worktree holds more than 1,024 files and directories, the most a contract 2 retirement manifest admits; retain the target")
 			}
 			folded := strings.ToLower(norm.NFC.String(p))
 			if old, ok := aliases[folded]; ok && old != p {
@@ -488,7 +493,7 @@ func retirementManifestDigest(m RetirementManifest) string {
 }
 
 func validateRetirementManifest(m RetirementManifest) error {
-	if !m.Complete || len(m.Entries) > retirementManifestEntries || retirementManifestDigest(m) != m.Digest {
+	if !m.Complete || len(m.Entries) > retirementV2ManifestEntries || retirementManifestDigest(m) != m.Digest {
 		return errors.New("invalid complete retirement manifest")
 	}
 	prior := ""

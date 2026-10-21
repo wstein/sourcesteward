@@ -143,8 +143,12 @@ func gitRetirementStoredFilesWithPolicy(ctx context.Context, bin string, id Nati
 	// retirementManifestEntries, so refuse by name before reading any content.
 	// Legacy v2 would otherwise spend up to checkoutLeafLimit sandboxed cat-file
 	// processes; Git v3 reads one bounded blob sample, itself limited to retirementManifestEntries (8,192).
-	if len(entries) > retirementManifestEntries {
-		return nil, failure("retirement-file-limit", "Stored Git content has more files than the retirement manifest admits; retain the target")
+	maxEntries := retirementManifestEntries
+	if policy != retirementGitV3Content {
+		maxEntries = retirementV2ManifestEntries
+	}
+	if len(entries) > maxEntries {
+		return nil, failure("retirement-file-limit", fmt.Sprintf("Stored Git content has more than %d files, the most this retirement manifest admits; retain the target", maxEntries))
 	}
 	files := []RetirementStoredFile{}
 	expectedIndex := map[string]string{}

@@ -98,7 +98,7 @@ func TestCreationRefusesAboveTheCheckoutLimit(t *testing.T) {
 // count can refuse here.
 func TestLegacyRetirementStoredFilesRefusesAboveTheManifestBoundBeforeReading(t *testing.T) {
 	d := fixtureGit(t)
-	for i := 0; i < retirementManifestEntries+10; i++ {
+	for i := 0; i < retirementV2ManifestEntries+10; i++ {
 		if e := os.WriteFile(filepath.Join(d, fmt.Sprintf("f%04d", i)), []byte("x\n"), 0600); e != nil {
 			t.Fatal(e)
 		}
