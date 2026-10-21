@@ -220,7 +220,7 @@ checked in and byte-frozen but excluded from Pages packaging until the feature i
 `attention`, `errors`) and `error` (null, or `code` and `message` of a refused or failed run, with no repositories). A
 repository has `name`, `path`, `kind` (`root`, `submodule`), `state` (`ok`, `uninitialized`, `error`), `branch`,
 `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`, `changes`, `operation`, `stash`, `branches`,
-`worktrees` (counts, and `list` only with `--worktrees`), `gitlink` (null for the root), `fetch_error`, `attention` and
+`worktrees` (counts, and `list` only with `--worktrees`), `gitlink` (null for the root), `fetch_error`, `attention` (boolean), `reasons` (why, empty unless attention) and
 `error`. No key is omitted; absent values are null. Exit 0 also when repositories need attention, 1 for an unreadable
 repository or a failed run, 2 for usage errors with no JSON. Tests validate the fixtures, reject broken variants and
 check real command output from temporary repositories. The exact rules are in the

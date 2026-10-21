@@ -24,10 +24,7 @@ initialized submodule (nested ones too). Git only; a jj-owned path is refused (`
    including untracked files, `locked`, `prunable`, `list` only with `--worktrees`); and for a submodule `gitlink`: the
    commit the superproject records (`HEAD:PATH`), the commit checked out, `state` `ok`/`drift`/`uninitialized` and, on
    drift, `relation` `ahead`/`behind`/`diverged`/`unknown` of the checked-out commit.
-5. **Attention** (the exact rule): a repository needs attention when `attention` is non-empty, which lists, in this order,
-   `operation`, `conflicts`, `staged`, `unstaged`, `untracked`, `ahead`, `behind`, `upstream-gone`, `no-upstream` (on a
-   branch), `gitlink-drift`, `worktree-dirty`, `worktree-locked`, `worktree-prunable`, `fetch-failed`, `error`. Stashes,
-   branches not integrated, a detached HEAD and an uninitialized submodule are shown but never count.
+5. **Attention** (the exact rule): `attention` is true, and `reasons` is non-empty, when the repository has one of these, listed in this order: `operation`, `conflicts`, `staged`, `unstaged`, `untracked`, `behind`, `diverged` (ahead and behind), `no-upstream` (on a branch), `detached` (HEAD detached in the main worktree), `gitlink-drift` (the checked-out commit is behind, diverged from or unrelated to the recorded one), `error`. Everything else is information only and never counts: commits ahead, a gone upstream, stashes, branches not integrated, linked worktrees (dirty, locked, prunable), a failed fetch, an uninitialized submodule, and a gitlink whose checked-out commit is *ahead* of the recorded one (shown as `gitlink: recorded A, checked out ahead (B)`, the normal state while gitlinks are updated in batches).
 6. **Exit status.** 0, also when repositories need attention; 1 when a repository cannot be read (`state` `error`) or the
    run fails (`error` set, `repos` empty; `--json` still prints it); 2 for usage errors with no output.
 7. **Output.** Text: one block per repository (marker `!` when it needs attention, name, branch, upstream state, change
@@ -40,6 +37,6 @@ initialized submodule (nested ones too). Git only; a jj-owned path is refused (`
 with `schema_version` 1, `command` `status`, `options` (`fetch`, `worktrees`), `root`, `note` (set when started inside a
 linked worktree), `repos`, `summary` (`total`, `attention`, `errors`) and `error`. Keys are never omitted; absent values
 are null. Repository members are those of rule 4 plus `name`, `path`, `kind` (`root`/`submodule`), `state`
-(`ok`/`uninitialized`/`error`), `head`, `fetch_error`, `attention` and `error`. Worktree members: `path`, `branch`,
+(`ok`/`uninitialized`/`error`), `head`, `fetch_error`, `attention` (boolean), `reasons` (list) and `error`. Worktree members: `path`, `branch`,
 `detached`, `dirty`, `locked` (the lock reason, `""` if none), `prunable`. Error codes: `status-invalid-options`,
 `status-git-unavailable`, `status-unsupported-backend`, `status-not-a-repository`, `status-read-failed`, `status-limit`.

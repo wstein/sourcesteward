@@ -125,8 +125,9 @@
         "worktrees",
         "gitlink",
         "fetch_error",
+        "error",
         "attention",
-        "error"
+        "reasons"
       ],
       "properties": {
         "name": {
@@ -354,29 +355,6 @@
             "null"
           ]
         },
-        "attention": {
-          "type": "array",
-          "items": {
-            "enum": [
-              "operation",
-              "conflicts",
-              "staged",
-              "unstaged",
-              "untracked",
-              "ahead",
-              "behind",
-              "upstream-gone",
-              "no-upstream",
-              "gitlink-drift",
-              "worktree-dirty",
-              "worktree-locked",
-              "worktree-prunable",
-              "fetch-failed",
-              "error"
-            ]
-          },
-          "uniqueItems": true
-        },
         "error": {
           "oneOf": [
             {
@@ -400,6 +378,28 @@
               }
             }
           ]
+        },
+        "attention": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "operation",
+              "conflicts",
+              "staged",
+              "unstaged",
+              "untracked",
+              "behind",
+              "diverged",
+              "no-upstream",
+              "detached",
+              "gitlink-drift",
+              "error"
+            ]
+          },
+          "uniqueItems": true
         }
       },
       "allOf": [
@@ -445,6 +445,29 @@
             "properties": {
               "gitlink": {
                 "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "attention": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasons": {
+                "maxItems": 0
               }
             }
           }

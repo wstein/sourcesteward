@@ -27,8 +27,9 @@ func workspaceStatusCommandWith(status func(context.Context, stwsync.StatusOptio
 			"default branch of the upstream remote, linked worktrees (dirty, locked, prunable) and, for a submodule, the drift\n" +
 			"between the commit the superproject records and the one checked out.\n" +
 			"A repository needs attention when it has an operation in progress, conflicts, staged, unstaged or untracked files,\n" +
-			"commits ahead of or behind its upstream, a gone or missing upstream, a drifted gitlink, a dirty, locked or prunable\n" +
-			"linked worktree or a failed fetch; stashes, unmerged branches and a detached HEAD are shown but do not count.\n" +
+			"commits behind its upstream (or diverged), a branch without an upstream, a detached HEAD, or a gitlink whose checked-out\n" +
+			"commit is behind or unrelated to the recorded one; commits ahead, stashes, unmerged branches, linked worktrees and a\n" +
+			"gitlink whose checkout is ahead of the record are shown but do not count.\n" +
 			"Nothing is changed and nothing is fetched unless --fetch asks for it (one git fetch per repository, remote-tracking\n" +
 			"refs only). --worktrees lists the linked worktrees. Colour only on a terminal (NO_COLOR turns it off). Git only.\n" +
 			"Exit statuses: 0 also when repositories need attention, 1 when a repository cannot be read or the run fails, 2 usage error.",
@@ -148,9 +149,11 @@ func statusDetails(rp stwsync.RepoStatus) []string {
 		lines = append(lines, text)
 	}
 	if g := rp.Gitlink; g != nil && g.State == "drift" {
-		text := "gitlink drift: recorded " + reposAbbrevOID(g.Recorded) + ", checked out " + reposAbbrevOID(g.CheckedOut)
+		text := "gitlink: recorded " + reposAbbrevOID(g.Recorded) + ", checked out "
 		if g.Relation != nil && *g.Relation != "unknown" {
-			text += " (checked out is " + *g.Relation + ")"
+			text += *g.Relation + " (" + reposAbbrevOID(g.CheckedOut) + ")"
+		} else {
+			text += reposAbbrevOID(g.CheckedOut)
 		}
 		lines = append(lines, text)
 	}
@@ -197,7 +200,7 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 		switch {
 		case rp.Error != nil:
 			marker, code = "! ", "31"
-		case len(rp.Attention) > 0:
+		case rp.Attention:
 			marker, code = "! ", "33"
 		}
 		sync, changes := esc(statusSyncText(rp)), ""
