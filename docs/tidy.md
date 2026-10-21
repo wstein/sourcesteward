@@ -50,7 +50,7 @@ is still evidence, not authorization. Apply supports authorized local reference 
 
 ## Bounds, output and failures
 
-Offline planning has a ten-second total deadline, a 1 MiB encoded record/result limit (8 MiB for retirement plans, which record every file) and
+Offline planning has a sixty-second total deadline (it was a fixed ten seconds that a loaded runner or a repository of a thousand files could exceed; it is deterministic, not scaled by the repository), a 1 MiB encoded record/result limit (8 MiB for retirement plans, which record every file) and
 an aggregate observation limit of 1024 entries. Complete base/target tree metadata and
 all-path filter observations use at most 4,325,376 stdout bytes and 4,224 bytes per logical
 record, retaining the 16,384-leaf, 4,096-byte path, 16 MiB/blob and 64 MiB aggregate blob
@@ -169,7 +169,7 @@ require manual review; no automatic rollback or blind retry is attempted. Comple
 recorded postconditions and remaining files. Native writes and disk removal still have sampled
 external/ABA race limits rather than a repository-wide transaction.
 
-Retirement uses the same ten-second planning/sixty-second apply deadlines, 8 MiB encoded record
+Retirement uses the same sixty-second planning/sixty-second apply deadlines, 8 MiB encoded record
 bound (a retirement plan records every file and directory) and aggregate 1024-entry bound for references; each stored/disk raw file in the default v2 contract
 is bounded to 64 KiB; the retirement blob sample and the manifest are 8,192 entries and user content
 64 MiB in total, while the shared 16,384-leaf tree limit only bounds cost. Hooks, fsmonitor and submodule

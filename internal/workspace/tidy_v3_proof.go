@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
@@ -116,7 +115,7 @@ type tidyV3NativeObservation struct {
 }
 
 func observeTidyV3Git(ctx context.Context, path, base string) (tidyV3NativeObservation, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	out := tidyV3NativeObservation{}
 	// Every native command of the observation runs under the planning

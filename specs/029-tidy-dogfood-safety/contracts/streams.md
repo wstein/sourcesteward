@@ -40,7 +40,7 @@ Per observation: user bytes3×64 MiB=192 MiB; registration metadata2×(1,024×64
 
 The content ledger excludes unrelated native metadata channels governed separately above and HTTP governed by the online contract; it never claims to measure Git removal's internal filesystem reads. Git removal has no additional SourceSteward per-file unlink pass. If later implementation adds a proof pass, it cannot reset the ledger or omit another guard; change the reviewed design or refuse when the approved budget is exhausted.
 
-No deadline reset: offline plan10 seconds, online plan30 seconds; each full native observation has a subordinate10-second context; apply60 seconds total. Recovery/removal suboperations remain within their existing tighter contexts and remaining parent time. Time/cancellation/budget failure after recovery preserves it and reports partial effects. Maximum-size valid input is byte-admissible but can still fail the deadline.
+No deadline reset: offline plan 60 seconds, online plan 90 seconds (amended from a fixed 10 and 30 seconds, which a loaded runner or a thousand-file repository could exceed; deterministic, not scaled); each full native observation has a subordinate 60-second context; apply60 seconds total. Recovery/removal suboperations remain within their existing tighter contexts and remaining parent time. Time/cancellation/budget failure after recovery preserves it and reports partial effects. Maximum-size valid input is byte-admissible but can still fail the deadline.
 
 ## Mandatory acceptance
 

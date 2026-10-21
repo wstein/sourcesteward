@@ -55,9 +55,9 @@ func TestTidyV3SixRealisticLegacyRetirementsThenFreshReferences(t *testing.T) {
 			}
 			p := *planned.Plan
 			pc := ledger.snapshot()
-			planDeadline := 10 * time.Second
+			planDeadline := planObservationTimeout
 			if o.Online {
-				planDeadline = 30 * time.Second
+				planDeadline = planObservationTimeout + planOnlineTimeout
 			}
 			if pc.Observations != 3 || pc.RawProcesses != 3 || pc.UserPasses != 9 || pc.MetadataPasses != 12 || pc.MaxReadBuffer > 64<<10 || planElapsed >= planDeadline {
 				t.Fatalf("plan proof %+v elapsed%s", pc, planElapsed)

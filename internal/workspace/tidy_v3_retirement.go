@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 )
@@ -27,9 +26,9 @@ func defaultTidyV3RetirementCoordinator() tidyV3RetirementCoordinator {
 	return tidyV3RetirementCoordinator{observe: observeTidyV3Retirement, openStore: openV3Store, pin: pinTidyV3Recovery, remove: runSandboxed, ownedRemove: gitRetirementOwnedNativeRemove, refs: defaultTidyV3RefsCoordinator()}
 }
 func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) (r V3Result) {
-	timeout := 10 * time.Second
+	timeout := planObservationTimeout
 	if o.Online {
-		timeout = 30 * time.Second
+		timeout += planOnlineTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

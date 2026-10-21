@@ -31,7 +31,7 @@ func selectAdapter(backend string) (nativeAdapter, error) {
 	return nil, failure("unsupported-backend", "Task workspace creation requires unambiguous native Git or jj ownership.")
 }
 func PlanCreate(ctx context.Context, o PlanOptions) Result {
-	ctx, cancel := context.WithTimeout(withCreationPolicy(ctx), 10*time.Second)
+	ctx, cancel := context.WithTimeout(withCreationPolicy(ctx), planObservationTimeout)
 	defer cancel()
 	return bounded(defaultCoordinator().plan(ctx, o))
 }
@@ -41,12 +41,12 @@ func Apply(ctx context.Context, o ApplyOptions) Result {
 	return bounded(defaultCoordinator().apply(ctx, o))
 }
 func Handoff(ctx context.Context, o Options) Result {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	return bounded(defaultCoordinator().handoff(ctx, o, false))
 }
 func RetirePlan(ctx context.Context, o Options) Result {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	return bounded(defaultCoordinator().handoff(ctx, o, true))
 }

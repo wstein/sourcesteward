@@ -205,14 +205,23 @@ func v3ProofPolicyFromOptions(o V3PlanOptions) (V3ProofPolicy, error) {
 	return policy, nil
 }
 
+// planObservationTimeout is the deadline of one plan or one native observation.
+// It was a fixed 10 s that a loaded runner or a repository of a thousand files
+// could exceed; it is now 60 s. It is deterministic, not scaled by the
+// repository, and a caller-chosen timeout (--timeout) may override it.
+const planObservationTimeout = 60 * time.Second
+
+// planOnlineTimeout is the extra online phase of a plan.
+const planOnlineTimeout = 30 * time.Second
+
 // v3ProofPlanTimeout is the total planning time of a local-reference plan: the
-// 10 s observation, the 60 s forge-free proof phase and, online, the 30 s
+// 60 s observation, the 60 s forge-free proof phase and, online, the 30 s
 // online phase (Spec 029 contract amendment, FR-008).
 func v3ProofPlanTimeout(o V3PlanOptions) time.Duration {
 	if o.Online {
-		return 100 * time.Second
+		return planObservationTimeout + 60*time.Second + planOnlineTimeout
 	}
-	return 70 * time.Second
+	return planObservationTimeout + 60*time.Second
 }
 
 // reviewRequested reports whether any review report option is set.

@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -18,7 +17,7 @@ type gitTidyAdapter struct{}
 type gitTidyWorktree struct{ path, head, branch string }
 
 func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObservation, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	out := TidyObservation{WorkspacePaths: []string{}, Candidates: []TidyCandidate{}, Limitations: []string{"Only native ancestry proves local integration; squash equivalence and forge evidence are unavailable and never inferred.", "State is sampled; external races and ABA changes are not transactionally excluded."}}
 	expected, e := (gitAdapter{}).Observe(ctx, path, base)
