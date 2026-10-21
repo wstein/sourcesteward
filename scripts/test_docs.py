@@ -178,7 +178,7 @@ class DocumentationTests(unittest.TestCase):
 
     def test_unpublished_schemas_stay_out_of_the_bundle_without_weakening_the_check(self):
         package = load('package_unpublished', 'package-pages.py')
-        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v3/tidy.schema.json', 'v3/tidy-report.schema.json', 'v3/tidy-decisions.schema.json', 'v3/tidy-restore.schema.json', 'v3/tidy-history.schema.json'})
+        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/restack-plan.schema.json', 'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v3/tidy.schema.json', 'v3/tidy-report.schema.json', 'v3/tidy-decisions.schema.json', 'v3/tidy-restore.schema.json', 'v3/tidy-history.schema.json'})
         self.assertFalse(package.UNPUBLISHED_SCHEMAS & package.SCHEMA_PATHS)
         self.assertNotIn('v3', package.SCHEMAS)
         self.assertNotIn('v3/tidy.schema.json', package.SCHEMA_PATHS)
