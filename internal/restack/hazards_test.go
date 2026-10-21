@@ -215,3 +215,15 @@ func TestJJAndNonRepositoriesAreRefusedWithoutAGitFallback(t *testing.T) {
 		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
 	}
 }
+
+func TestSHA256RepositoriesAreRefused(t *testing.T) {
+	r := newRepo(t)
+	dir := filepath.Join(filepath.Dir(r.dir), "sha256")
+	if out, code := r.gitIn(filepath.Dir(r.dir), nil, "", "init", "-q", "--object-format=sha256", "-b", "main", dir); code != 0 {
+		t.Skip("this Git cannot create a sha256 repository: " + out)
+	}
+	res := Plan(context.Background(), Options{Path: dir, Branch: "refs/heads/main", OldParent: "refs/heads/a", NewParent: "refs/heads/b", Remote: "origin"})
+	if res.Status != StatusError || firstCode(res) != "object-format-unsupported" {
+		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
+	}
+}
