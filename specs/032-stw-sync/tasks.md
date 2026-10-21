@@ -8,9 +8,9 @@
 
 ## Slice 1a — Classification and `--plan`
 
-- [ ] T002 Failing tests for the classification table (`fast-forward`, `up-to-date`, `ahead`, `diverged`, `upstream-gone`, untracked branch ignored, dirty worktree `skipped-dirty`) over a temporary repo with bare remote and linked worktrees; then `stw sync --plan [PATH] [--remote NAME] [--prune]` with the single fetch, bounded output, human and `--json`; no local ref, worktree or stash change.
-- [ ] T003 Failing tests then jj and unsupported path refusal before any effect; usage errors exit 2; exit-code table (`upstream-gone` exits 0).
-- [ ] T004 JSON schema for the sync result with valid and invalid fixtures; docs entry in `docs/commands.md` and `docs/json-contracts.md`.
+- [x] T002 Failing tests for the classification table (`fast-forward`, `up-to-date`, `ahead`, `diverged`, `upstream-gone`, untracked branch ignored, dirty worktree `skipped-dirty`) over a temporary repo with bare remote and linked worktrees; then `stw sync --plan [PATH] [--remote NAME] [--prune]` with the single fetch, bounded output, human and `--json`; no local ref, worktree or stash change.
+- [x] T003 Failing tests then jj and unsupported path refusal before any effect; usage errors exit 2; exit-code table (`upstream-gone` exits 0).
+- [x] T004 JSON schema for the sync result with valid and invalid fixtures; docs entry in `docs/commands.md` and `docs/json-contracts.md`.
 
 ## Slice 1b — Real run: fast-forward, prune, journal
 
