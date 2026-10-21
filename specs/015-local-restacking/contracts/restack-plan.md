@@ -71,7 +71,7 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 | --- | --- | --- |
 | 1 | `status` is `incomplete` or `error` | `none` |
 | 2 | `replay.state` is `conflict` | `conflicts-predicted` |
-| 3 | every one of the following holds: `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
+| 3 | every one of the following holds: `replay.state` is `clean`; `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
 | 4 | otherwise (any other state or value, known or future) | `needs-attention` |
 
 `evidence-clean` is the positive list of row 3 only; any state the table does not name falls to row 4. `evidence-clean` never means safe: the notice and `limitations` still apply. Examples (abridged):
