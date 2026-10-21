@@ -71,7 +71,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	}}
 	plan.Flags().StringVar(&options.Base, "base", "", "Required literal native integration base; no inferred trunk")
 	plan.Flags().StringArrayVar(&options.Refs, "ref", nil, "Select a literal local branch/bookmark name (repeatable; otherwise all bounded local references)")
-	plan.Flags().StringVar(&options.StateDir, "state-dir", "", "Optional existing private mode0700 state directory; omission makes planning stateless")
+	plan.Flags().StringVar(&options.StateDir, "state-dir", "", "Existing private mode0700 state directory; optional for reference planning (omission makes it stateless), required for retirement")
 	plan.Flags().StringVar(&options.Task, "task", "", "Select an exactly owned completed task for retirement")
 	plan.Flags().StringVar(&options.Owner, "owner", "", "Expected task owner; private store access remains the trust boundary")
 	plan.Flags().BoolVar(&options.RemoveRegistration, "remove-registration", false, "Plan exact native registration removal; required for task retirement")
