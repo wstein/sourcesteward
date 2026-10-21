@@ -237,3 +237,42 @@ func TestPlanRefusesMoreThanTheBranchLimit(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestPlanIgnoresFetchPruneConfigWithoutPruneFlag(t *testing.T) {
+	f := classificationFixture(t)
+	runGit(t, f.repo, "config", "fetch.prune", "true")
+	r := Plan(context.Background(), Options{Path: f.repo})
+	if r.Error != nil || len(r.Fetch.PrunedRefs) != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if runGit(t, f.repo, "for-each-ref", "refs/remotes/origin/gone") == "" {
+		t.Fatal("fetch.prune must not remove refs without --prune")
+	}
+}
+
+func TestPlanRefusesRefspecsThatWriteLocalRefs(t *testing.T) {
+	for _, spec := range []string{"+refs/heads/behind:refs/heads/behind", "refs/tags/*:refs/tags/*"} {
+		f := classificationFixture(t)
+		runGit(t, f.repo, "config", "--add", "remote.origin.fetch", spec)
+		before := runGit(t, f.repo, "for-each-ref", "--format=%(refname) %(objectname)")
+		r := Plan(context.Background(), Options{Path: f.repo})
+		if r.Error == nil || r.Error.Code != "sync-refspec-unsafe" || r.Fetch.Performed {
+			t.Fatalf("%s: %+v", spec, r)
+		}
+		if after := runGit(t, f.repo, "for-each-ref", "--format=%(refname) %(objectname)"); after != before {
+			t.Fatalf("%s: refs changed", spec)
+		}
+	}
+}
+
+func TestPlanIgnoresInheritedRepositoryVariables(t *testing.T) {
+	f := classificationFixture(t)
+	want := Plan(context.Background(), Options{Path: f.repo})
+	decoy := filepath.Join(f.root, "decoy")
+	runGit(t, f.root, "init", "-q", "-b", "main", decoy)
+	t.Setenv("GIT_DIR", filepath.Join(decoy, ".git"))
+	got := Plan(context.Background(), Options{Path: f.repo})
+	if got.Error != nil || len(got.Items) != len(want.Items) || len(got.Items) == 0 {
+		t.Fatalf("%+v", got)
+	}
+}
