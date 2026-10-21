@@ -22,7 +22,7 @@ func gitRetirementMetadataPaths() []string {
 }
 
 func (gitRetirementAdapter) Observe(ctx context.Context, source, base string, task TaskRecord, creation MutationPlan) (RetirementObservation, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	o := RetirementObservation{Siblings: []RetirementSibling{}, WorkspacePaths: []string{}, Actions: []RetirementAction{}, Limitations: []string{"Native and filesystem state are sampled; external races and ABA changes are not transactionally excluded.", "Git registration and filesystem removal are coupled and require both authorizations; unknown or dirty content is retained."}}
 	sourceState, e := (gitTidyAdapter{}).Observe(ctx, source, base)

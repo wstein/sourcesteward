@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-	"time"
 )
 
 // Admission is evidence only. It neither persists a completion claim nor
@@ -144,7 +143,7 @@ func (c tidyV3LegacyObserver) observe(ctx context.Context, o V3PlanOptions, budg
 	return c.observeWithOwnership(ctx, o, budget, nil)
 }
 func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3PlanOptions, budget *tidyV3ProofBudget, owned *V3OwnedProvenance) (tidyV3LegacyObservation, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	out := tidyV3LegacyObservation{}
 	if e := ctx.Err(); e != nil {

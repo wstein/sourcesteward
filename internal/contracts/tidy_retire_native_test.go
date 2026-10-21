@@ -77,7 +77,7 @@ func TestRealOwnedRetirementSchema(t *testing.T) {
 						var out, diagnostic bytes.Buffer
 						args = append(args, "--json")
 						// A plan only reads and stores its own plan, and every operation carries a
-						// fixed 10 s production deadline that a loaded two-core runner can exceed with
+						// 60 s production plan deadline that a loaded two-core runner can exceed with
 						// a real jj. A plan whose result is an error with the diagnostic code canceled is
 						// repeated up to three times; no other result and no apply ever is.
 						var elapsed []time.Duration
@@ -96,7 +96,7 @@ func TestRealOwnedRetirementSchema(t *testing.T) {
 							if strings.Contains(out.String(), "sandbox-unavailable") && os.Getenv("STW_REQUIRE_JJ") != "1" && os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") != "1" {
 								t.Skip("native sandbox unavailable")
 							}
-							t.Fatalf("exit%d want%d; attempts took %v (a tidy plan carries a fixed 10 s deadline) %s %s", code, expected, elapsed, out.String(), diagnostic.String())
+							t.Fatalf("exit%d want%d; attempts took %v (a tidy plan carries a 60 s deadline) %s %s", code, expected, elapsed, out.String(), diagnostic.String())
 						}
 						return out.Bytes()
 					}

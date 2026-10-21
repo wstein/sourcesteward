@@ -9,9 +9,9 @@ import (
 // PlanTidyV3 is the explicit version-three operation boundary. Existing tidy
 // entry points and their stored-plan meanings remain separate.
 func PlanTidyV3(ctx context.Context, o V3PlanOptions) V3Result {
-	timeout := 10 * time.Second
+	timeout := planObservationTimeout
 	if o.Online {
-		timeout = 30 * time.Second
+		timeout += planOnlineTimeout
 	}
 	if o.Task == "" && o.CompletedWorktree == "" && o.TrackingRemote == "" {
 		timeout = v3ProofPlanTimeout(o) // local-reference plans include the proof phase

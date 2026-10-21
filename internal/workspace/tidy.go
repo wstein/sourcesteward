@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 )
 
 type tidyCoordinator struct {
@@ -21,7 +20,7 @@ type tidyCoordinator struct {
 
 // tidyPlanTimeout bounds one PlanTidy call. It is a variable only so that a test of a
 // large fixture can widen it on a slow runner; production never changes it.
-var tidyPlanTimeout = 10 * time.Second
+var tidyPlanTimeout = planObservationTimeout
 
 func PlanTidy(ctx context.Context, o TidyPlanOptions) TidyResult {
 	ctx, cancel := context.WithTimeout(ctx, tidyPlanTimeout)

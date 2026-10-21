@@ -3,7 +3,6 @@ package workspace
 
 import (
 	"context"
-	"time"
 )
 
 // Owned mode opens original completed creation records read-only on every full
@@ -28,7 +27,7 @@ func observeTidyV3Retirement(ctx context.Context, o V3PlanOptions, budget *tidyV
 	if o.Task == "" {
 		return observeTidyV3Legacy(ctx, o, budget)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	if e := ctx.Err(); e != nil {
 		return tidyV3LegacyObservation{}, e

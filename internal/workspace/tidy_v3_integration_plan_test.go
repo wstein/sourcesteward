@@ -331,11 +331,11 @@ func TestPlanCommandTimeoutIsProofLimit(t *testing.T) {
 }
 
 func TestPlanBudgetTotalsAreAmended(t *testing.T) {
-	if got := v3ProofPlanTimeout(V3PlanOptions{}); got != 70*time.Second {
-		t.Errorf("offline plan budget %s, want 10 s + 60 s", got)
+	if got := v3ProofPlanTimeout(V3PlanOptions{}); got != 120*time.Second {
+		t.Errorf("offline plan budget %s, want 60 s + 60 s", got)
 	}
-	if got := v3ProofPlanTimeout(V3PlanOptions{Online: true}); got != 100*time.Second {
-		t.Errorf("online plan budget %s, want 10 s + 60 s + 30 s", got)
+	if got := v3ProofPlanTimeout(V3PlanOptions{Online: true}); got != 150*time.Second {
+		t.Errorf("online plan budget %s, want 60 s + 60 s + 30 s", got)
 	}
 }
 

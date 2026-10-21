@@ -16,7 +16,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
@@ -106,7 +105,7 @@ func (gitAdapter) Observe(ctx context.Context, path, base string) (Snapshot, err
 // The optional output exposes authority from the existing completed layout
 // proof. Legacy callers keep exactly their original snapshot and admission.
 func observeGitWithPrimary(ctx context.Context, path, base string, primary *gitPrimaryBinding) (Snapshot, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
 	defer cancel()
 	id, err := gitNativeIdentity(ctx, path)
 	if err != nil {
