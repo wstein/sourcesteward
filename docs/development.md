@@ -105,6 +105,26 @@ everything again. When GitHub retargets a stacked PR to `main` after its parent 
 workflow does not react (no `edited` trigger) and the conformance job stays skipped: the
 dispatcher restacks (a push) or applies `ci-full`.
 
+Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
+runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
+only when the event is `pull_request` and every file differing from the base tip is on a
+prose allowlist: root `*.md`, top-level `docs/*.md`, and `specs/<feature>/*.md` (including
+`checklists/`). Everything else counts as code: workflows, scripts, source, schemas, go.mod/go.sum,
+`docs/*.json`, `docs/assets`, `docs/index.html`, spec `contracts/` and `examples/` (Go tests and
+scripts read them), and any rename out of those paths. An empty or unreadable change set, a
+checkout that is not a merge commit and every other event (push to `main`, `workflow_dispatch`,
+schedule, tags, the `ci-full` label run) give `false`. There is no `paths-ignore`, so every
+workflow still starts and reports. `conformance.yml` receives `docs_only`; its `shard` job is
+skipped only when `docs_only` is `true` on a `pull_request`, and the lane's `suite` job (always
+runs) passes on `success`, or on `skipped` only for that same docs-only pull request; failed,
+cancelled or skipped-otherwise fails it. `check` (static and documentation checks, the race
+suite) and the docs, architecture and spec checks inside it always run. Widen the allowlist
+Never require a per-shard check: a shard skipped inside a matrix reports under the
+unexpanded matrix name and would stay pending. Require only checks that always report:
+`check` and `Git/jj conformance (<lane>) / suite`. Widen the allowlist
+only for files that nothing reads; `scripts/test_ci_workflow.py` pins the classifier, the
+event rules and the `suite` truth table.
+
 Check names of the conformance jobs are prefixed by the calling job: a lane reports as
 `Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`), from `ci.yml` and from
 `ci-full.yml` alike. No branch protection exists today; a future required check should

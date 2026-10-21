@@ -9,6 +9,11 @@ on:
         description: Pinned backend lane (minimum or current)
         required: true
         type: string
+      docs_only:
+        description: True for a documentation-only pull request, whose shards are skipped
+        required: false
+        default: 'false'
+        type: string
 
 permissions:
   contents: read
@@ -18,6 +23,8 @@ jobs:
   # scripts/ci_shards.py); shard 0 runs every other package and shard 5 the real-CLI smoke checks.
   shard:
     name: shard ${{ matrix.shard }}
+    # Only a pull_request may skip the shards, and only when ci.yml classified it docs-only.
+    if: inputs.docs_only != 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     strategy:
@@ -132,7 +139,26 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      # A skipped shard job is a pass only for a documentation-only pull request; everywhere
+      # else (docs_only false, push, dispatch, schedule, tag) skipped, cancelled and failed fail.
       - name: Require every shard of this lane to have passed
         env:
           SHARDS_RESULT: ${{ needs.shard.result }}
-        run: test "$SHARDS_RESULT" = success
+          DOCS_ONLY: ${{ inputs.docs_only }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          case "$SHARDS_RESULT" in
+            success) ;;
+            skipped)
+              if [ "$EVENT_NAME" = pull_request ] && [ "$DOCS_ONLY" = true ]; then
+                echo "shards skipped for a documentation-only pull request"
+              else
+                echo "shards were skipped but the change is not a documentation-only pull request"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "shards result: $SHARDS_RESULT"
+              exit 1
+              ;;
+          esac
