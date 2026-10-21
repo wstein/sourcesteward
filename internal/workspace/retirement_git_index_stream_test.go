@@ -70,3 +70,32 @@ func TestNULRecordStreamRefusesTruncationAndCountOverflow(t *testing.T) {
 		t.Fatalf("record overflow: %v", e)
 	}
 }
+
+// A registration index above 64 KiB (about 600 tracked files) used to refuse
+// every retirement as an oversized metadata file.
+func TestTidyV3LegacyAdmitsALargeRegistrationIndex(t *testing.T) {
+	o, _ := tidyV3LegacyFixture(t, false)
+	for i := 0; i < 900; i++ {
+		rel := filepath.Join("content", fmt.Sprintf("section-%02d", i%12), fmt.Sprintf("a-reasonably-long-file-name-%04d.dat", i))
+		p := filepath.Join(o.Path, rel)
+		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(p, []byte(fmt.Sprintf("content %d\n", i)), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	gitFixture(t, o.Path, "add", ".")
+	gitFixture(t, o.Path, "commit", "-qm", "many tracked files")
+	// A new linked worktree of the committed tree; the fixture's own is stale.
+	dest := filepath.Join(gitTempDir(t), "big")
+	gitFixture(t, o.Path, "worktree", "add", "-q", "-b", "big", dest, "HEAD")
+	o.CompletedWorktree, o.RemoveFiles = dest, dest
+	info, e := os.Stat(filepath.Join(strings.TrimSpace(gitFixture(t, dest, "rev-parse", "--absolute-git-dir")), "index"))
+	if e != nil || info.Size() <= 64<<10 {
+		t.Fatalf("fixture index does not exceed 64 KiB: %v %v", info, e)
+	}
+	if _, e := observeTidyV3Legacy(context.Background(), o, newTidyV3ProofBudget(false)); e != nil {
+		t.Fatalf("large index refused: %v", e)
+	}
+}
