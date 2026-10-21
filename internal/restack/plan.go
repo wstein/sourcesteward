@@ -22,6 +22,7 @@ type planner struct {
 	gdir       string // absolute git directory of the target worktree
 	cdir       string // common git directory
 	moved      []rawCommit
+	touched    []string
 	quarantine string
 }
 
@@ -75,7 +76,16 @@ func (p *planner) run(ctx context.Context) error {
 		return refuse("git-unsupported", "The Git executable is unavailable.", nil)
 	}
 	p.git = &gitRunner{bin: bin, dir: p.root, home: home, objectDir: objects, alternates: filepath.Join(p.cdir, "objects"), now: p.now}
-	return p.resolve(ctx)
+	if err := p.checkRepository(ctx); err != nil {
+		return err
+	}
+	if err := p.checkTarget(ctx); err != nil {
+		return err
+	}
+	if err := p.resolve(ctx); err != nil {
+		return err
+	}
+	return p.checkAttributes(ctx)
 }
 
 // admit decides ownership and canonical paths with the shared read-only inspection (FR-003, FR-014).
