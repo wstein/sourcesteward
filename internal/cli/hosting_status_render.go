@@ -2,12 +2,31 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 )
+
+// humanOutputLimit mirrors the one MiB JSON cap, counting escape expansion and the newline.
+const humanOutputLimit = 1 << 20
+
+var errHumanOutputLimit = errors.New("hosting output exceeded its one MiB limit")
+
+// writeBounded writes text, or only a fixed short diagnostic when it exceeds the cap.
+func writeBounded(w io.Writer, text string) error {
+	if len(text) > humanOutputLimit {
+		io.WriteString(w, "status=\"error\" diagnostic=\"hosting-output-limit\":\"hosting result exceeded its one MiB limit\"\n")
+		return errHumanOutputLimit
+	}
+	n, err := io.WriteString(w, text)
+	if err == nil && n < len(text) {
+		err = io.ErrShortWrite
+	}
+	return err
+}
 
 // Every remote or local string is written with %q so that titles, refs and URLs
 // can never reach the terminal as control or bidirectional characters.
@@ -27,8 +46,7 @@ func renderPRStatus(w io.Writer, r hosting.PRStatusResult, compact bool) error {
 			fmt.Fprintf(&text, " diagnostic=%q:%q", d.Code, d.Message)
 		}
 		text.WriteString("\n")
-		_, err := io.WriteString(w, text.String())
-		return err
+		return writeBounded(w, text.String())
 	}
 	fmt.Fprintf(&text, "Hosting: %q status=%q backend=%q\nObserved: %q sampled: %q\nComplete: %t; network reads: %t; requests: %d\nStop: %q\nExpectation: %q expected head: %q\n", r.Kind, r.Status, r.Backend, r.ObservedAt, hostingNullable(r.SampledAt), r.Boundary.Complete, r.Boundary.Network, r.Boundary.Requests, r.Observation.Stop, r.Observation.Expectation, hostingNullable(r.Observation.ExpectedHead))
 	writeIdentity(&text, r.Identity, r.Repository, r.Candidates)
@@ -42,8 +60,7 @@ func renderPRStatus(w io.Writer, r hosting.PRStatusResult, compact bool) error {
 	for _, v := range r.Boundary.Limitations {
 		fmt.Fprintf(&text, "Limitation: %q\n", v)
 	}
-	_, err := io.WriteString(w, text.String())
-	return err
+	return writeBounded(w, text.String())
 }
 
 func renderLookup(w io.Writer, r hosting.LookupResult, compact bool) error {
@@ -65,6 +82,5 @@ func renderLookup(w io.Writer, r hosting.LookupResult, compact bool) error {
 			fmt.Fprintf(&text, "Limitation: %q\n", v)
 		}
 	}
-	_, err := io.WriteString(w, text.String())
-	return err
+	return writeBounded(w, text.String())
 }

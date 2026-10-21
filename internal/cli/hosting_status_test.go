@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 
@@ -72,6 +73,7 @@ func TestHostingStatusFlagsAreUsageErrors(t *testing.T) {
 		{"prs", sha, "--json-version", "2"},
 		{"prs"},
 		{"prs", sha, "p", "extra"},
+		{"prs", sha, "--json", "--compact"},
 	} {
 		for _, jj := range []bool{false, true} {
 			var c hostingCalls
@@ -212,3 +214,43 @@ func TestHostingLookupOutput(t *testing.T) {
 		t.Fatalf("lookup error must exit 1: %v", e)
 	}
 }
+
+type shortWriter struct{ n int }
+
+func (w shortWriter) Write(p []byte) (int, error) { return w.n, nil }
+
+// Human output is bounded like JSON (escape expansion counts), and a failing or short
+// writer is a runtime failure, never silent success.
+func TestHostingHumanOutputBoundAndWriterFailure(t *testing.T) {
+	huge := strings.Repeat("\u0085", 400000)
+	lk := hosting.LookupResult{SchemaVersion: 2, Kind: "prs", Status: "ok", Candidates: []hosting.Candidate{}, Diagnostics: []inspection.Diagnostic{}, Count: 1}
+	lk.PullRequests = []hosting.LookupPullRequest{{PRStatusPullRequest: *okStatus(huge, "r").PullRequest}}
+	for _, args := range [][]string{{"pr", "42", "--compact"}, {"pr", "42", "--expect-head", strings.Repeat("a", 40)}, {"prs", strings.Repeat("a", 40)}, {"prs", strings.Repeat("a", 40), "--compact"}} {
+		var c hostingCalls
+		out, run := statusCommand(false, &c, okStatus(huge, "r"), lk)
+		var failure runtimeFailure
+		if e := run(args...); e == nil || !asRuntimeFailure(e, &failure) || out.out.Len() > 1024 || strings.Contains(out.out.String(), "\\u0085") || !strings.Contains(out.out.String(), "hosting-output-limit") {
+			t.Fatalf("%q: err=%v len=%d", args, e, out.out.Len())
+		}
+	}
+	for _, w := range []io.Writer{shortWriter{3}, closedPipeWriter{}} {
+		var c hostingCalls
+		cmd := hostingCommandWithOps(false, nil,
+			func(context.Context, string, hosting.Options) hosting.PRStatusResult {
+				c.status++
+				return okStatus("t", "r")
+			},
+			func(context.Context, string, hosting.Options) hosting.LookupResult { return lk })
+		cmd.SilenceErrors, cmd.SilenceUsage = true, true
+		cmd.SetOut(w)
+		cmd.SetArgs([]string{"pr", "42", "--compact"})
+		var failure runtimeFailure
+		if e := cmd.ExecuteContext(context.Background()); e == nil || !asRuntimeFailure(e, &failure) {
+			t.Fatalf("writer failure must exit 1: %v", e)
+		}
+	}
+}
+
+type closedPipeWriter struct{}
+
+func (closedPipeWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
