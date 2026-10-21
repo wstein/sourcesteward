@@ -89,11 +89,15 @@ func actionOf(t *testing.T, p V3Plan, name string) string {
 
 func TestHistoryCountsTheKindOfEveryDecision(t *testing.T) {
 	f := classFix(t)
+	f.git("checkout", "-q", "-b", "fresh2", "refs/heads/ancestor")
+	f.commit("fresh2", map[string]string{"fresh2.txt": "two\n"})
+	f.checkout(f.main)
 	r := f.decide(t, func(tip func(string) string, base string) []map[string]any {
 		human := validDecision("refs/heads/fresh", tip("fresh"), base)
+		human2 := validDecision("refs/heads/fresh2", tip("fresh2"), base)
 		ai := validDecision("refs/heads/ws", tip("ws"), base)
 		ai["decision"], ai["kind"], ai["reason"] = "drop", "ai", "abandoned"
-		return []map[string]any{human, ai}
+		return []map[string]any{human, human2, ai}
 	}, V3PlanOptions{})
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("%+v", r.Diagnostics)
@@ -103,7 +107,17 @@ func TestHistoryCountsTheKindOfEveryDecision(t *testing.T) {
 		t.Fatalf("%+v", a.Diagnostics)
 	}
 	e := historyEntry(t, historyOf(t, V3HistoryOptions{Path: f.dir, StateDir: p.StateDir}), p.PlanID)
-	if e.DecisionKinds != (V3HistoryDecisions{Human: 1, AI: 1}) || e.Deleted < 2 || e.Restorable != e.Deleted {
+	if e.DecisionKinds != (V3HistoryDecisions{Human: 2, AI: 1}) || e.Deleted < 3 || e.Restorable != e.Deleted {
+		t.Fatalf("%+v", e)
+	}
+}
+
+// A stopped apply: only the entries that finished count as deleted, and the
+// restorable count follows the entries with a confirmed recovery.
+func TestHistoryOfAStoppedApplyCountsOnlyWhatFinished(t *testing.T) {
+	f := newPartialRestoreFix(t, "first", "second", "third")
+	e := historyEntry(t, historyOf(t, f.historyOptions()), f.stored.PlanID)
+	if e.JournalStatus != "incomplete" || e.Deleted != 1 || e.Restorable != 1 || e.RecoveryRefs != "present" || e.Mode != "local-refs" {
 		t.Fatalf("%+v", e)
 	}
 }
