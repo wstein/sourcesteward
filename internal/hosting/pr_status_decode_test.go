@@ -119,6 +119,11 @@ func TestPRStatusRequiredAndInconsistentEvidence(t *testing.T) {
 			p["merged"] = true
 			p["closed_at"] = "2026-10-18T12:00:00Z"
 		}},
+		{"merged-with-null-closed-at", func(p map[string]any) {
+			p["state"] = "closed"
+			p["merged"] = true
+			p["merged_at"] = "2026-10-18T12:00:00Z"
+		}},
 		{"unmerged-with-merge-date", func(p map[string]any) {
 			p["state"] = "closed"
 			p["closed_at"] = "2026-10-18T12:00:00Z"

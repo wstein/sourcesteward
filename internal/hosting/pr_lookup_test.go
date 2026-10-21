@@ -281,3 +281,20 @@ func TestLookupResultsMatchPublishedSchema(t *testing.T) {
 	r, _, _ := runLookup(t, lookupBody(t, full...), nil)
 	validate("truncated", r)
 }
+
+// Escaping can grow the encoded result far past the raw body (< becomes six bytes):
+// the output cap then fails the whole result and clears identity and repository.
+func TestLookupOutputLimit(t *testing.T) {
+	items := make([]map[string]any, 30)
+	for i := range items {
+		items[i] = lookupItem(t, i+1, lookupSHA, func(p map[string]any) { p["title"] = strings.Repeat("<", 25000) })
+	}
+	body := bytes.ReplaceAll(lookupBody(t, items...), []byte(`\u003c`), []byte("<"))
+	if len(body) >= maxBytes {
+		t.Fatalf("raw body must fit: %d", len(body))
+	}
+	r, _, _ := runLookup(t, body, nil)
+	if r.Status != "error" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "hosting-output-limit" || r.Identity != nil || r.Repository != nil || r.Count != 0 || len(r.PullRequests) != 0 || r.SampledAt != nil || len(r.Candidates) != 0 {
+		t.Fatalf("%+v", r.Diagnostics)
+	}
+}
