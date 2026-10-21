@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/workspace"
@@ -124,6 +125,34 @@ func TestTidyV3ReportSchemaDescribesAProofLimitEntry(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			if s.Validate(with(mutate)) == nil {
+				t.Fatal("the schema admitted a violation")
+			}
+		})
+	}
+}
+
+// A commit says whether the base carries a commit with the same patch.
+func TestTidyV3ReportSchemaMarksMatchedAndUnmatchedCommits(t *testing.T) {
+	s := schemaAt(t, "v3", "tidy-report")
+	raw, err := os.ReadFile(filepath.Join(root(t), "internal", "workspace", "testdata", "tidy_v3_report", "tidy-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := func(v map[string]any) map[string]any {
+		return v["entries"].([]any)[0].(map[string]any)["commits"].([]any)[0].(map[string]any)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"status outside the table": func(v map[string]any) { commit(v)["patch_match"] = "similar" },
+		"matched_by without a status": func(v map[string]any) {
+			delete(commit(v), "patch_match")
+			commit(v)["matched_by"] = strings.Repeat("a", 40)
+		},
+		"matched_by not an OID": func(v map[string]any) { commit(v)["matched_by"] = "abc" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			v := value(t, raw).(map[string]any)
+			mutate(v)
+			if s.Validate(v) == nil {
 				t.Fatal("the schema admitted a violation")
 			}
 		})

@@ -232,11 +232,46 @@ func renderEntryMarkdown(index int, e V3ReportEntry) string {
 		total = e.CommitsTruncated.Total
 	}
 	fmt.Fprintf(&b, "### Commits (%d of %d)\n\n", len(e.Commits), total)
-	var commits strings.Builder
+	compared := false
 	for _, c := range e.Commits {
-		fmt.Fprintf(&commits, "%s %s (%s, %s)\n", short(c.OID), c.Subject.Text, c.Author.Text, c.Date)
+		compared = compared || c.PatchMatch != ""
 	}
-	b.WriteString(untrustedBlock(commits.String()))
+	if !compared {
+		var commits strings.Builder
+		for _, c := range e.Commits {
+			fmt.Fprintf(&commits, "%s %s (%s, %s)\n", short(c.OID), c.Subject.Text, c.Author.Text, c.Date)
+		}
+		b.WriteString(untrustedBlock(commits.String()))
+	} else {
+		// The unmatched commits come first: they are what the base lacks.
+		for _, group := range []struct{ title, status string }{{"Commits with no match on the base", "unmatched"}, {"Commits with a match on the base", "matched"}} {
+			var lines strings.Builder
+			n := 0
+			for _, c := range e.Commits {
+				if c.PatchMatch != group.status {
+					continue
+				}
+				n++
+				fmt.Fprintf(&lines, "%s %s (%s, %s)", short(c.OID), c.Subject.Text, c.Author.Text, c.Date)
+				if c.MatchedBy != "" {
+					fmt.Fprintf(&lines, " (matched by %s)", short(c.MatchedBy))
+				}
+				lines.WriteString("\n")
+			}
+			if n > 0 {
+				fmt.Fprintf(&b, "#### %s (%d)\n\n%s\n", group.title, n, untrustedBlock(lines.String()))
+			}
+		}
+		var other strings.Builder
+		for _, c := range e.Commits {
+			if c.PatchMatch == "" {
+				fmt.Fprintf(&other, "%s %s (%s, %s)\n", short(c.OID), c.Subject.Text, c.Author.Text, c.Date)
+			}
+		}
+		if other.Len() > 0 {
+			b.WriteString("#### Merge or empty commits (no patch to compare)\n\n" + untrustedBlock(other.String()) + "\n")
+		}
+	}
 	if e.CommitsTruncated != nil {
 		fmt.Fprintf(&b, "\n... %d more commits\n", e.CommitsTruncated.Total-e.CommitsTruncated.Shown)
 	}

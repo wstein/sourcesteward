@@ -66,6 +66,11 @@ type V3ReportCommit struct {
 	Subject V3Untrusted `json:"subject"`
 	Author  V3Untrusted `json:"author"`
 	Date    string      `json:"date"`
+	// PatchMatch is matched (the base has a commit with the same patch, named in
+	// MatchedBy) or unmatched; it is absent for merge and empty commits and when
+	// the patch comparison did not run.
+	PatchMatch string `json:"patch_match,omitempty"`
+	MatchedBy  string `json:"matched_by,omitempty"`
 }
 
 // V3ReportTruncation is the marker with exact counts (FR-035).

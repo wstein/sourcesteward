@@ -26,6 +26,9 @@ type patchIDResult struct {
 	// BaseMatches are the first base commits (at most five, in log order)
 	// whose patch-id equals a branch commit's: candidates for the report.
 	BaseMatches []string
+	// CommitMatches maps each non-empty, non-merge branch commit to the newest
+	// base commit with the same patch, or "" when the base has none.
+	CommitMatches map[string]string
 }
 
 type patchIDRow struct{ patch, commit string }
@@ -192,6 +195,16 @@ func (r *integrationRun) patchID(ctx context.Context, base, tip, mergeBase, tipT
 		res.Unmatched += n - min(n, have)
 		multiset = multiset || have > 0 && have < n
 		absent = absent || have == 0
+	}
+	firstOnBase := map[string]string{}
+	for _, row := range baseStable {
+		if _, ok := firstOnBase[row.patch]; !ok {
+			firstOnBase[row.patch] = row.commit
+		}
+	}
+	res.CommitMatches = map[string]string{}
+	for _, row := range stable {
+		res.CommitMatches[row.commit] = firstOnBase[row.patch]
 	}
 	for _, row := range baseStable {
 		if branchCounts[row.patch] > 0 && len(res.BaseMatches) < reportMaxCandidates {

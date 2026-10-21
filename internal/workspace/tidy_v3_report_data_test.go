@@ -172,6 +172,56 @@ func TestReportPartialMatchListsCandidateBaseCommits(t *testing.T) {
 	}
 }
 
+// Each branch commit says whether the base carries a commit with the same patch
+// and which one, so a reviewer sees what matched and what did not.
+func TestReportPartialMatchMarksTheMatchedAndUnmatchedCommits(t *testing.T) {
+	f := newProofFix(t)
+	m0 := f.rev("HEAD")
+	f.branch("two", m0)
+	c1 := f.commit("first change", map[string]string{"p1.txt": "p1\n"})
+	c2 := f.commit("second change", map[string]string{"p2.txt": "p2\n"})
+	f.checkout(f.main)
+	f.commit("main moves", map[string]string{"o.txt": "o\n"})
+	picked := f.pick(c1)
+	e, _ := f.reportEntry(f.main, "two", true, nil)
+	got := map[string]V3ReportCommit{}
+	for _, c := range e.Commits {
+		got[c.OID] = c
+	}
+	if c := got[c1]; c.PatchMatch != "matched" || c.MatchedBy != picked {
+		t.Errorf("first commit %+v, want matched by %s", c, picked)
+	}
+	if c := got[c2]; c.PatchMatch != "unmatched" || c.MatchedBy != "" {
+		t.Errorf("second commit %+v, want unmatched", c)
+	}
+	r, err := renderReport(syntheticDocument(e))
+	if err != nil {
+		t.Fatal(err)
+	}
+	md := string(r.Markdown)
+	for _, want := range []string{"#### Commits with no match on the base (1)", short(c2) + " second change", "#### Commits with a match on the base (1)", short(c1) + " first change (", "(matched by " + short(picked) + ")"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown lacks %q\n%s", want, md)
+		}
+	}
+	if strings.Index(md, "no match on the base") > strings.Index(md, "with a match on the base") {
+		t.Error("unmatched commits must come first")
+	}
+}
+
+func TestReportWithoutAPatchComparisonMarksNoCommit(t *testing.T) {
+	f := newProofFix(t)
+	m0 := f.rev("HEAD")
+	f.branchFrom("real", m0, map[string]string{"new.txt": "hello\n"}, "add")
+	f.commit("main moves", map[string]string{"other.txt": "o\n"})
+	e, _ := f.reportEntryBounded(f.main, "real", true, func(r *integrationRun) {}, defaultReportBounds())
+	for _, c := range e.Commits {
+		if c.PatchMatch == "matched" && c.MatchedBy == "" {
+			t.Errorf("a matched commit names no base commit: %+v", c)
+		}
+	}
+}
+
 func containsAll(have []string, want ...string) bool {
 	for _, w := range want {
 		found := false
