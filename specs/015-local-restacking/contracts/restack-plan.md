@@ -35,7 +35,7 @@ Success never means "safe to push" (FR-016). Standard error carries one concise 
 
 ## Refusals and diagnostics (stable codes)
 
-`unsupported-backend`, `ambiguous-ownership`, `path-not-canonical`, `symlink-hazard`, `repository-hazard` (`core.hooksPath`, `core.fsmonitor`, `include`/`includeIf`, `extensions.*`, `replace` refs or grafts, shallow history, `merge.*.driver`, filter drivers or non-default `.gitattributes` merge/diff attributes on any touched path, reported with `hazard` names, none executed), `target-dirty`, `operation-in-progress` (rebase, merge, cherry-pick, bisect, sequencer state), `branch-checked-out-elsewhere` (reported with the worktree path, never touched), `ref-not-found`, `ref-ambiguous`, `ref-not-commit`, `object-missing`, `head-changed`, `old-parent-not-ancestor` (`merge-base --is-ancestor <old parent> <old head>` failed: the parent's own commits would be moved), `unrelated-histories` (no merge base between old parent and new parent), `merge-commit-in-range`, `range-too-large` (bound), `bound-exceeded`, `canceled`, `timeout`, `git-unsupported` (below the minimum Git version of the existing runner).
+`unsupported-backend`, `ambiguous-ownership`, `path-not-canonical`, `symlink-hazard`, `repository-hazard` (`core.hooksPath`, `core.fsmonitor`, `include`/`includeIf`, `extensions.*`, `replace` refs or grafts, shallow history, `merge.*.driver`, filter drivers or non-default `.gitattributes` merge/diff attributes on any touched path, reported with `hazard` names, none executed), `target-dirty`, `operation-in-progress` (rebase, merge, cherry-pick, bisect, sequencer state), `branch-checked-out-elsewhere` (reported with the worktree path, never touched), `ref-not-found`, `ref-ambiguous`, `ref-not-commit`, `object-missing`, `head-changed`, `empty-moved-range` (`old_head` equals `old_parent`: nothing to restack; evidence over an empty set is never a pass, exit 1), `old-parent-not-ancestor` (`merge-base --is-ancestor <old parent> <old head>` failed: the parent's own commits would be moved), `unrelated-histories` (no merge base between old parent and new parent), `merge-commit-in-range`, `range-too-large` (bound), `bound-exceeded`, `canceled`, `timeout`, `git-unsupported` (below the minimum Git version of the existing runner).
 
 Hazard diagnostics that do not refuse (status stays `ok`, listed in `effects.hazards` and `diagnostics`): `local-identity-config` (a repository-local `user.name` or `user.email` exists; it is never read or used).
 
@@ -65,22 +65,23 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 
 ## Outcome decision table
 
-`outcome` is computed by a pure function of the evidence, first matching row wins. `unknown` in any item never yields `evidence-clean`.
+`outcome` is a pure function of the evidence, first matching row wins; exactly one row matches every input.
 
 | Row | Condition | `outcome` |
 | --- | --- | --- |
 | 1 | `status` is `incomplete` or `error` | `none` |
 | 2 | `replay.state` is `conflict` | `conflicts-predicted` |
-| 3 | any of: `range_pairing` has a mark other than `=`; `own_diff_equality` has a `differs` or `unknown` row; `parent_dropped` is `unknown` (including an empty parent range) or has a `+` row whose tree-equivalence probe is not `equal`; `empty_after_replay` is non-empty; `identity.state` is `fail` or `unknown`; `overlap.indicator` is `some` or `unknown`; `affected_refs` or `worktrees` hold the branch elsewhere | `needs-attention` |
-| 4 | otherwise (all pairing marks `=`, all own diffs `equal`, parent dropped, identity `pass`, overlap `none`) | `evidence-clean` |
+| 3 | every one of the following holds: `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
+| 4 | otherwise (any other state or value, known or future) | `needs-attention` |
 
-`evidence-clean` never means safe: the notice and `limitations` still apply. Examples (abridged):
+`evidence-clean` is the positive list of row 3 only; any state the table does not name falls to row 4. `evidence-clean` never means safe: the notice and `limitations` still apply. Examples (abridged):
 
 ```json
 {"schema_version":1,"kind":"restack-plan","status":"ok","outcome":"evidence-clean","evidence":{"parent_dropped":{"all_dropped":true},"range_pairing":{"all_equal":true},"identity":{"state":"pass","source":"flag"},"overlap":{"indicator":"none"}},"limitations":["semantic-breaks-not-detected","prediction-is-not-apply"]}
 {"schema_version":1,"kind":"restack-plan","status":"ok","outcome":"needs-attention","evidence":{"identity":{"state":"unknown","source":"none","reason":"no-expected-identity"},"overlap":{"indicator":"some","count":2}}}
 {"schema_version":1,"kind":"restack-plan","status":"ok","outcome":"conflicts-predicted","evidence":{"replay":{"state":"conflict","commits_replayed":1},"conflicts":{"predicted":true,"items":[{"path":"src/a.go","kind":"content"}]}}}
 {"schema_version":1,"kind":"restack-plan","status":"error","outcome":"none","evidence":null,"diagnostics":[{"code":"old-parent-not-ancestor","message":"The old parent is not an ancestor of the branch tip.","details":{}}]}
+{"schema_version":1,"kind":"restack-plan","status":"error","outcome":"none","evidence":null,"diagnostics":[{"code":"empty-moved-range","message":"The branch tip equals the old parent: nothing to restack.","details":{}}]}
 {"schema_version":1,"kind":"restack-plan","status":"incomplete","outcome":"none","diagnostics":[{"code":"bound-exceeded","message":"A documented bound was reached.","details":{"bound":"max_commits"}}]}
 ```
 
@@ -97,7 +98,7 @@ NEW_FULL_SHA=   # set to the full 40-hex id of the new branch tip before running
 git push --force-with-lease='refs/heads/feat/x:<observed old 40-hex SHA>' 'origin' "${NEW_FULL_SHA:?set to the full new commit id}:refs/heads/feat/x"
 ```
 
-`new_sha_known` is `false` in this slice. The pushed value is the full id behind the shell variable; an unset or empty variable aborts the command before git runs. The text never contains `--force` without `-with-lease=ref:sha`, never a bare `--force-with-lease`, and is not executed. Tests assert that the rendered text, with the variable line removed, contains no unquoted `<` or `>`. `texts.resync` holds the two owner alternatives with the concrete short branch name (`refs/heads/a/b` gives `a/b`), the second named destructive:
+`new_sha_known` is `false` in this slice. The pushed value is the full id behind the shell variable; a value that is not 40 hex characters is not checked by the text (known limit: the lease still protects the push, and Git rejects an unresolvable id); an unset or empty variable aborts the command before git runs. The text never contains `--force` without `-with-lease=ref:sha`, never a bare `--force-with-lease`, and is not executed. Tests assert that the rendered text, with the variable line removed, contains no unquoted `<` or `>`. `texts.resync` holds the two owner alternatives with the concrete short branch name (`refs/heads/a/b` gives `a/b`), the second named destructive:
 
 ```text
 git fetch --prune
