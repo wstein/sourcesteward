@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -369,5 +370,21 @@ func TestRestoreOptionsAreCheckedBeforeAnyNativeWork(t *testing.T) {
 	}
 	if r := RestoreTidyV3(context.Background(), V3RestoreOptions{Path: "/nonexistent", StateDir: "/state", PlanID: "p", Actions: []string{"a", "a"}}); r.Status != "refused" || r.Diagnostics[0].Code != "invalid-options" {
 		t.Errorf("%+v", r)
+	}
+}
+
+// Journals bind the absolute state-directory path they were written for, so a
+// copied state directory is refused as journal-unreadable (documented in tidy.md).
+func TestRestorePlanRefusesACopiedStateDirectory(t *testing.T) {
+	f := newRestoreFix(t, "alpha")
+	o := f.options()
+	copyDir := filepath.Join(gitTempDir(t), "state-copy")
+	if out, err := exec.Command("cp", "-a", o.StateDir, copyDir).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	o.StateDir = copyDir
+	r := restorePlan(t, o)
+	if r.Status != "refused" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "journal-unreadable" {
+		t.Fatalf("copied state directory not refused as journal-unreadable: %+v", r)
 	}
 }

@@ -272,8 +272,8 @@ deleted and restoring them is a no-op.
 
 A plan retires exactly one worktree and needs `--state-dir`; `--report-dir` and the other review
 report flags apply to reference plans only. Retirement refuses, with a named code and reason (also
-without `--json`): `retirement-file-limit` (more than 1,024 files and directories, or an oversized
-file), `retirement-unrecorded-entry` (an untracked, ignored or generated path the stored tree does
+without `--json`): `retirement-file-limit` (more than 1,024 tracked files, or more than 1,024 files and
+directories together, or an oversized file), `retirement-unrecorded-entry` (an untracked, ignored or generated path the stored tree does
 not contain), `retirement-sibling-refused` (the parent directory holds a symbolic link, device or
 socket; its siblings are recorded as plain files and directories) and `git-tree-refused` (the
 commit holds symbolic links or submodule gitlinks: native removal would also delete the Git

@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -97,5 +98,33 @@ func TestTidyV3LegacyAdmitsALargeRegistrationIndex(t *testing.T) {
 	}
 	if _, e := observeTidyV3Legacy(context.Background(), o, newTidyV3ProofBudget(false)); e != nil {
 		t.Fatalf("large index refused: %v", e)
+	}
+}
+
+// More than 1,024 tracked files is refused by name before any content is read.
+func TestRetirementV3StoredFilesRefuseAboveTheManifestBoundByName(t *testing.T) {
+	source := fixtureGit(t)
+	for i := 0; i < 1100; i++ {
+		if e := os.WriteFile(filepath.Join(source, fmt.Sprintf("f%04d", i)), []byte("x\n"), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	gitFixture(t, source, "add", ".")
+	gitFixture(t, source, "commit", "-qm", "many")
+	dest := filepath.Join(gitTempDir(t), "many")
+	gitFixture(t, source, "worktree", "add", "-q", "-b", "many", dest, "HEAD")
+	id := NativeIdentity{Backend: "git", WorkspaceRoot: dest, CommitID: gitFixture(t, dest, "rev-parse", "HEAD"), ObjectFormat: "sha1"}
+	bin, e := gitExecutable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	budget := newTidyV3ProofBudget(false)
+	if e = budget.beginObservation(); e != nil {
+		t.Fatal(e)
+	}
+	_, e = gitRetirementStoredFilesWithPolicy(context.Background(), bin, id, retirementGitV3Content, budget)
+	var op operationError
+	if !errors.As(e, &op) || op.Code != "retirement-file-limit" {
+		t.Fatalf("want retirement-file-limit, got %v", e)
 	}
 }
