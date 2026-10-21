@@ -472,7 +472,13 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 	if err := validateV3RestoreOptions(o); err != nil {
 		return failRestore(r, err)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	// An apply spends about four native processes per entry and at most 1,024
+	// entries exist; a rerun continues where a deadline stopped it.
+	deadline := 60 * time.Second
+	if o.Apply {
+		deadline = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	ctx, _, closeSession, err := withPlanningSession(ctx)
 	if err != nil {
