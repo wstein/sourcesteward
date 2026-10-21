@@ -101,3 +101,72 @@ func sortedKeys(m map[string]string) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+func (f *restoreFix) options() V3RestoreOptions {
+	return V3RestoreOptions{Path: f.dir, StateDir: f.state, PlanID: f.stored.PlanID}
+}
+
+// repoSnapshot is everything a restore plan must leave as it found it: the
+// references with their symbolic targets, the configuration, the reflogs and
+// the private store.
+func (f *restoreFix) snapshot() map[string]any {
+	f.t.Helper()
+	return map[string]any{
+		"refs":   f.git("for-each-ref", "--format=%(refname) %(objectname) %(symref)"),
+		"head":   f.git("symbolic-ref", "HEAD"),
+		"config": treeBytes(f.t, filepath.Join(f.dir, ".git"))["config"],
+		"logs":   treeBytes(f.t, filepath.Join(f.dir, ".git", "logs")),
+		"state":  treeBytes(f.t, f.state),
+	}
+}
+
+// entryFor returns the entry of the short branch name.
+func entryFor(t *testing.T, r V3RestoreResult, name string) V3RestoreEntry {
+	t.Helper()
+	for _, e := range r.Entries {
+		if e.Ref == "refs/heads/"+name {
+			return e
+		}
+	}
+	t.Fatalf("no entry for %s in %+v", name, r.Entries)
+	return V3RestoreEntry{}
+}
+
+// newPartialRestoreFix applies a plan of three branches whose second native
+// deletion is refused after its recovery was confirmed and whose third entry
+// was never started, as the stopped real apply leaves them.
+func newPartialRestoreFix(t *testing.T, names ...string) *restoreFix {
+	t.Helper()
+	f := &restoreFix{proofFix: newProofFix(t), tips: map[string]string{}}
+	refs := []string{}
+	for _, name := range names {
+		f.git("checkout", "-q", "--detach", f.main)
+		oid := f.commit("work on "+name, map[string]string{"work-" + name + ".txt": name + "\n"})
+		f.git("update-ref", "refs/heads/"+name, oid)
+		f.git("checkout", "-q", f.main)
+		f.git("merge", "-q", "--no-ff", "-m", "integrate "+name, oid)
+		f.tips[name] = oid
+		refs = append(refs, "refs/heads/"+name)
+	}
+	r := f.plan(V3PlanOptions{Refs: refs})
+	if r.Status != "ok" || r.Plan == nil {
+		t.Fatalf("%+v", r.Diagnostics)
+	}
+	f.stored, f.state = *r.Plan, r.Plan.StateDir
+	c := defaultTidyV3RefsApplyCoordinator()
+	prepare := c.prepare
+	calls := 0
+	c.prepare = func(ctx context.Context, bin string, id NativeIdentity, ref, oid string, write, ro []string) (tidyV3ApplyRefTransaction, error) {
+		calls++
+		tx, err := prepare(ctx, bin, id, ref, oid, write, ro)
+		if err == nil && calls == 2 {
+			return &fixtureTidyV3RefuseAfterIntent{tidyV3ApplyRefTransaction: tx}, nil
+		}
+		return tx, err
+	}
+	a := c.apply(context.Background(), V3ApplyOptions{StateDir: f.state, PlanID: f.stored.PlanID, Authorize: true, ProtectWorktrees: []string{}})
+	if a.Status != "partial" {
+		t.Fatalf("the fixture apply did not stop: %s %+v", a.Status, a.Diagnostics)
+	}
+	return f
+}
