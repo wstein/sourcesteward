@@ -932,6 +932,7 @@ func requireTidyV3PrepareFailureWithoutReplay(t *testing.T, dir string, p V3Plan
 // Exercise the newly combined representation at the existing maximum admitted
 // ID/text and whole-record context budgets; these checks never change the caps.
 func requireTidyV3PrepareDiagnosticBounds(t *testing.T, p V3Plan, j V3Journal, r V3Result, action string) {
+	smallV3RecordLimit(t)
 	t.Helper()
 	maxID := strings.Repeat("a", 128)
 	maxRef := "refs/heads/" + strings.Repeat("<", 4096-len("refs/heads/"))
@@ -984,7 +985,7 @@ func requireTidyV3PrepareDiagnosticBounds(t *testing.T, p V3Plan, j V3Journal, r
 	journalCountLimit := maxFit(func(n int) bool { return validateV3Journal(journalContext(n, false), p) == nil })
 	byteLimit := maxFit(func(n int) bool { return validateV3Journal(journalContext(n, true), p) == nil })
 	encoded, err := json.Marshal(journalContext(byteLimit, true))
-	if err != nil || len(encoded) > recordLimit {
+	if err != nil || len(encoded) > v3RecordLimit {
 		t.Fatal("admitted encoded context invalid", err)
 	}
 	overflow, err := json.Marshal(journalContext(byteLimit+1, true))
