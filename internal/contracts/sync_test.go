@@ -23,19 +23,19 @@ func syncFixture(t *testing.T, name string) []byte {
 
 func TestSyncSchemaFixtures(t *testing.T) {
 	s := schema(t, "sync")
-	for _, name := range []string{"plan", "refused"} {
+	for _, name := range []string{"plan", "run", "refused"} {
 		valid(t, s, syncFixture(t, name))
 	}
 }
 
-// mutateSync applies fn to a copy of the plan fixture and returns the JSON.
-func mutateSync(t *testing.T, fn func(m map[string]any, first map[string]any)) []byte {
+// mutateSync applies fn to a copy of a fixture and returns the JSON.
+func mutateSync(t *testing.T, fixture string, fn func(m map[string]any, repos []any)) []byte {
 	t.Helper()
 	var m map[string]any
-	if err := json.Unmarshal(syncFixture(t, "plan"), &m); err != nil {
+	if err := json.Unmarshal(syncFixture(t, fixture), &m); err != nil {
 		t.Fatal(err)
 	}
-	fn(m, m["items"].([]any)[0].(map[string]any))
+	fn(m, m["repos"].([]any))
 	raw, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)
@@ -43,43 +43,85 @@ func mutateSync(t *testing.T, fn func(m map[string]any, first map[string]any)) [
 	return raw
 }
 
+func syncRepoOf(repos []any, result string) map[string]any {
+	for _, r := range repos {
+		if m := r.(map[string]any); m["result"] == result {
+			return m
+		}
+	}
+	panic("no repo with result " + result)
+}
+
 func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 	s := schema(t, "sync")
-	for name, fn := range map[string]func(map[string]any, map[string]any){
-		"missing key":              func(m, _ map[string]any) { delete(m, "error") },
-		"missing item key":         func(_, it map[string]any) { delete(it, "reason") },
-		"wrong command":            func(m, _ map[string]any) { m["command"] = "repos" },
-		"run id on a plan":         func(m, _ map[string]any) { m["run_id"] = "r1" },
-		"unknown mode":             func(m, _ map[string]any) { m["mode"] = "sync" },
-		"null items":               func(m, _ map[string]any) { m["items"] = nil },
-		"unknown result":           func(_, it map[string]any) { it["result"] = "merged" },
-		"short oid":                func(_, it map[string]any) { it["old_oid"] = "abc" },
-		"null old oid":             func(_, it map[string]any) { it["old_oid"] = nil },
-		"new oid on ahead":         func(_, it map[string]any) { it["new_oid"] = "1111111111111111111111111111111111111111" },
-		"fast-forward without new": func(m, _ map[string]any) { m["items"].([]any)[4].(map[string]any)["new_oid"] = nil },
-		"skipped-dirty no reason":  func(m, _ map[string]any) { m["items"].([]any)[1].(map[string]any)["reason"] = nil },
-		"diverged no reason":       func(m, _ map[string]any) { m["items"].([]any)[2].(map[string]any)["reason"] = nil },
-		"submodule entries":        func(m, _ map[string]any) { m["submodules"] = []any{map[string]any{}} },
-		"unknown summary result":   func(m, _ map[string]any) { m["summary"].(map[string]any)["by_result"].(map[string]any)["merged"] = 1 },
-		"negative untracked":       func(m, _ map[string]any) { m["summary"].(map[string]any)["untracked"] = -1 },
-		"error without code":       func(m, _ map[string]any) { m["error"] = map[string]any{"message": "x"} },
-		"null pruned refs":         func(m, _ map[string]any) { m["fetch"].(map[string]any)["pruned_refs"] = nil },
-		"string option":            func(m, _ map[string]any) { m["options"].(map[string]any)["prune"] = "yes" },
+	for name, tc := range map[string]struct {
+		fixture string
+		fn      func(m map[string]any, repos []any)
+	}{
+		"missing key":                {"plan", func(m map[string]any, _ []any) { delete(m, "error") }},
+		"missing repo key":           {"plan", func(_ map[string]any, r []any) { delete(r[0].(map[string]any), "detail") }},
+		"wrong command":              {"plan", func(m map[string]any, _ []any) { m["command"] = "repos" }},
+		"run id on a plan":           {"plan", func(m map[string]any, _ []any) { m["run_id"] = "20261021T101500Z-0a1b2c3d" }},
+		"bad run id":                 {"run", func(m map[string]any, _ []any) { m["run_id"] = "r1" }},
+		"unknown mode":               {"plan", func(m map[string]any, _ []any) { m["mode"] = "restore" }},
+		"run result in a plan":       {"plan", func(_ map[string]any, r []any) { syncRepoOf(r, "fast-forward")["result"] = "fast-forwarded" }},
+		"plan result in a run":       {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "rebased")["result"] = "rebase" }},
+		"unknown result":             {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "merged" }},
+		"unknown kind":               {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["kind"] = "worktree" }},
+		"short oid":                  {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["old_oid"] = "abc" }},
+		"fast-forward without new":   {"plan", func(_ map[string]any, r []any) { syncRepoOf(r, "fast-forward")["new_oid"] = nil }},
+		"fast-forwarded without new": {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "fast-forwarded")["new_oid"] = nil }},
+		"new oid on up-to-date": {"plan", func(_ map[string]any, r []any) {
+			syncRepoOf(r, "up-to-date")["new_oid"] = "1111111111111111111111111111111111111111"
+		}},
+		"new oid on failed": {"run", func(_ map[string]any, r []any) {
+			syncRepoOf(r, "failed")["new_oid"] = "1111111111111111111111111111111111111111"
+		}},
+		"failed without reason":   {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "failed")["reason"] = nil }},
+		"diverged without reason": {"plan", func(_ map[string]any, r []any) { syncRepoOf(r, "diverged")["reason"] = nil }},
+		"dirty without reason":    {"plan", func(_ map[string]any, r []any) { syncRepoOf(r, "skipped-dirty")["reason"] = nil }},
+		"conflict without detail": {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "conflict")["detail"] = nil }},
+		"detail on a success":     {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "fast-forwarded")["detail"] = "x" }},
+		"negative ahead":          {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["ahead"] = -1 }},
+		"unknown summary result": {"plan", func(m map[string]any, _ []any) {
+			m["summary"].(map[string]any)["by_result"].(map[string]any)["merged"] = 1
+		}},
+		"error without code": {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
+		"string option":      {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
+		"null repos":         {"plan", func(m map[string]any, _ []any) { m["repos"] = nil }},
 	} {
-		if err := s.Validate(value(t, mutateSync(t, fn))); err == nil {
+		if err := s.Validate(value(t, mutateSync(t, tc.fixture, tc.fn))); err == nil {
 			t.Errorf("%s: the schema accepted a broken result", name)
 		}
 	}
 }
 
-// TestSyncRealOutputValidates runs the real command against temporary repositories with a bare remote
-// and checks schema validity, the exit code and the JSON/human agreement for each outcome.
+// TestSyncRealOutputValidates runs the real command against a temporary workspace with a submodule and
+// bare remotes and checks schema validity, the exit code and the JSON for each outcome.
 func TestSyncRealOutputValidates(t *testing.T) {
-	f := newReposRealFixture(t)
-	bare := filepath.Join(f.dir, "origin.git")
-	reposRealGit(t, f.dir, "init", "-q", "--bare", "-b", "main", bare)
-	reposRealGit(t, f.clean, "remote", "add", "origin", bare)
-	reposRealGit(t, f.clean, "push", "-q", "-u", "origin", "main")
+	root := t.TempDir()
+	git := func(dir string, args ...string) {
+		t.Helper()
+		reposRealGit(t, dir, args...)
+	}
+	mk := func(name string) (bare, work string) {
+		bare, work = filepath.Join(root, name+".git"), filepath.Join(root, name)
+		git(root, "init", "-q", "--bare", "-b", "main", bare)
+		git(root, "clone", "-q", bare, work)
+		git(work, "checkout", "-q", "-b", "main")
+		if err := os.WriteFile(filepath.Join(work, "f"), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(work, "add", ".")
+		git(work, "commit", "-qm", "init")
+		git(work, "push", "-q", "origin", "main")
+		return
+	}
+	subBare, _ := mk("sub")
+	bare, ws := mk("ws")
+	git(ws, "-c", "protocol.file.allow=always", "submodule", "add", "-q", "-b", "main", subBare, "sub")
+	git(ws, "commit", "-qm", "sub")
+	git(ws, "push", "-q", "origin", "main")
 	s := schema(t, "sync")
 	run := func(want int, args ...string) map[string]any {
 		t.Helper()
@@ -101,36 +143,55 @@ func TestSyncRealOutputValidates(t *testing.T) {
 		}
 		return v
 	}
-	// up to date: exit 0
-	v := run(0, "--plan", "--json", f.clean)
-	if v["error"] != nil || v["fetch"].(map[string]any)["performed"] != true || v["summary"].(map[string]any)["total"] != float64(1) {
-		t.Fatalf("%v", v)
+	results := func(v map[string]any) map[string]string {
+		m := map[string]string{}
+		for _, r := range v["repos"].([]any) {
+			m[r.(map[string]any)["name"].(string)] = r.(map[string]any)["result"].(string)
+		}
+		return m
 	}
-	// a remote move and a dirty tracked file: skipped-dirty, exit 1
-	other := filepath.Join(f.dir, "other")
-	reposRealGit(t, f.dir, "clone", "-q", bare, other)
+	if r := results(run(0, "--json", ws)); r["."] != "up-to-date" || r["sub"] != "up-to-date" {
+		t.Fatalf("%v", r)
+	}
+	other := filepath.Join(root, "other")
+	git(root, "clone", "-q", bare, other)
 	if err := os.WriteFile(filepath.Join(other, "g"), []byte("y\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	reposRealGit(t, other, "add", ".")
-	reposRealGit(t, other, "commit", "-qm", "remote")
-	reposRealGit(t, other, "push", "-q", "origin", "main")
-	v = run(0, "--dry-run", "--json", f.clean)
-	if v["items"].([]any)[0].(map[string]any)["result"] != "fast-forward" {
-		t.Fatalf("%v", v["items"])
-	}
-	if err := os.WriteFile(filepath.Join(f.clean, "f"), []byte("dirty\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	v = run(1, "--plan", "--json", f.clean)
-	if v["items"].([]any)[0].(map[string]any)["result"] != "skipped-dirty" {
-		t.Fatalf("%v", v["items"])
-	}
-	// refusals: a plain directory (JSON with error, exit 1) and usage errors (exit 2, no JSON)
-	v = run(1, "--plan", "--json", f.plain)
-	if v["error"] == nil {
+	git(other, "add", ".")
+	git(other, "commit", "-qm", "remote")
+	git(other, "push", "-q", "origin", "main")
+	v := run(0, "--plan", "--json", ws)
+	if v["mode"] != "plan" || v["run_id"] != nil || results(v)["."] != "fast-forward" {
 		t.Fatalf("%v", v)
 	}
-	run(2, f.clean)
-	run(2, "--plan", "--remote", "-x", f.clean)
+	v = run(0, "--json", ws)
+	if v["mode"] != "sync" || v["run_id"] == nil || results(v)["."] != "fast-forwarded" {
+		t.Fatalf("%v", v)
+	}
+	git(ws, "config", "pull.rebase", "false") // independent of the user's global configuration
+	// diverged without pull.rebase is reported, exit 0; --rebase resolves it
+	if err := os.WriteFile(filepath.Join(ws, "local"), []byte("l\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(ws, "add", "local")
+	git(ws, "commit", "-qm", "local")
+	if err := os.WriteFile(filepath.Join(other, "h"), []byte("z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(other, "add", ".")
+	git(other, "commit", "-qm", "remote 2")
+	git(other, "push", "-q", "origin", "main")
+	if r := results(run(0, "--json", ws)); r["."] != "diverged" {
+		t.Fatalf("%v", r)
+	}
+	if r := results(run(0, "--json", "--rebase", ws)); r["."] != "rebased" {
+		t.Fatalf("%v", r)
+	}
+	// refusals: a plain directory (JSON with error, exit 1) and usage errors (exit 2, no JSON)
+	if v = run(1, "--json", t.TempDir()); v["error"] == nil {
+		t.Fatalf("%v", v)
+	}
+	run(2, "--rebase", "--ff-only", ws)
+	run(2, "--bogus", ws)
 }

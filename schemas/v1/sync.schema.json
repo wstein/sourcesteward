@@ -1,19 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v1/sync.schema.json",
-  "title": "SourceSteward sync plan (schema 1)",
-  "description": "Result of stw sync --plan: one fetch of the remote-tracking refs, then a classification of every local branch that tracks the remote. Exit statuses: 0 nothing needs attention, 1 a failed run (error is set) or a skipped-dirty or diverged item, 2 usage error with no JSON. Keys are never omitted; absent values are null. Later slices add modes and results compatibly. Added properties are compatible extensions.",
+  "title": "SourceSteward sync (schema 1)",
+  "description": "Result of stw sync: one entry per repository, the workspace root and each submodule that sits on a branch. mode plan fetches the remote-tracking refs and reports what a run would do (fast-forward, rebase); mode sync fast-forwards or rebases the current branch like git pull and reports what happened. Exit statuses: 0 unless the run is refused (error is set) or a repository failed, conflicted or has an autostash conflict, 1 then, 2 usage error with no JSON. Keys are never omitted; absent values are null. Added properties are compatible extensions.",
   "type": "object",
   "required": [
     "schema_version",
     "command",
     "mode",
     "run_id",
-    "remote",
     "options",
-    "fetch",
-    "items",
-    "submodules",
+    "repos",
     "summary",
     "error"
   ],
@@ -25,108 +22,94 @@
       "const": "sync"
     },
     "mode": {
-      "const": "plan"
+      "enum": [
+        "plan",
+        "sync"
+      ]
     },
     "run_id": {
-      "type": "null"
-    },
-    "remote": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$"
+        }
+      ]
     },
     "options": {
       "type": "object",
       "required": [
         "rebase",
         "prune",
-        "autostash",
-        "submodules"
+        "autostash"
       ],
       "properties": {
         "rebase": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "prune": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "autostash": {
-          "type": "boolean"
-        },
-        "submodules": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },
-    "fetch": {
-      "type": "object",
-      "required": [
-        "performed",
-        "pruned_refs",
-        "pruned_total"
-      ],
-      "properties": {
-        "performed": {
-          "type": "boolean"
-        },
-        "pruned_refs": {
-          "type": "array",
-          "maxItems": 256,
-          "items": {
-            "type": "string",
-            "maxLength": 1024
-          }
-        },
-        "pruned_total": {
-          "type": "integer",
-          "minimum": 0
-        }
-      }
-    },
-    "items": {
+    "repos": {
       "type": "array",
-      "maxItems": 1024,
+      "maxItems": 256,
       "items": {
-        "$ref": "#/$defs/item"
+        "$ref": "#/$defs/repo"
       }
-    },
-    "submodules": {
-      "type": "array",
-      "maxItems": 0
     },
     "summary": {
       "type": "object",
       "required": [
         "total",
-        "by_result",
-        "untracked"
+        "by_result"
       ],
       "properties": {
         "total": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1024
+          "maximum": 256
         },
         "by_result": {
           "type": "object",
           "propertyNames": {
             "enum": [
               "fast-forward",
+              "rebase",
               "up-to-date",
               "ahead",
               "diverged",
               "skipped-dirty",
-              "upstream-gone"
+              "skipped-detached",
+              "skipped-no-upstream",
+              "skipped-busy",
+              "skipped-uninitialized",
+              "fast-forwarded",
+              "rebased",
+              "conflict",
+              "autostash-conflict",
+              "failed"
             ]
           },
           "additionalProperties": {
             "type": "integer",
             "minimum": 1
           }
-        },
-        "untracked": {
-          "type": "integer",
-          "minimum": 0
         }
       }
     },
@@ -155,46 +138,161 @@
       ]
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "plan"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "run_id": {
+            "type": "null"
+          },
+          "repos": {
+            "items": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "fast-forward",
+                    "rebase",
+                    "up-to-date",
+                    "ahead",
+                    "diverged",
+                    "skipped-dirty",
+                    "skipped-detached",
+                    "skipped-no-upstream",
+                    "skipped-busy",
+                    "skipped-uninitialized"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "sync"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "repos": {
+            "items": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "up-to-date",
+                    "ahead",
+                    "diverged",
+                    "skipped-dirty",
+                    "skipped-detached",
+                    "skipped-no-upstream",
+                    "skipped-busy",
+                    "skipped-uninitialized",
+                    "fast-forwarded",
+                    "rebased",
+                    "conflict",
+                    "autostash-conflict",
+                    "failed"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "oid": {
       "type": "string",
       "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
     },
-    "item": {
+    "repo": {
       "type": "object",
       "required": [
+        "name",
+        "path",
+        "kind",
         "branch",
-        "worktree",
+        "remote",
         "result",
         "old_oid",
         "new_oid",
-        "reason"
+        "ahead",
+        "behind",
+        "pruned",
+        "reason",
+        "detail"
       ],
       "properties": {
-        "branch": {
+        "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1024
+          "maxLength": 4096
         },
-        "worktree": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "kind": {
+          "enum": [
+            "root",
+            "submodule"
+          ]
+        },
+        "branch": {
           "type": [
             "string",
             "null"
           ],
-          "maxLength": 4096
+          "maxLength": 1024
+        },
+        "remote": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128
         },
         "result": {
           "enum": [
             "fast-forward",
+            "rebase",
             "up-to-date",
             "ahead",
             "diverged",
             "skipped-dirty",
-            "upstream-gone"
+            "skipped-detached",
+            "skipped-no-upstream",
+            "skipped-busy",
+            "skipped-uninitialized",
+            "fast-forwarded",
+            "rebased",
+            "conflict",
+            "autostash-conflict",
+            "failed"
           ]
         },
         "old_oid": {
-          "$ref": "#/$defs/oid"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/oid"
+            }
+          ]
         },
         "new_oid": {
           "oneOf": [
@@ -206,12 +304,31 @@
             }
           ]
         },
+        "ahead": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "behind": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pruned": {
+          "type": "integer",
+          "minimum": 0
+        },
         "reason": {
           "type": [
             "string",
             "null"
           ],
-          "maxLength": 200
+          "maxLength": 300
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1600
         }
       },
       "allOf": [
@@ -221,7 +338,9 @@
               "result": {
                 "enum": [
                   "fast-forward",
-                  "skipped-dirty"
+                  "fast-forwarded",
+                  "rebased",
+                  "autostash-conflict"
                 ]
               }
             }
@@ -232,8 +351,27 @@
                 "$ref": "#/$defs/oid"
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": [
+                  "up-to-date",
+                  "ahead",
+                  "skipped-detached",
+                  "skipped-no-upstream",
+                  "skipped-uninitialized",
+                  "skipped-busy",
+                  "diverged",
+                  "failed",
+                  "conflict"
+                ]
+              }
+            }
           },
-          "else": {
+          "then": {
             "properties": {
               "new_oid": {
                 "type": "null"
@@ -246,9 +384,15 @@
             "properties": {
               "result": {
                 "enum": [
-                  "skipped-dirty",
                   "diverged",
-                  "upstream-gone"
+                  "skipped-dirty",
+                  "skipped-detached",
+                  "skipped-no-upstream",
+                  "skipped-busy",
+                  "skipped-uninitialized",
+                  "conflict",
+                  "autostash-conflict",
+                  "failed"
                 ]
               }
             }
@@ -257,6 +401,32 @@
             "properties": {
               "reason": {
                 "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": [
+                  "conflict",
+                  "autostash-conflict"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "detail": {
+                "type": "null"
               }
             }
           }
