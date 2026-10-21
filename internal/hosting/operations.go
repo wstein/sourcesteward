@@ -68,58 +68,15 @@ func inspect(parent context.Context, path string, o Options, d dependencies) (r 
 		}
 		r.ObservedAt = time.Now().UTC().Format(time.RFC3339)
 	}()
-	if err := ValidateOptions(o); err != nil {
-		return r.fail("hosting-invalid-options", "invalid hosting inspection options")
+	target, ok := resolve(ctx, path, o, d, &r)
+	if !ok {
+		return r
 	}
-	if o.Host == "" {
-		o.Host = "github.com"
-	}
-	o.Host = strings.ToLower(o.Host)
-	remote := d.remotes(ctx, path)
-	r.Identity = &remote.Identity
-	r.Backend = remote.Identity.Backend
-	if remote.Status != "ok" || remote.Identity.Status != "ok" {
-		return r.fail("hosting-native-failed", "cannot establish complete native ownership and active remote evidence")
-	}
-	if o.RequireJJ && r.Backend != "jj" {
-		return r.fail("hosting-jj-required", "gh jj requires a natively jj-owned workspace; use stw hosting for Git")
-	}
-	for _, m := range remote.Remotes {
-		for _, raw := range append(append([]string{}, m.FetchURLs...), m.PushURLs...) {
-			c, e := parseRemote(m.Name, raw, o.Host)
-			if e != nil {
-				if o.Repo != "" && o.Remote == "" {
-					continue
-				}
-				if o.Remote != "" && o.Remote != m.Name {
-					continue
-				}
-				return r.fail("hosting-invalid-remote", "cannot completely resolve selected-host remote URLs; select --repo explicitly")
-			}
-			if c != nil {
-				r.Candidates = append(r.Candidates, *c)
-			}
-		}
-	}
-	selected, e := selectRepository(o, r.Candidates)
-	if e != nil {
-		return r.fail("hosting-repository-selection", e.Error())
-	}
-	r.Repository = selected
+	selected := r.Repository
 	if o.Kind == "repo" {
 		r.Status = "ok"
 		r.Boundary.Complete = true
 		return r
-	}
-	target := remote.Identity.InputPath
-	if remote.Identity.Repository != nil && remote.Identity.Repository.Bare {
-		target = remote.Identity.Repository.GitDir
-	}
-	if remote.Identity.Repository != nil && remote.Identity.Repository.Worktree != nil {
-		target = *remote.Identity.Repository.Worktree
-	}
-	if remote.Identity.JJRepository != nil {
-		target = remote.Identity.JJRepository.WorkspaceRoot
 	}
 	api, cleanup, e := d.api(ctx, target, selected.Host)
 	if e != nil {
@@ -147,6 +104,63 @@ func inspect(parent context.Context, path string, o Options, d dependencies) (r 
 	r.Status = "ok"
 	r.Boundary.Complete = true
 	return r
+}
+
+// resolve validates options, establishes native ownership and selects the
+// repository. On failure r already carries the diagnostic. On success target is
+// the native location used to prepare authentication.
+func resolve(ctx context.Context, path string, o Options, d dependencies, rp *Result) (target string, ok bool) {
+	r := rp
+	fail := func(code, msg string) (string, bool) { r.fail(code, msg); return "", false }
+	if err := ValidateOptions(o); err != nil {
+		return fail("hosting-invalid-options", "invalid hosting inspection options")
+	}
+	if o.Host == "" {
+		o.Host = "github.com"
+	}
+	o.Host = strings.ToLower(o.Host)
+	remote := d.remotes(ctx, path)
+	r.Identity = &remote.Identity
+	r.Backend = remote.Identity.Backend
+	if remote.Status != "ok" || remote.Identity.Status != "ok" {
+		return fail("hosting-native-failed", "cannot establish complete native ownership and active remote evidence")
+	}
+	if o.RequireJJ && r.Backend != "jj" {
+		return fail("hosting-jj-required", "gh jj requires a natively jj-owned workspace; use stw hosting for Git")
+	}
+	for _, m := range remote.Remotes {
+		for _, raw := range append(append([]string{}, m.FetchURLs...), m.PushURLs...) {
+			c, e := parseRemote(m.Name, raw, o.Host)
+			if e != nil {
+				if o.Repo != "" && o.Remote == "" {
+					continue
+				}
+				if o.Remote != "" && o.Remote != m.Name {
+					continue
+				}
+				return fail("hosting-invalid-remote", "cannot completely resolve selected-host remote URLs; select --repo explicitly")
+			}
+			if c != nil {
+				r.Candidates = append(r.Candidates, *c)
+			}
+		}
+	}
+	selected, e := selectRepository(o, r.Candidates)
+	if e != nil {
+		return fail("hosting-repository-selection", e.Error())
+	}
+	r.Repository = selected
+	target = remote.Identity.InputPath
+	if remote.Identity.Repository != nil && remote.Identity.Repository.Bare {
+		target = remote.Identity.Repository.GitDir
+	}
+	if remote.Identity.Repository != nil && remote.Identity.Repository.Worktree != nil {
+		target = *remote.Identity.Repository.Worktree
+	}
+	if remote.Identity.JJRepository != nil {
+		target = remote.Identity.JJRepository.WorkspaceRoot
+	}
+	return target, true
 }
 func fullSHA(s string) bool { return len(s) == 40 && strings.Trim(s, "0123456789abcdef") == "" }
 
