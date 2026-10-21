@@ -52,7 +52,7 @@ func failTidyV3(r V3Result, err error) V3Result {
 	return r
 }
 func (c tidyV3RefsCoordinator) plan(ctx context.Context, o V3PlanOptions) V3Result {
-	ctx, cancel := context.WithTimeout(ctx, v3ProofPlanTimeout(o))
+	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, v3ProofPlanTimeout(o)))
 	defer cancel()
 	ctx, _, closeSession, err := withPlanningSession(ctx)
 	if err != nil {

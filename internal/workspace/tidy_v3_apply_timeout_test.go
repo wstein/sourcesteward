@@ -2,6 +2,7 @@
 package workspace
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -14,5 +15,20 @@ func TestV3ApplyTimeoutScalesWithTheWorkWithoutACeiling(t *testing.T) {
 		if got := v3ApplyTimeout(tc.effects, tc.entries); got != tc.want {
 			t.Errorf("%+v: %s", tc, got)
 		}
+	}
+}
+
+// An explicit --timeout replaces every default deadline of the operation, the
+// shorter inner ones included; without it the defaults stand.
+func TestV3TimeoutOverrideReplacesDefaults(t *testing.T) {
+	if got := v3Timeout(context.Background(), 10*time.Second); got != 10*time.Second {
+		t.Fatalf("default %s", got)
+	}
+	ctx := withV3Timeout(context.Background(), 30*time.Minute)
+	if got := v3Timeout(ctx, 10*time.Second); got != 30*time.Minute {
+		t.Fatalf("override %s", got)
+	}
+	if got := v3Timeout(withV3Timeout(context.Background(), 0), time.Second); got != time.Second {
+		t.Fatalf("zero override %s", got)
 	}
 }

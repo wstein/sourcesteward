@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
@@ -100,5 +101,46 @@ func TestTidyV3HumanOutputAgreesWithJSONForProofEvidence(t *testing.T) {
 		if !strings.Contains(human.String(), fact) {
 			t.Errorf("fact %s missing from the human output:\n%s", fact, human.String())
 		}
+	}
+}
+
+func TestTidyV3TimeoutFlagReachesPlanAndApply(t *testing.T) {
+	base := []string{"plan", "/tmp/repo", "--contract", "3", "--base", "refs/heads/main"}
+	called, got, err := runProofCLI(base)
+	if err != nil || !called || got.Timeout != 0 {
+		t.Fatalf("default: err=%v %+v", err, got)
+	}
+	called, got, err = runProofCLI(append(append([]string{}, base...), "--timeout", "45m"))
+	if err != nil || !called || got.Timeout != 45*time.Minute {
+		t.Fatalf("plan: err=%v %+v", err, got)
+	}
+	for _, bad := range []string{"0", "-1m", "soon"} {
+		if _, _, err = runProofCLI(append(append([]string{}, base...), "--timeout", bad)); err == nil {
+			t.Fatalf("--timeout %s accepted", bad)
+		}
+	}
+	for _, bad := range []string{"0", "-1m"} {
+		c := tidyCommandWithV3Operations(nil, nil, nil, func(context.Context, workspace.V3ApplyOptions) workspace.V3Result {
+			t.Fatal("apply ran with an invalid --timeout")
+			return workspace.V3Result{}
+		})
+		c.SetOut(&bytes.Buffer{})
+		c.SetErr(&bytes.Buffer{})
+		c.SetArgs([]string{"apply", "--contract", "3", "--plan", "p1", "--state-dir", "/tmp/state", "--authorize", "--timeout", bad})
+		if c.Execute() == nil {
+			t.Fatalf("apply --timeout %s accepted", bad)
+		}
+	}
+	var applied workspace.V3ApplyOptions
+	cmd := tidyCommandWithV3Operations(nil, nil, nil, func(_ context.Context, o workspace.V3ApplyOptions) workspace.V3Result {
+		applied = o
+		return workspace.V3Result{SchemaVersion: 3, Command: "tidy-apply", Status: "ok", Backend: "git", Diagnostics: []workspace.Diagnostic{}}
+	})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"apply", "--contract", "3", "--plan", "p1", "--state-dir", "/tmp/state", "--authorize", "--timeout", "2h"})
+	_ = cmd.Execute()
+	if applied.Timeout != 2*time.Hour {
+		t.Fatalf("apply timeout %s", applied.Timeout)
 	}
 }

@@ -30,7 +30,7 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 	if o.Online {
 		timeout += planOnlineTimeout
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, timeout))
 	defer cancel()
 	budget := newTidyV3ProofBudget(false)
 	defer func() { retirementV3BudgetResult(&r, budget); r = boundV3Result(r) }()

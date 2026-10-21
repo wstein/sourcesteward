@@ -8,6 +8,7 @@ import (
 // PlanTidyV3 is the explicit version-three operation boundary. Existing tidy
 // entry points and their stored-plan meanings remain separate.
 func PlanTidyV3(ctx context.Context, o V3PlanOptions) V3Result {
+	ctx = withV3Timeout(ctx, o.Timeout)
 	timeout := planObservationTimeout
 	if o.Online {
 		timeout += planOnlineTimeout
@@ -15,7 +16,7 @@ func PlanTidyV3(ctx context.Context, o V3PlanOptions) V3Result {
 	if o.Task == "" && o.CompletedWorktree == "" && o.TrackingRemote == "" {
 		timeout = v3ProofPlanTimeout(o) // local-reference plans include the proof phase
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, timeout))
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return failTidyV3(newV3Result("tidy-plan"), err)
@@ -40,7 +41,8 @@ func PlanTidyV3(ctx context.Context, o V3PlanOptions) V3Result {
 // online acknowledgment are checked before the coordinator can open hosting.
 func ApplyTidyV3(ctx context.Context, o V3ApplyOptions) V3Result {
 	// The deadline depends on the stored plan, so each coordinator sets it after
-	// reading the plan (v3PlanApplyTimeout).
+	// reading the plan (v3PlanApplyTimeout); --timeout replaces it (v3Timeout).
+	ctx = withV3Timeout(ctx, o.Timeout)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if err := ctx.Err(); err != nil {

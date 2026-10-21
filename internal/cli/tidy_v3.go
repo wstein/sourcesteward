@@ -15,8 +15,8 @@ import (
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
-var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "consolidation-range", "decisions"}
-var tidyV3ApplyFlags = []string{"online", "completed-worktree", "owner", "protect-worktree"}
+var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "consolidation-range", "decisions", "timeout"}
+var tidyV3ApplyFlags = []string{"online", "completed-worktree", "owner", "protect-worktree", "timeout"}
 
 // Counting wraps the existing typed flag value without changing Cobra parsing.
 // Only the explicit v3 branch rejects repeats; old contracts retain their meaning.
@@ -34,7 +34,7 @@ func (v *tidyV3CountedFlag) String() string     { return v.value.String() }
 func (v *tidyV3CountedFlag) Type() string       { return v.value.Type() }
 func (v *tidyV3CountedFlag) Set(s string) error { v.count++; return v.value.Set(s) }
 
-var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "decisions", "as", "limit", "apply", "list"}
+var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "decisions", "timeout", "as", "limit", "apply", "list"}
 
 func trackTidyV3Singletons(cmd *cobra.Command) {
 	for _, name := range tidyV3Singletons {
@@ -88,12 +88,16 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.IntVar(&o.ReportMaxBytes, "report-max-bytes", 0, "Most bytes per report file (default 4 MiB, ceiling 16 MiB)")
 	f.IntVar(&o.ReportMaxDiffBytes, "report-max-diff-bytes", 0, "Most diff bytes per report entry (default 64 KiB, ceiling 1 MiB)")
 	f.StringArrayVar(&o.ConsolidationRanges, "consolidation-range", nil, "A..B range whose commits the report pairs with each branch (repeatable, at most four)")
+	f.DurationVar(&o.Timeout, "timeout", 0, "Replace the default deadlines of the operation (default scales with the number of deletions)")
 	f.StringVar(&o.DecisionsFile, "decisions", "", "Absolute path of a reviewer decision file; evidence for the plan, never authorization")
 }
 
 // validateTidyV3ReviewFlags checks the review report flags that need no
 // native work; the planner validates the rest before it reads Git.
 func validateTidyV3ReviewFlags(cmd *cobra.Command, o *workspace.V3PlanOptions) error {
+	if cmd.Flags().Changed("timeout") && o.Timeout <= 0 {
+		return fmt.Errorf("--timeout must be a positive duration")
+	}
 	for _, bound := range []struct {
 		name    string
 		value   int
@@ -147,6 +151,7 @@ func addTidyV3ApplyFlags(cmd *cobra.Command, contract *string, o *workspace.V3Ap
 	f.StringVar(contract, "contract", "", "Apply only an immutable contract 3 plan")
 	f.BoolVar(&o.Online, "online", false, "Acknowledge exactly the stored plan's authenticated GitHub reads")
 	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Reassert the exact legacy completion path and exclusive authority")
+	f.DurationVar(&o.Timeout, "timeout", 0, "Replace the default deadlines of the operation (default scales with the number of deletions)")
 	f.StringVar(&o.Owner, "owner", "", "Repeat the legacy completion owner label")
 	f.StringArrayVar(&o.ProtectWorktrees, "protect-worktree", []string{}, "Repeat every exact legacy active-workspace protection (repeatable)")
 }
@@ -301,6 +306,9 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 	return nil
 }
 func validateTidyV3ApplyCLI(o workspace.V3ApplyOptions) error {
+	if o.Timeout < 0 {
+		return fmt.Errorf("--timeout must be a positive duration")
+	}
 	if err := validateWorkspaceCLI("plan", o.PlanID, "state-dir", o.StateDir); err != nil {
 		return err
 	}

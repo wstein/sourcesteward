@@ -57,12 +57,16 @@ type V3PlanOptions struct {
 	ConsolidationRanges []string
 	// DecisionsFile is the absolute path of a reviewer decision file (FR-039).
 	DecisionsFile string
+	// Timeout replaces the default deadlines of the operation when positive.
+	Timeout time.Duration
 }
 type V3ApplyOptions struct {
 	StateDir, PlanID         string
 	Authorize, Online        bool
 	CompletedWorktree, Owner string
 	ProtectWorktrees         []string
+	// Timeout replaces the default deadlines of the operation when positive.
+	Timeout time.Duration
 }
 
 func validateV3PlanOptions(o V3PlanOptions) error {

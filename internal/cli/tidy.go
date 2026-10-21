@@ -90,6 +90,9 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 			if err := validateTidyV3PresentFlags(cmd); err != nil {
 				return err
 			}
+			if cmd.Flags().Changed("timeout") && applyV3Options.Timeout <= 0 {
+				return fmt.Errorf("--timeout must be a positive duration")
+			}
 			applyV3Options.PlanID, applyV3Options.StateDir, applyV3Options.Authorize = applyOptions.PlanID, applyOptions.StateDir, applyOptions.Authorize
 			if err := validateTidyV3ApplyCLI(applyV3Options); err != nil {
 				return err
