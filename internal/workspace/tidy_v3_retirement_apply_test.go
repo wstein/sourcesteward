@@ -129,6 +129,7 @@ func TestTidyV3LegacyRemovalLostResponseRetainsUncertainJournal(t *testing.T) {
 func TestTidyV3LegacyRetirementDurabilityFaultsNeverReplay(t *testing.T) {
 	for fault := 1; fault <= 8; fault++ {
 		t.Run(fmt.Sprint(fault), func(t *testing.T) {
+			parallelFixture(t)
 			o, _ := tidyV3LegacyFixture(t, false)
 			o.StateDir = privateDir(t)
 			c := defaultTidyV3RetirementCoordinator()
@@ -408,6 +409,7 @@ func TestTidyV3LegacyNativeRemovalKeepsCanonicalPrimaryLayouts(t *testing.T) {
 	for _, layout := range []string{"ordinary", "separate", "submodule"} {
 		for _, linked := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/linked-%t", layout, linked), func(t *testing.T) {
+				parallelFixture(t)
 				source, primary, common := fixtureGitLayout(t, layout, linked, true)
 				target := filepath.Join(gitTempDir(t), "completed")
 				gitFixture(t, source, "worktree", "add", "-q", "-b", "completed", target, "HEAD")

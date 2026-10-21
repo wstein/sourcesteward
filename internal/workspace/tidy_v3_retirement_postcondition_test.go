@@ -192,6 +192,7 @@ func TestTidyV3FinalNativeControlParentModeChangeIsPartial(t *testing.T) {
 func TestTidyV3NestedPostRemovalPreservesAllStableAndUnrelatedFacts(t *testing.T) {
 	for _, kind := range []string{"registration-parent-mode", "unrelated-file-write", "unrelated-directory-mode"} {
 		t.Run(kind, func(t *testing.T) {
+			parallelFixture(t)
 			source, _, common := fixtureGitLayout(t, "separate", false, true)
 			gitFixture(t, source, "update-ref", "refs/stw/recovery/v3/prior", "HEAD")
 			target := filepath.Join(common, "completed-workspace")
