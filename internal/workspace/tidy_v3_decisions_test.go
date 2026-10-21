@@ -89,6 +89,42 @@ func TestDecisionFileParsing(t *testing.T) {
 			}
 		})
 	}
+	t.Run("keys must be unique and exactly the fixed names", func(t *testing.T) {
+		valid := good(nil)
+		swap := func(a, b string) string { return strings.Replace(valid, a, b, 1) }
+		for name, content := range map[string]string{
+			"duplicate decision key":    swap(`"decision":"integrated"`, `"decision":"keep","decision":"integrated"`),
+			"duplicate last wins":       swap(`"decision":"integrated"`, `"decision":"integrated","decision":"drop"`),
+			"duplicate top-level key":   swap(`"schema_version":1`, `"schema_version":1,"schema_version":1`),
+			"duplicate decisions array": strings.TrimSuffix(valid, "}") + `,"decisions":[]}`,
+			"upper-case key":            swap(`"decision":`, `"DECISION":`),
+			"capitalized key":           swap(`"kind":`, `"Kind":`),
+			"case variant top-level":    swap(`"decisions":`, `"Decisions":`),
+			"case variant version":      swap(`"schema_version":`, `"Schema_Version":`),
+			"nested object in a field":  swap(`"reason":"already on the base"`, `"reason":{"a":1,"a":2}`),
+			"trailing JSON":             valid + `{"schema_version":1,"decisions":[]}`,
+			"trailing garbage":          valid + ` x`,
+		} {
+			if _, err := ReadV3DecisionFile(writeDecisionFile(t, content)); err == nil {
+				t.Errorf("%s accepted", name)
+			} else {
+				usageMessage(t, err)
+			}
+		}
+	})
+	t.Run("object ids have the width of an object format", func(t *testing.T) {
+		for _, bad := range []string{strings.Repeat("a", 39), strings.Repeat("a", 41), strings.Repeat("a", 63), strings.Repeat("a", 65), strings.Repeat("A", 40), strings.Repeat("0", 40), strings.Repeat("0", 64)} {
+			content := good(func(d map[string]any) { d["tip_oid"] = bad })
+			if _, err := ReadV3DecisionFile(writeDecisionFile(t, content)); err == nil {
+				t.Errorf("tip_oid %q accepted", bad)
+			}
+		}
+		for _, ok := range []string{strings.Repeat("a", 40), strings.Repeat("a", 64)} {
+			if _, err := ReadV3DecisionFile(writeDecisionFile(t, good(func(d map[string]any) { d["base_oid"] = ok }))); err != nil {
+				t.Errorf("base_oid %q refused: %v", ok, err)
+			}
+		}
+	})
 	t.Run("the offending decision is named by index", func(t *testing.T) {
 		_, err := ReadV3DecisionFile(writeDecisionFile(t, decisionJSON(validDecision("refs/heads/a", tip, base), func() map[string]any {
 			d := validDecision("refs/heads/b", tip, base)
