@@ -56,6 +56,9 @@ type V3JournalEntry struct {
 	Deltas              []V3StateDelta `json:"deltas"`
 	// Decision is the reviewer decision behind the entry's proof (FR-012).
 	Decision *V3DecisionRecord `json:"decision,omitempty"`
+	// Branch is the evidence recorded with the confirmed recovery and before the
+	// branch deletion (Spec 031 T045). Journals written before it lack the field.
+	Branch *V3BranchEvidence `json:"branch_evidence,omitempty"`
 }
 type V3Journal struct {
 	PrivatePlanDigest string           `json:"private_plan_digest"`
@@ -444,6 +447,9 @@ func validateV3Journal(j V3Journal, p V3Plan) error {
 		} else if e.Recovery != nil || len(e.Deltas) != 0 {
 			return bad()
 		}
+		if e.Branch != nil && (!recovery || p.Mode != "local-refs" || !validBranchEvidence(*e.Branch, targets[i])) {
+			return bad()
+		}
 		wantKinds := []string{}
 		if recovery {
 			wantKinds = append(wantKinds, "recovery-created")
@@ -661,6 +667,10 @@ func validV3Forward(before, after V3Journal, p V3Plan) bool {
 		legal = a.Phase == "action-complete"
 	}
 	if b.RecoveryAttempted && !a.RecoveryAttempted || b.RemovalAttempted && !a.RemovalAttempted {
+		return false
+	}
+	// Branch evidence arrives once, with the confirmed recovery, and never changes.
+	if !(b.Phase == "prepared" && a.Phase == "recovery-confirmed") && !reflect.DeepEqual(a.Branch, b.Branch) {
 		return false
 	}
 	if !legal || a.ActionID != b.ActionID || a.PlannedRecovery != b.PlannedRecovery || (b.Recovery != nil && !reflect.DeepEqual(a.Recovery, b.Recovery)) || len(a.Deltas) < len(b.Deltas) {

@@ -219,6 +219,7 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 		next = cloneTidyV3Journal(journal)
 		next.Entries[index].Recovery = &recovery
 		next.Entries[index].Phase = "recovery-confirmed"
+		next.Entries[index].Branch = c.recordBranchEvidence(ctx, p, journal.CurrentExpected.Identity, target)
 		next.Entries[index].Deltas = append(next.Entries[index].Deltas, V3StateDelta{Kind: "recovery-created", Before: journal.CurrentExpected, After: after})
 		next.Phase, next.CurrentExpected, next.CurrentNative = "recovery-confirmed", after, afterNative
 		next.KnownEffects = v3JournalEffects(p, next)
@@ -387,6 +388,20 @@ func (c tidyV3RefsApplyCoordinator) revalidateAction(ctx context.Context, p V3Pl
 	_, err := c.observeCurrent(ctx, p, expected, native)
 	return err
 }
+
+// recordBranchEvidence reads the evidence of a local branch right before its
+// deletion is prepared. Other modes record nothing; a failed read records
+// unavailable evidence and never stops the apply.
+func (c tidyV3RefsApplyCoordinator) recordBranchEvidence(ctx context.Context, p V3Plan, id NativeIdentity, target V3Candidate) *V3BranchEvidence {
+	if p.Mode != "local-refs" || !strings.HasPrefix(target.Name, restoreRefPrefix) {
+		return nil
+	}
+	bin, err := gitExecutable()
+	if err != nil {
+		return &V3BranchEvidence{ConfigStatus: branchStatusUnavailable, Config: []V3BranchConfigItem{}, BranchOID: target.OID, ReflogTip: branchStatusUnavailable}
+	}
+	return readBranchEvidence(ctx, bin, id, target.Name, target.OID)
+}
 func (c tidyV3RefsApplyCoordinator) createRecovery(ctx context.Context, p V3Plan, j V3Journal, target V3Candidate, s tidyV3Hosting) (Snapshot, V3NativeState, error) {
 	recovery := v3RecoveryFor(p, target.ActionID, target.OID)
 	bin, err := gitExecutable()
@@ -446,6 +461,7 @@ func cloneTidyV3Journal(j V3Journal) V3Journal {
 			r := *j.Entries[i].Recovery
 			out.Entries[i].Recovery = &r
 		}
+		out.Entries[i].Branch = cloneBranchEvidence(j.Entries[i].Branch)
 	}
 	return out
 }
