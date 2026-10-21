@@ -296,7 +296,7 @@ func (prStatusSchemaLoader) Load(string) (any, error) {
 	return nil, errors.New("external schema load refused")
 }
 func TestPRStatusResultSchemaAndJJIdentity(t *testing.T) {
-	raw, e := os.ReadFile("../../specs/030-pr-status/contracts/pr-status.schema.json")
+	raw, e := os.ReadFile("../../schemas/v2/hosting-pr.schema.json")
 	if e != nil {
 		t.Fatal(e)
 	}

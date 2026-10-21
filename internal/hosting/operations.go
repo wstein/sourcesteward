@@ -33,11 +33,14 @@ func Inspect(ctx context.Context, path string, o Options) Result {
 // InspectWithTransport preserves native inspection and permits an in-process HTTP fixture.
 // A nil transport selects the production HTTPS transport.
 func InspectWithTransport(ctx context.Context, path string, o Options, rt http.RoundTripper) Result {
-	return inspect(ctx, path, o, dependencies{remotes: func(ctx context.Context, path string) inspection.RemoteResult {
+	return inspect(ctx, path, o, productionDependencies(rt))
+}
+func productionDependencies(rt http.RoundTripper) dependencies {
+	return dependencies{remotes: func(ctx context.Context, path string) inspection.RemoteResult {
 		return inspection.Remotes(ctx, inspection.Inspect(ctx, path))
 	}, api: func(ctx context.Context, path, host string) (apiReader, func(), error) {
 		return newGHWithTransport(ctx, path, host, rt)
-	}})
+	}}
 }
 func newResult(kind string) Result {
 	return Result{SchemaVersion: 1, Kind: kind, Status: "error", Backend: "unknown", Candidates: []Candidate{}, Checks: []Check{}, Statuses: []CommitStatus{}, Diagnostics: []inspection.Diagnostic{}, ObservedAt: time.Now().UTC().Format(time.RFC3339), Boundary: Boundary{MaxPages: maxPages, MaxRecords: maxRecords, MaxBytes: maxBytes, TimeoutSeconds: 30, Limitations: []string{"Sampled evidence is not a transaction, required-check policy or merge eligibility.", "Only active native remotes are observed; repository existence is not verified by local resolution.", "Unsupported or unrelated-host remote URLs are excluded; credential-bearing URLs are never exposed."}}}

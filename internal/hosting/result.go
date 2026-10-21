@@ -12,6 +12,9 @@ import (
 type Options struct {
 	Kind               string
 	Number             int
+	Status             bool   // explicit schema 2 one-shot PR observation
+	ExpectHead         string // full 40-hex head SHA the PR must have (Status only)
+	HeadSHA            string // full 40-hex SHA to look up (kind prs)
 	Repo, Host, Remote string
 	RequireJJ          bool
 }
@@ -106,11 +109,23 @@ func validHost(s string) bool {
 	return true
 }
 func ValidateOptions(o Options) error {
-	if o.Kind != "repo" && o.Kind != "pr" && o.Kind != "ci" {
-		return fmt.Errorf("kind must be repo, pr or ci")
+	if o.Kind != "repo" && o.Kind != "pr" && o.Kind != "ci" && o.Kind != "prs" {
+		return fmt.Errorf("kind must be repo, pr, prs or ci")
 	}
-	if (o.Kind == "repo" && o.Number != 0) || (o.Kind != "repo" && o.Number <= 0) {
+	if o.Kind == "prs" {
+		if o.Number != 0 || o.Status || o.ExpectHead != "" || !fullSHA(o.HeadSHA) {
+			return fmt.Errorf("prs requires exactly one full 40-character lowercase hexadecimal head SHA")
+		}
+	} else if o.HeadSHA != "" {
+		return fmt.Errorf("a head SHA lookup requires the prs kind")
+	} else if (o.Kind == "repo" && o.Number != 0) || (o.Kind != "repo" && o.Number <= 0) {
 		return fmt.Errorf("PR and CI require a positive PR number")
+	}
+	if o.Status && o.Kind != "pr" {
+		return fmt.Errorf("schema 2 status applies only to PR observations")
+	}
+	if o.ExpectHead != "" && (!o.Status || !fullSHA(o.ExpectHead)) {
+		return fmt.Errorf("expected head must be a full 40-character lowercase hexadecimal SHA and requires schema 2")
 	}
 	if o.Repo != "" && !validRepo(o.Repo) {
 		return fmt.Errorf("repository must be OWNER/NAME")
