@@ -34,7 +34,7 @@ func (v *tidyV3CountedFlag) String() string     { return v.value.String() }
 func (v *tidyV3CountedFlag) Type() string       { return v.value.Type() }
 func (v *tidyV3CountedFlag) Set(s string) error { v.count++; return v.value.Set(s) }
 
-var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "decisions"}
+var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "decisions", "as", "limit", "apply", "list"}
 
 func trackTidyV3Singletons(cmd *cobra.Command) {
 	for _, name := range tidyV3Singletons {
