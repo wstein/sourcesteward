@@ -3,7 +3,6 @@ package workspace
 
 import (
 	"context"
-	"time"
 )
 
 // PlanTidyV3 is the explicit version-three operation boundary. Existing tidy
@@ -40,7 +39,9 @@ func PlanTidyV3(ctx context.Context, o V3PlanOptions) V3Result {
 // ApplyTidyV3 selects only an immutable, validated v3 record. Authorization and
 // online acknowledgment are checked before the coordinator can open hosting.
 func ApplyTidyV3(ctx context.Context, o V3ApplyOptions) V3Result {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	// The deadline depends on the stored plan, so each coordinator sets it after
+	// reading the plan (v3PlanApplyTimeout).
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return failTidyV3(newV3Result("tidy-apply"), err)

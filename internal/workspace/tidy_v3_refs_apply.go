@@ -32,10 +32,28 @@ func defaultTidyV3RefsApplyCoordinator() tidyV3RefsApplyCoordinator {
 		}}
 }
 
-// v3ApplyTimeout is the apply deadline: 60 s plus 3 s per planned deletion
-// (a sandboxed native process costs about 1.8 s each), capped at 10 minutes.
-func v3ApplyTimeout(effects int) time.Duration {
-	return min(60*time.Second+time.Duration(effects)*3*time.Second, 10*time.Minute)
+// v3ApplyTimeout is the apply deadline: 60 s plus 5 s per planned effect (a
+// sandboxed native process costs about 1.8 s each) plus 50 ms per recorded
+// manifest entry, because every apply observation re-reads each file. It has no
+// ceiling: the work, not a constant, bounds the time, and the caller's own
+// context (or --timeout) still ends it.
+func v3ApplyTimeout(effects, entries int) time.Duration {
+	return 60*time.Second + time.Duration(effects)*5*time.Second + time.Duration(entries)*50*time.Millisecond
+}
+
+// v3PlanApplyTimeout derives the apply deadline from the stored plan.
+func v3PlanApplyTimeout(p V3Plan) time.Duration {
+	effects, entries := 0, 0
+	for _, candidate := range p.Candidates {
+		if candidate.Decision == "delete" {
+			effects++
+		}
+	}
+	if p.Retirement != nil {
+		effects++
+		entries = len(p.Retirement.Disk.Entries) + len(p.Retirement.Metadata.Entries)
+	}
+	return v3ApplyTimeout(effects, entries)
 }
 func (c tidyV3RefsApplyCoordinator) apply(ctx context.Context, o V3ApplyOptions) V3Result {
 	ctx, cancel := context.WithCancel(ctx)
@@ -91,14 +109,8 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	// The stored plan is read before the deadline exists because the deadline
 	// depends on its size; that read is bounded local state I/O and still ends
 	// with the caller's own context.
-	effects := 0
-	for _, candidate := range p.Candidates {
-		if candidate.Decision == "delete" {
-			effects++
-		}
-	}
 	var stop context.CancelFunc
-	ctx, stop = context.WithTimeout(ctx, v3ApplyTimeout(effects))
+	ctx, stop = context.WithTimeout(ctx, v3PlanApplyTimeout(p))
 	defer stop()
 	r.Backend = p.Expected.Identity.Backend
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), "Recovery journal: "+filepath.Join(p.StateDir, "tidy-v3-operations", p.PlanID+".json"))
