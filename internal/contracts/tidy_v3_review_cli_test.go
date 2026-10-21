@@ -124,7 +124,7 @@ func TestTidyV3ReviewUsageErrorsExitTwo(t *testing.T) {
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	os.WriteFile(filepath.Join(dir, "tidy-report.md"), nil, 0o600)
 	badDecisions := filepath.Join(t.TempDir(), "d.json")
-	os.WriteFile(badDecisions, []byte(`{"schema_version":2,"decisions":[]}`), 0o600)
+	os.WriteFile(badDecisions, []byte(`{"schema_version":3,"decisions":[]}`), 0o600)
 	inRepo := filepath.Join(r.source, "reports")
 	os.Mkdir(inRepo, 0o700)
 	for name, extra := range map[string][]string{
@@ -176,12 +176,32 @@ func TestTidyV3DecisionsThroughTheCLIValidateAgainstTheSchemas(t *testing.T) {
 		"unknown field":        func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["note"] = "x" },
 		"invalid decision":     func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["decision"] = "approve" },
 		"integrated no reason": func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["reason"] = "" },
-		"schema version":       func(v map[string]any) { v["schema_version"] = 2 },
+		"schema version":       func(v map[string]any) { v["schema_version"] = 3 },
+		"needs-human in 1":     func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["decision"] = "needs-human" },
+		"repo in 1":            func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["repo"] = "sourcesteward" },
 		"kind":                 func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["kind"] = "bot" },
 		"short oid":            func(v map[string]any) { v["decisions"].([]any)[0].(map[string]any)["tip_oid"] = "abc" },
 	} {
 		t.Run("decision schema "+name, func(t *testing.T) {
 			v := value(t, []byte(body)).(map[string]any)
+			mutate(v)
+			if ds.Validate(v) == nil {
+				t.Fatal("the decision schema admitted a violation")
+			}
+		})
+	}
+	// Schema 2 adds needs-human and the repo label; schema 1 is unchanged.
+	body2 := strings.Replace(body, `"schema_version":1`, `"schema_version":2`, 1)
+	body2 = strings.Replace(body2, `"decision":"keep","reason":""`, `"decision":"needs-human","repo":"sourcesteward","reason":"cannot judge"`, 1)
+	valid(t, ds, []byte(body2))
+	for name, mutate := range map[string]func(map[string]any){
+		"needs-human no reason": func(v map[string]any) { v["decisions"].([]any)[1].(map[string]any)["reason"] = "" },
+		"empty repo":            func(v map[string]any) { v["decisions"].([]any)[1].(map[string]any)["repo"] = "" },
+		"long repo":             func(v map[string]any) { v["decisions"].([]any)[1].(map[string]any)["repo"] = strings.Repeat("r", 129) },
+		"unknown field":         func(v map[string]any) { v["decisions"].([]any)[1].(map[string]any)["note"] = "x" },
+	} {
+		t.Run("decision schema 2 "+name, func(t *testing.T) {
+			v := value(t, []byte(body2)).(map[string]any)
 			mutate(v)
 			if ds.Validate(v) == nil {
 				t.Fatal("the decision schema admitted a violation")

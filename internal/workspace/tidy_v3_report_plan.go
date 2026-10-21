@@ -161,6 +161,10 @@ func applyDecisions(p *V3Plan, file V3DecisionFile, rendered renderedReport) {
 			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: the reference is already proven")
 		case !needsReview(c):
 			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: the reference is protected or a hard stop ("+c.Reason+")")
+		case d.Decision == decisionNeedsHuman:
+			// The reviewer could not decide: the reference stays under review and
+			// the note carries the reason for the owner.
+			note(noteNeedsHuman, d.Branch, "needs-human ("+d.Kind+" reviewer "+d.Reviewer+"): "+clipText(d.Reason, decisionReasonLimit))
 		case !shown[d.Branch] || rendered.Truncated[d.Branch]:
 			note(noteDecisionNotApplied, d.Branch, "decision-not-applicable: not-fully-reviewed")
 		default:

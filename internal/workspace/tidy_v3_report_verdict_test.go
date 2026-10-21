@@ -121,7 +121,7 @@ func TestReportGuidanceCarriesTheQuestionsAndDecisionEvidenceOnce(t *testing.T) 
 			t.Errorf("%s has no evidence rule", d.Decision)
 		}
 	}
-	if !reflect.DeepEqual(names, []string{"integrated", "keep", "drop"}) {
+	if !reflect.DeepEqual(names, []string{"integrated", "keep", "drop", "needs-human"}) {
 		t.Errorf("decisions %v", names)
 	}
 	// What justifies integrated, which read-only git is allowed, what to cite and
