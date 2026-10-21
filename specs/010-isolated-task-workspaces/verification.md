@@ -294,3 +294,31 @@ growth is linear, so 16,384 is bounded by a documented constant with about two o
 time headroom. Path length is the other cost driver: the unchanged 4,325,376-byte stream bound ends a
 tree of long paths earlier than the leaf cap. SourceSteward itself has 1,062 leaf entries, the
 Anchorage umbrella 34 files and three gitlinks, WorkHarbor 745 leaves with `core.hooksPath=.githooks`.
+
+Numbers are indicative (one machine, two runs, no isolation from other load). To reproduce, add a
+temporary test to `internal/workspace` and run
+`go test ./internal/workspace -run TestZZMeasure -count=1 -v` (not committed; the standing tests
+`git_creation_limit_test.go` cover the 1,025, 1,062, 16,384 and 16,385 boundaries):
+
+```go
+func TestZZMeasure(t *testing.T) {
+	for _, n := range []int{1000, 4000, 16000, 32000} {
+		d := fixtureGit(t) // set the leaf limit high for the probe only
+		for i := 0; i < n; i++ {
+			dir := filepath.Join(d, fmt.Sprintf("pkg%03d", i%200))
+			os.MkdirAll(dir, 0700)
+			os.WriteFile(filepath.Join(dir, fmt.Sprintf("file-%05d.go", i)), []byte("package x\n"), 0600)
+		}
+		gitFixture(t, d, "add", ".")
+		gitFixture(t, d, "commit", "-qm", "big")
+		base := gitFixture(t, d, "rev-parse", "HEAD")
+		t0 := time.Now()
+		s, err := (gitAdapter{}).Observe(context.Background(), d, base)
+		t1 := time.Now()
+		dest := filepath.Join(gitTempDir(t), "task")
+		os.Mkdir(dest, 0700)
+		_, cerr := (gitAdapter{}).Create(context.Background(), MutationPlan{TaskID: "m", SourcePath: d, Destination: dest, Expected: s})
+		fmt.Println(n+1, t1.Sub(t0), time.Since(t1), err, cerr)
+	}
+}
+```

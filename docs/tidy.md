@@ -53,7 +53,7 @@ is still evidence, not authorization. Apply supports authorized local reference 
 Offline planning has a ten-second total deadline, a 1 MiB encoded record/result limit and
 an aggregate observation limit of 1024 entries. Complete base/target tree metadata and
 all-path filter observations use at most 4,325,376 stdout bytes and 4,224 bytes per logical
-record, retaining the 1,024-leaf, 4,096-byte path, 16 MiB/blob and 64 MiB aggregate blob
+record, retaining the 16,384-leaf, 4,096-byte path, 16 MiB/blob and 64 MiB aggregate blob
 bounds. Other native output and every stderr channel remain bounded to 64 KiB. Paths and selectors
 are bounded UTF-8 text of at most 4096 bytes; IDs are at most 128 bytes. Missing native tools,
 unsupported versions, unavailable sandboxing, malformed or truncated output, cancellation,

@@ -27,13 +27,15 @@ working-copy change based on the explicit commit; it changes operation metadata.
 may remove its newly reserved destination on failure; this is disclosed and never extended to
 foreign paths. Source disk,
 index/working-copy state, source HEAD/bookmarks, config and untracked files remain unchanged.
-No fetch, push, scripts, stash, source reset, hook suppression, model launch or deletion is permitted.
+No fetch, push, scripts, stash, source reset, model launch or deletion is permitted, and no hook is
+run or suppressed except by the command-line neutralization of the [creation refusals amendment](#creation-refusals-amendment).
 Native Git worktree-add may internally reset only its new owned destination to materialize the
 planned checkout; this is a declared backend effect, never a source checkout reset.
 
-Git safe preflight rejects all executable hooks, configured executable checkout filters and unsafe external attributes sources,
-submodule activation and unsupported sparse/promisor/external-helper paths before native action;
-no successful operation may silently bypass an installed hook. Missing safety evidence refuses.
+Git safe preflight rejects executable default hooks, configured executable checkout filters and unsafe external attributes sources,
+and unsupported sparse/promisor/external-helper paths before native action. stw never runs a hook of the
+repository: `core.hooksPath` and `submodule.*` are neutralized on the creation command line and disclosed
+(not silently bypassed), and nested submodules are never activated (see the [creation refusals amendment](#creation-refusals-amendment)). Missing safety evidence refuses.
 Git writes also require a network-denying sandbox limited to the owned destination and new
 worktree registration metadata. Native jj uses `git.colocate=false`, fixed explicit identity,
 full sparse patterns and pinned-operation workspace-add with source snapshot suppression. Native
@@ -118,7 +120,8 @@ It creates no new command, public schema field, adoption path or configuration-w
 A separate Git directory need not be inside the checkout. Its location, or a `modules/`
 component alone, establishes no ownership. An initialized submodule used as the selected
 repository is distinct from activating nested submodules or admitting gitlinks in the
-checkout base; those existing unsupported cases stay unsupported. Existing no-`core.worktree`
+checkout base. Nested activation stays unsupported; creation accepts gitlinks in the base as data
+(see the [creation refusals amendment](#creation-refusals-amendment)). Existing no-`core.worktree`
 layouts keep their admitted behavior and qualifications; an unavailable primary mapping
 must never be invented to satisfy a new proof requirement.
 
@@ -174,10 +177,10 @@ The mandatory acceptance matrix is in [T031–T038](../tasks.md#issue-62-native-
 
 The shared admitted Git base/target tree and all-path filter channels use complete bounded
 record consumption: 4,224 bytes per logical record, 4,325,376 stdout bytes per observation,
-64 KiB stderr, 1,024 leaves, 4,096-byte paths, 16 MiB/blob and 64 MiB aggregate blobs. Exactly
+64 KiB stderr, 16,384 leaves (1,024 before the [creation refusals amendment](#creation-refusals-amendment); the code shares one limit for every consumer of these two channels), 4,096-byte paths, 16 MiB/blob and 64 MiB aggregate blobs. Exactly
 at-limit valid observations can pass; truncation, a final unsafe path/filter, first detection
 byte/entry overrun or changed evidence refuses. All other native-output caps remain 64 KiB.
-This amendment applies to creation, reference tidy and old/new retirement consumers. It does
+This amendment applies to creation, reference tidy and old/new retirement consumers; the raw user-blob sample of retirement keeps its 1,024-file bound. It does
 not reuse partial inventory proof or broaden old user-content policies. Separate contract-3
 legacy completion never invents original creation provenance or bypasses native ownership.
 
