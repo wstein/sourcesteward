@@ -14,8 +14,12 @@
 
 ## Slice 1b — Real run: fast-forward, prune, journal
 
-- [ ] T005 Failing tests then the journal record (`sync` record type on the Spec 029/031 mechanism) written before each ref change and completed after, with recovery ref.
+- [ ] T005 Failing tests then the journal record (`sync` record type on the Spec 029/031 mechanism, keyed by run ID) written before each ref change and completed after, with the recovery ref under `refs/stw/recovery/sync/RUN_ID/N`.
 - [ ] T006 Failing tests then `stw sync [PATH]`: fast-forward of a checked-out clean branch in each linked worktree, `update-ref` with expected old OID for non-checked-out branches, per-item failure isolation, lost race reported `failed`.
+- [ ] T015 Failing tests then `skipped-busy` in plan and run: a worktree with a rebase in progress (`rebase-merge` and `rebase-apply`), merge, cherry-pick, revert or bisect, and a locked worktree, each leaves its branch and worktree byte-identical and exits 1; a detached worktree without an operation holds no branch; a branch named by an in-progress rebase's `head-name` counts as checked out there.
+- [ ] T016 FR-013 hooks test: a repository with `post-merge`, `post-rewrite` and `reference-transaction` hooks and a `core.hooksPath` setting is not refused; the hooks run in a real run (marker files) and in the plan's fetch; a hook exiting non-zero makes only that item `failed`; stw installs and removes no hook.
+- [ ] T017 FR-002 race test: a hook or test seam moves the branch (and, for a checked-out branch, `HEAD`) between classification and apply; the item is `failed` with `head-moved` or `raced`, stw's own change is absent, and other items proceed. Includes the `ORIG_HEAD` record check after a normal `merge --ff-only`.
+- [ ] T018 Configuration policy test of decision 8 with a configuration that sets `submodule.recurse=true`, `rebase.updateRefs=true`, `rebase.autoStash=true`, `merge.autoStash=true`, `fetch.prune=true` and a branch stacked on another: no submodule HEAD moves, the stacked branch ref is untouched, no hidden stash appears, no ref is pruned without `--prune`; the exact argument vectors are asserted.
 - [ ] T007 Failing tests then `--prune`: pruned refs reported by before/after comparison; without it no remote-tracking ref removed; local branches never deleted.
 - [ ] T008 No-merge-commit and no-lost-commit mutant tests; dirty worktree byte-identical after a run without `--autostash`.
 - [ ] T009 FR-012 tests: a run installs no hook and leaves no process; source check that no other command package imports the sync operation.
@@ -26,18 +30,20 @@
 
 ## Slice 3 — `--autostash`
 
-- [ ] T011 Failing tests then stash, operate, reapply; reapply conflict keeps the stash and reports `autostash-conflict` with the stash OID; clean reapply drops it; rebase-conflict abort followed by stash reapply.
+- [ ] T011 Failing tests then stash, operate, reapply; reapply conflict keeps the stash and reports `autostash-conflict` with the stash OID; clean reapply drops it; rebase-conflict abort followed by stash reapply. The stash is identified and applied by OID with `--index` (staged changes come back staged), and a second worktree stashing at the same time (shared stash list) never makes stw apply or drop the other worktree's entry (T020).
+- [ ] T020 Failing tests then the stash identification of D4: the new entry is found by `refs/stash` before and after, a stash created concurrently by another worktree is not mistaken for it, the drop locates the OID in the current list, and a vanished OID is left alone.
 
 ## Slice 4 — Restore
 
-- [ ] T012 Failing tests then `stw sync restore [PATH] [--run ID]`: `update-ref` for non-checked-out branches, `git reset --keep` for checked-out branches in a clean worktree, `changed-since` for dirty or moved-since, idempotent rerun.
+- [ ] T012 Failing tests then `stw sync restore [PATH] [--run ID]`: `update-ref` for non-checked-out branches, `git reset --keep` for checked-out branches in a clean worktree, `changed-since` for dirty or moved-since, `already-restored` on a rerun.
+- [ ] T019 Failing tests then the incomplete-record and retention rules: an incomplete fast-forward record is restored, left, or `changed-since` by branch state; an incomplete rebase record is `journal-incomplete` and untouched; after 11 completed runs the oldest run's recovery refs and records are gone and the other runs and all non-sync refs are untouched; a run with an incomplete record is kept.
 
 ## Slice 5 — Submodules
 
-- [ ] T013 Failing tests then `--submodules`: sync, fast-forward update of clean direct submodules to the recorded commit, dirty or diverged skipped, gitlinks never changed, no `--remote`.
+- [ ] T013 Failing tests then `--submodules`: sync, fast-forward update of clean direct submodules to the recorded commit, dirty or diverged skipped, gitlinks never changed, no `--remote`, `--init` or `--recursive`; an uninitialized submodule and a missing recorded commit are `unreachable` with no clone or fetch (no network access, asserted with an unreachable remote); a HEAD ahead of the recorded commit is `diverged`; the report lists old and new OID and `restore` leaves submodules alone.
 
 ## Slice 6 — Acceptance
 
 - [ ] T014 Feature status, progress, a source smoke script and real acceptance evidence; open items 1 and 2 of the spec reviewed.
 
-Traceability: FR-001 T002/T006; FR-002 T006; FR-003 T006/T008; FR-004 T010; FR-005 T002/T008/T011; FR-006 T006; FR-007 T005; FR-008 T007; FR-009 T006; FR-010 T013; FR-011 T003; FR-012 T009; FR-013 T006; FR-014 T002/T004.
+Traceability: FR-001 T002/T006; FR-002 T006/T017; FR-003 T006/T008; FR-004 T010; FR-005 T002/T008/T011; FR-006 T006; FR-007 T005/T019; FR-008 T007; FR-009 T006; FR-010 T013; FR-011 T003; FR-012 T009; FR-013 T016/T018; FR-015 T015; FR-014 T002/T004.
