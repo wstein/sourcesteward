@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 )
 
 // Retirement admits worktrees of the owner's own large repositories (SourceSteward
@@ -42,7 +43,9 @@ func TestTidyV3LegacyRetirementRefusesAboveTheNamedBound(t *testing.T) {
 	}
 	o, _ := tidyV3CommittedLegacyFixture(t, false, retirementManifestEntries+50)
 	o.StateDir = privateDir(t)
-	planned := defaultTidyV3RetirementCoordinator().plan(context.Background(), o)
+	// The refusal is the subject, not the 10 s default deadline: a loaded machine
+	// must not turn it into "canceled".
+	planned := defaultTidyV3RetirementCoordinator().plan(withV3Timeout(context.Background(), 10*time.Minute), o)
 	if planned.Status == "ok" || len(planned.Diagnostics) == 0 || planned.Diagnostics[0].Code != "retirement-file-limit" {
 		t.Fatalf("want retirement-file-limit: %+v %+v", planned.Status, planned.Diagnostics)
 	}

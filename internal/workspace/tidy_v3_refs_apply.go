@@ -55,6 +55,23 @@ func v3PlanApplyTimeout(p V3Plan) time.Duration {
 	}
 	return v3ApplyTimeout(effects, entries)
 }
+
+type v3TimeoutKey struct{}
+
+// withV3Timeout carries an explicit --timeout through the operation so that it
+// replaces the default deadline of every phase. Zero keeps the defaults.
+func withV3Timeout(ctx context.Context, d time.Duration) context.Context {
+	return context.WithValue(ctx, v3TimeoutKey{}, d)
+}
+
+// v3Timeout is the deadline of one phase: the explicit override or the default.
+func v3Timeout(ctx context.Context, def time.Duration) time.Duration {
+	if d, _ := ctx.Value(v3TimeoutKey{}).(time.Duration); d > 0 {
+		return d
+	}
+	return def
+}
+
 func (c tidyV3RefsApplyCoordinator) apply(ctx context.Context, o V3ApplyOptions) V3Result {
 	ctx, cancel := context.WithCancel(withTidyApplyPolicy(ctx))
 	defer cancel()
@@ -110,7 +127,7 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	// depends on its size; that read is bounded local state I/O and still ends
 	// with the caller's own context.
 	var stop context.CancelFunc
-	ctx, stop = context.WithTimeout(ctx, v3PlanApplyTimeout(p))
+	ctx, stop = context.WithTimeout(ctx, v3Timeout(ctx, v3PlanApplyTimeout(p)))
 	defer stop()
 	r.Backend = p.Expected.Identity.Backend
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), "Recovery journal: "+filepath.Join(p.StateDir, "tidy-v3-operations", p.PlanID+".json"))

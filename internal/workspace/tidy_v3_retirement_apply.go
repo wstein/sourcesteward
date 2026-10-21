@@ -190,7 +190,7 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	}
 	// Recovery keeps its original tighter 30-second context, subordinate to
 	// the non-resetting whole-operation deadline.
-	recoveryCtx, recoveryCancel := context.WithTimeout(ctx, v3PlanApplyTimeout(p))
+	recoveryCtx, recoveryCancel := context.WithTimeout(ctx, v3Timeout(ctx, v3PlanApplyTimeout(p)))
 	defer recoveryCancel()
 	// #3 recovery adapter before creation.
 	if e = sample(recoveryCtx, j.CurrentExpected, j.CurrentNative); e != nil {
@@ -244,7 +244,7 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	if e = sample(ctx, j.CurrentExpected, j.CurrentNative); e != nil {
 		return stop(e)
 	}
-	removeCtx, removeCancel := context.WithTimeout(ctx, v3PlanApplyTimeout(p))
+	removeCtx, removeCancel := context.WithTimeout(ctx, v3Timeout(ctx, v3PlanApplyTimeout(p)))
 	defer removeCancel()
 	// #7 native removal adapter before parent grant construction.
 	if _, e = c.observeCurrent(removeCtx, options, p, j.CurrentExpected, j.CurrentNative, first, budget, session); e != nil {
