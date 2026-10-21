@@ -186,6 +186,12 @@
       "status": "planned",
       "spec": "../specs/031-tidy-integration-proofs/spec.md",
       "evidence": "../specs/031-tidy-integration-proofs/verification.md"
+    },
+    {
+      "id": "032-stw-sync",
+      "status": "planned",
+      "spec": "../specs/032-stw-sync/spec.md",
+      "evidence": null
     }
   ]
 }
