@@ -32,6 +32,7 @@
 - [Task workspaces](workspaces.md): reviewable isolated Git/jj creation and retained handoffs.
 
 - [Evidence-based tidy](tidy.md): native local reference plans, proof and retention limits.
+- [Plan-only acceptance runner](acceptance-runner.md): opt-in source runner that plans a repository, writes the review report and proves non-mutation.
 
 - [Submodule pin audit](pins.md): planned read-only `stw pins` evidence, findings, exit statuses and limits.
 
