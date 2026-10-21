@@ -418,17 +418,17 @@ func failRestore(r V3RestoreResult, err error) V3RestoreResult {
 
 // restoreRepository resolves PATH to the clone to restore into. The journal does
 // not have to come from this clone: a re-clone simply has no recovery refs.
-func (c tidyV3RestoreCoordinator) restoreRepository(ctx context.Context, o V3RestoreOptions) (restoreNative, error) {
-	path, err := canonicalSource(o.Path)
+func restoreRepository(ctx context.Context, identity func(context.Context, string) (NativeIdentity, error), observe func([]string), path, stateDir string) (restoreNative, error) {
+	path, err := canonicalSource(path)
 	if err != nil {
 		return restoreNative{}, err
 	}
-	id, err := c.identity(ctx, path)
+	id, err := identity(ctx, path)
 	if err != nil {
 		return restoreNative{}, err
 	}
 	for _, root := range []string{id.WorkspaceRoot, id.RepositoryDir, id.GitDir} {
-		if v3Overlaps(o.StateDir, root) {
+		if v3Overlaps(stateDir, root) {
 			return restoreNative{}, failure("state-overlap", "The private state directory overlaps the repository.")
 		}
 	}
@@ -436,7 +436,7 @@ func (c tidyV3RestoreCoordinator) restoreRepository(ctx context.Context, o V3Res
 	if err != nil {
 		return restoreNative{}, err
 	}
-	return restoreNative{bin: bin, id: id, observe: c.observeArgs}, nil
+	return restoreNative{bin: bin, id: id, observe: observe}, nil
 }
 
 // readRestoreJournal opens the store read-only and maps its failures to the
@@ -475,7 +475,7 @@ func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOption
 		return failRestore(r, err)
 	}
 	defer closeSession()
-	n, err := c.restoreRepository(ctx, o)
+	n, err := restoreRepository(ctx, c.identity, c.observeArgs, o.Path, o.StateDir)
 	if err != nil {
 		return failRestore(r, err)
 	}

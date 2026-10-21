@@ -17,6 +17,7 @@ import (
 type restoreFix struct {
 	*proofFix
 	stored V3Plan
+	plans  []V3Plan          // every plan applied into a shared store, oldest first
 	tips   map[string]string // short branch name -> tip OID at deletion
 	state  string
 }
