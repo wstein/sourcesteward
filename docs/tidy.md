@@ -54,7 +54,9 @@ Offline planning has a ten-second total deadline, a 1 MiB encoded record/result 
 an aggregate observation limit of 1024 entries. Complete base/target tree metadata and
 all-path filter observations use at most 4,325,376 stdout bytes and 4,224 bytes per logical
 record, retaining the 16,384-leaf, 4,096-byte path, 16 MiB/blob and 64 MiB aggregate blob
-bounds. Other native output and every stderr channel remain bounded to 64 KiB. Paths and selectors
+bounds. The 16,384-leaf limit is shared with workspace creation; in tidy it only bounds cost, because these
+streams are all-or-refuse (final delimiter, exit status and EOF required) and evidence is never truncated.
+The limits that decide a deletion keep their values. Other native output and every stderr channel remain bounded to 64 KiB. Paths and selectors
 are bounded UTF-8 text of at most 4096 bytes; IDs are at most 128 bytes. Missing native tools,
 unsupported versions, unavailable sandboxing, malformed or truncated output, cancellation,
 ambiguous/GitButler ownership and changed observations refuse or report incomplete evidence.
@@ -169,7 +171,9 @@ external/ABA race limits rather than a repository-wide transaction.
 
 Retirement uses the same ten-second planning/sixty-second apply deadlines, 1 MiB encoded record
 bound and aggregate 1024-entry bound; each stored/disk raw file in the default v2 contract
-is bounded to 64 KiB. Oversized or
+is bounded to 64 KiB; the retirement blob sample is 1,024 files, the manifest 1,024 entries and user content
+64 MiB in total, while the shared 16,384-leaf tree limit only bounds cost. Hooks, fsmonitor and submodule
+policy stay strict for retirement. Oversized or
 incomplete evidence never authorizes a truncated removal target. Remote deletion, garbage collection,
 jj change abandonment and arbitrary forced cleanup remain excluded.
 

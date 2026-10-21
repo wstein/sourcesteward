@@ -196,7 +196,12 @@ project's own repositories, although none protected a real effect.
    (`git-checkout-limit`). It is a documented constant, not a configuration option. The 16 MiB/blob,
    64 MiB total, 4,224-byte record, 4,096-byte path and 4,325,376-byte stream bounds are unchanged, so the
    total cost stays bounded (the stream bound admits an average of about 264 bytes per entry at the cap).
-   The stored-file sample of owned retirement keeps its own 1,024-file bound, so a worktree beyond it is retained, not retired.
+   The limit is shared by creation, reference tidy and old/new retirement, because the code has one tree
+   validator and one filter inventory for all of them. In tidy and retirement it bounds cost only: the
+   streams are all-or-refuse (final delimiter, successful exit and EOF required), so evidence is never
+   truncated and a larger tree cannot make a deletion look safer. The limits that decide a deletion keep
+   their values: the retirement raw-blob sample of 1,024 files (a worktree beyond it is retained, not
+   retired), the 1,024-entry manifest and aggregate observation bounds, and 64 MiB of user content in total.
    The cap follows the [measurement](../verification.md#creation-refusals-measurement).
 2. **Hooks and recursion never run.** `stw` never runs a hook of the repository it manages. The one
    native command of creation that could run one (`git worktree add`, a `post-checkout` hook) is invoked with
@@ -213,6 +218,8 @@ project's own repositories, although none protected a real effect.
    uses its own workspace plan.
 
 Scope: the amendment applies only to `workspace plan` and `apply` (creation) and to the verification inside
-that apply. Tidy planning and apply, retirement and restore keep their own admissions: the strict apply
-admission still refuses `core.hooksPath`, `submodule.*` and gitlinks (Spec 031), so a worktree created under this amendment from
-such a repository is not retired by `stw` until a later specification defines that policy; retention is the safe outcome.
+that apply, except the shared leaf limit above. Tidy planning and apply, retirement and restore keep their own
+hook, fsmonitor and submodule admissions: the strict apply admission still refuses `core.hooksPath`, `submodule.*` and gitlinks (Spec 031), so a worktree created under this amendment from
+such a repository is not retired by `stw` until a later specification defines that policy; retention is the safe outcome. Creation admits `core.hooksPath`
+and gitlinks only because it carries the creation mark and neutralizes both on the command line; no other
+consumer does.
