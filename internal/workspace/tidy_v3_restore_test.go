@@ -73,7 +73,9 @@ func TestRestorePlanJSONHasTheContractShape(t *testing.T) {
 		t.Errorf("top-level keys %v", got)
 	}
 	entry := doc["entries"].([]any)[0].(map[string]any)
-	if got := keys(entry); !reflect.DeepEqual(got, []string{"action_id", "class", "decision", "flags", "oid", "reason", "recovery_ref", "ref", "state"}) {
+	if got := keys(entry); !reflect.DeepEqual(got, []string{"action_id", "branch_config", "class", "decision", "flags", "oid", "reason", "recovery_ref", "ref", "state"}) {
+		// branch_config is the one additive field of Spec 031 T045: a journal that
+		// recorded branch evidence shows it, an older journal does not.
 		t.Errorf("entry keys %v", got)
 	}
 	if v, ok := entry["reason"]; !ok || v != nil {

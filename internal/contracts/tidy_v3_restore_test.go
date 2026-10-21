@@ -21,7 +21,11 @@ func restoreFixtureResult(mode string) workspace.V3RestoreResult {
 			Decision: &workspace.V3RestoreDecision{Reviewer: "rev", Kind: "ai", Decision: "integrated", Reason: "done"}},
 		{ActionID: "ref-2", Ref: "refs/heads/other", OID: oid, RecoveryRef: "refs/stw/recovery/v3/plan1/" + strings.Repeat("d", 32), State: "name-taken", Reason: &reason, Class: "ancestor", Flags: []string{}},
 	}
+	origin := "origin"
+	entries[0].BranchConfig = &workspace.V3RestoreBranchConfig{Status: "recorded", ReflogTip: oid, BranchOID: oid, Keys: []workspace.V3RestoreConfigKey{
+		{Key: "branch.topic.remote", Remote: &origin, State: "reapply"}, {Key: "branch.topic.merge", State: "reapply"}, {Key: "branch.topic.description", State: "skip-not-recorded"}}}
 	if mode == "apply" {
+		entries[0].BranchConfig.Keys[0].Outcome, entries[0].BranchConfig.Keys[1].Outcome, entries[0].BranchConfig.Keys[2].Outcome = "applied", "failed", "skipped"
 		entries[0].Outcome = "created"
 		entries[0].RestoreJournal = &workspace.V3RestoreRecordRef{Intent: "i-0001", Outcome: "i-0002"}
 		entries[1].Outcome = "symbolic-reference"
@@ -66,8 +70,21 @@ func TestTidyV3RestoreSchemaAcceptsPlanAndApplyAndRefusesViolations(t *testing.T
 		"zero oid":                 func(v map[string]any) { first(v)["oid"] = strings.Repeat("0", 40) },
 		"recovery ref elsewhere":   func(v map[string]any) { first(v)["recovery_ref"] = "refs/heads/x" },
 		"decision kind":            func(v map[string]any) { first(v)["decision"].(map[string]any)["kind"] = "robot" },
-		"unknown entry field":      func(v map[string]any) { first(v)["verdict"] = "ok" },
-		"flag outside the table":   func(v map[string]any) { first(v)["flags"] = []any{"loose"} },
+		"config state outside the table": func(v map[string]any) {
+			first(v)["branch_config"].(map[string]any)["keys"].([]any)[0].(map[string]any)["state"] = "force"
+		},
+		"config key outside branch": func(v map[string]any) {
+			first(v)["branch_config"].(map[string]any)["keys"].([]any)[0].(map[string]any)["key"] = "remote.origin.url"
+		},
+		"config value field": func(v map[string]any) {
+			first(v)["branch_config"].(map[string]any)["keys"].([]any)[0].(map[string]any)["value"] = "secret"
+		},
+		"config outcome outside the table": func(v map[string]any) {
+			first(v)["branch_config"].(map[string]any)["keys"].([]any)[0].(map[string]any)["outcome"] = "forced"
+		},
+		"config reflog tip":      func(v map[string]any) { first(v)["branch_config"].(map[string]any)["reflog_tip"] = "later" },
+		"unknown entry field":    func(v map[string]any) { first(v)["verdict"] = "ok" },
+		"flag outside the table": func(v map[string]any) { first(v)["flags"] = []any{"loose"} },
 		"outcome outside the table": func(v map[string]any) {
 			first(v)["outcome"] = "overwritten"
 		},

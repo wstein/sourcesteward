@@ -56,6 +56,9 @@ type V3RestoreEntry struct {
 	Class       string             `json:"class"`
 	Flags       []string           `json:"flags"`
 	Decision    *V3RestoreDecision `json:"decision"`
+	// BranchConfig is additive: present only when the journal recorded branch
+	// evidence before the deletion (Spec 031 T045).
+	BranchConfig *V3RestoreBranchConfig `json:"branch_config,omitempty"`
 	// Outcome and RestoreJournal are present on an apply result only.
 	Outcome        string              `json:"outcome,omitempty"`
 	RestoreJournal *V3RestoreRecordRef `json:"restore_journal,omitempty"`
@@ -287,6 +290,8 @@ func reasonPointer(reason string) *string {
 type restoreItem struct {
 	entry   V3RestoreEntry
 	journal V3JournalEntry
+	// origin is the branch the journal deleted; entry.Ref differs under --as.
+	origin string
 }
 
 // restoreItems builds the in-scope entries in journal order. The branch name,
@@ -321,7 +326,7 @@ func restoreItems(view v3JournalView, actions []string, as string) ([]restoreIte
 		if d := decisionOf(c); d != nil {
 			e.Decision = &V3RestoreDecision{Reviewer: d.Reviewer, Kind: d.Kind, Decision: d.Decision, Reason: d.Reason}
 		}
-		items = append(items, restoreItem{entry: e, journal: je})
+		items = append(items, restoreItem{entry: e, journal: je, origin: c.Name})
 	}
 	for _, a := range actions {
 		if !known[a] {
@@ -349,7 +354,10 @@ func evaluateRestoreItems(ctx context.Context, n restoreNative, items []restoreI
 			read = append(read, e)
 		}
 	}
-	return classifyRestoreEntries(ctx, n, read)
+	if err := classifyRestoreEntries(ctx, n, read); err != nil {
+		return err
+	}
+	return n.planBranchConfigs(ctx, items)
 }
 
 // classifyRestoreEntries sets the state of entries whose journal side is
