@@ -181,7 +181,9 @@ completed legacy retirement. Select it with `--contract 3`; omission preserves t
 v1/v2 dispatch and zero-network behavior. These new capabilities do not permit Git writes in
 jj- or GitButler-owned workspaces. Source/native checks and remaining acceptance limits are
 recorded in the Spec 029 integration evidence. The v3 schema is retained in the source tree at
-`schemas/v3/tidy.schema.json`; it is not yet part of the published schema inventory.
+`schemas/v3/tidy.schema.json` (the review report and the decision file have the candidate schemas
+`schemas/v3/tidy-report.schema.json` and `schemas/v3/tidy-decisions.schema.json`); none is part of
+the published schema inventory.
 
 A local reference plan remains useful offline. Online merged-head evidence requires explicit
 `--online --remote NAME` and one admitted GitHub.com/SHA-1 repository:

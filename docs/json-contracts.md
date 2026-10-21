@@ -242,7 +242,9 @@ its command-specific exit meanings and the separately required build approval.
 ## Explicit tidy source contract 3
 
 `stw tidy plan/apply --contract 3 --json` uses the independent source schema
-`schemas/v3/tidy.schema.json`. It remains unpublished in the source-only inventory; the
+`schemas/v3/tidy.schema.json`. It remains unpublished in the source-only inventory, as do the
+candidate schemas `schemas/v3/tidy-report.schema.json` of the review report and
+`schemas/v3/tidy-decisions.schema.json` of the reviewer decision file; the
 existing public v1/v2 schema URLs and bytes are unchanged. The v3 envelope identifies mode,
 proof/provenance, exact effects, null executable plan on incompleteness, sampled freshness,
 actual network attempts and cumulative measured budgets. Complete negative observations

@@ -332,6 +332,11 @@ compiled and vetted, `internal/release` does not compile for Windows (also true 
 this work), and no real checkout, build, workflow or release was run. The earlier
 dead-code state of the view, which had no production caller, is closed by this wiring.
 
+## Decision-file schema registration
+
+The Pages source validator recognizes the exact candidate `v3/tidy-decisions.schema.json` as
+unpublished, like the report schema; the unexpected or linked source check is unchanged.
+
 ## PR 104 unpublished report schema CI correction
 
 The Pages source validator now recognizes the exact candidate
