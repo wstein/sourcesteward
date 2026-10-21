@@ -16,10 +16,7 @@ import (
 // Spec 031 T033: the decision file (contracts/decisions.md), its application
 // to the plan and the journal, and the apply re-check.
 
-func decisionJSON(decisions ...map[string]any) string {
-	b, _ := json.Marshal(map[string]any{"schema_version": 1, "decisions": decisions})
-	return string(b)
-}
+func decisionJSON(decisions ...map[string]any) string { return decisionJSONv(1, decisions...) }
 
 func validDecision(branch, tip, base string) map[string]any {
 	return map[string]any{"branch": branch, "tip_oid": tip, "base_oid": base, "decision": "integrated", "reason": "already on the base", "reviewer": "reviewer", "kind": "human"}
@@ -62,7 +59,7 @@ func TestDecisionFileParsing(t *testing.T) {
 	}
 	refusals := map[string]string{
 		"malformed JSON":         "{",
-		"unknown schema version": strings.Replace(good(nil), `"schema_version":1`, `"schema_version":2`, 1),
+		"unknown schema version": strings.Replace(good(nil), `"schema_version":1`, `"schema_version":3`, 1),
 		"unknown top field":      strings.Replace(good(nil), `"schema_version":1`, `"schema_version":1,"extra":1`, 1),
 		"unknown decision field": good(func(d map[string]any) { d["note"] = "smuggled" }),
 		"invalid decision":       good(func(d map[string]any) { d["decision"] = "approve" }),
@@ -179,7 +176,13 @@ func TestDecisionFileParsing(t *testing.T) {
 func (f *proofFix) decide(t *testing.T, build func(tip func(string) string, base string) []map[string]any, o V3PlanOptions) V3Result {
 	t.Helper()
 	tip := func(name string) string { return f.rev("refs/heads/" + name) }
-	o.DecisionsFile = writeDecisionFile(t, decisionJSON(build(tip, f.rev(f.main))...))
+	ds, version := build(tip, f.rev(f.main)), 1
+	for _, d := range ds {
+		if _, repo := d["repo"]; repo || d["decision"] == decisionNeedsHuman {
+			version = 2
+		}
+	}
+	o.DecisionsFile = writeDecisionFile(t, decisionJSONv(version, ds...))
 	return f.planReport(o)
 }
 

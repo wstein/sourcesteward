@@ -82,21 +82,137 @@
         }
       },
       "type": "object"
+    },
+    "DecisionV2": {
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "integrated",
+              "drop",
+              "needs-human"
+            ]
+          }
+        }
+      },
+      "properties": {
+        "base_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "branch": {
+          "maxLength": 4096,
+          "pattern": "^refs/heads/.+",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "integrated",
+            "keep",
+            "drop",
+            "needs-human"
+          ],
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "ai"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "repo": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "reviewer": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "tip_oid": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch",
+        "tip_oid",
+        "base_oid",
+        "decision",
+        "reason",
+        "reviewer",
+        "kind"
+      ],
+      "then": {
+        "properties": {
+          "reason": {
+            "minLength": 1
+          }
+        }
+      },
+      "type": "object"
     }
   },
   "$id": "https://wstein.github.io/sourcesteward/schemas/v3/tidy-decisions.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/Decision"
+          }
+        },
+        "schema_version": {
+          "const": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/DecisionV2"
+          }
+        },
+        "schema_version": {
+          "const": 2
+        }
+      }
+    }
+  ],
   "properties": {
     "decisions": {
-      "items": {
-        "$ref": "#/$defs/Decision"
-      },
       "maxItems": 1024,
       "type": "array"
     },
     "schema_version": {
-      "const": 1
+      "enum": [
+        1,
+        2
+      ]
     }
   },
   "required": [

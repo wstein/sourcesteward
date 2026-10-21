@@ -99,6 +99,7 @@ func reportGuidance() V3ReportGuidance {
 			{Decision: "integrated", Evidence: "Every change of the branch is already on the base in another form. Cite the base commit OIDs (or the path and line) that carry it. A similar subject alone is not evidence."},
 			{Decision: "keep", Evidence: "The branch holds content the owner may want, or you cannot show that the base carries it. When in doubt, keep."},
 			{Decision: "drop", Evidence: "The content is deliberately abandoned, for example stale or replaced by a different design. Cite why."},
+			{Decision: "needs-human", Evidence: "You cannot decide from the report and the allowed checks (decision file schema_version 2). Give the reason; the branch stays under review and the note reaches the owner."},
 		},
 		ReadOnlyGit: "You may check with read-only git in a clone of the repository: git log, git diff, git cherry, git range-diff, git merge-base --is-ancestor, git show, git grep, git ls-tree. Run nothing that writes; cite the command and the base commit or path that settles the point. Where an entry says unavailable or truncated, run the check yourself or keep the branch.",
 	}

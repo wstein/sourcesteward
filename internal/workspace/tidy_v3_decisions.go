@@ -24,6 +24,9 @@ const (
 	reviewedIntegrated     = "reviewed-integrated"
 	reviewedDrop           = "reviewed-drop"
 	reviewedKeep           = "reviewed-keep"
+	decisionRepoLimit      = 128
+	decisionNeedsHuman     = "needs-human"
+	noteNeedsHuman         = "needs-human"
 	noteStaleDecision      = "stale-decision"
 	noteDecisionNotApplied = "decision-not-applicable"
 )
@@ -43,7 +46,9 @@ type V3DecisionRecord struct {
 // V3DecisionFile is a parsed decision file and the digest of its bytes.
 type V3DecisionFile struct {
 	Decisions []V3DecisionRecord
-	Digest    string
+	// Repo is the repository label of a schema 2 file, "" when none is named.
+	Repo   string
+	Digest string
 }
 
 // V3ReviewNote records a decision that was ignored.
@@ -60,13 +65,14 @@ func decisionError(path, where, why string) error {
 }
 
 type rawDecision struct {
-	Branch   *string `json:"branch"`
-	TipOID   *string `json:"tip_oid"`
-	BaseOID  *string `json:"base_oid"`
-	Decision *string `json:"decision"`
-	Reason   *string `json:"reason"`
-	Reviewer *string `json:"reviewer"`
-	Kind     *string `json:"kind"`
+	Branch   *string         `json:"branch"`
+	TipOID   *string         `json:"tip_oid"`
+	BaseOID  *string         `json:"base_oid"`
+	Decision *string         `json:"decision"`
+	Reason   *string         `json:"reason"`
+	Reviewer *string         `json:"reviewer"`
+	Kind     *string         `json:"kind"`
+	Repo     json.RawMessage `json:"repo"`
 }
 
 func decisionOID(s string) bool {
@@ -96,7 +102,8 @@ func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 	if err != nil || len(data) > decisionFileLimit {
 		return out, decisionError(path, "", "must be readable and at most 1 MiB")
 	}
-	if err = strictDecisionJSON(data); err != nil {
+	version := decisionSchemaVersion(data)
+	if err = strictDecisionJSON(data, version); err != nil {
 		return out, decisionError(path, "", err.Error())
 	}
 	var top struct {
@@ -105,8 +112,8 @@ func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err = dec.Decode(&top); err != nil || top.SchemaVersion == nil || *top.SchemaVersion != 1 || top.Decisions == nil {
-		return out, decisionError(path, "", "must be one JSON object with schema_version 1 and a decisions array and no other field")
+	if err = dec.Decode(&top); err != nil || top.SchemaVersion == nil || (*top.SchemaVersion != 1 && *top.SchemaVersion != 2) || top.Decisions == nil {
+		return out, decisionError(path, "", "must be one JSON object with schema_version 1 or 2 and a decisions array and no other field")
 	}
 	if len(top.Decisions) > decisionCountLimit {
 		return out, decisionError(path, "", "holds more than 1,024 decisions")
@@ -120,14 +127,22 @@ func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 		if err = d.Decode(&r); err != nil || r.Branch == nil || r.TipOID == nil || r.BaseOID == nil || r.Decision == nil || r.Reason == nil || r.Reviewer == nil || r.Kind == nil {
 			return out, decisionError(path, where, "needs exactly the fields branch, tip_oid, base_oid, decision, reason, reviewer and kind")
 		}
+		var repo *string
+		if r.Repo != nil {
+			var label string
+			if json.Unmarshal(r.Repo, &label) != nil || bytes.Equal(r.Repo, []byte("null")) {
+				return out, decisionError(path, where, "repo must be non-empty text of at most 128 bytes")
+			}
+			repo = &label
+		}
 		rec := V3DecisionRecord{Branch: *r.Branch, TipOID: *r.TipOID, BaseOID: *r.BaseOID, Decision: *r.Decision, Reason: *r.Reason, Reviewer: *r.Reviewer, Kind: *r.Kind}
 		switch {
 		case !v3Ref(rec.Branch) || !strings.HasPrefix(rec.Branch, "refs/heads/") || len(rec.Branch) == len("refs/heads/"):
 			return out, decisionError(path, where, "branch must be a full ref under refs/heads/")
 		case !decisionOID(rec.TipOID) || !decisionOID(rec.BaseOID):
 			return out, decisionError(path, where, "tip_oid and base_oid must be full object ids")
-		case !slices.Contains([]string{"integrated", "keep", "drop"}, rec.Decision):
-			return out, decisionError(path, where, "decision must be integrated, keep or drop")
+		case !slices.Contains(decisionNames(*top.SchemaVersion), rec.Decision):
+			return out, decisionError(path, where, "decision must be "+strings.Join(decisionNames(*top.SchemaVersion), ", ")+" (needs-human needs schema_version 2)")
 		case rec.Kind != "human" && rec.Kind != "ai":
 			return out, decisionError(path, where, "kind must be human or ai")
 		case !validText(rec.Reason) || len(rec.Reason) > decisionReasonLimit || rec.Decision != "keep" && rec.Reason == "":
@@ -136,6 +151,13 @@ func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 			return out, decisionError(path, where, "reviewer must be non-empty text of at most 128 bytes")
 		case seen[rec.Branch]:
 			return out, decisionError(path, where, "names a branch that an earlier decision already names")
+		case repo != nil && (!validText(*repo) || *repo == "" || len(*repo) > decisionRepoLimit):
+			return out, decisionError(path, where, "repo must be non-empty text of at most 128 bytes")
+		case repo != nil && out.Repo != "" && *repo != out.Repo:
+			return out, decisionError(path, where, "names the repository "+fmt.Sprintf("%q", *repo)+" but an earlier decision names "+fmt.Sprintf("%q", out.Repo)+": a decision file names more than one repository, write one file per repository")
+		}
+		if repo != nil {
+			out.Repo = *repo
 		}
 		seen[rec.Branch] = true
 		out.Decisions = append(out.Decisions, rec)
@@ -157,7 +179,7 @@ func validV3ReviewNotes(notes []V3ReviewNote) bool {
 		return false
 	}
 	for _, n := range notes {
-		if (n.Code != noteStaleDecision && n.Code != noteDecisionNotApplied) || !validText(n.Branch) || !validText(n.Detail) || n.Detail == "" || len(n.Detail) > 4096 {
+		if (n.Code != noteStaleDecision && n.Code != noteDecisionNotApplied && n.Code != noteNeedsHuman) || !validText(n.Branch) || !validText(n.Detail) || n.Detail == "" || len(n.Detail) > 4096 {
 			return false
 		}
 	}
@@ -174,13 +196,37 @@ func decisionOf(c V3Candidate) *V3DecisionRecord {
 
 var decisionTopKeys = []string{"schema_version", "decisions"}
 var decisionKeys = []string{"branch", "tip_oid", "base_oid", "decision", "reason", "reviewer", "kind"}
+var decisionKeysV2 = append(slices.Clone(decisionKeys), "repo")
+
+// decisionNames are the decisions a schema version admits: version 2 adds
+// needs-human, which records a branch the reviewer cannot decide.
+func decisionNames(version int) []string {
+	if version == 2 {
+		return []string{"integrated", "keep", "drop", decisionNeedsHuman}
+	}
+	return []string{"integrated", "keep", "drop"}
+}
+
+// decisionSchemaVersion reads the version before the strict key check; 0 when
+// it is missing or not a number (the strict check and the typed decode refuse).
+func decisionSchemaVersion(data []byte) int {
+	var top struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	json.Unmarshal(data, &top)
+	return top.SchemaVersion
+}
 
 // strictDecisionJSON reads the file token by token before the typed decode:
 // encoding/json lets the last of two equal keys win and matches key names
 // without regard to case, so a human could read one decision while another is
 // applied. Every key must be unique within its object and exactly one of the
 // fixed lower-case names, and nothing may follow the one top-level object.
-func strictDecisionJSON(data []byte) error {
+func strictDecisionJSON(data []byte, version int) error {
+	keys := decisionKeys
+	if version == 2 {
+		keys = decisionKeysV2
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	bad := func(why string) error { return fmt.Errorf("%s", why) }
 	var value func(allowed []string, children func(key string) []string) error
@@ -230,7 +276,7 @@ func strictDecisionJSON(data []byte) error {
 	}
 	err := value(decisionTopKeys, func(key string) []string {
 		if key == "decisions" {
-			return decisionKeys
+			return keys
 		}
 		return nil
 	})

@@ -3207,7 +3207,8 @@
               "code": {
                 "enum": [
                   "stale-decision",
-                  "decision-not-applicable"
+                  "decision-not-applicable",
+                  "needs-human"
                 ],
                 "type": "string"
               },
