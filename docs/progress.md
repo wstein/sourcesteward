@@ -17,15 +17,16 @@ exact integrated SHA, which differs from the reviewed fold tips), T047 (candidat
 install, which needs separate owner approval) and T048/T049 (fresh real-repository acceptance).
 Windows and Darwin remain unverified here.
 
-## Active work: Spec 015 local restacking, first slice (design draft)
+## Active work: Spec 015 local restacking, first slice (source implemented, verification pending)
 
-Owner decisions of 2026-10-21 (Git first, read-only `stw restack plan` first, explicit minimal input
-instead of Spec 012, plumbing replay, push-with-lease left to a Spec 016 amendment, identity check
-and predicted conflicts in the plan) are recorded in
-[the specification](../specs/015-local-restacking/spec.md), with
-[plan](../specs/015-local-restacking/plan.md), [tasks](../specs/015-local-restacking/tasks.md) (0/23
-done) and [contracts](../specs/015-local-restacking/contracts/restack-plan.md). Status stays
-`planned`; the independent design review is pending and nothing is implemented.
+The read-only `stw restack plan` for native Git is implemented in source on `feat/015-restack-plan` (hidden command, unpublished
+`schemas/v1/restack-plan.schema.json`): explicit branch, old parent and new parent, a plumbing replay in a private object
+quarantine, `range-diff` pairing, `cherry` classification of the parent's commits, own-diff and identity evidence, predicted
+conflicts, the overlap risk indicator, effects, and the inert lease push and resync texts, with a closed outcome table that never
+reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [tasks](../specs/015-local-restacking/tasks.md)
+(19 of 23 done) and [verification](../specs/015-local-restacking/verification.md). Open: the independent design review (T001),
+the minimum/current Git lanes (T021) and the independent review of the exact head (T023); T004 was not done by design. Status
+stays `planned`; `restack apply`, jj and the push are later slices.
 
 ## Active work: Spec 032 stw sync (design only, 2026-10-21, runtime not started)
 
