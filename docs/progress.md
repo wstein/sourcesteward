@@ -17,15 +17,9 @@ exact integrated SHA, which differs from the reviewed fold tips), T047 (candidat
 install, which needs separate owner approval) and T048/T049 (fresh real-repository acceptance).
 Windows and Darwin remain unverified here.
 
-## Active work: Spec 030 PR status (design only, runtime held)
+## Active work: Spec 030 PR status (design only, re-scoped 2026-10-21, runtime not started)
 
-Only the Spec 030 design and specification documents are on this branch
-([spec](../specs/030-pr-status/spec.md)). The third design review is NOT CLEAR and the
-spec blocks implementation, so the two runtime commits (typed PR lifecycle model and decoder,
-then one-shot observation assembly under `internal/hosting/pr_status_*`) are not here. They are
-preserved, unmerged, on the branch `codex/hold-spec030-runtime` and are held pending an
-independent Spec 030 design CLEAR and the owner disposition recorded in
-[round 3](../specs/030-pr-status/round3-disposition.md). The feature stays `planned`.
+The owner split Spec 030 on 2026-10-21 ([spec](../specs/030-pr-status/spec.md)). Slice 1 is the one-shot `stw hosting pr NUMBER --json --json-version 2 [--expect-head SHA] [--compact]` and the new head lookup `stw hosting prs SHA`; its design awaits an independent review of the exact head and no runtime is merged. `--watch`, the delivery arbiter and descendant verification are a deferred slice that keeps the three DESIGN NOT CLEAR rounds and the pending round 4 ([round 3](../specs/030-pr-status/round3-disposition.md)); those blockers do not apply to slice 1 because a one-shot read has no final-delivery arbiter or teardown phase. Earlier runtime commits (typed lifecycle model and decoder, one-shot assembly) are preserved unmerged on `codex/hold-spec030-runtime` and may be reused after review. Long waits keep using `scripts/ci-wait.sh`. The feature stays `planned`.
 
 ## Active work: Spec 027 inventory limits (implemented, verification pending)
 
