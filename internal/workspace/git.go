@@ -158,15 +158,16 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 		return "", err
 	}
 	session := planningSessionFrom(ctx)
+	creation := creationPolicyFrom(ctx)
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
-		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
+		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" && !creation || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
 		// check-attr's textual sentinel values can also be literal driver names.
 		// Refuse those definitions rather than mistake an executable literal for
 		// absent/unset attributes. Case-insensitive refusal is conservative.
 		unsafe = unsafe || strings.HasPrefix(key, "filter.unspecified.") || strings.HasPrefix(key, "filter.unset.") || strings.HasPrefix(key, "filter.set.")
-		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || key == "submodule.recurse" && !gitFalse(value) || strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
+		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) || !creation && strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 		if session != nil {
 			// Planning (Spec 031 FR-020/FR-021): only hooksPath, fsmonitor and
 			// submodule.* leave the refusal list; they are neutralized by the
@@ -431,7 +432,7 @@ func (gitAdapter) Create(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	}
 	n.Phase = "unknown"
 	n.Effects = append(n.Effects, "native Git worktree creation attempted; destination and new registration may have changed")
-	_, code, runErr := runSandboxed(ctx, bin, []string{"--no-replace-objects", "worktree", "add", "--detach", "--lock", "--reason", "stw:" + p.TaskID, "--", p.Destination, p.Expected.BaseCommit}, p.Expected.Identity.WorkspaceRoot, []string{p.Destination, filepath.Join(p.Expected.Identity.RepositoryDir, "worktrees")}, protected)
+	_, code, runErr := runSandboxed(ctx, bin, append(append([]string{"--no-replace-objects"}, creationConfigArgs...), "worktree", "add", "--detach", "--lock", "--reason", "stw:"+p.TaskID, "--", p.Destination, p.Expected.BaseCommit), p.Expected.Identity.WorkspaceRoot, []string{p.Destination, filepath.Join(p.Expected.Identity.RepositoryDir, "worktrees")}, protected)
 	// Cancellation after native start cannot imply rollback. Preserve the unknown
 	// outcome rather than extending the total action deadline for reconciliation.
 	if ctx.Err() != nil {
