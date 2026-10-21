@@ -369,9 +369,18 @@ func (c tidyV3RestoreCoordinator) restoreOne(ctx context.Context, n restoreNativ
 	if c.beforeCAS != nil {
 		c.beforeCAS(*e)
 	}
-	code, err := n.createBranch(ctx, o.PlanID, e.ActionID, e.Ref, e.OID)
+	// Some Git versions replace a dangling symbolic reference when the old value
+	// is the zero object ID, so the symbol is looked for right before the swap.
+	symbolicNow, err := n.isSymbolic(ctx, e.Ref)
 	if err != nil {
 		return fail("restore-failed", "The reference could not be created.")
+	}
+	code := 1
+	if !symbolicNow {
+		code, err = n.createBranch(ctx, o.PlanID, e.ActionID, e.Ref, e.OID)
+		if err != nil {
+			return fail("restore-failed", "The reference could not be created.")
+		}
 	}
 	outcome := outcomeCreated
 	if code != 0 {
