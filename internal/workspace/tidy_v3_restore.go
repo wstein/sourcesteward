@@ -400,6 +400,10 @@ func defaultTidyV3RestoreCoordinator() tidyV3RestoreCoordinator {
 	return tidyV3RestoreCoordinator{identity: gitNativeIdentity, now: time.Now}
 }
 
+// ValidateV3RestoreOptions reports the argument errors of a restore command,
+// which need no store or native work (the CLI exits 2 on them).
+func ValidateV3RestoreOptions(o V3RestoreOptions) error { return validateV3RestoreOptions(o) }
+
 // RestoreTidyV3 plans (read-only) the restore of deleted branches.
 func RestoreTidyV3(ctx context.Context, o V3RestoreOptions) V3RestoreResult {
 	return defaultTidyV3RestoreCoordinator().restore(ctx, o)
