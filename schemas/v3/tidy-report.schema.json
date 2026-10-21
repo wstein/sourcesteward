@@ -73,6 +73,11 @@
     },
     "Commit": {
       "additionalProperties": false,
+      "dependentRequired": {
+        "matched_by": [
+          "patch_match"
+        ]
+      },
       "properties": {
         "author": {
           "$ref": "#/$defs/Untrusted"
@@ -81,8 +86,17 @@
           "minLength": 1,
           "type": "string"
         },
+        "matched_by": {
+          "$ref": "#/$defs/OID"
+        },
         "oid": {
           "$ref": "#/$defs/OID"
+        },
+        "patch_match": {
+          "enum": [
+            "matched",
+            "unmatched"
+          ]
         },
         "subject": {
           "$ref": "#/$defs/Untrusted"

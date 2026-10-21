@@ -70,6 +70,13 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 	reasons := slices.Clone(q.Verdict.Reasons)
 	finish := func() (V3ReportEntry, error) {
 		e.Reasons = reasonOrder(reasons)
+		for i, c := range e.Commits {
+			if by, ok := q.Verdict.CommitMatches[c.OID]; ok && by != "" {
+				e.Commits[i].PatchMatch, e.Commits[i].MatchedBy = "matched", by
+			} else if ok {
+				e.Commits[i].PatchMatch = "unmatched"
+			}
+		}
 		if slices.Contains(e.Reasons, "proof-limit") && e.ProofLimit == nil && q.Verdict.Limit != nil {
 			e.ProofLimit = reportLimitOf(q.Verdict.Limit)
 		}

@@ -20,6 +20,8 @@ type integrationVerdict struct {
 	SkippedMerges int
 	BinaryPaths   []string
 	BaseMatches   []string
+	// CommitMatches is the patch-id match of each branch commit (report only).
+	CommitMatches map[string]string
 	// Limit is the first bound a proof-limit reason came from (report only).
 	Limit *integrationLimitError
 }
@@ -103,6 +105,7 @@ func (r *integrationRun) evaluate(ctx context.Context, base, tip string, policy 
 			return out, e
 		}
 		v.Matched, v.Unmatched, v.Empty, v.SkippedMerges, v.BinaryPaths, v.BaseMatches = pr.Matched, pr.Unmatched, pr.Empty, pr.SkippedMerges, pr.BinaryPaths, pr.BaseMatches
+		v.CommitMatches = pr.CommitMatches
 		reasons = append(reasons, pr.Reasons...)
 		v.Limit = firstLimit(v.Limit, pr.Limit)
 		switch {
