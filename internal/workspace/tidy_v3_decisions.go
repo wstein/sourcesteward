@@ -96,13 +96,16 @@ func ReadV3DecisionFile(path string) (V3DecisionFile, error) {
 	if err != nil || len(data) > decisionFileLimit {
 		return out, decisionError(path, "", "must be readable and at most 1 MiB")
 	}
+	if err = strictDecisionJSON(data); err != nil {
+		return out, decisionError(path, "", err.Error())
+	}
 	var top struct {
 		SchemaVersion *int              `json:"schema_version"`
 		Decisions     []json.RawMessage `json:"decisions"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err = dec.Decode(&top); err != nil || dec.More() || top.SchemaVersion == nil || *top.SchemaVersion != 1 || top.Decisions == nil {
+	if err = dec.Decode(&top); err != nil || top.SchemaVersion == nil || *top.SchemaVersion != 1 || top.Decisions == nil {
 		return out, decisionError(path, "", "must be one JSON object with schema_version 1 and a decisions array and no other field")
 	}
 	if len(top.Decisions) > decisionCountLimit {
@@ -167,4 +170,75 @@ func decisionOf(c V3Candidate) *V3DecisionRecord {
 		return nil
 	}
 	return c.Evidence.Integration.Decision
+}
+
+var decisionTopKeys = []string{"schema_version", "decisions"}
+var decisionKeys = []string{"branch", "tip_oid", "base_oid", "decision", "reason", "reviewer", "kind"}
+
+// strictDecisionJSON reads the file token by token before the typed decode:
+// encoding/json lets the last of two equal keys win and matches key names
+// without regard to case, so a human could read one decision while another is
+// applied. Every key must be unique within its object and exactly one of the
+// fixed lower-case names, and nothing may follow the one top-level object.
+func strictDecisionJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	bad := func(why string) error { return fmt.Errorf("%s", why) }
+	var value func(allowed []string, children func(key string) []string) error
+	value = func(allowed []string, children func(key string) []string) error {
+		tok, err := dec.Token()
+		if err != nil {
+			return bad("must be one JSON object with schema_version 1 and a decisions array and no other field")
+		}
+		switch d := tok.(type) {
+		case json.Delim:
+			if d == '[' {
+				for dec.More() {
+					if err = value(allowed, nil); err != nil {
+						return err
+					}
+				}
+				_, err = dec.Token()
+				return err
+			}
+			seen := map[string]bool{}
+			for dec.More() {
+				k, err := dec.Token()
+				key, ok := k.(string)
+				if err != nil || !ok {
+					return bad("has a malformed object")
+				}
+				if !slices.Contains(allowed, key) {
+					return bad("has the field " + fmt.Sprintf("%q", clipText(key, 64)) + ", which is not one of the fixed lower-case field names")
+				}
+				if seen[key] {
+					return bad("names the field " + fmt.Sprintf("%q", key) + " twice")
+				}
+				seen[key] = true
+				var next []string
+				if children != nil {
+					next = children(key)
+				}
+				var nextChildren func(string) []string
+				if err = value(next, nextChildren); err != nil {
+					return err
+				}
+			}
+			_, err = dec.Token()
+			return err
+		}
+		return nil
+	}
+	err := value(decisionTopKeys, func(key string) []string {
+		if key == "decisions" {
+			return decisionKeys
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if _, err = dec.Token(); err != io.EOF {
+		return bad("must hold exactly one JSON object")
+	}
+	return nil
 }
