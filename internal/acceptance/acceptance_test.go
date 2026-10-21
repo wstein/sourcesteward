@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
@@ -154,13 +155,32 @@ func TestNonMutationCheckDetectsEveryKindOfChange(t *testing.T) {
 		mutate func(t *testing.T, repo, linked string)
 		want   string
 	}{
-		"new ref":   {func(t *testing.T, repo, _ string) { git(t, repo, "branch", "intruder", "main") }, "for-each-ref"},
-		"moved ref": {func(t *testing.T, repo, _ string) { git(t, repo, "branch", "-f", "unmerged", "main") }, "for-each-ref"},
+		"new ref":   {func(t *testing.T, repo, _ string) { git(t, repo, "branch", "intruder", "main") }, "refs/heads/"},
+		"moved ref": {func(t *testing.T, repo, _ string) { git(t, repo, "branch", "-f", "unmerged", "main") }, "refs/heads/"},
 		"worktree": {func(t *testing.T, repo, linked string) {
 			git(t, repo, "worktree", "add", "-q", "-b", "extra", filepath.Join(filepath.Dir(linked), "extra"), "main")
-		}, "worktree list"},
-		"local config": {func(t *testing.T, repo, _ string) { git(t, repo, "config", "--local", "tidy.test", "1") }, "local config"},
-		"status":       {func(t *testing.T, repo, _ string) { write(t, filepath.Join(repo, "stray.txt"), "x") }, "git status"},
+		}, "worktree-list"},
+		"local config": {func(t *testing.T, repo, _ string) { git(t, repo, "config", "--local", "tidy.test", "1") }, ".git/config"},
+		"status":       {func(t *testing.T, repo, _ string) { write(t, filepath.Join(repo, "stray.txt"), "x") }, "status:"},
+		"pack-refs":    {func(t *testing.T, repo, _ string) { git(t, repo, "pack-refs", "--all") }, "packed-refs"},
+		"index refresh": {func(t *testing.T, repo, _ string) {
+			now := time.Now().Add(time.Hour)
+			if err := os.Chtimes(filepath.Join(repo, "base.txt"), now, now); err != nil {
+				t.Fatal(err)
+			}
+			git(t, repo, "update-index", "--refresh")
+		}, ".git/index"},
+		"reflog append": {func(t *testing.T, repo, _ string) {
+			f, err := os.OpenFile(filepath.Join(repo, ".git", "logs", "HEAD"), os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.WriteString("0 0 t <t@example.test> 0 +0000\tnoise\n")
+			f.Close()
+		}, "logs/HEAD"},
+		"dirty edit in a linked worktree": {func(t *testing.T, _, linked string) { write(t, filepath.Join(linked, "another.txt"), "x") }, "status:"},
+		"description":                     {func(t *testing.T, repo, _ string) { write(t, filepath.Join(repo, ".git", "description"), "changed\n") }, ".git/description"},
+		"repack":                          {func(t *testing.T, repo, _ string) { git(t, repo, "repack", "-a", "-d", "-q") }, "objects/"},
 		"object": {func(t *testing.T, repo, _ string) {
 			cmd := exec.Command("git", "-C", repo, "hash-object", "-w", "--stdin")
 			cmd.Stdin = strings.NewReader("a stray object\n")
@@ -168,7 +188,7 @@ func TestNonMutationCheckDetectsEveryKindOfChange(t *testing.T) {
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("%v %s", err, out)
 			}
-		}, "object file count"},
+		}, "objects/"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -191,11 +211,38 @@ func TestPlanOnlyRunOnFixture(t *testing.T) {
 	sc := newScratch(t)
 	isolate(t, sc)
 	c := newConfig(repo)
-	s, err := run(context.Background(), c, workspace.PlanTidyV3, sc)
+	// The planner removes its private object directory when it returns, so
+	// watch it while the plan runs: the proof objects must appear there.
+	var seen int
+	planned := func(ctx context.Context, o workspace.V3PlanOptions) workspace.V3Result {
+		done := make(chan struct{})
+		finished := make(chan struct{})
+		go func() {
+			defer close(finished)
+			for {
+				if entries, _ := os.ReadDir(sc.Objects); len(entries) > seen {
+					seen = len(entries)
+				}
+				select {
+				case <-done:
+					return
+				case <-time.After(200 * time.Microsecond):
+				}
+			}
+		}()
+		res := workspace.PlanTidyV3(ctx, o)
+		close(done)
+		<-finished
+		return res
+	}
+	s, err := run(context.Background(), c, planned, sc)
 	if err != nil {
 		t.Fatalf("%v\n%s", err, s)
 	}
-	if s.Status != "ok" || s.Branches != 5 || s.HTTPRequests != 0 || s.Online {
+	if seen == 0 {
+		t.Error("the planner created no object directory under the private TMPDIR")
+	}
+	if s.Status != "ok" || s.Branches != 5 || s.Online {
 		t.Fatalf("summary %+v", s)
 	}
 	if s.Classes["delete:native-ancestry"] < 1 {
@@ -232,9 +279,36 @@ func TestPlanOnlyRunOnFixture(t *testing.T) {
 			t.Errorf("summary text lacks %q:\n%s", want, text)
 		}
 	}
-	// The scratch object directory, not the target, received the merge-tree objects.
-	if entries, _ := os.ReadDir(sc.Objects); len(entries) != 0 {
-		t.Logf("private object directory kept %d entries", len(entries))
+}
+
+func TestUnreadableWorktreeIsAFactNotAnAbort(t *testing.T) {
+	repo, linked := fixture(t)
+	if err := os.Remove(filepath.Join(linked, ".git")); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := listWorktrees(repo, gitEnv(t.TempDir()))
+	if err != nil {
+		t.Fatalf("an unreadable worktree must not abort: %v", err)
+	}
+	var found bool
+	for _, w := range ws {
+		found = found || w.Path == linked && w.Unreadable
+	}
+	if !found || !strings.Contains((summary{Worktrees: ws}).String(), "unreadable") {
+		t.Fatalf("%+v", ws)
+	}
+}
+
+func TestReportDirectorySymlinkIntoTheGitDirectoryIsRefused(t *testing.T) {
+	repo, _ := fixture(t)
+	link := filepath.Join(filepath.Dir(repo), "link")
+	if err := os.Symlink(filepath.Join(repo, ".git"), link); err != nil {
+		t.Fatal(err)
+	}
+	c := newConfig(repo)
+	c.ReportDir = filepath.Join(link, "report")
+	if _, err := check(c, gitEnv(t.TempDir())); err == nil {
+		t.Fatal("a report directory reached through a symbolic link into .git must be refused")
 	}
 }
 

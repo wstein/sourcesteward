@@ -76,60 +76,81 @@ func sum(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// fingerprint is what must not change in the target.
-type fingerprint struct {
-	Refs, Worktrees, Config, Status string // SHA-256 of the command output
-	StatusLines                     int
-	Objects                         int // files below the common object directory
-}
+// snapshot is what must not change in the target: a digest per regular file
+// below the common Git directory (packed-refs, index, logs, config, hooks,
+// worktrees/*, description, HEAD, refs...), path and size of every object-store
+// file (pack contents are not hashed), and for every worktree the porcelain v2
+// status. Keys are paths or "status:<worktree>" and "worktree-list".
+type snapshot map[string]string
 
-func countFiles(dir string) (int, error) {
-	n := 0
-	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+func takeSnapshot(repo string, env []string) (snapshot, error) {
+	snap := snapshot{}
+	common, err := readGit(repo, env, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return nil, err
+	}
+	common = strings.TrimSpace(common)
+	objects := filepath.Join(common, "objects") + string(filepath.Separator)
+	err = filepath.WalkDir(common, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() {
-			n++
+		switch {
+		case d.IsDir():
+		case strings.HasPrefix(p, objects):
+			info, ierr := d.Info()
+			if ierr != nil {
+				return ierr
+			}
+			snap[p] = fmt.Sprintf("size %d", info.Size())
+		case d.Type().IsRegular():
+			data, rerr := os.ReadFile(p)
+			if rerr != nil {
+				return rerr
+			}
+			snap[p] = sum(string(data))
+		default:
+			target, _ := os.Readlink(p)
+			snap[p] = "non-regular " + d.Type().String() + " " + target
 		}
 		return nil
 	})
-	return n, err
-}
-
-func takeFingerprint(repo string, env []string) (f fingerprint, err error) {
-	run := func(args ...string) string {
-		if err != nil {
-			return ""
-		}
-		var out string
-		out, err = readGit(repo, env, args...)
-		return out
-	}
-	f.Refs = sum(run("for-each-ref", "--format=%(refname) %(objectname) %(symref)"))
-	f.Worktrees = sum(run("worktree", "list", "--porcelain"))
-	f.Config = sum(run("config", "--local", "--list", "--show-origin"))
-	status := run("status", "--porcelain")
-	f.Status, f.StatusLines = sum(status), strings.Count(status, "\n")
-	common := strings.TrimSpace(run("rev-parse", "--path-format=absolute", "--git-common-dir"))
 	if err != nil {
-		return f, err
+		return nil, err
 	}
-	f.Objects, err = countFiles(filepath.Join(common, "objects"))
-	return f, err
-}
-
-// diffFingerprints names every part that differs.
-func diffFingerprints(a, b fingerprint) []string {
-	var d []string
-	for _, c := range []struct {
-		name string
-		same bool
-	}{{"for-each-ref", a.Refs == b.Refs}, {"worktree list", a.Worktrees == b.Worktrees}, {"local config", a.Config == b.Config}, {"git status --porcelain", a.Status == b.Status && a.StatusLines == b.StatusLines}, {"object file count", a.Objects == b.Objects}} {
-		if !c.same {
-			d = append(d, c.name)
+	list, err := readGit(repo, env, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	snap["worktree-list"] = sum(list)
+	for _, line := range strings.Split(list, "\n") {
+		if path, ok := strings.CutPrefix(line, "worktree "); ok {
+			status, serr := readGit(path, env, "status", "--porcelain=v2", "-z")
+			if serr != nil {
+				status = "unreadable"
+			}
+			snap["status:"+path] = sum(status)
 		}
 	}
+	return snap, nil
+}
+
+// diffSnapshots lists the keys that differ, sorted.
+func diffSnapshots(a, b snapshot) []string {
+	var d []string
+	for k, v := range a {
+		if w, ok := b[k]; !ok {
+			d = append(d, "removed "+k)
+		} else if w != v {
+			d = append(d, "changed "+k)
+		}
+	}
+	for k := range b {
+		if _, ok := a[k]; !ok {
+			d = append(d, "added "+k)
+		}
+	}
+	sort.Strings(d)
 	return d
 }
 
@@ -221,11 +242,11 @@ func check(c config, env []string) (r resolved, err error) {
 // worktree is one entry of `git worktree list --porcelain` with its read-only
 // working state. These facts are not part of the plan.
 type worktree struct {
-	Path, Head, Branch     string
-	Detached, Locked, Bare bool
-	Prunable, Missing      bool
-	Dirty                  bool
-	DirtyEntries           int
+	Path, Head, Branch            string
+	Detached, Locked, Bare        bool
+	Prunable, Missing, Unreadable bool
+	Dirty                         bool
+	DirtyEntries                  int
 }
 
 func listWorktrees(repo string, env []string) ([]worktree, error) {
@@ -263,7 +284,9 @@ func listWorktrees(repo string, env []string) ([]worktree, error) {
 		} else if !w.Bare {
 			status, serr := readGit(w.Path, env, "status", "--porcelain")
 			if serr != nil {
-				return nil, serr
+				w.Unreadable = true
+				ws = append(ws, w)
+				continue
 			}
 			w.DirtyEntries = strings.Count(status, "\n")
 			w.Dirty = w.DirtyEntries > 0
@@ -278,24 +301,21 @@ type planner func(context.Context, workspace.V3PlanOptions) workspace.V3Result
 
 // summary is the compact result of one run.
 type summary struct {
-	Repo, Base      string
-	Online          bool
-	Status          string
-	Branches        int
-	Classes         map[string]int // decision:proof-or-reason
-	Reasons         map[string]int // reason of the plan's review summary
-	Proven, Review  int
-	Retained        int
-	Worktrees       []worktree
-	Runtime         time.Duration
-	NativeProcesses int64
-	HTTPRequests    int64
-	Diagnostics     []string
+	Repo, Base     string
+	Online         bool
+	Status         string
+	Branches       int
+	Classes        map[string]int // decision:proof-or-reason
+	Reasons        map[string]int // reason of the plan's review summary
+	Proven, Review int
+	Retained       int
+	Worktrees      []worktree
+	Runtime        time.Duration
+	Diagnostics    []string
 }
 
 func summarize(r resolved, res workspace.V3Result, d time.Duration) summary {
 	s := summary{Repo: r.Repo, Base: r.Base, Online: r.Online, Status: res.Status, Classes: map[string]int{}, Reasons: map[string]int{}, Worktrees: r.Worktrees, Runtime: d}
-	s.NativeProcesses, s.HTTPRequests = res.Boundary.Budget.NativeProcesses, res.Boundary.Budget.HTTPRequests
 	for _, dg := range res.Diagnostics {
 		s.Diagnostics = append(s.Diagnostics, fmt.Sprintf("%+v", dg))
 	}
@@ -340,7 +360,7 @@ func (s summary) String() string {
 	for _, k := range sortedKeys(s.Reasons) {
 		fmt.Fprintf(&b, "  %-40s %d\n", k, s.Reasons[k])
 	}
-	var dirty, locked, detached, missing int
+	var dirty, locked, detached, missing, unreadable int
 	for _, w := range s.Worktrees {
 		if w.Dirty {
 			dirty++
@@ -354,14 +374,17 @@ func (s summary) String() string {
 		if w.Missing {
 			missing++
 		}
+		if w.Unreadable {
+			unreadable++
+		}
 	}
-	fmt.Fprintf(&b, "worktree facts (not part of the plan): %d seen, %d dirty, %d locked, %d detached, %d missing\n", len(s.Worktrees), dirty, locked, detached, missing)
+	fmt.Fprintf(&b, "worktree facts (not part of the plan): %d seen, %d dirty, %d locked, %d detached, %d missing, %d unreadable\n", len(s.Worktrees), dirty, locked, detached, missing, unreadable)
 	for _, w := range s.Worktrees {
 		var flags []string
 		for _, f := range []struct {
 			on   bool
 			name string
-		}{{w.Dirty, fmt.Sprintf("dirty(%d)", w.DirtyEntries)}, {w.Locked, "locked"}, {w.Detached, "detached"}, {w.Missing, "missing"}, {w.Prunable, "prunable"}} {
+		}{{w.Dirty, fmt.Sprintf("dirty(%d)", w.DirtyEntries)}, {w.Locked, "locked"}, {w.Detached, "detached"}, {w.Missing, "missing"}, {w.Prunable, "prunable"}, {w.Unreadable, "unreadable"}} {
 			if f.on {
 				flags = append(flags, f.name)
 			}
@@ -370,7 +393,7 @@ func (s summary) String() string {
 			fmt.Fprintf(&b, "  %s [%s] %s\n", w.Path, strings.Join(flags, ","), w.Branch)
 		}
 	}
-	fmt.Fprintf(&b, "runtime %s, native processes %d, http requests %d\n", s.Runtime.Round(time.Millisecond), s.NativeProcesses, s.HTTPRequests)
+	fmt.Fprintf(&b, "runtime %s (process and request counts are not measured on this plan path)\n", s.Runtime.Round(time.Millisecond))
 	for _, d := range s.Diagnostics {
 		fmt.Fprintf(&b, "diagnostic: %s\n", d)
 	}
@@ -401,15 +424,16 @@ func newScratch(t *testing.T) scratch {
 // returned summary is valid even when an error reports a changed target.
 func run(ctx context.Context, c config, plan planner, sc scratch) (summary, error) {
 	env := gitEnv(sc.Home)
+	// The snapshot comes first, so even the runner's own reads are inside the proof.
+	before, err := takeSnapshot(c.Repo, env)
+	if err != nil {
+		return summary{}, fmt.Errorf("acceptance runner refused: the target cannot be read as a repository: %w", err)
+	}
 	r, err := check(c, env)
 	if err != nil {
 		return summary{}, fmt.Errorf("acceptance runner refused: %w", err)
 	}
 	if err = os.MkdirAll(r.ReportDir, 0o700); err != nil {
-		return summary{}, err
-	}
-	before, err := takeFingerprint(r.Repo, env)
-	if err != nil {
 		return summary{}, err
 	}
 	opts := workspace.V3PlanOptions{Path: r.Repo, Base: r.Base, StateDir: sc.State, ReportDir: r.ReportDir, Online: r.Online, ProtectWorktrees: []string{}}
@@ -419,12 +443,12 @@ func run(ctx context.Context, c config, plan planner, sc scratch) (summary, erro
 	start := time.Now()
 	res := plan(ctx, opts)
 	s := summarize(r, res, time.Since(start))
-	after, ferr := takeFingerprint(r.Repo, env)
+	after, ferr := takeSnapshot(c.Repo, env)
 	if ferr != nil {
 		return s, ferr
 	}
-	if d := diffFingerprints(before, after); len(d) > 0 {
-		return s, fmt.Errorf("the plan-only run changed the target repository: %s", strings.Join(d, ", "))
+	if d := diffSnapshots(before, after); len(d) > 0 {
+		return s, fmt.Errorf("the plan-only run changed the target repository:\n  %s", strings.Join(d, "\n  "))
 	}
 	if res.Status != "ok" || res.Plan == nil {
 		return s, fmt.Errorf("planning did not succeed (status %q): %s", res.Status, strings.Join(s.Diagnostics, "; "))
