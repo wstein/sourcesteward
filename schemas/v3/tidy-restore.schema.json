@@ -1,0 +1,282 @@
+{
+  "$defs": {
+    "Decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "integrated",
+            "keep",
+            "drop"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "ai"
+          ]
+        },
+        "reason": {
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "reviewer": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "reviewer",
+        "kind",
+        "decision",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "Entry": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "type": "string"
+        },
+        "class": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Decision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flags": {
+          "items": {
+            "enum": [
+              "whitespace-differs",
+              "accepted-whitespace-differences"
+            ]
+          },
+          "maxItems": 2,
+          "type": "array"
+        },
+        "oid": {
+          "$ref": "#/$defs/OID"
+        },
+        "outcome": {
+          "enum": [
+            "created",
+            "created-recovered",
+            "already-present",
+            "name-taken",
+            "symbolic-reference",
+            "recovery-missing",
+            "journal-incomplete",
+            "error",
+            "not-attempted"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "invalid-ref-name",
+                "symbolic-reference",
+                "recovery-ref-absent",
+                "recovery-ref-retargeted",
+                "recovery-ref-symbolic",
+                "object-unreadable",
+                "no-confirmed-recovery"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recovery_ref": {
+          "maxLength": 4096,
+          "pattern": "^refs/stw/recovery/v3/[A-Za-z0-9._-]+/[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "ref": {
+          "maxLength": 4096,
+          "pattern": "^refs/heads/.+",
+          "type": "string"
+        },
+        "restore_journal": {
+          "additionalProperties": false,
+          "properties": {
+            "intent": {
+              "maxLength": 128,
+              "type": "string"
+            },
+            "outcome": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "state": {
+          "enum": [
+            "restorable",
+            "already-present",
+            "name-taken",
+            "recovery-missing",
+            "journal-incomplete"
+          ]
+        }
+      },
+      "required": [
+        "action_id",
+        "ref",
+        "oid",
+        "recovery_ref",
+        "state",
+        "reason",
+        "class",
+        "flags",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "OID": {
+      "maxLength": 64,
+      "not": {
+        "enum": [
+          "0000000000000000000000000000000000000000",
+          "0000000000000000000000000000000000000000000000000000000000000000"
+        ]
+      },
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+      "type": "string"
+    }
+  },
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v3/tidy-restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "command": {
+      "const": "tidy-restore"
+    },
+    "counts": {
+      "additionalProperties": false,
+      "properties": {
+        "already-present": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "journal-incomplete": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name-taken": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "recovery-missing": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restorable": {
+          "maximum": 1024,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "restorable",
+        "already-present",
+        "name-taken",
+        "recovery-missing",
+        "journal-incomplete"
+      ],
+      "type": "object"
+    },
+    "diagnostics": {
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/Entry"
+      },
+      "maxItems": 1024,
+      "type": "array"
+    },
+    "limits": {
+      "const": [
+        "tip-and-history-only",
+        "no-config",
+        "no-reflog",
+        "no-worktrees"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "plan",
+        "apply"
+      ]
+    },
+    "plan_id": {
+      "maxLength": 128,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "refused",
+        "partial",
+        "error"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "plan_id",
+    "mode",
+    "entries",
+    "counts",
+    "limits",
+    "diagnostics"
+  ],
+  "type": "object"
+}
