@@ -310,13 +310,13 @@ func TestGitBlobSampleNativeBoundedInputAndProcessCount(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	requests := make([]gitBlobRequest, 1024)
+	requests := make([]gitBlobRequest, retirementManifestEntries)
 	for i := range requests {
 		requests[i] = gitBlobRequest{Path: fmt.Sprint(i), OID: oid, Size: 7}
 	}
 	b := blobTestBudget(t)
 	files, e := gitStoredBlobSample(context.Background(), bin, d, "sha1", requests, b)
-	if e != nil || len(files) != 1024 || b.snapshot().RawProcesses != 1 || b.snapshot().UserBytes != 7168 || b.snapshot().UserPasses != 1 {
+	if e != nil || len(files) != retirementManifestEntries || b.snapshot().RawProcesses != 1 || b.snapshot().UserBytes != 7*retirementManifestEntries || b.snapshot().UserPasses != 1 {
 		t.Fatalf("bounded concurrent batch: %+v %v", b.snapshot(), e)
 	}
 	b = blobTestBudget(t)

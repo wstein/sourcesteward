@@ -104,8 +104,8 @@ func TestTidyV3LegacyAdmitsALargeRegistrationIndex(t *testing.T) {
 // More than 1,024 tracked files is refused by name before any content is read.
 func TestRetirementV3StoredFilesRefuseAboveTheManifestBoundByName(t *testing.T) {
 	source := fixtureGit(t)
-	for i := 0; i < 1100; i++ {
-		if e := os.WriteFile(filepath.Join(source, fmt.Sprintf("f%04d", i)), []byte("x\n"), 0600); e != nil {
+	for i := 0; i < retirementManifestEntries+50; i++ {
+		if e := os.WriteFile(filepath.Join(source, fmt.Sprintf("f%05d", i)), []byte("x\n"), 0600); e != nil {
 			t.Fatal(e)
 		}
 	}

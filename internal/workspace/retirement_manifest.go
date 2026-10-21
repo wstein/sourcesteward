@@ -18,7 +18,10 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-const retirementManifestEntries = 1024
+// retirementManifestEntries bounds the files and directories of one retired
+// worktree. A plan records every entry (about 330 bytes each), so the bound is
+// sized with v3RecordLimit; larger trees need a digest-only record (follow-up).
+const retirementManifestEntries = 8192
 const retirementFileBytes = 64 << 10
 
 func retirementLiteralPath(p string) bool {

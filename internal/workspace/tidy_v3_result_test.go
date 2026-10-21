@@ -82,13 +82,13 @@ func TestV3StrictResultAndLimits(t *testing.T) {
 	if e := validateV3Result(r); e != nil {
 		t.Fatal(e)
 	}
-	r.Limitations = []string{strings.Repeat("x", recordLimit)}
+	r.Limitations = []string{strings.Repeat("x", v3RecordLimit)}
 	bounded := boundV3Result(r)
 	if bounded.Plan != nil || bounded.Boundary.Complete || bounded.Status != "partial" {
 		t.Fatal("oversize retained authority")
 	}
 	b, _ := json.Marshal(bounded)
-	if len(b) > recordLimit {
+	if len(b) > v3RecordLimit {
 		t.Fatal("oversize envelope")
 	}
 }
@@ -180,7 +180,7 @@ func TestV3FailedNativeAndContentBoundsPreserveMeasuredEvidence(t *testing.T) {
 			"native":   func(b *V3BudgetCounters) { b.NativeBytes = 4325376 + 1 },
 			"user":     func(b *V3BudgetCounters) { b.UserBytes = n*192*1024*1024 + 1 },
 			"metadata": func(b *V3BudgetCounters) { b.MetadataBytes = n*(128*1024*1024+128*1024) + 1 },
-			"framing":  func(b *V3BudgetCounters) { b.FramingBytes = n*128*1024 + 1 },
+			"framing":  func(b *V3BudgetCounters) { b.FramingBytes = n*1024*1024 + 1 },
 			"stderr":   func(b *V3BudgetCounters) { b.StderrBytes = n*64*1024 + 1 },
 		} {
 			t.Run(command+"/"+channel, func(t *testing.T) {
@@ -249,15 +249,16 @@ func TestV3StrictRequiredFieldsAndNullScalars(t *testing.T) {
 	}
 }
 func TestV3ResultExactEncodedLimit(t *testing.T) {
+	smallV3RecordLimit(t)
 	r := newV3Result("tidy-plan")
 	r.Status = "refused"
 	r.Limitations = []string{}
 	for {
 		b, _ := json.Marshal(r)
-		if recordLimit-len(b) <= 4099 {
+		if v3RecordLimit-len(b) <= 4099 {
 			r.Limitations = append(r.Limitations, "")
 			b, _ = json.Marshal(r)
-			remaining := recordLimit - len(b)
+			remaining := v3RecordLimit - len(b)
 			if remaining < 0 {
 				t.Fatal("bad boundary fixture")
 			}
@@ -267,7 +268,7 @@ func TestV3ResultExactEncodedLimit(t *testing.T) {
 		r.Limitations = append(r.Limitations, strings.Repeat("x", 4096))
 	}
 	b, _ := json.Marshal(r)
-	if len(b) != recordLimit {
+	if len(b) != v3RecordLimit {
 		t.Fatalf("fixture %d", len(b))
 	}
 	var got V3Result
@@ -541,16 +542,17 @@ func TestV3RetirementRegistrationFactsShareAggregateLimit(t *testing.T) {
 }
 
 func TestV3RetirementRegistrationFactsShareEncodedLimit(t *testing.T) {
+	smallV3RecordLimit(t)
 	p := v3RegistrationGrantPlan()
 	r := newV3Result("tidy-plan")
 	r.Boundary.ObservedAt = "2026-10-18T00:00:00Z"
 	r.Status, r.Backend, r.Plan, r.Boundary.Complete = "ok", "git", &p, true
 	for {
 		raw, _ := json.Marshal(r)
-		if recordLimit-len(raw) <= 4099 {
+		if v3RecordLimit-len(raw) <= 4099 {
 			r.Limitations = append(r.Limitations, "")
 			raw, _ = json.Marshal(r)
-			remaining := recordLimit - len(raw)
+			remaining := v3RecordLimit - len(raw)
 			if remaining < 0 {
 				t.Fatal("invalid exact-limit fixture")
 			}
@@ -560,7 +562,7 @@ func TestV3RetirementRegistrationFactsShareEncodedLimit(t *testing.T) {
 		r.Limitations = append(r.Limitations, strings.Repeat("x", 4096))
 	}
 	raw, _ := json.Marshal(r)
-	if len(raw) != recordLimit {
+	if len(raw) != v3RecordLimit {
 		t.Fatalf("encoded boundary fixture: %d", len(raw))
 	}
 	var got V3Result
@@ -753,4 +755,13 @@ func TestV3DetachedRetirementUsesCommitProofWithoutInventedReference(t *testing.
 			t.Fatalf("commit proof invented reference field %s", field)
 		}
 	}
+}
+
+// smallV3RecordLimit lets an exact-boundary test build its record from the
+// 4,096 byte strings the aggregate entry bound allows, instead of 8 MiB of them.
+func smallV3RecordLimit(t *testing.T) {
+	t.Helper()
+	old := v3RecordLimit
+	v3RecordLimit = 1 << 20
+	t.Cleanup(func() { v3RecordLimit = old })
 }

@@ -45,7 +45,7 @@ func newTidyV3ProofBudget(apply bool) *tidyV3ProofBudget {
 	if apply {
 		n = 8
 	}
-	return &tidyV3ProofBudget{maxObservations: int(n), limits: [proofChannels]int64{n * 192 * 1024 * 1024, n * (128*1024*1024 + 128*1024), n * 128 * 1024, n * 64 * 1024}, totalLimit: n * (320*1024*1024 + 320*1024), changed: make(chan struct{})}
+	return &tidyV3ProofBudget{maxObservations: int(n), limits: [proofChannels]int64{n * 192 * 1024 * 1024, n * (128*1024*1024 + 128*1024), n * 1024 * 1024, n * 64 * 1024}, totalLimit: n * (320*1024*1024 + 320*1024 + 896*1024), changed: make(chan struct{})}
 }
 func (b *tidyV3ProofBudget) beginObservation() error {
 	if b == nil {

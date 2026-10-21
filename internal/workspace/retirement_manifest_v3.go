@@ -67,7 +67,7 @@ func validateRetirementV3Manifest(m V3Manifest, root string, metadata bool, poli
 		return errors.New("invalid v3 physical retirement manifest")
 	}
 	b, e := json.Marshal(m)
-	if e != nil || len(b) > 1<<20 {
+	if e != nil || len(b) > v3RecordLimit {
 		return errors.New("v3 retirement manifest exceeds encoded limit")
 	}
 	dirs := map[string]bool{}

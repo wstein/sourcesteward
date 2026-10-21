@@ -25,7 +25,7 @@ func validateGitBlobRequests(requests []gitBlobRequest, format string) ([]byte, 
 		return nil, errNativeBlobProtocol
 	}
 	v := newGitTreeValidator()
-	v.limit = observationLimit
+	v.limit = retirementManifestEntries
 	var input strings.Builder
 	for _, r := range requests {
 		if !fullGitOID(r.OID, format) {
@@ -85,7 +85,7 @@ func parseGitBlobSample(ctx context.Context, out io.Reader, requests []gitBlobRe
 	if e := budget.beginUserPass(); e != nil {
 		return nil, e
 	}
-	framing := &nativeCountReader{r: budget.reader(ctx, proofFraming, out), limit: 128 * 1024}
+	framing := &nativeCountReader{r: budget.reader(ctx, proofFraming, out), limit: 1024 * 1024}
 	payload := budget.reader(ctx, proofUser, out)
 	files := make([]RetirementStoredFile, 0, len(requests))
 	var buffer [64 * 1024]byte

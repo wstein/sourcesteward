@@ -169,9 +169,9 @@ require manual review; no automatic rollback or blind retry is attempted. Comple
 recorded postconditions and remaining files. Native writes and disk removal still have sampled
 external/ABA race limits rather than a repository-wide transaction.
 
-Retirement uses the same ten-second planning/sixty-second apply deadlines, 1 MiB encoded record
-bound and aggregate 1024-entry bound; each stored/disk raw file in the default v2 contract
-is bounded to 64 KiB; the retirement blob sample is 1,024 files, the manifest 1,024 entries and user content
+Retirement uses the same ten-second planning/sixty-second apply deadlines, 8 MiB encoded record
+bound (a retirement plan records every file and directory) and aggregate 1024-entry bound for references; each stored/disk raw file in the default v2 contract
+is bounded to 64 KiB; the retirement blob sample and the manifest are 8,192 entries and user content
 64 MiB in total, while the shared 16,384-leaf tree limit only bounds cost. Hooks, fsmonitor and submodule
 policy stay strict for retirement. Oversized or
 incomplete evidence never authorizes a truncated removal target. Remote deletion, garbage collection,
@@ -272,8 +272,8 @@ deleted and restoring them is a no-op.
 
 A plan retires exactly one worktree and needs `--state-dir`; `--report-dir` and the other review
 report flags apply to reference plans only. Retirement refuses, with a named code and reason (also
-without `--json`): `retirement-file-limit` (more than 1,024 tracked files, or more than 1,024 files and
-directories together, or an oversized file), `retirement-unrecorded-entry` (an untracked, ignored or generated path the stored tree does
+without `--json`): `retirement-file-limit` (more than 8,192 tracked files, or more than 8,192 files and
+directories together, or an oversized file; larger trees need a digest-only record, a follow-up), `retirement-unrecorded-entry` (an untracked, ignored or generated path the stored tree does
 not contain), `retirement-sibling-refused` (the parent directory holds a symbolic link, device or
 socket; its siblings are recorded as plain files and directories) and `git-tree-refused` (the
 commit holds symbolic links or submodule gitlinks: native removal would also delete the Git
