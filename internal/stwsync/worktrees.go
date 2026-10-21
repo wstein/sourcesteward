@@ -3,82 +3,10 @@ package stwsync
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
-
-// worktree is one entry of `git worktree list` with what makes it busy.
-type worktree struct {
-	path string
-	busy string // empty when nothing is in progress and the worktree is not locked
-}
-
-// holders maps a full branch ref to every worktree that holds it: as its HEAD branch, as the branch an
-// in-progress rebase is working on, or as the branch a bisect started from.
-type holders map[string][]worktree
-
-func (h holders) of(ref string) []worktree { return h[ref] }
-
-// inventory lists every worktree once and records, per branch, all worktrees that hold it.
-func (e env) inventory(ctx context.Context) (holders, error) {
-	out, err := e.g(ctx, "worktree", "list", "--porcelain", "-z")
-	if err != nil || out.Code != 0 {
-		return nil, errors.New("cannot list the worktrees")
-	}
-	h := holders{}
-	type entry struct {
-		path, branch string
-		locked, bare bool
-	}
-	var list []entry
-	var cur *entry
-	for _, field := range strings.Split(out.Out, "\x00") {
-		switch {
-		case strings.HasPrefix(field, "worktree "):
-			list = append(list, entry{path: strings.TrimPrefix(field, "worktree ")})
-			cur = &list[len(list)-1]
-		case cur == nil:
-		case strings.HasPrefix(field, "branch "):
-			cur.branch = strings.TrimPrefix(field, "branch ")
-		case field == "locked" || strings.HasPrefix(field, "locked "):
-			cur.locked = true
-		case field == "bare":
-			cur.bare = true
-		case field == "":
-			cur = nil
-		}
-	}
-	for _, w := range list {
-		if w.bare {
-			continue
-		}
-		wt := worktree{path: w.path}
-		refs := map[string]bool{}
-		if w.branch != "" {
-			refs[w.branch] = true
-		}
-		reason, involved := e.operation(ctx, w.path)
-		for _, r := range involved {
-			refs[r] = true
-		}
-		switch {
-		case w.locked:
-			wt.busy = "the worktree is locked"
-		case reason != "":
-			wt.busy = reason
-		}
-		for r := range refs {
-			h[r] = append(h[r], wt)
-		}
-	}
-	for _, l := range h {
-		sort.Slice(l, func(i, j int) bool { return l[i].path < l[j].path })
-	}
-	return h, nil
-}
 
 // operation reports an operation in progress in the worktree (rebase, merge, cherry-pick, revert or
 // bisect) and the branch refs it works on. An unreadable Git directory counts as busy.
@@ -122,16 +50,4 @@ func (e env) operation(ctx context.Context, tree string) (string, []string) {
 		}
 	}
 	return reason, involved
-}
-
-// block explains why the current branch of a repository must not be touched, or returns "": an operation
-// in progress or a lock in the worktree that holds it (as HEAD, or as the branch of its rebase or bisect).
-// The command acts only on the worktree it runs in; Git itself forbids one branch in two worktrees.
-func (h holders) block(ref string) string {
-	for _, w := range h[ref] {
-		if w.busy != "" {
-			return w.busy
-		}
-	}
-	return ""
 }

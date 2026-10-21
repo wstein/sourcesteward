@@ -165,3 +165,20 @@ func TestSyncSkipsABranchWithoutUpstreamNamingTheBranch(t *testing.T) {
 		t.Fatalf("%+v %v", g, deref(g.Reason))
 	}
 }
+
+// A submodule that is ahead of the root's pin (the state after any earlier sync) is not a dirty root for
+// git pull, which ignores submodule changes in its clean-tree check; stw sync must not skip the root.
+func TestSyncIgnoresSubmoduleChangesInTheCleanTreeCheck(t *testing.T) {
+	w := newWorkspace(t)
+	runGit(t, w.ws, "config", "pull.rebase", "true")
+	w.advance(t, "b", "main")
+	run(t, w, Options{}) // b moves ahead of the pin recorded by the root
+	if !strings.Contains(runGit(t, w.ws, "status", "--porcelain"), "b") {
+		t.Fatal("the submodule is not ahead of the pin")
+	}
+	commit(t, w.ws, "local.txt", "l\n")
+	w.advance(t, ".", "main")
+	if g := repoByName(t, run(t, w, Options{}))["."]; g.Result != ResultRebased {
+		t.Fatalf("%+v %v", g, deref(g.Reason))
+	}
+}

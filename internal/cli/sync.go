@@ -30,7 +30,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 			"and fetch.prune apply as they do for git pull, so with pull.rebase=true a diverged branch is rebased and with\n" +
 			"rebase.autoStash=true a dirty tree is stashed and restored. --rebase, --ff-only, --no-rebase, --no-ff, --autostash,\n" +
 			"--no-autostash, --prune and --no-prune override the configuration. Without pull.rebase a diverged branch is reported\n" +
-			"as needing a choice; a merge commit is created only when pull.rebase=false, pull.ff=false, --no-rebase or --no-ff asks\n" +
+			"as needing a choice; a merge commit is created only when pull.rebase=false, pull.ff=true|false, --no-rebase or --no-ff asks\n" +
 			"for it. A rebase or merge conflict is left in progress as git leaves it. A branch without an upstream, an operation in\n" +
 			"progress, and local changes the update would overwrite are reported and skipped; a failure in one repository does not\n" +
 			"stop the others. --plan fetches the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
