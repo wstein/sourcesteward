@@ -106,3 +106,7 @@ T032–T033 must fail against the old blanket guard or unsafe proposed shortcuts
 T035 and Spec 011 consumer tests follow the shared proof; T036–T038 finish acceptance.
 FR-012 maps to T031–T038 and Spec 011 T401–T404. Existing FR-001–FR-011 and SC-001–SC-004
 continue to apply; this amendment changes only the supported layout proof and its evidence.
+
+## Creation refusals amendment
+
+- [ ] T039 [FR-013] Implement the [creation refusals amendment](contracts/workspace.md#creation-refusals-amendment) (stacked PR after the specification PR): test-first fixtures for 1,025/1,062/16,384 leaves and the 16,385 refusal, a `core.hooksPath` repository whose hook writes a marker, and a gitlink and `submodule.*` repository; the separate `checkoutLeafLimit`, the creation command-line neutralization and gitlink acceptance for creation only; mutation probes of each guard; tidy, retirement and restore admissions unchanged.

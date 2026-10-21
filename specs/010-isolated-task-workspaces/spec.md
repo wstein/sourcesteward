@@ -71,7 +71,7 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-002**: Define the shared mutation contract before implementation: inspectable targets/reasons/effects, expected-state validation, caller authorization, per-action outcomes and recovery recorded before consequential changes.
 - **FR-003**: Bind plans to native repository/workspace identities, relevant base/reference/operation state and destination ownership; refuse changed relevant state and document concurrent-change limits.
 - **FR-004**: Record task ownership explicitly; never infer ownership or deletion permission from a filename or workspace registration alone.
-- **FR-005**: Preserve the source checkout, configuration and dirty/untracked files; disclose snapshots, hooks and metadata effects before apply and never silently stash/reset or skip hooks.
+- **FR-005**: Preserve the source checkout, configuration and dirty/untracked files; disclose snapshots, hooks and metadata effects before apply and never silently stash/reset or skip hooks (the one disclosed exception is FR-013).
 - **FR-006**: Return a durable handoff and interruption/retry outcome; repository setup scripts, model/session launchers and automatic cleanup are excluded.
 - **FR-007**: Prepare retirement without deleting workspace files or references; execution of retirement depends on Spec 011.
 - **FR-008**: Support native Git and jj as Tier 1 peers for declared capabilities; preserve distinct identities and explicit capability gaps, refuse ambiguous/GitButler ownership and never substitute raw Git writes for jj.
@@ -79,6 +79,7 @@ A caller receives the same evidence in human and structured output without hidde
 - **FR-010**: Declare and enforce observation/action scope, output and time limits, cancellation and incomplete-result behavior; never convert missing or truncated evidence into success or permission to mutate.
 - **FR-011**: Require acceptance evidence for minimum/current supported Git and jj, including failure, concurrency, ownership and effects cases; missing mandatory coverage cannot count as passed conformance.
 - **FR-012**: Admit proven native Git checkout layouts under the [layout contract](contracts/workspace.md#git-checkout-layout-admission-issue-62), separating current checkout, per-worktree Git directory, common repository and primary checkout identities. Bind layout/configuration evidence into stale validation for creation and Spec 011 consumers; no layout admission alone authorizes mutation or expands write grants.
+- **FR-013**: Creation refusals amendment: a separate 16,384 `checkoutLeafLimit`, command-line neutralization of `core.hooksPath`, fsmonitor and submodule recursion so stw never runs repository hooks, and gitlinks accepted as data, all for creation only; see the [contract](contracts/workspace.md#creation-refusals-amendment) and its [measurement](verification.md#creation-refusals-measurement).
 
 ### Key Entities
 
