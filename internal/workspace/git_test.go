@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -19,20 +20,65 @@ func gitTempDir(t *testing.T) string {
 	}
 	return p
 }
-func fixtureGit(t *testing.T) string {
+
+// parallelFixtures names the tests that called parallelFixture. A parallel test may not
+// use t.Setenv, so fixtureGit leaves HOME and XDG_CONFIG_HOME at the shared empty
+// directory; such a test must not write global Git configuration.
+var parallelFixtures sync.Map
+
+var (
+	sharedFixtureHomeOnce sync.Once
+	sharedFixtureHome     string
+)
+
+// useSharedFixtureHome points HOME and XDG_CONFIG_HOME at one empty directory, once,
+// while the calling test is still serial. It is not done in TestMain because the native
+// sandbox helper re-runs TestMain and must keep its own minimal environment.
+func useSharedFixtureHome(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "darwin" {
-		if p, e := exec.LookPath("git"); e == nil && p == "/usr/bin/git" {
-			for _, native := range []string{"/Applications/Xcode.app/Contents/Developer/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git"} {
-				if st, e := os.Stat(native); e == nil && st.Mode().IsRegular() {
-					t.Setenv("PATH", filepath.Dir(native)+":"+os.Getenv("PATH"))
-					break
-				}
+	sharedFixtureHomeOnce.Do(func() {
+		home, err := os.MkdirTemp("", "stw-fixture-home-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if home, err = filepath.EvalSymlinks(home); err != nil {
+			t.Fatal(err)
+		}
+		sharedFixtureHome = home
+		os.Setenv("HOME", home)
+		os.Setenv("XDG_CONFIG_HOME", home)
+		preferNativeGit()
+	})
+}
+
+// preferNativeGit puts the Xcode Git ahead of the macOS /usr/bin/git shim.
+func preferNativeGit() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	if p, e := exec.LookPath("git"); e == nil && p == "/usr/bin/git" {
+		for _, native := range []string{"/Applications/Xcode.app/Contents/Developer/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git"} {
+			if st, e := os.Stat(native); e == nil && st.Mode().IsRegular() {
+				os.Setenv("PATH", filepath.Dir(native)+":"+os.Getenv("PATH"))
+				return
 			}
 		}
 	}
-	t.Setenv("HOME", gitTempDir(t))
-	t.Setenv("XDG_CONFIG_HOME", gitTempDir(t))
+}
+
+func parallelFixture(t *testing.T) {
+	t.Helper()
+	useSharedFixtureHome(t)
+	parallelFixtures.Store(t.Name(), true)
+	t.Parallel()
+}
+
+func fixtureGit(t *testing.T) string {
+	t.Helper()
+	useSharedFixtureHome(t)
+	if _, shared := parallelFixtures.Load(t.Name()); !shared {
+		isolateFixtureHome(t)
+	}
 	d := gitTempDir(t)
 	gitFixture(t, d, "init", "-q")
 	gitFixture(t, d, "config", "user.name", "Fixture")
@@ -276,4 +322,10 @@ func TestGitWorkspaceRefusesSelectorsAndOccupiedDestination(t *testing.T) {
 	if string(got) != "keep" {
 		t.Fatal("foreign state changed")
 	}
+}
+
+func isolateFixtureHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", gitTempDir(t))
+	t.Setenv("XDG_CONFIG_HOME", gitTempDir(t))
 }
