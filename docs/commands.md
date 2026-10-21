@@ -14,6 +14,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
+| `stw sync --plan [PATH] [--remote NAME] [--prune]` (alias `--dry-run`) | Fetch one remote and classify every tracking branch (fast-forward, up-to-date, ahead, diverged, skipped-dirty, upstream-gone); Git only | One `git fetch` that changes remote-tracking refs only; no local branch, worktree or stash change. Applying the plan is a later slice |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -82,6 +83,34 @@ and the embedded `stw inventory` result. Exit 0 means every member was fully obs
 means a member is partial or failed, with the cause on its entry (gitlinks and stale worktrees
 commonly are, and very long change or reference listings are truncated with a disclosure, because
 the limits of single-repository inventory apply to each member). See [multi-repository inventory](repos.md).
+
+## Plan how local branches follow their upstream
+
+```sh
+stw sync --plan .
+stw sync --plan --prune --remote upstream --json ~/work/app
+```
+
+`stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)); this slice ships
+the plan (`--plan`, alias `--dry-run`, required for now: a real run is a usage error until a later
+slice). It runs one `git fetch --no-tags REMOTE` (default `origin`; `--prune` adds `--prune` and lists the
+removed remote-tracking refs) and classifies each local branch that tracks that remote from the fresh
+refs. Local branches, worktrees, the index, tags, `FETCH_HEAD` and stashes are never changed, the repository's own hooks
+run as Git runs them for a fetch, and no merge commit is ever planned. Results:
+
+| Result | Meaning | Exit |
+| --- | --- | --- |
+| `fast-forward` | upstream is ahead; a run would fast-forward it (the worktree is clean or the branch is checked out nowhere) | 0 |
+| `up-to-date`, `ahead` | equal to, or only ahead of, its upstream | 0 |
+| `upstream-gone` | the remote-tracking ref is missing (visible after `--prune`); the branch is kept | 0 |
+| `skipped-dirty` | a fast-forward is due but its worktree has tracked or staged changes (untracked files do not count) | 1 |
+| `diverged` | local and upstream both have new commits; never merged | 1 |
+
+Branches without an upstream under the selected remote are only counted (`untracked`). Exit 1 also means
+the run failed (a jj-owned or non-Git path, an unknown remote, a failed fetch, more than 1024 branches); `--json`
+then still prints the result with `error` set. Usage errors (including a missing `--plan`) exit 2 before any effect.
+Output is one line per branch (`BRANCH WORKTREE RESULT OLD..NEW`) and a summary; see the
+[JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 
 ## Create an isolated task workspace
 

@@ -194,6 +194,22 @@ their bytes. Exit status 3 (`--strict` with error findings in a complete result)
 
 [hosting-pr.schema.json](../schemas/v2/hosting-pr.schema.json) is the explicit opt-in `stw hosting pr --json --json-version 2` / `gh jj pr` contract and [hosting-prs.schema.json](../schemas/v2/hosting-prs.schema.json) the `hosting prs SHA --json` contract. Ordinary `--json` stays hosting schema 1 and its bytes. v2 has explicit nulls for merge/close dates, the raw GitHub merge SHA and the method-dependent `result_sha`; `observation` (`mode` always `once`, `stop`, expected head and expectation) and `boundary` (one request). Consumers ignore unknown properties, reject an unsupported `schema_version` and treat an unknown `observation.stop` as failure. The watch-only members of the design (`watch` mode, `timeout`, `changed`, `merged`/`closed-unmerged` stops) are reserved and rejected by this schema. See [hosting](hosting.md).
 
+## Sync schema v1 (unpublished)
+
+[Sync schema](../schemas/v1/sync.schema.json) describes `stw sync --plan --json` (Spec 032, slice 1a). It is
+checked in and validated offline but, like the release source schemas, excluded from Pages packaging until the
+feature is accepted. One object with `schema_version` 1, `command` `sync`, `mode` `plan`, `run_id` null,
+`remote`, `options` (`rebase`, `prune`, `autostash`, `submodules`, the last three false until their slices),
+`fetch` (`performed`, `pruned_refs` at most 256 with the full `pruned_total`), `items`, an always empty
+`submodules`, `summary` (`total`, `by_result`, `untracked`) and `error` (null, or `code` and `message` of a refused
+or failed run, with no items). No key is omitted; absent values are null. An item has `branch`, `worktree` (path or
+null when checked out nowhere), `result` (`fast-forward`, `up-to-date`, `ahead`, `diverged`, `skipped-dirty`,
+`upstream-gone`), `old_oid`, `new_oid` (the would-be tip, only for `fast-forward` and `skipped-dirty`) and `reason`
+(set for `skipped-dirty`, `diverged` and `upstream-gone`). Exit 0 when nothing needs attention, 1 for a failed run or
+any `skipped-dirty`/`diverged` item, 2 for usage errors with no JSON. Tests validate the fixtures, reject broken
+variants and check real command output from temporary repositories with a bare remote. See
+[commands](commands.md#plan-how-local-branches-follow-their-upstream).
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files
