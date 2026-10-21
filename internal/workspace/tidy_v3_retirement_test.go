@@ -47,6 +47,7 @@ func TestTidyV3RetirementPlanRejectsActorAtEveryObservation(t *testing.T) {
 func TestTidyV3RetirementApplyRejectsActorAtEveryObservation(t *testing.T) {
 	for boundary := 1; boundary <= 8; boundary++ {
 		t.Run(fmt.Sprint(boundary), func(t *testing.T) {
+			parallelFixture(t)
 			o, _ := tidyV3LegacyFixture(t, false)
 			o.StateDir = privateDir(t)
 			c := defaultTidyV3RetirementCoordinator()
@@ -142,6 +143,7 @@ func TestTidyV3RetirementPhysicalActorsAtEveryApplyObservation(t *testing.T) {
 	for boundary := 1; boundary <= 8; boundary++ {
 		for _, kind := range []string{"same-size-restored-mtime", "same-bytes-restored-mtime", "mode", "hardlink", "symlink", "path-replacement"} {
 			t.Run(fmt.Sprintf("%d/%s", boundary, kind), func(t *testing.T) {
+				parallelFixture(t)
 				o, _ := tidyV3LegacyFixture(t, false)
 				o.StateDir = privateDir(t)
 				path := filepath.Join(o.CompletedWorktree, "file")

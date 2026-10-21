@@ -167,9 +167,11 @@ func requireTrackingRefAbsent(t *testing.T, dir, ref string) {
 	}
 }
 func TestTidyV3TrackingApplyResamplesBeforeEffects(t *testing.T) {
+	isolateTidyV3Environment(t)
 	for _, at := range []int{1, 2, 3} {
 		for _, kind := range []string{"unrelated-oid", "source-reappeared", "provider-error", "wrong-repository", "bad-fingerprint", "http-detection-byte"} {
 			t.Run(strconv.Itoa(at)+"/"+kind, func(t *testing.T) {
+				parallelFixture(t)
 				f := fixtureTidyV3TrackingApply(t, 1)
 				p := f.plan
 				target := v3Eligible(p)[0]

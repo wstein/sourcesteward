@@ -286,6 +286,7 @@ func TestTidyV3PlanWithFortyProvenOIDsMakesNoPlanTimeProviderReads(t *testing.T)
 // (Spec 031 FR-017): at, above and far above the record cap the plan is ok,
 // decisions are untouched and overflow is dropped with a note.
 func TestTidyV3DiscoveryRecordsNeverRefuseThePlan(t *testing.T) {
+	isolateTidyV3Environment(t)
 	for _, tc := range []struct {
 		name       string
 		refs, oids int
@@ -300,6 +301,7 @@ func TestTidyV3DiscoveryRecordsNeverRefuseThePlan(t *testing.T) {
 		{"ref cap far exceeded", 700, 100, 73, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			parallelFixture(t)
 			dir, base, repo, _ := fixtureTidyV3SharedHeads(t, tc.refs, tc.oids)
 			c, _ := fixtureTidyV3Online(t, dir, repo, nil)
 			r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: base, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
