@@ -34,6 +34,11 @@ class TriggerTests(unittest.TestCase):
         on = WORKFLOW.split('\npermissions:', 1)[0]
         self.assertRegex(on, r'(?m)^  pull_request:')
 
+    def test_only_pull_request_runs_are_cancelled_by_a_newer_push(self):
+        group = WORKFLOW.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0]
+        self.assertIn('group: ci-${{ github.workflow }}-${{ github.ref }}', group)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", group)
+
     def test_deployment_stays_main_push_only(self):
         self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", job_text('pages'))
 
@@ -150,7 +155,9 @@ class ShardedConformanceTests(unittest.TestCase):
         count = int(re.search(r"SHARD_COUNT: '(\d+)'", CONFORMANCE).group(1))
         self.assertEqual(count, SHARDS.DEFAULT_SHARDS)
         matrix = re.search(r'shard: \[([\d, ]+)\]', CONFORMANCE).group(1)
-        self.assertEqual([int(x) for x in matrix.split(',')], list(range(count + 1)))
+        # Shard 0 runs the other packages, shards 1..count the workspace package, and the
+        # last shard the real-CLI smoke scripts.
+        self.assertEqual([int(x) for x in matrix.split(',')], list(range(count + 2)))
         self.assertIn('--shards 4', job_text('check'))
 
     def test_aggregate_is_per_lane_stable_and_runs_after_failures(self):
@@ -174,8 +181,9 @@ class ShardedConformanceTests(unittest.TestCase):
     def test_only_the_workspace_package_is_sharded(self):
         text = job_text('shard', CONFORMANCE)
         self.assertIn('-run "$regex" ./internal/workspace', text)
-        self.assertIn('matrix.shard != 0', text)
+        self.assertIn('matrix.shard != 0 && matrix.shard != 5', text)
         self.assertIn('matrix.shard == 0', text)
+        self.assertIn('if: matrix.shard == 5', text)
 
     def test_check_verifies_shard_coverage_before_the_race_suite(self):
         text = job_text('check')

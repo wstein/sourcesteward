@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   # The heavy internal/workspace package is split across parallel shards (shards 1-N, see
-  # scripts/ci_shards.py); shard 0 runs every other package and the real-CLI smoke checks.
+  # scripts/ci_shards.py); shard 0 runs every other package and shard 5 the real-CLI smoke checks.
   shard:
     name: shard ${{ matrix.shard }}
     runs-on: ubuntu-24.04
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        shard: [0, 1, 2, 3, 4, 5]
     env:
       STW_REQUIRE_JJ: '1'
       STW_REQUIRE_NATIVE_SANDBOX: '1'
@@ -94,7 +94,7 @@ jobs:
       # Command substitutions are assigned first so a failing script fails the step (bash -e)
       # instead of silently running go test on the wrong package set.
       - name: Workspace shard with real backends and race checks
-        if: matrix.shard != 0
+        if: matrix.shard != 0 && matrix.shard != 5
         env:
           SHARD: ${{ matrix.shard }}
         run: |
@@ -109,7 +109,7 @@ jobs:
           test "$#" -gt 1
           go test -count=1 -timeout 40m -race "$@"
       - name: Real CLI inspection and zero-write acceptance
-        if: matrix.shard == 0
+        if: matrix.shard == 5
         run: |
           go build -o bin/stw ./cmd/stw
           python3 -B scripts/smoke-inspection.py
