@@ -1,0 +1,1 @@
+{"schema_version":1,"command":"status","options":{"fetch":false,"worktrees":false},"root":null,"note":null,"repos":[],"summary":{"total":0,"attention":0,"errors":0},"error":{"code":"status-not-a-repository","message":"stw status needs a Git repository: no repository"}}

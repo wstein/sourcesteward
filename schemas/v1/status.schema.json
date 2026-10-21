@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/status.schema.json",
+  "title": "SourceSteward workspace status (schema 1)",
+  "description": "Result of stw status: a read-only overview of the workspace root and every initialized submodule (main worktrees). Exit statuses: 0 also when repositories need attention, 1 when a repository cannot be read (state error) or the run failed (error is set, repos empty), 2 usage error with no JSON. Keys are never omitted; absent values are null. Added properties are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "options",
+    "root",
+    "note",
+    "repos",
+    "summary",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "status"
+    },
+    "options": {
+      "type": "object",
+      "required": [
+        "fetch",
+        "worktrees"
+      ],
+      "properties": {
+        "fetch": {
+          "type": "boolean"
+        },
+        "worktrees": {
+          "type": "boolean"
+        }
+      }
+    },
+    "root": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "note": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repos": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/repo"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "attention",
+        "errors"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "attention": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^status-[a-z-]+$"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 260
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "repo": {
+      "type": "object",
+      "required": [
+        "name",
+        "path",
+        "kind",
+        "state",
+        "branch",
+        "detached",
+        "head",
+        "upstream",
+        "upstream_gone",
+        "ahead",
+        "behind",
+        "changes",
+        "operation",
+        "stash",
+        "branches",
+        "worktrees",
+        "gitlink",
+        "fetch_error",
+        "attention",
+        "error"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "root",
+            "submodule"
+          ]
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "uninitialized",
+            "error"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detached": {
+          "type": "boolean"
+        },
+        "head": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "upstream": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstream_gone": {
+          "type": "boolean"
+        },
+        "ahead": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "behind": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "changes": {
+          "type": "object",
+          "required": [
+            "staged",
+            "unstaged",
+            "untracked",
+            "conflicts"
+          ],
+          "properties": {
+            "staged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unstaged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "untracked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "conflicts": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "operation": {
+          "enum": [
+            "rebase",
+            "merge",
+            "cherry-pick",
+            "revert",
+            "bisect",
+            "unreadable",
+            null
+          ]
+        },
+        "stash": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "branches": {
+          "type": "object",
+          "required": [
+            "local",
+            "base",
+            "integrated",
+            "not_integrated"
+          ],
+          "properties": {
+            "local": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "base": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "integrated": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "not_integrated": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        },
+        "worktrees": {
+          "type": "object",
+          "required": [
+            "linked",
+            "dirty",
+            "locked",
+            "prunable",
+            "list"
+          ],
+          "properties": {
+            "linked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dirty": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "locked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "prunable": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "list": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/worktree"
+              }
+            }
+          }
+        },
+        "gitlink": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "recorded",
+                "checked_out",
+                "state",
+                "relation"
+              ],
+              "properties": {
+                "recorded": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{40,64}$"
+                },
+                "checked_out": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{40,64}$"
+                },
+                "state": {
+                  "enum": [
+                    "ok",
+                    "drift",
+                    "uninitialized"
+                  ]
+                },
+                "relation": {
+                  "enum": [
+                    "ahead",
+                    "behind",
+                    "diverged",
+                    "unknown",
+                    null
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "fetch_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "attention": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "operation",
+              "conflicts",
+              "staged",
+              "unstaged",
+              "untracked",
+              "ahead",
+              "behind",
+              "upstream-gone",
+              "no-upstream",
+              "gitlink-drift",
+              "worktree-dirty",
+              "worktree-locked",
+              "worktree-prunable",
+              "fetch-failed",
+              "error"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "error": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "pattern": "^status-[a-z-]+$"
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 260
+                }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "object"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "root"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "gitlink": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "gitlink": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "worktree": {
+      "type": "object",
+      "required": [
+        "path",
+        "branch",
+        "detached",
+        "dirty",
+        "locked",
+        "prunable"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detached": {
+          "type": "boolean"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prunable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
