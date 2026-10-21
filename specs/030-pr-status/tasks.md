@@ -1,6 +1,6 @@
 # Tasks: PR status
 
-**Gate**: all runtime boxes remain unchecked. Re-scoped 2026-10-21 (owner decisions in the spec): slice 1 = T001-T007, T009, T011-T014; the deferred watch slice = T008, T010 and the continuity half of T007. Complete artifacts do not imply independent review or owner disposition. Each behavior change starts with an observed failing test, then implementation and relevant checks. Commit focused Conventional Commits per work item; no runtime file ownership is granted by this list.
+**Gate**: all runtime boxes remain unchecked. Re-scoped 2026-10-21 (owner decisions in the spec): slice 1 = T001-T007, T009, T011-T015; the deferred watch slice = T008, T010 and the continuity half of T007. Complete artifacts do not imply independent review or owner disposition. Each behavior change starts with an observed failing test, then implementation and relevant checks. Commit focused Conventional Commits per work item; no runtime file ownership is granted by this list.
 
 ## WI0 — Design gate
 
@@ -18,7 +18,7 @@
 
 ## WI2 — One-shot operation (FR-004/007/010; watcher deferred)
 
-- [ ] T006 Characterize current resolution/auth/CI/v1 behavior green, trace every shared caller, then extract only the minimal prelude if needed. Add failing enhanced one-shot tests proving exactly one GET for open, merged and null mergeability; exactly one auth session. Native/selection/auth failure makes zero GETs; tokens/raw response errors never appear.
+- [ ] T006 (slice 1) Characterize current resolution/auth/CI/v1 behavior green, trace every shared caller, then extract only the minimal prelude if needed. Add failing enhanced one-shot tests proving exactly one GET for open, merged and null mergeability; exactly one auth session. Native/selection/auth failure makes zero GETs; tokens/raw response errors never appear.
 - [ ] T007 (slice 1) Add failing expectation tests: full expected SHA match/mismatch; compare head rather than result; mismatch even when merged; mismatching head fails before lifecycle success; unobserved expectation when no sample. Invalid new metadata never creates a sample. DEFERRED with the watch: later head/ref/head-repo/base-ref/base-repo continuity stops, A→B recovery and unobserved ABA claims.
 - [ ] T008 (DEFERRED slice: watch, work package D) With injected monotonic clock/sleeper, add failing watcher tests for immediate first poll, exact 1/2/4 capped waits, eight open samples, terminal on eighth read, slow native/auth/read/decode consuming global time, short parent deadline, cancellation in each phase, no read starting at/after W, no wait truncation followed by a poll, request-limit vs timeout precedence and one final result. Implement after each failure. Redirect/denial/rate limit/malformed/oversize stops with no retry or Retry-After sleep; last valid sample remains marked incomplete.
 
@@ -31,26 +31,30 @@
 ## WI4 — Conformance, evidence and documentation (FR-008/012)
 
 - [ ] T011 (slice 1) Add real temporary ordinary/linked Git and standalone/colocated/secondary jj fixtures with fake guarded HTTP; verify gh jj Git refusal, read-only native refs/files/working-copy/operation sentinels, both entry points and minimum/current supported versions. Test permission/config/root conditions through existing refusal seams rather than changing caller-owned configuration. Missing sandbox/tools are explicit skips, not conformance acceptance.
-- [ ] T012 (slice 1) Update public hosting/JSON/agent docs, examples, capability limits, architecture if needed, progress/status and verification evidence only after source behavior exists; preserve planned status until acceptance. No generated reference or binary smoke without separately authorized build. Run source checks required by AGENTS/CONTRIBUTING on exact implementation SHA; independent runtime review before publication. Record all unrun platforms/live API/keyring/binary acceptance. Document `hosting pr` v2 flags, `hosting prs`, the 401/403/404/429 stop-without-retry behaviour and that long waits still use `scripts/ci-wait.sh`.
 
-- [ ] T013 (slice 1) Add failing lookup tests with fake guarded HTTP: usage errors for non-40-hex SHA before native/auth/network; exactly one GET with the exact path `commits/SHA/pulls?per_page=100&page=1`; zero, one, many, 99 and exactly 100 (truncated, `lookup-single-page`) results; `head_match` true/false; lifecycle derived from `merged_at` incl. incoherent combinations as an evidence error for the whole result; null head repository; each HTTP outcome (401/403/404/429, redirect, compression, oversize, malformed) stops with one request and no retry; allowlist test that other `commits/SHA/...` suffixes, other pages, other `per_page` and non-GET are refused while existing routes (`pulls/N`, `check-runs`, `statuses`, tidy) are unchanged.
+- [ ] T013 (slice 1) Add failing lookup tests with fake guarded HTTP: usage errors for non-40-hex SHA before native/auth/network; exactly one GET with the exact path `commits/SHA/pulls?per_page=30&page=1`; zero, one, many, 29, a realistic 30-item body of ~20 KB items that decodes under the 1 MiB cap, a body over 1 MiB (stop with `hosting-pr-failed`, no partial list) and exactly 30 (truncated, `lookup-single-page`) results; `head_match` true/false; lifecycle derived from `merged_at` incl. incoherent combinations as an evidence error for the whole result; null head repository; each HTTP outcome (401/403/404/429, redirect, compression, oversize, malformed) stops with one request and no retry; allowlist test that other `commits/SHA/...` suffixes, other pages, other `per_page` and non-GET are refused while existing routes (`pulls/N`, `check-runs`, `statuses`, tidy) are unchanged.
 - [ ] T014 (slice 1) Implement the `prs` leaf in both entry points, the additive allowlist route, the typed reader/decoder and `hosting-prs.schema.json` after each T013 failure; add fixtures and the schema counterexamples; run native Git/jj sentinels (T011).
+- [ ] T015 (slice 1) Enforce the slice-1 schema subset: ship `schemas/v2/hosting-pr.schema.json` from [pr-status-once.schema.json](contracts/pr-status-once.schema.json) and add failing counterexamples that the schema rejects `mode:watch`, `max_requests` 8, and each of the stops `merged`, `closed-unmerged`, `changed`, `request-limit`, `timeout`, `output-unbounded`, while all seven [once examples](contracts/once/) validate; add the draft/production `hosting-prs` schema and its two lookup examples with the same counterexample style (31 items, truncated without limitation, error with items). A once deadline expiry must produce stop `canceled` with `hosting-canceled` (operation test), never `timeout`.
+- [ ] T012 (slice 1, runs after T013/T014 so it documents implemented behaviour) Update public hosting/JSON/agent docs, examples, capability limits, architecture if needed, progress/status and verification evidence only after source behavior exists; preserve planned status until acceptance. No generated reference or binary smoke without separately authorized build. Run source checks required by AGENTS/CONTRIBUTING on exact implementation SHA; independent runtime review before publication. Record all unrun platforms/live API/keyring/binary acceptance. Document `hosting pr` v2 flags, `hosting prs`, the 401/403/404/429 stop-without-retry behaviour and that long waits still use `scripts/ci-wait.sh`.
 
 ## Mutant and traceability plan
 
-| Mutant / false implementation | Required killer | Coverage |
-| --- | --- | --- |
-| merged := raw SHA != null; result := head | open-test-SHA and merged-rebase fixtures | T004, FR-001, SC-001 |
-| missing bool defaults false; nullable key silently omitted | missing/wrong-type table and schema mutants | T004/005, FR-003/009, SC-002 |
-| null mergeable retries by default | one-shot exact request count | T006, FR-005, SC-001 |
-| expected compared to result; terminal accepted before mismatch/change | merged mismatch and changed-head terminal tests | T007, FR-004/010, SC-001 |
-| recreate timeout/auth/budget every poll; ninth request; poll after shortened wait | fake-clock/counter tests | T008, FR-005/007, SC-003 |
-| retry HTTP denial; replace last valid sample on malformed body | no-extra-request/last-sample tests | T008, FR-009, SC-001 |
-| timeout only HTTP; unbounded stderr; abandoned writer goroutine | blocked-pipe/root-boundary/monitor tests | T009/010, FR-006/011, SC-003 |
-| hidden Git fallback or native write under jj | native ownership and state sentinels | T011, FR-008, SC-004 |
-| advertise implemented before usability/review gate | T003/T012 evidence review | FR-012, SC-005 |
-| lookup follows pages, selects one of many PRs or treats `head_match:false` as the head | zero/many/100-entry and head_match fixtures with request counting | T013, FR-013, SC-006 |
-| allowlist widened beyond the one route / non-GET reachable | route and method tests | T013, FR-007, SC-006 |
-| 403/429 retried or slept on | one-request assertion per HTTP outcome | T006/T013, FR-007, SC-001/006 |
+| Mutant / false implementation | Required killer | Slice | Coverage |
+| --- | --- | --- | --- |
+| merged := raw SHA != null; result := head | open-test-SHA and merged-rebase fixtures | 1 | T004, FR-001, SC-001 |
+| missing bool defaults false; nullable key silently omitted; malformed body replaces/creates a sample | missing/wrong-type table, schema mutants, no-sample-on-invalid test | 1 | T004/T005/T006, FR-003/009, SC-002 |
+| null mergeable retries by default; extra GET in one-shot | one-shot exact request count | 1 | T006, FR-007, SC-001 |
+| expected compared to result; mismatch accepted because merged | merged mismatch test | 1 | T007, FR-004, SC-001 |
+| slice-1 schema accepts watch mode, max_requests 8 or a deferred stop | schema counterexamples; once-timeout is `canceled` | 1 | T015, SC-007 |
+| `--watch` accepted in slice 1 | usage-error test before native/auth | 1 | T009, FR-006, SC-001 |
+| hidden Git fallback or native write under jj | native ownership and state sentinels | 1 | T011, FR-008, SC-004 |
+| HTTP denial/429/other non-2xx retried or slept on | one-request assertion per HTTP outcome, both endpoints | 1 | T006/T013, FR-007, SC-001/006 |
+| lookup follows pages, selects one of many PRs, treats `head_match:false` as the head, or returns a partial list on oversize | zero/many/30-entry/oversize fixtures with request counting | 1 | T013, FR-013, SC-006 |
+| allowlist widened beyond the one route / non-GET reachable | route and method tests | 1 | T013, FR-007, SC-006 |
+| advertise implemented before usability/review gate | T003/T012 evidence review | 1 | FR-012, SC-005 |
+| recreate timeout/auth/budget every poll; ninth request; poll after shortened wait | fake-clock/counter tests | deferred | T008, FR-005, SC-003 |
+| retry denial after a valid watch sample; replace last valid sample on malformed body | no-extra-request/last-sample tests | deferred | T008, FR-005/009 |
+| continuity: terminal accepted after observed head/ref change | changed-head tests | deferred | T007 (continuity half), FR-010 |
+| timeout only HTTP; unbounded stderr; abandoned writer goroutine | blocked-pipe/root-boundary/monitor tests | deferred | T010, FR-011, SC-003 |
 
-No test must merely restate its implementation helper. Use CLI/operation outputs, recorded endpoints, real blocked pipes and native state as the observations. Illustrative JSON fixtures are design examples, not evidence that runtime behavior exists.
+No test must merely restate its implementation helper. Use CLI/operation outputs, recorded endpoints, real blocked pipes and native state as the observations. Illustrative JSON fixtures ([once/](contracts/once/), [lookup/](contracts/lookup/), [deferred-watch/](contracts/deferred-watch/)) are design examples, not evidence that runtime behavior exists.

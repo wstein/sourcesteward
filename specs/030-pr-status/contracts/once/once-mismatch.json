@@ -13,15 +13,31 @@
       "bare": false,
       "linked_worktree": false,
       "object_format": "sha1",
-      "head": {"state": "attached", "ref": "refs/heads/main", "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+      "head": {
+        "state": "attached",
+        "ref": "refs/heads/main",
+        "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
     },
     "diagnostics": []
   },
-  "repository": {"host": "github.com", "owner": "example", "name": "project", "selection": "unique-candidate"},
-  "candidates": [{"remote": "upstream", "host": "github.com", "owner": "example", "name": "project"}],
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "project",
+    "selection": "unique-candidate"
+  },
+  "candidates": [
+    {
+      "remote": "upstream",
+      "host": "github.com",
+      "owner": "example",
+      "name": "project"
+    }
+  ],
   "schema_version": 2,
   "kind": "pr",
-  "status": "ok",
+  "status": "error",
   "pull_request": {
     "number": 42,
     "title": "Example PR",
@@ -41,27 +57,32 @@
     "result_sha": null,
     "lifecycle": "open"
   },
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "code": "hosting-head-mismatch",
+      "message": "The observed PR head differs from the expected head."
+    }
+  ],
   "observed_at": "2026-10-18T12:00:00Z",
   "sampled_at": "2026-10-18T12:00:00Z",
   "observation": {
     "mode": "once",
-    "stop": "sampled",
+    "stop": "expectation-mismatch",
     "samples": 1,
     "initial_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "expected_head": null,
-    "expectation": "not-requested",
+    "expected_head": "cccccccccccccccccccccccccccccccccccccccc",
+    "expectation": "mismatched",
     "identity_changed": false
   },
   "boundary": {
-    "complete": true,
+    "complete": false,
     "network": true,
     "max_bytes": 1048576,
     "timeout_seconds": 30,
     "max_requests": 1,
     "requests": 1,
     "limitations": [
-      "Sampled evidence cannot exclude unobserved ABA or future PR changes.",
+      "One sample only; the PR may have changed since it was read.",
       "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."
     ]
   }
