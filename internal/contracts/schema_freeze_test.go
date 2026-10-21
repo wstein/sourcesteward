@@ -31,6 +31,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v1/tidy.schema.json":                   "7b32f169e81b5351c9b542af7b09025a068279de98f3441ec8966d1239ec1161",
 	"schemas/v1/version.schema.json":                "886864837547ded4992af89e8e8e04d38fe7bf77724f91a8960a184c51a0659f",
 	"schemas/v1/workspace.schema.json":              "fb4d4623c7b3f329e596e7a3608116d10d3bb3c6801aaece6a073e154ccfd825",
+	"schemas/v2/hosting-pr.schema.json":             "2baef8835871144bcfeac3e3bbc15fa6ead88c9b30bce9949b19ef7f8d6c3756",
 	"schemas/v2/inspect.schema.json":                "3824dbf58ee99eaa184218c292a8eff0e7c7ee1b7f455a77d9c1977f1478f595",
 	"schemas/v2/tidy.schema.json":                   "c964a85de0941f41ceef84b6cc57235de984c7084ea1b4bacc8ebd799de19f2d",
 }
@@ -53,7 +54,7 @@ func TestPublishedV1AndV2SchemasAreByteFrozen(t *testing.T) {
 			}
 		}
 	}
-	if len(frozenPublishedSchemas) != 20 {
-		t.Fatalf("frozen schema inventory has %d entries, want 20", len(frozenPublishedSchemas))
+	if len(frozenPublishedSchemas) != 21 {
+		t.Fatalf("frozen schema inventory has %d entries, want 21", len(frozenPublishedSchemas))
 	}
 }

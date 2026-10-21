@@ -63,7 +63,7 @@ type PRStatusResult struct {
 }
 
 func newPRStatusResult() PRStatusResult {
-	return PRStatusResult{SchemaVersion: 2, Kind: "pr", Status: "error", Backend: "unknown", Candidates: []Candidate{}, Diagnostics: []inspection.Diagnostic{}, Observation: PRStatusObservation{Mode: "once", Stop: "failed", Expectation: "not-requested"}, Boundary: PRStatusBoundary{MaxBytes: maxBytes, TimeoutSeconds: 30, MaxRequests: 1, Limitations: []string{"Sampled evidence cannot exclude unobserved ABA or future PR changes.", "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."}}}
+	return PRStatusResult{SchemaVersion: 2, Kind: "pr", Status: "error", Backend: "unknown", Candidates: []Candidate{}, Diagnostics: []inspection.Diagnostic{}, Observation: PRStatusObservation{Mode: "once", Stop: "failed", Expectation: "not-requested"}, Boundary: PRStatusBoundary{MaxBytes: maxBytes, TimeoutSeconds: 30, MaxRequests: 1, Limitations: []string{"One sample only; the PR may have changed since it was read.", "GitHub result SHA is method-dependent; no review, ancestry or merge permission is inferred."}}}
 }
 func (r *PRStatusResult) fail(code, message, stop string) {
 	r.Status = "error"

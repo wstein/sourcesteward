@@ -24,7 +24,7 @@ GUIDES = {
     'docs/agent-guide.md': ('agents', 'Agent guide'),
     'docs/json-contracts.md': ('json-contracts', 'JSON contracts'),
 }
-SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json'), 'v2': ('inspect.schema.json', 'tidy.schema.json')}
+SCHEMAS = {'v1': ('version.schema.json', 'inspect.schema.json', 'inventory.schema.json', 'workspace.schema.json', 'tidy.schema.json', 'hosting.schema.json', 'pins.schema.json', 'repos.schema.json'), 'v2': ('inspect.schema.json', 'tidy.schema.json', 'hosting-pr.schema.json')}
 
 # Schemas of features whose commands are still hidden: they exist in the source tree and are
 # validated, but are not copied to the site. The documentation work item of the feature removes
