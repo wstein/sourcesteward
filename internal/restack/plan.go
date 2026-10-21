@@ -12,6 +12,9 @@ import (
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
+// resultLimit is MaxResultBytes; tests lower it.
+var resultLimit = MaxResultBytes
+
 // planner carries the observations of one plan.
 type planner struct {
 	opts          Options
@@ -56,7 +59,7 @@ func planWith(ctx context.Context, o Options, now func() time.Time, inspect func
 	}
 	p.res.Status = StatusOK
 	p.res.Outcome = decideOutcome(p.res)
-	if encoded, e := json.Marshal(p.res); e != nil || len(encoded) > MaxResultBytes {
+	if encoded, e := json.Marshal(p.res); e != nil || len(encoded) > resultLimit {
 		bound := "max_result_bytes"
 		p.res.Status, p.res.Outcome, p.res.Evidence = StatusIncomplete, OutcomeNone, nil
 		p.res.Diagnostics = append(p.res.Diagnostics, Diagnostic{"bound-exceeded", "A documented bound was reached.", map[string]any{"bound": bound}})
