@@ -106,16 +106,17 @@ It is never stricter than `git pull`. Per repository it runs `git fetch --no-tag
 does: `pull.rebase` and `branch.NAME.rebase` decide whether a diverged branch is rebased (`--rebase`/`--ff-only`
 override), `pull.ff=only` forbids it, `rebase.autoStash` and `merge.autoStash` stash and restore a dirty tree
 (`--autostash`/`--no-autostash` override) and `fetch.prune` prunes (`--prune`/`--no-prune` override). Without
-`pull.rebase` a diverged branch is reported as needing a choice; a merge commit is created only when `pull.rebase=false`,
-`pull.ff=false`, `--no-rebase` or `--no-ff` asks for it, never by default. A dirty tree is fine when the update touches
-none of its files, as for `git merge --ff-only`. A failure in one repository does not stop the others.
+`pull.rebase` and without a `pull.ff` setting a diverged branch is reported as needing a choice; a merge commit is created only
+when `pull.rebase=false`, `pull.ff=true` or `false`, `--no-rebase` or `--no-ff` asks for it, as for `git pull`, never by default.
+`pull.ff=only` (or `--ff-only`) refuses a diverged branch even when `pull.rebase=true`; `--rebase` overrides it. A dirty tree (submodule changes ignored, as git does) is fine when the update touches
+none of its files, as for `git merge --ff-only`; with a rebase configured it needs `rebase.autoStash` or `--autostash`, even for a fast-forward, as for `git pull --rebase`. A failure in one repository does not stop the others.
 
 Output is one line per repository, then a summary line (colour only on a terminal with `NO_COLOR` unset):
 
 ```
 SourceSteward sync: 3 repositories
 .        main     fast-forwarded 2 commits 3f2a1b0..9c4d7e1
-app      develop  skipped: diverged (2 ahead, 5 behind) - needs a choice: use --rebase or set pull.rebase (stw sync never merges)
+app      develop  skipped: diverged (2 ahead, 5 behind) - needs a choice: use --rebase or --no-rebase, or set pull.rebase
 app/lib  -        skipped: detached at 8d1e2f3 (pinned)
 summary: 1 fast-forwarded, 1 diverged, 1 skipped detached
 ```
