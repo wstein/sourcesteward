@@ -43,7 +43,7 @@ S about 0.5 author day, M about 1, L about 2 to 3 (each includes the repo's own 
 | --- | --- | --- | --- |
 | WP0 | This design: plan, tasks, contracts, data model, independent design review, analysis (estimate 015-0) | L (done as draft in this PR; review rounds extra) | owner decisions D4-D13 |
 | WP1 | Minimal explicit input and resolver, refusals, bounds (estimate 015-1 plus refusals of 015-3) | M | WP0 |
-| WP2 | Evidence library: extract proof helpers, range-diff pairing, cherry, tree equivalence, own-diff equality, identity check (015-2) | M | WP1 |
+| WP2 | Evidence library: own proof helpers (no extraction from `internal/workspace`, T004 skipped), range-diff pairing, cherry, tree equivalence, own-diff equality, identity check (015-2) | M | WP1 |
 | WP3 | Replay and conflict prediction in quarantine, effects, hazards, texts (015-3 remainder) | L | WP2 |
 | WP4 | Result, schema, CLI, human output, architecture check | M | WP3 |
 | WP5 | Conformance: minimum/current Git, effect sentinels, mutation controls, quickstart evidence (015-9, plan part) | M | WP4 |
