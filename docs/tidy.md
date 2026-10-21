@@ -182,8 +182,9 @@ v1/v2 dispatch and zero-network behavior. These new capabilities do not permit G
 jj- or GitButler-owned workspaces. Source/native checks and remaining acceptance limits are
 recorded in the Spec 029 integration evidence. The v3 schema is retained in the source tree at
 `schemas/v3/tidy.schema.json` (the review report and the decision file have the candidate schemas
-`schemas/v3/tidy-report.schema.json` and `schemas/v3/tidy-decisions.schema.json`); none is part of
-the published schema inventory.
+`schemas/v3/tidy-report.schema.json` and `schemas/v3/tidy-decisions.schema.json`, the restore and
+history results `schemas/v3/tidy-restore.schema.json` and `schemas/v3/tidy-history.schema.json`);
+none is part of the published schema inventory.
 
 A local reference plan remains useful offline. Online merged-head evidence requires explicit
 `--online --remote NAME` and one admitted GitHub.com/SHA-1 repository:
@@ -265,6 +266,72 @@ and 64 MiB per user-content pass in buffers no larger than 64 KiB. Metadata rema
 per file; old v2/jj policy is unchanged. Full content/identity checks run at three plan/eight
 apply observations, with one shared byte/process/deadline budget and no reused fresh hashes.
 Timestamp and inode checks do not exclude every same-user/ABA race.
+
+### Restoring deleted branches and the journal history
+
+A local-reference apply keeps a recovery ref `refs/stw/recovery/v3/PLAN/HASH` and a journal entry
+for every branch it deletes. `stw tidy restore` creates the branch again from them. It is a
+read-only plan by default and works on the clone it is pointed at (`PATH`, default `.`):
+
+```sh
+stw tidy restore /absolute/clone --contract 3 --plan PLAN_ID --state-dir /private/task-state --json
+stw tidy restore /absolute/clone --contract 3 --plan PLAN_ID --state-dir /private/task-state \
+  --action ACTION_ID --as refs/heads/finished-task-again
+stw tidy restore /absolute/clone --contract 3 --plan PLAN_ID --state-dir /private/task-state \
+  --apply --authorize --json
+```
+
+Per journal entry that reached a confirmed recovery the plan shows the full branch ref, the tip
+OID, the proof class, flags and the reviewer decision (who, kind, why), and one state:
+
+| State | Meaning | Apply |
+| --- | --- | --- |
+| `restorable` | the recovery ref is a direct ref at the journal OID, the commit is readable and the branch name is free | creates the branch |
+| `already-present` | the branch exists at the journal OID | nothing |
+| `name-taken` | the branch exists at another OID, or is a symbolic ref (reason `symbolic-reference`) | nothing; `--as` restores one action under another name |
+| `recovery-missing` | the recovery ref is absent (`recovery-ref-absent`), symbolic (`recovery-ref-symbolic`), points elsewhere (`recovery-ref-retargeted`), or its commit is gone (`object-unreadable`); a re-clone has no recovery refs | nothing; the reflog is never searched |
+| `journal-incomplete` | the entry has no confirmed recovery, or its branch name is not a valid `refs/heads/` name (`invalid-ref-name`) | nothing; an incomplete journal is never replayed |
+
+Journal text (branch names, reasons, reviewer names) is data: it is validated, escaped on output and
+never passed to Git as an option. Only journals of plan mode `local-refs` are restorable; a
+tracking-ref or retirement journal is refused as `unsupported-mode`. An unknown plan or action is a
+refusal (exit 1); argument errors (a duplicate `--action`, `--as` without exactly one `--action` or
+not a `refs/heads/` name, `--authorize` without `--apply` and the reverse, `--list` with `--plan`, a
+malformed plan or `--limit`) exit 2 before any store or native work. The plan status is `ok` whenever
+the journal was read, even if nothing is restorable.
+
+`--apply --authorize` is the same explicit authorization as `tidy apply`; a plan or a reviewer
+decision is never authorization. There is no stored restore plan: the effects are computed at apply
+time and every entry is evaluated again immediately before its creation. A branch is created with
+`git update-ref --no-deref` against the zero object ID, so an existing branch is never
+overwritten or moved and a symbolic ref is never followed; a branch created in between is reported
+as `name-taken` and a symbolic one as `symbolic-reference`. The new branch gets one reflog entry
+`stw restore PLAN ACTION`. Apply keeps the recovery refs and touches no worktree, remote,
+configuration, index, other ref or file; a repository whose hooks would run refuses first. Before each
+creation an `intent` record is durable in the `tidy-v3-restores` namespace of the private state
+store and an `outcome` record (`created`, `created-recovered`, `name-taken`, `symbolic-reference`,
+`recovery-missing` or `error`) follows; records are appended, never rewritten, and the tidy journal is
+never modified. A rerun is idempotent. After a crash between intent and outcome the rerun finds the
+branch at the journal OID and records `created-recovered`, or finds it absent and creates it; it never
+overwrites. A branch that someone else created at the same OID after the crash is reported
+`created-recovered` too. The apply status is `ok` when every in-scope entry is `created`,
+`created-recovered` or `already-present`, `partial` when some were created and others were not,
+`refused` when nothing was created and an entry was not already present, and `error` for an
+unexpected failure. `git branch NAME OID` stays a valid manual restore.
+
+Only the tip commit and its history are restored, in this clone. Reflog tips, `branch.NAME.*`
+configuration (upstream and tracking), untracked files and worktree registrations are not.
+
+`stw tidy history` and `stw tidy restore --list` (same reader, read-only, `--state-dir` and
+`--limit`, default 256, at most 1,024) list the stored journals newest first by journal time: plan
+ID, time, mode, numbers deleted, retained and restorable, whether the recovery refs are `present`,
+`partial` or `absent`, the number of `human` and `ai` decisions and the journal status `complete`,
+`incomplete` or `unreadable` (an unreadable journal is listed with its ID, never skipped). Journals of
+other modes show their mode and `restorable` 0. The store scan stops after 4,096 records, the
+commit checks are one batched `git cat-file --batch-check` of at most 65,536 lines and 4 MiB, and the
+whole call has a 30-second budget. A bound that is reached marks the affected journals `incomplete`
+and adds a truncation marker `{unit, shown, total}` (`journals`, `objects` or `checked-journals`);
+`total` is a lower bound when `scan_truncated` is true.
 
 V3 human and JSON results report completeness, sampled freshness, actual network attempts,
 measured counters, precise candidates/actions, recovery and effects. Complete negative plans
