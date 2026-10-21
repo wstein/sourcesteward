@@ -468,7 +468,7 @@ func readRestoreJournal(stateDir, planID string) (v3JournalView, error) {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return view, err
 	}
-	return view, failure("journal-unreadable", "The stored journal of the plan could not be read.")
+	return view, failure("journal-unreadable", "The stored journal of the plan could not be read; journals are bound to the absolute repository and state-directory paths they were written for, so restore from those original locations (a copied clone or state directory is not supported)")
 }
 
 func (c tidyV3RestoreCoordinator) restore(ctx context.Context, o V3RestoreOptions) V3RestoreResult {

@@ -82,7 +82,10 @@ func validateTidyRestoreCommon(cmd *cobra.Command, args []string, f tidyRestoreF
 	if len(args) > 0 && !tidyV3Path(args[0]) {
 		return fmt.Errorf("PATH requires an absolute canonical path")
 	}
-	if f.stateDir == "" || !tidyV3Path(f.stateDir) {
+	if f.stateDir == "" {
+		return fmt.Errorf("--state-dir is required: the private directory that holds the plan and journals of the tidy apply")
+	}
+	if !tidyV3Path(f.stateDir) {
 		return fmt.Errorf("--state-dir requires an absolute canonical path")
 	}
 	if cmd.Flags().Changed("limit") && (f.limit < 1 || f.limit > 1024) {
