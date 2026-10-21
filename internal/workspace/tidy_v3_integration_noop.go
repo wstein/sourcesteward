@@ -125,7 +125,7 @@ func (r *integrationRun) gitlinkDiffers(ctx context.Context, attrTree, mergeBase
 }
 
 // mergeAttributes scans the .gitattributes files of the trees (at most 64 files
-// of at most 1 MiB per tree, 1,024 tree records) for any use of merge or binary.
+// of at most 1 MiB per tree, 16,384 tree records) for any use of merge or binary.
 func (r *integrationRun) mergeAttributes(ctx context.Context, trees ...string) (bool, error) {
 	var contents [][]byte
 	seenTree, seenBlob := map[string]bool{}, map[string][]byte{}
