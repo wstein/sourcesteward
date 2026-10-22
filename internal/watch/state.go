@@ -142,6 +142,7 @@ type Health struct {
 	LastCode     string `json:"last_code"`
 	Stalled      bool   `json:"stalled"`
 	StallEpisode int    `json:"stall_episode"`
+	NextTry      string `json:"next_try"` // backoff: not polled before this time (run level: the hold)
 }
 
 func newState() *State {

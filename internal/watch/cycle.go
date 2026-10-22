@@ -52,8 +52,8 @@ func (c *cycle) compute(ctx context.Context) error {
 			rs.Baselined, rs.RestackDue, rs.RestackDone = false, nil, nil
 		}
 	}
-	if !c.w.hold.IsZero() && c.now.Before(c.w.hold) {
-		c.retryIn = c.w.hold.Sub(c.now)
+	if h := st.Health[""]; h != nil && h.waiting(c.now) {
+		c.retryIn = h.until().Sub(c.now)
 		return nil
 	}
 	for _, repo := range o.Repos {
@@ -69,7 +69,7 @@ func (c *cycle) compute(ctx context.Context) error {
 			c.emit(nil, nil, KindWatchRecovered, keyRecoveredError(h.Episode), &WatchRecoveredDetails{AfterFailures: h.Failures})
 		}
 		if h := st.Health[""]; h != nil {
-			h.Failures, h.LastCode = 0, ""
+			h.Failures, h.LastCode, h.NextTry = 0, "", ""
 		}
 	}
 	return nil
@@ -157,7 +157,7 @@ func (c *cycle) poll(ctx context.Context, repo string) error {
 	if rs == nil {
 		return nil
 	}
-	if t, ok := w.nextTry[repo]; ok && c.now.Before(t) {
+	if h := st.Health[repo]; h != nil && h.waiting(c.now) {
 		c.stalled(repo, rs)
 		return nil
 	}
@@ -474,15 +474,15 @@ func (c *cycle) fail(repo string, rs *RepoState, err error) {
 	if retry <= 0 {
 		retry = c.backoff(h.Failures)
 	}
+	h.NextTry = c.now.Add(retry).Format(time.RFC3339)
 	if h.Failures == 1 || code != h.LastCode || h.Failures%10 == 0 {
 		c.emit(rptr, nil, KindWatchError, keyError(code, h.Episode, h.Failures), &WatchErrorDetails{Code: code, Message: sanitize(msg, 512),
 			Failures: h.Failures, RetryInSeconds: int(retry / time.Second), Repo: rptr})
 	}
 	if runWide {
-		c.w.hold, c.retryIn, c.stop = c.now.Add(retry), retry, true
+		c.retryIn, c.stop = retry, true
 		return
 	}
-	c.w.nextTry[repo] = c.now.Add(retry)
 	c.stalled(repo, rs)
 }
 
@@ -517,7 +517,16 @@ func (c *cycle) succeed(repo string, rs *RepoState) {
 	if h.Stalled {
 		c.emit(rp(repo), nil, KindWatchRecovered, keyStall(h.StallEpisode), &WatchRecoveredDetails{AfterFailures: after, Repo: rp(repo)})
 	}
-	h.Failures, h.LastCode = 0, ""
+	h.Failures, h.LastCode, h.NextTry = 0, "", ""
 	rs.LastOK = c.nowS
-	delete(c.w.nextTry, repo)
+}
+
+func (h *Health) until() time.Time {
+	t, _ := time.Parse(time.RFC3339, h.NextTry)
+	return t
+}
+
+// waiting reports whether the backoff of this repository (or the run-wide hold) has not elapsed.
+func (h *Health) waiting(now time.Time) bool {
+	return h.NextTry != "" && now.Before(h.until())
 }
