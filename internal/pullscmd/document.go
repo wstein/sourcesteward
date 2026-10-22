@@ -8,27 +8,25 @@ import (
 	"io"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/wstein/sourcesteward/internal/pulls"
+	"github.com/wstein/sourcesteward/internal/snapcmd"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
-
-const maxMessage = 512
 
 // Document is the one JSON document of `stw pulls --json` (schemas/v1/pulls.schema.json).
 // Field order is the order of the contract; no key is ever omitted.
 type Document struct {
-	SchemaVersion int        `json:"schema_version"`
-	Command       string     `json:"command"`
-	Time          string     `json:"time"`
-	Host          string     `json:"host"`
-	Options       DocOptions `json:"options"`
-	Repos         []DocRepo  `json:"repos"`
-	Groups        DocGroups  `json:"groups"`
-	Summary       DocSummary `json:"summary"`
-	Errors        []DocError `json:"errors"`
-	limit         int        // for the human renderer; not part of the contract
+	SchemaVersion int                `json:"schema_version"`
+	Command       string             `json:"command"`
+	Time          string             `json:"time"`
+	Host          string             `json:"host"`
+	Options       DocOptions         `json:"options"`
+	Repos         []DocRepo          `json:"repos"`
+	Groups        DocGroups          `json:"groups"`
+	Summary       DocSummary         `json:"summary"`
+	Errors        []snapcmd.DocError `json:"errors"`
+	limit         int                // for the human renderer; not part of the contract
 }
 
 // DocOptions echoes the selection of the run.
@@ -102,56 +100,13 @@ type DocSummary struct {
 	ReposFailed int `json:"repos_failed"`
 }
 
-// DocError is one failed repository (Repo set) or owner discovery (Owner set).
-type DocError struct {
-	Repo    *string `json:"repo"`
-	Owner   *string `json:"owner"`
-	Code    string  `json:"code"`
-	Message string  `json:"message"`
-}
-
-func ownerErrorCount(d *Document) int {
-	n := 0
-	for _, e := range d.Errors {
-		if e.Owner != nil {
-			n++
-		}
-	}
-	return n
-}
-
-// cut shortens s to at most n bytes on a UTF-8 boundary.
-func cut(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
-}
-
-func strPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-func strings0(in []string) []string {
-	if in == nil {
-		return []string{}
-	}
-	return in
-}
-
-func buildDocument(p Params, res *pulls.Result, sources map[string]string, ownerErrs []DocError) *Document {
-	d := &Document{SchemaVersion: 1, Command: "pulls", Time: res.Time.UTC().Format(time.RFC3339), Host: cut(p.Host, pulls.MaxString), limit: res.Limit}
-	d.Options = DocOptions{Scope: p.Scope, Owners: strings0(p.Owners), NoBots: p.Options.NoBots, BotsOnly: p.Options.BotsOnly, Authors: strings0(p.Options.Authors),
+func buildDocument(p Params, res *pulls.Result, sources map[string]string, ownerErrs []snapcmd.DocError) *Document {
+	d := &Document{SchemaVersion: 1, Command: "pulls", Time: res.Time.UTC().Format(time.RFC3339), Host: snapcmd.Cut(p.Host, pulls.MaxString), limit: res.Limit}
+	d.Options = DocOptions{Scope: p.Scope, Owners: snapcmd.Strings0(p.Owners), NoBots: p.Options.NoBots, BotsOnly: p.Options.BotsOnly, Authors: snapcmd.Strings0(p.Options.Authors),
 		DetailDrafts: p.Options.DetailDrafts, Limit: res.Limit}
 	d.Repos = []DocRepo{}
 	for _, st := range res.Repos {
-		r := DocRepo{Repo: st.Repo, Source: sources[strings.ToLower(st.Repo)], Open: st.Open, Listed: st.Listed, Error: strPtr(st.Error)}
+		r := DocRepo{Repo: st.Repo, Source: sources[strings.ToLower(st.Repo)], Open: st.Open, Listed: st.Listed, Error: snapcmd.StrPtr(st.Error)}
 		if r.Source == "" {
 			r.Source = SourceRepo
 		}
@@ -176,19 +131,19 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 	s := res.Summary
 	d.Summary = DocSummary{Total: s.Total, Ready: s.Ready, Checks: s.Checks, Conflict: s.Conflict, Draft: s.Draft, Blocked: s.Blocked, Bots: s.Bots,
 		NotRead: s.NotRead, ReposRead: s.ReposRead, ReposFailed: s.ReposFailed}
-	d.Errors = []DocError{}
+	d.Errors = []snapcmd.DocError{}
 	for _, e := range res.Errors {
 		repo := e.Repo
-		d.Errors = append(d.Errors, DocError{Repo: &repo, Code: e.Code, Message: cut(e.Message, maxMessage)})
+		d.Errors = append(d.Errors, snapcmd.DocError{Repo: &repo, Code: e.Code, Message: snapcmd.Cut(e.Message, snapcmd.MaxMessage)})
 	}
 	d.Errors = append(d.Errors, ownerErrs...)
 	return d
 }
 
 func docRow(r pulls.Row) DocRow {
-	row := DocRow{Repo: r.Repo, Number: r.Number, Title: r.Title, URL: strPtr(r.URL), Author: r.Author, Bot: r.Bot, Draft: r.Draft, AgeDays: r.AgeDays,
-		Base: r.Base, HeadRef: r.HeadRef, Fork: r.Fork, Labels: strings0(r.Labels), Checks: r.Checks, Failing: strings0(r.Failing), Mergeable: r.Mergeable,
-		MergeableState: r.MergeableState, Rebaseable: r.Rebaseable, Reviewers: strings0(r.Reviewers), Group: r.Group, Reason: strPtr(r.Reason), Ready: r.Ready, Detail: r.Detail}
+	row := DocRow{Repo: r.Repo, Number: r.Number, Title: r.Title, URL: snapcmd.StrPtr(r.URL), Author: r.Author, Bot: r.Bot, Draft: r.Draft, AgeDays: r.AgeDays,
+		Base: r.Base, HeadRef: r.HeadRef, Fork: r.Fork, Labels: snapcmd.Strings0(r.Labels), Checks: r.Checks, Failing: snapcmd.Strings0(r.Failing), Mergeable: r.Mergeable,
+		MergeableState: r.MergeableState, Rebaseable: r.Rebaseable, Reviewers: snapcmd.Strings0(r.Reviewers), Group: r.Group, Reason: snapcmd.StrPtr(r.Reason), Ready: r.Ready, Detail: r.Detail}
 	if pulls.ValidSHA(r.Head) {
 		head := r.Head
 		row.Head = &head
@@ -248,15 +203,15 @@ func writeHuman(w io.Writer, d *Document) error {
 		b.WriteByte('\n')
 	}
 	s := d.Summary
-	fmt.Fprintf(&b, "%s in %s, %d ready\n", plural(s.Total, "open pull request", "open pull requests"), plural(s.ReposRead, "repository", "repositories"), s.Ready)
+	fmt.Fprintf(&b, "%s in %s, %d ready\n", snapcmd.Plural(s.Total, "open pull request", "open pull requests"), snapcmd.Plural(s.ReposRead, "repository", "repositories"), s.Ready)
 	if s.NotRead > 0 {
 		fmt.Fprintf(&b, "%d not read (past --limit %d)\n", s.NotRead, d.limit)
 	}
 	if s.ReposFailed > 0 {
-		fmt.Fprintf(&b, "%s could not be read\n", plural(s.ReposFailed, "repository", "repositories"))
+		fmt.Fprintf(&b, "%s could not be read\n", snapcmd.Plural(s.ReposFailed, "repository", "repositories"))
 	}
-	if n := ownerErrorCount(d); n > 0 {
-		fmt.Fprintf(&b, "%s with owner discovery\n", plural(n, "problem", "problems"))
+	if n := snapcmd.OwnerErrorCount(d.Errors); n > 0 {
+		fmt.Fprintf(&b, "%s with owner discovery\n", snapcmd.Plural(n, "problem", "problems"))
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
