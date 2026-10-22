@@ -425,3 +425,43 @@ func TestNewIssuesReaderWithTransportSearches(t *testing.T) {
 		t.Fatalf("the pulls reader searched issues: %v %v", err, seen)
 	}
 }
+
+// A reader of the wrong mode is refused before any request, with a message that names the
+// search, on the page read and on both discoveries.
+func TestIssueSearchWrongModeIsRefusedWithAClearMessage(t *testing.T) {
+	f := newFakeForge(t)
+	const want = "issue search is not allowed for this reader"
+	for _, mode := range []guardMode{guardPulls, guardStatus, guardWatch, guardOneShot} {
+		r := readerForMode(f, mode)
+		_, err := r.IssueSearchPage(context.Background(), "wstein", 1)
+		if we, ok := err.(*WatchError); !ok || we.Code != CodeMalformed || we.Message != want {
+			t.Errorf("mode %d page: %v", mode, err)
+		}
+		if d := r.DiscoverIssueOwner(context.Background(), "wstein"); d.Code != CodeMalformed || d.Message != want {
+			t.Errorf("mode %d discovery: %+v", mode, d)
+		}
+	}
+	d := issuesReaderFor(f).DiscoverOwner(context.Background(), "wstein")
+	if d.Code != CodeMalformed || d.Message != "search is not allowed for this reader" {
+		t.Errorf("the issues reader searched pull requests: %+v", d)
+	}
+	if len(f.log) != 0 {
+		t.Fatalf("sent %v", f.log)
+	}
+}
+
+// Owners are compared case-insensitively and the first spelling is the one requested.
+func TestDiscoverIssueOwnersKeepsTheFirstSpellingOfAnOwner(t *testing.T) {
+	f := newFakeForge(t)
+	f.handlers[issueSearchPath("Wstein", 1)] = func(*http.Request) *http.Response {
+		return response(200, searchBody(1, false, searchItem("https://api.github.com/repos/wstein/a", 1)))
+	}
+	f.handlers[issueSearchPath("Other", 1)] = func(*http.Request) *http.Response { return response(200, searchBody(0, false)) }
+	ds := issuesReaderFor(f).DiscoverIssueOwners(context.Background(), []string{"Wstein", "WSTEIN", "wstein", "Other"})
+	if len(ds) != 2 || ds[0].Owner != "Wstein" || ds[0].Code != "" || !reflect.DeepEqual(ds[0].Repos, []string{"wstein/a"}) || ds[1].Owner != "Other" || ds[1].Code != "" {
+		t.Fatalf("%+v", ds)
+	}
+	if !reflect.DeepEqual(f.log, []string{issueSearchPath("Wstein", 1), issueSearchPath("Other", 1)}) {
+		t.Fatalf("%v", f.log)
+	}
+}
