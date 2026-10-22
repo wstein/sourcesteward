@@ -142,48 +142,58 @@ func TestLocalCleanRepositoryHasNoItems(t *testing.T) {
 	}
 }
 
-// Every attention reason of Spec 033 (the exact list of stwsync.attention) maps to an item.
+// Every attention reason of Spec 033 maps to an item. The reasons come from stwsync, the source of truth: a new
+// reason has no fixture here and fails this test until it is mapped.
 func TestEveryAttentionReasonMapsToARow(t *testing.T) {
-	facts := map[string]func(*stwsync.RepoStatus){
-		"operation":   func(r *stwsync.RepoStatus) { r.Operation = sp("merge") },
-		"conflicts":   func(r *stwsync.RepoStatus) { r.Changes.Conflicts = 1 },
-		"staged":      func(r *stwsync.RepoStatus) { r.Changes.Staged = 1 },
-		"unstaged":    func(r *stwsync.RepoStatus) { r.Changes.Unstaged = 1 },
-		"untracked":   func(r *stwsync.RepoStatus) { r.Changes.Untracked = 1 },
-		"behind":      func(r *stwsync.RepoStatus) { r.Behind = ip(1) },
-		"diverged":    func(r *stwsync.RepoStatus) { r.Behind = ip(1); r.Ahead = ip(1) },
-		"no-upstream": func(r *stwsync.RepoStatus) { r.Upstream = nil },
-		"detached":    func(r *stwsync.RepoStatus) { r.Detached = true; r.Branch = nil },
-		"gitlink-drift": func(r *stwsync.RepoStatus) {
+	type row struct {
+		mod func(*stwsync.RepoStatus)
+		cat Category
+	}
+	rows := map[string]row{
+		"error":       {func(r *stwsync.RepoStatus) { r.State = "error" }, RepoError},
+		"operation":   {func(r *stwsync.RepoStatus) { r.Operation = sp("merge") }, LocalOperation},
+		"conflicts":   {func(r *stwsync.RepoStatus) { r.Changes.Conflicts = 1 }, LocalOperation},
+		"staged":      {func(r *stwsync.RepoStatus) { r.Changes.Staged = 1 }, LocalChanges},
+		"unstaged":    {func(r *stwsync.RepoStatus) { r.Changes.Unstaged = 1 }, LocalChanges},
+		"untracked":   {func(r *stwsync.RepoStatus) { r.Changes.Untracked = 1 }, LocalUntracked},
+		"behind":      {func(r *stwsync.RepoStatus) { r.Behind = ip(1) }, LocalBehind},
+		"diverged":    {func(r *stwsync.RepoStatus) { r.Behind = ip(1); r.Ahead = ip(1) }, LocalBehind},
+		"no-upstream": {func(r *stwsync.RepoStatus) { r.Upstream = nil }, LocalNoUpstream},
+		"detached":    {func(r *stwsync.RepoStatus) { r.Detached = true; r.Branch = nil }, LocalDetached},
+		"gitlink-drift": {func(r *stwsync.RepoStatus) {
 			r.Gitlink = &stwsync.Gitlink{State: "drift", Relation: sp("diverged")}
-		},
+		}, GitlinkDrift},
 	}
-	want := map[string]Category{
-		"operation": LocalOperation, "conflicts": LocalOperation, "staged": LocalChanges, "unstaged": LocalChanges,
-		"untracked": LocalUntracked, "behind": LocalBehind, "diverged": LocalBehind, "no-upstream": LocalNoUpstream,
-		"detached": LocalDetached, "gitlink-drift": GitlinkDrift,
-	}
-	if len(facts) != 10 {
-		t.Fatal("the attention rule has ten reasons")
-	}
-	for reason, mod := range facts {
-		rp := repoOK("r", mod)
+	reasons := stwsync.AttentionReasons()
+	for _, reason := range reasons {
+		row, ok := rows[reason]
+		if !ok {
+			t.Errorf("attention reason %q of stwsync has no row in the action model: map it", reason)
+			continue
+		}
+		rp := repoOK("r", row.mod)
 		rp.Reasons = []string{reason}
 		items := local(rp)
-		if len(items) != 1 || items[0].Category != want[reason] {
+		if len(items) != 1 || items[0].Category != row.cat {
 			t.Errorf("reason %s: %v", reason, ids(items))
 		}
 	}
-	// The same repository with its reasons in the order of the rule never loses one.
+	if len(rows) != len(reasons) {
+		t.Errorf("%d fixtures for %d reasons: a reason was removed from stwsync", len(rows), len(reasons))
+	}
+	// The same repository with all its reasons at once loses none; staged+unstaged and behind+diverged
+	// collapse per subject.
 	rp := repoOK("r", func(r *stwsync.RepoStatus) {
-		for _, m := range facts {
-			m(r)
+		for reason, row := range rows {
+			if reason != "error" {
+				row.mod(r)
+			}
 		}
 		r.Branch, r.Upstream = nil, nil
 	})
-	rp.Reasons = []string{"operation", "conflicts", "staged", "unstaged", "untracked", "behind", "diverged", "no-upstream", "detached", "gitlink-drift"}
+	rp.Reasons = reasons[1:]
 	if got := len(local(rp)); got != 8 {
-		t.Errorf("all reasons: %d items, want 8 (staged+unstaged and behind+diverged collapse per subject)", got)
+		t.Errorf("all reasons: %d items, want 8", got)
 	}
 }
 
