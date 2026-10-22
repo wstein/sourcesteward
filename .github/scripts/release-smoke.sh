@@ -9,8 +9,10 @@
 # repository root: the expected third_party/ members are read from there. Checks, in order:
 # the checksum; the archive members; that `stw version` prints "SourceSteward VERSION" (and
 # the same version with --json); `--help`; then, on a tiny temporary Git repository and with
-# no network: `inspect`, `status` and a plan-only `tidy plan`, which must leave every
-# reference and the working tree unchanged. Works with POSIX tools on Linux and macOS.
+# no network: `inspect` and `status`, which must leave every reference and the working tree
+# unchanged. Commands that run Git inside the native sandbox (bubblewrap, sandbox-exec), such as
+# `tidy plan`, are deliberately not run here: the runners need not allow the sandbox, and ci.yml
+# conformance covers them. Works with POSIX tools on Linux and macOS.
 
 set -eu
 
@@ -87,13 +89,7 @@ tree_before=$(git -C "$repo" status --porcelain=v1) || fail "cannot read status"
 stw inspect "$repo" --json | tr -d ' \n' | grep -q '"status":"ok".*"backend":"git"' || fail "inspect --json did not report an ok git repository"
 stw status "$repo" | grep -q '1 repository' || fail "status did not report one repository"
 stw status "$repo" --json | tr -d ' \n' | grep -q '"total":1' || fail "status --json did not total one repository"
-stw tidy plan "$repo" --base refs/heads/main | grep -q 'Status: "ok"' || fail "tidy plan did not report ok"
-stw tidy plan "$repo" --base refs/heads/main --json | tr -d ' \n' | grep -q '"command":"tidy-plan","status":"ok"' || fail "tidy plan --json did not report ok"
 
-[ "$(git -C "$repo" for-each-ref)" = "$refs_before" ] || fail "a plan-only command changed the references"
-[ "$(git -C "$repo" status --porcelain=v1)" = "$tree_before" ] || fail "a plan-only command changed the working tree"
-# A plan without its required base is refused, never guessed.
-if stw tidy plan "$repo" >/dev/null 2>&1; then
-	fail "tidy plan without --base succeeded"
-fi
+[ "$(git -C "$repo" for-each-ref)" = "$refs_before" ] || fail "a read-only command changed the references"
+[ "$(git -C "$repo" status --porcelain=v1)" = "$tree_before" ] || fail "a read-only command changed the working tree"
 printf 'release-smoke: %s ok\n' "$file"

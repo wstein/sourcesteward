@@ -448,3 +448,33 @@ func TestNotes(t *testing.T) {
 		t.Errorf("usage error must exit 2: %+v", r)
 	}
 }
+
+func TestSmokeNeedsNoSandbox(t *testing.T) {
+	gnuTar(t)
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("SKIPPED, NOT PASSED: stw archives are shipped for linux and darwin only")
+	}
+	// Failing sandbox launchers stand in for a runner that forbids unprivileged namespaces.
+	shims := t.TempDir()
+	for _, name := range []string{"bwrap", "sandbox-exec"} {
+		body := "#!/bin/sh\necho \"" + name + ": denied\" >&2\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(shims, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bin := realBinary(t, "v0.1.0")
+	out := t.TempDir()
+	if r := pack(t, "v0.1.0", hostTarget(), bin, out); r.code != 0 {
+		t.Fatalf("pack: %+v", r)
+	}
+	archive := filepath.Join(out, "stw_0.1.0_"+hostTarget()+".tar.gz")
+	path := "PATH=" + shims + string(os.PathListSeparator) + os.Getenv("PATH")
+	if r := smoke(t, []string{path}, "v0.1.0", archive); r.code != 0 {
+		t.Errorf("the smoke must not depend on the native sandbox: %+v", r)
+	}
+	for _, line := range strings.Split(readRepo(t, ".github/scripts/release-smoke.sh"), "\n") {
+		if code := strings.TrimSpace(line); !strings.HasPrefix(code, "#") && (strings.Contains(code, "tidy") || strings.Contains(code, "workspace ") || strings.Contains(code, "stw sync")) {
+			t.Errorf("the smoke must not run sandboxed commands: %s", code)
+		}
+	}
+}
