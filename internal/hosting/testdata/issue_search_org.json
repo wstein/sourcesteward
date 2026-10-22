@@ -34,14 +34,10 @@
         "user_view_type": "public",
         "site_admin": false
       },
-      "labels": [
-
-      ],
+      "labels": [],
       "state": "open",
       "locked": false,
-      "assignees": [
-
-      ],
+      "assignees": [],
       "milestone": null,
       "comments": 48,
       "created_at": "2011-10-05T14:23:20Z",
@@ -49,9 +45,7 @@
       "closed_at": null,
       "assignee": null,
       "author_association": "NONE",
-      "issue_field_values": [
-
-      ],
+      "issue_field_values": [],
       "type": null,
       "active_lock_reason": null,
       "sub_issues_summary": {
@@ -65,7 +59,6 @@
         "blocking": 0,
         "total_blocking": 0
       },
-      "body": "I have tried every approach for embedding equations into my rst markup on Github, but none seem to work:\n\n```\n.. math::\n\n    \\beta = \\alpha + \\epsilon^2\n```\n\nand\n\n```\n.. raw:: latex html\n\n    \\[  \\beta = \\alpha + \\epsilon^2 \\]\n```\n\nas well as adding a MathJax script to the rst file.\n\nSince I largely develop statistical software, its important to be able to add math to my wiki pages and docs. Is this something that will be added in the near future, or is there a workaround?\n",
       "reactions": {
         "url": "https://api.github.com/repos/github/markup/issues/83/reactions",
         "total_count": 22,
@@ -81,7 +74,6 @@
       "timeline_url": "https://api.github.com/repos/github/markup/issues/83/timeline",
       "performed_via_github_app": null,
       "state_reason": "reopened",
-      "pinned_comment": null,
       "score": 1.0
     },
     {
@@ -116,14 +108,10 @@
         "user_view_type": "public",
         "site_admin": false
       },
-      "labels": [
-
-      ],
+      "labels": [],
       "state": "open",
       "locked": false,
-      "assignees": [
-
-      ],
+      "assignees": [],
       "milestone": null,
       "comments": 0,
       "created_at": "2011-10-10T03:24:03Z",
@@ -131,9 +119,7 @@
       "closed_at": null,
       "assignee": null,
       "author_association": "NONE",
-      "issue_field_values": [
-
-      ],
+      "issue_field_values": [],
       "type": null,
       "active_lock_reason": null,
       "sub_issues_summary": {
@@ -147,7 +133,6 @@
         "blocking": 0,
         "total_blocking": 0
       },
-      "body": "For example:\n\n```\nHi! I'm replying to an email! let me end it with a quote:\n\n> this is a quote! \n\nOn Oct 9, 2011, at 3:47 PM, Maboo <hello@rapgenius.com> wrote:\n\n> THIS IS THE ORIGINAL EMAIL!\n> HI!\n```\n\nThis produces the following fragments:\n\n```\n--- \n- !ruby/struct:EmailReplyParser::Fragment \n  quoted: false\n  signature: false\n  hidden: false\n  \"@content\": \"Hi! I'm replying to an email! let me end it with a quote:\"\n  \"@lines\": \n- !ruby/struct:EmailReplyParser::Fragment \n  quoted: true\n  signature: false\n  hidden: true\n  \"@content\": |-\n\n    > this is a quote!\n\n    On Oct 9, 2011, at 3:47 PM, Maboo <hello@rapgenius.com> wrote:\n\n    > THIS IS THE ORIGINAL EMAIL!\n    > HI!\n  \"@lines\": \n```\n\nMaybe ERP should look for the `On Oct 9, 2011, at 3:47 PM, Maboo <hello@rapgenius.com> wrote` business as well as the angle bracket?\n",
       "reactions": {
         "url": "https://api.github.com/repos/github/email_reply_parser/issues/3/reactions",
         "total_count": 0,
@@ -163,7 +148,6 @@
       "timeline_url": "https://api.github.com/repos/github/email_reply_parser/issues/3/timeline",
       "performed_via_github_app": null,
       "state_reason": null,
-      "pinned_comment": null,
       "score": 1.0
     },
     {
@@ -198,14 +182,10 @@
         "user_view_type": "public",
         "site_admin": false
       },
-      "labels": [
-
-      ],
+      "labels": [],
       "state": "open",
       "locked": false,
-      "assignees": [
-
-      ],
+      "assignees": [],
       "milestone": null,
       "comments": 6,
       "created_at": "2013-04-20T16:20:19Z",
@@ -213,9 +193,7 @@
       "closed_at": null,
       "assignee": null,
       "author_association": "CONTRIBUTOR",
-      "issue_field_values": [
-
-      ],
+      "issue_field_values": [],
       "type": null,
       "active_lock_reason": null,
       "sub_issues_summary": {
@@ -229,7 +207,6 @@
         "blocking": 0,
         "total_blocking": 0
       },
-      "body": "We need to add some logging to the `Client` class. For each request the client makes, we should output a detailed debug message to a logger of some sort. I really like how Tire does it; logging a curl command that you can copy/paste and use directly. Also, outputting the status code of the response would be good, too ...\n\n```\n[200] curl -XGET 'http://localhost:9200/index/_search' -d '...'\n```\n\nNot sure how to handle large bodies and what not. And I don't think we need to log responses.\n\ncc @github/search\n",
       "reactions": {
         "url": "https://api.github.com/repos/github/elastomer-client/issues/5/reactions",
         "total_count": 0,
@@ -245,7 +222,6 @@
       "timeline_url": "https://api.github.com/repos/github/elastomer-client/issues/5/timeline",
       "performed_via_github_app": null,
       "state_reason": null,
-      "pinned_comment": null,
       "score": 1.0
     }
   ],
