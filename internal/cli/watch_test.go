@@ -227,10 +227,17 @@ func TestWatchNoReachableRepositoryInOnceIsExitOne(t *testing.T) {
 	}
 }
 
-func TestWatchIsHiddenAndDocumentedInItsHelp(t *testing.T) {
+func TestWatchIsVisibleAndDocumentedInItsHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if status := Run(context.Background(), "test", []string{"--help"}, &stdout, &stderr); status != 0 || strings.Contains(stdout.String(), "  watch ") {
-		t.Fatalf("watch must stay hidden until accepted: %d %s", status, stdout.String())
+	if status := Run(context.Background(), "test", []string{"--help"}, &stdout, &stderr); status != 0 || !strings.Contains(stdout.String(), "  watch ") {
+		t.Fatalf("watch must be listed in the root help: %d %s", status, stdout.String())
+	}
+	listed := false
+	for _, doc := range CommandReference() {
+		listed = listed || doc.Path == "stw watch" || strings.HasSuffix(doc.Path, " watch")
+	}
+	if !listed {
+		t.Fatal("generated command reference does not list watch")
 	}
 	stdout.Reset()
 	if status := Run(context.Background(), "test", []string{"watch", "--help"}, &stdout, &stderr); status != 0 || !strings.Contains(stdout.String(), "--until-event") {

@@ -19,8 +19,6 @@ func watchCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "watch [PATH] [--repo OWNER/NAME]... [--workspace] [--once | --stream | --until-event KIND[,KIND]...] [--status]",
 		Short: "Watch the open pull requests of GitHub repositories and print only the transitions",
-		// Hidden until Spec 035 is accepted, like stw status was.
-		Hidden: true,
 		Long: "Read-only watcher: polls the open pull requests of one or more GitHub repositories, compares each poll with the previous\n" +
 			"one and prints only the transitions as JSON Lines events (new-pr, head-changed, checks-green, checks-red,\n" +
 			"checks-pending-timeout, mergeable-changed, ready-state-changed, base-changed, merged, closed, restack-needed, repos-changed,\n" +
