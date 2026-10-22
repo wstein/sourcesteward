@@ -134,6 +134,26 @@ A tag is **unreleased** per release tag pattern (`v*.*.*`, a semantic version wi
 release, draft or published, carries its name (without a published release only the highest tag counts). `*` matches any text and the text between the
 pattern's literal head and tail must be a semantic version; other tags are ignored, prereleases order as in semantic versioning, and at most 5 unreleased tags are listed, pattern by pattern in the declared order. The latest tag of each pattern is reported as well, with one entry per pattern and tag.
 
+## CI state for `stw status` (Spec 037, work package C)
+
+The online `stw status` reads the CI state of each GitHub repository through the status reader (guard mode `status`, 15 s per
+request, same bounds as `stw watch`). It adds no request shape. The default branch is read through `branches/DEFAULT` and the
+existing check-run and commit-status reads, classified `none`, `pending`, `green` or `red` by the same classifier as `stw watch` and
+`stw pulls`. A release run is read through the fixed Spec 026 shape
+`actions/workflows/FILE/runs?head_sha=SHA&per_page=100&page=1`, page 1 only, by the typed `WorkflowRuns` read and the decoder
+`DecodeWorkflowRuns`; the newest runs come first by creation time and at most 20 are kept per tag.
+
+The reads live in `internal/statusremote`. `ci-release` reads one workflow file: the `ci.release_workflow` of the repository's
+`.stw/release.toml` (or `release.PRODUCT.toml`, or the JSON form), its file name only, and `release.yml` when no valid contract
+declares one; a 404 for that workflow ends the source as `skipped`, reason `not-found`. It reads the commit of the latest tag of each
+declared product (the tag grammar of the contract; `v*.*.*`, semver with an optional `v`, when none is declared) and of the
+unreleased tags the caller names (at most 5), one entry per tag name. A failure, cancelled or timed-out newest run is a red item
+of the action model; a run still in progress is not.
+
+`behind_origin` never uses the network: `stwsync.BehindOrigin` looks the head of the default branch up in the local object store
+and is true when the commit is absent or is not an ancestor of the local branch tip. It runs read-only Git, never fetches, and stays
+undecided without a clone or a local branch of that name.
+
 ## Optional local extension installation
 
 After reviewing/building this source:
