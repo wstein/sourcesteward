@@ -45,7 +45,7 @@ func notices(in Input) []Notice {
 			switch st.Outcome {
 			case OutcomeSkipped:
 				switch st.Reason {
-				case "offline":
+				case "offline", ReasonIssuesDisabled:
 				case ReasonNotFound:
 					add(key{ReasonNotFound, string(src)}, name, st.Reason, src)
 				case ReasonNoToken, ReasonDeadline:
@@ -72,6 +72,7 @@ func notices(in Input) []Notice {
 			}
 		}
 	}
+	out = append(out, viewerNotices(in.Viewer)...)
 	for k, g := range groups {
 		out = append(out, Notice{Code: k.code, Source: k.source, Repos: capRepos(g.repos), Message: noticeMessage(in, k.code, g.code, g.src, len(g.repos), g.pairs)})
 	}
@@ -111,7 +112,7 @@ func capRepos(set map[string]bool) []string {
 // sourceLabel names a source in a notice.
 var sourceLabel = map[Source]string{
 	SourceRepo: "repository data", SourcePulls: "pull requests", SourceReleases: "releases", SourceTags: "tags",
-	SourceCIMain: "default branch CI", SourceCIRelease: "release workflow runs",
+	SourceCIMain: "default branch CI", SourceCIRelease: "release workflow runs", SourceIssues: "issues",
 }
 
 // skipText names why the remote sources of a repository were skipped before any read.
@@ -148,4 +149,17 @@ func errorText(code string) string {
 		return "network error"
 	}
 	return untrusted.Esc(code)
+}
+
+// viewerNotices says that "assigned to you" is not flagged: when the token class cannot read the
+// authenticated user (a skip) and when the read failed. A skip because no request was made (offline, no
+// token) is already told by the sources.
+func viewerNotices(v SourceState) []Notice {
+	switch {
+	case v.Outcome == OutcomeSkipped && v.Reason == ReasonNoIdentity:
+		return []Notice{{Code: ReasonNoIdentity, Source: "viewer", Message: "the token cannot read the authenticated user: issues assigned to you are not flagged"}}
+	case v.Outcome == OutcomeError:
+		return []Notice{{Code: "viewer-unknown", Source: "viewer", Message: "the authenticated user could not be read (" + untrusted.Esc(v.Code) + "): issues assigned to you are not flagged"}}
+	}
+	return nil
 }

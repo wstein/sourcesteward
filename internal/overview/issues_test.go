@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/issues"
 )
@@ -214,5 +215,82 @@ func TestIssueItemsGroupIntoOneLineWithThreeIdsAndTheDrillDown(t *testing.T) {
 	one := Group(Build(Input{Repos: []Repo{remoteRepo(withIssues(rows[0]))}}).Items)[0].Lines[0]
 	if one.Count != 1 || one.URL != rows[0].URL || one.Command != "gh issue view 12 -R wstein/sourcesteward" {
 		t.Fatalf("%+v", one)
+	}
+}
+
+func TestViewerNotices(t *testing.T) {
+	cases := []struct {
+		name   string
+		viewer SourceState
+		want   []Notice
+	}{
+		{"not attempted", SourceState{}, nil},
+		{"ok", SourceState{Outcome: OutcomeOK}, nil},
+		{"no identity", SourceState{Outcome: OutcomeSkipped, Reason: ReasonNoIdentity}, []Notice{{Code: "no-identity", Source: "viewer",
+			Message: "the token cannot read the authenticated user: issues assigned to you are not flagged"}}},
+		{"failed", SourceState{Outcome: OutcomeError, Code: "http-5xx"}, []Notice{{Code: "viewer-unknown", Source: "viewer",
+			Message: "the authenticated user could not be read (http-5xx): issues assigned to you are not flagged"}}},
+		{"rate limited", SourceState{Outcome: OutcomeError, Code: CodeRateLimited}, []Notice{{Code: "viewer-unknown", Source: "viewer",
+			Message: "the authenticated user could not be read (rate-limited): issues assigned to you are not flagged"}}},
+		{"hostile code", SourceState{Outcome: OutcomeError, Code: "x\x1b[31m"}, []Notice{{Code: "viewer-unknown", Source: "viewer",
+			Message: `the authenticated user could not be read (x\x1b[31m): issues assigned to you are not flagged`}}},
+		{"no request is no notice", SourceState{Outcome: OutcomeSkipped, Reason: ReasonNoToken}, nil},
+		{"offline is no notice", SourceState{Outcome: OutcomeSkipped, Reason: "offline"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ov := Build(Input{Repos: []Repo{remoteRepo(withIssues())}, Viewer: c.viewer})
+			if !reflect.DeepEqual(ov.Notices, c.want) && !(len(ov.Notices) == 0 && len(c.want) == 0) {
+				t.Fatalf("got %+v\nwant %+v", ov.Notices, c.want)
+			}
+			if ov.Summary.Notices != len(c.want) {
+				t.Errorf("summary notices %d", ov.Summary.Notices)
+			}
+		})
+	}
+}
+
+func TestViewerOutcomeShapesTheSummary(t *testing.T) {
+	repo := remoteRepo(withIssues())
+	for _, c := range []struct {
+		name             string
+		viewer           SourceState
+		degraded, failed bool
+	}{
+		{"ok", SourceState{Outcome: OutcomeOK}, false, false},
+		{"not attempted", SourceState{}, false, false},
+		{"no identity is a skip", SourceState{Outcome: OutcomeSkipped, Reason: ReasonNoIdentity}, true, false},
+		{"failed read", SourceState{Outcome: OutcomeError, Code: "network"}, true, true},
+	} {
+		s := Build(Input{Repos: []Repo{repo}, Viewer: c.viewer}).Summary
+		if s.Degraded != c.degraded || s.Failed != c.failed {
+			t.Errorf("%s: %+v", c.name, s)
+		}
+	}
+}
+
+// A repository with issues disabled is a fact, not a gap: no notice, not degraded, no failure.
+func TestIssuesDisabledIsNeitherANoticeNorDegraded(t *testing.T) {
+	r := remoteRepo(func(r *Remote) {
+		r.Sources[SourceIssues] = SourceState{Outcome: OutcomeSkipped, Reason: ReasonIssuesDisabled}
+	})
+	ov := Build(Input{Repos: []Repo{r}})
+	if len(ov.Notices) != 0 || ov.Summary.Degraded || ov.Summary.Failed || len(ov.Items) != 0 {
+		t.Fatalf("%+v", ov)
+	}
+	// The other skips of the source keep their meaning.
+	r = remoteRepo(func(r *Remote) {
+		r.Sources[SourceIssues] = SourceState{Outcome: OutcomeSkipped, Reason: ReasonDeadline}
+	})
+	if ov := Build(Input{Repos: []Repo{r}, Deadline: 90 * time.Second}); !ov.Summary.Degraded || len(ov.Notices) != 1 || ov.Notices[0].Code != "deadline" {
+		t.Fatalf("%+v", ov)
+	}
+}
+
+func TestFailedIssuesSourceGetsItsOwnNotice(t *testing.T) {
+	r := remoteRepo(func(r *Remote) { r.Sources[SourceIssues] = SourceState{Outcome: OutcomeError, Code: "forbidden"} })
+	ov := Build(Input{Repos: []Repo{r}})
+	if len(ov.Notices) != 1 || ov.Notices[0].Source != "issues" || ov.Notices[0].Message != "forbidden: issues of 1 repositories not read" || !ov.Summary.Failed {
+		t.Fatalf("%+v", ov.Notices)
 	}
 }
