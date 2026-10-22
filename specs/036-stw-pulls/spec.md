@@ -48,7 +48,7 @@ stw pulls [--workspace [PATH]] [--repo OWNER/NAME ...] [--owner OWNER ...] [--ho
 - Filters: `--no-bots` and `--bots-only` are mutually exclusive (usage error, exit 2). `--author LOGIN` (repeatable; pattern
   `[A-Za-z0-9-]{1,39}` with an optional `[bot]` suffix) intersects with them (`--bots-only --author alice` is valid and empty unless
   alice is a bot). Filters apply **before** the budget is spent.
-- `--owner` takes a login (`[A-Za-z0-9-]{1,39}`), repeatable. A bot marker is `user.type == "Bot"`, else a login ending in `[bot]`; a
+- `--owner` takes a GitHub login (ASCII letters, digits and single interior hyphens, no leading, trailing or doubled hyphen, 1 to 39 characters), repeatable. A bot marker is `user.type == "Bot"`, else a login ending in `[bot]`; a
   machine-user bot without either is not marked.
 - Platform: `stw` as a whole is Unix-only today (release matrix, `internal/release`); `stw pulls` adds no restriction of its own.
 
@@ -153,7 +153,7 @@ above, matched in a **third guard mode**
 `pulls/N`, checks, commits) plus the single search shape and refuses everything else; `stw watch` and the one-shot operations keep their
 own modes and **cannot reach the search shape** (tests: each mode refuses the shapes outside its set). FR-006 (1 MiB) and FR-007 (30 s per
 request) apply as in Spec 035. The search shape is `search/issues?q=user%3AOWNER+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=N&sort=created&order=asc`: OWNER is
-`[A-Za-z0-9-]{1,39}` checked byte-wise (no encoded, Unicode, `+`, `:` or control form), N is 1 to 10, the guard matches the string produced by
+a GitHub login (ASCII letters, digits, single interior hyphens, 1 to 39) checked byte-wise (no encoded, Unicode, `+`, `:` or control form), N is 1 to 10, the guard matches the string produced by
 the one generator and nothing else (no other parameter, order, case of the escapes or `q`), and a reader built for `watch` refuses it before any request.
 Spec 022 FR-005 carries the same text and a pointer to this section.
 
