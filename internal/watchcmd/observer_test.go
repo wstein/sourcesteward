@@ -528,10 +528,10 @@ func TestObserveReportsTheForkFlagOnlyWhenPullDetailWasRead(t *testing.T) {
 	if obs.PRs[0].ForkKnown || obs.PRs[0].Fork {
 		t.Fatalf("an unread fork must not be reported as an answer: %+v", obs.PRs[0])
 	}
-	s.cyc = 9 // slow refresh: a 304 reads no body either
+	s.cyc = 8 // the next cycle is 9: (9+1) % 10 == 0 is the slow refresh, whose 304 reads no body
 	obs = s.observe(t)
-	if obs.PRs[0].ForkKnown {
-		t.Fatalf("304: %+v", obs.PRs[0])
+	if f.count("detail/1") != 1 || f.etags["detail/1"] != `"d1"` || obs.PRs[0].ForkKnown || obs.PRs[0].Fork {
+		t.Fatalf("304 on the slow refresh: %v %v %+v", f.calls, f.etags, obs.PRs[0])
 	}
 }
 

@@ -175,10 +175,24 @@ func TestPrepareRefusesASymlinkOrFIFOAsTheImplicitConfig(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("a FIFO blocked the read")
 	}
+	// an explicit --config naming a FIFO is refused without blocking
+	done = make(chan error, 1)
+	go func() { _, err := prep(t, Flags{Config: link}); done <- err }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrUsage) {
+			t.Fatalf("explicit fifo: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a FIFO named by --config blocked the read")
+	}
 	os.Remove(link)
+	// a symlinked .stw is not a real directory, even when the target holds a valid watch.toml
 	os.RemoveAll(filepath.Join(root, ".stw"))
-	os.Symlink(t.TempDir(), filepath.Join(root, ".stw"))
-	if _, err := prep(t, Flags{}); err != nil && !errors.Is(err, ErrUsage) {
-		t.Fatalf("%v", err)
+	real := t.TempDir()
+	os.WriteFile(filepath.Join(real, "watch.toml"), []byte(fullConfig), 0o644)
+	os.Symlink(real, filepath.Join(root, ".stw"))
+	if _, err := prep(t, Flags{}); !errors.Is(err, ErrUsage) || !strings.Contains(err.Error(), "not a real directory") {
+		t.Fatalf("symlinked .stw: %v", err)
 	}
 }
