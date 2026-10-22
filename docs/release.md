@@ -10,6 +10,10 @@ See [feature status](feature-status.json) and the
 [work items](../specs/026-release-process/tasks.md). WI9 documentation can start
 after the contract is stable but finishes only after WI8 workflows.
 
+**The first `stw` release is not made by these commands.** `v0.1.0` uses the simple owner-pushed
+annotated tag workflow `.github/workflows/release.yml` (Spec 026 D7, the bootstrap pattern); see the
+[bootstrap release plan](../specs/034-bootstrap-release/spec.md). The machinery below supersedes it later.
+
 ## Current command and acceptance matrix
 
 Use an already available binary matching the source revision. Hidden commands
