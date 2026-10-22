@@ -36,3 +36,21 @@ func (l *dirLock) Close() error {
 	syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN)
 	return l.f.Close()
 }
+
+// lockHolder reports whether a watcher holds the lock of dir and its recorded pid. It takes a shared
+// non-blocking lock only to probe, writes nothing and never creates the lock file.
+func lockHolder(dir string) (bool, int) {
+	f, err := os.Open(filepath.Join(dir, "lock"))
+	if err != nil {
+		return false, 0
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err == nil {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return false, 0
+	}
+	raw := make([]byte, 32)
+	n, _ := f.ReadAt(raw, 0)
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw[:n])))
+	return true, pid
+}
