@@ -14,12 +14,14 @@ const DefaultReleaseTagPattern = "v*.*.*"
 // MaxUnreleasedTags is the number of unreleased tags status reports per repository.
 const MaxUnreleasedTags = 5
 
-// TagFindings is what the tags and releases of a repository say about the release state.
-// Latest holds the newest tag of each pattern that has one (the tags whose release workflow run
-// status reads), Unreleased the tags that wait for a release, newest first.
-type TagFindings struct {
-	Latest     []StatusTag
-	Unreleased []StatusTag
+// PatternTag is one tag as one release tag pattern sees it: Latest when it has the highest version
+// of the pattern, Unreleased when it waits for a release. A tag that two patterns match has one
+// entry per pattern.
+type PatternTag struct {
+	Pattern string
+	StatusTag
+	Latest     bool
+	Unreleased bool
 }
 
 // FindTags applies the unreleased-tag rule of Spec 037 to the tags and the releases (drafts and
@@ -35,9 +37,11 @@ type TagFindings struct {
 //     candidate) and no release, draft or published, carries its name.
 //
 // Prerelease versions follow semantic versioning: 1.0.0-rc.1 is lower than 1.0.0. Older tags
-// without release are history and never listed; the result has at most MaxUnreleasedTags entries,
-// taken pattern by pattern in the order given, each newest first.
-func FindTags(tags []StatusTag, releases []StatusRelease, patterns []string) TagFindings {
+// without release are history and never listed. The result has one entry per pattern and tag that
+// is latest or unreleased (a tag that is both has one entry with both flags), the patterns in the
+// order given and each newest first. At most MaxUnreleasedTags entries are unreleased, filled in
+// that order; the latest entries are not capped.
+func FindTags(tags []StatusTag, releases []StatusRelease, patterns []string) []PatternTag {
 	if len(patterns) == 0 {
 		patterns = []string{DefaultReleaseTagPattern}
 	}
@@ -45,40 +49,35 @@ func FindTags(tags []StatusTag, releases []StatusRelease, patterns []string) Tag
 	for _, rel := range releases {
 		carried[rel.Tag] = true
 	}
-	var out TagFindings
-	seenLatest, seenUnreleased := map[string]bool{}, map[string]bool{}
+	var out []PatternTag
+	seen := map[string]bool{}
+	unreleased := 0
 	for _, pattern := range patterns {
-		matched := versioned(pattern, tags)
-		if len(matched) == 0 {
+		if seen[pattern] {
 			continue
 		}
+		seen[pattern] = true
+		matched := versioned(pattern, tags)
 		sort.SliceStable(matched, func(i, j int) bool { return newer(matched[i], matched[j]) })
-		if latest := matched[0].StatusTag; !seenLatest[latest.Name] {
-			seenLatest[latest.Name] = true
-			out.Latest = append(out.Latest, latest)
-		}
-		candidates := matched[:1]
-		if published := versioned(pattern, publishedTags(releases)); len(published) > 0 {
-			floor := published[0]
-			for _, p := range published[1:] {
-				if p.version.compare(floor.version) > 0 {
-					floor = p
-				}
-			}
-			candidates = nil
-			for _, c := range matched {
-				if c.version.compare(floor.version) > 0 {
-					candidates = append(candidates, c)
-				}
+		var floor *semver
+		for _, p := range versioned(pattern, publishedTags(releases)) {
+			if floor == nil || p.version.compare(*floor) > 0 {
+				v := p.version
+				floor = &v
 			}
 		}
-		for _, c := range candidates {
-			if len(out.Unreleased) == MaxUnreleasedTags {
-				break
+		for i, t := range matched {
+			newerThanRelease := i == 0 // without a published release only the latest tag is a candidate
+			if floor != nil {
+				newerThanRelease = t.version.compare(*floor) > 0
 			}
-			if !carried[c.Name] && !seenUnreleased[c.Name] {
-				seenUnreleased[c.Name] = true
-				out.Unreleased = append(out.Unreleased, c.StatusTag)
+			entry := PatternTag{Pattern: pattern, StatusTag: t.StatusTag, Latest: i == 0}
+			if newerThanRelease && !carried[t.Name] && unreleased < MaxUnreleasedTags {
+				entry.Unreleased = true
+				unreleased++
+			}
+			if entry.Latest || entry.Unreleased {
+				out = append(out, entry)
 			}
 		}
 	}

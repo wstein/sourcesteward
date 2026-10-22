@@ -192,7 +192,7 @@ func tagKey(e ReleaseTag) string {
 	if failedRun(e.Run) {
 		failed, url = "0", e.Run.URL
 	}
-	return e.Tag + "\x00" + failed + "\x00" + url + "\x00" + e.SHA + "\x00" + strconv.FormatBool(e.Unreleased)
+	return e.Tag + "\x00" + failed + "\x00" + url + "\x00" + e.SHA + "\x00" + strconv.FormatBool(e.Unreleased) + "\x00" + e.Pattern + "\x00" + strconv.FormatBool(e.Latest)
 }
 
 // mainItems gives main-red for class red and main-behind-origin when the local default branch lacks origin's head.

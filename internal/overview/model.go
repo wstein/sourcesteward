@@ -257,11 +257,14 @@ type Run struct {
 	URL        string
 }
 
-// ReleaseTag is a tag the release workflow was read for: the latest tag of a product or an unreleased
-// tag. Run is nil when no run was found.
+// ReleaseTag is a tag the release workflow was read for, as one release tag pattern sees it: the
+// latest tag of the pattern (Latest), an unreleased tag (Unreleased) or both. A tag that two patterns
+// match has one entry per pattern. Run is nil when no run was found. Only Unreleased changes the items.
 type ReleaseTag struct {
+	Pattern    string
 	Tag        string
 	SHA        string
+	Latest     bool
 	Unreleased bool
 	Run        *Run
 }
