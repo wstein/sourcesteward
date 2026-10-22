@@ -153,6 +153,9 @@ func prepareGH(ctx context.Context, target, host string) (*ghAPI, func(), error)
 	return api, cleanup, nil
 }
 func newGHWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*ghAPI, func(), error) {
+	return newGHMode(ctx, target, host, rt, false)
+}
+func newGHMode(ctx context.Context, target, host string, rt http.RoundTripper, watch bool) (*ghAPI, func(), error) {
 	api, cleanup, err := prepareGH(ctx, target, host)
 	if err != nil {
 		return nil, cleanup, err
@@ -172,7 +175,7 @@ func newGHWithTransport(ctx context.Context, target, host string, rt http.RoundT
 		previous := cleanup
 		cleanup = func() { owned.CloseIdleConnections(); previous() }
 	}
-	api.client, err = newSDKClient(host, token, api.dir, rt)
+	api.client, err = newSDKClientMode(host, token, api.dir, rt, watch)
 	if err != nil {
 		cleanup()
 		return nil, func() {}, errors.New("cannot initialize bounded hosting transport")
@@ -278,15 +281,37 @@ func (b *cappedBody) Read(p []byte) (int, error) {
 type guardedTransport struct {
 	next         http.RoundTripper
 	host, prefix string
+	// watch admits the Spec 035 watch-reader endpoints and escaped branch segments.
+	watch bool
 }
 
-func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.RawPath != "" || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, t.prefix) || !transportReadEndpoint(strings.TrimPrefix(req.URL.Path, t.prefix)+func() string {
-		if req.URL.RawQuery != "" {
-			return "?" + req.URL.RawQuery
+func (t guardedTransport) allowed(req *http.Request) bool {
+	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.Opaque != "" {
+		return false
+	}
+	path := req.URL.Path
+	if req.URL.RawPath != "" {
+		// Only the watch reader may carry an escaped path, and only one that decodes to
+		// the same Path; the branch segment itself is validated against its encoder.
+		if !t.watch {
+			return false
 		}
-		return ""
-	}()) {
+		if decoded, err := url.PathUnescape(req.URL.RawPath); err != nil || decoded != req.URL.Path {
+			return false
+		}
+		path = req.URL.RawPath
+	}
+	if !strings.HasPrefix(path, t.prefix) {
+		return false
+	}
+	endpoint := strings.TrimPrefix(path, t.prefix)
+	if req.URL.RawQuery != "" {
+		endpoint += "?" + req.URL.RawQuery
+	}
+	return transportReadEndpoint(endpoint) || (t.watch && watchReadEndpoint(endpoint))
+}
+func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !t.allowed(req) {
 		return nil, errors.New("hosting request refused outside fixed read-only destination")
 	}
 	if tidyReadEndpoint(strings.TrimPrefix(req.URL.RequestURI(), t.prefix)) && t.host != "api.github.com" {
@@ -321,11 +346,14 @@ func newHTTPTransport() *http.Transport {
 	return &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext, ForceAttemptHTTP2: true, MaxIdleConns: 100, IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 10 * time.Second, ExpectContinueTimeout: time.Second, MaxResponseHeaderBytes: 32 * 1024, DisableCompression: true}
 }
 func newSDKClient(host, token, dir string, rt http.RoundTripper) (*http.Client, error) {
+	return newSDKClientMode(host, token, dir, rt, false)
+}
+func newSDKClientMode(host, token, dir string, rt http.RoundTripper, watch bool) (*http.Client, error) {
 	destination, prefix := apiDestination(host)
 	if rt == nil {
 		rt = newHTTPTransport()
 	}
-	return newSDKClientWithGuard(host, token, dir, guardedTransport{next: rt, host: destination, prefix: prefix})
+	return newSDKClientWithGuard(host, token, dir, guardedTransport{next: rt, host: destination, prefix: prefix, watch: watch})
 }
 
 func newSDKClientWithGuard(host, token, dir string, guard http.RoundTripper) (*http.Client, error) {
