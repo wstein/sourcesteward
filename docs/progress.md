@@ -37,6 +37,13 @@ source and the command is listed in `stw --help`; `schemas/v1/watch-event.schema
 ([watch](watch.md)) and an end to end acceptance suite (US1 to US10, fake forge, no network). The owner accepted it on 2026-10-22 after a dogfood run on the
 workspace (discovery of 7 repositories, silent baseline, `--status` fresh). The removal of `scripts/ci-wait.sh` is still open.
 
+## Spec 036 stw pulls (proposed, spec only, 2026-10-22)
+
+[The specification](../specs/036-stw-pulls/spec.md), its [JSON contract](../specs/036-stw-pulls/contracts/pulls.md) and
+[plan](../specs/036-stw-pulls/plan.md) describe a read-only, stateless `stw pulls` snapshot of all open pull requests of the workspace
+repositories (bot PRs included, grouped by what needs action, with a `ready to merge` verdict) and an opt-in `--owner` mode that
+discovers other repositories through one fixed `search/issues` read. No implementation yet; independent review pending.
+
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 
 [The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (4/20 done: T001 to T004) describe a manual one-step `stw sync [--plan]` and `stw sync restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). The independent design review is CLEAR at 3d8d1da (after NOT CLEAR at b0cc02d, F1-F8 resolved). Slice 1a (T002 to T004) is implemented in source on `feat/032-sync-plan`: `stw sync --plan|--dry-run [PATH] [--remote NAME] [--prune] [--json]` fetches once (remote-tracking refs only) and classifies every tracking branch (`internal/stwsync`), with the unpublished `schemas/v1/sync.schema.json`. Tests use temporary repositories with a bare remote and linked worktrees, including a before/after snapshot proving that a plan changes only remote-tracking refs. Not started: the real run, journal, prune reporting beyond the plan, `--rebase`, `--autostash`, `restore`, `--submodules`, acceptance evidence and a smoke script. No build, release artifact or real-repository run was made. Status stays `planned`.
