@@ -485,3 +485,21 @@ func nextPageFromLink(link string) (int, bool) {
 	}
 	return 0, false
 }
+
+// splitRel returns the rel tokens of every entry of a Link header.
+func splitRel(link string) []string {
+	var rels []string
+	for _, entry := range strings.Split(link, ",") {
+		entry = strings.TrimSpace(entry)
+		end := strings.Index(entry, ">")
+		if !strings.HasPrefix(entry, "<") || end < 0 {
+			continue
+		}
+		for _, param := range strings.Split(entry[end+1:], ";") {
+			if k, v, ok := strings.Cut(strings.TrimSpace(param), "="); ok && strings.EqualFold(strings.TrimSpace(k), "rel") {
+				rels = append(rels, strings.Fields(strings.ToLower(strings.Trim(strings.TrimSpace(v), `"`)))...)
+			}
+		}
+	}
+	return rels
+}
