@@ -16,34 +16,39 @@ Exit status is 0 in every case that prints a result; an internal error prints th
 
 ## `scripts/ci_tier.py`
 
-Input: event name, action, draft flag, base ref, head ref, head SHA, default branch, labels, head repository equals base repository, the
-list of open pull requests whose base is the head ref (from one API call), the T2 evidence for the head SHA (from one API call) and
-`docs_only`. Output (job outputs and step summary):
+Runs in the `tier` job from the **base-ref checkout** (trusted copy). Input: event name, action, draft flag, base ref, head ref, head SHA,
+default branch, labels, head repository equals base repository, the open pull requests whose base is the head ref **filtered to a head
+repository equal to the base repository**, the PR file list from the API, own T2 evidence for the head SHA, and tip evidence (compare
+ancestry plus filtered T2 evidence) for each descendant tip. Evidence is accepted only from a run whose workflow path is
+`.github/workflows/ci.yml` or `ci-full.yml`, event `pull_request`, head repository equal to the base repository, created by the GitHub
+Actions app, with the lane's `suite` job `success` (a check name alone is never evidence).
 
 | Output | Values |
 | --- | --- |
 | `t2_required` | `true`, `false` |
-| `reason` | `docs-only`, `draft`, `label`, `unstacked`, `stack-tip`, `deferred-to-tip #N`, `ready`, `evidence from run <id>`, `main`, `schedule` |
-| `stack_line` | the expected body line `T2 runs on the top PR #N` for a non-top PR, else empty |
-| `stack_tip` | the number of the top PR that carries the evidence, or empty |
+| `reason` | `docs-only`, `draft`, `label`, `unstacked`, `stack-tip`, `deferred-to-tip #N`, `T2 pending on #N`, `evidence from run <id>`, `evidence from tip #N run <id>`, `main`, `schedule` |
+| `stack_line` | the expected informational body line `T2 runs on the top PR #N` for a non-top PR, else empty (never a gate) |
+| `stack_tip` | the number of the tip that carries the evidence, or empty |
 | `tier` | `T1`, `T2`, `T3` |
 
-Truth table (a row applies in this order; the first match wins):
+Truth table (a row applies in this order; the first match wins; the child row precedes the default-branch row):
 
 | # | Event | Condition | `t2_required` | `reason` |
 | --- | --- | --- | --- | --- |
 | 1 | push to the default branch, `schedule`, `workflow_dispatch` | always | `true` (T3) | `main` or `schedule` |
 | 2 | pull_request | an API read failed | `true` | the failing source |
 | 3 | pull_request | `docs_only` | `false` | `docs-only` |
-| 4 | pull_request | green T2 evidence exists for the head SHA | `false` (evidence) | `evidence from run <id>` |
+| 4 | pull_request | filtered T2 evidence exists for the head SHA | `false` (evidence) | `evidence from run <id>` |
 | 5 | pull_request | label `ci-full` present | `true` | `label` |
 | 6 | pull_request | Draft | `false` | `draft` |
-| 7 | pull_request | head repository differs from base repository | `true` | `unstacked` |
-| 8 | pull_request | base is the default branch | `true` | `unstacked` |
-| 9 | pull_request | an open PR has this head ref as base | `false` | `deferred-to-tip #N` |
-| 10 | pull_request | otherwise (stacked, no child) | `true` | `stack-tip` |
+| 7 | pull_request | head repository differs from base repository (fork) | `true` | `unstacked` |
+| 8 | pull_request | an open same-repo PR has this head ref as base, and tip evidence exists | `false` (evidence) | `evidence from tip #N run <id>` |
+| 9 | pull_request | an open same-repo PR has this head ref as base, no tip evidence | `false`, `suite` fails | `T2 pending on #N` (`deferred-to-tip #N` in the summary) |
+| 10 | pull_request | base is the default branch | `true` | `unstacked` |
+| 11 | pull_request | otherwise (stacked, no same-repo child) | `true` | `stack-tip` |
 
-`ready_for_review` is the same table: after a flip from Draft, row 6 no longer applies.
+`ready_for_review` is not a row: after a flip from Draft, row 6 no longer applies and the PR reaches rows 8 to 11. A fork PR that
+targets a branch of the base repository is never counted as a child in rows 8 and 9 (mutation target and test row).
 
 ## Aggregate truth table (`suite`, per lane)
 
@@ -52,7 +57,8 @@ Truth table (a row applies in this order; the first match wins):
 | `success` | any | any | pass |
 | `skipped` | pull_request | `false` (reason printed) | pass |
 | `skipped` | pull_request, lane `minimum` | any | pass (reason `minimum lane runs on T3`) |
-| `skipped` | pull_request | evidence reused | pass (reason `evidence from run <id>`) |
+| `skipped` | pull_request | own or tip evidence (rows 4 and 8) | pass (reason with the run id) |
+| `skipped` | pull_request | `T2 pending on #N` (row 9) | fail |
 | `skipped` | pull_request | `true` | fail |
 | `skipped` | push, schedule, dispatch | any | fail |
 | `failure`, `cancelled` | any | any | fail |
