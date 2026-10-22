@@ -373,10 +373,17 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	r.count(kind, false)
 	if res.StatusCode != http.StatusOK {
 		err := r.statusFailure(res, rate)
-		if we, ok := err.(*WatchError); ok && kind == KindSearch && we.Code == CodeRateLimited && !rate.Known {
-			wait := we.RetryAfter
-			if wait <= 0 {
-				wait = time.Minute
+		if we, ok := err.(*WatchError); ok && kind == KindSearch && we.Code == CodeRateLimited {
+			// Any search throttle empties the search bucket for at least a minute, longer
+			// when Retry-After or the reset say so, whatever the other headers claim.
+			wait := time.Minute
+			if we.RetryAfter > wait {
+				wait = we.RetryAfter
+			}
+			if rate.Known {
+				if until := time.Until(rate.Reset); until > wait {
+					wait = until
+				}
 			}
 			r.mu.Lock()
 			r.searchLast = RateInfo{Known: true, Remaining: 0, Reset: time.Now().Add(wait)}

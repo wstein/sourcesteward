@@ -27,14 +27,18 @@ const (
 	searchResultCap = 1000
 )
 
-// ValidOwner reports whether s is an owner login: 1 to 39 characters of [A-Za-z0-9-].
-// The check is byte-wise on purpose, so no encoded or Unicode form passes.
+// ValidOwner reports whether s follows the GitHub login rules: 1 to 39 ASCII letters,
+// digits and single interior hyphens (none leading, trailing or doubled). The check is
+// byte-wise on purpose, so no encoded or Unicode form passes.
 func ValidOwner(s string) bool {
-	if len(s) < 1 || len(s) > 39 {
+	if len(s) < 1 || len(s) > 39 || s[0] == '-' || s[len(s)-1] == '-' {
 		return false
 	}
 	for i := 0; i < len(s); i++ {
 		c := s[i]
+		if c == '-' && s[i-1] == '-' {
+			return false
+		}
 		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
 			return false
 		}
@@ -164,7 +168,11 @@ type OwnerDiscovery struct {
 // ignored results (malformed-response).
 func (r *WatchReader) DiscoverOwner(ctx context.Context, owner string) OwnerDiscovery {
 	d := OwnerDiscovery{Owner: owner}
-	if !ValidOwner(owner) || !admitsSearch(r.mode) {
+	if !admitsSearch(r.mode) {
+		d.Code, d.Message = CodeMalformed, "search is not allowed for this reader"
+		return d
+	}
+	if !ValidOwner(owner) {
 		d.Code, d.Message = CodeMalformed, "invalid owner"
 		return d
 	}
