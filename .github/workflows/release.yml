@@ -105,8 +105,8 @@ jobs:
           set -euo pipefail
           # ci.yml on a push to main runs the check job and both Git/jj conformance lanes; its
           # conclusion is success only when all of them passed. Re-run it for the commit if absent.
-          n=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success" --jq '.workflow_runs | map(select(.conclusion == "success")) | length')
-          test "$n" -ge 1 || { echo "no successful ci.yml run on push for $GITHUB_SHA; re-run ci for that commit first" >&2; exit 1; }
+          # The script retries the head_sha query, then filters the push runs by head_sha client side.
+          sh .github/scripts/release-verify.sh ci-green "$GITHUB_SHA"
       - name: Require that no release exists for the tag
         if: steps.resolve.outputs.dry_run == 'false'
         shell: bash
