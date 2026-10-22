@@ -217,3 +217,40 @@ func TestListOpenPullItemsBoundsAndErrors(t *testing.T) {
 		t.Fatalf("link: %v", err)
 	}
 }
+
+func TestListOpenPullItemsStopsAtTheMaxPagesBound(t *testing.T) {
+	f := newFakeForge(t)
+	// maxOpen 25 allows one page; a Link next on it must stop with too-many instead of reading page 2.
+	f.serve(listURI(25, 1), `"x"`, pageBody(1, 25), linkNext(25, 2))
+	f.serve(listURI(25, 2), `"y"`, pageBody(26, 30), nil)
+	_, err := f.reader("github.com").ListOpenPullItems(context.Background(), "a/b", 25)
+	var we *WatchError
+	if !errors.As(err, &we) || we.Code != CodeTooManyPRs || len(f.log) != 1 {
+		t.Fatalf("%v %v", err, f.log)
+	}
+}
+
+func TestListOpenPullItemsHalvesOnlyOnce(t *testing.T) {
+	f := newFakeForge(t)
+	big := func(*http.Request) *http.Response { return forgeResponse(200, strings.Repeat("x", maxBytes+1), nil) }
+	f.handlers[listURI(25, 1)] = big
+	f.handlers[listURI(12, 1)] = big
+	_, err := f.reader("github.com").ListOpenPullItems(context.Background(), "a/b", 2000)
+	var we *WatchError
+	if !errors.As(err, &we) || we.Code != CodePageTooLarge {
+		t.Fatalf("%v", err)
+	}
+	if strings.Join(f.log, "|") != listURI(25, 1)+"|"+listURI(12, 1) {
+		t.Fatalf("%v", f.log)
+	}
+}
+
+func TestListOpenPullItemsRejectsAnUnexpected304(t *testing.T) {
+	f := newFakeForge(t)
+	f.handlers[listURI(25, 1)] = func(*http.Request) *http.Response { return forgeResponse(304, "[]", map[string]string{"ETag": `"x"`}) }
+	_, err := f.reader("github.com").ListOpenPullItems(context.Background(), "a/b", 100)
+	var we *WatchError
+	if !errors.As(err, &we) || we.Code != CodeMalformed {
+		t.Fatalf("%v", err)
+	}
+}
