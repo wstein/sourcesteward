@@ -49,12 +49,11 @@ Two documents, never mixed:
 
 ### `repos[].remote`
 
-`{repo, state, reason, sources}`. `repo` `OWNER/NAME` or null; `state` `ok`, `degraded`, `skipped`, `offline` (`offline` is never emitted
-online; reserved for the same shape in tooling); `reason` null or `not-github-origin`, `other-host`, `not-read-locally`, `invalid-repo`,
-`no-token`, `network`, `rate-limited`, `deadline`; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
-`ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons include `deadline`, `no-token`, `network`, `no-release-workflow`) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
+`{repo, state, reason, sources}`. `repo` `OWNER/NAME` or null; `state` `ok`, `degraded`, `skipped`, `error`; `reason` (only for `skipped`, else null) is one of `not-github-origin`, `other-host`,
+`not-read-locally`, `invalid-repo`, `offline`, `no-token`, `deadline`, `not-found`; failures are never skip reasons, they are source errors; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
+`ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons `offline`, `no-token`, `deadline`, `not-found` (a 404 for the release workflow)) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
 `rate-limited`, `network`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`,
-`too-many-open-prs`, `no-release-workflow`). The data of each source:
+`too-many-open-prs`; `network` is an error code, never a skip reason). The data of each source:
 
 | Source key | Data (null when the source is not `ok`) |
 | --- | --- |
@@ -72,4 +71,4 @@ and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent 
 
 ## Exit status
 
-0 the overview was produced (also with no token, no network, a deadline skip, items); 1 a requested remote read failed (`error` source) or a repository is unreadable locally or the run failed; 2 usage error.
+0 the overview was produced **only** with `--offline`, or no usable token detected before any request (skip reason `no-token`), or when every attempted request succeeded or was skipped by the deadline or a 404 workflow (`not-found`); items never matter. 1 an **attempted** request failed (any `error` source, including `network`), a repository is unreadable locally or the run failed; 2 usage error.

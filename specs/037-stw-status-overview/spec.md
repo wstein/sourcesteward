@@ -16,7 +16,7 @@ every action item names one. Everything stays read-only: the command suggests, t
 | --- | --- | --- |
 | A. Local only (Spec 033 as it is) | 2/5 | Fast, but answers only half of "what needs action": PRs, release drafts, red CI and unpublished tags live on the forge. |
 | B. Opt-in `--remote` (first draft of this spec) | 3/5 | Keeps speed by default, but the owner must remember a flag to see the whole picture; superseded by the owner's redirect. |
-| **C. Online by default, `--offline` for the old behaviour** | **5/5, chosen** | One command, whole picture, action first. The fast local-only view survives as a flag. Missing token or network degrades to the local view with clear notices. |
+| **C. Online by default, `--offline` for the old behaviour** | **5/5, chosen** | One command, whole picture, action first. The fast local-only view survives as a flag. A missing token degrades to the local view with a clear notice; a failed request is reported and exits 1. |
 | D. A separate overview or `stw releases` command | 2/5 | A second place to look; the owner explicitly wants no extra command for the overview. |
 
 Derived rules: (1) the default is online; `--offline` restores Spec 033 **byte for byte** (text and the v1 JSON); (2) no new
@@ -35,7 +35,7 @@ or the disk, and never runs a suggested command; (4) a failing or unavailable so
 - **US6 (local).** **Every** Spec 033 attention reason and information fact (changes, operation, behind or diverged, no upstream,
   detached, gitlink drift, stashes, unmerged branches, linked worktrees) plus "local default branch behind origin" maps to a row of
   the action table with its own subject.
-- **US7 (degrade).** No token, no network, rate limit or timeout: the local view and the sources that worked are printed, with one
+- **US7 (degrade).** No token (nothing attempted), or a failed request, rate limit or deadline: the local view and the sources that worked are printed, with one
   clear notice per missing source; never an error wall.
 - **US8 (machine).** `--json` prints one stable, versioned document: action items with ids, priorities, categories, deep links and
   suggested commands, for the owner's later web UI (out of scope here), and the per-repository data.
@@ -233,7 +233,7 @@ one item per id and no grouping. The human section shows at most 10 lines per pr
 ## Degradation, timeouts, exit status
 
 - **Notices.** One notice per **missing source**, not per repository, deterministic wording, e.g. `no GitHub token (run: gh auth login):
-  pull requests, releases and tags were not read`, `network unreachable: remote sources not read`, `rate limit reached at HH:MM UTC:
+  pull requests, releases and tags were not read`, `network error: pull requests of N repositories not read` (a failed attempted request, exit 1), `rate limit reached at HH:MM UTC:
   3 repositories not read` (the reset time is shown when GitHub gave it; the command never waits), `deadline of 90 s reached: remote
   sources of N repositories not read`, `release drafts of OWNER/NAME not visible (token has no write access)`. Notices are on stdout
   in the Notices section and in the JSON; progress is the only thing on stderr.
@@ -335,7 +335,7 @@ facts or to `--offline` output.
 4. **CI state is required (WP-C is not optional).** Default-branch CI and the latest release workflow run per repository, latest run
    only; red main or a failed tag run is `red`. Rationale: exactly what the owner must not miss.
 5. **Unreleased tag rule.** A tag matching the repository's release tag pattern, newer than the latest published release, with no
-   release (draft or published): `yellow` `tag-without-release`; `red` when the release run for that tag failed.
+   release (draft or published): `yellow` `tag-without-release`; if its release run failed, the single item is the `red` `release-run-failed` instead (never both).
 6. **Deadlines.** 15 s per request, 90 s overall, overridable with `--timeout`; on expiry partial results, a notice and sources
    `skipped` with reason `deadline`; a deadline skip is not a failed read (exit 0 if nothing else failed).
 7. **A releases page over 1 MiB** degrades that repository's release section to a `page-too-large` notice, exit 1, the rest is
@@ -344,7 +344,7 @@ facts or to `--offline` output.
    says so, and without evidence it says "release draft visibility unknown"; it never prints "0 drafts" as a fact.
 9. **Suggested commands** (hints only, never run): merge `gh pr merge N -R OWNER/NAME --rebase` (the owner merges, effect `owner`); publish
    `gh release edit TAG -R OWNER/NAME --draft=false`; the tag item has no command, only a hint text: follow that repository's `docs/releasing.md`; the draft variable must be set **before** the tag is pushed; drill-down `stw pulls --repo OWNER/NAME`.
-10. **Caps and the violet rule.** The human output caps each section at 10 items per priority with "N more" and the drill-down
+10. **Caps and the violet rule.** The human output caps each section at 10 lines per priority with "N more" and the drill-down
     command; the JSON is complete. Every bot PR, even a ready one, is `violet`.
 
 Residual points to verify during implementation (not owner questions): the Nerd Font code points, and the exact reading of the
