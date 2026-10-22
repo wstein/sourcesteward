@@ -153,7 +153,7 @@ func TestStatusExitStatus(t *testing.T) {
 
 func TestStatusColourOnlyWhenEnabled(t *testing.T) {
 	var b bytes.Buffer
-	if err := renderStatusText(&b, statusCLIResult(), false, true); err != nil || !strings.Contains(b.String(), "\x1b[") {
+	if err := renderStatusText(&b, statusCLIResult(), false, true, asciiStatusMarks); err != nil || !strings.Contains(b.String(), "\x1b[") {
 		t.Fatalf("%v %q", err, b.String())
 	}
 	if strings.Contains(b.String(), "\x1b[31m\x1b") || strings.Count(b.String(), "\x1b") != strings.Count(b.String(), "\x1b[") {
@@ -194,7 +194,7 @@ func TestStatusOfflineOutputIsPinned(t *testing.T) {
 		statusGolden(t, name, out)
 	}
 	var b bytes.Buffer
-	if err := renderStatusText(&b, statusCLIResult(), true, true); err != nil {
+	if err := renderStatusText(&b, statusCLIResult(), true, true, asciiStatusMarks); err != nil {
 		t.Fatal(err)
 	}
 	statusGolden(t, "status-offline-colour.txt", b.String())

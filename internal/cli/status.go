@@ -48,7 +48,7 @@ func workspaceStatusCommandWith(status func(context.Context, stwsync.StatusOptio
 			if jsonOutput {
 				err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 			} else {
-				err = renderStatusText(cmd.OutOrStdout(), result, options.Worktrees, stwsync.ColorEnabled(cmd.OutOrStdout()))
+				err = renderStatusText(cmd.OutOrStdout(), result, options.Worktrees, stwsync.ColorEnabled(cmd.OutOrStdout()), asciiStatusMarks)
 			}
 			if err != nil {
 				return runtimeFailure{err}
@@ -163,14 +163,26 @@ func statusDetails(rp stwsync.RepoStatus) []string {
 	return lines
 }
 
-func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool) error {
-	var b strings.Builder
-	paint := func(s, code string) string {
+// statusMarks are the two markers of the repository lines: the repository needs attention, or cannot be read.
+// Both are two columns wide, like the blank marker of a clean repository.
+type statusMarks struct{ attention, failed string }
+
+// asciiStatusMarks are the markers of the Spec 033 text.
+var asciiStatusMarks = statusMarks{attention: "! ", failed: "! "}
+
+// statusPainter returns the function that colours a piece of text with an SGR code, or leaves it as it is.
+func statusPainter(color bool) func(s, code string) string {
+	return func(s, code string) string {
 		if !color || code == "" {
 			return s
 		}
 		return "\x1b[" + code + "m" + s + "\x1b[0m"
 	}
+}
+
+func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool, marks statusMarks) error {
+	var b strings.Builder
+	paint := statusPainter(color)
 	// every piece of repository text is escaped before it is coloured, so no repository text can inject escapes
 	esc := escapeReposLine
 	line := func(s string) { b.WriteString(s + "\n") }
@@ -182,6 +194,21 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 	if r.Note != nil {
 		line("note: " + esc(*r.Note))
 	}
+	writeStatusRepos(line, r, worktrees, paint, marks, nil)
+	switch {
+	case r.Summary.Attention == 0 && r.Summary.Errors == 0:
+		line(paint("summary: "+plural(r.Summary.Total, "repository", "repositories")+", nothing needs attention", "32"))
+	default:
+		line(paint(fmt.Sprintf("summary: %d of %d repositories need attention", r.Summary.Attention, r.Summary.Total), "33"))
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// writeStatusRepos writes the block of every repository: one line, the extra facts and, with worktrees,
+// the linked worktrees. remote, when set, gives one more line right under the repository line.
+func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees bool, paint func(s, code string) string, marks statusMarks, remote func(stwsync.RepoStatus) string) {
+	esc := escapeReposLine
 	nameWidth, branchWidth := 1, 1
 	branchOf := func(rp stwsync.RepoStatus) string {
 		switch {
@@ -199,15 +226,20 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 		marker, code := "  ", "2"
 		switch {
 		case rp.Error != nil:
-			marker, code = "! ", "31"
+			marker, code = marks.failed, "31"
 		case rp.Attention:
-			marker, code = "! ", "33"
+			marker, code = marks.attention, "33"
 		}
 		sync, changes := esc(statusSyncText(rp)), ""
 		if rp.State == "ok" {
 			changes = "  " + statusChangesText(rp.Changes)
 		}
 		line(fmt.Sprintf("%s%-*s  %-*s  %s%s", paint(marker, code), nameWidth, esc(rp.Name), branchWidth, branchOf(rp), sync, changes))
+		if remote != nil {
+			if text := remote(rp); text != "" {
+				line("    " + text)
+			}
+		}
 		for _, d := range statusDetails(rp) {
 			line("    " + paint(esc(d), "2"))
 		}
@@ -237,12 +269,4 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 			}
 		}
 	}
-	switch {
-	case r.Summary.Attention == 0 && r.Summary.Errors == 0:
-		line(paint("summary: "+plural(r.Summary.Total, "repository", "repositories")+", nothing needs attention", "32"))
-	default:
-		line(paint(fmt.Sprintf("summary: %d of %d repositories need attention", r.Summary.Attention, r.Summary.Total), "33"))
-	}
-	_, err := io.WriteString(w, b.String())
-	return err
 }
