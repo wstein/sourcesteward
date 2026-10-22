@@ -104,8 +104,8 @@ Bounded to the **latest** run; no history is read.
   existing check-run and status reads of `stw pulls`; `red` is a `red` item (`main-red`), `pending` and `none` are information in the
   repository block.
 - **Release workflow run** (`ci-release`): the **single** workflow file `ci.release_workflow` of the repository's `.stw/release.toml`
-  (Spec 026 config; a path, its file name is used in the request). When the repository declares none, the default is the file name
-  `release-build.yml` of the Spec 026 workflow contract; a 404 for that workflow means `skipped`, reason `no-release-workflow`, with a
+  (Spec 026 config; a path, its file name is used in the request). When the repository declares none, the default is the file
+  `.github/workflows/release.yml` (the name the member repositories use; a declared `ci.release_workflow` always wins); a 404 for that workflow means `skipped`, reason `no-release-workflow`, with a
   notice (not a failure). For the commit of each product's **latest tag** and of each **unreleased tag** (at most 6 tags per repository,
   from the `tags` read) the newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
   are kept in the JSON). Conclusion `failure`, `cancelled` or `timed_out` is a failed run; one not completed is information.
