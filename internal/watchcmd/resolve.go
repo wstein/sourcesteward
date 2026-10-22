@@ -26,28 +26,34 @@ func (e *usageError) Is(target error) bool { return target == ErrUsage }
 
 func usagef(format string, args ...any) error { return &usageError{fmt.Sprintf(format, args...)} }
 
-// ParseRemote extracts OWNER/NAME from a remote URL of host (https, ssh:// and scp-like spellings).
-func ParseRemote(remote, host string) (string, bool) {
+// SplitRemote returns the host and the path of a remote URL (https, http, ssh://, git:// and scp-like
+// spellings) without judging either: the caller decides whether the host is its forge and the path a
+// repository. It reports false for a local path or an unsupported scheme.
+func SplitRemote(remote string) (host, path string, ok bool) {
 	remote = strings.TrimSpace(remote)
-	var h, path string
 	switch {
 	case strings.Contains(remote, "://"):
 		u, err := url.Parse(remote)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http" && u.Scheme != "ssh" && u.Scheme != "git") {
-			return "", false
+			return "", "", false
 		}
-		h, path = u.Hostname(), strings.TrimPrefix(u.Path, "/")
+		return u.Hostname(), strings.TrimPrefix(u.Path, "/"), true
 	default: // scp-like: [user@]host:owner/name
-		before, after, ok := strings.Cut(remote, ":")
-		if !ok || strings.Contains(before, "/") {
-			return "", false
+		before, after, found := strings.Cut(remote, ":")
+		if !found || strings.Contains(before, "/") {
+			return "", "", false
 		}
 		if _, hostPart, hasUser := strings.Cut(before, "@"); hasUser {
 			before = hostPart
 		}
-		h, path = before, after
+		return before, after, true
 	}
-	if !strings.EqualFold(h, host) {
+}
+
+// ParseRemote extracts OWNER/NAME from a remote URL of host (https, ssh:// and scp-like spellings).
+func ParseRemote(remote, host string) (string, bool) {
+	h, path, ok := SplitRemote(remote)
+	if !ok || !strings.EqualFold(h, host) {
 		return "", false
 	}
 	path = strings.TrimSuffix(strings.TrimSuffix(path, "/"), ".git")
