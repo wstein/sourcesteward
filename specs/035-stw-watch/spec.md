@@ -1,6 +1,6 @@
 # Specification: `stw watch`, a read-only pull request watcher
 
-**Created**: 2026-10-22 | **Status**: accepted and released 2026-10-22 (WP-A to WP-E; owner acceptance by dogfood on the Anchorage workspace) (spec-light: this page,
+**Created**: 2026-10-22 | **Status**: accepted 2026-10-22 (WP-A to WP-E; owner dogfood on the Anchorage workspace) (spec-light: this page,
 [contracts/watch-events.md](contracts/watch-events.md) and [plan.md](plan.md) are the whole design; guide: [watch](../../docs/watch.md)).
 
 `stw watch` observes the open pull requests of one or more GitHub repositories, compares each poll with the previous one and
