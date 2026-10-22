@@ -39,6 +39,27 @@ See the [current matrix](docs/release.md) and [owner preparation](docs/releasing
 [Specification](specs/001-project-foundation/spec.md) ·
 [Plan](specs/001-project-foundation/plan.md) · [Tasks](specs/001-project-foundation/tasks.md)
 
+## Install a release
+
+No release exists yet; the first one (`v0.1.0`) is planned by the
+[bootstrap release plan](specs/034-bootstrap-release/spec.md). Archives for linux and macOS
+(amd64 and arm64; Windows and the BSDs are not shipped) are published on the
+[releases page](https://github.com/wstein/sourcesteward/releases). From the directory holding a download
+and `SHA256SUMS`:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS                  # Linux
+grep ' stw_0.1.0_darwin_arm64.tar.gz$' SHA256SUMS | shasum -a 256 --check   # macOS
+gh attestation verify stw_0.1.0_linux_amd64.tar.gz --repo wstein/sourcesteward
+tar -xzf stw_0.1.0_linux_amd64.tar.gz && ./stw_0.1.0_linux_amd64/stw version
+```
+
+The binaries are not signed or notarized. Files fetched with `gh` or `curl` run directly; a browser
+download on macOS carries a quarantine flag that Gatekeeper blocks until you run
+`xattr -d com.apple.quarantine stw`. The attestation shows that GitHub Actions built the archive from
+this repository. With Go 1.27.2 or later, `go install github.com/wstein/sourcesteward/cmd/stw@v0.1.0`
+builds from source; that binary reports version `dev` because only the release workflow stamps it.
+
 ## Try SourceSteward
 
 Requires Go 1.27.2 or later. From the repository root:

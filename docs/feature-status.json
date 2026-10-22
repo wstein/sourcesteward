@@ -198,6 +198,12 @@
       "status": "planned",
       "spec": "../specs/033-stw-status/spec.md",
       "evidence": null
+    },
+    {
+      "id": "034-bootstrap-release",
+      "status": "planned",
+      "spec": "../specs/034-bootstrap-release/spec.md",
+      "evidence": null
     }
   ]
 }
