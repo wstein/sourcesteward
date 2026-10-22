@@ -40,6 +40,27 @@ func TestParseRemoteAcceptsTheGitHubSpellings(t *testing.T) {
 	}
 }
 
+func TestSplitRemoteReturnsHostAndPathWithoutJudgingThem(t *testing.T) {
+	for remote, want := range map[string][2]string{
+		"https://github.com/wstein/a.git":     {"github.com", "wstein/a.git"},
+		"git@gitlab.com:team/x":               {"gitlab.com", "team/x"},
+		"ssh://git@ghe.example.com:22/t/x":    {"ghe.example.com", "t/x"},
+		"https://github.com/wstein/../a":      {"github.com", "wstein/../a"},
+		"  https://GitHub.com/wstein/a/\n":    {"GitHub.com", "wstein/a/"},
+		"https://github.com/wstein/a/b/c.git": {"github.com", "wstein/a/b/c.git"},
+	} {
+		host, path, ok := SplitRemote(remote)
+		if !ok || host != want[0] || path != want[1] {
+			t.Errorf("%q: %q %q %v", remote, host, path, ok)
+		}
+	}
+	for _, remote := range []string{"", "/srv/git/a.git", "../a", "file:///github.com/wstein/a", "ftp://github.com/a/b"} {
+		if host, path, ok := SplitRemote(remote); ok {
+			t.Errorf("%q split into %q %q", remote, host, path)
+		}
+	}
+}
+
 func fakeDiscover(root string, members ...stwsync.Member) func(context.Context, string) (stwsync.Workspace, error) {
 	return func(context.Context, string) (stwsync.Workspace, error) {
 		return stwsync.Workspace{Root: root, Members: members}, nil
