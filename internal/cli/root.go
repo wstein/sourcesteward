@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/hosting"
+	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
 
 type versionInformation struct {
@@ -76,6 +77,10 @@ func exitStatus(stderr io.Writer, err error) int {
 	var failure runtimeFailure
 	if errors.As(err, &failure) {
 		return report(stderr, err, 1)
+	}
+	var watchFailure *watchcmd.Failure
+	if errors.As(err, &watchFailure) {
+		return report(stderr, err, watchFailure.Code)
 	}
 	var strict strictFindingsError
 	if errors.As(err, &strict) {
@@ -162,7 +167,7 @@ func newRootWithHosting(version string, stdout, stderr io.Writer, operation host
 		},
 	}
 	versionCommand.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), pinsCommand(), reposCommand(), restackCommand(), syncCommand(), workspaceStatusCommand(), releaseCommand(version), hostingCommandWith(false, operation))
+	root.AddCommand(versionCommand, inspectCommand(), inventoryCommand(), workspaceCommand(), tidyCommand(), pinsCommand(), reposCommand(), restackCommand(), syncCommand(), workspaceStatusCommand(), watchCommand(), releaseCommand(version), hostingCommandWith(false, operation))
 	root.SetHelpCommand(&cobra.Command{
 		Use: "help [command]", Short: "Help about a command", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
