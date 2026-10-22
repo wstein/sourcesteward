@@ -7,7 +7,8 @@ import (
 	"strings"
 )
 
-// DefaultReleaseTagPattern is the release tag pattern of a repository that declares no product.
+// DefaultReleaseTagPattern is the release tag pattern of a repository that declares no product: a
+// semantic version with an optional leading `v`, so that 1.2.3 and v1.2.3 are one version scheme.
 const DefaultReleaseTagPattern = "v*.*.*"
 
 // MaxUnreleasedTags is the number of unreleased tags status reports per repository.
@@ -123,8 +124,12 @@ func newer(a, b versionedTag) bool {
 
 // patternVersion reports whether name matches the glob pattern and returns the version between the
 // literal text before the first `*` and the literal text after the last one. A pattern without `*`
-// matches nothing: it names no version.
+// matches nothing: it names no version. The default pattern is the exception that gives it its
+// meaning: the version with or without one leading `v`.
 func patternVersion(pattern, name string) (semver, bool) {
+	if pattern == DefaultReleaseTagPattern {
+		return parseSemver(strings.TrimPrefix(name, "v"))
+	}
 	parts := strings.Split(pattern, "*")
 	if len(parts) < 2 {
 		return semver{}, false
@@ -152,7 +157,10 @@ type semver struct {
 }
 
 func parseSemver(s string) (semver, bool) {
-	s, _, _ = strings.Cut(s, "+")
+	s, build, hasBuild := strings.Cut(s, "+")
+	if hasBuild && !validIdentifiers(build, false) {
+		return semver{}, false
+	}
 	core, pre, hasPre := strings.Cut(s, "-")
 	nums := strings.Split(core, ".")
 	if len(nums) != 3 {
@@ -167,12 +175,10 @@ func parseSemver(s string) (semver, bool) {
 		*field = n
 	}
 	if hasPre {
-		v.pre = strings.Split(pre, ".")
-		for _, id := range v.pre {
-			if !validPreIdentifier(id) {
-				return semver{}, false
-			}
+		if !validIdentifiers(pre, true) {
+			return semver{}, false
 		}
+		v.pre = strings.Split(pre, ".")
 	}
 	return v, true
 }
@@ -186,13 +192,16 @@ func parseNumeric(s string) (uint64, bool) {
 	return n, err == nil
 }
 
-func validPreIdentifier(id string) bool {
-	if id == "" || strings.Trim(id, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-") != "" {
-		return false
-	}
-	if strings.Trim(id, "0123456789") == "" {
-		_, ok := parseNumeric(id)
-		return ok
+// validIdentifiers reports whether s is a non-empty, dot-separated list of identifiers of
+// [0-9A-Za-z-]; a numeric prerelease identifier has no leading zero.
+func validIdentifiers(s string, prerelease bool) bool {
+	for _, id := range strings.Split(s, ".") {
+		if id == "" || strings.Trim(id, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-") != "" {
+			return false
+		}
+		if _, numeric := parseNumeric(id); prerelease && !numeric && strings.Trim(id, "0123456789") == "" {
+			return false
+		}
 	}
 	return true
 }
