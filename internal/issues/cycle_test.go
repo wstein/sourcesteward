@@ -303,3 +303,23 @@ func TestRunCountsAnIssueRepeatedAcrossPagesOnce(t *testing.T) {
 		t.Errorf("the first occurrence must win: %+v", res.Rows[0])
 	}
 }
+
+func TestRunOrdersRepositoriesByASCIICaseInsensitiveName(t *testing.T) {
+	f := newForge()
+	f.pages["B/y"] = []string{body(raw(1))}
+	f.pages["a/x"] = []string{body(raw(2))}
+	f.pages["C/z"] = []string{body(raw(3))}
+	f.pages["d/w"] = []string{body(raw(4))}
+	res := run(t, f, Options{Repos: []string{"d/w", "C/z", "B/y", "a/x"}})
+	want := []string{"a/x#2", "B/y#1", "C/z#3", "d/w#4"}
+	if got := numbers(res.Rows); !slices.Equal(got, want) {
+		t.Errorf("rows %v, want %v", got, want)
+	}
+	var repos []string
+	for _, st := range res.Repos {
+		repos = append(repos, st.Repo)
+	}
+	if !slices.Equal(repos, []string{"a/x", "B/y", "C/z", "d/w"}) {
+		t.Errorf("repos %v", repos)
+	}
+}
