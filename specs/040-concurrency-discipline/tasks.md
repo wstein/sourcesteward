@@ -6,11 +6,11 @@ default branch.
 
 ## WP-0 `internal/fanout` and the rule
 
-- [ ] T001 Write failing synctest tests in `internal/fanout/fanout_test.go` for `Do`: late cancellation returns nil, width bound (gate and peak counter), n=0, width<1, width>n, ctx already done, cancel during, panic re-raise by lowest index, no leak.
+- [ ] T001 Write failing synctest tests in `internal/fanout/fanout_test.go` for `Do`: late cancellation returns nil, `n == 0` with a done context returns nil, `n > 0` with a done context starts nothing, width bound (gate and peak counter), n=0, width<1, width>n, ctx already done, cancel during, panic re-raise by lowest index, no leak.
 - [ ] T002 Implement `Do` in `internal/fanout/fanout.go` (index counter, `width` workers, recovered panic, no timers) to pass T001.
-- [ ] T003 Write failing tests and implement `Map`, `Both` and `Start`/`Session` (`Close` waits and is idempotent; `Completed` never blocks a job) (index order under reversed completion; both errors; waits for the slower pump).
-- [ ] T004 Write failing mutation tests in `scripts/test_architecture.py` in `internal/architecture/gostmt_test.go` and `scripts/test_architecture.py` (stray `go`, stale entry, `wp N` in `done`, second `exempt`, entry for a `fanout` or missing file, errgroup and WaitGroup import, comment, raw string, `_test.go`, generated-looking file).
-- [ ] T005 Implement `internal/architecture/gostmt_test.go` and `run_go_statement_check()` in `scripts/check-architecture.py`, and create `scripts/go-statements.allow` with the 14 current statements (one commented line per file, naming the WP that removes it).
+- [ ] T003 Write failing tests and implement `Map`, `Both` and `Start`/`Session` (`Close` waits and is idempotent; `Completed` never blocks a job; a job panic is re-raised from `Close`, the other jobs finish, no leak) (index order under reversed completion; both errors; waits for the slower pump).
+- [ ] T004 Write failing tests: the table of `checkGoStatements` rules 1 to 5 in `internal/architecture/gostmt_test.go`, and the end-to-end cases in `scripts/test_architecture.py` (temporary tree with a stray `go`, `STW_ARCH_ROOT`; comment, raw string and `_test.go` ignored; errgroup and WaitGroup import; malformed line, stale entry, `wp N` in `done:`, second `exempt`).
+- [ ] T005 Implement `internal/architecture/gostmt_test.go` and `run_go_statement_check()` in `scripts/check-architecture.py`, and create `scripts/go-statements.allow` in the grammar of the specification (`done:` header and nine `wp N` lines for the 14 statements).
 - [ ] T006 Run `make check`, `python3 -B scripts/test_architecture.py` and `scripts/check-docs.py`; record the numbers (allowlist total 14) and the killed mutations; update `docs/development.md` with the rule and the allowlist procedure.
 
 ## WP-1 `internal/inspection`
@@ -25,8 +25,8 @@ default branch.
 
 ## WP-3 `internal/stwsync`
 
-- [ ] T011 Tests in `internal/stwsync`: (a) characterisation, passes before and after: peak concurrent Git calls over many repositories and worktrees is at most `gitConcurrency`; (b) fails today: inside a synctest bubble the goroutine count above the baseline stays bounded by the `Do` widths, not by the number of repositories and worktrees.
-- [ ] T012 Replace both fan-outs with `fanout.Do`; keep the run-wide slots as THE bound on Git processes; remove two allowlist lines.
+- [ ] T011 Tests in `internal/stwsync` with a fake Git env and a synctest bubble: (a) characterisation, passes before and after: the peak of concurrent Git calls over many repositories and worktrees is at most `gitConcurrency`; (b) fails today: 40 repositories, 16 Git calls held by a gate, the context is cancelled, the gate released: the number of Git calls the fake env sees afterwards is at most 16 (today the 24 queued repositories still run Git, because `statusRun.g` never checks the context); a skipped repository gets the row a cancelled Git call gives today. No `runtime.NumGoroutine`, no export.
+- [ ] T012 Replace both fan-outs with `fanout.Do`; keep the run-wide slots as THE bound on Git processes; remove two allowlist lines and add 3 to `done:`.
 
 ## WP-4 `cmd/stw`
 
