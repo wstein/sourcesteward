@@ -183,3 +183,12 @@ func TestErrorRepositoryHasNoRemoteItems(t *testing.T) {
 }
 
 func collect(in Input) []Item { return sortItems(allItems(in)) }
+
+func TestSortRepositoryNamesCaseInsensitively(t *testing.T) {
+	a := mk(PRReady, "a/zeta", Subject{Kind: KindPR, Number: 1})
+	b := mk(PRReady, "B/alpha", Subject{Kind: KindPR, Number: 1})
+	c := mk(PRReady, "c/x", Subject{Kind: KindPR, Number: 1})
+	if got := ids(sortItems([]Item{c, b, a})); !reflect.DeepEqual(got, []string{a.ID, b.ID, c.ID}) {
+		t.Fatalf("%v", got)
+	}
+}
