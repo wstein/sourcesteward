@@ -91,7 +91,7 @@ func pullItems(r Repo) ([]Item, bool) {
 			continue
 		}
 		it := newItem(c, r.Slug, Subject{Kind: KindPR, Number: p.Number}, strconv.Itoa(p.Number), target{Slug: r.Slug, Number: p.Number})
-		it.Path, it.URL = r.Local.Path, httpsURL(p.URL)
+		it.Path, it.URL = r.Local.Path, HTTPSURL(p.URL)
 		it.Title = what + ": " + untrusted.Esc(p.Title)
 		it.Evidence = map[string]any{"group": untrusted.Esc(p.Group)}
 		if p.Reason != "" {
@@ -125,7 +125,7 @@ func draftItems(r Repo) []Item {
 			part = fingerprint(d.Tag + "\x00" + d.Name + "\x00" + d.CreatedAt.UTC().Format(time.RFC3339Nano))
 		}
 		it := newItem(ReleaseDraft, r.Slug, Subject{Kind: KindRelease, Tag: d.Tag}, part, target{Slug: r.Slug, Tag: d.Tag})
-		it.Path, it.URL = r.Local.Path, httpsURL(d.URL)
+		it.Path, it.URL = r.Local.Path, HTTPSURL(d.URL)
 		it.Title = fmt.Sprintf("release draft %s (%d assets) is waiting", untrusted.Esc(d.Tag), d.Assets)
 		it.Evidence = map[string]any{"drafts_visibility": string(WriteAccess), "assets": d.Assets}
 		items = append(items, it)
@@ -173,7 +173,7 @@ func tagItems(r Repo) []Item {
 		switch {
 		case f.failed != nil:
 			it = newItem(ReleaseRunFailed, r.Slug, s, idToken(f.tag, validRef), target{Slug: r.Slug, SHA: f.sha})
-			it.URL = httpsURL(f.failed.URL)
+			it.URL = HTTPSURL(f.failed.URL)
 			it.Title = fmt.Sprintf("release workflow run of %s %s", untrusted.Esc(f.tag), untrusted.Esc(f.failed.Conclusion))
 			it.Evidence = map[string]any{"conclusion": untrusted.Esc(f.failed.Conclusion), "released": !f.unreleased}
 		case f.unreleased:
@@ -252,7 +252,7 @@ func issueItems(r Repo) []Item {
 			continue
 		}
 		it := newItem(c, r.Slug, Subject{Kind: KindIssue, Number: i.Number}, strconv.Itoa(i.Number), target{Slug: r.Slug, Number: i.Number})
-		it.Path, it.URL = r.Local.Path, httpsURL(i.URL)
+		it.Path, it.URL = r.Local.Path, HTTPSURL(i.URL)
 		it.Title = what + ": " + untrusted.Esc(i.Title)
 		it.Evidence = map[string]any{"reason": i.Reason, "labels": escapedHead(i.Labels), "assignees": escapedHead(i.Assignees), "author": untrusted.Esc(i.Author)}
 		items = append(items, it)
