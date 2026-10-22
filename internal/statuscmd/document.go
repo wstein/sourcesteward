@@ -310,7 +310,7 @@ func sourceReads(rr statusremote.RepoResult) DocRepoSource {
 	}
 	return DocRepoSource{
 		Repo:      read(overview.SourceRepo, func() any { return repoData(rr.Remote) }),
-		Pulls:     read(overview.SourcePulls, func() any { return pullsData(rr) }),
+		Pulls:     read(overview.SourcePulls, func() any { return PullsData(rr) }),
 		Releases:  read(overview.SourceReleases, func() any { return releasesData(rr.Remote) }),
 		Tags:      read(overview.SourceTags, func() any { return tagsData(rr) }),
 		CIMain:    read(overview.SourceCIMain, func() any { return mainData(rr.Remote.Main) }),
@@ -322,7 +322,8 @@ func repoData(r *overview.Remote) DocRepoData {
 	return DocRepoData{DefaultBranch: cut(r.DefaultBranch, maxString), HTMLURL: nullable(overview.HTTPSURL(r.HTMLURL)), DraftsVisibility: string(r.Visibility)}
 }
 
-func pullsData(rr statusremote.RepoResult) DocPullsData {
+// PullsData is the data of the `pulls` source: the group counts of `stw pulls`, and `red`, the blocked rows whose checks are red.
+func PullsData(rr statusremote.RepoResult) DocPullsData {
 	c := rr.Pulls.Counts
 	d := DocPullsData{Open: c.Total, Ready: c.Ready, Checks: c.Checks, Conflict: c.Conflict, Draft: c.Draft, Blocked: c.Blocked, Bots: c.Bots, NotRead: c.NotRead}
 	if rr.Pulls.Open != nil {

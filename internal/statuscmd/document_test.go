@@ -212,10 +212,10 @@ func TestDocumentDataOfEachSource(t *testing.T) {
 	}
 	src := steward["sources"].(map[string]any)
 	requireKeys(t, "repo data", src["repo"].(map[string]any)["data"].(map[string]any), "default_branch", "html_url", "drafts_visibility")
-	pullsData := src["pulls"].(map[string]any)["data"].(map[string]any)
-	requireKeys(t, "pulls data", pullsData, "open", "ready", "checks", "conflict", "draft", "blocked", "red", "bots", "not_read")
-	if pullsData["open"] != float64(3) || pullsData["red"] != float64(1) || pullsData["blocked"] != float64(1) {
-		t.Errorf("%v", pullsData)
+	PullsData := src["pulls"].(map[string]any)["data"].(map[string]any)
+	requireKeys(t, "pulls data", PullsData, "open", "ready", "checks", "conflict", "draft", "blocked", "red", "bots", "not_read")
+	if PullsData["open"] != float64(3) || PullsData["red"] != float64(1) || PullsData["blocked"] != float64(1) {
+		t.Errorf("%v", PullsData)
 	}
 	releases := src["releases"].(map[string]any)["data"].(map[string]any)
 	requireKeys(t, "releases data", releases, "drafts", "truncated")
