@@ -123,7 +123,6 @@ Go test, `go test ./internal/architecture -run ^TestGoStatementsConfined -count=
 non-test files, so comments, strings, raw strings and generated or aliased forms cannot fool it, then applies a pure function
 `checkGoStatements(counts, allow)` to the counts and `scripts/go-statements.allow`. The test reads its root from the environment
 variable `STW_ARCH_ROOT` (default: the module root) so the Python tests can point it at a temporary tree. All packages including `cmd/`.
-The check fails when:
 
 Allowlist grammar (`scripts/go-statements.allow`, exact; blank lines and `#` comment lines are ignored, everything else must match
 one of these, or the test fails on the line):
