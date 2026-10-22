@@ -225,3 +225,26 @@ func TestListOpenPullsErrorsPassThrough(t *testing.T) {
 		t.Fatalf("retried a rate-limited list: %v", f.log)
 	}
 }
+
+// GitHub's 304 carries no Link header; the chain must come from the stored Link.
+func TestListOpenPullsStoredLinkSurvivesLinklessNotModified(t *testing.T) {
+	f := newFakeForge(t)
+	threePages(f, [3]string{"a", "a", "a"})
+	r := f.reader("github.com")
+	first, err := r.ListOpenPulls(context.Background(), "a/b", PullListState{}, 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe, err := r.PullListPage(context.Background(), "a/b", 25, 1, first.State.Pages[0].ETag)
+	if err != nil || !probe.NotModified || probe.Link != "" {
+		t.Fatalf("fake forge must answer a Link-less 304: %+v %v", probe, err)
+	}
+	f.log = nil
+	second, err := r.ListOpenPulls(context.Background(), "a/b", first.State, 2000)
+	if err != nil || !second.Unchanged || len(second.Items) != 60 || len(f.log) != 3 {
+		t.Fatalf("%v unchanged=%v items=%d log=%v", err, second.Unchanged, len(second.Items), f.log)
+	}
+	if second.State.Pages[0].Link != first.State.Pages[0].Link || second.State.Pages[1].Link == "" {
+		t.Fatalf("stored Link lost: %+v", second.State.Pages)
+	}
+}

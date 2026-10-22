@@ -66,6 +66,8 @@ func (f *fakeForge) serve(uri, etag, body string, header map[string]string) {
 			h[k] = v
 		}
 		if etag != "" && r.Header.Get("If-None-Match") == etag {
+			// GitHub answers a 304 with the ETag but without the Link header.
+			delete(h, "Link")
 			return forgeResponse(304, "", h)
 		}
 		return forgeResponse(200, body, h)
