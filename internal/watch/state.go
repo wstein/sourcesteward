@@ -132,6 +132,9 @@ type RestackDue struct {
 	OldParent   string  `json:"old_parent"`
 	Base        string  `json:"base"`
 	HeadRef     string  `json:"head_ref"`
+	// HeadFork is true unless the merged PR was observed open with its head in the base repository, so a
+	// fork-merged PR (fork:main into main) or an unobserved one never yields class-1 candidates.
+	HeadFork bool `json:"head_fork"`
 }
 
 // Health is the failure and stall bookkeeping of one repository (or, under "", of the run).
