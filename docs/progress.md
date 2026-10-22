@@ -28,6 +28,13 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply`, jj and the push are later slices.
 
+## Active work: Spec 035 stw watch (specification draft, 2026-10-22)
+
+[The specification](../specs/035-stw-watch/spec.md), its [event contract](../specs/035-stw-watch/contracts/watch-events.md) and
+[plan](../specs/035-stw-watch/plan.md) describe a read-only `stw watch` that prints pull request transitions (checks, merges,
+`restack-needed` after a rebase merge) as JSON Lines, replacing the foreman's `watch2.sh`. Status `planned`; the independent
+review of the exact head is pending and no code exists.
+
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 
 [The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (4/20 done: T001 to T004) describe a manual one-step `stw sync [--plan]` and `stw sync restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). The independent design review is CLEAR at 3d8d1da (after NOT CLEAR at b0cc02d, F1-F8 resolved). Slice 1a (T002 to T004) is implemented in source on `feat/032-sync-plan`: `stw sync --plan|--dry-run [PATH] [--remote NAME] [--prune] [--json]` fetches once (remote-tracking refs only) and classifies every tracking branch (`internal/stwsync`), with the unpublished `schemas/v1/sync.schema.json`. Tests use temporary repositories with a bare remote and linked worktrees, including a before/after snapshot proving that a plan changes only remote-tracking refs. Not started: the real run, journal, prune reporting beyond the plan, `--rebase`, `--autostash`, `restore`, `--submodules`, acceptance evidence and a smoke script. No build, release artifact or real-repository run was made. Status stays `planned`.

@@ -204,6 +204,12 @@
       "status": "planned",
       "spec": "../specs/034-bootstrap-release/spec.md",
       "evidence": null
+    },
+    {
+      "id": "035-stw-watch",
+      "status": "planned",
+      "spec": "../specs/035-stw-watch/spec.md",
+      "evidence": null
     }
   ]
 }
