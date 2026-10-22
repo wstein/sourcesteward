@@ -46,3 +46,16 @@ func TestValidReleaseTag(t *testing.T) {
 		}
 	}
 }
+
+// The bound of Spec 036 and 037 is 120 characters; the literal pins it, whatever MaxText says.
+func TestEscKeepsExactly120Characters(t *testing.T) {
+	if got := Esc(strings.Repeat("x", 120)); got != strings.Repeat("x", 120) {
+		t.Fatalf("120 characters changed: len %d", len(got))
+	}
+	if got := Esc(strings.Repeat("x", 121)); got != strings.Repeat("x", 120)+"..." {
+		t.Fatalf("121 characters: len %d", len(got))
+	}
+	if MaxText != 120 {
+		t.Fatalf("MaxText = %d", MaxText)
+	}
+}
