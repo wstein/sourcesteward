@@ -265,7 +265,7 @@ one item per id and no grouping. The human section shows at most 10 lines per pr
 (a) `pulls.Run` returns the **rows read so far** with `not-read`/`deadline` marks and a `PastBudget` flag on every row when its context
 expires, instead of `nil, err` (also an improvement for `stw pulls`, with its own tests; `stw pulls` output changes only on expiry);
 (b) a per-request timeout option of the hosting reader (default 30 s unchanged for every other command; status uses 15 s);
-(c) the exported `PastBudget` flag, so `pr-unread` means past the budget only; (d) the per-source pools described above.
+(c) the exported `PastBudget` flag, so `pr-unread` means past the budget only. The orchestration with the per-source pools described above is not a WP-0 seam: it is WP-R of the plan.
 
 ## Cost model
 
