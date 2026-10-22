@@ -1,7 +1,7 @@
 # Specification: `stw watch`, a read-only pull request watcher
 
-**Created**: 2026-10-22 | **Status**: planned (spec-light: this page, [contracts/watch-events.md](contracts/watch-events.md) and
-[plan.md](plan.md) are the whole design; no code yet). Draft for independent review.
+**Created**: 2026-10-22 | **Status**: implemented in source behind a hidden command (WP-A to WP-E), owner acceptance pending (spec-light: this page,
+[contracts/watch-events.md](contracts/watch-events.md) and [plan.md](plan.md) are the whole design; guide: [watch](../../docs/watch.md)).
 
 `stw watch` observes the open pull requests of one or more GitHub repositories, compares each poll with the previous one and
 prints **only the transitions** as JSON Lines events. It never writes to the forge. It replaces the foreman's ad-hoc `watch2.sh`

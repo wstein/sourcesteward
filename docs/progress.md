@@ -28,17 +28,14 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply`, jj and the push are later slices.
 
-## Active work: Spec 035 stw watch (specification draft, 2026-10-22)
+## Active work: Spec 035 stw watch (implemented in source, hidden, 2026-10-22)
 
 [The specification](../specs/035-stw-watch/spec.md), its [event contract](../specs/035-stw-watch/contracts/watch-events.md) and
 [plan](../specs/035-stw-watch/plan.md) describe a read-only `stw watch` that prints pull request transitions (checks, merges,
-`restack-needed` after a rebase merge) as JSON Lines, replacing the foreman's `watch2.sh`. Status `planned`; the independent
-review of the exact head is pending and no code exists.
-
-WP-A (the core, `internal/watch`) is implemented in source on `codex/035-stw-watch-core`: snapshot diff into the 15 event kinds,
-debounce, check class and shape, epoch-based ids, `state.json`, the fsynced `journal.jsonl`, start-up replay, lock and heartbeat,
-tested on a fake `Observer` with a generated crash matrix and a random-crash property test. Hosting reads (WP-B), the command (WP-C),
-the restack selection behind the `Restacker` hook (WP-D) and the schema and acceptance (WP-E) are not started.
+`restack-needed` after a rebase merge) as JSON Lines, replacing the foreman's `watch2.sh`. Work packages A to E are implemented in
+source: the command stays hidden, `schemas/v1/watch-event.schema.json` is frozen and unpublished, and `stw watch` has a guide
+([watch](watch.md)) and an end to end acceptance suite (US1 to US10, fake forge, no network). The feature status stays `planned`
+until the owner accepts it; the independent review of the exact head and the removal of `scripts/ci-wait.sh` are open.
 
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 

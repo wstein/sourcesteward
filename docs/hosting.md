@@ -78,7 +78,7 @@ the PR head, never `result_sha`; a mismatch exits 1 like any failure and is
 distinguishable by `observation.stop` `expectation-mismatch` / diagnostic
 `hosting-head-mismatch`, even for a merged PR. A match says nothing about review, CI or
 ancestry. `--watch` is not available (usage error, exit 2): use `scripts/ci-wait.sh` for
-long waits.
+long waits (or the planned `stw watch --until-event`, see [watch](watch.md)).
 
 `stw hosting prs SHA` (and `gh jj prs SHA`) lists the PRs GitHub associates with a commit
 through one `GET commits/SHA/pulls?per_page=30&page=1` (schema

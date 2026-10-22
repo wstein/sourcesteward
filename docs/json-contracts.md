@@ -226,6 +226,15 @@ repository or a failed run, 2 for usage errors with no JSON. Tests validate the 
 check real command output from temporary repositories. The exact rules are in the
 [spec](../specs/033-stw-status/spec.md).
 
+## Watch event schema v1 (unpublished)
+
+[Watch event schema](../schemas/v1/watch-event.schema.json) describes every line of `stw watch` stdout (without `--human`)
+and of its `journal.jsonl` (Spec 035). It is checked in and byte-frozen but excluded from Pages packaging until the
+feature is accepted. The envelope has `schema_version` 1, `seq`, `id`, `time`, `repo`, `pr`, `kind` (a closed enum of 15
+kinds) and `details`, whose keys are fixed per kind; no key is omitted and absent values are null. A second top-level
+definition, `#/$defs/status`, describes `stw watch --status --json`. Tests validate fixtures, reject broken variants and
+validate every event the crash matrix and the end to end acceptance run generate. See [watch](watch.md).
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files
