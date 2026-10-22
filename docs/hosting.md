@@ -116,6 +116,24 @@ search. A page of the issue list holds at most 100 entries and at most 1 MiB; en
 dropped, a 410 answer means the repository has issues disabled, and the `Link` header only signals that a further
 page exists: its URL is never requested, the reader asks for the next page number itself.
 
+## Repository, release and tag reads of `stw status`
+
+The online `stw status` ([Spec 037](../specs/037-stw-status-overview/spec.md)) reads `repos/OWNER/NAME`, `releases` and `tags` through typed decoders of the
+status reader (`RepoInfo`, `ReleaseList`, `TagList`). They use request shapes that every guard mode already admits, so the guard gains no shape;
+`ReleaseEntry` and the release verification are unchanged. Releases and tags are read from `per_page=100&page=1` on; the page of each request is the typed
+number, and the `Link` `rel="next"` header only says whether another page exists (it must name the following page; its URL is never requested). A next page
+after page 10 is the error `too-many-releases` (also for tags), a page over 1 MiB `page-too-large`, and a duplicate JSON key or a missing required field
+`malformed-response`.
+
+GitHub shows release drafts only to a token whose user has write access and does not say that it withheld any. `permissions` of the repository read give the
+visibility: `push`, `maintain` or `admin` true is `write-access`, all three reported false `no-write-access`, anything less `unknown`; without
+`write-access` no draft is reported, so "0 drafts" is never stated for a token that cannot see them. A fine-grained token with write access but without the
+releases scope can still withhold drafts.
+
+A tag is **unreleased** per release tag pattern (`v*.*.*` when the caller gives none) when its version is higher than that of the latest published release and no
+release, draft or published, carries its name (without a published release only the highest tag counts). `*` matches any text and the text between the
+pattern's literal head and tail must be a semantic version; other tags are ignored, prereleases order as in semantic versioning, and at most 5 tags are listed.
+
 ## Optional local extension installation
 
 After reviewing/building this source:
