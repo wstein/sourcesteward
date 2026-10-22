@@ -132,7 +132,7 @@ releases scope can still withhold drafts.
 
 A tag is **unreleased** per release tag pattern (`v*.*.*`, a semantic version with an optional `v`, when the caller gives none) when its version is higher than that of the latest published release and no
 release, draft or published, carries its name (without a published release only the highest tag counts). `*` matches any text and the text between the
-pattern's literal head and tail must be a semantic version; other tags are ignored, prereleases order as in semantic versioning, and at most 5 tags are listed.
+pattern's literal head and tail must be a semantic version; other tags are ignored, prereleases order as in semantic versioning, and at most 5 unreleased tags are listed, pattern by pattern in the declared order. The latest tag of each pattern is reported as well, with one entry per pattern and tag.
 
 ## Optional local extension installation
 
