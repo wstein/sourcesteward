@@ -82,8 +82,11 @@ func TestPullsSchemaRejectsBrokenDocuments(t *testing.T) {
 		"missing group key":      top(func(m map[string]any) { delete(m["groups"].(map[string]any), "blocked") }),
 		"extra group key":        top(func(m map[string]any) { m["groups"].(map[string]any)["other"] = []any{} }),
 		"row in the wrong group": top(func(m map[string]any) { pullRow(m)["group"] = "draft" }),
-		"ready flag false":       row(func(r map[string]any) { r["ready"] = false }),
-		"ready row with reason":  row(func(r map[string]any) { r["reason"] = "unknown" }),
+		"draft row listed under ready": row(func(r map[string]any) {
+			r["group"], r["ready"], r["draft"] = "draft", false, true
+		}),
+		"ready flag false":      row(func(r map[string]any) { r["ready"] = false }),
+		"ready row with reason": row(func(r map[string]any) { r["reason"] = "unknown" }),
 		"blocked without reason": top(func(m map[string]any) {
 			r := pullRow(m)
 			g := m["groups"].(map[string]any)
