@@ -2,37 +2,52 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/wstein/sourcesteward/internal/statuscmd"
+	"github.com/wstein/sourcesteward/internal/statusremote"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
-func workspaceStatusCommand() *cobra.Command { return workspaceStatusCommandWith(stwsync.Status) }
+func workspaceStatusCommand() *cobra.Command { return workspaceStatusCommandWith(statuscmd.Params{}) }
 
-func workspaceStatusCommandWith(status func(context.Context, stwsync.StatusOptions) stwsync.StatusResult) *cobra.Command {
-	var jsonOutput bool
+// workspaceStatusCommandWith builds the command over base: its function fields replace the production
+// readers (local status, discovery, forge reader) and are nil in production.
+func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
+	var jsonOutput, offline bool
+	var icons string
+	var timeout time.Duration
 	var options stwsync.StatusOptions
 	command := &cobra.Command{
-		Use:   "status [PATH] [--fetch] [--worktrees] [--json]",
-		Short: "Show where you are in the workspace root and every submodule, in one screen",
-		Long: "Read-only overview of the whole workspace, from any directory inside it: what git status, git worktree list and\n" +
-			"git branch -vv tell for the top-level superproject and each initialized submodule (nested ones too), main worktree\n" +
-			"only. Per repository: branch or detached HEAD, upstream with ahead/behind, staged/unstaged/untracked counts,\n" +
-			"conflicts, a rebase/merge/cherry-pick/revert/bisect in progress, stashes, local branches not yet merged into the\n" +
-			"default branch of the upstream remote, linked worktrees (dirty, locked, prunable) and, for a submodule, the drift\n" +
-			"between the commit the superproject records and the one checked out.\n" +
-			"A repository needs attention when it has an operation in progress, conflicts, staged, unstaged or untracked files,\n" +
-			"commits behind its upstream (or diverged), a branch without an upstream, a detached HEAD, or a gitlink whose checked-out\n" +
-			"commit is behind or unrelated to the recorded one; commits ahead, stashes, unmerged branches, linked worktrees and a\n" +
-			"gitlink whose checkout is ahead of the record are shown but do not count.\n" +
+		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--icons unicode|nerd|ascii] [--timeout DURATION] [--json]",
+		Short: "Show what needs action in the workspace and the state of every repository",
+		Long: "Read-only overview of the whole workspace, from any directory inside it. It starts with what needs action, ordered by\n" +
+			"priority (red, yellow, green, blue, violet), each item with its link and a command you can run yourself; then one block\n" +
+			"per repository, the notices about anything that could not be read, and a summary line. stw never runs a suggested command.\n" +
+			"Per repository the local half is what git status, git worktree list and git branch -vv tell for the top-level superproject\n" +
+			"and each initialized submodule (nested ones too), main worktree only: branch or detached HEAD, upstream with ahead/behind,\n" +
+			"staged/unstaged/untracked counts, conflicts, a rebase/merge/cherry-pick/revert/bisect in progress, stashes, local branches\n" +
+			"not yet merged into the default branch of the upstream remote, linked worktrees (dirty, locked, prunable) and, for a\n" +
+			"submodule, the drift between the commit the superproject records and the one checked out.\n" +
+			"The remote half reads, with GET requests only and the gh token of the other hosting commands, the open pull requests with\n" +
+			"their stw pulls verdict, the release drafts, the tags without a release, and the CI of the default branch and of the\n" +
+			"release workflow runs, for every repository whose origin is a GitHub repository on github.com. A missing token or a source\n" +
+			"that failed never hides the rest: the notices name what is missing. --timeout (default 90s, 1s to 10m) is the overall\n" +
+			"deadline of the remote half; one request takes at most 15 s.\n" +
+			"--offline sends no request and reads no credential: it prints the local half alone, exactly as before the online default.\n" +
 			"Nothing is changed and nothing is fetched unless --fetch asks for it (one git fetch per repository, remote-tracking\n" +
-			"refs only). --worktrees lists the linked worktrees. Colour only on a terminal (NO_COLOR turns it off). Git only.\n" +
-			"Exit statuses: 0 also when repositories need attention, 1 when a repository cannot be read or the run fails, 2 usage error.",
+			"refs only). --worktrees lists the linked worktrees. Colour only on a terminal (NO_COLOR turns it off). --icons picks the\n" +
+			"glyphs of the text: unicode (default on a terminal with a UTF-8 locale), nerd (Nerd Font) or ascii (default otherwise).\n" +
+			"A progress line goes to stderr, only when stderr is a terminal. --json prints one versioned document: schema 2 online,\n" +
+			"the frozen schema 1 with --offline.\n" +
+			"Exit statuses: 0 also when there is something to do, when a token is missing or when the deadline cut a read; 1 when a\n" +
+			"request that was made failed, a repository cannot be read or the run fails; 2 usage error.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,36 +55,104 @@ func workspaceStatusCommandWith(status func(context.Context, stwsync.StatusOptio
 			if err := stwsync.ValidateOptions(stwsync.Options{Path: options.Path}); err != nil {
 				return err
 			}
-			result := status(cmd.Context(), options)
-			if result.Error != nil && !jsonOutput {
-				return runtimeFailure{fmt.Errorf("status: %s: %s", result.Error.Code, result.Error.Message)}
+			flags := cmd.Flags()
+			switch {
+			case offline && flags.Changed("timeout"):
+				return errors.New("--timeout cannot be used with --offline: nothing is read from the forge")
+			case timeout < statuscmd.MinTimeout || timeout > statuscmd.MaxTimeout:
+				return fmt.Errorf("--timeout %s is outside %s to %s", timeout, statuscmd.MinTimeout, statuscmd.MaxTimeout)
 			}
-			var err error
-			if jsonOutput {
-				err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
-			} else {
-				err = renderStatusText(cmd.OutOrStdout(), result, options.Worktrees, stwsync.ColorEnabled(cmd.OutOrStdout()), asciiStatusMarks)
-			}
+			term := statuscmd.DetectTerminal(cmd.OutOrStdout(), cmd.ErrOrStderr())
+			set, err := statuscmd.ResolveIcons(icons, term)
 			if err != nil {
-				return runtimeFailure{err}
+				return err
 			}
-			if err = cmd.Context().Err(); err != nil {
-				return runtimeFailure{err}
+			// the local layout, which is also what a run without a usable token prints, keeps the plain marks
+			// unless --icons was given
+			marks := asciiStatusMarks
+			if flags.Changed("icons") {
+				marks = statusMarks{attention: set.Attention(), failed: set.Failure()}
 			}
-			if result.Error != nil {
-				return runtimeFailure{fmt.Errorf("status: %s: %s", result.Error.Code, result.Error.Message)}
+			if offline {
+				return runStatusOffline(cmd, base, options, jsonOutput, marks)
 			}
-			if result.Summary.Errors > 0 {
-				return runtimeFailure{fmt.Errorf("status: %s cannot be read", plural(result.Summary.Errors, "repository", "repositories"))}
+			base.Status, base.Timeout = options, timeout
+			if term.Stderr {
+				base.Progress = cmd.ErrOrStderr()
 			}
-			return nil
+			return runStatusOnline(cmd, base, set, marks, term.Color, jsonOutput)
 		},
 	}
 	flags := command.Flags()
+	flags.BoolVar(&offline, "offline", false, "Local only: send no request, read no credential and print the output of the local status")
 	flags.BoolVar(&options.Fetch, "fetch", false, "Fetch every repository first (remote-tracking refs only; the one thing that is not read-only)")
 	flags.BoolVar(&options.Worktrees, "worktrees", false, "List the linked worktrees of each repository")
+	flags.StringVar(&icons, "icons", "", "Glyph set of the text: unicode, nerd or ascii (default: unicode on a UTF-8 terminal, else ascii)")
+	flags.DurationVar(&timeout, "timeout", statusremote.DefaultTimeout, "Overall deadline of the remote half, 1s to 10m (not with --offline)")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
 	return command
+}
+
+// runStatusOffline prints the local status alone, byte for byte as the command did before the online
+// default: the text, or the schema 1 document.
+func runStatusOffline(cmd *cobra.Command, base statuscmd.Params, options stwsync.StatusOptions, jsonOutput bool, marks statusMarks) error {
+	local := base.Local
+	if local == nil {
+		local = stwsync.Status
+	}
+	result := local(cmd.Context(), options)
+	if result.Error != nil && !jsonOutput {
+		return runtimeFailure{fmt.Errorf("status: %s: %s", result.Error.Code, result.Error.Message)}
+	}
+	var err error
+	if jsonOutput {
+		err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+	} else {
+		err = renderStatusText(cmd.OutOrStdout(), result, options.Worktrees, stwsync.ColorEnabled(cmd.OutOrStdout()), marks)
+	}
+	if err != nil {
+		return runtimeFailure{err}
+	}
+	if err = cmd.Context().Err(); err != nil {
+		return runtimeFailure{err}
+	}
+	if result.Error != nil {
+		return runtimeFailure{fmt.Errorf("status: %s: %s", result.Error.Code, result.Error.Message)}
+	}
+	if result.Summary.Errors > 0 {
+		return runtimeFailure{fmt.Errorf("status: %s cannot be read", plural(result.Summary.Errors, "repository", "repositories"))}
+	}
+	return nil
+}
+
+// runStatusOnline reads the local and the remote half and prints the overview or the schema 2 document.
+// The output is printed even when the run failed: the failure is the exit status.
+func runStatusOnline(cmd *cobra.Command, p statuscmd.Params, icons statuscmd.IconSet, localMarks statusMarks, color, jsonOutput bool) error {
+	rep, err := statuscmd.Run(cmd.Context(), p)
+	if err != nil {
+		return runtimeFailure{err}
+	}
+	if rep.Local.Error != nil && !jsonOutput {
+		return runtimeFailure{rep.Failure()}
+	}
+	switch {
+	case jsonOutput:
+		err = json.NewEncoder(cmd.OutOrStdout()).Encode(rep.Document())
+	case rep.NoToken():
+		err = renderStatusNoToken(cmd.OutOrStdout(), rep, p.Status.Worktrees, color, localMarks)
+	default:
+		err = renderStatusOnline(cmd.OutOrStdout(), rep, icons, p.Status.Worktrees, color)
+	}
+	if err != nil {
+		return runtimeFailure{err}
+	}
+	if err = cmd.Context().Err(); err != nil {
+		return runtimeFailure{err}
+	}
+	if err = rep.Failure(); err != nil {
+		return runtimeFailure{err}
+	}
+	return nil
 }
 
 func statusSyncText(rp stwsync.RepoStatus) string {

@@ -100,7 +100,7 @@ func TestStatusRealOutputValidates(t *testing.T) {
 	run := func(want int, args ...string) map[string]any {
 		t.Helper()
 		var out, diag bytes.Buffer
-		code := cli.Run(context.Background(), "test", append([]string{"status"}, args...), &out, &diag)
+		code := cli.Run(context.Background(), "test", append([]string{"status", "--offline"}, args...), &out, &diag)
 		if code != want {
 			t.Fatalf("%v: exit %d want %d: %s %s", args, code, want, out.String(), diag.String())
 		}

@@ -1,0 +1,15 @@
+SourceSteward status: 3 repositories in /ws
+  .            main  origin/main up to date  clean
+! sub\x1b[31m  feat  origin/feat ahead 2, behind 1  1 staged, 2 unstaged, 3 untracked, 1 conflict
+    rebase in progress
+    stash 2
+    branches: 4 local, 2 not integrated into origin/main
+    2 linked worktrees (1 dirty, 1 locked)
+    gitlink: recorded aaaaaaa, checked out ahead (bbbbbbb)
+  gone         -     not initialized, recorded aaaaaaa
+summary: 1 of 3 repositories need attention
+
+Notices
+  no GitHub token (run: gh auth login): pull requests, releases and tags were not read
+  origin is not a GitHub repository: remote sources of 1 repository were not read
+  repository was not read locally: remote sources of 1 repository were not read
