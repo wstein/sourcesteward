@@ -27,6 +27,7 @@ type KnownPR struct {
 	Number    int
 	Head      string
 	Class     string // "" when unobserved
+	ClassCand string // a checks class seen once and not yet accepted ("" when none)
 	DetailDue bool
 }
 

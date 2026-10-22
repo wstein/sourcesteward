@@ -385,6 +385,27 @@ func TestObserveConfirmsADebounceCandidateWithAFreshRead(t *testing.T) {
 	}
 }
 
+// A candidate that the core stored survives a restart (or a separate --once process): the observer's
+// memory of the last class is gone, so the known PR itself must say that a fresh read is due.
+func TestObserveConfirmsAStoredCandidateInANewProcess(t *testing.T) {
+	f := newFake()
+	f.items = []hosting.PullItem{item(1, "main")}
+	f.tips["main"] = sha40("a")
+	f.details[1] = detailJSON
+	h := f.items[0].HeadSHA
+	f.runs[h] = `{"total_count":1,"check_runs":[{"name":"ci","status":"completed","conclusion":"failure","output":{}}]}`
+	s := &session{o: newObserver(f), f: f}
+	s.accept(s.observe(t)) // the first sighting: the core keeps class "" with a red candidate
+	s.know[0].ClassCand = watch.ClassRed
+	s.o = newObserver(f) // a new process
+	s.cyc = 1
+	f.calls = nil
+	obs := s.observe(t)
+	if obs.PRs[0].Checks == nil || f.etags["runs/"+h[:4]] != "" {
+		t.Fatalf("the stored candidate was not confirmed with a fresh read: %+v etag %q", obs.PRs[0].Checks, f.etags["runs/"+h[:4]])
+	}
+}
+
 func TestObserveSkipsIgnoredPRs(t *testing.T) {
 	f := newFake()
 	bot := item(1, "main")

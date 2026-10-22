@@ -176,7 +176,7 @@ func (o *HostObserver) Observe(ctx context.Context, repo string, h watch.Hints) 
 			o.mu.Lock()
 			last := o.lastClass[ck]
 			o.mu.Unlock()
-			inflight := last != "" && last != k.Class
+			inflight := last != "" && last != k.Class || k.ClassCand != ""
 			if !headSame || k.Class == "" || k.Class == watch.ClassPending || k.Class == watch.ClassNone || inflight || refresh {
 				ch, class, err := o.readChecks(ctx, repo, it.HeadSHA, inflight, cond)
 				if err != nil {
