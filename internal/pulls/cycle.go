@@ -61,7 +61,7 @@ type Row struct {
 	Ready                                         bool
 	Detail                                        bool
 
-	pastBudget bool // not selected for detail (counted by summary.not_read)
+	PastBudget bool // not selected for detail by the budget (counted by summary.not_read); a failed or skipped read is not past the budget
 	headOK     bool // pulls/N reported the listed head (validated)
 }
 
@@ -206,7 +206,7 @@ func (c *cycle) run(ctx context.Context) {
 	c.reread(ctx, all, read, index, status)
 
 	for _, it := range all {
-		it.row.pastBudget = !it.budget
+		it.row.PastBudget = !it.budget
 		c.finish(it)
 		c.res.Rows = append(c.res.Rows, it.row)
 	}
@@ -433,7 +433,7 @@ func (c *cycle) summarize() {
 		if r.Bot {
 			s.Bots++
 		}
-		if r.pastBudget && r.Reason == ReasonNotRead {
+		if r.PastBudget && r.Reason == ReasonNotRead {
 			s.NotRead++
 		}
 	}
