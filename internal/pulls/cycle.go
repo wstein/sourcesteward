@@ -106,6 +106,12 @@ type Result struct {
 // Run reads the snapshot. An error is returned for unusable options (nil Result) or an expired
 // context: then the Result is NOT nil but holds the rows read so far, marked Deadline where
 // reads were skipped, and the error is ctx.Err(). Failures of a repository are in Result.Errors.
+//
+// The error reflects the context at return: when it expires after the last read finished, the
+// complete Result comes back with ctx.Err() and Result.Deadline false; callers that must tell
+// the cases apart key on the error. A read that fails while the context expires is a deadline
+// mark, never an error: the deadline wins over a rate limit that arrives with it, so no rate-limit
+// stop is recorded.
 func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	if o.Limit == 0 {
 		o.Limit = defaultLimit

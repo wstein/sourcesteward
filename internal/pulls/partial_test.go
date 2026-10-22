@@ -17,6 +17,9 @@ type cancelForge struct {
 	cancel context.CancelFunc
 	at     int
 	seen   int
+	// fail, when set, is the error of the read that cancels (a real reader reports what
+	// the forge said even when the deadline passed at the same time).
+	fail error
 }
 
 func (c *cancelForge) PullDetail(ctx context.Context, repo string, n int, etag string) (hosting.WatchResponse, error) {
@@ -26,6 +29,9 @@ func (c *cancelForge) PullDetail(ctx context.Context, repo string, n int, etag s
 	c.fakeForge.mu.Unlock()
 	if hit {
 		c.cancel()
+		if c.fail != nil {
+			return hosting.WatchResponse{}, c.fail
+		}
 		return hosting.WatchResponse{}, ctx.Err()
 	}
 	return c.fakeForge.PullDetail(ctx, repo, n, etag)
@@ -129,4 +135,71 @@ func TestExpiryKeepsPastBudgetRowsDistinctFromDeadlineRows(t *testing.T) {
 	if res.Summary.NotRead != 1 {
 		t.Fatalf("%+v", res.Summary)
 	}
+}
+
+func TestFailedReadKeepsItsRepositoryErrorAndLaterSkipsAreNotDeadlineRows(t *testing.T) {
+	f := newForge()
+	threePRs(f)
+	f.errAt["detail/o/r#1"] = &hosting.WatchError{Code: hosting.CodeHTTP5xx, Message: "boom"}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// read 1 fails, read 2 is cut off by the deadline, read 3 is never made.
+	res, err := Run(ctx, &cancelForge{fakeForge: f, cancel: cancel, at: 2}, Options{Repos: []string{"o/r"}, Parallel: 1, Now: func() time.Time { return t0 }})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if res.Repos[0].Error != hosting.CodeHTTP5xx || len(res.Errors) != 1 || !res.Repos[0].Deadline {
+		t.Fatalf("the failed repository keeps its error: %+v %+v", res.Repos, res.Errors)
+	}
+	for _, r := range res.Rows {
+		if r.Deadline || r.PastBudget || r.Reason != ReasonNotRead {
+			t.Fatalf("a repository with an error reports read-error, not deadline rows: %+v", r)
+		}
+	}
+}
+
+func TestDeadlineWinsOverARateLimitThatArrivesWithIt(t *testing.T) {
+	f := newForge()
+	threePRs(f)
+	f.add(okPR("p/q", 1))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	limited := &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "limit"}
+	res, err := Run(ctx, &cancelForge{fakeForge: f, cancel: cancel, at: 1, fail: limited}, Options{Repos: []string{"o/r", "p/q"}, Parallel: 1, Now: func() time.Time { return t0 }})
+	if !errors.Is(err, context.Canceled) || res == nil {
+		t.Fatal(err)
+	}
+	if len(res.Errors) != 0 || res.Summary.ReposFailed != 0 || !res.Deadline {
+		t.Fatalf("a read that failed while the deadline passed is a deadline, not a rate limit: %+v %+v", res.Errors, res.Summary)
+	}
+	for _, r := range res.Rows {
+		if !r.Deadline {
+			t.Fatalf("%+v", r)
+		}
+	}
+}
+
+func TestExpiryAfterTheLastReadReturnsAnErrorAndNoDeadlineMark(t *testing.T) {
+	f := newForge()
+	f.add(okPR("o/r", 1))
+	ctx, cancel := context.WithCancel(context.Background())
+	res, err := Run(ctx, &expireAfter{fakeForge: f, cancel: cancel}, Options{Repos: []string{"o/r"}, Now: func() time.Time { return t0 }})
+	if !errors.Is(err, context.Canceled) || res == nil || res.Deadline || res.Repos[0].Deadline {
+		t.Fatalf("every read finished: the result is complete, the error is ctx.Err(): %+v %v", res, err)
+	}
+	if r := row(t, res, "o/r", 1); !r.Detail || r.Deadline || r.Group != GroupReady {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// expireAfter cancels the context once the last check read has been served.
+type expireAfter struct {
+	*fakeForge
+	cancel context.CancelFunc
+}
+
+func (e *expireAfter) Statuses(ctx context.Context, repo, sha string, page int, etag string) (hosting.WatchResponse, error) {
+	r, err := e.fakeForge.Statuses(ctx, repo, sha, page, etag)
+	e.cancel()
+	return r, err
 }
