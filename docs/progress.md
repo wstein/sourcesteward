@@ -37,12 +37,14 @@ source and the command is listed in `stw --help`; `schemas/v1/watch-event.schema
 ([watch](watch.md)) and an end to end acceptance suite (US1 to US10, fake forge, no network). The owner accepted it on 2026-10-22 after a dogfood run on the
 workspace (discovery of 7 repositories, silent baseline, `--status` fresh). The removal of `scripts/ci-wait.sh` is still open.
 
-## Spec 036 stw pulls (proposed, spec only, 2026-10-22)
+## Spec 036 stw pulls (implemented in source, review and acceptance pending, 2026-10-22)
 
 [The specification](../specs/036-stw-pulls/spec.md), its [JSON contract](../specs/036-stw-pulls/contracts/pulls.md) and
 [plan](../specs/036-stw-pulls/plan.md) describe a read-only, stateless `stw pulls` snapshot of all open pull requests of the workspace
 repositories (bot PRs included, grouped by what needs action, with a `ready to merge` verdict) and an opt-in `--owner` mode that
-discovers other repositories through one fixed `search/issues` read. No implementation yet; independent review pending.
+discovers other repositories through one fixed `search/issues` read. Work packages 0 to C are implemented in source and the command is
+listed in `stw --help`; `schemas/v1/pulls.schema.json` is frozen and unpublished, and `stw pulls` has a guide ([pulls](pulls.md)). The tests
+use a fake forge only (no network, no build); independent review of the exact head and the owner's acceptance are pending.
 
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 
