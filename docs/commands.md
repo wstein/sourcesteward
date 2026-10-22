@@ -168,6 +168,11 @@ summary: 2 of 3 repositories need attention
 
 [JSON contract](json-contracts.md#status-schema-v1-unpublished).
 
+## Watch pull requests
+
+`stw watch` (hidden until accepted, [Spec 035](../specs/035-stw-watch/spec.md)) is the read-only pull request watcher that
+prints transitions as JSON Lines; see [watch](watch.md).
+
 ## Create an isolated task workspace
 
 Choose an existing source, an unused absolute destination and a private mode0700
