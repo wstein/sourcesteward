@@ -133,7 +133,7 @@ type Subject struct {
 }
 
 // Item is one action item. Path, URL, Command, Effect and Hint are empty when absent; Effect is empty
-// exactly when Command is. Title is safe for the terminal: forge text passed through watchcmd.Esc.
+// exactly when Command is. Title is safe for the terminal: forge text passed through untrusted.Esc.
 // Evidence holds the small fixed facts of the category as strings, integers or booleans.
 type Item struct {
 	ID       string
@@ -206,6 +206,18 @@ const (
 	NoWriteAccess Visibility = "no-write-access"
 	Unknown       Visibility = "unknown"
 )
+
+// The verdict groups of a pull request row (Spec 036), the strings of internal/pulls; a test keeps them equal.
+const (
+	GroupReady    = "ready"
+	GroupChecks   = "checks"
+	GroupConflict = "conflict"
+	GroupDraft    = "draft"
+	GroupBlocked  = "blocked"
+)
+
+// PRReasonNotRead is the reason of a blocked row whose detail was not read.
+const PRReasonNotRead = "not-read"
 
 // PR is one open pull request row as the pulls cycle read it. Group and Reason are the verdict of
 // Spec 036; PastBudget is true when the row was not read because the detail budget was spent.

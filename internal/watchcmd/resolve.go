@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/stwsync"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 	"github.com/wstein/sourcesteward/internal/watch"
 )
 
@@ -51,7 +52,7 @@ func ParseRemote(remote, host string) (string, bool) {
 	}
 	path = strings.TrimSuffix(strings.TrimSuffix(path, "/"), ".git")
 	path = strings.TrimSuffix(path, "/")
-	if strings.Count(path, "/") != 1 || !ValidRepo(path) {
+	if strings.Count(path, "/") != 1 || !untrusted.ValidRepo(path) {
 		return "", false
 	}
 	return path, true
@@ -81,7 +82,7 @@ func Resolve(ctx context.Context, in ResolveInput) (Selection, error) {
 	var sel Selection
 	var repos []string
 	for _, r := range in.Repos {
-		if !ValidRepo(r) {
+		if !untrusted.ValidRepo(r) {
 			return sel, usagef("--repo %q is not OWNER/NAME", r)
 		}
 		repos = append(repos, r)

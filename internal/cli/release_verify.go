@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/release"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 	"io"
 	"unicode/utf8"
 )
@@ -16,7 +17,7 @@ func releaseVerifyCommand() *cobra.Command {
 	var o release.VerifyOptions
 	var jsonOutput bool
 	c := &cobra.Command{Use: "verify <tag> [PATH]", Short: "Verify a release without building or publishing", Args: cobra.RangeArgs(1, 2), SilenceUsage: true, SilenceErrors: true, RunE: func(cmd *cobra.Command, args []string) error {
-		if release.IsFullCommitID(args[0]) || !validReleaseTag(args[0]) {
+		if release.IsFullCommitID(args[0]) || !untrusted.ValidReleaseTag(args[0]) {
 			return errors.New("verify requires a valid tag name")
 		}
 		o.Subject = args[0]

@@ -3,11 +3,10 @@
 package overview
 
 import (
+	"github.com/wstein/sourcesteward/internal/pulls"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/wstein/sourcesteward/internal/pulls"
 )
 
 const slug = "wstein/sourcesteward"

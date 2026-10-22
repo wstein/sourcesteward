@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/release"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 func releaseDispatchCommand() *cobra.Command {
@@ -87,5 +88,5 @@ func releaseDispatchCommandWithRunner(run func(context.Context, release.Dispatch
 // --tag already determines the selector kind. Only the positional validator's
 // abbreviated-hex ambiguity rule is bypassed; all other tag rules stay intact.
 func validExplicitReleaseTag(tag string) bool {
-	return validReleaseTag(tag) || (tag != "" && len(tag) <= 255 && strings.Trim(tag, "0123456789abcdefABCDEF") == "")
+	return untrusted.ValidReleaseTag(tag) || (tag != "" && len(tag) <= 255 && strings.Trim(tag, "0123456789abcdefABCDEF") == "")
 }
