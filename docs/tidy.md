@@ -217,6 +217,33 @@ records. Native processes remain network-denied. Apply requires `--online` exact
 stored plan declares network effects, alongside separate `--authorize` for its local effects;
 a saved online plan never enables networking by itself.
 
+
+### Review report bounds
+
+`stw tidy plan` with `--report-dir` writes the review report; a reviewer decision (`--decisions`)
+clears a `needs-review` branch only if its report entry is complete, so every bound that can cut
+an entry has a flag. Defaults and ceilings (the plan binds them; the three per-entry ones only
+when they differ from the default):
+
+| Flag | Default | Ceiling |
+| --- | --- | --- |
+| `--report-max-entries` | 512 | 4,096 |
+| `--report-max-bytes` (per file, Markdown and JSON) | 4 MiB | 16 MiB |
+| `--report-max-diff-bytes` (per entry) | 64 KiB | 1 MiB |
+| `--report-max-files` (per entry diff and gitlink list) | 16 | 4,096 |
+| `--report-max-lines` (per entry diff) | 1,000 | 200,000 |
+| `--report-max-commits` (per entry) | 50 | 1,000 |
+| `--timeout` | scaled | none |
+
+The bounds interact: the diff stops at the first of the file, line and byte bound, so past
+roughly 5 bytes per line the line bound is never reached unless `--report-max-diff-bytes` is raised
+as well (1 MiB holds about 200,000 short lines), and the report files must be big enough for the
+entries (`--report-max-bytes`). An entry cut by any bound, including a truncated gitlink list, is
+"not fully reviewed": its decision is ignored with a note. To review very large branches raise
+all of them, for example `--report-max-entries 4096 --report-max-bytes 16777216
+--report-max-diff-bytes 1048576 --report-max-files 4096 --report-max-lines 200000
+--report-max-commits 1000`.
+
 ### Local tracking refs
 
 Tracking selection is a separate mode. The selected remote must have one canonical fetch URL

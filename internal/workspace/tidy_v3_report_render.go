@@ -98,7 +98,7 @@ func renderReport(d reportDocument) (renderedReport, error) {
 		}
 		jsonUsed, mdUsed = jsonUsed+len(piece)+1, mdUsed+len(mdPiece)
 		pieces, mdPieces, shown = append(pieces, piece), append(mdPieces, mdPiece), append(shown, e.Branch.Text)
-		cut[e.Branch.Text] = e.Diff.Truncated != nil || e.CommitsTruncated != nil || e.Diff.Source == "unavailable" || e.RangePairing != nil && e.RangePairing.Truncated != nil
+		cut[e.Branch.Text] = e.Diff.Truncated != nil || e.CommitsTruncated != nil || e.Diff.Source == "unavailable" || e.GitlinksTruncated != nil || e.RangePairing != nil && e.RangePairing.Truncated != nil
 	}
 	sort.SliceStable(omitted, func(i, j int) bool { return omitted[i].Branch.Text < omitted[j].Branch.Text })
 	summary := d.Counts
