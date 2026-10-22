@@ -61,6 +61,21 @@ stw watch --status [--state-dir DIR] [--json]
 - Output goes to stdout, one event per line, flushed per line. Diagnostics (never tokens) go to stderr only as `watch-error`
   style lines; stdout carries events only.
 
+### CLI details that the synopsis leaves open
+
+- `--workspace [PATH]` is the boolean flag `--workspace` plus the optional positional `PATH` (`stw watch --workspace /ws`);
+  `PATH` without `--workspace` is a usage error. `--repo` may repeat; `--until-event` takes commas or repeats.
+- The config file is read from `--config`; without it, `.stw/watch.toml` of the workspace containing the current directory is
+  read only when neither `--repo` nor `--workspace` is given. `repos` is a top-level key (the `[repos]` of the repository list
+  above). The file's `interval`, `detail_every` and `max_open_prs` apply unless a flag overrides them.
+- `--status` also accepts `--repo`, `--workspace`, `--config` and `--host`, only to compute the default state directory of the
+  run it reports on; it rejects the polling flags.
+- A stream or `--until-event` run interrupted by SIGINT or SIGTERM exits 0 for `--stream` and 1 for `--until-event`. A
+  repository whose `pulls/N` cannot be read after it left the open list fails that repository's cycle (`watch-error`, state
+  untouched) so the PR is retried; a PR that GitHub still reports open there stays unresolved.
+- The Spec 022 allowlist has no repository read, so the default branch of a repository is `main` or `master` when an open PR
+  targets it, else unknown; an unknown default branch makes `shape` `unknown` (fail loud) for a red head.
+
 ### Config file `.stw/watch.toml`
 
 Strict profile like `.stw/release.toml` (unknown keys, wrong types and duplicate keys are usage errors; `schema_version = 1`
