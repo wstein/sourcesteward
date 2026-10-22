@@ -36,24 +36,25 @@ Two documents, never mixed:
 | --- | --- | --- |
 | `id` | str | `CATEGORY:REPO:SUBJECT`, stable for the same finding across runs (`pr-ready:wstein/sourcesteward:57`); `REPO` is the repository's `OWNER/NAME` or, for a local-only finding, its `name`; `SUBJECT` a number, tag, branch, or `-` |
 | `priority` | enum `red`, `yellow`, `green`, `blue`, `violet` | |
-| `category` | enum, the 20 category ids of the spec table | |
+| `category` | enum, the 25 category ids of the spec table | |
 | `repo` | str | as in `id` |
 | `path` | str or null | workspace-relative path of the repository when local |
 | `title` | str | one-line text, the same words as the human item line |
 | `url` | str or null | deep link, `https` only (PR, release, actions page, repository) |
-| `subject` | object | `{kind, number, tag, sha}`: `kind` in `pr`, `release`, `tag`, `branch`, `repository`, `worktree`, `gitlink`; the other keys null when not applicable |
+| `subject` | object | `{kind, number, tag, sha}`: `kind` in `pr`, `release`, `tag`, `branch`, `repository`, `worktree`, `gitlink`, `fact`, `source` (`fact` for the local fact kinds `dirty`, `detached`, `untracked`, `behind`, `diverged`, `no-upstream`, `stash`, `operation`, `conflicts`, `branches`; `source` for `read-error`); the other keys null when not applicable |
 | `evidence` | object or null | small fixed facts for the category (for example `{"group":"ready","checks":"green","mergeable_state":"clean"}` for a PR; `{"drafts_visibility":"write-access","assets":4}` for a draft) |
-| `command` | str or null | suggested owner-side command, validated tokens only; null when no safe command exists |
-| `effect` | enum `read`, `write`, or null | `write` = the command changes something when the **owner** runs it; `stw` never runs it; null exactly when `command` is null |
+| `command` | str or null | suggested command, a hint that `stw` never runs; validated tokens only; null when no safe command exists (for example `tag-without-release`) |
+| `effect` | enum `read`, `owner`, or null | `read` = changes nothing when run; `owner` = changes something and is the owner's operation (`gh pr merge`, `gh release edit`, `git -C ROOT add PATH`); null exactly when `command` is null |
+| `hint` | str or null | advice when no command fits (for example: see the repository's `docs/releasing.md`; set the draft variable before the tag is pushed) |
 
 ### `repos[].remote`
 
 `{repo, state, reason, sources}`. `repo` `OWNER/NAME` or null; `state` `ok`, `degraded`, `skipped`, `offline` (`offline` is never emitted
 online; reserved for the same shape in tooling); `reason` null or `not-github-origin`, `other-host`, `not-read-locally`, `invalid-repo`,
 `no-token`, `network`, `rate-limited`, `deadline`; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
-`ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons include `deadline`, `no-token`, `network`, `no-release-workflows`) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
+`ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons include `deadline`, `no-token`, `network`, `no-release-workflow`) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
 `rate-limited`, `network`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`,
-`too-many-open-prs`, `no-release-workflows`). The data of each source:
+`too-many-open-prs`, `no-release-workflow`). The data of each source:
 
 | Source key | Data (null when the source is not `ok`) |
 | --- | --- |
@@ -62,7 +63,7 @@ online; reserved for the same shape in tooling); `reason` null or `not-github-or
 | `releases` | `{drafts, truncated}`; `drafts` at most 100 `{name, tag, created_at, assets, url}` (`name` str or null, `created_at` time or null); empty and meaningless unless `drafts_visibility` is `write-access` |
 | `tags` | `{latest, unreleased}`; `latest` str or null, `unreleased` at most 5 `{tag, sha, run}` (`run` `{workflow, conclusion, status, url}` or null) |
 | `ci_main` | `{branch, head, class, behind_origin}`; `class` `none`, `pending`, `green`, `red` or null; `behind_origin` bool or null (local default branch lacks origin's head) |
-| `ci_release` | `{tag, sha, runs}`; `tag` is the latest tag; unreleased tags carry their run in `tags.unreleased[].run`; `runs` at most 20 `{workflow, conclusion, status, url}` |
+| `ci_release` | `{workflow, tags}`: `workflow` the single `ci.release_workflow` (or the default `release-build.yml`); `tags` an array of `{product, tag, sha, released, runs}` for each product's latest tag and each unreleased tag; `runs` at most 20 `{workflow, conclusion, status, url}`, newest first |
 
 ### `summary`
 
