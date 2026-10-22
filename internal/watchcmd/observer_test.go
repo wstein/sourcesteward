@@ -26,6 +26,7 @@ type fakeReader struct {
 	runs     map[string]string // sha -> check_runs body
 	stats    map[string]string // sha -> statuses body
 	commits  map[string]string
+	pulls    map[int]string // pulls/N/commits body
 	rate     hosting.RateInfo
 	calls    []string
 	etags    map[string]string // call -> validator sent
@@ -34,7 +35,7 @@ type fakeReader struct {
 
 func newFake() *fakeReader {
 	return &fakeReader{details: map[int]string{}, detailET: map[int]string{}, tips: map[string]string{}, runs: map[string]string{},
-		stats: map[string]string{}, commits: map[string]string{}, etags: map[string]string{}, errAt: map[string]error{}}
+		stats: map[string]string{}, commits: map[string]string{}, pulls: map[int]string{}, etags: map[string]string{}, errAt: map[string]error{}}
 }
 
 func (f *fakeReader) note(call, etag string) error {
@@ -118,6 +119,17 @@ func (f *fakeReader) Statuses(_ context.Context, _ string, sha string, page int,
 		body = `[]`
 	}
 	return hosting.WatchResponse{Status: 200, ETag: tag, Body: []byte(body)}, nil
+}
+
+func (f *fakeReader) PullCommits(_ context.Context, _ string, n, page int, etag string) (hosting.WatchResponse, error) {
+	if err := f.note(fmt.Sprintf("commits/%d/%d", n, page), etag); err != nil {
+		return hosting.WatchResponse{}, err
+	}
+	body := f.pulls[n]
+	if body == "" || page > 1 {
+		body = `[]`
+	}
+	return hosting.WatchResponse{Status: 200, Body: []byte(body)}, nil
 }
 
 func (f *fakeReader) RateLimit(context.Context) (hosting.RateInfo, error) { return f.rate, nil }

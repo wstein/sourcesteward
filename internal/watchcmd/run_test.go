@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -394,5 +395,36 @@ func TestInterruptedUntilEventIsAFailureAndNeverAMatch(t *testing.T) {
 	}
 	if got := interrupted(ModeOnce); code(got) != ExitFailure {
 		t.Fatalf("once: %v", got)
+	}
+}
+
+func TestRestackNeededEventsAreProducedEndToEnd(t *testing.T) {
+	r := newRunRig(t, ModeOnce)
+	r.f.tips["feat/1"] = sha40("f")
+	r.open(item(1, "main"), item(2, "feat/1"), item(3, "main"), item(4, "main"))
+	if err := r.run(context.Background()); err != nil || r.out.Len() != 0 {
+		t.Fatalf("baseline: %v %q", err, r.out)
+	}
+	merge := sha40("e")
+	r.f.details[1] = `{"state":"closed","merged":true,"merge_commit_sha":"` + merge + `","merged_at":"2026-10-22T08:00:00Z","base":{"ref":"main"},"head":{"sha":"` + sha40("1") + `","ref":"feat/1"}}`
+	r.f.commits[merge] = `{"parents":[{"sha":"x"}]}`
+	r.f.pulls[3] = `[{"sha":"` + sha40("1") + `"},{"sha":"` + sha40("3") + `"}]`
+	r.f.pulls[4] = `[{"sha":"` + sha40("4") + `"}]`
+	r.now = r.now.Add(time.Minute)
+	r.open(item(2, "feat/1"), item(3, "main"), item(4, "main"))
+	if err := r.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]map[string]any{}
+	for _, l := range r.lines() {
+		if l["kind"] == "restack-needed" {
+			got[fmt.Sprint(l["pr"])] = l["details"].(map[string]any)
+		}
+	}
+	if len(got) != 2 || got["2"]["reason"] != "child-of-merged-branch" || got["3"]["reason"] != "contains-merged-commits" || got["4"] != nil {
+		t.Fatalf("%v\n%s", got, r.out)
+	}
+	if d := got["3"]; d["old_parent"] != sha40("1") || d["new_parent"] != merge || d["merged_pr"] != float64(1) || len(d["argv"].([]any)) != 10 {
+		t.Fatalf("%v", d)
 	}
 }
