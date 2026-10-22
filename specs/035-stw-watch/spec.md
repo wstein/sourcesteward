@@ -74,8 +74,11 @@ stw watch --status [--state-dir DIR] [--json]
   repository whose `pulls/N` cannot be read after it left the open list fails that repository's cycle (`watch-error`, state
   untouched) so the PR is retried; a PR that GitHub still reports open there stays unresolved.
 - A PR whose base branch name the hosting guard refuses (for example one containing `%`) does not fail the repository: the
-  `branches/BASE` read is skipped for that base, one diagnostic line goes to stderr per run, its PRs are still watched and a red
-  head there has `shape` `unknown`.
+  `branches/BASE` read is skipped for that base, one diagnostic line goes to stderr per run, its PRs are still watched, a red
+  head there is classified by the usual `shape` rules, and with no tip read their `mergeable` is refreshed only on the slow
+  `--detail-every` cycle (or on a head change).
+- Supported platforms: Linux, macOS and other Unix systems (the state lock is `flock`). On other platforms (Windows) `stw
+  watch` exits 2 with "not supported on this platform"; the code compiles there with stubs.
 - A first SIGINT or SIGTERM ends the command gracefully; a second one terminates the process at once.
 - The Spec 022 allowlist has no repository read, so the default branch of a repository is `main` or `master` when an open PR
   targets it, else unknown; an unknown default branch makes `shape` `unknown` (fail loud) for a red head.

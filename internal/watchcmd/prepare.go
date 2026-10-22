@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/release"
@@ -67,6 +66,9 @@ type Prepared struct {
 // usage error (exit 2): nothing has been read from the forge or written to a state directory.
 func Prepare(ctx context.Context, f Flags, stdout io.Writer) (Prepared, error) {
 	var out Prepared
+	if !watch.Supported {
+		return out, usagef("stw watch is not supported on this platform")
+	}
 	host := f.Host
 	if host == "" {
 		host = DefaultHost
@@ -230,7 +232,7 @@ func loadConfig(ctx context.Context, f Flags) (*Config, error) {
 
 // readConfigFile reads at most MaxContractBytes of a regular file without ever blocking on a FIFO.
 func readConfigFile(path string, noLinks bool) ([]byte, error) {
-	flags := os.O_RDONLY | syscall.O_NONBLOCK
+	flags := os.O_RDONLY | openNonBlock
 	if noLinks {
 		info, err := os.Lstat(path)
 		if err != nil {
@@ -239,7 +241,7 @@ func readConfigFile(path string, noLinks bool) ([]byte, error) {
 		if !info.Mode().IsRegular() {
 			return nil, fmt.Errorf("%s is a symbolic link or not a regular file", path)
 		}
-		flags |= syscall.O_NOFOLLOW
+		flags |= openNoFollow
 	}
 	file, err := os.OpenFile(path, flags, 0)
 	if err != nil {

@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build unix
 
 // SPDX-License-Identifier: EUPL-1.2
 package watch
@@ -72,3 +72,6 @@ func lockHolder(dir string) (bool, int) {
 	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw[:n])))
 	return true, pid
 }
+
+// Supported reports whether stw watch runs on this platform: it needs flock.
+const Supported = true

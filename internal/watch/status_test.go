@@ -106,6 +106,14 @@ func TestUnknownForkNeverOverwritesAPersistedFork(t *testing.T) {
 	if !r.state().Repo["o/r"].PRs[1].Fork {
 		t.Fatal("restart kept")
 	}
+	r.base = true // a baseline that did not read pulls/N keeps the persisted fork flag too
+	r.mustOpen()
+	r.must(ok(mk(1)))
+	r.base = false
+	r.must(ok(mk(1)))
+	if !r.state().Repo["o/r"].PRs[1].Fork {
+		t.Fatal("a baseline without pulls/N overwrote the fork flag")
+	}
 }
 
 func TestStatusFreshnessWindow(t *testing.T) {
