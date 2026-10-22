@@ -132,7 +132,7 @@ func TestPullRequestPrecedence(t *testing.T) {
 		{"bot past budget is pr-bot only", pr(1, pulls.GroupBlocked, pulls.ReasonNotRead, func(p *PR) { p.Bot, p.PastBudget = true, true }), PRBot},
 		{"past budget human is pr-unread", pr(1, pulls.GroupBlocked, pulls.ReasonNotRead, func(p *PR) { p.PastBudget = true }), PRUnread},
 		{"past budget wins over the group", pr(1, pulls.GroupReady, "", func(p *PR) { p.PastBudget = true }), PRUnread},
-		{"not-read without the flag is no item (deadline or failed read)", pr(1, pulls.GroupBlocked, pulls.ReasonNotRead, nil), ""},
+		{"not-read without the flag is a read-error of the repository", pr(1, pulls.GroupBlocked, pulls.ReasonNotRead, nil), ReadError},
 		{"unknown group is no item", pr(1, "other", "", nil), ""},
 		{"ready", pr(1, pulls.GroupReady, "", nil), PRReady},
 		{"conflict", pr(1, pulls.GroupConflict, "", nil), PRConflict},
@@ -417,5 +417,38 @@ func TestRemoteEvidence(t *testing.T) {
 	items = remote(func(r *Remote) { r.Pulls = []PR{pr(1, pulls.GroupBlocked, pulls.ReasonReview, nil)} })
 	if ev := items[0].Evidence; ev["group"] != "blocked" || ev["reason"] != "review-or-protection" {
 		t.Fatalf("%v", ev)
+	}
+}
+
+// A row that was not read for another reason than the budget is a lost read: the model reports it as one
+// read-error of the repository even when the source says ok, and never twice.
+func TestUnreadRowDerivesTheReadError(t *testing.T) {
+	unread := []PR{pr(1, pulls.GroupBlocked, pulls.ReasonNotRead, nil), pr(2, pulls.GroupBlocked, pulls.ReasonNotRead, nil)}
+	cases := []struct {
+		name  string
+		state SourceState
+		pulls []PR
+		want  []string
+	}{
+		{"source ok", SourceState{Outcome: OutcomeOK}, unread, []string{"read-error:wstein/sourcesteward:pulls"}},
+		{"source state missing", SourceState{}, unread, []string{"read-error:wstein/sourcesteward:pulls"}},
+		{"source error: still one item", SourceState{Outcome: OutcomeError, Code: CodeRateLimited}, unread, []string{"read-error:wstein/sourcesteward:pulls"}},
+		{"deadline skip is no item", SourceState{Outcome: OutcomeSkipped, Reason: ReasonDeadline}, unread, nil},
+		{"past budget is not a read error", SourceState{Outcome: OutcomeOK}, []PR{pr(3, pulls.GroupBlocked, pulls.ReasonNotRead, func(p *PR) { p.PastBudget = true })}, []string{"pr-unread:wstein/sourcesteward:3"}},
+		{"bot and draft rows lose nothing", SourceState{Outcome: OutcomeOK}, []PR{
+			pr(4, pulls.GroupBlocked, pulls.ReasonNotRead, func(p *PR) { p.Bot = true }),
+			pr(5, pulls.GroupDraft, "", func(p *PR) { p.Draft = true }),
+		}, []string{"pr-bot:wstein/sourcesteward:4"}},
+	}
+	for _, c := range cases {
+		items := remote(func(r *Remote) {
+			if c.state != (SourceState{}) {
+				r.Sources[SourcePulls] = c.state
+			}
+			r.Pulls = c.pulls
+		})
+		if got := ids(items); !reflect.DeepEqual(got, c.want) && !(len(got) == 0 && len(c.want) == 0) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
 	}
 }
