@@ -12,7 +12,7 @@ of an owner or organisation outside the workspace. It is the poll-once, stateles
 ## Decisions (owner, 2026-10-22)
 
 1. **A first, C opt-in.** Default scope is the workspace (or the given `--repo`/`--workspace`); `--owner` adds repositories discovered outside it.
-2. **Read-only and stateless.** One cycle of the `stw watch` host observer, nothing written to disk or to the forge.
+2. **Read-only and stateless.** A stateless cycle over the watch reader (see Implementation seams), nothing written to disk or to the forge.
 3. **Bots are first-class**, marked in every output; filters narrow the view, the default hides nothing.
 
 ## User stories
@@ -43,7 +43,7 @@ stw pulls [--workspace [PATH]] [--repo OWNER/NAME ...] [--owner OWNER ...] [--ho
   that is a usage error (exit 2). `.stw/watch.toml` is not read. At most 256 repositories (the `watchcmd.Resolve` limit), `--owner` results
   included; more is a usage error naming the count. `--host` defaults to `github.com` (one host per run, Spec 022 host rules).
 - `--human` (default on a terminal) and `--json` (default otherwise) are mutually exclusive.
-- `--limit N` (default 200, 1 to 500) is the **detail budget**: the number of non-draft PRs whose `pulls/N` and checks are read.
+- `--limit N` (default 200, 1 to 500) is the **detail budget**: the number of non-draft PRs (drafts too with `--detail-drafts`) whose `pulls/N` and checks are read.
 - `--detail-drafts`: drafts are also read and consume the budget (default: drafts get no detail, they are group `draft`).
 - Filters: `--no-bots` and `--bots-only` are mutually exclusive (usage error, exit 2). `--author LOGIN` (repeatable; pattern
   `[A-Za-z0-9-]{1,39}` with an optional `[bot]` suffix) intersects with them (`--bots-only --author alice` is valid and empty unless
@@ -54,7 +54,7 @@ stw pulls [--workspace [PATH]] [--repo OWNER/NAME ...] [--owner OWNER ...] [--ho
 
 ## Reading order and budget (deterministic)
 
-1. List every repository's open PRs (all pages, sorted by repository name). 2. Apply the filters. 3. Take the non-draft PRs of the
+1. List every repository's open PRs (all pages, sorted by repository name). 2. Apply the filters. 3. Take the non-draft PRs (drafts too with `--detail-drafts`) of the
 whole set newest first (`created_at`, then repository, then number) up to `--limit`, and read their detail and checks. The result
 therefore depends only on the data, never on timing or parallelism. Rows past the budget are listed with `detail` false and reason
 `not-read` and counted separately in `summary.not_read`.
@@ -82,14 +82,19 @@ Per PR, from the list item and (within the budget) `pulls/N` plus check runs and
 | 3 | `pulls/N` `head.sha` differs from the listed head | `blocked` | `unknown` |
 | 4 | class `red` | `blocked` | `checks-red` |
 | 5 | class `none` | `blocked` | `no-checks` |
-| 6 | `mergeable` null, or `mergeable_state` `unknown` or `has_hooks` | `blocked` | `unknown` |
-| 7 | `mergeable_state` `blocked` | `blocked` | `review-or-protection` |
-| 8 | `mergeable_state` `unstable` | `blocked` | `unstable` |
-| 9 | `rebaseable` false | `blocked` | `not-rebaseable` |
-| 10 | `mergeable_state` `dirty`, or `mergeable` false, or `behind` | `conflict` | null |
-| 11 | class `pending` | `checks` | null |
-| 12 | class `green`, `mergeable` true, `mergeable_state` `clean`, `rebaseable` true | `ready` | null |
-| 13 | anything else | `blocked` | `unknown` |
+| 6 | `mergeable` null, or `mergeable_state` `unknown` | `blocked` | `unknown` |
+| 7 | class `pending` | `checks` | null |
+| 8 | `mergeable_state` `dirty`, or `mergeable` false, or `behind` | `conflict` | null |
+| 9 | `mergeable_state` `blocked` | `blocked` | `review-or-protection` |
+| 10 | `mergeable_state` `unstable` | `blocked` | `unstable` |
+| 11 | `rebaseable` false | `blocked` | `not-rebaseable` |
+| 12 | `mergeable_state` `has_hooks` | `blocked` | `unknown` |
+| 13 | class `green`, `mergeable` true, `mergeable_state` `clean`, `rebaseable` true | `ready` | null |
+| 14 | anything else | `blocked` | `unknown` |
+
+The order matters because GitHub reports pending required checks as `blocked` and a conflicting PR as not rebaseable: tested earlier,
+those rows would hide the `checks` and `conflict` groups. All five groups stay reachable (rows 1, 7, 8, 13 and the `blocked` rows).
+Reason names, in order: `checks-red`, `no-checks`, `unknown`, `review-or-protection`, `unstable`, `not-rebaseable`, `not-read`.
 
 Decisions: a repository **without any CI can never be `ready`** (reason `no-checks`); `ready` requires `rebaseable` true because the owner
 merges by rebase; `has_hooks` is treated as `unknown` (documented in the guide). The review decision is not read (no `pulls/N/reviews`
@@ -135,7 +140,7 @@ escapes control characters and bounds text exactly like `internal/watchcmd/human
 ## Output and exit status
 
 Output is on stdout only; diagnostics on stderr. Exit 0: all repositories read (also when nothing is open); 1: at least one
-repository or owner discovery failed (partial output is printed); 2: usage error or unsupported platform. A failure of one
+repository or owner discovery failed (partial output is printed); 2: usage error. A failure of one
 repository never hides the others. JSON is **one document** (the contract), not JSON Lines: a snapshot is one value with a
 `summary`, groups and `errors`, like `stw status`, and a consumer reads it with a single `jq`; there are no transitions to stream.
 Schema: `schemas/v1/pulls.schema.json`, unpublished until accepted (frozen, listed in `UNPUBLISHED_SCHEMAS`).
@@ -143,8 +148,10 @@ Schema: `schemas/v1/pulls.schema.json`, unpublished until accepted (frozen, list
 ## Amendments to Spec 022 (explicit)
 
 Only the `stw pulls` reader may use them; one-shot operations and `stw watch` stay unchanged. **FR-005 (allowlist)**: the one search shape
-above, matched in a **third guard mode** (`one-shot`, `watch`, `search`) with its own pre-check, so the search shape is **not reachable
-from `stw watch`** or the one-shot operations (tests: each mode refuses the other modes' shapes). FR-006 (1 MiB) and FR-007 (30 s per
+above, matched in a **third guard mode**
+(`one-shot`, `watch`, `pulls`) with its own pre-check. The `pulls` mode allows exactly the read shapes `stw watch` already has (list,
+`pulls/N`, checks, commits) plus the single search shape and refuses everything else; `stw watch` and the one-shot operations keep their
+own modes and **cannot reach the search shape** (tests: each mode refuses the shapes outside its set). FR-006 (1 MiB) and FR-007 (30 s per
 request) apply as in Spec 035. Spec 022 FR-005 is amended with a pointer to this section in the same change.
 
 ## Non-goals
