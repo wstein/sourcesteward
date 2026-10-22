@@ -48,8 +48,8 @@ ledger (a CLEAR on the exact head): the review decision is not read, and request
 ordered rule table is in the [specification](../specs/036-stw-pulls/spec.md#verdict-and-groups-exact-rules).
 
 Each human line is `REPO#N  AGE  AUTHOR  CHECKS  MERGEABLE  [reviewers: a, b]  TITLE`, blocked rows end with `(reason)`,
-and the last line counts `N open pull requests in M repositories, K ready`. Bots carry a `[bot]` marker (`user.type` is
-`Bot`, or the login ends in `[bot]`). Untrusted text (titles, logins, labels) has control characters escaped and is
+and a line `N open pull requests in M repositories, K ready` closes the table; further lines follow when some were not read (past `--limit`) or a repository or owner could not be read. Bots carry a `[bot]` marker (`user.type` is
+`Bot`, or the login ends in `[bot]`). Untrusted text (titles, logins, reviewer names, states) has control characters escaped and is
 bounded to 120 characters; JSON strings are cut at 2048 bytes. No colour is used.
 
 ## Filters and the detail budget
@@ -88,7 +88,7 @@ seen are still read:
 | --- | --- |
 | 0 | every repository was read (also when nothing is open) |
 | 1 | at least one repository or owner discovery failed, or authentication is missing (before any request); partial output is printed |
-| 2 | usage error; nothing is read |
+| 2 | usage error; no pull request is read (a repository set above 256 after `--owner` discovery is also exit 2, after the search requests were sent) |
 
 A failure of one repository never hides the others: it is named on stderr and in `errors`, and `summary.repos_failed`
 counts it. On rate-limit exhaustion (403/429 with evidence) the run stops reading, prints what it has, marks the

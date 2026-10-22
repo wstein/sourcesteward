@@ -14,16 +14,16 @@ omitted; absent values are `null`. `additionalProperties: false` everywhere. Typ
 | `command` | const `pulls` | |
 | `time` | RFC 3339 UTC | start of the run |
 | `host` | str | `github.com` or the Enterprise host |
-| `options` | object | `scope` enum(`workspace`, `repos`, `mixed`) (`mixed` when more than one of workspace, `--repo`, `--owner` applies), `owners` array of str, `no_bots`, `bots_only` bool, `authors` array of str, `detail_drafts` bool, `limit` integer |
+| `options` | object | `scope` enum(`workspace`, `repos`, `mixed`) (`mixed` when more than one of workspace, `--repo`, `--owner` applies; `--owner` alone is `repos`, there is no `owner` value), `owners` array of str, `no_bots`, `bots_only` bool, `authors` array of str, `detail_drafts` bool, `limit` integer |
 | `repos` | array | `{repo, source, open, listed, error}`: `source` enum(`workspace`, `repo`, `owner`), `open` integer or null (open PRs seen), `listed` integer, `error` code or null |
 | `groups` | object | keys `ready`, `checks`, `conflict`, `draft`, `blocked`; each an array of PR rows, newest first, in this fixed key order |
 | `summary` | object | `total`, per group counts, `bots` (bot rows), `not_read` (non-draft rows past `--limit` only; a row inside the budget whose read failed or was skipped after a rate limit has reason `not-read` too but is reported through `repos[].error` and `errors`, not here), `repos_read`, `repos_failed` |
-| `errors` | array | `{repo or owner (str), code, message}`; `code` in `rate-limited`, `network`, `unauthorized`, `forbidden`, `http-5xx`, `malformed-response`, `too-many-open-prs`, `page-too-large`, `repo-moved`, `search-incomplete`, `search-too-many`; `message` sanitized, at most 512 bytes |
+| `errors` | array | `{repo, owner, code, message}`: both keys are always present and exactly one is non-null (`repo` for a repository, `owner` for an owner discovery); `code` in `rate-limited`, `network`, `unauthorized`, `forbidden`, `http-5xx`, `malformed-response`, `too-many-open-prs`, `page-too-large`, `repo-moved`, `search-incomplete`, `search-too-many`; `message` sanitized, at most 512 bytes |
 
 ## PR row
 
-`repo` (str), `number` (integer), `title` (str), `url` (str, `https` only), `author` (str), `bot` (bool), `draft` (bool),
-`created_at` (time), `age_days` (integer), `base` (str), `head_ref` (str), `head` (sha), `fork` (bool), `labels` (array of at most 20 str),
+`repo` (str), `number` (integer), `title` (str), `url` (str, `https` only, or null when the forge gave no `https` URL), `author` (str), `bot` (bool), `draft` (bool),
+`created_at` (time, or null when the forge gave none), `age_days` (integer, or null exactly when `created_at` is null), `base` (str), `head_ref` (str), `head` (sha, or null when the listed head is not 40 lowercase hex), `fork` (bool), `labels` (array of at most 20 str),
 `checks` (enum `none|pending|green|red`, or null for a draft without detail), `failing` (array of at most 20 str, red only, else empty),
 `mergeable` (bool or null), `mergeable_state` (str or null), `rebaseable` (bool or null), `reviewers` (array of at most 20 str), `group` (the key it is listed
 under), `reason` (null unless `group` is `blocked`: `checks-red`, `no-checks`, `unknown`, `review-or-protection`, `unstable`, `not-rebaseable`, `not-read`; the ordered rule table is in the spec),

@@ -243,8 +243,7 @@ checked in and byte-frozen but excluded from Pages packaging until the feature i
 `draft`, `blocked`, each an array of rows, newest first), `summary` and `errors`; no key is omitted and absent values
 are null. A row carries the verdict (`group`, `reason`, `ready`) and `detail`, which is false for a draft without detail
 or a row past `--limit`; its `checks`, `mergeable`, `mergeable_state` and `rebaseable` are then null. `url`,
-`created_at`, `age_days` and `head` are null only when the forge gave no usable value. An error names a `repo` or an
-`owner` (the other is null). Tests validate the contract example, reject broken variants and validate the real output of
+`created_at`, `age_days` and `head` are null only when the forge gave no usable value. An error always has both `repo` and `owner` keys, exactly one non-null. `--owner` alone reports scope `repos`. Tests validate the contract example, reject broken variants and validate the real output of
 the command for every flag combination. See [pulls](pulls.md).
 
 ## Release source schemas (unpublished)
