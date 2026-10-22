@@ -179,6 +179,13 @@ prints transitions as JSON Lines; see [watch](watch.md).
 request (bots included) of the workspace, grouped into `ready`, `checks`, `conflict`, `draft` and `blocked`; `--owner`
 adds the repositories of another user or organisation. See [pulls](pulls.md).
 
+## List open issues
+
+`stw issues` ([Spec 038](../specs/038-stw-issues/spec.md)) prints a read-only, stateless snapshot of every open issue (pull requests
+excluded, bots included) of the workspace, each with one priority (`red` for a `security` label, `yellow` when assigned to you or labelled
+`bug`, `violet` for bots, `blue` otherwise) and a suggested `gh issue view` for red and yellow rows. `--label`, `--assignee` (also `@me` and
+`@none`) and `--author` filter locally; `--owner` adds the repositories of another user or organisation. See [issues](issues.md).
+
 ## Create an isolated task workspace
 
 Choose an existing source, an unused absolute destination and a private mode0700

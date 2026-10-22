@@ -246,6 +246,21 @@ or a row past `--limit`; its `checks`, `mergeable`, `mergeable_state` and `rebas
 `created_at`, `age_days` and `head` are null only when the forge gave no usable value. An error always has both `repo` and `owner` keys, exactly one non-null. `--owner` alone reports scope `repos`. Tests validate the contract example, reject broken variants and validate the real output of
 the command for every flag combination. See [pulls](pulls.md).
 
+## Issues schema v1 (unpublished)
+
+[Issues schema](../schemas/v1/issues.schema.json) describes the one document `stw issues --json` prints (Spec 038). It is checked in and
+byte-frozen but excluded from Pages packaging until the feature is accepted. Top-level keys are `schema_version` 1, `command` `issues`,
+`time`, `host`, `viewer`, `options`, `repos`, `issues` (`red`, `yellow`, `blue`, `violet`, each an array of rows sorted by repository and
+number, after the filters and the `--limit` cap), `summary` and `errors`; no key is omitted and absent values are null. `viewer` is
+`{state, login, reason, error}`: `ok` with a login, `skipped` with the reason `no-identity` (a 403 or 404 on `user` without rate-limit
+evidence) or `not-github-origin` (no request was made), or `error` with a code. A repository is `ok`, `partial` (`too-many-open-issues`),
+`error` or `skipped`; a skipped one has the reason `issues-disabled` (zero issues) or `viewer-unknown` (`--assignee @me` without a known
+login: not read, `open` and `pulls_dropped` null). The group, `reason`, `command` and `effect` of a row agree: red rows are
+`security-label`, yellow rows `assigned-to-you` or `bug-label`, both with `command` `gh issue view N -R OWNER/NAME` and `effect` `read`;
+blue rows (`none`) and violet rows (`bot`) have neither. `summary.counts` covers everything read with the filters applied and the cap not.
+An error has both `repo` and `owner` keys, at most one non-null; a run-level failure (`viewer-unknown`, a failed viewer read) has both
+null. Tests validate the contract example, reject broken variants and validate the real output of the command. See [issues](issues.md).
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files
