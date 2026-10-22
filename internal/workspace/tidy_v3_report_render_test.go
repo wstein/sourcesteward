@@ -311,6 +311,10 @@ func TestReportRenderingNamesTheEntriesABoundCut(t *testing.T) {
 			e.RangePairing = &V3ReportPairing{Range: "a..b", Evidence: "superseded-candidate", Pairs: []V3ReportPair{}, Truncated: &V3ReportTruncation{Unit: "rows", Shown: 1, Total: 2}}
 		},
 		"no diff available": func(e *V3ReportEntry) { e.Diff = emptyReportDiff("unavailable") },
+		// The gitlink list is evidence of a gate reason: a cut list is incomplete.
+		"gitlinks truncated": func(e *V3ReportEntry) {
+			e.GitlinksTruncated = &V3ReportTruncation{Unit: "gitlinks", Shown: 16, Total: 20}
+		},
 	}
 	var entries []V3ReportEntry
 	entries = append(entries, syntheticEntry("a-clean", 5))

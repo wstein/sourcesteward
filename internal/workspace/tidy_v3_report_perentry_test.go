@@ -82,3 +82,35 @@ func TestReportEntryBoundsAreResolvedAndBoundIntoThePlan(t *testing.T) {
 		t.Fatal("a binding above the ceiling is valid")
 	}
 }
+
+// A binding that names a bound at its default is not the plan the planner
+// writes (it omits defaults), so it is refused: one plan, one encoding.
+func TestReviewBindingRefusesAnExplicitDefaultEntryBound(t *testing.T) {
+	f := reportRepo(t)
+	r := f.planReport(V3PlanOptions{ReportDir: gitTempDir(t), ReportMaxFiles: 64})
+	if r.Status != "ok" || r.Plan.Review == nil {
+		t.Fatalf("%+v", r.Diagnostics)
+	}
+	d := defaultReportBounds()
+	for name, mutate := range map[string]func(*V3ReviewBinding){
+		"files":   func(b *V3ReviewBinding) { b.MaxFiles = d.MaxFiles },
+		"lines":   func(b *V3ReviewBinding) { b.MaxLines = d.MaxLines },
+		"commits": func(b *V3ReviewBinding) { b.MaxCommits = d.MaxCommits },
+	} {
+		b := *r.Plan.Review
+		mutate(&b)
+		if validV3ReviewBinding(b, *r.Plan) {
+			t.Errorf("an explicit default %s bound is valid", name)
+		}
+	}
+	for name, mutate := range map[string]func(*V3ReviewBinding){
+		"negative files": func(b *V3ReviewBinding) { b.MaxFiles = -1 },
+		"lines ceiling":  func(b *V3ReviewBinding) { b.MaxLines = reportLinesCeiling + 1 },
+	} {
+		b := *r.Plan.Review
+		mutate(&b)
+		if validV3ReviewBinding(b, *r.Plan) {
+			t.Errorf("%s is valid", name)
+		}
+	}
+}

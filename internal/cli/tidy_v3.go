@@ -88,7 +88,7 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.IntVar(&o.ReportMaxBytes, "report-max-bytes", 0, "Most bytes per report file (default 4 MiB, ceiling 16 MiB)")
 	f.IntVar(&o.ReportMaxDiffBytes, "report-max-diff-bytes", 0, "Most diff bytes per report entry (default 64 KiB, ceiling 1 MiB)")
 	f.IntVar(&o.ReportMaxFiles, "report-max-files", 0, "Most files per report entry diff (default 16, ceiling 4096)")
-	f.IntVar(&o.ReportMaxLines, "report-max-lines", 0, "Most diff lines per report entry (default 1000, ceiling 200000)")
+	f.IntVar(&o.ReportMaxLines, "report-max-lines", 0, "Most diff lines per report entry (default 1000, ceiling 200000; the diff also stops at --report-max-diff-bytes, so raise both)")
 	f.IntVar(&o.ReportMaxCommits, "report-max-commits", 0, "Most commits listed per report entry (default 50, ceiling 1000)")
 	f.StringArrayVar(&o.ConsolidationRanges, "consolidation-range", nil, "A..B range whose commits the report pairs with each branch (repeatable, at most four)")
 	f.DurationVar(&o.Timeout, "timeout", 0, "Replace the default deadlines of the operation (default scales with the number of deletions)")
