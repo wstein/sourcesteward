@@ -4,7 +4,7 @@
 workspace repositories, grouped by what needs action. GitHub's pull request inbox lists only the pull requests where you
 are a requested reviewer or assignee, so bot pull requests (dependabot, the upgrade bot) never appear there; the
 repository's pull request tab does show them, and so does `stw pulls`. It is the poll-once, stateless sibling of
-[`stw watch`](watch.md): `watch` prints transitions, `pulls` prints the current table. It is read-only and keeps no state,
+[`stw watch`](watch.md): `watch` prints transitions, `pulls` prints the current table. The same snapshot for issues is [`stw issues`](issues.md). It is read-only and keeps no state,
 journal or lock. The JSON document is described by [`pulls.schema.json`](../schemas/v1/pulls.schema.json) (unpublished,
 byte-frozen, see [JSON contracts](json-contracts.md#pulls-schema-v1-unpublished)).
 

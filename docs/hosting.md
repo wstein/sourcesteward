@@ -109,14 +109,17 @@ workflow runs, the tidy listings and the repository itself) are in every mode.
 | `watch` | `stw watch` | the watch shapes (open pull request list, commits, branches, `rate_limit`) |
 | `pulls` | `stw pulls` | the watch shapes and the pull request owner search (`is:pr`) |
 | `status` | `stw status` online | the watch shapes, the open issue list and `user` (Spec 038); no search |
-| `issues` | `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md), reader in source, command pending) | the open issue list `repos/OWNER/NAME/issues?state=open&per_page=100&sort=created&direction=asc&page=N` (N 1 to 10), `user` (no query) and the issue owner search (`is:issue`); no watch shapes and no pull request search |
+| `issues` | `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md), see [issues](issues.md)) | the open issue list `repos/OWNER/NAME/issues?state=open&per_page=100&sort=created&direction=asc&page=N` (N 1 to 10), `user` (no query) and the issue owner search (`is:issue`); no watch shapes and no pull request search |
 
 The two owner searches refuse each other: `pulls` admits only the `is:pr` search and `issues` only the `is:issue`
 search. The issue owner search is read only through `IssueSearchPage` / `DiscoverIssueOwner(s)` and only to discover
 repository names (at most 10 pages, 1000 results, `search-incomplete` and `search-too-many` as for pull requests); issue data is
 never taken from it. A page of the issue list holds at most 100 entries and at most 1 MiB; entries with a `pull_request` key are
 dropped, a 410 answer means the repository has issues disabled, and the `Link` header only signals that a further
-page exists: its URL is never requested, the reader asks for the next page number itself.
+page exists: its URL is never requested, the reader asks for the next page number itself. The `user` read answers who the token is,
+once per run and without retry: a 403 or 404 without rate-limit evidence is the user-lookup skip (`no-identity`, exit 0), a 403 or
+429 with it is `rate-limited`, anything else an error. The `status` mode admits the list and `user` but neither search, so the issue
+source of `stw status` cannot discover repositories.
 
 ## Repository, release and tag reads of `stw status`
 
