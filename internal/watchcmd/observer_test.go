@@ -534,3 +534,29 @@ func TestObserveReportsTheForkFlagOnlyWhenPullDetailWasRead(t *testing.T) {
 		t.Fatalf("304: %+v", obs.PRs[0])
 	}
 }
+
+func TestObserveGuessesTheDefaultBranch(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bases []string
+		want  string
+	}{
+		"main":               {[]string{"main"}, "main"},
+		"master":             {[]string{"master"}, "master"},
+		"main over master":   {[]string{"master", "main"}, "main"},
+		"stacked and main":   {[]string{"feat/1", "main"}, "main"},
+		"only stacked":       {[]string{"feat/1"}, ""},
+		"no open PR":         {nil, ""},
+		"develop is unknown": {[]string{"develop"}, ""},
+	} {
+		f := newFake()
+		for i, b := range tc.bases {
+			f.items = append(f.items, item(i+1, b))
+			f.tips[b] = sha40("a")
+			f.details[i+1] = detailJSON
+		}
+		obs, err := newObserver(f).Observe(context.Background(), "o/r", watch.Hints{Cycle: 1, DetailEvery: 10})
+		if err != nil || obs.DefaultBranch != tc.want {
+			t.Errorf("%s: %q %v", name, obs.DefaultBranch, err)
+		}
+	}
+}
