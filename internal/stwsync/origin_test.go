@@ -72,3 +72,49 @@ func TestBehindOriginWithoutARepositoryIsUnknown(t *testing.T) {
 		t.Fatalf("%v %v", behind, known)
 	}
 }
+
+// In a partial clone Git fetches a missing object from the promisor remote on demand; the lookup must
+// not: the commit stays absent, and the answer is that the clone is behind.
+func TestBehindOriginDoesNotLazyFetchInAPartialClone(t *testing.T) {
+	origin := t.TempDir()
+	runGit(t, origin, "init", "-q", "-b", "main")
+	runGit(t, origin, "config", "uploadpack.allowFilter", "true")
+	runGit(t, origin, "config", "uploadpack.allowAnySHA1InWant", "true")
+	commit(t, origin, "a.txt", "one\n")
+	clone := filepath.Join(t.TempDir(), "clone")
+	runGit(t, filepath.Dir(clone), "-c", "protocol.file.allow=always", "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+origin, clone)
+	if runGit(t, clone, "config", "remote.origin.promisor") != "true" {
+		t.Fatal("the fixture is not a partial clone")
+	}
+	commit(t, origin, "a.txt", "two\n")
+	newHead := runGit(t, origin, "rev-parse", "HEAD")
+	behind, known := BehindOrigin(context.Background(), clone, "main", newHead)
+	if !behind || !known {
+		t.Fatalf("%v %v", behind, known)
+	}
+	if exec.Command("git", "-C", clone, "--no-lazy-fetch", "cat-file", "-e", newHead+"^{commit}").Run() == nil {
+		t.Fatal("the commit of origin was fetched on demand")
+	}
+}
+
+// Git before 2.44 does not know --no-lazy-fetch and exits 129: the answer is undecided, never a guess.
+func TestBehindOriginIsUndecidedWhenGitRefusesTheOption(t *testing.T) {
+	tip := strings.Repeat("a", 40)
+	for _, failing := range []string{"show-ref", "rev-parse", "merge-base"} {
+		var calls [][]string
+		run := func(_ context.Context, args ...string) (gitOutput, error) {
+			calls = append(calls, args)
+			if args[0] != "--no-lazy-fetch" {
+				t.Fatalf("a call without --no-lazy-fetch first: %v", args)
+			}
+			if args[1] == failing {
+				return gitOutput{Code: 129}, nil
+			}
+			return gitOutput{Out: tip + "\n"}, nil
+		}
+		behind, known := behindOrigin(context.Background(), run, "main", strings.Repeat("b", 40))
+		if behind || known {
+			t.Errorf("%s: %v %v", failing, behind, known)
+		}
+	}
+}
