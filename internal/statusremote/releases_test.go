@@ -16,6 +16,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/overview"
+	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
 // fakeReleaseReader answers the three reads from fields and records the order of the calls.
@@ -338,3 +339,56 @@ type relRoundTrip func(*http.Request) (*http.Response, error)
 func (f relRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func relBody(s string) io.ReadCloser { return io.NopCloser(strings.NewReader(s)) }
+
+func TestApplyCarriesWhatTheSourceComputed(t *testing.T) {
+	var rels []hosting.StatusRelease
+	for i := 0; i < MaxDrafts+1; i++ {
+		rels = append(rels, hosting.StatusRelease{Draft: true, Tag: fmt.Sprintf("v1.0.%d", i)})
+	}
+	var into overview.Remote
+	ReadReleases(context.Background(), &fakeReleaseReader{info: writeAccessInfo(), rels: rels}, "o/r", nil).Apply(&into)
+	if !into.DraftsTruncated || len(into.Drafts) != MaxDrafts || into.DefaultBranch != "main" || into.HTMLURL != "https://github.com/o/r" {
+		t.Fatalf("%+v", into)
+	}
+	var whole overview.Remote
+	ReadReleases(context.Background(), &fakeReleaseReader{info: writeAccessInfo(), rels: rels[:3]}, "o/r", nil).Apply(&whole)
+	if whole.DraftsTruncated {
+		t.Fatal("not truncated")
+	}
+}
+
+// A draft without a usable tag or page yields no suggested command and no URL, through the real
+// model: the item may exist (the owner should know about it) but never offers `gh release edit ”`.
+func TestDraftWithoutTagOrURLYieldsNoCommand(t *testing.T) {
+	rd := &fakeReleaseReader{info: writeAccessInfo(), rels: []hosting.StatusRelease{
+		{Draft: true, Name: "no tag", URL: "https://github.com/o/r/releases/1"},
+		{Draft: true, Tag: "v1.1.0"},
+		{Draft: true, Tag: "-rf", URL: "http://example.com/x"},
+		{Draft: true, Tag: "v1.2.0 x", URL: "https://github.com/o/r/releases/2"},
+		{Draft: true, Tag: "v1.3.0", URL: "https://github.com/o/r/releases/3"},
+	}}
+	into := &overview.Remote{}
+	ReadReleases(context.Background(), rd, "o/r", nil).Apply(into)
+	got := overview.Build(overview.Input{Root: "/w", Repos: []overview.Repo{{Local: stwsync.RepoStatus{Name: "r", Path: "r", Kind: "root", State: "ok", Reasons: []string{}}, Slug: "o/r", Remote: into}}})
+	want := map[string][2]string{ // tag: command, URL
+		"":         {"", "https://github.com/o/r/releases/1"},
+		"v1.1.0":   {"gh release edit v1.1.0 -R o/r --draft=false", ""},
+		"-rf":      {"", ""},
+		"v1.2.0 x": {"", "https://github.com/o/r/releases/2"},
+		"v1.3.0":   {"gh release edit v1.3.0 -R o/r --draft=false", "https://github.com/o/r/releases/3"},
+	}
+	seen := 0
+	for _, it := range got.Items {
+		if it.Category != overview.ReleaseDraft {
+			continue
+		}
+		seen++
+		w, ok := want[it.Subject.Tag]
+		if !ok || it.Command != w[0] || it.URL != w[1] || (it.Command == "") != (it.Effect == "") {
+			t.Errorf("%q: command %q effect %q url %q", it.Subject.Tag, it.Command, it.Effect, it.URL)
+		}
+	}
+	if seen != len(want) {
+		t.Fatalf("%d draft items", seen)
+	}
+}
