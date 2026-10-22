@@ -134,7 +134,20 @@ exempt <path> <count> <justification>  the one named exemption; justification is
 ```
 
 Lines are sorted by path, paths are module-relative with `/`, `count` is a positive integer. The initial file is `done:` followed by the
-14 statements of the table as nine `wp` lines (`cmd/stw/main.go 1 wp 4`, ..., `internal/workspace/native_ref_transaction.go 3 wp 6`).
+14 statements of the table as nine `wp` lines, sorted by path:
+
+```
+done:
+cmd/stw/main.go 1 wp 4
+internal/inspection/repos.go 1 wp 1
+internal/issues/cycle.go 1 wp 2
+internal/pulls/cycle.go 1 wp 2
+internal/release/build.go 2 wp 5
+internal/stwsync/status.go 2 wp 3
+internal/workspace/native_ref_transaction.go 3 wp 6
+internal/workspace/native_stream.go 2 wp 5
+internal/workspace/tidy_v3_integration_patchid.go 1 wp 5
+```
 
 The check fails when:
 

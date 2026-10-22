@@ -25,8 +25,8 @@ default branch.
 
 ## WP-3 `internal/stwsync`
 
-- [ ] T011 Tests in `internal/stwsync` with a fake Git env and a synctest bubble: (a) characterisation, passes before and after: the peak of concurrent Git calls over many repositories and worktrees is at most `gitConcurrency`; (b) fails today: 40 repositories, 16 Git calls held by a gate, the context is cancelled, the gate released: the number of Git calls the fake env sees afterwards is at most 16 (today the 24 queued repositories still run Git, because `statusRun.g` never checks the context); a skipped repository gets the row a cancelled Git call gives today. No `runtime.NumGoroutine`, no export.
-- [ ] T012 Replace both fan-outs with `fanout.Do`; keep the run-wide slots as THE bound on Git processes; remove two allowlist lines and add 3 to `done:`.
+- [ ] T011 Characterisation tests in `internal/stwsync` that pass today and must keep passing (WP-3 is a behaviour-preserving refactor; no test here fails first, and none uses `runtime.NumGoroutine` or an export): (a) the peak of concurrent Git processes over many repositories and worktrees is at most `gitConcurrency` (16); (b) with an already-cancelled context every repository row equals what a cancelled Git call yields today (`fail("the repository status")`: state error, code `status-read-failed`, attention set; with `--fetch` `FetchError` "git fetch failed") and every linked-worktree probe has `Dirty = true`. The goroutine-count benefit is not observable by a test; it is verified by the architecture check (the `go` statements leave `internal/stwsync`).
+- [ ] T012 Replace both fan-outs with `fanout.Do`; keep the run-wide slots as THE bound on Git processes; for every repository and every worktree that `fanout.Do` skips because the context ended, construct the cancelled-call row of T011(b) instead of the zero value (an obligation, at repository and worktree level); T011 passes unchanged; remove two allowlist lines and add 3 to `done:`.
 
 ## WP-4 `cmd/stw`
 
