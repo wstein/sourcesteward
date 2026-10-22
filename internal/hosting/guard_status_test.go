@@ -158,7 +158,8 @@ func TestStatusReaderGuardAndModeRefuseSearch(t *testing.T) {
 
 func TestNewStatusReaderIsStatusModeWith15SecondRequests(t *testing.T) {
 	rt := roundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, `{}`), nil })
-	r, cleanup, err := NewStatusReaderWithTransport(context.Background(), t.TempDir(), "github.com", rt)
+	target := fixtureTarget(t)
+	r, cleanup, err := NewStatusReaderWithTransport(context.Background(), target, "github.com", rt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestNewStatusReaderIsStatusModeWith15SecondRequests(t *testing.T) {
 	if r.mode != guardStatus || r.RequestTimeout() != StatusRequestTimeout {
 		t.Fatalf("%v %v", r.mode, r.RequestTimeout())
 	}
-	w, wc, err := NewWatchReaderWithTransport(context.Background(), t.TempDir(), "github.com", rt)
+	w, wc, err := NewWatchReaderWithTransport(context.Background(), target, "github.com", rt)
 	if err != nil {
 		t.Fatal(err)
 	}
