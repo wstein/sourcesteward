@@ -153,9 +153,9 @@ func prepareGH(ctx context.Context, target, host string) (*ghAPI, func(), error)
 	return api, cleanup, nil
 }
 func newGHWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*ghAPI, func(), error) {
-	return newGHMode(ctx, target, host, rt, false)
+	return newGHMode(ctx, target, host, rt, guardOneShot)
 }
-func newGHMode(ctx context.Context, target, host string, rt http.RoundTripper, watch bool) (*ghAPI, func(), error) {
+func newGHMode(ctx context.Context, target, host string, rt http.RoundTripper, mode guardMode) (*ghAPI, func(), error) {
 	api, cleanup, err := prepareGH(ctx, target, host)
 	if err != nil {
 		return nil, cleanup, err
@@ -175,7 +175,7 @@ func newGHMode(ctx context.Context, target, host string, rt http.RoundTripper, w
 		previous := cleanup
 		cleanup = func() { owned.CloseIdleConnections(); previous() }
 	}
-	api.client, err = newSDKClientMode(host, token, api.dir, rt, watch)
+	api.client, err = newSDKClientGuardMode(host, token, api.dir, rt, mode)
 	if err != nil {
 		cleanup()
 		return nil, func() {}, errors.New("cannot initialize bounded hosting transport")
@@ -281,11 +281,38 @@ func (b *cappedBody) Read(p []byte) (int, error) {
 type guardedTransport struct {
 	next         http.RoundTripper
 	host, prefix string
-	// watch admits the Spec 035 watch-reader endpoints and escaped branch segments.
+	// mode selects the endpoint set (guardOneShot is the zero value).
+	mode guardMode
+	// watch is the legacy shorthand for mode guardWatch, kept so the existing
+	// constructors and tests that set it keep their meaning.
 	watch bool
 }
 
+// guardMode is the endpoint set a guard admits (Spec 022 FR-005, amended by Spec 036).
+type guardMode int
+
+const (
+	// guardOneShot admits only the one-shot read operations.
+	guardOneShot guardMode = iota
+	// guardWatch also admits the Spec 035 watch-reader endpoints and escaped branch segments.
+	guardWatch
+	// guardPulls admits the shapes of guardWatch for the stateless `stw pulls` reader
+	// (Spec 036); its own search shape is added with the owner mode work package.
+	guardPulls
+)
+
+func (t guardedTransport) effectiveMode() guardMode {
+	if t.mode == guardOneShot && t.watch {
+		return guardWatch
+	}
+	return t.mode
+}
+
+// admitsWatchShapes reports whether the mode may read the watch endpoints.
+func (m guardMode) admitsWatchShapes() bool { return m == guardWatch || m == guardPulls }
+
 func (t guardedTransport) allowed(req *http.Request) bool {
+	watchShapes := t.effectiveMode().admitsWatchShapes()
 	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.Opaque != "" {
 		return false
 	}
@@ -294,7 +321,7 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	if req.URL.RawPath != "" {
 		// Only the watch reader may carry an escaped path, and only one that decodes to
 		// the same Path; the branch segment itself is validated against its encoder.
-		if !t.watch {
+		if !watchShapes {
 			return false
 		}
 		if decoded, err := url.PathUnescape(req.URL.RawPath); err != nil || decoded != req.URL.Path {
@@ -309,7 +336,7 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	if req.URL.RawQuery != "" {
 		endpoint += "?" + req.URL.RawQuery
 	}
-	return transportReadEndpoint(endpoint) || (t.watch && watchReadEndpoint(endpoint))
+	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint))
 }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.allowed(req) {
@@ -350,11 +377,18 @@ func newSDKClient(host, token, dir string, rt http.RoundTripper) (*http.Client, 
 	return newSDKClientMode(host, token, dir, rt, false)
 }
 func newSDKClientMode(host, token, dir string, rt http.RoundTripper, watch bool) (*http.Client, error) {
+	mode := guardOneShot
+	if watch {
+		mode = guardWatch
+	}
+	return newSDKClientGuardMode(host, token, dir, rt, mode)
+}
+func newSDKClientGuardMode(host, token, dir string, rt http.RoundTripper, mode guardMode) (*http.Client, error) {
 	destination, prefix := apiDestination(host)
 	if rt == nil {
 		rt = newHTTPTransport()
 	}
-	return newSDKClientWithGuard(host, token, dir, guardedTransport{next: rt, host: destination, prefix: prefix, watch: watch})
+	return newSDKClientWithGuard(host, token, dir, guardedTransport{next: rt, host: destination, prefix: prefix, mode: mode})
 }
 
 func newSDKClientWithGuard(host, token, dir string, guard http.RoundTripper) (*http.Client, error) {
