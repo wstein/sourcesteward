@@ -33,6 +33,21 @@ var statusLineNoun = map[overview.Category]string{
 // maxStatusRepoWidth bounds the repository column of the action lines.
 const maxStatusRepoWidth = 40
 
+// renderStatusNoToken prints what a run without a usable token prints: exactly the output of --offline, then the
+// notices (Spec 037): no Needs action section, no remote lines, no second summary.
+func renderStatusNoToken(w io.Writer, rep statuscmd.Report, worktrees, color bool, marks statusMarks) error {
+	if err := renderStatusText(w, rep.Local, worktrees, color, marks); err != nil {
+		return err
+	}
+	var b strings.Builder
+	b.WriteString("\nNotices\n")
+	for _, n := range rep.Overview.Notices {
+		b.WriteString("  " + n.Message + "\n")
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
 // renderStatusOnline prints the online overview: what needs action, the repositories with their remote
 // line, the notices and one summary line. Stripping the colour leaves exactly the text without it.
 func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconSet, worktrees, color bool) error {

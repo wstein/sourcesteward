@@ -87,8 +87,8 @@ refs_before=$(git -C "$repo" for-each-ref) || fail "cannot list refs"
 tree_before=$(git -C "$repo" status --porcelain=v1) || fail "cannot read status"
 
 stw inspect "$repo" --json | tr -d ' \n' | grep -q '"status":"ok".*"backend":"git"' || fail "inspect --json did not report an ok git repository"
-stw status "$repo" | grep -q '1 repository' || fail "status did not report one repository"
-stw status "$repo" --json | tr -d ' \n' | grep -q '"total":1' || fail "status --json did not total one repository"
+stw status --offline "$repo" | grep -q '1 repository' || fail "status did not report one repository"
+stw status --offline "$repo" --json | tr -d ' \n' | grep -q '"total":1' || fail "status --json did not total one repository"
 
 [ "$(git -C "$repo" for-each-ref)" = "$refs_before" ] || fail "a read-only command changed the references"
 [ "$(git -C "$repo" status --porcelain=v1)" = "$tree_before" ] || fail "a read-only command changed the working tree"

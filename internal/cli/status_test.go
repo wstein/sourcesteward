@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wstein/sourcesteward/internal/statuscmd"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
@@ -38,18 +39,19 @@ func statusCLIResult() stwsync.StatusResult {
 	}
 }
 
+// runStatus runs the offline status over a canned local result.
 func runStatus(result stwsync.StatusResult, args ...string) (stwsync.StatusOptions, int, string, error) {
 	var got stwsync.StatusOptions
 	calls := 0
-	cmd := workspaceStatusCommandWith(func(_ context.Context, o stwsync.StatusOptions) stwsync.StatusResult {
+	cmd := workspaceStatusCommandWith(statuscmd.Params{Local: func(_ context.Context, o stwsync.StatusOptions) stwsync.StatusResult {
 		calls++
 		got = o
 		return result
-	})
+	}})
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs(args)
+	cmd.SetArgs(append([]string{"--offline"}, args...))
 	err := cmd.ExecuteContext(context.Background())
 	return got, calls, out.String(), err
 }
