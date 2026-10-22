@@ -263,7 +263,7 @@ one item per id and no grouping. The human section shows at most 10 lines per pr
 
 ## Issues (WP-G, specified in Spec 038)
 
-The issue source (per-repository `issues: N open (R red, Y yellow)` line, the `issue-security`, `issue-assigned` and `issue-bug` items as categories 26 to 28 of the action table, the `viewer` read, the two new request shapes admitted by guard mode `status` and the additive JSON keys) is specified in [Spec 038](../038-stw-issues/spec.md#integration-into-stw-status-wp-g-of-spec-037); the deadline, skip, exit and rate-limit rules of this spec apply to it unchanged and no exit code is added.
+The issue source (per-repository `issues: N open (R red, Y yellow)` line, the `issue-security`, `issue-assigned` and `issue-bug` items as categories 26 to 28 of the action table, the `viewer` read, the two new request shapes admitted by guard mode `status` and the additive JSON keys) is specified in [Spec 038](../038-stw-issues/spec.md#integration-into-stw-status-wp-g-of-spec-037); the deadline, skip, exit and rate-limit rules of this spec apply to it, with exactly one deviation, the user-lookup exception: a `GET user` answering 403 or 404 **without** rate-limit evidence is a skip (reason `no-identity`, exit 0), whereas this spec's exit table treats 401/403 as exit 1 (a 403 with rate-limit evidence stays `rate-limited`, exit 1); this is separate from the `not-found` skip of the release workflow. No exit code is added.
 
 ## Required seams (WP-0)
 
