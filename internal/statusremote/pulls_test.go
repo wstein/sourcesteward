@@ -271,6 +271,9 @@ func TestReadPullsKeepsTheRowsOfAFailedDetailReadAsNotRead(t *testing.T) {
 	if got.State != (overview.SourceState{Outcome: overview.OutcomeError, Code: hosting.CodeRateLimited}) {
 		t.Fatalf("%+v", got.State)
 	}
+	if len(got.PRs) != 2 || got.PRs[0].Number != 1 || got.PRs[1].Number != 2 {
+		t.Fatalf("the rows of a failed read must stay: %+v", got.PRs)
+	}
 	for _, row := range got.PRs {
 		if row.Group != overview.GroupBlocked || row.Reason != "not-read" || row.PastBudget {
 			t.Fatalf("a lost read must be not-read without PastBudget: %+v", row)
