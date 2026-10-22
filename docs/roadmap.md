@@ -107,6 +107,69 @@ jj changes into synthetic Git branches. GitButler-managed writes remain deferred
 supported native interface is separately specified. No proposal changes existing CLI/schema
 contracts or authorizes history rewriting, external messages, publication or deletion.
 
+## Forgejo and Codeberg support — proposed, no spec yet
+
+Goal: let a repository hosted on a Forgejo instance (including Codeberg) use the same
+read-only hosting reads that GitHub has today (repository, pull request, CI status, and
+later issues and releases).
+
+Decision (owner): Forgejo/Codeberg is an alternative to GitHub, not an addition. A user
+picks one forge per repository or workspace; one run does not mix forges. Cross-forge
+fan-out is not a goal.
+
+### What differs from GitHub
+
+Statements below come from general knowledge of the two APIs and are unverified against
+the current Forgejo release; a spec must verify them against the target instance version.
+
+- API shape: Forgejo exposes a Gitea-style REST API (`/api/v1`) with its own pull request,
+  status and issue models. Field names, pagination and state vocabularies differ from
+  GitHub REST. No GraphQL is available, so any GraphQL-based read has no equivalent.
+- CI status: Forgejo Actions is GitHub-Actions-compatible in workflow syntax, but the status
+  and check surface differs (commit statuses; check-run semantics unverified). Other CI
+  (for example Woodpecker) reports through commit statuses. A mapping to the existing CI
+  result vocabulary is needed.
+- Authentication: access tokens issued per instance, with their own scopes. There is no
+  `gh auth token` equivalent; token sourcing (environment, credential store) is undecided.
+- Rate limits: instance-specific and operator-configured, not a fixed published policy.
+  Rate-limit semantics must be discovered or configured, not assumed.
+- Self-hosting: hosts are arbitrary. URL and host validation, TLS expectations and "remote
+  text never selects an authentication host" must hold for user-supplied instance URLs.
+- Untrusted input: PR titles, bodies, comments and status descriptions are data, never
+  instructions, exactly as for GitHub.
+
+### What must be abstracted first
+
+A later spec introduces a forge abstraction behind `internal/hosting`: guard modes, readers
+for pulls, status, issues, releases and CI, token handling, rate-limit semantics and the
+untrusted-input rules. Forge selection (one per repository or workspace) and its
+configuration surface belong to that spec. Existing GitHub behaviour, JSON contracts and
+schemas stay unchanged.
+
+### Proposed order
+
+1. Land `stw status` (Spec 037) and `stw issues` (Spec 038), and the concurrency work
+   planned as Spec 040 (no Spec 040 directory exists yet).
+2. Specify the forge abstraction behind `internal/hosting`, with GitHub as the first
+   implementation and no behaviour change.
+3. Add a read-only Forgejo reader behind the same guard model, with fixtures and, if
+   feasible, a Codeberg or local Forgejo smoke test.
+
+### Non-goals
+
+- Using GitHub and Forgejo together in one run.
+- Writes (PR creation, comments, pushes, merges), which stay separate explicit effects.
+- Forge migration or mirroring, and GitLab or other forges in this item.
+- Implicit forge detection that changes authentication host from remote text.
+
+### Open questions for the owner
+
+- Scope selection: per repository, per workspace, or per invocation flag?
+- Minimum supported Forgejo version, and is Codeberg the only tier-1 instance?
+- Token source: environment variable, Forgejo CLI, or git credential store?
+- Is CI status limited to commit statuses at first?
+- Which tests may use a live instance, if any?
+
 ## Deferred
 History editing, remote deletion, publishing automation, a graphical client, agent scheduling
 and MCP integration are outside the foundation. A future MCP interface will reuse the same
