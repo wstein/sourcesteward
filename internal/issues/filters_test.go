@@ -206,7 +206,7 @@ func TestAssigneeMeWithoutALoginIsAFailedRunWithoutRows(t *testing.T) {
 			t.Errorf("%s: errors %+v", name, res.Errors)
 		}
 		for _, st := range res.Repos {
-			if st.Open != nil || (name == "rate limit") != (st.State == StateError) || (name != "rate limit" && st.State != StateSkipped) {
+			if st.Open != nil || (name == "rate limit") != (st.State == StateError) || (name != "rate limit" && (st.State != StateSkipped || st.Reason != CodeViewerUnknown)) {
 				t.Errorf("%s: status %+v", name, st)
 			}
 		}

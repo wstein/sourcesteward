@@ -280,3 +280,14 @@ func TestRunWritesNothing(t *testing.T) {
 		t.Errorf("the cycle left %v (%v)", entries, err)
 	}
 }
+
+func TestSkippedRepositoriesAreNotCountedAsReadByTheirReason(t *testing.T) {
+	c := &cycle{res: &Result{Repos: []RepoStatus{
+		{State: StateSkipped, Reason: "issues-disabled"}, {State: StateSkipped, Reason: CodeViewerUnknown},
+		{State: StateOK}, {State: StatePartial}, {State: StateError},
+	}}}
+	c.summarize()
+	if c.res.Summary.ReposRead != 2 || c.res.Summary.ReposFailed != 2 {
+		t.Errorf("%+v", c.res.Summary)
+	}
+}

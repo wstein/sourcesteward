@@ -97,7 +97,7 @@ func (c *cycle) run(ctx context.Context, repos []string) {
 	pool(len(repos), parallelism, func(i int) {
 		status[i].Repo = repos[i]
 		if unresolved && !c.limited.Load() {
-			status[i].State = StateSkipped
+			status[i].State, status[i].Reason = StateSkipped, CodeViewerUnknown
 			return
 		}
 		l, err := c.list(ctx, repos[i])
@@ -260,7 +260,7 @@ func (c *cycle) summarize() {
 	}
 	for _, st := range c.res.Repos {
 		switch {
-		case st.State == StateOK, st.State == StateSkipped && st.Reason != "":
+		case st.State == StateOK, st.State == StateSkipped && st.Reason == hosting.CodeIssuesDisabled:
 			s.ReposRead++
 		case st.State == StatePartial, st.State == StateError:
 			s.ReposFailed++

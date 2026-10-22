@@ -42,7 +42,7 @@ type Row struct {
 type RepoStatus struct {
 	Repo         string
 	State        string
-	Reason       string // issues-disabled, only with StateSkipped
+	Reason       string // issues-disabled or viewer-unknown, only with StateSkipped
 	Open         *int   // issues read, before the filters
 	PullsDropped *int
 	Error        string
@@ -70,7 +70,7 @@ type Counts struct{ Red, Yellow, Blue, Violet int }
 // Summary counts the rows. Total..Violet and Bots cover the listed rows (after the filters and
 // the cap); Counts covers everything read with the filters applied and the cap not, which is
 // what `stw status` shows. A repository is read when its state is ok or skipped because its issues
-// are disabled, failed when it is partial or an error; one left unread for a failed run is neither.
+// are disabled, failed when it is partial or an error; one skipped for any other reason (viewer-unknown, a run that read nothing) is neither.
 type Summary struct {
 	Total, Red, Yellow, Blue, Violet int
 	Omitted                          int
