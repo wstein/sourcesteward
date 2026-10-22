@@ -92,8 +92,8 @@ func TestHTTPSURL(t *testing.T) {
 		"https://x/" + strings.Repeat("a", 2048): "",
 	}
 	for in, want := range cases {
-		if got := httpsURL(in); got != want {
-			t.Errorf("httpsURL(%q) = %q, want %q", in, got, want)
+		if got := HTTPSURL(in); got != want {
+			t.Errorf("HTTPSURL(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

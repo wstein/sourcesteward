@@ -81,9 +81,9 @@ func isSHA(s string) bool {
 	return true
 }
 
-// httpsURL returns s when it is an https URL without whitespace or control characters and at most 2048
+// HTTPSURL returns s when it is an https URL without whitespace or control characters and at most 2048
 // bytes, and the empty string otherwise.
-func httpsURL(s string) string {
+func HTTPSURL(s string) string {
 	if len(s) > maxURLBytes || !strings.HasPrefix(s, "https://") || !utf8.ValidString(s) {
 		return ""
 	}
