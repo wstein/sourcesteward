@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,4 +239,82 @@ func TestTidyV3DecisionsThroughTheCLIValidateAgainstTheSchemas(t *testing.T) {
 	if !strings.Contains(human, `Decision: branch="refs/heads/fresh" decision="integrated" kind="ai"`) {
 		t.Errorf("decision missing from the human output:\n%s", human)
 	}
+}
+
+// A report built with every per-entry bound raised (more than the default 16
+// files, 50 commits, 1,000 diff lines and 16 gitlinks) validates against the
+// report schema, whose caps follow the ceilings.
+func TestTidyV3ReportBuiltAtRaisedBoundsValidatesAgainstTheSchema(t *testing.T) {
+	r := newReviewRepo(t)
+	reportSchema := schemaAt(t, "v3", "tidy-report")
+	g := func(args ...string) string { return r.git(append([]string{"-C", r.source}, args...)...) }
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(r.source, name)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(r.source, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oidA := g("rev-parse", "main")
+	oidB := g("rev-parse", "fresh")
+	oidC := g("rev-parse", "second")
+	setLinks := func(oid string) {
+		for i := 0; i < 20; i++ {
+			g("update-index", "--add", "--cacheinfo", "160000,"+oid+","+fmt.Sprintf("vendor/mod-%02d", i))
+		}
+		g("commit", "-qm", "gitlinks "+oid[:7])
+	}
+	setLinks(oidA)
+	g("checkout", "-qb", "huge", "main")
+	for i := 0; i < 60; i++ {
+		write("steps.txt", fmt.Sprintf("step %d\n", i))
+		g("add", "-A")
+		g("commit", "-qm", fmt.Sprintf("step %d", i))
+	}
+	for i := 0; i < 40; i++ {
+		write(fmt.Sprintf("wide/file-%02d.txt", i), "line\n")
+	}
+	write("long.txt", strings.Repeat("a line of text\n", 1500))
+	g("add", "-A")
+	g("commit", "-qm", "wide and long")
+	setLinks(oidB)
+	g("checkout", "-q", "main")
+	setLinks(oidC) // both sides move the same gitlinks: the merge gate reports gitlink-change
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	code, res, _ := r.runJSON("--report-dir", dir, "--report-max-files", "4096", "--report-max-lines", "200000", "--report-max-commits", "1000", "--report-max-diff-bytes", "1048576")
+	if code != 0 || res.Plan == nil || res.Plan.Review == nil || res.Plan.Review.MaxFiles != 4096 {
+		t.Fatalf("plan: %d %+v", code, res.Plan)
+	}
+	report, err := os.ReadFile(filepath.Join(dir, "tidy-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Entries []struct {
+			Branch  struct{ Text string }
+			Commits []any `json:"commits"`
+			Diff    struct {
+				Files []any `json:"files"`
+			} `json:"unintegrated_diff"`
+			Gitlinks []any `json:"gitlink_changes"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(report, &doc); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range doc.Entries {
+		if e.Branch.Text == "refs/heads/huge" {
+			found = len(e.Commits) > 50 && len(e.Diff.Files) > 16 && len(e.Gitlinks) > 16
+		}
+	}
+	if !found {
+		for _, e := range doc.Entries {
+			t.Logf("%s commits=%d files=%d gitlinks=%d", e.Branch.Text, len(e.Commits), len(e.Diff.Files), len(e.Gitlinks))
+		}
+		t.Fatal("the report does not exceed the default bounds")
+	}
+	valid(t, reportSchema, report)
 }
