@@ -471,3 +471,203 @@ func TestErrorMessageIsCutOnARuneBoundary(t *testing.T) {
 		t.Fatalf("len %d valid %v", len(m), utf8.ValidString(m))
 	}
 }
+
+// GitHub computes mergeability lazily: the first pulls/N read may say null/unknown. The cycle
+// re-reads such a row once, at the end of the pass, and uses the result for the verdict.
+func TestUnknownMergeabilityIsReReadOnceAndSettles(t *testing.T) {
+	f := newForge()
+	f.lazy("o/r", 1)
+	res := run(t, f, Options{Repos: []string{"o/r"}})
+	r := row(t, res, "o/r", 1)
+	if !r.Ready || r.Group != "ready" || r.MergeableState == nil || *r.MergeableState != "clean" || r.Mergeable == nil || !*r.Mergeable {
+		t.Fatalf("%+v", r)
+	}
+	if got, want := strings.Join(f.calls, ","), "list/o/r,detail/o/r#1,runs/2222,stats/2222,detail/o/r#1"; got != want {
+		t.Fatalf("request log %s != %s", got, want)
+	}
+}
+
+func TestMergeableStateUnknownAloneAlsoTriggersTheReRead(t *testing.T) {
+	f := newForge()
+	p := okPR("o/r", 1)
+	p.state = "unknown"
+	f.add(p) // mergeable true, state unknown, then (second read) the same body
+	f.seq["o/r#1"] = []string{f.details["o/r#1"], detailBody("o/r", "true", "clean", p.head)}
+	if r := row(t, run(t, f, Options{Repos: []string{"o/r"}}), "o/r", 1); !r.Ready {
+		t.Fatalf("%+v", r)
+	}
+	if n := f.count("detail/"); n != 2 {
+		t.Fatalf("%d detail reads", n)
+	}
+}
+
+func TestStillUnknownAfterTheOneReReadStaysBlockedUnknown(t *testing.T) {
+	f := newForge()
+	p := okPR("o/r", 1)
+	p.mergeable, p.state = "null", "unknown"
+	f.add(p) // every read says unknown
+	res := run(t, f, Options{Repos: []string{"o/r"}})
+	if r := row(t, res, "o/r", 1); r.Group != "blocked" || r.Reason != "unknown" || r.Ready || !r.Detail {
+		t.Fatalf("%+v", r)
+	}
+	if n := f.count("detail/"); n != 2 {
+		t.Fatalf("exactly one re-read expected, %d detail reads", n)
+	}
+	if len(res.Errors) != 0 {
+		t.Fatalf("%+v", res.Errors)
+	}
+}
+
+func TestNoReReadForDraftRedNoCIPendingOrSettledRows(t *testing.T) {
+	f := newForge()
+	mk := func(n int, mod func(*pr)) {
+		p := okPR("o/r", n)
+		p.mergeable, p.state = "null", "unknown"
+		mod(&p)
+		f.add(p)
+	}
+	mk(1, func(p *pr) { p.draft = true })
+	mk(2, func(p *pr) { p.class = "red" })
+	mk(3, func(p *pr) { p.class = "none" })
+	mk(4, func(p *pr) { p.class = "pending" })
+	mk(5, func(p *pr) { p.mergeable, p.state = "true", "clean" })
+	mk(6, func(p *pr) { p.mergeable, p.state = "false", "dirty" })
+	res := run(t, f, Options{Repos: []string{"o/r"}})
+	if n := f.count("detail/"); n != 5 { // 5 non-draft rows once each, no re-read
+		t.Fatalf("%d detail reads: %v", n, f.calls)
+	}
+	if r := row(t, res, "o/r", 1); r.Group != "draft" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestNoReReadForAnUnreadableListedHead(t *testing.T) {
+	f := newForge()
+	p := okPR("o/r", 1)
+	p.mergeable, p.state = "null", "unknown"
+	f.add(p)
+	f.lists["o/r"][0].HeadSHA = strings.ToUpper(sha("a"))
+	run(t, f, Options{Repos: []string{"o/r"}})
+	if n := f.count("detail/"); n != 1 {
+		t.Fatalf("%d detail reads", n)
+	}
+}
+
+func TestReReadsAreBoundedByTheUnknownRowsAndDoNotUseTheLimit(t *testing.T) {
+	f := newForge()
+	for n := 1; n <= 3; n++ {
+		f.lazy("o/r", n)
+	}
+	for n := 4; n <= 5; n++ {
+		f.add(okPR("o/r", n))
+	}
+	// Newest first: numbers 1..5 share created_at, so the order is by number; limit 3 reads 1..3.
+	res := run(t, f, Options{Repos: []string{"o/r"}, Limit: 3})
+	if n := f.count("detail/"); n != 3+3 {
+		t.Fatalf("%d detail reads, want 3 budget reads + 3 re-reads", n)
+	}
+	if n := f.count("runs/") + f.count("stats/"); n != 6 {
+		t.Fatalf("checks were re-read: %d", n)
+	}
+	if res.Summary.Ready != 3 || res.Summary.NotRead != 2 {
+		t.Fatalf("%+v", res.Summary)
+	}
+	// All of the rows being unknown: re-reads never exceed the row count.
+	g := newForge()
+	for n := 1; n <= 4; n++ {
+		p := okPR("o/r", n)
+		p.mergeable, p.state = "null", "unknown"
+		g.add(p)
+	}
+	run(t, g, Options{Repos: []string{"o/r"}})
+	if n := g.count("detail/"); n != 8 {
+		t.Fatalf("%d", n)
+	}
+}
+
+func TestNoReReadsAfterTheRateLimit(t *testing.T) {
+	f := newForge()
+	f.lazy("a/x", 1)
+	f.add(okPR("b/y", 1))
+	f.errAt["detail/b/y#1"] = &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "limit"}
+	res := run(t, f, Options{Repos: []string{"a/x", "b/y"}, Parallel: 1})
+	if n := f.count("detail/a/x#1"); n != 1 {
+		t.Fatalf("re-read after the rate limit: %d", n)
+	}
+	if r := row(t, res, "a/x", 1); r.Group != "blocked" || r.Reason != "unknown" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestRateLimitOnTheReReadStopsTheRemainingReReads(t *testing.T) {
+	f := newForge()
+	f.lazy("o/r", 1)
+	f.lazy("o/r", 2)
+	f.errNth["detail/o/r#1"] = []error{&hosting.WatchError{Code: hosting.CodeRateLimited, Message: "limit"}}
+	res := run(t, f, Options{Repos: []string{"o/r"}, Parallel: 1})
+	if n := f.count("detail/"); n != 3 {
+		t.Fatalf("%d detail reads: %v", n, f.calls)
+	}
+	for n := 1; n <= 2; n++ {
+		if r := row(t, res, "o/r", n); r.Reason != "unknown" || r.Ready {
+			t.Fatalf("%+v", r)
+		}
+	}
+	if len(res.Errors) != 1 || res.Errors[0].Code != "rate-limited" {
+		t.Fatalf("%+v", res.Errors)
+	}
+}
+
+func TestReReadOfAnotherHeadFailsClosed(t *testing.T) {
+	f := newForge()
+	p := okPR("o/r", 1)
+	f.add(p)
+	f.seq["o/r#1"] = []string{detailBody("o/r", "null", "unknown", p.head), detailBody("o/r", "true", "clean", sha("e"))}
+	r := row(t, run(t, f, Options{Repos: []string{"o/r"}}), "o/r", 1)
+	if r.Ready || r.Group != "blocked" || r.Reason != "unknown" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestReReadFailureKeepsTheRowUnknownAndIsReported(t *testing.T) {
+	f := newForge()
+	f.lazy("o/r", 1)
+	f.errNth["detail/o/r#1"] = []error{&hosting.WatchError{Code: hosting.CodeNetwork, Message: "boom"}}
+	res := run(t, f, Options{Repos: []string{"o/r"}})
+	if r := row(t, res, "o/r", 1); r.Reason != "unknown" || r.Ready || !r.Detail {
+		t.Fatalf("%+v", r)
+	}
+	if len(res.Errors) != 1 || res.Errors[0].Code != "network" || res.Summary.ReposFailed != 1 {
+		t.Fatalf("%+v %+v", res.Errors, res.Summary)
+	}
+}
+
+func TestReReadIsUnconditionalAndHappensAfterAllFirstReads(t *testing.T) {
+	f := newForge()
+	f.lazy("a/x", 1)
+	f.add(okPR("b/y", 1))
+	run(t, f, Options{Repos: []string{"a/x", "b/y"}, Parallel: 1})
+	if len(f.etags) != 0 {
+		t.Fatalf("validators: %v", f.etags)
+	}
+	if last := f.calls[len(f.calls)-1]; last != "detail/a/x#1" {
+		t.Fatalf("the re-read must come last: %v", f.calls)
+	}
+}
+
+func TestNoReReadWhenTheFirstReadAlreadyReportedAnotherHeadOrForADetailedDraft(t *testing.T) {
+	f := newForge()
+	a := okPR("o/r", 1)
+	a.mergeable, a.state, a.detailHead = "null", "unknown", sha("e")
+	f.add(a)
+	b := okPR("o/r", 2)
+	b.mergeable, b.state, b.draft = "null", "unknown", true
+	f.add(b)
+	res := run(t, f, Options{Repos: []string{"o/r"}, DetailDrafts: true})
+	if n := f.count("detail/"); n != 2 {
+		t.Fatalf("%d detail reads: %v", n, f.calls)
+	}
+	if r := row(t, res, "o/r", 2); r.Group != "draft" {
+		t.Fatalf("%+v", r)
+	}
+}
