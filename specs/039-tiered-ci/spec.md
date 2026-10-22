@@ -169,7 +169,7 @@ There is **no race list** and no derivation machinery: `-race` is not run on pul
   goroutines; this specification does not depend on it.
 
 **Failure issue (`race-failure`).** A workflow `race.yml` (`schedule`, `workflow_dispatch` on the default branch) has a job `race` and a
-job `report` (`needs: race`, `if: failure()`). `report` has `permissions: contents: read, actions: read, issues: write` (issues write
+job `report` (`needs: race`, `if: failure() || cancelled()`). **Both jobs carry `if: github.ref == 'refs/heads/main'`**, because `workflow_dispatch` can run on any ref and `issues: write` and the race runs must never run on a topic branch; a workflow test pins this. The issue states the reason (failed, or cancelled or timed out). `report` has `permissions: contents: read, actions: read, issues: write` (issues write
 exists **only** in this workflow), checks out **`main` only**, runs only trusted repository scripts and never PR code. It lists open
 issues with the label `race-failure`; if one exists it adds a comment, otherwise it creates the issue, so at most one is open. The body
 contains the run link, the tier (nightly or weekly), the lane and the failing test names extracted from the failed job log by a strict
@@ -371,7 +371,7 @@ Each step is a pull request of its own, stacked linearly, test-first (see [plan.
 - `scripts/test_ci_workflow.py` additions in the style of the existing structure tests: triggers (no `pull_request_target`, no
   `workflow_run`; `ci.yml` has `ready_for_review` and not `labeled`, `ci-full.yml` has `labeled`; `edited` absent), the `tier` job checks out only the base ref, per-job `permissions`, actions pinned by SHA, the
   conformance caller has no `if:`, the `suite` truth table including the new skipped row, required names present, the `t2-` group in both
-  callers, `race.yml`: schedule and `workflow_dispatch` only, `issues: write` only there, `main` checkout only, no `pull_request` trigger anywhere that has `-race`, no `-race` in `ci.yml`, `ci-full.yml` and the conformance calls from them; the `minimum` lane absent from T2 and present on T3 and the weekly run; the body line `T2 runs on the top PR #N` format (informational, printed, not a gate), the lane in the `t2-` group key.
+  callers, `race.yml`: schedule and `workflow_dispatch` only, `issues: write` only there, `main` checkout only, no `pull_request` trigger anywhere that has `-race`, both `race.yml` jobs guarded by `if: github.ref == 'refs/heads/main'`, no `-race` in `ci.yml`, `ci-full.yml` and the conformance calls from them; the `minimum` lane absent from T2 and present on T3 and the weekly run; the body line `T2 runs on the top PR #N` format (informational, printed, not a gate), the lane in the `t2-` group key.
 - A dry run on the specification branch itself (WP-1) compares `affected` for the last 60 PR heads with what a full run would have
   needed (read only), so the fail-closed rules are checked against real diffs before WP-2.
 
@@ -390,7 +390,6 @@ All former open questions are decided. A Draft carrying `ci-full` is the only Dr
 | D7 (Q7) | The nightly T4 **always** runs on schedule (also on quiet days): `go test -race ./...` of all packages, `current` lane. The weekly T4 runs the `minimum` lane with `-race`. | Guards races and drift in action versions, runner images and toolchains, which a skip on quiet days would hide. |
 | D8 (Q8) | No change to the sandbox install (median 104 s, 8 to 260 s) before it is measured; see the WP-1 task below with its decision gate. An install-once artifact, if chosen, carries a sha256 recorded as a job output of the producing job and verified by every consumer job. | The cost is measured (535 steps, 869 runner min in the sample); the saving of any remedy is modelled from that distribution. |
 | D9 (Q9) | A PR that is not the top of its stack is Ready only with exact-head independent review CLEAR, T1 green **and** a green T2 on a tip whose head contains its head (compare API ancestry plus filtered evidence); until then it stays Draft with the blocker `T2 pending on #N`. Its body states `T2 runs on the top PR #N`, informational only. The owner merges in stack order and T3 on `main` follows each merge. | Revised after review (F1): the earlier "CLEAR plus T1" rule could mark untested code mergeable. The cost is a re-test of the tip after any lower push. Residual risk: R7. |
-
 | D10 (owner, binding) | **No `-race` on pull requests.** T1 and T2 run plain tests; T3 on `main` runs the normal matrix without race; T4 runs `go test -race ./...` of all packages nightly and the `minimum` lane with race weekly, and a failure opens or comments on one `race-failure` issue (`race.yml`, `issues: write` only there, `main` checkout only). The foreman fixes it by a normal PR with a reproducing test. No race-list derivation. Spec 040 may later narrow the nightly run. | Speed on the PR path is worth finding a data race the next night; the residual risk is R8 and Ready no longer implies a race-clean head. |
 
 ### Measurement tasks left to WP-1 (unmeasured items)
