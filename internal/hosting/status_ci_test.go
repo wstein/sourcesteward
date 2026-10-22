@@ -29,7 +29,7 @@ func runsPath(workflow string) string {
 func TestWorkflowRunsReadsPageOneOfTheFixedShape(t *testing.T) {
 	f := newFakeForge(t)
 	f.handlers[runsPath("release.yml")] = func(*http.Request) *http.Response {
-		return response(200, `{"total_count":1,"workflow_runs":[{"status":"completed","conclusion":"failure","html_url":"https://github.com/o/r/actions/runs/9","created_at":"2026-10-22T09:00:00Z"}]}`)
+		return response(200, `{"total_count":1,"workflow_runs":[{"status":"completed","conclusion":"failure","html_url":"https://github.com/o/r/actions/runs/9","head_sha":"`+ciSHA+`","created_at":"2026-10-22T09:00:00Z"}]}`)
 	}
 	r := statusCIReader(t, f)
 	res, err := r.WorkflowRuns(context.Background(), "o/r", "release.yml", ciSHA)
@@ -46,7 +46,7 @@ func TestWorkflowRunsReadsPageOneOfTheFixedShape(t *testing.T) {
 	if err != nil || len(runs) != 1 {
 		t.Fatalf("%+v %v", runs, err)
 	}
-	want := WorkflowRun{Status: "completed", Conclusion: "failure", URL: "https://github.com/o/r/actions/runs/9", CreatedAt: time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)}
+	want := WorkflowRun{Status: "completed", Conclusion: "failure", URL: "https://github.com/o/r/actions/runs/9", CreatedAt: time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC), HeadSHA: ciSHA}
 	if runs[0] != want {
 		t.Fatalf("%+v", runs[0])
 	}
