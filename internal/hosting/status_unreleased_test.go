@@ -55,6 +55,7 @@ func TestFindTagsUnreleasedRule(t *testing.T) {
 		{"no release at all: only the newest tag", []string{"v1.0.0", "v1.1.0", "v0.1.0"}, nil, nil, []string{"v1.1.0"}, []string{"v1.1.0"}},
 		{"a draft carries the tag", []string{"v1.0.0", "v1.1.0"}, append(published("v1.0.0"), drafts("v1.1.0")...), nil, nil, []string{"v1.1.0"}},
 		{"a draft is no published release", []string{"v1.0.0", "v1.1.0"}, drafts("v1.1.0"), nil, nil, []string{"v1.1.0"}},
+		{"the floor is the highest release whatever their order", []string{"v1.0.0", "v1.1.0", "v1.2.0"}, published("v1.0.0", "v1.1.0"), nil, []string{"v1.2.0"}, []string{"v1.2.0"}},
 		{"a draft does not raise the floor", []string{"v1.0.0", "v1.1.0", "v1.2.0"}, append(published("v1.0.0"), drafts("v1.2.0")...), nil, []string{"v1.1.0"}, []string{"v1.2.0"}},
 		{"version order, not text order", []string{"v1.9.0", "v1.10.0", "v1.2.0"}, published("v1.9.0"), nil, []string{"v1.10.0"}, []string{"v1.10.0"}},
 		{"tag order and names do not matter", []string{"v1.3.0", "v1.1.0", "v1.2.0"}, published("v1.1.0"), nil, []string{"v1.3.0", "v1.2.0"}, []string{"v1.3.0"}},
@@ -143,6 +144,7 @@ func TestFindTagsPatternShapes(t *testing.T) {
 		{"rel-*-lts", "rel-1.2.3-lts", true},
 		{"rel-*-lts", "rel-1.2.3", false},
 		{"v1.0.0", "v1.0.0", false},
+		{"x*.*", "x1", false},
 		{"", "", false},
 		{"v*", "v18446744073709551616.0.0", false},
 	} {
