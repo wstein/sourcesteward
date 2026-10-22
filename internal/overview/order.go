@@ -83,7 +83,7 @@ func compareItems(a, b Item) int {
 
 func compareSubjects(a, b Subject) int {
 	switch {
-	case a.Kind == KindPR && b.Kind == KindPR:
+	case a.Kind == b.Kind && (a.Kind == KindPR || a.Kind == KindIssue):
 		return a.Number - b.Number
 	case (a.Kind == KindTag || a.Kind == KindRelease) && (b.Kind == KindTag || b.Kind == KindRelease):
 		return naturalCompare(b.Tag, a.Tag)

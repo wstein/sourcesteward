@@ -8,7 +8,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/pulls"
 )
 
-// The action table of Spec 037: the number is the position, the priority the colour of the row.
+// The action table of Spec 037 (rows 1 to 25) and Spec 038 (rows 26 to 28): the number is the position, the priority the colour of the row.
 func TestCategoryTableMatchesTheSpec(t *testing.T) {
 	spec := []struct {
 		id       Category
@@ -22,9 +22,10 @@ func TestCategoryTableMatchesTheSpec(t *testing.T) {
 		{"pr-checks-pending", Blue}, {"pr-unread", Blue}, {"local-stash", Blue}, {"gitlink-ahead", Blue},
 		{"branches-unmerged", Blue}, {"worktree-stale", Blue},
 		{"pr-bot", Violet},
+		{"issue-security", Red}, {"issue-assigned", Yellow}, {"issue-bug", Yellow},
 	}
 	cats := Categories()
-	if len(cats) != 25 || len(spec) != 25 {
+	if len(cats) != 28 || len(spec) != 28 {
 		t.Fatalf("%d categories", len(cats))
 	}
 	for i, row := range spec {
@@ -36,7 +37,7 @@ func TestCategoryTableMatchesTheSpec(t *testing.T) {
 	if _, ok := PriorityOf("nope"); ok {
 		t.Error("unknown category has a priority")
 	}
-	if categoryNumber("nope") != 26 || rank("nope") != len(Priorities) {
+	if categoryNumber("nope") != 29 || rank("nope") != len(Priorities) {
 		t.Error("unknown values sort last")
 	}
 	if got := count(nil); got != 0 {
