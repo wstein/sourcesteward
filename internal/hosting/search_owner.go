@@ -46,23 +46,36 @@ func ValidOwner(s string) bool {
 	return true
 }
 
-// SearchEndpoint is the one generator of the search request (path and query, no API prefix).
+// SearchEndpoint is the one generator of the PR search request (path and query, no API prefix).
 func SearchEndpoint(owner string, page int) (string, error) {
+	return ownerSearchEndpoint("pr", owner, page)
+}
+
+// ownerSearchEndpoint generates the fixed owner search of one item kind: "pr" for
+// `stw pulls` (Spec 036) and "issue" for `stw issues` (Spec 038). Nothing else is generated.
+func ownerSearchEndpoint(kind, owner string, page int) (string, error) {
 	if !ValidOwner(owner) {
 		return "", malformed("invalid owner")
 	}
 	if page < 1 || page > searchMaxPages {
 		return "", malformed("search page is outside 1..10")
 	}
-	return "search/issues?q=user%3A" + owner + "+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=" + strconv.Itoa(page) + "&sort=created&order=asc", nil
+	return "search/issues?q=user%3A" + owner + "+is%3A" + kind + "+is%3Aopen+archived%3Afalse&per_page=100&page=" + strconv.Itoa(page) + "&sort=created&order=asc", nil
 }
 
-var searchRoute = regexp.MustCompile(`\Asearch/issues\?q=user%3A([A-Za-z0-9-]+)\+is%3Apr\+is%3Aopen\+archived%3Afalse&per_page=100&page=([1-9][0-9]?)&sort=created&order=asc\z`)
+func ownerSearchRoute(kind string) *regexp.Regexp {
+	return regexp.MustCompile(`\Asearch/issues\?q=user%3A([A-Za-z0-9-]+)\+is%3A` + kind + `\+is%3Aopen\+archived%3Afalse&per_page=100&page=([1-9][0-9]?)&sort=created&order=asc\z`)
+}
 
-// searchReadEndpoint matches exactly what SearchEndpoint generates: the match is
+var (
+	searchRoute      = ownerSearchRoute("pr")
+	issueSearchRoute = ownerSearchRoute("issue")
+)
+
+// matchOwnerSearch matches exactly what ownerSearchEndpoint generates: the match is
 // re-derived through the generator, so the two can never drift apart.
-func searchReadEndpoint(p string) bool {
-	m := searchRoute.FindStringSubmatch(p)
+func matchOwnerSearch(route *regexp.Regexp, kind, p string) bool {
+	m := route.FindStringSubmatch(p)
 	if m == nil {
 		return false
 	}
@@ -70,9 +83,12 @@ func searchReadEndpoint(p string) bool {
 	if err != nil {
 		return false
 	}
-	want, err := SearchEndpoint(m[1], page)
+	want, err := ownerSearchEndpoint(kind, m[1], page)
 	return err == nil && want == p
 }
+
+// searchReadEndpoint matches the PR owner search.
+func searchReadEndpoint(p string) bool { return matchOwnerSearch(searchRoute, "pr", p) }
 
 // admitsSearch is true for the pulls guard only; watch and one-shot cannot reach the search shape.
 func admitsSearch(m guardMode) bool { return m == guardPulls }
