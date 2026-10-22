@@ -453,10 +453,39 @@ func (c *cycle) finish(it *item) {
 	it.row.Ready = it.row.Group == GroupReady
 }
 
-func (c *cycle) summarize() {
-	s := &c.res.Summary
-	s.Total = len(c.res.Rows)
-	for _, r := range c.res.Rows {
+// RepoView is everything one repository contributed: its status line, its rows in document
+// order and the counts of those rows.
+type RepoView struct {
+	Status  RepoStatus
+	Rows    []Row
+	Summary Summary // Total..NotRead of Rows; the Repos* fields describe this one repository
+}
+
+// Repo returns the view of one repository (case-insensitive); false when it was not requested.
+func (r *Result) Repo(name string) (RepoView, bool) {
+	for _, st := range r.Repos {
+		if !strings.EqualFold(st.Repo, name) {
+			continue
+		}
+		v := RepoView{Status: st}
+		for _, row := range r.Rows {
+			if strings.EqualFold(row.Repo, st.Repo) {
+				v.Rows = append(v.Rows, row)
+			}
+		}
+		v.Summary = summarize(v.Rows, []RepoStatus{st})
+		return v, true
+	}
+	return RepoView{}, false
+}
+
+func (c *cycle) summarize() { c.res.Summary = summarize(c.res.Rows, c.res.Repos) }
+
+func summarize(rows []Row, repos []RepoStatus) Summary {
+	var sum Summary
+	s := &sum
+	s.Total = len(rows)
+	for _, r := range rows {
 		switch r.Group {
 		case GroupReady:
 			s.Ready++
@@ -476,7 +505,7 @@ func (c *cycle) summarize() {
 			s.NotRead++
 		}
 	}
-	for _, st := range c.res.Repos {
+	for _, st := range repos {
 		switch {
 		case st.Error != "":
 			s.ReposFailed++
@@ -486,6 +515,7 @@ func (c *cycle) summarize() {
 			s.ReposRead++
 		}
 	}
+	return sum
 }
 
 // failErr records an error of a read; a rate limit stops all further reads.
