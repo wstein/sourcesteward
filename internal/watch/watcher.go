@@ -52,8 +52,6 @@ type Watcher struct {
 	j        *journal
 	st       *State
 	broken   error
-	nextTry  map[string]time.Time
-	hold     time.Time
 	baseline bool
 }
 
@@ -85,7 +83,7 @@ func Open(o Options) (*Watcher, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &Watcher{o: o, lock: lock, nextTry: map[string]time.Time{}, baseline: o.Baseline}
+	w := &Watcher{o: o, lock: lock, baseline: o.Baseline}
 	if err := w.start(); err != nil {
 		w.Close()
 		return nil, err

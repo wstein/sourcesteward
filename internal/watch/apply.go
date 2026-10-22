@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: EUPL-1.2
 package watch
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // apply is the one place where an event changes the state. A live cycle calls it for every event it
 // emits and the start-up replay calls it for every journal line past applied_seq, so both reach the same
@@ -166,8 +169,14 @@ func (s *State) applyRepos(ev Event) {
 	removed := map[string]bool{}
 	for _, r := range d.Removed {
 		removed[r] = true
-		delete(s.Repo, r)
-		delete(s.Health, r)
+		// The record stays: its counters keep ids unique if the repository comes back (its next
+		// read is a silent baseline that carries them over).
+		if rs := s.Repo[r]; rs != nil {
+			rs.Baselined, rs.RestackDue, rs.RestackDone, rs.Cond = false, nil, nil, nil
+		}
+		if h := s.Health[r]; h != nil {
+			h.NextTry = ""
+		}
 	}
 	var repos []string
 	have := map[string]bool{}
@@ -206,6 +215,9 @@ func (s *State) applyHealth(ev Event) {
 		raise(&h.Episode, e)
 		raise(&h.Failures, d.Failures)
 		h.LastCode, h.ErrOpen = d.Code, true
+		if t, err := time.Parse(time.RFC3339, ev.Time); err == nil {
+			h.NextTry = t.Add(time.Duration(d.RetryInSeconds) * time.Second).Format(time.RFC3339)
+		}
 	case KindWatchRecovered:
 		if e, ok := idCounter(ev.ID, 'e'); ok { // after a watch-error episode
 			raise(&h.Episode, e)
