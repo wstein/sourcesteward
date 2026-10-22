@@ -173,6 +173,12 @@ summary: 2 of 3 repositories need attention
 `stw watch` ([Spec 035](../specs/035-stw-watch/spec.md)) is the read-only pull request watcher that
 prints transitions as JSON Lines; see [watch](watch.md).
 
+## List open pull requests
+
+`stw pulls` ([Spec 036](../specs/036-stw-pulls/spec.md)) prints a read-only, stateless snapshot of every open pull
+request (bots included) of the workspace, grouped into `ready`, `checks`, `conflict`, `draft` and `blocked`; `--owner`
+adds the repositories of another user or organisation. See [pulls](pulls.md).
+
 ## Create an isolated task workspace
 
 Choose an existing source, an unused absolute destination and a private mode0700

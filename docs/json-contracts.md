@@ -235,6 +235,18 @@ kinds) and `details`, whose keys are fixed per kind; no key is omitted and absen
 definition, `#/$defs/status`, describes `stw watch --status --json`. Tests validate fixtures, reject broken variants and
 validate every event the crash matrix and the end to end acceptance run generate. See [watch](watch.md).
 
+## Pulls schema v1 (unpublished)
+
+[Pulls schema](../schemas/v1/pulls.schema.json) describes the one document `stw pulls --json` prints (Spec 036). It is
+checked in and byte-frozen but excluded from Pages packaging until the feature is accepted. Top-level keys are
+`schema_version` 1, `command` `pulls`, `time`, `host`, `options`, `repos`, `groups` (`ready`, `checks`, `conflict`,
+`draft`, `blocked`, each an array of rows, newest first), `summary` and `errors`; no key is omitted and absent values
+are null. A row carries the verdict (`group`, `reason`, `ready`) and `detail`, which is false for a draft without detail
+or a row past `--limit`; its `checks`, `mergeable`, `mergeable_state` and `rebaseable` are then null. `url`,
+`created_at`, `age_days` and `head` are null only when the forge gave no usable value. An error names a `repo` or an
+`owner` (the other is null). Tests validate the contract example, reject broken variants and validate the real output of
+the command for every flag combination. See [pulls](pulls.md).
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files

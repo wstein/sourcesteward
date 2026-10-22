@@ -36,6 +36,8 @@
 
 - [Pull request watcher](watch.md): `stw watch` JSON Lines transitions, modes, exit codes, state, restack-needed and its read-only limits.
 
+- [Open pull requests](pulls.md): `stw pulls` snapshot of every open pull request (bots included), groups and verdict, filters, detail budget, `--owner` discovery, exit codes and its read-only limits.
+
 - [Submodule pin audit](pins.md): planned read-only `stw pins` evidence, findings, exit statuses and limits.
 
 - [GitHub inspection and gh jj](hosting.md): shared native ownership, local resolution and explicit read-only PR/CI observations.
