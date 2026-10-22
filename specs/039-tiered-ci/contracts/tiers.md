@@ -24,6 +24,7 @@ list of open pull requests whose base is the head ref (from one API call), the T
 | --- | --- |
 | `t2_required` | `true`, `false` |
 | `reason` | `docs-only`, `draft`, `label`, `unstacked`, `stack-tip`, `deferred-to-tip #N`, `ready`, `evidence from run <id>`, `main`, `schedule` |
+| `stack_line` | the expected body line `T2 runs on the top PR #N` for a non-top PR, else empty |
 | `stack_tip` | the number of the top PR that carries the evidence, or empty |
 | `tier` | `T1`, `T2`, `T3` |
 
@@ -50,6 +51,7 @@ Truth table (a row applies in this order; the first match wins):
 | --- | --- | --- | --- |
 | `success` | any | any | pass |
 | `skipped` | pull_request | `false` (reason printed) | pass |
+| `skipped` | pull_request, lane `minimum` | any | pass (reason `minimum lane runs on T3`) |
 | `skipped` | pull_request | evidence reused | pass (reason `evidence from run <id>`) |
 | `skipped` | pull_request | `true` | fail |
 | `skipped` | push, schedule, dispatch | any | fail |
@@ -57,5 +59,5 @@ Truth table (a row applies in this order; the first match wins):
 
 ## Status names (stable)
 
-`check`, `Git/jj conformance (minimum) / suite`, `Git/jj conformance (current) / suite`. Informational, never required: `tier`,
+`check`, `Git/jj conformance (minimum) / suite` (T3 only; passes with a reason on a pull request), `Git/jj conformance (current) / suite`. Informational, never required: `tier`,
 `changes`, every `shard N`, `pages`. The conformance caller job has no `if:` so the two `suite` names always report.
