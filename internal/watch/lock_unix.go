@@ -9,18 +9,36 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // dirLock is the advisory flock of a state directory.
 type dirLock struct{ f *os.File }
 
-// acquireLock takes the exclusive lock file and records the holder's pid in it.
+// lockAttempts and lockPause bound the retry of acquireLock: a --status probe holds a shared lock for
+// an instant and must not make a starting watcher report a second watcher.
+const (
+	lockAttempts = 5
+	lockPause    = 250 * time.Millisecond
+)
+
+// acquireLock takes the exclusive lock file and records the holder's pid in it. A busy lock is retried
+// briefly (about one second) before it is reported.
 func acquireLock(dir string) (*dirLock, error) {
 	f, err := os.OpenFile(filepath.Join(dir, "lock"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	var lockErr error
+	for i := 0; i < lockAttempts; i++ {
+		if lockErr = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); lockErr == nil {
+			break
+		}
+		if i < lockAttempts-1 {
+			time.Sleep(lockPause)
+		}
+	}
+	if lockErr != nil {
 		raw := make([]byte, 32)
 		n, _ := f.ReadAt(raw, 0)
 		f.Close()
