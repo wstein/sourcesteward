@@ -18,6 +18,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/pullscmd"
 	"github.com/wstein/sourcesteward/internal/stwsync"
+	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
 
 func TestSelectDerivesTheRepositoryFromOrigin(t *testing.T) {
@@ -71,6 +72,7 @@ func TestSelectKeepsTheOrderOfTheInput(t *testing.T) {
 const (
 	repoA = "wstein/a"
 	repoB = "wstein/b"
+	repoC = "wstein/c"
 )
 
 func targets(slugs ...string) []Target {
@@ -343,8 +345,8 @@ func TestReadPullsSkipsEveryRepositoryWhenTheDeadlinePassedBeforeTheStart(t *tes
 	}
 }
 
-// parityForge builds the same fixture each time it is called: a workspace of two repositories with
-// every verdict group, a bot, a draft, an unknown mergeability that resolves and a failed repository.
+// parityForge builds the same fixture each time it is called: three repositories with every verdict
+// group, a bot, a draft, an unknown mergeability that resolves, and one whose detail read fails.
 func parityForge() *forge {
 	f := newForge()
 	f.add(human(repoA, 1))
@@ -367,25 +369,29 @@ func parityForge() *forge {
 	u.mergeable, u.state = "null", "unknown"
 	f.add(u)
 	f.seq[repoB+"#7"] = []string{detail(u, "null", "unknown"), detail(u, "true", "clean")}
+	f.add(human(repoC, 8))
+	f.add(human(repoC, 9))
+	f.errAt["detail/"+repoC+"#8"] = &hosting.WatchError{Code: hosting.CodeForbidden, Message: "forbidden"}
 	return f
 }
 
 func TestStatusCountsEqualTheStwPullsDocument(t *testing.T) {
 	var out bytes.Buffer
 	err := pullscmd.Execute(context.Background(), pullscmd.Params{
-		Host: Host, Repos: []string{repoA, repoB}, Out: &out,
+		Host: Host, Repos: []string{repoA, repoB, repoC}, Out: &out,
 		Open: func(context.Context, string, string) (pullscmd.Source, func(), error) {
 			return parityForge(), func() {}, nil
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	var failure *watchcmd.Failure // the failed repository makes `stw pulls` exit 1 after printing
+	if !errors.As(err, &failure) || failure.Code != watchcmd.ExitFailure {
+		t.Fatalf("stw pulls: %v", err)
 	}
 	var doc pullscmd.Document
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	got := read(t, parityForge(), targets(repoA, repoB))
+	got := read(t, parityForge(), targets(repoA, repoB, repoC))
 
 	groups := map[string][]pullscmd.DocRow{overview.GroupReady: doc.Groups.Ready, overview.GroupChecks: doc.Groups.Checks, overview.GroupConflict: doc.Groups.Conflict, overview.GroupDraft: doc.Groups.Draft, overview.GroupBlocked: doc.Groups.Blocked}
 	want := map[string][]string{}
@@ -395,7 +401,7 @@ func TestStatusCountsEqualTheStwPullsDocument(t *testing.T) {
 		}
 	}
 	have := map[string][]string{}
-	for _, slug := range []string{repoA, repoB} {
+	for _, slug := range []string{repoA, repoB, repoC} {
 		for _, row := range got[slug].PRs {
 			have[row.Group] = append(have[row.Group], fmt.Sprintf("%s#%d", slug, row.Number))
 		}
@@ -410,7 +416,7 @@ func TestStatusCountsEqualTheStwPullsDocument(t *testing.T) {
 	}
 
 	var sum pulls.Summary
-	for _, slug := range []string{repoA, repoB} {
+	for _, slug := range []string{repoA, repoB, repoC} {
 		c := got[slug].Counts
 		sum.Total, sum.Ready, sum.Checks, sum.Conflict, sum.Draft, sum.Blocked, sum.Bots, sum.NotRead = sum.Total+c.Total, sum.Ready+c.Ready, sum.Checks+c.Checks, sum.Conflict+c.Conflict, sum.Draft+c.Draft, sum.Blocked+c.Blocked, sum.Bots+c.Bots, sum.NotRead+c.NotRead
 	}
@@ -419,11 +425,18 @@ func TestStatusCountsEqualTheStwPullsDocument(t *testing.T) {
 		t.Fatalf("counts of status %+v, of stw pulls %+v", sum, s)
 	}
 	for _, dr := range doc.Repos {
-		if open := got[dr.Repo].Open; open == nil || dr.Open == nil || *open != *dr.Open {
-			t.Fatalf("%s: open %v, stw pulls %v", dr.Repo, open, dr.Open)
+		g := got[dr.Repo]
+		if (g.Open == nil) != (dr.Open == nil) || (g.Open != nil && *g.Open != *dr.Open) {
+			t.Fatalf("%s: open %v, stw pulls %v", dr.Repo, g.Open, dr.Open)
+		}
+		if (dr.Error != nil) != (g.State.Outcome == overview.OutcomeError) || (dr.Error != nil && *dr.Error != g.State.Code) {
+			t.Fatalf("%s: state %+v, stw pulls error %v", dr.Repo, g.State, dr.Error)
 		}
 	}
-	if s.Ready != 3 || s.Bots != 1 || s.Draft != 1 {
+	if c := got[repoC]; c.State.Code != hosting.CodeForbidden || len(c.PRs) != 2 {
+		t.Fatalf("the failed repository: %+v", c)
+	}
+	if s.Ready != 4 || s.Blocked != 2 || s.Bots != 1 || s.Draft != 1 {
 		t.Fatalf("the fixture lost its variety: %+v", s)
 	}
 }
