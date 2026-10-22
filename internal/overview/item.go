@@ -19,13 +19,15 @@ func newItem(c Category, repo string, s Subject, t target) Item {
 // subjectID is the id part of a subject: the number of a pull request, the tag of a release or tag,
 // otherwise the name; `-` when the subject has none.
 func subjectID(s Subject) string {
-	switch {
-	case s.Kind == KindPR:
+	id := s.Name
+	switch s.Kind {
+	case KindPR:
 		return strconv.Itoa(s.Number)
-	case s.Kind == KindRelease || s.Kind == KindTag:
-		return s.Tag
-	case s.Name == "":
+	case KindRelease, KindTag:
+		id = s.Tag
+	}
+	if id == "" {
 		return "-"
 	}
-	return s.Name
+	return id
 }
