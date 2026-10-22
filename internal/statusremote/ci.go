@@ -4,11 +4,12 @@ package statusremote
 import (
 	"context"
 	"errors"
+	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/overview"
-	"github.com/wstein/sourcesteward/internal/release"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
@@ -67,45 +68,46 @@ func ReadCIMain(ctx context.Context, r CIReader, repo, branch, dir string) CIMai
 	return CIMainResult{State: overview.SourceState{Outcome: overview.OutcomeOK}, Main: main}
 }
 
-// CITag is a tag of the `tags` read with the commit it points at.
-type CITag struct {
-	Name string
-	SHA  string
-}
+// CodeContractInvalid is the error code of `ci-release` when a release contract exists but cannot be
+// used: the owner must fix it, the defaults are not applied in its place.
+const CodeContractInvalid = "contract-invalid"
 
-// CIReleaseInput is what the `ci-release` source needs: the repository (OWNER/NAME), its local clone
-// (empty when there is none; the release contracts are read from it), the tags that the `tags` source
-// read and the names of the unreleased ones among them (Spec 037: newer than the latest release, no
-// release carries them).
+// maxCITags is the number of tags of one repository whose release runs are read (Spec 037: the latest
+// tag of each pattern and at most 5 unreleased ones, 6 in all).
+const maxCITags = 6
+
+// CIReleaseInput is what the `ci-release` source needs: the repository (OWNER/NAME), the release
+// products read from its contracts and the tag entries that the `tags` source found with them
+// (Releases.Tags: one entry per pattern and tag, the latest of the pattern or unreleased). The runs
+// are added to those entries; which tags matter is not decided here.
 type CIReleaseInput struct {
-	Repo       string
-	Dir        string
-	Tags       []CITag
-	Unreleased []string
+	Repo     string
+	Products ReleaseProducts
+	Tags     []overview.ReleaseTag
 }
 
-// CIReleaseTag is a tag whose release workflow runs were read: the latest tag of Product (empty for the
-// default product) or an unreleased tag, newest run first.
+// CIReleaseTag is a tag entry with the runs of the release workflow of its product, newest first.
 type CIReleaseTag struct {
-	Product  string
-	Tag      string
-	SHA      string
-	Released bool
-	Runs     []overview.Run
+	Pattern    string
+	Product    string
+	Tag        string
+	SHA        string
+	Latest     bool
+	Unreleased bool
+	Workflow   string
+	Runs       []overview.Run
 }
 
-// CIRelease is the data of the `ci-release` source: the single release workflow (its file name) and
-// the tags read, the latest tag of each product first, then the unreleased tags.
+// CIRelease is the data of the `ci-release` source: the tags read, in the order of the input.
 type CIRelease struct {
-	Workflow string
-	Tags     []CIReleaseTag
+	Tags []CIReleaseTag
 }
 
-// ReleaseTags gives the tags the way the action model reads them: the newest run decides a failure.
+// ReleaseTags gives the entries the way the action model reads them: the newest run decides a failure.
 func (c CIRelease) ReleaseTags() []overview.ReleaseTag {
 	out := make([]overview.ReleaseTag, len(c.Tags))
 	for i, t := range c.Tags {
-		out[i] = overview.ReleaseTag{Tag: t.Tag, SHA: t.SHA, Unreleased: !t.Released}
+		out[i] = overview.ReleaseTag{Pattern: t.Pattern, Tag: t.Tag, SHA: t.SHA, Latest: t.Latest, Unreleased: t.Unreleased}
 		if len(t.Runs) > 0 {
 			out[i].Run = &t.Runs[0]
 		}
@@ -119,22 +121,23 @@ type CIReleaseResult struct {
 	Release *CIRelease
 }
 
-// ReadCIRelease reads, for the commit of each tag to inspect, the runs of the one release workflow of
-// the repository: the `ci.release_workflow` of its release contracts, or `release.yml` when it declares
-// none. The tags to inspect are the latest tag of each declared product (the default `v*.*.*` for a
-// repository without contracts) and the unreleased tags, at most 5, one entry per tag name. A workflow
-// the forge does not know ends the source as skipped, reason not-found.
+// ReadCIRelease adds the newest runs of the release workflow to the first maxCITags tag entries: for
+// each, the runs of the workflow of its product (release.yml for a pattern no contract declares) for
+// the commit of the tag, at most 20, newest first. A run of another commit is ignored. A workflow the
+// forge does not know ends the source as skipped, reason not-found; an existing but unusable
+// contract ends it with the error code contract-invalid before any request.
 func ReadCIRelease(ctx context.Context, r CIReader, in CIReleaseInput) CIReleaseResult {
-	products := ciProducts(in.Dir)
-	workflow := defaultReleaseWorkflow
-	if len(products) == 0 {
-		products = []ciProduct{defaultProduct}
-	} else {
-		workflow = products[0].workflow
+	if in.Products.invalid {
+		return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeError, Code: CodeContractInvalid}}
 	}
-	out := &CIRelease{Workflow: workflow, Tags: []CIReleaseTag{}}
-	for _, t := range ciTargets(products, in) {
-		res, err := r.WorkflowRuns(ctx, in.Repo, workflow, t.SHA)
+	entries := in.Tags
+	if len(entries) > maxCITags {
+		entries = entries[:maxCITags]
+	}
+	out := &CIRelease{Tags: []CIReleaseTag{}}
+	for _, e := range entries {
+		product, workflow := in.Products.of(e.Pattern)
+		res, err := r.WorkflowRuns(ctx, in.Repo, workflow, e.SHA)
 		if err != nil {
 			return CIReleaseResult{State: ciReleaseState(ctx, err)}
 		}
@@ -142,90 +145,71 @@ func ReadCIRelease(ctx context.Context, r CIReader, in CIReleaseInput) CIRelease
 		if err != nil {
 			return CIReleaseResult{State: ciState(ctx, err)}
 		}
-		t.Runs = newestRuns(workflow, runs)
-		out.Tags = append(out.Tags, t)
+		out.Tags = append(out.Tags, CIReleaseTag{Pattern: e.Pattern, Product: product, Tag: e.Tag, SHA: e.SHA, Latest: e.Latest,
+			Unreleased: e.Unreleased, Workflow: workflow, Runs: newestRuns(in.Repo, workflow, e.SHA, runs)})
 	}
 	return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeOK}, Release: out}
 }
 
-// ciTargets lists the tags whose runs are read: the latest tag of each product, then the unreleased
-// tags (the first maxUnreleasedTags names), each tag name once. An unreleased tag that is also a latest
-// tag is one entry and not released. Names that are not among the tags read are dropped.
-func ciTargets(products []ciProduct, in CIReleaseInput) []CIReleaseTag {
-	bySHA := map[string]string{}
-	for _, t := range in.Tags {
-		if _, dup := bySHA[t.Name]; !dup {
-			bySHA[t.Name] = t.SHA
+// newestRuns keeps the runs of the commit, orders them newest first by creation time (the order of the
+// response is not relied on; equal times keep it) and keeps the first maxCIRuns. The forge's strings
+// are data: a page that is not under the repository is dropped, and an unknown status or conclusion
+// becomes empty, which the action model treats as information only.
+func newestRuns(repo, workflow, sha string, runs []hosting.WorkflowRun) []overview.Run {
+	var mine []hosting.WorkflowRun
+	for _, run := range runs {
+		if run.HeadSHA == sha {
+			mine = append(mine, run)
 		}
 	}
-	var targets []CIReleaseTag
-	index := map[string]int{}
-	add := func(product, tag string, released bool) {
-		if i, ok := index[tag]; ok {
-			targets[i].Released = targets[i].Released && released
-			return
+	sort.SliceStable(mine, func(i, j int) bool { return mine[i].CreatedAt.After(mine[j].CreatedAt) })
+	if len(mine) > maxCIRuns {
+		mine = mine[:maxCIRuns]
+	}
+	out := make([]overview.Run, len(mine))
+	for i, run := range mine {
+		status := knownRunStatus(run.Status)
+		conclusion := ""
+		if status == "completed" {
+			conclusion = knownRunConclusion(run.Conclusion)
 		}
-		index[tag] = len(targets)
-		targets = append(targets, CIReleaseTag{Product: product, Tag: tag, SHA: bySHA[tag], Released: released})
+		out[i] = overview.Run{Workflow: workflow, Conclusion: conclusion, Status: status, URL: repoPageURL(repo, run.URL)}
 	}
-	for _, p := range products {
-		if latest, ok := latestTag(p.scheme, in.Tags); ok {
-			add(p.id, latest, true)
-		}
-	}
-	unreleased := in.Unreleased
-	if len(unreleased) > maxUnreleasedTags {
-		unreleased = unreleased[:maxUnreleasedTags]
-	}
-	for _, name := range unreleased {
-		if _, known := bySHA[name]; known {
-			add(productOf(products, name), name, false)
-		}
-	}
-	return targets
+	return out
 }
 
-// latestTag returns the tag of the highest version among those the scheme accepts; equal versions
-// (`v1.0.0` and `1.0.0`) resolve to the greater name, so the choice does not depend on the order read.
-func latestTag(scheme *release.VersionScheme, tags []CITag) (string, bool) {
-	best, found := "", false
-	var bestTuple release.VersionTuple
-	for _, t := range tags {
-		_, tuple, ok := scheme.ParseTag(t.Name)
-		if !ok {
-			continue
-		}
-		cmp := release.CompareVersionTuples(tuple, bestTuple)
-		if !found || cmp > 0 || (cmp == 0 && t.Name > best) {
-			best, bestTuple, found = t.Name, tuple, true
-		}
-	}
-	return best, found
-}
-
-// productOf names the first product whose grammar accepts the tag, or no product.
-func productOf(products []ciProduct, tag string) string {
-	for _, p := range products {
-		if _, _, ok := p.scheme.ParseTag(tag); ok {
-			return p.id
-		}
+func knownRunStatus(s string) string {
+	switch s {
+	case "queued", "in_progress", "completed", "waiting", "requested", "pending":
+		return s
 	}
 	return ""
 }
 
-// newestRuns orders the runs newest first by creation time (the order of the response is not relied on;
-// equal times keep it) and keeps the first maxCIRuns.
-func newestRuns(workflow string, runs []hosting.WorkflowRun) []overview.Run {
-	sort.SliceStable(runs, func(i, j int) bool { return runs[i].CreatedAt.After(runs[j].CreatedAt) })
-	if len(runs) > maxCIRuns {
-		runs = runs[:maxCIRuns]
+func knownRunConclusion(s string) string {
+	switch s {
+	case "success", "failure", "cancelled", "timed_out", "neutral", "skipped", "action_required", "startup_failure", "stale":
+		return s
 	}
-	out := make([]overview.Run, len(runs))
-	for i, run := range runs {
-		out[i] = overview.Run{Workflow: workflow, Conclusion: run.Conclusion, Status: run.Status, URL: run.URL}
-	}
-	return out
+	return ""
 }
+
+// repoPageURL returns raw when it is an https page of the forge under the repository (`/OWNER/NAME/`,
+// the case of the name is not significant) and no URL otherwise.
+func repoPageURL(repo, raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host != forgeHost || u.User != nil || u.Opaque != "" {
+		return ""
+	}
+	prefix := "/" + repo + "/"
+	if len(u.Path) <= len(prefix) || !strings.EqualFold(u.Path[:len(prefix)], prefix) || strings.Contains(u.Path, "/../") {
+		return ""
+	}
+	return raw
+}
+
+// forgeHost is the host of the pages the runs link to.
+const forgeHost = "github.com"
 
 // ciState turns a failed read into the state of its source: skipped with the deadline reason when the
 // run's own context ended during a request, otherwise an error with the code of the read.

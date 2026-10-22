@@ -3,6 +3,7 @@ package statusremote
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -310,192 +311,216 @@ func ciRunsBody(runs ...string) string {
 	return fmt.Sprintf(`{"total_count":%d,"workflow_runs":[%s]}`, len(runs), strings.Join(runs, ","))
 }
 
-func ciRun(status, conclusion, created string, n int) string {
+func ciRunAt(sha, status, conclusion, created, url string) string {
 	c := "null"
 	if conclusion != "" {
 		c = `"` + conclusion + `"`
 	}
-	return fmt.Sprintf(`{"status":"%s","conclusion":%s,"html_url":"https://github.com/%s/actions/runs/%d","created_at":"%s"}`, status, c, ciRepo, n, created)
+	return fmt.Sprintf(`{"status":"%s","conclusion":%s,"html_url":"%s","head_sha":"%s","created_at":"%s"}`, status, c, url, sha, created)
+}
+
+func ciRun(sha, status, conclusion, created string, n int) string {
+	return ciRunAt(sha, status, conclusion, created, fmt.Sprintf("https://github.com/%s/actions/runs/%d", ciRepo, n))
 }
 
 func ciTime(hour int) string {
 	return time.Date(2026, 10, 22, hour, 0, 0, 0, time.UTC).Format(time.RFC3339)
 }
 
-func ciTags(names ...string) []CITag {
-	tags := make([]CITag, len(names))
-	for i, n := range names {
-		tags[i] = CITag{Name: n, SHA: ciSHA(string(rune('a' + i)))}
-	}
-	return tags
+// ciEntry is a tag entry as the `tags` source reports it.
+func ciEntry(pattern, tag, seed string, latest, unreleased bool) overview.ReleaseTag {
+	return overview.ReleaseTag{Pattern: pattern, Tag: tag, SHA: ciSHA(seed), Latest: latest, Unreleased: unreleased}
 }
 
-func TestReadCIReleaseDefaultsToReleaseYmlAndTheLatestSemverTag(t *testing.T) {
+const defaultPattern = "v*.*.*"
+
+func TestReadCIReleaseAddsTheNewestRunsToTheGivenEntries(t *testing.T) {
+	entry := ciEntry(defaultPattern, "v1.10.0", "a", true, false)
 	f := newCIFake()
-	tags := ciTags("v1.9.0", "v1.10.0", "v0.2.0", "nightly", "1.2", "v1.10.0-rc1")
-	latest := tags[1]
-	f.flows["release.yml@"+latest.SHA] = ciRunsBody(ciRun("completed", "failure", ciTime(10), 2), ciRun("completed", "success", ciTime(9), 1))
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: tags})
-	if got.State.Outcome != overview.OutcomeOK || got.Release == nil {
-		t.Fatalf("%+v", got.State)
+	f.flows["release.yml@"+entry.SHA] = ciRunsBody(ciRun(entry.SHA, "completed", "success", ciTime(9), 1), ciRun(entry.SHA, "completed", "failure", ciTime(10), 2))
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: []overview.ReleaseTag{entry}})
+	if got.State.Outcome != overview.OutcomeOK || got.Release == nil || len(got.Release.Tags) != 1 {
+		t.Fatalf("%+v", got)
 	}
-	want := CIReleaseTag{Tag: "v1.10.0", SHA: latest.SHA, Released: true, Runs: []overview.Run{
+	e := got.Release.Tags[0]
+	want := []overview.Run{
 		{Workflow: "release.yml", Conclusion: "failure", Status: "completed", URL: "https://github.com/" + ciRepo + "/actions/runs/2"},
 		{Workflow: "release.yml", Conclusion: "success", Status: "completed", URL: "https://github.com/" + ciRepo + "/actions/runs/1"},
-	}}
-	if got.Release.Workflow != "release.yml" || len(got.Release.Tags) != 1 || fmt.Sprint(got.Release.Tags[0]) != fmt.Sprint(want) {
-		t.Fatalf("%+v", got.Release)
 	}
-	if len(f.calls) != 1 || f.calls[0] != "flow release.yml@"+latest.SHA {
+	if e.Pattern != defaultPattern || e.Product != "" || e.Tag != "v1.10.0" || e.SHA != entry.SHA || !e.Latest || e.Unreleased || e.Workflow != "release.yml" || fmt.Sprint(e.Runs) != fmt.Sprint(want) {
+		t.Fatalf("%+v", e)
+	}
+	if len(f.calls) != 1 || f.calls[0] != "flow release.yml@"+entry.SHA {
 		t.Fatalf("requests %v", f.calls)
 	}
-}
-
-func TestReadCIReleaseEqualVersionsResolveWhateverTheOrderRead(t *testing.T) {
-	for _, names := range [][]string{{"1.0.0", "v1.0.0"}, {"v1.0.0", "1.0.0"}} {
-		tags := ciTags(names...)
-		got := ReadCIRelease(context.Background(), newCIFake(), CIReleaseInput{Repo: ciRepo, Tags: tags})
-		if got.Release == nil || len(got.Release.Tags) != 1 || got.Release.Tags[0].Tag != "v1.0.0" {
-			t.Errorf("%v: %+v", names, got.Release)
-		}
+	// the entries come back as the action model reads them, the newest run attached
+	tags := got.Release.ReleaseTags()
+	if len(tags) != 1 || tags[0].Run == nil || tags[0].Run.Conclusion != "failure" || tags[0].Pattern != defaultPattern || !tags[0].Latest || tags[0].SHA != entry.SHA {
+		t.Fatalf("%+v", tags)
 	}
 }
 
-func TestReadCIReleaseUsesOnlyTheDeclaredWorkflow(t *testing.T) {
-	dir := t.TempDir()
-	ciWriteContract(t, dir, "release.toml", ciContractText("", "v{version}", `^v(?P<version>(?P<major>[0-9]{1,9})\.(?P<minor>[0-9]{1,9})\.(?P<patch>[0-9]{1,9}))$`, ".github/workflows/publish.yaml"))
+// The entries are not recomputed: a tag that no pattern grammar of the clone would pick is read all the same.
+func TestReadCIReleaseReadsTheEntriesItIsGivenAndNothingElse(t *testing.T) {
+	entries := []overview.ReleaseTag{ciEntry("custom/*", "custom/odd", "a", false, true)}
 	f := newCIFake()
-	tags := ciTags("v1.0.0")
-	f.flows["publish.yaml@"+tags[0].SHA] = ciRunsBody(ciRun("completed", "success", ciTime(9), 1))
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Dir: dir, Tags: tags})
-	if got.Release == nil || got.Release.Workflow != "publish.yaml" || got.Release.Tags[0].Runs[0].Workflow != "publish.yaml" {
-		t.Fatalf("%+v %+v", got.State, got.Release)
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries})
+	if got.Release == nil || len(got.Release.Tags) != 1 || got.Release.Tags[0].Workflow != "release.yml" || len(f.calls) != 1 {
+		t.Fatalf("%+v %v", got, f.calls)
 	}
-	if len(f.calls) != 1 || f.calls[0] != "flow publish.yaml@"+tags[0].SHA {
-		t.Fatalf("a workflow that is not declared was read: %v", f.calls)
+	if empty := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo}); empty.Release == nil || len(empty.Release.Tags) != 0 || len(f.calls) != 1 {
+		t.Fatalf("%+v %v", empty, f.calls)
 	}
 }
 
-func TestReadCIReleaseReadsAJSONContract(t *testing.T) {
+func ciTwoProducts(t *testing.T) ReleaseProducts {
+	t.Helper()
+	dir := t.TempDir()
+	ciWriteContract(t, dir, "release.zlib.toml", ciContractText("zlib", "zlib-v{version}", ciProductPattern("zlib"), ".github/workflows/zlib-release.yml"))
+	ciWriteContract(t, dir, "release.busybox.toml", ciContractText("busybox", "busybox-v{version}", ciProductPattern("busybox"), ".github/workflows/ship.yaml"))
+	products := ReadReleaseProducts(dir)
+	if products.Invalid() {
+		t.Fatal("the fixture contracts are not valid")
+	}
+	return products
+}
+
+func TestReadReleaseProductsGivePatternsInTheOrderOfTheProductIds(t *testing.T) {
+	if got := fmt.Sprint(ciTwoProducts(t).Patterns()); got != "[busybox-v* zlib-v*]" {
+		t.Fatal(got)
+	}
 	dir := t.TempDir()
 	ciWriteContract(t, dir, "release.json", `{"schema_version":1,"project":{"name":"tool"},
-	"version":{"scheme":"semver","source":"input"},
+	"version":{"scheme":"semver","tag_prefix":"cli/","source":"input"},
 	"build":[{"id":"pack","scope":"once","argv":["make","dist"],"timeout_seconds":60}],
 	"target":[{"id":"archive","kind":"file","build":"pack","os":"any","arch":"any","output":"dist/release/tool-{version_number}.tar.gz"}],
 	"outputs":{"checksums":"SHA256SUMS"},"reproducibility":{"policy":"required","source_date_epoch":"commit-time"},
 	"allowlist":{"paths":["docs/**"]},"ci":{"workflows":["ci.yml"],"release_workflow":".github/workflows/ship.yml"}}`)
-	tags := ciTags("v1.0.0", "1.2.0")
-	f := newCIFake()
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Dir: dir, Tags: tags})
-	// the declared semver grammar requires the `v`: the default grammar's optional `v` does not apply
-	if got.Release == nil || got.Release.Workflow != "ship.yml" || len(got.Release.Tags) != 1 || got.Release.Tags[0].Tag != "v1.0.0" {
-		t.Fatalf("%+v %+v", got.State, got.Release)
+	json := ReadReleaseProducts(dir)
+	if got := fmt.Sprint(json.Patterns()); got != "[cli/v*]" || json.Invalid() {
+		t.Fatal(got)
+	}
+	for name, p := range map[string]ReleaseProducts{"no clone": ReadReleaseProducts(""), "no .stw": ReadReleaseProducts(t.TempDir())} {
+		if p.Invalid() || len(p.Patterns()) != 0 {
+			t.Errorf("%s: declares %v", name, p.Patterns())
+		}
 	}
 }
 
-func TestReadCIReleaseAContractThatDeclaresNothingUsableFallsBackToTheDefault(t *testing.T) {
-	broken := ciContractText("", "v{version}", `^v(?P<version>(?P<major>[0-9]{1,9})\.(?P<minor>[0-9]{1,9})\.(?P<patch>[0-9]{1,9}))$`, ".github/workflows/publish.yaml")
-	for name, files := range map[string]map[string]string{
-		"not a contract":     {"release.toml": "not toml ["},
-		"invalid contract":   {"release.toml": strings.Replace(broken, "schema_version = 1", "schema_version = 7", 1)},
-		"yaml is not a form": {"release.yml": "schema_version: 1"},
-		"unrelated file":     {"notes.txt": broken},
-	} {
-		dir := t.TempDir()
-		for file, content := range files {
-			ciWriteContract(t, dir, file, content)
-		}
-		tags := ciTags("v1.0.0")
-		f := newCIFake()
-		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Dir: dir, Tags: tags})
-		if got.Release == nil || got.Release.Workflow != "release.yml" || len(f.calls) != 1 || f.calls[0] != "flow release.yml@"+tags[0].SHA {
-			t.Errorf("%s: %+v %v", name, got.Release, f.calls)
-		}
-	}
-	// a contract that is a link is never followed
-	dir := t.TempDir()
-	ciWriteContract(t, dir, "real.txt", broken)
-	if err := os.Symlink("real.txt", filepath.Join(dir, ".stw", "release.toml")); err != nil {
-		t.Fatal(err)
+// Each entry uses the workflow of its own product; the default workflow serves a pattern nobody declares.
+func TestReadCIReleaseUsesTheWorkflowOfTheProductOfEachEntry(t *testing.T) {
+	entries := []overview.ReleaseTag{
+		ciEntry("busybox-v*", "busybox-v1.36.0", "a", true, false),
+		ciEntry("zlib-v*", "zlib-v1.3.1", "b", true, false),
+		ciEntry(defaultPattern, "v2.0.0", "c", true, false),
 	}
 	f := newCIFake()
-	if got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Dir: dir, Tags: ciTags("v1.0.0")}); got.Release == nil || got.Release.Workflow != "release.yml" {
-		t.Errorf("a linked contract was read: %+v", got.Release)
-	}
-}
-
-func TestReadCIReleaseLatestTagPerDeclaredProduct(t *testing.T) {
-	dir := t.TempDir()
-	ciWriteContract(t, dir, "release.zlib.toml", ciContractText("zlib", "zlib-v{version}", ciProductPattern("zlib"), ".github/workflows/release.yml"))
-	ciWriteContract(t, dir, "release.busybox.toml", ciContractText("busybox", "busybox-v{version}", ciProductPattern("busybox"), ".github/workflows/release.yml"))
-	tags := ciTags("zlib-v1.2.9", "zlib-v1.2.10", "busybox-v1.36.0", "busybox-v1.35.0", "v9.9.9")
-	f := newCIFake()
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Dir: dir, Tags: tags})
-	if got.Release == nil || len(got.Release.Tags) != 2 {
-		t.Fatalf("%+v %+v", got.State, got.Release)
-	}
-	// products in the order of their ids, the default pattern is not used when products are declared
-	if a, b := got.Release.Tags[0], got.Release.Tags[1]; a.Product != "busybox" || a.Tag != "busybox-v1.36.0" || b.Product != "zlib" || b.Tag != "zlib-v1.2.10" || !a.Released || !b.Released {
-		t.Fatalf("%+v", got.Release.Tags)
-	}
-	if f.count("flow") != 2 {
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Products: ciTwoProducts(t), Tags: entries})
+	want := []string{"flow ship.yaml@" + entries[0].SHA, "flow zlib-release.yml@" + entries[1].SHA, "flow release.yml@" + entries[2].SHA}
+	if fmt.Sprint(f.calls) != fmt.Sprint(want) {
 		t.Fatalf("requests %v", f.calls)
 	}
+	var seen []string
+	for _, e := range got.Release.Tags {
+		seen = append(seen, e.Product+":"+e.Workflow)
+	}
+	if fmt.Sprint(seen) != "[busybox:ship.yaml zlib:zlib-release.yml :release.yml]" {
+		t.Fatal(seen)
+	}
 }
 
-func TestReadCIReleaseAddsUnreleasedTagsOnceAndCapsThemAtFive(t *testing.T) {
-	names := []string{"v1.0.0", "v1.1.0", "v1.2.0", "v1.3.0", "v1.4.0", "v1.5.0", "v1.6.0", "v1.7.0"}
-	tags := ciTags(names...)
-	summary := func(in CIReleaseInput) ([]string, *ciFake) {
-		f := newCIFake()
-		got := ReadCIRelease(context.Background(), f, in)
-		if got.Release == nil {
-			t.Fatalf("%+v", got.State)
+func TestReadCIReleaseReadsAtMostSixTagsInAll(t *testing.T) {
+	var entries []overview.ReleaseTag
+	for i, pattern := range []string{"busybox-v*", "zlib-v*", defaultPattern} {
+		for j := 0; j < 3; j++ {
+			entries = append(entries, ciEntry(pattern, fmt.Sprintf("t%d.%d", i, j), string(rune('a'+i*3+j)), j == 0, j > 0))
 		}
-		var seen []string
-		for _, e := range got.Release.Tags {
-			seen = append(seen, fmt.Sprintf("%s:%v", e.Tag, e.Released))
-		}
-		return seen, f
 	}
-	// the latest tag is also unreleased: one entry, not released, and five unreleased tags in all
-	seen, f := summary(CIReleaseInput{Repo: ciRepo, Tags: tags, Unreleased: []string{"v1.7.0", "v1.6.0", "v1.5.0", "v1.4.0", "v1.3.0", "v1.2.0", "v1.1.0", "ghost"}})
-	if got, want := strings.Join(seen, " "), "v1.7.0:false v1.6.0:false v1.5.0:false v1.4.0:false v1.3.0:false"; got != want || f.count("flow") != 5 {
-		t.Fatalf("%v %v", seen, f.calls)
-	}
-	// the latest tag is released: it and five unreleased older tags make the six of a repository
-	seen, f = summary(CIReleaseInput{Repo: ciRepo, Tags: tags, Unreleased: []string{"v1.6.0", "v1.5.0", "v1.4.0", "v1.3.0", "v1.2.0", "v1.1.0", "v1.0.0"}})
-	if got, want := strings.Join(seen, " "), "v1.7.0:true v1.6.0:false v1.5.0:false v1.4.0:false v1.3.0:false v1.2.0:false"; got != want || f.count("flow") != 6 {
-		t.Fatalf("%v %v", seen, f.calls)
+	f := newCIFake()
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Products: ciTwoProducts(t), Tags: entries})
+	if len(f.calls) != 6 || len(got.Release.Tags) != 6 || got.Release.Tags[5].Tag != "t1.2" {
+		t.Fatalf("%d requests: %v", len(f.calls), f.calls)
 	}
 }
 
 func TestReadCIReleaseKeepsAtMost20RunsNewestFirst(t *testing.T) {
+	entry := ciEntry(defaultPattern, "v1.0.0", "a", true, false)
 	var runs []string
 	for i := 1; i <= 25; i++ { // the forge's order is not trusted: oldest first here
-		runs = append(runs, ciRun("completed", "success", time.Date(2026, 10, 1, i, 0, 0, 0, time.UTC).Format(time.RFC3339), i))
+		runs = append(runs, ciRun(entry.SHA, "completed", "success", time.Date(2026, 10, 1, i, 0, 0, 0, time.UTC).Format(time.RFC3339), i))
 	}
-	tags := ciTags("v1.0.0")
 	f := newCIFake()
-	f.flows["release.yml@"+tags[0].SHA] = ciRunsBody(runs...)
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: tags})
+	f.flows["release.yml@"+entry.SHA] = ciRunsBody(runs...)
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: []overview.ReleaseTag{entry}})
 	kept := got.Release.Tags[0].Runs
 	if len(kept) != 20 || !strings.HasSuffix(kept[0].URL, "/runs/25") || !strings.HasSuffix(kept[19].URL, "/runs/6") {
 		t.Fatalf("%d runs, first %v last %v", len(kept), kept[0].URL, kept[len(kept)-1].URL)
 	}
 }
 
-func TestReadCIReleaseWithoutTagsReadsNothing(t *testing.T) {
+// A run of another commit is not a run of the tag.
+func TestReadCIReleaseIgnoresRunsOfOtherCommits(t *testing.T) {
+	entry := ciEntry(defaultPattern, "v1.0.0", "a", true, false)
+	other := ciSHA("b")
 	f := newCIFake()
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: ciTags("nightly", "1.2")})
-	if got.State.Outcome != overview.OutcomeOK || got.Release == nil || len(got.Release.Tags) != 0 || len(f.calls) != 0 {
-		t.Fatalf("%+v %+v %v", got.State, got.Release, f.calls)
+	f.flows["release.yml@"+entry.SHA] = ciRunsBody(
+		ciRun(other, "completed", "failure", ciTime(11), 3),
+		ciRun("", "completed", "failure", ciTime(12), 4),
+		ciRun(entry.SHA, "completed", "success", ciTime(9), 1))
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: []overview.ReleaseTag{entry}})
+	runs := got.Release.Tags[0].Runs
+	if len(runs) != 1 || runs[0].Conclusion != "success" {
+		t.Fatalf("%+v", runs)
+	}
+}
+
+// Forge values are data: a page outside the repository is dropped, an unknown status or conclusion is
+// information only, and a conclusion of a run that has not completed means nothing.
+func TestReadCIReleaseDoesNotTrustForgeValues(t *testing.T) {
+	entry := ciEntry(defaultPattern, "v1.0.0", "a", true, false)
+	good := "https://github.com/" + ciRepo + "/actions/runs/1"
+	for _, tc := range []struct {
+		name, status, conclusion, url string
+		wantStatus, wantConclusion    string
+		wantURL                       string
+	}{
+		{"plain run", "completed", "failure", good, "completed", "failure", good},
+		{"repository case is not significant", "completed", "success", "https://github.com/WStein/SourceSteward/actions/runs/1", "completed", "success", "https://github.com/WStein/SourceSteward/actions/runs/1"},
+		{"http", "completed", "success", "http://github.com/" + ciRepo + "/actions/runs/1", "completed", "success", ""},
+		{"other host", "completed", "success", "https://evil.example/" + ciRepo + "/actions/runs/1", "completed", "success", ""},
+		{"host as user info", "completed", "success", "https://github.com@evil.example/" + ciRepo + "/actions/runs/1", "completed", "success", ""},
+		{"user info", "completed", "success", "https://user:pass@github.com/" + ciRepo + "/actions/runs/1", "completed", "success", ""},
+		{"javascript", "completed", "success", "javascript:alert(1)", "completed", "success", ""},
+		{"other repository", "completed", "success", "https://github.com/evil/repo/actions/runs/1", "completed", "success", ""},
+		{"repository prefix only", "completed", "success", "https://github.com/" + ciRepo + "-evil/actions/runs/1", "completed", "success", ""},
+		{"traversal", "completed", "success", "https://github.com/" + ciRepo + "/../evil/repo", "completed", "success", ""},
+		{"empty", "completed", "success", "", "completed", "success", ""},
+		{"unknown conclusion", "completed", "exploded", good, "completed", "", good},
+		{"unknown status", "teleporting", "failure", good, "", "", good},
+		{"control characters", "completed\u001b[31m", "failure\u0007", good, "", "", good},
+		{"conclusion without completion", "in_progress", "failure", good, "in_progress", "", good},
+	} {
+		f := newCIFake()
+		body, err := json.Marshal(map[string]any{"workflow_runs": []map[string]string{{"status": tc.status, "conclusion": tc.conclusion, "html_url": tc.url, "head_sha": entry.SHA, "created_at": ciTime(9)}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.flows["release.yml@"+entry.SHA] = string(body)
+		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: []overview.ReleaseTag{entry}})
+		if got.Release == nil || len(got.Release.Tags[0].Runs) != 1 {
+			t.Errorf("%s: %+v", tc.name, got)
+			continue
+		}
+		run := got.Release.Tags[0].Runs[0]
+		if run.Status != tc.wantStatus || run.Conclusion != tc.wantConclusion || run.URL != tc.wantURL {
+			t.Errorf("%s: %+v", tc.name, run)
+		}
 	}
 }
 
 func TestReadCIReleaseFailuresAreStatesNotData(t *testing.T) {
-	tags := ciTags("v1.0.0", "v1.1.0")
-	key := "flow release.yml@" + tags[1].SHA
+	entries := []overview.ReleaseTag{ciEntry(defaultPattern, "v1.1.0", "a", true, false), ciEntry(defaultPattern, "v1.0.0", "b", false, true)}
+	key := "flow release.yml@" + entries[1].SHA
 	notFound := &hosting.WatchError{Code: hosting.CodeForbidden, Status: 404}
 	for _, tc := range []struct {
 		name string
@@ -509,22 +534,63 @@ func TestReadCIReleaseFailuresAreStatesNotData(t *testing.T) {
 	} {
 		f := newCIFake()
 		f.errs[key] = tc.err
-		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: tags, Unreleased: []string{"v1.0.0"}})
+		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries})
 		if got.State != tc.want || got.Release != nil {
 			t.Errorf("%s: %+v %+v", tc.name, got.State, got.Release)
 		}
 	}
 	f := newCIFake()
-	f.flows["release.yml@"+tags[1].SHA] = `{"workflow_runs":null}`
-	if got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: tags}); got.State != ciErrState("malformed-response") || got.Release != nil {
+	f.flows["release.yml@"+entries[1].SHA] = `{"workflow_runs":null}`
+	if got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries}); got.State != ciErrState("malformed-response") || got.Release != nil {
 		t.Errorf("%+v %+v", got.State, got.Release)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	f = newCIFake()
 	f.errs[key] = &hosting.WatchError{Code: hosting.CodeNetwork}
-	if got := ReadCIRelease(ctx, f, CIReleaseInput{Repo: ciRepo, Tags: tags}); got.State != (overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}) || got.Release != nil {
+	if got := ReadCIRelease(ctx, f, CIReleaseInput{Repo: ciRepo, Tags: entries}); got.State != (overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}) || got.Release != nil {
 		t.Errorf("%+v %+v", got.State, got.Release)
+	}
+}
+
+// An absent contract uses the defaults; one that exists but cannot be used is an error, not a fallback.
+func TestReadCIReleaseAnUnusableContractIsAnErrorNotADefault(t *testing.T) {
+	valid := ciContractText("", "v{version}", `^v(?P<version>(?P<major>[0-9]{1,9})\.(?P<minor>[0-9]{1,9})\.(?P<patch>[0-9]{1,9}))$`, ".github/workflows/publish.yaml")
+	entries := []overview.ReleaseTag{ciEntry(defaultPattern, "v1.0.0", "a", true, false)}
+	for name, files := range map[string]map[string]string{
+		"not a contract":      {"release.toml": "not toml ["},
+		"invalid contract":    {"release.toml": strings.Replace(valid, "schema_version = 1", "schema_version = 7", 1)},
+		"yaml form":           {"release.yml": "schema_version: 1"},
+		"default mixed named": {"release.toml": valid, "release.other.toml": valid},
+	} {
+		dir := t.TempDir()
+		for file, content := range files {
+			ciWriteContract(t, dir, file, content)
+		}
+		f := newCIFake()
+		products := ReadReleaseProducts(dir)
+		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Products: products, Tags: entries})
+		if !products.Invalid() || got.State != ciErrState(CodeContractInvalid) || got.Release != nil || len(f.calls) != 0 {
+			t.Errorf("%s: %+v %v", name, got.State, f.calls)
+		}
+	}
+	// a contract that is a link is never followed
+	dir := t.TempDir()
+	ciWriteContract(t, dir, "real.txt", valid)
+	if err := os.Symlink("real.txt", filepath.Join(dir, ".stw", "release.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if !ReadReleaseProducts(dir).Invalid() {
+		t.Error("a linked contract was read")
+	}
+	// a file of .stw that is no contract is not a contract; no .stw at all declares nothing
+	ciWriteContract(t, dir, "notes.txt", "x")
+	for _, p := range []ReleaseProducts{ReadReleaseProducts(t.TempDir()), {}} {
+		f := newCIFake()
+		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Products: p, Tags: entries})
+		if got.State.Outcome != overview.OutcomeOK || len(f.calls) != 1 || f.calls[0] != "flow release.yml@"+entries[0].SHA {
+			t.Errorf("%+v %v", got.State, f.calls)
+		}
 	}
 }
 
@@ -532,7 +598,7 @@ func TestReadCIReleaseFailuresAreStatesNotData(t *testing.T) {
 // is one too, a run still in progress is not.
 func TestUS5RedMainAndFailedTagRunAreRedItems(t *testing.T) {
 	head := ciSHA("a")
-	tags := ciTags("v1.0.0", "v1.1.0")
+	entries := []overview.ReleaseTag{ciEntry(defaultPattern, "v1.0.0", "b", false, false), ciEntry(defaultPattern, "v1.1.0", "c", true, true)}
 	for _, tc := range []struct {
 		name, conclusion, status string
 		wantRun                  bool
@@ -546,9 +612,9 @@ func TestUS5RedMainAndFailedTagRunAreRedItems(t *testing.T) {
 		f := newCIFake()
 		f.branches["main"] = ciBranch(head)
 		f.runs[head] = ciCheckRun("completed", "failure")
-		f.flows["release.yml@"+tags[1].SHA] = ciRunsBody(ciRun(tc.status, tc.conclusion, ciTime(10), 7))
+		f.flows["release.yml@"+entries[1].SHA] = ciRunsBody(ciRun(entries[1].SHA, tc.status, tc.conclusion, ciTime(10), 7))
 		main := ReadCIMain(context.Background(), f, ciRepo, "main", "")
-		rel := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: tags, Unreleased: []string{"v1.1.0"}})
+		rel := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries})
 		repo := overview.Repo{
 			Local: stwsync.RepoStatus{Name: "sourcesteward", Path: "sourcesteward", Kind: "root", State: "ok", Reasons: []string{}},
 			Slug:  ciRepo,

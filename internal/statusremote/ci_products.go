@@ -2,103 +2,86 @@
 package statusremote
 
 import (
-	"io"
-	"os"
 	"path"
-	"path/filepath"
+	"strings"
 
 	"github.com/wstein/sourcesteward/internal/release"
 )
 
-// defaultReleaseWorkflow is the release workflow file of a repository whose contract declares none:
-// the name the member repositories use.
+// defaultReleaseWorkflow is the release workflow file of a pattern that no contract declares: the name
+// the member repositories use.
 const defaultReleaseWorkflow = "release.yml"
 
-// defaultProduct is the product of a repository that declares none: the tag grammar `v*.*.*` (semver
-// with an optional `v`) and the default release workflow.
-var defaultProduct = func() ciProduct {
-	scheme, err := release.CompileVersionScheme(release.Version{
-		Scheme:      "pattern",
-		TagTemplate: "{version}",
-		TagPattern:  `\A(?P<version>v?(?P<major>0|[1-9][0-9]{0,8})\.(?P<minor>0|[1-9][0-9]{0,8})\.(?P<patch>0|[1-9][0-9]{0,8}))\z`,
-		Order:       []string{"major", "minor", "patch"},
-	})
-	if err != nil {
-		panic("the default tag scheme does not compile: " + err.Error())
-	}
-	return ciProduct{scheme: scheme, workflow: defaultReleaseWorkflow}
-}()
-
 // ciProduct is one product the repository declares: its id (the file name part of
-// `.stw/release.PRODUCT.toml`, empty for the default contract), its tag grammar and its release workflow.
+// `.stw/release.PRODUCT.toml`, empty for the default contract), the release tag pattern of its tag
+// grammar and its release workflow file.
 type ciProduct struct {
 	id       string
-	scheme   *release.VersionScheme
+	pattern  string
 	workflow string
 }
 
-// ciProducts reads the release contracts of the clone at dir (Spec 026: `.stw/release.toml` or
-// `.stw/release.PRODUCT.toml`, regular files only, never followed through a link). A missing directory,
-// a file that is not a valid contract and a version scheme that does not compile declare nothing, so a
-// repository without a usable declaration gets the default product. The result is in the order of the
-// product ids.
-func ciProducts(dir string) []ciProduct {
-	if dir == "" {
-		return nil
-	}
-	entries, err := os.ReadDir(filepath.Join(dir, ".stw"))
-	if err != nil {
-		return nil
-	}
-	var names []string
-	for _, e := range entries {
-		if e.Type().IsRegular() {
-			names = append(names, e.Name())
-		}
-	}
-	files, _ := release.DiscoverProducts(names)
-	var products []ciProduct
-	for _, file := range files {
-		contract := readCIContract(filepath.Join(dir, file.Path), file)
-		if contract == nil {
-			continue
-		}
-		scheme, err := release.CompileVersionScheme(contract.Version)
-		if err != nil || contract.CI.ReleaseWorkflow == "" {
-			continue
-		}
-		products = append(products, ciProduct{id: file.Product, scheme: scheme, workflow: path.Base(contract.CI.ReleaseWorkflow)})
-	}
-	return products
+// ReleaseProducts is what the release contracts of a clone declare. The zero value declares nothing:
+// the default pattern and the default workflow apply.
+type ReleaseProducts struct {
+	products []ciProduct
+	invalid  bool
 }
 
-// readCIContract reads and validates one contract file; nil when it cannot be read or is not valid.
-func readCIContract(name string, file release.ContractFile) *release.Contract {
-	f, err := os.Open(name)
-	if err != nil {
-		return nil
+// ReadReleaseProducts reads the release contracts of the clone at dir with the reader of
+// `release check`. No `.stw` directory (or no clone: dir empty) declares nothing. A contract that
+// exists but cannot be read or is not valid makes the result Invalid: the defaults are not a
+// substitute for a contract the owner meant. Only semver and pattern tag grammars give a pattern
+// (Spec 037 compares semantic versions); a product of another scheme declares none.
+func ReadReleaseProducts(dir string) ReleaseProducts {
+	if dir == "" {
+		return ReleaseProducts{}
 	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, release.MaxContractBytes+1))
-	if err != nil {
-		return nil
+	found, err := release.ReadWorktreeContracts(dir)
+	if err != nil || !found.Valid() {
+		return ReleaseProducts{invalid: true}
 	}
-	var doc any
-	var findings []release.Finding
-	if file.Format == "json" {
-		doc, findings = release.ParseJSON(data)
-	} else {
-		var table map[string]any
-		if table, findings = release.ParseTOML(data); table != nil {
-			doc = table
+	var out ReleaseProducts
+	for _, p := range found.Products {
+		if pattern := tagPattern(p.Contract.Version); pattern != "" {
+			out.products = append(out.products, ciProduct{id: p.Product, pattern: pattern, workflow: path.Base(p.Contract.CI.ReleaseWorkflow)})
 		}
 	}
-	if len(findings) != 0 {
-		return nil
+	return out
+}
+
+// Invalid reports that a contract exists but cannot be used.
+func (p ReleaseProducts) Invalid() bool { return p.invalid }
+
+// Patterns lists the release tag patterns of the declared products in the order of their ids; none
+// means the default pattern.
+func (p ReleaseProducts) Patterns() []string {
+	var out []string
+	for _, prod := range p.products {
+		out = append(out, prod.pattern)
 	}
-	contract, _, err := release.ValidateContract(doc, release.ValidateOptions{Product: file.Product})
-	if err != nil {
-		return nil
+	return out
+}
+
+// of returns the product id and the release workflow of a tag pattern: the declaring product's, or no
+// product and the default workflow.
+func (p ReleaseProducts) of(pattern string) (id, workflow string) {
+	for _, prod := range p.products {
+		if prod.pattern == pattern {
+			return prod.id, prod.workflow
+		}
 	}
-	return contract
+	return "", defaultReleaseWorkflow
+}
+
+// tagPattern is the glob of the tags of a version scheme, `*` standing for the version, or "" for a
+// scheme that is not a semantic version.
+func tagPattern(v release.Version) string {
+	switch v.Scheme {
+	case "semver":
+		return v.TagPrefix + "v*"
+	case "pattern":
+		return strings.Replace(v.TagTemplate, "{version}", "*", 1)
+	}
+	return ""
 }
