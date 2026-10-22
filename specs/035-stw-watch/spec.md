@@ -100,14 +100,23 @@ selects a new directory (a new silent baseline) unless `--state-dir` pins it. Th
 | `heartbeat` | one line `RFC3339-time pid mode`, rewritten atomically after every poll cycle that completed (also when some repositories failed, see liveness) |
 
 Order inside one poll cycle, exactly: (1) compute the events from (state, observation); (2) append each event line to
-`journal.jsonl` and `fsync`; (3) print the events to stdout; (4) write `state.json` with the new observation and `printed_seq`.
+`journal.jsonl` and `fsync`; (3) print the events to stdout; (4) write `state.json` with the new observation, the counters
+(epochs, generations, episodes, `repos_epoch`) and `applied_seq` = `printed_seq` = the last `seq` of the cycle.
 `seq` is **derived from the journal tail**: the next `seq` is the `seq` of the last complete journal line plus one (1 for an empty
 journal), so it is gapless and survives a lost or older `state.json`.
-On start (before the first poll) the watcher reads the journal lines with `seq` greater than `printed_seq`, prints them in order
-(at-least-once delivery) and records them as `pending_ids`; during the first cycle any computed event whose `id` is in `pending_ids`
-is not journaled or printed again (its effect on the state is still applied). Result: **exactly once in the journal, at least once on
-stdout; consumers dedupe by `id`**. Crash windows: after (2) before (3): the line is printed once on restart; after (3) before (4):
-printed twice on stdout, once in the journal; after (4): once and once. There is no tombstone or suppress file (see Event ids).
+
+**Replay on start** (before the first poll): the watcher reads the journal lines with `seq` greater than `state.applied_seq` and
+(a) **applies each event to the state**: its counter is set to the epoch, generation or episode encoded in its `id` (never lowered),
+and its observed effect is applied to the accepted observation (`new-pr` and `closed`/`merged` open or remove the PR and set the
+generation; `head-changed` the new head; `checks-green`/`checks-red` the class; `mergeable-changed` the mergeability;
+`ready-state-changed` the draft flag; `base-changed` the base; `repos-changed` the repository set and `repos_epoch`; `watch-*` the
+failure or stall episode); then writes `state.json` with `applied_seq` advanced; and (b) prints the lines with `seq` greater than
+`printed_seq` in order (at-least-once delivery). Because the journalled transition is already in the state, the first poll compares
+against it: if the change flapped back, the reverse transition is a **new** event with the next epoch; if it still holds, nothing
+repeats. Ids therefore stay unique and no event is lost or duplicated. Result: **exactly once in the journal, at least once on
+stdout; consumers dedupe by `id`**. Crash windows: after (2) before (3): replay applies and prints the event once; after (3)
+before (4): replay applies it, stdout has it twice, journal once; after (4): once and once. There is no tombstone or suppress file
+(see Event ids).
 Truncated trailing journal lines are ignored and healed with a newline on the next append. The journal is never rotated or deleted by
 `stw watch`; its size is the owner's to manage (about 300 bytes per event).
 
@@ -115,8 +124,12 @@ Truncated trailing journal lines are ignored and healed with a newline on the ne
 
 Per repository and cycle (all GET, through the Spec 022 transport, 30 s per request, 1 MiB body cap, no redirects):
 
-1. `pulls?state=open&per_page=25&page=N` (pages 1 to 40, so 1000 open PRs per repository; following pages are those of the
-   `Link: rel="next"` header, never guessed; more than 1000 is `watch-error` `list-truncated` and the first 1000 are used). The page
+1. `pulls?state=open&per_page=25&page=N` (following pages are those of the `Link: rel="next"` header, never guessed). The bound is
+   `max_open_prs` per repository, default **2000**, configurable in `watch.toml`: at 25 per page that is **80 pages**, at 12 per
+   page **167 pages**; exceeding it is `watch-error` code `too-many-open-prs` for that repository (it keeps its last accepted
+   state). Halving the page size **restarts the listing at page 1** with `per_page=12` (page numbers of different sizes are not
+   mixed). On a `304` for a page the **stored Link header and the stored parsed page** (ETag, Link and the list items kept in
+   `state.json`) are reused for that page, so a fully unchanged repository needs no response bodies. The page
    size is 25 because a list item is large: a live read-only sample (`gh api 'repos/wstein/sourcesteward/pulls?state=open&per_page=5'`,
    2026-10-22, one open PR) returned **17,047 bytes for one PR**, and an earlier measurement of 20 PRs was 361,596 bytes (about 18 KB
    each); 25 PRs are about 450 KB, inside the 1 MiB body cap of Spec 022 FR-006, which this spec does **not** raise (100 per page
@@ -190,7 +203,7 @@ All events carry the common fields of the contract. `details` per kind (exact ke
 | `base-changed` | the PR's base ref changed (retarget, also GitHub's automatic retarget after a parent merge) | `old`, `new` |
 | `merged` | a PR that left the open list is `merged` | `merge_commit`, `base`, `head` (the merged head SHA), `head_ref`, `merged_at`, `method_hint` (`rebase-or-squash` when `merge_commit` is not a merge commit with 2 parents, `merge` otherwise, `unknown` when unreadable) |
 | `closed` | a PR that left the open list is closed unmerged | `head`, `base` |
-| `restack-needed` | follows a `merged` event, one per affected open PR (rules below) | `base`, `reason` (`child-of-merged-branch` or `contains-merged-commits`), `old_parent`, `new_parent`, `new_parent_source`, `branch`, `argv` |
+| `restack-needed` | follows a `merged` event, one per affected open PR (rules below) | `base`, `reason` (`child-of-merged-branch` or `contains-merged-commits`), `merged_pr`, `old_parent`, `new_parent`, `new_parent_source`, `branch`, `argv` |
 | `repos-changed` | the resolved repository set differs from the one in state (including a skipped submodule); a repository that was **added** gets a **silent baseline** of its own (no `new-pr` for its existing PRs) | `added`, `removed`, `skipped` (with reason) |
 | `watch-error` | see Rate limit, errors, offline | `code`, `message` (bounded, sanitized), `failures`, `retry_in_seconds`, `repo` (or null) |
 | `watch-recovered` | first success after an emitted `watch-error` or `watch-stalled` | `after_failures`, `repo` |
@@ -241,9 +254,9 @@ On a `merged` event of PR M (base B, head ref H, merged head SHA S, merge commit
   2. **`contains-merged-commits`**: the PR's `base` is B (not H) and its commit list (`pulls/N/commits`, at most 3 pages of 100,
      read only for open PRs on B in the merge cycle) contains S. This catches children that GitHub retargeted to B after the parent
      branch was deleted. The commit check applies to this class only.
-- `old_parent` (defined once) is S: the head SHA of M as reported by `pulls/M` after the merge (authoritative; `old_parent_source`
-  `pulls-detail`). Only if `pulls/M` is unavailable the last head SHA the watcher observed is used (`old_parent_source`
-  `last-observed`).
+- `old_parent` (defined once) is S: the head SHA of M as reported by `pulls/M` after the merge. If `pulls/M` cannot be read there
+  is no `merged` event yet: the PR stays "gone, unresolved" in state and is retried every cycle (a `watch-error` follows the usual
+  rules), so `restack-needed` never carries a guessed parent.
 - `new_parent` is C (the merge commit of the PR as reported by GitHub; for a rebase merge it is the rewritten tip on B). It may be
   behind the branch tip if more merges followed; `new_parent_source` is `merge_commit_sha`, and the consumer may fetch and use
   `origin/B` after verifying. If C is unreadable the event is still emitted with `new_parent` null and `argv` null.
@@ -261,7 +274,7 @@ a replay after a crash recomputes the same id, and they are unique per transitio
 increment on every accepted transition. There are no tombstones and no suppress file: the journal holds events only (so every line
 validates against the schema) and re-arming is done by the counters. Per-PR state: `epoch` per transition family (`head`, `checks`,
 `mergeable`, `ready`, `base`), `generation` (incremented when a closed-unmerged PR is seen open again), per repository `episode`
-per `watch-*` family.
+per `watch-*` family, and the global `repos_epoch`.
 
 | Kind | `key` |
 | --- | --- |
@@ -274,7 +287,7 @@ per `watch-*` family.
 | `merged` | the merge commit SHA (`unknown` if unreadable) |
 | `closed` | `g<generation>` (closed, reopened, closed again gives `g0`, then `g1`) |
 | `restack-needed` | `<merged PR number>:<merge commit>` (the PR in the id is the child) |
-| `repos-changed` | the SHA-256 digest (first 12 hex digits) of the new sorted repository list |
+| `repos-changed` | `p<repos_epoch>` (a counter in state, incremented per accepted change and replayed like the others; A, B, A, B all fire with distinct ids) |
 | `watch-error`, `watch-recovered` | `<code>:e<episode>`; a failure episode starts at the first failure after a success and ends at the next success, so a new episode fires again and the same ongoing episode does not (a changed `code` inside an episode is a new key suffix `.<code>`) |
 | `watch-stalled` | `e<stall episode>` per repository |
 
@@ -312,11 +325,11 @@ Tests use an in-process fake forge (the Spec 022 HTTP injection seam, fixed resp
 3. **US3 Stacked merge (P1).** Parent PR rebase-merged (merge commit and SHAs differ from the head); a child on the parent head
    ref and a child already retargeted to main with the parent's commits yield two `restack-needed` events (`child-of-merged-branch`
    detected by base ref name alone with the commits endpoint never read for it, and `contains-merged-commits` detected by the commit
-   list) with `old_parent` = merged head from `pulls/M` (`old_parent_source` `pulls-detail`; with `pulls/M` failing, `last-observed`),
+   list) with `old_parent` = merged head from `pulls/M` (with `pulls/M` failing there is no `merged` and no `restack-needed` until it is readable),
    `new_parent` = merge commit and the exact argv; an unrelated PR yields none; an unreadable merge commit yields null.
 4. **US4 Restart idempotence (P1).** Three kill tests with a fake clock: kill after the journal append (restart prints the event
    once, journal has it once), kill after the print (stdout has it twice, journal once, same `id`), kill after the state write
-   (once and once); `seq` stays gapless and is taken from the journal tail even when `state.json` is deleted; every journal line
+   (once and once); kill after append, restart with a snapshot in which the change flapped back, then a real transition: ids are unique, no event is lost, the flap-back appears as a new event with the next epoch; `seq` stays gapless and is taken from the journal tail even when `state.json` is deleted; every journal line
    validates against the schema; head-changed fires on each force-push, checks red-green-red fires three times, closed-reopened-closed
    fires two `closed` with distinct ids, a second failure episode fires `watch-error` again.
 5. **US5 Rate limit and 304 (P1).** Second cycle with unchanged ETags sends `If-None-Match`, gets 304 and emits nothing and issues no
@@ -330,7 +343,7 @@ Tests use an in-process fake forge (the Spec 022 HTTP injection seam, fixed resp
 8. **US8 Modes and liveness (P1).** `--until-event checks-green,merged` prints the whole poll and exits 0; `--timeout` exits 4;
    `--status` exit 0 when fresh, 5 when the fake clock passed 3 intervals; second watcher exits 3; `--human` golden lines.
 9. **US9 Scale (P2).** 120 open PRs in one repository (two pages) and 50 repositories complete one cycle; no cap below the
-   documented 1000 PRs per repository; the journal and state stay valid JSON.
+   documented 2000 PRs per repository (`too-many-open-prs` above it); the journal and state stay valid JSON.
 10. **US10 Read-only proof (P1).** The fake forge fails the test on any non-GET request; a source test greps that the watch
     package imports no write helper; no token appears in output, state or journal.
 
@@ -338,9 +351,9 @@ Tests use an in-process fake forge (the Spec 022 HTTP injection seam, fixed resp
 
 Own repositories, no hostile party is modeled (the same stance as Spec 022 for repository selection); still, bodies are capped by
 the transport, text fields are bounded and escaped in `--human`, and JSON strings are valid UTF-8. There is no artificial cap on
-PRs or repositories below the sanity bounds: 1000 open PRs per repository (10 pages), 256 repositories per run (as `stw status`),
+PRs or repositories below the sanity bounds: 2000 open PRs per repository (80 pages at 25 per page; `max_open_prs`), 256 repositories per run (as `stw status`),
 20 names per `failing` or `pending` list, 4 KiB of check text read per run, 3 pages of commits per restack candidate. Output per
-poll is bounded only by these (a baseline-free first-appearance of 1000 PRs would be 1000 `new-pr` lines, which is correct).
+poll is bounded only by these (a baseline-free first-appearance of 2000 PRs would be 2000 `new-pr` lines, which is correct).
 The 30 s operation context of Spec 022 applies **per request**, not to the whole watch; the finite-total-clock design of the
 deferred Spec 030 `--watch` is a different, one-PR command and stays deferred.
 
@@ -348,10 +361,16 @@ deferred Spec 030 `--watch` is a different, one-PR command and stays deferred.
 
 `stw watch` needs these, and only the watch reader may use them; the one-shot operations and their fixtures stay unchanged:
 
-- **FR-005 (allowlist)**, new fixed GET endpoints: `pulls?state=open&per_page=25|12&page=1..40`, `pulls/N/commits?per_page=100&page=1..3`,
-  `branches/BASE` (a bounded branch-name pattern), `commits/SHA` (to read the merge commit and decide `method_hint`), `rate_limit`;
+- **FR-005 (allowlist)**, new fixed GET endpoints: `pulls?state=open&per_page=25&page=1..80` and `per_page=12&page=1..167`, `pulls/N/commits?per_page=100&page=1..3`,
+  `branches/BASE` (BASE encoded as below), `commits/SHA` (to read the merge commit and decide `method_hint`), `rate_limit`;
   existing `pulls/N`, `commits/SHA/check-runs|statuses` stay. Conditional `If-None-Match` and reading the `ETag` and `Link`
   response headers are added for the watch reader. Redirects are still refused.
+- **Branch-name path segments (FR-005 guard)**: `branches/BASE` needs a percent-encoded segment (`feat%2Fx`), and `guardedTransport`
+  refuses any `RawPath`. The hosting layer encodes BASE with **one tested function** (`url.PathEscape` on the whole branch segment,
+  after validating BASE against the git branch-name rules: no control or NUL, no `..`, no leading `-`, no `@{`, not ending in `/` or
+  `.lock`, at most 255 bytes); the guard accepts a `RawPath` **only** for a segment produced by that function, re-validated by
+  decoding exactly once and re-encoding to the same text (so `%2E`, `%00`, `%252F` and any double encoding are refused). Tests:
+  `feat/x`, `release/v1.2`, a non-ASCII branch (UTF-8 percent-encoded), and the attack strings `..%2F`, `%252F`, `%2e%2e`, `%00`.
 - **FR-007 (deadline)**: the 30 second context is **per request** for the watch reader (the process is long-lived); the whole-watch
   clock of the deferred Spec 030 `--watch` is not used here.
 - **Renamed repositories**: GitHub answers 301 and the transport refuses redirects; the watcher reports `watch-error` code
@@ -370,7 +389,7 @@ deferred Spec 030 `--watch` is a different, one-PR command and stays deferred.
 - **New**: JSON Lines with a frozen schema and gapless `seq`; `--human`; strict config and workspace discovery; ETag/304 and
   rate-limit awareness; backoff, `watch-error`, `watch-recovered`, `watch-stalled`; `--status` and exit codes; a lock against two
   watchers; `restack-needed` with the exact argv; `checks-pending-timeout`; `mergeable-changed` with `behind`; `base-changed`;
-  `repos-changed`; no 60-PR limit (pages up to 1000); read-only guarantee tested; works for any repository set.
+  `repos-changed`; no 60-PR limit (2000 open PRs per repository by default); read-only guarantee tested; works for any repository set.
 
 ## Out of scope (and why)
 
