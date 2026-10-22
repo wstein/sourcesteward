@@ -429,17 +429,43 @@ func TestReadCIReleaseUsesTheWorkflowOfTheProductOfEachEntry(t *testing.T) {
 	}
 }
 
-func TestReadCIReleaseReadsAtMostSixTagsInAll(t *testing.T) {
+// The latest tag of every pattern is read, however many products there are, and at most five unreleased
+// tags besides: N+5 runs reads of page 1.
+func TestReadCIReleaseReadsEveryLatestTagAndAtMostFiveUnreleased(t *testing.T) {
 	var entries []overview.ReleaseTag
-	for i, pattern := range []string{"busybox-v*", "zlib-v*", defaultPattern} {
-		for j := 0; j < 3; j++ {
-			entries = append(entries, ciEntry(pattern, fmt.Sprintf("t%d.%d", i, j), string(rune('a'+i*3+j)), j == 0, j > 0))
-		}
+	for i := 0; i < 8; i++ {
+		entries = append(entries, ciEntry(fmt.Sprintf("p%d-v*", i), fmt.Sprintf("p%d-v1.0.0", i), string(rune('a'+i)), true, false))
+	}
+	for i := 0; i < 7; i++ { // the cap is the tags source's; the reader keeps it as well
+		entries = append(entries, ciEntry("p0-v*", fmt.Sprintf("p0-v0.%d.0", i), string(rune('k'+i)), false, true))
 	}
 	f := newCIFake()
-	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Products: ciTwoProducts(t), Tags: entries})
-	if len(f.calls) != 6 || len(got.Release.Tags) != 6 || got.Release.Tags[5].Tag != "t1.2" {
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries})
+	if len(f.calls) != 13 || len(got.Release.Tags) != 13 {
 		t.Fatalf("%d requests: %v", len(f.calls), f.calls)
+	}
+	for i := 0; i < 8; i++ {
+		if !got.Release.Tags[i].Latest || got.Release.Tags[i].Tag != fmt.Sprintf("p%d-v1.0.0", i) {
+			t.Errorf("latest tag %d: %+v", i, got.Release.Tags[i])
+		}
+	}
+	if last := got.Release.Tags[12]; last.Tag != "p0-v0.4.0" || !last.Unreleased {
+		t.Errorf("%+v", last)
+	}
+}
+
+// A tag that is the latest and unreleased uses one of the five.
+func TestReadCIReleaseCountsALatestUnreleasedTagAmongTheFive(t *testing.T) {
+	entries := []overview.ReleaseTag{ciEntry("a-v*", "a-v1.0.0", "a", true, true)}
+	for i := 0; i < 5; i++ {
+		entries = append(entries, ciEntry("a-v*", fmt.Sprintf("a-v0.%d.0", i), string(rune('k'+i)), false, true))
+	}
+	// the latest tag of a later pattern is read although the five unreleased tags are used up
+	entries = append(entries, ciEntry("b-v*", "b-v1.0.0", "z", true, false))
+	f := newCIFake()
+	got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries})
+	if len(got.Release.Tags) != 6 || got.Release.Tags[4].Tag != "a-v0.3.0" || got.Release.Tags[5].Tag != "b-v1.0.0" {
+		t.Fatalf("%d: %v", len(got.Release.Tags), f.calls)
 	}
 }
 
