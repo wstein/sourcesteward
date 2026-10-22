@@ -151,6 +151,26 @@ func NewPullsReaderWithTransport(ctx context.Context, target, host string, rt ht
 	return r, cleanup, nil
 }
 
+// NewStatusReader is the reader of the online `stw status` (Spec 037): guard mode status (the
+// watch shapes, no owner search) and the StatusRequestTimeout per request.
+func NewStatusReader(ctx context.Context, target, host string) (*WatchReader, func(), error) {
+	return NewStatusReaderWithTransport(ctx, target, host, nil)
+}
+
+// NewStatusReaderWithTransport is the in-process injection seam for fixtures.
+func NewStatusReaderWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*WatchReader, func(), error) {
+	api, cleanup, err := newGHMode(ctx, target, host, rt, guardStatus)
+	if err != nil {
+		return nil, cleanup, err
+	}
+	r := newWatchReader(api)
+	r.mode = guardStatus
+	if err := r.SetRequestTimeout(StatusRequestTimeout); err != nil {
+		return nil, cleanup, err
+	}
+	return r, cleanup, nil
+}
+
 // NewWatchReader qualifies gh exactly like the one-shot operations and builds a
 // client whose guard admits the watch endpoints. target is the absolute repository
 // root that bounds the gh configuration check.

@@ -299,6 +299,10 @@ const (
 	// guardPulls admits the shapes of guardWatch for the stateless `stw pulls` reader
 	// (Spec 036) plus the one fixed owner search shape, which no other mode admits.
 	guardPulls
+	// guardStatus admits the shapes of guardWatch for the online `stw status` reader (Spec 037)
+	// and refuses the owner search, which only guardPulls admits (least privilege). The
+	// release, tags, runs and repository shapes are fixed one-shot shapes every mode admits.
+	guardStatus
 )
 
 func (t guardedTransport) effectiveMode() guardMode {
@@ -309,7 +313,9 @@ func (t guardedTransport) effectiveMode() guardMode {
 }
 
 // admitsWatchShapes reports whether the mode may read the watch endpoints.
-func (m guardMode) admitsWatchShapes() bool { return m == guardWatch || m == guardPulls }
+func (m guardMode) admitsWatchShapes() bool {
+	return m == guardWatch || m == guardPulls || m == guardStatus
+}
 
 func (t guardedTransport) allowed(req *http.Request) bool {
 	watchShapes := t.effectiveMode().admitsWatchShapes()

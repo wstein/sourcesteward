@@ -40,8 +40,7 @@ func TestRequestTimeoutDefaultsTo30SecondsForEveryConstructor(t *testing.T) {
 	} {
 		r, cleanup, err := mk()
 		if err != nil {
-			t.Logf("%s: constructor needs gh configuration here: %v", name, err)
-			continue
+			t.Fatalf("%s: %v", name, err)
 		}
 		if r.RequestTimeout() != 30*time.Second {
 			t.Errorf("%s: %v", name, r.RequestTimeout())
