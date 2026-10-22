@@ -13,6 +13,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/watch"
+	"github.com/wstein/sourcesteward/internal/watch/watchhost"
 )
 
 // Modes of a run.
@@ -165,7 +166,11 @@ func Run(ctx context.Context, p Params) error {
 		host.Diag = func(line string) { fmt.Fprintln(p.Diag, esc(line)) }
 	}
 	obs := &counting{inner: host}
-	opts := watch.Options{Dir: dir, Host: p.Host, Repos: p.Repos, Skipped: p.Skipped, Observer: obs, Clock: now, Out: p.Out,
+	var restackDiag func(string)
+	if p.Diag != nil {
+		restackDiag = func(line string) { fmt.Fprintln(p.Diag, esc(line)) }
+	}
+	opts := watch.Options{Dir: dir, Host: p.Host, Repos: p.Repos, Skipped: p.Skipped, Observer: obs, Restacker: watchhost.NewRestacker(reader, restackDiag), Clock: now, Out: p.Out,
 		Baseline: p.Baseline, Interval: p.Interval, PendingTimeout: p.PendingTimeout, DetailEvery: p.DetailEvery,
 		IgnoreAuthors: p.IgnoreAuthors, IgnoreLabels: p.IgnoreLabels, StackPatterns: p.StackPatterns, Mode: p.Mode}
 	if p.Human {

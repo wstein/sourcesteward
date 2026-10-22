@@ -23,6 +23,7 @@ type Reader interface {
 	PullDetail(ctx context.Context, repo string, number int, etag string) (hosting.WatchResponse, error)
 	Branch(ctx context.Context, repo, name, etag string) (hosting.WatchResponse, error)
 	Commit(ctx context.Context, repo, sha, etag string) (hosting.WatchResponse, error)
+	PullCommits(ctx context.Context, repo string, number, page int, etag string) (hosting.WatchResponse, error)
 	CheckRuns(ctx context.Context, repo, sha string, page int, etag string) (hosting.WatchResponse, error)
 	Statuses(ctx context.Context, repo, sha string, page int, etag string) (hosting.WatchResponse, error)
 	RateLimit(ctx context.Context) (hosting.RateInfo, error)
