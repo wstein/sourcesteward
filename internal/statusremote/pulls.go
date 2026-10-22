@@ -84,6 +84,12 @@ type Pulls struct {
 // skip `deadline` of the repositories it did not finish; both keep the rows that were read. The
 // error is not nil only when the cycle could not start at all.
 func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) (map[string]Pulls, error) {
+	return readPulls(ctx, r, targets, pulls.Options{})
+}
+
+// readPulls is ReadPulls over the given cycle options, whose Repos it fills. pulls.Run refuses unusable
+// options with no result; the defaults of ReadPulls never are.
+func readPulls(ctx context.Context, r pulls.Reader, targets []Target, o pulls.Options) (map[string]Pulls, error) {
 	out := make(map[string]Pulls, len(targets))
 	var slugs []string
 	for _, t := range targets {
@@ -93,7 +99,8 @@ func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) (map[strin
 		}
 		slugs = append(slugs, t.Slug)
 	}
-	res, err := pulls.Run(ctx, r, pulls.Options{Repos: slugs})
+	o.Repos = slugs
+	res, err := pulls.Run(ctx, r, o)
 	if res == nil {
 		return nil, err
 	}
