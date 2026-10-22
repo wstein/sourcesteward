@@ -33,11 +33,12 @@ func (r *WatchReader) WorkflowRuns(ctx context.Context, repo, workflow, sha stri
 }
 
 // WorkflowRun is one run of a workflow: its status (`queued`, `in_progress`, `completed`), its
-// conclusion (empty until completed), its page and its creation time.
+// conclusion (empty until completed), its page, the commit it ran for and its creation time.
 type WorkflowRun struct {
 	Status     string
 	Conclusion string
 	URL        string
+	HeadSHA    string
 	CreatedAt  time.Time
 }
 
@@ -48,6 +49,7 @@ func DecodeWorkflowRuns(body []byte) ([]WorkflowRun, error) {
 			Status     string     `json:"status"`
 			Conclusion *string    `json:"conclusion"`
 			URL        string     `json:"html_url"`
+			HeadSHA    string     `json:"head_sha"`
 			CreatedAt  *time.Time `json:"created_at"`
 		} `json:"workflow_runs"`
 	}
@@ -59,7 +61,7 @@ func DecodeWorkflowRuns(body []byte) ([]WorkflowRun, error) {
 		if r.Status == "" || r.CreatedAt == nil {
 			return nil, malformed("workflow runs response is not usable")
 		}
-		run := WorkflowRun{Status: r.Status, URL: r.URL, CreatedAt: *r.CreatedAt}
+		run := WorkflowRun{Status: r.Status, URL: r.URL, HeadSHA: r.HeadSHA, CreatedAt: *r.CreatedAt}
 		if r.Conclusion != nil {
 			run.Conclusion = *r.Conclusion
 		}
