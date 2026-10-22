@@ -152,7 +152,10 @@ above, matched in a **third guard mode**
 (`one-shot`, `watch`, `pulls`) with its own pre-check. The `pulls` mode allows exactly the read shapes `stw watch` already has (list,
 `pulls/N`, checks, commits) plus the single search shape and refuses everything else; `stw watch` and the one-shot operations keep their
 own modes and **cannot reach the search shape** (tests: each mode refuses the shapes outside its set). FR-006 (1 MiB) and FR-007 (30 s per
-request) apply as in Spec 035. Spec 022 FR-005 is amended with a pointer to this section in the same change.
+request) apply as in Spec 035. The search shape is `search/issues?q=user%3AOWNER+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=N&sort=created&order=asc`: OWNER is
+`[A-Za-z0-9-]{1,39}` checked byte-wise (no encoded, Unicode, `+`, `:` or control form), N is 1 to 10, the guard matches the string produced by
+the one generator and nothing else (no other parameter, order, case of the escapes or `q`), and a reader built for `watch` refuses it before any request.
+Spec 022 FR-005 carries the same text and a pointer to this section.
 
 ## Non-goals
 
