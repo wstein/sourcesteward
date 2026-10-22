@@ -196,3 +196,11 @@ func TestPrepareRefusesASymlinkOrFIFOAsTheImplicitConfig(t *testing.T) {
 		t.Fatalf("symlinked .stw: %v", err)
 	}
 }
+
+func TestValidHost(t *testing.T) {
+	for host, want := range map[string]bool{"github.com": true, "ghe.example.com:8443": true, "a": true, "": false, "-x.com": false, "a b": false, "x.com/": false, "x.com:123456": false} {
+		if got := ValidHost(host); got != want {
+			t.Errorf("ValidHost(%q) = %v, want %v", host, got, want)
+		}
+	}
+}

@@ -27,6 +27,9 @@ const (
 
 var hostName = regexp.MustCompile(`\A[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?\z`)
 
+// ValidHost reports whether s is a host name with an optional port (--host of the read-only commands).
+func ValidHost(s string) bool { return hostName.MatchString(s) }
+
 // Flags are the parsed command line of `stw watch`; the *Set fields say whether a flag was given
 // (flags override the config file).
 type Flags struct {
@@ -73,7 +76,7 @@ func Prepare(ctx context.Context, f Flags, stdout io.Writer) (Prepared, error) {
 	if host == "" {
 		host = DefaultHost
 	}
-	if !hostName.MatchString(host) {
+	if !ValidHost(host) {
 		return out, usagef("--host %q is not a host name", host)
 	}
 	if f.StateDir != "" && !filepath.IsAbs(f.StateDir) {
