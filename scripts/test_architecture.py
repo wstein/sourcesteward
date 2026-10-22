@@ -34,6 +34,12 @@ class ArchitectureTests(unittest.TestCase):
         for other in ('internal/pulls', 'internal/pullscmdx'):
             with self.assertRaises(ValueError, msg=other): architecture.validate([prefix + 'internal/cli ' + prefix + other])
 
+    def test_cli_may_import_the_issues_command_package_only(self):
+        prefix = architecture.MODULE
+        architecture.validate([prefix + 'internal/cli ' + prefix + 'internal/issuescmd'])
+        for other in ('internal/issues', 'internal/issuescmdx'):
+            with self.assertRaises(ValueError, msg=other): architecture.validate([prefix + 'internal/cli ' + prefix + other])
+
     def test_restack_starts_processes_only_in_its_git_runner_and_stays_offline(self):
         spawning = 'package restack\n\nimport "os/exec"\n'
         architecture.validate_sources({'internal/restack/git.go': spawning, 'internal/restack/plan_test.go': spawning})
