@@ -69,6 +69,36 @@ func TestReadChecksIsUnconditionalAndClassifies(t *testing.T) {
 	}
 }
 
+func TestReadPullDetailUnexpected304IsAnError(t *testing.T) {
+	r := notModifiedReader{newFake()}
+	_, err := ReadPullDetail(context.Background(), r, "o/r", 4)
+	var we *hosting.WatchError
+	if !errors.As(err, &we) || we.Code != hosting.CodeMalformed {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// notModifiedReader answers every pulls/N read with 304 even though no validator was sent.
+type notModifiedReader struct{ *fakeReader }
+
+func (notModifiedReader) PullDetail(context.Context, string, int, string) (hosting.WatchResponse, error) {
+	// The body would decode, so only the 304 check can make the read fail.
+	return hosting.WatchResponse{Status: 304, NotModified: true, Body: []byte(detailJSON)}, nil
+}
+
+func TestReadChecksStatusesOnly(t *testing.T) {
+	f := newFake()
+	red, pending := sha40("1"), sha40("2")
+	f.stats[red] = `[{"context":"legacy","state":"failure","description":"x"}]`
+	f.stats[pending] = `[{"context":"legacy","state":"pending","description":"x"}]`
+	for sha, want := range map[string]string{red: "red", pending: "pending"} {
+		obs, class, err := ReadChecks(context.Background(), f, "o/r", sha)
+		if err != nil || class != want || len(obs.Runs) != 0 || len(obs.Statuses) != 1 {
+			t.Fatalf("%s: class=%q obs=%+v err=%v", want, class, obs, err)
+		}
+	}
+}
+
 func TestEscIsExportedAndBounded(t *testing.T) {
 	if got := Esc("a\nb\x1b[0m\u202e"); got != `a\nb\x1b[0m`+`\u202e` {
 		t.Fatalf("%q", got)

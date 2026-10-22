@@ -120,6 +120,8 @@ func TestGuardModesAdmitTheirOwnShapes(t *testing.T) {
 		{"repos/a/b/branches/main", false, true, true},
 		{"repos/a/b/pulls?state=closed&per_page=25&page=1", false, false, false},
 		{"repos/a/b/issues", false, false, false},
+		// The search shape belongs to the owner-mode work package; until then no mode reaches it.
+		{"search/issues?q=user%3Aa+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=1&sort=created&order=asc", false, false, false},
 	}
 	for _, c := range cases {
 		for mode, want := range map[guardMode]bool{guardOneShot: c.oneShot, guardWatch: c.watch, guardPulls: c.pu} {
