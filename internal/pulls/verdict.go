@@ -25,10 +25,14 @@ const (
 
 const (
 	maxListed       = 20
-	maxString       = 2048
 	defaultLimit    = 200
-	maxLimit        = 500
 	defaultParallel = 4
+)
+
+// Bounds shared with the command layer.
+const (
+	MaxString = 2048 // bytes of any JSON string
+	MaxLimit  = 500  // --limit
 )
 
 // facts is everything the ordered table looks at.
@@ -77,7 +81,8 @@ func verdict(f facts) (group, reason string) {
 	}
 }
 
-func validSHA(s string) bool {
+// ValidSHA reports whether s is 40 lowercase hexadecimal digits.
+func ValidSHA(s string) bool {
 	if len(s) != 40 {
 		return false
 	}
