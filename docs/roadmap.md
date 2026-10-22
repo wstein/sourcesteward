@@ -143,7 +143,7 @@ the current Forgejo release; a spec must verify them against the target instance
 
 A later spec introduces a forge abstraction behind `internal/hosting`: guard modes, readers
 for pulls, status, issues, releases and CI, token handling, rate-limit semantics and the
-untrusted-input rules. Forge selection (one per repository or workspace) and its
+untrusted-input rules. Forge selection (one per repository) and its
 configuration surface belong to that spec. Existing GitHub behaviour, JSON contracts and
 schemas stay unchanged.
 
