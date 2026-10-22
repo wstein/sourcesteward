@@ -71,4 +71,4 @@ and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent 
 
 ## Exit status
 
-0 the overview was produced **only** with `--offline`, or no usable token detected before any request (skip reason `no-token`), or when every attempted request succeeded or was skipped by the deadline or a 404 workflow (`not-found`); items never matter. 1 an **attempted** request failed (any `error` source, including `network`), a repository is unreadable locally or the run failed; 2 usage error.
+0 in exactly these situations: everything attempted succeeded, `--offline`, no usable token before any request (`no-token`), a deadline skip, a `not-found` skip (404 release workflow); items never matter. 1 on a single condition: an **attempted** request failed (any `error` source, including `network`), plus a repository unreadable locally or a run failure; 2 usage error.

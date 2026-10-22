@@ -105,7 +105,7 @@ Bounded to the **latest** run; no history is read.
   repository block.
 - **Release workflow run** (`ci-release`): the **single** workflow file `ci.release_workflow` of the repository's `.stw/release.toml`
   (Spec 026 config; a path, its file name is used in the request). When the repository declares none, the default is the file
-  `.github/workflows/release.yml` (the name the member repositories use; a declared `ci.release_workflow` always wins); a 404 for that workflow means `skipped`, reason `no-release-workflow`, with a
+  `.github/workflows/release.yml` (the name the member repositories use; a declared `ci.release_workflow` always wins); a 404 for that workflow means `skipped`, reason `not-found`, with a
   notice (not a failure). For the commit of each product's **latest tag** and of each **unreleased tag** (at most 6 tags per repository,
   from the `tags` read) the newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
   are kept in the JSON). Conclusion `failure`, `cancelled` or `timed_out` is a failed run; one not completed is information.
@@ -252,13 +252,13 @@ one item per id and no grouping. The human section shows at most 10 lines per pr
   Output is rendered once, deterministically ordered.
 - **Rate limit.** On exhaustion (403/429 with evidence) all remaining remote reads stop; the sources not yet read are `error`
   `rate-limited` (a failed read), the command **never sleeps or retries**. Search is never used.
-- **Exit status (deterministic).** Exit **0** with a notice happens **only** for (a) `--offline`, and (b) no usable token detected
-  before any request. Otherwise, if at least one **attempted** request fails at the transport, API or response level (network
-  unreachable, 401/403, 5xx, rate-limit, malformed or oversized answer, `repo-moved`), that source reports an error, the partial
-  output is printed and the exit status is **1**, as `stw pulls`. A request that the **deadline** prevented or cancelled is `skipped`,
-  never a failure (exit 0 if nothing else failed). Also 1 when a repository cannot be read locally or the run fails; 2 usage error.
-  Items and priorities never affect the status. The result depends on what was attempted, not on timing: a network that fails on the
-  first request exits 1 whenever a request was attempted, and 0 only when none was.
+- **Exit status (deterministic).** **Exit 0** in exactly these situations (with a notice where something was not read): everything
+  attempted succeeded, `--offline`, no usable token detected before any request (`no-token`), requests prevented or cancelled by the
+  deadline (`skipped`, `deadline`), and a 404 for the release workflow (`skipped`, `not-found`). **Exit 1** on a single condition:
+  an **attempted** request failed at the transport, API or response level (network error, 401/403, 5xx, rate-limit stop, malformed
+  or oversized answer, `repo-moved`); that source reports an error, the partial output is printed, as `stw pulls`. Also 1 when a
+  repository cannot be read locally or the run fails; 2 usage error. Items and priorities never affect the status. The result
+  depends on what was attempted, not on timing: a network that fails on the first request exits 1 whenever a request was attempted.
 
 ## Required seams (WP-0)
 
@@ -329,7 +329,7 @@ facts or to `--offline` output.
    pure surface.
 2. **Exit codes (refined after review).** `--offline` or no usable token before any request: local status plus one notice per missing
    source, exit 0; an **attempted** request that fails (transport, API, malformed, rate-limit stop) is a source error, partial output,
-   exit 1, as `stw pulls`; a deadline skip is not a failure; usage error 2. Rationale: the rule depends on what was attempted, never on
+   exit 1, as `stw pulls`; a deadline skip and a `not-found` skip are not failures; usage error 2. Rationale: the rule depends on what was attempted, never on
    timing.
 3. **Re-read of unknown mergeability** is merged in the shared cycle (PR #149); status inherits it, `stw pulls` is unchanged.
 4. **CI state is required (WP-C is not optional).** Default-branch CI and the latest release workflow run per repository, latest run
