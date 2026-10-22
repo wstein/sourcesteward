@@ -287,7 +287,7 @@ func (s *statusRun) repo(ctx context.Context, sp statusSpec) RepoStatus {
 	fail := func(what string) RepoStatus {
 		rp.State = "error"
 		rp.Error = &Failure{Code: "status-read-failed", Message: "cannot read " + what}
-		rp.Reasons, rp.Attention = append(rp.Reasons, "error"), true
+		rp.Reasons, rp.Attention = append(rp.Reasons, errorReason), true
 		return rp
 	}
 	e, dir := sp.e, sp.e.dir
@@ -516,25 +516,50 @@ func (s *statusRun) worktrees(ctx context.Context, e env, rp *RepoStatus) bool {
 	return true
 }
 
-// attention is the exact rule for "needs attention": any of these facts, in this order. Everything else (commits
-// ahead, a gone upstream, stashes, branches not integrated, linked worktrees, a failed fetch, a gitlink whose
-// checked-out commit is ahead of the recorded one, an uninitialized submodule) is shown but never counts.
+// errorReason is the only reason of a repository that could not be read.
+const errorReason = "error"
+
+// attentionRules is the one list of attention reasons, in the order of the rule: a repository needs attention
+// when any of these facts holds. Everything else (commits ahead, a gone upstream, stashes, branches not
+// integrated, linked worktrees, a failed fetch, a gitlink whose checked-out commit is ahead of the recorded one,
+// an uninitialized submodule) is shown but never counts.
+var attentionRules = []struct {
+	reason string
+	holds  func(RepoStatus) bool
+}{
+	{errorReason, func(rp RepoStatus) bool { return rp.State == "error" }},
+	{"operation", func(rp RepoStatus) bool { return rp.Operation != nil }},
+	{"conflicts", func(rp RepoStatus) bool { return rp.Changes.Conflicts > 0 }},
+	{"staged", func(rp RepoStatus) bool { return rp.Changes.Staged > 0 }},
+	{"unstaged", func(rp RepoStatus) bool { return rp.Changes.Unstaged > 0 }},
+	{"untracked", func(rp RepoStatus) bool { return rp.Changes.Untracked > 0 }},
+	{"behind", func(rp RepoStatus) bool { return rp.Behind != nil && *rp.Behind > 0 }},
+	{"diverged", func(rp RepoStatus) bool {
+		return rp.Ahead != nil && *rp.Ahead > 0 && rp.Behind != nil && *rp.Behind > 0
+	}},
+	{"no-upstream", func(rp RepoStatus) bool { return rp.Branch != nil && rp.Upstream == nil }},
+	{"detached", func(rp RepoStatus) bool { return rp.Detached }},
+	{"gitlink-drift", func(rp RepoStatus) bool {
+		return rp.Gitlink != nil && rp.Gitlink.State == "drift" && (rp.Gitlink.Relation == nil || *rp.Gitlink.Relation != "ahead")
+	}},
+}
+
+// AttentionReasons lists every reason a repository can carry in its `reasons`, in the order of the rule.
+func AttentionReasons() []string {
+	reasons := make([]string, len(attentionRules))
+	for i, rule := range attentionRules {
+		reasons[i] = rule.reason
+	}
+	return reasons
+}
+
+// attention returns the reasons that hold for rp, in the order of attentionRules.
 func attention(rp RepoStatus) []string {
 	reasons := []string{}
-	add := func(cond bool, name string) {
-		if cond {
-			reasons = append(reasons, name)
+	for _, rule := range attentionRules {
+		if rule.holds(rp) {
+			reasons = append(reasons, rule.reason)
 		}
 	}
-	add(rp.Operation != nil, "operation")
-	add(rp.Changes.Conflicts > 0, "conflicts")
-	add(rp.Changes.Staged > 0, "staged")
-	add(rp.Changes.Unstaged > 0, "unstaged")
-	add(rp.Changes.Untracked > 0, "untracked")
-	add(rp.Behind != nil && *rp.Behind > 0, "behind")
-	add(rp.Ahead != nil && *rp.Ahead > 0 && rp.Behind != nil && *rp.Behind > 0, "diverged")
-	add(rp.Branch != nil && rp.Upstream == nil, "no-upstream")
-	add(rp.Detached, "detached")
-	add(rp.Gitlink != nil && rp.Gitlink.State == "drift" && (rp.Gitlink.Relation == nil || *rp.Gitlink.Relation != "ahead"), "gitlink-drift")
 	return reasons
 }
