@@ -286,6 +286,9 @@ func TestDetailFailureFailsClosedAndNamesTheRepository(t *testing.T) {
 		if r := row(t, res, "o/r", 2); !r.Ready {
 			t.Fatalf("%s: the other PR must still be read: %+v", name, r)
 		}
+		if res.Summary.NotRead != 0 {
+			t.Fatalf("%s: not_read counts a failed read inside the budget: %d", name, res.Summary.NotRead)
+		}
 		if len(res.Errors) != 1 || res.Errors[0].Code != "http-5xx" || res.Summary.ReposFailed != 1 {
 			t.Fatalf("%s: %+v %+v", name, res.Errors, res.Summary)
 		}
@@ -329,6 +332,10 @@ func TestRateLimitStopsReadingAndMarksTheRest(t *testing.T) {
 		if r.Detail || r.Group != "blocked" || r.Reason != "not-read" {
 			t.Fatalf("row read after the limit: %+v", r)
 		}
+	}
+	// Rows inside the budget are not "past --limit": not_read stays 0, the repo errors carry it.
+	if res.Summary.NotRead != 0 {
+		t.Fatalf("not_read %d counts rows inside the budget", res.Summary.NotRead)
 	}
 	// Unlisted repositories are reported, not silently dropped.
 	if len(res.Repos) != 5 {
@@ -413,5 +420,54 @@ func TestLongStringsAreCutOnARuneBoundary(t *testing.T) {
 	got := row(t, run(t, f, Options{Repos: []string{"o/r"}}), "o/r", 1).Title
 	if len(got) != 2048 || !utf8.ValidString(got) {
 		t.Fatalf("len %d valid %v", len(got), utf8.ValidString(got))
+	}
+}
+
+func TestNotReadCountsOnlyNonDraftRowsPastTheLimit(t *testing.T) {
+	f := newForge()
+	for n := 1; n <= 3; n++ {
+		p := okPR("o/r", n)
+		p.age = time.Duration(n) * time.Hour
+		f.add(p)
+	}
+	d := okPR("o/r", 9)
+	d.draft = true
+	d.age = 100 * time.Hour // oldest, past the budget, but drafts are free
+	f.add(d)
+	for _, dd := range []bool{false, true} {
+		res := run(t, f, Options{Repos: []string{"o/r"}, Limit: 1, DetailDrafts: dd})
+		want := 2
+		if res.Summary.NotRead != want {
+			t.Fatalf("detail-drafts=%v: not_read %d want %d", dd, res.Summary.NotRead, want)
+		}
+	}
+}
+
+func TestRateLimitDuringTheListPhaseStopsLaterLists(t *testing.T) {
+	f := newForge()
+	for _, repo := range []string{"a/x", "b/y", "c/z"} {
+		f.add(okPR(repo, 1))
+	}
+	f.listErr["a/x"] = &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "limit"}
+	res := run(t, f, Options{Repos: []string{"a/x", "b/y", "c/z"}, Parallel: 1})
+	if n := f.count("list/"); n != 1 {
+		t.Fatalf("lists continued after the limit: %d", n)
+	}
+	if len(res.Rows) != 0 || res.Summary.ReposFailed != 3 || len(res.Errors) != 3 {
+		t.Fatalf("%+v %+v", res.Summary, res.Errors)
+	}
+	for _, st := range res.Repos {
+		if st.Error != "rate-limited" || st.Open != nil {
+			t.Fatalf("%+v", st)
+		}
+	}
+}
+
+func TestErrorMessageIsCutOnARuneBoundary(t *testing.T) {
+	f := newForge()
+	f.listErr["o/r"] = &hosting.WatchError{Code: hosting.CodeForbidden, Message: "a" + strings.Repeat("\u00e9", 400)}
+	m := run(t, f, Options{Repos: []string{"o/r"}}).Errors[0].Message
+	if len(m) > 512 || !utf8.ValidString(m) {
+		t.Fatalf("len %d valid %v", len(m), utf8.ValidString(m))
 	}
 }

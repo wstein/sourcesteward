@@ -61,7 +61,8 @@ type Row struct {
 	Ready                                         bool
 	Detail                                        bool
 
-	headOK bool // pulls/N reported the listed head (validated)
+	pastBudget bool // not selected for detail (counted by summary.not_read)
+	headOK     bool // pulls/N reported the listed head (validated)
 }
 
 // RepoStatus is the per-repository line of the document.
@@ -75,7 +76,9 @@ type RepoStatus struct {
 // Error is one failure of a repository.
 type Error struct{ Repo, Code, Message string }
 
-// Summary counts the rows.
+// Summary counts the rows. NotRead counts only the non-draft rows past the detail budget
+// (--limit); a read that failed or was skipped after a rate limit keeps reason not-read on its
+// row but is reported through Errors and the repository's Error.
 type Summary struct {
 	Total, Ready, Checks, Conflict, Draft, Blocked, Bots, NotRead, ReposRead, ReposFailed int
 }
@@ -200,6 +203,7 @@ func (c *cycle) run(ctx context.Context) {
 	})
 
 	for _, it := range all {
+		it.row.pastBudget = !it.budget
 		c.finish(it)
 		c.res.Rows = append(c.res.Rows, it.row)
 	}
@@ -394,7 +398,7 @@ func (c *cycle) summarize() {
 		if r.Bot {
 			s.Bots++
 		}
-		if r.Reason == ReasonNotRead {
+		if r.pastBudget && r.Reason == ReasonNotRead {
 			s.NotRead++
 		}
 	}
@@ -427,7 +431,11 @@ func (c *cycle) fail(st *RepoStatus, repo, code, msg string) {
 		st.Error = code
 	}
 	if len(msg) > 512 {
-		msg = msg[:512]
+		n := 512
+		for n > 0 && !utf8.RuneStart(msg[n]) {
+			n--
+		}
+		msg = msg[:n]
 	}
 	for _, e := range c.res.Errors {
 		if e.Repo == repo && e.Code == code {
