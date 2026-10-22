@@ -43,7 +43,7 @@ Consequences, each observed in the code above and not hypothetical:
   lives at the edge too.
 - **G2 One concurrency package.** `internal/fanout` is the only non-test code that contains a `go` statement.
 - **G3 Enforced.** `scripts/check-architecture.py` (run by `make check`) fails on a `go` statement outside `internal/fanout`, except the
-  shrinking allowlist of current violations, which reaches zero for fan-out code (see "Process plumbing" for the one open decision).
+  shrinking allowlist of current violations, which reaches zero, or zero plus the one named exemption of Decision 1.
 - **G4 Deterministic tests.** Concurrency is tested with `testing/synctest`, no `time.Sleep`, no wall-clock waits, and no export that
   exists only for tests.
 - **G5 Simple enough for nightly race.** Because `-race` is not a pull request gate, the shape must be verifiable without it: results
@@ -167,16 +167,17 @@ fixed fake edge must be byte identical before and after, including the order of 
 The process-plumbing packages (WP-5, WP-6) are where cost exceeds benefit most: they sit in the sandboxed, security-reviewed Git launch
 path (Specs 029 and 031) whose stream tests are strict about reaping and byte limits. They are scheduled last and each is optional.
 
-## Decisions to confirm (open questions for the owner)
+## Decisions (foreman, 2026-10-22; open to owner override)
 
-1. **Process plumbing exemption.** Is the end state "zero outside `fanout`" including `workspace/native_ref_transaction.go` (a
-   long-lived session with a commit watcher, which `Do` and `Both` do not fit; it would need a third primitive such as `fanout.Session`),
-   or a permanent, named exemption of that one file in the allowlist with the owner's recorded reason? Recommendation: try `Both` for
-   the stream and patch-id pumps (WP-5); decide WP-6 after seeing that diff.
-2. **`sync.WaitGroup` import ban** (rule 4) is cheap but stricter than the goal needs; keep it, or only count `go`?
-   Recommendation: keep, it prevents a pool from reappearing under a different spelling.
-3. **Go helper vs Python**: the check shells out to `go run` (fast, needs the toolchain which `make check` already has). A pure-Python
-   regex would need no toolchain but is defeated by raw strings and comments. Recommendation: the Go helper.
+These were settled by the foreman after the first draft and stay open to an owner override.
+
+1. **No blanket exemption.** The end state allows at most ONE named exemption, `workspace/native_ref_transaction.go`, and only if the
+   conditional WP-6 shows that `fanout` (with a `Session` primitive) cannot express its long-lived session. The exemption is a line in
+   `scripts/go-statements.allow` with a written justification, and a test in `scripts/test_architecture.py` fails when a second
+   exemption (a second path with a nonzero count after WP-5) appears. No other file may stay on the list.
+2. **Keep the import ban.** `sync.WaitGroup` and `golang.org/x/sync/errgroup` are forbidden outside `internal/fanout` (rule 4 of the check).
+3. **Go AST helper.** `scripts/gostmt` (`go/parser`, `*ast.GoStmt`) invoked by `scripts/check-architecture.py`. A regex is rejected:
+   comments, strings, raw strings and generated code fool it.
 
 ## Dependencies and sequence
 

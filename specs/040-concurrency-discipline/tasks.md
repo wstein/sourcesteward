@@ -36,10 +36,10 @@ default branch.
 
 - [ ] T014 Run the strict stream tests (`release` build, `workspace` stream and patch-id) green before the change; replace the copy and drain goroutines with `fanout.Both`; run them again plus `-race` once locally; remove four allowlist lines; exact-head independent review.
 
-## WP-6 ref transaction (conditional on the owner)
+## WP-6 ref transaction (conditional)
 
-- [ ] T015 Record the owner decision on question 1; either implement `fanout.Session` with tests or add the permanent named exemption with its reason; the allowlist is zero or contains that one line.
+- [ ] T015 Try `fanout.Session` with tests; only if it cannot express the session, add the one named exemption for `native_ref_transaction.go` with a written justification and a test in `scripts/test_architecture.py` that fails when a second exemption appears; the allowlist is zero or that one line.
 
 ## Closing
 
-- [ ] T016 Confirm `scripts/go-statements.allow` is empty (or holds only the recorded exemption); update `docs/progress.md`, `docs/development.md` and this list with the final evidence.
+- [ ] T016 Confirm `scripts/go-statements.allow` is empty (or holds only the one named exemption with its justification); update `docs/progress.md`, `docs/development.md` and this list with the final evidence.
