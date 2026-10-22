@@ -33,10 +33,10 @@ func TestTidyV3ReportSchemaAcceptsTheGoldenAndRefusesViolations(t *testing.T) {
 		"unknown reason":              func(v map[string]any) { first(v)["reasons"] = []any{"looks-fine"} },
 		"short tip":                   func(v map[string]any) { first(v)["tip_oid"] = "abc" },
 		"unknown entry field":         func(v map[string]any) { first(v)["verdict"] = "integrated" },
-		"more than 16 files": func(v map[string]any) {
+		"more than the 4,096 file ceiling": func(v map[string]any) {
 			d := first(v)["unintegrated_diff"].(map[string]any)
 			f := d["files"].([]any)
-			for len(f) <= 16 {
+			for len(f) <= 4096 {
 				f = append(f, f[0])
 			}
 			d["files"] = f
@@ -180,9 +180,9 @@ func TestTidyV3ReportSchemaNamesGitlinkChanges(t *testing.T) {
 	for name, mutate := range map[string]func(map[string]any){
 		"side outside the table": func(e map[string]any) { e["gitlink_changes"].([]any)[0].(map[string]any)["side"] = "tip" },
 		"path not untrusted":     func(e map[string]any) { e["gitlink_changes"].([]any)[0].(map[string]any)["path"] = "libs/sub" },
-		"more than 16": func(e map[string]any) {
+		"more than the 4,096 ceiling": func(e map[string]any) {
 			g := e["gitlink_changes"].([]any)
-			for len(g) <= 16 {
+			for len(g) <= 4096 {
 				g = append(g, g[0])
 			}
 			e["gitlink_changes"] = g

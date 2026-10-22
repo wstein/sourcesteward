@@ -134,7 +134,7 @@
           "items": {
             "$ref": "#/$defs/Binary"
           },
-          "maxItems": 16,
+          "maxItems": 4096,
           "type": "array"
         },
         "conflicted_paths": {
@@ -148,14 +148,14 @@
           "items": {
             "$ref": "#/$defs/File"
           },
-          "maxItems": 16,
+          "maxItems": 4096,
           "type": "array"
         },
         "hunks": {
           "items": {
             "$ref": "#/$defs/Hunk"
           },
-          "maxItems": 1000,
+          "maxItems": 200000,
           "type": "array"
         },
         "source": {
@@ -220,7 +220,7 @@
           "items": {
             "$ref": "#/$defs/Commit"
           },
-          "maxItems": 50,
+          "maxItems": 1000,
           "type": "array"
         },
         "commits_truncated": {
@@ -237,7 +237,7 @@
           "items": {
             "$ref": "#/$defs/Gitlink"
           },
-          "maxItems": 16,
+          "maxItems": 4096,
           "type": "array"
         },
         "gitlink_changes_truncated": {
@@ -414,7 +414,7 @@
           "items": {
             "$ref": "#/$defs/Untrusted"
           },
-          "maxItems": 1000,
+          "maxItems": 200000,
           "type": "array"
         },
         "new_lines": {
@@ -717,7 +717,7 @@
           "items": {
             "$ref": "#/$defs/Retained"
           },
-          "maxItems": 1024,
+          "maxItems": 16384,
           "type": "array"
         }
       },
@@ -825,14 +825,14 @@
       "items": {
         "$ref": "#/$defs/Entry"
       },
-      "maxItems": 1024,
+      "maxItems": 4096,
       "type": "array"
     },
     "omitted_entries": {
       "items": {
         "$ref": "#/$defs/Omitted"
       },
-      "maxItems": 1024,
+      "maxItems": 4096,
       "type": "array"
     },
     "reviewer_guidance": {
