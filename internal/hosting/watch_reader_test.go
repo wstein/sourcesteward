@@ -375,3 +375,16 @@ func TestNewWatchReaderUsesGhTokenAndWatchGuard(t *testing.T) {
 		t.Fatalf("%v %q", err, auth)
 	}
 }
+
+// The validator that was sent is kept, weak prefix included, even when the server's
+// 304 repeats a different (strong) form.
+func TestWatchNotModifiedKeepsSentValidator(t *testing.T) {
+	f := newFakeForge(t)
+	f.handlers["repos/a/b/pulls/7"] = func(r *http.Request) *http.Response {
+		return forgeResponse(304, "", map[string]string{"ETag": `"strong"`})
+	}
+	res, err := f.reader("github.com").PullDetail(context.Background(), "a/b", 7, `W/"v1"`)
+	if err != nil || !res.NotModified || res.ETag != `W/"v1"` {
+		t.Fatalf("%+v %v", res, err)
+	}
+}

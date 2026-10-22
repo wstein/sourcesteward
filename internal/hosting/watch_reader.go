@@ -78,7 +78,7 @@ const (
 type CallCount struct{ Requests, NotModified int }
 
 // WatchResponse is one successful read. For a 304, NotModified is true, Body is
-// empty and ETag is the validator that was sent (or the one the server repeated).
+// empty and ETag is the validator that was sent, unchanged (weak prefix included).
 type WatchResponse struct {
 	Status      int
 	NotModified bool
@@ -324,9 +324,6 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 			return WatchResponse{}, malformed("unsolicited 304 response")
 		}
 		out := WatchResponse{Status: 304, NotModified: true, ETag: etag, Link: res.Header.Get("Link"), RateLimit: rate}
-		if v := res.Header.Get("ETag"); v != "" && validETag(v) {
-			out.ETag = v
-		}
 		return out, nil
 	}
 	r.count(kind, false)
