@@ -342,6 +342,9 @@ func (c *cycle) volatile(repo string, rs *RepoState, p *PRState, o PRObs) {
 	if o.Detail != nil {
 		p.DetailDue = false
 		c.mergeable(repo, p, o.Detail)
+		if p.MergeCand != nil && o.Detail.Mergeable == nil {
+			p.DetailDue = true // still being computed: keep the candidate's confirming read due
+		}
 	}
 	if o.Checks != nil {
 		c.checks(repo, rs, p, o.Checks)

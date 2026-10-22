@@ -24,3 +24,34 @@ func TestStoredCandidatesAreVisibleToTheObserver(t *testing.T) {
 		t.Fatalf("a mergeability candidate must make the detail read due: %+v", k)
 	}
 }
+
+// A confirming read that finds mergeability still being computed (null) must not drop the due flag: the
+// candidate resolves on the next non-null read, not at the slow refresh, and ids stay unique.
+func TestNullMergeableKeepsTheDetailReadDueWhileACandidateIsStored(t *testing.T) {
+	r := newRig(t)
+	due := func() bool {
+		for _, c := range r.obs.hints["o/r"].Known {
+			if c.Number == 1 {
+				return c.DetailDue
+			}
+		}
+		t.Fatal("PR 1 not in the hints")
+		return false
+	}
+	r.must(ok(mk(1, detail(tt(), "clean"))))  // baseline
+	r.must(ok(mk(1, detail(ff(), "dirty"))))  // first sighting: candidate
+	r.must(ok(mk(1, detail(nil, "unknown")))) // GitHub is still computing
+	r.must(ok(mk(1, detail(nil, "unknown"))))
+	if !due() {
+		t.Fatal("the detail read must stay due while a candidate waits")
+	}
+	evs := r.must(ok(mk(1, detail(ff(), "dirty"))))
+	if len(evs) != 1 || evs[0].Kind != KindMergeableChanged {
+		t.Fatalf("the candidate must resolve on the next non-null read: %v", ids(evs))
+	}
+	r.must(ok(mk(1, detail(ff(), "dirty"))))
+	if due() {
+		t.Fatal("nothing is pending any more")
+	}
+	uniq(t, r.journalIDs())
+}
