@@ -57,7 +57,7 @@ func TestGuardTableOfAllFourModes(t *testing.T) {
 		{"repos/o/r/issues", false, false, false, false},
 		{"repos/o/r/pulls?state=all&per_page=25&page=1", false, false, false, false},
 		{"orgs/o/repos", false, false, false, false},
-		{"user", false, false, false, false},
+		{"user", false, false, false, true}, // Spec 038: status reads the viewer for the issue source
 		// search: pulls only; status refuses it
 		{"search/issues?q=user%3Aa+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=1&sort=created&order=asc", false, false, true, false},
 		{"search/issues", false, false, false, false},

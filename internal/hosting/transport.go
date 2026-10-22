@@ -300,9 +300,14 @@ const (
 	// (Spec 036) plus the one fixed owner search shape, which no other mode admits.
 	guardPulls
 	// guardStatus admits the shapes of guardWatch for the online `stw status` reader (Spec 037)
-	// and refuses the owner search, which only guardPulls admits (least privilege). The
-	// release, tags, runs and repository shapes are fixed one-shot shapes every mode admits.
+	// and, for the issue source (Spec 038), the per-repository issue list and `user`. It refuses
+	// both owner searches (least privilege). The release, tags, runs and repository shapes
+	// are fixed one-shot shapes every mode admits.
 	guardStatus
+	// guardIssues admits the one-shot set and exactly the three shapes of `stw issues`
+	// (Spec 038): the per-repository open issue list, `user` and the issue owner search. It
+	// refuses the watch set and the PR owner search, which the pulls guard keeps to itself.
+	guardIssues
 )
 
 func (t guardedTransport) effectiveMode() guardMode {
@@ -316,6 +321,14 @@ func (t guardedTransport) effectiveMode() guardMode {
 func (m guardMode) admitsWatchShapes() bool {
 	return m == guardWatch || m == guardPulls || m == guardStatus
 }
+
+// admitsIssueReads reports whether the mode may read the issue list and `user`.
+func (m guardMode) admitsIssueReads() bool { return m == guardIssues || m == guardStatus }
+
+// admitsIssueSearch is true for the issues guard only: it is the admission of the issue owner
+// search. The PR owner search has its own predicate, admitsSearch (pulls only), so the two
+// guards refuse each other's search.
+func admitsIssueSearch(m guardMode) bool { return m == guardIssues }
 
 func (t guardedTransport) allowed(req *http.Request) bool {
 	watchShapes := t.effectiveMode().admitsWatchShapes()
@@ -342,7 +355,9 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	if req.URL.RawQuery != "" {
 		endpoint += "?" + req.URL.RawQuery
 	}
-	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint)) || (admitsSearch(t.effectiveMode()) && searchReadEndpoint(endpoint))
+	mode := t.effectiveMode()
+	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint)) || (admitsSearch(mode) && searchReadEndpoint(endpoint)) ||
+		(mode.admitsIssueReads() && issueReadEndpoint(endpoint)) || (admitsIssueSearch(mode) && issueSearchReadEndpoint(endpoint))
 }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.allowed(req) {
