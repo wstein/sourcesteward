@@ -100,8 +100,8 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	if o.Limit == 0 {
 		o.Limit = defaultLimit
 	}
-	if o.Limit < 1 || o.Limit > maxLimit {
-		return nil, fmt.Errorf("limit %d is outside 1..%d", o.Limit, maxLimit)
+	if o.Limit < 1 || o.Limit > MaxLimit {
+		return nil, fmt.Errorf("limit %d is outside 1..%d", o.Limit, MaxLimit)
 	}
 	if o.Parallel < 1 {
 		o.Parallel = defaultParallel
@@ -136,7 +136,7 @@ type item struct {
 }
 
 func (c *cycle) run(ctx context.Context) {
-	repos := dedupe(c.o.Repos)
+	repos := Dedupe(c.o.Repos)
 	status := make([]RepoStatus, len(repos))
 	lists := make([][]hosting.PullListItem, len(repos))
 	for i, repo := range repos {
@@ -233,8 +233,8 @@ func pool(n, width int, fn func(int)) {
 	wg.Wait()
 }
 
-// dedupe sorts by name and drops case-insensitive duplicates (the first spelling wins).
-func dedupe(in []string) []string {
+// Dedupe sorts by name and drops case-insensitive duplicates (the first spelling wins).
+func Dedupe(in []string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, s := range in {
@@ -315,10 +315,10 @@ func capped(in []string) []string {
 
 // clip cuts s to 2048 bytes on a UTF-8 boundary.
 func clip(s string) string {
-	if len(s) <= maxString {
+	if len(s) <= MaxString {
 		return s
 	}
-	n := maxString
+	n := MaxString
 	for n > 0 && !utf8.RuneStart(s[n]) {
 		n--
 	}
@@ -332,7 +332,7 @@ func (c *cycle) readDetail(ctx context.Context, it *item) error {
 	if err != nil {
 		return err
 	}
-	if !validSHA(it.HeadSHA) {
+	if !ValidSHA(it.HeadSHA) {
 		// Nothing safe to read checks for; fail closed without a read error.
 		it.row.Detail = true
 		fillDetail(&it.row, d, nil, "", false)
@@ -342,7 +342,7 @@ func (c *cycle) readDetail(ctx context.Context, it *item) error {
 	if err != nil {
 		return err
 	}
-	headOK := validSHA(d.HeadSHA) && d.HeadSHA == it.HeadSHA
+	headOK := ValidSHA(d.HeadSHA) && d.HeadSHA == it.HeadSHA
 	it.row.Detail = true
 	fillDetail(&it.row, d, obs, class, headOK)
 	return nil
