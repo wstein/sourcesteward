@@ -170,7 +170,7 @@ summary: 2 of 3 repositories need attention
 
 ## Watch pull requests
 
-`stw watch` (hidden until accepted, [Spec 035](../specs/035-stw-watch/spec.md)) is the read-only pull request watcher that
+`stw watch` ([Spec 035](../specs/035-stw-watch/spec.md)) is the read-only pull request watcher that
 prints transitions as JSON Lines; see [watch](watch.md).
 
 ## Create an isolated task workspace

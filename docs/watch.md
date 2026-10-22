@@ -2,8 +2,8 @@
 
 `stw watch` ([Spec 035](../specs/035-stw-watch/spec.md)) polls the open pull requests of one or more GitHub repositories,
 compares each poll with the previous one and prints **only the transitions**, one JSON object per line. It decides
-nothing: a consumer (an agent, a shell loop, `jq`, a Monitor tool) reads the stream. The command is implemented but
-**hidden** from `stw --help` until the owner accepts the feature; `stw watch --help` works. The event schema is
+nothing: a consumer (an agent, a shell loop, `jq`, a Monitor tool) reads the stream. The command is listed in
+`stw --help`; the owner accepted it on 2026-10-22 after a dogfood run. The event schema is
 [`watch-event.schema.json`](../schemas/v1/watch-event.schema.json) (unpublished, byte-frozen, see
 [JSON contracts](json-contracts.md#watch-event-schema-v1-unpublished)).
 
@@ -110,8 +110,8 @@ reports the command; it never runs it. With `--human` the SHAs show seven charac
   `watch-recovered` after the next success; `watch-stalled` follows a long silence.
 - **Bounds.** 2000 open PRs per repository, 256 repositories per run, 20 names per list, three pages of commits per
   restack candidate.
-- **Platforms.** Linux, macOS and other Unix systems (the state lock is `flock`); elsewhere the command exits 2 with
-  "not supported on this platform".
+- **Platforms.** Linux, macOS and other Unix systems (the state lock is `flock`); Windows and other non-Unix platforms are
+  unsupported: the command exits 2 with "not supported on this platform".
 
 ## Relation to the scripts
 

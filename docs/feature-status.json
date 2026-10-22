@@ -207,9 +207,9 @@
     },
     {
       "id": "035-stw-watch",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/035-stw-watch/spec.md",
-      "evidence": null
+      "evidence": "../docs/progress.md#spec-035-stw-watch-accepted-visible-2026-10-22"
     }
   ]
 }

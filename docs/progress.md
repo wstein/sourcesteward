@@ -28,14 +28,14 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply`, jj and the push are later slices.
 
-## Active work: Spec 035 stw watch (implemented in source, hidden, 2026-10-22)
+## Spec 035 stw watch (accepted, visible, 2026-10-22)
 
 [The specification](../specs/035-stw-watch/spec.md), its [event contract](../specs/035-stw-watch/contracts/watch-events.md) and
 [plan](../specs/035-stw-watch/plan.md) describe a read-only `stw watch` that prints pull request transitions (checks, merges,
 `restack-needed` after a rebase merge) as JSON Lines, replacing the foreman's `watch2.sh`. Work packages A to E are implemented in
-source: the command stays hidden, `schemas/v1/watch-event.schema.json` is frozen and unpublished, and `stw watch` has a guide
-([watch](watch.md)) and an end to end acceptance suite (US1 to US10, fake forge, no network). The feature status stays `planned`
-until the owner accepts it; the independent review of the exact head and the removal of `scripts/ci-wait.sh` are open.
+source and the command is listed in `stw --help`; `schemas/v1/watch-event.schema.json` is frozen and unpublished, and `stw watch` has a guide
+([watch](watch.md)) and an end to end acceptance suite (US1 to US10, fake forge, no network). The owner accepted it on 2026-10-22 after a dogfood run on the
+workspace (discovery of 7 repositories, silent baseline, `--status` fresh). The removal of `scripts/ci-wait.sh` is still open.
 
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 

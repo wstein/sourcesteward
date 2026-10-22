@@ -34,7 +34,7 @@
 - [Evidence-based tidy](tidy.md): native local reference plans, proof and retention limits.
 - [Plan-only acceptance runner](acceptance-runner.md): opt-in source runner that plans a repository, writes the review report and proves non-mutation.
 
-- [Pull request watcher](watch.md): hidden `stw watch` JSON Lines transitions, modes, exit codes, state, restack-needed and its read-only limits.
+- [Pull request watcher](watch.md): `stw watch` JSON Lines transitions, modes, exit codes, state, restack-needed and its read-only limits.
 
 - [Submodule pin audit](pins.md): planned read-only `stw pins` evidence, findings, exit statuses and limits.
 
