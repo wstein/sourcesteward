@@ -96,3 +96,16 @@ func TestSetRequestTimeoutRefusesNonPositiveAndKeepsTheOldValue(t *testing.T) {
 		t.Fatalf("%v", r.RequestTimeout())
 	}
 }
+
+func TestSetRequestTimeoutRefusesMoreThanTheClientTimeout(t *testing.T) {
+	r := blockingReader(t)
+	if err := r.SetRequestTimeout(DefaultRequestTimeout); err != nil {
+		t.Fatalf("the client timeout itself is allowed: %v", err)
+	}
+	if err := r.SetRequestTimeout(DefaultRequestTimeout + time.Nanosecond); err == nil {
+		t.Fatal("a value the 30 s client timeout would silently cap was accepted")
+	}
+	if r.RequestTimeout() != DefaultRequestTimeout {
+		t.Fatalf("%v", r.RequestTimeout())
+	}
+}

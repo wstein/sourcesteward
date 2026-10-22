@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -119,10 +120,12 @@ func (r *WatchReader) RequestTimeout() time.Duration {
 	return r.timeout
 }
 
-// SetRequestTimeout sets the deadline of each following request; d must be positive.
+// SetRequestTimeout sets the deadline of each following request. d must be positive and at most
+// DefaultRequestTimeout: the SDK client carries a fixed 30 s timeout of its own, so a longer value
+// would be capped silently and is refused instead; the old value stays.
 func (r *WatchReader) SetRequestTimeout(d time.Duration) error {
-	if d <= 0 {
-		return errors.New("request timeout must be positive")
+	if d <= 0 || d > DefaultRequestTimeout {
+		return fmt.Errorf("request timeout must be positive and at most %s", DefaultRequestTimeout)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
