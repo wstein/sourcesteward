@@ -31,6 +31,7 @@ func remoteItems(r Repo) []Item {
 	items = append(items, draftItems(r)...)
 	items = append(items, tagItems(r)...)
 	items = append(items, mainItems(r)...)
+	items = append(items, issueItems(r)...)
 	return items
 }
 
@@ -50,6 +51,9 @@ func readErrors(r Repo, unreadPulls bool) []Item {
 		it := newItem(ReadError, r.Slug, Subject{Kind: KindSource, Name: string(src)}, string(src), target{Slug: r.Slug, Source: src})
 		code := untrusted.Esc(st.Code)
 		it.Path, it.Title, it.Evidence = r.Local.Path, fmt.Sprintf("%s could not be read: %s", src, code), map[string]any{"source": string(src), "code": code}
+		if src == SourceIssues { // Spec 038: a hint, not a command
+			it.Hint = issuesDrillDown(r.Slug)
+		}
 		items = append(items, it)
 	}
 	return items
@@ -217,4 +221,50 @@ func mainItems(r Repo) []Item {
 		items = append(items, it)
 	}
 	return items
+}
+
+// issuesDrillDown is the command that lists the issues of a repository: the hint of a failed issues read
+// and the drill-down of a grouped issue line. The caller has validated the repository.
+func issuesDrillDown(slug string) string { return "stw issues --repo " + slug }
+
+// maxEvidence bounds the labels and assignees of the evidence of an issue item.
+const maxEvidence = 20
+
+// issueItems gives one item per issue whose priority is an action: security-label is red, assigned-to-you and
+// bug-label are yellow. A bot or plain issue is only counted by the caller. The rows count only when the issues
+// source ended ok; a failed read gives the repository its one read-error instead.
+func issueItems(r Repo) []Item {
+	if r.Remote.Sources[SourceIssues].Outcome != OutcomeOK {
+		return nil
+	}
+	var items []Item
+	for _, i := range r.Remote.Issues {
+		var c Category
+		var what string
+		switch i.Reason {
+		case IssueReasonSecurity:
+			c, what = IssueSecurity, fmt.Sprintf("issue #%d is labelled security", i.Number)
+		case IssueReasonAssigned:
+			c, what = IssueAssigned, fmt.Sprintf("issue #%d is assigned to you", i.Number)
+		case IssueReasonBug:
+			c, what = IssueBug, fmt.Sprintf("bug issue #%d", i.Number)
+		default:
+			continue
+		}
+		it := newItem(c, r.Slug, Subject{Kind: KindIssue, Number: i.Number}, strconv.Itoa(i.Number), target{Slug: r.Slug, Number: i.Number})
+		it.Path, it.URL = r.Local.Path, httpsURL(i.URL)
+		it.Title = what + ": " + untrusted.Esc(i.Title)
+		it.Evidence = map[string]any{"reason": i.Reason, "labels": escapedHead(i.Labels), "assignees": escapedHead(i.Assignees), "author": untrusted.Esc(i.Author)}
+		items = append(items, it)
+	}
+	return items
+}
+
+// escapedHead returns the first maxEvidence strings of in, each passed through untrusted.Esc.
+func escapedHead(in []string) []string {
+	out := make([]string, 0, min(len(in), maxEvidence))
+	for _, s := range in[:min(len(in), maxEvidence)] {
+		out = append(out, untrusted.Esc(s))
+	}
+	return out
 }

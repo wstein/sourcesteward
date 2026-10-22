@@ -139,6 +139,10 @@ func buildCommand(c Category, t target) (string, Effect) {
 		return with(repo, func(r string) string { return "stw pulls --repo " + r }, Read)
 	case PRBot:
 		return with(repo, func(r string) string { return "stw pulls --repo " + r + " --bots-only" }, Read)
+	case IssueSecurity, IssueAssigned, IssueBug:
+		if r, ok := repo(); ok && t.Number > 0 {
+			return "gh issue view " + strconv.Itoa(t.Number) + " -R " + r, Read
+		}
 	case PRReady:
 		if r, ok := repo(); ok && t.Number > 0 {
 			return "gh pr merge " + strconv.Itoa(t.Number) + " -R " + r + " --rebase", Owner

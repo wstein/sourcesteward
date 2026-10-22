@@ -36,7 +36,7 @@ const (
 // Priorities lists the priorities in their fixed order.
 var Priorities = []Priority{Red, Yellow, Green, Blue, Violet}
 
-// Category is one of the 25 category ids of the action table of Spec 037.
+// Category is one of the 28 category ids of the action table of Spec 037 (1 to 25) and Spec 038 (26 to 28).
 type Category string
 
 // The categories; their position in categoryTable is the category number of the spec.
@@ -66,6 +66,9 @@ const (
 	BranchesUnmerged  Category = "branches-unmerged"
 	WorktreeStale     Category = "worktree-stale"
 	PRBot             Category = "pr-bot"
+	IssueSecurity     Category = "issue-security"
+	IssueAssigned     Category = "issue-assigned"
+	IssueBug          Category = "issue-bug"
 )
 
 // categoryTable is the action table of the spec in its order: the index plus one is the category
@@ -82,9 +85,10 @@ var categoryTable = []struct {
 	{PRChecksPending, Blue}, {PRUnread, Blue}, {LocalStash, Blue}, {GitlinkAhead, Blue},
 	{BranchesUnmerged, Blue}, {WorktreeStale, Blue},
 	{PRBot, Violet},
+	{IssueSecurity, Red}, {IssueAssigned, Yellow}, {IssueBug, Yellow},
 }
 
-// Categories returns the 25 category ids in the order of the spec table.
+// Categories returns the 28 category ids in the order of the spec table.
 func Categories() []Category {
 	out := make([]Category, len(categoryTable))
 	for i, c := range categoryTable {
@@ -126,10 +130,11 @@ const (
 	KindGitlink    SubjectKind = "gitlink"
 	KindFact       SubjectKind = "fact"
 	KindSource     SubjectKind = "source"
+	KindIssue      SubjectKind = "issue"
 )
 
 // Subject identifies the one thing a finding is about; precedence applies only within one subject.
-// Number is set for a pull request, Tag for a release or tag, SHA for a tag or branch head, and Name
+// Number is set for a pull request or an issue, Tag for a release or tag, SHA for a tag or branch head, and Name
 // carries the remaining id part: the fact kind (`dirty`, `behind`, ...), the branch, a path or a source id.
 type Subject struct {
 	Kind   SubjectKind
@@ -160,7 +165,7 @@ type Item struct {
 // Source is a remote source of one repository.
 type Source string
 
-// The remote sources of Spec 037, in the order of the spec.
+// The remote sources of Spec 037, in the order of the spec, and the issues source of Spec 038.
 const (
 	SourceRepo      Source = "repo"
 	SourcePulls     Source = "pulls"
@@ -168,10 +173,11 @@ const (
 	SourceTags      Source = "tags"
 	SourceCIMain    Source = "ci-main"
 	SourceCIRelease Source = "ci-release"
+	SourceIssues    Source = "issues"
 )
 
 // Sources lists the remote sources in a fixed order.
-var Sources = []Source{SourceRepo, SourcePulls, SourceReleases, SourceTags, SourceCIMain, SourceCIRelease}
+var Sources = []Source{SourceRepo, SourcePulls, SourceReleases, SourceTags, SourceCIMain, SourceCIRelease, SourceIssues}
 
 // Outcome is how one source ended.
 type Outcome string
@@ -192,6 +198,7 @@ const (
 	ReasonOtherHost      = "other-host"
 	ReasonNotReadLocally = "not-read-locally"
 	ReasonInvalidRepo    = "invalid-repo"
+	ReasonIssuesDisabled = "issues-disabled"
 	CodeRateLimited      = "rate-limited"
 	CodeNetwork          = "network"
 )
@@ -240,6 +247,26 @@ type PR struct {
 	PastBudget bool
 }
 
+// The reasons of an issue row that make it an action item (Spec 038), the strings of internal/issues; a test
+// keeps them equal. Any other reason (a bot issue, none) is only counted by the caller and is no item.
+const (
+	IssueReasonSecurity = "security-label"
+	IssueReasonAssigned = "assigned-to-you"
+	IssueReasonBug      = "bug-label"
+)
+
+// Issue is one open issue row as the issues cycle read it, with the reason of its priority. Labels and
+// Assignees are all the cycle kept; the evidence of an item cuts them to 20.
+type Issue struct {
+	Number    int
+	Title     string
+	URL       string
+	Author    string
+	Reason    string
+	Labels    []string
+	Assignees []string
+}
+
 // Draft is a pending release draft; CreatedAt is zero when GitHub gave none.
 type Draft struct {
 	Name      string
@@ -283,6 +310,8 @@ type Main struct {
 type Remote struct {
 	Sources map[Source]SourceState
 	Pulls   []PR
+	// Issues holds the rows of the issues source; it is read only when that source ended ok.
+	Issues []Issue
 	// DefaultBranch and HTMLURL come from the `repo` source; Visibility says whether Drafts is complete.
 	DefaultBranch string
 	HTMLURL       string

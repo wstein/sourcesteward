@@ -121,6 +121,10 @@ func drillDown(c Category, repo string) (string, Effect) {
 		return buildCommand(PRBlocked, target{Slug: repo})
 	case PRBot:
 		return buildCommand(PRBot, target{Slug: repo})
+	case IssueSecurity, IssueAssigned, IssueBug:
+		if untrusted.ValidRepo(repo) {
+			return issuesDrillDown(repo), Read
+		}
 	case ReleaseDraft:
 		if untrusted.ValidRepo(repo) {
 			return "gh release list -R " + repo, Read
@@ -132,7 +136,7 @@ func drillDown(c Category, repo string) (string, Effect) {
 // label is the identifier of a subject in a grouped line: `#N` for a pull request, else the tag or name.
 func label(s Subject) string {
 	switch s.Kind {
-	case KindPR:
+	case KindPR, KindIssue:
 		return "#" + strconv.Itoa(s.Number)
 	case KindRelease, KindTag:
 		return untrusted.Esc(s.Tag)

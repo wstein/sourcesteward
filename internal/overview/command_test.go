@@ -134,6 +134,9 @@ func TestBuildCommand(t *testing.T) {
 		{BranchesUnmerged, base, "stw tidy plan crewbook", Read},
 		{WorktreeStale, base, "stw tidy plan crewbook", Read},
 		{PRBot, base, "stw pulls --repo wstein/sourcesteward --bots-only", Read},
+		{IssueSecurity, base, "gh issue view 7 -R wstein/sourcesteward", Read},
+		{IssueAssigned, base, "gh issue view 7 -R wstein/sourcesteward", Read},
+		{IssueBug, base, "gh issue view 7 -R wstein/sourcesteward", Read},
 	}
 	if len(cases) != len(Categories())+1 { // read-error appears twice
 		t.Fatalf("%d cases for %d categories", len(cases), len(Categories()))
@@ -156,7 +159,7 @@ func TestBuildCommandRefusesHostileTokens(t *testing.T) {
 	uses := map[Category][]string{
 		RepoError: {"Path"}, LocalOperation: {"Path"}, MainRed: {"Slug", "Branch"}, ReleaseRunFailed: {"Slug", "SHA"},
 		ReadError: {"Slug"}, LocalBehind: {"Path"}, PRReady: {"Slug"}, ReleaseDraft: {"Slug", "Tag"},
-		GitlinkAhead: {"Path", "Root"}, WorktreeDirty: {"Worktree"}, PRBot: {"Slug"}, BranchesUnmerged: {"Path"},
+		IssueSecurity: {"Slug"}, GitlinkAhead: {"Path", "Root"}, WorktreeDirty: {"Worktree"}, PRBot: {"Slug"}, BranchesUnmerged: {"Path"},
 	}
 	for cat, fields := range uses {
 		for _, f := range fields {
