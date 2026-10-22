@@ -12,9 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/wstein/sourcesteward/internal/hosting"
+	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
@@ -689,5 +691,67 @@ func TestExecuteHumanSaysHowManyWereNotRead(t *testing.T) {
 	out, _, err := exec(t, sampleSource(), f, nil)
 	if err != nil || !strings.Contains(out, "3 not read (past --limit 1)\n") {
 		t.Fatalf("%v %q", err, out)
+	}
+}
+
+func TestExecuteHumanEscapesEveryUntrustedColumn(t *testing.T) {
+	src := newSource()
+	p := okPR("o/a", 1)
+	p.user, p.state = "ev\x1b[31mil", "clean\u202e"
+	src.add(p)
+	src.lists["o/a"][0].Reviewers = []string{"re\x1bv"}
+	f := baseFlags()
+	f.Repos, f.Human = []string{"o/a"}, true
+	out, _, err := exec(t, src, f, nil)
+	if err != nil || strings.ContainsRune(out, 0x1b) || strings.ContainsRune(out, 0x202e) {
+		t.Fatalf("%v %q", err, out)
+	}
+	for _, want := range []string{`ev\x1b[31mil`, `clean\u202e`, `re\x1bv`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in %q", want, out)
+		}
+	}
+}
+
+func TestPrepareScopeNeedsAtLeastTwoSources(t *testing.T) {
+	member := ws("/w", member("s", "https://github.com/wstein/s.git"))
+	for name, mutate := range map[string]func(f *Flags){
+		"workspace and repo":  func(f *Flags) { f.Workspace, f.Repos = true, []string{"o/r"} },
+		"workspace and owner": func(f *Flags) { f.Workspace, f.Owners = true, []string{"wstein"} },
+		"repo and owner":      func(f *Flags) { f.Repos, f.Owners = []string{"o/r"}, []string{"wstein"} },
+	} {
+		f := baseFlags()
+		mutate(&f)
+		p, err := prepare(context.Background(), f, &bytes.Buffer{}, member)
+		if err != nil || p.Scope != "mixed" {
+			t.Errorf("%s: %v %q", name, err, p.Scope)
+		}
+	}
+}
+
+func TestDocumentCutsMessagesAndHostOnAUTF8Boundary(t *testing.T) {
+	long := strings.Repeat("é", 400) // 800 bytes
+	check := func(what, s string, max int) {
+		if len(s) > max || len(s) < max-1 || !utf8.ValidString(s) {
+			t.Errorf("%s: len %d valid %v", what, len(s), utf8.ValidString(s))
+		}
+	}
+	src := newSource()
+	src.listErr["o/a"] = &hosting.WatchError{Code: hosting.CodeNetwork, Message: long}
+	src.owners["wstein"] = hosting.OwnerDiscovery{Owner: "wstein", Code: hosting.CodeSearchIncomplete, Message: long}
+	f := baseFlags()
+	f.Repos, f.Owners, f.JSON = []string{"o/a"}, []string{"wstein"}, true
+	out, _, _ := exec(t, src, f, nil)
+	m := decode(t, out)
+	if len(m["errors"].([]any)) != 2 {
+		t.Fatalf("%v", m["errors"])
+	}
+	for _, e := range m["errors"].([]any) {
+		check("message", e.(map[string]any)["message"].(string), 512)
+	}
+	d := buildDocument(Params{Host: strings.Repeat("a", 2047) + "é"}, &pulls.Result{}, nil, nil)
+	check("host", d.Host, 2048)
+	if got := cut("éé", 3); got != "é" {
+		t.Errorf("cut %q", got)
 	}
 }
