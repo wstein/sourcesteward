@@ -388,3 +388,37 @@ func TestWatchNotModifiedKeepsSentValidator(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
+
+func TestWatchRetryAfterUpperBound(t *testing.T) {
+	for _, tc := range []struct {
+		header string
+		want   time.Duration
+	}{{"0", 0}, {"30", 30 * time.Second}, {"86400", 24 * time.Hour}, {"86401", 0}, {"-1", 0}, {"abc", 0}, {"", 0}} {
+		h := http.Header{}
+		h.Set("Retry-After", tc.header)
+		if got := retryAfter(h); got != tc.want {
+			t.Errorf("Retry-After %q -> %v, want %v", tc.header, got, tc.want)
+		}
+	}
+}
+
+func TestWatchNegativeRateRemainingIsUnknown(t *testing.T) {
+	h := http.Header{}
+	h.Set("X-RateLimit-Limit", "5000")
+	h.Set("X-RateLimit-Remaining", "-1")
+	h.Set("X-RateLimit-Reset", "1700000000")
+	if rateFromHeader(h).Known {
+		t.Fatal("negative X-RateLimit-Remaining accepted")
+	}
+	h.Set("X-RateLimit-Remaining", "0")
+	if !rateFromHeader(h).Known {
+		t.Fatal("zero remaining must be accepted")
+	}
+	// A 403 whose only rate evidence is a negative remaining is not a rate limit.
+	f := newFakeForge(t)
+	f.handlers["repos/a/b/pulls/7"] = func(*http.Request) *http.Response {
+		return forgeResponse(403, `{"message":"Resource not accessible"}`, map[string]string{"X-RateLimit-Limit": "5000", "X-RateLimit-Remaining": "-1", "X-RateLimit-Reset": "1700000000"})
+	}
+	_, err := f.reader("github.com").PullDetail(context.Background(), "a/b", 7, "")
+	assertWatchCode(t, err, CodeForbidden)
+}
