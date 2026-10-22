@@ -17,7 +17,7 @@ omitted; absent values are `null`. `additionalProperties: false` everywhere. Typ
 | `options` | object | `scope` enum(`workspace`, `repos`, `mixed`) (`mixed` when more than one of workspace, `--repo`, `--owner` applies), `owners` array of str, `no_bots`, `bots_only` bool, `authors` array of str, `detail_drafts` bool, `limit` integer |
 | `repos` | array | `{repo, source, open, listed, error}`: `source` enum(`workspace`, `repo`, `owner`), `open` integer or null (open PRs seen), `listed` integer, `error` code or null |
 | `groups` | object | keys `ready`, `checks`, `conflict`, `draft`, `blocked`; each an array of PR rows, newest first, in this fixed key order |
-| `summary` | object | `total`, per group counts, `bots` (bot rows), `not_read` (rows past `--limit`), `repos_read`, `repos_failed` |
+| `summary` | object | `total`, per group counts, `bots` (bot rows), `not_read` (non-draft rows past `--limit` only; a row inside the budget whose read failed or was skipped after a rate limit has reason `not-read` too but is reported through `repos[].error` and `errors`, not here), `repos_read`, `repos_failed` |
 | `errors` | array | `{repo or owner (str), code, message}`; `code` in `rate-limited`, `network`, `unauthorized`, `forbidden`, `http-5xx`, `malformed-response`, `too-many-open-prs`, `page-too-large`, `repo-moved`, `search-incomplete`, `search-too-many`; `message` sanitized, at most 512 bytes |
 
 ## PR row
