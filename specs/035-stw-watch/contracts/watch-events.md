@@ -4,15 +4,15 @@ The schema file is `schemas/v1/watch-event.schema.json` (JSON Schema 2020-12, `$
 `https://wstein.github.io/sourcesteward/schemas/v1/watch-event.schema.json`). It is created in WP-E, byte-frozen in
 `internal/contracts/schema_freeze_test.go` and listed in `UNPUBLISHED_SCHEMAS` of `scripts/package-pages.py` (and its test), exactly
 like `sync.schema.json` and `status.schema.json` (Specs 032, 033), until the feature is accepted. Each line of stdout (without
-`--human`) and of `journal.jsonl` validates against it. Keys are never omitted; absent values are `null`.
+`--human`) and **every** line of `journal.jsonl` validates against it (the journal holds events only; there are no tombstone lines). Keys are never omitted; absent values are `null`.
 
 ## Envelope
 
 | Key | Type | Meaning |
 | --- | --- | --- |
 | `schema_version` | integer, const 1 | |
-| `seq` | integer >= 1 | gapless per state directory |
-| `id` | string | stable event id `repo#pr:kind:key` (spec: "Event ids"; `-` replaces an absent repo or PR); consumers dedupe on it |
+| `seq` | integer >= 1 | gapless per state directory, derived from the journal tail |
+| `id` | string | event id `repo#pr:kind:key` (spec: "Event ids" gives the key of every kind; `-` replaces an absent repo or PR); consumers dedupe on it |
 | `time` | string, RFC 3339 UTC | observation time |
 | `repo` | string `OWNER/NAME` or null | null only for `repos-changed` and run-level `watch-error` |
 | `pr` | integer or null | null for repository-level kinds |
@@ -36,20 +36,20 @@ Types: `sha` = 40 lowercase hex; `str` = string, at most 2048 bytes; `names` = a
 - `base-changed`: `old` str, `new` str.
 - `merged`: `merge_commit` sha or null, `base` str, `head` sha, `head_ref` str, `merged_at` time, `method_hint` enum(`merge`, `rebase-or-squash`, `unknown`).
 - `closed`: `head` sha, `base` str.
-- `restack-needed`: `base` str, `reason` enum(`child-of-merged-branch`, `contains-merged-commits`), `old_parent` sha, `new_parent` sha or null, `new_parent_source` const `merge_commit_sha`, `branch` str, `argv` array of str or null (null when `new_parent` is null or the head repository is a fork). `merged_pr` integer is part of `details` (the PR whose merge caused it).
+- `restack-needed`: `base` str, `reason` enum(`child-of-merged-branch`, `contains-merged-commits`), `old_parent` sha, `old_parent_source` enum(`pulls-detail`, `last-observed`), `new_parent` sha or null, `new_parent_source` const `merge_commit_sha`, `branch` str, `argv` array of str or null (null when `new_parent` is null or the head repository is a fork). `merged_pr` integer is part of `details` (the PR whose merge caused it).
 - `repos-changed`: `added` array of str, `removed` array of str, `skipped` array of `{path, reason}`.
-- `watch-error`: `code` str (`rate-limited`, `network`, `unauthorized`, `forbidden`, `http-5xx`, `malformed-response`, `list-truncated`, `hosting-api-unavailable`, `state-error`), `message` str (sanitized, at most 512 bytes), `failures` integer, `retry_in_seconds` integer, `repo` str or null.
+- `watch-error`: `code` str (`rate-limited`, `network`, `unauthorized`, `forbidden`, `http-5xx`, `malformed-response`, `list-truncated`, `page-too-large`, `repo-moved`, `hosting-api-unavailable`, `state-error`), `message` str (sanitized, at most 512 bytes), `failures` integer, `retry_in_seconds` integer, `repo` str or null.
 - `watch-recovered`: `after_failures` integer, `repo` str or null.
 - `watch-stalled`: `since` time, `threshold_seconds` integer, `repo` str.
 
 ## Examples
 
 ```json
-{"schema_version":1,"seq":1,"id":"wstein/sourcesteward#41:new-pr:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","time":"2026-10-22T09:00:07Z","repo":"wstein/sourcesteward","pr":41,"kind":"new-pr","details":{"title":"docs(035): stw watch","author":"wstein","draft":true,"base":"main","head_ref":"docs/035-stw-watch","head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182"}}
-{"schema_version":1,"seq":2,"id":"wstein/sourcesteward#41:checks-red:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","time":"2026-10-22T09:04:10Z","repo":"wstein/sourcesteward","pr":41,"kind":"checks-red","details":{"head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","failing":["docs-check"],"failing_total":1,"shape":"real","base":"main","draft":true}}
+{"schema_version":1,"seq":1,"id":"wstein/sourcesteward#41:new-pr:g0","time":"2026-10-22T09:00:07Z","repo":"wstein/sourcesteward","pr":41,"kind":"new-pr","details":{"title":"docs(035): stw watch","author":"wstein","draft":true,"base":"main","head_ref":"docs/035-stw-watch","head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182"}}
+{"schema_version":1,"seq":2,"id":"wstein/sourcesteward#41:checks-red:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:c1","time":"2026-10-22T09:04:10Z","repo":"wstein/sourcesteward","pr":41,"kind":"checks-red","details":{"head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","failing":["docs-check"],"failing_total":1,"shape":"real","base":"main","draft":true}}
 {"schema_version":1,"seq":3,"id":"wstein/sourcesteward#41:merged:9d8c7b6a5f4e3d2c1b0a99887766554433221100","time":"2026-10-22T10:30:00Z","repo":"wstein/sourcesteward","pr":41,"kind":"merged","details":{"merge_commit":"9d8c7b6a5f4e3d2c1b0a99887766554433221100","base":"main","head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","head_ref":"docs/035-stw-watch","merged_at":"2026-10-22T10:29:58Z","method_hint":"rebase-or-squash"}}
-{"schema_version":1,"seq":4,"id":"wstein/sourcesteward#42:restack-needed:9d8c7b6a5f4e3d2c1b0a99887766554433221100","time":"2026-10-22T10:30:03Z","repo":"wstein/sourcesteward","pr":42,"kind":"restack-needed","details":{"merged_pr":41,"base":"main","reason":"contains-merged-commits","old_parent":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","new_parent":"9d8c7b6a5f4e3d2c1b0a99887766554433221100","new_parent_source":"merge_commit_sha","branch":"feat/035-impl","argv":["git","-c","rebase.updateRefs=false","-c","rerere.enabled=false","rebase","--onto","9d8c7b6a5f4e3d2c1b0a99887766554433221100","3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","feat/035-impl"]}}
-{"schema_version":1,"seq":5,"id":"-:watch-error:rate-limited","time":"2026-10-22T10:31:00Z","repo":null,"pr":null,"kind":"watch-error","details":{"code":"rate-limited","message":"core rate limit exhausted, resets 10:58:00Z","failures":1,"retry_in_seconds":1620,"repo":null}}
+{"schema_version":1,"seq":4,"id":"wstein/sourcesteward#42:restack-needed:41:9d8c7b6a5f4e3d2c1b0a99887766554433221100","time":"2026-10-22T10:30:03Z","repo":"wstein/sourcesteward","pr":42,"kind":"restack-needed","details":{"merged_pr":41,"base":"main","reason":"contains-merged-commits","old_parent":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","old_parent_source":"pulls-detail","new_parent":"9d8c7b6a5f4e3d2c1b0a99887766554433221100","new_parent_source":"merge_commit_sha","branch":"feat/035-impl","argv":["git","-c","rebase.updateRefs=false","-c","rerere.enabled=false","rebase","--onto","9d8c7b6a5f4e3d2c1b0a99887766554433221100","3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","feat/035-impl"]}}
+{"schema_version":1,"seq":5,"id":"-:watch-error:rate-limited:e1","time":"2026-10-22T10:31:00Z","repo":null,"pr":null,"kind":"watch-error","details":{"code":"rate-limited","message":"core rate limit exhausted, resets 10:58:00Z","failures":1,"retry_in_seconds":1620,"repo":null}}
 ```
 
 ## Human line (`--human`)
@@ -57,7 +57,7 @@ Types: `sha` = 40 lowercase hex; `str` = string, at most 2048 bytes; `names` = a
 `TIME REPO#PR KIND summary`, one line, control characters escaped, no colour. Examples:
 `10:04:10 wstein/sourcesteward#41 checks-red docs-check (real)`,
 `10:30:03 wstein/sourcesteward#42 restack-needed after #41: git rebase --onto 9d8c7b6 3f2a9c1 feat/035-impl` (the human line shows
-8-digit SHAs; JSON always has 40).
+7-character SHAs; JSON always has 40).
 
 ## `--status --json`
 
