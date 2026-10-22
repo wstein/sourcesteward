@@ -649,3 +649,45 @@ func TestExecuteReportsSkippedMembersOnStderr(t *testing.T) {
 		t.Fatalf("%v %q", err, diag)
 	}
 }
+
+func TestExecuteMarksABotWhoseLoginHasNoSuffix(t *testing.T) {
+	src := newSource()
+	b := okPR("o/a", 1)
+	b.user, b.utype = "buildbot", "Bot"
+	src.add(b)
+	f := baseFlags()
+	f.Repos, f.Human = []string{"o/a"}, true
+	out, _, err := exec(t, src, f, nil)
+	if err != nil || !strings.Contains(out, "  buildbot[bot]  ") {
+		t.Fatalf("%v %q", err, out)
+	}
+}
+
+func TestExecuteEmitsNullForValuesTheForgeDidNotGive(t *testing.T) {
+	src := newSource()
+	p := okPR("o/a", 1)
+	p.noTime = true
+	src.add(p)
+	src.lists["o/a"][0].HTMLURL = "http://example.com/x"
+	src.lists["o/a"][0].HeadSHA = "not-a-sha"
+	f := baseFlags()
+	f.Repos, f.JSON = []string{"o/a"}, true
+	out, _, err := exec(t, src, f, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	r := m["groups"].(map[string]any)["blocked"].([]any)[0].(map[string]any)
+	if r["url"] != nil || r["head"] != nil || r["created_at"] != nil || r["age_days"] != nil {
+		t.Fatalf("%v", r)
+	}
+}
+
+func TestExecuteHumanSaysHowManyWereNotRead(t *testing.T) {
+	f := baseFlags()
+	f.Repos, f.Human, f.Limit = []string{"o/a", "o/b"}, true, 1
+	out, _, err := exec(t, sampleSource(), f, nil)
+	if err != nil || !strings.Contains(out, "3 not read (past --limit 1)\n") {
+		t.Fatalf("%v %q", err, out)
+	}
+}
