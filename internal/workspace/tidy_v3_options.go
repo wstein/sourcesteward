@@ -52,6 +52,8 @@ type V3PlanOptions struct {
 	// (FR-032). The three bounds are 0 for their defaults (FR-035).
 	ReportDir                                            string
 	ReportMaxEntries, ReportMaxBytes, ReportMaxDiffBytes int
+	// Per-entry report bounds (0: defaults of 16 files, 1,000 lines, 50 commits).
+	ReportMaxFiles, ReportMaxLines, ReportMaxCommits int
 	// ConsolidationRanges are `A..B` selectors whose commits the report pairs
 	// with each reported branch (FR-037), at most four.
 	ConsolidationRanges []string
@@ -230,9 +232,9 @@ func v3ProofPlanTimeout(o V3PlanOptions) time.Duration {
 
 // reviewRequested reports whether any review report option is set.
 func (o V3PlanOptions) reviewRequested() bool {
-	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0 || len(o.ConsolidationRanges) > 0 || o.DecisionsFile != ""
+	return o.ReportDir != "" || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0 || o.ReportMaxFiles != 0 || o.ReportMaxLines != 0 || o.ReportMaxCommits != 0 || len(o.ConsolidationRanges) > 0 || o.DecisionsFile != ""
 }
 
 func (o V3PlanOptions) reportBounds() reportBounds {
-	return reportBounds{MaxEntries: o.ReportMaxEntries, MaxBytes: o.ReportMaxBytes, MaxDiffBytes: o.ReportMaxDiffBytes}
+	return reportBounds{MaxEntries: o.ReportMaxEntries, MaxBytes: o.ReportMaxBytes, MaxDiffBytes: o.ReportMaxDiffBytes, MaxFiles: o.ReportMaxFiles, MaxLines: o.ReportMaxLines, MaxCommits: o.ReportMaxCommits}
 }

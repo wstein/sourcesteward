@@ -21,12 +21,18 @@ const (
 	reportDiffBytesCeiling = 1 << 20
 
 	// Fixed per-entry bounds (FR-035).
-	reportMaxCommits    = 50
+	reportMaxCommits    = 50 // defaults of the per-entry bounds (--report-max-commits, -files, -lines)
 	reportMaxCandidates = 5
 	reportMaxLines      = 1000
 	reportMaxFiles      = 16
-	reportMaxPairs      = 256
-	reportSubjectBytes  = 200
+
+	// Ceilings of the per-entry bounds: the owner's own repositories decide how
+	// large a reviewable branch is; the diff byte bound still applies.
+	reportCommitsCeiling = 1000
+	reportFilesCeiling   = 4096
+	reportLinesCeiling   = 200000
+	reportMaxPairs       = 256
+	reportSubjectBytes   = 200
 	// reportDiffRetain is the most diff text kept per entry; the whole stream is
 	// still counted so truncation markers carry exact totals.
 	reportDiffRetain = 1 << 20
@@ -39,10 +45,24 @@ const (
 // reportBounds are the overridable report bounds (FR-035), bound into the plan.
 type reportBounds struct {
 	MaxEntries, MaxBytes, MaxDiffBytes int
+	// Per-entry bounds: 0 means the default (reportMaxFiles, reportMaxLines,
+	// reportMaxCommits) and, in a binding, "default" as well.
+	MaxFiles, MaxLines, MaxCommits int
+}
+
+// files, lines and commits are the per-entry bounds with 0 meaning the default.
+func (b reportBounds) files() int   { return orDefault(b.MaxFiles, reportMaxFiles) }
+func (b reportBounds) lines() int   { return orDefault(b.MaxLines, reportMaxLines) }
+func (b reportBounds) commits() int { return orDefault(b.MaxCommits, reportMaxCommits) }
+func orDefault(v, def int) int {
+	if v == 0 {
+		return def
+	}
+	return v
 }
 
 func defaultReportBounds() reportBounds {
-	return reportBounds{MaxEntries: reportDefaultEntries, MaxBytes: reportDefaultBytes, MaxDiffBytes: reportDefaultDiffBytes}
+	return reportBounds{MaxEntries: reportDefaultEntries, MaxBytes: reportDefaultBytes, MaxDiffBytes: reportDefaultDiffBytes, MaxFiles: reportMaxFiles, MaxLines: reportMaxLines, MaxCommits: reportMaxCommits}
 }
 
 // V3Untrusted marks a string derived from the repository.
@@ -231,6 +251,18 @@ func resolveReportBounds(b reportBounds) (reportBounds, error) {
 	}
 	if b.MaxDiffBytes == 0 {
 		b.MaxDiffBytes = d.MaxDiffBytes
+	}
+	if b.MaxFiles == 0 {
+		b.MaxFiles = d.MaxFiles
+	}
+	if b.MaxLines == 0 {
+		b.MaxLines = d.MaxLines
+	}
+	if b.MaxCommits == 0 {
+		b.MaxCommits = d.MaxCommits
+	}
+	if b.MaxFiles < 0 || b.MaxFiles > reportFilesCeiling || b.MaxLines < 0 || b.MaxLines > reportLinesCeiling || b.MaxCommits < 0 || b.MaxCommits > reportCommitsCeiling {
+		return b, failure("invalid-options", "Per-entry report bounds must be positive and within 4,096 files, 200,000 diff lines and 1,000 commits.")
 	}
 	if b.MaxEntries < 0 || b.MaxEntries > reportEntriesCeiling || b.MaxBytes < 0 || b.MaxBytes > reportBytesCeiling || b.MaxDiffBytes < 0 || b.MaxDiffBytes > reportDiffBytesCeiling {
 		return b, failure("invalid-options", "Report bounds must be positive and within 4,096 entries, 16 MiB per file and 1 MiB per diff.")

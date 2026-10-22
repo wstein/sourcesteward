@@ -80,8 +80,9 @@ func TestTidyV3PlanSchemaCarriesTheReviewBindingAndSummary(t *testing.T) {
 	}
 	valid(t, s, raw)
 	for name, mutate := range map[string]func(map[string]any){
-		"entries over the ceiling": func(v map[string]any) { v["plan"].(map[string]any)["review"].(map[string]any)["max_entries"] = 1025 },
-		"unknown review field":     func(v map[string]any) { v["plan"].(map[string]any)["review"].(map[string]any)["max_files"] = 1 },
+		"entries over the ceiling": func(v map[string]any) { v["plan"].(map[string]any)["review"].(map[string]any)["max_entries"] = 4097 },
+		"files over the ceiling":   func(v map[string]any) { v["plan"].(map[string]any)["review"].(map[string]any)["max_files"] = 4097 },
+		"unknown review field":     func(v map[string]any) { v["plan"].(map[string]any)["review"].(map[string]any)["max_widgets"] = 1 },
 		"summary without a count":  func(v map[string]any) { delete(v["review_summary"].(map[string]any), "omitted") },
 		"negative reason count": func(v map[string]any) {
 			v["review_summary"].(map[string]any)["reasons"].(map[string]any)["conflict"] = -1
