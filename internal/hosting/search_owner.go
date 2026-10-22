@@ -162,6 +162,9 @@ type OwnerDiscovery struct {
 	Message string
 }
 
+// MessageIgnoredResults is the Message of a discovery whose only problem is ignored results.
+const MessageIgnoredResults = "search results with an unusable repository were ignored"
+
 // DiscoverOwner pages through the owner search (at most 10 requests) and never panics
 // or returns an error: every failure is a Code. Precedence: a failed request stops the
 // run (Code is its code), then incomplete_results, then the 1000 result cap, then
@@ -221,7 +224,7 @@ func (r *WatchReader) DiscoverOwner(ctx context.Context, owner string) OwnerDisc
 	case tooMany:
 		d.Code, d.Message = CodeSearchTooMany, "more than 1000 search results; some repositories may be missing"
 	case d.Ignored > 0:
-		d.Code, d.Message = CodeMalformed, "search results with an unusable repository were ignored"
+		d.Code, d.Message = CodeMalformed, MessageIgnoredResults
 	}
 	return d
 }
