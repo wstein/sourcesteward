@@ -1,0 +1,1095 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/watch-event.schema.json",
+  "title": "SourceSteward watch event (schema 1)",
+  "description": "One line of stdout of stw watch (without --human) and of journal.jsonl: a transition of a watched pull request or of the watcher itself. Keys are never omitted; absent values are null. The kind enum is closed in v1 and consumers ignore unknown kinds; details are closed per kind. Consumers dedupe on id. The second top-level definition #/$defs/status describes stw watch --status --json.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "seq",
+    "id",
+    "time",
+    "repo",
+    "pr",
+    "kind",
+    "details"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^(-|[^#:\\s]+#(-|[0-9]+)):[a-z0-9-]+:[^\\s]+$",
+      "maxLength": 1024,
+      "description": "repo#pr:kind:key; - replaces an absent repo or PR."
+    },
+    "time": {
+      "$ref": "#/$defs/time"
+    },
+    "repo": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/repo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pr": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kind": {
+      "enum": [
+        "new-pr",
+        "head-changed",
+        "checks-green",
+        "checks-red",
+        "checks-pending-timeout",
+        "mergeable-changed",
+        "ready-state-changed",
+        "base-changed",
+        "merged",
+        "closed",
+        "restack-needed",
+        "repos-changed",
+        "watch-error",
+        "watch-recovered",
+        "watch-stalled"
+      ]
+    },
+    "details": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "new-pr"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "title",
+              "author",
+              "draft",
+              "base",
+              "head_ref",
+              "head",
+              "fork"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "$ref": "#/$defs/str"
+              },
+              "author": {
+                "$ref": "#/$defs/str"
+              },
+              "draft": {
+                "type": "boolean"
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              },
+              "head_ref": {
+                "$ref": "#/$defs/str"
+              },
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "fork": {
+                "type": "boolean"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "head-changed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "old",
+              "new"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "old": {
+                "$ref": "#/$defs/sha"
+              },
+              "new": {
+                "$ref": "#/$defs/sha"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "checks-green"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "head",
+              "draft",
+              "base",
+              "total"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "draft": {
+                "type": "boolean"
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "checks-red"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "head",
+              "failing",
+              "failing_total",
+              "shape",
+              "base",
+              "draft"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "failing": {
+                "$ref": "#/$defs/names"
+              },
+              "failing_total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "shape": {
+                "enum": [
+                  "stack-merge-shape",
+                  "real",
+                  "unknown"
+                ]
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              },
+              "draft": {
+                "type": "boolean"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "checks-pending-timeout"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "head",
+              "pending",
+              "since"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "pending": {
+                "$ref": "#/$defs/names"
+              },
+              "since": {
+                "$ref": "#/$defs/time"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "mergeable-changed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "mergeable",
+              "state",
+              "conflicting",
+              "behind",
+              "base"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mergeable": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "state": {
+                "$ref": "#/$defs/str"
+              },
+              "conflicting": {
+                "type": "boolean"
+              },
+              "behind": {
+                "type": "boolean"
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ready-state-changed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "enum": [
+                  "draft",
+                  "ready"
+                ]
+              },
+              "to": {
+                "enum": [
+                  "draft",
+                  "ready"
+                ]
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "from": {
+                    "const": "draft"
+                  },
+                  "to": {
+                    "const": "ready"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "from": {
+                    "const": "ready"
+                  },
+                  "to": {
+                    "const": "draft"
+                  }
+                }
+              }
+            ]
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "base-changed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "old",
+              "new"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "old": {
+                "$ref": "#/$defs/str"
+              },
+              "new": {
+                "$ref": "#/$defs/str"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "merged"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "merge_commit",
+              "base",
+              "head",
+              "head_ref",
+              "merged_at",
+              "method_hint"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "merge_commit": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/sha"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              },
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "head_ref": {
+                "$ref": "#/$defs/str"
+              },
+              "merged_at": {
+                "$ref": "#/$defs/time"
+              },
+              "method_hint": {
+                "enum": [
+                  "merge",
+                  "rebase-or-squash",
+                  "unknown"
+                ]
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "closed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "head",
+              "base"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "restack-needed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "merged_pr",
+              "base",
+              "reason",
+              "old_parent",
+              "new_parent",
+              "new_parent_source",
+              "branch",
+              "argv"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "merged_pr": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "base": {
+                "$ref": "#/$defs/str"
+              },
+              "reason": {
+                "enum": [
+                  "child-of-merged-branch",
+                  "contains-merged-commits"
+                ]
+              },
+              "old_parent": {
+                "$ref": "#/$defs/sha"
+              },
+              "new_parent": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/sha"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "new_parent_source": {
+                "const": "merge_commit_sha"
+              },
+              "branch": {
+                "$ref": "#/$defs/str"
+              },
+              "argv": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/str"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "if": {
+              "properties": {
+                "new_parent": {
+                  "type": "null"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "argv": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "repos-changed"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "added",
+              "removed",
+              "skipped"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "added": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/str"
+                }
+              },
+              "removed": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/str"
+                }
+              },
+              "skipped": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "reason"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "$ref": "#/$defs/str"
+                    },
+                    "reason": {
+                      "$ref": "#/$defs/str"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "repo": {
+            "type": "null"
+          },
+          "pr": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "watch-error"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "failures",
+              "retry_in_seconds",
+              "repo"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "rate-limited",
+                  "network",
+                  "unauthorized",
+                  "forbidden",
+                  "http-5xx",
+                  "malformed-response",
+                  "too-many-open-prs",
+                  "page-too-large",
+                  "repo-moved",
+                  "hosting-api-unavailable",
+                  "state-error"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "retry_in_seconds": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "repo": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/repo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/repo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pr": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "watch-recovered"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "after_failures",
+              "repo"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "after_failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "repo": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/repo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/repo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pr": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "watch-stalled"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": [
+              "since",
+              "threshold_seconds",
+              "repo"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "since": {
+                "$ref": "#/$defs/time"
+              },
+              "threshold_seconds": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "repo": {
+                "$ref": "#/$defs/repo"
+              }
+            }
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "pr": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "str": {
+      "type": "string",
+      "maxLength": 2048,
+      "description": "At most 2048 bytes in the producer; maxLength counts characters."
+    },
+    "names": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/str"
+      }
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "status": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "state_dir",
+        "heartbeat",
+        "fresh",
+        "interval_seconds",
+        "seq",
+        "lock_held",
+        "repos"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "state_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "heartbeat": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "time",
+                "age_seconds",
+                "pid"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "time": {
+                  "$ref": "#/$defs/time"
+                },
+                "age_seconds": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "pid": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fresh": {
+          "type": "boolean"
+        },
+        "interval_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lock_held": {
+          "type": "boolean"
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "repo",
+              "last_ok",
+              "age_seconds",
+              "failures",
+              "open_error"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "repo": {
+                "$ref": "#/$defs/repo"
+              },
+              "last_ok": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "age_seconds": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "open_error": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "rate-limited",
+                      "network",
+                      "unauthorized",
+                      "forbidden",
+                      "http-5xx",
+                      "malformed-response",
+                      "too-many-open-prs",
+                      "page-too-large",
+                      "repo-moved",
+                      "hosting-api-unavailable",
+                      "state-error"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "title": "stw watch --status --json"
+    }
+  }
+}
