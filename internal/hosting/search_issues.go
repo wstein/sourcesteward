@@ -25,7 +25,7 @@ func (r *WatchReader) IssueSearchPage(ctx context.Context, owner string, page in
 // DiscoverIssueOwner pages through the issue owner search (at most 10 requests) with the
 // semantics of DiscoverOwner: it never returns an error, every failure is a Code.
 func (r *WatchReader) DiscoverIssueOwner(ctx context.Context, owner string) OwnerDiscovery {
-	return r.discoverOwner(ctx, owner, admitsIssueSearch(r.mode), r.IssueSearchPage)
+	return r.discoverOwner(ctx, owner, r.IssueSearchPage)
 }
 
 // DiscoverIssueOwners discovers each distinct owner (case-insensitively) in order, with the
