@@ -473,3 +473,11 @@ func TestAFailedReadGivesOneReadErrorAndNoPullRequestItem(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+func TestReadPullsReportsACycleThatCannotStart(t *testing.T) {
+	f := newForge()
+	got, err := readPulls(context.Background(), f, targets(repoA), pulls.Options{Limit: -1})
+	if err == nil || got != nil || len(f.calls) != 0 {
+		t.Fatalf("%v %v %v", got, err, f.calls)
+	}
+}
