@@ -74,9 +74,9 @@ func esc(s string) string {
 
 func short(sha string) string {
 	if len(sha) > 7 {
-		return sha[:7]
+		sha = sha[:7]
 	}
-	return sha
+	return esc(sha)
 }
 
 func summary(e watch.Event) string {
