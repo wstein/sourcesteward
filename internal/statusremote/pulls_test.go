@@ -85,11 +85,7 @@ func targets(slugs ...string) []Target {
 
 func read(t *testing.T, f *forge, ts []Target) map[string]Pulls {
 	t.Helper()
-	got, err := ReadPulls(context.Background(), f, ts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return got
+	return ReadPulls(context.Background(), f, ts)
 }
 
 func prByNumber(t *testing.T, p Pulls, n int) overview.PR {
@@ -297,10 +293,7 @@ func TestReadPullsTurnsTheDeadlineIntoASkip(t *testing.T) {
 			cancel() // the deadline passes while the first row is read
 		}
 	}
-	got, err := ReadPulls(ctx, f, targets(repoA))
-	if err != nil {
-		t.Fatalf("a deadline is a skip, not an error: %v", err)
-	}
+	got := ReadPulls(ctx, f, targets(repoA))
 	a := got[repoA]
 	if a.State != (overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}) {
 		t.Fatalf("%+v", a.State)
@@ -323,9 +316,9 @@ func TestReadPullsReportsAFailureEvenWhenTheDeadlinePassedLater(t *testing.T) {
 			cancel()
 		}
 	}
-	got, err := ReadPulls(ctx, f, targets(repoA))
-	if err != nil || got[repoA].State != (overview.SourceState{Outcome: overview.OutcomeError, Code: hosting.CodeNetwork}) {
-		t.Fatalf("%v %+v", err, got[repoA].State)
+	got := ReadPulls(ctx, f, targets(repoA))
+	if got[repoA].State != (overview.SourceState{Outcome: overview.OutcomeError, Code: hosting.CodeNetwork}) {
+		t.Fatalf("%+v", got[repoA].State)
 	}
 }
 
@@ -334,9 +327,9 @@ func TestReadPullsSkipsEveryRepositoryWhenTheDeadlinePassedBeforeTheStart(t *tes
 	cancel()
 	f := newForge()
 	f.add(human(repoA, 1))
-	got, err := ReadPulls(ctx, f, targets(repoA, repoB))
-	if err != nil || len(f.calls) != 0 {
-		t.Fatalf("%v %v", err, f.calls)
+	got := ReadPulls(ctx, f, targets(repoA, repoB))
+	if len(f.calls) != 0 {
+		t.Fatalf("%v", f.calls)
 	}
 	for _, slug := range []string{repoA, repoB} {
 		if got[slug].State != (overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}) {

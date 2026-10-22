@@ -81,9 +81,8 @@ type Pulls struct {
 // result is keyed by Target.Name; repositories that share an origin share one read.
 //
 // A failed read is the error of that repository's source, a cycle cut short by the context is the
-// skip `deadline` of the repositories it did not finish; both keep the rows that were read. The
-// error is not nil only when the cycle could not start at all.
-func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) (map[string]Pulls, error) {
+// skip `deadline` of the repositories it did not finish; both keep the rows that were read.
+func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) map[string]Pulls {
 	out := make(map[string]Pulls, len(targets))
 	var slugs []string
 	for _, t := range targets {
@@ -93,11 +92,9 @@ func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) (map[strin
 		}
 		slugs = append(slugs, t.Slug)
 	}
-	res, err := pulls.Run(ctx, r, pulls.Options{Repos: slugs})
-	if res == nil {
-		return nil, err
-	}
-	// With a result the error is only the context's: the deadline marks of the result already carry it.
+	// Run returns no result only for a limit outside 1..500; the defaults never are, and with a result
+	// its error is only the context's: the deadline marks of the result already carry it.
+	res, _ := pulls.Run(ctx, r, pulls.Options{Repos: slugs})
 	for _, t := range targets {
 		if t.Skip != "" {
 			continue
@@ -105,7 +102,7 @@ func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) (map[strin
 		view, _ := res.Repo(t.Slug) // every slug was requested
 		out[t.Name] = fromView(view)
 	}
-	return out, nil
+	return out
 }
 
 // fromView maps one repository of the cycle's result. A failure of the repository wins over a
