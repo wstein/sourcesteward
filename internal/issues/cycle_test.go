@@ -3,6 +3,7 @@ package issues
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -263,5 +264,19 @@ func TestResultIsIndependentOfInputOrder(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("order %v changed the result", order)
 		}
+	}
+}
+
+func TestRunWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_STATE_HOME", dir)
+	f := newForge()
+	f.pages["o/r"] = []string{body(raw(1, withLabels("security")))}
+	f.errAt["p/q#1"] = &hosting.WatchError{Code: hosting.CodeHTTP5xx, Message: "server error"}
+	run(t, f, Options{Repos: []string{"o/r", "p/q"}})
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
+		t.Errorf("the cycle left %v (%v)", entries, err)
 	}
 }
