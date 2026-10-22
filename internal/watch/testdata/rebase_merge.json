@@ -1,0 +1,70 @@
+{
+ "_comment": "Recorded from a real git rebase-merge in a throwaway repository (GitHub's rebase merge replays the PR commits on the base with new committer data; merge_commit_sha is the rewritten tip). Shapes follow pulls/N and pulls/N/commits.",
+ "base": "main",
+ "parent": {
+  "number": 10,
+  "head_ref": "parent",
+  "head_sha": "a97d7c5fd03a128f55bb0e37910bc29b88699100",
+  "merge_commit_sha": "34efceb54ad88a9efc691e507a0c70558ab6ca8b",
+  "rewritten_commits": [
+   "e9a2b5decca126cae1ffb194da321ffebbe807ad",
+   "34efceb54ad88a9efc691e507a0c70558ab6ca8b"
+  ]
+ },
+ "child_on_parent": {
+  "number": 11,
+  "base": "parent",
+  "head_ref": "child",
+  "commits": [
+   {
+    "sha": "b501c2a98522229a331b3c2e91c478c117cdc9ce",
+    "commit": {
+     "message": "c1",
+     "patch_id": "fa19bd7dbc724a0e887ec589bd89d8fb5f7dd043"
+    }
+   },
+   {
+    "sha": "b1af07a5113fe7198ec7b2b965d52acef825cbbc",
+    "commit": {
+     "message": "c2",
+     "patch_id": "bb82cff42eb0e17ece824515319e09b733af33ad"
+    }
+   }
+  ]
+ },
+ "child_retargeted": {
+  "number": 12,
+  "base": "main",
+  "head_ref": "child",
+  "commits": [
+   {
+    "sha": "226d30bb2c2dc3e65322bcb41a4f50f6da7ec4f5",
+    "commit": {
+     "message": "p1",
+     "patch_id": "5845abd90bc89bc26aebe0b6780edafb53283853"
+    }
+   },
+   {
+    "sha": "a97d7c5fd03a128f55bb0e37910bc29b88699100",
+    "commit": {
+     "message": "p2",
+     "patch_id": "21795508d1999013225652b67f70ee5fe36db804"
+    }
+   },
+   {
+    "sha": "b501c2a98522229a331b3c2e91c478c117cdc9ce",
+    "commit": {
+     "message": "c1",
+     "patch_id": "fa19bd7dbc724a0e887ec589bd89d8fb5f7dd043"
+    }
+   },
+   {
+    "sha": "b1af07a5113fe7198ec7b2b965d52acef825cbbc",
+    "commit": {
+     "message": "c2",
+     "patch_id": "bb82cff42eb0e17ece824515319e09b733af33ad"
+    }
+   }
+  ]
+ }
+}
