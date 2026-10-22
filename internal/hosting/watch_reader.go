@@ -168,9 +168,7 @@ func NewStatusReaderWithTransport(ctx context.Context, target, host string, rt h
 	}
 	r := newWatchReader(api)
 	r.mode = guardStatus
-	if err := r.SetRequestTimeout(StatusRequestTimeout); err != nil {
-		return nil, cleanup, err
-	}
+	r.timeout = StatusRequestTimeout
 	return r, cleanup, nil
 }
 
