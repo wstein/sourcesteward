@@ -159,7 +159,7 @@ func (c *cycle) poll(ctx context.Context, repo string) error {
 	hints := Hints{Cycle: st.Cycle, DetailEvery: w.o.DetailEvery, Cond: rs.Cond}
 	for _, p := range rs.sortedPRs() {
 		if !p.Gone {
-			hints.Known = append(hints.Known, KnownPR{Number: p.Number, Head: p.Head, Class: p.Class, DetailDue: p.DetailDue})
+			hints.Known = append(hints.Known, KnownPR{Number: p.Number, Head: p.Head, Class: p.Class, ClassCand: p.ClassCand, DetailDue: p.DetailDue})
 		}
 	}
 	obs, err := w.o.Observer.Observe(ctx, repo, hints)
