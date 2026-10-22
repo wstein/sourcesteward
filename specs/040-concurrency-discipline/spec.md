@@ -91,14 +91,16 @@ func Start(ctx context.Context, jobs ...func(ctx context.Context) error) *Sessio
 // Completed delivers each finished job (index and error) on a channel buffered to len(jobs); it never blocks a job.
 func (s *Session) Completed() <-chan Completion
 // Cancel cancels the session context. Close cancels, waits for every job and returns the errors by job index; it is
-// idempotent, and the caller must call it (defer) on every path, which is the no-leak guarantee.
+// idempotent, and the caller must call it (defer) on every path, which is the no-leak guarantee. A panic in a job is recovered
+// in its goroutine, cancels the session context and is re-raised (first by index, same value) from Close in the caller; the
+// panicking job is still delivered once on Completed with a nil error.
 func (s *Session) Cancel()
 func (s *Session) Close() []error
 
 type Completion struct { Index int; Err error }
 ```
 
-Rules the implementation must satisfy for `Do` (each is a test, see the plan); `Session` must satisfy rule 3 (no leak after `Close`) and rule 4:
+Rules the implementation must satisfy for `Do` (each is a test, see the plan); `Session` must satisfy rule 3 (no leak after `Close`, also after a job panic), rule 4 and the panic behaviour documented on `Close` (rule 7 applied to `Close`):
 
 1. **Bounded.** At most `width` workers exist at any time, not n goroutines blocked on a semaphore. Workers pull the next index from a
    shared counter; there is no unbounded channel.
@@ -109,7 +111,7 @@ Rules the implementation must satisfy for `Do` (each is a test, see the plan); `
 4. **No new deadline.** `fanout` adds no timeout of its own. Deadlines stay with the caller's context (`hosting` and `inspection`
    per-call bounds are unchanged).
 5. **Late cancellation is not an error.** `Do` returns `ctx.Err()` only when at least one item was skipped for it.
-6. **No wait on a dead context.** If `ctx` is already done, nothing is started and `Do` returns `ctx.Err()` without a goroutine.
+6. **No wait on a dead context.** If `n > 0` and `ctx` is already done, nothing is started and `Do` returns `ctx.Err()` without a goroutine. If `n == 0`, no item exists to skip, so `Do` returns nil even when `ctx` is done (rule 5 governs; one test row for each).
 7. **Panic is the caller's.** A recovered panic is re-raised unchanged (same value) in the calling goroutine so the existing top-level
    handling applies; it is never swallowed and never logged by `fanout`.
 
@@ -123,26 +125,42 @@ non-test files, so comments, strings, raw strings and generated or aliased forms
 variable `STW_ARCH_ROOT` (default: the module root) so the Python tests can point it at a temporary tree. All packages including `cmd/`.
 The check fails when:
 
-1. a file outside `internal/fanout/` has more go statements than its allowlist entry (a new file has entry 0: a stray `go` fails);
-2. an allowlist entry is **stale**, that is larger than the count found (the list may only shrink, so a fixed violation must remove its
-   entry in the same change; the check demands it);
-3. the allowlist names a file under `internal/fanout/` or a file that no longer exists;
-4. the allowlist is a closed set of two kinds of line: `wp N` lines (transitional; the header line `done: ...` lists the work packages that have landed, each WP adds its number in the same change, and the test fails on any `wp N` line with N in `done`) and at most one `exempt` line, which must name `internal/workspace/native_ref_transaction.go` and carry a justification text; a second `exempt` line, or an `exempt` line for another path, fails (Decision 1);
-5. a non-test file outside `internal/fanout/` imports `golang.org/x/sync/errgroup`, or uses `sync.WaitGroup` (after the migration of
-   its package; before that, the allowlist entry covers the file).
+Allowlist grammar (`scripts/go-statements.allow`, exact; blank lines and `#` comment lines are ignored, everything else must match
+one of these, or the test fails on the line):
 
-The allowlist is `scripts/go-statements.allow`, one `path count` pair per line, sorted, with a comment per line naming the Spec 040 work
-package that removes it. Adding a line is a change to a reviewed file and needs the owner's decision stated in the pull request; the
-plan starts it with the 14 statements of the table above and each work package deletes its lines.
+```
+done: <N> <N> ...                      exactly one header line, first; the work packages that have landed (may be empty: "done:")
+<path> <count> wp <N>                  transitional: <count> go statements remain in <path>, removed by work package <N>
+exempt <path> <count> <justification>  the one named exemption; justification is free text of at least 20 characters
+```
+
+Lines are sorted by path, paths are module-relative with `/`, `count` is a positive integer. The initial file is `done:` followed by the
+14 statements of the table as nine `wp` lines (`cmd/stw/main.go 1 wp 4`, ..., `internal/workspace/native_ref_transaction.go 3 wp 6`).
+
+The check fails when:
+
+1. a file outside `internal/fanout/` has more go statements than its entry (a file without an entry has 0: a stray `go` fails);
+2. an entry is **stale**, that is larger than the count found (the list may only shrink, so a fixed violation must remove or lower its
+   entry in the same change; the check demands it);
+3. an entry names a file under `internal/fanout/`, a file that no longer exists, or a path twice;
+4. the grammar or the closed set is violated: a line that matches none of the three forms, no or two `done:` headers, a `wp N` line
+   with N in the `done:` header (each work package adds its number to `done:` in the change that removes its lines, so a leftover line
+   of a landed package fails), or an `exempt` line that is not for `internal/workspace/native_ref_transaction.go`, or a second
+   `exempt` line (Decision 1);
+5. a non-test file outside `internal/fanout/` imports `golang.org/x/sync/errgroup`, or uses `sync.WaitGroup` (a file with an entry is
+   covered until its work package lands).
+
+Adding or raising a line is a change to a reviewed file and needs the owner's decision stated in the pull request; the plan starts the
+file with the 14 statements and each work package deletes its lines.
 
 ### Mutation proof
 
-The pure function is table-tested in `internal/architecture/gostmt_test.go`, and `scripts/test_architecture.py` proves the runner can fail
-(same style as its import-boundary tests):
+The pure function `checkGoStatements` is table-tested in `internal/architecture/gostmt_test.go` (one row per check rule above, each
+killing a one-line mutation), and `scripts/test_architecture.py` proves the runner can fail (same style as its import-boundary tests):
 
 - a count with one `go` in a new file (`internal/foo/x.go`) fails; the same count inside `internal/fanout/` passes;
-- a stale allowlist entry (larger than the count) fails; removing a still-needed entry fails; an entry in `internal/fanout/` or for a
-  missing file fails; a `wp N` line with N in `done` fails; two `exempt` lines, or one for another path, fail;
+- a stale entry fails; removing a still-needed entry fails; an entry in `internal/fanout/`, for a missing file or twice fails; a
+  malformed line, a missing or doubled header, a `wp N` line with N in `done:`, two `exempt` lines and an `exempt` line for another path fail;
 - end to end, the Python test writes a temporary tree (a stray `go func() {}()` in a non-test file next to a clean sibling), sets
   `STW_ARCH_ROOT`, runs the Go test and asserts the offending path is reported and the clean one is not; the same `go` in a `_test.go`
   file, in a comment and in a raw string literal is ignored (kills a regex implementation); an `errgroup` or `sync.WaitGroup` import fails;
@@ -194,10 +212,10 @@ path (Specs 029 and 031) whose stream tests are strict about reaping and byte li
 These were settled by the foreman after the first draft and stay open to an owner override.
 
 1. **No blanket exemption.** The end state allows at most ONE named exemption, `workspace/native_ref_transaction.go`, and only if the
-   conditional WP-6 shows that `fanout` (`Session` is already in WP-0; if it still cannot express the transaction) cannot express its long-lived session. The exemption is a line in
-   `scripts/go-statements.allow` with a written justification, and a test in `scripts/test_architecture.py` fails when a second
-   exemption (a second path with a nonzero count after WP-5) appears. No other file may stay on the list.
-2. **Keep the import ban.** `sync.WaitGroup` and `golang.org/x/sync/errgroup` are forbidden outside `internal/fanout` (rule 4 of the check).
+   conditional WP-6 shows that `fanout` (`Session` is already in WP-0; if it still cannot express the transaction) cannot express its long-lived session. The exemption is an `exempt` line in
+   `scripts/go-statements.allow` with a written justification; rule 4 of the Go test (`internal/architecture/gostmt_test.go`) fails on
+   a second `exempt` line or one for another path. No other file may stay on the list: after the last work package every `wp` line is gone.
+2. **Keep the import ban.** `sync.WaitGroup` and `golang.org/x/sync/errgroup` are forbidden outside `internal/fanout` (rule 5 of the check).
 3. **Go AST check.** `go/parser` and `*ast.GoStmt`, run by `scripts/check-architecture.py` the way `run_release_ast_check` already runs
    a Go test (`internal/architecture`, no `scripts/gostmt` helper: the existing pattern is followed because nothing needs a separate
    binary; the environment root of the test serves the Python mutation tests). A regex is rejected: comments, strings, raw strings and
