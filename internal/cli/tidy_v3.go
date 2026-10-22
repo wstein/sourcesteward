@@ -15,7 +15,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
-var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "consolidation-range", "decisions", "timeout"}
+var tidyV3PlanFlags = []string{"online", "remote", "tracking-remote", "repo", "host", "pr", "completed-worktree", "protect-worktree", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "report-max-files", "report-max-lines", "report-max-commits", "consolidation-range", "decisions", "timeout"}
 var tidyV3ApplyFlags = []string{"online", "completed-worktree", "owner", "protect-worktree", "timeout"}
 
 // Counting wraps the existing typed flag value without changing Cobra parsing.
@@ -34,7 +34,7 @@ func (v *tidyV3CountedFlag) String() string     { return v.value.String() }
 func (v *tidyV3CountedFlag) Type() string       { return v.value.Type() }
 func (v *tidyV3CountedFlag) Set(s string) error { v.count++; return v.value.Set(s) }
 
-var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "decisions", "timeout", "as", "limit", "apply", "list"}
+var tidyV3Singletons = []string{"contract", "base", "state-dir", "task", "owner", "remove-registration", "remove-files", "json", "online", "remote", "tracking-remote", "repo", "host", "completed-worktree", "plan", "authorize", "integration-proof", "accept-whitespace-differences", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "report-max-files", "report-max-lines", "report-max-commits", "decisions", "timeout", "as", "limit", "apply", "list"}
 
 func trackTidyV3Singletons(cmd *cobra.Command) {
 	for _, name := range tidyV3Singletons {
@@ -87,6 +87,9 @@ func addTidyV3PlanFlags(cmd *cobra.Command, contract *string, o *workspace.V3Pla
 	f.IntVar(&o.ReportMaxEntries, "report-max-entries", 0, "Most report entries (default 512, ceiling 4096)")
 	f.IntVar(&o.ReportMaxBytes, "report-max-bytes", 0, "Most bytes per report file (default 4 MiB, ceiling 16 MiB)")
 	f.IntVar(&o.ReportMaxDiffBytes, "report-max-diff-bytes", 0, "Most diff bytes per report entry (default 64 KiB, ceiling 1 MiB)")
+	f.IntVar(&o.ReportMaxFiles, "report-max-files", 0, "Most files per report entry diff (default 16, ceiling 4096)")
+	f.IntVar(&o.ReportMaxLines, "report-max-lines", 0, "Most diff lines per report entry (default 1000, ceiling 200000)")
+	f.IntVar(&o.ReportMaxCommits, "report-max-commits", 0, "Most commits listed per report entry (default 50, ceiling 1000)")
 	f.StringArrayVar(&o.ConsolidationRanges, "consolidation-range", nil, "A..B range whose commits the report pairs with each branch (repeatable, at most four)")
 	f.DurationVar(&o.Timeout, "timeout", 0, "Replace the default deadlines of the operation (default scales with the number of deletions)")
 	f.StringVar(&o.DecisionsFile, "decisions", "", "Absolute path of a reviewer decision file; evidence for the plan, never authorization")
@@ -102,7 +105,7 @@ func validateTidyV3ReviewFlags(cmd *cobra.Command, o *workspace.V3PlanOptions) e
 		name    string
 		value   int
 		ceiling int
-	}{{"report-max-entries", o.ReportMaxEntries, 4096}, {"report-max-bytes", o.ReportMaxBytes, 16 << 20}, {"report-max-diff-bytes", o.ReportMaxDiffBytes, 1 << 20}} {
+	}{{"report-max-entries", o.ReportMaxEntries, 4096}, {"report-max-bytes", o.ReportMaxBytes, 16 << 20}, {"report-max-diff-bytes", o.ReportMaxDiffBytes, 1 << 20}, {"report-max-files", o.ReportMaxFiles, 4096}, {"report-max-lines", o.ReportMaxLines, 200000}, {"report-max-commits", o.ReportMaxCommits, 1000}} {
 		if cmd.Flags().Changed(bound.name) && (bound.value < 1 || bound.value > bound.ceiling) {
 			return fmt.Errorf("--%s must be between 1 and %d", bound.name, bound.ceiling)
 		}
@@ -122,7 +125,7 @@ func validateTidyV3ReviewFlags(cmd *cobra.Command, o *workspace.V3PlanOptions) e
 		}
 	}
 	retirement := o.Task != "" || o.CompletedWorktree != ""
-	if (retirement || o.TrackingRemote != "") && (o.ReportDir != "" || o.DecisionsFile != "" || len(o.ConsolidationRanges) > 0 || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0) {
+	if (retirement || o.TrackingRemote != "") && (o.ReportDir != "" || o.DecisionsFile != "" || len(o.ConsolidationRanges) > 0 || o.ReportMaxEntries != 0 || o.ReportMaxBytes != 0 || o.ReportMaxDiffBytes != 0 || o.ReportMaxFiles != 0 || o.ReportMaxLines != 0 || o.ReportMaxCommits != 0) {
 		return fmt.Errorf("--report-dir, --decisions, --consolidation-range and --report-max-* apply to local-reference plans only: a retirement plan writes no review report, and its result (use --json) is the record")
 	}
 	return nil
@@ -385,6 +388,9 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 		}
 		if rv := p.Review; rv != nil {
 			fmt.Fprintf(&text, "Review bounds: max_entries=%d max_bytes=%d max_diff_bytes=%d\n", rv.MaxEntries, rv.MaxBytes, rv.MaxDiffBytes)
+			if rv.MaxFiles != 0 || rv.MaxLines != 0 || rv.MaxCommits != 0 {
+				fmt.Fprintf(&text, "Review entry bounds: max_files=%d max_lines=%d max_commits=%d (0: default)\n", rv.MaxFiles, rv.MaxLines, rv.MaxCommits)
+			}
 			for _, rg := range rv.Ranges {
 				fmt.Fprintf(&text, "Review range: %q from=%q to=%q commits=%d\n", rg.Selector, rg.From, rg.To, rg.Commits)
 			}

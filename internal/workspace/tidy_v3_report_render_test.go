@@ -145,7 +145,7 @@ func TestReportByteBoundKeepsBothFilesWithinTheirBoundAndOmitsTheRest(t *testing
 }
 
 func TestReportBoundsAreValidatedAgainstTheirCeilings(t *testing.T) {
-	good := reportBounds{MaxEntries: reportEntriesCeiling, MaxBytes: reportBytesCeiling, MaxDiffBytes: reportDiffBytesCeiling}
+	good := reportBounds{MaxEntries: reportEntriesCeiling, MaxBytes: reportBytesCeiling, MaxDiffBytes: reportDiffBytesCeiling, MaxFiles: reportFilesCeiling, MaxLines: reportLinesCeiling, MaxCommits: reportCommitsCeiling}
 	if got, err := resolveReportBounds(good); err != nil || got != good {
 		t.Fatalf("ceilings must be accepted: %+v %v", got, err)
 	}

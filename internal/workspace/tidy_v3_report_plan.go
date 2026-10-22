@@ -16,8 +16,10 @@ func defaultWriteReport(dir string, markdown, jsonData []byte) error {
 }
 
 func validV3ReviewBinding(b V3ReviewBinding, p V3Plan) bool {
-	r, err := resolveReportBounds(reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes})
-	if err != nil || b.MaxEntries <= 0 || b.MaxBytes <= 0 || b.MaxDiffBytes <= 0 || r != (reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes}) {
+	r, err := resolveReportBounds(reportBounds{MaxEntries: b.MaxEntries, MaxBytes: b.MaxBytes, MaxDiffBytes: b.MaxDiffBytes, MaxFiles: b.MaxFiles, MaxLines: b.MaxLines, MaxCommits: b.MaxCommits})
+	d := defaultReportBounds()
+	if err != nil || b.MaxEntries <= 0 || b.MaxBytes <= 0 || b.MaxDiffBytes <= 0 || r.MaxEntries != b.MaxEntries || r.MaxBytes != b.MaxBytes || r.MaxDiffBytes != b.MaxDiffBytes ||
+		b.MaxFiles == d.MaxFiles || b.MaxLines == d.MaxLines || b.MaxCommits == d.MaxCommits {
 		return false
 	}
 	if b.Ranges == nil || len(b.Ranges) > reportMaxRanges || !validV3ReviewNotes(b.Notes) || b.DecisionsDigest != "" && !v3Hash(b.DecisionsDigest) {
@@ -41,7 +43,16 @@ func reviewBindingFor(o V3PlanOptions, ranges []V3ReviewRange) (*V3ReviewBinding
 	if ranges == nil {
 		ranges = []V3ReviewRange{}
 	}
-	return &V3ReviewBinding{MaxEntries: bounds.MaxEntries, MaxBytes: bounds.MaxBytes, MaxDiffBytes: bounds.MaxDiffBytes, Ranges: ranges, Notes: []V3ReviewNote{}}, bounds, nil
+	d := defaultReportBounds()
+	nonDefault := func(v, def int) int {
+		if v == def {
+			return 0
+		}
+		return v
+	}
+	return &V3ReviewBinding{MaxEntries: bounds.MaxEntries, MaxBytes: bounds.MaxBytes, MaxDiffBytes: bounds.MaxDiffBytes,
+		MaxFiles: nonDefault(bounds.MaxFiles, d.MaxFiles), MaxLines: nonDefault(bounds.MaxLines, d.MaxLines), MaxCommits: nonDefault(bounds.MaxCommits, d.MaxCommits),
+		Ranges: ranges, Notes: []V3ReviewNote{}}, bounds, nil
 }
 
 // reportRoots are the places a report must not be written into.

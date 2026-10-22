@@ -92,3 +92,16 @@ func TestTidyV3HumanOutputAgreesWithJSONForTheReview(t *testing.T) {
 		}
 	}
 }
+
+func TestTidyV3EntryBoundFlagsReachThePlannerAndAreValidated(t *testing.T) {
+	base := []string{"plan", "/tmp/repo", "--contract", "3", "--base", "refs/heads/main", "--report-dir", "/tmp/report"}
+	called, got, err := runProofCLI(append(append([]string{}, base...), "--report-max-files", "4096", "--report-max-lines", "200000", "--report-max-commits", "1000"))
+	if err != nil || !called || got.ReportMaxFiles != 4096 || got.ReportMaxLines != 200000 || got.ReportMaxCommits != 1000 {
+		t.Fatalf("flags: %v %+v", err, got)
+	}
+	for _, bad := range [][]string{{"--report-max-files", "0"}, {"--report-max-files", "4097"}, {"--report-max-lines", "200001"}, {"--report-max-commits", "1001"}, {"--report-max-commits", "-1"}} {
+		if _, _, err := runProofCLI(append(append([]string{}, base...), bad...)); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+}

@@ -39,21 +39,31 @@ var (
 	reportModePattern = regexp.MustCompile(`^[0-7]{6}$`)
 
 	// Report command bounds (contracts/review-report.md#command-bounds).
-	specReportLog = integrationSpec{"log", reportMaxCommits, bothWidths(reportMaxCommits * reportRecordBytes), '\n', func(r []byte, w int) bool {
-		parts := bytes.Split(r, []byte{0})
-		return len(r)+1 <= reportRecordBytes && len(parts) == 4 && hexExact(parts[0], w) && reportDatePattern.Match(parts[3])
-	}}
+	specReportLog = reportLogSpec(reportMaxCommits)
 	// The base-side scan that finds candidate commits is bounded by the
 	// base-side commit bound of the proofs (FR-008).
 	specReportScan = integrationSpec{"log candidates", 4096, bothWidths(4096 * reportRecordBytes), '\n', func(r []byte, w int) bool {
 		parts := bytes.Split(r, []byte{0})
 		return len(r)+1 <= reportRecordBytes && len(parts) == 2 && hexExact(parts[0], w)
 	}}
-	specReportBlobSizes = integrationSpec{"cat-file --batch-check", 2 * reportMaxFiles, [2]int64{2 * reportMaxFiles * 61, 2 * reportMaxFiles * 89}, '\n', func(r []byte, w int) bool {
+	specReportBlobSizes = reportBlobSpec(reportMaxFiles)
+)
+
+// reportLogSpec is the command bound of the commit listing for n commits.
+func reportLogSpec(n int) integrationSpec {
+	return integrationSpec{"log", n, bothWidths(int64(n) * reportRecordBytes), '\n', func(r []byte, w int) bool {
+		parts := bytes.Split(r, []byte{0})
+		return len(r)+1 <= reportRecordBytes && len(parts) == 4 && hexExact(parts[0], w) && reportDatePattern.Match(parts[3])
+	}}
+}
+
+// reportBlobSpec is the command bound of the blob size lookup for files files.
+func reportBlobSpec(files int) integrationSpec {
+	return integrationSpec{"cat-file --batch-check", 2 * files, [2]int64{int64(2 * files * 61), int64(2 * files * 89)}, '\n', func(r []byte, w int) bool {
 		fields := strings.Fields(string(r))
 		return len(fields) == 3 && hexExact([]byte(fields[0]), w) && fields[1] == "blob" && integrationCountPattern.MatchString(fields[2])
 	}}
-)
+}
 
 const (
 	reportRawRecords = 8192
@@ -105,7 +115,7 @@ func (r *integrationRun) collectReportEntry(ctx context.Context, q reportRequest
 		return finish()
 	}
 	span := q.Base + ".." + q.Tip
-	if err := r.reportCommits(ctx, &e, span); err != nil {
+	if err := r.reportCommits(ctx, &e, span, q.Bounds.commits()); err != nil {
 		if err = degrade(err); err != nil {
 			return e, err
 		}
@@ -222,13 +232,13 @@ func (r *integrationRun) reportGitlinks(ctx context.Context, e *V3ReportEntry, a
 			if c.oldMode != "160000" && c.newMode != "160000" {
 				continue
 			}
-			if total++; total <= reportMaxFiles {
+			if total++; total <= q.Bounds.files() {
 				e.Gitlinks = append(e.Gitlinks, V3ReportGitlink{Side: side.name, Path: untrusted(c.path), OldOID: zeroAsEmpty(c.oldOID), NewOID: zeroAsEmpty(c.newOID)})
 			}
 		}
 	}
-	if total > reportMaxFiles {
-		e.GitlinksTruncated = &V3ReportTruncation{Unit: "gitlinks", Shown: reportMaxFiles, Total: total}
+	if total > q.Bounds.files() {
+		e.GitlinksTruncated = &V3ReportTruncation{Unit: "gitlinks", Shown: q.Bounds.files(), Total: total}
 	}
 	return nil
 }
@@ -238,12 +248,12 @@ func emptyReportDiff(source string) V3ReportDiff {
 }
 
 // reportCommits lists the newest commits of base..tip (merge commits included).
-func (r *integrationRun) reportCommits(ctx context.Context, e *V3ReportEntry, span string) error {
+func (r *integrationRun) reportCommits(ctx context.Context, e *V3ReportEntry, span string, maxCommits int) error {
 	total, err := r.count(ctx, "rev-list", "--count", span, "--")
 	if err != nil {
 		return err
 	}
-	records, err := r.lines(ctx, integrationCommand{args: []string{"log", "-n", strconv.Itoa(reportMaxCommits), "--format=%H%x00%s%x00%an%x00%aI", span, "--"}}, specReportLog)
+	records, err := r.lines(ctx, integrationCommand{args: []string{"log", "-n", strconv.Itoa(maxCommits), "--format=%H%x00%s%x00%an%x00%aI", span, "--"}}, reportLogSpec(maxCommits))
 	if err != nil {
 		return err
 	}
@@ -417,7 +427,7 @@ func (r *integrationRun) reportDiff(ctx context.Context, e *V3ReportEntry, q rep
 		if source == "merge-result" && (c.oldMode == "160000" || c.newMode == "160000") {
 			*reasons = append(*reasons, "gitlink-change")
 		}
-		if i >= reportMaxFiles {
+		if i >= q.Bounds.files() {
 			continue
 		}
 		file := V3ReportFile{Path: untrusted(c.path), OldMode: c.oldMode, NewMode: c.newMode, Kind: reportFileKind(c, stats[c.path].binary)}
@@ -432,7 +442,7 @@ func (r *integrationRun) reportDiff(ctx context.Context, e *V3ReportEntry, q rep
 			binaryOIDs = append(binaryOIDs, c.oldOID, c.newOID)
 		}
 	}
-	if d.BinaryFiles, err = r.reportBinaries(ctx, d.Files, raw, binaryOIDs); err != nil {
+	if d.BinaryFiles, err = r.reportBinaries(ctx, d.Files, raw, binaryOIDs, q.Bounds.files()); err != nil {
 		return err
 	}
 	text, total, lines, err := r.reportPatch(ctx, attr, pair, false)
@@ -446,7 +456,7 @@ func (r *integrationRun) reportDiff(ctx context.Context, e *V3ReportEntry, q rep
 		}
 		d.WhitespaceOnly = whitespaceTotal == 0
 	}
-	shown, cut := boundReportDiff(text, q.Bounds.MaxDiffBytes)
+	shown, cut := boundReportDiff(text, q.Bounds.MaxDiffBytes, q.Bounds.files(), q.Bounds.lines())
 	d.shownFiles, d.totalFiles, d.shownLines, d.totalLines = shown.files, len(raw), shown.lines, lines
 	switch {
 	case cut == "files":
@@ -503,7 +513,7 @@ func reportFileKind(c reportChange, binary bool) string {
 }
 
 // reportBinaries names the binary paths with their old and new blob and size.
-func (r *integrationRun) reportBinaries(ctx context.Context, files []V3ReportFile, raw []reportChange, oids []string) ([]V3ReportBinary, error) {
+func (r *integrationRun) reportBinaries(ctx context.Context, files []V3ReportFile, raw []reportChange, oids []string, maxFiles int) ([]V3ReportBinary, error) {
 	out := []V3ReportBinary{}
 	var want []string
 	for _, oid := range oids {
@@ -513,7 +523,7 @@ func (r *integrationRun) reportBinaries(ctx context.Context, files []V3ReportFil
 	}
 	sizes := map[string]int64{}
 	if len(want) > 0 {
-		lines, err := r.lines(ctx, integrationCommand{args: []string{"cat-file", "--batch-check"}, stdin: bytes.NewReader(joinRecords(want, '\n'))}, specReportBlobSizes)
+		lines, err := r.lines(ctx, integrationCommand{args: []string{"cat-file", "--batch-check"}, stdin: bytes.NewReader(joinRecords(want, '\n'))}, reportBlobSpec(maxFiles))
 		if err != nil {
 			return nil, err
 		}
@@ -593,7 +603,7 @@ type reportShown struct {
 
 // boundReportDiff cuts the diff at the file, line and byte bounds of FR-035 and
 // names the first bound that applied.
-func boundReportDiff(text string, maxBytes int) (reportShown, string) {
+func boundReportDiff(text string, maxBytes, maxFiles, maxLines int) (reportShown, string) {
 	var out reportShown
 	var b strings.Builder
 	cut := ""
@@ -604,13 +614,13 @@ func boundReportDiff(text string, maxBytes int) (reportShown, string) {
 		}
 		rest = rest[len(line):]
 		if strings.HasPrefix(line, "diff --git ") {
-			if out.files == reportMaxFiles {
+			if out.files == maxFiles {
 				cut = "files"
 				break
 			}
 			out.files++
 		}
-		if out.lines == reportMaxLines {
+		if out.lines == maxLines {
 			cut = "lines"
 			break
 		}

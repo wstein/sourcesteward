@@ -76,10 +76,15 @@ type V3Plan struct {
 
 // V3ReviewBinding is the effective report bounds bound into the plan identity.
 type V3ReviewBinding struct {
-	MaxEntries   int             `json:"max_entries"`
-	MaxBytes     int             `json:"max_bytes"`
-	MaxDiffBytes int             `json:"max_diff_bytes"`
-	Ranges       []V3ReviewRange `json:"ranges"`
+	MaxEntries   int `json:"max_entries"`
+	MaxBytes     int `json:"max_bytes"`
+	MaxDiffBytes int `json:"max_diff_bytes"`
+	// Per-entry bounds, present only when they differ from the defaults
+	// (16 files, 1,000 diff lines, 50 commits).
+	MaxFiles   int             `json:"max_files,omitempty"`
+	MaxLines   int             `json:"max_lines,omitempty"`
+	MaxCommits int             `json:"max_commits,omitempty"`
+	Ranges     []V3ReviewRange `json:"ranges"`
 	// DecisionsDigest is the SHA-256 of the decision file (FR-011); Notes list
 	// the decisions that were ignored (FR-039).
 	DecisionsDigest string         `json:"decisions_digest,omitempty"`
