@@ -73,15 +73,22 @@ interval = "60s"
 authors = ["dependabot[bot]"]      # PRs by these logins produce no events at all
 labels  = ["no-watch"]             # PRs carrying one of these labels produce no events
 [shape]
-stack_checks = ["pr-target"]       # check names whose failure on a non-default base is the stack-merge-shape
+stack_patterns = ["PR must target repository main"]   # extra fixed strings, added to the two defaults (rule 2)
 ```
 
-Flags override the file. `[shape]` is optional; its default patterns are in the event table.
+Flags override the file. `[shape]` is optional; the defaults are in the `shape` rules.
 
 ## State and journal layout
 
-State directory: `--state-dir`, else `$XDG_STATE_HOME/stw/watch/<profile>` (fallback `~/.local/state`), where `<profile>` is the
-first 12 hex digits of SHA-256 over host and the sorted repository list. Created `0700`; files `0600`. Nothing else is written.
+State directory: `--state-dir ABSOLUTE_PATH` if given, else `$XDG_STATE_HOME/stw/watch/<workspace-id>/` (fallback
+`~/.local/state/stw/watch/<workspace-id>/`). It is **never** inside a repository, a worktree or a `.stw/` directory: `.stw/` is
+committed project configuration (`release.toml`, `watch.toml`), and a journal there would be committed or dirty the tree; a
+`--state-dir` inside a Git work tree is refused (exit 2). Created `0700` (an existing directory with wider mode is exit 1);
+files `0600`. `<workspace-id>` is the first 16 lowercase hex digits of SHA-256 over the UTF-8 text
+`stw-watch-v1\n` + host + `\n` + `workspace:` + the canonical (symlink-resolved, absolute) workspace root when `--workspace` is used,
+else `repos:` + the sorted, de-duplicated, lowercased `OWNER/NAME` list joined by `\n`. A changed repository list therefore
+selects a new directory (a new silent baseline) unless `--state-dir` pins it. The foreman's scratchpad use maps to an explicit
+`--state-dir <scratchpad>/watch-state` (its `alive` file is the `heartbeat`, `emitted.jsonl` is `journal.jsonl`). Nothing else is written.
 
 | File | Content |
 | --- | --- |
@@ -104,10 +111,25 @@ Per repository and cycle (all GET, through the Spec 022 transport, 30 s per requ
 
 1. `pulls?state=open&per_page=100&page=N` (pages up to 10, so 1000 open PRs per repository; more is `watch-error` `list-truncated`
    and the repository keeps working on the first 1000). Gives number, title, user, labels, draft, head SHA and ref, base ref.
-2. `pulls/N` for each open PR (mergeable, mergeable_state; `null` mergeable is "not computed" and keeps the previous value).
-3. `commits/SHA/check-runs` and `commits/SHA/statuses` at each open PR head (existing allowlisted paths, bounded pagination).
+2. `pulls/N` detail (mergeable, mergeable_state; `null` mergeable is "not computed" and keeps the previous value) for **every**
+   open PR, drafts included (a draft that turns conflicting after a merge is exactly the restack case), but **only when needed**:
+   when the PR is new or its head SHA or base SHA (from the list) changed; for all open PRs of a repository in the cycle after
+   a `merged` event of that repository (stacked children); and on a slow refresh every `--detail-every N` cycles (default 10), per
+   PR staggered by number so the load is spread. Otherwise the previous `mergeable` is kept.
+3. `commits/SHA/check-runs` and `commits/SHA/statuses` (existing allowlisted paths, bounded pagination) only for open PRs whose last
+   accepted class is `pending` or `none`, or whose head just changed, and on the same slow refresh for `green`/`red` PRs. These are
+   conditional reads (ETag per head and path).
 4. For a PR that left the open list: `pulls/N` once (state, merged, merge commit, base, head).
 5. `rate_limit` once per cycle (free).
+
+GraphQL is not used: the Spec 022 allowlist (`fixedEndpoint`) admits only fixed REST GETs, and GraphQL is a POST; a read-only
+GraphQL query would need an allowlist and policy change that this spec does not make. The conditional REST design is the contract.
+
+Budget per poll (steady state, nothing changing): **one conditional list call per repository (a 304, no rate limit cost)**, plus
+one conditional check read pair per PR still `pending`/`none` (304 when unchanged), plus one free `rate_limit` read per cycle.
+Calls that cost rate limit are the 200 responses: a changed list, new heads, detail after head/base change or merge, the slow refresh.
+Worst case for a repository with P open PRs is 1 + P detail + 2P check calls (a first baseline); a steady 100-PR, 6-repository
+watch at 60 s is 6 conditional list calls plus the pending PRs' conditional check reads per minute.
 
 Conditional requests: every list and detail response keeps its `ETag`; the next request sends `If-None-Match`; a 304 is accepted as
 "unchanged" and costs no rate limit. The conditional primitive is new in the transport (WP-B) and is available only to the watch
@@ -160,16 +182,36 @@ All events carry the common fields of the contract. `details` per kind (exact ke
 | `watch-recovered` | first success after an emitted `watch-error` or `watch-stalled` | `after_failures`, `repo` |
 | `watch-stalled` | see above | `since`, `threshold_seconds`, `repo` |
 
-`review-state-changed` is **reserved**: not emitted in v1 (the REST reviews are per-PR and per-review, so a faithful "approved,
-changes requested" needs a separate read budget and a decision about stale reviews; see Open questions). Consumers must ignore
+`review-state-changed` is **reserved**: not emitted in v1 (owner decision). Review state is not a CI or PR-shape fact: it needs
+its own read budget (REST reviews are per PR and per review, with stale-review rules) and, above all, the meaning of an
+independent review ("CLEAR" for an exact head) lives in a review ledger, which is a separate concern with its own spec. A future
+`review` source can plug into the event stream (same envelope, new kind) without changing the other kinds. Consumers must ignore
 unknown kinds.
 
-`shape` classification (no log download; check-run `name`, `output.title` and the first 4 KiB of `output.summary` only): the
-failing set is `stack-merge-shape` when the PR base is **not** the repository default branch and every failing check either is
-listed in `[shape] stack_checks` or its text matches one of the defaults `Unexpected synthetic merge parents` or `PR must target
-repository main`; `real` when every failing check is a plain `failure` conclusion and the first rule does not apply; `unknown`
-for anything else (cancelled, timed out, action required, startup failure, status context errors, no readable text). Infrastructure
-flakes therefore show as `unknown` or `real`; the consumer decides what to do. This is a heuristic and the field says so in the docs.
+### `shape` classification (exact, testable)
+
+No log download: the inputs are, per failing check-run, `name`, `conclusion`, `output.title` and the first 4 KiB of
+`output.summary` and `output.text` (joined as the *text*), and, per failing status context, `context` and `description`. The
+rules apply in this order to the whole failing set of one head; the first that matches decides:
+
+1. **`real`** if **any** failing item has `conclusion` `failure` (or status `failure`) and its text contains a failing-test marker:
+   `--- FAIL: `, a line starting with `FAIL` followed by whitespace, `panic:`, `Error:`, or `_test.go:` followed by digits. (`watch2.sh`
+   ranks a real failure above a stack artefact in the same run, so does this rule: a real failure is never hidden by a
+   stack-shaped failure next to it.)
+2. **`stack-merge-shape`** only if **all** of the following hold: the PR's `base` is not the repository default branch (a stacked
+   PR); **every** failing item has `conclusion` `failure`; **every** failing item's text contains one of the patterns `Unexpected
+   synthetic merge parents` or `PR must target repository main` (extended by `[shape] stack_patterns`, fixed strings, matched
+   case-sensitively); and rule 1 did not match. A check name alone never qualifies (the config does not list check names), and an
+   empty or unreadable text never qualifies.
+3. **`unknown`** otherwise. `unknown` is the default when in doubt: cancelled, timed out, action required, startup failure,
+   status-context errors, `failure` with no readable text, infrastructure phrases (runner shutdown, no space left, HTTP 5xx), a
+   mix of shape and non-shape failures. The watcher fails loud and never hides a possible real failure as a stack artefact.
+
+This is at least as strict as `watch2.sh`, which classifies from job logs by the same two patterns but does not look at the PR
+base and does not require every failing item to match; here both are required, and the log is replaced by the bounded check-run
+text. A consequence is that a `stack-merge-shape` can come out as `unknown` where the log would have shown it (summary lacks the
+text); that error direction is intended. The consumer may treat `stack-merge-shape` as expected on a stacked PR and everything
+else as needing a look.
 
 ### restack-needed rules
 
@@ -259,6 +301,20 @@ poll is bounded only by these (a baseline-free first-appearance of 1000 PRs woul
 The 30 s operation context of Spec 022 applies **per request**, not to the whole watch; the finite-total-clock design of the
 deferred Spec 030 `--watch` is a different, one-PR command and stays deferred.
 
+## Differences from `watch2.sh`
+
+- **Dropped**: auto-ready and PR body editing (the Haiku brief did that; `stw watch` is read-only), the clear ledger
+  (`clear-ledger.tsv`), the LLM relay that forwarded `EVT` lines, the Anchorage-specific repository list and `READY-CANDIDATE` /
+  `READY-PR` labels (decisions belong to the consumer), `gh`-subprocess calls (`gh pr list`, `gh run view`, `gh api` job logs), the
+  STOP file and `WATCH_*` environment variables (signals, flags and the config file replace them), the plain-text `EVT` format.
+- **Kept**: poll-and-compare with a persistent state, append-only event log, id-based dedupe with re-arming when a state is left,
+  debounce of checks and mergeability, 60 s interval with jitter, `--once`, `--stream`, `--until-event`, the `alive` heartbeat,
+  the stack-merge-shape idea (stricter, see above), a `merged` event that tells the consumer to check restacks.
+- **New**: JSON Lines with a frozen schema and gapless `seq`; `--human`; strict config and workspace discovery; ETag/304 and
+  rate-limit awareness; backoff, `watch-error`, `watch-recovered`, `watch-stalled`; `--status` and exit codes; a lock against two
+  watchers; `restack-needed` with the exact argv; `checks-pending-timeout`; `mergeable-changed` with `behind`; `base-changed`;
+  `repos-changed`; no 60-PR limit (pages up to 1000); read-only guarantee tested; works for any repository set.
+
 ## Out of scope (and why)
 
 - **Auto-ready, rerun, merge, label, comment**: writes need their own spec with disclosed effects and an approval model. A possible
@@ -272,6 +328,6 @@ deferred Spec 030 `--watch` is a different, one-PR command and stays deferred.
 
 ## Open questions for the owner
 
-1. Is `review-state-changed` wanted in v1 (extra per-PR reads) or stays reserved?
-2. Is default state under `$XDG_STATE_HOME` right, or should `--workspace` mode keep it in `.stw/watch/` of the workspace?
-3. `pulls/N` detail per open PR each cycle (304-cheap): acceptable, or poll detail only for non-draft PRs?
+1. (Decided: `review-state-changed` stays reserved.)
+2. Is a 10-cycle refresh default for `pulls/N` detail acceptable, or should it be configurable in `watch.toml` (it is a flag only)?
+3. Should the reviewed-SHA ledger and `stw pr ready --ledger` get their own spec next?
