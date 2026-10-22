@@ -1,0 +1,953 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/issues.schema.json",
+  "title": "SourceSteward open issue snapshot (schema 1)",
+  "description": "Result of stw issues --json: one document with every open issue (pull requests excluded) of the selected repositories, each with one deterministic priority (Spec 038). Exit statuses: 0 all repositories read (also when nothing is open), 1 at least one repository, owner discovery or the viewer read failed (the document is still printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. A row's url, created_at and age_days are null only when the forge gave no usable value. Added properties are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "time",
+    "host",
+    "viewer",
+    "options",
+    "repos",
+    "issues",
+    "summary",
+    "errors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "issues"
+    },
+    "time": {
+      "$ref": "#/$defs/time"
+    },
+    "host": {
+      "$ref": "#/$defs/str"
+    },
+    "viewer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "login",
+            "reason",
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "ok"
+            },
+            "login": {
+              "$ref": "#/$defs/login"
+            },
+            "reason": {
+              "type": "null"
+            },
+            "error": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "login",
+            "reason",
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "skipped"
+            },
+            "login": {
+              "type": "null"
+            },
+            "reason": {
+              "enum": [
+                "no-identity",
+                "not-github-origin"
+              ]
+            },
+            "error": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "login",
+            "reason",
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "error"
+            },
+            "login": {
+              "type": "null"
+            },
+            "reason": {
+              "type": "null"
+            },
+            "error": {
+              "enum": [
+                "rate-limited",
+                "network",
+                "unauthorized",
+                "forbidden",
+                "http-5xx",
+                "malformed-response",
+                "too-many-open-issues",
+                "page-too-large",
+                "repo-moved",
+                "search-incomplete",
+                "search-too-many",
+                "viewer-unknown"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "options": {
+      "type": "object",
+      "required": [
+        "scope",
+        "owners",
+        "labels",
+        "assignees",
+        "authors",
+        "limit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "workspace",
+            "repos",
+            "mixed"
+          ]
+        },
+        "owners": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/owner"
+          }
+        },
+        "labels": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          }
+        },
+        "assignees": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "pattern": "^([A-Za-z0-9-]{1,39}(\\[bot\\])?|@me|@none)$"
+          }
+        },
+        "authors": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,39}(\\[bot\\])?$"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        }
+      }
+    },
+    "repos": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "required": [
+          "repo",
+          "source",
+          "state",
+          "reason",
+          "open",
+          "pulls_dropped",
+          "error"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "source": {
+            "enum": [
+              "workspace",
+              "repo",
+              "owner"
+            ]
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "partial",
+              "skipped",
+              "error"
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "issues-disabled",
+                  "viewer-unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pulls_dropped": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "enum": [
+                  "rate-limited",
+                  "network",
+                  "unauthorized",
+                  "forbidden",
+                  "http-5xx",
+                  "malformed-response",
+                  "too-many-open-issues",
+                  "page-too-large",
+                  "repo-moved",
+                  "search-incomplete",
+                  "search-too-many",
+                  "viewer-unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "if": {
+          "properties": {
+            "state": {
+              "const": "skipped"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        "then": {
+          "properties": {
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "reason": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "object",
+      "required": [
+        "red",
+        "yellow",
+        "blue",
+        "violet"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "red": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/redRow"
+          }
+        },
+        "yellow": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/yellowRow"
+          }
+        },
+        "blue": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/blueRow"
+          }
+        },
+        "violet": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/violetRow"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "red",
+        "yellow",
+        "blue",
+        "violet",
+        "omitted",
+        "counts",
+        "bots",
+        "repos_read",
+        "repos_failed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "red": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "yellow": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blue": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "violet": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counts": {
+          "type": "object",
+          "required": [
+            "red",
+            "yellow",
+            "blue",
+            "violet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "red": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "yellow": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blue": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violet": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "bots": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repos_read": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repos_failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "repo",
+          "owner",
+          "code",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "repo": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/repo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/owner"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "code": {
+            "enum": [
+              "rate-limited",
+              "network",
+              "unauthorized",
+              "forbidden",
+              "http-5xx",
+              "malformed-response",
+              "too-many-open-issues",
+              "page-too-large",
+              "repo-moved",
+              "search-incomplete",
+              "search-too-many",
+              "viewer-unknown"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "not": {
+          "properties": {
+            "repo": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "str": {
+      "type": "string",
+      "maxLength": 2048,
+      "description": "At most 2048 bytes in the producer; maxLength counts characters."
+    },
+    "names": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/str"
+      }
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9]([A-Za-z0-9]|-[A-Za-z0-9]){0,38}$"
+    },
+    "login": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{1,39}(\\[bot\\])?$"
+    },
+    "redRow": {
+      "type": "object",
+      "required": [
+        "repo",
+        "number",
+        "title",
+        "url",
+        "author",
+        "bot",
+        "created_at",
+        "age_days",
+        "labels",
+        "labels_total",
+        "assignees",
+        "comments",
+        "priority",
+        "reason",
+        "command",
+        "effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "$ref": "#/$defs/str"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "author": {
+          "$ref": "#/$defs/str"
+        },
+        "bot": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "$ref": "#/$defs/names"
+        },
+        "labels_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assignees": {
+          "$ref": "#/$defs/names"
+        },
+        "comments": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority": {
+          "const": "red"
+        },
+        "reason": {
+          "enum": [
+            "security-label"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "pattern": "^gh issue view [0-9]+ -R [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "maxLength": 2048
+        },
+        "effect": {
+          "const": "read"
+        }
+      }
+    },
+    "yellowRow": {
+      "type": "object",
+      "required": [
+        "repo",
+        "number",
+        "title",
+        "url",
+        "author",
+        "bot",
+        "created_at",
+        "age_days",
+        "labels",
+        "labels_total",
+        "assignees",
+        "comments",
+        "priority",
+        "reason",
+        "command",
+        "effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "$ref": "#/$defs/str"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "author": {
+          "$ref": "#/$defs/str"
+        },
+        "bot": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "$ref": "#/$defs/names"
+        },
+        "labels_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assignees": {
+          "$ref": "#/$defs/names"
+        },
+        "comments": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority": {
+          "const": "yellow"
+        },
+        "reason": {
+          "enum": [
+            "assigned-to-you",
+            "bug-label"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "pattern": "^gh issue view [0-9]+ -R [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "maxLength": 2048
+        },
+        "effect": {
+          "const": "read"
+        }
+      }
+    },
+    "blueRow": {
+      "type": "object",
+      "required": [
+        "repo",
+        "number",
+        "title",
+        "url",
+        "author",
+        "bot",
+        "created_at",
+        "age_days",
+        "labels",
+        "labels_total",
+        "assignees",
+        "comments",
+        "priority",
+        "reason",
+        "command",
+        "effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "$ref": "#/$defs/str"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "author": {
+          "$ref": "#/$defs/str"
+        },
+        "bot": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "$ref": "#/$defs/names"
+        },
+        "labels_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assignees": {
+          "$ref": "#/$defs/names"
+        },
+        "comments": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority": {
+          "const": "blue"
+        },
+        "reason": {
+          "enum": [
+            "none"
+          ]
+        },
+        "command": {
+          "type": "null"
+        },
+        "effect": {
+          "type": "null"
+        }
+      }
+    },
+    "violetRow": {
+      "type": "object",
+      "required": [
+        "repo",
+        "number",
+        "title",
+        "url",
+        "author",
+        "bot",
+        "created_at",
+        "age_days",
+        "labels",
+        "labels_total",
+        "assignees",
+        "comments",
+        "priority",
+        "reason",
+        "command",
+        "effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "$ref": "#/$defs/str"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "author": {
+          "$ref": "#/$defs/str"
+        },
+        "bot": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "$ref": "#/$defs/names"
+        },
+        "labels_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assignees": {
+          "$ref": "#/$defs/names"
+        },
+        "comments": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority": {
+          "const": "violet"
+        },
+        "reason": {
+          "enum": [
+            "bot"
+          ]
+        },
+        "command": {
+          "type": "null"
+        },
+        "effect": {
+          "type": "null"
+        }
+      }
+    }
+  }
+}

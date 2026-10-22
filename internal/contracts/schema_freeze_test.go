@@ -17,6 +17,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v1/inspect.schema.json":                "8e12ee38a3e065e1f2e47b88ec4b1668cd8a32d8879e4803870e8994a9cfcfae",
 	"schemas/v1/inventory.schema.json":              "8a8aeb281ca24c91809ea8fc95e83655d5a459afce51b1993965c9fa25a805f8",
 	"schemas/v1/pins.schema.json":                   "1ae773a4fa0c4d08a9948ff050600505165323865a44b213ae91b205204c055b",
+	"schemas/v1/issues.schema.json":                 "10082037cbb97bc5311e52e9738daf3f774b0f3ee9ca97eb84d3a93d6b94f6ee",
 	"schemas/v1/pulls.schema.json":                  "e478c1062270f0d265052bee428d50411033306a2fac2b15142ab5f90e67a9f8",
 	"schemas/v1/release-build-manifest.schema.json": "ca9fc9e2087d421d7bc0be1bc341fcb76248af6668f7719b3260bd9d949a84fd",
 	"schemas/v1/release-build.schema.json":          "f0f63a7ab8b7e19ae7437855e8da62c223c8f937a1740542bc52561cc9e88f73",
@@ -60,7 +61,7 @@ func TestPublishedV1AndV2SchemasAreByteFrozen(t *testing.T) {
 			}
 		}
 	}
-	if len(frozenPublishedSchemas) != 27 {
-		t.Fatalf("frozen schema inventory has %d entries, want 27", len(frozenPublishedSchemas))
+	if len(frozenPublishedSchemas) != 28 {
+		t.Fatalf("frozen schema inventory has %d entries, want 28", len(frozenPublishedSchemas))
 	}
 }
