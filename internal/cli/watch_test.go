@@ -129,7 +129,7 @@ func TestWatchOnceBaselineThenTransitionEndToEnd(t *testing.T) {
 		t.Fatalf("%v %q", err, out)
 	}
 	d, _ := ev["details"].(map[string]any)
-	if d["title"] != "PR 2" || d["author"] != "alice" || d["base"] != "main" || len(d) != 6 {
+	if d["title"] != "PR 2" || d["author"] != "alice" || d["base"] != "main" || d["fork"] != false || len(d) != 7 {
 		t.Fatalf("%v", d)
 	}
 	// the journal line and the state never contain the token
