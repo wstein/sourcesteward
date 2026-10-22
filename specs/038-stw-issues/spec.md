@@ -3,7 +3,7 @@
 **Created**: 2026-10-22 | **Status**: proposed (spec-light: this page, [contracts/issues.md](contracts/issues.md) and
 [plan.md](plan.md) are the whole design; no implementation yet). It is the sibling of [Spec 036](../036-stw-pulls/spec.md)
 (`stw pulls`) for issues and specifies **WP-G of [Spec 037](../037-stw-status-overview/spec.md)** (the issue source of `stw status`),
-which refers here. Stacked on the Spec 037 branch: the action model, priorities, grouping, exit rules and guard mode `status`
+which refers here. Spec 037 is merged: the action model, priorities, grouping, exit rules and guard mode `status`
 used below are defined there.
 
 `stw pulls` answers "which pull requests are open"; nothing answers "which issues are open" across the workspace. GitHub's issue
@@ -32,7 +32,7 @@ Derived rules: (1) the per-repository list is the authoritative read, search onl
 - **US1 (inbox).** `stw issues` in a workspace prints every open issue of every repository whose remote is GitHub, grouped by
   priority `red`, `yellow`, `blue`, `violet`, each row showing `REPO#N`, title, author with a `[bot]` marker, age, labels,
   assignees, the reason of the priority and a suggested `gh issue view` command for red and yellow rows.
-- **US2 (security first).** An issue labelled `security` is `red` and can never be hidden by the author type or by the budget.
+- **US2 (security first).** An issue labelled `security` is `red` and is never hidden silently: the author type and the budget cannot hide it, and a drop by `--limit`, a filter or truncation is always counted or noticed (`summary.omitted`, `summary.counts`, `partial`).
 - **US3 (mine).** An issue assigned to the authenticated user is `yellow`; so is a `bug`. The owner sees "assigned to you" without
   opening GitHub.
 - **US4 (filters).** `--label`, `--assignee`, `--author` narrow the view; the default hides nothing. Pull requests are never listed.
@@ -58,8 +58,8 @@ stw issues [--workspace [PATH]] [--repo OWNER/NAME ...] [--owner OWNER ...] [--h
   `assignee=` or `creator=` query parameter exists in the fixed shapes), so a hostile value cannot reach a request. Repeats of one
   flag are alternatives (any of); different flags intersect.
   - `--label NAME`: 1 to 50 characters (UTF-8, no control characters, no leading or trailing space); matched
-    **case-insensitively and exactly** against every label of the issue (`bug` does not match `bugfix` or `type: bug`).
-  - `--assignee LOGIN`: GitHub login (`[A-Za-z0-9-]{1,39}` with an optional `[bot]` suffix, case-insensitive match against the
+    **case-insensitively (ASCII case folding only) and exactly** against every label of the issue (`bug` does not match `bugfix` or `type: bug`).
+  - `--assignee LOGIN`: GitHub login (`[A-Za-z0-9-]{1,39}` with an optional `[bot]` suffix, because bots such as Copilot can be assignees; ASCII case-insensitive match against the
     assignees); `@me` is the authenticated user (see "The authenticated user"); `@none` matches issues without assignee. `@` cannot occur
     in a login, so the two words never collide with one. `--assignee @me` when the login could not be determined is a failed run: exit 1,
     error `viewer-unknown`, no rows printed (an empty list would mislead).
@@ -96,7 +96,7 @@ Repositories with issues disabled answer 410: that is **not an error**: `repos[]
 
 ### Why a new guard mode `issues`, not an extension
 
-Options: (a) add the shapes to `guardPulls`; (b) a sixth mode. Decision: **a new guard mode `issues`** (the mode enum becomes
+Options: (a) add the shapes to `guardPulls`; (b) a fifth mode. Decision: **a new guard mode `issues`** (the mode enum becomes
 `one-shot`, `watch`, `pulls`, `status`, `issues`). Least privilege: `stw issues` needs none of the PR-specific shapes (`pulls/N`,
 commits, branches, check runs), so admitting them would widen the surface for no use, and `guardPulls` carries the PR owner search that
 `stw issues` must not reach. The `issues` mode admits **exactly**: the per-repository list, `user`, the issue search, and the
@@ -113,12 +113,18 @@ the viewer), so this is the one unavoidable extra fixed shape. It is read throug
 case-insensitively with `assignees[].login`. Outcomes:
 
 - `ok`: the login is known; the rule "assigned to you" is active.
-- 401 or any other attempted failure that is not 403 (network, 5xx, malformed answer, rate-limit stop): source `viewer` `error`, exit 1
-  (the Spec 037 exit rule: an attempted request failed); the rule "assigned to you" is inactive for the run and the output says so in a
-  notice (`viewer-unknown`). Issues are still read and classified by the other rules.
-- **403 or 404**: a token class that cannot read `user` (for example an Actions `GITHUB_TOKEN`, a fine-grained token without the permission)
-  is not a failure of the run: source `viewer` `skipped`, reason `no-identity`, a notice, exit 0 (the exit rule counts only
-  failures a retry could fix; a 403 or 404 here is the token class; this is the single, explicit exception to the generic exit rule of Spec 037). The "assigned to you" rule is inactive, `--assignee @me` fails as above.
+- **Order of evaluation (no overlapping branches).** (1) A 403 or 429 **with rate-limit evidence** (as defined in Spec 037, "Rate
+  limit") is `rate-limited`: source `viewer` `error`, all further requests of the run stop, exit 1. (2) Otherwise a **403 or 404 without
+  rate-limit evidence** is the **user-lookup exception**: source `viewer` `skipped`, reason `no-identity`, a notice, exit 0. A token class
+  that cannot read `user` (an Actions `GITHUB_TOKEN`, an App installation token, which gets 403 on `GET /user`, a fine-grained token
+  without the permission) is not a retryable fault; 404 is kept as a candidate for the same reason. (3) Any other failure (401, network,
+  5xx, malformed answer) is source `viewer` `error`, exit 1 (the generic Spec 037 rule: an attempted request failed). In (1) and (3) the
+  rule "assigned to you" is inactive for the run and a notice (`viewer-unknown`) says so; issues are still read and classified by the
+  other rules, except after a rate-limit stop. Spec 037's exit table lists 401/403 as exit 1; **the user-lookup exception is the only
+  deviation of this spec** from it (Spec 037 has its own, separate `not-found` skip for the release workflow). In case (2) the rule is
+  inactive and `--assignee @me` fails as above.
+- **No request, no lookup.** The `user` read is made only when an issue read is attempted: with `--offline`, with no usable token, or
+  when no repository is on GitHub, no `viewer` request is made (source `skipped` for the same reason, no `user` call).
 - The login is never printed except as a matched assignee in a row; the token never.
 
 ## Priority and action model (deterministic, one level per issue)
@@ -127,17 +133,17 @@ Per issue, from the list item only (no per-issue detail read). Evaluate **in thi
 
 | # | Condition | priority | reason |
 | --- | --- | --- | --- |
-| 1 | any label equals `security` (case-insensitive, exact) | red | `security-label` |
+| 1 | any label equals `security` (ASCII case-insensitive, exact) | red | `security-label` |
 | 2 | the viewer login is known and equals (case-insensitively) an assignee | yellow | `assigned-to-you` |
 | 3 | the author is a bot (`user.type == "Bot"`, else a login ending in `[bot]`) | violet | `bot` |
-| 4 | any label equals `bug` (case-insensitive, exact) | yellow | `bug-label` |
+| 4 | any label equals `bug` (ASCII case-insensitive, exact) | yellow | `bug-label` |
 | 5 | anything else | blue | `none` |
 
 Rationale of the order: a `security` label is the one signal that must never be hidden, so it beats the author type (a bot-opened
 security issue is still red); an explicit assignment to the owner beats the bot rule (the owner was asked); a bot-opened issue that is
 neither is noise-class (`violet`, like bot pull requests of Spec 037), also when it carries `bug`. Labels are evaluated over **all**
 labels the API returned (up to GitHub's 100 per issue) **before** any display truncation; the `reason` field records why, so a
-`security` label past the 20 labels kept in a row still makes it red. Matching is exact: `security-review`, `area/security`,
+`security` label past the 20 labels kept in a row still makes it red. "Case-insensitive" everywhere in this spec means **ASCII case folding only**, not Unicode folding (`strings.EqualFold` is not used: U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN must **not** match `security` or `bug`). Matching is exact: `security-review`, `area/security`,
 `type: bug` match nothing (residual: repositories that spell labels differently; configurability is an open question). `stw` reads
 labels as data and never trusts the forge's own `type` or `security_advisory` fields.
 
@@ -153,9 +159,9 @@ each GitHub repository with local state `ok` (the other Spec 037 sources and the
   both), plus **one** `user` read per run. Reads are sequential within a repository, in the status worker pool of **4 repositories**
   (a separate pool for the issues source, like the other non-PR sources of Spec 037), 15 s per request, inside the 90 s deadline.
   No search, no `--owner` (see below). Guard mode `status` admits the two shapes.
-- **Per repository block**: one line `issues: N open (R red, Y yellow)`; `N` counts every open issue read (blue and violet included),
-  the counts per priority are in the JSON. A repository whose issues are disabled prints `issues: disabled`; a repository whose read
-  failed prints `issues: not read (CODE)`; a skipped one `issues: not read (deadline)`.
+- **Per repository block**: one line `issues: N open (R red, Y yellow)`; `N` counts every open issue read (blue and violet included; the violet count is the bots count),
+  the counts per priority are in the JSON; a truncated read (`too-many-open-issues`) prints `issues: N+ open (R red, Y yellow, truncated)`. A repository whose issues are disabled prints `issues: disabled`; a repository whose read
+  failed prints `issues: not read (CODE)`; a skipped one `issues: not read (REASON)` with REASON one of `deadline`, `no-token`, `offline`, `rate-limited`.
 - **Items** (appended to the table of Spec 037; categories 26 to 28 so that no existing number changes; ordering is priority first,
   then category number, as defined there):
 
@@ -227,8 +233,8 @@ stdout carries output, stderr diagnostics. JSON is **one document** (not JSON Li
 until accepted (frozen: digest in `internal/contracts/schema_freeze_test.go`, listed in `UNPUBLISHED_SCHEMAS` of
 `scripts/package-pages.py`, like `pulls.schema.json`). Human output, per non-empty priority a heading `RED (N)`, `YELLOW (N)`,
 `BLUE (N)`, `VIOLET (N)`, then one line per issue
-`REPO#N  AGE  AUTHOR[bot]  [labels: a, b]  [assigned: x]  TITLE  (reason)`, a `run:` hint line under red and yellow rows, and a
-final line `N open issues in M repositories, R red, Y yellow` plus the omitted count and the failures. No colour unless a terminal and
+`REPO#N  AGE  AUTHOR  [labels: a, b]  [assigned: x]  TITLE  (reason)`, a `run:` hint line under red and yellow rows, and a
+AUTHOR carries a `[bot]` marker only when the login does not already end in `[bot]` (never `dependabot[bot][bot]`); a final line `N open issues in M repositories, R red, Y yellow` plus the omitted count and the failures. No colour unless a terminal and
 `NO_COLOR` unset. Exit status as above.
 
 ## Amendment to Spec 022 FR-005 (explicit)
@@ -265,7 +271,7 @@ and lags the index; an Actions `GITHUB_TOKEN` has 1000 requests an hour.
 1. **Labels are fixed.** `security` and `bug` (case-insensitive, exact) are the only labels; configurability is a later spec if needed. Rationale: no config surface before there is a second convention to serve.
 2. **No `--owner` in `stw status`** in this spec; a later spec may add it. Rationale: the search budget and its guard surface do not belong in the glance command.
 3. **Schema.** The status v2 schema is unpublished: the additions are additive within v2 and re-register the frozen digest through the existing process; no v3 while it is unpublished.
-4. **`GET user` 403 or 404 is a skip** (reason `no-identity`: the "assigned to you" rule is disabled with a notice, exit 0), any other error on it is a failed attempted request (exit 1). This is the **one exception** to the generic exit rule of Spec 037 (see "The authenticated user"). Rationale: the token class, not a retryable fault, withholds the identity.
+4. **`GET user` 403 or 404 is a skip** (reason `no-identity`: the "assigned to you" rule is disabled with a notice, exit 0), any other error on it is a failed attempted request (exit 1). A 403 with rate-limit evidence is checked first and is `rate-limited` (exit 1). This is the **user-lookup exception** to the exit table of Spec 037 (see "The authenticated user"); Spec 037's `not-found` skip is a separate, existing one. Rationale: the token class, not a retryable fault, withholds the identity.
 5. **Assigned to you wins over the bot rule.** An assignment to the owner is always actionable.
 6. **Bot-opened issues are only counted in status** (the violet count of the `issues` data is the bots count) and listed in `stw issues`; no status items for them.
 7. **Bounded paging is never silent.** A repository whose open items (issues plus pull requests) exceed the 10 pages (1000 entries) is `partial` with error `too-many-open-issues` and a notice, exit 1, like `too-many-open-prs` and `search-too-many` of the pulls owner search; the oldest 1000 are kept.
