@@ -28,6 +28,14 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply`, jj and the push are later slices.
 
+## Spec 040 concurrency discipline (specification proposed, 2026-10-22)
+
+[The specification](../specs/040-concurrency-discipline/spec.md), its [plan](../specs/040-concurrency-discipline/plan.md) and
+[tasks](../specs/040-concurrency-discipline/tasks.md) propose one package, `internal/fanout`, as the only place with a `go` statement
+(14 today in nine non-test files), enforced by `scripts/check-architecture.py` with a shrinking allowlist and mutation tests, and tested
+with `testing/synctest`. Documentation only: no code, script or allowlist is changed; three questions for the owner are listed in the
+specification (process plumbing exemption, the `sync.WaitGroup` import ban, the Go helper). No build, release, tag or push was run.
+
 ## Spec 035 stw watch (accepted, visible, 2026-10-22)
 
 [The specification](../specs/035-stw-watch/spec.md), its [event contract](../specs/035-stw-watch/contracts/watch-events.md) and
