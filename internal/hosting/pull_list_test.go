@@ -2,7 +2,9 @@
 package hosting
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -150,5 +152,68 @@ func TestGuardLegacyWatchFieldMeansWatchMode(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://api.github.com/rate_limit", nil)
 	if !g.allowed(req) {
 		t.Fatal("watch:true must admit watch shapes")
+	}
+}
+
+func TestListOpenPullItemsFollowsLinkUnconditionally(t *testing.T) {
+	f := newFakeForge(t)
+	threePages(f, [3]string{"a", "a", "a"})
+	r := f.reader("github.com")
+	items, err := r.ListOpenPullItems(context.Background(), "a/b", 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 60 || items[59].Number != 60 || items[0].User != "u" {
+		t.Fatalf("%d items", len(items))
+	}
+	for i, e := range f.etags {
+		if e != "" {
+			t.Fatalf("request %d sent If-None-Match %q", i, e)
+		}
+	}
+	if c := r.TakeCalls()[KindList]; c.Requests != 3 || c.NotModified != 0 {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestListOpenPullItemsHalvesAndRestarts(t *testing.T) {
+	f := newFakeForge(t)
+	f.serve(listURI(25, 1), `"x1"`, pageBody(1, 25), linkNext(25, 2))
+	f.handlers[listURI(25, 2)] = func(*http.Request) *http.Response {
+		return forgeResponse(200, strings.Repeat("x", maxBytes+1), nil)
+	}
+	f.serve(listURI(12, 1), `"y1"`, pageBody(1, 12), linkNext(12, 2))
+	f.serve(listURI(12, 2), `"y2"`, pageBody(13, 24), linkNext(12, 3))
+	f.serve(listURI(12, 3), `"y3"`, pageBody(25, 30), nil)
+	items, err := f.reader("github.com").ListOpenPullItems(context.Background(), "a/b", 2000)
+	if err != nil || len(items) != 30 {
+		t.Fatalf("%v %d", err, len(items))
+	}
+	want := []string{listURI(25, 1), listURI(25, 2), listURI(12, 1), listURI(12, 2), listURI(12, 3)}
+	if strings.Join(f.log, "|") != strings.Join(want, "|") {
+		t.Fatalf("%v", f.log)
+	}
+}
+
+func TestListOpenPullItemsBoundsAndErrors(t *testing.T) {
+	f := newFakeForge(t)
+	threePages(f, [3]string{"a", "a", "a"})
+	r := f.reader("github.com")
+	var we *WatchError
+	if _, err := r.ListOpenPullItems(context.Background(), "a/b", 59); !errors.As(err, &we) || we.Code != CodeTooManyPRs {
+		t.Fatalf("too many: %v", err)
+	}
+	if _, err := r.ListOpenPullItems(context.Background(), "a/b", 0); !errors.As(err, &we) || we.Code != CodeMalformed {
+		t.Fatalf("bound: %v", err)
+	}
+	g := newFakeForge(t)
+	g.serve(listURI(25, 1), `"x"`, `{"not":"an array"}`, nil)
+	if _, err := g.reader("github.com").ListOpenPullItems(context.Background(), "a/b", 100); !errors.As(err, &we) || we.Code != CodeMalformed {
+		t.Fatalf("malformed: %v", err)
+	}
+	h := newFakeForge(t)
+	h.serve(listURI(25, 1), `"x"`, pageBody(1, 25), map[string]string{"Link": `<https://api.github.com/x?page=3>; rel="next"`})
+	if _, err := h.reader("github.com").ListOpenPullItems(context.Background(), "a/b", 100); !errors.As(err, &we) || we.Code != CodeMalformed {
+		t.Fatalf("link: %v", err)
 	}
 }

@@ -2,7 +2,9 @@
 package hosting
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -88,4 +90,66 @@ func ParsePullList(body []byte) ([]PullListItem, error) {
 		items = append(items, it)
 	}
 	return items, nil
+}
+
+// ListOpenPullItems lists every open PR of repo for the stateless `stw pulls` reader:
+// the same pages, Link rules and halving as ListOpenPulls, but no validators and the
+// extra fields of PullListItem. It stops with CodeTooManyPRs above maxOpen
+// (1..WatchMaxOpenPRs) PRs.
+func (r *WatchReader) ListOpenPullItems(ctx context.Context, repo string, maxOpen int) ([]PullListItem, error) {
+	if maxOpen < 1 || maxOpen > WatchMaxOpenPRs {
+		return nil, malformed("max_open_prs is outside 1..2000")
+	}
+	perPage := 25
+	if r.isHalved(repo) {
+		perPage = 12
+	}
+	for {
+		items, err := r.listItemsAt(ctx, repo, perPage, maxOpen)
+		var we *WatchError
+		if errors.As(err, &we) && we.Code == CodePageTooLarge && perPage == 25 {
+			r.markHalved(repo)
+			perPage = 12 // restart at page 1: page numbers of different sizes are never mixed
+			continue
+		}
+		return items, err
+	}
+}
+
+func (r *WatchReader) listItemsAt(ctx context.Context, repo string, perPage, maxOpen int) ([]PullListItem, error) {
+	maxPages := (maxOpen + perPage - 1) / perPage
+	if limit := listPageLimit(perPage); maxPages > limit {
+		maxPages = limit
+	}
+	var out []PullListItem
+	for page := 1; ; page++ {
+		res, err := r.PullListPage(ctx, repo, perPage, page, "")
+		if err != nil {
+			return nil, err
+		}
+		if res.NotModified {
+			return nil, malformed("unexpected 304 for an unconditional read")
+		}
+		items, err := ParsePullList(res.Body)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+		if len(out) > maxOpen {
+			return nil, &WatchError{Code: CodeTooManyPRs, Message: "more open pull requests than max_open_prs"}
+		}
+		next, more := nextPageFromLink(res.Link)
+		if res.Link != "" && !more && hasNextRel(res.Link) {
+			return nil, malformed("unusable Link header")
+		}
+		if !more {
+			return out, nil
+		}
+		if next != page+1 {
+			return nil, malformed("Link next is not the following page")
+		}
+		if page >= maxPages {
+			return nil, &WatchError{Code: CodeTooManyPRs, Message: "more open pull requests than max_open_prs"}
+		}
+	}
 }
