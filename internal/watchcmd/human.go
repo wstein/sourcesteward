@@ -44,8 +44,12 @@ func humanTime(s string) string {
 	return esc(s)
 }
 
-// esc escapes control and format characters (including bidirectional overrides) and bounds the length.
-func esc(s string) string {
+// esc is the unexported name used throughout this package.
+func esc(s string) string { return Esc(s) }
+
+// Esc escapes control and format characters (including bidirectional overrides) and bounds the length.
+// It is exported for `stw pulls`, which prints untrusted forge text the same way (Spec 036).
+func Esc(s string) string {
 	var b strings.Builder
 	n := 0
 	for _, r := range s {

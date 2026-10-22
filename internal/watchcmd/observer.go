@@ -333,27 +333,14 @@ func (o *HostObserver) readDetail(ctx context.Context, repo string, n int, etag 
 	if res.NotModified {
 		return nil, false, nil
 	}
-	var doc struct {
-		Mergeable      *bool  `json:"mergeable"`
-		MergeableState string `json:"mergeable_state"`
-		Head           struct {
-			Repo *struct {
-				FullName string `json:"full_name"`
-			} `json:"repo"`
-		} `json:"head"`
-		Base struct {
-			Repo *struct {
-				FullName string `json:"full_name"`
-			} `json:"repo"`
-		} `json:"base"`
-	}
-	if json.Unmarshal(res.Body, &doc) != nil {
-		return nil, false, &hosting.WatchError{Code: hosting.CodeMalformed, Message: "pull request response is not usable"}
+	doc, err := DecodePullDetail(res.Body)
+	if err != nil {
+		return nil, false, err
 	}
 	if res.ETag != "" {
 		cond.Details[detailKey(n)] = res.ETag
 	}
-	fork := doc.Head.Repo == nil || doc.Base.Repo == nil || !strings.EqualFold(doc.Head.Repo.FullName, doc.Base.Repo.FullName)
+	fork := doc.Fork
 	return &watch.DetailObs{Mergeable: doc.Mergeable, State: doc.MergeableState}, fork, nil
 }
 
@@ -447,11 +434,11 @@ func (o *HostObserver) readChecks(ctx context.Context, repo, sha string, force b
 	if force {
 		runsTag, statTag = "", ""
 	}
-	runs, runsETag, runsSame, err := o.readRuns(ctx, repo, sha, runsTag)
+	runs, runsETag, runsSame, err := readRuns(ctx, o.r, repo, sha, runsTag)
 	if err != nil {
 		return nil, "", err
 	}
-	stats, statETag, statSame, err := o.readStatuses(ctx, repo, sha, statTag)
+	stats, statETag, statSame, err := readStatuses(ctx, o.r, repo, sha, statTag)
 	if err != nil {
 		return nil, "", err
 	}
@@ -459,12 +446,12 @@ func (o *HostObserver) readChecks(ctx context.Context, repo, sha string, force b
 		return nil, "", nil
 	}
 	if runsSame { // the other half changed: the classification needs both
-		if runs, runsETag, _, err = o.readRuns(ctx, repo, sha, ""); err != nil {
+		if runs, runsETag, _, err = readRuns(ctx, o.r, repo, sha, ""); err != nil {
 			return nil, "", err
 		}
 	}
 	if statSame {
-		if stats, statETag, _, err = o.readStatuses(ctx, repo, sha, ""); err != nil {
+		if stats, statETag, _, err = readStatuses(ctx, o.r, repo, sha, ""); err != nil {
 			return nil, "", err
 		}
 	}
@@ -473,14 +460,14 @@ func (o *HostObserver) readChecks(ctx context.Context, repo, sha string, force b
 	return &watch.ChecksObs{Runs: runs, Statuses: stats}, class, nil
 }
 
-func (o *HostObserver) readRuns(ctx context.Context, repo, sha, etag string) (runs []watch.CheckRun, first string, same bool, err error) {
+func readRuns(ctx context.Context, r Reader, repo, sha, etag string) (runs []watch.CheckRun, first string, same bool, err error) {
 	var total int
 	for page := 1; page <= maxCheckPages; page++ {
 		tag := ""
 		if page == 1 {
 			tag = etag
 		}
-		res, err := o.r.CheckRuns(ctx, repo, sha, page, tag)
+		res, err := r.CheckRuns(ctx, repo, sha, page, tag)
 		if err != nil {
 			return nil, "", false, err
 		}
@@ -507,9 +494,9 @@ func (o *HostObserver) readRuns(ctx context.Context, repo, sha, etag string) (ru
 			return nil, "", false, &hosting.WatchError{Code: hosting.CodeMalformed, Message: "check runs response is not usable"}
 		}
 		total = doc.Total
-		for _, r := range doc.Runs {
-			runs = append(runs, watch.CheckRun{Name: r.Name, Status: r.Status, Conclusion: r.Conclusion, Title: r.Output.Title,
-				Summary: r.Output.Summary, Text: r.Output.Text})
+		for _, cr := range doc.Runs {
+			runs = append(runs, watch.CheckRun{Name: cr.Name, Status: cr.Status, Conclusion: cr.Conclusion, Title: cr.Output.Title,
+				Summary: cr.Output.Summary, Text: cr.Output.Text})
 		}
 		if len(doc.Runs) == 0 || len(runs) >= total {
 			break
@@ -518,14 +505,14 @@ func (o *HostObserver) readRuns(ctx context.Context, repo, sha, etag string) (ru
 	return runs, first, false, nil
 }
 
-func (o *HostObserver) readStatuses(ctx context.Context, repo, sha, etag string) (stats []watch.StatusContext, first string, same bool, err error) {
+func readStatuses(ctx context.Context, r Reader, repo, sha, etag string) (stats []watch.StatusContext, first string, same bool, err error) {
 	seen := map[string]bool{}
 	for page := 1; page <= maxCheckPages; page++ {
 		tag := ""
 		if page == 1 {
 			tag = etag
 		}
-		res, err := o.r.Statuses(ctx, repo, sha, page, tag)
+		res, err := r.Statuses(ctx, repo, sha, page, tag)
 		if err != nil {
 			return nil, "", false, err
 		}
