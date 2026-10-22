@@ -1,0 +1,4 @@
+# Shell scripts and workflow files are LF in every checkout (the release scripts run on Linux
+# and macOS runners and are checked as text).
+*.sh text eol=lf
+.github/workflows/*.yml text eol=lf
