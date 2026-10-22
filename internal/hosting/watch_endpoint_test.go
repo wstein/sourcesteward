@@ -143,3 +143,16 @@ func TestWatchGuardRefusesInconsistentRawPath(t *testing.T) {
 		res.Body.Close()
 	}
 }
+
+// A request built with a literal Path that contains an escape sequence has no
+// RawPath; the wire form is its escaped path, so %2F becomes %252F and must be refused.
+func TestWatchGuardValidatesWireFormOfLiteralPath(t *testing.T) {
+	g := guardedTransport{next: roundTripFunc(func(r *http.Request) (*http.Response, error) { return response(200, `{}`), nil }), host: "api.github.com", prefix: "/", watch: true}
+	req, _ := http.NewRequest("GET", "https://api.github.com/repos/a/b/branches/main", nil)
+	req.URL.Path = "/repos/a/b/branches/feat%2Fx"
+	req.URL.RawPath = ""
+	if res, err := g.RoundTrip(req); err == nil {
+		res.Body.Close()
+		t.Fatal("literal Path with %2F was accepted although it is sent as %252F")
+	}
+}
