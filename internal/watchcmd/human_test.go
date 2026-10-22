@@ -83,3 +83,36 @@ func TestHumanEscapesControlCharactersAndBoundsText(t *testing.T) {
 		t.Fatalf("unknown kinds are shown without a summary: %q", got)
 	}
 }
+
+func TestHumanEscapesEveryTextField(t *testing.T) {
+	bad := "x\x1b[31m\u009b\u2028\u202e\x7f"
+	r, a := s("o/"+bad), bad+strings.Repeat("0", 40)
+	tr := true
+	events := []watch.Event{
+		ev("new-pr", r, n(1), &watch.NewPRDetails{Title: bad, Author: bad, Base: bad, HeadRef: bad, Head: a}),
+		ev("head-changed", r, n(1), &watch.HeadChangedDetails{Old: a, New: a}),
+		ev("checks-green", r, n(1), &watch.ChecksGreenDetails{Head: a, Base: bad}),
+		ev("checks-red", r, n(1), &watch.ChecksRedDetails{Head: a, Failing: []string{bad}, FailingTotal: 1, Shape: bad, Base: bad}),
+		ev("checks-pending-timeout", r, n(1), &watch.PendingTimeoutDetails{Head: a, Pending: []string{bad}, Since: bad}),
+		ev("mergeable-changed", r, n(1), &watch.MergeableDetails{Mergeable: &tr, State: bad, Base: bad}),
+		ev("ready-state-changed", r, n(1), &watch.ReadyDetails{From: bad, To: bad}),
+		ev("base-changed", r, n(1), &watch.BaseChangedDetails{Old: bad, New: bad}),
+		ev("merged", r, n(1), &watch.MergedDetails{MergeCommit: &a, Base: bad, Head: a, HeadRef: bad, MethodHint: bad}),
+		ev("closed", r, n(1), &watch.ClosedDetails{Head: a, Base: bad}),
+		ev("restack-needed", r, n(2), &watch.RestackDetails{MergedPR: 1, Base: bad, Reason: bad, OldParent: a, NewParent: &a, Branch: bad, Argv: []string{"git"}}),
+		ev("repos-changed", nil, nil, &watch.ReposChangedDetails{}),
+		ev("watch-error", r, nil, &watch.WatchErrorDetails{Code: bad, Message: bad}),
+		ev("watch-recovered", r, nil, &watch.WatchRecoveredDetails{}),
+		ev("watch-stalled", r, nil, &watch.WatchStalledDetails{Since: bad, Repo: bad}),
+	}
+	for _, e := range events {
+		line := string(Human(e))
+		body := strings.TrimSuffix(line, "\n")
+		for _, r := range body {
+			if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x2028 || r == 0x202e {
+				t.Errorf("%s: unescaped %U in %q", e.Kind, r, line)
+				break
+			}
+		}
+	}
+}
