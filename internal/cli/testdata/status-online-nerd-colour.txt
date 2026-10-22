@@ -1,0 +1,43 @@
+Needs action: 13 items
+ [31m[0m [31mred[0m     gone                  repository cannot be read: status-read-failed: cannot read the repository status
+     run: stw status --offline /ws/gone
+ [31m[0m [31mred[0m     wstein/sourcesteward  default branch CI is red (main, 3f2a9c1)  https://github.com/wstein/sourcesteward/actions
+     run: gh run list --repo wstein/sourcesteward --branch main
+ [31m[0m [31mred[0m     wstein/sourcesteward  release workflow run of v1.1.0 failure  https://github.com/wstein/sourcesteward/actions/runs/7
+     run: gh run list --repo wstein/sourcesteward --commit bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ [33m[0m [33myellow[0m  .                     0 staged, 2 unstaged changes
+     run: git -C /ws status
+ [33m[0m [33myellow[0m  .                     behind origin/main by 2 commits
+     run: stw sync --plan /ws
+ [33m[0m [33myellow[0m  wstein/sourcesteward  origin has commits of main that the local clone lacks  https://github.com/wstein/sourcesteward
+     run: stw sync --plan /ws
+ [33m[0m [33myellow[0m  wstein/crewbook       PR #12 has conflicts: Update docs  https://github.com/wstein/crewbook/pull/12
+     run: stw pulls --repo wstein/crewbook
+ [33m[0m [33myellow[0m  wstein/sourcesteward  PR #59 is blocked (checks-red): Fix the tests  https://github.com/wstein/sourcesteward/pull/59
+     run: stw pulls --repo wstein/sourcesteward
+ [32m[0m [32mgreen[0m   wstein/sourcesteward  PR #57 is ready to merge: build(deps): bump cobra  https://github.com/wstein/sourcesteward/pull/57
+     run: gh pr merge 57 -R wstein/sourcesteward --rebase
+ [32m[0m [32mgreen[0m   wstein/sourcesteward  release draft v1.0.0 (4 assets) is waiting  https://github.com/wstein/sourcesteward/releases/tag/untagged-1
+     run: gh release edit v1.0.0 -R wstein/sourcesteward --draft=false
+ [34m[0m [34mblue[0m    .                     1 stash
+     run: git -C /ws stash list
+ [35m[0m [35mviolet[0m  wstein/workharbor     2 bot PRs: #3, #4
+     run: stw pulls --repo wstein/workharbor --bots-only
+
+Repositories
+[33m [0m.           main  origin/main behind 2  2 unstaged
+    remote: 3 open PRs (1 ready, 1 red, 1 draft), main CI red, 1 release draft: Release one (2026-10-20, 4 assets)
+    [2mstash 1[0m
+[2m  [0mcrewbook    main  origin/main up to date  clean
+    remote: 1 open PR (1 conflict), main CI green, release drafts not visible (no write access)
+[2m  [0mworkharbor  main  origin/main up to date  clean
+    remote: 2 open PRs (1 ready, 1 checks pending), main CI not read (deadline), no release drafts, release runs not read (deadline)
+[31m [0mgone        -     cannot read the repository status
+    remote: not read (not-read-locally)
+
+Notices
+  deadline of 90 s reached: 2 sources of 1 repository not read; raise --timeout
+  release drafts of wstein/crewbook not visible (token has no write access)
+  repository was not read locally: remote sources of 1 repository were not read
+
+summary: 3 red, 5 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices
