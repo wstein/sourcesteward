@@ -53,6 +53,7 @@ type Params struct {
 	IgnoreLabels   []string
 	StackPatterns  []string
 	Out            io.Writer
+	Diag           io.Writer // one-line diagnostics (stderr); nil discards them
 
 	Transport hosting.Transport // in-process HTTP fixture; nil means HTTPS
 	Now       func() time.Time
@@ -160,6 +161,9 @@ func Run(ctx context.Context, p Params) error {
 	}
 	defer cleanup()
 	host := NewHostObserver(reader, now, p.MaxOpenPRs, p.IgnoreAuthors, p.IgnoreLabels)
+	if p.Diag != nil {
+		host.Diag = func(line string) { fmt.Fprintln(p.Diag, esc(line)) }
+	}
 	obs := &counting{inner: host}
 	opts := watch.Options{Dir: dir, Host: p.Host, Repos: p.Repos, Skipped: p.Skipped, Observer: obs, Clock: now, Out: p.Out,
 		Baseline: p.Baseline, Interval: p.Interval, PendingTimeout: p.PendingTimeout, DetailEvery: p.DetailEvery,

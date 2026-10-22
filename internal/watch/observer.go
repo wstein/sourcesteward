@@ -50,8 +50,11 @@ type PRObs struct {
 	HeadRef string
 	Base    string
 	Fork    bool // the head repository differs from the base repository
-	Detail  *DetailObs
-	Checks  *ChecksObs
+	// ForkKnown is true only when pulls/N was read in this observation; otherwise Fork is not an answer
+	// and the accepted value is kept.
+	ForkKnown bool
+	Detail    *DetailObs
+	Checks    *ChecksObs
 }
 
 // DetailObs is pulls/N: a nil Mergeable is "not computed" and keeps the previous value.
