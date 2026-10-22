@@ -69,12 +69,13 @@ Work package B (releases, tags, repository) is implemented in source: the typed 
 Work package C reads the CI state for the online `stw status`: `internal/statusremote` (`ReadCIMain`, `ReadReleaseProducts`, `ReadCIRelease`), the
 typed `WorkflowRuns` read and decoders in `internal/hosting`, `stwsync.BehindOrigin` (local object lookup with `--no-lazy-fetch`; undecided on a
 Git before 2.44) and `release.ReadWorktreeContracts` (the reader of `release check`); see [hosting](hosting.md). The default branch class reuses the
-classifier of `stw watch`. `ReadCIRelease` adds the newest runs to the per pattern entries of the `tags` source (at most 6 tags in all, each with
+classifier of `stw watch`. `ReadCIRelease` adds the newest runs to the per pattern entries of the `tags` source (the latest tag of every pattern and at most 5 unreleased tags, N+5 reads, each with
 the workflow of its product, `release.yml` by default, 404 skipped); an unusable contract is the error code `contract-invalid`. A red default
 branch and a failed, cancelled or timed-out tag run reach the action model as red items (US5, tested through `overview.Build`). Tests use an
 injected reader and temporary Git repositories only. `overview.Remote` carries neither the full list of runs (at most 20 per tag) nor the workflow
 of each tag: WP-F and WP-R must take both from `CIRelease` (`CIReleaseTag.Runs`, `CIReleaseTag.Workflow`, `Product`), not from the overview. WP-R
-passes `ReleaseProducts.Patterns()` to the releases and tags read and its tag entries to `ReadCIRelease`.
+passes `ReleaseProducts.Patterns()` to the releases and tags read and its tag entries to `ReadCIRelease`, and puts the result back by appending the
+entries of `CIRelease.ReleaseTags()` to `Remote.Tags` (the overview merges them per tag); it never replaces `Remote.Tags`.
 
 ## Spec 038 stw issues (hosting seams in source, 2026-10-22)
 

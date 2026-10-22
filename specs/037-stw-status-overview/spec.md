@@ -105,7 +105,7 @@ Bounded to the **latest** run; no history is read.
   existing check-run and status reads of `stw pulls`; `red` is a `red` item (`main-red`), `pending` and `none` are information in the
   repository block.
 - **Release workflow run** (`ci-release`): each tag entry of the `tags` read (the latest tag of a release tag pattern or an unreleased tag,
-  at most 6 tags per repository in all, in the order of the entries) gets the newest run of the release workflow of **its product**: the
+  the latest tag of **every** pattern, so that a failed run of the seventh product is not hidden, and at most 5 unreleased tags: N+5 reads of page 1 for N patterns, in the order of the entries) gets the newest run of the release workflow of **its product**: the
   file name of the `ci.release_workflow` of the contract that declares the pattern (Spec 026 config; a path, its file name is used in the
   request), or `release.yml` (the name the member repositories use) for a pattern no contract declares. A repository without contract files
   uses the defaults. A contract that **exists but is invalid or unreadable** is not replaced by the defaults: the source ends `error` with
