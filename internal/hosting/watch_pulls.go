@@ -30,8 +30,10 @@ type PullPage struct {
 }
 
 // PullListState is everything that must be stored between two listings of one
-// repository. PerPage is 0 (start at 25), 25 or 12; once 12 it stays 12 for the
-// repository. Pages are those of a listing at PerPage, in order.
+// repository. PerPage is 0 (none stored), 25 or 12. Pages are those of a listing at
+// PerPage, in order. PerPage only says what size the stored pages have, so that their
+// ETags are reused only for that size; it never selects the size of the next listing. The halved size is kept in memory by
+// the WatchReader until restart, so the stored state must not be used to pin it.
 type PullListState struct {
 	PerPage int        `json:"per_page"`
 	Pages   []PullPage `json:"pages"`
@@ -62,13 +64,14 @@ func (r *WatchReader) ListOpenPulls(ctx context.Context, repo string, prior Pull
 		return PullListResult{}, malformed("max_open_prs is outside 1..2000")
 	}
 	perPage := 25
-	if prior.PerPage == 12 {
+	if r.isHalved(repo) {
 		perPage = 12
 	}
 	for {
 		res, err := r.listAt(ctx, repo, perPage, prior, maxOpen)
 		var we *WatchError
 		if errors.As(err, &we) && we.Code == CodePageTooLarge && perPage == 25 {
+			r.markHalved(repo)
 			perPage = 12 // restart at page 1: page numbers of different sizes are never mixed
 			continue
 		}
