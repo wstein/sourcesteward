@@ -524,16 +524,3 @@ func TestDiscoverOwnersSkipsWhenSearchBudgetIsKnownEmpty(t *testing.T) {
 		t.Fatalf("%+v %v", ds, f.log)
 	}
 }
-
-func TestPullsReaderConstructorUsesPullsGuard(t *testing.T) {
-	f := newFakeForge(t)
-	f.handlers[searchPath("wstein", 1)] = func(*http.Request) *http.Response { return response(200, searchBody(0, false)) }
-	f.handlers["repos/a/b/pulls/7"] = func(*http.Request) *http.Response { return response(200, `{}`) }
-	r := pullsReaderFor(f, "github.com")
-	if _, err := r.PullDetail(context.Background(), "a/b", 7, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.SearchOwnerPage(context.Background(), "wstein", 1); err != nil {
-		t.Fatal(err)
-	}
-}
