@@ -113,7 +113,7 @@ func NewWatchReader(ctx context.Context, target, host string) (*WatchReader, fun
 
 // NewWatchReaderWithTransport is the in-process injection seam for fixtures.
 func NewWatchReaderWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*WatchReader, func(), error) {
-	api, cleanup, err := newGHMode(ctx, target, host, rt, true)
+	api, cleanup, err := newGHMode(ctx, target, host, rt, guardWatch)
 	if err != nil {
 		return nil, cleanup, err
 	}
