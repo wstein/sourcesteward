@@ -164,6 +164,24 @@ commit is absent or is not an ancestor of the local branch tip. Every Git call p
 the commit on demand; a Git older than 2.44 refuses the option (exit 129) and the answer stays undecided, as it does without a clone or a
 local branch of that name.
 
+## Orchestration of the sources of `stw status` (Spec 037, work package R)
+
+`statusremote.Collect` runs the remote sources of a workspace under one overall deadline (`Options.Timeout`, 90 s by default; `--timeout`
+is wired by the command). The pull request source reads through the pulls cycle's own pool of four repositories; all other sources share one pool of four, a worker
+reading one repository's `repo`, `releases`, `tags`, `ci-main` and `ci-release` in this order (`ci-main` needs the default branch and
+`ci-release` the tags of the same repository; when that source failed they are skipped as `not-attempted`, which the notices do not repeat,
+and when it was skipped they carry the same skip). All reads pass one gate in front of the client: no request is sent once the context is done, and after the first
+rate-limit evidence of any source no request of any source is sent; the unread repositories end `error` with the code `rate-limited`,
+and nothing sleeps, retries or waits for the reset.
+
+What is attempted decides the outcome. `--offline`, a repository whose origin is not a GitHub repository and a run in which no
+repository can be read make no request and look up no credential. A token is found while the client is opened, before any request: the
+authentication error of the hosting layer is the skip `no-token`; any other failure to open the client (no `gh`, an old `gh`) is the error
+`hosting-api-unavailable` (an attempt that failed), and only its code is reported, never the text of an error. A deadline that passes
+cancels the requests in flight and skips the unfinished sources with the reason `deadline`, keeping what the finished ones read. The data of
+a source is empty unless the source ended `ok`, so a failed pull request read leaves no rows to the action model, which then reports one
+read error.
+
 ## Optional local extension installation
 
 After reviewing/building this source:
