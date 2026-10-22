@@ -8,9 +8,11 @@
 package statusremote
 
 import (
+	"context"
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/overview"
+	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
 
@@ -61,4 +63,66 @@ func slugOf(o Origin) (slug, skip string) {
 		return "", overview.ReasonInvalidRepo
 	}
 	return slug, ""
+}
+
+// Pulls is what the pulls source read for one repository. State is the outcome of the source, PRs
+// the rows in the model's input form, Open the number of open pull requests the list reported (nil
+// when the list was not read) and Counts the group counts of the rows, exactly those of `stw pulls`.
+type Pulls struct {
+	State  overview.SourceState
+	Open   *int
+	PRs    []overview.PR
+	Counts pulls.Summary
+}
+
+// ReadPulls reads the open pull requests of every target that was not skipped with one pulls cycle
+// and default options: the filters, the detail budget and the single bounded re-read of an unknown
+// mergeability are those of `stw pulls`, and no request is made when every target is skipped. The
+// result is keyed by Target.Name; repositories that share an origin share one read.
+//
+// A failed read is the error of that repository's source, a cycle cut short by the context is the
+// skip `deadline` of the repositories it did not finish; both keep the rows that were read. The
+// error is not nil only when the cycle could not start at all.
+func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) (map[string]Pulls, error) {
+	out := make(map[string]Pulls, len(targets))
+	var slugs []string
+	for _, t := range targets {
+		if t.Skip != "" {
+			out[t.Name] = Pulls{State: overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: t.Skip}}
+			continue
+		}
+		slugs = append(slugs, t.Slug)
+	}
+	res, err := pulls.Run(ctx, r, pulls.Options{Repos: slugs})
+	if res == nil {
+		return nil, err
+	}
+	// With a result the error is only the context's: the deadline marks of the result already carry it.
+	for _, t := range targets {
+		if t.Skip != "" {
+			continue
+		}
+		view, _ := res.Repo(t.Slug) // every slug was requested
+		out[t.Name] = fromView(view)
+	}
+	return out, nil
+}
+
+// fromView maps one repository of the cycle's result. A failure of the repository wins over a
+// deadline mark: it was attempted and failed before the deadline.
+func fromView(v pulls.RepoView) Pulls {
+	p := Pulls{State: overview.SourceState{Outcome: overview.OutcomeOK}, Open: v.Status.Open, Counts: v.Summary}
+	switch {
+	case v.Status.Error != "":
+		p.State = overview.SourceState{Outcome: overview.OutcomeError, Code: v.Status.Error}
+	case v.Status.Deadline:
+		p.State = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}
+	}
+	for _, row := range v.Rows {
+		p.PRs = append(p.PRs, overview.PR{
+			Number: row.Number, Title: row.Title, URL: row.URL, Author: row.Author, Bot: row.Bot, Draft: row.Draft,
+			Group: row.Group, Reason: row.Reason, PastBudget: row.PastBudget,
+		})
+	}
+	return p
 }
