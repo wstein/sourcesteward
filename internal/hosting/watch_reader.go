@@ -72,6 +72,7 @@ const (
 	KindCommit    WatchKind = "commit"
 	KindChecks    WatchKind = "checks"
 	KindRateLimit WatchKind = "rate_limit"
+	KindSearch    WatchKind = "search"
 )
 
 // CallCount counts requests of one kind; NotModified is the subset answered 304.
@@ -95,13 +96,34 @@ type WatchReader struct {
 	mu      sync.Mutex
 	calls   map[WatchKind]CallCount
 	last    RateInfo
+	// mode is the guard mode the client was built with; only guardPulls may search.
+	mode guardMode
+	// searchLast is the state of the separate search bucket; it never feeds last.
+	searchLast RateInfo
 	// halved holds the repositories whose list pages exceeded the body limit at 25; in
 	// memory only, so a restart tries 25 again.
 	halved map[string]bool
 }
 
 func newWatchReader(api *ghAPI) *WatchReader {
-	return &WatchReader{api: api, timeout: 30 * time.Second, calls: map[WatchKind]CallCount{}}
+	return &WatchReader{api: api, timeout: 30 * time.Second, calls: map[WatchKind]CallCount{}, mode: guardWatch}
+}
+
+// NewPullsReader is NewWatchReader for the stateless `stw pulls` reader (Spec 036): its
+// guard additionally admits the one fixed owner search shape.
+func NewPullsReader(ctx context.Context, target, host string) (*WatchReader, func(), error) {
+	return NewPullsReaderWithTransport(ctx, target, host, nil)
+}
+
+// NewPullsReaderWithTransport is the in-process injection seam for fixtures.
+func NewPullsReaderWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*WatchReader, func(), error) {
+	api, cleanup, err := newGHMode(ctx, target, host, rt, guardPulls)
+	if err != nil {
+		return nil, cleanup, err
+	}
+	r := newWatchReader(api)
+	r.mode = guardPulls
+	return r, cleanup, nil
 }
 
 // NewWatchReader qualifies gh exactly like the one-shot operations and builds a
@@ -307,7 +329,7 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	if !validETag(etag) {
 		return WatchResponse{}, malformed("invalid ETag")
 	}
-	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) {
+	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) && !(admitsSearch(r.mode) && searchReadEndpoint(endpoint)) {
 		return WatchResponse{}, malformed("endpoint is not an allowed watch read")
 	}
 	ctx, cancel := context.WithTimeout(parent, r.timeout)
@@ -333,7 +355,11 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	rate := rateFromHeader(res.Header)
 	if rate.Known {
 		r.mu.Lock()
-		r.last = rate
+		if kind == KindSearch {
+			r.searchLast = rate // the search bucket is separate from the core limit
+		} else {
+			r.last = rate
+		}
 		r.mu.Unlock()
 	}
 	if res.StatusCode == http.StatusNotModified {
@@ -346,7 +372,17 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	}
 	r.count(kind, false)
 	if res.StatusCode != http.StatusOK {
-		return WatchResponse{}, r.statusFailure(res, rate)
+		err := r.statusFailure(res, rate)
+		if we, ok := err.(*WatchError); ok && kind == KindSearch && we.Code == CodeRateLimited && !rate.Known {
+			wait := we.RetryAfter
+			if wait <= 0 {
+				wait = time.Minute
+			}
+			r.mu.Lock()
+			r.searchLast = RateInfo{Known: true, Remaining: 0, Reset: time.Now().Add(wait)}
+			r.mu.Unlock()
+		}
+		return WatchResponse{}, err
 	}
 	body, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
 	if err != nil || len(body) > maxBytes {
