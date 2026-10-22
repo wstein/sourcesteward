@@ -168,7 +168,7 @@ func TestVerifyJobGates(t *testing.T) {
 	for _, want := range []string{
 		"release-verify.sh version", "release-verify.sh dryversion", "release-verify.sh tag",
 		`test "$ACTOR" = "$OWNER"`, `test "$PUSHER" = "$OWNER"`,
-		"actions/workflows/ci.yml/runs?head_sha=", "releases/tags/$TAG", "go mod verify", "go vet ./...",
+		"actions/workflows/ci.yml/runs?head_sha=", "event=push&status=success", `select(.conclusion == "success")`, "releases/tags/$TAG", "go mod verify", "go vet ./...",
 		"scripts/check-architecture.py", "scripts/check-docs.py", "go test -count=1 ./internal/releaseworkflow", "go-version-file: go.mod",
 	} {
 		if !strings.Contains(v, want) {
@@ -499,5 +499,119 @@ func TestOnlyTheReleaseWorkflowRunsReleaseJobsAndQemu(t *testing.T) {
 				t.Errorf("%s must not reference %q: only the release workflow runs release jobs", e.Name(), bad)
 			}
 		}
+	}
+}
+
+// scriptViolations lists failure-swallowing constructs of a release script. release-notes.sh may
+// end a grep pipeline with || true (no match is not an error there); no other script may.
+func scriptViolations(name, text string) []string {
+	var out []string
+	for n, line := range strings.Split(text, "\n") {
+		code := strings.TrimSpace(line)
+		if strings.HasPrefix(code, "#") {
+			continue
+		}
+		if swallowRe.MatchString(code) && !(name == "release-notes.sh" && strings.Contains(code, "grep")) {
+			out = append(out, sprintf("%s:%d ignores a failure with || true or || :", name, n+1))
+		}
+		if name == "release-notes.sh" && code == "exit 0" {
+			continue // ends the first-release and no-change branches after their text is printed
+		}
+		if disarmRe.MatchString(code) {
+			out = append(out, sprintf("%s:%d can succeed past a failure (exit 0, set +e, || echo)", name, n+1))
+		}
+	}
+	return out
+}
+
+func TestReleaseScriptsSwallowNoFailure(t *testing.T) {
+	entries, err := os.ReadDir(filepath.Join(repoRoot(t), ".github", "scripts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		raw := readRepo(t, ".github/scripts/"+e.Name())
+		if v := scriptViolations(e.Name(), raw); len(v) != 0 {
+			t.Errorf("violations:\n%s", strings.Join(v, "\n"))
+		}
+		if !strings.Contains(raw, "set -eu\n") {
+			t.Errorf("%s lacks set -eu", e.Name())
+		}
+	}
+	smoke := readRepo(t, ".github/scripts/release-smoke.sh")
+	for _, c := range []struct{ from, to string }{
+		{`stw --help | grep -q 'Usage:' || fail "stw --help printed no usage"`, `stw --help | grep -q 'Usage:' || true`},
+		{`stw --help | grep -q 'Usage:' || fail "stw --help printed no usage"`, `stw --help | grep -q 'Usage:' || :`},
+		{"set -eu\n", "set -eu\nset +e\n"},
+		{`git -C "$repo" branch topic`, `git -C "$repo" branch topic || echo ignored`},
+	} {
+		if !strings.Contains(smoke, c.from) {
+			t.Fatalf("mutation target missing: %s", c.from)
+		}
+		if v := scriptViolations("release-smoke.sh", strings.Replace(smoke, c.from, c.to, 1)); len(v) == 0 {
+			t.Errorf("mutation not caught: %s", c.to)
+		}
+	}
+}
+
+// linkedModules is the set of modules linked into ./cmd/stw for a GOOS, as module@version.
+func linkedModules(t *testing.T, goos string) []string {
+	t.Helper()
+	r := run(t, repoRoot(t), []string{"CGO_ENABLED=0", "GOOS=" + goos, "GOARCH=amd64", "GOFLAGS=-mod=readonly"},
+		"go", "list", "-deps", "-f", "{{if .Module}}{{.Module.Path}}@{{.Module.Version}}{{end}}", "./cmd/stw")
+	if r.code != 0 {
+		t.Fatalf("go list: %s%s", r.stdout, r.stderr)
+	}
+	var out []string
+	for _, l := range strings.Fields(r.stdout) {
+		if !strings.HasSuffix(l, "@") { // the main module has no version
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+var noticeRow = regexp.MustCompile(`(?m)^\| (\S+) \| (\S+) \| (.*) \|$`)
+
+func TestEveryLinkedModuleHasAThirdPartyNotice(t *testing.T) {
+	need(t, "go")
+	readme := readRepo(t, "third_party/README.md")
+	rows := map[string]string{}
+	for _, m := range noticeRow.FindAllStringSubmatch(readme, -1) {
+		if m[1] == "Module" || strings.HasPrefix(m[1], "-") {
+			continue
+		}
+		rows[m[1]+"@"+m[2]] = m[3]
+		links := regexp.MustCompile(`\]\((licenses/[^)]+)\)`).FindAllStringSubmatch(m[3], -1)
+		if len(links) == 0 {
+			t.Errorf("notice row %s names no license file", m[1])
+		}
+		for _, l := range links {
+			if _, err := os.Stat(filepath.Join(repoRoot(t), "third_party", filepath.FromSlash(l[1]))); err != nil {
+				t.Errorf("notice row %s: %v", m[1], err)
+			}
+		}
+	}
+	linked := map[string]bool{}
+	for _, goos := range []string{"linux", "darwin"} {
+		for _, m := range linkedModules(t, goos) {
+			linked[m] = true
+			if _, ok := rows[m]; !ok {
+				t.Errorf("%s is linked into the %s binary but has no row in third_party/README.md", m, goos)
+			}
+		}
+	}
+	for row := range rows {
+		if !linked[row] && !strings.HasPrefix(row, "Go@") && !strings.HasPrefix(row, "Go standard") {
+			t.Errorf("third_party/README.md lists %s, which is not linked into the shipped binaries", row)
+		}
+	}
+	for _, want := range []string{"Apache License", "Version 2.0"} {
+		if !strings.Contains(readRepo(t, "third_party/licenses/Apache-2.0.txt"), want) {
+			t.Errorf("Apache-2.0.txt lacks %q", want)
+		}
+	}
+	if !strings.Contains(readRepo(t, "third_party/licenses/BSD-3-pflag.txt"), "Alex Ogier") {
+		t.Error("the pflag license lacks its copyright line")
 	}
 }
