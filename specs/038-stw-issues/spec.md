@@ -116,9 +116,9 @@ case-insensitively with `assignees[].login`. Outcomes:
 - 401 or any other attempted failure that is not 403 (network, 5xx, malformed answer, rate-limit stop): source `viewer` `error`, exit 1
   (the Spec 037 exit rule: an attempted request failed); the rule "assigned to you" is inactive for the run and the output says so in a
   notice (`viewer-unknown`). Issues are still read and classified by the other rules.
-- **403**: a token class that cannot read `user` (for example an Actions `GITHUB_TOKEN`, a fine-grained token without the permission)
-  is not a failure of the run: source `viewer` `skipped`, reason `viewer-unavailable`, a notice, exit 0 (the exit rule counts only
-  failures a retry could fix; a 403 here is the token class). The "assigned to you" rule is inactive, `--assignee @me` fails as above.
+- **403 or 404**: a token class that cannot read `user` (for example an Actions `GITHUB_TOKEN`, a fine-grained token without the permission)
+  is not a failure of the run: source `viewer` `skipped`, reason `no-identity`, a notice, exit 0 (the exit rule counts only
+  failures a retry could fix; a 403 or 404 here is the token class; this is the single, explicit exception to the generic exit rule of Spec 037). The "assigned to you" rule is inactive, `--assignee @me` fails as above.
 - The login is never printed except as a matched assignee in a row; the token never.
 
 ## Priority and action model (deterministic, one level per issue)
@@ -177,14 +177,14 @@ each GitHub repository with local state `ok` (the other Spec 037 sources and the
 - **Deadline, exit and skip semantics: inherited from Spec 037 by reference.** Requests prevented or cancelled by the deadline are
   `skipped`/`deadline` (exit 0), a failed attempted request is an error (exit 1), rate-limit exhaustion stops all remaining reads
   without sleeping, no usable token means no request. The only additions are the `viewer` source and the reasons `issues-disabled` and
-  `viewer-unavailable` above. **No new exit code.** Items and priorities never affect the status.
+  `no-identity` above. **No new exit code.** Items and priorities never affect the status.
 - **`--owner` in status: not in this spec.** Status has no owner or filter flags (Spec 037) and the issue search is a separate, small
   budget (30 requests per minute) with its own throttling semantics; adding it would also add a guard mode surface to `status`. Owner
   discovery stays in `stw issues --owner`. A later spec can add `--owner` to status once the owner is willing to pay the seam; recorded
   as an open question.
 - **JSON additions** (additive, frozen-schema process, see the contract): `actions[].category` enum +3, `actions[].subject.kind`
   +`issue`, `repos[].remote.sources.issues`, the `viewer` and `issues` entries of `sources`, notice codes `viewer-unknown` and
-  `viewer-unavailable`, source skip reason `issues-disabled`. Spec 037 carries pointer sentences to this section.
+  `no-identity`, source skip reason `issues-disabled`. Spec 037 carries pointer sentences to this section.
 
 ## Cost model
 
@@ -260,14 +260,12 @@ mixes pull requests into the page budget (a repository with more than 1000 open 
 unavailable to some token classes (assigned issues then are not flagged, with a notice); search is verified only by recorded fixtures
 and lags the index; an Actions `GITHUB_TOKEN` has 1000 requests an hour.
 
-## Open questions (not owner decisions yet)
+## Decisions recorded (foreman, 2026-10-22)
 
-1. **Configurable labels.** Should the red and yellow labels (`security`, `bug`) be configurable per repository (a `.stw` file) for
-   projects that use `vulnerability` or `type: bug`? Default stays exact `security` and `bug` here.
-2. **`--owner` in `stw status`.** Left to a later spec (reasons above); is it wanted at all?
-3. **Schema version.** Spec 037's v2 status schema is unpublished; extending its enums and `sources` with WP-G is treated as additive
-   (no version bump) only while it is unaccepted. If it is accepted before WP-G lands, is that a version 3?
-4. **Viewer 403.** Is the choice "a 403 on `user` is a skip, not a failure" acceptable, given the generic exit rule of Spec 037?
-5. **Unassigned-by-bot rule order.** Is "assigned to you" before the bot rule right for bot-opened issues assigned to the owner?
-6. **Items for violet issues.** Bot issues are counts only here; should a bot issue with a failing-CI style title ever be an item?
-7. **1000-entry cap.** A repository with more than 1000 open items (issues plus PRs) is truncated to the oldest 1000; acceptable?
+1. **Labels are fixed.** `security` and `bug` (case-insensitive, exact) are the only labels; configurability is a later spec if needed. Rationale: no config surface before there is a second convention to serve.
+2. **No `--owner` in `stw status`** in this spec; a later spec may add it. Rationale: the search budget and its guard surface do not belong in the glance command.
+3. **Schema.** The status v2 schema is unpublished: the additions are additive within v2 and re-register the frozen digest through the existing process; no v3 while it is unpublished.
+4. **`GET user` 403 or 404 is a skip** (reason `no-identity`: the "assigned to you" rule is disabled with a notice, exit 0), any other error on it is a failed attempted request (exit 1). This is the **one exception** to the generic exit rule of Spec 037 (see "The authenticated user"). Rationale: the token class, not a retryable fault, withholds the identity.
+5. **Assigned to you wins over the bot rule.** An assignment to the owner is always actionable.
+6. **Bot-opened issues are only counted in status** (the violet count of the `issues` data is the bots count) and listed in `stw issues`; no status items for them.
+7. **Bounded paging is never silent.** A repository whose open items (issues plus pull requests) exceed the 10 pages (1000 entries) is `partial` with error `too-many-open-issues` and a notice, exit 1, like `too-many-open-prs` and `search-too-many` of the pulls owner search; the oldest 1000 are kept.

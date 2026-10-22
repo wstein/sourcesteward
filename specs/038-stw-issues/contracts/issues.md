@@ -14,7 +14,7 @@ The schema file is `schemas/v1/issues.schema.json` (JSON Schema 2020-12, `$id`
 | `command` | const `issues` | |
 | `time` | RFC 3339 UTC | start of the run |
 | `host` | str | `github.com` or the Enterprise host |
-| `viewer` | object | `{state, login, error}`: `state` `ok`, `skipped` (reason `viewer-unavailable`, a 403) or `error`; `login` str or null (null unless `ok`); `error` a code or null |
+| `viewer` | object | `{state, login, error}`: `state` `ok`, `skipped` (reason `no-identity`, a 403 or 404) or `error`; `login` str or null (null unless `ok`); `error` a code or null |
 | `options` | object | `scope` enum(`workspace`, `repos`, `mixed`) as in the pulls contract, `owners` array of str, `labels`, `assignees`, `authors` arrays of str (as given), `limit` integer |
 | `repos` | array | `{repo, source, state, reason, open, pulls_dropped, error}`: `source` enum(`workspace`, `repo`, `owner`); `state` `ok`, `partial`, `skipped`, `error`; `reason` null or `issues-disabled` (only with `skipped`); `open` integer or null (issues read, before filters); `pulls_dropped` integer or null; `error` a code or null |
 | `issues` | object | keys `red`, `yellow`, `blue`, `violet`, each an array of issue rows in this fixed key order, sorted by repository (case-insensitive) then number, **after filters and the `--limit` cap** |
@@ -48,6 +48,6 @@ Additive; the Spec 037 frozen-schema process applies (digest updated in the same
   `offline`, `issues-disabled`), data `{open, red, yellow, blue, violet, pulls_dropped, truncated}` (null when not `ok`; `open` equals
   the sum of the four priority counts; `truncated` true for `too-many-open-issues`).
 - Document-level `sources` gains two entries, `issues` and `viewer` (`{id, state, read, degraded, skipped}` counts as for the others;
-  `viewer` has at most one repository-independent attempt). `notices[].code` gains `viewer-unknown` and `viewer-unavailable`.
+  `viewer` has at most one repository-independent attempt). `notices[].code` gains `viewer-unknown` and `no-identity`.
 - `summary.priorities` is unchanged in shape; issue items count in it like any item. Exit status: Spec 037 unchanged (a `viewer`
-  read that failed with an attempted request is an error, exit 1; a 403 is a skip, exit 0).
+  read that failed with an attempted request is an error, exit 1; a 403 or 404 is a skip, exit 0, the one exception to the exit rule of Spec 037).
