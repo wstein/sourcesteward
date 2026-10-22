@@ -192,6 +192,8 @@ const (
 // Skip reasons and error codes that the notices name; any other code is reported as it is.
 const (
 	ReasonNoToken        = "no-token"
+	ReasonOffline        = "offline"
+	ReasonNotAttempted   = "not-attempted"
 	ReasonDeadline       = "deadline"
 	ReasonNotFound       = "not-found"
 	ReasonNotGitHub      = "not-github-origin"

@@ -80,7 +80,7 @@ func TestOfflineSendsNothingAndReadsNoCredential(t *testing.T) {
 		t.Fatalf("opens %d, requests %v", op.opens.Load(), w.requests())
 	}
 	for _, r := range res.Repos {
-		allSources(t, r, skipped(ReasonOffline))
+		allSources(t, r, skipped(overview.ReasonOffline))
 	}
 }
 
@@ -93,7 +93,7 @@ func TestARepositoryThatCannotBeReadKeepsItsOwnSkipReason(t *testing.T) {
 		allSources(t, res.Repos[0], skipped(overview.ReasonOtherHost))
 		allSources(t, res.Repos[1], skipped(overview.ReasonNotGitHub))
 		allSources(t, res.Repos[2], skipped(overview.ReasonNotReadLocally))
-		want := skipped(ReasonOffline)
+		want := skipped(overview.ReasonOffline)
 		if name == "no token" {
 			want = skipped(overview.ReasonNoToken)
 		}
