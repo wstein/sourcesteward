@@ -63,7 +63,7 @@ online; reserved for the same shape in tooling); `reason` null or `not-github-or
 | `releases` | `{drafts, truncated}`; `drafts` at most 100 `{name, tag, created_at, assets, url}` (`name` str or null, `created_at` time or null); empty and meaningless unless `drafts_visibility` is `write-access` |
 | `tags` | `{latest, unreleased}`; `latest` str or null, `unreleased` at most 5 `{tag, sha, run}` (`run` `{workflow, conclusion, status, url}` or null) |
 | `ci_main` | `{branch, head, class, behind_origin}`; `class` `none`, `pending`, `green`, `red` or null; `behind_origin` bool or null (local default branch lacks origin's head) |
-| `ci_release` | `{workflow, tags}`: `workflow` the single `ci.release_workflow` (or the default `release-build.yml`); `tags` an array of `{product, tag, sha, released, runs}` for each product's latest tag and each unreleased tag; `runs` at most 20 `{workflow, conclusion, status, url}`, newest first |
+| `ci_release` | `{workflow, tags}`: `workflow` the single `ci.release_workflow` (or the default `release.yml`); `tags` an array of `{product, tag, sha, released, runs}` for each product's latest tag and each unreleased tag; `runs` at most 20 `{workflow, conclusion, status, url}`, newest first |
 
 ### `summary`
 
