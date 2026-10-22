@@ -18,9 +18,12 @@ const MaxRepos = 256
 // ErrUsage marks an error that is a usage or configuration error (exit 2): nothing was read or written.
 var ErrUsage = errors.New("usage")
 
-func usagef(format string, args ...any) error {
-	return fmt.Errorf("%w: %s", ErrUsage, fmt.Sprintf(format, args...))
-}
+type usageError struct{ msg string }
+
+func (e *usageError) Error() string        { return e.msg }
+func (e *usageError) Is(target error) bool { return target == ErrUsage }
+
+func usagef(format string, args ...any) error { return &usageError{fmt.Sprintf(format, args...)} }
 
 // ParseRemote extracts OWNER/NAME from a remote URL of host (https, ssh:// and scp-like spellings).
 func ParseRemote(remote, host string) (string, bool) {
