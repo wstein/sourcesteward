@@ -23,7 +23,8 @@ import (
 const (
 	// maxCIRuns is the number of runs of one tag that are kept, newest first.
 	maxCIRuns = 20
-	// maxUnreleasedTags is the number of unreleased tags of a repository that are read (Spec 037).
+	// maxUnreleasedTags is the number of unreleased tags of a repository that are read (Spec 037); the latest
+	// tag of every pattern is read besides, so a repository makes N+5 runs reads of page 1 for N patterns.
 	maxUnreleasedTags = 5
 )
 
@@ -72,10 +73,6 @@ func ReadCIMain(ctx context.Context, r CIReader, repo, branch, dir string) CIMai
 // used: the owner must fix it, the defaults are not applied in its place.
 const CodeContractInvalid = "contract-invalid"
 
-// maxCITags is the number of tags of one repository whose release runs are read (Spec 037: the latest
-// tag of each pattern and at most 5 unreleased ones, 6 in all).
-const maxCITags = 6
-
 // CIReleaseInput is what the `ci-release` source needs: the repository (OWNER/NAME), the release
 // products read from its contracts and the tag entries that the `tags` source found with them
 // (Releases.Tags: one entry per pattern and tag, the latest of the pattern or unreleased). The runs
@@ -121,7 +118,7 @@ type CIReleaseResult struct {
 	Release *CIRelease
 }
 
-// ReadCIRelease adds the newest runs of the release workflow to the first maxCITags tag entries: for
+// ReadCIRelease adds the newest runs of the release workflow to the latest tag entry of every pattern and the first maxUnreleasedTags unreleased ones: for
 // each, the runs of the workflow of its product (release.yml for a pattern no contract declares) for
 // the commit of the tag, at most 20, newest first. A run of another commit is ignored. A workflow the
 // forge does not know ends the source as skipped, reason not-found; an existing but unusable
@@ -130,10 +127,7 @@ func ReadCIRelease(ctx context.Context, r CIReader, in CIReleaseInput) CIRelease
 	if in.Products.invalid {
 		return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeError, Code: CodeContractInvalid}}
 	}
-	entries := in.Tags
-	if len(entries) > maxCITags {
-		entries = entries[:maxCITags]
-	}
+	entries := tagsToRead(in.Tags)
 	out := &CIRelease{Tags: []CIReleaseTag{}}
 	for _, e := range entries {
 		product, workflow := in.Products.of(e.Pattern)
@@ -149,6 +143,22 @@ func ReadCIRelease(ctx context.Context, r CIReader, in CIReleaseInput) CIRelease
 			Unreleased: e.Unreleased, Workflow: workflow, Runs: newestRuns(in.Repo, workflow, e.SHA, runs)})
 	}
 	return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeOK}, Release: out}
+}
+
+// tagsToRead keeps, in order, every latest entry and the unreleased entries up to maxUnreleasedTags; an
+// entry that is both counts as one of the unreleased.
+func tagsToRead(entries []overview.ReleaseTag) []overview.ReleaseTag {
+	var out []overview.ReleaseTag
+	unreleased := 0
+	for _, e := range entries {
+		if e.Unreleased {
+			unreleased++
+		}
+		if e.Latest || (e.Unreleased && unreleased <= maxUnreleasedTags) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // newestRuns keeps the runs of the commit, orders them newest first by creation time (the order of the
