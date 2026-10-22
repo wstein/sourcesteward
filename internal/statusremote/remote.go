@@ -15,8 +15,6 @@ import (
 const (
 	// DefaultTimeout is the overall deadline of the remote half of a run (Spec 037, `--timeout`).
 	DefaultTimeout = 90 * time.Second
-	// ReasonOffline is the skip reason of every source of a run with `--offline`.
-	ReasonOffline = "offline"
 	// CodeHostingUnavailable is the error code of every source when the reader could not be opened for a
 	// reason other than a missing token (no `gh`, a `gh` that is too old): the attempt failed, which is
 	// not a skip.
@@ -107,7 +105,7 @@ func Collect(ctx context.Context, repos []Repository, o Options) Result {
 // run reads the selected repositories, or records why nothing was read.
 func (c *collector) run(ctx context.Context, o Options) {
 	if o.Offline {
-		c.fallback = &overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: ReasonOffline}
+		c.fallback = &overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonOffline}
 		return
 	}
 	client, closeClient, st := open(ctx, o)
@@ -140,6 +138,8 @@ type slot struct {
 	pulls    Pulls
 	releases Releases
 	products ReleaseProducts
+	main     CIMainResult
+	ci       CIReleaseResult
 }
 
 // collector is the state of one run.
@@ -152,34 +152,59 @@ type collector struct {
 	fallback *overview.SourceState // the state of every source of the selected repositories when nothing was read
 }
 
-// read runs the sources and returns when all of them are done.
+// read runs the pull request source and, beside it, all other sources on one pool of repositories.
 func (c *collector) read(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { c.readPulls(ctx) })
-	wg.Go(func() { c.each(func(idx int) { c.readReleases(ctx, idx) }) })
+	wg.Go(func() { c.each(ctx) })
 	wg.Wait()
 }
 
-// each runs fn for every selected repository, at most parallel at a time and starting them in order.
-func (c *collector) each(fn func(idx int)) {
+// each reads every selected repository, at most parallel at a time and starting them in order. A worker
+// reads one repository's sources one after the other: repo, releases, tags, ci-main, ci-release.
+func (c *collector) each(ctx context.Context) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallel)
 	for _, idx := range c.selected {
 		sem <- struct{}{}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			fn(idx)
+			c.readRepository(ctx, idx)
 		})
 	}
 	wg.Wait()
 }
 
-// readReleases reads the repository, its releases and its tags, with the tag patterns that the
-// release contracts of the clone declare.
-func (c *collector) readReleases(ctx context.Context, idx int) {
-	s := &c.slots[idx]
+// readRepository reads the release sources with the tag patterns that the release contracts of the clone
+// declare, then the CI sources, which need what they found: ci-main the default branch, ci-release the
+// tags. When that source failed, the CI source is not attempted; it is skipped as `not-attempted`
+// (the failure is already reported once), and when that source was skipped, it carries the same skip.
+func (c *collector) readRepository(ctx context.Context, idx int) {
+	s, slug := &c.slots[idx], c.targets[idx].Slug
 	s.products = ReadReleaseProducts(c.repos[idx].Dir)
-	s.releases = ReadReleases(ctx, c.gate, c.targets[idx].Slug, s.products.Patterns())
+	s.releases = ReadReleases(ctx, c.gate, slug, s.products.Patterns())
+	if dep, ok := dependency(s.releases.Sources[overview.SourceRepo]); ok {
+		s.main = CIMainResult{State: dep}
+	} else {
+		s.main = ReadCIMain(ctx, c.gate, slug, s.releases.DefaultBranch, c.repos[idx].Dir)
+	}
+	// an unusable contract is a fact of the clone and is reported whatever the forge answered
+	if dep, ok := dependency(s.releases.Sources[overview.SourceTags]); ok && !s.products.Invalid() {
+		s.ci = CIReleaseResult{State: dep}
+	} else {
+		s.ci = ReadCIRelease(ctx, c.gate, CIReleaseInput{Repo: slug, Products: s.products, Tags: s.releases.Tags})
+	}
+}
+
+// dependency gives the state of a CI source whose input source ended in st, and false when the input is there.
+func dependency(st overview.SourceState) (overview.SourceState, bool) {
+	switch st.Outcome {
+	case overview.OutcomeOK:
+		return st, false
+	case overview.OutcomeError:
+		return overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotAttempted}, true
+	}
+	return st, true
 }
 
 func (c *collector) readPulls(ctx context.Context) {
@@ -218,7 +243,7 @@ func setAll(r *overview.Remote, st overview.SourceState) {
 }
 
 // fill stores what the sources of one repository read. The data of a source that did not end `ok` is
-// left out: ReadReleases and the CI reads already return none for a failed source, the pull requests
+// left out: ReadReleases and ReadCIMain already return none for a failed source, the pull requests
 // that were read before a failure and the visibility that a failed repository read leaves as "unknown"
 // are dropped here.
 func (c *collector) fill(r *RepoResult, s slot) {
@@ -229,6 +254,14 @@ func (c *collector) fill(r *RepoResult, s slot) {
 	s.releases.Apply(r.Remote)
 	if r.Remote.Sources[overview.SourceRepo] != okState {
 		r.Remote.DefaultBranch, r.Remote.HTMLURL, r.Remote.Visibility = "", "", ""
+	}
+	r.Remote.Sources[overview.SourceCIMain] = s.main.State
+	r.Remote.Main = s.main.Main
+	r.Remote.Sources[overview.SourceCIRelease] = s.ci.State
+	if s.ci.State == okState {
+		// the entries with a run are added to those of the tags source; the overview merges them per tag
+		r.CIRelease = s.ci.Release
+		r.Remote.Tags = append(r.Remote.Tags, s.ci.Release.ReleaseTags()...)
 	}
 }
 

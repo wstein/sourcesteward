@@ -45,7 +45,7 @@ func notices(in Input) []Notice {
 			switch st.Outcome {
 			case OutcomeSkipped:
 				switch st.Reason {
-				case "offline", ReasonIssuesDisabled:
+				case ReasonOffline, ReasonNotAttempted, ReasonIssuesDisabled: // nothing was read, or a fact about the repository; the notice of the source it needs says why
 				case ReasonNotFound:
 					add(key{ReasonNotFound, string(src)}, name, st.Reason, src)
 				case ReasonNoToken, ReasonDeadline:

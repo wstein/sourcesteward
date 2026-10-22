@@ -80,7 +80,8 @@ func TestNotices(t *testing.T) {
 		{"drafts unknown", Input{Repos: []Repo{{Local: repoOK("a", nil), Slug: "w/a", Remote: &Remote{Visibility: Unknown}}}},
 			[]Notice{{Code: "drafts-unknown", Source: "releases", Repos: []string{"w/a"}, Message: "release drafts of w/a unknown (write access not determined)"}}, false},
 		{"all fine", Input{Repos: []Repo{withSources("a", "w/a", all(SourceState{Outcome: OutcomeOK})), {Local: repoOK("b", nil)}}}, nil, false},
-		{"offline skip is silent", Input{Repos: []Repo{withSources("a", "w/a", all(SourceState{Outcome: OutcomeSkipped, Reason: "offline"}))}}, nil, true},
+		{"offline skip is silent", Input{Repos: []Repo{withSources("a", "w/a", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonOffline}))}}, nil, true},
+		{"not-attempted skip is silent", Input{Repos: []Repo{withSources("a", "w/a", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonNotAttempted}))}}, nil, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

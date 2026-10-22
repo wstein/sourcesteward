@@ -15,6 +15,20 @@ import (
 	"github.com/wstein/sourcesteward/internal/overview"
 )
 
+// entriesOfTheTagsSource drops the repeats that the CI release source appended: the first entry of each
+// pattern and tag is the one the tags source gave.
+func entriesOfTheTagsSource(tags []overview.ReleaseTag) []overview.ReleaseTag {
+	var out []overview.ReleaseTag
+	seen := map[string]bool{}
+	for _, tag := range tags {
+		if key := tag.Pattern + "\x00" + tag.Tag; !seen[key] {
+			seen[key] = true
+			out = append(out, tag)
+		}
+	}
+	return out
+}
+
 func TestReleasesAreReadPerRepositoryInOrderAndReachTheOverviewInputs(t *testing.T) {
 	w := newWorld()
 	w.addRepo("o/a", true)
@@ -34,7 +48,7 @@ func TestReleasesAreReadPerRepositoryInOrderAndReachTheOverviewInputs(t *testing
 		t.Fatalf("%+v", a.Remote.Drafts)
 	}
 	want := []overview.ReleaseTag{{Pattern: "v*.*.*", Tag: "v1.1.0", SHA: sha("2"), Latest: true, Unreleased: true}}
-	if !reflect.DeepEqual(a.Remote.Tags, want) {
+	if !reflect.DeepEqual(entriesOfTheTagsSource(a.Remote.Tags), want) {
 		t.Fatalf("%+v", a.Remote.Tags)
 	}
 	// one repository after the other inside a source: repo, releases, tags of one repository in this order
@@ -63,7 +77,7 @@ func TestTheTagPatternsComeFromTheContractsOfTheClone(t *testing.T) {
 	r := repository("o/a")
 	r.Dir = dir
 	res := Collect(context.Background(), []Repository{r}, (&opener{client: w}).options())
-	got := res.Repos[0].Remote.Tags
+	got := entriesOfTheTagsSource(res.Repos[0].Remote.Tags)
 	if len(got) != 1 || got[0].Pattern != "zlib-v*" || got[0].Tag != "zlib-v1.0.0" {
 		t.Fatalf("%+v", got)
 	}
@@ -84,7 +98,7 @@ func TestAFailingSourceHurtsOnlyItself(t *testing.T) {
 	if sourceState(t, a, overview.SourceRepo) != failed(hosting.CodeHTTP5xx) || sourceState(t, a, overview.SourceReleases) != okState || sourceState(t, a, overview.SourceTags) != okState {
 		t.Fatalf("%+v", a.Remote.Sources)
 	}
-	if a.Remote.DefaultBranch != "" || a.Remote.HTMLURL != "" || a.Remote.Visibility != "" || len(a.Remote.Tags) != 1 {
+	if a.Remote.DefaultBranch != "" || a.Remote.HTMLURL != "" || a.Remote.Visibility != "" || len(entriesOfTheTagsSource(a.Remote.Tags)) != 1 {
 		t.Fatalf("data of a failed repo source: %+v", a.Remote)
 	}
 	if sourceState(t, b, overview.SourceReleases) != failed(hosting.CodePageTooLarge) || sourceState(t, b, overview.SourceTags) != okState || sourceState(t, b, overview.SourceRepo) != okState {
