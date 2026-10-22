@@ -124,7 +124,7 @@ case-insensitively with `assignees[].login`. Outcomes:
   deviation of this spec** from it (Spec 037 has its own, separate `not-found` skip for the release workflow). In case (2) the rule is
   inactive and `--assignee @me` fails as above.
 - **No request, no lookup.** The `user` read is made only when an issue read is attempted: with `--offline`, with no usable token, or
-  when no repository is on GitHub, no `viewer` request is made (source `skipped` for the same reason, no `user` call).
+  when no repository is on GitHub, no `viewer` request is made and the source is `skipped`: reason `offline` with `--offline`, `no-token` without a usable token, and `not-github-origin` when no repository is on GitHub.
 - The login is never printed except as a matched assignee in a row; the token never.
 
 ## Priority and action model (deterministic, one level per issue)
@@ -161,7 +161,8 @@ each GitHub repository with local state `ok` (the other Spec 037 sources and the
   No search, no `--owner` (see below). Guard mode `status` admits the two shapes.
 - **Per repository block**: one line `issues: N open (R red, Y yellow)`; `N` counts every open issue read (blue and violet included; the violet count is the bots count),
   the counts per priority are in the JSON; a truncated read (`too-many-open-issues`) prints `issues: N+ open (R red, Y yellow, truncated)`. A repository whose issues are disabled prints `issues: disabled`; a repository whose read
-  failed prints `issues: not read (CODE)`; a skipped one `issues: not read (REASON)` with REASON one of `deadline`, `no-token`, `offline`, `rate-limited`.
+  failed prints `issues: not read (CODE)` with CODE an error code such as `rate-limited` or `network`; a skipped one prints
+  `issues: not read (REASON)` with REASON one of `deadline`, `no-token`, `offline`.
 - **Items** (appended to the table of Spec 037; categories 26 to 28 so that no existing number changes; ordering is priority first,
   then category number, as defined there):
 
@@ -233,8 +234,9 @@ stdout carries output, stderr diagnostics. JSON is **one document** (not JSON Li
 until accepted (frozen: digest in `internal/contracts/schema_freeze_test.go`, listed in `UNPUBLISHED_SCHEMAS` of
 `scripts/package-pages.py`, like `pulls.schema.json`). Human output, per non-empty priority a heading `RED (N)`, `YELLOW (N)`,
 `BLUE (N)`, `VIOLET (N)`, then one line per issue
-`REPO#N  AGE  AUTHOR  [labels: a, b]  [assigned: x]  TITLE  (reason)`, a `run:` hint line under red and yellow rows, and a
-AUTHOR carries a `[bot]` marker only when the login does not already end in `[bot]` (never `dependabot[bot][bot]`); a final line `N open issues in M repositories, R red, Y yellow` plus the omitted count and the failures. No colour unless a terminal and
+`REPO#N  AGE  AUTHOR  [labels: a, b]  [assigned: x]  TITLE  (reason)`, and a `run:` hint line under red and yellow rows. AUTHOR carries
+a `[bot]` marker only when the login does not already end in `[bot]` (never `dependabot[bot][bot]`). A final line
+`N open issues in M repositories, R red, Y yellow` follows, plus the omitted count and the failures. No colour unless a terminal and
 `NO_COLOR` unset. Exit status as above.
 
 ## Amendment to Spec 022 FR-005 (explicit)
