@@ -278,12 +278,17 @@ type Main struct {
 // Remote is what the remote sources read for one repository. A field is meaningful only when its
 // source ended `ok`; Sources carries the outcome of every source that was attempted or skipped.
 type Remote struct {
-	Sources    map[Source]SourceState
-	Pulls      []PR
-	Visibility Visibility
-	Drafts     []Draft
-	Tags       []ReleaseTag
-	Main       *Main
+	Sources map[Source]SourceState
+	Pulls   []PR
+	// DefaultBranch and HTMLURL come from the `repo` source; Visibility says whether Drafts is complete.
+	DefaultBranch string
+	HTMLURL       string
+	Visibility    Visibility
+	Drafts        []Draft
+	// DraftsTruncated is true when the repository has more drafts than Drafts holds.
+	DraftsTruncated bool
+	Tags            []ReleaseTag
+	Main            *Main
 }
 
 // Repo is one repository of the workspace. Slug is its GitHub OWNER/NAME, empty when the remote sources

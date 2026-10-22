@@ -102,8 +102,8 @@ func ReadReleases(ctx context.Context, rd Reader, slug string, patterns []string
 	return out
 }
 
-// Apply stores what was read into the remote data of the repository: the visibility, drafts and
-// tags, and the states of the three sources next to the states other sources already wrote.
+// Apply stores what was read into the remote data of the repository: the default branch and page, the
+// visibility, drafts (and whether they were cut) and tags, and the states of the three sources next to the states other sources already wrote.
 func (r Releases) Apply(into *overview.Remote) {
 	if into.Sources == nil {
 		into.Sources = map[overview.Source]overview.SourceState{}
@@ -111,7 +111,8 @@ func (r Releases) Apply(into *overview.Remote) {
 	for src, st := range r.Sources {
 		into.Sources[src] = st
 	}
-	into.Visibility, into.Drafts, into.Tags = r.Visibility, r.Drafts, r.Tags
+	into.DefaultBranch, into.HTMLURL = r.DefaultBranch, r.HTMLURL
+	into.Visibility, into.Drafts, into.DraftsTruncated, into.Tags = r.Visibility, r.Drafts, r.Truncated, r.Tags
 }
 
 var releaseSources = []overview.Source{overview.SourceRepo, overview.SourceReleases, overview.SourceTags}
