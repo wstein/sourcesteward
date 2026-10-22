@@ -289,7 +289,8 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	if req.Body != nil || req.ContentLength != 0 || (req.Host != "" && req.Host != t.host) || req.URL.ForceQuery || req.Method != http.MethodGet || req.URL.Scheme != "https" || req.URL.Host != t.host || req.URL.User != nil || req.URL.Fragment != "" || req.URL.Opaque != "" {
 		return false
 	}
-	path := req.URL.Path
+	// The wire form is the escaped path: a literal Path holding "%2F" is sent as "%252F".
+	path := req.URL.EscapedPath()
 	if req.URL.RawPath != "" {
 		// Only the watch reader may carry an escaped path, and only one that decodes to
 		// the same Path; the branch segment itself is validated against its encoder.
