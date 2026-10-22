@@ -72,6 +72,10 @@ func TestRealOwnedRetirementSchema(t *testing.T) {
 						native("-R", source, "describe", "-m", "initial")
 						native("-R", source, "bookmark", "create", "base")
 					}
+					// An apply is never retried: a partial apply has journalled effects. Only this
+					// test widens the 60 s production apply deadline, which a loaded runner exceeds
+					// with a real jj.
+					t.Cleanup(workspace.SetTidyApplyTimeoutForTest(180 * time.Second))
 					invoke := func(expected int, version, name string, args ...string) []byte {
 						t.Helper()
 						var out, diagnostic bytes.Buffer
@@ -96,7 +100,7 @@ func TestRealOwnedRetirementSchema(t *testing.T) {
 							if strings.Contains(out.String(), "sandbox-unavailable") && os.Getenv("STW_REQUIRE_JJ") != "1" && os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") != "1" {
 								t.Skip("native sandbox unavailable")
 							}
-							t.Fatalf("exit%d want%d; attempts took %v (a tidy plan carries a 60 s deadline) %s %s", code, expected, elapsed, out.String(), diagnostic.String())
+							t.Fatalf("exit%d want%d; attempts took %v (a tidy plan and a tidy apply each carry a 60 s production deadline; this test widens the apply deadline to 180 s) %s %s", code, expected, elapsed, out.String(), diagnostic.String())
 						}
 						return out.Bytes()
 					}

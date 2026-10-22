@@ -28,8 +28,21 @@ type TidyJournal struct {
 	Diagnostics   []Diagnostic       `json:"diagnostics"`
 }
 
+// tidyApplyTimeout bounds one ApplyTidy call. A partial apply has journalled effects, so it is
+// never retried; the variable exists only so that a test with a real jj on a loaded runner can
+// widen it through SetTidyApplyTimeoutForTest. Production never changes the 60 s default.
+var tidyApplyTimeout = 60 * time.Second
+
+// SetTidyApplyTimeoutForTest replaces the ApplyTidy deadline and returns the function that
+// restores it. It is for tests only and must not be called by production code.
+func SetTidyApplyTimeoutForTest(d time.Duration) (restore func()) {
+	previous := tidyApplyTimeout
+	tidyApplyTimeout = d
+	return func() { tidyApplyTimeout = previous }
+}
+
 func ApplyTidy(ctx context.Context, o TidyApplyOptions) TidyResult {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, tidyApplyTimeout)
 	defer cancel()
 	kind, err := tidyStoredKind(o)
 	if kind == "retirement" {
