@@ -1,6 +1,6 @@
 # Specification: tiered, faster CI
 
-**Created**: 2026-10-23 | **Status**: proposed (spec-light: this page, [contracts/tiers.md](contracts/tiers.md) and
+**Created**: 2026-10-23 | **Status**: proposed (spec-light; open questions decided by the owner 2026-10-23, see "Decisions": this page, [contracts/tiers.md](contracts/tiers.md) and
 [plan.md](plan.md) are the whole design; documentation only, no workflow or script is changed by this specification). It
 **amends** the CI tier design recorded in [development](../../docs/development.md) (the `CONFORMANCE_TIER` expression and the
 `ci-full` label) and keeps the shard design of `scripts/ci_shards.py`.
@@ -80,7 +80,7 @@ delay and not test time. A run with 17 jobs asks the runner pool for 17 jobs at 
 
 ## Goals
 
-- **G1.** T1 on every pull request head, target **under 5 minutes** wall time: formatting, vet, documentation and architecture checks,
+- **G1.** T1 on every pull request head, target **under 5 minutes** wall time (a goal; if WP-1 measures more, the target becomes the measured p90 plus 20% and this specification is amended, Decision D3): formatting, vet, documentation and architecture checks,
   and plain `go test` of the packages affected by the diff and their reverse dependencies.
 - **G2.** The heavy suite (race on the concurrent packages and the 12 conformance shards) runs once per stack: on the **top** pull request
   of a stack, and on an unstacked pull request when it is ready for review or carries `ci-full`.
@@ -103,8 +103,8 @@ delay and not test time. A run with 17 jobs asks the runner pool for 17 jobs at 
 | Tier | Runs on | Content | Target wall time |
 | --- | --- | --- | --- |
 | **T1** | Every pull request head (every `opened`, `synchronize`, `reopened`, `ready_for_review` event) and every push to `main` | `gofmt`, `go vet`, `go mod verify`, tidy check, Python and Node script tests, `scripts/check-docs.py`, `scripts/check-architecture.py`, shard coverage check, Pages artifact check, plain `go test` (no `-race`) of the affected packages. A documentation-only change runs T1 without the Go tests. | under 5 min |
-| **T2** | The top pull request of a stack; an unstacked non-draft pull request; any pull request carrying `ci-full` (see "When T2 runs") | T1 plus both Git/jj conformance lanes (shards 0 to 5): `-race` for the **race list**, plain `go test` for the other packages, real backends | the current shard time, about 12 min plus queue |
-| **T3** | Every push to `main` (post-merge) and nightly | The full matrix as today: `-race` on all packages, both lanes, all shards | unchanged, about 14 min median |
+| **T2** | The top pull request of a stack; an unstacked non-draft pull request; any pull request carrying `ci-full` (see "When T2 runs") | T1 plus the **`current`** Git/jj conformance lane only (shards 0 to 5): `-race` for the **race list**, plain `go test` for the other packages, real backends | the current shard time, about 12 min plus queue |
+| **T3** | Every push to `main` (post-merge) and nightly | The full matrix as today: `-race` on all packages, both lanes (`minimum` and `current`), all shards | unchanged, about 14 min median |
 
 ### T1: affected packages
 
@@ -126,9 +126,7 @@ Whether T1 needs the 103 s sandbox install is **unmeasured**: `STW_REQUIRE_NATIV
 without it. The T1 job installs the sandbox only when the affected set contains a package that needs it, and WP-1 measures which part
 of the 103 s is `apt-get update`. The fixed T1 floor from the measured steps is checkout 2 s, setup-go 12 s, Node 1 s, Hugo 1 s, static
 checks 24 s, shard coverage 6 s, import boundaries 7 s, Pages artifact 1 s = about 55 s without the sandbox, about 160 s with it, plus the
-affected tests (unmeasured: WP-1 records `go test -json` per-package elapsed). The 5 minute target is feasible when the affected tests
-fit in about 2 minutes; the cost of the widest case (`all`) is measured in WP-1 and reported before WP-2 is merged, and if T1 cannot meet
-5 minutes in the `all` case it ships at the measured time and the open question Q3 decides.
+affected tests (unmeasured: WP-1 records `go test -json` per-package elapsed). The 5 minute target is feasible when the affected tests fit in about 2 minutes; WP-1 measures the widest case (`all`) and the target is then set by Decision D3.
 
 ### The race list
 
@@ -182,8 +180,8 @@ uses only the event payload and one read-only API call, so the same inputs alway
 **Who triggers it.** The owner's rule "Ready means mergeable" makes green required checks part of Ready, so T2 must be **green before the
 flip to Ready**, not started by it. Therefore the foreman applies the label `ci-full` to the top PR (Draft, with its named blocker
 "T2 pending") as soon as the head is frozen for the independent review, so T2 runs while the review runs (this is the "push early"
-rule). Ready then needs: exact-head review CLEAR, T1 and T2 green on that head, no other blocker. The `ready_for_review` trigger is
-the **safety net**: a PR that is flipped to Ready without T2 evidence for its head gets T2 at that moment and shows pending, so a
+rule). Ready then needs: exact-head review CLEAR, T1 and T2 green on that head, no other blocker. The foreman removes the label when the PR stops being the top (Decision D5). The `ready_for_review` trigger is
+the **safety net** (Decision D4; a Draft never runs T2 unless it carries the label): a PR that is flipped to Ready without T2 evidence for its head gets T2 at that moment and shows pending, so a
 non-tested head can never appear mergeable (its `suite` check is not green). A label applied after the last push uses the existing
 `ci-full.yml` path (a `labeled` event, which does not re-run T1); later pushes to a labelled PR re-run T1 and T2 through `ci.yml`.
 
@@ -202,9 +200,7 @@ otherwise cause for a head that was just tested.
 | A rebase of the whole stack | every head changes | T1 on each pushed head, T2 only on the top and only if labelled or ready; the foreman labels after the last push of the stack |
 
 **The invariant.** (I1) The exact head of the top or unstacked PR has a green T2 (`suite` of both lanes) before the owner merges the
-**first** PR of its stack. (I2) A non-top PR reports `suite` green with reason `deferred-to-tip #N`; it becomes Ready only when the
-top PR's T2 is green on a head that **contains** its head (`git merge-base --is-ancestor`), and the Ready body names that tip head
-SHA. (I3) The owner merges by rebase, which rewrites SHAs, so every merge triggers T3 on the new `main` head. I1 and I2 are procedure for
+**first** PR of its stack. (I2) A non-top PR reports `suite` green with reason `deferred-to-tip #N`; it is Ready with exact-head independent review CLEAR and T1 green, and its body carries the line `T2 runs on the top PR #N` (Decision D9). (I3) The owner merges by rebase, which rewrites SHAs, so every merge triggers T3 on the new `main` head. I1 and the body line of I2 are procedure for
 the cross-PR part (a job cannot be re-evaluated when another PR's run finishes without a `workflow_run` trigger, which this specification
 does not add: see Security); I1 is mechanical for the top PR itself because its `suite` fails closed when shards were required and
 skipped.
@@ -217,13 +213,13 @@ stable through every change below:
 | Check name | Meaning after this specification | Always reports |
 | --- | --- | --- |
 | `check` | T1 (static checks, affected tests, architecture); no longer contains the race step | yes |
-| `Git/jj conformance (minimum) / suite` | T2 verdict of the minimum lane | must be made to (see below) |
-| `Git/jj conformance (current) / suite` | T2 verdict of the current lane | must be made to (see below) |
+| `Git/jj conformance (minimum) / suite` | T3 verdict of the minimum lane; on a pull request it passes with reason `minimum lane runs on T3` (Decision D1) | must be made to (see below) |
+| `Git/jj conformance (current) / suite` | T2 verdict of the current lane (T3 on `main`) | must be made to (see below) |
 
 Today the conformance caller job is skipped on a stacked PR, so these two names do not report at all there: a ruleset requiring them
 would leave such a PR `Expected` forever, and GitHub treats a skipped required job as passed. The workflow change of WP-3 therefore
 **always calls** the conformance workflow and passes `t2_required`; the `suite` job passes on `success`, passes on `skipped` only when
-`t2_required` is `false` and the event is a pull request (reason printed), and fails otherwise (the existing docs-only rule becomes one
+`t2_required` is `false` (or the lane is `minimum`) and the event is a pull request (reason printed), and fails otherwise (the existing docs-only rule becomes one
 row of the same truth table). Never require a shard name, `changes`, `tier`, `pages` or a `Race tests` step. The `tier` job name is
 informational. The owner decides whether to enable required checks, "dismiss stale approvals" and "require branches to be up to date"
 (the last one would turn every merge of a stack into a rebase plus a T1/T2 re-run and is **not** recommended with the rebase-merge flow).
@@ -248,35 +244,37 @@ informational. The owner decides whether to enable required checks, "dismiss sta
 - All actions stay pinned by commit SHA; no new third-party action is added. `gh` is used from the runner image with the job token.
 - The `tier` job and `ci_changes.py` run PR-controlled code (the PR's own copy of the script). This is accepted in proportion to the
   threat model: the owner reviews every change to `.github/` and `scripts/` (CODEOWNERS), such a change is classified `all` by the script
-  and T3 re-tests `main` after the merge. Running the script from the base branch instead is open question Q6.
+  and T3 re-tests `main` after the merge. Running the script from the base branch instead was declined for now (D6).
 - Cached Git build and hash-pinned backends are unchanged.
 
-## Estimated saving (model, from the measured medians above)
+## Estimated saving (measured versus modelled)
 
-Model inputs, all measured except where marked: full run 116 runner min, completed run wall 19.1 min, `check` race step 7.9 min
-(removable from the T2 run because shard 0 covers the same packages with the same flags: measured duplication), **target** T1 = 5 runner
-min, T2 = 116 - 7.9 = about 108 runner min.
+**Measured** (section "Measured baseline"): full run 116 runner min, completed run wall 19.1 min, `check` race step 7.9 min, the
+`minimum` lane 54.3 runner min (sum of its six job medians), the Spec 037 stack 1635 runner min in 22 runs. **Modelled** (every figure
+marked *M*): T1 = 5 runner min is the **target** (*M*); T2 = 116 - 7.9 (the `check` race step, duplicated by shard 0) - 54.3 (the
+`minimum` lane moves to T3, Decision D1) = about 54 runner min (*M*). The model assumes the Spec 037 run counts per PR.
 
-| Scenario | Measured today | Model after | Saving |
+| Scenario | Measured today | Modelled after (*M*) | Saving (*M*) |
 | --- | --- | --- | --- |
-| The Spec 037 stack (22 PR runs), optimistic: 1 T2 on the tip, 21 T1 | 1635 runner min | 108 + 21 x 5 = 213 | 1422 min (87%) |
-| The same stack, pessimistic: every one of the 6 runs of the tip is a T2, the other 16 are T1 | 1635 runner min | 6 x 108 + 16 x 5 = 728 | 907 min (55%) |
-| Wall time to a result on a non-top PR head | 19.1 min (PR on `main`), 38.0 min (stacked path) | 5 min **target** | 14 to 33 min |
-| Wall time of the top PR | 19.1 min | about 12 min of shards plus queue (unmeasured until WP-3) | not claimed |
+| The Spec 037 stack (22 PR runs), optimistic: 1 T2 on the tip, 21 T1 | 1635 runner min | 54 + 21 x 5 = 159 | 1476 min (90%) |
+| The same stack, pessimistic: every one of the 6 runs of the tip is a T2, the other 16 are T1 | 1635 runner min | 6 x 54 + 16 x 5 = 404 | 1231 min (75%) |
+| Wall time to a result on a non-top PR head | 19.1 min (PR on `main`), 38.0 min (stacked path) | 5 min **target** (*M*) | 14 to 33 min (*M*) |
+| Wall time of the top PR | 19.1 min | about 12 min of shards plus queue, **unmeasured** until WP-3 | not claimed |
 | Jobs requested per push of a non-top PR | 17 (or 4) | 2 (`changes`/`tier`, `check`) **target** | 15 jobs less per push |
+| Jobs requested per T2 run | 17 | 9 (`changes`/`tier`, `check`, 6 `current` shards, 1 `suite`; the `minimum` caller adds one pass-through `suite`) *M* | 7 to 8 less |
 
-The model does not count the fixed T1 floor beyond the 5 minute target and does not assume any change to the cancelled-run share
-(25% of runner minutes today); the saving of cancelled runs is automatic because a cancelled T1 costs at most 5 minutes against up to
-37. Further levers, each **unmeasured** until WP-1 and listed as questions: removing the sandbox install where unneeded (22.5 min of
-every full run), rebalancing shard 0 and shard 1 (the long poles), a single lane on T2.
+The model does not assume any change to the cancelled-run share (25% of runner minutes today); the saving of cancelled runs is
+automatic because a cancelled T1 costs at most 5 minutes against up to 37. T3 gets no saving: every push to `main` still costs about
+119 runner min. Further levers are **unmeasured** and are WP-1 tasks: the sandbox install (D8) and rebalancing shard 0 and shard 1.
 
 ## Risks
 
 | ID | Risk | Mitigation |
 | --- | --- | --- |
-| R1 | A flaky T2 job blocks the top PR (a 12 minute job failing at minute 11) | Re-run failed jobs once per head (`gh run rerun --failed`), record job and test in the PR; a second failure on the same head is treated as real. Flakes are listed in `docs/progress.md` with a fix owner. Not retried silently by the workflow. |
+| R1 | A flaky T2 job blocks the top PR (a 12 minute job failing at minute 11) | An agent may re-run a failed T2 job once per head only for an infrastructure failure (Decision D2), never for a test failure; a failure after the re-run is real. Flakes are listed in `docs/progress.md` with a fix owner. Not retried silently by the workflow. |
 | R2 | A race only T3 finds (a package off the race list, or a path the affected set missed) | T3 runs after every merge; a red `main` is reported by `stw status` (Spec 037 `ci-main`). The foreman opens a fix PR at once and prepares a revert PR; the **owner** decides and merges the revert. The cause (package not on the list, or an uncovered path) gets a regression test and the derivation rule or fail-closed rule is widened. |
-| R3 | A stack change without event leaves a top PR with a deferred `suite` (child closed without merge) | The foreman checks "is it the top now" when it closes a child and labels; the Ready rule (I1) requires T2 evidence in the body, not only a green status. |
+| R3 | A stack change without event leaves a top PR with a deferred `suite` (child closed without merge) | The foreman checks "is it the top now" when it closes a child and labels; the Ready rule (I1) requires T2 evidence in the body, not only a green status; the foreman removes `ci-full` from a PR that stops being the top (D5). |
+| R7 | Residual risk of D9: a non-top PR is Ready on T1 only, so a defect visible only to T2 shows on the tip, not on the PR that introduced it | The owner merges in stack order and T3 runs on `main` after every merge; the tip's T2 failure is reported against the stack and the guilty PR is found by bisecting the stack. Accepted by the owner. |
 | R4 | The derived affected set misses a dependency (a test reads a file outside its package) | Fail closed rules in section "T1: affected packages"; every miss found by T3 widens them with a test. |
 | R5 | Evidence reuse trusts a prior green check on the same SHA | The check runs are read from the same repository and the same workflow names; a SHA is immutable. Forks cannot produce them. |
 | R6 | Required names stop reporting after a refactor | `scripts/test_ci_workflow.py` pins the names and the always-call rule; the owner's list above is the contract. |
@@ -304,20 +302,31 @@ Each step is a pull request of its own, stacked linearly, test-first (see [plan.
 - `scripts/test_ci_workflow.py` additions in the style of the existing structure tests: triggers (no `pull_request_target`, no
   `workflow_run`, `ready_for_review` and `labeled` present, `edited` absent), per-job `permissions`, actions pinned by SHA, the
   conformance caller has no `if:`, the `suite` truth table including the new skipped row, required names present, the `t2-` group in both
-  callers, the nightly schedule only on the default branch.
+  callers, the nightly schedule only on the default branch, the `minimum` lane absent from T2 and present on T3, the body line `T2 runs on the top PR #N` check.
 - A dry run on the specification branch itself (WP-1) compares `affected` for the last 60 PR heads with what a full run would have
   needed (read only), so the fail-closed rules are checked against real diffs before WP-2.
 
-## Open questions (owner)
+## Decisions (owner, 2026-10-23)
 
-| ID | Question | Recommendation |
+All former open questions are decided. A Draft carrying `ci-full` is the only Draft that runs T2 (D4 and D5 read together).
+
+| ID | Decision | Rationale |
 | --- | --- | --- |
-| Q1 | Run only the `current` lane on T2 and both lanes on T3? It halves the T2 conformance (a lane is about 53 of the 108 runner min). | Keep both lanes on T2 until the measured T2 time after WP-3 says otherwise; the minimum lane guards the supported floor. |
-| Q2 | May an agent re-run a failed T2 job once per head (`gh run rerun --failed`) without asking? | Yes, once per head, recorded in the PR (R1). |
-| Q3 | If T1 for the widest (`all`) case cannot meet 5 minutes, accept the measured time or split the Go tests into a second parallel job? | Accept the measured time first; split only if it exceeds 8 minutes. |
-| Q4 | Is `ready_for_review` the safety net (T2 starts if no evidence exists), or should an unlabelled flip to Ready simply fail with a message? | The safety net: it never leaves a Ready PR untested and costs nothing when the label ran first. |
-| Q5 | May the foreman add the `ci-full` label to the top PR itself (today it is "the owner or dispatcher")? | Yes: labels on its own PRs are within "PRs, issues and boards". |
-| Q6 | Run `ci_changes.py` from the base branch instead of the PR copy (stops a PR from classifying itself as docs-only)? | Not now: proportionate to the review and T3; revisit if a bot or fork gets write access. |
-| Q7 | Add a nightly T3 at all, given a push to `main` already runs it? In the sample 12 pushes ran in 6 hours. | Yes but skipped when no commit is new since the last green T3; it only guards quiet days and pin drift (Git/jj releases, apt). |
-| Q8 | Which of the sandbox-install options: skip where unneeded, cache the apt archives, or move the profile activation into a prebuilt image? | Measure first (WP-1); skip where unneeded is the zero-risk step. |
-| Q9 | Should the Ready evidence for non-top PRs of a stack be mechanical (a `workflow_run` or a re-runnable `stack-gate` job) instead of procedure? | Procedure for now (no `workflow_run`); revisit after the first stack under the new tiers. |
+| D1 (Q1) | T2 runs the **`current`** lane (and race) only; the `minimum` lane runs on T3 (push to `main` and nightly). On a pull request the `minimum` `suite` passes with reason `minimum lane runs on T3` so its required name still reports. | Halves the T2 conformance cost (54.3 of about 116 runner min measured) and the supported floor is still tested after every merge. |
+| D2 (Q2) | An agent may re-run a failed T2 job **once** per head when the failure is infrastructure (runner lost, network, apt or install step, cancelled by the platform), never for a test failure, and reports the re-run in the PR. | Infrastructure noise must not cost a rebase cycle; a test failure is evidence. |
+| D3 (Q3) | The T1 target stays 5 minutes as a goal. If WP-1 measures more, the target becomes the measured p90 plus 20% and this specification is amended. | No guessing before the affected-test time is measured. |
+| D4 (Q4) | `ready_for_review` starts T2 as a safety net when no `ci-full` label is present and no same-head evidence exists; Drafts never run T2 without the label. | A Ready PR can never be untested. |
+| D5 (Q5) | The foreman agent may add `ci-full` to its own top-of-stack PR (PR metadata, not a setting) and removes it when the PR stops being the top. | The label is the deterministic trigger; a stale label would re-run T2 on pushes that no longer need it. |
+| D6 (Q6) | `ci_changes.py` runs from the PR copy (not from the base branch) for now. | Proportionate to CODEOWNERS review and T3; revisit if a bot or fork gets write access. |
+| D7 (Q7) | A nightly T3 exists, skipped when `main` has no commit since the last green T3. It also runs the `minimum` lane. | Guards quiet days and pin drift at no cost on busy days. |
+| D8 (Q8) | No change to the 103 s sandbox install before it is measured; see the WP-1 task below with its decision gate. | The cost is measured (about 22.5 runner min per full run), the remedy is not. |
+| D9 (Q9) | A PR that is not the top of its stack is Ready with exact-head Opus review CLEAR and T1 green; its body states the line `T2 runs on the top PR #N`, added by the foreman and verified by a check (the `tier` summary prints the expected line and the workflow test pins its format). The owner merges in stack order and T3 on `main` after each merge is the safety net. Residual risk: R7. | Owner wants tests on the last PR only; the line makes the deferral visible and checkable. |
+
+### Measurement tasks left to WP-1 (unmeasured items)
+
+1. Plain and race `go test -json` elapsed per package; p90 of T1 for the `affected` and `all` cases (feeds D3).
+2. D8 gate: split the sandbox step into `apt-get update` and install; measure the `actions/cache` hit rate for the package set (apt archives) and
+   an install-once artifact reused by the 13 jobs. **Gate:** no workflow change for the sandbox before these numbers are recorded in
+   `docs/progress.md` and the owner picks one option; skip-where-unneeded for T1 follows only if the affected packages are shown not to need it.
+3. The cost of the race list against `-race` on all packages (feeds the claim that the list saves anything).
+4. Replay of `affected` over the last 60 PR heads (fail-closed check).
