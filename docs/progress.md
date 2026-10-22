@@ -32,9 +32,9 @@ stays `planned`; `restack apply`, jj and the push are later slices.
 
 [The specification](../specs/040-concurrency-discipline/spec.md), its [plan](../specs/040-concurrency-discipline/plan.md) and
 [tasks](../specs/040-concurrency-discipline/tasks.md) propose one package, `internal/fanout`, as the only place with a `go` statement
-(14 today in nine non-test files), enforced by `scripts/check-architecture.py` with a shrinking allowlist and mutation tests, and tested
-with `testing/synctest`. Documentation only: no code, script or allowlist is changed; three questions for the owner are listed in the
-specification (process plumbing exemption, the `sync.WaitGroup` import ban, the Go helper). No build, release, tag or push was run.
+(14 today in nine non-test files of seven packages), enforced by `scripts/check-architecture.py` with a shrinking allowlist and mutation tests, and tested
+with `testing/synctest`. Documentation only: no code, script or allowlist is changed; the foreman decisions (at most one named exemption, the `sync.WaitGroup` and errgroup import ban, the Go AST check) are recorded in the
+specification and open to owner override. No build, release, tag or push was run.
 
 ## Spec 035 stw watch (accepted, visible, 2026-10-22)
 
