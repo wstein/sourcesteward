@@ -1,0 +1,833 @@
+{
+  "schema_version": 2,
+  "command": "status",
+  "time": "2026-10-22T09:30:00Z",
+  "host": "github.com",
+  "options": {
+    "fetch": false,
+    "worktrees": true,
+    "icons": null
+  },
+  "root": "/ws",
+  "note": null,
+  "actions": [
+    {
+      "id": "repo-error:gone:-",
+      "priority": "red",
+      "category": "repo-error",
+      "repo": "gone",
+      "path": "/ws/gone",
+      "title": "repository cannot be read: status-read-failed: cannot read the repository status",
+      "url": null,
+      "subject": {
+        "kind": "repository",
+        "number": null,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "code": "status-read-failed"
+      },
+      "command": "stw status --offline /ws/gone",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "main-red:wstein/sourcesteward:main",
+      "priority": "red",
+      "category": "main-red",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "default branch CI is red (main, 3f2a9c1)",
+      "url": "https://github.com/wstein/sourcesteward/actions",
+      "subject": {
+        "kind": "branch",
+        "number": null,
+        "tag": null,
+        "sha": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9"
+      },
+      "evidence": {
+        "class": "red"
+      },
+      "command": "gh run list --repo wstein/sourcesteward --branch main",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "release-run-failed:wstein/sourcesteward:v1.1.0",
+      "priority": "red",
+      "category": "release-run-failed",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "release workflow run of v1.1.0 failure",
+      "url": "https://github.com/wstein/sourcesteward/actions/runs/7",
+      "subject": {
+        "kind": "tag",
+        "number": null,
+        "tag": "v1.1.0",
+        "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "evidence": {
+        "conclusion": "failure",
+        "released": false
+      },
+      "command": "gh run list --repo wstein/sourcesteward --commit bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "local-changes:.:dirty",
+      "priority": "yellow",
+      "category": "local-changes",
+      "repo": ".",
+      "path": "/ws",
+      "title": "0 staged, 2 unstaged files",
+      "url": null,
+      "subject": {
+        "kind": "fact",
+        "number": null,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "staged": 0,
+        "unstaged": 2
+      },
+      "command": "git -C /ws status",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "local-behind:.:behind",
+      "priority": "yellow",
+      "category": "local-behind",
+      "repo": ".",
+      "path": "/ws",
+      "title": "behind origin/main by 2 commits",
+      "url": null,
+      "subject": {
+        "kind": "fact",
+        "number": null,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "behind": 2
+      },
+      "command": "stw sync --plan /ws",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "main-behind-origin:wstein/sourcesteward:main",
+      "priority": "yellow",
+      "category": "main-behind-origin",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "origin has commits of main that the local clone lacks",
+      "url": "https://github.com/wstein/sourcesteward",
+      "subject": {
+        "kind": "branch",
+        "number": null,
+        "tag": null,
+        "sha": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9"
+      },
+      "evidence": null,
+      "command": "stw sync --plan /ws",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "pr-conflict:wstein/crewbook:12",
+      "priority": "yellow",
+      "category": "pr-conflict",
+      "repo": "wstein/crewbook",
+      "path": "/ws/crewbook",
+      "title": "PR #12 has conflicts: Update docs",
+      "url": "https://github.com/wstein/crewbook/pull/12",
+      "subject": {
+        "kind": "pr",
+        "number": 12,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "group": "conflict"
+      },
+      "command": "stw pulls --repo wstein/crewbook",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "pr-blocked:wstein/sourcesteward:59",
+      "priority": "yellow",
+      "category": "pr-blocked",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "PR #59 is blocked (checks-red): Fix the tests",
+      "url": "https://github.com/wstein/sourcesteward/pull/59",
+      "subject": {
+        "kind": "pr",
+        "number": 59,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "group": "blocked",
+        "reason": "checks-red"
+      },
+      "command": "stw pulls --repo wstein/sourcesteward",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "pr-ready:wstein/sourcesteward:57",
+      "priority": "green",
+      "category": "pr-ready",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "PR #57 is ready to merge: build(deps): bump cobra",
+      "url": "https://github.com/wstein/sourcesteward/pull/57",
+      "subject": {
+        "kind": "pr",
+        "number": 57,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "group": "ready"
+      },
+      "command": "gh pr merge 57 -R wstein/sourcesteward --rebase",
+      "effect": "owner",
+      "hint": null
+    },
+    {
+      "id": "release-draft:wstein/sourcesteward:v1.0.0",
+      "priority": "green",
+      "category": "release-draft",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "release draft v1.0.0 (4 assets) is waiting",
+      "url": "https://github.com/wstein/sourcesteward/releases/tag/untagged-1",
+      "subject": {
+        "kind": "release",
+        "number": null,
+        "tag": "v1.0.0",
+        "sha": null
+      },
+      "evidence": {
+        "assets": 4,
+        "drafts_visibility": "write-access"
+      },
+      "command": "gh release edit v1.0.0 -R wstein/sourcesteward --draft=false",
+      "effect": "owner",
+      "hint": null
+    },
+    {
+      "id": "local-stash:.:stash",
+      "priority": "blue",
+      "category": "local-stash",
+      "repo": ".",
+      "path": "/ws",
+      "title": "1 stashes",
+      "url": null,
+      "subject": {
+        "kind": "fact",
+        "number": null,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "stash": 1
+      },
+      "command": "git -C /ws stash list",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "pr-bot:wstein/workharbor:3",
+      "priority": "violet",
+      "category": "pr-bot",
+      "repo": "wstein/workharbor",
+      "path": "/ws/workharbor",
+      "title": "bot PR #3 (dependabot[bot]): bump a",
+      "url": "https://github.com/wstein/workharbor/pull/3",
+      "subject": {
+        "kind": "pr",
+        "number": 3,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "group": "ready"
+      },
+      "command": "stw pulls --repo wstein/workharbor --bots-only",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "pr-bot:wstein/workharbor:4",
+      "priority": "violet",
+      "category": "pr-bot",
+      "repo": "wstein/workharbor",
+      "path": "/ws/workharbor",
+      "title": "bot PR #4 (dependabot[bot]): bump b",
+      "url": "https://github.com/wstein/workharbor/pull/4",
+      "subject": {
+        "kind": "pr",
+        "number": 4,
+        "tag": null,
+        "sha": null
+      },
+      "evidence": {
+        "group": "checks"
+      },
+      "command": "stw pulls --repo wstein/workharbor --bots-only",
+      "effect": "read",
+      "hint": null
+    }
+  ],
+  "repos": [
+    {
+      "name": ".",
+      "path": "/ws",
+      "kind": "root",
+      "state": "ok",
+      "branch": "main",
+      "detached": false,
+      "head": null,
+      "upstream": "origin/main",
+      "upstream_gone": false,
+      "ahead": 0,
+      "behind": 2,
+      "changes": {
+        "staged": 0,
+        "unstaged": 2,
+        "untracked": 0,
+        "conflicts": 0
+      },
+      "operation": null,
+      "stash": 1,
+      "branches": {
+        "local": 0,
+        "base": null,
+        "integrated": null,
+        "not_integrated": null
+      },
+      "worktrees": {
+        "linked": 0,
+        "dirty": 0,
+        "locked": 0,
+        "prunable": 0,
+        "missing": 0,
+        "list": null
+      },
+      "gitlink": null,
+      "fetch_error": null,
+      "attention": true,
+      "reasons": [
+        "unstaged",
+        "behind"
+      ],
+      "error": null,
+      "remote": {
+        "repo": "wstein/sourcesteward",
+        "state": "ok",
+        "reason": null,
+        "sources": {
+          "repo": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "default_branch": "main",
+              "html_url": "https://github.com/wstein/sourcesteward",
+              "drafts_visibility": "write-access"
+            }
+          },
+          "pulls": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "open": 3,
+              "ready": 1,
+              "checks": 0,
+              "conflict": 0,
+              "draft": 1,
+              "blocked": 1,
+              "red": 1,
+              "bots": 0,
+              "not_read": 0
+            }
+          },
+          "releases": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "drafts": [
+                {
+                  "name": "Release one",
+                  "tag": "v1.0.0",
+                  "created_at": "2026-10-20T08:00:00Z",
+                  "assets": 4,
+                  "url": "https://github.com/wstein/sourcesteward/releases/tag/untagged-1"
+                }
+              ],
+              "truncated": false
+            }
+          },
+          "tags": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "latest": [
+                {
+                  "pattern": "v*.*.*",
+                  "tag": "v1.1.0"
+                }
+              ],
+              "unreleased": [
+                {
+                  "pattern": "v*.*.*",
+                  "tag": "v1.1.0",
+                  "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "run": {
+                    "workflow": "release.yml",
+                    "conclusion": "failure",
+                    "status": "completed",
+                    "url": "https://github.com/wstein/sourcesteward/actions/runs/7"
+                  }
+                }
+              ]
+            }
+          },
+          "ci_main": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "branch": "main",
+              "head": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+              "class": "red",
+              "behind_origin": true
+            }
+          },
+          "ci_release": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "tags": [
+                {
+                  "pattern": "v*.*.*",
+                  "product": "sourcesteward",
+                  "tag": "v1.1.0",
+                  "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "latest": true,
+                  "unreleased": true,
+                  "workflow": "release.yml",
+                  "runs": [
+                    {
+                      "workflow": "release.yml",
+                      "conclusion": "failure",
+                      "status": "completed",
+                      "url": "https://github.com/wstein/sourcesteward/actions/runs/7"
+                    }
+                  ]
+                },
+                {
+                  "pattern": "v*.*.*",
+                  "product": "sourcesteward",
+                  "tag": "v1.0.0",
+                  "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "latest": false,
+                  "unreleased": false,
+                  "workflow": "release.yml",
+                  "runs": [
+                    {
+                      "workflow": "release.yml",
+                      "conclusion": "success",
+                      "status": "completed",
+                      "url": "https://github.com/wstein/sourcesteward/actions/runs/5"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "crewbook",
+      "path": "/ws/crewbook",
+      "kind": "submodule",
+      "state": "ok",
+      "branch": "main",
+      "detached": false,
+      "head": null,
+      "upstream": "origin/main",
+      "upstream_gone": false,
+      "ahead": 0,
+      "behind": 0,
+      "changes": {
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "conflicts": 0
+      },
+      "operation": null,
+      "stash": 0,
+      "branches": {
+        "local": 0,
+        "base": null,
+        "integrated": null,
+        "not_integrated": null
+      },
+      "worktrees": {
+        "linked": 0,
+        "dirty": 0,
+        "locked": 0,
+        "prunable": 0,
+        "missing": 0,
+        "list": null
+      },
+      "gitlink": null,
+      "fetch_error": null,
+      "attention": false,
+      "reasons": [],
+      "error": null,
+      "remote": {
+        "repo": "wstein/crewbook",
+        "state": "ok",
+        "reason": null,
+        "sources": {
+          "repo": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "default_branch": "main",
+              "html_url": "https://github.com/wstein/crewbook",
+              "drafts_visibility": "no-write-access"
+            }
+          },
+          "pulls": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "open": 1,
+              "ready": 0,
+              "checks": 0,
+              "conflict": 1,
+              "draft": 0,
+              "blocked": 0,
+              "red": 0,
+              "bots": 0,
+              "not_read": 0
+            }
+          },
+          "releases": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "drafts": [],
+              "truncated": false
+            }
+          },
+          "tags": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "latest": [],
+              "unreleased": []
+            }
+          },
+          "ci_main": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "branch": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "class": "green",
+              "behind_origin": null
+            }
+          },
+          "ci_release": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "tags": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "workharbor",
+      "path": "/ws/workharbor",
+      "kind": "submodule",
+      "state": "ok",
+      "branch": "main",
+      "detached": false,
+      "head": null,
+      "upstream": "origin/main",
+      "upstream_gone": false,
+      "ahead": 0,
+      "behind": 0,
+      "changes": {
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "conflicts": 0
+      },
+      "operation": null,
+      "stash": 0,
+      "branches": {
+        "local": 0,
+        "base": null,
+        "integrated": null,
+        "not_integrated": null
+      },
+      "worktrees": {
+        "linked": 0,
+        "dirty": 0,
+        "locked": 0,
+        "prunable": 0,
+        "missing": 0,
+        "list": null
+      },
+      "gitlink": null,
+      "fetch_error": null,
+      "attention": false,
+      "reasons": [],
+      "error": null,
+      "remote": {
+        "repo": "wstein/workharbor",
+        "state": "degraded",
+        "reason": null,
+        "sources": {
+          "repo": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "default_branch": "main",
+              "html_url": "https://github.com/wstein/workharbor",
+              "drafts_visibility": "write-access"
+            }
+          },
+          "pulls": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "open": 2,
+              "ready": 1,
+              "checks": 1,
+              "conflict": 0,
+              "draft": 0,
+              "blocked": 0,
+              "red": 0,
+              "bots": 2,
+              "not_read": 0
+            }
+          },
+          "releases": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "drafts": [],
+              "truncated": false
+            }
+          },
+          "tags": {
+            "state": "ok",
+            "error": null,
+            "data": {
+              "latest": [],
+              "unreleased": []
+            }
+          },
+          "ci_main": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          },
+          "ci_release": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "name": "gone",
+      "path": "/ws/gone",
+      "kind": "submodule",
+      "state": "error",
+      "branch": null,
+      "detached": false,
+      "head": null,
+      "upstream": null,
+      "upstream_gone": false,
+      "ahead": null,
+      "behind": null,
+      "changes": {
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "conflicts": 0
+      },
+      "operation": null,
+      "stash": 0,
+      "branches": {
+        "local": 0,
+        "base": null,
+        "integrated": null,
+        "not_integrated": null
+      },
+      "worktrees": {
+        "linked": 0,
+        "dirty": 0,
+        "locked": 0,
+        "prunable": 0,
+        "missing": 0,
+        "list": null
+      },
+      "gitlink": null,
+      "fetch_error": null,
+      "attention": false,
+      "reasons": [],
+      "error": {
+        "code": "status-read-failed",
+        "message": "cannot read the repository status"
+      },
+      "remote": {
+        "repo": null,
+        "state": "skipped",
+        "reason": "not-read-locally",
+        "sources": {
+          "repo": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          },
+          "pulls": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          },
+          "releases": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          },
+          "tags": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          },
+          "ci_main": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          },
+          "ci_release": {
+            "state": "skipped",
+            "error": null,
+            "data": null
+          }
+        }
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "local",
+      "state": "degraded",
+      "read": 3,
+      "degraded": 1,
+      "skipped": 0
+    },
+    {
+      "id": "repo",
+      "state": "degraded",
+      "read": 3,
+      "degraded": 0,
+      "skipped": 1
+    },
+    {
+      "id": "pulls",
+      "state": "degraded",
+      "read": 3,
+      "degraded": 0,
+      "skipped": 1
+    },
+    {
+      "id": "releases",
+      "state": "degraded",
+      "read": 3,
+      "degraded": 0,
+      "skipped": 1
+    },
+    {
+      "id": "tags",
+      "state": "degraded",
+      "read": 3,
+      "degraded": 0,
+      "skipped": 1
+    },
+    {
+      "id": "ci-main",
+      "state": "degraded",
+      "read": 2,
+      "degraded": 0,
+      "skipped": 2
+    },
+    {
+      "id": "ci-release",
+      "state": "degraded",
+      "read": 2,
+      "degraded": 0,
+      "skipped": 2
+    }
+  ],
+  "notices": [
+    {
+      "code": "deadline",
+      "source": "remote",
+      "repos": [
+        "wstein/workharbor"
+      ],
+      "message": "deadline of 90 s reached: 2 sources of 1 repositories not read; raise --timeout"
+    },
+    {
+      "code": "drafts-not-visible",
+      "source": "releases",
+      "repos": [
+        "wstein/crewbook"
+      ],
+      "message": "release drafts of wstein/crewbook not visible (token has no write access)"
+    },
+    {
+      "code": "not-read-locally",
+      "source": "remote",
+      "repos": [
+        "gone"
+      ],
+      "message": "repository was not read locally: remote sources of 1 repositories were not read"
+    }
+  ],
+  "summary": {
+    "repos": 4,
+    "attention": 1,
+    "errors": 1,
+    "priorities": {
+      "red": 3,
+      "yellow": 5,
+      "green": 2,
+      "blue": 1,
+      "violet": 2
+    },
+    "degraded": true,
+    "failed": false,
+    "notices": 3
+  },
+  "error": null
+}
