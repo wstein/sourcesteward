@@ -10,6 +10,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -66,6 +67,12 @@ type Params struct {
 	Human         bool
 	Out           io.Writer
 	Diag          io.Writer // one line per problem (stderr); nil discards them
+
+	Transport hosting.Transport // in-process HTTP fixture; nil means HTTPS
+	Now       func() time.Time
+	// Open replaces the hosting reader (tests). The target is the directory that bounds the gh
+	// configuration check, like the repository does for the one-shot operations.
+	Open func(ctx context.Context, target, host string) (Source, func(), error)
 }
 
 // validLabel: 1 to 50 characters of valid UTF-8, no control character, no leading or trailing space.
