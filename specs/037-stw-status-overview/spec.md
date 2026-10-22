@@ -279,8 +279,8 @@ expires, instead of `nil, err` (also an improvement for `stw pulls`, with its ow
 
 Per GitHub repository: `repo` 1 read, open PR list `ceil(open/25)` pages, about 3 reads per non-draft PR within the run budget of
 200 (plus at most one re-read per unknown-mergeability PR), `releases` 1 page typically (at most 10), `tags` 1 page typically (at
-most 10), and with WP-C `branches/DEFAULT` 1, check runs and statuses 2, `runs` 1 per declared release workflow. Example: 7
-repositories, 12 open PRs: about 80 requests, 5 to 15 s. Worst case: the budget (about 600 reads) plus at most 30 per repository. A
+most 10), and with WP-C `branches/DEFAULT` 1, check runs and statuses 2, `runs` N+5 for N release tag patterns (the latest tag of each, at most 5 unreleased tags). Example: 7
+repositories, 12 open PRs: about 80 requests, 5 to 15 s. Worst case: the budget (about 600 reads) plus at most 29+N per repository. A
 personal token has 5000 requests an hour, an Actions `GITHUB_TOKEN` 1000; three runs a day are far below either.
 
 ## Amendment to Spec 022 FR-005 (explicit)
