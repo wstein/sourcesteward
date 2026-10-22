@@ -6,8 +6,10 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -56,6 +58,8 @@ func TestPrepareRejectsInvalidCombinations(t *testing.T) {
 		"bad repo":               with(func(f *Flags) { f.Repos = []string{"nope"} }),
 		"json without status":    with(func(f *Flags) { f.JSON = true }),
 		"status with once":       with(func(f *Flags) { f.Status, f.Once = true, true }),
+		"status with baseline":   with(func(f *Flags) { f.Status, f.Baseline = true, true }),
+		"status with interval":   with(func(f *Flags) { f.Status, f.Interval, f.IntervalSet = true, "30s", true }),
 		"status with human":      with(func(f *Flags) { f.Status, f.Human = true, true }),
 		"path without workspace": with(func(f *Flags) { f.WorkspacePath = "/x" }),
 		"missing config":         {Config: filepath.Join(t.TempDir(), "none.toml")},
@@ -106,5 +110,75 @@ func TestPrepareStatusResolvesTheStateDirectory(t *testing.T) {
 	}
 	if _, err = prep(t, Flags{Status: true}); !errors.Is(err, ErrUsage) {
 		t.Fatalf("a status without a directory or repositories: %v", err)
+	}
+}
+
+func workspaceWithConfig(t *testing.T, content string) string {
+	t.Helper()
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	os.Mkdir(filepath.Join(root, ".stw"), 0o755)
+	if content != "" {
+		os.WriteFile(filepath.Join(root, ".stw", "watch.toml"), []byte(content), 0o644)
+	}
+	t.Chdir(root)
+	return root
+}
+
+func TestPrepareReadsTheImplicitConfigOnlyWithoutRepoOrWorkspace(t *testing.T) {
+	workspaceWithConfig(t, fullConfig)
+	p, err := prep(t, Flags{})
+	if err != nil || p.Run.Interval != 90*time.Second || len(p.Run.Repos) != 2 {
+		t.Fatalf("%+v %v", p.Run, err)
+	}
+	// with --repo the file is not read at all: neither its repos nor its interval apply
+	p, err = prep(t, Flags{Repos: []string{"o/a"}})
+	if err != nil || p.Run.Interval != time.Minute || len(p.Run.Repos) != 1 || len(p.Run.IgnoreAuthors) != 0 {
+		t.Fatalf("%+v %v", p.Run, err)
+	}
+	// even an invalid file is not read then
+	os.WriteFile(filepath.Join(".stw", "watch.toml"), []byte("bogus"), 0o644)
+	if _, err = prep(t, Flags{Repos: []string{"o/a"}}); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if _, err = prep(t, Flags{}); !errors.Is(err, ErrUsage) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestPrepareRefusesASymlinkOrFIFOAsTheImplicitConfig(t *testing.T) {
+	root := workspaceWithConfig(t, "")
+	target := filepath.Join(t.TempDir(), "real.toml")
+	os.WriteFile(target, []byte(fullConfig), 0o644)
+	link := filepath.Join(root, ".stw", "watch.toml")
+	os.Symlink(target, link)
+	if _, err := prep(t, Flags{}); !errors.Is(err, ErrUsage) || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("symlink: %v", err)
+	}
+	// an explicit --config may name a symlink
+	if p, err := prep(t, Flags{Config: link}); err != nil || len(p.Run.Repos) != 2 {
+		t.Fatalf("%+v %v", p.Run, err)
+	}
+	os.Remove(link)
+	if err := syscall.Mkfifo(link, 0o644); err != nil {
+		t.Skip("no FIFO support")
+	}
+	done := make(chan error, 1)
+	go func() { _, err := prep(t, Flags{}); done <- err }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrUsage) {
+			t.Fatalf("fifo: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a FIFO blocked the read")
+	}
+	os.Remove(link)
+	os.RemoveAll(filepath.Join(root, ".stw"))
+	os.Symlink(t.TempDir(), filepath.Join(root, ".stw"))
+	if _, err := prep(t, Flags{}); err != nil && !errors.Is(err, ErrUsage) {
+		t.Fatalf("%v", err)
 	}
 }

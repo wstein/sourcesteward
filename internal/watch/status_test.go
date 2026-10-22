@@ -105,3 +105,13 @@ func TestUnknownForkNeverOverwritesAPersistedFork(t *testing.T) {
 		t.Fatal("restart kept")
 	}
 }
+
+func TestStatusFreshnessWindow(t *testing.T) {
+	for interval, want := range map[time.Duration]time.Duration{
+		10 * time.Second: 3 * time.Minute, 60 * time.Second: 3 * time.Minute, 61 * time.Second: 183 * time.Second,
+		120 * time.Second: 6 * time.Minute, 10 * time.Minute: 30 * time.Minute} {
+		if got := StatusFreshness(interval); got != want {
+			t.Errorf("%s: %s want %s", interval, got, want)
+		}
+	}
+}

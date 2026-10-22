@@ -3,11 +3,13 @@ package watchcmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/release"
@@ -193,9 +195,11 @@ func knownKind(k string) bool {
 }
 
 // loadConfig reads --config, else (only when no --repo and no --workspace was given) the
-// `.stw/watch.toml` of the workspace that contains the current directory, if it exists.
+// `.stw/watch.toml` of the workspace that contains the current directory, if it exists. The implicit
+// file is project content: it must be a regular file below a real .stw directory, never a symlink or a
+// FIFO (the guard of .stw/release.toml). A path named by --config is the user's choice and may be a symlink.
 func loadConfig(ctx context.Context, f Flags) (*Config, error) {
-	path := f.Config
+	path, implicit := f.Config, false
 	if path == "" {
 		if len(f.Repos) > 0 || f.Workspace {
 			return nil, nil
@@ -204,23 +208,54 @@ func loadConfig(ctx context.Context, f Flags) (*Config, error) {
 		if err != nil {
 			return nil, nil
 		}
-		path = filepath.Join(ws.Root, ".stw", "watch.toml")
-		if _, err := os.Stat(path); err != nil {
+		dir := filepath.Join(ws.Root, ".stw")
+		path, implicit = filepath.Join(dir, "watch.toml"), true
+		if _, err := os.Lstat(path); err != nil {
 			return nil, nil
 		}
+		if info, err := os.Lstat(dir); err != nil || !info.IsDir() {
+			return nil, usagef("%s is not a real directory; watch.toml is not read", dir)
+		}
 	}
-	file, err := os.Open(path)
+	raw, err := readConfigFile(path, implicit)
 	if err != nil {
 		return nil, usagef("--config: %v", err)
-	}
-	defer file.Close()
-	raw, err := io.ReadAll(io.LimitReader(file, release.MaxContractBytes+1))
-	if err != nil {
-		return nil, usagef("--config: cannot read %s", path)
 	}
 	c, err := ParseConfig(raw)
 	if err != nil {
 		return nil, usagef("%s: %v", path, strings.TrimPrefix(err.Error(), "watch.toml: "))
 	}
 	return &c, nil
+}
+
+// readConfigFile reads at most MaxContractBytes of a regular file without ever blocking on a FIFO.
+func readConfigFile(path string, noLinks bool) ([]byte, error) {
+	flags := os.O_RDONLY | syscall.O_NONBLOCK
+	if noLinks {
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s is a symbolic link or not a regular file", path)
+		}
+		flags |= syscall.O_NOFOLLOW
+	}
+	file, err := os.OpenFile(path, flags, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, release.MaxContractBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s", path)
+	}
+	return raw, nil
 }
