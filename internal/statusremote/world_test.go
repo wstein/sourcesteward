@@ -5,6 +5,7 @@ package statusremote
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
@@ -54,6 +55,17 @@ func (w *world) requests() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return append([]string(nil), w.calls...)
+}
+
+// count is the number of recorded requests that start with prefix.
+func (w *world) count(prefix string) int {
+	n := 0
+	for _, c := range w.requests() {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
 }
 
 func (w *world) RepoInfo(ctx context.Context, repo string) (hosting.RepoInfo, error) {
