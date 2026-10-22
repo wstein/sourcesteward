@@ -9,19 +9,18 @@ produce; nothing here exists yet.
 | --- | --- | --- |
 | `ci_changes.py` (no argument, as today) | `docs_only=true|false` | byte for byte unchanged |
 | `ci_changes.py affected` | `affected=<space separated import paths or ./...>`, `affected_reason=docs-only|packages|all` | fails closed to `all` |
-| `ci_changes.py race-packages` | `race=<space separated import paths>` | derived from the sources, sorted, never hand-edited |
 
 Exit status is 0 in every case that prints a result; an internal error prints the fail-closed value (`docs_only=false`,
 `affected=./...`, `affected_reason=all`) and still exits 0, so a classifier error runs more tests, never fewer.
 
 ## `scripts/ci_tier.py`
 
-Runs in the `tier` job from the **base-ref checkout** (trusted copy). Input: event name, action, draft flag, base ref, head ref, head SHA,
+Runs in the `tier` job from the **base-ref checkout** (a guard against script-level self-classification only; the workflow YAML itself comes from the PR, see Spec 039 "Security"). Input: event name, action, draft flag, base ref, head ref, head SHA,
 default branch, labels, head repository equals base repository, the open pull requests whose base is the head ref **filtered to a head
 repository equal to the base repository**, the PR file list from the API, own T2 evidence for the head SHA, and tip evidence (compare
 ancestry plus filtered T2 evidence) for each descendant tip. Evidence is accepted only from a run whose workflow path is
 `.github/workflows/ci.yml` or `ci-full.yml`, event `pull_request`, head repository equal to the base repository, created by the GitHub
-Actions app, with the lane's `suite` job `success` (a check name alone is never evidence).
+Actions app, in which **all six `current` shard jobs concluded `success`** (executed, not skipped). A `suite` job is never evidence by itself: it also passes with skipped shards (draft, docs-only, reused evidence, `minimum` lane), and a reused-evidence run must not be chained.
 
 | Output | Values |
 | --- | --- |
@@ -29,13 +28,15 @@ Actions app, with the lane's `suite` job `success` (a check name alone is never 
 | `reason` | `docs-only`, `draft`, `label`, `unstacked`, `stack-tip`, `deferred-to-tip #N`, `T2 pending on #N`, `evidence from run <id>`, `evidence from tip #N run <id>`, `main`, `schedule` |
 | `stack_line` | the expected informational body line `T2 runs on the top PR #N` for a non-top PR, else empty (never a gate) |
 | `stack_tip` | the number of the tip that carries the evidence, or empty |
-| `tier` | `T1`, `T2`, `T3` |
+| `affected_reason` | `docs-only`, `packages`, `all`; `all` for any changed path under `.github/` or `scripts/`, which `check` honours |
+| `tier` | `T1`, `T2`, `T3`, `T4` |
 
 Truth table (a row applies in this order; the first match wins; the child row precedes the default-branch row):
 
 | # | Event | Condition | `t2_required` | `reason` |
 | --- | --- | --- | --- | --- |
-| 1 | push to the default branch, `schedule`, `workflow_dispatch` | always | `true` (T3) | `main` or `schedule` |
+| 1 | push to the default branch | always | `true` (T3: plain matrix, both lanes, no `-race`) | `main` |
+| 1b | `schedule`, `workflow_dispatch` on the default branch | always | `true` (T4, `race.yml`: `-race`, nightly `current` lane, weekly `minimum` lane) | `schedule` |
 | 2 | pull_request | an API read failed | `true` | the failing source |
 | 3 | pull_request | `docs_only` | `false` | `docs-only` |
 | 4 | pull_request | filtered T2 evidence exists for the head SHA | `false` (evidence) | `evidence from run <id>` |
@@ -67,3 +68,17 @@ targets a branch of the base repository is never counted as a child in rows 8 an
 
 `check`, `Git/jj conformance (minimum) / suite` (T3 only; passes with a reason on a pull request), `Git/jj conformance (current) / suite`. Informational, never required: `tier`,
 `changes`, every `shard N`, `pages`. The conformance caller job has no `if:` so the two `suite` names always report.
+
+## `ci_changes.py --files-from`
+
+`ci_changes.py affected --files-from FILE` classifies a newline separated path list (the PR file list from the API) by path only. Output:
+`affected_reason=docs-only|packages|all`. Any path under `.github/` or `scripts/` gives `all`; so does any non-package, non-prose path, an
+empty list and an unreadable file.
+
+## `race.yml` and the `race-failure` issue
+
+Triggers: `schedule` (nightly and weekly crons) and `workflow_dispatch`, on the default branch only; no `pull_request` trigger. Job `race`
+runs the conformance shards with `race: true` (nightly: all packages, lane `current`; weekly: lane `minimum`). Job `report`
+(`needs: race`, `if: failure()`): `permissions: contents: read, actions: read, issues: write`; checks out the default branch only; finds an
+open issue with the label `race-failure` (comment on it) or creates one (so at most one is open); the body holds the run link, the tier,
+the lane and at most 20 test names matched by `^--- FAIL: (Test\w+)`; the log text itself is never copied.
