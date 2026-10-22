@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -18,10 +19,12 @@ import (
 )
 
 const (
-	maxPages    = 10   // pages of 100 entries per repository
-	maxListed   = 20   // labels and assignees kept in a row
-	maxString   = 2048 // bytes of any row string
-	parallelism = 4    // repositories read at the same time
+	defaultLimit = 200
+	MaxLimit     = 500  // largest accepted Options.Limit
+	maxPages     = 10   // pages of 100 entries per repository
+	maxListed    = 20   // labels and assignees kept in a row
+	maxString    = 2048 // bytes of any row string
+	parallelism  = 4    // repositories read at the same time
 )
 
 // Reader is the read-only part of the hosting watch reader that the cycle uses;
@@ -33,21 +36,33 @@ type Reader interface {
 
 var _ Reader = (*hosting.WatchReader)(nil)
 
-// Options selects the repositories.
+// Options selects the repositories, the filters and the row cap. The filters are applied
+// locally to the decoded issues and never reach a request. Repeats of one filter are
+// alternatives (any of); different filters intersect; empty means all.
 type Options struct {
-	Repos []string // OWNER/NAME; de-duplicated case-insensitively and sorted by the cycle
-	Now   func() time.Time
+	Repos     []string // OWNER/NAME; de-duplicated case-insensitively and sorted by the cycle
+	Labels    []string // matched against every label
+	Assignees []string // a login, AssigneeMe or AssigneeNone
+	Authors   []string // a login, with its [bot] marker
+	Limit     int      // row cap of the output, 0 means 200, at most 500
+	Now       func() time.Time
 }
 
 // Run reads the snapshot. A repository that cannot be read is listed in Result.Repos and
 // Result.Errors with no rows; the others are still read. Nothing is ever slept or retried.
 func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
+	if o.Limit == 0 {
+		o.Limit = defaultLimit
+	}
+	if o.Limit < 1 || o.Limit > MaxLimit {
+		return nil, fmt.Errorf("limit %d is outside 1..%d", o.Limit, MaxLimit)
+	}
 	now := time.Now
 	if o.Now != nil {
 		now = o.Now
 	}
-	res := &Result{Time: now().UTC()}
-	c := &cycle{r: r, now: res.Time, res: res}
+	res := &Result{Time: now().UTC(), Limit: o.Limit}
+	c := &cycle{r: r, o: o, now: res.Time, res: res}
 	repos := pulls.Dedupe(o.Repos)
 	c.readViewer(ctx, len(repos) > 0)
 	c.run(ctx, repos)
@@ -56,6 +71,7 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 
 type cycle struct {
 	r       Reader
+	o       Options
 	now     time.Time
 	res     *Result
 	viewer  string      // the login the token resolves to; empty when unknown
@@ -71,10 +87,19 @@ type listing struct {
 }
 
 func (c *cycle) run(ctx context.Context, repos []string) {
+	// --assignee @me without a login would list a wrong, smaller set: fail the run, read nothing.
+	unresolved := slices.Contains(c.o.Assignees, AssigneeMe) && c.viewer == ""
+	if unresolved {
+		c.res.Errors = append(c.res.Errors, Error{Code: CodeViewerUnknown, Message: "the authenticated user is unknown"})
+	}
 	status := make([]RepoStatus, len(repos))
 	lists := make([]listing, len(repos))
 	pool(len(repos), parallelism, func(i int) {
 		status[i].Repo = repos[i]
+		if unresolved && !c.limited.Load() {
+			status[i].State = StateSkipped
+			return
+		}
 		l, err := c.list(ctx, repos[i])
 		var we *hosting.WatchError
 		switch {
@@ -94,12 +119,21 @@ func (c *cycle) run(ctx context.Context, repos []string) {
 		}
 	})
 
+	var rows []Row
 	for i, repo := range repos {
 		for _, it := range lists[i].items {
-			c.res.Rows = append(c.res.Rows, c.row(repo, it))
+			if c.keep(it) {
+				rows = append(rows, c.row(repo, it))
+			}
 		}
 	}
-	sort.Slice(c.res.Rows, func(a, b int) bool { return before(c.res.Rows[a], c.res.Rows[b]) })
+	sort.Slice(rows, func(a, b int) bool { return before(rows[a], rows[b]) })
+	c.counts(rows)
+	if len(rows) > c.o.Limit {
+		c.res.Summary.Omitted = len(rows) - c.o.Limit
+		rows = rows[:c.o.Limit]
+	}
+	c.res.Rows = rows
 	c.res.Repos = status
 	sort.SliceStable(c.res.Errors, func(a, b int) bool {
 		x, y := c.res.Errors[a], c.res.Errors[b]
@@ -190,6 +224,22 @@ func before(a, b Row) bool {
 	return a.Number < b.Number
 }
 
+// counts records what was read with the filters applied and the cap not.
+func (c *cycle) counts(rows []Row) {
+	for _, r := range rows {
+		switch r.Priority {
+		case Red:
+			c.res.Summary.Counts.Red++
+		case Yellow:
+			c.res.Summary.Counts.Yellow++
+		case Blue:
+			c.res.Summary.Counts.Blue++
+		default:
+			c.res.Summary.Counts.Violet++
+		}
+	}
+}
+
 func (c *cycle) summarize() {
 	s := &c.res.Summary
 	s.Total = len(c.res.Rows)
@@ -208,12 +258,11 @@ func (c *cycle) summarize() {
 			s.Bots++
 		}
 	}
-	s.Counts = Counts{Red: s.Red, Yellow: s.Yellow, Blue: s.Blue, Violet: s.Violet}
 	for _, st := range c.res.Repos {
-		switch st.State {
-		case StateOK, StateSkipped:
+		switch {
+		case st.State == StateOK, st.State == StateSkipped && st.Reason != "":
 			s.ReposRead++
-		default:
+		case st.State == StatePartial, st.State == StateError:
 			s.ReposFailed++
 		}
 	}

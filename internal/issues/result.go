@@ -15,6 +15,10 @@ const (
 // (issues and pull requests together): the oldest 1000 are kept and the repository is partial.
 const CodeTooManyOpenIssues = "too-many-open-issues"
 
+// CodeViewerUnknown is the run-level error of `--assignee @me` when the login of the token
+// could not be determined.
+const CodeViewerUnknown = "viewer-unknown"
+
 // Row is one open issue with its priority. Pointer fields are null in the JSON contract:
 // AgeDays is nil exactly when CreatedAt is zero, Comments is nil when GitHub gave none. URL is
 // empty unless the forge gave an https address; Command and Effect are empty for blue and
@@ -65,8 +69,8 @@ type Counts struct{ Red, Yellow, Blue, Violet int }
 
 // Summary counts the rows. Total..Violet and Bots cover the listed rows (after the filters and
 // the cap); Counts covers everything read with the filters applied and the cap not, which is
-// what `stw status` shows. A repository is read when its state is ok or skipped, failed when it
-// is partial or an error.
+// what `stw status` shows. A repository is read when its state is ok or skipped because its issues
+// are disabled, failed when it is partial or an error; one left unread for a failed run is neither.
 type Summary struct {
 	Total, Red, Yellow, Blue, Violet int
 	Omitted                          int
@@ -78,6 +82,7 @@ type Summary struct {
 // repository (ASCII case-insensitive), then number.
 type Result struct {
 	Time    time.Time
+	Limit   int // the row cap of this run
 	Viewer  Viewer
 	Rows    []Row
 	Repos   []RepoStatus // sorted by repository, ASCII case-insensitive
