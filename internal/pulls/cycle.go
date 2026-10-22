@@ -133,6 +133,7 @@ type item struct {
 	hosting.PullListItem
 	row    Row
 	budget bool // selected for detail
+	reread bool // detail says null/unknown mergeability on an otherwise judgeable row
 }
 
 func (c *cycle) run(ctx context.Context) {
@@ -202,6 +203,8 @@ func (c *cycle) run(ctx context.Context) {
 		}
 	})
 
+	c.reread(ctx, all, read, index, status)
+
 	for _, it := range all {
 		it.row.pastBudget = !it.budget
 		c.finish(it)
@@ -216,6 +219,37 @@ func (c *cycle) run(ctx context.Context) {
 		return x.Code < y.Code
 	})
 	c.summarize()
+}
+
+// reread gives every row whose pulls/N came back with mergeable null or mergeable_state
+// "unknown" (GitHub computes mergeability lazily) ONE more pulls/N read, after all first reads
+// so that GitHub had time to compute it. No sleep, no loop, no second re-read, no check read;
+// the reads are bounded by the number of such rows and do not use the --limit budget. After a
+// rate limit none is made and the rows stay unknown.
+func (c *cycle) reread(ctx context.Context, all []*item, repos []string, index map[string]int, status []RepoStatus) {
+	byRepo := map[string][]*item{}
+	for _, it := range all {
+		if it.reread {
+			byRepo[it.repo] = append(byRepo[it.repo], it)
+		}
+	}
+	pool(len(repos), c.o.Parallel, func(i int) {
+		for _, it := range byRepo[repos[i]] {
+			if c.limited.Load() || ctx.Err() != nil {
+				return
+			}
+			d, err := watchcmd.ReadPullDetail(ctx, c.r, it.repo, it.Number)
+			if err != nil {
+				c.failErr(&status[index[repos[i]]], repos[i], err)
+				continue
+			}
+			// Same guards as the first read: the re-read must report the listed head.
+			it.row.Fork, it.row.Mergeable, it.row.Rebaseable = d.Fork, d.Mergeable, d.Rebaseable
+			state := clip(d.MergeableState)
+			it.row.MergeableState = &state
+			it.row.headOK = ValidSHA(d.HeadSHA) && d.HeadSHA == it.HeadSHA
+		}
+	})
 }
 
 // pool runs fn(0..n-1) with at most width calls at the same time.
@@ -345,6 +379,7 @@ func (c *cycle) readDetail(ctx context.Context, it *item) error {
 	headOK := ValidSHA(d.HeadSHA) && d.HeadSHA == it.HeadSHA
 	it.row.Detail = true
 	fillDetail(&it.row, d, obs, class, headOK)
+	it.reread = !it.Draft && headOK && class == watch.ClassGreen && (d.Mergeable == nil || d.MergeableState == "unknown")
 	return nil
 }
 

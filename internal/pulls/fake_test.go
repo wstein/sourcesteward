@@ -24,24 +24,35 @@ type fakeForge struct {
 	mu      sync.Mutex
 	lists   map[string][]hosting.PullListItem
 	listErr map[string]error
-	details map[string]string // repo#n -> body
-	runs    map[string]string // sha -> check_runs body
-	stats   map[string]string // sha -> statuses body
-	errAt   map[string]error  // "detail/repo#n", "runs/<sha4>"
+	details map[string]string   // repo#n -> body
+	runs    map[string]string   // sha -> check_runs body
+	stats   map[string]string   // sha -> statuses body
+	errAt   map[string]error    // "detail/repo#n", "runs/<sha4>"
+	seq     map[string][]string // repo#n -> bodies served by the next pulls/N reads, then details
+	errNth  map[string][]error  // "detail/repo#n" -> errors for the 2nd, 3rd... read of that key
 	calls   []string
 	etags   []string
 }
 
 func newForge() *fakeForge {
-	return &fakeForge{lists: map[string][]hosting.PullListItem{}, listErr: map[string]error{}, details: map[string]string{}, runs: map[string]string{}, stats: map[string]string{}, errAt: map[string]error{}}
+	return &fakeForge{lists: map[string][]hosting.PullListItem{}, listErr: map[string]error{}, details: map[string]string{}, runs: map[string]string{}, stats: map[string]string{}, errAt: map[string]error{}, seq: map[string][]string{}, errNth: map[string][]error{}}
 }
 
 func (f *fakeForge) note(call string, etag string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	prior := 0
+	for _, c := range f.calls {
+		if c == call {
+			prior++
+		}
+	}
 	f.calls = append(f.calls, call)
 	if etag != "" {
 		f.etags = append(f.etags, call+" "+etag)
+	}
+	if prior > 0 && prior <= len(f.errNth[call]) && f.errNth[call][prior-1] != nil {
+		return f.errNth[call][prior-1]
 	}
 	return f.errAt[call]
 }
@@ -75,7 +86,12 @@ func (f *fakeForge) PullDetail(_ context.Context, repo string, n int, etag strin
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return hosting.WatchResponse{Status: 200, Body: []byte(f.details[fmt.Sprintf("%s#%d", repo, n)])}, nil
+	k := fmt.Sprintf("%s#%d", repo, n)
+	if q := f.seq[k]; len(q) > 0 {
+		f.seq[k] = q[1:]
+		return hosting.WatchResponse{Status: 200, Body: []byte(q[0])}, nil
+	}
+	return hosting.WatchResponse{Status: 200, Body: []byte(f.details[k])}, nil
 }
 
 func (f *fakeForge) CheckRuns(_ context.Context, _ string, s string, _ int, etag string) (hosting.WatchResponse, error) {
@@ -168,4 +184,17 @@ func row(t *testing.T, r *Result, repo string, n int) Row {
 	}
 	t.Fatalf("no row %s#%d", repo, n)
 	return Row{}
+}
+
+// detailBody is a pulls/N body of repo for the given mergeable/state/head.
+func detailBody(repo, mergeable, state, head string) string {
+	return fmt.Sprintf(`{"mergeable":%s,"mergeable_state":%q,"rebaseable":true,"head":{"sha":%q,"repo":{"full_name":%q}},"base":{"repo":{"full_name":%q}}}`, mergeable, state, head, repo, repo)
+}
+
+// lazy adds a green PR whose first pulls/N read is "unknown" and whose later reads are the
+// settled detail (what GitHub serves once it has computed mergeability).
+func (f *fakeForge) lazy(repo string, n int) {
+	p := okPR(repo, n)
+	f.add(p)
+	f.seq[fmt.Sprintf("%s#%d", repo, n)] = []string{detailBody(repo, "null", "unknown", p.head)}
 }
