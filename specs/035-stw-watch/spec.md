@@ -71,6 +71,7 @@ schema_version = 1
 repos = ["wstein/crewbook", "wstein/sourcesteward"]
 interval = "60s"
 detail_every = 10                  # cycles between refreshes of PR detail and checks
+max_open_prs = 2000                # per repository; above it: watch-error too-many-open-prs
 [ignore]
 authors = ["dependabot[bot]"]      # PRs by these logins produce no events at all
 labels  = ["no-watch"]             # PRs carrying one of these labels produce no events
@@ -106,7 +107,7 @@ Order inside one poll cycle, exactly: (1) compute the events from (state, observ
 journal), so it is gapless and survives a lost or older `state.json`.
 
 **Replay on start** (before the first poll): the watcher reads the journal lines with `seq` greater than `state.applied_seq` and
-(a) **applies each event to the state**: its counter is set to the epoch, generation or episode encoded in its `id` (never lowered),
+(a) **applies each event to the state** (the exact effect of every kind is the "Replay effects" table below): its counter is set to the epoch, generation or episode encoded in its `id` (never lowered),
 and its observed effect is applied to the accepted observation (`new-pr` and `closed`/`merged` open or remove the PR and set the
 generation; `head-changed` the new head; `checks-green`/`checks-red` the class; `mergeable-changed` the mergeability;
 `ready-state-changed` the draft flag; `base-changed` the base; `repos-changed` the repository set and `repos_epoch`; `watch-*` the
@@ -197,7 +198,7 @@ All events carry the common fields of the contract. `details` per kind (exact ke
 | `head-changed` | head SHA of a still-open PR differs | `old`, `new` |
 | `checks-green` | debounced class becomes `green` for the current head | `head`, `draft`, `base`, `total` (check count) |
 | `checks-red` | debounced class becomes `red` for the current head | `head`, `failing` (sorted check names, at most 20), `failing_total`, `shape`: `stack-merge-shape`, `real` or `unknown`, `base`, `draft` |
-| `checks-pending-timeout` | class stays `pending` on one head longer than `--pending-timeout`; once per head | `head`, `pending` (names, at most 20), `since` |
+| `checks-pending-timeout` | class stays `pending` on one head longer than `--pending-timeout`; once per pending period (see Replay effects) | `head`, `pending` (names, at most 20), `since` |
 | `mergeable-changed` | debounced `mergeable` flips, or `mergeable_state` enters or leaves `behind` | `mergeable` (`true`/`false`), `state` (GitHub `mergeable_state`), `conflicting`, `behind` (booleans), `base` |
 | `ready-state-changed` | `draft` flips | `from`, `to` (`draft`/`ready`) |
 | `base-changed` | the PR's base ref changed (retarget, also GitHub's automatic retarget after a parent merge) | `old`, `new` |
@@ -280,7 +281,8 @@ per `watch-*` family, and the global `repos_epoch`.
 | --- | --- |
 | `new-pr` | `g<generation>` (a reopened PR is announced again as `new-pr` with the next generation) |
 | `head-changed` | `<new head>:h<head epoch>` (the epoch increments on every accepted head change, so every force-push fires, also a return to an earlier SHA) |
-| `checks-green`, `checks-red`, `checks-pending-timeout` | `<head>:c<checks epoch>`; the checks epoch increments on every accepted class change (so red, green, red announces each time) |
+| `checks-green`, `checks-red` | `<head>:c<checks epoch>`; the checks epoch increments on **every** accepted class change, also to `pending` or `none` (which emit nothing), so red, green, red announces each time |
+| `checks-pending-timeout` | `<head>:c<checks epoch>:t` (once per pending period: a new period needs a class change, which bumps the epoch) |
 | `mergeable-changed` | `<head>:m<mergeable epoch>` |
 | `ready-state-changed` | `r<ready epoch>` |
 | `base-changed` | `b<base epoch>` |
@@ -288,10 +290,41 @@ per `watch-*` family, and the global `repos_epoch`.
 | `closed` | `g<generation>` (closed, reopened, closed again gives `g0`, then `g1`) |
 | `restack-needed` | `<merged PR number>:<merge commit>` (the PR in the id is the child) |
 | `repos-changed` | `p<repos_epoch>` (a counter in state, incremented per accepted change and replayed like the others; A, B, A, B all fire with distinct ids) |
-| `watch-error`, `watch-recovered` | `<code>:e<episode>`; a failure episode starts at the first failure after a success and ends at the next success, so a new episode fires again and the same ongoing episode does not (a changed `code` inside an episode is a new key suffix `.<code>`) |
-| `watch-stalled` | `e<stall episode>` per repository |
+| `watch-error` | `<code>:e<episode>:f<failures>`; an episode starts at the first failure after a success and ends at the next success; `failures` is the consecutive count at emission (1, then 10, 20, ...), so a new code, a new episode and every 10th failure fire and the same ongoing episode does not |
+| `watch-recovered` | `e<episode>` (after a `watch-error` episode) or `s<stall episode>` (after a `watch-stalled`) |
+| `watch-stalled` | `s<stall episode>` per repository |
 
 `seq` is a gapless counter derived from the journal tail (see State and journal layout). `time` is the observation time (UTC, `Z`).
+
+### Replay effects (audit of every kind)
+
+**Invariant**: any state transition that a poll would detect again after a restart must either be covered by a replay effect that
+makes the recomputed id different, or be impossible to re-detect (the replay already moved the accepted state past it). Level-based
+triggers (a condition that stays true) therefore carry an explicit "fired" flag in state that the event and its replay both set;
+edge-based triggers are covered by moving the accepted observation. A transition that emits no event (for example a class change to
+`pending`) is never journalled; after a crash it is recomputed identically from the unchanged state, with the same counters.
+
+| Kind | Id key (see above) | Fields the cycle advances | Replay effect from the journal line | Crash after append: first poll after restart |
+| --- | --- | --- | --- | --- |
+| `new-pr` | `g<generation>` | PR added to the accepted open set with its list data; `generation` | add the PR from `details` (head, base, draft, title, author), set `generation`, checks class `none` | PR known: nothing |
+| `head-changed` | `<new>:h<head epoch>` | `head`, `head epoch`; checks class reset to unobserved, debounce candidates cleared | head = `new`, head epoch from the id, checks reset | head equal: nothing; another force-push: new event, next epoch |
+| `checks-green` / `checks-red` | `<head>:c<checks epoch>` | accepted class, checks epoch, candidate cleared | class = green/red for `head`, epoch from the id | same class: nothing; flapped back: new event, next epoch |
+| `checks-pending-timeout` (level-based) | `<head>:c<checks epoch>:t` | `pending_since`, flag `timeout_fired` for that head and epoch | class = pending, `pending_since` = `since`, `timeout_fired` = true, epoch from the id | flag set: nothing; class changed: bumps the epoch, so a later pending period fires again with a new id |
+| `mergeable-changed` | `<head>:m<mergeable epoch>` | accepted `mergeable`, `state`, `conflicting`, `behind`, epoch | those values from `details`, epoch from the id | same value: nothing; flapped back: new event, next epoch |
+| `ready-state-changed` | `r<ready epoch>` | accepted `draft`, epoch | draft = (`to` is `draft`), epoch from the id | nothing; flipped back: next epoch |
+| `base-changed` | `b<base epoch>` | accepted `base`, epoch | base = `new`, epoch from the id | nothing; changed again: next epoch |
+| `merged` | `<merge commit>` | PR removed from the open set and marked resolved; `restack_due` entry for the repository | PR removed and resolved; `restack_due` (merged PR, merge commit, old parent) added | PR resolved: no second `merged`; pending restack work is finished (next row) |
+| `restack-needed` (level-based on the open children) | `<merged PR>:<merge commit>` (child in the id) | `restack_due` cleared at the end of the same cycle | the line's (child, merge commit) is recorded as done; `restack_due` stays until the next successful poll | the first poll recomputes the candidates of every `restack_due` merge and emits only the (child, merge commit) pairs not yet journalled, then clears `restack_due`; a child already rebased is no longer a candidate |
+| `closed` | `g<generation>` | PR removed, `closed_prs[n]` = generation | PR removed, generation recorded | not in the open list and resolved: nothing; reopened: `new-pr` with the next generation |
+| `repos-changed` | `p<repos_epoch>` | repository set, `repos_epoch`; baseline mark for added repositories | set and `repos_epoch` from the id; added repositories marked "needs silent baseline" | set equal: nothing; added repositories baseline silently |
+| `watch-error` (level-based) | `<code>:e<episode>:f<failures>` | per-repository open episode, last emitted code, last emitted failure count | episode, code and count from the id and `details` | same code, count not at a multiple of 10: nothing; new code or the 10th: new key |
+| `watch-recovered` (level-based) | `e<episode>` / `s<stall episode>` | episode closed, failures 0, stall flag cleared | episode closed (flags cleared) | no open episode: nothing |
+| `watch-stalled` (level-based) | `s<stall episode>` | per-repository `stalled` flag, stall episode | `stalled` = true, episode from the id | flag set: nothing until a success clears it (then `watch-recovered`) |
+
+Plan acceptance test (WP-A, generated from this table): for **each** row, a table-driven test builds the pre-state, runs the cycle
+that emits the kind, kills after the journal append (and separately after the print), restarts against an observation that (a) still
+shows the condition and (b) shows it flapped back, and asserts that the journal holds **exactly one line** for that id, that every id in
+the journal is unique, and that (b) adds exactly one new event with the next epoch. A new event kind is not accepted without a row here.
 
 ## Liveness contract
 
