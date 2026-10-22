@@ -109,13 +109,14 @@ contracts or authorizes history rewriting, external messages, publication or del
 
 ## Forgejo and Codeberg support — proposed, no spec yet
 
-Goal: let a repository hosted on a Forgejo instance (including Codeberg) use the same
-read-only hosting reads that GitHub has today (repository, pull request, CI status, and
-later issues and releases).
+Goal: give a repository hosted on a Forgejo instance (including Codeberg) the same
+read-only hosting reads that GitHub repositories have or are getting (repository, pulls,
+CI status, releases, issues).
 
 Decision (owner): Forgejo/Codeberg is an alternative to GitHub, not an addition. A user
-picks one forge per repository or workspace; one run does not mix forges. Cross-forge
-fan-out is not a goal.
+chooses the forge per repository: each repository uses exactly one forge. A workspace-wide
+run may contain repositories on different forges, each read through its own forge. Mixing
+forges inside one repository is not supported.
 
 ### What differs from GitHub
 
@@ -129,8 +130,8 @@ the current Forgejo release; a spec must verify them against the target instance
   and check surface differs (commit statuses; check-run semantics unverified). Other CI
   (for example Woodpecker) reports through commit statuses. A mapping to the existing CI
   result vocabulary is needed.
-- Authentication: access tokens issued per instance, with their own scopes. There is no
-  `gh auth token` equivalent; token sourcing (environment, credential store) is undecided.
+- Authentication: access tokens issued per instance, with their own scopes. Token
+  sourcing is undecided. Forgejo CLIs (`fj`, `tea`) exist but are unverified as a source.
 - Rate limits: instance-specific and operator-configured, not a fixed published policy.
   Rate-limit semantics must be discovered or configured, not assumed.
 - Self-hosting: hosts are arbitrary. URL and host validation, TLS expectations and "remote
@@ -157,14 +158,15 @@ schemas stay unchanged.
 
 ### Non-goals
 
-- Using GitHub and Forgejo together in one run.
+- Mixing GitHub and Forgejo inside one repository.
 - Writes (PR creation, comments, pushes, merges), which stay separate explicit effects.
 - Forge migration or mirroring, and GitLab or other forges in this item.
 - Implicit forge detection that changes authentication host from remote text.
 
 ### Open questions for the owner
 
-- Scope selection: per repository, per workspace, or per invocation flag?
+- Where is the per-repository forge configured: workspace manifest or a remote URL host
+  allowlist? Never from remote text alone.
 - Minimum supported Forgejo version, and is Codeberg the only tier-1 instance?
 - Token source: environment variable, Forgejo CLI, or git credential store?
 - Is CI status limited to commit statuses at first?
