@@ -77,18 +77,16 @@ of each tag: WP-F and WP-R must take both from `CIRelease` (`CIReleaseTag.Runs`,
 passes `ReleaseProducts.Patterns()` to the releases and tags read and its tag entries to `ReadCIRelease`, and puts the result back by appending the
 entries of `CIRelease.ReleaseTags()` to `Remote.Tags` (the overview merges them per tag); it never replaces `Remote.Tags`.
 
-## Spec 038 stw issues (hosting seams in source, 2026-10-22)
+## Spec 038 stw issues (hosting seams and core cycle in source, 2026-10-22)
 
 [The specification](../specs/038-stw-issues/spec.md), its [JSON contract](../specs/038-stw-issues/contracts/issues.md) and
 [plan](../specs/038-stw-issues/plan.md) describe a read-only, stateless `stw issues` snapshot of the open issues of the workspace
 repositories and the issue source of `stw status`. Work package 0 is implemented in source on `feat/038-issues-hosting`: in
 `internal/hosting` the three fixed read shapes (open issue list, `user`, issue owner search), the guard mode `issues`, the issue list and
 `user` in the `status` mode, the typed decoders and `NewIssuesReader` (see [hosting](hosting.md#guard-modes-of-the-read-only-transport)).
-Work package B (owner search) is implemented in source on `feat/038-issues-owner`: `IssueSearchPage`, `DiscoverIssueOwner` and
-`DiscoverIssueOwners` discover the repository names of an owner through the one issue search shape with the decode, caps, `incomplete_results`
-precedence and separate search throttle of the pull request owner search, and the recorded fixtures are `issue_search_*.json`. The issue cycle,
-the command, the schema and the status integration (work packages A, C and D) are not started, and `stw issues` does not
-exist yet. The tests use fixtures only (no network, no build); independent review of the exact head is pending.
+Work package B (owner search) is implemented in source on `feat/038-issues-owner`: `IssueSearchPage`, `DiscoverIssueOwner` and `DiscoverIssueOwners` discover the repository names of an owner through the one issue search shape with the decode, caps, `incomplete_results` precedence and separate search throttle of the pull request owner search, and the recorded fixtures are `issue_search_*.json`.
+
+Work package A is implemented in source on `feat/038-issues-core`: the stateless cycle `internal/issues` (pages 1 to 10 by number, four repositories in parallel, rate-limit stop without sleeping, all-or-nothing repositories except `too-many-open-issues`, `issues-disabled` as a skip), the ordered priority rule table over all labels with ASCII case folding, the one `user` read per run and its outcomes, the local filters (`@me`, `@none`), the `--limit` cap and the counts. The command, the schema and the status integration (work packages C and D) are not started, and `stw issues` does not exist yet. The tests use fake readers only (no network, no credentials, no build); independent review of the exact head is pending.
 
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 
