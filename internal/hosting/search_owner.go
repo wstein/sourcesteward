@@ -90,7 +90,9 @@ func matchOwnerSearch(route *regexp.Regexp, kind, p string) bool {
 // searchReadEndpoint matches the PR owner search.
 func searchReadEndpoint(p string) bool { return matchOwnerSearch(searchRoute, "pr", p) }
 
-// admitsSearch is true for the pulls guard only; watch and one-shot cannot reach the search shape.
+// admitsSearch is true for the pulls guard only: it is the admission of the PR owner search.
+// The issue owner search (Spec 038) has its own predicate, admitsIssueSearch, so the two
+// guards refuse each other's search. Watch, status and one-shot reach neither.
 func admitsSearch(m guardMode) bool { return m == guardPulls }
 
 // SearchOwnerPage reads one page (1..10) of the owner search. It needs a reader built

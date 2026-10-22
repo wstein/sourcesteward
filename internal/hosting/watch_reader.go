@@ -97,7 +97,7 @@ type WatchReader struct {
 	mu      sync.Mutex
 	calls   map[WatchKind]CallCount
 	last    RateInfo
-	// mode is the guard mode the client was built with; only guardPulls may search.
+	// mode is the guard mode the client was built with; only guardPulls may search pull requests and only guardIssues issues.
 	mode guardMode
 	// searchLast is the state of the separate search bucket; it never feeds last.
 	searchLast RateInfo
