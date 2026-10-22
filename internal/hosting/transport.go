@@ -297,7 +297,7 @@ const (
 	// guardWatch also admits the Spec 035 watch-reader endpoints and escaped branch segments.
 	guardWatch
 	// guardPulls admits the shapes of guardWatch for the stateless `stw pulls` reader
-	// (Spec 036); its own search shape is added with the owner mode work package.
+	// (Spec 036) plus the one fixed owner search shape, which no other mode admits.
 	guardPulls
 )
 
@@ -336,7 +336,7 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	if req.URL.RawQuery != "" {
 		endpoint += "?" + req.URL.RawQuery
 	}
-	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint))
+	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint)) || (admitsSearch(t.effectiveMode()) && searchReadEndpoint(endpoint))
 }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.allowed(req) {
