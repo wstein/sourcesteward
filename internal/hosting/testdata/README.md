@@ -10,3 +10,7 @@ The issue owner search (Spec 038) has its own recordings, `issue_search_user.jso
 `q=user:OWNER+is:issue+is:open+archived:false&sort=created&order=asc&per_page=3`, three items each (public data only).
 `issue_search_empty.json` (total_count 0, items empty), `issue_search_incomplete.json` (incomplete_results true, total_count 0)
 and `issue_search_truncated.json` (the organisation response with total_count 1500) are derived from them with jq.
+
+The five `issue_search_*.json` files are genuine API output except that the free text of the issues was removed: the `body` of every
+item (which could carry third-party text such as e-mail addresses). The `pinned_comment` key was removed with it. No other field was
+changed; the items carry only logins, URLs and counts besides their titles, and the files contain no `@` address and no token.
