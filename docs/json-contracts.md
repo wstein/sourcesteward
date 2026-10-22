@@ -214,7 +214,7 @@ reject broken variants and check real command output from temporary repositories
 
 ## Status schema v1 (unpublished)
 
-[Status schema](../schemas/v1/status.schema.json) describes `stw status --json` (Spec 033). Like the sync schema it is
+[Status schema](../schemas/v1/status.schema.json) describes `stw status --offline --json` (Spec 033, byte-identical to what `stw status --json` printed before the online default). Like the sync schema it is
 checked in and byte-frozen but excluded from Pages packaging until the feature is accepted. One object with
 `schema_version` 1, `command` `status`, `options` (`fetch`, `worktrees`), `root`, `note`, `repos`, `summary` (`total`,
 `attention`, `errors`) and `error` (null, or `code` and `message` of a refused or failed run, with no repositories). A
@@ -225,6 +225,34 @@ repository has `name`, `path`, `kind` (`root`, `submodule`), `state` (`ok`, `uni
 repository or a failed run, 2 for usage errors with no JSON. Tests validate the fixtures, reject broken variants and
 check real command output from temporary repositories. The exact rules are in the
 [spec](../specs/033-stw-status/spec.md).
+
+## Status schema v2 (unpublished)
+
+[Status schema 2](../schemas/v2/status.schema.json) describes `stw status --json`, the online default (Spec 037). Like the v1
+schema it is checked in and byte-frozen but excluded from Pages packaging until the feature is accepted; the v1 schema and its
+digest do not change. One object with `schema_version` 2, `command` `status`, `time` (UTC), `host`, `options` (`fetch`,
+`worktrees`, `icons` always `null`), `root`, `note`, `actions`, `repos`, `sources`, `notices`, `summary` and `error`. No key is
+omitted, absent values are null and `additionalProperties` is false everywhere; strings are at most 2048 bytes (notice messages
+512).
+
+- `actions`: every item, with `id` (`CATEGORY:REPO:SUBJECT`, stable), `priority`, `category` (the 25 of the
+  [status page](status.md#needs-action)), `repo`, `path`, `title`, `url` (`https` or null), `subject` (`kind`, and the keys that
+  apply of `number`, `tag`, `sha` and `name`, the id part that is neither a number nor a tag), `evidence` (small facts whose keys
+  the schema fixes per category, or null), `command`, `effect` (`read` or `owner`, null exactly when `command` is) and `hint`.
+- `repos`: all members of the v1 repository object plus `remote` with `repo` (`OWNER/NAME` or null), `state` (`ok`, `degraded`,
+  `skipped`, `error`), `reason` (only when skipped) and `sources`, one `{state, error, reason, data}` for each of `repo`,
+  `pulls`, `releases`, `tags`, `ci_main` and `ci_release`. `state` is `ok`, `skipped` (with `reason`) or `error` (with a code);
+  `data` is `null` unless the state is `ok`, and its keys are fixed per source.
+- `sources`: exactly seven entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, each
+  `{id, state, read, degraded, skipped}` with the counts of repositories per outcome and a `state` of `ok`, `skipped`, `error`
+  or `degraded`.
+- `notices` (`code`, `source`, `repos`, `message`, one per missing source), `summary` (`repos`, `attention`, `errors`,
+  `priorities`, `degraded`, `failed`, `notices`) and `error` (`status-` code and message of a failed run, with no repositories).
+
+Exit 0 also with items, offline, without a token, after a deadline skip or a missing release workflow; 1 when an attempted
+request failed, a repository cannot be read or the run fails; 2 for usage errors with no JSON. Tests validate the documents of
+every outcome the command can print (healthy, no token, a reader that cannot be opened, failing requests, a rate limit, a
+failed local read), reject about sixty broken variants and keep the schema in step with the action model.
 
 ## Watch event schema v1 (unpublished)
 

@@ -15,7 +15,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
 | `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--no-rebase] [--no-ff] [--autostash\|--no-autostash] [--prune\|--no-prune]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
-| `stw status [PATH] [--fetch] [--worktrees]` | One-screen overview of the workspace root and every submodule, from any directory inside it: branch, upstream ahead/behind, change counts, conflicts, operation in progress, stashes, unmerged branches, linked worktrees, gitlink drift; Git only | Read-only local observation; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
+| `stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons SET] [--timeout D]` | What needs action in the workspace, ordered by priority with a command to run for each item, then every repository (branch, upstream, changes, conflicts, operation, stashes, unmerged branches, worktrees, gitlink drift) and the pull requests, release drafts, unreleased tags and CI of its GitHub repository; Git only locally | Read-only. Online by default with `GET` requests through the `gh` token of the hosting commands; `--offline` reads no credential and sends nothing; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -137,26 +137,30 @@ checked around `git merge --ff-only NEW_OID` and `git rebase`. A submodule HEAD 
 touched. `stw sync restore` and retention of old runs come in a later slice. See the
 [JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 
-## Show where you are in the workspace
+## Show what needs action in the workspace
 
 ```sh
-stw status                  # root repository and every submodule, from anywhere inside the workspace
+stw status                  # needs action, every repository, notices, summary; from anywhere inside the workspace
+stw status --offline        # the local state alone, no request and no credential
 stw status --worktrees      # also list the linked worktrees
-stw status --fetch --json   # fetch first, then one JSON object
+stw status --fetch --json   # fetch first, then one JSON object (schema 2)
 ```
 
-`stw status` ([Spec 033](../specs/033-stw-status/spec.md)) is the read-only "where am I" view: what `git status`,
-`git worktree list` and `git branch -vv` tell, for the workspace root and each initialized submodule, in one screen. It
-finds the workspace the way `stw sync` does and changes nothing; only `--fetch` runs one `git fetch` per repository
-(remote-tracking refs only). A repository is marked `!` when it needs attention: an operation in progress, conflicts,
-staged, unstaged or untracked files, commits behind the upstream (or diverged), a branch without an upstream, a detached
-HEAD, or a gitlink whose checked-out commit is behind or unrelated to the recorded one. Commits ahead, stashes, branches
-not yet merged into the default branch, linked worktrees and a checkout that is merely *ahead* of the recorded gitlink
-are shown but never count. Exit status 0,
-also when repositories need attention; 1 when a repository cannot be read or the run fails; 2 for usage errors.
+`stw status` ([Spec 037](../specs/037-stw-status-overview/spec.md), amending [Spec 033](../specs/033-stw-status/spec.md)) is
+the read-only "what needs me" view and has [its own page](status.md). It finds the workspace the way `stw sync` does and
+changes nothing; only `--fetch` runs one `git fetch` per repository (remote-tracking refs only). It lists the items that
+need action by priority (red, yellow, green, blue, violet), each with a link and a command that `stw` never runs itself, then
+the Spec 033 block of every repository with a `remote:` line, the notices about anything that could not be read, and a
+summary line. The local half marks a repository `!` when an operation is in progress, there are conflicts, staged, unstaged
+or untracked files, it is behind its upstream or diverged, a branch has no upstream, HEAD is detached or a gitlink is behind
+or unrelated; commits ahead, stashes, unmerged branches, linked worktrees and a merely *ahead* gitlink are shown but do not
+count. The remote half reads pull requests, release drafts, unreleased tags and CI for each GitHub repository, with 15 s per
+request and 90 s overall (`--timeout`). Exit status 0 also when there is something to do, when no token is available or
+the deadline cut a read; 1 when a request that was made failed, a repository cannot be read or the run fails; 2 for usage
+errors.
 
 ```
-SourceSteward status: 3 repositories in /work/ws
+SourceSteward status: 3 repositories in /work/ws   (--offline)
 ! .         main     origin/main behind 2  1 unstaged
     stash 1
     9 linked worktrees (7 locked)
@@ -166,7 +170,8 @@ SourceSteward status: 3 repositories in /work/ws
 summary: 2 of 3 repositories need attention
 ```
 
-[JSON contract](json-contracts.md#status-schema-v1-unpublished).
+JSON contracts: [schema 2](json-contracts.md#status-schema-v2-unpublished) online,
+[schema 1](json-contracts.md#status-schema-v1-unpublished) with `--offline`.
 
 ## Watch pull requests
 
