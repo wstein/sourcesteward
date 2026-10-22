@@ -151,6 +151,7 @@ func (c *cycle) run(ctx context.Context, repos []string) {
 // explicit truncation: everything read is kept and listing.truncated is set.
 func (c *cycle) list(ctx context.Context, repo string) (listing, error) {
 	var l listing
+	seen := map[int]bool{}
 	for page := 1; ; page++ {
 		if c.limited.Load() {
 			return listing{}, &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "rate limit reached before this repository was read"}
@@ -163,7 +164,12 @@ func (c *cycle) list(ctx context.Context, repo string) (listing, error) {
 		if err != nil {
 			return listing{}, err
 		}
-		l.items = append(l.items, items...)
+		for _, it := range items {
+			if !seen[it.Number] { // concurrent updates can shift an item onto the next page: the first (oldest-first order) wins
+				seen[it.Number] = true
+				l.items = append(l.items, it)
+			}
+		}
 		l.dropped += dropped
 		next, more, err := hosting.LinkNextPage(res.Link)
 		if err != nil {

@@ -143,11 +143,14 @@ func TestCapKeepsRedFirstAndCountsCoverEverythingRead(t *testing.T) {
 
 func TestCapDefaultsTo200AndIsBounded(t *testing.T) {
 	f := newForge()
-	var entries []entry
-	for i := 1; i <= 100; i++ {
-		entries = append(entries, raw(i))
+	page := func(from int) string {
+		var entries []entry
+		for i := from; i < from+100; i++ {
+			entries = append(entries, raw(i))
+		}
+		return body(entries...)
 	}
-	f.pages["o/r"] = []string{body(entries...), body(entries...), body(raw(1))}
+	f.pages["o/r"] = []string{page(1), page(101), body(raw(201))}
 	res := run(t, f, Options{Repos: []string{"o/r"}})
 	if res.Limit != 200 || res.Summary.Total != 200 || res.Summary.Omitted != 1 || res.Summary.Counts.Blue != 201 {
 		t.Errorf("limit %d summary %+v", res.Limit, res.Summary)

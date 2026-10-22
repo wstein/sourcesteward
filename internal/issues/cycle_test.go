@@ -291,3 +291,15 @@ func TestSkippedRepositoriesAreNotCountedAsReadByTheirReason(t *testing.T) {
 		t.Errorf("%+v", c.res.Summary)
 	}
 }
+
+func TestRunCountsAnIssueRepeatedAcrossPagesOnce(t *testing.T) {
+	f := newForge()
+	f.pages["o/r"] = []string{body(raw(1), raw(2, withLabels("bug"))), body(raw(2, withLabels("security")), raw(3))}
+	res := run(t, f, Options{Repos: []string{"o/r"}})
+	if got := numbers(res.Rows); !slices.Equal(got, []string{"o/r#2", "o/r#1", "o/r#3"}) {
+		t.Fatalf("rows %v", got)
+	}
+	if res.Rows[0].Reason != ReasonBug || *repoStatus(t, res, "o/r").Open != 3 || res.Summary.Counts.Red != 0 {
+		t.Errorf("the first occurrence must win: %+v", res.Rows[0])
+	}
+}
