@@ -1,14 +1,18 @@
-# Hosting SDK dependency provenance
+# Third-party notices of the stw binary
 
-Pinned SDK: github.com/cli/go-gh/v2 v2.16.2 (official GitHub CLI SDK).
-Only pkg/api is used; native discovery and bounded authentication remain owned by SourceSteward.
+Every module linked into `stw` for the shipped targets (linux and darwin) is listed below with its
+retained license text, plus the Go standard library and runtime. The list is the output of
+`go list -deps ./cmd/stw` for both operating systems; `internal/releaseworkflow` fails when a linked
+module has no row or a row names a license file that is missing, so a new dependency cannot ship
+without a notice. Modules used only by tests or by other operating systems (the schema validator
+`santhosh-tekuri/jsonschema/v6`, `inconshreveable/mousetrap`, which Cobra links on Windows only) are
+not linked into the shipped binaries and have no row. The release archives contain this directory.
 
-This hosting compile closure is pinned in go.mod/go.sum; no third-party source is vendored.
-Identical license terms are stored once. MIT copyright notices are collected with the
-shared permission/disclaimer text; Go modules share their byte-identical BSD license
-and patent grant. Distinct safeexec, timezone and YAML terms/notices remain intact.
-This hosting-specific inventory does not replace the license inventory needed for
-any future full binary distribution, including existing Cobra/schema dependencies.
+Pinned SDK: github.com/cli/go-gh/v2 v2.16.2 (official GitHub CLI SDK). Only pkg/api is used; native
+discovery and bounded authentication remain owned by SourceSteward. No third-party source is vendored;
+versions are pinned in go.mod/go.sum. Identical license terms are stored once. MIT copyright notices
+are collected with the shared permission/disclaimer text; Go modules share their byte-identical BSD
+license and patent grant. Distinct safeexec, pflag, timezone and YAML terms/notices remain intact.
 
 | Module | Version | Retained attribution and terms |
 | --- | --- | --- |
@@ -26,3 +30,6 @@ any future full binary distribution, including existing Cobra/schema dependencie
 | golang.org/x/term | v0.47.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | golang.org/x/text | v0.43.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | gopkg.in/yaml.v3 | v3.0.1 | [MIT/Apache terms](licenses/yaml-LICENSE.txt), [NOTICE](licenses/yaml-NOTICE.txt) |
+| github.com/spf13/cobra | v1.10.2 | [Apache-2.0](licenses/Apache-2.0.txt) |
+| github.com/spf13/pflag | v1.0.10 | [BSD-3](licenses/BSD-3-pflag.txt), Copyright (c) 2012 Alex Ogier and The Go Authors |
+| Go standard library and runtime | go.mod toolchain | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |

@@ -34,8 +34,11 @@ ref, never cancelled. Jobs:
    `-ldflags "-X main.version=<tag>"`, verified against the real `main.version` of `cmd/stw` by a test; an unstamped build keeps
    the default `dev`. `stw version` prints `SourceSteward <tag>`.
 3. **smoke**: the shipped archive runs natively on a runner of its own platform: checksum, exact members, `stw version`
-   (text and `--json`), `--help`, then on a temporary Git repository without network `stw inspect`, `stw status` and the
-   plan-only `stw tidy plan --base refs/heads/main`, which must leave every reference and the working tree unchanged.
+   (text and `--json`), `--help`, then on a temporary Git repository without network `stw inspect` and `stw status`, which
+   must leave every reference and the working tree unchanged. Commands that run Git inside the native sandbox (`tidy plan`, `sync`,
+   `workspace`) are **not** in the smoke: on Linux they need bubblewrap, which the smoke job does not install (no package is installed
+   in this workflow) and whose availability on the runners is unverified; the macOS smoke does not use `sandbox-exec`. The `ci.yml`
+   conformance lanes cover them. A test runs the smoke with failing `bwrap`/`sandbox-exec` shims.
 4. **publish** (the only job with `contents: write`, `attestations: write` and `id-token: write`; `environment: release`):
    re-checks the owner, the absence of any release (drafts included) and that the tag still names the verified commit; writes and
    checks `SHA256SUMS`; attests build provenance for the archives and `SHA256SUMS`; `gh release create --verify-tag`. The repository
@@ -69,7 +72,8 @@ Tier 1 backends and run as native child processes. The matrix is the set that co
 ## Archives and verification
 
 `stw_<version>_<os>_<arch>.tar.gz`, one top directory with `stw`, `LICENSE`, `README.md`, `llms.txt`, `agent-guide.md` (from
-`docs/agent-guide.md`) and `third_party/` (the retained dependency notices), sorted, owner 0, normalised modes and times, plus a
+`docs/agent-guide.md`) and `third_party/` (a README table and the license text of every module linked into the shipped binaries, Cobra
+(Apache-2.0) and pflag (BSD-3) included; a test compares the table with `go list -deps` for linux and darwin), sorted, owner 0, normalised modes and times, plus a
 `.sha256` sidecar at build time. The release carries 4 archives and `SHA256SUMS`. The binaries are not signed or notarized;
 the attestation (`gh attestation verify ARCHIVE --repo wstein/sourcesteward`) and `SHA256SUMS` are the evidence. Release notes are generated from the
 Conventional Commit subjects since the previous release tag (`.github/scripts/release-notes.sh`).
@@ -81,8 +85,5 @@ Conventional Commit subjects since the previous release tag (`.github/scripts/re
 - A **tag ruleset** for `v*` restricting creation, update and deletion to the owner (Spec 026 D11; see [releasing](../../docs/releasing.md)),
   and release immutability if wanted.
 - Required status checks on `main` so every merged commit has the `ci.yml` run the gate reads.
-- **Open item before tagging:** `third_party/README.md` states that its notice inventory covers only the hosting dependencies and
-  "does not replace the license inventory needed for any future full binary distribution" (Cobra, pflag, mousetrap, the schema
-  validator and others). The archives ship `third_party/` as it stands; the owner decides whether to complete it first.
 - The dry run (`workflow_dispatch`) and the tag are builds and publication: each needs the owner's explicit approval.
 - After the release: the BundleDock catalog entry (separate later change) and the record commit of Spec 026.
