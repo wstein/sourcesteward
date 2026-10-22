@@ -2,6 +2,8 @@
 package release
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +73,18 @@ func TestReadWorktreeContracts(t *testing.T) {
 		}
 		if _, err := ReadWorktreeContracts(root); err == nil {
 			t.Fatal("accepted")
+		}
+	})
+	t.Run("a .stw listing past its bound is refused", func(t *testing.T) {
+		root := t.TempDir()
+		writeStw(t, root, "release.toml", string(example))
+		for i := 0; i <= maxStwEntries; i++ {
+			if err := os.WriteFile(filepath.Join(root, ".stw", fmt.Sprintf("n%05d.txt", i)), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := ReadWorktreeContracts(root); !errors.Is(err, errReleaseLimit) {
+			t.Fatalf("%v", err)
 		}
 	})
 }
