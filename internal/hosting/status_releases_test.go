@@ -244,3 +244,32 @@ func TestTagListBoundsAndMalformed(t *testing.T) {
 	_, err = big.reader("github.com").TagList(context.Background(), "o/r")
 	assertWatchCode(t, err, CodePageTooLarge)
 }
+
+// The status reader itself (guard mode status, not the legacy watch flag of fakeForge.reader) admits
+// the four reads and refuses the search.
+func TestStatusGuardModeAdmitsTheStatusReads(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	f := newFakeForge(t)
+	f.body("repos/o/r", `{"default_branch":"main","html_url":"https://github.com/o/r"}`, nil)
+	f.body(releasesPage+"1", `[`+rel(false, "v1.0.0")+`]`, nil)
+	f.body(tagsPage+"1", `[{"name":"v1.0.0","commit":{"sha":"`+sha+`"}}]`, nil)
+	client, err := newSDKClientGuardMode("github.com", "fixturetoken", t.TempDir(), f, guardStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := newWatchReader(&ghAPI{client: client, host: "github.com"})
+	r.mode = guardStatus
+	ctx := context.Background()
+	if _, err := r.RepoInfo(ctx, "o/r"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReleaseList(ctx, "o/r"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.TagList(ctx, "o/r"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.log) != 3 {
+		t.Fatalf("%v", f.log)
+	}
+}
