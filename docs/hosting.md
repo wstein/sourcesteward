@@ -108,7 +108,7 @@ workflow runs, the tidy listings and the repository itself) are in every mode.
 | `one-shot` | `stw hosting`, `gh jj` | nothing |
 | `watch` | `stw watch` | the watch shapes (open pull request list, commits, branches, `rate_limit`) |
 | `pulls` | `stw pulls` | the watch shapes and the pull request owner search (`is:pr`) |
-| `status` | `stw status` online | the watch shapes, the open issue list and `user` (Spec 038); no search |
+| `status` | `stw status` online ([Spec 037](../specs/037-stw-status-overview/spec.md)) | the watch shapes (the open pull request list, commits, branches, `rate_limit`), the open issue list and `user` (Spec 038); no search. The default branch, release, tag, workflow run and repository reads it makes are one-shot shapes. The reader's per-request timeout is 15 s |
 | `issues` | `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md), see [issues](issues.md)) | the open issue list `repos/OWNER/NAME/issues?state=open&per_page=100&sort=created&direction=asc&page=N` (N 1 to 10), `user` (no query) and the issue owner search (`is:issue`); no watch shapes and no pull request search |
 
 The two owner searches refuse each other: `pulls` admits only the `is:pr` search and `issues` only the `is:issue`
