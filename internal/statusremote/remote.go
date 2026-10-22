@@ -10,6 +10,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/overview"
+	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
 const (
@@ -62,6 +63,24 @@ type Result struct {
 	Repos          []RepoResult
 	Timeout        time.Duration
 	RateLimitReset time.Time
+}
+
+// Input is the input of overview.Build: the local status of each repository, in the order given, next
+// to the remote half that has the same name. A local status without a remote half has none (its
+// remote sources did not apply). root is the workspace root.
+func (r Result) Input(root string, locals []stwsync.RepoStatus) overview.Input {
+	byName := make(map[string]RepoResult, len(r.Repos))
+	for _, rr := range r.Repos {
+		byName[rr.Name] = rr
+	}
+	in := overview.Input{Root: root, Deadline: r.Timeout, RateLimitReset: r.RateLimitReset, Repos: make([]overview.Repo, len(locals))}
+	for i, local := range locals {
+		in.Repos[i] = overview.Repo{Local: local}
+		if rr, ok := byName[local.Name]; ok {
+			in.Repos[i].Slug, in.Repos[i].Remote = rr.Slug, rr.Remote
+		}
+	}
+	return in
 }
 
 // Collect runs the remote sources for the repositories and returns what each of them read; it never
