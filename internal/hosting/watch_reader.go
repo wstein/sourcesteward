@@ -105,8 +105,33 @@ type WatchReader struct {
 	halved map[string]bool
 }
 
+// Per-request timeouts of the watch reader. Every command keeps DefaultRequestTimeout; the
+// `stw status` reader (Spec 037) sets StatusRequestTimeout.
+const (
+	DefaultRequestTimeout = 30 * time.Second
+	StatusRequestTimeout  = 15 * time.Second
+)
+
+// RequestTimeout is the deadline of one request of this reader.
+func (r *WatchReader) RequestTimeout() time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.timeout
+}
+
+// SetRequestTimeout sets the deadline of each following request; d must be positive.
+func (r *WatchReader) SetRequestTimeout(d time.Duration) error {
+	if d <= 0 {
+		return errors.New("request timeout must be positive")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.timeout = d
+	return nil
+}
+
 func newWatchReader(api *ghAPI) *WatchReader {
-	return &WatchReader{api: api, timeout: 30 * time.Second, calls: map[WatchKind]CallCount{}, mode: guardWatch}
+	return &WatchReader{api: api, timeout: DefaultRequestTimeout, calls: map[WatchKind]CallCount{}, mode: guardWatch}
 }
 
 // NewPullsReader is NewWatchReader for the stateless `stw pulls` reader (Spec 036): its
@@ -332,7 +357,7 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) && !(admitsSearch(r.mode) && searchReadEndpoint(endpoint)) {
 		return WatchResponse{}, malformed("endpoint is not an allowed watch read")
 	}
-	ctx, cancel := context.WithTimeout(parent, r.timeout)
+	ctx, cancel := context.WithTimeout(parent, r.RequestTimeout())
 	defer cancel()
 	host, prefix := apiDestination(r.api.host)
 	u, err := url.Parse("https://" + host + prefix + endpoint)
