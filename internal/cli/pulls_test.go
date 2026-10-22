@@ -111,7 +111,6 @@ func TestPullsExitCodes(t *testing.T) {
 	watchEnv(t, true)
 	forge := pullsForge(t)
 	for name, args := range map[string][]string{
-		"outside a workspace":    {"/nonexistent-workspace-path"},
 		"no-bots and bots-only":  {"--repo", "o/r", "--no-bots", "--bots-only"},
 		"human and json":         {"--repo", "o/r", "--human", "--json"},
 		"limit 0":                {"--repo", "o/r", "--limit", "0"},
@@ -121,6 +120,7 @@ func TestPullsExitCodes(t *testing.T) {
 		"bad repo":               {"--repo", "nope"},
 		"unknown flag":           {"--repo", "o/r", "--nonsense"},
 		"path without workspace": {"--repo", "o/r", "/tmp"},
+		"path alone":             {"/nonexistent-workspace-path"},
 		"two paths":              {"--workspace", "a", "b"},
 	} {
 		if status, out, errOut := pullsRun(t, forge, args...); status != 2 || out != "" || !strings.HasPrefix(errOut, "Error:") {
@@ -152,5 +152,26 @@ func TestPullsIsListedInHelp(t *testing.T) {
 	stdout.Reset()
 	if status := Run(context.Background(), "test", []string{"pulls", "--help"}, &stdout, &stderr); status != 0 || !strings.Contains(stdout.String(), "--bots-only") || !strings.Contains(stdout.String(), "--detail-drafts") {
 		t.Fatalf("%d %q", status, stdout.String())
+	}
+}
+
+func TestPullsOutsideAWorkspaceIsAUsageError(t *testing.T) {
+	watchEnv(t, true)
+	t.Chdir(t.TempDir())
+	forge := pullsForge(t)
+	status, out, errOut := pullsRun(t, forge)
+	if status != 2 || out != "" || !strings.HasPrefix(errOut, "Error:") || len(forge.log) != 0 {
+		t.Fatalf("%d %q %q %v", status, out, errOut, forge.log)
+	}
+}
+
+func TestPullsLimitDefaultsTo200(t *testing.T) {
+	watchEnv(t, true)
+	status, out, _ := pullsRun(t, pullsForge(t), "--repo", "o/r", "--json")
+	var doc struct {
+		Options map[string]any `json:"options"`
+	}
+	if status != 0 || json.Unmarshal([]byte(out), &doc) != nil || doc.Options["limit"] != 200.0 {
+		t.Fatalf("%d %s", status, out)
 	}
 }
