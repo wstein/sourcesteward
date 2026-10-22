@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/release"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 func runDispatchCLI(t *testing.T, run func(context.Context, release.DispatchOptions) release.DispatchResult, args ...string) (int, string, string) {
@@ -109,7 +110,7 @@ func TestReleaseDispatchExplicitHexTagsKeepSelectorMeaning(t *testing.T) {
 			}
 		})
 	}
-	if validReleaseTag("deadbeef1") || validReleaseTag(strings.Repeat("a", 40)) {
+	if untrusted.ValidReleaseTag("deadbeef1") || untrusted.ValidReleaseTag(strings.Repeat("a", 40)) {
 		t.Fatal("existing positional selector validation changed")
 	}
 }

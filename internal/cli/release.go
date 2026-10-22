@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/release"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // releaseFindingsError is the typed exit-status-3 error of `stw release check`: the result was
@@ -108,7 +107,7 @@ func releasePlanCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.Subject = args[0]
 			commit := release.IsFullCommitID(options.Subject)
-			if !commit && !validReleaseTag(options.Subject) {
+			if !commit && !untrusted.ValidReleaseTag(options.Subject) {
 				return errors.New("subject must be a full lowercase commit id or a valid tag name")
 			}
 			if commit {
@@ -174,30 +173,6 @@ func releasePlanCommand() *cobra.Command {
 	command.Flags().BoolVar(&options.WithDrafts, "with-drafts", false, "Assert token sees drafts")
 	command.Flags().BoolVar(&jsonOutput, "json", false, "Output one versioned JSON result")
 	return command
-}
-
-func validReleaseTag(s string) bool {
-	if s == "" || len(s) > 255 || !utf8.ValidString(s) || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "/") || strings.HasSuffix(s, "/") || strings.HasSuffix(s, ".") || strings.ContainsAny(s, " ~^:?*[\\") || strings.Contains(s, "..") || strings.Contains(s, "@{") || strings.Contains(s, "//") || strings.IndexFunc(s, unicode.IsControl) >= 0 {
-		return false
-	}
-	for _, part := range strings.Split(s, "/") {
-		if strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
-			return false
-		}
-	}
-	// Abbreviated hexadecimal identities are ambiguous input, not resolved as refs.
-	if len(s) < 64 {
-		hex := true
-		for _, c := range s {
-			if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
-				hex = false
-			}
-		}
-		if hex {
-			return false
-		}
-	}
-	return true
 }
 
 func containsNUL(s string) bool {

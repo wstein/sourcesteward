@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/stwsync"
-	"github.com/wstein/sourcesteward/internal/watchcmd"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // Fact names of the local subjects, one per fact kind of a repository.
@@ -40,8 +40,8 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 		it := newItem(RepoError, repo, Subject{Kind: KindRepository}, tgt)
 		it.Path, it.Title = rp.Path, "repository cannot be read"
 		if rp.Error != nil {
-			it.Title += ": " + watchcmd.Esc(rp.Error.Code+": "+rp.Error.Message)
-			it.Evidence = map[string]any{"code": watchcmd.Esc(rp.Error.Code)}
+			it.Title += ": " + untrusted.Esc(rp.Error.Code+": "+rp.Error.Message)
+			it.Evidence = map[string]any{"code": untrusted.Esc(rp.Error.Code)}
 		}
 		return []Item{it}
 	}
@@ -51,7 +51,7 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 	}
 	var items []Item
 	if has["operation"] && rp.Operation != nil {
-		op := watchcmd.Esc(*rp.Operation)
+		op := untrusted.Esc(*rp.Operation)
 		items = append(items, fact(LocalOperation, factOperation, op+" in progress", map[string]any{"operation": op}))
 	}
 	if has["conflicts"] {
@@ -64,7 +64,7 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 	if has["detached"] {
 		head := ""
 		if rp.Head != nil {
-			head = " at " + watchcmd.Esc(short(*rp.Head))
+			head = " at " + untrusted.Esc(short(*rp.Head))
 		}
 		items = append(items, fact(LocalDetached, factDetached, "detached HEAD"+head, nil))
 	}
@@ -80,14 +80,14 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 	if has["no-upstream"] {
 		branch := ""
 		if rp.Branch != nil {
-			branch = " " + watchcmd.Esc(*rp.Branch)
+			branch = " " + untrusted.Esc(*rp.Branch)
 		}
 		items = append(items, fact(LocalNoUpstream, factNoUpstream, "branch"+branch+" has no upstream", nil))
 	}
 	if g := rp.Gitlink; g != nil && g.State == "drift" {
 		rel := "unknown"
 		if g.Relation != nil {
-			rel = watchcmd.Esc(*g.Relation)
+			rel = untrusted.Esc(*g.Relation)
 		}
 		c := GitlinkDrift
 		if rel == "ahead" {
@@ -105,11 +105,11 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 		switch {
 		case w.Dirty:
 			it := newItem(WorktreeDirty, repo, Subject{Kind: KindWorktree, Name: w.Path}, wt)
-			it.Path, it.Title = rp.Path, "linked worktree "+watchcmd.Esc(w.Path)+" has changes"
+			it.Path, it.Title = rp.Path, "linked worktree "+untrusted.Esc(w.Path)+" has changes"
 			items = append(items, it)
 		case w.Missing || w.Prunable || w.Locked != nil:
 			it := newItem(WorktreeStale, repo, Subject{Kind: KindWorktree, Name: w.Path}, wt)
-			it.Path, it.Title = rp.Path, "linked worktree "+watchcmd.Esc(w.Path)+" is "+staleWord(w)
+			it.Path, it.Title = rp.Path, "linked worktree "+untrusted.Esc(w.Path)+" is "+staleWord(w)
 			items = append(items, it)
 		}
 	}
@@ -155,5 +155,5 @@ func upstream(rp stwsync.RepoStatus) string {
 	if rp.Upstream == nil {
 		return "its upstream"
 	}
-	return watchcmd.Esc(*rp.Upstream)
+	return untrusted.Esc(*rp.Upstream)
 }

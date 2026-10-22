@@ -4,7 +4,6 @@ package watchcmd
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
@@ -96,14 +95,5 @@ func TestReadChecksStatusesOnly(t *testing.T) {
 		if err != nil || class != want || len(obs.Runs) != 0 || len(obs.Statuses) != 1 {
 			t.Fatalf("%s: class=%q obs=%+v err=%v", want, class, obs, err)
 		}
-	}
-}
-
-func TestEscIsExportedAndBounded(t *testing.T) {
-	if got := Esc("a\nb\x1b[0m\u202e"); got != `a\nb\x1b[0m`+`\u202e` {
-		t.Fatalf("%q", got)
-	}
-	if got := Esc(strings.Repeat("x", maxHumanText+5)); got != strings.Repeat("x", maxHumanText)+"..." {
-		t.Fatalf("len %d", len(got))
 	}
 }

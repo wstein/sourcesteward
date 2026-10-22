@@ -14,6 +14,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/stwsync"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 	"github.com/wstein/sourcesteward/internal/watch"
 	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
@@ -126,7 +127,7 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 		}
 	}
 	for _, r := range f.Repos {
-		if !watchcmd.ValidRepo(r) {
+		if !untrusted.ValidRepo(r) {
 			return p, usagef("--repo %q is not OWNER/NAME", r)
 		}
 	}
@@ -225,7 +226,7 @@ func Execute(ctx context.Context, p Params) error {
 		}
 	}
 	for _, s := range p.Skipped {
-		diag("skipped %s: %s", watchcmd.Esc(s.Path), watchcmd.Esc(s.Reason))
+		diag("skipped %s: %s", untrusted.Esc(s.Path), untrusted.Esc(s.Reason))
 	}
 
 	repos := append([]string{}, p.Repos...)
@@ -273,7 +274,7 @@ func Execute(ctx context.Context, p Params) error {
 		case e.Owner != nil:
 			subject = "owner " + *e.Owner
 		}
-		diag("%s: %s: %s", watchcmd.Esc(subject), e.Code, watchcmd.Esc(e.Message))
+		diag("%s: %s: %s", untrusted.Esc(subject), e.Code, untrusted.Esc(e.Message))
 	}
 	if len(doc.Errors) > 0 || doc.Summary.ReposFailed > 0 {
 		return failure(watchcmd.ExitFailure, "%s", problemSummary(doc))

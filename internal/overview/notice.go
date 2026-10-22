@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/wstein/sourcesteward/internal/watchcmd"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // MaxNoticeRepos bounds the repository list of one notice; the message still counts every repository.
@@ -51,17 +51,17 @@ func notices(in Input) []Notice {
 				case ReasonNoToken, ReasonDeadline:
 					add(key{st.Reason, "remote"}, name, st.Reason, src)
 				default:
-					add(key{watchcmd.Esc(st.Reason), "remote"}, name, st.Reason, src)
+					add(key{untrusted.Esc(st.Reason), "remote"}, name, st.Reason, src)
 				}
 			case OutcomeError:
 				if st.Code == CodeRateLimited {
 					add(key{CodeRateLimited, "remote"}, name, st.Code, src)
 				} else {
-					add(key{watchcmd.Esc(st.Code), string(src)}, name, st.Code, src)
+					add(key{untrusted.Esc(st.Code), string(src)}, name, st.Code, src)
 				}
 			}
 		}
-		if watchcmd.ValidRepo(r.Slug) {
+		if untrusted.ValidRepo(r.Slug) {
 			switch r.Remote.Visibility {
 			case NoWriteAccess:
 				out = append(out, Notice{Code: "drafts-not-visible", Source: string(SourceReleases), Repos: []string{r.Slug},
@@ -90,10 +90,10 @@ func notices(in Input) []Notice {
 
 // repoName is the name a notice uses: OWNER/NAME when the repository has a valid one, else its local name.
 func repoName(r Repo) string {
-	if watchcmd.ValidRepo(r.Slug) {
+	if untrusted.ValidRepo(r.Slug) {
 		return r.Slug
 	}
-	return watchcmd.Esc(r.Local.Name)
+	return untrusted.Esc(r.Local.Name)
 }
 
 func capRepos(set map[string]bool) []string {
@@ -147,5 +147,5 @@ func errorText(code string) string {
 	if code == CodeNetwork {
 		return "network error"
 	}
-	return watchcmd.Esc(code)
+	return untrusted.Esc(code)
 }

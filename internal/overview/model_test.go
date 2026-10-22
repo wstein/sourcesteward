@@ -2,7 +2,11 @@
 
 package overview
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/wstein/sourcesteward/internal/pulls"
+)
 
 // The action table of Spec 037: the number is the position, the priority the colour of the row.
 func TestCategoryTableMatchesTheSpec(t *testing.T) {
@@ -37,5 +41,18 @@ func TestCategoryTableMatchesTheSpec(t *testing.T) {
 	}
 	if got := count(nil); got != 0 {
 		t.Error(got)
+	}
+}
+
+// The verdict strings of the model are those of the pulls cycle (Spec 036), which this package must not import.
+func TestVerdictStringsMatchThePullsCycle(t *testing.T) {
+	pairs := [][2]string{
+		{GroupReady, pulls.GroupReady}, {GroupChecks, pulls.GroupChecks}, {GroupConflict, pulls.GroupConflict},
+		{GroupDraft, pulls.GroupDraft}, {GroupBlocked, pulls.GroupBlocked}, {PRReasonNotRead, pulls.ReasonNotRead},
+	}
+	for _, p := range pairs {
+		if p[0] != p[1] {
+			t.Errorf("%q != %q", p[0], p[1])
+		}
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/wstein/sourcesteward/internal/watchcmd"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // maxURLBytes bounds a URL of an item; a longer one is dropped rather than cut.
@@ -99,7 +99,7 @@ func httpsURL(s string) string {
 // buildCommand returns the suggested command of a category and its effect, or two empty strings when
 // the category has none or a value it needs does not validate. `stw` never runs the command.
 func buildCommand(c Category, t target) (string, Effect) {
-	repo := func() (string, bool) { return t.Slug, watchcmd.ValidRepo(t.Slug) }
+	repo := func() (string, bool) { return t.Slug, untrusted.ValidRepo(t.Slug) }
 	path := func() (string, bool) { return shellWord(t.Path) }
 	switch c {
 	case RepoError, GitlinkDrift:

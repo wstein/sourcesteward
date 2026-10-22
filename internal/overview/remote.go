@@ -7,8 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/wstein/sourcesteward/internal/pulls"
-	"github.com/wstein/sourcesteward/internal/watchcmd"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // forgeHost is the one host of a run (Spec 037: `github.com`).
@@ -19,9 +18,9 @@ const releasingHint = "see the repository's docs/releasing.md; the draft variabl
 
 // remoteItems maps what the remote sources read for one repository to its items. A repository without
 // a valid OWNER/NAME has no remote items: none of its remote sources ran. Forge text enters titles
-// only through watchcmd.Esc, URLs only when https, commands only through buildCommand.
+// only through untrusted.Esc, URLs only when https, commands only through buildCommand.
 func remoteItems(r Repo) []Item {
-	if r.Remote == nil || !watchcmd.ValidRepo(r.Slug) {
+	if r.Remote == nil || !untrusted.ValidRepo(r.Slug) {
 		return nil
 	}
 	var items []Item
@@ -42,7 +41,7 @@ func readErrors(r Repo) []Item {
 			continue
 		}
 		it := newItem(ReadError, r.Slug, Subject{Kind: KindSource, Name: string(src)}, target{Slug: r.Slug, Source: src})
-		code := watchcmd.Esc(st.Code)
+		code := untrusted.Esc(st.Code)
 		it.Path, it.Title, it.Evidence = r.Local.Path, fmt.Sprintf("%s could not be read: %s", src, code), map[string]any{"source": string(src), "code": code}
 		items = append(items, it)
 	}
@@ -62,26 +61,26 @@ func pullItems(r Repo) []Item {
 		case p.Draft:
 			continue
 		case p.Bot:
-			c, what = PRBot, fmt.Sprintf("bot PR #%d (%s)", p.Number, watchcmd.Esc(p.Author))
+			c, what = PRBot, fmt.Sprintf("bot PR #%d (%s)", p.Number, untrusted.Esc(p.Author))
 		case p.PastBudget:
 			c, what = PRUnread, fmt.Sprintf("PR #%d was not read (detail budget spent)", p.Number)
-		case p.Group == pulls.GroupReady:
+		case p.Group == GroupReady:
 			c, what = PRReady, fmt.Sprintf("PR #%d is ready to merge", p.Number)
-		case p.Group == pulls.GroupConflict:
+		case p.Group == GroupConflict:
 			c, what = PRConflict, fmt.Sprintf("PR #%d has conflicts", p.Number)
-		case p.Group == pulls.GroupChecks:
+		case p.Group == GroupChecks:
 			c, what = PRChecksPending, fmt.Sprintf("PR #%d is waiting for checks", p.Number)
-		case p.Group == pulls.GroupBlocked && p.Reason != pulls.ReasonNotRead:
-			c, what = PRBlocked, fmt.Sprintf("PR #%d is blocked (%s)", p.Number, watchcmd.Esc(p.Reason))
+		case p.Group == GroupBlocked && p.Reason != PRReasonNotRead:
+			c, what = PRBlocked, fmt.Sprintf("PR #%d is blocked (%s)", p.Number, untrusted.Esc(p.Reason))
 		default:
 			continue
 		}
 		it := newItem(c, r.Slug, Subject{Kind: KindPR, Number: p.Number}, target{Slug: r.Slug, Number: p.Number})
 		it.Path, it.URL = r.Local.Path, httpsURL(p.URL)
-		it.Title = what + ": " + watchcmd.Esc(p.Title)
-		it.Evidence = map[string]any{"group": watchcmd.Esc(p.Group)}
+		it.Title = what + ": " + untrusted.Esc(p.Title)
+		it.Evidence = map[string]any{"group": untrusted.Esc(p.Group)}
 		if p.Reason != "" {
-			it.Evidence["reason"] = watchcmd.Esc(p.Reason)
+			it.Evidence["reason"] = untrusted.Esc(p.Reason)
 		}
 		if p.PastBudget {
 			it.Evidence["past_budget"] = true
@@ -101,7 +100,7 @@ func draftItems(r Repo) []Item {
 	for _, d := range r.Remote.Drafts {
 		it := newItem(ReleaseDraft, r.Slug, Subject{Kind: KindRelease, Tag: d.Tag}, target{Slug: r.Slug, Tag: d.Tag})
 		it.Path, it.URL = r.Local.Path, httpsURL(d.URL)
-		it.Title = fmt.Sprintf("release draft %s (%d assets) is waiting", watchcmd.Esc(d.Tag), d.Assets)
+		it.Title = fmt.Sprintf("release draft %s (%d assets) is waiting", untrusted.Esc(d.Tag), d.Assets)
 		it.Evidence = map[string]any{"drafts_visibility": string(WriteAccess), "assets": d.Assets}
 		items = append(items, it)
 	}
@@ -149,11 +148,11 @@ func tagItems(r Repo) []Item {
 		case f.failed != nil:
 			it = newItem(ReleaseRunFailed, r.Slug, s, target{Slug: r.Slug, SHA: f.sha})
 			it.URL = httpsURL(f.failed.URL)
-			it.Title = fmt.Sprintf("release workflow run of %s %s", watchcmd.Esc(f.tag), watchcmd.Esc(f.failed.Conclusion))
-			it.Evidence = map[string]any{"conclusion": watchcmd.Esc(f.failed.Conclusion), "released": !f.unreleased}
+			it.Title = fmt.Sprintf("release workflow run of %s %s", untrusted.Esc(f.tag), untrusted.Esc(f.failed.Conclusion))
+			it.Evidence = map[string]any{"conclusion": untrusted.Esc(f.failed.Conclusion), "released": !f.unreleased}
 		case f.unreleased:
 			it = newItem(TagWithoutRelease, r.Slug, s, target{Slug: r.Slug})
-			it.Title = fmt.Sprintf("tag %s has no release", watchcmd.Esc(f.tag))
+			it.Title = fmt.Sprintf("tag %s has no release", untrusted.Esc(f.tag))
 			it.Hint = releasingHint
 		default:
 			continue
@@ -185,14 +184,14 @@ func mainItems(r Repo) []Item {
 	if m.Class == "red" {
 		it := newItem(MainRed, r.Slug, s, target{Slug: r.Slug, Branch: m.Branch})
 		it.Path, it.URL = r.Local.Path, forgeHost+r.Slug+"/actions"
-		it.Title = fmt.Sprintf("default branch CI is red (%s, %s)", watchcmd.Esc(m.Branch), watchcmd.Esc(short(m.Head)))
+		it.Title = fmt.Sprintf("default branch CI is red (%s, %s)", untrusted.Esc(m.Branch), untrusted.Esc(short(m.Head)))
 		it.Evidence = map[string]any{"class": "red"}
 		items = append(items, it)
 	}
 	if m.BehindOrigin != nil && *m.BehindOrigin {
 		it := newItem(MainBehindOrigin, r.Slug, s, target{Slug: r.Slug, Path: r.Local.Path})
 		it.Path, it.URL = r.Local.Path, forgeHost+r.Slug
-		it.Title = fmt.Sprintf("origin has commits of %s that the local clone lacks", watchcmd.Esc(m.Branch))
+		it.Title = fmt.Sprintf("origin has commits of %s that the local clone lacks", untrusted.Esc(m.Branch))
 		items = append(items, it)
 	}
 	return items

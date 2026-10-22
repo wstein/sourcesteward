@@ -8,12 +8,12 @@ package watchcmd
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/release"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // MinInterval is the smallest polling interval (Spec 035).
@@ -21,11 +21,6 @@ const MinInterval = 10 * time.Second
 
 // DefaultMaxOpenPRs is the per-repository bound of open pull requests.
 const DefaultMaxOpenPRs = 2000
-
-var repoName = regexp.MustCompile(`\A[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*\z`)
-
-// ValidRepo reports whether s is an OWNER/NAME repository name.
-func ValidRepo(s string) bool { return repoName.MatchString(s) }
 
 // Config is `.stw/watch.toml`. Zero values mean "not set" (the flag or built-in default applies).
 type Config struct {
@@ -62,7 +57,7 @@ func ParseConfig(data []byte) (Config, error) {
 			return c, err
 		}
 		for _, r := range list {
-			if !ValidRepo(r) {
+			if !untrusted.ValidRepo(r) {
 				return c, fmt.Errorf("watch.toml: repos entry %q is not OWNER/NAME", r)
 			}
 		}

@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wstein/sourcesteward/internal/pulls"
-	"github.com/wstein/sourcesteward/internal/watchcmd"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 const maxMessage = 512
@@ -206,7 +206,7 @@ func writeJSON(w io.Writer, d *Document) error { return json.NewEncoder(w).Encod
 var humanGroups = []string{pulls.GroupReady, pulls.GroupChecks, pulls.GroupConflict, pulls.GroupDraft, pulls.GroupBlocked}
 
 // writeHuman prints one section per non-empty group and a final summary line. Every untrusted
-// field goes through watchcmd.Esc (control characters escaped, 120 characters).
+// field goes through untrusted.Esc (control characters escaped, 120 characters).
 func writeHuman(w io.Writer, d *Document) error {
 	var b strings.Builder
 	lists := map[string][]DocRow{pulls.GroupReady: d.Groups.Ready, pulls.GroupChecks: d.Groups.Checks, pulls.GroupConflict: d.Groups.Conflict, pulls.GroupDraft: d.Groups.Draft, pulls.GroupBlocked: d.Groups.Blocked}
@@ -214,7 +214,7 @@ func writeHuman(w io.Writer, d *Document) error {
 		if s == nil {
 			return "-"
 		}
-		return watchcmd.Esc(*s)
+		return untrusted.Esc(*s)
 	}
 	for _, g := range humanGroups {
 		rows := lists[g]
@@ -227,21 +227,21 @@ func writeHuman(w io.Writer, d *Document) error {
 			if r.AgeDays != nil {
 				age = fmt.Sprintf("%dd", *r.AgeDays)
 			}
-			author := watchcmd.Esc(r.Author)
+			author := untrusted.Esc(r.Author)
 			if r.Bot && !strings.HasSuffix(r.Author, "[bot]") {
 				author += "[bot]"
 			}
-			fmt.Fprintf(&b, "%s#%d  %s  %s  %s  %s", watchcmd.Esc(r.Repo), r.Number, age, author, dash(r.Checks), dash(r.MergeableState))
+			fmt.Fprintf(&b, "%s#%d  %s  %s  %s  %s", untrusted.Esc(r.Repo), r.Number, age, author, dash(r.Checks), dash(r.MergeableState))
 			if len(r.Reviewers) > 0 {
 				names := make([]string, len(r.Reviewers))
 				for i, n := range r.Reviewers {
-					names[i] = watchcmd.Esc(n)
+					names[i] = untrusted.Esc(n)
 				}
 				fmt.Fprintf(&b, "  [reviewers: %s]", strings.Join(names, ", "))
 			}
-			fmt.Fprintf(&b, "  %s", watchcmd.Esc(r.Title))
+			fmt.Fprintf(&b, "  %s", untrusted.Esc(r.Title))
 			if g == pulls.GroupBlocked && r.Reason != nil {
-				fmt.Fprintf(&b, "  (%s)", watchcmd.Esc(*r.Reason))
+				fmt.Fprintf(&b, "  (%s)", untrusted.Esc(*r.Reason))
 			}
 			b.WriteByte('\n')
 		}

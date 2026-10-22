@@ -5,7 +5,7 @@ package overview
 import (
 	"strconv"
 
-	"github.com/wstein/sourcesteward/internal/watchcmd"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // MaxLinesPerPriority is the cap of the human output: more lines of one priority are counted, not listed.
@@ -118,7 +118,7 @@ func drillDown(c Category, repo string) (string, Effect) {
 	case PRReady, PRConflict, PRBlocked, PRChecksPending, PRUnread:
 		return buildCommand(PRBlocked, target{Slug: repo})
 	case ReleaseDraft:
-		if watchcmd.ValidRepo(repo) {
+		if untrusted.ValidRepo(repo) {
 			return "gh release list -R " + repo, Read
 		}
 	}
@@ -131,7 +131,7 @@ func label(s Subject) string {
 	case KindPR:
 		return "#" + strconv.Itoa(s.Number)
 	case KindRelease, KindTag:
-		return watchcmd.Esc(s.Tag)
+		return untrusted.Esc(s.Tag)
 	}
-	return watchcmd.Esc(s.Name)
+	return untrusted.Esc(s.Name)
 }

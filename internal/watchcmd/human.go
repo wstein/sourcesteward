@@ -6,12 +6,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
+	"github.com/wstein/sourcesteward/internal/untrusted"
 	"github.com/wstein/sourcesteward/internal/watch"
 )
-
-const maxHumanText = 120
 
 // Human renders one event as a single line, `TIME REPO#PR KIND summary` (contracts/watch-events.md):
 // no colour, 7-character SHAs, control characters escaped and text bounded. JSON always carries the full values.
@@ -45,36 +43,7 @@ func humanTime(s string) string {
 }
 
 // esc is the unexported name used throughout this package.
-func esc(s string) string { return Esc(s) }
-
-// Esc escapes control and format characters (including bidirectional overrides) and bounds the length.
-// It is exported for `stw pulls`, which prints untrusted forge text the same way (Spec 036).
-func Esc(s string) string {
-	var b strings.Builder
-	n := 0
-	for _, r := range s {
-		if n >= maxHumanText {
-			b.WriteString("...")
-			break
-		}
-		n++
-		switch {
-		case r == '\n':
-			b.WriteString(`\n`)
-		case r == '\r':
-			b.WriteString(`\r`)
-		case r == '\t':
-			b.WriteString(`\t`)
-		case r < 0x20 || r == 0x7f:
-			fmt.Fprintf(&b, `\x%02x`, r)
-		case r == unicode.ReplacementChar || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r):
-			fmt.Fprintf(&b, `\u%04x`, r)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
+func esc(s string) string { return untrusted.Esc(s) }
 
 func short(sha string) string {
 	if len(sha) > 7 {
