@@ -373,3 +373,26 @@ func TestRunStatus(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestInterruptedUntilEventIsAFailureAndNeverAMatch(t *testing.T) {
+	r := newRunRig(t, ModeUntil)
+	r.p.UntilKinds = map[string]bool{"merged": true}
+	r.p.Timeout = time.Hour
+	r.open(item(1, "main"))
+	ctx, cancel := context.WithCancel(context.Background())
+	r.script = func(i int) {
+		if i == 2 {
+			cancel()
+		}
+	}
+	err := r.run(ctx)
+	if code(err) != ExitFailure || !strings.Contains(err.Error(), "interrupted") {
+		t.Fatalf("an interrupted --until-event must not look like a match: %v", err)
+	}
+	if got := interrupted(ModeStream); got != nil {
+		t.Fatalf("stream: %v", got)
+	}
+	if got := interrupted(ModeOnce); code(got) != ExitFailure {
+		t.Fatalf("once: %v", got)
+	}
+}

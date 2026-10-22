@@ -73,6 +73,10 @@ stw watch --status [--state-dir DIR] [--json]
 - A stream or `--until-event` run interrupted by SIGINT or SIGTERM exits 0 for `--stream` and 1 for `--until-event`. A
   repository whose `pulls/N` cannot be read after it left the open list fails that repository's cycle (`watch-error`, state
   untouched) so the PR is retried; a PR that GitHub still reports open there stays unresolved.
+- A PR whose base branch name the hosting guard refuses (for example one containing `%`) does not fail the repository: the
+  `branches/BASE` read is skipped for that base, one diagnostic line goes to stderr per run, its PRs are still watched and a red
+  head there has `shape` `unknown`.
+- A first SIGINT or SIGTERM ends the command gracefully; a second one terminates the process at once.
 - The Spec 022 allowlist has no repository read, so the default branch of a repository is `main` or `master` when an open PR
   targets it, else unknown; an unknown default branch makes `shape` `unknown` (fail loud) for a red head.
 
