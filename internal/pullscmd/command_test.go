@@ -17,6 +17,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/pulls"
+	"github.com/wstein/sourcesteward/internal/snapcmd"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/watchcmd"
 )
@@ -751,7 +752,7 @@ func TestDocumentCutsMessagesAndHostOnAUTF8Boundary(t *testing.T) {
 	}
 	d := buildDocument(Params{Host: strings.Repeat("a", 2047) + "é"}, &pulls.Result{}, nil, nil)
 	check("host", d.Host, 2048)
-	if got := cut("éé", 3); got != "é" {
+	if got := snapcmd.Cut("éé", 3); got != "é" {
 		t.Errorf("cut %q", got)
 	}
 }
