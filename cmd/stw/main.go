@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/wstein/sourcesteward/internal/cli"
 )
@@ -14,7 +15,7 @@ var version = "dev"
 func main() { os.Exit(run()) }
 
 func run() int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// The private native route of the build checkout comparison re-executes stw as "git" and
 	// must be handled before any command parsing. It is not a public command: it applies only
