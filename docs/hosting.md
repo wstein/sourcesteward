@@ -96,6 +96,26 @@ at once with exit 1 and a safe message: no retry, no `Retry-After` or backoff sl
 no token or API body in output. Rate-limit headers are not read; callers that poll must space
 their calls.
 
+## Guard modes of the read-only transport
+
+Every request passes a guard that admits only fixed GET shapes, each produced by one generator and matched
+exactly: no other parameter, order, value or escape case. The guard has five modes, one per kind of reader, and a
+mode admits nothing outside its set. The one-shot shapes (pull request, check runs, statuses, releases, tags,
+workflow runs, the tidy listings and the repository itself) are in every mode.
+
+| Mode | Reader | Beyond the one-shot shapes |
+| --- | --- | --- |
+| `one-shot` | `stw hosting`, `gh jj` | nothing |
+| `watch` | `stw watch` | the watch shapes (open pull request list, commits, branches, `rate_limit`) |
+| `pulls` | `stw pulls` | the watch shapes and the pull request owner search (`is:pr`) |
+| `status` | `stw status` online | the watch shapes, the open issue list and `user` (Spec 038); no search |
+| `issues` | `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md), reader in source, command pending) | the open issue list `repos/OWNER/NAME/issues?state=open&per_page=100&sort=created&direction=asc&page=N` (N 1 to 10), `user` (no query) and the issue owner search (`is:issue`); no watch shapes and no pull request search |
+
+The two owner searches refuse each other: `pulls` admits only the `is:pr` search and `issues` only the `is:issue`
+search. A page of the issue list holds at most 100 entries and at most 1 MiB; entries with a `pull_request` key are
+dropped, a 410 answer means the repository has issues disabled, and the `Link` header only signals that a further
+page exists: its URL is never requested, the reader asks for the next page number itself.
+
 ## Optional local extension installation
 
 After reviewing/building this source:
