@@ -188,18 +188,14 @@ const MessageIgnoredResults = "search results with an unusable repository were i
 // run (Code is its code), then incomplete_results, then the 1000 result cap, then
 // ignored results (malformed-response).
 func (r *WatchReader) DiscoverOwner(ctx context.Context, owner string) OwnerDiscovery {
-	return r.discoverOwner(ctx, owner, admitsSearch(r.mode), r.SearchOwnerPage)
+	return r.discoverOwner(ctx, owner, r.SearchOwnerPage)
 }
 
 // discoverOwner is the paging run shared by the PR owner search and the issue owner
-// search (Spec 038): admitted says whether this reader may search at all and readPage
-// reads one page of the matching shape. Everything else is identical.
-func (r *WatchReader) discoverOwner(ctx context.Context, owner string, admitted bool, readPage func(context.Context, string, int) (WatchResponse, error)) OwnerDiscovery {
+// search (Spec 038): readPage reads one page of the matching shape and refuses a reader of
+// the wrong mode before any request, which the run reports as the Code of the discovery.
+func (r *WatchReader) discoverOwner(ctx context.Context, owner string, readPage func(context.Context, string, int) (WatchResponse, error)) OwnerDiscovery {
 	d := OwnerDiscovery{Owner: owner}
-	if !admitted {
-		d.Code, d.Message = CodeMalformed, "search is not allowed for this reader"
-		return d
-	}
 	if !ValidOwner(owner) {
 		d.Code, d.Message = CodeMalformed, "invalid owner"
 		return d
