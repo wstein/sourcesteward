@@ -76,6 +76,7 @@ Every repository of Spec 033 (root and initialized submodules, at most 256) has 
 | `tags` | `repos/OWNER/NAME/tags?per_page=100&page=N` | existing (Spec 026) | yes |
 | `ci-main` | `branches/DEFAULT`, then check runs and statuses of its head | existing watch shapes | yes (WP-C) |
 | `ci-release` | `actions/workflows/FILE/runs?head_sha=SHA&per_page=100&page=1` for the commit of the latest tag and of each unreleased tag | existing (Spec 026) | yes (WP-C) |
+| `issues`, `viewer` | open issues per repository and the authenticated login | new fixed shapes, admitted in `status`, see [Spec 038](../038-stw-issues/spec.md) | yes (WP-G) |
 
 ### Open pull requests (reuse, no new shape)
 
@@ -259,6 +260,10 @@ one item per id and no grouping. The human section shows at most 10 lines per pr
   or oversized answer, `repo-moved`); that source reports an error, the partial output is printed, as `stw pulls`. Also 1 when a
   repository cannot be read locally or the run fails; 2 usage error. Items and priorities never affect the status. The result
   depends on what was attempted, not on timing: a network that fails on the first request exits 1 whenever a request was attempted.
+
+## Issues (WP-G, specified in Spec 038)
+
+The issue source (per-repository `issues: N open (R red, Y yellow)` line, the `issue-security`, `issue-assigned` and `issue-bug` items as categories 26 to 28 of the action table, the `viewer` read, the two new request shapes admitted by guard mode `status` and the additive JSON keys) is specified in [Spec 038](../038-stw-issues/spec.md#integration-into-stw-status-wp-g-of-spec-037); the deadline, skip, exit and rate-limit rules of this spec apply to it unchanged and no exit code is added.
 
 ## Required seams (WP-0)
 
