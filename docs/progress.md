@@ -64,6 +64,18 @@ Work package A (pull requests, implemented in source) is `internal/statusremote/
 
 Work package B (releases, tags, repository) is implemented in source: the typed reads `RepoInfo`, `ReleaseList` and `TagList` of the status reader in `internal/hosting` (`status_repo.go`, `status_releases.go`, `status_unreleased.go`), the draft visibility, the unreleased-tag rule over caller-given release tag patterns and `internal/statusremote/releases.go`, the per-repository source that returns the overview inputs and the states of the `repo`, `releases` and `tags` sources (see [hosting](hosting.md)). The default pattern `v*.*.*` is a semantic version with an optional `v` (`1.2.3` and `v1.2.3` are one version scheme; with both present they are listed by name). Only semantic-version tags are considered: calver and other product schemes of Spec 026 need their own later specification. The contract now says that `too-many-releases` also reports a tags listing past page 10, that `tags.latest` is a list of `{pattern, tag}`, that there is one entry per pattern and tag (`overview.ReleaseTag` carries `Pattern`, `Latest` and `Unreleased`; only `Unreleased` makes an item) and that the cap of 5 unreleased entries is filled in pattern order. `overview.Remote` carries the default branch, page and draft truncation of the `repo` and `releases` sources for the later output. Choices the spec leaves open: a source skipped by the overall deadline is `skipped` while a per-request timeout stays a `network` error, and a failed releases read leaves only the latest tag (nothing can be called unreleased without the releases). Tests use a fake forge and a fixture `gh` only; no build was made.
 
+## Spec 037 stw status online (work package C, CI state implemented in source, 2026-10-22)
+
+Work package C reads the CI state for the online `stw status`: `internal/statusremote` (`ReadCIMain`, `ReadReleaseProducts`, `ReadCIRelease`), the
+typed `WorkflowRuns` read and decoders in `internal/hosting`, `stwsync.BehindOrigin` (local object lookup with `--no-lazy-fetch`; undecided on a
+Git before 2.44) and `release.ReadWorktreeContracts` (the reader of `release check`); see [hosting](hosting.md). The default branch class reuses the
+classifier of `stw watch`. `ReadCIRelease` adds the newest runs to the per pattern entries of the `tags` source (at most 6 tags in all, each with
+the workflow of its product, `release.yml` by default, 404 skipped); an unusable contract is the error code `contract-invalid`. A red default
+branch and a failed, cancelled or timed-out tag run reach the action model as red items (US5, tested through `overview.Build`). Tests use an
+injected reader and temporary Git repositories only. `overview.Remote` carries neither the full list of runs (at most 20 per tag) nor the workflow
+of each tag: WP-F and WP-R must take both from `CIRelease` (`CIReleaseTag.Runs`, `CIReleaseTag.Workflow`, `Product`), not from the overview. WP-R
+passes `ReleaseProducts.Patterns()` to the releases and tags read and its tag entries to `ReadCIRelease`.
+
 ## Spec 038 stw issues (hosting seams in source, 2026-10-22)
 
 [The specification](../specs/038-stw-issues/spec.md), its [JSON contract](../specs/038-stw-issues/contracts/issues.md) and
