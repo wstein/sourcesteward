@@ -248,3 +248,69 @@ func TestListOpenPullsStoredLinkSurvivesLinklessNotModified(t *testing.T) {
 		t.Fatalf("stored Link lost: %+v", second.State.Pages)
 	}
 }
+
+// A 304 reuses the stored Link, so an exactly full last page hides a PR that was
+// reopened behind it: the next page is probed once, conditionally.
+func TestListOpenPullsProbesPastAFullLastPageOnNotModified(t *testing.T) {
+	f := newFakeForge(t)
+	f.serve(listURI(25, 1), `"p1"`, pageBody(1, 25), nil)
+	f.serve(listURI(25, 2), `"p2"`, "[]", nil)
+	r := f.reader("github.com")
+	ctx := context.Background()
+	// A 200 is authoritative: its missing Link needs no probe.
+	first, err := r.ListOpenPulls(ctx, "a/b", PullListState{}, 2000)
+	if err != nil || len(first.Items) != 25 || len(f.log) != 1 {
+		t.Fatalf("%v items=%d log=%v", err, len(first.Items), f.log)
+	}
+	// A 304 on the full last page probes page 2 (first time: unconditional).
+	f.log, f.etags = nil, nil
+	second, err := r.ListOpenPulls(ctx, "a/b", first.State, 2000)
+	if err != nil || !second.Unchanged || len(second.Items) != 25 || strings.Join(f.log, "|") != listURI(25, 1)+"|"+listURI(25, 2) || f.etags[1] != "" {
+		t.Fatalf("%v unchanged=%v log=%v etags=%q", err, second.Unchanged, f.log, f.etags)
+	}
+	// The probed empty page is stored, so the next probe is conditional and the listing stays unchanged.
+	f.log, f.etags = nil, nil
+	third, err := r.ListOpenPulls(ctx, "a/b", second.State, 2000)
+	if err != nil || !third.Unchanged || len(f.log) != 2 || f.etags[1] != `"p2"` {
+		t.Fatalf("%v unchanged=%v log=%v etags=%q", err, third.Unchanged, f.log, f.etags)
+	}
+	// An older PR is reopened: page 1 stays 304, page 2 now holds it.
+	f.serve(listURI(25, 2), `"p2b"`, pageBody(26, 26), nil)
+	fourth, err := r.ListOpenPulls(ctx, "a/b", third.State, 2000)
+	if err != nil || fourth.Unchanged || len(fourth.Items) != 26 || fourth.Items[25].Number != 26 {
+		t.Fatalf("reopened PR missed: %v unchanged=%v items=%d", err, fourth.Unchanged, len(fourth.Items))
+	}
+	// A short last page is never probed.
+	g := newFakeForge(t)
+	g.serve(listURI(25, 1), `"q1"`, pageBody(1, 24), nil)
+	gr := g.reader("github.com")
+	s1, err := gr.ListOpenPulls(ctx, "a/b", PullListState{}, 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.log = nil
+	if _, err = gr.ListOpenPulls(ctx, "a/b", s1.State, 2000); err != nil || len(g.log) != 1 {
+		t.Fatalf("%v %v", err, g.log)
+	}
+}
+
+// The probe of a full last page at the page bound must not leave the allowlist.
+func TestListOpenPullsNoProbeBeyondAllowlistBound(t *testing.T) {
+	f := newFakeForge(t)
+	for p := 1; p <= 80; p++ {
+		next := linkNext(25, p+1)
+		if p == 80 {
+			next = nil
+		}
+		f.serve(listURI(25, p), fmt.Sprintf(`"e%d"`, p), pageBody((p-1)*25+1, p*25), next)
+	}
+	r := f.reader("github.com")
+	first, err := r.ListOpenPulls(context.Background(), "a/b", PullListState{}, 2000)
+	if err != nil || len(first.Items) != 2000 {
+		t.Fatalf("%v %d", err, len(first.Items))
+	}
+	f.log = nil
+	if _, err := r.ListOpenPulls(context.Background(), "a/b", first.State, 2000); err != nil || len(f.log) != 80 {
+		t.Fatalf("%v requests=%d", err, len(f.log))
+	}
+}

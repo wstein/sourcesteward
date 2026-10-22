@@ -106,7 +106,9 @@ func (r *WatchReader) listAt(ctx context.Context, repo string, perPage int, prio
 				return PullListResult{}, perr
 			}
 			entry = PullPage{ETag: res.ETag, Link: res.Link, Items: items}
-			out.Unchanged = false
+			if len(items) > 0 || page <= len(prior.Pages) || !usable {
+				out.Unchanged = false
+			}
 		}
 		out.State.Pages = append(out.State.Pages, entry)
 		out.Items = append(out.Items, entry.Items...)
@@ -118,7 +120,12 @@ func (r *WatchReader) listAt(ctx context.Context, repo string, perPage int, prio
 			return PullListResult{}, malformed("unusable Link header")
 		}
 		if !more {
-			if len(prior.Pages) != len(out.State.Pages) || prior.PerPage != perPage {
+			// A 304 reuses the stored Link, so an exactly full last page may hide an older PR
+			// that was reopened behind it: probe the next page once (conditional, allowlisted).
+			if res.NotModified && len(entry.Items) == perPage && page < listPageLimit(perPage) {
+				continue
+			}
+			if contentPages(prior.Pages) != contentPages(out.State.Pages) || prior.PerPage != perPage {
 				out.Unchanged = false
 			}
 			return out, nil
@@ -130,6 +137,16 @@ func (r *WatchReader) listAt(ctx context.Context, repo string, perPage int, prio
 			return PullListResult{}, &WatchError{Code: CodeTooManyPRs, Message: "more open pull requests than max_open_prs"}
 		}
 	}
+}
+
+// contentPages counts the pages up to the last non-empty one; a trailing empty
+// page is only the stored result of a probe past a full last page.
+func contentPages(pages []PullPage) int {
+	n := len(pages)
+	for n > 0 && len(pages[n-1].Items) == 0 {
+		n--
+	}
+	return n
 }
 
 func hasNextRel(link string) bool {
