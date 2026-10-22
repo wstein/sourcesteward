@@ -333,7 +333,7 @@
         "locked": 0,
         "prunable": 0,
         "missing": 0,
-        "list": null
+        "list": []
       },
       "gitlink": null,
       "fetch_error": null,
@@ -506,9 +506,14 @@
         "locked": 0,
         "prunable": 0,
         "missing": 0,
-        "list": null
+        "list": []
       },
-      "gitlink": null,
+      "gitlink": {
+        "recorded": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "checked_out": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "state": "ok",
+        "relation": null
+      },
       "fetch_error": null,
       "attention": false,
       "reasons": [],
@@ -616,9 +621,14 @@
         "locked": 0,
         "prunable": 0,
         "missing": 0,
-        "list": null
+        "list": []
       },
-      "gitlink": null,
+      "gitlink": {
+        "recorded": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "checked_out": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "state": "ok",
+        "relation": null
+      },
       "fetch_error": null,
       "attention": false,
       "reasons": [],
@@ -719,9 +729,14 @@
         "locked": 0,
         "prunable": 0,
         "missing": 0,
-        "list": null
+        "list": []
       },
-      "gitlink": null,
+      "gitlink": {
+        "recorded": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "checked_out": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "state": "ok",
+        "relation": null
+      },
       "fetch_error": null,
       "attention": false,
       "reasons": [],

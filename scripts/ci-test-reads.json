@@ -5,6 +5,7 @@
     {"kind": "read", "prefix": "internal/watch/", "dependents": ["internal/cli"], "why": "internal/cli/watch_acceptance_test.go globs ../watch/*.go and ../watch/watchhost/*.go"},
     {"kind": "read", "prefix": "internal/watchcmd/", "dependents": ["internal/cli"], "why": "internal/cli/watch_acceptance_test.go globs ../watchcmd/*.go"},
     {"kind": "read", "prefix": "internal/cli/testdata/", "dependents": ["internal/contracts"], "why": "internal/contracts tests read internal/cli/testdata/*.json"},
+    {"kind": "read", "prefix": "internal/statuscmd/testdata/", "dependents": ["internal/contracts"], "why": "internal/contracts/status_online_test.go reads internal/statuscmd/testdata/document.json"},
     {"kind": "read", "prefix": "internal/workspace/testdata/tidy_v3_report/", "dependents": ["internal/contracts"], "why": "internal/contracts/tidy_v3_report_test.go reads the report fixture"},
     {"kind": "read", "prefix": "README.md", "dependents": ["internal/release", "internal/releaseworkflow"], "why": "releaseworkflow reads README.md; release names it in allowlist fixtures"},
     {"kind": "read", "prefix": "docs/README.md", "dependents": ["internal/release"], "why": "internal/release tests name docs/README.md"},
