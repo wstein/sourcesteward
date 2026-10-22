@@ -96,7 +96,7 @@ selects a new directory (a new silent baseline) unless `--state-dir` pins it. Th
 | File | Content |
 | --- | --- |
 | `lock` | advisory `flock`; a second watcher on the same directory exits 3 and prints the holder's pid |
-| `state.json` | `schema_version`, `printed_seq` (seq of the last event printed to stdout), per repository `last_ok`, the ETag of every list page and branch-tip read, `generation` and the per-PR epoch counters (see Event ids), the closed-unmerged PR generations (at most 5000, oldest dropped), and per open PR the last accepted observation plus any debounce candidate and per-PR `etag`s; **`seq` is not stored here**; replaced atomically (write temp, fsync, rename) |
+| `state.json` | `schema_version`, `printed_seq` (seq of the last event printed to stdout), per repository `last_ok`, the ETag of every list page and branch-tip read, `generation` and the per-PR epoch counters (see Event ids), the closed-unmerged PR generations (at most 5000, oldest dropped), and per open PR the last accepted observation plus any debounce candidate and per-PR `etag`s; **`seq` is not stored here**; per repository and run the backoff `next_try` (set from `retry_in_seconds` of a `watch-error`, so a replay restores it); replaced atomically (write temp, fsync, rename) |
 | `journal.jsonl` | every emitted event and nothing else, one schema-valid object per line, append-only, fsynced before anything is printed; the source of `seq` and the delivery record |
 | `heartbeat` | one line `RFC3339-time pid mode`, rewritten atomically after every poll cycle that completed (also when some repositories failed, see liveness) |
 
@@ -117,8 +117,8 @@ against it: if the change flapped back, the reverse transition is a **new** even
 repeats. Ids therefore stay unique and no event is lost or duplicated. Result: **exactly once in the journal, at least once on
 stdout; consumers dedupe by `id`**. Crash windows: after (2) before (3): replay applies and prints the event once; after (3)
 before (4): replay applies it, stdout has it twice, journal once; after (4): once and once. There is no tombstone or suppress file
-(see Event ids).
-Truncated trailing journal lines are ignored and healed with a newline on the next append. The journal is never rotated or deleted by
+(see Event ids). A **missing or unusable `state.json` with a non-empty journal** (the latter only with `--baseline`) replays the whole journal to rebuild the counters, prints nothing again and does a silent baseline, without needing `--baseline`; the rebuilt counters of repositories that are no longer configured are kept, exactly as after a normal removal, so a returning repository never repeats an id.
+A truncated trailing journal line (no newline, or not decodable) is ignored and **cut off** by the next append, so every line of the journal stays schema-valid. The journal is never rotated or deleted by
 `stw watch`; its size is the owner's to manage (about 300 bytes per event).
 
 ## Observation, debounce and polling
@@ -194,7 +194,7 @@ All events carry the common fields of the contract. `details` per kind (exact ke
 
 | Kind | Emitted when | `details` |
 | --- | --- | --- |
-| `new-pr` | an open PR appears that was not in the previous accepted list (never during a baseline) | `title`, `author`, `draft`, `base`, `head_ref`, `head` |
+| `new-pr` | an open PR appears that was not in the previous accepted list (never during a baseline) | `title`, `author`, `draft`, `base`, `head_ref`, `head`, `fork` (the head repository differs from the base repository; replay restores it) |
 | `head-changed` | head SHA of a still-open PR differs | `old`, `new` |
 | `checks-green` | debounced class becomes `green` for the current head | `head`, `draft`, `base`, `total` (check count) |
 | `checks-red` | debounced class becomes `red` for the current head | `head`, `failing` (sorted check names, at most 20), `failing_total`, `shape`: `stack-merge-shape`, `real` or `unknown`, `base`, `draft` |
@@ -207,7 +207,7 @@ All events carry the common fields of the contract. `details` per kind (exact ke
 | `restack-needed` | follows a `merged` event, one per affected open PR (rules below) | `base`, `reason` (`child-of-merged-branch` or `contains-merged-commits`), `merged_pr`, `old_parent`, `new_parent`, `new_parent_source`, `branch`, `argv` |
 | `repos-changed` | the resolved repository set differs from the one in state (including a skipped submodule); a repository that was **added** gets a **silent baseline** of its own (no `new-pr` for its existing PRs) | `added`, `removed`, `skipped` (with reason) |
 | `watch-error` | see Rate limit, errors, offline | `code`, `message` (bounded, sanitized), `failures`, `retry_in_seconds`, `repo` (or null) |
-| `watch-recovered` | first success after an emitted `watch-error` or `watch-stalled` | `after_failures`, `repo` |
+| `watch-recovered` | first success after an emitted `watch-error` and/or `watch-stalled`: one event per open episode, the error episode first | `after_failures`, `repo` |
 | `watch-stalled` | see above | `since`, `threshold_seconds`, `repo` |
 
 `review-state-changed` is **reserved**: not emitted in v1 (owner decision). Review state is not a CI or PR-shape fact: it needs
@@ -291,7 +291,7 @@ per `watch-*` family, and the global `repos_epoch`.
 | `restack-needed` | `<merged PR number>:<merge commit>` (the PR in the id is the child) |
 | `repos-changed` | `p<repos_epoch>` (a counter in state, incremented per accepted change and replayed like the others; A, B, A, B all fire with distinct ids) |
 | `watch-error` | `<code>:e<episode>:f<failures>`; an episode starts at the first failure after a success and ends at the next success; `failures` is the consecutive count at emission (1, then 10, 20, ...), so a new code, a new episode and every 10th failure fire and the same ongoing episode does not |
-| `watch-recovered` | `e<episode>` (after a `watch-error` episode) or `s<stall episode>` (after a `watch-stalled`) |
+| `watch-recovered` | `e<episode>` (after a `watch-error` episode) and `s<stall episode>` (after a `watch-stalled`; both are emitted when both episodes are open) |
 | `watch-stalled` | `s<stall episode>` per repository |
 
 `seq` is a gapless counter derived from the journal tail (see State and journal layout). `time` is the observation time (UTC, `Z`).
@@ -306,7 +306,7 @@ edge-based triggers are covered by moving the accepted observation. A transition
 
 | Kind | Id key (see above) | Fields the cycle advances | Replay effect from the journal line | Crash after append: first poll after restart |
 | --- | --- | --- | --- | --- |
-| `new-pr` | `g<generation>` | PR added to the accepted open set with its list data; `generation` | add the PR from `details` (head, base, draft, title, author), set `generation`, checks class `none`; mark the PR **due for a detail read** | PR known: nothing |
+| `new-pr` | `g<generation>` | PR added to the accepted open set with its list data; `generation` | add the PR from `details` (head, base, draft, title, author, fork), set `generation`, checks class `none`; mark the PR **due for a detail read** | PR known: nothing |
 | `head-changed` | `<new>:h<head epoch>` | `head`, `head epoch`; checks class reset to unobserved, debounce candidates cleared | head = `new`, head epoch from the id, checks reset; mark the PR due for a detail read | head equal: nothing; another force-push: new event, next epoch |
 | `checks-green` / `checks-red` | `<head>:c<checks epoch>` | accepted class, checks epoch, candidate cleared | class = green/red for `head`, epoch from the id | same class: nothing; flapped back: new event, next epoch |
 | `checks-pending-timeout` (level-based) | `<head>:c<checks epoch>:t` | `pending_since`, flag `timeout_fired` for that head and epoch | class = pending, `pending_since` = `since`, `timeout_fired` = true, epoch from the id | flag set: nothing; class changed: bumps the epoch, so a later pending period fires again with a new id |
@@ -316,7 +316,7 @@ edge-based triggers are covered by moving the accepted observation. A transition
 | `merged` | `<merge commit>` | PR removed from the open set and marked resolved; `restack_due` entry for the repository | PR removed and resolved; `restack_due` (merged PR, merge commit, old parent) added; every other open PR of the repository marked due for a detail read (as a live cycle does after a merge) | PR resolved: no second `merged`; pending restack work is finished (next row) |
 | `restack-needed` (level-based on the open children) | `<merged PR>:<merge commit>` (child in the id) | `restack_due` cleared at the end of the same cycle | the line's (child, merge commit) is recorded as done; `restack_due` stays until the next successful poll | the first poll recomputes the candidates of every `restack_due` merge (including the class-2 `pulls/N/commits` reads, which happen in that same cycle) and emits only the (child, merge commit) pairs not yet journalled, then clears `restack_due`; a child already rebased is no longer a candidate |
 | `closed` | `g<generation>` | PR removed, `closed_prs[n]` = generation | PR removed, generation recorded | not in the open list and resolved: nothing; reopened: `new-pr` with the next generation |
-| `repos-changed` | `p<repos_epoch>` | repository set, `repos_epoch`; baseline mark for added repositories | set and `repos_epoch` from the id; added repositories marked "needs silent baseline" | set equal: nothing; added repositories baseline silently |
+| `repos-changed` | `p<repos_epoch>` | repository set, `repos_epoch`; baseline mark for added repositories | set and `repos_epoch` from the id; added repositories marked "needs silent baseline"; the record (counters) of a removed repository is kept | set equal: nothing; added repositories baseline silently |
 | `watch-error` (level-based) | `<code>:e<episode>:f<failures>` | per-repository open episode, last emitted code, last emitted failure count | episode, code and count from the id and `details` | same code, count not at a multiple of 10: nothing; new code or the 10th: new key |
 | `watch-recovered` (level-based) | `e<episode>` / `s<stall episode>` | episode closed, failures 0, stall flag cleared | episode closed (flags cleared) | no open episode: nothing |
 | `watch-stalled` (level-based) | `s<stall episode>` | per-repository `stalled` flag, stall episode | `stalled` = true, episode from the id | flag set: nothing until a success clears it (then `watch-recovered`) |

@@ -26,7 +26,7 @@ which may be added to v1 before acceptance. Consumers ignore unknown kinds.
 
 Types: `sha` = 40 lowercase hex; `str` = string, at most 2048 bytes; `names` = array of at most 20 strings.
 
-- `new-pr`: `title` str, `author` str, `draft` bool, `base` str, `head_ref` str, `head` sha.
+- `new-pr`: `title` str, `author` str, `draft` bool, `base` str, `head_ref` str, `head` sha, `fork` bool (head repository differs from the base repository).
 - `head-changed`: `old` sha, `new` sha.
 - `checks-green`: `head` sha, `draft` bool, `base` str, `total` integer.
 - `checks-red`: `head` sha, `failing` names, `failing_total` integer, `shape` enum(`stack-merge-shape`, `real`, `unknown`), `base` str, `draft` bool.
@@ -45,7 +45,7 @@ Types: `sha` = 40 lowercase hex; `str` = string, at most 2048 bytes; `names` = a
 ## Examples
 
 ```json
-{"schema_version":1,"seq":1,"id":"wstein/sourcesteward#41:new-pr:g0","time":"2026-10-22T09:00:07Z","repo":"wstein/sourcesteward","pr":41,"kind":"new-pr","details":{"title":"docs(035): stw watch","author":"wstein","draft":true,"base":"main","head_ref":"docs/035-stw-watch","head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182"}}
+{"schema_version":1,"seq":1,"id":"wstein/sourcesteward#41:new-pr:g0","time":"2026-10-22T09:00:07Z","repo":"wstein/sourcesteward","pr":41,"kind":"new-pr","details":{"title":"docs(035): stw watch","author":"wstein","draft":true,"base":"main","head_ref":"docs/035-stw-watch","head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","fork":false}}
 {"schema_version":1,"seq":2,"id":"wstein/sourcesteward#41:checks-red:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:c1","time":"2026-10-22T09:04:10Z","repo":"wstein/sourcesteward","pr":41,"kind":"checks-red","details":{"head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","failing":["docs-check"],"failing_total":1,"shape":"real","base":"main","draft":true}}
 {"schema_version":1,"seq":3,"id":"wstein/sourcesteward#41:merged:9d8c7b6a5f4e3d2c1b0a99887766554433221100","time":"2026-10-22T10:30:00Z","repo":"wstein/sourcesteward","pr":41,"kind":"merged","details":{"merge_commit":"9d8c7b6a5f4e3d2c1b0a99887766554433221100","base":"main","head":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","head_ref":"docs/035-stw-watch","merged_at":"2026-10-22T10:29:58Z","method_hint":"rebase-or-squash"}}
 {"schema_version":1,"seq":4,"id":"wstein/sourcesteward#42:restack-needed:41:9d8c7b6a5f4e3d2c1b0a99887766554433221100","time":"2026-10-22T10:30:03Z","repo":"wstein/sourcesteward","pr":42,"kind":"restack-needed","details":{"merged_pr":41,"base":"main","reason":"contains-merged-commits","old_parent":"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","new_parent":"9d8c7b6a5f4e3d2c1b0a99887766554433221100","new_parent_source":"merge_commit_sha","branch":"feat/035-impl","argv":["git","-c","rebase.updateRefs=false","-c","rerere.enabled=false","rebase","--onto","9d8c7b6a5f4e3d2c1b0a99887766554433221100","3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182","feat/035-impl"]}}
