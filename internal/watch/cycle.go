@@ -364,7 +364,7 @@ func (c *cycle) mergeable(repo string, p *PRState, d *DetailObs) {
 	}
 	cand := MergeCand{Mergeable: m, Behind: behind, State: d.State}
 	if p.MergeCand == nil || p.MergeCand.Mergeable != m || p.MergeCand.Behind != behind {
-		p.MergeCand = &cand
+		p.MergeCand, p.DetailDue = &cand, true // the second sighting needs a fresh read next cycle
 		return
 	}
 	mm := m

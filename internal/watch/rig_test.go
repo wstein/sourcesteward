@@ -79,9 +79,16 @@ func merged(commit string, headSHA string) GoneObs {
 }
 func closedGone(headSHA string) GoneObs { return GoneObs{Base: "main", Head: headSHA} }
 
-type fakeObserver struct{ cur map[string]snap }
+type fakeObserver struct {
+	cur   map[string]snap
+	hints map[string]Hints // the hints of the last Observe per repository
+}
 
 func (f *fakeObserver) Observe(ctx context.Context, repo string, h Hints) (RepoObservation, error) {
+	if f.hints == nil {
+		f.hints = map[string]Hints{}
+	}
+	f.hints[repo] = h
 	s, ok := f.cur[repo]
 	if !ok {
 		return RepoObservation{}, &ObserveError{Code: "network", Message: "no fixture"}
