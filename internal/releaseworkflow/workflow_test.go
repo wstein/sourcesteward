@@ -168,7 +168,7 @@ func TestVerifyJobGates(t *testing.T) {
 	for _, want := range []string{
 		"release-verify.sh version", "release-verify.sh dryversion", "release-verify.sh tag",
 		`test "$ACTOR" = "$OWNER"`, `test "$PUSHER" = "$OWNER"`,
-		"actions/workflows/ci.yml/runs?head_sha=", "event=push&status=success", `select(.conclusion == "success")`, "releases/tags/$TAG", "go mod verify", "go vet ./...",
+		"release-verify.sh ci-green", "releases/tags/$TAG", "go mod verify", "go vet ./...",
 		"scripts/check-architecture.py", "scripts/check-docs.py", "go test -count=1 ./internal/releaseworkflow", "go-version-file: go.mod",
 	} {
 		if !strings.Contains(v, want) {
@@ -177,6 +177,65 @@ func TestVerifyJobGates(t *testing.T) {
 	}
 	if got := strings.Count(v, "if: steps.resolve.outputs.dry_run == 'false'"); got != 3 {
 		t.Errorf("%d tag-only steps in verify, want 3 (annotated tag, green ci, no release)", got)
+	}
+}
+
+// ciGuardViolations checks the green-CI step of the verify job. The retry, the client-side fallback
+// and the head_sha, conclusion and event filters live in release-verify.sh (tested against a fake gh in
+// scripts_test.go); the step must call it for the run's commit, with the read-only token and the
+// repository, and only for a tag run.
+func ciGuardViolations(raw string) []string {
+	var out []string
+	var found []step
+	for _, st := range stepsOf(jobsOf(raw)["verify"]) {
+		if strings.Contains(st.text, "- name: Require a green check run for the tagged commit\n") {
+			found = append(found, st)
+		}
+	}
+	if len(found) != 1 {
+		return []string{sprintf("%d green-check steps in verify, want 1", len(found))}
+	}
+	st := found[0]
+	if !strings.Contains(st.text, "        if: steps.resolve.outputs.dry_run == 'false'\n") {
+		out = append(out, "the green-check step is not skipped for a dry run only")
+	}
+	if !strings.Contains(st.text, "        env:\n          GH_TOKEN: ${{ github.token }}\n          REPO: ${{ github.repository }}\n        run: |\n") {
+		out = append(out, "the green-check step env is not exactly GH_TOKEN and REPO")
+	}
+	if !strings.Contains(st.run, "\nsh .github/scripts/release-verify.sh ci-green \"$GITHUB_SHA\"") || !strings.HasPrefix(st.run, "set -euo pipefail\n") {
+		out = append(out, "the green-check step does not call ci-green for $GITHUB_SHA under set -euo pipefail")
+	}
+	if strings.Contains(st.run, "||") || strings.Contains(st.run, "gh api") {
+		out = append(out, "the green-check step queries or tolerates failure itself")
+	}
+	return out
+}
+
+func TestCIGuardStepCallsTheScript(t *testing.T) {
+	raw := readRepo(t, ".github/workflows/release.yml")
+	if v := ciGuardViolations(raw); len(v) != 0 {
+		t.Errorf("violations:\n%s", strings.Join(v, "\n"))
+	}
+	call := `sh .github/scripts/release-verify.sh ci-green "$GITHUB_SHA"`
+	tail := "          REPO: ${{ github.repository }}\n        run: |\n          set -euo pipefail\n          # ci.yml"
+	for _, c := range []struct{ name, from, to string }{
+		{"guard call removed", call, "true"},
+		{"guard for another commit", `ci-green "$GITHUB_SHA"`, `ci-green "$GITHUB_REF"`},
+		{"guard failure tolerated", call, call + " || true"},
+		{"guard failure tolerated by echo", call, call + " || echo ignored"},
+		{"guard run without strict mode", "set -euo pipefail\n          # ci.yml", "# ci.yml"},
+		{"token dropped", "          GH_TOKEN: ${{ github.token }}\n" + tail, tail},
+		{"repo dropped", tail, "        run: |\n          set -euo pipefail\n          # ci.yml"},
+		{"extra env", tail, "          REPO: ${{ github.repository }}\n          CI_ATTEMPTS: 1\n        run: |\n          set -euo pipefail\n          # ci.yml"},
+		{"guard also on dry run", "      - name: Require a green check run for the tagged commit\n        if: steps.resolve.outputs.dry_run == 'false'\n", "      - name: Require a green check run for the tagged commit\n"},
+		{"inline query back", call, `n=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success" --jq '.workflow_runs | length'); test "$n" -ge 1`},
+	} {
+		if !strings.Contains(raw, c.from) {
+			t.Fatalf("%s: the mutation target is not in the workflow", c.name)
+		}
+		if v := ciGuardViolations(strings.Replace(raw, c.from, c.to, 1)); len(v) == 0 {
+			t.Errorf("%s: not caught", c.name)
+		}
 	}
 }
 

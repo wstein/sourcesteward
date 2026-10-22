@@ -28,6 +28,10 @@ ref, never cancelled. Jobs:
    `go mod verify`, `go vet ./...`, `scripts/check-architecture.py`, `scripts/check-docs.py` and the offline workflow tests of
    `internal/releaseworkflow`. The full test suite is not repeated: the green `ci.yml` run is its evidence. Required status checks
    on `main` (an owner setting) make that run cover every merged commit.
+   The CI guard retries its `head_sha` query up to five times and then filters the newest 500 successful push runs of
+   `ci.yml` by commit client side, because the Actions API has answered that query alternately with two results and none;
+   every run is re-checked for the commit, a success conclusion and the push event, and a commit older than those 500 runs
+   must re-run CI first.
 2. **build**: per target, with `CGO_ENABLED=0`, `GOTOOLCHAIN=local`, `-mod=readonly`, `-trimpath`, `-buildvcs=false` and the Go
    version of `go.mod`: `stw` is built **twice with separate empty build caches and compared byte for byte**, then packaged
    reproducibly (`SOURCE_DATE_EPOCH` is the commit time). The version is stamped with
