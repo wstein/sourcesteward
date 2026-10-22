@@ -162,3 +162,39 @@ func TestGroupIsInvariantUnderShuffles(t *testing.T) {
 		t.Error("no items must give no sections")
 	}
 }
+
+// The "and N more" command is the read-only drill-down of the first omitted line's category and repository,
+// never the owner command of one of its items.
+func TestMoreLineCarriesTheDrillDownNotAnOwnerCommand(t *testing.T) {
+	var items []Item
+	for i := 0; i < MaxLinesPerPriority+1; i++ {
+		items = append(items, prItem(PRReady, fmt.Sprintf("w/r%02d", i), 7)) // 11 ready PRs, 11 lines
+	}
+	s := Group(items)[0]
+	if len(s.Lines) != MaxLinesPerPriority || s.MoreLines != 1 || s.MoreItems != 1 {
+		t.Fatalf("%d lines, more %d/%d", len(s.Lines), s.MoreLines, s.MoreItems)
+	}
+	if s.MoreCommand != "stw pulls --repo w/r10" || s.MoreEffect != Read {
+		t.Errorf("more command %q (%q)", s.MoreCommand, s.MoreEffect)
+	}
+	if strings.Contains(s.MoreCommand, "gh pr merge") {
+		t.Error("an owner command leaked into the more line")
+	}
+	// bots and drafts drill down too; a category without one has no command and no effect.
+	bots := []Item{}
+	for i := 0; i < 11; i++ {
+		bots = append(bots, prItem(PRBot, fmt.Sprintf("w/b%02d", i), 1))
+	}
+	if b := Group(bots)[0]; b.MoreCommand != "stw pulls --repo w/b10 --bots-only" || b.MoreEffect != Read {
+		t.Errorf("bots %q (%q)", b.MoreCommand, b.MoreEffect)
+	}
+	var stash []Item
+	for i := 0; i < 11; i++ {
+		it := mk(LocalStash, fmt.Sprintf("r%02d", i), Subject{Kind: KindFact, Name: "stash"})
+		it.Command, it.Effect = "git -C x stash list", Read
+		stash = append(stash, it)
+	}
+	if st := Group(stash)[0]; st.MoreLines != 1 || st.MoreCommand != "" || st.MoreEffect != "" {
+		t.Errorf("stash %q (%q)", st.MoreCommand, st.MoreEffect)
+	}
+}

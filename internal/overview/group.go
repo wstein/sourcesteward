@@ -31,13 +31,15 @@ type Line struct {
 }
 
 // Section is the human output of one priority: at most MaxLinesPerPriority lines, then the number of
-// omitted lines and items and the command of the first omitted line.
+// omitted lines and items and the drill-down command of the first omitted line (its category and repository,
+// effect read; empty when the category has none). It is never the command of an item.
 type Section struct {
 	Priority    Priority
 	Lines       []Line
 	MoreLines   int
 	MoreItems   int
 	MoreCommand string
+	MoreEffect  Effect
 }
 
 // Group groups items into the lines of the human output, per priority in the fixed order; priorities
@@ -65,7 +67,7 @@ func Group(items []Item) []Section {
 				continue
 			}
 			if s.MoreLines == 0 {
-				s.MoreCommand = l.finish().Command
+				s.MoreCommand, s.MoreEffect = drillDown(l.Category, l.Repo)
 			}
 			s.MoreLines++
 			s.MoreItems += l.Count
@@ -117,6 +119,8 @@ func drillDown(c Category, repo string) (string, Effect) {
 	switch c {
 	case PRReady, PRConflict, PRBlocked, PRChecksPending, PRUnread:
 		return buildCommand(PRBlocked, target{Slug: repo})
+	case PRBot:
+		return buildCommand(PRBot, target{Slug: repo})
 	case ReleaseDraft:
 		if untrusted.ValidRepo(repo) {
 			return "gh release list -R " + repo, Read
