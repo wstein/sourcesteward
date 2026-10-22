@@ -64,6 +64,27 @@ discovers other repositories through one fixed `search/issues` read. Work packag
 listed in `stw --help`; `schemas/v1/pulls.schema.json` is frozen and unpublished, and `stw pulls` has a guide ([pulls](pulls.md)). The tests
 use a fake forge only (no network, no build); independent review of the exact head and the owner's acceptance are pending.
 
+## Spec 037 stw status online (work package E, command and output implemented in source, 2026-10-22)
+
+`stw status` is online by default. `--offline` runs the unchanged Spec 033 code path (no discovery, no credential, no request; its text
+and schema 1 JSON are pinned by goldens taken before the change), `--icons unicode|nerd|ascii` (accepted with `--offline`, where it only
+changes the two repository markers) and `--timeout` (1s to 10m, a usage error with `--offline`) are new. `internal/statuscmd` holds the
+terminal and icon decisions, the run (local status, workspace discovery for the origins, `statusremote.Collect` with `hosting.NewStatusReader`
+as the default reader, `overview.Build`) and the schema 2 document builder; `internal/cli/status*.go` prints Needs action, Repositories
+(the Spec 033 block plus a `remote:` line), Notices and the summary line, with one golden per icon set with and without colour (stripping the
+colour leaves the same text). Exit 1 is an attempted request that failed, an unreadable repository or a failed run; a missing token, the
+deadline and the items are exit 0. A test resolves the command of every item of all 25 categories against the cobra tree. Choices the spec
+leaves open: the progress line on stderr counts requests (`reading remote: N requests`) because the number of repositories done is not
+observable from `statusremote`; the Nerd Font code points are U+F057, U+F071, U+F058, U+F05A and U+F0AA (to verify in a Nerd Font); the
+action section names `N` things of a grouped line with a noun per category; titles use the singular for a count of one. For work package F
+(no schema file is touched here): `sources[]` entries are `{id, state, read, degraded, skipped}` for `local` and the six remote sources,
+`degraded` counts failed reads and `state` is `ok`, `skipped`, `error` or `degraded`; `repos[].remote.sources.X` is `{state, error, data}`,
+`data` null unless the state is `ok` and the contract's data table; `remote.state` is `ok`, `skipped` (with the reason of the first source),
+`error` (every source failed) or `degraded`; `actions[].url` and the draft and run URLs are `https` or null; `options.icons` is always null;
+the error code `hosting-api-unavailable` of a reader that could not be opened is an error code of every source; a local failure prints the
+document with `error` set and empty lists, exit 1. The golden `internal/statuscmd/testdata/document.json` is a full valid document. Tests
+use fakes only (no network, no credential, no build).
+
 ## Spec 037 stw status online (work package D, action model implemented in source, 2026-10-22)
 
 [The specification](../specs/037-stw-status-overview/spec.md), its [JSON contract](../specs/037-stw-status-overview/contracts/status.md) and
