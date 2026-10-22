@@ -99,7 +99,7 @@ func TestReadReleasesAllSourcesOK(t *testing.T) {
 	if !reflect.DeepEqual(got.Drafts, wantDrafts) || got.Truncated {
 		t.Fatalf("%+v", got.Drafts)
 	}
-	wantTags := []overview.ReleaseTag{{Tag: "v1.2.0", SHA: relSHA("c"), Unreleased: true}}
+	wantTags := []overview.ReleaseTag{{Pattern: "v*.*.*", Tag: "v1.2.0", SHA: relSHA("c"), Latest: true, Unreleased: true}}
 	if !reflect.DeepEqual(got.Tags, wantTags) {
 		t.Fatalf("%+v", got.Tags)
 	}
@@ -108,7 +108,7 @@ func TestReadReleasesAllSourcesOK(t *testing.T) {
 func TestReadReleasesLatestTagThatIsReleasedStaysListed(t *testing.T) {
 	rd := &fakeReleaseReader{info: writeAccessInfo(), rels: []hosting.StatusRelease{{Tag: "v1.0.0"}}, tags: []hosting.StatusTag{{Name: "v1.0.0", SHA: relSHA("a")}}}
 	got := ReadReleases(context.Background(), rd, "o/r", nil)
-	if !reflect.DeepEqual(got.Tags, []overview.ReleaseTag{{Tag: "v1.0.0", SHA: relSHA("a")}}) {
+	if !reflect.DeepEqual(got.Tags, []overview.ReleaseTag{{Pattern: "v*.*.*", Tag: "v1.0.0", SHA: relSHA("a"), Latest: true}}) {
 		t.Fatalf("%+v", got.Tags)
 	}
 }
@@ -116,7 +116,7 @@ func TestReadReleasesLatestTagThatIsReleasedStaysListed(t *testing.T) {
 func TestReadReleasesPatternsAreTheCallersChoice(t *testing.T) {
 	rd := &fakeReleaseReader{info: writeAccessInfo(), rels: []hosting.StatusRelease{{Tag: "bdock/1.0.0"}}, tags: []hosting.StatusTag{{Name: "bdock/1.0.0", SHA: relSHA("a")}, {Name: "bdock/1.1.0", SHA: relSHA("b")}, {Name: "v5.0.0", SHA: relSHA("c")}}}
 	got := ReadReleases(context.Background(), rd, "o/r", []string{"bdock/*"})
-	if !reflect.DeepEqual(got.Tags, []overview.ReleaseTag{{Tag: "bdock/1.1.0", SHA: relSHA("b"), Unreleased: true}}) {
+	if !reflect.DeepEqual(got.Tags, []overview.ReleaseTag{{Pattern: "bdock/*", Tag: "bdock/1.1.0", SHA: relSHA("b"), Latest: true, Unreleased: true}}) {
 		t.Fatalf("%+v", got.Tags)
 	}
 }
@@ -178,7 +178,7 @@ func TestReadReleasesSourcesAreIndependent(t *testing.T) {
 		t.Fatalf("%+v", got.Sources)
 	}
 	// Without the releases nothing is unreleased: only the latest tag is known.
-	if !reflect.DeepEqual(got.Tags, []overview.ReleaseTag{{Tag: "v1.1.0", SHA: relSHA("b")}}) || len(got.Drafts) != 0 {
+	if !reflect.DeepEqual(got.Tags, []overview.ReleaseTag{{Pattern: "v*.*.*", Tag: "v1.1.0", SHA: relSHA("b"), Latest: true}}) || len(got.Drafts) != 0 {
 		t.Fatalf("%+v", got)
 	}
 	tagsFail := ReadReleases(context.Background(), &fakeReleaseReader{info: writeAccessInfo(), rels: []hosting.StatusRelease{{Draft: true, Tag: "v1"}}, tagsErr: relWatchErr(hosting.CodePageTooLarge)}, "o/r", nil)

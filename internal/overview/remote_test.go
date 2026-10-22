@@ -452,3 +452,17 @@ func TestUnreadRowDerivesTheReadError(t *testing.T) {
 		}
 	}
 }
+
+// Per pattern entries of one tag are one finding, and an entry that is only the latest of its
+// pattern is information, never an item.
+func TestTagItemsPerPatternEntries(t *testing.T) {
+	r := Repo{Local: repoOK("a", nil), Slug: "w/a", Remote: &Remote{Tags: []ReleaseTag{
+		{Pattern: "v*.*.*", Tag: "v1.1.0", SHA: "a", Latest: true, Unreleased: true},
+		{Pattern: "v*", Tag: "v1.1.0", SHA: "a", Latest: true, Unreleased: true},
+		{Pattern: "bdock/*", Tag: "bdock/1.0.0", SHA: "b", Latest: true},
+	}}}
+	items := tagItems(r)
+	if len(items) != 1 || items[0].Category != TagWithoutRelease || items[0].Subject.Tag != "v1.1.0" {
+		t.Fatalf("%+v", items)
+	}
+}

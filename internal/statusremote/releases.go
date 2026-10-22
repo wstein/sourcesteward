@@ -32,8 +32,8 @@ type Releases struct {
 	Drafts     []overview.Draft
 	// Truncated is true when the repository has more than MaxDrafts drafts.
 	Truncated bool
-	// Tags holds the unreleased tags (Unreleased true) and the latest tag of each pattern, without
-	// the workflow run, which the CI source adds.
+	// Tags holds one entry per release tag pattern and tag that is the latest of the pattern or
+	// unreleased, without the workflow run, which the CI source adds.
 	Tags []overview.ReleaseTag
 }
 
@@ -92,7 +92,7 @@ func ReadReleases(ctx context.Context, rd Reader, slug string, patterns []string
 	}) {
 		found := hosting.FindTags(tags, releases, patterns)
 		if !releasesOK {
-			found.Unreleased = nil
+			found = latestOnly(found)
 		}
 		out.Tags = releaseTags(found)
 	}
@@ -155,18 +155,24 @@ func drafts(releases []hosting.StatusRelease) ([]overview.Draft, bool) {
 	return out, false
 }
 
-// releaseTags lists the unreleased tags and then the latest tags that are not unreleased.
-func releaseTags(found hosting.TagFindings) []overview.ReleaseTag {
-	var out []overview.ReleaseTag
-	listed := map[string]bool{}
-	for _, t := range found.Unreleased {
-		listed[t.Name] = true
-		out = append(out, overview.ReleaseTag{Tag: t.Name, SHA: t.SHA, Unreleased: true})
-	}
-	for _, t := range found.Latest {
-		if !listed[t.Name] {
-			out = append(out, overview.ReleaseTag{Tag: t.Name, SHA: t.SHA})
+// latestOnly drops the unreleased flag, which cannot be known without the releases, and the entries
+// that had nothing else to say.
+func latestOnly(found []hosting.PatternTag) []hosting.PatternTag {
+	var out []hosting.PatternTag
+	for _, t := range found {
+		if t.Latest {
+			t.Unreleased = false
+			out = append(out, t)
 		}
+	}
+	return out
+}
+
+// releaseTags maps the entries per pattern: one overview entry for each of them.
+func releaseTags(found []hosting.PatternTag) []overview.ReleaseTag {
+	var out []overview.ReleaseTag
+	for _, t := range found {
+		out = append(out, overview.ReleaseTag{Pattern: t.Pattern, Tag: t.Name, SHA: t.SHA, Latest: t.Latest, Unreleased: t.Unreleased})
 	}
 	return out
 }

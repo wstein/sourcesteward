@@ -56,6 +56,8 @@ func TestFindTagsUnreleasedRule(t *testing.T) {
 		{"a draft carries the tag", []string{"v1.0.0", "v1.1.0"}, append(published("v1.0.0"), drafts("v1.1.0")...), nil, nil, []string{"v1.1.0"}},
 		{"a draft is no published release", []string{"v1.0.0", "v1.1.0"}, drafts("v1.1.0"), nil, nil, []string{"v1.1.0"}},
 		{"the floor is the highest release whatever their order", []string{"v1.0.0", "v1.1.0", "v1.2.0"}, published("v1.0.0", "v1.1.0"), nil, []string{"v1.2.0"}, []string{"v1.2.0"}},
+		{"the floor is not the first release", []string{"v1.0.0", "v1.1.0", "v1.2.0"}, published("v1.0.0", "v1.2.0"), nil, nil, []string{"v1.2.0"}},
+		{"an invalid prerelease is no tag even without a release", []string{"v1.0.0-01", "v1.0.0-rc.01"}, nil, nil, nil, nil},
 		{"a draft does not raise the floor", []string{"v1.0.0", "v1.1.0", "v1.2.0"}, append(published("v1.0.0"), drafts("v1.2.0")...), nil, []string{"v1.1.0"}, []string{"v1.2.0"}},
 		{"version order, not text order", []string{"v1.9.0", "v1.10.0", "v1.2.0"}, published("v1.9.0"), nil, []string{"v1.10.0"}, []string{"v1.10.0"}},
 		{"tag order and names do not matter", []string{"v1.3.0", "v1.1.0", "v1.2.0"}, published("v1.1.0"), nil, []string{"v1.3.0", "v1.2.0"}, []string{"v1.3.0"}},
@@ -74,10 +76,30 @@ func TestFindTagsUnreleasedRule(t *testing.T) {
 		{"release without a tag name", []string{"v1.0.0"}, []StatusRelease{{Tag: ""}}, nil, []string{"v1.0.0"}, []string{"v1.0.0"}},
 	} {
 		got := FindTags(tagsOf(tc.tags...), tc.releases, tc.patterns)
-		if !reflect.DeepEqual(names(got.Unreleased), orEmpty(tc.unreleased)) || !reflect.DeepEqual(names(got.Latest), orEmpty(tc.latest)) {
-			t.Errorf("%s: unreleased %v latest %v, want %v %v", tc.name, names(got.Unreleased), names(got.Latest), tc.unreleased, tc.latest)
+		if !reflect.DeepEqual(unreleasedNames(got), orEmpty(tc.unreleased)) || !reflect.DeepEqual(latestNames(got), orEmpty(tc.latest)) {
+			t.Errorf("%s: unreleased %v latest %v, want %v %v", tc.name, unreleasedNames(got), latestNames(got), tc.unreleased, tc.latest)
 		}
 	}
+}
+
+func unreleasedNames(found []PatternTag) []string {
+	out := []string{}
+	for _, t := range found {
+		if t.Unreleased {
+			out = append(out, t.Name)
+		}
+	}
+	return out
+}
+
+func latestNames(found []PatternTag) []string {
+	out := []string{}
+	for _, t := range found {
+		if t.Latest {
+			out = append(out, t.Name)
+		}
+	}
+	return out
 }
 
 func orEmpty(s []string) []string {
@@ -94,15 +116,15 @@ func TestFindTagsAtMostFiveNewestFirst(t *testing.T) {
 	}
 	got := FindTags(tagsOf(all...), published("v1.0.0"), nil)
 	want := []string{"v1.9.0", "v1.8.0", "v1.7.0", "v1.6.0", "v1.5.0"}
-	if !reflect.DeepEqual(names(got.Unreleased), want) {
-		t.Fatalf("%v", names(got.Unreleased))
+	if !reflect.DeepEqual(unreleasedNames(got), want) {
+		t.Fatalf("%v", unreleasedNames(got))
 	}
 }
 
 func TestFindTagsKeepsTheCommit(t *testing.T) {
 	tags := []StatusTag{{"v1.0.0", strings.Repeat("a", 40)}, {"v1.1.0", strings.Repeat("b", 40)}}
 	got := FindTags(tags, published("v1.0.0"), nil)
-	if len(got.Unreleased) != 1 || got.Unreleased[0] != tags[1] || got.Latest[0] != tags[1] {
+	if len(got) != 1 || got[0] != (PatternTag{Pattern: DefaultReleaseTagPattern, StatusTag: tags[1], Latest: true, Unreleased: true}) {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -111,11 +133,11 @@ func TestFindTagsPerDeclaredPattern(t *testing.T) {
 	tags := tagsOf("bdock/1.0.0", "bdock/1.1.0", "claude/2.0.0", "claude/2.1.0", "claude/2.2.0", "v9.9.9", "other/3.0.0")
 	releases := published("bdock/1.0.0", "claude/2.1.0")
 	got := FindTags(tags, releases, []string{"bdock/*", "claude/*"})
-	if !reflect.DeepEqual(names(got.Unreleased), []string{"bdock/1.1.0", "claude/2.2.0"}) || !reflect.DeepEqual(names(got.Latest), []string{"bdock/1.1.0", "claude/2.2.0"}) {
+	if !reflect.DeepEqual(unreleasedNames(got), []string{"bdock/1.1.0", "claude/2.2.0"}) || !reflect.DeepEqual(latestNames(got), []string{"bdock/1.1.0", "claude/2.2.0"}) {
 		t.Fatalf("%+v", got)
 	}
 	// The default pattern is not added to declared ones.
-	for _, n := range names(got.Latest) {
+	for _, n := range latestNames(got) {
 		if n == "v9.9.9" || n == "other/3.0.0" {
 			t.Fatalf("undeclared tag %s", n)
 		}
@@ -145,6 +167,7 @@ func TestFindTagsPatternShapes(t *testing.T) {
 		{"rel-*-lts", "rel-1.2.3", false},
 		{"v1.0.0", "v1.0.0", false},
 		{"x*.*", "x1", false},
+		{"rel*-*", "rel1.2.3", false},
 		{"", "", false},
 		{"v*", "v18446744073709551616.0.0", false},
 	} {
@@ -155,9 +178,55 @@ func TestFindTagsPatternShapes(t *testing.T) {
 	}
 }
 
-func TestFindTagsOverlappingPatternsListATagOnce(t *testing.T) {
-	got := FindTags(tagsOf("v1.0.0", "v1.1.0"), published("v1.0.0"), []string{"v*.*.*", "*"})
-	if !reflect.DeepEqual(names(got.Unreleased), []string{"v1.1.0"}) || !reflect.DeepEqual(names(got.Latest), []string{"v1.1.0"}) {
+func TestFindTagsOverlappingPatternsEachGetAnEntry(t *testing.T) {
+	tags := tagsOf("v1.0.0", "v1.1.0")
+	got := FindTags(tags, published("v1.0.0"), []string{"v*.*.*", "v*", "v*.*.*"})
+	want := []PatternTag{
+		{Pattern: "v*.*.*", StatusTag: tags[1], Latest: true, Unreleased: true},
+		{Pattern: "v*", StatusTag: tags[1], Latest: true, Unreleased: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%+v", got)
+	}
+}
+
+// The latest tag of a pattern is listed whether or not it is released; a tag that is both latest and
+// unreleased is one entry with both flags; the latest entries are not capped.
+func TestFindTagsLatestPerPatternIsNotCapped(t *testing.T) {
+	var all []string
+	var patterns []string
+	for i := 0; i < 7; i++ {
+		all = append(all, fmt.Sprintf("p%d/1.0.0", i), fmt.Sprintf("p%d/1.1.0", i))
+		patterns = append(patterns, fmt.Sprintf("p%d/*", i))
+	}
+	var rels []StatusRelease
+	for i := 0; i < 7; i++ {
+		rels = append(rels, StatusRelease{Tag: fmt.Sprintf("p%d/1.1.0", i)})
+	}
+	got := FindTags(tagsOf(all...), rels, patterns)
+	if len(got) != 7 || len(unreleasedNames(got)) != 0 {
+		t.Fatalf("%+v", got)
+	}
+	for i, e := range got {
+		if !e.Latest || e.Unreleased || e.Pattern != patterns[i] || e.Name != fmt.Sprintf("p%d/1.1.0", i) {
+			t.Errorf("%d: %+v", i, e)
+		}
+	}
+	// Past the cap a latest tag stays as a latest-only entry.
+	unreleased := FindTags(tagsOf(all...), nil, patterns)
+	if len(unreleased) != 7 || len(unreleasedNames(unreleased)) != MaxUnreleasedTags || unreleased[5].Unreleased || !unreleased[5].Latest {
+		t.Fatalf("%+v", unreleased)
+	}
+}
+
+func TestFindTagsLatestAndUnreleasedAreSeparateFacts(t *testing.T) {
+	tags := tagsOf("v1.0.0", "v1.1.0", "v1.2.0")
+	got := FindTags(tags, published("v1.0.0", "v1.2.0"), nil)
+	if len(got) != 1 || !got[0].Latest || got[0].Unreleased {
+		t.Fatalf("%+v", got)
+	}
+	got = FindTags(tags, published("v1.0.0"), nil)
+	if len(got) != 2 || !got[0].Latest || !got[0].Unreleased || got[1].Latest || !got[1].Unreleased || got[1].Name != "v1.1.0" {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -169,8 +238,8 @@ func TestFindTagsCapIsPerRepositoryAcrossPatterns(t *testing.T) {
 		b = append(b, fmt.Sprintf("b/1.%d.0", i))
 	}
 	got := FindTags(tagsOf(append(a, b...)...), published("a/1.0.0", "b/1.0.0"), []string{"a/*", "b/*"})
-	if len(got.Unreleased) != MaxUnreleasedTags || got.Unreleased[4].Name != "b/1.4.0" {
-		t.Fatalf("%v", names(got.Unreleased))
+	if len(unreleasedNames(got)) != MaxUnreleasedTags || unreleasedNames(got)[4] != "b/1.4.0" {
+		t.Fatalf("%v", unreleasedNames(got))
 	}
 }
 
