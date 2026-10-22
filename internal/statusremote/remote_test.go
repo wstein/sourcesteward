@@ -62,8 +62,6 @@ func failed(code string) overview.SourceState {
 	return overview.SourceState{Outcome: overview.OutcomeError, Code: code}
 }
 
-var okState = overview.SourceState{Outcome: overview.OutcomeOK}
-
 // allSources checks the state of every source of one repository.
 func allSources(t *testing.T, r RepoResult, want overview.SourceState) {
 	t.Helper()

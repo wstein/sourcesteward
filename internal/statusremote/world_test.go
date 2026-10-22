@@ -68,6 +68,19 @@ func (w *world) count(prefix string) int {
 	return n
 }
 
+// addRepo gives a repository the default branch main, write access, a released v1.0.0 and, when
+// unreleased is set, an unreleased tag v1.1.0.
+func (w *world) addRepo(repo string, unreleased bool) {
+	t, f := true, false
+	w.info[repo] = hosting.RepoInfo{DefaultBranch: "main", HTMLURL: "https://github.com/" + repo, Admin: &f, Maintain: &f, Push: &t}
+	w.rels[repo] = []hosting.StatusRelease{{Tag: "v1.0.0", URL: "https://github.com/" + repo + "/releases/1"}}
+	w.tags[repo] = []hosting.StatusTag{{Name: "v1.0.0", SHA: sha("1")}}
+	if unreleased {
+		w.tags[repo] = append(w.tags[repo], hosting.StatusTag{Name: "v1.1.0", SHA: sha("2")})
+	}
+	w.heads[repo] = sha("a")
+}
+
 func (w *world) RepoInfo(ctx context.Context, repo string) (hosting.RepoInfo, error) {
 	if err := w.enter(ctx, "repo "+repo); err != nil {
 		return hosting.RepoInfo{}, err
