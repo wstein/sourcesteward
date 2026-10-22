@@ -465,3 +465,18 @@ func TestDiscoverIssueOwnersKeepsTheFirstSpellingOfAnOwner(t *testing.T) {
 		t.Fatalf("%v", f.log)
 	}
 }
+
+// A repository seen on two pages under two spellings is one name, in the first spelling.
+func TestDiscoverIssueOwnerDedupesAcrossPages(t *testing.T) {
+	f := newFakeForge(t)
+	f.handlers[issueSearchPath("wstein", 1)] = func(*http.Request) *http.Response {
+		return forgeResponse(200, searchBody(101, false, searchItem("https://api.github.com/repos/wstein/Repo", 1)), map[string]string{"Link": `<https://api.github.com/search/issues?q=x&page=2>; rel="next"`})
+	}
+	f.handlers[issueSearchPath("wstein", 2)] = func(*http.Request) *http.Response {
+		return response(200, searchBody(101, false, searchItem("https://api.github.com/repos/WSTEIN/repo", 2)))
+	}
+	d := issuesReaderFor(f).DiscoverIssueOwner(context.Background(), "wstein")
+	if d.Code != "" || !reflect.DeepEqual(d.Repos, []string{"wstein/Repo"}) || len(f.log) != 2 {
+		t.Fatalf("%+v %v", d, f.log)
+	}
+}
