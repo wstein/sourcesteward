@@ -1,6 +1,6 @@
 # Specification: `stw status`, the workspace overview
 
-**Created**: 2026-10-21 | **Status**: implemented in source (spec-light: code and tests first; this page is the contract only).
+**Created**: 2026-10-21 | **Status**: implemented in source (spec-light: code and tests first; this page is the contract only). *Amended by [Spec 037](../037-stw-status-overview/spec.md): the default becomes online and action-oriented; this page describes `--offline`, which is unchanged.*
 
 `stw status [PATH] [--fetch] [--worktrees] [--json]` answers "where am I" for the whole workspace in one screen:
 what `git status`, `git worktree list` and `git branch -vv` tell, for the top-level superproject and every
