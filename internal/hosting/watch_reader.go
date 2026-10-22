@@ -74,6 +74,8 @@ const (
 	KindChecks    WatchKind = "checks"
 	KindRateLimit WatchKind = "rate_limit"
 	KindSearch    WatchKind = "search"
+	KindIssues    WatchKind = "issues"
+	KindUser      WatchKind = "user"
 )
 
 // CallCount counts requests of one kind; NotModified is the subset answered 304.
@@ -154,8 +156,26 @@ func NewPullsReaderWithTransport(ctx context.Context, target, host string, rt ht
 	return r, cleanup, nil
 }
 
+// NewIssuesReader is the reader of the stateless `stw issues` (Spec 038): guard mode issues
+// (the one-shot set, the issue list, `user` and the issue owner search; no watch shapes and no
+// PR search) and the DefaultRequestTimeout per request.
+func NewIssuesReader(ctx context.Context, target, host string) (*WatchReader, func(), error) {
+	return NewIssuesReaderWithTransport(ctx, target, host, nil)
+}
+
+// NewIssuesReaderWithTransport is the in-process injection seam for fixtures.
+func NewIssuesReaderWithTransport(ctx context.Context, target, host string, rt http.RoundTripper) (*WatchReader, func(), error) {
+	api, cleanup, err := newGHMode(ctx, target, host, rt, guardIssues)
+	if err != nil {
+		return nil, cleanup, err
+	}
+	r := newWatchReader(api)
+	r.mode = guardIssues
+	return r, cleanup, nil
+}
+
 // NewStatusReader is the reader of the online `stw status` (Spec 037): guard mode status (the
-// watch shapes, no owner search) and the StatusRequestTimeout per request.
+// watch shapes, the issue list and `user`, no owner search) and the StatusRequestTimeout per request.
 func NewStatusReader(ctx context.Context, target, host string) (*WatchReader, func(), error) {
 	return NewStatusReaderWithTransport(ctx, target, host, nil)
 }
@@ -375,7 +395,7 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	if !validETag(etag) {
 		return WatchResponse{}, malformed("invalid ETag")
 	}
-	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) && !(admitsSearch(r.mode) && searchReadEndpoint(endpoint)) {
+	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) && !(admitsSearch(r.mode) && searchReadEndpoint(endpoint)) && !(r.mode.admitsIssueReads() && issueReadEndpoint(endpoint)) {
 		return WatchResponse{}, malformed("endpoint is not an allowed watch read")
 	}
 	ctx, cancel := context.WithTimeout(parent, r.RequestTimeout())
