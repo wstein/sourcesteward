@@ -21,6 +21,8 @@ const (
 	// reason other than a missing token (no `gh`, a `gh` that is too old): the attempt failed, which is
 	// not a skip.
 	CodeHostingUnavailable = "hosting-api-unavailable"
+	// parallel is the number of repositories one source reads at the same time.
+	parallel = 4
 )
 
 // Repository is a workspace repository of the run: what its origin says (Origin) and the clone the
@@ -135,7 +137,9 @@ func open(ctx context.Context, o Options) (Client, func(), *overview.SourceState
 
 // slot is what the sources read for one repository.
 type slot struct {
-	pulls Pulls
+	pulls    Pulls
+	releases Releases
+	products ReleaseProducts
 }
 
 // collector is the state of one run.
@@ -152,7 +156,30 @@ type collector struct {
 func (c *collector) read(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { c.readPulls(ctx) })
+	wg.Go(func() { c.each(func(idx int) { c.readReleases(ctx, idx) }) })
 	wg.Wait()
+}
+
+// each runs fn for every selected repository, at most parallel at a time and starting them in order.
+func (c *collector) each(fn func(idx int)) {
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, parallel)
+	for _, idx := range c.selected {
+		sem <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			fn(idx)
+		})
+	}
+	wg.Wait()
+}
+
+// readReleases reads the repository, its releases and its tags, with the tag patterns that the
+// release contracts of the clone declare.
+func (c *collector) readReleases(ctx context.Context, idx int) {
+	s := &c.slots[idx]
+	s.products = ReadReleaseProducts(c.repos[idx].Dir)
+	s.releases = ReadReleases(ctx, c.gate, c.targets[idx].Slug, s.products.Patterns())
 }
 
 func (c *collector) readPulls(ctx context.Context) {
@@ -190,11 +217,19 @@ func setAll(r *overview.Remote, st overview.SourceState) {
 	}
 }
 
-// fill stores what the sources of one repository read, and nothing of a source that did not end `ok`.
+// fill stores what the sources of one repository read. The data of a source that did not end `ok` is
+// left out: ReadReleases and the CI reads already return none for a failed source, the pull requests
+// that were read before a failure and the visibility that a failed repository read leaves as "unknown"
+// are dropped here.
 func (c *collector) fill(r *RepoResult, s slot) {
 	r.Remote.Sources[overview.SourcePulls] = s.pulls.State
-	if s.pulls.State == (overview.SourceState{Outcome: overview.OutcomeOK}) {
-		r.Pulls = &s.pulls
-		r.Remote.Pulls = s.pulls.PRs
+	if s.pulls.State == okState {
+		r.Pulls, r.Remote.Pulls = &s.pulls, s.pulls.PRs
+	}
+	s.releases.Apply(r.Remote)
+	if r.Remote.Sources[overview.SourceRepo] != okState {
+		r.Remote.DefaultBranch, r.Remote.HTMLURL, r.Remote.Visibility = "", "", ""
 	}
 }
+
+var okState = overview.SourceState{Outcome: overview.OutcomeOK}
