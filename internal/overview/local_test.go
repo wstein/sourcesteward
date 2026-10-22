@@ -304,3 +304,38 @@ func TestLocalIDsUseValidatedComponents(t *testing.T) {
 		t.Error(got[0].ID)
 	}
 }
+
+func TestTitlesUseTheSingularForACountOfOne(t *testing.T) {
+	titles := func(n int) map[string]bool {
+		rp := repoOK("x", func(r *stwsync.RepoStatus) {
+			r.Changes.Untracked, r.Changes.Conflicts, r.Stash = n, n, n
+			r.Behind, r.Branches.NotIntegrated = ip(n), ip(n)
+			r.Reasons = []string{"untracked", "conflicts", "behind"}
+		})
+		out := map[string]bool{}
+		for _, it := range local(rp) {
+			out[it.Title] = true
+		}
+		return out
+	}
+	one, two := titles(1), titles(2)
+	for _, want := range []string{"1 untracked file", "1 conflicted file", "1 stash", "behind origin/main by 1 commit", "1 branch not integrated"} {
+		if !one[want] {
+			t.Errorf("missing %q in %v", want, one)
+		}
+	}
+	for _, want := range []string{"2 untracked files", "2 conflicted files", "2 stashes", "behind origin/main by 2 commits", "2 branches not integrated"} {
+		if !two[want] {
+			t.Errorf("missing %q in %v", want, two)
+		}
+	}
+}
+
+func TestDraftTitleCountsAssets(t *testing.T) {
+	for n, want := range map[int]string{0: "release draft v1.0.0 (0 assets) is waiting", 1: "release draft v1.0.0 (1 asset) is waiting", 4: "release draft v1.0.0 (4 assets) is waiting"} {
+		r := Repo{Local: stwsync.RepoStatus{Name: "x", Path: "x"}, Slug: "o/r", Remote: &Remote{Sources: map[Source]SourceState{}, Visibility: WriteAccess, Drafts: []Draft{{Tag: "v1.0.0", Assets: n}}}}
+		if got := draftItems(r)[0].Title; got != want {
+			t.Errorf("%d: %q", n, got)
+		}
+	}
+}

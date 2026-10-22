@@ -126,7 +126,7 @@ func draftItems(r Repo) []Item {
 		}
 		it := newItem(ReleaseDraft, r.Slug, Subject{Kind: KindRelease, Tag: d.Tag}, part, target{Slug: r.Slug, Tag: d.Tag})
 		it.Path, it.URL = r.Local.Path, HTTPSURL(d.URL)
-		it.Title = fmt.Sprintf("release draft %s (%d assets) is waiting", untrusted.Esc(d.Tag), d.Assets)
+		it.Title = fmt.Sprintf("release draft %s (%s) is waiting", untrusted.Esc(d.Tag), count1(d.Assets, "asset", "assets"))
 		it.Evidence = map[string]any{"drafts_visibility": string(WriteAccess), "assets": d.Assets}
 		items = append(items, it)
 	}

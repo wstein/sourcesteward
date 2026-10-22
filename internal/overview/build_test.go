@@ -43,27 +43,31 @@ func TestNotices(t *testing.T) {
 			withSources("b", "w/b", map[Source]SourceState{SourcePulls: {Outcome: OutcomeSkipped, Reason: ReasonDeadline}}),
 		}}, []Notice{{Code: "deadline", Source: "remote", Repos: []string{"w/a", "w/b"},
 			Message: "deadline of 90 s reached: 3 sources of 2 repositories not read; raise --timeout"}}, true},
+		{"deadline, one source of one repository", Input{Deadline: 7 * time.Second, Repos: []Repo{
+			withSources("a", "w/a", map[Source]SourceState{SourcePulls: {Outcome: OutcomeSkipped, Reason: ReasonDeadline}}),
+		}}, []Notice{{Code: "deadline", Source: "remote", Repos: []string{"w/a"},
+			Message: "deadline of 7 s reached: 1 source of 1 repository not read; raise --timeout"}}, true},
 		{"workflow not found", Input{Repos: []Repo{
 			withSources("a", "w/a", map[Source]SourceState{SourceCIRelease: {Outcome: OutcomeSkipped, Reason: ReasonNotFound}}),
 		}}, []Notice{{Code: "not-found", Source: "ci-release", Repos: []string{"w/a"},
-			Message: "release workflow not found in 1 repositories: runs not read"}}, true},
+			Message: "release workflow not found in 1 repository: runs not read"}}, true},
 		{"not github", Input{Repos: []Repo{
 			withSources("local-only", "", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonNotGitHub})),
 			withSources("other", "", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonOtherHost})),
 			withSources("bad", "", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonInvalidRepo})),
 			withSources("nl", "", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonNotReadLocally})),
 		}}, []Notice{
-			{Code: "invalid-repo", Source: "remote", Repos: []string{"bad"}, Message: "invalid repository name: remote sources of 1 repositories were not read"},
-			{Code: "not-github-origin", Source: "remote", Repos: []string{"local-only"}, Message: "origin is not a GitHub repository: remote sources of 1 repositories were not read"},
-			{Code: "not-read-locally", Source: "remote", Repos: []string{"nl"}, Message: "repository was not read locally: remote sources of 1 repositories were not read"},
-			{Code: "other-host", Source: "remote", Repos: []string{"other"}, Message: "origin is on another host: remote sources of 1 repositories were not read"},
+			{Code: "invalid-repo", Source: "remote", Repos: []string{"bad"}, Message: "invalid repository name: remote sources of 1 repository were not read"},
+			{Code: "not-github-origin", Source: "remote", Repos: []string{"local-only"}, Message: "origin is not a GitHub repository: remote sources of 1 repository were not read"},
+			{Code: "not-read-locally", Source: "remote", Repos: []string{"nl"}, Message: "repository was not read locally: remote sources of 1 repository were not read"},
+			{Code: "other-host", Source: "remote", Repos: []string{"other"}, Message: "origin is on another host: remote sources of 1 repository were not read"},
 		}, true},
 		{"network", Input{Repos: []Repo{
 			withSources("a", "w/a", map[Source]SourceState{SourcePulls: {Outcome: OutcomeError, Code: CodeNetwork}}),
 			withSources("b", "w/b", map[Source]SourceState{SourcePulls: {Outcome: OutcomeError, Code: CodeNetwork}, SourceTags: {Outcome: OutcomeError, Code: CodeNetwork}}),
 		}}, []Notice{
 			{Code: "network", Source: "pulls", Repos: []string{"w/a", "w/b"}, Message: "network error: pull requests of 2 repositories not read"},
-			{Code: "network", Source: "tags", Repos: []string{"w/b"}, Message: "network error: tags of 1 repositories not read"},
+			{Code: "network", Source: "tags", Repos: []string{"w/b"}, Message: "network error: tags of 1 repository not read"},
 		}, true},
 		{"rate limit with reset", Input{RateLimitReset: reset, Repos: []Repo{
 			withSources("a", "w/a", map[Source]SourceState{SourcePulls: {Outcome: OutcomeError, Code: CodeRateLimited}, SourceTags: {Outcome: OutcomeError, Code: CodeRateLimited}}),
@@ -71,7 +75,7 @@ func TestNotices(t *testing.T) {
 		}}, []Notice{{Code: "rate-limited", Source: "remote", Repos: []string{"w/a", "w/b"}, Message: "rate limit reached at 13:05 UTC: 2 repositories not read"}}, true},
 		{"rate limit without reset", Input{Repos: []Repo{
 			withSources("a", "w/a", map[Source]SourceState{SourcePulls: {Outcome: OutcomeError, Code: CodeRateLimited}}),
-		}}, []Notice{{Code: "rate-limited", Source: "remote", Repos: []string{"w/a"}, Message: "rate limit reached: 1 repositories not read"}}, true},
+		}}, []Notice{{Code: "rate-limited", Source: "remote", Repos: []string{"w/a"}, Message: "rate limit reached: 1 repository not read"}}, true},
 		{"other error code, hostile", Input{Repos: []Repo{
 			withSources("a", "w/a", map[Source]SourceState{SourceReleases: {Outcome: OutcomeError, Code: "x\ny\x1b[31m"}}),
 		}}, nil, true},
@@ -87,7 +91,7 @@ func TestNotices(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			ov := Build(c.in)
 			if c.name == "other error code, hostile" {
-				if len(ov.Notices) != 1 || strings.ContainsAny(ov.Notices[0].Message, "\n\x1b") || !strings.Contains(ov.Notices[0].Message, "releases of 1 repositories not read") {
+				if len(ov.Notices) != 1 || strings.ContainsAny(ov.Notices[0].Message, "\n\x1b") || !strings.Contains(ov.Notices[0].Message, "releases of 1 repository not read") {
 					t.Fatalf("%+v", ov.Notices)
 				}
 				return

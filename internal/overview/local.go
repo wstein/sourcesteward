@@ -4,6 +4,7 @@ package overview
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/stwsync"
@@ -55,10 +56,10 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 		items = append(items, fact(LocalOperation, factOperation, op+" in progress", map[string]any{"operation": op}))
 	}
 	if has["conflicts"] {
-		items = append(items, fact(LocalOperation, factConflicts, fmt.Sprintf("%d conflicted files", rp.Changes.Conflicts), map[string]any{"conflicts": rp.Changes.Conflicts}))
+		items = append(items, fact(LocalOperation, factConflicts, count1(rp.Changes.Conflicts, "conflicted file", "conflicted files"), map[string]any{"conflicts": rp.Changes.Conflicts}))
 	}
 	if has["staged"] || has["unstaged"] {
-		items = append(items, fact(LocalChanges, factDirty, fmt.Sprintf("%d staged, %d unstaged files", rp.Changes.Staged, rp.Changes.Unstaged),
+		items = append(items, fact(LocalChanges, factDirty, fmt.Sprintf("%d staged, %d unstaged changes", rp.Changes.Staged, rp.Changes.Unstaged),
 			map[string]any{"staged": rp.Changes.Staged, "unstaged": rp.Changes.Unstaged}))
 	}
 	if has["detached"] {
@@ -69,13 +70,13 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 		items = append(items, fact(LocalDetached, factDetached, "detached HEAD"+head, nil))
 	}
 	if has["untracked"] {
-		items = append(items, fact(LocalUntracked, factUntracked, fmt.Sprintf("%d untracked files", rp.Changes.Untracked), map[string]any{"untracked": rp.Changes.Untracked}))
+		items = append(items, fact(LocalUntracked, factUntracked, count1(rp.Changes.Untracked, "untracked file", "untracked files"), map[string]any{"untracked": rp.Changes.Untracked}))
 	}
 	if has["diverged"] {
 		items = append(items, fact(LocalBehind, factDiverged, fmt.Sprintf("diverged from %s (ahead %d, behind %d)", upstream(rp), count(rp.Ahead), count(rp.Behind)),
 			map[string]any{"ahead": count(rp.Ahead), "behind": count(rp.Behind)}))
 	} else if has["behind"] {
-		items = append(items, fact(LocalBehind, factBehind, fmt.Sprintf("behind %s by %d commits", upstream(rp), count(rp.Behind)), map[string]any{"behind": count(rp.Behind)}))
+		items = append(items, fact(LocalBehind, factBehind, "behind "+upstream(rp)+" by "+count1(count(rp.Behind), "commit", "commits"), map[string]any{"behind": count(rp.Behind)}))
 	}
 	if has["no-upstream"] {
 		branch := ""
@@ -114,10 +115,10 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 		}
 	}
 	if rp.Stash > 0 {
-		items = append(items, fact(LocalStash, factStash, fmt.Sprintf("%d stashes", rp.Stash), map[string]any{"stash": rp.Stash}))
+		items = append(items, fact(LocalStash, factStash, count1(rp.Stash, "stash", "stashes"), map[string]any{"stash": rp.Stash}))
 	}
 	if n := rp.Branches.NotIntegrated; n != nil && *n > 0 {
-		items = append(items, fact(BranchesUnmerged, factBranches, fmt.Sprintf("%d branches not integrated", *n), map[string]any{"not_integrated": *n}))
+		items = append(items, fact(BranchesUnmerged, factBranches, count1(*n, "branch", "branches")+" not integrated", map[string]any{"not_integrated": *n}))
 	}
 	return items
 }
@@ -156,4 +157,12 @@ func upstream(rp stwsync.RepoStatus) string {
 		return "its upstream"
 	}
 	return untrusted.Esc(*rp.Upstream)
+}
+
+// count1 is a count and its noun, in the singular for one.
+func count1(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + many
 }

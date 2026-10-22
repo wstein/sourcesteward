@@ -290,7 +290,7 @@ func TestIssuesDisabledIsNeitherANoticeNorDegraded(t *testing.T) {
 func TestFailedIssuesSourceGetsItsOwnNotice(t *testing.T) {
 	r := remoteRepo(func(r *Remote) { r.Sources[SourceIssues] = SourceState{Outcome: OutcomeError, Code: "forbidden"} })
 	ov := Build(Input{Repos: []Repo{r}})
-	if len(ov.Notices) != 1 || ov.Notices[0].Source != "issues" || ov.Notices[0].Message != "forbidden: issues of 1 repositories not read" || !ov.Summary.Failed {
+	if len(ov.Notices) != 1 || ov.Notices[0].Source != "issues" || ov.Notices[0].Message != "forbidden: issues of 1 repository not read" || !ov.Summary.Failed {
 		t.Fatalf("%+v", ov.Notices)
 	}
 }

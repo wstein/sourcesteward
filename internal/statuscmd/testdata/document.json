@@ -81,7 +81,7 @@
       "category": "local-changes",
       "repo": ".",
       "path": "/ws",
-      "title": "0 staged, 2 unstaged files",
+      "title": "0 staged, 2 unstaged changes",
       "url": null,
       "subject": {
         "kind": "fact",
@@ -229,7 +229,7 @@
       "category": "local-stash",
       "repo": ".",
       "path": "/ws",
-      "title": "1 stashes",
+      "title": "1 stash",
       "url": null,
       "subject": {
         "kind": "fact",
@@ -795,7 +795,7 @@
       "repos": [
         "wstein/workharbor"
       ],
-      "message": "deadline of 90 s reached: 2 sources of 1 repositories not read; raise --timeout"
+      "message": "deadline of 90 s reached: 2 sources of 1 repository not read; raise --timeout"
     },
     {
       "code": "drafts-not-visible",
@@ -811,7 +811,7 @@
       "repos": [
         "gone"
       ],
-      "message": "repository was not read locally: remote sources of 1 repositories were not read"
+      "message": "repository was not read locally: remote sources of 1 repository were not read"
     }
   ],
   "summary": {

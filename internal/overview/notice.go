@@ -5,7 +5,6 @@ package overview
 import (
 	"fmt"
 	"sort"
-	"strconv"
 
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
@@ -126,21 +125,21 @@ func noticeMessage(in Input, key, code string, src Source, repos, pairs int) str
 	case ReasonNoToken:
 		return "no GitHub token (run: gh auth login): pull requests, releases and tags were not read"
 	case ReasonDeadline:
-		return fmt.Sprintf("deadline of %d s reached: %d sources of %d repositories not read; raise --timeout", int(in.Deadline.Seconds()), pairs, repos)
+		return fmt.Sprintf("deadline of %d s reached: %s of %s not read; raise --timeout", int(in.Deadline.Seconds()), count1(pairs, "source", "sources"), count1(repos, "repository", "repositories"))
 	case ReasonNotFound:
-		return fmt.Sprintf("release workflow not found in %d repositories: runs not read", repos)
+		return fmt.Sprintf("release workflow not found in %s: runs not read", count1(repos, "repository", "repositories"))
 	case CodeRateLimited:
 		at := ""
 		if !in.RateLimitReset.IsZero() {
 			at = " at " + in.RateLimitReset.UTC().Format("15:04") + " UTC"
 		}
-		return "rate limit reached" + at + ": " + strconv.Itoa(repos) + " repositories not read"
+		return "rate limit reached" + at + ": " + count1(repos, "repository", "repositories") + " not read"
 	}
 	if text, ok := skipText[code]; ok {
-		return fmt.Sprintf("%s: remote sources of %d repositories were not read", text, repos)
+		return fmt.Sprintf("%s: remote sources of %s were not read", text, count1(repos, "repository", "repositories"))
 	}
 	label := sourceLabel[src]
-	return fmt.Sprintf("%s: %s of %d repositories not read", errorText(code), label, repos)
+	return fmt.Sprintf("%s: %s of %s not read", errorText(code), label, count1(repos, "repository", "repositories"))
 }
 
 // errorText is the lead of an error notice: `network error`, else the escaped error code.
