@@ -71,7 +71,10 @@ Work package B (releases, tags, repository) is implemented in source: the typed 
 repositories and the issue source of `stw status`. Work package 0 is implemented in source on `feat/038-issues-hosting`: in
 `internal/hosting` the three fixed read shapes (open issue list, `user`, issue owner search), the guard mode `issues`, the issue list and
 `user` in the `status` mode, the typed decoders and `NewIssuesReader` (see [hosting](hosting.md#guard-modes-of-the-read-only-transport)).
-The issue cycle, the command, the schema and the status integration (work packages A to D) are not started, and `stw issues` does not
+Work package B (owner search) is implemented in source on `feat/038-issues-owner`: `IssueSearchPage`, `DiscoverIssueOwner` and
+`DiscoverIssueOwners` discover the repository names of an owner through the one issue search shape with the decode, caps, `incomplete_results`
+precedence and separate search throttle of the pull request owner search, and the recorded fixtures are `issue_search_*.json`. The issue cycle,
+the command, the schema and the status integration (work packages A, C and D) are not started, and `stw issues` does not
 exist yet. The tests use fixtures only (no network, no build); independent review of the exact head is pending.
 
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
