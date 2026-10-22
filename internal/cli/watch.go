@@ -23,8 +23,8 @@ func watchCommand() *cobra.Command {
 		Hidden: true,
 		Long: "Read-only watcher: polls the open pull requests of one or more GitHub repositories, compares each poll with the previous\n" +
 			"one and prints only the transitions as JSON Lines events (new-pr, head-changed, checks-green, checks-red,\n" +
-			"checks-pending-timeout, mergeable-changed, ready-state-changed, base-changed, merged, closed, repos-changed, watch-error,\n" +
-			"watch-recovered, watch-stalled). The first run is a silent baseline; --baseline forces one. It never marks a PR Ready,\n" +
+			"checks-pending-timeout, mergeable-changed, ready-state-changed, base-changed, merged, closed, restack-needed, repos-changed,\n" +
+			"watch-error, watch-recovered, watch-stalled). The first run is a silent baseline; --baseline forces one. It never marks a PR Ready,\n" +
 			"reruns a check, merges, comments or edits, and it decides nothing: a consumer reads the stream.\n" +
 			"Repositories come from --repo flags, then --workspace (the root and every initialized submodule with a GitHub remote, found\n" +
 			"as stw status finds the workspace, from PATH or the current directory), then the repos of --config. Without any of them the\n" +
