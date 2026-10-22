@@ -173,7 +173,7 @@ func TestDocumentNeverOmitsAKey(t *testing.T) {
 	for _, a := range m["actions"].([]any) {
 		item := a.(map[string]any)
 		requireKeys(t, "action", item, "id", "priority", "category", "repo", "path", "title", "url", "subject", "evidence", "command", "effect", "hint")
-		requireKeys(t, "subject", item["subject"].(map[string]any), "kind", "number", "tag", "sha")
+		requireKeys(t, "subject", item["subject"].(map[string]any), "kind", "number", "tag", "sha", "name")
 		if (item["command"] == nil) != (item["effect"] == nil) {
 			t.Errorf("%v: effect is null exactly when command is", item["id"])
 		}
@@ -190,7 +190,7 @@ func TestDocumentNeverOmitsAKey(t *testing.T) {
 		sources := remote["sources"].(map[string]any)
 		requireKeys(t, "remote.sources", sources, "repo", "pulls", "releases", "tags", "ci_main", "ci_release")
 		for name, s := range sources {
-			requireKeys(t, name, s.(map[string]any), "state", "error", "data")
+			requireKeys(t, name, s.(map[string]any), "state", "error", "reason", "data")
 		}
 	}
 	for _, s := range m["sources"].([]any) {
@@ -239,6 +239,12 @@ func TestDocumentDataOfEachSource(t *testing.T) {
 	harbor := repos[2].(map[string]any)["remote"].(map[string]any)
 	if harbor["state"] != "degraded" || harbor["sources"].(map[string]any)["ci_main"].(map[string]any)["state"] != "skipped" || harbor["sources"].(map[string]any)["ci_main"].(map[string]any)["data"] != nil {
 		t.Errorf("%v", harbor)
+	}
+	if ci := harbor["sources"].(map[string]any)["ci_main"].(map[string]any); ci["reason"] != "deadline" || ci["error"] != nil {
+		t.Errorf("a skipped source says why: %v", ci)
+	}
+	if ok := src["pulls"].(map[string]any); ok["reason"] != nil || ok["error"] != nil {
+		t.Errorf("an ok source has neither reason nor error: %v", ok)
 	}
 	gone := repos[3].(map[string]any)["remote"].(map[string]any)
 	if gone["state"] != "skipped" || gone["reason"] != "not-read-locally" || gone["repo"] != nil {
@@ -411,5 +417,30 @@ func TestDocumentCountsTheRepositoriesOfEverySource(t *testing.T) {
 		if s != want[s.ID] {
 			t.Errorf("%s: %+v, want %+v", s.ID, s, want[s.ID])
 		}
+	}
+}
+
+// The part of an id that is neither a number nor a tag is the subject's name: the fact kind, the branch,
+// the path of a gitlink or worktree, the id of a source; it is null for the kinds that have none.
+func TestDocumentSubjectName(t *testing.T) {
+	names := map[string]any{}
+	for _, a := range decode(t, fixtureReport().Document())["actions"].([]any) {
+		item := a.(map[string]any)
+		names[item["category"].(string)] = item["subject"].(map[string]any)["name"]
+	}
+	want := map[string]any{"local-changes": "dirty", "local-behind": "behind", "main-red": "main", "repo-error": nil, "pr-ready": nil, "release-draft": nil, "release-run-failed": nil}
+	for cat, name := range want {
+		if got, ok := names[cat]; !ok || got != name {
+			t.Errorf("%s: name %v (present %v), want %v", cat, got, ok, name)
+		}
+	}
+}
+
+func TestDocumentSourceErrorCarriesOnlyItsCode(t *testing.T) {
+	rep := fixtureReport()
+	rep.Remote.Repos[1].Remote.Sources[overview.SourceTags] = overview.SourceState{Outcome: overview.OutcomeError, Code: "http-5xx"}
+	tags := decode(t, rep.Document())["repos"].([]any)[1].(map[string]any)["remote"].(map[string]any)["sources"].(map[string]any)["tags"].(map[string]any)
+	if tags["state"] != "error" || tags["error"] != "http-5xx" || tags["reason"] != nil || tags["data"] != nil {
+		t.Fatalf("%v", tags)
 	}
 }
