@@ -35,6 +35,11 @@ stays `planned`; `restack apply`, jj and the push are later slices.
 `restack-needed` after a rebase merge) as JSON Lines, replacing the foreman's `watch2.sh`. Status `planned`; the independent
 review of the exact head is pending and no code exists.
 
+WP-A (the core, `internal/watch`) is implemented in source on `codex/035-stw-watch-core`: snapshot diff into the 15 event kinds,
+debounce, check class and shape, epoch-based ids, `state.json`, the fsynced `journal.jsonl`, start-up replay, lock and heartbeat,
+tested on a fake `Observer` with a generated crash matrix and a random-crash property test. Hosting reads (WP-B), the command (WP-C),
+the restack selection behind the `Restacker` hook (WP-D) and the schema and acceptance (WP-E) are not started.
+
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 
 [The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (4/20 done: T001 to T004) describe a manual one-step `stw sync [--plan]` and `stw sync restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). The independent design review is CLEAR at 3d8d1da (after NOT CLEAR at b0cc02d, F1-F8 resolved). Slice 1a (T002 to T004) is implemented in source on `feat/032-sync-plan`: `stw sync --plan|--dry-run [PATH] [--remote NAME] [--prune] [--json]` fetches once (remote-tracking refs only) and classifies every tracking branch (`internal/stwsync`), with the unpublished `schemas/v1/sync.schema.json`. Tests use temporary repositories with a bare remote and linked worktrees, including a before/after snapshot proving that a plan changes only remote-tracking refs. Not started: the real run, journal, prune reporting beyond the plan, `--rebase`, `--autostash`, `restore`, `--submodules`, acceptance evidence and a smoke script. No build, release artifact or real-repository run was made. Status stays `planned`.
