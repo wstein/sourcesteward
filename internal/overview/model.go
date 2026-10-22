@@ -6,6 +6,13 @@
 // for the human output, and derive the notices and the summary counts. It reads nothing and writes
 // nothing: no file, no network, no clock; the data comes in as plain values and the output is a pure
 // function of them, whatever the order of the input.
+//
+// The model trusts its input. Selecting the release tag patterns of a repository's products, finding the
+// latest and the unreleased tags (at most 5 per repository, Spec 037), applying the draft visibility and
+// budget of the pulls cycle and deciding which source ended how belong to the callers that read the forge;
+// this package only turns what they report into items. Every string of the input is data: it reaches a
+// title through untrusted.Esc, an id and a command only through the validators of this package, and a URL
+// only when it is https.
 package overview
 
 import (

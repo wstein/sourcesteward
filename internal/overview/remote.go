@@ -25,19 +25,25 @@ func remoteItems(r Repo) []Item {
 		return nil
 	}
 	var items []Item
-	items = append(items, readErrors(r)...)
-	items = append(items, pullItems(r)...)
+	prs, unread := pullItems(r)
+	items = append(items, readErrors(r, unread)...)
+	items = append(items, prs...)
 	items = append(items, draftItems(r)...)
 	items = append(items, tagItems(r)...)
 	items = append(items, mainItems(r)...)
 	return items
 }
 
-// readErrors gives one read-error item per failed source (a skipped source, a deadline skip included, is no item).
-func readErrors(r Repo) []Item {
+// readErrors gives one read-error item per failed source (a skipped source, a deadline skip included, is no
+// item). unreadPulls reports a pull request row that was lost although the source did not fail: the pulls
+// source then counts as failed with the code `not-read`, unless a deadline skipped it.
+func readErrors(r Repo, unreadPulls bool) []Item {
 	var items []Item
 	for _, src := range Sources {
 		st := r.Remote.Sources[src]
+		if src == SourcePulls && unreadPulls && st.Outcome != OutcomeError && st.Outcome != OutcomeSkipped {
+			st = SourceState{Outcome: OutcomeError, Code: PRReasonNotRead}
+		}
 		if st.Outcome != OutcomeError {
 			continue
 		}
@@ -51,9 +57,10 @@ func readErrors(r Repo) []Item {
 
 // pullItems applies the pull request rules in the order of the spec: a draft is never an item, a bot
 // PR is pr-bot whatever its group, a human PR past the detail budget is pr-unread, the others follow
-// their verdict group. A row marked not-read for any other reason is no item: its failed or skipped
-// read is a read-error of the repository.
-func pullItems(r Repo) []Item {
+// their verdict group. A human row that was not read for another reason is no PR item: it is a lost read,
+// reported as the second result so that the repository gets its one read-error.
+func pullItems(r Repo) ([]Item, bool) {
+	unread := false
 	var items []Item
 	for _, p := range r.Remote.Pulls {
 		var c Category
@@ -73,6 +80,9 @@ func pullItems(r Repo) []Item {
 			c, what = PRChecksPending, fmt.Sprintf("PR #%d is waiting for checks", p.Number)
 		case p.Group == GroupBlocked && p.Reason != PRReasonNotRead:
 			c, what = PRBlocked, fmt.Sprintf("PR #%d is blocked (%s)", p.Number, untrusted.Esc(p.Reason))
+		case p.Group == GroupBlocked:
+			unread = true
+			continue
 		default:
 			continue
 		}
@@ -88,7 +98,7 @@ func pullItems(r Repo) []Item {
 		}
 		items = append(items, it)
 	}
-	return items
+	return items, unread
 }
 
 // draftItems gives one release-draft item per draft, only when the token can see drafts: otherwise the
