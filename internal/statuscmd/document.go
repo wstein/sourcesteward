@@ -58,12 +58,15 @@ type DocAction struct {
 	Hint     *string        `json:"hint"`
 }
 
-// DocSubject is the thing an item is about; the keys that do not apply are null.
+// DocSubject is the thing an item is about; the keys that do not apply are null. Name is the part of
+// the id that is neither a number nor a tag: the fact kind, the branch, the path of a gitlink or a
+// worktree, the id of a source.
 type DocSubject struct {
 	Kind   string  `json:"kind"`
 	Number *int    `json:"number"`
 	Tag    *string `json:"tag"`
 	SHA    *string `json:"sha"`
+	Name   *string `json:"name"`
 }
 
 // DocRepo is the v1 repository object unchanged plus the remote half.
@@ -90,11 +93,13 @@ type DocRepoSource struct {
 	CIRelease DocSourceRead `json:"ci_release"`
 }
 
-// DocSourceRead is the outcome of one source of one repository and, when it ended ok, its data.
+// DocSourceRead is the outcome of one source of one repository: its data when it ended ok, the error
+// code when it failed and the skip reason when it was skipped.
 type DocSourceRead struct {
-	State string  `json:"state"`
-	Error *string `json:"error"`
-	Data  any     `json:"data"`
+	State  string  `json:"state"`
+	Error  *string `json:"error"`
+	Reason *string `json:"reason"`
+	Data   any     `json:"data"`
 }
 
 // DocRepoData is the data of the `repo` source.
@@ -258,7 +263,7 @@ func action(it overview.Item) DocAction {
 		ID: it.ID, Priority: string(it.Priority), Category: string(it.Category), Repo: it.Repo, Path: nullable(it.Path),
 		Title: cut(it.Title, maxString), URL: nullable(overview.HTTPSURL(it.URL)), Evidence: it.Evidence,
 		Command: nullable(it.Command), Effect: nullable(string(it.Effect)), Hint: nullable(it.Hint),
-		Subject: DocSubject{Kind: string(it.Subject.Kind), Tag: nullable(it.Subject.Tag), SHA: nullable(it.Subject.SHA)},
+		Subject: DocSubject{Kind: string(it.Subject.Kind), Tag: nullable(it.Subject.Tag), SHA: nullable(it.Subject.SHA), Name: nullable(cut(it.Subject.Name, maxString))},
 	}
 	if it.Subject.Number != 0 {
 		a.Subject.Number = &it.Subject.Number
@@ -305,6 +310,8 @@ func sourceReads(rr statusremote.RepoResult) DocRepoSource {
 			out.Data = data()
 		case overview.OutcomeError:
 			out.Error = nullable(cut(st.Code, maxString))
+		case overview.OutcomeSkipped:
+			out.Reason = nullable(cut(st.Reason, maxString))
 		}
 		return out
 	}

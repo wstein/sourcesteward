@@ -23,7 +23,8 @@
         "kind": "repository",
         "number": null,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "code": "status-read-failed"
@@ -44,7 +45,8 @@
         "kind": "branch",
         "number": null,
         "tag": null,
-        "sha": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9"
+        "sha": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "name": "main"
       },
       "evidence": {
         "class": "red"
@@ -65,7 +67,8 @@
         "kind": "tag",
         "number": null,
         "tag": "v1.1.0",
-        "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "name": null
       },
       "evidence": {
         "conclusion": "failure",
@@ -87,7 +90,8 @@
         "kind": "fact",
         "number": null,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": "dirty"
       },
       "evidence": {
         "staged": 0,
@@ -109,7 +113,8 @@
         "kind": "fact",
         "number": null,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": "behind"
       },
       "evidence": {
         "behind": 2
@@ -130,7 +135,8 @@
         "kind": "branch",
         "number": null,
         "tag": null,
-        "sha": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9"
+        "sha": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
+        "name": "main"
       },
       "evidence": null,
       "command": "stw sync --plan /ws",
@@ -149,7 +155,8 @@
         "kind": "pr",
         "number": 12,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "group": "conflict"
@@ -170,7 +177,8 @@
         "kind": "pr",
         "number": 59,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "group": "blocked",
@@ -192,7 +200,8 @@
         "kind": "pr",
         "number": 57,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "group": "ready"
@@ -213,7 +222,8 @@
         "kind": "release",
         "number": null,
         "tag": "v1.0.0",
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "assets": 4,
@@ -235,7 +245,8 @@
         "kind": "fact",
         "number": null,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": "stash"
       },
       "evidence": {
         "stash": 1
@@ -256,7 +267,8 @@
         "kind": "pr",
         "number": 3,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "group": "ready"
@@ -277,7 +289,8 @@
         "kind": "pr",
         "number": 4,
         "tag": null,
-        "sha": null
+        "sha": null,
+        "name": null
       },
       "evidence": {
         "group": "checks"
@@ -338,6 +351,7 @@
           "repo": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "default_branch": "main",
               "html_url": "https://github.com/wstein/sourcesteward",
@@ -347,6 +361,7 @@
           "pulls": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "open": 3,
               "ready": 1,
@@ -362,6 +377,7 @@
           "releases": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "drafts": [
                 {
@@ -378,6 +394,7 @@
           "tags": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "latest": [
                 {
@@ -403,6 +420,7 @@
           "ci_main": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "branch": "main",
               "head": "3f2a9c13f2a9c13f2a9c13f2a9c13f2a9c13f2a9",
@@ -413,6 +431,7 @@
           "ci_release": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "tags": [
                 {
@@ -502,6 +521,7 @@
           "repo": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "default_branch": "main",
               "html_url": "https://github.com/wstein/crewbook",
@@ -511,6 +531,7 @@
           "pulls": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "open": 1,
               "ready": 0,
@@ -526,6 +547,7 @@
           "releases": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "drafts": [],
               "truncated": false
@@ -534,6 +556,7 @@
           "tags": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "latest": [],
               "unreleased": []
@@ -542,6 +565,7 @@
           "ci_main": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "branch": "main",
               "head": "cccccccccccccccccccccccccccccccccccccccc",
@@ -552,6 +576,7 @@
           "ci_release": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "tags": []
             }
@@ -606,6 +631,7 @@
           "repo": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "default_branch": "main",
               "html_url": "https://github.com/wstein/workharbor",
@@ -615,6 +641,7 @@
           "pulls": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "open": 2,
               "ready": 1,
@@ -630,6 +657,7 @@
           "releases": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "drafts": [],
               "truncated": false
@@ -638,6 +666,7 @@
           "tags": {
             "state": "ok",
             "error": null,
+            "reason": null,
             "data": {
               "latest": [],
               "unreleased": []
@@ -646,11 +675,13 @@
           "ci_main": {
             "state": "skipped",
             "error": null,
+            "reason": "deadline",
             "data": null
           },
           "ci_release": {
             "state": "skipped",
             "error": null,
+            "reason": "deadline",
             "data": null
           }
         }
@@ -706,31 +737,37 @@
           "repo": {
             "state": "skipped",
             "error": null,
+            "reason": "not-read-locally",
             "data": null
           },
           "pulls": {
             "state": "skipped",
             "error": null,
+            "reason": "not-read-locally",
             "data": null
           },
           "releases": {
             "state": "skipped",
             "error": null,
+            "reason": "not-read-locally",
             "data": null
           },
           "tags": {
             "state": "skipped",
             "error": null,
+            "reason": "not-read-locally",
             "data": null
           },
           "ci_main": {
             "state": "skipped",
             "error": null,
+            "reason": "not-read-locally",
             "data": null
           },
           "ci_release": {
             "state": "skipped",
             "error": null,
+            "reason": "not-read-locally",
             "data": null
           }
         }
