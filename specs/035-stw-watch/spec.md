@@ -130,12 +130,12 @@ Per repository and cycle (all GET, through the Spec 022 transport, 30 s per requ
    page **167 pages**; exceeding it is `watch-error` code `too-many-open-prs` for that repository (it keeps its last accepted
    state). Halving the page size **restarts the listing at page 1** with `per_page=12` (page numbers of different sizes are not
    mixed). On a `304` for a page the **stored Link header and the stored parsed page** (ETag, Link and the list items kept in
-   `state.json`) are reused for that page, so a fully unchanged repository needs no response bodies. The page
+   `state.json`) are reused for that page, so a fully unchanged repository needs no response bodies. A `304` carries no `Link`, so when the last page answered `304` and holds exactly `per_page` items, the next page is also requested once (conditionally, with its stored ETag if any; an empty answer is stored too), because an older PR reopened behind a full last page would otherwise be missed; a `200` needs no probe because its `Link` is current, and no page beyond the allowlist bound (80 at 25, 167 at 12) is requested. The page
    size is 25 because a list item is large: a live read-only sample (`gh api 'repos/wstein/sourcesteward/pulls?state=open&per_page=5'`,
    2026-10-22, one open PR) returned **17,047 bytes for one PR**, and an earlier measurement of 20 PRs was 361,596 bytes (about 18 KB
    each); 25 PRs are about 450 KB, inside the 1 MiB body cap of Spec 022 FR-006, which this spec does **not** raise (100 per page
    would be about 1.8 MB and fail with a body-limit error from 58 PRs on). If a page still exceeds the cap the watcher retries that
-   page once with `per_page=12` (and keeps 12 for that repository until restart); if that also exceeds it, the repository fails the
+   page once with `per_page=12` (and keeps 12 for that repository until restart: the hosting reader holds it in memory only and `state.json` must not persist it, so a restart tries 25 again); if that also exceeds it, the repository fails the
    cycle with `watch-error` code `page-too-large`. Each page has its own ETag. Gives number, title, user, labels, draft, head SHA and
    ref, base ref and base SHA.
 2. `pulls/N` detail (mergeable, mergeable_state; `null` mergeable is "not computed" and keeps the previous value) for **every**
@@ -404,6 +404,11 @@ deferred Spec 030 `--watch` is a different, one-PR command and stays deferred.
   `.lock`, at most 255 bytes); the guard accepts a `RawPath` **only** for a segment produced by that function, re-validated by
   decoding exactly once and re-encoding to the same text (so `%2E`, `%00`, `%252F` and any double encoding are refused). Tests:
   `feat/x`, `release/v1.2`, a non-ASCII branch (UTF-8 percent-encoded), and the attack strings `..%2F`, `%252F`, `%2e%2e`, `%00`.
+  A literal `%` is refused in a branch name (it would be double encoding), so a PR whose base branch contains `%` cannot be watched:
+  the `branches/BASE` read fails with `malformed-response` and a diagnostic naming the invalid branch name. The guard checks the
+  escaped wire form of the request path (`EscapedPath`), not the decoded `Path`. GitHub answers `404` for a missing branch and for an
+  inaccessible repository alike; the hosting layer maps every `404` to code `forbidden` with HTTP status `404` kept in the error, so
+  the caller can tell a deleted base branch (`branches/BASE`) from other `forbidden` reads.
 - **FR-007 (deadline)**: the 30 second context is **per request** for the watch reader (the process is long-lived); the whole-watch
   clock of the deferred Spec 030 `--watch` is not used here.
 - **Renamed repositories**: GitHub answers 301 and the transport refuses redirects; the watcher reports `watch-error` code
