@@ -32,12 +32,12 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 	repo := rp.Name
 	tgt := target{Path: rp.Path, Root: root}
 	fact := func(c Category, name, title string, ev map[string]any) Item {
-		it := newItem(c, repo, Subject{Kind: KindFact, Name: name}, tgt)
+		it := newItem(c, repo, Subject{Kind: KindFact, Name: name}, name, tgt)
 		it.Path, it.Title, it.Evidence = rp.Path, title, ev
 		return it
 	}
 	if rp.State == "error" {
-		it := newItem(RepoError, repo, Subject{Kind: KindRepository}, tgt)
+		it := newItem(RepoError, repo, Subject{Kind: KindRepository}, "-", tgt)
 		it.Path, it.Title = rp.Path, "repository cannot be read"
 		if rp.Error != nil {
 			it.Title += ": " + untrusted.Esc(rp.Error.Code+": "+rp.Error.Message)
@@ -94,7 +94,7 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 			c = GitlinkAhead
 		}
 		if c == GitlinkAhead || has["gitlink-drift"] {
-			it := newItem(c, repo, Subject{Kind: KindGitlink, Name: rp.Path}, tgt)
+			it := newItem(c, repo, Subject{Kind: KindGitlink, Name: rp.Path}, idToken(rp.Path, validName), tgt)
 			it.Path, it.Title, it.Evidence = rp.Path, "checked-out commit is "+rel+" the recorded gitlink", map[string]any{"relation": rel}
 			items = append(items, it)
 		}
@@ -104,11 +104,11 @@ func localItems(root string, rp stwsync.RepoStatus) []Item {
 		wt.Worktree = w.Path
 		switch {
 		case w.Dirty:
-			it := newItem(WorktreeDirty, repo, Subject{Kind: KindWorktree, Name: w.Path}, wt)
+			it := newItem(WorktreeDirty, repo, Subject{Kind: KindWorktree, Name: w.Path}, idToken(w.Path, validName), wt)
 			it.Path, it.Title = rp.Path, "linked worktree "+untrusted.Esc(w.Path)+" has changes"
 			items = append(items, it)
 		case w.Missing || w.Prunable || w.Locked != nil:
-			it := newItem(WorktreeStale, repo, Subject{Kind: KindWorktree, Name: w.Path}, wt)
+			it := newItem(WorktreeStale, repo, Subject{Kind: KindWorktree, Name: w.Path}, idToken(w.Path, validName), wt)
 			it.Path, it.Title = rp.Path, "linked worktree "+untrusted.Esc(w.Path)+" is "+staleWord(w)
 			items = append(items, it)
 		}

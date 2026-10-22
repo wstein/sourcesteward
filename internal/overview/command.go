@@ -14,9 +14,6 @@ import (
 // maxURLBytes bounds a URL of an item; a longer one is dropped rather than cut.
 const maxURLBytes = 2048
 
-// maxTokenBytes bounds a tag or branch name that may enter a command.
-const maxTokenBytes = 128
-
 // target holds the values a suggested command may be built from. Every value is validated again by
 // buildCommand, so a command never contains an unvalidated string.
 type target struct {
@@ -40,7 +37,7 @@ func shellWord(s string) (string, bool) {
 	}
 	plain := true
 	for _, r := range s {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		if unsafeRune(r) {
 			return "", false
 		}
 		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._/-", r)) {
@@ -53,20 +50,22 @@ func shellWord(s string) (string, bool) {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'", true
 }
 
-// plainToken reports whether s is a tag or branch name that is safe in a command without quoting: the
-// characters [A-Za-z0-9._/-], no leading `-`, `.` or `/`, no `..`, `//` or trailing `/`, at most 128 bytes.
-// Free text from the forge enters a command only through this test.
-func plainToken(s string) bool {
-	if s == "" || len(s) > maxTokenBytes || strings.ContainsAny(s[:1], "-./") || strings.HasSuffix(s, "/") ||
-		strings.Contains(s, "..") || strings.Contains(s, "//") {
-		return false
+// refWord returns a tag or branch name as one shell word. The name must pass the release-tag validation of
+// Spec 026 (a name Git accepts as a ref, at most 255 bytes, not an abbreviated hexadecimal identity) and the
+// shell-word rules; anything else, a forge string included, never enters a command. The only difference from
+// Spec 026 is that a name with control, format or line-separator characters is refused here too, because the
+// result is printed.
+func refWord(s string) (string, bool) {
+	if !untrusted.ValidReleaseTag(s) {
+		return "", false
 	}
-	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._/-", r)) {
-			return false
-		}
-	}
-	return true
+	return shellWord(s)
+}
+
+// unsafeRune reports whether r must never appear in a command, an id or a URL: a control, format or
+// line-separator character (bidirectional overrides included).
+func unsafeRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r)
 }
 
 // isSHA reports whether s is a full lowercase hexadecimal object id (SHA-1 or SHA-256).
@@ -89,7 +88,7 @@ func httpsURL(s string) string {
 		return ""
 	}
 	for _, r := range s {
-		if unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		if unicode.IsSpace(r) || unsafeRune(r) {
 			return ""
 		}
 	}
@@ -124,8 +123,9 @@ func buildCommand(c Category, t target) (string, Effect) {
 		}
 		return "git -C " + root + " add " + p, Owner
 	case MainRed:
-		if r, ok := repo(); ok && plainToken(t.Branch) {
-			return "gh run list --repo " + r + " --branch " + t.Branch, Read
+		b, okRef := refWord(t.Branch)
+		if r, ok := repo(); ok && okRef {
+			return "gh run list --repo " + r + " --branch " + b, Read
 		}
 	case ReleaseRunFailed:
 		if r, ok := repo(); ok && isSHA(t.SHA) {
@@ -144,8 +144,9 @@ func buildCommand(c Category, t target) (string, Effect) {
 			return "gh pr merge " + strconv.Itoa(t.Number) + " -R " + r + " --rebase", Owner
 		}
 	case ReleaseDraft:
-		if r, ok := repo(); ok && plainToken(t.Tag) {
-			return "gh release edit " + t.Tag + " -R " + r + " --draft=false", Owner
+		tag, okRef := refWord(t.Tag)
+		if r, ok := repo(); ok && okRef {
+			return "gh release edit " + tag + " -R " + r + " --draft=false", Owner
 		}
 	}
 	return "", ""

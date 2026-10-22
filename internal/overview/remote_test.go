@@ -3,7 +3,11 @@
 package overview
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"github.com/wstein/sourcesteward/internal/pulls"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -253,31 +257,138 @@ func TestFailedReadNeverLeavesACategorylessRow(t *testing.T) {
 	}
 }
 
-func TestRemoteHostileForgeStrings(t *testing.T) {
-	evil := "x\x1b[31m\n; rm -rf /"
-	items := remote(func(r *Remote) {
-		r.Visibility = WriteAccess
-		r.Drafts = []Draft{{Name: evil, Tag: evil, URL: "javascript:alert(1)", Assets: 1}}
-		r.Pulls = []PR{pr(1, pulls.GroupReady, "", func(p *PR) { p.Title, p.URL, p.Author = evil, "http://insecure", evil })}
-		r.Tags = []ReleaseTag{{Tag: evil, SHA: evil, Unreleased: true}}
-		r.Main = &Main{Branch: evil, Head: evil, Class: "red"}
-	})
-	if len(items) != 4 {
-		t.Fatalf("%v", ids(items))
+var hostileStrings = map[string]string{
+	"escape":  "x\x1b[31m\n; rm -rf /",
+	"newline": "line\nbreak",
+	"colon":   "a:b:c",
+	"10kB":    strings.Repeat("long/", 2048),
+	"unicode": "v\u00fc\u202e\u2028x",
+	"empty":   "",
+	"dash":    "-rf",
+}
+
+var fingerprintRE = regexp.MustCompile(`^h-[0-9a-f]{12}$`)
+
+// idParts splits an id into CATEGORY, REPO and SUBJECT; a valid repository and the validated parts hold no ':'.
+func idParts(t *testing.T, id string) [3]string {
+	t.Helper()
+	p := strings.Split(id, ":")
+	if len(p) != 3 {
+		t.Fatalf("id %q has %d parts", id, len(p))
 	}
-	for _, it := range items {
-		if strings.ContainsAny(it.Title, "\n\x1b") || strings.ContainsAny(it.Command, "\n\x1b;") && it.Category != PRReady {
-			t.Errorf("%s: title %q command %q", it.ID, it.Title, it.Command)
+	return [3]string{p[0], p[1], p[2]}
+}
+
+func TestRemoteHostileForgeStrings(t *testing.T) {
+	seen := map[string]string{}
+	for name, evil := range hostileStrings {
+		build := func() []Item {
+			return remote(func(r *Remote) {
+				r.Visibility = WriteAccess
+				r.Drafts = []Draft{{Name: evil, Tag: evil, URL: "javascript:alert(1)", Assets: 1}}
+				r.Pulls = []PR{pr(1, pulls.GroupReady, "", func(p *PR) { p.Title, p.URL, p.Author = evil, "http://insecure", evil })}
+				r.Tags = []ReleaseTag{{Tag: evil, SHA: evil, Unreleased: true}}
+				r.Main = &Main{Branch: evil, Head: evil, Class: "red"}
+			})
 		}
-		if it.Category == ReleaseDraft && (it.Command != "" || it.URL != "") {
-			t.Errorf("draft with hostile tag: command %q url %q", it.Command, it.URL)
+		items := build()
+		if len(items) != 4 {
+			t.Fatalf("%s: %v", name, ids(items))
 		}
-		if it.Category == PRReady && (it.URL != "" || !strings.HasPrefix(it.Command, "gh pr merge 1 -R")) {
-			t.Errorf("pr: url %q command %q", it.URL, it.Command)
+		if !reflect.DeepEqual(ids(items), ids(build())) {
+			t.Errorf("%s: ids are not stable", name)
 		}
-		if it.Category == MainRed && it.Command != "" {
-			t.Errorf("main-red command %q", it.Command)
+		for _, it := range items {
+			parts := idParts(t, it.ID)
+			if strings.ContainsAny(it.ID, "\n\x1b\x00") || len(it.ID) > 300 {
+				t.Errorf("%s: id %q", name, it.ID)
+			}
+			if parts[1] != slug {
+				t.Errorf("%s: repo part %q", name, parts[1])
+			}
+			if it.Category != PRReady {
+				if validRef(evil) && parts[2] != evil {
+					t.Errorf("%s: %s: valid subject %q was replaced by %q", name, it.Category, evil, parts[2])
+				}
+				if !validRef(evil) && !fingerprintRE.MatchString(parts[2]) {
+					t.Errorf("%s: %s: invalid component is not a fingerprint: %q", name, it.Category, parts[2])
+				}
+			}
+			if strings.ContainsAny(it.Title, "\n\x1b") || (strings.ContainsAny(it.Command, "\n\x1b;") && it.Category != PRReady && !strings.Contains(it.Command, "'")) {
+				t.Errorf("%s: %s: title %q command %q", name, it.ID, it.Title, it.Command)
+			}
+			if it.Category == ReleaseDraft && it.URL != "" {
+				t.Errorf("%s: draft url %q", name, it.URL)
+			}
+			if it.Category == PRReady && (it.URL != "" || !strings.HasPrefix(it.Command, "gh pr merge 1 -R")) {
+				t.Errorf("%s: pr: url %q command %q", name, it.URL, it.Command)
+			}
+			if !validRef(evil) && (it.Category == MainRed || it.Category == ReleaseDraft) && it.Command != "" {
+				t.Errorf("%s: %s command %q for an invalid ref", name, it.Category, it.Command)
+			}
+			if prev, dup := seen[it.ID]; dup && it.Category != PRReady && prev != name+string(it.Category) {
+				// the same category with different hostile values must not share an id
+				t.Errorf("%s: id %q already used by %s", name, it.ID, prev)
+			}
+			seen[it.ID] = name + string(it.Category)
 		}
+	}
+}
+
+func TestInvalidComponentsGetAStableFingerprint(t *testing.T) {
+	got := idToken("a:b", validRef)
+	again := idToken("a:b", validRef)
+	if got != again || !fingerprintRE.MatchString(got) || got == idToken("a:c", validRef) {
+		t.Fatalf("%q %q", got, again)
+	}
+	if idToken("v1.0.0", validRef) != "v1.0.0" {
+		t.Error("a valid component stays")
+	}
+	// sha256("a:b") starts with ...: pins the algorithm, not a time or a counter.
+	if want := "h-" + sha12("a:b"); got != want {
+		t.Errorf("%q, want %q", got, want)
+	}
+}
+
+func sha12(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+func TestDraftIDsAreUniqueAndStable(t *testing.T) {
+	created := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name   string
+		drafts []Draft
+		want   int
+	}{
+		{"distinct valid tags", []Draft{{Tag: "v1.0.0"}, {Tag: "v1.1.0"}}, 2},
+		{"empty tags, different names", []Draft{{Name: "a"}, {Name: "b"}}, 2},
+		{"empty tags, same name, different dates", []Draft{{Name: "a", CreatedAt: created}, {Name: "a", CreatedAt: created.Add(time.Hour)}}, 2},
+		{"same valid tag twice, different names", []Draft{{Tag: "v1.0.0", Name: "a"}, {Tag: "v1.0.0", Name: "b"}}, 2},
+		{"identical drafts are one finding", []Draft{{Tag: "v1.0.0", Name: "a", CreatedAt: created}, {Tag: "v1.0.0", Name: "a", CreatedAt: created}}, 1},
+		{"hostile tags, different names", []Draft{{Tag: "a:b", Name: "x"}, {Tag: "a:b", Name: "y"}}, 2},
+	}
+	for _, c := range cases {
+		build := func(drafts []Draft) []Item {
+			return sortItems(remote(func(r *Remote) { r.Visibility, r.Drafts = WriteAccess, drafts }))
+		}
+		got := build(c.drafts)
+		if len(got) != c.want {
+			t.Errorf("%s: %v", c.name, ids(got))
+			continue
+		}
+		reversed := append([]Draft(nil), c.drafts...)
+		for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
+			reversed[i], reversed[j] = reversed[j], reversed[i]
+		}
+		if !reflect.DeepEqual(ids(got), ids(build(reversed))) {
+			t.Errorf("%s: ids depend on the order: %v", c.name, ids(got))
+		}
+	}
+	// A draft with a unique valid tag keeps the readable id.
+	if got := remote(func(r *Remote) { r.Visibility, r.Drafts = WriteAccess, []Draft{{Tag: "v0.1.0"}} }); got[0].ID != "release-draft:wstein/sourcesteward:v0.1.0" {
+		t.Errorf("%s", got[0].ID)
 	}
 }
 
@@ -306,14 +417,5 @@ func TestRemoteEvidence(t *testing.T) {
 	items = remote(func(r *Remote) { r.Pulls = []PR{pr(1, pulls.GroupBlocked, pulls.ReasonReview, nil)} })
 	if ev := items[0].Evidence; ev["group"] != "blocked" || ev["reason"] != "review-or-protection" {
 		t.Fatalf("%v", ev)
-	}
-}
-
-func TestSubjectIDFallsBackToDash(t *testing.T) {
-	if got := subjectID(Subject{Kind: KindRelease}); got != "-" {
-		t.Errorf("empty release tag: %q", got)
-	}
-	if got := subjectID(Subject{Kind: KindPR, Number: 12}); got != "12" {
-		t.Errorf("pr: %q", got)
 	}
 }

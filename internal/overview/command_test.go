@@ -27,6 +27,7 @@ func TestShellWord(t *testing.T) {
 		{"nul\x00byte", "", false},
 		{"esc\x1b[31m", "", false},
 		{"bidi‮evil", "", false},
+		{"line" + string(rune(0x2028)) + "sep", "", false},
 		{"bad\xffutf8", "", false},
 	}
 	for _, c := range cases {
@@ -37,17 +38,33 @@ func TestShellWord(t *testing.T) {
 	}
 }
 
-func TestPlainToken(t *testing.T) {
-	good := []string{"main", "v1.2.3", "bdock/v0.1.0", "release_1", "a.b-c"}
-	bad := []string{"", "-x", ".hidden", "a..b", "a//b", "/abs", "trail/", "sp ace", "semi;colon", "dollar$", "quote'", "new\nline", "ünï", "v1.0.0+meta", strings.Repeat("a", 129)}
-	for _, s := range good {
-		if !plainToken(s) {
-			t.Errorf("plainToken(%q) = false", s)
-		}
+func TestRefWord(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"main", "main", true},
+		{"bdock/v0.1.0", "bdock/v0.1.0", true},
+		{"v1.0.0+meta", "'v1.0.0+meta'", true},
+		{"semi;colon", "'semi;colon'", true},
+		{"$(rm)", "'$(rm)'", true},
+		{"it's", `'it'\''s'`, true},
+		{"ünï", "'ünï'", true},
+		{"", "", false},
+		{"-x", "", false},
+		{".hidden/x", "", false},
+		{"a..b", "", false},
+		{"a b", "", false},
+		{"a:b", "", false},
+		{"a\nb", "", false},
+		{"deadbeef1", "", false},
+		{strings.Repeat("a", 256), "", false},
 	}
-	for _, s := range bad {
-		if plainToken(s) {
-			t.Errorf("plainToken(%q) = true", s)
+	for _, c := range cases {
+		got, ok := refWord(c.in)
+		if got != c.want || ok != c.ok {
+			t.Errorf("refWord(%q) = %q, %v; want %q, %v", c.in, got, ok, c.want, c.ok)
 		}
 	}
 }
@@ -167,9 +184,12 @@ func TestBuildCommandRefusesHostileTokens(t *testing.T) {
 				cmd, eff := buildCommand(cat, tg)
 				// A path with spaces or shell metacharacters is quoted, not refused.
 				quoted := (f == "Path" || f == "Root" || f == "Worktree") && h != "" && !strings.HasPrefix(h, "-") && !strings.ContainsAny(h, "\n\x00")
+				if f == "Tag" || f == "Branch" {
+					_, quoted = refWord(h) // a valid ref with shell characters is quoted, never refused or injected
+				}
 				if quoted {
-					if cmd == "" || eff == "" {
-						t.Errorf("%s %s=%q: quotable value refused", cat, f, h)
+					if cmd == "" || eff == "" || (strings.ContainsAny(h, ";$`'") && !strings.Contains(cmd, "'")) {
+						t.Errorf("%s %s=%q: quotable value refused or left unquoted: %q", cat, f, h, cmd)
 					}
 					continue
 				}
