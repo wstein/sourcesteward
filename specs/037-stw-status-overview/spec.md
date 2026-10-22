@@ -104,12 +104,15 @@ Bounded to the **latest** run; no history is read.
 - **Default branch** (`ci-main`): head SHA of `branches/DEFAULT` and the `internal/watch` class (`none|pending|green|red`) from the
   existing check-run and status reads of `stw pulls`; `red` is a `red` item (`main-red`), `pending` and `none` are information in the
   repository block.
-- **Release workflow run** (`ci-release`): the **single** workflow file `ci.release_workflow` of the repository's `.stw/release.toml`
-  (Spec 026 config; a path, its file name is used in the request). When the repository declares none, the default is the file
-  `.github/workflows/release.yml` (the name the member repositories use; a declared `ci.release_workflow` always wins); a 404 for that workflow means `skipped`, reason `not-found`, with a
-  notice (not a failure). For the commit of each product's **latest tag** and of each **unreleased tag** (at most 6 tags per repository,
-  from the `tags` read) the newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
-  are kept in the JSON). Conclusion `failure`, `cancelled` or `timed_out` is a failed run; one not completed is information.
+- **Release workflow run** (`ci-release`): each tag entry of the `tags` read (the latest tag of a release tag pattern or an unreleased tag,
+  at most 6 tags per repository in all, in the order of the entries) gets the newest run of the release workflow of **its product**: the
+  file name of the `ci.release_workflow` of the contract that declares the pattern (Spec 026 config; a path, its file name is used in the
+  request), or `release.yml` (the name the member repositories use) for a pattern no contract declares. A repository without contract files
+  uses the defaults. A contract that **exists but is invalid or unreadable** is not replaced by the defaults: the source ends `error` with
+  the code `contract-invalid` (exit 1; the owner fixes the contract). A 404 for a workflow means `skipped`, reason `not-found`, with a
+  notice (not a failure). The newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
+  are kept in the JSON; a run whose `head_sha` is not the tag's commit is ignored). Conclusion `failure`, `cancelled` or `timed_out` is a
+  failed run; one not completed, or with a status or conclusion this specification does not know, is information.
 - **One item per tag.** A tag whose run failed yields exactly one item, `release-run-failed` (`red`), whether the tag is released or
   not and whether it is the latest or an unreleased one; the `tag-without-release` item is **not** emitted for that tag. Without a
   failed run an unreleased tag yields `tag-without-release` (`yellow`).

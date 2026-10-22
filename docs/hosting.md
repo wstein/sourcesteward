@@ -143,16 +143,21 @@ existing check-run and commit-status reads, classified `none`, `pending`, `green
 `actions/workflows/FILE/runs?head_sha=SHA&per_page=100&page=1`, page 1 only, by the typed `WorkflowRuns` read and the decoder
 `DecodeWorkflowRuns`; the newest runs come first by creation time and at most 20 are kept per tag.
 
-The reads live in `internal/statusremote`. `ci-release` reads one workflow file: the `ci.release_workflow` of the repository's
-`.stw/release.toml` (or `release.PRODUCT.toml`, or the JSON form), its file name only, and `release.yml` when no valid contract
-declares one; a 404 for that workflow ends the source as `skipped`, reason `not-found`. It reads the commit of the latest tag of each
-declared product (the tag grammar of the contract; `v*.*.*`, semver with an optional `v`, when none is declared) and of the
-unreleased tags the caller names (at most 5), one entry per tag name. A failure, cancelled or timed-out newest run is a red item
-of the action model; a run still in progress is not.
+The reads live in `internal/statusremote`. `ci-release` does not choose tags: it takes the entries of the `tags` source (one per release
+tag pattern and tag, the latest of the pattern or unreleased) and adds the newest runs to the first 6 of them, so that a repository reads
+at most 6 tags whatever its products. Each entry uses the `ci.release_workflow` (file name only) of the product that declares its
+pattern, and `release.yml` for a pattern no contract declares; a 404 for a workflow ends the source as `skipped`, reason `not-found`.
+The contracts are read through the reader of `release check` (`release.ReadWorktreeContracts`: no symlink is followed, a file that
+changes while it is opened is refused). A repository without `.stw` uses the defaults; a contract that exists but cannot be used ends the
+source with the error code `contract-invalid` before any request, and the defaults are not a substitute. Only semver and pattern tag
+grammars give a release tag pattern. A run of another commit than the tag's is ignored; the page of a run is kept only when it is an
+https page of github.com under the repository, and an unknown status or conclusion (or a conclusion of a run that has not completed) is
+information only. A failure, cancelled or timed-out newest run is a red item of the action model; a run still in progress is not.
 
-`behind_origin` never uses the network: `stwsync.BehindOrigin` looks the head of the default branch up in the local object store
-and is true when the commit is absent or is not an ancestor of the local branch tip. It runs read-only Git, never fetches, and stays
-undecided without a clone or a local branch of that name.
+`behind_origin` is decided in the local object store: `stwsync.BehindOrigin` looks the head of the default branch up and is true when the
+commit is absent or is not an ancestor of the local branch tip. Every Git call passes `--no-lazy-fetch`, so a partial clone does not fetch
+the commit on demand; a Git older than 2.44 refuses the option (exit 129) and the answer stays undecided, as it does without a clone or a
+local branch of that name.
 
 ## Optional local extension installation
 
