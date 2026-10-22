@@ -93,7 +93,8 @@ rewrites the parent commits): `child-of-merged-branch` (the PR's base is the mer
 git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto NEW_PARENT OLD_PARENT BRANCH
 ```
 
-`new_parent` and `argv` are `null` when the merge commit is unreadable or the head lives in a fork. The watcher only
+`new_parent` and `argv` are `null` when the merge commit is unreadable; for a child whose head lives in a fork only `argv`
+is `null` (`new_parent` stays the merge commit and `branch` is the head ref). The watcher only
 reports the command; it never runs it. With `--human` the SHAs show seven characters.
 
 ## Safety and limits

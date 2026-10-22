@@ -221,7 +221,7 @@ All events carry the common fields of the contract. `details` per kind (exact ke
 | `checks-green` | debounced class becomes `green` for the current head | `head`, `draft`, `base`, `total` (check count) |
 | `checks-red` | debounced class becomes `red` for the current head | `head`, `failing` (sorted check names, at most 20), `failing_total`, `shape`: `stack-merge-shape`, `real` or `unknown`, `base`, `draft` |
 | `checks-pending-timeout` | class stays `pending` on one head longer than `--pending-timeout`; once per pending period (see Replay effects) | `head`, `pending` (names, at most 20), `since` |
-| `mergeable-changed` | debounced `mergeable` flips, or `mergeable_state` enters or leaves `behind` | `mergeable` (`true`/`false`), `state` (GitHub `mergeable_state`), `conflicting`, `behind` (booleans), `base` |
+| `mergeable-changed` | debounced `mergeable` flips, or `mergeable_state` enters or leaves `behind` | `mergeable` (`true`/`false`; the code never emits null, a null read keeps the previous value and the contract allows null for forward compatibility), `state` (GitHub `mergeable_state`), `conflicting`, `behind` (booleans), `base` |
 | `ready-state-changed` | `draft` flips | `from`, `to` (`draft`/`ready`) |
 | `base-changed` | the PR's base ref changed (retarget, also GitHub's automatic retarget after a parent merge) | `old`, `new` |
 | `merged` | a PR that left the open list is `merged` | `merge_commit`, `base`, `head` (the merged head SHA), `head_ref`, `merged_at`, `method_hint` (`rebase-or-squash` when `merge_commit` is not a merge commit with 2 parents, `merge` otherwise, `unknown` when unreadable) |
@@ -290,7 +290,7 @@ On a `merged` event of PR M (base B, head ref H, merged head SHA S, merge commit
 - `argv` is the exact argument vector, no shell:
   `["git","-c","rebase.updateRefs=false","-c","rerere.enabled=false","rebase","--onto",NEW,OLD,BRANCH]` where BRANCH is the child's
   head ref. The watcher only reports it. Forks: a child whose head repository differs from the base repository is reported
-  with `branch` as `OWNER:REF` and `argv` null.
+  with `branch` as the head ref (`head.ref`, without the owner) and `argv` null.
 - A class-2 candidate whose commit list lacks `old_parent` is not reported. Order: ascending PR number. Ids include the merge commit,
   so a restart does not repeat them.
 
