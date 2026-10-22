@@ -56,7 +56,7 @@ func watchCommand() *cobra.Command {
 			if prepared.IsStat {
 				return watchcmd.RunStatus(prepared.Status)
 			}
-			prepared.Run.Transport = watchTransport
+			prepared.Run.Transport, prepared.Run.Diag = watchTransport, cmd.ErrOrStderr()
 			if watchHook != nil {
 				watchHook(&prepared.Run)
 			}

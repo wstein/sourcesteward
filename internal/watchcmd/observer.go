@@ -45,8 +45,11 @@ type HostObserver struct {
 
 	mu        sync.Mutex
 	lastClass map[string]string // repo#n: check class of the last read, to confirm a debounce candidate
-	forks     map[string]bool   // repo#n: head repository differs from the base repository (from pulls/N)
 	holdUntil time.Time         // a rate-limit wait that the next Observe reports
+
+	// Diag receives one-line diagnostics that are not events (never tokens); nil discards them.
+	Diag   func(string)
+	warned map[string]bool
 }
 
 // NewHostObserver builds the observer. maxOpen is the bound of open PRs per repository (1..2000).
@@ -58,7 +61,7 @@ func NewHostObserver(r Reader, now func() time.Time, maxOpen int, ignoreAuthors,
 		maxOpen = DefaultMaxOpenPRs
 	}
 	return &HostObserver{r: r, now: now, maxOpen: maxOpen, ignoreAuthors: ignoreAuthors, ignoreLabels: ignoreLabels,
-		lastClass: map[string]string{}, forks: map[string]bool{}}
+		lastClass: map[string]string{}, warned: map[string]bool{}}
 }
 
 // AfterCycle reads rate_limit (free) once per cycle and applies the slowdown policy: it reports whether
@@ -148,7 +151,7 @@ func (o *HostObserver) Observe(ctx context.Context, repo string, h watch.Hints) 
 	}
 	for _, it := range items {
 		p := watch.PRObs{Number: it.Number, Title: it.Title, Author: it.User, Labels: it.Labels, Draft: it.Draft, Head: it.HeadSHA,
-			HeadRef: it.HeadRef, Base: it.BaseRef, Fork: o.fork(repo, it.Number)}
+			HeadRef: it.HeadRef, Base: it.BaseRef}
 		if !o.ignored(it) {
 			k, isKnown := known[it.Number]
 			refresh := h.DetailEvery > 0 && (h.Cycle+it.Number)%h.DetailEvery == 0
@@ -159,12 +162,14 @@ func (o *HostObserver) Observe(ctx context.Context, repo string, h watch.Hints) 
 				if !force {
 					etag = cond.Details[detailKey(it.Number)]
 				}
-				d, err := o.readDetail(ctx, repo, it.Number, etag, cond)
+				d, fork, err := o.readDetail(ctx, repo, it.Number, etag, cond)
 				if err != nil {
 					return obs, o.fail(ctx, err)
 				}
 				p.Detail = d
-				p.Fork = o.fork(repo, it.Number)
+				if d != nil { // a 304 read nothing: the accepted fork flag stays
+					p.Fork, p.ForkKnown = fork, true
+				}
 			}
 			ck := repo + "#" + strconv.Itoa(it.Number)
 			o.mu.Lock()
@@ -206,12 +211,6 @@ func guessDefaultBranch(items []hosting.PullItem) string {
 		}
 	}
 	return ""
-}
-
-func (o *HostObserver) fork(repo string, n int) bool {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.forks[repo+"#"+strconv.Itoa(n)]
 }
 
 func detailKey(n int) string { return "pulls/" + strconv.Itoa(n) }
@@ -287,6 +286,17 @@ func (o *HostObserver) readTips(ctx context.Context, repo string, items []hostin
 			continue
 		}
 		seen[it.BaseRef] = true
+		if _, err := hosting.EncodeBranchSegment(it.BaseRef); err != nil {
+			// a base name the guard refuses (for example one with %) must not fail the repository
+			o.mu.Lock()
+			first := !o.warned[repo+"\x00"+it.BaseRef]
+			o.warned[repo+"\x00"+it.BaseRef] = true
+			o.mu.Unlock()
+			if o.Diag != nil && first {
+				o.Diag("watch: " + repo + ": the tip of base branch " + strconv.Quote(it.BaseRef) + " is not read (name not allowed); its PRs are still watched")
+			}
+			continue
+		}
 		prior, hadPrior := cond.Tips[it.BaseRef]
 		res, err := o.r.Branch(ctx, repo, it.BaseRef, prior.ETag)
 		if err != nil {
@@ -314,13 +324,13 @@ func (o *HostObserver) readTips(ctx context.Context, repo string, items []hostin
 }
 
 // readDetail reads pulls/N. A 304 is "unchanged": no detail, the accepted values stay.
-func (o *HostObserver) readDetail(ctx context.Context, repo string, n int, etag string, cond *watch.Conditional) (*watch.DetailObs, error) {
+func (o *HostObserver) readDetail(ctx context.Context, repo string, n int, etag string, cond *watch.Conditional) (*watch.DetailObs, bool, error) {
 	res, err := o.r.PullDetail(ctx, repo, n, etag)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if res.NotModified {
-		return nil, nil
+		return nil, false, nil
 	}
 	var doc struct {
 		Mergeable      *bool  `json:"mergeable"`
@@ -337,16 +347,13 @@ func (o *HostObserver) readDetail(ctx context.Context, repo string, n int, etag 
 		} `json:"base"`
 	}
 	if json.Unmarshal(res.Body, &doc) != nil {
-		return nil, &hosting.WatchError{Code: hosting.CodeMalformed, Message: "pull request response is not usable"}
+		return nil, false, &hosting.WatchError{Code: hosting.CodeMalformed, Message: "pull request response is not usable"}
 	}
 	if res.ETag != "" {
 		cond.Details[detailKey(n)] = res.ETag
 	}
 	fork := doc.Head.Repo == nil || doc.Base.Repo == nil || !strings.EqualFold(doc.Head.Repo.FullName, doc.Base.Repo.FullName)
-	o.mu.Lock()
-	o.forks[repo+"#"+strconv.Itoa(n)] = fork
-	o.mu.Unlock()
-	return &watch.DetailObs{Mergeable: doc.Mergeable, State: doc.MergeableState}, nil
+	return &watch.DetailObs{Mergeable: doc.Mergeable, State: doc.MergeableState}, fork, nil
 }
 
 // readGone reads pulls/N of a PR that left the open list. ok is false when the PR is still open on
@@ -376,16 +383,38 @@ func (o *HostObserver) readGone(ctx context.Context, repo string, k watch.KnownP
 	if doc.State == "open" {
 		return g, false, nil
 	}
+	// Values that become event details are validated here: anything else is a malformed response for this PR.
+	bad := func() (watch.GoneObs, bool, error) {
+		return watch.GoneObs{}, false, &hosting.WatchError{Code: hosting.CodeMalformed, Message: "pull request response has an invalid value"}
+	}
+	if !lowerHex40(doc.Head.SHA) || (doc.Merged && doc.MergeCommitSHA != "" && !lowerHex40(doc.MergeCommitSHA)) {
+		return bad()
+	}
+	if _, err := time.Parse(time.RFC3339, doc.MergedAt); doc.Merged && err != nil {
+		return bad()
+	}
 	g = watch.GoneObs{Merged: doc.Merged, MergedAt: doc.MergedAt, Base: doc.Base.Ref, Head: doc.Head.SHA, HeadRef: doc.Head.Ref, MethodHint: "unknown"}
 	if !doc.Merged {
 		return g, true, nil
 	}
-	if len(doc.MergeCommitSHA) == 40 {
+	if doc.MergeCommitSHA != "" {
 		sha := doc.MergeCommitSHA
 		g.MergeCommit = &sha
 		g.MethodHint = o.methodHint(ctx, repo, sha)
 	}
 	return g, true, nil
+}
+
+func lowerHex40(s string) bool {
+	if len(s) != 40 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !(s[i] >= '0' && s[i] <= '9' || s[i] >= 'a' && s[i] <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // methodHint: a merge commit has two parents, a rebase or squash merge one. Unreadable: unknown.

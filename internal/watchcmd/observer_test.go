@@ -309,7 +309,7 @@ func TestObserveGoneClosedMergedMethodAndStillOpen(t *testing.T) {
 	f.details[5] = `{"state":"closed","merged":false,"base":{"ref":"main"},"head":{"sha":"` + sha40("5") + `","ref":"feat/5"}}`
 	f.details[6] = `{"state":"closed","merged":true,"merge_commit_sha":"` + sha40("d") + `","merged_at":"2026-10-22T08:00:00Z","base":{"ref":"main"},"head":{"sha":"` + sha40("6") + `","ref":"feat/6"}}`
 	f.details[7] = `{"state":"open","merged":false,"base":{"ref":"main"},"head":{"sha":"` + sha40("7") + `","ref":"feat/7"}}`
-	f.details[8] = `{"state":"closed","merged":true,"merge_commit_sha":null,"base":{"ref":"main"},"head":{"sha":"` + sha40("8") + `","ref":"feat/8"}}`
+	f.details[8] = `{"state":"closed","merged":true,"merge_commit_sha":null,"merged_at":"2026-10-22T08:00:00Z","base":{"ref":"main"},"head":{"sha":"` + sha40("8") + `","ref":"feat/8"}}`
 	f.commits[sha40("d")] = `{"parents":[{"sha":"1"},{"sha":"2"}]}`
 	s := &session{o: newObserver(f), f: f}
 	s.know = []watch.KnownPR{{Number: 5}, {Number: 6}, {Number: 7}, {Number: 8}}
@@ -467,5 +467,70 @@ func TestPruneCondDropsClosedPRs(t *testing.T) {
 		if strings.Contains(k, sha40("9")) {
 			t.Fatal(k)
 		}
+	}
+}
+
+func TestObserveRefusesInvalidValuesOfAGonePR(t *testing.T) {
+	good := `{"state":"closed","merged":true,"merge_commit_sha":"` + sha40("d") + `","merged_at":"2026-10-22T08:00:00Z","base":{"ref":"main"},"head":{"sha":"` + sha40("6") + `","ref":"feat/6"}}`
+	for name, body := range map[string]string{
+		"merge commit with an escape": strings.Replace(good, sha40("d"), "\u001b[31m"+sha40("d")[:30], 1),
+		"uppercase merge commit":      strings.Replace(good, sha40("d"), strings.ToUpper(sha40("d")), 1),
+		"short head":                  strings.Replace(good, sha40("6"), "abc", 1),
+		"merged_at garbage":           strings.Replace(good, "2026-10-22T08:00:00Z", "yesterday", 1),
+		"merged_at missing":           strings.Replace(good, `"merged_at":"2026-10-22T08:00:00Z",`, "", 1),
+		"closed with a bad head":      `{"state":"closed","merged":false,"base":{"ref":"main"},"head":{"sha":"x","ref":"f"}}`,
+	} {
+		f := newFake()
+		f.tips["main"] = sha40("a")
+		f.details[6] = body
+		o := newObserver(f)
+		_, err := o.Observe(context.Background(), "o/r", watch.Hints{Cycle: 1, DetailEvery: 10, Known: []watch.KnownPR{{Number: 6}}})
+		var oe *watch.ObserveError
+		if !errors.As(err, &oe) || oe.Code != hosting.CodeMalformed {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestObserveKeepsWatchingWhenABaseNameIsRefused(t *testing.T) {
+	f := newFake()
+	f.items = []hosting.PullItem{item(1, "main"), item(2, "we%2Fird")}
+	f.tips["main"] = sha40("a")
+	f.details[1], f.details[2] = detailJSON, detailJSON
+	o := newObserver(f)
+	var diags []string
+	o.Diag = func(s string) { diags = append(diags, s) }
+	for i := 0; i < 2; i++ {
+		obs, err := o.Observe(context.Background(), "o/r", watch.Hints{Cycle: i + 1, DetailEvery: 10})
+		if err != nil || len(obs.PRs) != 2 || obs.PRs[1].Detail == nil {
+			t.Fatalf("%v %+v", err, obs)
+		}
+	}
+	if f.count("branch/we") != 0 || f.count("branch/main") != 2 || len(diags) != 1 || !strings.Contains(diags[0], `"we%2Fird"`) {
+		t.Fatalf("%v %v", f.calls, diags)
+	}
+}
+
+func TestObserveReportsTheForkFlagOnlyWhenPullDetailWasRead(t *testing.T) {
+	f := newFake()
+	f.items = []hosting.PullItem{item(1, "main")}
+	f.tips["main"] = sha40("a")
+	f.details[1] = `{"mergeable":true,"mergeable_state":"clean","head":{"repo":{"full_name":"x/fork"}},"base":{"repo":{"full_name":"o/r"}}}`
+	f.detailET[1] = `"d1"`
+	s := &session{o: newObserver(f), f: f}
+	obs := s.observe(t)
+	if !obs.PRs[0].Fork || !obs.PRs[0].ForkKnown {
+		t.Fatalf("%+v", obs.PRs[0])
+	}
+	s.accept(obs)
+	s.cyc = 1
+	obs = s.observe(t) // nothing read
+	if obs.PRs[0].ForkKnown || obs.PRs[0].Fork {
+		t.Fatalf("an unread fork must not be reported as an answer: %+v", obs.PRs[0])
+	}
+	s.cyc = 9 // slow refresh: a 304 reads no body either
+	obs = s.observe(t)
+	if obs.PRs[0].ForkKnown {
+		t.Fatalf("304: %+v", obs.PRs[0])
 	}
 }

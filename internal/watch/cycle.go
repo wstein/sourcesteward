@@ -224,6 +224,9 @@ func (c *cycle) baseline(rs *RepoState, obs RepoObservation) {
 			if old.Head == o.Head && old.TimeoutFired {
 				fired = old
 			}
+			if !o.ForkKnown {
+				p.Fork = old.Fork
+			}
 		} else if rec, _, ok := rs.closedRecord(o.Number); ok {
 			p.Epochs, p.Generation = rec.Epochs, rec.Generation+1
 		}
@@ -289,7 +292,10 @@ func (c *cycle) diff(repo string, rs *RepoState, obs RepoObservation) {
 			}
 			p.Gone = false
 		}
-		p.Title, p.Author, p.Labels, p.HeadRef, p.Fork = o.Title, o.Author, o.Labels, o.HeadRef, o.Fork
+		p.Title, p.Author, p.Labels, p.HeadRef = o.Title, o.Author, o.Labels, o.HeadRef
+		if o.ForkKnown {
+			p.Fork = o.Fork
+		}
 		c.volatile(repo, rs, p, o)
 	}
 	for _, p := range rs.sortedPRs() {

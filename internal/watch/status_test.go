@@ -81,3 +81,27 @@ func dirListing(t *testing.T, dir string) string {
 	}
 	return out
 }
+
+func TestUnknownForkNeverOverwritesAPersistedFork(t *testing.T) {
+	r := newRig(t)
+	r.must(ok(mk(1)))
+	r.must(ok(mk(1, func(p *PRObs) { p.Fork, p.ForkKnown = true, true })))
+	if !r.state().Repo["o/r"].PRs[1].Fork {
+		t.Fatal("a known fork is stored")
+	}
+	r.must(ok(mk(1))) // no pulls/N this cycle: Fork=false is not an answer
+	if !r.state().Repo["o/r"].PRs[1].Fork {
+		t.Fatal("an unknown fork overwrote the persisted one")
+	}
+	r.must(ok(mk(1, func(p *PRObs) { p.ForkKnown = true })))
+	if r.state().Repo["o/r"].PRs[1].Fork {
+		t.Fatal("a known non-fork is stored")
+	}
+	r.base = true
+	r.must(ok(mk(1, func(p *PRObs) { p.Fork, p.ForkKnown = true, true })))
+	r.base = false
+	r.must(ok(mk(1)))
+	if !r.state().Repo["o/r"].PRs[1].Fork {
+		t.Fatal("restart kept")
+	}
+}
