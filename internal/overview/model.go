@@ -199,6 +199,7 @@ const (
 	ReasonNotReadLocally = "not-read-locally"
 	ReasonInvalidRepo    = "invalid-repo"
 	ReasonIssuesDisabled = "issues-disabled"
+	ReasonNoIdentity     = "no-identity"
 	CodeRateLimited      = "rate-limited"
 	CodeNetwork          = "network"
 )
@@ -332,11 +333,13 @@ type Repo struct {
 }
 
 // Input is everything the model needs. Root is the workspace root used for `git -C ROOT add PATH`.
-// Deadline is the overall deadline of the run and RateLimitReset the reset time GitHub gave (zero when
+// Viewer is the outcome of the one `user` read of the run (the zero value when none was attempted): it
+// shapes the notices and the summary, never an item. Deadline is the overall deadline of the run and RateLimitReset the reset time GitHub gave (zero when
 // it gave none); both only shape the wording of the notices.
 type Input struct {
 	Root           string
 	Repos          []Repo
+	Viewer         SourceState
 	Deadline       time.Duration
 	RateLimitReset time.Time
 }

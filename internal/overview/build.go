@@ -23,6 +23,12 @@ func Build(in Input) Overview {
 			ov.Summary.Priorities.Violet++
 		}
 	}
+	switch in.Viewer.Outcome {
+	case OutcomeError:
+		ov.Summary.Failed, ov.Summary.Degraded = true, true
+	case OutcomeSkipped:
+		ov.Summary.Degraded = true
+	}
 	for _, r := range in.Repos {
 		if r.Local.Attention {
 			ov.Summary.Attention++
@@ -38,7 +44,9 @@ func Build(in Input) Overview {
 			case OutcomeError:
 				ov.Summary.Failed, ov.Summary.Degraded = true, true
 			case OutcomeSkipped:
-				ov.Summary.Degraded = true
+				if st.Reason != ReasonIssuesDisabled { // a fact about the repository, not a gap in the data
+					ov.Summary.Degraded = true
+				}
 			}
 		}
 	}
