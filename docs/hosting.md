@@ -130,7 +130,7 @@ visibility: `push`, `maintain` or `admin` true is `write-access`, all three repo
 `write-access` no draft is reported, so "0 drafts" is never stated for a token that cannot see them. A fine-grained token with write access but without the
 releases scope can still withhold drafts.
 
-A tag is **unreleased** per release tag pattern (`v*.*.*` when the caller gives none) when its version is higher than that of the latest published release and no
+A tag is **unreleased** per release tag pattern (`v*.*.*`, a semantic version with an optional `v`, when the caller gives none) when its version is higher than that of the latest published release and no
 release, draft or published, carries its name (without a published release only the highest tag counts). `*` matches any text and the text between the
 pattern's literal head and tail must be a semantic version; other tags are ignored, prereleases order as in semantic versioning, and at most 5 tags are listed.
 
