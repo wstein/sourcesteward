@@ -26,7 +26,7 @@ func ptr[T any](v T) *T { return &v }
 // workspaceLocal is a local status of three repositories: the root with a GitHub origin, a submodule
 // on another host and one that cannot be read.
 func workspaceLocal() stwsync.StatusResult {
-	return stwsync.StatusResult{
+	res := stwsync.StatusResult{
 		SchemaVersion: 1, Command: "status", Root: ptr("/ws"),
 		Repos: []stwsync.RepoStatus{
 			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: ptr("main"), Reasons: []string{}},
@@ -35,6 +35,13 @@ func workspaceLocal() stwsync.StatusResult {
 		},
 		Summary: stwsync.StatusSummary{Total: 3, Errors: 1},
 	}
+	for i := range res.Repos { // as stwsync reports them: the worktree list is never null and a submodule has a gitlink
+		res.Repos[i].Worktrees.List = []stwsync.WorktreeInfo{}
+		if res.Repos[i].Kind == "submodule" {
+			res.Repos[i].Gitlink = &stwsync.Gitlink{State: "uninitialized"}
+		}
+	}
+	return res
 }
 
 func workspaceMembers(dir string) stwsync.Workspace {
