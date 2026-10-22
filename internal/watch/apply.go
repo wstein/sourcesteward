@@ -9,7 +9,7 @@ import (
 // apply is the one place where an event changes the state. A live cycle calls it for every event it
 // emits and the start-up replay calls it for every journal line past applied_seq, so both reach the same
 // state by construction (the "Replay effects" table of Spec 035). Counters are set to the value encoded in
-// the id and never lowered, and applying an event twice changes nothing.
+// the id and never lowered (raise), so a counter does not depend on how often an event is applied.
 func (s *State) apply(ev Event) {
 	switch ev.Kind {
 	case KindReposChanged:
@@ -40,7 +40,7 @@ func (s *State) apply(ev Event) {
 				p.Epochs = p.Epochs.max(rec.Epochs)
 			}
 		}
-		p.Title, p.Author, p.Draft, p.Base, p.HeadRef, p.Head = d.Title, d.Author, d.Draft, d.Base, d.HeadRef, d.Head
+		p.Title, p.Author, p.Draft, p.Base, p.HeadRef, p.Head, p.Fork = d.Title, d.Author, d.Draft, d.Base, d.HeadRef, d.Head, d.Fork
 		p.Generation, p.DetailDue, p.Gone = gen, true, false
 	case KindMerged:
 		d := ev.Details.(*MergedDetails)
@@ -125,18 +125,25 @@ func applyPR(p *PRState, ev Event) {
 		if d, ok := ev.Details.(*ChecksRedDetails); ok {
 			head, class = d.Head, ClassRed
 		}
-		if head != p.Head {
+		e, _ := idCounter(ev.ID, 'c')
+		if p.Head == "" { // a PR rebuilt from the journal alone (lost state) learns its head here
+			p.Head = head
+		}
+		if head != p.Head { // not the current head: only the counter is kept
+			raise(&p.Epochs.Checks, e)
 			return
 		}
-		e, _ := idCounter(ev.ID, 'c')
 		p.acceptClass(class, e, "")
 	case KindChecksPendingTimout:
 		d := ev.Details.(*PendingTimeoutDetails)
+		e, _ := idCounter(ev.ID, 'c')
+		raise(&p.Epochs.Checks, e)
+		if p.Head == "" {
+			p.Head = d.Head
+		}
 		if d.Head != p.Head {
 			return
 		}
-		e, _ := idCounter(ev.ID, 'c')
-		raise(&p.Epochs.Checks, e)
 		p.Class, p.ClassCand, p.PendingSince, p.TimeoutFired = ClassPending, "", d.Since, true
 		p.PendingNames = append([]string(nil), d.Pending...)
 	case KindMergeableChanged:
