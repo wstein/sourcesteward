@@ -671,3 +671,18 @@ func TestNoReReadWhenTheFirstReadAlreadyReportedAnotherHeadOrForADetailedDraft(t
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestNullMergeableWithAnyStateTriggersTheReRead(t *testing.T) {
+	for _, state := range []string{"clean", ""} {
+		f := newForge()
+		p := okPR("o/r", 1)
+		f.add(p)
+		f.seq["o/r#1"] = []string{detailBody("o/r", "null", state, p.head)}
+		if r := row(t, run(t, f, Options{Repos: []string{"o/r"}}), "o/r", 1); !r.Ready {
+			t.Fatalf("state %q: %+v", state, r)
+		}
+		if n := f.count("detail/"); n != 2 {
+			t.Fatalf("state %q: %d detail reads", state, n)
+		}
+	}
+}
