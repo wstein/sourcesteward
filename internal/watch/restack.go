@@ -54,7 +54,7 @@ func (g *GitRestacker) branchOK(name string) error {
 }
 
 // Candidates returns the open children of a merged PR: class 1 (`child-of-merged-branch`) by the base ref
-// name alone, class 2 (`contains-merged-commits`) by the old parent SHA in the commit list of an open PR on
+// name alone, only when the merged head branch lives in the base repository and differs from the base branch, class 2 (`contains-merged-commits`) by the old parent SHA in the commit list of an open PR on
 // the merge base. A rebase merge rewrites the SHAs, so the old head only survives in the children's own commits.
 func (g *GitRestacker) Candidates(ctx context.Context, repo string, due RestackDue, open []OpenPR) ([]RestackCandidate, error) {
 	sorted := append([]OpenPR(nil), open...)
@@ -66,7 +66,7 @@ func (g *GitRestacker) Candidates(ctx context.Context, repo string, due RestackD
 		}
 		var reason string
 		switch {
-		case due.HeadRef != "" && p.Base == due.HeadRef:
+		case !due.HeadFork && due.HeadRef != "" && due.HeadRef != due.Base && p.Base == due.HeadRef:
 			reason = ReasonChildOfMerged
 		case p.Base == due.Base:
 			reason = ReasonContains

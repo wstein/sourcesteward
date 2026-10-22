@@ -44,8 +44,12 @@ func (s *State) apply(ev Event) {
 		p.Generation, p.DetailDue, p.Gone = gen, true, false
 	case KindMerged:
 		d := ev.Details.(*MergedDetails)
+		headFork := true // unknown head repository: no class-1 candidates
+		if p := rs.PRs[n]; p != nil {
+			headFork = p.Fork
+		}
 		delete(rs.PRs, n)
-		due := RestackDue{MergedPR: n, MergeCommit: d.MergeCommit, OldParent: d.Head, Base: d.Base, HeadRef: d.HeadRef}
+		due := RestackDue{MergedPR: n, MergeCommit: d.MergeCommit, OldParent: d.Head, Base: d.Base, HeadRef: d.HeadRef, HeadFork: headFork}
 		dup := false
 		for _, x := range rs.RestackDue {
 			if x.MergedPR == n && keyMerged(x.MergeCommit) == keyMerged(d.MergeCommit) {

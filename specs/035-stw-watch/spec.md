@@ -252,6 +252,10 @@ On a `merged` event of PR M (base B, head ref H, merged head SHA S, merge commit
 - Two disjoint classes of candidate children (open PRs of the same repository):
   1. **`child-of-merged-branch`**: the PR's `base` ref name equals H. Detected by the base ref name **only**; no commit check
      (`pulls/N/commits` lists H...child and never contains S, so it cannot confirm this class).
+     Class 1 applies only when the merged PR's head branch lives in the base repository and H differs from B. A merged
+     fork PR (for example `fork:main` into `main`, H equal to B) or one whose head repository was never observed has no
+     class-1 children: its open PRs on B are candidates by the commit check (class 2) only, so a fork merge cannot
+     produce `restack-needed` for unrelated PRs.
   2. **`contains-merged-commits`**: the PR's `base` is B (not H) and its commit list (`pulls/N/commits`, at most 3 pages of 100,
      read only for open PRs on B in the merge cycle) contains S. This catches children that GitHub retargeted to B after the parent
      branch was deleted. The commit check applies to this class only.

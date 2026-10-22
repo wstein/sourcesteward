@@ -96,6 +96,19 @@ func TestRestackRebaseMergeFixture(t *testing.T) {
 	if f.Parent.MergeCommit == f.Parent.HeadSHA {
 		t.Fatal("fixture is not a rewrite")
 	}
+	// Every rewritten commit differs from every original parent commit.
+	orig := map[string]bool{}
+	for _, c := range f.ChildRetargeted.shas() {
+		orig[c] = true
+	}
+	for _, r := range f.Parent.Rewritten {
+		if orig[r] {
+			t.Fatalf("rewritten commit %s is still an original", r)
+		}
+	}
+	if len(f.Parent.Rewritten) != 2 || len(f.ChildRetargeted.shas()) != 4 || !orig[f.Parent.HeadSHA] {
+		t.Fatal("fixture shape changed")
+	}
 	for _, s := range f.ChildRetargeted.shas() {
 		if s == f.Parent.MergeCommit {
 			t.Fatal("rewritten tip must not be in the retargeted list")
@@ -228,12 +241,60 @@ func TestRestackErrors(t *testing.T) {
 	}
 }
 
-func TestRestackBaseEqualsHeadRefIsClassOne(t *testing.T) {
+// A fork PR fork:main into main has head ref == base. It has no children by branch name: only the commit check applies.
+func TestRestackHeadRefEqualsBaseUsesCommitCheck(t *testing.T) {
+	old := sha("aa")
+	lc := &fakeCommits{lists: map[int][]string{12: {sha("01")}, 13: {old}}}
+	rs := &GitRestacker{Commits: lc}
+	due := RestackDue{MergedPR: 10, OldParent: old, Base: "main", HeadRef: "main"}
+	got, err := rs.Candidates(context.Background(), "o/r", due, []OpenPR{{Number: 12, Base: "main", HeadRef: "c"}, {Number: 13, Base: "main", HeadRef: "d"}})
+	if err != nil || len(got) != 1 || got[0].PR != 13 || got[0].Reason != ReasonContains || len(lc.reads) != 2 {
+		t.Fatalf("%v %+v %v", err, got, lc.reads)
+	}
+}
+
+// A merged fork PR must not match an upstream PR whose base is a branch with the fork head's name.
+func TestRestackForkHeadHasNoClassOne(t *testing.T) {
 	old := sha("aa")
 	lc := &fakeCommits{}
 	rs := &GitRestacker{Commits: lc}
-	got, _ := rs.Candidates(context.Background(), "o/r", RestackDue{MergedPR: 10, OldParent: old, Base: "main", HeadRef: "main"}, []OpenPR{{Number: 12, Base: "main", HeadRef: "c"}})
-	if len(got) != 1 || got[0].Reason != ReasonChildOfMerged || len(lc.reads) != 0 {
-		t.Fatalf("%+v %v", got, lc.reads)
+	due := RestackDue{MergedPR: 10, OldParent: old, Base: "main", HeadRef: "feat/x", HeadFork: true}
+	got, err := rs.Candidates(context.Background(), "o/r", due, []OpenPR{{Number: 12, Base: "feat/x", HeadRef: "c"}})
+	if err != nil || len(got) != 0 || len(lc.reads) != 0 {
+		t.Fatalf("%v %+v %v", err, got, lc.reads)
+	}
+}
+
+// The first hit ends the reading, even when the lister reports more pages.
+func TestRestackStopsAtFirstHit(t *testing.T) {
+	old := sha("aa")
+	lc := &fakeCommits{lists: map[int][]string{12: {old, sha("01"), sha("02"), sha("03")}}, pageSize: 2}
+	rs := &GitRestacker{Commits: lc}
+	due := RestackDue{MergedPR: 10, OldParent: old, Base: "main", HeadRef: "p"}
+	got, err := rs.Candidates(context.Background(), "o/r", due, []OpenPR{{Number: 12, Base: "main", HeadRef: "c"}})
+	if err != nil || len(got) != 1 || len(lc.reads) != 1 {
+		t.Fatalf("%v %+v %v", err, got, lc.reads)
+	}
+}
+
+// The merged PR's head repository is taken from the open PR in state, in a live cycle and in a replay.
+func TestMergedDueRecordsHeadFork(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		prs  map[int]*PRState
+		want bool
+	}{
+		{"same repository", map[int]*PRState{10: {Number: 10}}, false},
+		{"fork", map[int]*PRState{10: {Number: 10, Fork: true}}, true},
+		{"unobserved", map[int]*PRState{}, true},
+	} {
+		st := newState()
+		st.Repo = map[string]*RepoState{"o/r": {PRs: tc.prs}}
+		c := sha("cc")
+		st.apply(Event{Repo: rp("o/r"), PR: pp(10), Kind: KindMerged, ID: "o/r#10:merged:" + c,
+			Details: &MergedDetails{MergeCommit: &c, Base: "main", Head: sha("aa"), HeadRef: "f"}})
+		if got := st.Repo["o/r"].RestackDue[0].HeadFork; got != tc.want {
+			t.Errorf("%s: HeadFork %v", tc.name, got)
+		}
 	}
 }
