@@ -95,6 +95,9 @@ type WatchReader struct {
 	mu      sync.Mutex
 	calls   map[WatchKind]CallCount
 	last    RateInfo
+	// halved holds the repositories whose list pages exceeded the body limit at 25; in
+	// memory only, so a restart tries 25 again.
+	halved map[string]bool
 }
 
 func newWatchReader(api *ghAPI) *WatchReader {
@@ -144,6 +147,21 @@ func (r *WatchReader) count(kind WatchKind, notModified bool) {
 	}
 	r.calls[kind] = c
 	r.mu.Unlock()
+}
+
+func (r *WatchReader) isHalved(repo string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.halved[repo]
+}
+
+func (r *WatchReader) markHalved(repo string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.halved == nil {
+		r.halved = map[string]bool{}
+	}
+	r.halved[repo] = true
 }
 
 func malformed(msg string) *WatchError { return &WatchError{Code: CodeMalformed, Message: msg} }

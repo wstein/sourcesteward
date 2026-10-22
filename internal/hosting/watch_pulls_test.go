@@ -162,8 +162,11 @@ func TestListOpenPullsTooManyOpenPRs(t *testing.T) {
 				body := "[" + pullJSON(p) + "]"
 				f.serve(uri, fmt.Sprintf(`"e%d"`, p), body, linkNext(tc.perPage, p+1)) // endless list
 			}
-			state := PullListState{PerPage: tc.perPage}
-			_, err := f.reader("github.com").ListOpenPulls(context.Background(), "a/b", state, tc.maxOpen)
+			r := f.reader("github.com")
+			if tc.perPage == 12 {
+				r.markHalved("a/b")
+			}
+			_, err := r.ListOpenPulls(context.Background(), "a/b", PullListState{PerPage: tc.perPage}, tc.maxOpen)
 			assertWatchCode(t, err, CodeTooManyPRs)
 			if len(f.log) != tc.wantPages {
 				t.Fatalf("fetched %d pages, want %d", len(f.log), tc.wantPages)
@@ -312,5 +315,43 @@ func TestListOpenPullsNoProbeBeyondAllowlistBound(t *testing.T) {
 	f.log = nil
 	if _, err := r.ListOpenPulls(context.Background(), "a/b", first.State, 2000); err != nil || len(f.log) != 80 {
 		t.Fatalf("%v requests=%d", err, len(f.log))
+	}
+}
+
+// The halved page size lives in the reader (until restart); it is not read back from
+// the stored state, so a restart begins at 25 again and never trusts stored 12-sized pages.
+func TestHalvedPageSizeIsInMemoryOnly(t *testing.T) {
+	f := newFakeForge(t)
+	f.serve(listURI(25, 1), `"x1"`, pageBody(1, 25), linkNext(25, 2))
+	f.handlers[listURI(25, 2)] = func(*http.Request) *http.Response {
+		return forgeResponse(200, strings.Repeat("x", maxBytes+1), nil)
+	}
+	f.serve(listURI(12, 1), `"y1"`, pageBody(1, 12), linkNext(12, 2))
+	f.serve(listURI(12, 2), `"y2"`, pageBody(13, 20), nil)
+	ctx := context.Background()
+	r := f.reader("github.com")
+	res, err := r.ListOpenPulls(ctx, "a/b", PullListState{}, 2000)
+	if err != nil || res.State.PerPage != 12 {
+		t.Fatalf("%v %+v", err, res.State.PerPage)
+	}
+	// Same reader: still 12 (kept for the repository until restart).
+	f.log = nil
+	if _, err = r.ListOpenPulls(ctx, "a/b", res.State, 2000); err != nil || f.log[0] != listURI(12, 1) {
+		t.Fatalf("%v %v", err, f.log)
+	}
+	// Another repository on the same reader is unaffected.
+	f.log = nil
+	f.serve("repos/c/d/pulls?state=open&per_page=25&page=1", `"z"`, pageBody(1, 3), nil)
+	if _, err = r.ListOpenPulls(ctx, "c/d", PullListState{}, 2000); err != nil || f.log[0] != "repos/c/d/pulls?state=open&per_page=25&page=1" {
+		t.Fatalf("%v %v", err, f.log)
+	}
+	// A new reader (restart) with the stored 12-sized state starts at 25 and sends no stale validator.
+	f.log, f.etags = nil, nil
+	r2 := f.reader("github.com")
+	if _, err = r2.ListOpenPulls(ctx, "a/b", res.State, 2000); err != nil {
+		t.Fatal(err)
+	}
+	if f.log[0] != listURI(25, 1) || f.etags[0] != "" {
+		t.Fatalf("restart must begin at 25 without validators: %v %q", f.log, f.etags)
 	}
 }
