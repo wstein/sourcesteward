@@ -26,9 +26,9 @@ omitted; absent values are `null`. `additionalProperties: false` everywhere. Typ
 `created_at` (time), `age_days` (integer), `base` (str), `head_ref` (str), `head` (sha), `fork` (bool), `labels` (array of at most 20 str),
 `checks` (enum `none|pending|green|red`, or null for a draft without detail), `failing` (array of at most 20 str, red only, else empty),
 `mergeable` (bool or null), `mergeable_state` (str or null), `rebaseable` (bool or null), `reviewers` (array of at most 20 str), `group` (the key it is listed
-under), `reason` (null unless `group` is `blocked`: `checks-red`, `no-checks`, `review-or-protection`, `unstable`, `unknown`),
+under), `reason` (null unless `group` is `blocked`: `checks-red`, `no-checks`, `unknown`, `review-or-protection`, `unstable`, `not-rebaseable`, `not-read`; the ordered rule table is in the spec),
 `ready` (bool, true exactly when `group` is `ready`), `detail` (bool: false for a row beyond `--limit` or a draft without detail,
-whose `checks`, `mergeable` and `mergeable_state` are then null and whose group is `draft` or `blocked` with reason `unknown`).
+whose `checks`, `mergeable`, `mergeable_state` and `rebaseable` are then null and whose group is `draft`, or `blocked` with reason `not-read` past the budget).
 
 ## Example
 
