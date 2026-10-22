@@ -39,6 +39,9 @@ func TestSelectDerivesTheRepositoryFromOrigin(t *testing.T) {
 		{"look-alike host", Origin{Name: "a", Remote: "https://github.com.evil.example/wstein/a", Readable: true}, "", overview.ReasonOtherHost},
 		{"too many segments", Origin{Name: "a", Remote: "https://github.com/wstein/a/b", Readable: true}, "", overview.ReasonInvalidRepo},
 		{"owner only", Origin{Name: "a", Remote: "https://github.com/wstein", Readable: true}, "", overview.ReasonInvalidRepo},
+		{"parent segment", Origin{Name: "a", Remote: "https://github.com/wstein/..", Readable: true}, "", overview.ReasonInvalidRepo},
+		{"encoded space", Origin{Name: "a", Remote: "https://github.com/wstein/a%20b", Readable: true}, "", overview.ReasonInvalidRepo},
+		{"encoded slash", Origin{Name: "a", Remote: "https://github.com/wstein/a%2Fb", Readable: true}, "", overview.ReasonInvalidRepo},
 		{"dot segment", Origin{Name: "a", Remote: "https://github.com/wstein/../a", Readable: true}, "", overview.ReasonInvalidRepo},
 	}
 	for _, c := range cases {
