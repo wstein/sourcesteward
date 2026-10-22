@@ -153,7 +153,7 @@ func TestWatchOnceBaselineThenTransitionEndToEnd(t *testing.T) {
 	// --human prints one line per event
 	forge3 := forgeWith(t, 1, 2, 3)
 	status, out, _ = watchRun(t, forge3, "--repo", "o/r", "--once", "--human", "--state-dir", dir)
-	if status != 0 || !strings.Contains(out, " o/r#3 new-pr PR 3 by alice into main") || strings.Count(out, "\n") != 1 {
+	if status != 0 || !strings.Contains(out, " o/r#3 new-pr PR 3 by alice into main") || !strings.Contains(out, " o/r#2 checks-green ") || strings.Count(out, "\n") != 2 {
 		t.Fatalf("%d %q", status, out)
 	}
 }
