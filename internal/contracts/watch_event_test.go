@@ -180,3 +180,35 @@ func TestWatchStatusDefinition(t *testing.T) {
 		}
 	}
 }
+
+// Every kind rejects an extra and a missing detail key (an open details object must fail a test, not only
+// the freeze hash).
+func TestWatchEventSchemaClosesDetailsOfEveryKind(t *testing.T) {
+	s := schema(t, "watch-event")
+	for name, line := range watchFixtures() {
+		var base map[string]any
+		if err := json.Unmarshal([]byte(line), &base); err != nil {
+			t.Fatal(err)
+		}
+		details := base["details"].(map[string]any)
+		withExtra := func() string {
+			var m map[string]any
+			_ = json.Unmarshal([]byte(line), &m)
+			m["details"].(map[string]any)["extra"] = 1
+			b, _ := json.Marshal(m)
+			return string(b)
+		}()
+		if s.Validate(value(t, []byte(withExtra))) == nil {
+			t.Errorf("%s: an extra details key is accepted", name)
+		}
+		for key := range details {
+			var m map[string]any
+			_ = json.Unmarshal([]byte(line), &m)
+			delete(m["details"].(map[string]any), key)
+			b, _ := json.Marshal(m)
+			if s.Validate(value(t, b)) == nil {
+				t.Errorf("%s: missing details key %s is accepted", name, key)
+			}
+		}
+	}
+}
