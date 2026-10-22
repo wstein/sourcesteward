@@ -38,7 +38,7 @@ head matched `pulls/N` and whose checks are `green`, and that has `mergeable` nu
 only (unconditional, `head.sha` must equal the listed head, otherwise the row fails closed as `blocked`/`unknown`), no check read. The result
 replaces the first detail before the verdict; a row still unknown stays `blocked` with reason `unknown`. There is no sleep, no loop and no
 second re-read. The re-reads are bounded by the number of such rows, consume rate limit but not the `--limit` budget, and are not made once a
-rate limit was hit (the rows stay `unknown`). A failed re-read leaves the row `unknown` and is reported in `repos[].error` and `errors`. The
+rate limit was hit (the rows stay `unknown`). A failed re-read leaves the row `unknown` and is reported in `repos[].error` and `errors` (exit 1). The
 document, its counters and the schema are unchanged.
 
 ## Example
