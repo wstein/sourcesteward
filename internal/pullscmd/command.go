@@ -313,7 +313,7 @@ func ownerErrors(d hosting.OwnerDiscovery) []DocError {
 	if d.Code != "" {
 		add(d.Code, d.Message)
 	}
-	if d.Ignored > 0 && !(d.Code == hosting.CodeMalformed && strings.Contains(d.Message, "ignored")) {
+	if d.Ignored > 0 && !(d.Code == hosting.CodeMalformed && d.Message == hosting.MessageIgnoredResults) {
 		add(hosting.CodeMalformed, fmt.Sprintf("%s ignored: unusable repository", plural(d.Ignored, "search result", "search results")))
 	}
 	return out
