@@ -140,11 +140,42 @@ func TestJournalJunkTailLongerThanTheNextLineIsCutOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	j.Close()
-	j, err = openJournal(dir) // junk left behind a shorter line would be a corrupt middle line
+	raw, _ := os.ReadFile(filepath.Join(dir, "journal.jsonl"))
+	lines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+	if len(lines) != 2 || !strings.HasSuffix(string(raw), "\n") || strings.Contains(string(raw), "xxx") {
+		t.Fatalf("the file must hold exactly the two events, got %q", raw)
+	}
+	j, err = openJournal(dir)
 	if err != nil || j.Tail() != 2 {
 		t.Fatalf("%d %v", j.Tail(), err)
 	}
 	j.Close()
+}
+
+func TestLostStateReplayOfATimeoutAtAHigherEpoch(t *testing.T) {
+	r := newRig(t)
+	r.timeout = 3 * time.Minute
+	r.must(ok(mk(1, runs(running()))))
+	r.must(ok(mk(1, runs(passing()))))
+	one(t, r.must(ok(mk(1, runs(passing())))), KindChecksGreen) // c1
+	r.must(ok(mk(1, runs(running()))))
+	r.must(ok(mk(1, runs(running())))) // pending accepted, c2
+	var fired Event
+	for i := 0; i < 6 && fired.ID == ""; i++ {
+		if evs := r.must(ok(mk(1, runs(running())))); len(evs) > 0 {
+			fired = evs[0]
+		}
+	}
+	if !strings.HasSuffix(fired.ID, ":c2:t") {
+		t.Fatalf("setup: %v", r.journalIDs())
+	}
+	r.w.Close()
+	r.w = nil
+	os.Remove(filepath.Join(r.dir, "state.json"))
+	r.mustOpen()
+	if p := r.state().Repo["o/r"].PRs[1]; p == nil || p.Epochs.Checks != 2 || !p.TimeoutFired {
+		t.Fatalf("replay lost the epoch or the fired flag: %+v", p)
+	}
 }
 
 func TestClosedReplayPinsTheGenerationAcrossASecondReopen(t *testing.T) {
