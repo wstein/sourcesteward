@@ -61,6 +61,7 @@ type (
 		Base    string `json:"base"`
 		HeadRef string `json:"head_ref"`
 		Head    string `json:"head"`
+		Fork    bool   `json:"fork"` // the head repository differs from the base repository
 	}
 	HeadChangedDetails struct {
 		Old string `json:"old"`

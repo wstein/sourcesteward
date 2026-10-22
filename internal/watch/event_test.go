@@ -20,7 +20,7 @@ func boolp(b bool) *bool    { return &b }
 
 // allKinds is the closed v1 enum of the contract with the exact detail keys of every kind.
 var kindKeys = map[string][]string{
-	KindNewPR:               {"title", "author", "draft", "base", "head_ref", "head"},
+	KindNewPR:               {"title", "author", "draft", "base", "head_ref", "head", "fork"},
 	KindHeadChanged:         {"old", "new"},
 	KindChecksGreen:         {"head", "draft", "base", "total"},
 	KindChecksRed:           {"head", "failing", "failing_total", "shape", "base", "draft"},

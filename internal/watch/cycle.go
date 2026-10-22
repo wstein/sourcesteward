@@ -82,18 +82,13 @@ func (c *cycle) syncRepos() {
 	if st.Repos == nil {
 		st.Repos = append([]string{}, o.Repos...)
 		st.Skipped = append([]Skipped{}, o.Skipped...)
-		keep := map[string]bool{}
 		for _, r := range o.Repos {
-			keep[r] = true
 			if st.Repo[r] == nil {
 				st.Repo[r] = newRepoState(c.nowS)
 			}
 		}
-		for r := range st.Repo {
-			if !keep[r] {
-				delete(st.Repo, r)
-			}
-		}
+		// A rebuilt record of a repository that is no longer configured stays, as after a normal
+		// removal: its counters keep ids unique if the repository returns.
 		return
 	}
 	cfg, have := map[string]bool{}, map[string]bool{}
@@ -223,8 +218,12 @@ func (c *cycle) baseline(rs *RepoState, obs RepoObservation) {
 		}
 		p := &PRState{Number: o.Number, Title: o.Title, Author: o.Author, Labels: o.Labels, Draft: o.Draft, Head: o.Head, HeadRef: o.HeadRef,
 			Base: o.Base, Fork: o.Fork, DetailDue: o.Detail == nil}
+		var fired *PRState // a timeout that already fired for this head stays fired (same id otherwise)
 		if old := rs.PRs[o.Number]; old != nil {
 			p.Epochs, p.Generation = old.Epochs, old.Generation
+			if old.Head == o.Head && old.TimeoutFired {
+				fired = old
+			}
 		} else if rec, _, ok := rs.closedRecord(o.Number); ok {
 			p.Epochs, p.Generation = rec.Epochs, rec.Generation+1
 		}
@@ -237,6 +236,9 @@ func (c *cycle) baseline(rs *RepoState, obs RepoObservation) {
 			p.Class = res.Class
 			if res.Class == ClassPending {
 				p.PendingSince, p.PendingNames = c.nowS, res.Pending
+				if fired != nil {
+					p.TimeoutFired, p.PendingSince = true, fired.PendingSince
+				}
 			}
 		}
 		fresh[o.Number] = p
@@ -268,7 +270,7 @@ func (c *cycle) diff(repo string, rs *RepoState, obs RepoObservation) {
 				gen = rec.Generation + 1
 			}
 			c.emit(rp(repo), pp(n), KindNewPR, keyGeneration(gen),
-				&NewPRDetails{Title: o.Title, Author: o.Author, Draft: o.Draft, Base: o.Base, HeadRef: o.HeadRef, Head: o.Head})
+				&NewPRDetails{Title: o.Title, Author: o.Author, Draft: o.Draft, Base: o.Base, HeadRef: o.HeadRef, Head: o.Head, Fork: o.Fork})
 			p = rs.PRs[n]
 		} else {
 			if o.Head != p.Head {
