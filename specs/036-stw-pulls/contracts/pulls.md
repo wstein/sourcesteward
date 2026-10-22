@@ -30,6 +30,17 @@ under), `reason` (null unless `group` is `blocked`: `checks-red`, `no-checks`, `
 `ready` (bool, true exactly when `group` is `ready`), `detail` (bool: false for a row beyond `--limit` or a draft without detail,
 whose `checks`, `mergeable`, `mergeable_state` and `rebaseable` are then null and whose group is `draft`, or `blocked` with reason `not-read` past the budget).
 
+## Reads and the one re-read
+
+The cycle reads each non-draft row within `--limit` once (`pulls/N`, check runs, statuses). GitHub computes mergeability lazily, so a
+`pulls/N` read may return `mergeable` null or `mergeable_state` `unknown`. After the main pass, a row that is not a draft, whose listed
+head matched `pulls/N` and whose checks are `green`, and that has `mergeable` null or `mergeable_state` `unknown`, is re-read **once**: `pulls/N`
+only (unconditional, `head.sha` must equal the listed head, otherwise the row fails closed as `blocked`/`unknown`), no check read. The result
+replaces the first detail before the verdict; a row still unknown stays `blocked` with reason `unknown`. There is no sleep, no loop and no
+second re-read. The re-reads are bounded by the number of such rows, consume rate limit but not the `--limit` budget, and are not made once a
+rate limit was hit (the rows stay `unknown`). A failed re-read leaves the row `unknown` and is reported in `repos[].error` and `errors`. The
+document, its counters and the schema are unchanged.
+
 ## Example
 
 ```json
