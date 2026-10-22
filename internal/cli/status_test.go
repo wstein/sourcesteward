@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -157,4 +159,43 @@ func TestStatusColourOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(b.String(), "\x1b[31m\x1b") || strings.Count(b.String(), "\x1b") != strings.Count(b.String(), "\x1b[") {
 		t.Fatalf("raw escape from repository text: %q", b.String())
 	}
+}
+
+// statusGolden compares got with testdata/NAME; STW_UPDATE_GOLDEN=1 rewrites the file after review.
+func statusGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	if os.Getenv("STW_UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != string(want) {
+		t.Errorf("%s differs from its golden (STW_UPDATE_GOLDEN=1 rewrites it after review)\n--- got\n%s\n--- want\n%s", name, got, want)
+	}
+}
+
+// The offline output is the Spec 033 output byte for byte (Spec 037, US2): these goldens were taken
+// before the online default existed and must never change.
+func TestStatusOfflineOutputIsPinned(t *testing.T) {
+	for name, args := range map[string][]string{
+		"status-offline.txt":           {},
+		"status-offline-worktrees.txt": {"--worktrees"},
+		"status-offline.json":          {"--json"},
+	} {
+		_, _, out, err := runStatus(statusCLIResult(), args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		statusGolden(t, name, out)
+	}
+	var b bytes.Buffer
+	if err := renderStatusText(&b, statusCLIResult(), true, true); err != nil {
+		t.Fatal(err)
+	}
+	statusGolden(t, "status-offline-colour.txt", b.String())
 }

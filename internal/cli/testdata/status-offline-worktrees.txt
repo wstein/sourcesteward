@@ -1,0 +1,12 @@
+SourceSteward status: 3 repositories in /ws
+  .            main  origin/main up to date  clean
+! sub\x1b[31m  feat  origin/feat ahead 2, behind 1  1 staged, 2 unstaged, 3 untracked, 1 conflict
+    rebase in progress
+    stash 2
+    branches: 4 local, 2 not integrated into origin/main
+    2 linked worktrees (1 dirty, 1 locked)
+    gitlink: recorded aaaaaaa, checked out ahead (bbbbbbb)
+    worktree /wt/one  one  dirty
+    worktree /wt/two  detached  locked: usb
+  gone         -     not initialized, recorded aaaaaaa
+summary: 1 of 3 repositories need attention
