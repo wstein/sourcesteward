@@ -23,7 +23,7 @@ Two documents, never mixed:
 | `options` | object | `fetch`, `worktrees` booleans, `icons` null (JSON carries no icons) |
 | `root` | str or null | workspace root, as v1 |
 | `note` | str or null | as v1 |
-| `actions` | array | the action items, ordered as in the spec (priority, category, repo, subject), at most 500 |
+| `actions` | array | the action items, ordered as in the spec (priority, category, repo, subject), every item, no cap |
 | `repos` | array | one object per repository: **all members of the v1 repository object unchanged** (`name`, `path`, `kind`, `state`, `head`, `branch`, ... `attention`, `reasons`, `error`) plus `remote` (below) |
 | `sources` | array | one entry per source id with `{id, state, read, degraded, skipped}`: counts of repositories per outcome (`ok` = `read`) |
 | `notices` | array | `{code, source, repos, message}`: one per missing source, `message` sanitized, at most 512 bytes; `repos` array of repository names affected (at most 256) |
@@ -50,27 +50,25 @@ Two documents, never mixed:
 
 `{repo, state, reason, sources}`. `repo` `OWNER/NAME` or null; `state` `ok`, `degraded`, `skipped`, `offline` (`offline` is never emitted
 online; reserved for the same shape in tooling); `reason` null or `not-github-origin`, `other-host`, `not-read-locally`, `invalid-repo`,
-`no-token`, `network`, `rate-limited`, `timeout`; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
-`ci_release`, each `{state, error}` with state `ok`, `skipped`, `degraded` and `error` a code or null (`unauthorized`, `forbidden`,
-`rate-limited`, `network`, `timeout`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`,
-`too-many-open-prs`, `not-implemented`, `no-release-workflows`). The data of each source:
+`no-token`, `network`, `rate-limited`, `deadline`; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
+`ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons include `deadline`, `no-token`, `network`, `no-release-workflows`) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
+`rate-limited`, `network`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`,
+`too-many-open-prs`, `no-release-workflows`). The data of each source:
 
 | Source key | Data (null when the source is not `ok`) |
 | --- | --- |
 | `repo` | `{default_branch, html_url, drafts_visibility}`; `drafts_visibility` `write-access`, `no-write-access`, `unknown` |
 | `pulls` | `{open, ready, checks, conflict, draft, blocked, red, bots, not_read}` (group counts add up to `open`; `red` is the subset of `blocked` with reason `checks-red`) |
 | `releases` | `{drafts, truncated}`; `drafts` at most 100 `{name, tag, created_at, assets, url}` (`name` str or null, `created_at` time or null); empty and meaningless unless `drafts_visibility` is `write-access` |
-| `tags` | `{latest, unreleased}`; `latest` str or null, `unreleased` at most 5 `{tag, sha}` |
+| `tags` | `{latest, unreleased}`; `latest` str or null, `unreleased` at most 5 `{tag, sha, run}` (`run` `{workflow, conclusion, status, url}` or null) |
 | `ci_main` | `{branch, head, class, behind_origin}`; `class` `none`, `pending`, `green`, `red` or null; `behind_origin` bool or null (local default branch lacks origin's head) |
-| `ci_release` | `{tag, sha, runs}`; `runs` at most 20 `{workflow, conclusion, status, url}` |
+| `ci_release` | `{tag, sha, runs}`; `tag` is the latest tag; unreleased tags carry their run in `tags.unreleased[].run`; `runs` at most 20 `{workflow, conclusion, status, url}` |
 
 ### `summary`
 
-`{repos, attention, errors, priorities: {red, yellow, green, blue, violet}, items_truncated, degraded, notices}`. `repos`, `attention`
-and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent of priorities); `priorities` counts **all** items
-including truncated ones; `items_truncated` bool; `degraded` true when any source of any requested repository is not `ok` or
-`skipped` for a legitimate reason; `notices` the count.
+`{repos, attention, errors, priorities: {red, yellow, green, blue, violet}, degraded, failed, notices}`. `repos`, `attention`
+and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent of priorities); `priorities` counts all items; `degraded` true when any source is not `ok` (missing token, offline, deadline, failed read); `failed` true when a requested remote read failed (the exit status 1 condition); `notices` the count.
 
 ## Exit status
 
-0 the overview was produced (also degraded, also with items); 1 a repository unreadable locally or a run-level failure; 2 usage error.
+0 the overview was produced (also with no token, no network, a deadline skip, items); 1 a requested remote read failed (`error` source) or a repository is unreadable locally or the run failed; 2 usage error.
