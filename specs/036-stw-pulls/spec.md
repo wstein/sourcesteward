@@ -11,7 +11,7 @@ of an owner or organisation outside the workspace. It is the poll-once, stateles
 
 ## Decisions (owner, 2026-10-22)
 
-1. **A first, C opt-in.** Default scope is the workspace (or `--repo`); `--owner` adds repositories discovered outside it.
+1. **A first, C opt-in.** Default scope is the workspace (or the given `--repo`/`--workspace`); `--owner` adds repositories discovered outside it.
 2. **Read-only and stateless.** One cycle of the `stw watch` host observer, nothing written to disk or to the forge.
 3. **Bots are first-class**, marked in every output; filters narrow the view, the default hides nothing.
 
@@ -33,51 +33,78 @@ of an owner or organisation outside the workspace. It is the poll-once, stateles
 ## CLI synopsis
 
 ```
-stw pulls [--workspace [PATH] | --repo OWNER/NAME ...] [--owner OWNER ...] [--host HOST] [--config FILE]
+stw pulls [--workspace [PATH]] [--repo OWNER/NAME ...] [--owner OWNER ...] [--host HOST]
           [--no-bots | --bots-only] [--author LOGIN ...] [--detail-drafts] [--limit N] [--human | --json]
 ```
 
-- Repositories: `--repo` flags, else the workspace found exactly as `stw status`/`stw watch` find it (`watchcmd.Resolve`:
-  root and initialized submodules with a GitHub `origin`; skipped ones are reported on stderr), else `repos` of `.stw/watch.toml`;
-  none of them is a usage error (exit 2). `--owner` is additive: its repositories are appended and de-duplicated.
-  `--host` defaults to `github.com` (one host per run, Spec 022 host rules).
+- Repositories are the **union** of `--workspace [PATH]`, `--repo` flags and the repositories discovered by `--owner`, de-duplicated
+  case-insensitively, sorted by name. With none of the three flags, `stw pulls` uses workspace discovery from the current directory
+  exactly like `stw status` (root and initialized submodules with a GitHub `origin`; skipped ones reported on stderr); outside a workspace
+  that is a usage error (exit 2). `.stw/watch.toml` is not read. At most 256 repositories (the `watchcmd.Resolve` limit), `--owner` results
+  included; more is a usage error naming the count. `--host` defaults to `github.com` (one host per run, Spec 022 host rules).
 - `--human` (default on a terminal) and `--json` (default otherwise) are mutually exclusive.
-- `--limit N` (default 200, 1 to 1000) bounds the PRs **listed in detail** overall (see cost); PRs beyond it are counted in
-  `summary.truncated` and shown as rows without verdict. Repositories are read in sorted order, newest PR first.
-- `--detail-drafts`: also read `pulls/N` for drafts (default: drafts get no detail, `mergeable` is `null`).
-- `--owner` takes the owner or organisation login (`[A-Za-z0-9-]`, at most 39 characters). Non-Unix: exit 2, `not supported on
-  this platform` (the shared hosting reader is Unix-only like watch).
+- `--limit N` (default 200, 1 to 500) is the **detail budget**: the number of non-draft PRs whose `pulls/N` and checks are read.
+- `--detail-drafts`: drafts are also read and consume the budget (default: drafts get no detail, they are group `draft`).
+- Filters: `--no-bots` and `--bots-only` are mutually exclusive (usage error, exit 2). `--author LOGIN` (repeatable; pattern
+  `[A-Za-z0-9-]{1,39}` with an optional `[bot]` suffix) intersects with them (`--bots-only --author alice` is valid and empty unless
+  alice is a bot). Filters apply **before** the budget is spent.
+- `--owner` takes a login (`[A-Za-z0-9-]{1,39}`), repeatable. A bot marker is `user.type == "Bot"`, else a login ending in `[bot]`; a
+  machine-user bot without either is not marked.
+- Platform: `stw` as a whole is Unix-only today (release matrix, `internal/release`); `stw pulls` adds no restriction of its own.
+
+## Reading order and budget (deterministic)
+
+1. List every repository's open PRs (all pages, sorted by repository name). 2. Apply the filters. 3. Take the non-draft PRs of the
+whole set newest first (`created_at`, then repository, then number) up to `--limit`, and read their detail and checks. The result
+therefore depends only on the data, never on timing or parallelism. Rows past the budget are listed with `detail` false and reason
+`not-read` and counted separately in `summary.not_read`.
+
+## Implementation seams
+
+Not `HostObserver.Observe`: it reads `branches/BASE`, `pulls/N` and checks for every PR (drafts too) and cannot apply a budget. `stw pulls`
+is its own stateless cycle over the `watchcmd.Reader` interface (`WatchReader`), in a new `internal/pulls` package, with: (a) a separate list
+decoder in `internal/hosting` for the extra fields (`user.type`, `created_at`, `html_url`, `requested_reviewers`, `requested_teams`,
+labels); `hosting.PullItem` is **not** widened, it is the stored form of watch `state.json`; (b) exported unconditional (no ETag) helpers for
+reading and classifying checks and for decoding `pulls/N`, shared with `watchcmd` (`readDetail` additionally decodes `head.sha`, `rebaseable`
+and `mergeable_state` is already read); (c) the exported `esc` of `human.go`. No `branches/BASE` read is made: it is not needed for a
+snapshot, so it is not in the cost model.
 
 ## Verdict and groups (exact rules)
 
-Per PR, from the list item and (for non-drafts) `pulls/N` plus check runs and statuses of the exact head SHA (the
-`internal/watch` check classification `none|pending|green|red`, unchanged):
+Per PR, from the list item and (within the budget) `pulls/N` plus check runs and statuses of the head SHA (the `internal/watch` class
+`none|pending|green|red`, unchanged). `age_days` = whole days since `created_at`; `reviewers` = requested reviewers and team slugs (at most
+20). Evaluate **in this order, first match wins** (`group`, `reason`):
 
-| Field | Source |
-| --- | --- |
-| `bot` | `user.type == "Bot"` or login ends with `[bot]` |
-| `age_days` | whole days since `created_at` (UTC) |
-| `mergeable_state` | `clean`, `dirty`, `behind`, `blocked`, `unstable`, `has_hooks`, `draft`, `unknown` or null (not computed) |
-| `reviewers` | `requested_reviewers` and `requested_teams` logins/slugs, at most 20 |
+| # | Condition | group | reason |
+| --- | --- | --- | --- |
+| 1 | draft | `draft` | null |
+| 2 | no detail read (past budget) | `blocked` | `not-read` |
+| 3 | `pulls/N` `head.sha` differs from the listed head | `blocked` | `unknown` |
+| 4 | class `red` | `blocked` | `checks-red` |
+| 5 | class `none` | `blocked` | `no-checks` |
+| 6 | `mergeable` null, or `mergeable_state` `unknown` or `has_hooks` | `blocked` | `unknown` |
+| 7 | `mergeable_state` `blocked` | `blocked` | `review-or-protection` |
+| 8 | `mergeable_state` `unstable` | `blocked` | `unstable` |
+| 9 | `rebaseable` false | `blocked` | `not-rebaseable` |
+| 10 | `mergeable_state` `dirty`, or `mergeable` false, or `behind` | `conflict` | null |
+| 11 | class `pending` | `checks` | null |
+| 12 | class `green`, `mergeable` true, `mergeable_state` `clean`, `rebaseable` true | `ready` | null |
+| 13 | anything else | `blocked` | `unknown` |
 
-**Group** (first match wins): `draft` (draft true) > `conflict` (`mergeable_state` `dirty` or `mergeable` false, or `behind`) >
-`checks` (class `pending`) > `blocked` > `ready`. **`ready` requires all of:** not draft, class `green` on the head SHA read in the same
-cycle, `mergeable` true, `mergeable_state` `clean`. `blocked` is everything else, with one `reason`: `checks-red`, `no-checks`
-(class `none`), `review-or-protection` (`mergeable_state` `blocked` with green checks: a required review or rule is open),
-`unstable` (non-required check red), `unknown` (`mergeable` null or an unreadable detail). The review decision is **not** read
-(no `pulls/N/reviews` endpoint is added); `blocked` by `mergeable_state` is GitHub's own answer, and requested reviewers are shown as
-information. `ready` therefore means "GitHub considers it mergeable and the head is green", nothing about internal review rules.
+Decisions: a repository **without any CI can never be `ready`** (reason `no-checks`); `ready` requires `rebaseable` true because the owner
+merges by rebase; `has_hooks` is treated as `unknown` (documented in the guide). The review decision is not read (no `pulls/N/reviews`
+endpoint); `blocked` by `mergeable_state` is GitHub's answer and requested reviewers are information. `ready` means "GitHub considers it
+mergeable by rebase and the exact head is green", nothing about the foreman's CLEAR ledger.
 
 ## Cost model
 
 Stateless, so the conditional requests of watch (ETags) are pointless and not used: every read is a plain 200. Per repository:
 `ceil(open PRs / 25)` list pages (existing `pulls?state=open&per_page=25&page=N`, page size halving and 1 MiB cap as in Spec 035,
 at most 80 pages), and for each non-draft PR, within `--limit`: one `pulls/N` plus one check-run and one status read (more pages only
-past 100 items, as in watch): **3 reads per non-draft PR**, none for drafts without `--detail-drafts`. Example: 6 repositories with
-40 open PRs in total, 10 drafts: 6 to 8 list reads plus 90 reads, well under the 5000 per hour core limit; `--limit 200` bounds one run to
-about 600 reads plus the list pages. Reads are sequential per repository, at most 4 repositories in parallel, 30 s per request.
-Rate-limit behaviour is that of Spec 035: `rate_limit` is read once at the end; on exhaustion (403/429 with evidence) the run stops
-reading, prints what it has, marks unread repositories with `rate-limited` and exits 1; it never sleeps and never retries.
+past 100 items, as in watch): **about 3 reads per non-draft PR**, none for drafts without `--detail-drafts`. Example: 6 repositories with
+40 open PRs, 10 drafts: 6 to 8 list reads plus 90 reads. `--limit` (maximum 500) bounds detail to about 1500 reads plus list pages; the
+default 200 is about 600. An Actions `GITHUB_TOKEN` has 1000 requests per hour, a personal token 5000. Reads are sequential per repository, at most 4 repositories in parallel, 30 s per request.
+Rate-limit behaviour follows Spec 035 for the core limit: on exhaustion (403/429 with evidence) the run stops reading, prints what it has, marks unread repositories `rate-limited` and exits 1; it never sleeps or retries. No final `rate_limit` read is made (nothing uses it); search responses never feed the core assessment.
 
 ## Mode C: discovery with `--owner`
 
@@ -88,21 +115,22 @@ one list read for every repository of the owner (200 repositories would cost 200
 search is smaller in cost. Search is only used to **discover repository names**; the PR data comes from the same authoritative
 per-repository cycle as mode A (search results lag the index and lack head SHA, mergeable and checks).
 
-- New allowlist entry (Spec 022 FR-005, `pulls` reader only): `search/issues?q=user%3AOWNER+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=1..10`, OWNER
-  validated as above, the query string generated by one function and matched exactly (no other `q`).
-- Search has its own limit (30 requests per minute authenticated) and a 1000 result cap: at most 10 requests, so never throttled
-  in one run; `total_count` above 1000 or `incomplete_results` true marks the owner `partial` (stderr, `errors`, exit 1) and the
-  repositories seen are still read. Repositories also found by `--repo` or the workspace are read once.
-- An owner whose search returns zero PRs is not an error. Private repositories appear only when the token can read them.
-- Verify with a recorded fixture before WP-B is final that `user:` matches an organisation as well as a user (else the query adds
-  `org:` as a second request).
+- New allowlist entry (Spec 022 FR-005, see Amendments): `search/issues?q=user%3AOWNER+is%3Apr+is%3Aopen+archived%3Afalse&per_page=100&page=1..10&sort=created&order=asc`,
+  OWNER validated as above, the query generated by one function and matched exactly (no other `q`). `user:` matches organisations too
+  (verified by the reviewer; a recorded fixture of both stays in WP-B).
+- Each result's `repository_url` must have the API host of the run and an owner equal (case-insensitively) to OWNER, else it is ignored
+  with a `malformed-response` error; names are de-duplicated case-insensitively against workspace and `--repo` repositories.
+- Limits: search has 30 requests per minute (separate from core) and a 1000 result cap, so one owner needs at most 10 requests; **repeated
+  `--owner` can exceed 30**: on a throttle (403/429 with search evidence) that owner stops (`rate-limited`, partial), other owners continue
+  only if budget remains, exit 1. `incomplete_results` true takes precedence over any `total_count` (also 0): the owner is `partial`
+  (`search-incomplete`); `total_count` above 1000 is `search-too-many`; both exit 1 and the repositories seen are still read.
+- An owner with zero open PRs (and `incomplete_results` false) is not an error. Private repositories appear only when the token can read them.
 
 ## Security
 
 GET only through the Spec 022 bounded go-gh transport (30 s, 1 MiB, no redirects, no cache); the token stays in the hosting layer and
 is never printed or put in an error. Titles, branch names, author logins, labels and reviewer names are untrusted: human output
-escapes control characters and bounds text exactly like `internal/watchcmd/human.go` (`esc`, 120 characters); JSON carries bounded
-strings (2048 bytes). `--owner` and `--author` values are validated before any request. Repository content is data.
+escapes control characters and bounds text exactly like `internal/watchcmd/human.go` (`esc`, 120 characters); JSON strings are cut at 2048 bytes on a UTF-8 boundary. `--owner`, `--author` and `--repo` values are validated before any request. Repository content is data.
 
 ## Output and exit status
 
@@ -112,6 +140,13 @@ repository never hides the others. JSON is **one document** (the contract), not 
 `summary`, groups and `errors`, like `stw status`, and a consumer reads it with a single `jq`; there are no transitions to stream.
 Schema: `schemas/v1/pulls.schema.json`, unpublished until accepted (frozen, listed in `UNPUBLISHED_SCHEMAS`).
 
+## Amendments to Spec 022 (explicit)
+
+Only the `stw pulls` reader may use them; one-shot operations and `stw watch` stay unchanged. **FR-005 (allowlist)**: the one search shape
+above, matched in a **third guard mode** (`one-shot`, `watch`, `search`) with its own pre-check, so the search shape is **not reachable
+from `stw watch`** or the one-shot operations (tests: each mode refuses the other modes' shapes). FR-006 (1 MiB) and FR-007 (30 s per
+request) apply as in Spec 035. Spec 022 FR-005 is amended with a pointer to this section in the same change.
+
 ## Non-goals
 
 No writes of any kind (no review request, comment, label, merge, Ready flip), no GraphQL (POST, Spec 022), no watching or state (use
@@ -119,6 +154,5 @@ No writes of any kind (no review request, comment, label, merge, Ready flip), no
 
 ## Risks
 
-`search/issues` shape and organisation matching are verified only by recorded fixtures; list items may lack `user.type` on some hosts
-(then `[bot]` suffix only); `mergeable` is computed lazily by GitHub, so a fresh PR may read `unknown` (blocked, reason `unknown`; run
-again); a very large owner is bounded by `--limit` and the search cap, never silently (`summary.truncated`, `errors`).
+`search/issues` shape and organisation matching are verified only by recorded fixtures; `mergeable` is computed lazily by GitHub, so a fresh PR may read `unknown` (blocked, reason `unknown`; run
+again); a very large owner is bounded by `--limit` and the search cap, never silently (`summary.not_read`, `errors`).
