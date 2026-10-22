@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
@@ -40,7 +41,7 @@ func readErrors(r Repo) []Item {
 		if st.Outcome != OutcomeError {
 			continue
 		}
-		it := newItem(ReadError, r.Slug, Subject{Kind: KindSource, Name: string(src)}, target{Slug: r.Slug, Source: src})
+		it := newItem(ReadError, r.Slug, Subject{Kind: KindSource, Name: string(src)}, string(src), target{Slug: r.Slug, Source: src})
 		code := untrusted.Esc(st.Code)
 		it.Path, it.Title, it.Evidence = r.Local.Path, fmt.Sprintf("%s could not be read: %s", src, code), map[string]any{"source": string(src), "code": code}
 		items = append(items, it)
@@ -75,7 +76,7 @@ func pullItems(r Repo) []Item {
 		default:
 			continue
 		}
-		it := newItem(c, r.Slug, Subject{Kind: KindPR, Number: p.Number}, target{Slug: r.Slug, Number: p.Number})
+		it := newItem(c, r.Slug, Subject{Kind: KindPR, Number: p.Number}, strconv.Itoa(p.Number), target{Slug: r.Slug, Number: p.Number})
 		it.Path, it.URL = r.Local.Path, httpsURL(p.URL)
 		it.Title = what + ": " + untrusted.Esc(p.Title)
 		it.Evidence = map[string]any{"group": untrusted.Esc(p.Group)}
@@ -91,14 +92,25 @@ func pullItems(r Repo) []Item {
 }
 
 // draftItems gives one release-draft item per draft, only when the token can see drafts: otherwise the
-// drafts are unknown, not zero, and the notice says so.
+// drafts are unknown, not zero, and the notice says so. GitHub allows several drafts with one tag name (and
+// drafts without a usable one), so the id part is the tag only when it passes the ref validation and no other
+// draft of the repository has it; otherwise it is the fingerprint of tag, name and creation time, all taken
+// from the data, never from a clock. Two drafts that agree in all three are one finding and collapse in sortItems.
 func draftItems(r Repo) []Item {
 	if r.Remote.Visibility != WriteAccess {
 		return nil
 	}
+	tags := map[string]int{}
+	for _, d := range r.Remote.Drafts {
+		tags[d.Tag]++
+	}
 	var items []Item
 	for _, d := range r.Remote.Drafts {
-		it := newItem(ReleaseDraft, r.Slug, Subject{Kind: KindRelease, Tag: d.Tag}, target{Slug: r.Slug, Tag: d.Tag})
+		part := d.Tag
+		if tags[d.Tag] != 1 || !validRef(d.Tag) {
+			part = fingerprint(d.Tag + "\x00" + d.Name + "\x00" + d.CreatedAt.UTC().Format(time.RFC3339Nano))
+		}
+		it := newItem(ReleaseDraft, r.Slug, Subject{Kind: KindRelease, Tag: d.Tag}, part, target{Slug: r.Slug, Tag: d.Tag})
 		it.Path, it.URL = r.Local.Path, httpsURL(d.URL)
 		it.Title = fmt.Sprintf("release draft %s (%d assets) is waiting", untrusted.Esc(d.Tag), d.Assets)
 		it.Evidence = map[string]any{"drafts_visibility": string(WriteAccess), "assets": d.Assets}
@@ -146,12 +158,12 @@ func tagItems(r Repo) []Item {
 		var it Item
 		switch {
 		case f.failed != nil:
-			it = newItem(ReleaseRunFailed, r.Slug, s, target{Slug: r.Slug, SHA: f.sha})
+			it = newItem(ReleaseRunFailed, r.Slug, s, idToken(f.tag, validRef), target{Slug: r.Slug, SHA: f.sha})
 			it.URL = httpsURL(f.failed.URL)
 			it.Title = fmt.Sprintf("release workflow run of %s %s", untrusted.Esc(f.tag), untrusted.Esc(f.failed.Conclusion))
 			it.Evidence = map[string]any{"conclusion": untrusted.Esc(f.failed.Conclusion), "released": !f.unreleased}
 		case f.unreleased:
-			it = newItem(TagWithoutRelease, r.Slug, s, target{Slug: r.Slug})
+			it = newItem(TagWithoutRelease, r.Slug, s, idToken(f.tag, validRef), target{Slug: r.Slug})
 			it.Title = fmt.Sprintf("tag %s has no release", untrusted.Esc(f.tag))
 			it.Hint = releasingHint
 		default:
@@ -182,14 +194,14 @@ func mainItems(r Repo) []Item {
 	var items []Item
 	s := Subject{Kind: KindBranch, Name: m.Branch, SHA: m.Head}
 	if m.Class == "red" {
-		it := newItem(MainRed, r.Slug, s, target{Slug: r.Slug, Branch: m.Branch})
+		it := newItem(MainRed, r.Slug, s, idToken(m.Branch, validRef), target{Slug: r.Slug, Branch: m.Branch})
 		it.Path, it.URL = r.Local.Path, forgeHost+r.Slug+"/actions"
 		it.Title = fmt.Sprintf("default branch CI is red (%s, %s)", untrusted.Esc(m.Branch), untrusted.Esc(short(m.Head)))
 		it.Evidence = map[string]any{"class": "red"}
 		items = append(items, it)
 	}
 	if m.BehindOrigin != nil && *m.BehindOrigin {
-		it := newItem(MainBehindOrigin, r.Slug, s, target{Slug: r.Slug, Path: r.Local.Path})
+		it := newItem(MainBehindOrigin, r.Slug, s, idToken(m.Branch, validRef), target{Slug: r.Slug, Path: r.Local.Path})
 		it.Path, it.URL = r.Local.Path, forgeHost+r.Slug
 		it.Title = fmt.Sprintf("origin has commits of %s that the local clone lacks", untrusted.Esc(m.Branch))
 		items = append(items, it)

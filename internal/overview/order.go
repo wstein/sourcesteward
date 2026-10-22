@@ -41,8 +41,11 @@ func categoryNumber(c Category) int {
 
 // sortItems orders items by priority, category number, repository name (case-insensitive, then exact),
 // then subject (a pull request number numerically, a tag or release by version descending, anything else
-// by name), then id and title so the order is total; it drops later items of the same id. The result
-// depends only on the set of items, never on their input order.
+// by name), then id and title so the order is total; it drops later items of the same id. An id is built
+// from the category, the repository and the subject, each a validated token or the fingerprint of the full
+// string, so two items share an id only when they are one finding listed twice (a pull request row twice, a
+// tag read for two products, two drafts equal in tag, name and creation time). The result depends only on the
+// set of items, never on their input order.
 func sortItems(items []Item) []Item {
 	out := append([]Item(nil), items...)
 	sort.SliceStable(out, func(i, j int) bool { return compareItems(out[i], out[j]) < 0 })

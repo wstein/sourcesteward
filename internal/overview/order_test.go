@@ -5,6 +5,7 @@ package overview
 import (
 	"math/rand"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -36,7 +37,20 @@ func TestNaturalCompare(t *testing.T) {
 
 func mk(c Category, repo string, s Subject) Item {
 	p, _ := PriorityOf(c)
-	return Item{ID: string(c) + ":" + repo + ":" + subjectID(s), Priority: p, Category: c, Repo: repo, Subject: s}
+	return Item{ID: string(c) + ":" + repo + ":" + testPart(s), Priority: p, Category: c, Repo: repo, Subject: s}
+}
+
+// testPart is the id part of a subject whose strings are all valid.
+func testPart(s Subject) string {
+	switch s.Kind {
+	case KindPR:
+		return strconv.Itoa(s.Number)
+	case KindRelease, KindTag:
+		return s.Tag
+	case KindRepository:
+		return "-"
+	}
+	return s.Name
 }
 
 func TestSortOrderPriorityCategoryRepoSubject(t *testing.T) {
@@ -152,7 +166,7 @@ func TestIDsDoNotDependOnTimeOrRunData(t *testing.T) {
 		t.Fatal("ids or order changed with times or run data")
 	}
 	for _, it := range collect(a) {
-		if want := string(it.Category) + ":" + it.Repo + ":" + subjectID(it.Subject); it.ID != want {
+		if want := string(it.Category) + ":" + it.Repo + ":" + testPart(it.Subject); it.ID != want {
 			t.Errorf("id %q, want %q", it.ID, want)
 		}
 	}

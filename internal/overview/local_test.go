@@ -3,6 +3,7 @@
 package overview
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -266,5 +267,40 @@ func TestLocalEvidence(t *testing.T) {
 	ev := got[0].Evidence
 	if ev["staged"] != 2 || ev["unstaged"] != 3 {
 		t.Fatalf("%v", ev)
+	}
+}
+
+func TestLocalIDsUseValidatedComponents(t *testing.T) {
+	hostile := []string{"a:b", "x\ny", "x\x1b[31m", strings.Repeat("p/", 4096), "-rf", ""}
+	seen := map[string]bool{}
+	for _, h := range hostile {
+		rp := repoOK("r"+h, func(r *stwsync.RepoStatus) {
+			r.Path = "libs/" + h
+			r.Gitlink = &stwsync.Gitlink{State: "drift", Relation: sp("behind")}
+			r.Reasons = []string{"gitlink-drift"}
+			r.Worktrees.List = []stwsync.WorktreeInfo{{Path: "/wt/" + h, Dirty: true}, {Path: "/wt2/" + h, Missing: true}}
+		})
+		items := local(rp)
+		if len(items) != 3 {
+			t.Fatalf("%q: %v", h, ids(items))
+		}
+		for _, it := range items {
+			if strings.ContainsAny(it.ID, "\n\x1b") || strings.Count(it.ID, ":") != 2 && h != "" || len(it.ID) > 300 {
+				t.Errorf("id %q for %q", it.ID, h)
+			}
+			if seen[it.ID] {
+				t.Errorf("duplicate id %q", it.ID)
+			}
+			seen[it.ID] = true
+		}
+		again := local(rp)
+		if !reflect.DeepEqual(ids(items), ids(again)) {
+			t.Errorf("ids are not stable for %q", h)
+		}
+	}
+	// Plain names stay readable.
+	got := local(repoOK("crewbook", func(r *stwsync.RepoStatus) { r.Changes.Staged = 1; r.Reasons = []string{"staged"} }))
+	if got[0].ID != "local-changes:crewbook:dirty" {
+		t.Error(got[0].ID)
 	}
 }
