@@ -32,8 +32,9 @@ or the disk, and never runs a suggested command; (4) a failing or unavailable so
   action is an item with its deep link.
 - **US4 (releases).** Pending release drafts, tags that have no release, and what is reported when the token cannot see drafts.
 - **US5 (CI).** The CI state of the default branch and of the latest tag's release workflow run (WP-C).
-- **US6 (local).** The existing local facts (changes, operation, behind or diverged, gitlink drift, unmerged branches, linked
-  worktrees) plus "local default branch behind origin", mapped to priorities as well.
+- **US6 (local).** **Every** Spec 033 attention reason and information fact (changes, operation, behind or diverged, no upstream,
+  detached, gitlink drift, stashes, unmerged branches, linked worktrees) plus "local default branch behind origin" maps to a row of
+  the action table with its own subject.
 - **US7 (degrade).** No token, no network, rate limit or timeout: the local view and the sources that worked are printed, with one
   clear notice per missing source; never an error wall.
 - **US8 (machine).** `--json` prints one stable, versioned document: action items with ids, priorities, categories, deep links and
@@ -51,8 +52,8 @@ stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons unicode|nerd|asci
   their meaning and compose with both modes (`--fetch` runs git; it is independent of the forge reads).
 - `--icons SET` (human output only): `unicode`, `nerd` (Nerd Font glyphs) or `ascii`. Default: `unicode` on a terminal whose locale
   is UTF-8, `ascii` otherwise (a pipe, a file, a non-UTF-8 locale, `TERM=dumb`). An explicit value always wins. `--icons` with
-  `--json` is accepted and ignored.
-- `--timeout DURATION` (Go duration, for example `2m`; default `90s`, 1s to 10m, usage error otherwise): the overall deadline of the remote half; the per-request timeout is fixed at 15 s. Ignored with `--offline`.
+  `--json` is accepted and ignored; `--icons` with `--offline` is accepted and changes only the glyphs of the human text (without it, `--offline` is byte-identical to today's default output).
+- `--timeout DURATION` (Go duration, for example `2m`; default `90s`, 1s to 10m, usage error otherwise): the overall deadline of the remote half; the per-request timeout is fixed at 15 s. `--timeout` together with `--offline` is a usage error (exit 2).
 - Host: `github.com`, one host per run (the `stw pulls` default); a repository whose `origin` is not GitHub on that host is `skipped`
   for the remote sources (reason `not-github-origin` or `other-host`, a notice, not an error). No filters, limits or owner flags:
   those belong to `stw pulls`.
@@ -93,7 +94,7 @@ the default options (no filters, bots included, budget 200 non-draft PRs for the
   With `no-write-access`/`unknown` the command **does not report zero**: it says "release drafts not visible to this token (no write
   access)" or "release drafts unknown (write access not determined)" and creates no draft item. A fine-grained token with write
   access but without the releases scope can still withhold drafts; documented residual (Risks).
-- **Tags without release.** A tag is "unreleased" when it matches the repository's **release tag pattern**, is **newer than the latest published release** (by the version scheme of the pattern; when no release is published, only the newest matching tag) and **no release, draft or published, carries its `tag_name`**. The pattern is the tag grammar the repository declares in `.stw/release.toml` (Spec 026 D6/D9: `semver`, `calver` or a pattern, per product); without a declaration the default is `v?MAJOR.MINOR.PATCH` with an optional `-prerelease`. At most 5 per repository. The finding is `yellow` (`tag-without-release`), and **`red`** when the release workflow run for that tag failed (see CI state). Older unreleased tags are history, not action.
+- **Tags without release.** A tag is "unreleased" when it matches the repository's **release tag pattern**, is **newer than the latest published release** (by the version scheme of the pattern; when no release is published, only the newest matching tag) and **no release, draft or published, carries its `tag_name`**. The pattern is the tag grammar of each product the repository declares in `.stw/release.toml` (Spec 026 D6/D9: `semver`, `calver` or a pattern, for example `bdock/*` and `claude/*`); **latest tag** means the latest per declared product pattern, and for a repository without declarations the pattern `v*.*.*` (semver with an optional `v`). At most 5 per repository. The finding is `yellow` (`tag-without-release`); a tag whose release workflow run **failed** is reported as `release-run-failed` instead (one item per tag, see CI state and the action model). Older unreleased tags are history, not action.
 
 ### CI state (WP-C, required)
 
@@ -102,12 +103,15 @@ Bounded to the **latest** run; no history is read.
 - **Default branch** (`ci-main`): head SHA of `branches/DEFAULT` and the `internal/watch` class (`none|pending|green|red`) from the
   existing check-run and status reads of `stw pulls`; `red` is a `red` item (`main-red`), `pending` and `none` are information in the
   repository block.
-- **Release workflow run** (`ci-release`): for the commit of the **latest tag** and for each **unreleased tag** (at most 6 tags, from
-  the `tags` read) the newest run, per workflow file declared in the repository's `.stw/release.toml` (Spec 026; no declaration means
-  `skipped`, reason `no-release-workflows`, with a notice), through the existing `runs?head_sha=SHA&per_page=100&page=1` shape. A run
-  with conclusion `failure`, `cancelled` or `timed_out` makes a **red** item (`release-run-failed` for the latest tag, the same
-  category with the tag as subject for an unreleased tag, where the `tag-without-release` item turns `red` instead of a second item);
-  one not completed is information.
+- **Release workflow run** (`ci-release`): the **single** workflow file `ci.release_workflow` of the repository's `.stw/release.toml`
+  (Spec 026 config; a path, its file name is used in the request). When the repository declares none, the default is the file name
+  `release-build.yml` of the Spec 026 workflow contract; a 404 for that workflow means `skipped`, reason `no-release-workflow`, with a
+  notice (not a failure). For the commit of each product's **latest tag** and of each **unreleased tag** (at most 6 tags per repository,
+  from the `tags` read) the newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
+  are kept in the JSON). Conclusion `failure`, `cancelled` or `timed_out` is a failed run; one not completed is information.
+- **One item per tag.** A tag whose run failed yields exactly one item, `release-run-failed` (`red`), whether the tag is released or
+  not and whether it is the latest or an unreleased one; the `tag-without-release` item is **not** emitted for that tag. Without a
+  failed run an unreleased tag yields `tag-without-release` (`yellow`).
 - **Local default branch behind origin** needs no fetch: the remote default-branch head SHA (from `branches/DEFAULT`, `ci-main`) is looked up in the local object
   store; absent locally, or not an ancestor-descendant of the local default branch tip, means "origin has commits you do not have"
   (`main-behind-origin`). Local Git only; no write; with `--offline` the item cannot exist.
@@ -118,58 +122,76 @@ Every finding that deserves a human becomes an **action item**; findings that ar
 
 **Priorities** (fixed order, colour in brackets): `red` act now, `yellow` soon, `green` ready to merge or publish, `blue` information
 worth knowing, `violet` bot and dependency updates. Priority is a property of the item, separate from Spec 033's `attention`, which
-keeps its meaning and is untouched.
+keeps its meaning and is untouched. Rule of thumb for the mapping below: every Spec 033 attention reason is `yellow` unless it is a
+risk to work in progress (`operation`, `conflicts`, `error`: `red`); `blue` is reserved for facts Spec 033 calls information only.
 
-| # | Category id | Condition | Priority | Suggested command (owner-side hint, never run) |
-| --- | --- | --- | --- | --- |
-| 1 | `repo-error` | repository state `error` | red | `stw status --offline PATH` |
-| 2 | `local-operation` | rebase, merge, cherry-pick, revert, bisect in progress, or `conflicts` > 0 | red | `git -C PATH status` |
-| 3 | `main-red` | `ci-main` class `red` | red | `gh run list --repo OWNER/NAME --branch DEFAULT` |
-| 4 | `release-run-failed` | `ci-release` failed for the latest tag | red | `gh run list --repo OWNER/NAME --commit SHA` |
-| 5 | `local-changes` | staged or unstaged files, `detached`, a dirty linked worktree | yellow | `git -C PATH status` |
-| 6 | `local-behind` | behind or diverged from upstream | yellow | `stw sync --plan PATH` |
-| 7 | `main-behind-origin` | origin's default branch has commits the local clone lacks | yellow | `stw sync --plan PATH` |
-| 8 | `gitlink-drift` | checked-out commit behind, diverged from or unrelated to the recorded gitlink | yellow | `stw status --offline PATH` |
-| 9 | `pr-conflict` | non-bot PR in group `conflict` | yellow | `stw pulls --repo OWNER/NAME` |
-| 10 | `pr-blocked` | non-bot PR in group `blocked` (any reason except `not-read`) | yellow | `stw pulls --repo OWNER/NAME` |
-| 11 | `tag-without-release` | unreleased tag (rule above); **red** when its release workflow run failed | yellow, red on failed run | per the repository's `docs/releasing.md` (hint text: set the draft variable **before** the tag is pushed) |
-| 12 | `pr-ready` | non-bot PR in group `ready` | green | `gh pr merge N -R OWNER/NAME --rebase` |
-| 13 | `release-draft` | release draft with `write-access` visibility | green | `gh release edit TAG -R OWNER/NAME --draft=false` |
-| 14 | `pr-checks-pending` | non-bot PR in group `checks` | blue | `stw pulls --repo OWNER/NAME` |
-| 15 | `pr-unread` | PR past the budget (`not-read`) | blue | `stw pulls --repo OWNER/NAME` |
-| 16 | `local-untracked` | untracked files, nothing else local | blue | `git -C PATH status` |
-| 17 | `gitlink-ahead` | checked-out commit ahead of the recorded gitlink | blue | `git -C ROOT add PATH` |
-| 18 | `branches-unmerged` | `branches.not_integrated` > 0 | blue | `stw tidy PATH` |
-| 19 | `worktree-stale` | prunable or missing linked worktree | blue | `stw tidy PATH` |
-| 20 | `pr-bot` | **any** PR by a bot, whatever its group | violet | `stw pulls --repo OWNER/NAME --bots-only` |
+| # | Category id | Subject (id part) | Condition | Priority | Suggested command (hint, never run) |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `repo-error` | `-` | repository state `error` (Spec 033 attention `error`) | red | `stw status --offline PATH` |
+| 2 | `local-operation` | `operation` or `conflicts` | rebase, merge, cherry-pick, revert, bisect in progress; `conflicts` > 0 | red | `git -C PATH status` |
+| 3 | `main-red` | default branch | `ci-main` class `red` | red | `gh run list --repo OWNER/NAME --branch DEFAULT` |
+| 4 | `release-run-failed` | tag | newest release run of a tag failed (rule "one item per tag") | red | `gh run list --repo OWNER/NAME --commit SHA` |
+| 5 | `read-error` | source id | a remote read of the repository failed or was skipped by a rate-limit stop (state `error`); deadline skips are not items | yellow | `stw pulls --repo OWNER/NAME` for source `pulls`; none for the other sources |
+| 6 | `local-changes` | `dirty` | staged or unstaged files (attention `staged`, `unstaged`) | yellow | `git -C PATH status` |
+| 7 | `local-detached` | `detached` | detached HEAD in the main worktree (attention `detached`) | yellow | `git -C PATH status` |
+| 8 | `local-untracked` | `untracked` | untracked files (attention `untracked`) | yellow | `git -C PATH status` |
+| 9 | `local-behind` | `behind` or `diverged` | behind or diverged from the upstream (attention `behind`, `diverged`) | yellow | `stw sync --plan PATH` |
+| 10 | `local-no-upstream` | `no-upstream` | a branch without upstream (attention `no-upstream`) | yellow | `git -C PATH branch -vv` |
+| 11 | `main-behind-origin` | default branch | origin's default branch has commits the local clone lacks (no Spec 033 attention; remote fact) | yellow | `stw sync --plan PATH` |
+| 12 | `gitlink-drift` | submodule path | checked-out commit behind, diverged from or unrelated to the recorded one (attention `gitlink-drift`) | yellow | `stw status --offline PATH` |
+| 13 | `worktree-dirty` | worktree path | a linked worktree with changes (information in Spec 033, a risk to unsaved work here) | yellow | `git -C WORKTREE status` |
+| 14 | `pr-conflict` | PR number | non-bot, non-draft PR in group `conflict` | yellow | `stw pulls --repo OWNER/NAME` |
+| 15 | `pr-blocked` | PR number | non-bot, non-draft PR in group `blocked` whose row was read (any reason except past-budget) | yellow | `stw pulls --repo OWNER/NAME` |
+| 16 | `tag-without-release` | tag | unreleased tag without a failed run | yellow | none; hint text: see the repository's `docs/releasing.md`; the draft variable must be set **before** the tag is pushed |
+| 17 | `pr-ready` | PR number | non-bot, non-draft PR in group `ready` | green | `gh pr merge N -R OWNER/NAME --rebase` |
+| 18 | `release-draft` | tag | release draft with `write-access` visibility | green | `gh release edit TAG -R OWNER/NAME --draft=false` |
+| 19 | `pr-checks-pending` | PR number | non-bot, non-draft PR in group `checks` | blue | `stw pulls --repo OWNER/NAME` |
+| 20 | `pr-unread` | PR number | non-bot PR **past the detail budget** only (the `PastBudget` flag of the row) | blue | `stw pulls --repo OWNER/NAME` |
+| 21 | `local-stash` | `stash` | stash count > 0 (information in Spec 033) | blue | `git -C PATH stash list` |
+| 22 | `gitlink-ahead` | submodule path | checked-out commit ahead of the recorded gitlink | blue | `git -C ROOT add PATH` (effect `owner`) |
+| 23 | `branches-unmerged` | `branches` | `branches.not_integrated` > 0 | blue | `stw tidy plan PATH` |
+| 24 | `worktree-stale` | worktree path | linked worktree prunable, missing or locked | blue | `stw tidy plan PATH` |
+| 25 | `pr-bot` | PR number | non-draft PR by a bot, whatever its group, including past the budget | violet | `stw pulls --repo OWNER/NAME --bots-only` |
 
-Rules: draft PRs are counted in the block, never an item. A finding matching several rows of the **same subject** (one PR, one
-repository fact) takes the first row in table order (a PR cannot be both `pr-bot` and `pr-ready`: bots are tested first, so row 20
-is evaluated before 9 to 15 for PRs, the numbering above is the display order within a priority, not the evaluation order for PRs).
-Commands that change something (`gh pr merge`, `gh release edit`, the release-tag hint) carry `effect: "write"`: they are the owner's
-operation, not the tool's; the others are `effect: "read"`. `PATH` and repository names are validated tokens, shell-quoted when
-they contain anything outside `[A-Za-z0-9._/-]`; free text from the forge never enters a command except a release tag, which
-passes the release-tag validation of Spec 026 or the item has no command.
+Every suggested command exists in the current CLI (`stw status`, `stw sync [PATH] --plan`, `stw tidy plan [PATH]` of the `tidy`
+family, `stw pulls --repo`, `--bots-only`) or is a plain `gh` or `git` command; `stw status --offline` exists once this spec is
+implemented. WP-E re-checks every string against `internal/cli` in a test.
+
+**Rules.**
+
+- **Distinct local facts, distinct items.** Local rows have a subject per fact kind (`dirty`, `detached`, `untracked`, `behind` or
+  `diverged`, `no-upstream`, `stash`, `branches`, a path), so a repository that is dirty **and** behind yields both items. Precedence
+  (first row wins) applies only to the **same subject**: one PR, one tag, one fact kind of one repository.
+- **PRs.** Evaluate in this order: (1) a **draft** is never an item, bot or not (counted in the block); (2) a **bot** non-draft PR is
+  `pr-bot` (violet) whatever its group, also past the budget; (3) a non-bot PR past the budget is `pr-unread`; (4) otherwise by
+  group: `ready` `pr-ready`, `conflict` `pr-conflict`, `blocked` `pr-blocked`, `checks` `pr-checks-pending`. A row whose detail read
+  failed or was skipped after a rate limit is not a PR item: the repository gets one `read-error` item (row 5), so no row is
+  categoryless or counted twice.
+- **Effect of a hint.** `effect` is `read` (changes nothing when run) or `owner` (changes something, and is the **owner's**
+  operation: `gh pr merge`, `gh release edit`, `git -C ROOT add PATH`). Hints are strings; **`stw` never runs a suggested command**.
+  `PATH` and repository names are validated tokens, shell-quoted when they contain anything outside `[A-Za-z0-9._/-]`; free text from
+  the forge never enters a command except a release tag, which passes the release-tag validation of Spec 026 or the item has no
+  command.
 
 **Ordering (deterministic).** Items sort by priority (`red`, `yellow`, `green`, `blue`, `violet`), then by category number of the
-table, then repository name (case-insensitive), then subject (PR number numerically, tag by semantic version descending, path). The
-same data yields the same items, ids and order regardless of timing, parallelism or repository order. **Item id**:
-`CATEGORY:REPO:SUBJECT` (`pr-ready:wstein/sourcesteward:57`, `main-red:wstein/sourcesteward:main`, `local-changes:crewbook:-`), stable
-across runs for the same finding. The JSON lists **every** item (no cap); the human section shows at most 10 items per priority and `and N more` with the drill-down command.
+table, then repository name (case-insensitive), then subject (PR number numerically, tag by version descending, path). The same data
+yields the same items, ids and order regardless of timing, parallelism or repository order. **Item id**: `CATEGORY:REPO:SUBJECT`
+(`pr-ready:wstein/sourcesteward:57`, `main-red:wstein/sourcesteward:main`, `local-changes:crewbook:dirty`), stable across runs for the
+same finding. The JSON lists **every** item, one per id, no cap.
 
 ## Human output
 
 ```
-Needs action (9)
+Needs action: 6 items
  ✖ red     wstein/sourcesteward  default branch CI is red (main, 3f2a9c1)            https://github.com/wstein/sourcesteward/actions
            run: gh run list --repo wstein/sourcesteward --branch main
  ▲ yellow  wstein/crewbook       PR #12 has conflicts: Update docs                    https://github.com/wstein/crewbook/pull/12
            run: stw pulls --repo wstein/crewbook
  ✔ green   wstein/sourcesteward  PR #57 is ready to merge: build(deps): bump cobra    https://github.com/wstein/sourcesteward/pull/57
            run: gh pr merge 57 -R wstein/sourcesteward --rebase
- ✔ green   wstein/bundledock     release draft v0.1.0 (4 assets) is waiting           https://github.com/wstein/bundledock/releases/tag/untagged-abc
+ ✔ green   wstein/bundledock     release draft v0.1.0 (4 assets) is waiting           https://github.com/wstein/bundledock/releases
            run: gh release edit v0.1.0 -R wstein/bundledock --draft=false
- ⬆ violet  wstein/workharbor     2 bot PRs (dependabot)                               https://github.com/wstein/workharbor/pulls
+ ⬆ violet  wstein/workharbor     2 bot PRs: #3, #4 (dependabot)
            run: stw pulls --repo wstein/workharbor --bots-only
 
 Repositories
@@ -179,8 +201,13 @@ Repositories
 Notices
   remote: release drafts of wstein/crewbook are not visible (token has no write access)
 
-summary: 1 red, 1 yellow, 2 green, 3 blue, 2 violet | 7 repositories | 2 notices
+summary: 1 red, 1 yellow, 2 green, 0 blue, 2 violet | 7 repositories | 1 notice
 ```
+
+The header counts **items**, the lines may be fewer: items with the same (priority, category, repository) are **grouped into one line**
+with the count and the first 3 identifiers (`+N more` beyond), here the two bot PRs of `wstein/workharbor` (6 items, 5 lines, so the
+summary counts 2 violet). A grouped line carries no URL, only the drill-down command; a single item keeps its URL. The JSON keeps
+one item per id and no grouping. The human section shows at most 10 lines per priority and `and N more` with the drill-down command.
 
 - Section order: **Needs action**, **Repositories** (the Spec 033 block per repository, plus one `remote:` line), **Notices**, the
   **summary** line (counts per priority in the fixed order, repository count, notice count; `nothing needs action` when empty).
@@ -210,23 +237,35 @@ summary: 1 red, 1 yellow, 2 green, 3 blue, 2 violet | 7 repositories | 2 notices
   3 repositories not read` (the reset time is shown when GitHub gave it; the command never waits), `deadline of 90 s reached: remote
   sources of N repositories not read`, `release drafts of OWNER/NAME not visible (token has no write access)`. Notices are on stdout
   in the Notices section and in the JSON; progress is the only thing on stderr.
-- **No token or no network at all**: the local view plus the one notice, exactly the `--offline` content plus the notice.
+- **No usable token**: when token resolution finds no usable token **before any request is made**, no request is sent; the local view
+  plus the one notice is printed, exactly the `--offline` content plus the notice, exit 0.
 - **Per-source independence**: a failing source (`pulls`, `releases`, `tags`, `ci-*`) leaves the others of the repository and
   all other repositories intact; its repository block says which part is missing.
-- **Parallelism and time.** The local half is computed first and completely. Remote reads: at most 4 repositories in parallel,
-  sequential within a repository, **15 s per request** and an **overall deadline of 90 s** (`--timeout`, default 90s) for the remote
-  half. When the deadline passes, the reads in flight are cancelled and every source not completed is **`skipped`, reason `deadline`**:
-  one notice (`deadline of 90 s reached: N sources of M repositories not read; raise --timeout`), shown in the repository block as
-  `remote: not read (deadline)`; a deadline skip is **not a failed read**. Output is rendered once, deterministically ordered.
-- **Rate limit.** On exhaustion (403/429 with evidence) all remaining remote reads stop, the sources not yet read are
-  `rate-limited` (a failed read, error), the command **never sleeps or retries**. Search is never used.
-- **Exit status.** 0 when the overview was produced: **also** with no token, no network at all (nothing could be asked), `--offline`,
-  deadline skips, skipped repositories and any number of items (the document says `summary.degraded` true and lists the notices).
-  **1** when a remote read of a requested repository **failed**: an `error` source (`unauthorized` for a rejected token, `forbidden`,
-  `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`, `rate-limited` stop), or a repository cannot
-  be read locally, or the run fails; the partial output is printed all the same, as with `stw pulls`. 2 usage error. Items and
-  priorities never affect the status. Distinction: *missing* (no token, offline, no network, deadline) is a notice and 0; *failed*
-  (the forge answered wrongly or refused) is a notice and 1.
+- **Concurrency and time (per source).** The local half is computed first and completely. Remote sources run in two groups: the PR
+  source through the pulls cycle's own pool (**parallelism 4 across repositories**, sequential within a repository, as in Spec
+  036); the other sources (`repo`, `releases`, `tags`, `ci-main`, `ci-release`) through **their own worker pool of 4 across
+  repositories**, sequential per source within a repository. **15 s per request** (a per-request timeout option of the hosting
+  reader; other commands keep 30 s) and an **overall deadline of 90 s** (`--timeout`, default 90s) per run. When the deadline
+  passes, requests not yet started are not sent and those in flight are cancelled: every such source is **`skipped`, reason
+  `deadline`**, a notice says `deadline of 90 s reached: N sources of M repositories not read; raise --timeout`, the repository block
+  says `remote: not read (deadline)`. Each source keeps what it finished: partial results per source, never an all-or-nothing run.
+  Output is rendered once, deterministically ordered.
+- **Rate limit.** On exhaustion (403/429 with evidence) all remaining remote reads stop; the sources not yet read are `error`
+  `rate-limited` (a failed read), the command **never sleeps or retries**. Search is never used.
+- **Exit status (deterministic).** Exit **0** with a notice happens **only** for (a) `--offline`, and (b) no usable token detected
+  before any request. Otherwise, if at least one **attempted** request fails at the transport, API or response level (network
+  unreachable, 401/403, 5xx, rate-limit, malformed or oversized answer, `repo-moved`), that source reports an error, the partial
+  output is printed and the exit status is **1**, as `stw pulls`. A request that the **deadline** prevented or cancelled is `skipped`,
+  never a failure (exit 0 if nothing else failed). Also 1 when a repository cannot be read locally or the run fails; 2 usage error.
+  Items and priorities never affect the status. The result depends on what was attempted, not on timing: a network that fails on the
+  first request exits 1 whenever a request was attempted, and 0 only when none was.
+
+## Required seams (WP-0)
+
+(a) `pulls.Run` returns the **rows read so far** with `not-read`/`deadline` marks and a `PastBudget` flag on every row when its context
+expires, instead of `nil, err` (also an improvement for `stw pulls`, with its own tests; `stw pulls` output changes only on expiry);
+(b) a per-request timeout option of the hosting reader (default 30 s unchanged for every other command; status uses 15 s);
+(c) the exported `PastBudget` flag, so `pr-unread` means past the budget only; (d) the per-source pools described above.
 
 ## Cost model
 
@@ -252,7 +291,7 @@ Only the `stw status` online reader may use the new guard mode; one-shot operati
    `tidyRoute`. The premise that a new releases shape is needed is therefore wrong: the amendment adds none. It records that the status
    reader reads these through new typed decoders (name, tag, `created_at`, `html_url`, `draft`, asset count, tag commit; the existing
    `ReleaseEntry` is not widened because release verification depends on it), with the `Link` bound of 10 pages, the 1 MiB cap (FR-006)
-   and a 15 s per-request context (FR-007). The behaviour of every existing mode is unchanged (they still admit what they admitted, and
+   and a 15 s per-request context (FR-007; a per-request timeout option of the hosting reader, default 30 s kept for other commands). The behaviour of every existing mode is unchanged (they still admit what they admitted, and
    `search/issues` stays `guardPulls` only); no claim and no test says the other modes refuse the release shapes. Tested: `guardStatus`
    refuses `search/issues` and everything outside its set.
 3. Spec 022 FR-005 and Spec 033 carry pointer sentences to this section. FR-006 and FR-007 apply as in Specs 035 and 036.
@@ -288,23 +327,23 @@ facts or to `--offline` output.
 1. **Reuse the existing releases, tags and runs shapes; no new request string.** The new `status` guard mode stays and refuses
    `search/issues`; every other mode behaves as before. Rationale: the shapes exist and are admitted already, a new string would be
    pure surface.
-2. **Exit codes.** No token, offline or no network gives the local status plus one notice per missing source, exit 0; a remote read
-   that failed for a repository (error, rate-limit stop, malformed answer) gives partial output and exit 1, as `stw pulls`; usage
-   error 2. Rationale: missing is not failed; a wrong answer is.
+2. **Exit codes (refined after review).** `--offline` or no usable token before any request: local status plus one notice per missing
+   source, exit 0; an **attempted** request that fails (transport, API, malformed, rate-limit stop) is a source error, partial output,
+   exit 1, as `stw pulls`; a deadline skip is not a failure; usage error 2. Rationale: the rule depends on what was attempted, never on
+   timing.
 3. **Re-read of unknown mergeability** is merged in the shared cycle (PR #149); status inherits it, `stw pulls` is unchanged.
 4. **CI state is required (WP-C is not optional).** Default-branch CI and the latest release workflow run per repository, latest run
    only; red main or a failed tag run is `red`. Rationale: exactly what the owner must not miss.
 5. **Unreleased tag rule.** A tag matching the repository's release tag pattern, newer than the latest published release, with no
    release (draft or published): `yellow` `tag-without-release`; `red` when the release run for that tag failed.
 6. **Deadlines.** 15 s per request, 90 s overall, overridable with `--timeout`; on expiry partial results, a notice and sources
-   `skipped` with reason `deadline`; a deadline skip is not a failed read (exit 0).
+   `skipped` with reason `deadline`; a deadline skip is not a failed read (exit 0 if nothing else failed).
 7. **A releases page over 1 MiB** degrades that repository's release section to a `page-too-large` notice, exit 1, the rest is
    unaffected (as the search read of `stw pulls`).
 8. **Keep the write-access read** (`permissions` of `repos/OWNER/NAME`, an admitted shape). When the token cannot see drafts the command
    says so, and without evidence it says "release draft visibility unknown"; it never prints "0 drafts" as a fact.
-9. **Suggested commands** (hints only, never run): merge `gh pr merge N -R OWNER/NAME --rebase` (the owner merges); publish
-   `gh release edit TAG -R OWNER/NAME --draft=false`; the tag hint follows that repository's `docs/releasing.md` and states that
-   the draft variable must be set **before** the tag is pushed; drill-down `stw pulls --repo OWNER/NAME`.
+9. **Suggested commands** (hints only, never run): merge `gh pr merge N -R OWNER/NAME --rebase` (the owner merges, effect `owner`); publish
+   `gh release edit TAG -R OWNER/NAME --draft=false`; the tag item has no command, only a hint text: follow that repository's `docs/releasing.md`; the draft variable must be set **before** the tag is pushed; drill-down `stw pulls --repo OWNER/NAME`.
 10. **Caps and the violet rule.** The human output caps each section at 10 items per priority with "N more" and the drill-down
     command; the JSON is complete. Every bot PR, even a ready one, is `violet`.
 
