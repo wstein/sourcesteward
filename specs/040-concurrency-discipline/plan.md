@@ -7,7 +7,7 @@ independent review of the exact head. Seams: new `internal/fanout`, `scripts/che
 new `scripts/gostmt/main.go`, new `scripts/go-statements.allow`. No build, release or push of the default branch is part of any WP.
 
 Order: **WP-0**, then WP-1, WP-2, WP-3, WP-4 (independent of each other after WP-0, any order, but one pull request each), then WP-5,
-then WP-6 only if the owner confirms question 1 of the specification.
+then WP-6 (the Session primitive first; the exemption only if that fails, Decision 1).
 
 | WP | Scope | Done when |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ then WP-6 only if the owner confirms question 1 of the specification.
 | 3 stwsync | the repository fan-out in `status.go` becomes `fanout.Do` with width `gitConcurrency` and the inner `slots` channel removed if redundant (otherwise kept and noted); the per-worktree `git status` fan-out gets a width (the same `gitConcurrency`, stated in the PR as the one behaviour change) | two lines removed; a bubble test shows no more than `gitConcurrency` concurrent `git status` calls; unchanged JSON for the existing fixtures |
 | 4 main | `cmd/stw/main.go` drops the goroutine: `context.AfterFunc(ctx, stop)` (or `signal.NotifyContext` semantics as today) with a test that a signal cancels the context and releases the handler | one line removed; behaviour on SIGINT and SIGTERM unchanged (existing cli tests) |
 | 5 process plumbing | `release/build.go` stdout/stderr copy, `workspace/native_stream.go` stderr drain and finish watcher, `tidy_v3_integration_patchid.go` readers use `fanout.Both` (or `Do`); the strict stream tests (byte limits, blocked pipes, cancellation, reaping) pass untouched and run under `-race` locally once | four lines removed; no change to the sandbox launch policy or the byte caps; independent security-minded review of the exact head |
-| 6 ref transaction (conditional) | `native_ref_transaction.go` session: either a `fanout.Session` primitive with tests, or the recorded permanent exemption in the allowlist with the owner's reason | owner decision recorded in the PR; allowlist reaches zero or one named exemption |
+| 6 ref transaction (conditional) | `native_ref_transaction.go` session: either a `fanout.Session` primitive with tests, or, only if `fanout` cannot express it, the single named exemption with a written justification and a test that fails on a second exemption (Decision 1) | allowlist reaches zero or exactly one named exemption |
 
 ## Test plan and mutation targets
 
