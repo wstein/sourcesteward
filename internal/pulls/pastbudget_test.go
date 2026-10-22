@@ -44,3 +44,37 @@ func TestFailedAndRateSkippedReadsAreRepositoryErrorsNotPastBudget(t *testing.T)
 		}
 	}
 }
+
+func TestDraftsAreNeverPastBudgetUnlessTheyWereEligibleForDetail(t *testing.T) {
+	f := newForge()
+	d := okPR("o/r", 1)
+	d.draft = true
+	f.add(d)
+	f.add(okPR("o/r", 2))
+	res := run(t, f, Options{Repos: []string{"o/r"}})
+	if r := row(t, res, "o/r", 1); r.PastBudget || r.Detail || r.Group != GroupDraft {
+		t.Fatalf("a draft skipped by default is not past the budget: %+v", r)
+	}
+	// With --detail-drafts a draft competes for the budget and can be past it; it is still
+	// a draft, so it is not counted as not read.
+	res = run(t, f, Options{Repos: []string{"o/r"}, DetailDrafts: true, Limit: 1})
+	if r := row(t, res, "o/r", 1); r.PastBudget || !r.Detail {
+		t.Fatalf("%+v", r)
+	}
+	if r := row(t, res, "o/r", 2); !r.PastBudget || r.Reason != ReasonNotRead {
+		t.Fatalf("%+v", r)
+	}
+	f2 := newForge()
+	d2 := okPR("o/r", 1)
+	d2.draft = true
+	d2.age = 48 * time.Hour
+	f2.add(d2)
+	f2.add(okPR("o/r", 2))
+	res = run(t, f2, Options{Repos: []string{"o/r"}, DetailDrafts: true, Limit: 1})
+	if r := row(t, res, "o/r", 1); !r.PastBudget || r.Group != GroupDraft || r.Detail {
+		t.Fatalf("an eligible draft past the budget: %+v", r)
+	}
+	if res.Summary.NotRead != 0 {
+		t.Fatalf("a draft is never counted as not read: %+v", res.Summary)
+	}
+}

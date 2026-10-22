@@ -62,7 +62,7 @@ type Row struct {
 	Detail                                        bool
 	Deadline                                      bool // not read because the context expired (not a failure)
 
-	PastBudget bool // not selected for detail by the budget (counted by summary.not_read); a failed or skipped read is not past the budget
+	PastBudget bool // eligible for detail but cut by the --limit budget (summary.not_read counts the non-drafts); a draft skipped by default, a failed read and a deadline skip are not past the budget
 	headOK     bool // pulls/N reported the listed head (validated)
 }
 
@@ -138,9 +138,10 @@ type cycle struct {
 type item struct {
 	repo string
 	hosting.PullListItem
-	row    Row
-	budget bool // selected for detail
-	reread bool // detail says null/unknown mergeability on an otherwise judgeable row
+	row      Row
+	eligible bool // competes for the detail budget: not a draft, or --detail-drafts
+	budget   bool // selected for detail
+	reread   bool // detail says null/unknown mergeability on an otherwise judgeable row
 }
 
 func (c *cycle) run(ctx context.Context) {
@@ -186,7 +187,8 @@ func (c *cycle) run(ctx context.Context) {
 	budget := c.o.Limit
 	byRepo := map[string][]*item{}
 	for _, it := range all {
-		if (it.Draft && !c.o.DetailDrafts) || budget == 0 {
+		it.eligible = !it.Draft || c.o.DetailDrafts
+		if !it.eligible || budget == 0 {
 			continue
 		}
 		budget--
@@ -221,7 +223,7 @@ func (c *cycle) run(ctx context.Context) {
 	c.reread(ctx, all, read, index, status)
 
 	for _, it := range all {
-		it.row.PastBudget = !it.budget
+		it.row.PastBudget = it.eligible && !it.budget
 		it.row.Deadline = it.budget && !it.row.Detail && ctx.Err() != nil && statusOf(status, index, it.repo).Error == ""
 		c.finish(it)
 		c.res.Rows = append(c.res.Rows, it.row)
