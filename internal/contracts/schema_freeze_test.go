@@ -40,6 +40,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v2/hosting-pr.schema.json":             "2baef8835871144bcfeac3e3bbc15fa6ead88c9b30bce9949b19ef7f8d6c3756",
 	"schemas/v2/hosting-prs.schema.json":            "a4d2a263bc8470fe78757c639b359fe4a30a52e0a0638c67e747a6d8eb696047",
 	"schemas/v2/inspect.schema.json":                "3824dbf58ee99eaa184218c292a8eff0e7c7ee1b7f455a77d9c1977f1478f595",
+	"schemas/v2/status.schema.json":                 "e8c075a7ade89a0a0428ff9e16574ac60bd856289643958e235bf7b2b21e77bf",
 	"schemas/v2/tidy.schema.json":                   "c964a85de0941f41ceef84b6cc57235de984c7084ea1b4bacc8ebd799de19f2d",
 }
 

@@ -45,6 +45,12 @@ func fixtureReport() Report {
 		},
 		Summary: stwsync.StatusSummary{Total: 4, Attention: 1, Errors: 1},
 	}
+	for i := range local.Repos { // as stwsync reports them: no worktree list is null, a submodule has a gitlink
+		local.Repos[i].Worktrees.List = []stwsync.WorktreeInfo{}
+		if local.Repos[i].Kind == "submodule" {
+			local.Repos[i].Gitlink = &stwsync.Gitlink{Recorded: ptr(fixtureSHA), CheckedOut: ptr(fixtureSHA), State: "ok"}
+		}
+	}
 	failedRun := overview.Run{Workflow: "release.yml", Conclusion: "failure", Status: "completed", URL: "https://github.com/wstein/sourcesteward/actions/runs/7"}
 	greenRun := overview.Run{Workflow: "release.yml", Conclusion: "success", Status: "completed", URL: "https://github.com/wstein/sourcesteward/actions/runs/5"}
 	behind := true

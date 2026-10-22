@@ -1,0 +1,3024 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v2/status.schema.json",
+  "title": "SourceSteward workspace status, online and action-oriented (schema 2)",
+  "description": "Result of stw status (online, the default): the action items, every workspace repository with the v1 local status plus the remote half read from GitHub, one entry per source, the notices about sources that were not read and the summary. stw status --offline prints the schema 1 document instead. Exit statuses: 0 also when items exist, when the run is offline, without a usable token, after a deadline skip or a missing release workflow; 1 when an attempted remote request failed, a repository cannot be read or the run failed (error is set); 2 usage error with no JSON. Keys are never omitted; absent values are null. A source that is not ok has data null. Strings are at most 2048 bytes (notice messages 512). Added optional keys keep schema_version 2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command",
+    "time",
+    "host",
+    "options",
+    "root",
+    "note",
+    "actions",
+    "repos",
+    "sources",
+    "notices",
+    "summary",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "command": {
+      "const": "status"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "host": {
+      "const": "github.com"
+    },
+    "options": {
+      "type": "object",
+      "required": [
+        "fetch",
+        "worktrees",
+        "icons"
+      ],
+      "properties": {
+        "fetch": {
+          "type": "boolean"
+        },
+        "worktrees": {
+          "type": "boolean"
+        },
+        "icons": {
+          "type": "null"
+        }
+      },
+      "additionalProperties": false
+    },
+    "root": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2048
+    },
+    "note": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2048
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "repos": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/repo"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "local"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "repo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "pulls"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "releases"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "tags"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "ci-main"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "ci-release"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/notice"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "repos",
+        "attention",
+        "errors",
+        "priorities",
+        "degraded",
+        "failed",
+        "notices"
+      ],
+      "properties": {
+        "repos": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "attention": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priorities": {
+          "type": "object",
+          "required": [
+            "red",
+            "yellow",
+            "green",
+            "blue",
+            "violet"
+          ],
+          "properties": {
+            "red": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "yellow": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "green": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blue": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violet": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "degraded": {
+          "type": "boolean"
+        },
+        "failed": {
+          "type": "boolean"
+        },
+        "notices": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^status-[a-z-]+$"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 260
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "action": {
+      "type": "object",
+      "required": [
+        "id",
+        "priority",
+        "category",
+        "repo",
+        "path",
+        "title",
+        "url",
+        "subject",
+        "evidence",
+        "command",
+        "effect",
+        "hint"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z-]*:.+:.+$",
+          "maxLength": 2048
+        },
+        "priority": {
+          "enum": [
+            "red",
+            "yellow",
+            "green",
+            "blue",
+            "violet"
+          ]
+        },
+        "category": {
+          "enum": [
+            "repo-error",
+            "local-operation",
+            "main-red",
+            "release-run-failed",
+            "read-error",
+            "local-changes",
+            "local-detached",
+            "local-untracked",
+            "local-behind",
+            "local-no-upstream",
+            "main-behind-origin",
+            "gitlink-drift",
+            "worktree-dirty",
+            "pr-conflict",
+            "pr-blocked",
+            "tag-without-release",
+            "pr-ready",
+            "release-draft",
+            "pr-checks-pending",
+            "pr-unread",
+            "local-stash",
+            "gitlink-ahead",
+            "branches-unmerged",
+            "worktree-stale",
+            "pr-bot"
+          ]
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "evidence": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "command": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        },
+        "effect": {
+          "enum": [
+            "read",
+            "owner",
+            null
+          ]
+        },
+        "hint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "repo-error",
+                  "local-operation",
+                  "main-red",
+                  "release-run-failed"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "priority": {
+                "const": "red"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "read-error",
+                  "local-changes",
+                  "local-detached",
+                  "local-untracked",
+                  "local-behind",
+                  "local-no-upstream",
+                  "main-behind-origin",
+                  "gitlink-drift",
+                  "worktree-dirty",
+                  "pr-conflict",
+                  "pr-blocked",
+                  "tag-without-release"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "priority": {
+                "const": "yellow"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "pr-ready",
+                  "release-draft"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "priority": {
+                "const": "green"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "pr-checks-pending",
+                  "pr-unread",
+                  "local-stash",
+                  "gitlink-ahead",
+                  "branches-unmerged",
+                  "worktree-stale"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "priority": {
+                "const": "blue"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "pr-bot"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "priority": {
+                "const": "violet"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "pr-ready",
+                  "pr-conflict",
+                  "pr-checks-pending",
+                  "pr-blocked",
+                  "pr-unread",
+                  "pr-bot"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "pr"
+                  }
+                }
+              },
+              "evidence": {
+                "$ref": "#/$defs/evidencePR"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "repo-error"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "repository"
+                  }
+                }
+              },
+              "evidence": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "code"
+                    ],
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "maxLength": 2048
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "local-operation"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "operation"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "enum": [
+                          "rebase",
+                          "merge",
+                          "cherry-pick",
+                          "revert",
+                          "bisect",
+                          "unreadable"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "conflicts"
+                    ],
+                    "properties": {
+                      "conflicts": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "main-red"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "branch"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "class"
+                ],
+                "properties": {
+                  "class": {
+                    "const": "red"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "release-run-failed"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "tag"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "conclusion",
+                  "released"
+                ],
+                "properties": {
+                  "conclusion": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "released": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "read-error"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "source"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "code"
+                ],
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "repo",
+                      "pulls",
+                      "releases",
+                      "tags",
+                      "ci-main",
+                      "ci-release"
+                    ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "local-changes"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "staged",
+                  "unstaged"
+                ],
+                "properties": {
+                  "staged": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "unstaged": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "local-detached",
+                  "local-no-upstream"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "local-untracked"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "untracked"
+                ],
+                "properties": {
+                  "untracked": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "local-behind"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "behind"
+                    ],
+                    "properties": {
+                      "behind": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "ahead",
+                      "behind"
+                    ],
+                    "properties": {
+                      "ahead": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "behind": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "main-behind-origin"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "branch"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "gitlink-drift",
+                  "gitlink-ahead"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "gitlink"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "relation"
+                ],
+                "properties": {
+                  "relation": {
+                    "enum": [
+                      "ahead",
+                      "behind",
+                      "diverged",
+                      "unrelated",
+                      "unknown"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "worktree-dirty",
+                  "worktree-stale"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "worktree"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "tag-without-release"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "tag"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "release-draft"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "release"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "drafts_visibility",
+                  "assets"
+                ],
+                "properties": {
+                  "drafts_visibility": {
+                    "const": "write-access"
+                  },
+                  "assets": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "local-stash"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "stash"
+                ],
+                "properties": {
+                  "stash": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "branches-unmerged"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "kind": {
+                    "const": "fact"
+                  }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "not_integrated"
+                ],
+                "properties": {
+                  "not_integrated": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effect": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "effect": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "kind",
+        "number",
+        "tag",
+        "sha",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "pr",
+            "release",
+            "tag",
+            "branch",
+            "repository",
+            "worktree",
+            "gitlink",
+            "fact",
+            "source"
+          ]
+        },
+        "number": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        },
+        "sha": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40,64}$"
+            }
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "pr"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "number": {
+                "type": "integer"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "number": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "tag",
+                  "release"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tag": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "tag": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "branch",
+                  "gitlink",
+                  "worktree",
+                  "fact",
+                  "source"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "name": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidencePR": {
+      "type": "object",
+      "required": [
+        "group"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "enum": [
+            "ready",
+            "checks",
+            "conflict",
+            "draft",
+            "blocked"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "past_budget": {
+          "const": true
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "workflow",
+        "conclusion",
+        "status",
+        "url"
+      ],
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "conclusion": {
+          "enum": [
+            "success",
+            "failure",
+            "cancelled",
+            "timed_out",
+            "neutral",
+            "skipped",
+            "action_required",
+            "startup_failure",
+            "stale",
+            null
+          ]
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "in_progress",
+            "completed",
+            "waiting",
+            "requested",
+            "pending",
+            null
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://",
+          "maxLength": 2048
+        }
+      },
+      "additionalProperties": false
+    },
+    "draft": {
+      "type": "object",
+      "required": [
+        "name",
+        "tag",
+        "created_at",
+        "assets",
+        "url"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        },
+        "tag": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "assets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://",
+          "maxLength": 2048
+        }
+      },
+      "additionalProperties": false
+    },
+    "repo": {
+      "type": "object",
+      "required": [
+        "name",
+        "path",
+        "kind",
+        "state",
+        "branch",
+        "detached",
+        "head",
+        "upstream",
+        "upstream_gone",
+        "ahead",
+        "behind",
+        "changes",
+        "operation",
+        "stash",
+        "branches",
+        "worktrees",
+        "gitlink",
+        "fetch_error",
+        "error",
+        "attention",
+        "reasons",
+        "remote"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "root",
+            "submodule"
+          ]
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "uninitialized",
+            "error"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detached": {
+          "type": "boolean"
+        },
+        "head": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "upstream": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstream_gone": {
+          "type": "boolean"
+        },
+        "ahead": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "behind": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "changes": {
+          "type": "object",
+          "required": [
+            "staged",
+            "unstaged",
+            "untracked",
+            "conflicts"
+          ],
+          "properties": {
+            "staged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unstaged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "untracked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "conflicts": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "operation": {
+          "enum": [
+            "rebase",
+            "merge",
+            "cherry-pick",
+            "revert",
+            "bisect",
+            "unreadable",
+            null
+          ]
+        },
+        "stash": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "branches": {
+          "type": "object",
+          "required": [
+            "local",
+            "base",
+            "integrated",
+            "not_integrated"
+          ],
+          "properties": {
+            "local": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "base": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "integrated": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "not_integrated": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "worktrees": {
+          "type": "object",
+          "required": [
+            "linked",
+            "dirty",
+            "locked",
+            "prunable",
+            "list",
+            "missing"
+          ],
+          "properties": {
+            "linked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dirty": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "locked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "prunable": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "list": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/worktree"
+              }
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "gitlink": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "recorded",
+                "checked_out",
+                "state",
+                "relation"
+              ],
+              "properties": {
+                "recorded": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{40,64}$"
+                },
+                "checked_out": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{40,64}$"
+                },
+                "state": {
+                  "enum": [
+                    "ok",
+                    "drift",
+                    "uninitialized"
+                  ]
+                },
+                "relation": {
+                  "enum": [
+                    "ahead",
+                    "behind",
+                    "diverged",
+                    "unrelated",
+                    "unknown",
+                    null
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "fetch_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "pattern": "^status-[a-z-]+$"
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 260
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "attention": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "operation",
+              "conflicts",
+              "staged",
+              "unstaged",
+              "untracked",
+              "behind",
+              "diverged",
+              "no-upstream",
+              "detached",
+              "gitlink-drift",
+              "error"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "remote": {
+          "$ref": "#/$defs/remote"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "object"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "root"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "gitlink": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "gitlink": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "attention": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "worktree": {
+      "type": "object",
+      "required": [
+        "path",
+        "branch",
+        "detached",
+        "dirty",
+        "locked",
+        "prunable",
+        "missing"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detached": {
+          "type": "boolean"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prunable": {
+          "type": "boolean"
+        },
+        "missing": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "remote": {
+      "type": "object",
+      "required": [
+        "repo",
+        "state",
+        "reason",
+        "sources"
+      ],
+      "properties": {
+        "repo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "maxLength": 140
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "degraded",
+            "skipped",
+            "error"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "sources": {
+          "type": "object",
+          "required": [
+            "repo",
+            "pulls",
+            "releases",
+            "tags",
+            "ci_main",
+            "ci_release"
+          ],
+          "properties": {
+            "repo": {
+              "$ref": "#/$defs/repoRead"
+            },
+            "pulls": {
+              "$ref": "#/$defs/pullsRead"
+            },
+            "releases": {
+              "$ref": "#/$defs/releasesRead"
+            },
+            "tags": {
+              "$ref": "#/$defs/tagsRead"
+            },
+            "ci_main": {
+              "$ref": "#/$defs/ciMainRead"
+            },
+            "ci_release": {
+              "$ref": "#/$defs/ciReleaseRead"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "id",
+        "state",
+        "read",
+        "degraded",
+        "skipped"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "local",
+            "repo",
+            "pulls",
+            "releases",
+            "tags",
+            "ci-main",
+            "ci-release"
+          ]
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error",
+            "degraded"
+          ]
+        },
+        "read": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "degraded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "notice": {
+      "type": "object",
+      "required": [
+        "code",
+        "source",
+        "repos",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "repos": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "additionalProperties": false
+    },
+    "repoData": {
+      "type": "object",
+      "required": [
+        "default_branch",
+        "html_url",
+        "drafts_visibility"
+      ],
+      "properties": {
+        "default_branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "html_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "drafts_visibility": {
+          "enum": [
+            "write-access",
+            "no-write-access",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "pullsData": {
+      "type": "object",
+      "required": [
+        "open",
+        "ready",
+        "checks",
+        "conflict",
+        "draft",
+        "blocked",
+        "red",
+        "bots",
+        "not_read"
+      ],
+      "properties": {
+        "open": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ready": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conflict": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "draft": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "red": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bots": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "not_read": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "releasesData": {
+      "type": "object",
+      "required": [
+        "drafts",
+        "truncated"
+      ],
+      "properties": {
+        "drafts": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/draft"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tagsData": {
+      "type": "object",
+      "required": [
+        "latest",
+        "unreleased"
+      ],
+      "properties": {
+        "latest": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "tag"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "tag": {
+                "type": "string",
+                "maxLength": 2048
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "unreleased": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "tag",
+              "sha",
+              "run"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "tag": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "sha": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40,64}$"
+              },
+              "run": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/run"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ciMainData": {
+      "type": "object",
+      "required": [
+        "branch",
+        "head",
+        "class",
+        "behind_origin"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "head": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "class": {
+          "enum": [
+            "none",
+            "pending",
+            "green",
+            "red",
+            null
+          ]
+        },
+        "behind_origin": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ciReleaseData": {
+      "type": "object",
+      "required": [
+        "tags"
+      ],
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "product",
+              "tag",
+              "sha",
+              "latest",
+              "unreleased",
+              "workflow",
+              "runs"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "product": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "tag": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "sha": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40,64}$"
+              },
+              "latest": {
+                "type": "boolean"
+              },
+              "unreleased": {
+                "type": "boolean"
+              },
+              "workflow": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "runs": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "$ref": "#/$defs/run"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "repoRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/repoData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pullsRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/pullsData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "releasesRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/releasesData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "tagsRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/tagsData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ciMainRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/ciMainData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ciReleaseRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/ciReleaseData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
