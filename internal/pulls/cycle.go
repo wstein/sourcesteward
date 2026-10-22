@@ -60,6 +60,7 @@ type Row struct {
 	Group, Reason                                 string // Reason is empty unless Group is blocked
 	Ready                                         bool
 	Detail                                        bool
+	Deadline                                      bool // not read because the context expired (not a failure)
 
 	PastBudget bool // not selected for detail by the budget (counted by summary.not_read); a failed or skipped read is not past the budget
 	headOK     bool // pulls/N reported the listed head (validated)
@@ -71,6 +72,9 @@ type RepoStatus struct {
 	Open   *int // open PRs seen, nil when the list could not be read
 	Listed int  // rows after the filters
 	Error  string
+	// Deadline: the context expired before everything of this repository was read; the
+	// list (Open nil) or some pull request details are missing. It is not a failure.
+	Deadline bool
 }
 
 // Error is one failure of a repository.
@@ -81,6 +85,8 @@ type Error struct{ Repo, Code, Message string }
 // row but is reported through Errors and the repository's Error.
 type Summary struct {
 	Total, Ready, Checks, Conflict, Draft, Blocked, Bots, NotRead, ReposRead, ReposFailed int
+	// ReposDeadline counts repositories whose list was not read because the context expired.
+	ReposDeadline int
 }
 
 // Result is the snapshot. Rows are newest first (created_at, then repository, then number;
@@ -92,10 +98,14 @@ type Result struct {
 	Repos   []RepoStatus
 	Errors  []Error
 	Summary Summary
+	// Deadline: the context expired before every read finished; Rows and Repos hold what was read
+	// so far (Row.Deadline, RepoStatus.Deadline mark the rest).
+	Deadline bool
 }
 
-// Run reads the snapshot. An error is returned only for unusable options or a cancelled
-// context; failures of a repository are in Result.Errors.
+// Run reads the snapshot. An error is returned for unusable options (nil Result) or an expired
+// context: then the Result is NOT nil but holds the rows read so far, marked Deadline where
+// reads were skipped, and the error is ctx.Err(). Failures of a repository are in Result.Errors.
 func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	if o.Limit == 0 {
 		o.Limit = defaultLimit
@@ -113,10 +123,7 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	res := &Result{Time: now().UTC(), Limit: o.Limit}
 	c := &cycle{r: r, o: o, now: res.Time, res: res}
 	c.run(ctx)
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return res, nil
+	return res, ctx.Err()
 }
 
 type cycle struct {
@@ -144,13 +151,17 @@ func (c *cycle) run(ctx context.Context) {
 		status[i].Repo = repo
 	}
 	pool(len(repos), c.o.Parallel, func(i int) {
-		if c.limited.Load() || ctx.Err() != nil {
+		if ctx.Err() != nil {
+			status[i].Deadline = true
+			return
+		}
+		if c.limited.Load() {
 			c.fail(&status[i], repos[i], hosting.CodeRateLimited, "rate limit reached before this repository was read")
 			return
 		}
 		items, err := c.r.ListOpenPullItems(ctx, repos[i], hosting.WatchMaxOpenPRs)
 		if err != nil {
-			c.failErr(&status[i], repos[i], err)
+			c.readFailed(ctx, &status[i], repos[i], err)
 			return
 		}
 		n := len(items)
@@ -193,12 +204,16 @@ func (c *cycle) run(ctx context.Context) {
 	}
 	pool(len(read), c.o.Parallel, func(i int) {
 		for _, it := range byRepo[read[i]] {
-			if c.limited.Load() || ctx.Err() != nil {
+			if ctx.Err() != nil {
+				status[index[read[i]]].Deadline = true
+				return
+			}
+			if c.limited.Load() {
 				c.fail(&status[index[read[i]]], read[i], hosting.CodeRateLimited, "rate limit reached before this pull request was read")
 				return
 			}
 			if err := c.readDetail(ctx, it); err != nil {
-				c.failErr(&status[index[read[i]]], read[i], err)
+				c.readFailed(ctx, &status[index[read[i]]], read[i], err)
 			}
 		}
 	})
@@ -207,10 +222,16 @@ func (c *cycle) run(ctx context.Context) {
 
 	for _, it := range all {
 		it.row.PastBudget = !it.budget
+		it.row.Deadline = it.budget && !it.row.Detail && ctx.Err() != nil && statusOf(status, index, it.repo).Error == ""
 		c.finish(it)
 		c.res.Rows = append(c.res.Rows, it.row)
 	}
 	c.res.Repos = status
+	for _, st := range status {
+		if st.Deadline {
+			c.res.Deadline = true
+		}
+	}
 	sort.SliceStable(c.res.Errors, func(a, b int) bool {
 		x, y := c.res.Errors[a], c.res.Errors[b]
 		if x.Repo != y.Repo {
@@ -219,6 +240,20 @@ func (c *cycle) run(ctx context.Context) {
 		return x.Code < y.Code
 	})
 	c.summarize()
+}
+
+func statusOf(status []RepoStatus, index map[string]int, repo string) *RepoStatus {
+	return &status[index[repo]]
+}
+
+// readFailed records a failed read, except that a read cut off by the expired context is a
+// deadline mark of the repository, never an error and never a rate-limit stop.
+func (c *cycle) readFailed(ctx context.Context, st *RepoStatus, repo string, err error) {
+	if ctx.Err() != nil {
+		st.Deadline = true
+		return
+	}
+	c.failErr(st, repo, err)
 }
 
 // reread gives every row whose pulls/N came back with mergeable null or mergeable_state
@@ -235,12 +270,16 @@ func (c *cycle) reread(ctx context.Context, all []*item, repos []string, index m
 	}
 	pool(len(repos), c.o.Parallel, func(i int) {
 		for _, it := range byRepo[repos[i]] {
-			if c.limited.Load() || ctx.Err() != nil {
+			if ctx.Err() != nil {
+				status[index[repos[i]]].Deadline = true
+				return
+			}
+			if c.limited.Load() {
 				return
 			}
 			d, err := watchcmd.ReadPullDetail(ctx, c.r, it.repo, it.Number)
 			if err != nil {
-				c.failErr(&status[index[repos[i]]], repos[i], err)
+				c.readFailed(ctx, &status[index[repos[i]]], repos[i], err)
 				continue
 			}
 			// Same guards as the first read: the re-read must report the listed head.
@@ -438,9 +477,12 @@ func (c *cycle) summarize() {
 		}
 	}
 	for _, st := range c.res.Repos {
-		if st.Error != "" {
+		switch {
+		case st.Error != "":
 			s.ReposFailed++
-		} else {
+		case st.Open == nil:
+			s.ReposDeadline++
+		default:
 			s.ReposRead++
 		}
 	}
