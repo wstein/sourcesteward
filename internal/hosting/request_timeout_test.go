@@ -5,9 +5,29 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+// fixtureTarget returns a repository root and points GH_PATH at a fake gh that serves a fixture
+// token, so reader constructors never read real credentials.
+func fixtureTarget(t *testing.T) string {
+	t.Helper()
+	d := t.TempDir()
+	target := filepath.Join(d, "target")
+	if err := os.Mkdir(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(d, "gh")
+	body := "#!/bin/sh\nif [ \"$1\" = \"--version\" ];then echo 'gh version 2.102.0';exit 0;fi\necho testsecret\n"
+	if err := os.WriteFile(script, []byte(body), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GH_PATH", script)
+	return target
+}
 
 func blockingReader(t *testing.T) *WatchReader {
 	t.Helper()
@@ -29,13 +49,13 @@ func TestRequestTimeoutDefaultsTo30SecondsForEveryConstructor(t *testing.T) {
 	if got := f.reader("github.com").RequestTimeout(); got != 30*time.Second {
 		t.Fatalf("%v", got)
 	}
-	ctx := context.Background()
+	ctx, target := context.Background(), fixtureTarget(t)
 	for name, mk := range map[string]func() (*WatchReader, func(), error){
 		"watch": func() (*WatchReader, func(), error) {
-			return NewWatchReaderWithTransport(ctx, t.TempDir(), "github.com", roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("x") }))
+			return NewWatchReaderWithTransport(ctx, target, "github.com", roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("x") }))
 		},
 		"pulls": func() (*WatchReader, func(), error) {
-			return NewPullsReaderWithTransport(ctx, t.TempDir(), "github.com", roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("x") }))
+			return NewPullsReaderWithTransport(ctx, target, "github.com", roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("x") }))
 		},
 	} {
 		r, cleanup, err := mk()
