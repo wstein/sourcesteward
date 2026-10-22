@@ -44,6 +44,19 @@ type RepoStatus struct {
 	Error        string
 }
 
+// States of the viewer read and the reasons of a skipped one.
+const (
+	ViewerOK         = "ok"
+	ViewerSkipped    = "skipped"
+	ViewerError      = "error"
+	ReasonNoIdentity = "no-identity"       // 403 or 404 without rate-limit evidence: the token class cannot read `user`
+	ReasonNotGitHub  = "not-github-origin" // no repository to read, so no request
+)
+
+// Viewer is the outcome of the one `user` read of a run. Login is set only with ViewerOK,
+// Reason only with ViewerSkipped and Error (a code) only with ViewerError.
+type Viewer struct{ State, Login, Reason, Error string }
+
 // Error is one failure. Repo is empty for a failure of the whole run.
 type Error struct{ Repo, Code, Message string }
 
@@ -65,6 +78,7 @@ type Summary struct {
 // repository (ASCII case-insensitive), then number.
 type Result struct {
 	Time    time.Time
+	Viewer  Viewer
 	Rows    []Row
 	Repos   []RepoStatus // sorted by repository, ASCII case-insensitive
 	Errors  []Error

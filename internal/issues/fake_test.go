@@ -29,7 +29,7 @@ type fakeForge struct {
 }
 
 func newForge() *fakeForge {
-	return &fakeForge{pages: map[string][]string{}, errAt: map[string]error{}}
+	return &fakeForge{pages: map[string][]string{}, errAt: map[string]error{}, viewer: "wstein"}
 }
 
 func (f *fakeForge) IssuesPage(_ context.Context, repo string, page int) (hosting.WatchResponse, error) {

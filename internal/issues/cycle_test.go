@@ -119,7 +119,7 @@ func TestRunReadsPagesByNumberAndNeverFollowsLink(t *testing.T) {
 	f := newForge()
 	f.pages["o/r"] = []string{body(raw(1)), body(raw(2)), body(raw(3))}
 	res := run(t, f, Options{Repos: []string{"o/r", "O/R"}})
-	if got := f.callList(); !slices.Equal(got, []string{"o/r#1", "o/r#2", "o/r#3"}) {
+	if got := f.callList(); !slices.Equal(got, []string{"user", "o/r#1", "o/r#2", "o/r#3"}) {
 		t.Fatalf("calls %v", got)
 	}
 	if len(res.Rows) != 3 || len(res.Repos) != 1 {

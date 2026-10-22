@@ -28,6 +28,7 @@ const (
 // *hosting.WatchReader implements it. Every method is a GET.
 type Reader interface {
 	IssuesPage(ctx context.Context, repo string, page int) (hosting.WatchResponse, error)
+	Viewer(ctx context.Context) (string, error)
 }
 
 var _ Reader = (*hosting.WatchReader)(nil)
@@ -47,7 +48,9 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	}
 	res := &Result{Time: now().UTC()}
 	c := &cycle{r: r, now: res.Time, res: res}
-	c.run(ctx, pulls.Dedupe(o.Repos))
+	repos := pulls.Dedupe(o.Repos)
+	c.readViewer(ctx, len(repos) > 0)
+	c.run(ctx, repos)
 	return res, nil
 }
 
@@ -55,6 +58,7 @@ type cycle struct {
 	r       Reader
 	now     time.Time
 	res     *Result
+	viewer  string      // the login the token resolves to; empty when unknown
 	limited atomic.Bool // the core rate limit was hit: nothing is read any more
 	mu      sync.Mutex
 }
@@ -144,7 +148,7 @@ func (c *cycle) list(ctx context.Context, repo string) (listing, error) {
 }
 
 func (c *cycle) row(repo string, it hosting.IssueListItem) Row {
-	priority, reason := classify(it, "")
+	priority, reason := classify(it, c.viewer)
 	row := Row{
 		Repo: repo, Number: it.Number, Title: clip(it.Title), Author: clip(it.Author), Bot: isBot(it),
 		CreatedAt: it.CreatedAt, Labels: capped(it.Labels), LabelsTotal: len(it.Labels), Assignees: capped(it.Assignees),
