@@ -46,6 +46,19 @@ discovers other repositories through one fixed `search/issues` read. Work packag
 listed in `stw --help`; `schemas/v1/pulls.schema.json` is frozen and unpublished, and `stw pulls` has a guide ([pulls](pulls.md)). The tests
 use a fake forge only (no network, no build); independent review of the exact head and the owner's acceptance are pending.
 
+## Spec 037 stw status online (work package D, action model implemented in source, 2026-10-22)
+
+[The specification](../specs/037-stw-status-overview/spec.md), its [JSON contract](../specs/037-stw-status-overview/contracts/status.md) and
+[plan](../specs/037-stw-status-overview/plan.md) make `stw status` online and action-oriented. Work package D is the pure package
+`internal/overview` (no I/O, no network, no clock): the 25 category rules, priorities, stable ids, deterministic ordering, human grouping with
+the cap of 10 lines per priority, suggested commands built only from validated tokens with their `effect`, notices and summary counts. Its
+tests are table-driven with one fixture per table row and never touch a network. Choices the spec leaves open: local findings use the
+repository's local name in the id and every forge-derived finding (including `main-behind-origin`) its `OWNER/NAME`; tags sort by natural
+version order (`v1.9.0` before `v1.10.0`) instead of a compiled release scheme; worktree items exist only when the status listed the
+linked worktrees (`--worktrees`); a grouped line shows the command its items share or else the drill-down `stw pulls --repo OWNER/NAME`
+(`gh release list -R OWNER/NAME` for drafts), and the omitted lines of a capped priority carry the command of the first omitted line.
+The CLI, hosting, schema and the other work packages are not part of this package; the issue categories of Spec 038 are not either.
+
 ## Active work: Spec 032 stw sync (slice 1a source implemented, 2026-10-21)
 
 [The specification](../specs/032-stw-sync/spec.md), [plan](../specs/032-stw-sync/plan.md) and [tasks](../specs/032-stw-sync/tasks.md) (4/20 done: T001 to T004) describe a manual one-step `stw sync [--plan]` and `stw sync restore` that replaces `git pull --rebase --prune` per repository (fast-forward only unless `--rebase`, dirty worktrees skipped unless `--autostash`, optional submodules). The independent design review is CLEAR at 3d8d1da (after NOT CLEAR at b0cc02d, F1-F8 resolved). Slice 1a (T002 to T004) is implemented in source on `feat/032-sync-plan`: `stw sync --plan|--dry-run [PATH] [--remote NAME] [--prune] [--json]` fetches once (remote-tracking refs only) and classifies every tracking branch (`internal/stwsync`), with the unpublished `schemas/v1/sync.schema.json`. Tests use temporary repositories with a bare remote and linked worktrees, including a before/after snapshot proving that a plan changes only remote-tracking refs. Not started: the real run, journal, prune reporting beyond the plan, `--rebase`, `--autostash`, `restore`, `--submodules`, acceptance evidence and a smoke script. No build, release artifact or real-repository run was made. Status stays `planned`.
