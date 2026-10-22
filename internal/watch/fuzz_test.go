@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
@@ -312,6 +313,8 @@ func stateJSON(t *testing.T, r *rig) string {
 	// detail_due is a read hint: a rerun poll that read the detail anyway clears it, a crash-free run
 	// keeps it one cycle longer. It never changes an event, so it is not part of the comparison.
 	for _, rs := range s.Repo {
+		// the closed list is ordered by when it was recorded, which only matters for evicting the oldest
+		sort.Slice(rs.Closed, func(i, j int) bool { return rs.Closed[i].Number < rs.Closed[j].Number })
 		for _, p := range rs.PRs {
 			p.DetailDue = false
 		}
