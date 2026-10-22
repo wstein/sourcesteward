@@ -188,8 +188,15 @@ const MessageIgnoredResults = "search results with an unusable repository were i
 // run (Code is its code), then incomplete_results, then the 1000 result cap, then
 // ignored results (malformed-response).
 func (r *WatchReader) DiscoverOwner(ctx context.Context, owner string) OwnerDiscovery {
+	return r.discoverOwner(ctx, owner, admitsSearch(r.mode), r.SearchOwnerPage)
+}
+
+// discoverOwner is the paging run shared by the PR owner search and the issue owner
+// search (Spec 038): admitted says whether this reader may search at all and readPage
+// reads one page of the matching shape. Everything else is identical.
+func (r *WatchReader) discoverOwner(ctx context.Context, owner string, admitted bool, readPage func(context.Context, string, int) (WatchResponse, error)) OwnerDiscovery {
 	d := OwnerDiscovery{Owner: owner}
-	if !admitsSearch(r.mode) {
+	if !admitted {
 		d.Code, d.Message = CodeMalformed, "search is not allowed for this reader"
 		return d
 	}
@@ -200,7 +207,7 @@ func (r *WatchReader) DiscoverOwner(ctx context.Context, owner string) OwnerDisc
 	seen := map[string]bool{}
 	incomplete, tooMany := false, false
 	for page := 1; ; page++ {
-		res, err := r.SearchOwnerPage(ctx, owner, page)
+		res, err := readPage(ctx, owner, page)
 		if err != nil {
 			d.Code, d.Message = failureCode(err)
 			return d
@@ -258,6 +265,10 @@ func failureCode(err error) (string, string) {
 // throttle, or when the search bucket is known to be empty until a future reset, the
 // remaining owners are not sent and report rate-limited.
 func (r *WatchReader) DiscoverOwners(ctx context.Context, owners []string) []OwnerDiscovery {
+	return r.discoverOwners(ctx, owners, r.DiscoverOwner)
+}
+
+func (r *WatchReader) discoverOwners(ctx context.Context, owners []string, discover func(context.Context, string) OwnerDiscovery) []OwnerDiscovery {
 	var out []OwnerDiscovery
 	seen := map[string]bool{}
 	for _, o := range owners {
@@ -270,7 +281,7 @@ func (r *WatchReader) DiscoverOwners(ctx context.Context, owners []string) []Own
 			out = append(out, OwnerDiscovery{Owner: o, Code: CodeRateLimited, Message: "search rate limit reached"})
 			continue
 		}
-		out = append(out, r.DiscoverOwner(ctx, o))
+		out = append(out, discover(ctx, o))
 	}
 	return out
 }
