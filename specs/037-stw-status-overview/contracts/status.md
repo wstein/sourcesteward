@@ -52,7 +52,7 @@ Two documents, never mixed:
 `{repo, state, reason, sources}`. `repo` `OWNER/NAME` or null; `state` `ok`, `degraded`, `skipped`, `error`; `reason` (only for `skipped`, else null) is one of `not-github-origin`, `other-host`,
 `not-read-locally`, `invalid-repo`, `offline`, `no-token`, `deadline`, `not-found`; failures are never skip reasons, they are source errors; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
 `ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons `offline`, `no-token`, `deadline`, `not-found` (a 404 for the release workflow)) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
-`rate-limited`, `network`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`,
+`rate-limited`, `network`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases` (also the tags listing past page 10),
 `too-many-open-prs`; `network` is an error code, never a skip reason). The data of each source:
 
 | Source key | Data (null when the source is not `ok`) |
@@ -60,7 +60,7 @@ Two documents, never mixed:
 | `repo` | `{default_branch, html_url, drafts_visibility}`; `drafts_visibility` `write-access`, `no-write-access`, `unknown` |
 | `pulls` | `{open, ready, checks, conflict, draft, blocked, red, bots, not_read}` (group counts add up to `open`; `red` is the subset of `blocked` with reason `checks-red`) |
 | `releases` | `{drafts, truncated}`; `drafts` at most 100 `{name, tag, created_at, assets, url}` (`name` str or null, `created_at` time or null); empty and meaningless unless `drafts_visibility` is `write-access` |
-| `tags` | `{latest, unreleased}`; `latest` str or null, `unreleased` at most 5 `{tag, sha, run}` (`run` `{workflow, conclusion, status, url}` or null) |
+| `tags` | `{latest, unreleased}`; `latest` an array of `{pattern, tag}`, the highest-version tag of each declared release tag pattern that has one, in the order of the patterns (empty when none); `unreleased` at most 5 `{tag, sha, run}`, filled pattern by pattern in the declared order, newest first within a pattern (`run` `{workflow, conclusion, status, url}` or null) |
 | `ci_main` | `{branch, head, class, behind_origin}`; `class` `none`, `pending`, `green`, `red` or null; `behind_origin` bool or null (local default branch lacks origin's head) |
 | `ci_release` | `{workflow, tags}`: `workflow` the single `ci.release_workflow` (or the default `release.yml`); `tags` an array of `{product, tag, sha, released, runs}` for each product's latest tag and each unreleased tag; `runs` at most 20 `{workflow, conclusion, status, url}`, newest first |
 
