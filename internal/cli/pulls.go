@@ -31,7 +31,9 @@ func pullsCommand() *cobra.Command {
 			"whose pulls/N and checks are read, newest first; the rest is listed as blocked, not-read and counted in summary.not_read.\n" +
 			"Output is human on a terminal and one JSON document otherwise (--human, --json). Authentication is the gh token route of the hosting commands;\n" +
 			"a missing token is exit 1 before any request and no token is ever printed. Nothing is written to disk or to the forge. On rate-limit\n" +
-			"exhaustion the run stops reading, prints what it has and exits 1; it never sleeps or retries.\n" +
+			"exhaustion the run stops reading, prints what it has and exits 1; it never sleeps and never loops.\n" +
+			"GitHub computes mergeability lazily: a non-draft row with green checks and mergeable null or state unknown gets at most one bounded re-read\n" +
+			"(pulls/N only, at the end, outside the --limit budget, never after a rate limit); it can stay blocked unknown, run again then.\n" +
 			"Exit statuses: 0 all repositories read (also when nothing is open), 1 a repository or owner discovery failed or authentication is\n" +
 			"missing (partial output is printed), 2 usage error.",
 		Args:         cobra.MaximumNArgs(1),

@@ -59,6 +59,15 @@ whole set newest first (`created_at`, then repository, then number) up to `--lim
 therefore depends only on the data, never on timing or parallelism. Rows past the budget are listed with `detail` false and reason
 `not-read` and counted separately in `summary.not_read`.
 
+**Lazy mergeability (one bounded re-read).** GitHub computes `mergeable` lazily: the first `pulls/N` read often returns `mergeable` null or
+`mergeable_state` `unknown` for a pull request that is in fact mergeable. After the main read pass, every non-draft row whose detail was read,
+whose listed head matched and whose head checks are `green`, and whose `pulls/N` said `mergeable` null or `mergeable_state` `unknown`, is read
+**once more** (`pulls/N` only, unconditional, same shape, `head.sha` must still equal the listed head; checks are not re-read). The re-read
+comes at the end of the pass so that the other reads gave GitHub time; there is no sleep, no loop and no second re-read. Its result replaces
+the first detail before the verdict is computed; if it is still unknown the verdict is `blocked`/`unknown` as before. These reads consume rate
+limit but not the `--limit` budget and are bounded by the number of such rows. After a rate limit none is made and the rows stay `unknown`.
+A failed re-read keeps the first detail (the row stays `unknown`) and is reported like any read failure in `repos[].error` and `errors`.
+
 ## Implementation seams
 
 Not `HostObserver.Observe`: it reads `branches/BASE`, `pulls/N` and checks for every PR (drafts too) and cannot apply a budget. `stw pulls`
@@ -106,10 +115,10 @@ mergeable by rebase and the exact head is green", nothing about the foreman's CL
 Stateless, so the conditional requests of watch (ETags) are pointless and not used: every read is a plain 200. Per repository:
 `ceil(open PRs / 25)` list pages (existing `pulls?state=open&per_page=25&page=N`, page size halving and 1 MiB cap as in Spec 035,
 at most 80 pages), and for each non-draft PR, within `--limit`: one `pulls/N` plus one check-run and one status read (more pages only
-past 100 items, as in watch): **about 3 reads per non-draft PR**, none for drafts without `--detail-drafts`. Example: 6 repositories with
+past 100 items, as in watch): **about 3 reads per non-draft PR** (plus at most one more `pulls/N` read per row that GitHub reported as `unknown` mergeability, see above), none for drafts without `--detail-drafts`. Example: 6 repositories with
 40 open PRs, 10 drafts: 6 to 8 list reads plus 90 reads. `--limit` (maximum 500) bounds detail to about 1500 reads plus list pages; the
 default 200 is about 600. An Actions `GITHUB_TOKEN` has 1000 requests per hour, a personal token 5000. Reads are sequential per repository, at most 4 repositories in parallel, 30 s per request.
-Rate-limit behaviour follows Spec 035 for the core limit: on exhaustion (403/429 with evidence) the run stops reading, prints what it has, marks unread repositories `rate-limited` and exits 1; it never sleeps or retries. No final `rate_limit` read is made (nothing uses it); search responses never feed the core assessment.
+Rate-limit behaviour follows Spec 035 for the core limit: on exhaustion (403/429 with evidence) the run stops reading, prints what it has, marks unread repositories `rate-limited` and exits 1; it never sleeps and never loops, and makes at most one bounded re-read per pull request whose mergeability GitHub has not computed yet (non-draft, green checks, `mergeable` null or state `unknown`; never after a rate limit, see above). No final `rate_limit` read is made (nothing uses it); search responses never feed the core assessment.
 
 ## Mode C: discovery with `--owner`
 

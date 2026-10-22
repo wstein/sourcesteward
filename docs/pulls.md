@@ -62,6 +62,13 @@ result depends only on the data. A non-draft row past the budget is listed as `b
 in `summary.not_read`; a row inside the budget whose read failed has the same reason but is reported through
 `repos[].error` and `errors` instead.
 
+GitHub computes a pull request's mergeability lazily: the first `pulls/N` read often returns `mergeable` null or state `unknown` for a pull
+request that is in fact mergeable, and a second read moments later says `clean`. So that a single run does not under-report `ready`, the
+command re-reads such a row once, at the end of the pass (after the other reads gave GitHub time), reading `pulls/N` only (no checks), and
+only for a non-draft row whose head checks are green. There is no sleep and no second re-read, so `unknown` can still remain; run the
+command again then. The re-reads cost rate limit (at most one read per such row) but not the `--limit` budget, and none is made after a
+rate limit.
+
 Cost: about three reads per non-draft pull request (`pulls/N`, check runs, statuses) plus `ceil(open / 25)` list pages per
 repository, and no read for drafts without `--detail-drafts`. The default limit is about 600 reads, the maximum about 1500;
 an Actions `GITHUB_TOKEN` allows 1000 requests per hour, a personal token 5000.
@@ -92,7 +99,7 @@ seen are still read:
 
 A failure of one repository never hides the others: it is named on stderr and in `errors`, and `summary.repos_failed`
 counts it. On rate-limit exhaustion (403/429 with evidence) the run stops reading, prints what it has, marks the
-unread repositories `rate-limited` and exits 1; it never sleeps or retries.
+unread repositories `rate-limited` and exits 1; it never sleeps and never loops, and makes at most one bounded re-read per pull request whose mergeability GitHub has not computed yet (non-draft, green checks, `mergeable` null or state `unknown`; never after a rate limit).
 
 ## Safety and limits
 
