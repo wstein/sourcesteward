@@ -165,6 +165,30 @@ both lanes with jj; otherwise it runs `./...`, so nothing is skipped. The weight
 non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change
 (the fixture speed-up work will do that).
 
+Race coverage is the scheduled tier T4 in `.github/workflows/race.yml` (Spec 039); pull requests
+run no `-race`. It triggers only on `schedule` and `workflow_dispatch` and both jobs are guarded
+by `if: github.ref == 'refs/heads/main'`, because a dispatch can name any ref. Nightly (03:17 UTC)
+job `race` calls `conformance.yml` with `race: true` for the `current` lane (all packages and the
+four `internal/workspace` shards under `-race`); weekly (Sunday 04:17 UTC) it does the same for the
+`minimum` lane. A manual dispatch takes a `lane` input. The runs always happen, also on quiet days,
+and are never cancelled (groups `t4-nightly` and `t4-weekly`). When `race` fails or is cancelled,
+job `report` (the only job in the repository with `issues: write`; it checks out `main` only)
+runs `scripts/race_report.py`: it comments on the open issue labelled `race-failure`, or creates it
+if none is open, so at most one is open. The body holds the run link, the tier (nightly or weekly),
+the lane, the reason (failed, cancelled or timed out: a timed-out job normally reports as failed,
+so the two are not told apart, and the log of a timed-out job may be missing) and at most 20 test
+names matched from the failed job logs by `^--- FAIL: (Test\w+)`; no other log text is ever
+copied. If the logs cannot be fetched or hold no match, the report still files with "No test name
+matched, see the run." The `report` jobs of both schedules share the concurrency group
+`race-report`, so a Sunday's nightly and weekly reports cannot both create an issue. Close the
+issue after the fix lands; the fix is a normal pull request with a reproducing test.
+
+Cost and residual risk of T4 (modelled from the conformance medians, not measured): about 54
+runner minutes per `-race` lane run, so seven nightly runs plus one weekly run are about 430
+runner minutes a week, off the pull request path. A data race is found after the merge, up to a
+day later (a week for a race only the `minimum` lane shows), and only as an issue; Ready does not
+imply a race-clean head. A race that no test exercises is found by neither run.
+
 Its check job builds and
 validates the artifact from the exact run SHA; mandatory minimum/current Git/jj conformance
 lanes must also pass before deployment. The deployment job runs only for main
