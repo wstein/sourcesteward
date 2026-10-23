@@ -38,6 +38,11 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply`, jj and the push are later slices.
 
+## Spec 041 stw tidy wizard (specification proposed, 2026-10-23)
+
+[The specification](../specs/041-tidy-wizard/spec.md), its [plan](../specs/041-tidy-wizard/plan.md) and
+[tasks](../specs/041-tidy-wizard/tasks.md) propose `stw tidy` as a workspace-wide wizard (overview of all repositories and owners, choice, stored plan set, `stw tidy apply <plan-id>`), derived defaults, the fix of the `changed-ownership` refusal after a branch switch (issue #174) and ownership as a view (a human sees everything; agents are narrowed). Documentation only: no code changed; open questions await the foreman. No build, release, tag or push of the default branch was run.
+
 ## Spec 040 concurrency discipline (specification proposed, 2026-10-22)
 
 [The specification](../specs/040-concurrency-discipline/spec.md), its [plan](../specs/040-concurrency-discipline/plan.md) and
