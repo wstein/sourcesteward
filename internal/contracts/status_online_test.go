@@ -100,7 +100,7 @@ func TestOnlineStatusSchemaFollowsTheActionModel(t *testing.T) {
 		}
 	}
 	var ids []string
-	for _, src := range overview.Sources {
+	for _, src := range overview.StatusSources {
 		ids = append(ids, string(src))
 	}
 	if got := strs(jobj(jobj(jobj(defs["source"])["properties"])["id"])["enum"]); !reflect.DeepEqual(got, append([]string{"local"}, ids...)) {

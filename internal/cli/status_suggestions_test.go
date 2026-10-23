@@ -10,7 +10,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
-// everyCategoryInput is a workspace in which every one of the 25 categories of the action table has an item.
+// everyCategoryInput is a workspace in which every one of the 28 categories of the action table has an item.
 func everyCategoryInput() overview.Input {
 	sha := strings.Repeat("a", 40)
 	core := stwsync.RepoStatus{
@@ -31,6 +31,7 @@ func everyCategoryInput() overview.Input {
 	failedRun := &overview.Run{Workflow: "release.yml", Conclusion: "failure", Status: "completed", URL: "https://github.com/acme/core/actions/runs/1"}
 	sources := map[overview.Source]overview.SourceState{
 		overview.SourcePulls:     {Outcome: overview.OutcomeError, Code: "network"},
+		overview.SourceIssues:    {Outcome: overview.OutcomeOK},
 		overview.SourceCIRelease: {Outcome: overview.OutcomeError, Code: "network"},
 	}
 	remote := &overview.Remote{
@@ -46,6 +47,11 @@ func everyCategoryInput() overview.Input {
 			{Pattern: "v*.*.*", Tag: "v1.9.0", SHA: strings.Repeat("c", 40), Unreleased: true, Run: failedRun},
 		},
 		Main: &overview.Main{Branch: "main", Head: sha, Class: "red", BehindOrigin: &behind},
+		Issues: []overview.Issue{
+			{Number: 7, Title: "s", URL: "https://github.com/acme/core/issues/7", Reason: overview.IssueReasonSecurity},
+			{Number: 8, Title: "a", URL: "https://github.com/acme/core/issues/8", Reason: overview.IssueReasonAssigned},
+			{Number: 9, Title: "b", URL: "https://github.com/acme/core/issues/9", Reason: overview.IssueReasonBug},
+		},
 	}
 	return overview.Input{Root: "/ws", Repos: []overview.Repo{{Local: core, Slug: "acme/core", Remote: remote}, {Local: ahead}, {Local: broken}}}
 }
@@ -103,7 +109,7 @@ func TestEverySuggestedCommandExists(t *testing.T) {
 }
 
 func reviewedForeignCommand(command string) bool {
-	for _, prefix := range []string{"gh run list --repo ", "gh pr merge ", "gh release edit ", "gh release list -R ", "git -C "} {
+	for _, prefix := range []string{"gh run list --repo ", "gh pr merge ", "gh issue view ", "gh release edit ", "gh release list -R ", "git -C "} {
 		if strings.HasPrefix(command, prefix) {
 			return true
 		}

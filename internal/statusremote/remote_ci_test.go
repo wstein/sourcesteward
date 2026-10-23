@@ -302,7 +302,7 @@ func TestTheFirstRateLimitStopsEverySourceWithoutSleeping(t *testing.T) {
 			}
 		}
 		for _, r := range res.Repos {
-			for _, src := range overview.Sources {
+			for _, src := range overview.StatusSources {
 				if st := sourceState(t, r, src); st != okState && st != failed(hosting.CodeRateLimited) && st != skipped(overview.ReasonNotAttempted) {
 					t.Errorf("%s %s: %+v", r.Name, src, st)
 				}

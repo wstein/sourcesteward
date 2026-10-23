@@ -276,7 +276,7 @@ func action(it overview.Item) DocAction {
 func remote(rr statusremote.RepoResult) DocRemote {
 	ok, skipped, failed := 0, 0, 0
 	reason := ""
-	for _, src := range overview.Sources {
+	for _, src := range overview.StatusSources {
 		switch st := rr.Remote.Sources[src]; st.Outcome {
 		case overview.OutcomeOK:
 			ok++
@@ -291,11 +291,11 @@ func remote(rr statusremote.RepoResult) DocRemote {
 	}
 	out := DocRemote{Repo: nullable(rr.Slug), State: "degraded", Sources: sourceReads(rr)}
 	switch {
-	case ok == len(overview.Sources):
+	case ok == len(overview.StatusSources):
 		out.State = "ok"
-	case skipped == len(overview.Sources):
+	case skipped == len(overview.StatusSources):
 		out.State, out.Reason = "skipped", nullable(reason)
-	case failed == len(overview.Sources):
+	case failed == len(overview.StatusSources):
 		out.State = "error"
 	}
 	return out
@@ -424,7 +424,7 @@ func (r Report) sources() []DocSource {
 		}
 	}
 	out := []DocSource{local.withState()}
-	for _, src := range overview.Sources {
+	for _, src := range overview.StatusSources {
 		s := DocSource{ID: string(src)}
 		for _, rr := range r.Remote.Repos {
 			switch rr.Remote.Sources[src].Outcome {

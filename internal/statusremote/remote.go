@@ -256,7 +256,7 @@ func (c *collector) results() []RepoResult {
 }
 
 func setAll(r *overview.Remote, st overview.SourceState) {
-	for _, src := range overview.Sources {
+	for _, src := range overview.StatusSources {
 		r.Sources[src] = st
 	}
 }
