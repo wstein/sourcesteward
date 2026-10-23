@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
+	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/statuscmd"
 	"github.com/wstein/sourcesteward/internal/statusremote"
 	"github.com/wstein/sourcesteward/internal/stwsync"
@@ -451,5 +452,32 @@ func TestStatusWithoutATokenListsTheWorktreesLikeTheOfflineOutput(t *testing.T) 
 	}
 	if notices := strings.TrimPrefix(run.out, offline.out); !strings.HasPrefix(notices, "\nNotices\n  ") {
 		t.Errorf("%q", notices)
+	}
+}
+
+// With colour the output without a token is the coloured offline output followed by the notices, and stripping
+// the colour leaves the plain text. The command colours only on a terminal, so the renderer is called directly.
+func TestStatusWithoutATokenColoursLikeTheOfflineOutput(t *testing.T) {
+	rep := statuscmd.Report{Local: statusCLIResult(), Overview: overview.Overview{Notices: []overview.Notice{{Code: "no-token", Message: "no GitHub token (run: gh auth login)"}}}}
+	var coloured, plain, offline bytes.Buffer
+	for _, c := range []struct {
+		w     *bytes.Buffer
+		color bool
+	}{{&coloured, true}, {&plain, false}} {
+		if err := renderStatusNoToken(c.w, rep, true, c.color, asciiStatusMarks); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := renderStatusText(&offline, rep.Local, true, true, asciiStatusMarks); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(coloured.String(), "\x1b[") || !strings.HasPrefix(coloured.String(), offline.String()) {
+		t.Errorf("the coloured offline output is the start of the output:\n%s", coloured.String())
+	}
+	if got := ansi.ReplaceAllString(coloured.String(), ""); got != plain.String() {
+		t.Errorf("stripping the colour must leave the plain text:\n%s\n%s", got, plain.String())
+	}
+	if !strings.HasSuffix(coloured.String(), "\nNotices\n  no GitHub token (run: gh auth login)\n") {
+		t.Errorf("%q", coloured.String())
 	}
 }
