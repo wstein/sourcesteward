@@ -79,6 +79,33 @@
       "hint": null
     },
     {
+      "id": "issue-security:wstein/sourcesteward:12",
+      "priority": "red",
+      "category": "issue-security",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "issue #12 is labelled security: leak",
+      "url": "https://github.com/wstein/sourcesteward/issues/12",
+      "subject": {
+        "kind": "issue",
+        "number": 12,
+        "tag": null,
+        "sha": null,
+        "name": null
+      },
+      "evidence": {
+        "assignees": [],
+        "author": "alice",
+        "labels": [
+          "security"
+        ],
+        "reason": "security-label"
+      },
+      "command": "gh issue view 12 -R wstein/sourcesteward",
+      "effect": "read",
+      "hint": null
+    },
+    {
       "id": "local-changes:.:dirty",
       "priority": "yellow",
       "category": "local-changes",
@@ -185,6 +212,33 @@
         "reason": "checks-red"
       },
       "command": "stw pulls --repo wstein/sourcesteward",
+      "effect": "read",
+      "hint": null
+    },
+    {
+      "id": "issue-assigned:wstein/sourcesteward:13",
+      "priority": "yellow",
+      "category": "issue-assigned",
+      "repo": "wstein/sourcesteward",
+      "path": "/ws",
+      "title": "issue #13 is assigned to you: review me",
+      "url": "https://github.com/wstein/sourcesteward/issues/13",
+      "subject": {
+        "kind": "issue",
+        "number": 13,
+        "tag": null,
+        "sha": null,
+        "name": null
+      },
+      "evidence": {
+        "assignees": [
+          "wstein"
+        ],
+        "author": "bob",
+        "labels": [],
+        "reason": "assigned-to-you"
+      },
+      "command": "gh issue view 13 -R wstein/sourcesteward",
       "effect": "read",
       "hint": null
     },
@@ -470,6 +524,20 @@
                 }
               ]
             }
+          },
+          "issues": {
+            "state": "ok",
+            "error": null,
+            "reason": null,
+            "data": {
+              "open": 5,
+              "red": 1,
+              "yellow": 2,
+              "blue": 1,
+              "violet": 1,
+              "pulls_dropped": 2,
+              "truncated": true
+            }
           }
         }
       }
@@ -585,6 +653,12 @@
             "data": {
               "tags": []
             }
+          },
+          "issues": {
+            "state": "skipped",
+            "error": null,
+            "reason": "issues-disabled",
+            "data": null
           }
         }
       }
@@ -693,6 +767,20 @@
             "error": null,
             "reason": "deadline",
             "data": null
+          },
+          "issues": {
+            "state": "ok",
+            "error": null,
+            "reason": null,
+            "data": {
+              "open": 0,
+              "red": 0,
+              "yellow": 0,
+              "blue": 0,
+              "violet": 0,
+              "pulls_dropped": 0,
+              "truncated": false
+            }
           }
         }
       }
@@ -784,6 +872,12 @@
             "error": null,
             "reason": "not-read-locally",
             "data": null
+          },
+          "issues": {
+            "state": "skipped",
+            "error": null,
+            "reason": "not-read-locally",
+            "data": null
           }
         }
       }
@@ -838,6 +932,20 @@
       "read": 2,
       "degraded": 0,
       "skipped": 2
+    },
+    {
+      "id": "issues",
+      "state": "degraded",
+      "read": 3,
+      "degraded": 0,
+      "skipped": 1
+    },
+    {
+      "id": "viewer",
+      "state": "ok",
+      "read": 1,
+      "degraded": 0,
+      "skipped": 0
     }
   ],
   "notices": [
@@ -871,8 +979,8 @@
     "attention": 1,
     "errors": 1,
     "priorities": {
-      "red": 3,
-      "yellow": 5,
+      "red": 4,
+      "yellow": 6,
       "green": 2,
       "blue": 1,
       "violet": 2

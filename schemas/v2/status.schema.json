@@ -83,8 +83,8 @@
     },
     "sources": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 9,
+      "maxItems": 9,
       "prefixItems": [
         {
           "allOf": [
@@ -179,6 +179,34 @@
               "properties": {
                 "id": {
                   "const": "ci-release"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "issues"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "viewer"
                 }
               }
             }
@@ -1161,6 +1189,29 @@
         {
           "if": {
             "properties": {
+              "command": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effect": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "effect": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
               "category": {
                 "enum": [
                   "issue-security",
@@ -1180,64 +1231,7 @@
                 }
               },
               "evidence": {
-                "type": "object",
-                "required": [
-                  "reason",
-                  "labels",
-                  "assignees",
-                  "author"
-                ],
-                "properties": {
-                  "reason": {
-                    "enum": [
-                      "security-label",
-                      "assigned-to-you",
-                      "bug-label"
-                    ]
-                  },
-                  "labels": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 2048
-                    }
-                  },
-                  "assignees": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 2048
-                    }
-                  },
-                  "author": {
-                    "type": "string",
-                    "maxLength": 2048
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "command": {
-                "type": "null"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "effect": {
-                "type": "null"
-              }
-            }
-          },
-          "else": {
-            "properties": {
-              "effect": {
-                "type": "string"
+                "$ref": "#/$defs/evidenceIssue"
               }
             }
           }
@@ -1980,7 +1974,8 @@
             "releases",
             "tags",
             "ci_main",
-            "ci_release"
+            "ci_release",
+            "issues"
           ],
           "properties": {
             "repo": {
@@ -2000,6 +1995,9 @@
             },
             "ci_release": {
               "$ref": "#/$defs/ciReleaseRead"
+            },
+            "issues": {
+              "$ref": "#/$defs/issuesRead"
             }
           },
           "additionalProperties": false
@@ -2050,7 +2048,9 @@
             "releases",
             "tags",
             "ci-main",
-            "ci-release"
+            "ci-release",
+            "issues",
+            "viewer"
           ]
         },
         "state": {
@@ -3091,6 +3091,207 @@
           }
         }
       ]
+    },
+    "issuesRead": {
+      "type": "object",
+      "required": [
+        "state",
+        "error",
+        "reason",
+        "data"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "skipped",
+            "error"
+          ]
+        },
+        "error": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "rate-limited",
+            "network",
+            "http-5xx",
+            "malformed-response",
+            "page-too-large",
+            "repo-moved",
+            "too-many-releases",
+            "too-many-open-prs",
+            "contract-invalid",
+            "hosting-api-unavailable",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not-github-origin",
+            "other-host",
+            "not-read-locally",
+            "invalid-repo",
+            "offline",
+            "no-token",
+            "deadline",
+            "not-found",
+            "not-attempted",
+            "issues-disabled",
+            null
+          ]
+        },
+        "data": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "$ref": "#/$defs/issuesData"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "null"
+              },
+              "data": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "issuesData": {
+      "type": "object",
+      "required": [
+        "open",
+        "red",
+        "yellow",
+        "blue",
+        "violet",
+        "pulls_dropped",
+        "truncated"
+      ],
+      "properties": {
+        "open": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "red": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "yellow": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blue": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "violet": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pulls_dropped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceIssue": {
+      "type": "object",
+      "required": [
+        "reason",
+        "labels",
+        "assignees",
+        "author"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "enum": [
+            "security-label",
+            "assigned-to-you",
+            "bug-label"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "assignees": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      }
     }
   }
 }

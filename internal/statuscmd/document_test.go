@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/issues"
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/statusremote"
@@ -24,7 +25,7 @@ var (
 
 func allSources(st overview.SourceState) map[overview.Source]overview.SourceState {
 	m := map[overview.Source]overview.SourceState{}
-	for _, s := range overview.StatusSources {
+	for _, s := range overview.Sources {
 		m[s] = st
 	}
 	return m
@@ -69,7 +70,13 @@ func fixtureReport() Report {
 				{Pattern: "v*.*.*", Tag: "v1.0.0", SHA: strings.Repeat("a", 40), Latest: false},
 			},
 			Main: &overview.Main{Branch: "main", Head: fixtureSHA, Class: "red", BehindOrigin: &behind},
+			Issues: []overview.Issue{
+				{Number: 12, Title: "leak", URL: "https://github.com/wstein/sourcesteward/issues/12", Author: "alice", Reason: overview.IssueReasonSecurity, Labels: []string{"security"}, Assignees: []string{}},
+				{Number: 13, Title: "review me", URL: "https://github.com/wstein/sourcesteward/issues/13", Author: "bob", Reason: overview.IssueReasonAssigned, Labels: []string{}, Assignees: []string{"wstein"}},
+			},
 		},
+		Issues: &statusremote.Issues{State: okSource, Open: 5, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}, Dropped: 2, Truncated: true,
+			Rows: []overview.Issue{{Number: 12}, {Number: 13}}},
 		Pulls: &statusremote.Pulls{State: okSource, Open: ptr(3), Counts: pulls.Summary{Total: 3, Ready: 1, Draft: 1, Blocked: 1},
 			PRs: []overview.PR{
 				{Number: 57, Group: overview.GroupReady}, {Number: 58, Draft: true, Group: overview.GroupDraft}, {Number: 59, Group: overview.GroupBlocked, Reason: "checks-red"},
@@ -80,10 +87,12 @@ func fixtureReport() Report {
 		}},
 	}
 	steward.Remote.Tags = append(steward.Remote.Tags, steward.CIRelease.ReleaseTags()...)
+	disabled := allSources(okSource)
+	disabled[overview.SourceIssues] = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonIssuesDisabled}
 	crewbook := statusremote.RepoResult{
 		Name: "crewbook", Slug: "wstein/crewbook",
 		Remote: &overview.Remote{
-			Sources: allSources(okSource), DefaultBranch: "main", HTMLURL: "https://github.com/wstein/crewbook", Visibility: overview.NoWriteAccess,
+			Sources: disabled, DefaultBranch: "main", HTMLURL: "https://github.com/wstein/crewbook", Visibility: overview.NoWriteAccess,
 			Pulls: []overview.PR{{Number: 12, Title: "Update docs", URL: "https://github.com/wstein/crewbook/pull/12", Author: "carol", Group: overview.GroupConflict}},
 			Main:  &overview.Main{Branch: "main", Head: strings.Repeat("c", 40), Class: "green"},
 		},
@@ -102,10 +111,11 @@ func fixtureReport() Report {
 				{Number: 4, Title: "bump b", URL: "https://github.com/wstein/workharbor/pull/4", Author: "dependabot[bot]", Bot: true, Group: overview.GroupChecks},
 			},
 		},
-		Pulls: &statusremote.Pulls{State: okSource, Open: ptr(2), Counts: pulls.Summary{Total: 2, Ready: 1, Checks: 1, Bots: 2}, PRs: []overview.PR{{Number: 3, Bot: true, Group: overview.GroupReady}, {Number: 4, Bot: true, Group: overview.GroupChecks}}},
+		Pulls:  &statusremote.Pulls{State: okSource, Open: ptr(2), Counts: pulls.Summary{Total: 2, Ready: 1, Checks: 1, Bots: 2}, PRs: []overview.PR{{Number: 3, Bot: true, Group: overview.GroupReady}, {Number: 4, Bot: true, Group: overview.GroupChecks}}},
+		Issues: &statusremote.Issues{State: okSource},
 	}
 	gone := statusremote.RepoResult{Name: "gone", Remote: &overview.Remote{Sources: allSources(overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotReadLocally})}}
-	res := statusremote.Result{Repos: []statusremote.RepoResult{steward, crewbook, harbor, gone}, Timeout: 90 * time.Second}
+	res := statusremote.Result{Repos: []statusremote.RepoResult{steward, crewbook, harbor, gone}, Viewer: okSource, Timeout: 90 * time.Second}
 	return Report{Time: time.Date(2026, 10, 22, 9, 30, 0, 0, time.UTC), Local: local, Remote: res, Overview: overview.Build(res.Input("/ws", local.Repos))}
 }
 
@@ -194,7 +204,7 @@ func TestDocumentNeverOmitsAKey(t *testing.T) {
 		remote := repo["remote"].(map[string]any)
 		requireKeys(t, "remote", remote, "repo", "state", "reason", "sources")
 		sources := remote["sources"].(map[string]any)
-		requireKeys(t, "remote.sources", sources, "repo", "pulls", "releases", "tags", "ci_main", "ci_release")
+		requireKeys(t, "remote.sources", sources, "repo", "pulls", "releases", "tags", "ci_main", "ci_release", "issues")
 		for name, s := range sources {
 			requireKeys(t, name, s.(map[string]any), "state", "error", "reason", "data")
 		}
@@ -237,6 +247,11 @@ func TestDocumentDataOfEachSource(t *testing.T) {
 	requireKeys(t, "run", run, "workflow", "conclusion", "status", "url")
 	if run["conclusion"] != "failure" {
 		t.Errorf("the failed run of the unreleased tag: %v", run)
+	}
+	issuesData := src["issues"].(map[string]any)["data"].(map[string]any)
+	requireKeys(t, "issues data", issuesData, "open", "red", "yellow", "blue", "violet", "pulls_dropped", "truncated")
+	if issuesData["open"] != float64(5) || issuesData["red"] != float64(1) || issuesData["yellow"] != float64(2) || issuesData["pulls_dropped"] != float64(2) || issuesData["truncated"] != true {
+		t.Errorf("%v", issuesData)
 	}
 	requireKeys(t, "main data", src["ci_main"].(map[string]any)["data"].(map[string]any), "branch", "head", "class", "behind_origin")
 	ciTags := src["ci_release"].(map[string]any)["data"].(map[string]any)["tags"].([]any)
@@ -414,6 +429,8 @@ func TestDocumentCountsTheRepositoriesOfEverySource(t *testing.T) {
 		"releases":   {ID: "releases", State: "degraded", Read: 3, Skipped: 1},
 		"tags":       {ID: "tags", State: "degraded", Read: 3, Skipped: 1},
 		"ci-release": {ID: "ci-release", State: "degraded", Read: 2, Skipped: 2},
+		"issues":     {ID: "issues", State: "degraded", Read: 3, Skipped: 1}, // issues-disabled is read: a fact about the repository
+		"viewer":     {ID: "viewer", State: "ok", Read: 1},
 	}
 	got := rep.Document().Sources
 	if len(got) != len(want) {
@@ -448,5 +465,86 @@ func TestDocumentSourceErrorCarriesOnlyItsCode(t *testing.T) {
 	tags := decode(t, rep.Document())["repos"].([]any)[1].(map[string]any)["remote"].(map[string]any)["sources"].(map[string]any)["tags"].(map[string]any)
 	if tags["state"] != "error" || tags["error"] != "http-5xx" || tags["reason"] != nil || tags["data"] != nil {
 		t.Fatalf("%v", tags)
+	}
+}
+
+// A notice that is about the run and not about a repository (the viewer) lists no repository: `[]`, never null.
+func TestDocumentNoticeOfTheViewerHasNoRepositories(t *testing.T) {
+	rep := fixtureReport()
+	rep.Remote.Viewer = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNoIdentity}
+	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
+	var found bool
+	for _, n := range decode(t, rep.Document())["notices"].([]any) {
+		notice := n.(map[string]any)
+		if notice["source"] == "viewer" {
+			found = true
+			if repos, ok := notice["repos"].([]any); !ok || len(repos) != 0 {
+				t.Errorf("%v", notice)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the token cannot read the user: a notice says that assigned issues are not flagged")
+	}
+}
+
+// The viewer entry of the sources counts the one `user` read by its outcome.
+func TestDocumentCountsTheViewerByItsOutcome(t *testing.T) {
+	for name, tc := range map[string]struct {
+		viewer overview.SourceState
+		want   DocSource
+	}{
+		"answered":    {okSource, DocSource{ID: "viewer", State: "ok", Read: 1}},
+		"failed":      {overview.SourceState{Outcome: overview.OutcomeError, Code: "http-5xx"}, DocSource{ID: "viewer", State: "error", Degraded: 1}},
+		"no identity": {overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNoIdentity}, DocSource{ID: "viewer", State: "skipped", Skipped: 1}},
+		"no GitHub":   {overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotGitHub}, DocSource{ID: "viewer", State: "skipped", Skipped: 1}},
+		"no attempt":  {overview.SourceState{}, DocSource{ID: "viewer", State: "ok"}},
+	} {
+		rep := fixtureReport()
+		rep.Remote.Viewer = tc.viewer
+		rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
+		sources := rep.Document().Sources
+		if got := sources[len(sources)-1]; got != tc.want {
+			t.Errorf("%s: %+v, want %+v", name, got, tc.want)
+		}
+	}
+}
+
+// The strings of the evidence are bounded like every string of the document (the schema says 2048 bytes), whatever
+// the model hands over, and the evidence of the model is not changed.
+func TestDocumentCutsTheEvidenceStrings(t *testing.T) {
+	rep := fixtureReport()
+	long := strings.Repeat("é", 2000) // 4000 bytes
+	var idx = -1
+	for i, it := range rep.Overview.Items {
+		if it.Category == overview.IssueSecurity {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("no issue item")
+	}
+	rep.Overview.Items[idx].Evidence = map[string]any{"author": long, "labels": []string{long}, "assignees": []string{long}, "number": 3}
+	var found bool
+	for _, a := range rep.Document().Actions {
+		if a.Category != string(overview.IssueSecurity) {
+			continue
+		}
+		found = true
+		author, labels, assignees := a.Evidence["author"].(string), a.Evidence["labels"].([]string), a.Evidence["assignees"].([]string)
+		for _, v := range []string{author, labels[0], assignees[0]} {
+			if len(v) > maxString || !utf8Valid(v) {
+				t.Errorf("%d bytes, valid %v", len(v), utf8Valid(v))
+			}
+		}
+		if a.Evidence["number"] != 3 {
+			t.Errorf("other values pass unchanged: %v", a.Evidence)
+		}
+	}
+	if !found {
+		t.Fatal("no issue action")
+	}
+	if got := rep.Overview.Items[idx].Evidence["author"].(string); len(got) != 4000 {
+		t.Errorf("the evidence of the model was changed")
 	}
 }
