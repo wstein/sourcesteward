@@ -235,17 +235,24 @@ digest do not change. One object with `schema_version` 2, `command` `status`, `t
 omitted, absent values are null and `additionalProperties` is false everywhere; strings are at most 2048 bytes (notice messages
 512).
 
-- `actions`: every item, with `id` (`CATEGORY:REPO:SUBJECT`, stable), `priority`, `category` (the 25 of the
+- `actions`: every item, with `id` (`CATEGORY:REPO:SUBJECT`, stable), `priority`, `category` (the 28 of the
   [status page](status.md#needs-action)), `repo`, `path`, `title`, `url` (`https` or null), `subject` (`kind`, and the keys that
   apply of `number`, `tag`, `sha` and `name`, the id part that is neither a number nor a tag), `evidence` (small facts whose keys
   the schema fixes per category, or null), `command`, `effect` (`read` or `owner`, null exactly when `command` is) and `hint`.
 - `repos`: all members of the v1 repository object plus `remote` with `repo` (`OWNER/NAME` or null), `state` (`ok`, `degraded`,
   `skipped`, `error`), `reason` (only when skipped) and `sources`, one `{state, error, reason, data}` for each of `repo`,
-  `pulls`, `releases`, `tags`, `ci_main` and `ci_release`. `state` is `ok`, `skipped` (with `reason`) or `error` (with a code);
-  `data` is `null` unless the state is `ok`, and its keys are fixed per source.
-- `sources`: exactly seven entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, each
-  `{id, state, read, degraded, skipped}` with the counts of repositories per outcome and a `state` of `ok`, `skipped`, `error`
-  or `degraded`.
+  `pulls`, `releases`, `tags`, `ci_main`, `ci_release` and `issues`. `state` is `ok`, `skipped` (with `reason`) or `error` (with a
+  code); `data` is `null` unless the state is `ok`, and its keys are fixed per source. The `issues` data is `{open, red, yellow,
+  blue, violet, pulls_dropped, truncated}` (`open` is the sum of the four counts, `truncated` is true for more than ten pages);
+  its skip reasons add `issues-disabled`, which counts as read in `sources` and does not degrade `remote.state`.
+- `sources`: exactly nine entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, `issues`,
+  `viewer`, each `{id, state, read, degraded, skipped}` with the counts of repositories per outcome and a `state` of `ok`,
+  `skipped`, `error` or `degraded`. `viewer` is the one `user` read of the run, which belongs to no repository: `read` 1 when it
+  answered, `skipped` 1 when it was skipped (the token class cannot read it, no request was made, or no repository is on GitHub:
+  `not-github-origin`), `degraded` 1 when it failed, and no count at all when the run failed before any remote read. The category enum gains `issue-security` (red),
+  `issue-assigned` and `issue-bug` (yellow), their subject kind is `issue` with a `number`, and their evidence is `{reason,
+  labels, assignees, author}` with at most 20 labels and assignees. A notice about the run and not a repository (`no-identity`,
+  `viewer-unknown`) has `repos` `[]`.
 - `notices` (`code`, `source`, `repos`, `message`, one per missing source), `summary` (`repos`, `attention`, `errors`,
   `priorities`, `degraded`, `failed`, `notices`) and `error` (`status-` code and message of a failed run, with no repositories).
 
