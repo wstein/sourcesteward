@@ -55,7 +55,7 @@ The rows overlap: the sandbox install is part of every job row, and the rows add
 
 | Item | Per job | Jobs per run | Runner min per run |
 | --- | --- | --- | --- |
-| `Install distro sandbox` step (apt update and install of bubblewrap, apparmor, profiles) | median 104 s (8 to 260 s, see below) | 13 (`check` and 12 shards) | about 22.5 *M* (13 x the median; 19% of the run) |
+| `Install distro sandbox` step (apt update and install of bubblewrap, apparmor, profiles) | median 104 s (8 to 260 s, see below); WP-1 read the job logs: 90 s of it is `needrestart` waiting for `php8.3-fpm`, `apt-get update` is 5 s, download and unpack 7 s | 13 (`check` and 12 shards) | about 22.5 *M* (13 x the median; 19% of the run) |
 | `check`: `Race tests` step (all packages except `internal/workspace`) | 476 s | 1 | 7.9 |
 | shard 0 (the same packages, again under `-race`, with real backends) | 506 s test step, 11.2 to 11.7 min job | 2 (one per lane) | 23 |
 | shards 1 to 4 (`internal/workspace` under `-race`) | 334 to 518 s test step, 7.5 to 10.8 min job | 8 | about 70 |
@@ -81,8 +81,10 @@ sum to about 869 runner min, 19% of the 4616 runner min of the sample (measured)
 The test steps that run under `-race` today are the `check` race step (476 s) and, per lane, shard 0 (506 s) plus the four
 `internal/workspace` shards (334, 375, 451 and 518 s = 1678 s): 476 + 2 x (506 + 1678) = 4844 s = **80.7 runner min of the 116**
 (medians of the 16 PR runs on `main`). Shard 5 (real CLI smoke checks, 356 s per lane) does not use `-race`. How much of those 80.7 min
-is the cost of the race detector itself is **unmeasured** (the committed weights file holds local non-race seconds, not CI seconds):
-WP-1 measures the plain-versus-race ratio on the CI runner before any figure beyond the removed `check` race step (7.9 min) is claimed.
+is the cost of the race detector itself is **unmeasured on CI** (the committed weights file holds local non-race seconds, not CI seconds).
+WP-1 **measured locally** (one 10-core VM, not the CI runner; `docs/progress.md`): the race detector adds 10% to 38% of the test time (two runs: wall 13 min 46 s
+against 16 min 27 s, and 11 min 49 s against 16 min 4 s), so the saving beyond the removed `check` race step (7.9 min) is real but smaller than the 80.7 min;
+the CI ratio is read from the first plain run.
 
 ### Queueing
 
@@ -120,7 +122,7 @@ delay and not test time. A run with 17 jobs asks the runner pool for 17 jobs at 
 
 | Tier | Runs on | Content | Target wall time |
 | --- | --- | --- | --- |
-| **T1** | Every pull request head (every `opened`, `synchronize`, `reopened`, `ready_for_review` event) | `gofmt`, `go vet`, `go mod verify`, tidy check, Python and Node script tests, `scripts/check-docs.py`, `scripts/check-architecture.py`, shard coverage check, Pages artifact check, plain `go test` (**no `-race`**) of the affected packages and their reverse dependencies. A documentation-only change runs T1 without the Go tests. | under 5 min (goal, D3) |
+| **T1** | Every pull request head (every `opened`, `synchronize`, `reopened`, `ready_for_review` event) | `gofmt`, `go vet`, `go mod verify`, tidy check, Python and Node script tests, `scripts/check-docs.py`, `scripts/check-architecture.py`, shard coverage check, Pages artifact check, plain `go test` (**no `-race`**) of the affected packages and their reverse dependencies. A documentation-only change runs T1 without the Go tests, except that prose which a Go test reads (declared in `scripts/ci-test-reads.json`) runs the tests of its readers. | under 5 min (goal, D3) |
 | **T2** | The top pull request of a stack; an unstacked non-draft pull request; any pull request carrying `ci-full` (see "When T2 runs") | T1 plus the Git/jj **conformance** with real git and jj, lane **`current`** only, **no `-race`** (shards 0 to 5) | the current shard time, about 12 min plus queue (race removal unmeasured) |
 | **T3** | Every push to `main` (post-merge) | T1 plus the normal (non-race) full matrix: `go test ./...` and conformance, **both** lanes (`minimum` and `current`), all shards | about 14 min median today, less without race (unmeasured) |
 | **T4** | Schedule (cron), always, also on quiet days | **Nightly:** `go test -race ./...` of **all** packages (lane `current`, real backends). **Weekly:** the `minimum` lane with `-race`. A failure opens or updates one issue (see "Race coverage") | not time critical |
@@ -146,13 +148,13 @@ commit it already inspects:
    `affected_reason`; the `check` job **honours** it: when `affected_reason` is `all` it tests every package, otherwise it computes the
    package list from `go list` on the PR checkout. A pull request that edits `scripts/ci_changes.py` therefore always gets T1 `all`.
 
-A documentation-only change (the existing classifier) runs T1 without tests and without installing the sandbox.
+A documentation-only change (the existing classifier) runs T1 without tests and without installing the sandbox, unless it changes prose that a Go test reads (`README.md`, `docs/agent-guide.md` and two spec files today): then the plain tests of those readers run.
 
-Whether T1 needs the sandbox install (median 104 s, 8 to 260 s) is **unmeasured**: `STW_REQUIRE_NATIVE_SANDBOX=1` makes the sandbox-dependent packages fail
+Whether T1 needs the sandbox install (median 104 s, 8 to 260 s; WP-1 re-read 105 s from the job logs) is **not decided**: `STW_REQUIRE_NATIVE_SANDBOX=1` makes the sandbox-dependent packages fail
 without it. The T1 job installs the sandbox only when the affected set contains a package that needs it, and WP-1 measures which part
 of the install is `apt-get update`. The fixed T1 floor from the measured steps is checkout 2 s, setup-go 12 s, Node 1 s, Hugo 1 s, static
 checks 24 s, shard coverage 6 s, import boundaries 7 s, Pages artifact 1 s = about 55 s without the sandbox, about 160 s with it (median install), plus the
-affected tests (unmeasured: WP-1 records `go test -json` per-package elapsed). The 5 minute target is feasible when the affected tests fit in about 2 minutes; WP-1 measures the widest case (`all`) and the target is then set by Decision D3.
+affected tests (WP-1, measured locally, `docs/progress.md`: all 20 packages with tests take 11 min 49 s, of which `internal/workspace` 698 s; without it the longest package takes 170 s; CI speed unmeasured). T1 runs `internal/workspace` only when the conformance shards do not run for the pull request (`CONFORMANCE_TIER` false), as `ci.yml` does today. The 5 minute target is feasible when the affected tests fit in about 2 minutes; WP-1 measures the widest case (`all`) and the target is then set by Decision D3.
 
 ### Race coverage (owner decision D10, 2026-10-22)
 
@@ -318,8 +320,8 @@ informational. The owner decides whether to enable required checks, "dismiss sta
 `minimum` lane 54.3 runner min (sum of its six job medians), 80.7 runner min in test steps that run under `-race`, the Spec 037 stack
 1635 runner min in 22 runs. **Modelled** (every figure marked *M*): T1 = 5 runner min is the **target** (*M*); T2 = 116 - 7.9 (the
 `check` race step, removed by D10) - 54.3 (the `minimum` lane moves to T3 and T4, D1) = about 54 runner min (*M*). That T2 figure is an
-**upper bound**: removing `-race` from the `current` conformance shards saves more, but the plain-versus-race ratio on the CI runner is
-unmeasured (WP-1), so no further saving is claimed. The model assumes the Spec 037 run counts per PR.
+**upper bound** of the saving of that kind: removing `-race` from the `current` conformance shards saves more, but the local ratio is only 1.1 to 1.4
+(WP-1, measured locally) and the CI ratio is unmeasured, so no further saving is claimed. The model assumes the Spec 037 run counts per PR.
 
 | Scenario | Measured today | Modelled after (*M*) | Saving (*M*) |
 | --- | --- | --- | --- |
@@ -333,8 +335,8 @@ unmeasured (WP-1), so no further saving is claimed. The model assumes the Spec 0
 
 The model does not assume any change to the cancelled-run share (25% of runner minutes today); the saving of cancelled runs is
 automatic because a cancelled T1 costs at most 5 minutes against up to 37. T3 on `main` still costs about 119 runner min per push
-today (measured); its race part is removed (unmeasured amount). Further levers are **unmeasured** and are WP-1 tasks: the race-detector
-share, the sandbox install (D8) and rebalancing shard 0 and shard 1.
+today (measured); its race part is removed (unmeasured on CI; locally 10 to 38% of test time). Further levers: the sandbox install (D8; WP-1 measured median 105 s from job logs,
+of which `needrestart` 92 s; an apt cache would save under 10 s) and rebalancing shard 0 and shard 1.
 
 ## Risks
 

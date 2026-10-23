@@ -449,3 +449,55 @@ are unpublished candidates registered in the Pages source validator. This is sou
 acceptance on the dogfood data set (T052) follows the owner-authorized cleanup apply and is not
 done, so Spec 031 stays planned. No product or documentation build, release, tag or `apply` on a
 real repository was run for this work.
+
+## Spec 039 WP-1 measurements and T1 source candidate
+
+Source only: `ci.yml` no longer runs `-race` on pull requests or pushes, `scripts/ci_changes.py affected` and
+`--files-from` select the affected packages (fail closed to `all`), and the `check` job tests only those
+(none for a documentation-only change, which also skips the sandbox install). `scripts/ci-test-reads.json` declares the
+packages whose tests read or build other packages' files, or read prose of the repository, without importing them (for example
+`internal/release` reads `internal/cli` sources and `internal/releaseworkflow` reads `README.md`); prose that a test reads is not
+docs-only and runs just its readers; root-level `.go` files select the tests that build `./cmd/stw`. A scan test keeps the file
+complete and keeps build entries apart from file-read entries. Nothing was triggered on GitHub, built or released; the GitHub
+figures are read only (`gh api`, `gh run list`, job logs). The local figures come from one 10-core arm64 VM with the real
+sandbox on the tree of GitHub `main` 7c696cee (23 packages by `go list ./...`, 20 with tests), not from the CI runner, so they show
+shares and ratios only. Every figure not listed here stays unmeasured.
+
+**Plain versus race, per package** (`go test -json -count=1 ./...`, then with `-race`; seconds plain / race, packages of
+5 s or more): workspace 698 / 946, watch 170 / 185, release 131 / 181, contracts 129 / 234, inspection 110 / 150,
+stwsync 71 / 96, cli 27 / 42, releaseworkflow 22 / 29, acceptance 14 / 16, restack 10 / 12, watchcmd 7 / 8, hosting
+5 / 20. Package sums 1394 s and 1928 s (1.38); wall 11 min 49 s and 16 min 4 s (1.36). An earlier run on the older
+tree of the local clone gave 1675 s and 1848 s (1.10) and 13 min 46 s and 16 min 27 s (1.20), with other work on the
+machine, so the local race overhead is 10 to 38 percent and not stable. The 80.7 runner minutes under `-race` in CI therefore
+are mostly test and sandbox work; the saving of removing `-race` is smaller than that figure. The plain-versus-race ratio of
+the `current` CI shards cannot be read from existing runs (no plain run exists); the first plain run after this change
+measures it. The second race run is the local stand-in for the nightly all-package run (16 min 4 s wall); its CI cost stays
+unmeasured.
+
+**Sandbox install, decision gate D8** (job logs of 136 of the 408 successful `check` and shard jobs of the 60 runs, every
+third job; times from log timestamps): the whole step takes median 105 s (8 to 222, p90 129). `apt-get update` takes median
+5 s (3 to 82, p90 10), fetching and unpacking the packages (781 kB, index 12.5 MB) median 7 s (3 to 69). The rest is
+`needrestart` after the install: in 126 of 136 steps it tries to restart `php8.3-fpm.service` and waits for the 90 s unit
+timeout (median 92 s, p90 94 s). An apt cache or an install-once artifact could save at most the download part (about 7 s
+median, up to 70 s on a slow mirror) and not the 90 s. Suppressing the restart (for example with `NEEDRESTART_MODE=a`) is a
+WP-4 proposal only: its saving is unmeasured and needs an owner-approved workflow run. No sandbox install step was changed.
+
+**Replay of `affected` over the 49 PR heads of the last 60 runs** (merge base from the commit's pull request, or the merge base
+with `main` for those without one; graph from each head, with the declared reads): 5 `docs-only`, 8 `packages`, 36 `all`.
+The `--files-from` classification equals the git classification for all 49. `all` comes from changed paths outside prose and
+packages: non-prose spec files in 32 heads, `scripts/` in 26, `schemas/` in 3 and `.github/` in 2 (a head can have several);
+this stays fail closed and is revisited after more data. 27 heads change prose that a test reads (README, agent guide or
+declared spec prose); none of them was `docs-only`. Of the 8 `packages` heads 6 contain `internal/workspace` (through
+`hosting` or `inspection`); the affected sets hold 12 to 17 of 19 to 23 packages, the other one 3 of 20. No head failed in CI
+(19 success, 29 cancelled, 1 not finished), so the replay cannot show a missed package.
+
+**T1 duration and target D3**: no CI figure. At local speed all packages take 11 min 49 s, of which `internal/workspace` takes
+698 s; without it the longest package is `watch` at 170 s. With the CI floor of the specification (about 55 s of checks, 105 s
+sandbox) a T1 without `internal/workspace` is about 5.5 min at local test speed, and a T1 with it is about 14 min. On the current tree
+a change to `hosting`, `inspection` or `workspace` (3 of 23 packages) selects `internal/workspace`; any other package change
+selects 1 to 15 packages. `check` leaves `internal/workspace` to the conformance shards when they run for the pull request
+(`CONFORMANCE_TIER`, as before) and tests it plain otherwise, so the tests of every package that changed or depends on a change still run, except `internal/workspace` when the shards cover it;
+the prose, cross-package and build dependencies are covered by the declared entries, and a dependency no test names and the scan
+cannot see (a read through an unusual helper) is not covered, which T3 on `main` catches. The 5 minute goal of D3 is therefore
+met only for pull requests whose shards run or whose change does not reach the workspace package. The owner and the
+specification decide the rest with the first CI figures.
