@@ -56,7 +56,7 @@ authorization, stale checks and a recorded recovery manifest.
 - **US4a (P1, whole workspace in view).** The human owner sees every worktree and branch of every owner or tool (Claude, Codex,
   Google, others, unknown) without typing a flag, grouped by owner, and may select items of other owners by an explicit choice; they are
   never preselected and need the same proof.
-- **US4b (P1, agents narrow).** An agent runs `stw tidy plan --mine` (or `--owner LABEL`); it sees and plans only its own items, and
+- **US4b (P1, agents narrow).** An agent runs `stw tidy plan --mine` (or `--by-owner LABEL`); it sees and plans only its own items, and
   its `apply` never touches another owner's item unless the human explicitly authorized that very plan.
 - **US5 (P1, derived defaults).** Base, remote, owner and state directory are derived and printed with their source; an ambiguous
   derivation is never guessed: the wizard asks, or in non-interactive mode refuses (exit 1, `base-ambiguous`).
@@ -86,19 +86,38 @@ stw tidy plan --json                       # one document, stores nothing
 stw tidy plan --save --json                # also stores the plan set; prints "plan_id"
 stw tidy apply 3f9c2a7e41b8                # asks "Apply plan 3f9c2a7e41b8 (7 removals)? [y/N]" on a TTY
 stw tidy apply 3f9c2a7e41b8 --yes --json   # non-interactive; the explicit plan id is the authorization
-stw tidy plan --repo sourcesteward --only retire,branches   # narrow the analysis
-stw tidy plan --base refs/heads/main --state-dir /private/state    # override a derived default
+stw tidy plan --member sourcesteward --only retire,branches   # narrow the analysis
+stw tidy plan --member-base sourcesteward=refs/heads/trunk    # override one derived base
+stw tidy plan --state-dir /s/workspace --state-dir /s/scratch # extra stores holding creation records
 
+stw tidy plan --base refs/heads/main --state-dir S --json                                          # expert (Spec 011), repository of the cwd: stays expert
 stw tidy plan /path/to/repo --base refs/heads/main --ref refs/heads/done --state-dir S --json      # expert (Spec 011)
 stw tidy plan /path/to/repo --base refs/heads/main --state-dir S --task T --owner O --remove-registration --remove-files /p
 stw tidy apply --plan ID --state-dir S --authorize --json          # expert (Spec 011/029)
 ```
 
-**Mode selection (no overlap).** `stw tidy` and `stw tidy plan` enter the **wizard layer** when none of `--base` with a `PATH` or
-`--ref`, `--task`, `--remove-registration`, `--remove-files`, `--completed-worktree`, `--protect-worktree`,
-`--contract`, `--tracking-remote` is given (`--owner` alone is wizard-layer; with `--task`, `--remove-registration`, `--remove-files` or `--completed-worktree` it is expert); any of them selects the **expert layer** exactly as today (the current parser and
-`RunE` paths, untouched). `stw tidy apply` with `--plan` is expert; with a positional plan id it is the wizard layer. Mixing a
-positional id with `--plan` is a usage error (exit 2).
+**Mode selection (no overlap, back-compat first).** A command line is the **wizard layer** only if it has **no positional `PATH`** and
+**every flag it carries is in the wizard set** (`--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, `--save`,
+`--yes`, and the shared flags `--state-dir`, `--online`, `--timeout`, `--json`, `--human`). **Any other flag, or any `PATH`, selects the expert layer**, exactly as today: that includes
+`--base` (so `stw tidy plan --base X` without a `PATH`, which works today on the repository of the working directory, **stays expert**), `--ref`,
+`--task`, `--owner`, `--remove-registration`, `--remove-files`, `--completed-worktree`, `--protect-worktree`, `--contract`,
+`--remote`, `--tracking-remote`, `--repo`, `--host`, `--pr`, `--integration-proof`, `--accept-whitespace-differences`, `--decisions`,
+`--consolidation-range`, `--report-dir` and every `--report-max-*`, `--plan`, `--authorize`. The test enumerates the flags registered
+by the tidy commands and fails when a new flag is not classified (T015). Back-compat rule: **an invocation that succeeds today behaves
+byte-identically**; only invocations that are a usage error or only help today may become wizard forms (bare `stw tidy`, which prints
+help today and keeps doing so with `--help`; `stw tidy plan` and `stw tidy plan --state-dir S` without `--base`, which are usage errors
+today). `stw tidy apply` with `--plan` is expert; with a positional plan id it is the wizard layer; both together is a usage error
+(exit 2). `--owner` and `--repo` keep their expert meanings; the wizard's names are `--by-owner` and `--member`.
+
+**Flag compatibility table** (every flag registered today by `plan`, `apply`, `restore`, `history`):
+
+| Flag | Wizard layer | Expert layer |
+| --- | --- | --- |
+| `--state-dir`, `--online`, `--timeout`, `--json` | shared; wizard `--state-dir` is repeatable (extra stores) | unchanged (single value) |
+| `--base`, `--ref`, `--task`, `--owner`, `--remove-registration`, `--remove-files`, `--completed-worktree`, `--protect-worktree`, `--contract`, `--remote`, `--tracking-remote`, `--repo`, `--host`, `--pr`, `--integration-proof`, `--accept-whitespace-differences`, `--decisions`, `--consolidation-range`, `--report-dir`, `--report-max-*` | not accepted together with wizard-only flags (usage error, exit 2) | unchanged |
+| `--plan`, `--authorize` | not accepted with a positional plan id (exit 2) | unchanged |
+| `restore` (`--as`, `--action`, `--list`, `--apply`, ...), `history` | unaffected, separate subcommands | unchanged |
+| `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, `--save`, `--yes` | new | not accepted (exit 2) |
 
 Wizard-layer flags:
 
@@ -106,16 +125,15 @@ Wizard-layer flags:
 | --- | --- |
 | `--workspace [PATH]` | workspace to use; default: discovery as `stw status` does (Spec 037); outside a workspace a usage error (exit 2) with the hint to give `PATH` or use the expert layer |
 | `--mine` | only items owned by the caller's owner label (derived, see below); the narrowing for agents |
-| `--owner LABEL` | in the wizard layer: only items of that owner label (repeatable); never selects the expert-layer meaning (that one needs `--task` or `--completed-worktree`) |
-| `--repo NAME ...` | restrict to member repositories (the workspace repository is `.`); repeatable |
+| `--by-owner LABEL` | only items of that owner label (repeatable); read-only view in agent mode unless LABEL is the caller label |
+| `--member NAME` | restrict to member repositories (the workspace repository is `.`); repeatable |
 | `--only KINDS` | comma list of `retire`, `branches`, `tracking`, `stale-worktrees`; default all |
-| `--base REF` | override the derived base for **every** repository (rare); `--base NAME=REF` (repeatable) overrides one repository |
-| `--state-dir DIR` | override the derived private state directory |
-| `--as LABEL` | override the derived caller label used by `--mine` and by the agent-mode check |
+| `--member-base NAME=REF` | override the derived base of one member repository (repeatable); there is no global `--base` in the wizard layer |
+| `--state-dir DIR` | repeatable: stores to read creation records from and to write plans to (the first is the plan store); adds to the defaults, see [State directories](#state-directories-and-creation-records) |
 | `--online` | allow the contract-3 authenticated reads (default off, as today) |
 | `--save` | `plan` only: store the plan set of all *safe* items (non-interactive wizard) |
-| `--yes` | `apply` only: skip the confirmation prompt; requires an explicit plan id; refused with no id |
-| `--json` / `--human` | as elsewhere; JSON is the default when stdout is not a terminal only for `--json`; text stays the default (no surprise change) |
+| `--yes` | `apply` only: skip the confirmation prompt; requires an explicit plan id; refused with no id; **not honoured for plans containing `other` or `unknown` items** (those always need the typed confirmation below) |
+| `--json` / `--human` | as `stw status`: text is the default, `--json` selects JSON, `--human` forces text; they exclude each other (exit 2) |
 | `--timeout DURATION` | as in contract 3, over the whole analysis |
 
 ## Derivation of defaults (FR-010 to FR-016)
@@ -130,11 +148,44 @@ sees what the wizard assumed and how to change it.
 | Remote | `origin` if present; else the single remote; | several remotes, none `origin`: ask, or `remote-ambiguous` (exit 1) |
 | Base | per repository: the remote's default branch from the symbolic ref `refs/remotes/<remote>/HEAD` (offline); else a repository setting in workspace config (open question 3); jj: the trunk bookmark | no symbolic HEAD and no config, or HEAD pointing to a missing ref: the repository is **not analysed** (`base-ambiguous`); the wizard asks for it on a TTY, the non-interactive run reports it and exits 1 only for that repository's items (others proceed, overall exit 1) |
 | Base freshness | the base ref must exist locally; the wizard never fetches (offline); a stale base can only make integration proofs *fewer*, never wrong | notice `base-stale-possible` with the age of the ref |
-| Caller label | `--as`, else `$STW_OWNER`, else the OS user | used for `--mine` and agent mode only |
+| Caller label | human mode: `$STW_OWNER`, else the OS user; agent mode: `$STW_OWNER` only (no `--as` flag; it also collides with `restore --as`); none set: `--mine` is a usage error | used for `--mine`, `scope` and agent mode only |
 | Item owner | see [Scope of ownership is a view](#scope-of-ownership-is-a-view) | `unknown` |
-| Run mode | `human` when stdin and stdout are terminals and `STW_AGENT` is unset; else `agent` (also `--agent`, `--human` do not exist: use `--mine`); see OQ12 | agent mode is the narrow, safe one |
-| State directory | `--state-dir`, else `$STW_STATE_DIR`, else `<XDG_STATE_HOME or ~/.local/state>/stw/tidy` created with mode 0700 (it must be outside every repository, owned by the user, not a symlink, mode exactly 0700; else refuse `state-dir-unsafe`) | refuse, exit 1 |
+| Run mode | see [Mode detection](#mode-detection-an-accident-guard) | agent mode is the narrow, safe one |
+| State directories | see [State directories](#state-directories-and-creation-records) | refuse `state-dir-unsafe` (exit 1) |
 | Protected worktrees | the current working directory's worktree, primary checkouts, dirty or unmerged worktrees and locks that are not stw's are `retain` automatically; `--protect-worktree` is unnecessary in the wizard layer | n/a |
+
+## State directories and creation records
+
+Owned retirement reads the creation records (`plans`, `tasks`, `operations`) from a private **state directory** (Spec 029); the records of
+a worktree are in the directory its creator passed to `stw workspace`, which has no default today. This specification adds one:
+
+- **Shared default.** `stw workspace` and `stw tidy` default to `${XDG_STATE_HOME:-~/.local/state}/stw/workspace` (created 0700;
+  must be user-owned, not a symlink, outside every repository, mode exactly 0700, else `state-dir-unsafe`) when `--state-dir` is omitted
+  (additive: an explicit `--state-dir` behaves as today). `$STW_STATE_DIR` overrides the default for both commands.
+- **Known stores** of one wizard run, in order: the repeatable `--state-dir` values, `$STW_STATE_DIR`, the `state_dirs` list of the workspace
+  config (a follow-up if OQ3 defers the config; until then flags and environment), the shared default. Each is validated; an unsafe one is
+  reported (`state-dir-unsafe`) and skipped, the run continues (exit 1 at the end). The plan store is the first valid store.
+  Helper scripts that create worktrees (for example an agent's scratch store) are found by passing that directory once, for example
+  `stw tidy --state-dir "$STW_WT_STATE"`; this is documented in `docs/tidy.md` and `docs/workspaces.md`.
+- **Record lookup.** For every linked worktree locked with the exact `stw:<task>` form, the creation record is looked up by task id in
+  every known store. Found in one store: owned (`owner_source` `task-record`). Found in several with different content: `retain`
+  `registration-record-ambiguous`. Found in none: `retain` `registration-record-missing` with the hint `pass the --state-dir that
+  created it`; such a worktree is **not** treated as owned and is classed like an unregistered one (see the table).
+- A wizard run shows the stores it read and how many records each held (`derived[]`, name `state-dirs`).
+
+## Mode detection (an accident guard)
+
+The wizard distinguishes **human mode** from **agent mode**. This is an **accident guard and a policy aid, not a security boundary
+against a deliberately evasive process of the same user**: an agent can drive a pty (`script`, `expect`, `tmux`, `herdr send-keys`) or set
+environment variables. The deletion safety never rests on it; it rests on the proofs (SI2), the recovery manifest and the stale checks.
+`docs/agent-guide.md` additionally forbids driving `stw tidy` through pty wrappers or `send-keys`.
+
+Human mode requires **all** of: stdin and stdout are terminals; `STW_AGENT` is unset; no known agent marker is in the environment
+(`CLAUDECODE`, `CLAUDE_CODE_*`, `CODEX_*`, `AGY_*`; a code table with tests, extendable by pull request); and neither `--mine` nor `--by-owner` is given.
+Otherwise the run is agent mode. `--mine` forces agent mode.
+
+**Mode evidence** (terminal yes/no per stream, markers seen, caller label and its source, derived mode) is recorded in the stored plan,
+in the apply journal, and is shown by `stw tidy history`.
 
 ## Candidate classes and verdicts
 
@@ -152,7 +203,7 @@ Candidate kinds: `worktree` (linked task worktree: registration, files, optional
 
 Reason codes (stable, kebab-case; the list extends Spec 011/029 codes, none is renamed): `unmerged` (no proof), `dirty`,
 `ignored-extras`, `locked-foreign`, `locked-stw` (decision), `unregistered` (information: no stw creation record), `current-worktree`, `primary-checkout`,
-`protected`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
+`protected`, `recently-active`, `registration-record-missing`, `registration-record-ambiguous`, `scope-not-authorized`, `safety-config-changed`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
 real identity change, see below), `registration-moved`, `lock-mismatch`, `branch-attached-elsewhere`, `retirement-file-limit`,
 `retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`.
 
@@ -160,13 +211,14 @@ real identity change, see below), `registration-moved`, `lock-mismatch`, `branch
 
 | Case | Verdict | Effects if selected |
 | --- | --- | --- |
-| Completed task worktree, registration matches, clean, branch integrated | `safe` | remove registration + files; delete the branch iff it is a proven-integrated local branch in the same plan |
+| Completed task worktree: exact `stw:<task>` lock, matching creation record in a known store, clean, branch integrated (every `stw workspace apply` worktree is locked this way, so this is the normal owned case) | `safe` | remove registration + files; delete the branch iff it is a proven-integrated local branch in the same plan |
 | Same, but branch not integrated | `retain` `unmerged` | none; report the ahead commits count and the closest evidence (for example "3 commits ahead, not in origin/main") |
 | Dirty or has untracked/ignored extras the stored tree does not hold | `retain` `dirty` or `ignored-extras` | none |
-| Locked, lock is stw's own task lock of a matching registration | `decision` `locked-stw` | the retirement of Spec 029 (it owns the lock); no `git worktree unlock --force` of a lock that is not ours |
+| Lock in the `stw:<task>` format, but no record (`registration-record-missing`) or a mismatching record (`lock-mismatch`) | `decision` `locked-stw` | only through the legacy completion of Spec 029 (exact path, declared complete by the human's explicit choice); no `git worktree unlock --force` of a lock that is not ours; human mode only |
 | Locked with any other lock | `retain` `locked-foreign` | none |
-| Worktree of another owner or created by another tool (no stw registration), proven integrated, clean, unlocked | `safe`, `scope` `other` or `unknown` | human mode: shown, never preselected, removable only by explicit choice; removal of an unregistered worktree uses the Spec 029 legacy completion (exact path, declared complete, cooperative); agent mode: not shown and not plannable |
+| Worktree of another owner or created by another tool (no stw registration), proven integrated, clean, unlocked, not recently active | `safe`, `scope` `other` or `unknown`, evidence `no-work` when it has no commit of its own | human mode: shown, never preselected, removable only by explicit choice; removal of an unregistered worktree uses the Spec 029 legacy completion (exact path, declared complete, cooperative); agent mode: not shown and not plannable |
 | The same, but dirty, unmerged or locked by another | `retain` | none |
+| Worktree of scope `other` or `unknown` whose `HEAD`, index or any tracked-file mtime is within the last 24 hours (a possibly running job, for example a fresh `/tmp/whr010-*` at the base commit is trivially an ancestor and clean) | `retain` `recently-active` | none; the window is OQ15 |
 | Worktree directory missing, registration present | `safe` (`stale-worktree`) if stw-owned and the Git admin entry proves prunable; else `retain` | registration removal only |
 | Branch integrated, not checked out anywhere | `safe` | delete branch with recovery ref (Spec 011 WI2) |
 | Branch integrated but checked out in a retained worktree | `retain` `branch-attached-elsewhere` | none |
@@ -188,61 +240,74 @@ proofs, not on the label.
 
 `scope` is `own` when the owner equals the caller label, `other` when it is a different known label, `unknown` otherwise.
 
-**Human mode (default).** Everything is shown, **grouped by owner**, with the owner column visible; the `--mine` and `--owner LABEL` flags
+**Human mode (default).** Everything is shown, **grouped by owner**, with the owner column visible; the `--mine` and `--by-owner LABEL` flags
 narrow it. No candidate with `scope` `other` or `unknown` is ever preselected: `a` (all safe) in the wizard selects `own` items only,
 the other owners' items are chosen by number or by `o` ("also all safe items of owner LABEL", asked per owner) and carry a clear marking
 (`[other: codex]`, `[unknown owner]`) in the overview, in the confirmation prompt and in the stored plan (`scope`, `owner`). The proof
 requirements (integration proof, clean tree, no non-stw lock, recovery manifest) are identical for every owner.
 
-**Agent mode.** Without a terminal, with `STW_AGENT` set, or with `--mine` or `--owner`, a run is narrowed: `plan` lists and plans only
-`own` items (`--owner LABEL` lists that label read-only and may plan it only if LABEL equals the caller label), and `apply` refuses (exit
-1, `scope-not-authorized`) any sub-plan containing an `other` or `unknown` item **unless the plan carries the human's explicit
-authorization of those items**: a plan stored by the human wizard with those items chosen by explicit choice (`authorized_scopes` in the
-plan, written only by the interactive path after the `y`). An agent cannot create that field; `--save` in agent mode never includes
-`other` or `unknown` items.
+**Agent mode** (see [Mode detection](#mode-detection-an-accident-guard)). `plan` lists and plans only `own` items, and `own` in agent mode
+requires `owner_source` `task-record` (a path or author guess never makes an item `own` for an agent); `--by-owner LABEL` of another
+label is a read-only view. `apply` refuses (exit 1, `scope-not-authorized`) any sub-plan with an `other` or `unknown` item **unless the
+plan carries `authorized_scopes`**, which is written only by the human path, is part of the content-addressed `plan_id` (editing it
+changes the id and the store entry no longer matches the id typed at apply), and is recorded with its mode evidence. `--save` in agent
+mode never includes `other` or `unknown` items. The residual risk (an evasive same-user process forging the human path or the
+label) is accepted and documented; proofs and the recovery manifest still bound the harm.
+
+**Typed confirmation for foreign items.** Choosing an `other` or `unknown` item in the wizard, and `apply` of a plan with
+`authorized_scopes`, requires a confirmation **read from `/dev/tty`** (never stdin): the owner label followed by the first 6 characters
+of the plan id, for example `codex 3f9c2a`. A bare `y` does not suffice; `--yes` is not honoured for such plans. Without a controlling terminal
+the confirmation fails and nothing is stored or applied.
 
 ## Fixing #174: ownership binding after a branch switch
 
-**Cause.** The creation record (Spec 010/029) binds `registration + format + task lock` to the **detached HEAD target** the worktree
-had when `stw workspace apply` created it. The documented use (`git switch -c <branch>` inside it) changes HEAD, so the check "must
-bind the current detached target" fails forever.
+**Two causes, verified against the code at `afef06f`.** Owned observation (`tidy_v3_legacy.go`) refuses a creation-bound worktree for two
+independent reasons:
 
-**Design (recommended, open question 1).** Split the binding into an **identity** that must never change and a **position** that may
-move forward:
+1. **Position.** It requires `target.HeadRef == ""` (detached). After `git switch -c <branch>` the HEAD is attached: `changed-ownership`.
+2. **Creation-time safety digest.** It calls `Verify` on the creation plan (`git.go`), which recomputes `gitSafety(source, BaseCommit)`
+   and requires equality with the digest stored at creation. That digest covers the whole common config (`config --list --includes
+   --show-origin`), the hook fingerprint and the Git binary's size and mtime. Anything legitimate that changes them (a `git push -u`
+   or `push.autoSetupRemote` writing `branch.<b>.remote/merge`, a Git upgrade, a devcontainer rebuild) fails `Verify`, surfaced as
+   `changed-ownership` too. Fixing only the position still leaves such worktrees refused (a probe on the reviewed head confirmed
+   it).
 
-1. *Identity (unchanged strictness):* admin directory name and `gitdir` pointer, canonical worktree path, common-dir identity, the
-   task lock (reason, plan id, owner), the recorded format, the creation journal entry. Any difference is `changed-ownership` (or the
-   narrower `registration-moved`, `lock-mismatch`).
-2. *Position (new):* HEAD may be (a) the recorded detached creation commit, or (b) a local branch (attached HEAD) whose history
-   **contains the recorded creation commit** (descendant check by object, `git merge-base --is-ancestor`), or (c) detached at a
-   descendant of it. A HEAD that does not contain the creation commit (an unrelated checkout) is `changed-ownership`: the worktree was
-   repurposed and the creation record proves nothing.
-3. *Retirement then relies on the proofs it already has:* clean tree, no extras, no submodule/symlink problems, and the **integration
-   proof of HEAD** (not only of the recorded commit): the attached branch tip (or detached HEAD) is proven integrated into the base by
-   ancestor, patch-id, merge-noop or no-net-change. The branch is deleted only if the same plan lists it as proven-integrated and it is
-   attached to no other worktree.
-4. *Stored plan binds the observed position* (HEAD ref and OID at plan time). Apply re-reads it; any move of HEAD, the branch tip or the
-   base is `stale` and refuses (existing stale-check rule), so a commit made between plan and apply is never lost.
+**Design (stated, not silent).**
 
-**Why this is safe.** It widens only the *position* the creation record accepts; everything that proves "this worktree is the one stw
-made" stays exact, and everything that proves "its content is already in the base" is the existing proof applied to the real HEAD. The
-failure mode of a wrong widening would be removing unmerged work; that is blocked by the integration proof, the clean-tree requirement and
-the recovery manifest, not by the position check.
+- **Position rule.** HEAD may be the detached creation commit, or attached to a local branch, or detached at a descendant, provided its
+  history **contains the recorded creation (base) commit** (`merge-base --is-ancestor`). An unrelated checkout is `changed-ownership`. Today's
+  code has no creation-commit binding at all (it only requires "detached"), so the descendant check is a **new restriction** next to the
+  widening. The plan already binds `Target.HeadRef` and `CommitID`; **no new plan field** is needed and plans stored before stay valid.
+- **Verify split.** `Verify` is split into (a) an **identity part**: lock `stw:<task>`, gitdir backlink, worktrees parent, layout, creation
+  journal entry; and (b) the **creation digest equality**. Retirement uses (a) and replaces (b) with the **fresh `gitSafety` admission it already
+  runs** (`tidy_v3_legacy.go`), against the current safety policy. The creation digest equality stays for the workspace and handoff paths,
+  unchanged. This is a deliberate, documented change of what retirement requires, **not** a silent weakening of the digest: instead of "the
+  safety-relevant state equals what it was at creation", retirement requires "the safety-relevant state is acceptable now", which is the
+  question that matters for deleting files, and the plan stores the fresh digest so apply re-checks that it did not change after planning.
+  An added hook, an unsafe config key, a changed layout or an unrecognised safety state still refuses, with its own code
+  `safety-config-changed` (not `changed-ownership`). The re-bind alternative (a human-authorized, journaled re-registration step in the plan) is
+  rejected as default because it asks for a confirmation per worktree (61); it remains available as the `decision` path of the legacy completion.
+- **Integration proof of the real HEAD** (already how the code proves: `proveTidyV3Commit(target.CommitID)`): ancestor, patch-id,
+  merge-noop or no-net-change; clean tree, no extras, no submodule or symlink problem.
+- **Stale binding.** The stored plan binds HEAD ref, OID, branch tip and base; any change refuses with `stale`.
 
-**Alternative (safe derivation, rejected as default).** Re-bind the registration by an explicit owner confirmation. Rejected as
-default because it asks the owner to vouch for 61 worktrees; kept as the `decision`/`legacy` path for worktrees with no stw registration
-(expert layer `--completed-worktree`).
+**Branch leg (new plan form, defined).** `owned-retirement` and `legacy-retirement` plans carry no selected refs today and the branch is
+attached while planned, so Spec 011 ref planning would retain it. The wizard therefore plans a **dependent branch sub-plan**: it records
+branch name, tip OID, proof and `depends_on` (the retirement sub-plan id). At apply it runs only **after the retirement succeeded**, is
+re-observed (the branch is then unattached), and goes through the unchanged Spec 011 reference deletion with **all its protections**:
+`selected-base`, workspace name and OID, attached elsewhere, symbolic ref, tip equal to the planned OID, proof re-run, recovery ref and
+journal. A failed or stale retirement makes the dependent sub-plan `skipped`. A worktree whose HEAD is attached to the base branch itself
+(for example `main`) never gets a branch leg. This combined form is new, so it is stated as such; it is **not** "exactly Spec 011/029
+plans".
 
-**Compatibility.** Creation records and journals already written stay valid (no migration): the new check reads the same fields. The
-stored plan gains `head` (ref, oid) in a new additive field of the plan version; plans stored before are applied by the old
-code path only if their recorded position still equals the detached target, otherwise they must be re-planned. This is documented in
-`docs/tidy.md` as the lifecycle *workspace -> work -> retirement* (acceptance item of #174).
+**Compatibility.** Creation records and journals stay valid (same fields). Documented in `docs/tidy.md` as the lifecycle
+*workspace -> work -> retirement* (acceptance item of #174).
 
 ## Plan set and apply
 
 `stw tidy` stores a **plan set**: a manifest of independent sub-plans (one per repository per effect kind, retirement sub-plans one per
-worktree, exactly Spec 011/029 plans stored with their current ids) plus a content-addressed `plan_id` over the sorted sub-plan ids, the
-derived values and the selected items. Planning never deletes and writes only the private store, and only when the owner confirms
+worktree, the existing Spec 011/029 plan kinds with their current ids, plus the dependent branch leg defined above) plus a content-addressed `plan_id` over the sorted sub-plan ids, the
+derived values, the selected items, `authorized_scopes` and the mode evidence. Planning never deletes and writes only the private store, and only when the owner confirms
 (wizard) or passes `--save`.
 
 - `stw tidy apply <plan-id>` loads the set, verifies the store (mode, owner), re-runs each sub-plan's stale checks, and applies the
@@ -251,7 +316,7 @@ derived values and the selected items. Planning never deletes and writes only th
   `--yes` the explicit plan id is the authorization (never inferred, never accepted without an id, never from a plan produced in the
   same invocation).
 - **Partial progress is honest.** A sub-plan that turns stale or fails is reported (`stale`, `failed`), the remaining sub-plans of other
-  repositories continue only when independent, a retirement and its branch deletion are one sub-plan (the branch is deleted only after
+  repositories continue only when independent, a retirement and its dependent branch leg are applied in that order (the branch leg only after
   the retirement succeeded). Exit 1 if any sub-plan did not complete; the report lists every outcome and the recovery location.
 - A plan id of the older single-plan form still works with `apply --plan` (expert layer).
 - Agents never run `apply` on the owner's behalf without the owner's authorization of that plan id (repository rule, restated here and
@@ -262,7 +327,7 @@ derived values and the selected items. Planning never deletes and writes only th
 ```
 $ stw tidy
 Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
-Derived:   remote origin, base per repository (see below), state dir ~/.local/state/stw/tidy (created, 0700), owner claude
+Derived:   remote origin, base per repository (see below), state dirs ~/.local/state/stw/workspace (2 records), /s/wt (59 records), mode human (tty yes, no agent marker)
 Analysed 7 repositories in 6 s (offline; base last fetched 2 h ago in the oldest repository)
 
 sourcesteward   base refs/heads/main (origin/HEAD)
@@ -291,8 +356,8 @@ details)`, and JSON lists every candidate.
 
 One document `tidy-overview` (schema `schemas/v2/tidy-overview.schema.json`, additive, v1/v3 tidy schemas unchanged): `workspace`,
 `derived[]`, `repositories[]` (`name`, `path`, `backend`, `base`, `remote`, `state` `analysed|skipped|error`, `reason`), `candidates[]`
-(`id`, `repo`, `kind`, `verdict`, `reason`, `owner`, `owner_source`, `scope`, `path`, `branch`, `task`, `owner`, `proof` `ancestor|patch-id|merge-noop|no-net-change|none`,
-`effects[]`, `evidence`), `summary` (counts per verdict), `plan_id` (empty unless saved), `notices[]`. Item ids are
+(`id`, `repo`, `kind`, `verdict`, `reason`, `owner`, `owner_source`, `scope`, `path`, `branch`, `task`, `proof` `ancestor|patch-id|merge-noop|no-net-change|none`,
+`effects[]`, `evidence`), `summary` (counts per verdict), `mode` (evidence), `plan_id` (empty unless saved), `notices[]`. Item ids are
 `KIND:REPO:SUBJECT`, stable across runs. Output is bounded (candidates 4096, evidence 512 bytes each, document 4 MiB; beyond that
 `truncated: true` and exit 1 `output-limit`).
 
@@ -308,7 +373,7 @@ One document `tidy-overview` (schema `schemas/v2/tidy-overview.schema.json`, add
 
 SI1 planning never deletes and never writes outside the private store; SI2 no deletion without a proof of integration (Specs 011/031);
 SI3 apply needs a stored plan, explicit authorization, fresh stale checks and a recorded recovery root plus journal before native
-effects; SI4 other owners' work is touched only by a human's explicit choice with the full proof, never preselected and never by agent-run mode without that human authorization; SI5 derivation never guesses an ambiguous value; SI6 untrusted text is quoted; SI7 Git and
+effects; SI4 other owners' work is touched only by a human's explicit choice with the full proof, never preselected, behind a typed `/dev/tty` confirmation, and never by agent-run mode without that human authorization; mode detection is an accident guard, not a boundary; SI5 derivation never guesses an ambiguous value; SI6 untrusted text is quoted; SI7 Git and
 jj both supported as in Spec 011 (jj: bookmarks and empty working-copy retirement under the existing limits); SI8 Windows unsupported;
 SI9 no network unless `--online`; SI10 the token never appears in output.
 
@@ -317,35 +382,41 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 ### Functional
 
 - **FR-001** `stw tidy` with no arguments runs the wizard; `stw tidy plan` with no expert flag runs the same analysis non-interactively.
-- **FR-002** Mode selection is exactly the rule above; the expert layer's parsers, outputs and exit codes are byte-unchanged.
+- **FR-002** Mode selection is exactly the rule above (no `PATH` and only wizard-set flags); every invocation that succeeds today, including `plan --base X` without `PATH`, keeps its behaviour byte-identically; the wizard flags `--member` and `--by-owner` do not reuse `--repo` and `--owner`.
 - **FR-003** Workspace discovery is that of `stw status`; the member set plus the workspace repository are analysed.
 - **FR-004** Analysis runs per repository through `internal/fanout` (width 4); one repository's failure never hides the others.
 - **FR-005** Every candidate has exactly one verdict and, for non-`safe`, a stable reason code.
 - **FR-006** Every candidate carries `owner`, `owner_source` and `scope` (`own`, `other`, `unknown`); the owner column is always visible in text and present in JSON.
 - **FR-006a** Default for a human: all candidates of all owners are visible without any flag, grouped by owner.
 - **FR-006b** Candidates with `scope` `other` or `unknown` are never preselected (`a` selects `own` only); they are selected only by explicit choice, marked clearly in the overview, the prompt and the stored plan, and need the same proof as any other.
-- **FR-006c** `--mine` and `--owner LABEL` narrow the view and the plan; agent mode (no TTY, `STW_AGENT`, `--mine`, `--owner`) lists and plans own items only.
-- **FR-006d** `apply` in agent mode refuses (`scope-not-authorized`, exit 1) any sub-plan with an `other` or `unknown` item unless the stored plan carries `authorized_scopes` written by the interactive human path; agents cannot write it.
+- **FR-006c** `--mine` and `--by-owner LABEL` narrow the view and the plan; agent mode (see Mode detection) lists and plans own items only, and `own` there requires `owner_source` `task-record`.
+- **FR-006d** `apply` in agent mode refuses (`scope-not-authorized`, exit 1) any sub-plan with an `other` or `unknown` item unless the stored plan carries `authorized_scopes`, which is part of the content-addressed plan id and recorded with the mode evidence.
+- **FR-006f** Choosing an `other` or `unknown` item, and applying a plan with `authorized_scopes`, needs the typed confirmation (owner label and plan-id prefix) read from `/dev/tty`; `--yes` is not honoured for such plans.
+- **FR-006g** Mode detection is documented as an accident guard, not a boundary; human mode needs both streams on terminals, no `STW_AGENT`, no agent marker; mode evidence is recorded in plan and journal and shown by `history`.
+- **FR-006h** An `other` or `unknown` worktree that is recently active (default 24 h) is `retain` `recently-active`; a safe one with no commit of its own carries evidence `no-work`.
 - **FR-006e** The owner of an item is derived by the ordered rule above; the source is reported; `commit-author` is a hint only and never makes an item `own`.
 - **FR-007** The overview shows derived values with their sources; `derived[]` is in JSON.
 - **FR-008** The wizard asks after the overview; the default is none; parsing is strict; selection is by number, range or `a`.
-- **FR-009** Without a TTY on stdin or stdout the wizard prints the overview, stores nothing, exits 0 and never reads stdin.
+- **FR-009** Without a TTY on stdin or stdout the wizard prints the overview, stores nothing, never reads stdin, and exits 0 unless the analysis itself ends in an error (a repository `error` or `base-ambiguous` is exit 1 as in the exit table).
 - **FR-010** Base is derived per repository from the remote's symbolic HEAD (or workspace config, OQ3); never guessed; ambiguity asks or refuses.
 - **FR-011** Remote derivation: `origin`, else the single remote, else ambiguity as FR-010.
-- **FR-012** State directory default `$XDG_STATE_HOME/stw/tidy` (mode 0700, user-owned, not a symlink, outside repositories); unsafe means refuse.
+- **FR-012** `stw workspace` and `stw tidy` share the default state directory `${XDG_STATE_HOME:-~/.local/state}/stw/workspace` (0700, user-owned, not a symlink, outside repositories); an unsafe store is reported and skipped.
+- **FR-012a** The wizard reads creation records from every known store (repeatable `--state-dir`, `$STW_STATE_DIR`, workspace config, default); a `stw:<task>` worktree without a record is `retain` `registration-record-missing` with a hint, with several differing records `registration-record-ambiguous`.
 - **FR-013** Owner for retirement is the registered owner; no typed owner is needed.
-- **FR-014** Every derived value is overridable (`--base`, `--state-dir`, `--owner`, `--workspace`).
+- **FR-014** Every derived value is overridable (`--member-base`, `--state-dir`, `--workspace`).
 - **FR-015** The worktree of the working directory, primary checkouts and any non-provably-completed worktree are protected automatically.
 - **FR-016** `--online` is the only way to network; default offline.
 - **FR-020** Ownership identity (admin dir, path, common dir, lock, format, journal) stays exact; HEAD position may be the detached creation commit or any descendant, attached or detached (#174).
+- **FR-020a** Retirement does not require equality with the creation-time safety digest; it requires the fresh safety admission, stores the fresh digest in the plan and re-checks it at apply. An added hook, unsafe key or layout change refuses with `safety-config-changed`. Workspace and handoff paths keep the creation digest check.
 - **FR-021** A HEAD that does not contain the creation commit is `changed-ownership`.
 - **FR-022** Retirement requires the integration proof of the real HEAD, a clean tree and no extras; the branch is deleted only if proven integrated, listed in the plan and attached nowhere else.
-- **FR-023** The stored retirement plan binds HEAD ref and OID; apply refuses (`stale`) on any change of HEAD, branch tip or base.
-- **FR-024** Existing creation records and journals need no migration.
+- **FR-023** The stored retirement plan binds HEAD ref and OID (existing fields); apply refuses (`stale`) on any change of HEAD, branch tip or base.
+- **FR-024** Existing creation records, journals and stored plans need no migration.
+- **FR-025** The branch leg is a dependent sub-plan applied after a successful retirement, re-observed, under all Spec 011 ref protections; never planned for the base branch.
 - **FR-030** `--save` and the wizard store a plan set of independent sub-plans (one worktree per retirement sub-plan) with a content-addressed `plan_id`.
 - **FR-031** `apply <plan-id>` verifies the store, re-runs stale checks and applies sub-plans one at a time in the fixed order, each with its own journal and recovery manifest.
 - **FR-032** `--yes` requires an explicit plan id on the command line (never a plan created by the same invocation); without one it is a usage error (exit 2).
-- **FR-033** Partial outcomes are reported per sub-plan; exit 1 if any sub-plan is not complete; a retirement and its branch deletion are one sub-plan.
+- **FR-033** Partial outcomes are reported per sub-plan; exit 1 if any sub-plan is not complete; a failed retirement makes its dependent branch leg `skipped`.
 - **FR-034** Planning never deletes; no effect outside apply.
 - **FR-040** `--json` emits one `tidy-overview` document; text and JSON carry the same evidence.
 - **FR-041** Output is bounded (rows, evidence, document) and truncation is marked, never silent.
@@ -356,18 +427,22 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 
 ### Success criteria
 
-- **SC-001** On the 2026-10-23 dogfood set (61 stw-created worktrees, branches merged by rebase) the overview classifies every worktree, proposes each completed one as `safe`, and one `stw tidy apply` removes them with recovery evidence, in no more than two commands typed by the owner (`stw tidy`, answer `a`).
+- **SC-001** On a fixture reproducing the 2026-10-23 situation (stw-created worktrees whose records are in a known store passed by `--state-dir`, branches pushed with `-u` and merged by rebase), the overview classifies every worktree, proposes each completed one as `safe`, and `stw tidy` with the answer `a` plus `stw tidy apply` removes them with recovery evidence. Worktrees whose records live in a store not passed are `retain` `registration-record-missing`, never guessed.
 - **SC-002** A fixture for every case of the behaviour table yields the stated verdict and reason, and no fixture of `retain` is ever changed by apply (mutation probe: forcing any of them into the plan makes apply refuse).
-- **SC-010** With worktrees of Claude, Codex and an unknown owner present, a human `stw tidy` with no flag lists all of them grouped by owner with the owner column; JSON carries `owner`, `owner_source`, `scope` for each.
-- **SC-011** Answering `a` selects own safe items only; a foreign or unknown item is in the stored plan only if chosen by number or `o`, and is then marked in plan and prompt.
-- **SC-012** `--mine` lists and plans own items only; agent-mode `apply` of a plan containing an other or unknown item without `authorized_scopes` exits 1 `scope-not-authorized` and changes nothing; with a human-written `authorized_scopes` it applies.
-- **SC-003** The real sequence of #174 (apply workspace detached, `git switch -c b`, commit, rebase-merge so SHAs differ, `tidy`) retires registration, directory and branch; wrong owner, moved or foreign lock, dirty tree and unintegrated branch are refused with their codes.
+- **SC-003** The real sequence of #174 (apply workspace detached, `git switch -c b`, commit, `git push -u` to a bare remote, rebase-merge so SHAs differ, `tidy`) retires registration, directory and branch; a changed unrelated config key and a changed Git binary identity retire; an added hook or unsafe key refuses `safety-config-changed`; wrong owner, moved or foreign lock, dirty tree and unintegrated branch are refused with their codes.
 - **SC-004** `stw tidy` with no TTY never blocks (test with closed and with silent stdin) and stores nothing.
-- **SC-005** Existing tidy tests, goldens and schemas pass byte-unchanged.
+- **SC-005** Existing tidy tests, goldens and schemas pass byte-unchanged; every flag registered by the tidy commands is classified (wizard, expert or shared), and `plan --base X` without `PATH` stays expert.
 - **SC-006** An ambiguous base never produces a candidate for that repository (tests: no `refs/remotes/origin/HEAD`, two remotes, dangling HEAD).
 - **SC-007** Stale checks: moving HEAD, the branch tip or the base between plan and apply makes apply refuse with `stale` and change nothing.
 - **SC-008** Output bounds hold under 5000 candidates; `esc` holds for ANSI, CR, NUL and bidi in branch names, tasks and paths.
 - **SC-009** `make check` and `scripts/check-docs.py` pass; independent review of the exact head is CLEAR.
+- **SC-010** With worktrees of Claude, Codex and an unknown owner present, a human `stw tidy` with no flag lists all of them grouped by owner with the owner column; JSON carries `owner`, `owner_source`, `scope` for each.
+- **SC-011** Answering `a` selects own safe items only; an other or unknown item is in the stored plan only if chosen by number or `o` with the typed `/dev/tty` confirmation, and is then marked in plan and prompt.
+- **SC-012** `--mine` lists and plans own items only (agent mode: only `task-record` owners); agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized` and changes nothing; editing `authorized_scopes` in the store changes the plan id and is refused; with it set by the human path it applies.
+- **SC-013** State directories: the shared default is used by both commands; repeatable `--state-dir` finds records in several stores; missing and ambiguous records give their reasons and hints; an unsafe store is skipped with exit 1 at the end.
+- **SC-014** Mode detection: pty with `STW_AGENT` or an agent marker yields agent mode; both streams on terminals without markers yields human mode; the mode evidence is in plan, journal and `history`; `--mine` forces agent mode.
+- **SC-015** The branch leg: HEAD attached to the base branch never gets a leg; a failed retirement skips the leg; the leg re-checks Spec 011 protections and the planned tip OID.
+- **SC-016** A recently active other or unknown worktree is `retain` `recently-active`; an old one with no commit carries `no-work`.
 
 ## Open questions
 
@@ -379,15 +454,17 @@ Each has a recommended default; the foreman decides.
 3. **Base source.** Recommended: remote symbolic HEAD only in v1, workspace config (`.stw/tidy.toml`, key `base` per repository) as a follow-up if a
    repository lacks a symbolic HEAD. Alternative: ship the config now.
 4. **State directory default location.** Recommended `$XDG_STATE_HOME/stw/tidy`. Alternative: inside the workspace repository's `.stw/` (rejected: inside a repository).
-5. **`locked-stw` as `decision`.** Recommended: selectable with a second confirmation. Alternative: always `retain` until the owner unlocks (safer, but leaves the 61 worktrees locked).
+5. **`locked-stw` as `decision`.** Now only for an stw-format lock without a (matching) record. Recommended: selectable in human mode through the legacy completion with a second confirmation. Alternative: always `retain`.
 6. **Plan set versus single plans.** Recommended: plan set of independent sub-plans (keeps the Spec 029 one-worktree rule). Alternative: lift the rule to batch plans (larger review surface).
 7. **Wizard flags `--only`, `--repo`.** Recommended: keep, small. Alternative: omit in v1.
 8. **Tracking refs in the default analysis.** Recommended: only with `--online` (contract 3 needs it); offline wizard skips them with a notice.
 9. **jj in the wizard.** Recommended: include bookmarks and empty working-copy retirement exactly as Spec 011; no new jj proof.
 10. **Prompt library.** Recommended: plain line prompts on stdin/stdout, no dependency. Alternative: a TUI library (rejected: pinned-dependency cost).
-12. **Human versus agent mode detection.** Recommended: human only when stdin and stdout are terminals and `STW_AGENT` is unset; everything else is agent mode (narrow, safe). Alternative: an explicit `--as-agent` flag (rejected: an agent could omit it).
+12. **Human versus agent mode detection.** Recommended: the accident guard of Mode detection (both terminals, no `STW_AGENT`, no agent marker table). Alternative: an explicit `--as-agent` flag (rejected: an agent could omit it).
 13. **Owner of an unregistered worktree.** Recommended: ordered derivation task record, then path/branch-prefix table (`/tmp/whr*` and `codex/` = codex, `claude/` = claude, others unknown) extendable in workspace config, then `unknown`; the branch-tip author is shown as a hint only and never grants `own`. Alternative: author-based owner (rejected: agents commit under the human's identity).
 14. **Removing an unregistered foreign worktree.** Recommended: via the Spec 029 legacy completion path (exact path, declared complete by the human's explicit choice, same proofs). Alternative: refuse until adopted into a registration (safer, slower).
+15. **Recently-active window and bare `stw tidy`.** Recommended: 24 hours for `other`/`unknown` scope, and bare `stw tidy` becomes the wizard (it printed help; `--help` stays). Alternative: 4 hours; bare `stw tidy` stays help and the wizard is `stw tidy wizard`.
+16. **Workspace config list of state dirs.** Recommended: ship flags and `$STW_STATE_DIR` first, the config key with OQ3. Alternative: ship both together.
 11. **`stw status` hint.** Recommended: the `branches-unmerged` and `worktree-stale` items (Spec 037 rows 23, 24) change their suggested command to `stw tidy` once this ships.
 
 ## Docs impact
@@ -395,7 +472,7 @@ Each has a recommended default; the foreman decides.
 `docs/tidy.md` (wizard section first, lifecycle workspace -> work -> retirement, the position rule, reason codes, derived defaults, plan set),
 `docs/commands.md` (rows and examples), `docs/json-contracts.md` and `schemas/v2/tidy-overview.schema.json` with fixtures and freeze
 digest, `docs/agent-guide.md` (agents plan and `--save`, never apply without the owner), `docs/workspaces.md` (retirement after a
-branch switch), `docs/status.md` and Spec 037 rows 23 and 24 (suggested command, OQ11), `docs/progress.md`, `docs/README.md`,
+branch switch, the shared default state directory of `stw workspace`, `--state-dir` for helper scripts), `docs/status.md` and Spec 037 rows 23 and 24 (suggested command, OQ11), `docs/progress.md`, `docs/README.md`,
 `docs/roadmap.md`, `docs/feature-status.json` (status `planned`), `docs/development.md` if a state-directory default needs
 mentioning. Specs 011 and 029 get a pointer to this spec; their text is not rewritten.
 
