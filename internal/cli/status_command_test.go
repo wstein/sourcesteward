@@ -123,7 +123,7 @@ func TestStatusIsOnlineByDefault(t *testing.T) {
 	if run.err != nil || run.opened != 1 || run.locals != 1 || run.discovered != 1 || forge.reads == 0 {
 		t.Fatalf("%+v %d reads", run, forge.reads)
 	}
-	for _, want := range []string{"Needs action: nothing\n", "Repositories\n", "remote: no open PRs, main CI green, no release drafts", "summary: nothing needs action | 1 repository | 0 notices\n"} {
+	for _, want := range []string{"Needs action: nothing\n", "Repositories\n", "remote: no open PRs, main CI green, no release drafts", "issues: 0 open (0 red, 0 yellow)\n", "summary: nothing needs action | 1 repository | 0 notices\n"} {
 		if !strings.Contains(run.out, want) {
 			t.Errorf("missing %q in\n%s", want, run.out)
 		}

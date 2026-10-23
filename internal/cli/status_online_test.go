@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/issues"
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/statuscmd"
@@ -64,7 +65,12 @@ func onlineReport() statuscmd.Report {
 				{Pattern: "v*.*.*", Tag: "v1.0.0", SHA: strings.Repeat("a", 40), Latest: false},
 			},
 			Main: &overview.Main{Branch: "main", Head: onlineSHA, Class: "red", BehindOrigin: &behind},
+			Issues: []overview.Issue{
+				{Number: 12, Title: "leak", URL: "https://github.com/wstein/sourcesteward/issues/12", Author: "alice", Reason: overview.IssueReasonSecurity, Labels: []string{"security"}},
+				{Number: 13, Title: "review me", URL: "https://github.com/wstein/sourcesteward/issues/13", Author: "bob", Reason: overview.IssueReasonAssigned, Assignees: []string{"wstein"}},
+			},
 		},
+		Issues: &statusremote.Issues{State: onlineOK, Open: 5, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}},
 		Pulls: &statusremote.Pulls{State: onlineOK, Open: statusPtrTo(3), Counts: pulls.Summary{Total: 3, Ready: 1, Draft: 1, Blocked: 1},
 			PRs: []overview.PR{
 				{Number: 57, Group: overview.GroupReady}, {Number: 58, Draft: true, Group: overview.GroupDraft}, {Number: 59, Group: overview.GroupBlocked, Reason: "checks-red"},
@@ -75,10 +81,12 @@ func onlineReport() statuscmd.Report {
 		}},
 	}
 	steward.Remote.Tags = append(steward.Remote.Tags, steward.CIRelease.ReleaseTags()...)
+	disabled := onlineSources(onlineOK)
+	disabled[overview.SourceIssues] = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonIssuesDisabled}
 	crewbook := statusremote.RepoResult{
 		Name: "crewbook", Slug: "wstein/crewbook",
 		Remote: &overview.Remote{
-			Sources: onlineSources(onlineOK), DefaultBranch: "main", HTMLURL: "https://github.com/wstein/crewbook", Visibility: overview.NoWriteAccess,
+			Sources: disabled, DefaultBranch: "main", HTMLURL: "https://github.com/wstein/crewbook", Visibility: overview.NoWriteAccess,
 			Pulls: []overview.PR{{Number: 12, Title: "Update docs", URL: "https://github.com/wstein/crewbook/pull/12", Author: "carol", Group: overview.GroupConflict}},
 			Main:  &overview.Main{Branch: "main", Head: strings.Repeat("c", 40), Class: "green"},
 		},
@@ -97,10 +105,11 @@ func onlineReport() statuscmd.Report {
 				{Number: 4, Title: "bump b", URL: "https://github.com/wstein/workharbor/pull/4", Author: "dependabot[bot]", Bot: true, Group: overview.GroupChecks},
 			},
 		},
-		Pulls: &statusremote.Pulls{State: onlineOK, Open: statusPtrTo(2), Counts: pulls.Summary{Total: 2, Ready: 1, Checks: 1, Bots: 2}, PRs: []overview.PR{{Number: 3, Bot: true, Group: overview.GroupReady}, {Number: 4, Bot: true, Group: overview.GroupChecks}}},
+		Pulls:  &statusremote.Pulls{State: onlineOK, Open: statusPtrTo(2), Counts: pulls.Summary{Total: 2, Ready: 1, Checks: 1, Bots: 2}, PRs: []overview.PR{{Number: 3, Bot: true, Group: overview.GroupReady}, {Number: 4, Bot: true, Group: overview.GroupChecks}}},
+		Issues: &statusremote.Issues{State: onlineOK},
 	}
 	gone := statusremote.RepoResult{Name: "gone", Remote: &overview.Remote{Sources: onlineSources(overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotReadLocally})}}
-	res := statusremote.Result{Repos: []statusremote.RepoResult{steward, crewbook, harbor, gone}, Timeout: 90 * time.Second}
+	res := statusremote.Result{Repos: []statusremote.RepoResult{steward, crewbook, harbor, gone}, Viewer: onlineOK, Timeout: 90 * time.Second}
 	return statuscmd.Report{Time: time.Date(2026, 10, 22, 9, 30, 0, 0, time.UTC), Local: local, Remote: res, Overview: overview.Build(res.Input("/ws", local.Repos))}
 }
 
@@ -129,7 +138,7 @@ func TestOnlineTextGoldens(t *testing.T) {
 
 func TestOnlineTextSections(t *testing.T) {
 	out := renderOnline(t, onlineReport(), statuscmd.Unicode, false, false)
-	order := []string{"Needs action: 13 items", "\nRepositories\n", "\nNotices\n", "\nsummary: 3 red, 5 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices\n"}
+	order := []string{"Needs action: 15 items", "\nRepositories\n", "\nNotices\n", "\nsummary: 4 red, 6 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices\n"}
 	last := -1
 	for _, want := range order {
 		i := strings.Index(out, want)
@@ -142,6 +151,9 @@ func TestOnlineTextSections(t *testing.T) {
 		"2 bot PRs: #3, #4\n     run: stw pulls --repo wstein/workharbor --bots-only",
 		"remote: 1 open PR (1 conflict), main CI green, release drafts not visible (no write access)",
 		"remote: not read (not-read-locally)",
+		"issues: 5 open (1 red, 2 yellow)\n",
+		"issues: disabled\n",
+		"issues: 0 open (0 red, 0 yellow)\n",
 		"1 stash\n",
 	} {
 		if !strings.Contains(out, want) {
@@ -186,7 +198,7 @@ func TestOnlineTextCapsALongSectionAndKeepsTheCount(t *testing.T) {
 			rep.Remote.Repos = append(rep.Remote.Repos, statusremote.RepoResult{Name: name, Slug: slug, Remote: &overview.Remote{
 				Sources: onlineSources(onlineOK), Visibility: overview.WriteAccess, Main: &overview.Main{Branch: "main", Head: strings.Repeat("e", 40), Class: "green"},
 				Pulls: []overview.PR{{Number: i + 1, Title: "t", URL: "https://github.com/" + slug + "/pull/1", Author: "a", Group: overview.GroupConflict}},
-			}, Pulls: &statusremote.Pulls{State: onlineOK, Open: statusPtrTo(1), Counts: pulls.Summary{Total: 1, Conflict: 1}}})
+			}, Pulls: &statusremote.Pulls{State: onlineOK, Open: statusPtrTo(1), Counts: pulls.Summary{Total: 1, Conflict: 1}}, Issues: &statusremote.Issues{State: onlineOK}})
 		}
 		rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 		out := renderOnline(t, rep, statuscmd.ASCII, false, false)
@@ -297,5 +309,94 @@ func TestOnlineTextGroupsAndNamesThreeIdentifiers(t *testing.T) {
 	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
 	if !strings.Contains(out, "5 PRs have conflicts: #1, #2, #3, +2 more\n     run: stw pulls --repo wstein/crewbook\n") {
 		t.Errorf("%s", out)
+	}
+}
+
+func TestIssuesLineTexts(t *testing.T) {
+	rr := onlineReport().Remote.Repos[0]
+	for name, tc := range map[string]struct {
+		state  overview.SourceState
+		issues *statusremote.Issues
+		want   string
+	}{
+		"counts":    {onlineOK, &statusremote.Issues{State: onlineOK, Open: 40, Counts: issues.Counts{Red: 3, Yellow: 7, Blue: 20, Violet: 10}}, "issues: 40 open (3 red, 7 yellow)"},
+		"truncated": {onlineOK, &statusremote.Issues{State: onlineOK, Open: 1000, Counts: issues.Counts{Red: 1, Blue: 999}, Truncated: true}, "issues: 1000+ open (1 red, 0 yellow, truncated)"},
+		"disabled":  {overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonIssuesDisabled}, nil, "issues: disabled"},
+		"deadline":  {overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}, nil, "issues: not read (deadline)"},
+		"no token":  {overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNoToken}, nil, "issues: not read (no-token)"},
+		"offline":   {overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonOffline}, nil, "issues: not read (offline)"},
+		"failed":    {overview.SourceState{Outcome: overview.OutcomeError, Code: "rate-limited"}, nil, "issues: not read (rate-limited)"},
+		"hostile":   {overview.SourceState{Outcome: overview.OutcomeError, Code: "x\x1b[31m"}, nil, `issues: not read (x\x1b[31m)`},
+	} {
+		rr.Issues, rr.Remote.Sources = tc.issues, onlineSources(onlineOK)
+		rr.Remote.Sources[overview.SourceIssues] = tc.state
+		if got := statusIssuesLine(rr); got != tc.want {
+			t.Errorf("%s: %q, want %q", name, got, tc.want)
+		}
+	}
+	// what is a fact of the repository is told by the remote line alone
+	for _, reason := range []string{overview.ReasonNotGitHub, overview.ReasonOtherHost, overview.ReasonNotReadLocally, overview.ReasonInvalidRepo} {
+		rr.Remote.Sources = onlineSources(overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: reason})
+		if got := statusIssuesLine(rr); got != "" {
+			t.Errorf("%s: %q", reason, got)
+		}
+	}
+}
+
+// The remote line is about the six sources it always was; the issues source has a line of its own.
+func TestTheRemoteLineIgnoresTheIssuesSource(t *testing.T) {
+	rr := onlineReport().Remote.Repos[0]
+	rr.Remote.Sources[overview.SourceIssues] = overview.SourceState{Outcome: overview.OutcomeError, Code: "network"}
+	if got := statusRemoteLine(rr); strings.Contains(got, "issues") || strings.Contains(got, "network") {
+		t.Errorf("%s", got)
+	}
+}
+
+func TestOnlineTextGroupsIssuesOfOneKind(t *testing.T) {
+	rep := onlineReport()
+	r0 := rep.Remote.Repos[0].Remote
+	r0.Issues = nil
+	for _, n := range []int{12, 15, 19} {
+		r0.Issues = append(r0.Issues, overview.Issue{Number: n, Title: "t", URL: "https://github.com/wstein/sourcesteward/issues/1", Author: "a", Reason: overview.IssueReasonSecurity})
+	}
+	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
+	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
+	if !strings.Contains(out, "3 security issues: #12, #15, #19\n     run: stw issues --repo wstein/sourcesteward\n") {
+		t.Errorf("%s", out)
+	}
+}
+
+// Blue and violet issues are only counted; the remote line names the drill-down when there are any (Spec 038).
+func TestTheRemoteLineNamesTheIssuesDrillDown(t *testing.T) {
+	rr := onlineReport().Remote.Repos[0]
+	const hint = "other issues: stw issues --repo wstein/sourcesteward"
+	if got := statusRemoteLine(rr); !strings.HasSuffix(got, ", "+hint) {
+		t.Errorf("blue and violet issues exist: %s", got)
+	}
+	for name, c := range map[string]issues.Counts{"blue": {Blue: 1}, "violet": {Violet: 1}} {
+		rr.Issues = &statusremote.Issues{State: onlineOK, Open: 1, Counts: c}
+		if got := statusRemoteLine(rr); !strings.Contains(got, hint) {
+			t.Errorf("%s: %s", name, got)
+		}
+	}
+	rr.Issues = &statusremote.Issues{State: onlineOK, Open: 2, Counts: issues.Counts{Red: 1, Yellow: 1}}
+	if got := statusRemoteLine(rr); strings.Contains(got, "stw issues") {
+		t.Errorf("only red and yellow issues, all of them items: %s", got)
+	}
+	rr.Issues = &statusremote.Issues{State: onlineOK, Open: 1, Counts: issues.Counts{Blue: 1}}
+	rr.Remote.Sources[overview.SourceIssues] = overview.SourceState{Outcome: overview.OutcomeError, Code: "network"}
+	if got := statusRemoteLine(rr); strings.Contains(got, "stw issues") {
+		t.Errorf("issues that were not read have no count to point to: %s", got)
+	}
+}
+
+// The issues source has no say in the remote line: six sources that were not read give "not read" however well
+// the issues were read.
+func TestTheRemoteLineIsNotReadWhenOnlyTheIssuesWereRead(t *testing.T) {
+	rr := onlineReport().Remote.Repos[0]
+	rr.Remote.Sources = onlineSources(overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline})
+	rr.Remote.Sources[overview.SourceIssues] = onlineOK
+	if got := statusRemoteLine(rr); got != "remote: not read (deadline)" {
+		t.Errorf("%s", got)
 	}
 }
