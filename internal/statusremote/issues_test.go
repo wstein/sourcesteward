@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -171,13 +172,18 @@ func TestARateLimitStopsTheIssuesSource(t *testing.T) {
 		w := newWorld()
 		w.errs["issues o/a#1"] = &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "m"}
 		release, four := make(chan struct{}), make(chan struct{})
+		// A failing assertion ends the bubble while readers still block on these channels, and synctest
+		// then panics the whole test binary: always open both exactly once, whichever way the test ends.
+		var openRelease, openFour sync.Once
+		defer openRelease.Do(func() { close(release) })
+		defer openFour.Do(func() { close(four) })
 		var started atomic.Int32
 		w.hook = func(ctx context.Context, call string) error {
 			if !strings.HasPrefix(call, "issues ") {
 				return nil
 			}
 			if started.Add(1) == 4 {
-				close(four)
+				openFour.Do(func() { close(four) })
 			}
 			if call == "issues o/a#1" {
 				<-four // the evidence arrives while the other three reads are in flight
@@ -190,13 +196,13 @@ func TestARateLimitStopsTheIssuesSource(t *testing.T) {
 		for i := 0; i < 8; i++ {
 			repos = append(repos, repository(fmt.Sprintf("o/%c", 'a'+i)))
 		}
-		done := make(chan Result)
+		done := make(chan Result, 1) // buffered: Collect may finish after a failed assertion has returned
 		go func() { done <- Collect(context.Background(), repos, (&opener{client: w}).options()) }()
 		synctest.Wait() // o/a has failed, the other three reads of the pool are in flight, the rest wait for a slot
 		if got := started.Load(); got != 4 {
 			t.Fatalf("%d reads in flight, want the pool of 4", got)
 		}
-		close(release)
+		openRelease.Do(func() { close(release) })
 		res := <-done
 		if n := w.count("issues "); n != 4 {
 			t.Errorf("%d issue reads, want the 4 that were in flight: none may start after the rate limit", n)
