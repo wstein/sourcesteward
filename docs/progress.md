@@ -43,6 +43,8 @@ stays `planned`; `restack apply`, jj and the push are later slices.
 [The specification](../specs/041-tidy-wizard/spec.md), its [plan](../specs/041-tidy-wizard/plan.md) and
 [tasks](../specs/041-tidy-wizard/tasks.md) propose `stw tidy` as a workspace-wide wizard (overview of all repositories and owners, choice, stored plan set, `stw tidy apply <plan-id>`), derived defaults, the fix of the `changed-ownership` refusal after a branch switch (issue #174) and ownership as a view (a human sees everything; agents are narrowed). Documentation only: no code changed; open questions await the foreman. No build, release, tag or push of the default branch was run.
 
+WP-1 (issue #174) is implemented in `internal/workspace` on a Draft pull request awaiting independent review: owned retirement now uses the identity part of `Verify` (`VerifyIdentity`) and a position rule (HEAD, attached or detached, must contain the recorded creation commit), and `TidyV3BranchLeg`/`ApplyTidyV3BranchLeg` add the dependent branch leg. Known gap, not fixed: retirement proves integration by native ancestry only, so a rebase-merged head (different SHA) is planned but retained (`integration-not-proven`); T001 and T003 stay open until the owner decides how the patch-id classes reach retirement. The old `attached-current-head` plan-validation case was removed because attached heads are now valid. Evidence is in the pull request; T005 stays open.
+
 ## Spec 040 concurrency discipline (specification proposed, 2026-10-22)
 
 [The specification](../specs/040-concurrency-discipline/spec.md), its [plan](../specs/040-concurrency-discipline/plan.md) and
