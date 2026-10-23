@@ -93,7 +93,8 @@ lane, the pinned Git version and the installer hash; a hit skips the build and t
 preflight still asserts the exact Git version. Caches written by a branch or PR are visible
 only to that ref and its children, and never to other forks' runs (GitHub's default scoping).
 CI is tiered so stacked PRs do not repeat the heavy suite. The `check` job (static checks
-and the race suite) always runs. The two `Git/jj conformance` lanes live in the reusable
+and the plain Go test suite) always runs; `-race` never runs on a pull request or a push
+(Spec 039), only in the scheduled race workflow. The two `Git/jj conformance` lanes live in the reusable
 workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for pushes to `main`, for PRs
 whose base is the default branch, and for any PR that carries the `ci-full` label when it is
 opened or pushed; a PR stacked on another PR branch skips it otherwise. The separate workflow
@@ -117,7 +118,7 @@ schedule, tags, the `ci-full` label run) give `false`. There is no `paths-ignore
 workflow still starts and reports. `conformance.yml` receives `docs_only`; its `shard` job is
 skipped only when `docs_only` is `true` on a `pull_request`, and the lane's `suite` job (always
 runs) passes on `success`, or on `skipped` only for that same docs-only pull request; failed,
-cancelled or skipped-otherwise fails it. `check` (static and documentation checks, the race
+cancelled or skipped-otherwise fails it. `check` (static and documentation checks, the Go test
 suite) and the docs, architecture and spec checks inside it always run.
 Never require a per-shard check: a shard skipped inside a matrix reports under the
 unexpanded matrix name and would stay pending. Require only checks that always report:
@@ -135,14 +136,14 @@ The heavy `internal/workspace` package is sharded. `scripts/ci_shards.py` lists 
 tests, assigns them to four shards by greedy longest-processing-time using the committed
 `scripts/ci-test-weights.json` (unlisted tests get the default weight, so a new test is always
 assigned) and prints each shard's `-run` regex. In `conformance.yml`, jobs `shard 1` to
-`shard 4` run one shard each with `-race -count=1 -timeout 40m`; `shard 0` runs every other
+`shard 4` run one shard each with `-count=1 -timeout 40m`; `shard 0` runs every other
 package and `shard 5` the real-CLI smoke checks
 (its own job, so the smoke scripts no longer lengthen shard 0). The aggregate job `suite` needs the shards of its own
 lane only, so the lane's check name stays stable. The `check` job runs
 `python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
 list none. When the conformance tier applies to the event (the same expression as the
 conformance `if:`, held once in the workflow-level `CONFORMANCE_TIER` value), `check` runs
-`-race` on every package except `internal/workspace`, which the shards cover under `-race` on
+`go test` on every package except `internal/workspace`, which the shards cover on
 both lanes with jj; otherwise it runs `./...`, so nothing is skipped. The weights are local
 non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change
 (the fixture speed-up work will do that).
