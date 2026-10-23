@@ -14,6 +14,11 @@ on:
         required: false
         default: 'false'
         type: string
+      race:
+        description: True for the scheduled race runs (race.yml); every pull request and push path leaves it false
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -104,17 +109,24 @@ jobs:
         if: matrix.shard != 0 && matrix.shard != 5
         env:
           SHARD: ${{ matrix.shard }}
+          RACE: ${{ inputs.race }}
         run: |
+          race_flag=
+          if [ "$RACE" = true ]; then race_flag=-race; fi
           regex="$(python3 -B scripts/ci_shards.py regex --shard "$SHARD" --shards "$SHARD_COUNT")"
           test -n "$regex"
-          go test -count=1 -timeout 40m -run "$regex" ./internal/workspace
+          go test -count=1 -timeout 40m $race_flag -run "$regex" ./internal/workspace
       - name: Other packages with real backends, schema conformance
         if: matrix.shard == 0
+        env:
+          RACE: ${{ inputs.race }}
         run: |
+          race_flag=
+          if [ "$RACE" = true ]; then race_flag=-race; fi
           packages="$(python3 -B scripts/ci_shards.py packages)"
           set -- $packages
           test "$#" -gt 1
-          go test -count=1 -timeout 40m "$@"
+          go test -count=1 -timeout 40m $race_flag "$@"
       - name: Real CLI inspection and zero-write acceptance
         if: matrix.shard == 5
         run: |
