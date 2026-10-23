@@ -100,9 +100,10 @@ func TestOnlineStatusSchemaFollowsTheActionModel(t *testing.T) {
 		}
 	}
 	var ids []string
-	for _, src := range overview.StatusSources {
+	for _, src := range overview.Sources {
 		ids = append(ids, string(src))
 	}
+	ids = append(ids, "viewer") // the one `user` read of the run is a source of the document, not of a repository
 	if got := strs(jobj(jobj(jobj(defs["source"])["properties"])["id"])["enum"]); !reflect.DeepEqual(got, append([]string{"local"}, ids...)) {
 		t.Errorf("source ids %v", got)
 	}
@@ -161,7 +162,40 @@ func TestOnlineStatusSchemaRejectsBrokenDocuments(t *testing.T) {
 		"unknown skip reason":        func(m map[string]any) { jobj(jobj(m["repos"].([]any)[3])["remote"])["reason"] = "tired" },
 		"bad repo name":              func(m map[string]any) { jobj(jobj(m["repos"].([]any)[0])["remote"])["repo"] = "no-slash" },
 		"extra source": func(m map[string]any) {
-			jobj(jobj(jobj(m["repos"].([]any)[0])["remote"])["sources"])["issues"] = sourceOf(m, 0, "repo")
+			jobj(jobj(jobj(m["repos"].([]any)[0])["remote"])["sources"])["wiki"] = sourceOf(m, 0, "repo")
+		},
+		"missing issues source": func(m map[string]any) {
+			delete(jobj(jobj(jobj(m["repos"].([]any)[0])["remote"])["sources"]), "issues")
+		},
+		"issues data with an extra key":   func(m map[string]any) { jobj(sourceOf(m, 0, "issues")["data"])["x"] = 1 },
+		"issues data without truncated":   func(m map[string]any) { delete(jobj(sourceOf(m, 0, "issues")["data"]), "truncated") },
+		"issues data negative":            func(m map[string]any) { jobj(sourceOf(m, 0, "issues")["data"])["red"] = -1 },
+		"issues data truncated as number": func(m map[string]any) { jobj(sourceOf(m, 0, "issues")["data"])["truncated"] = 1 },
+		"issues-disabled on another source": func(m map[string]any) {
+			s := sourceOf(m, 2, "ci_main")
+			s["reason"] = "issues-disabled"
+		},
+		"issue without a number":     func(m map[string]any) { jobj(actionOf(t, m, "issue-security")["subject"])["number"] = nil },
+		"issue kind on a pr":         func(m map[string]any) { jobj(actionOf(t, m, "pr-ready")["subject"])["kind"] = "issue" },
+		"pr kind on an issue":        func(m map[string]any) { jobj(actionOf(t, m, "issue-security")["subject"])["kind"] = "pr" },
+		"yellow security issue":      func(m map[string]any) { actionOf(t, m, "issue-security")["priority"] = "yellow" },
+		"red assigned issue":         func(m map[string]any) { actionOf(t, m, "issue-assigned")["priority"] = "red" },
+		"issue evidence unknown key": func(m map[string]any) { jobj(actionOf(t, m, "issue-security")["evidence"])["x"] = 1 },
+		"issue evidence reason of a pr": func(m map[string]any) {
+			jobj(actionOf(t, m, "issue-security")["evidence"])["reason"] = "checks-red"
+		},
+		"issue evidence without labels": func(m map[string]any) { delete(jobj(actionOf(t, m, "issue-security")["evidence"]), "labels") },
+		"issue with 21 labels": func(m map[string]any) {
+			jobj(actionOf(t, m, "issue-security")["evidence"])["labels"] = many(21, func(i int) any { return fmt.Sprintf("l%d", i) })
+		},
+		"issue with 21 assignees": func(m map[string]any) {
+			jobj(actionOf(t, m, "issue-security")["evidence"])["assignees"] = many(21, func(i int) any { return fmt.Sprintf("a%d", i) })
+		},
+		"no evidence for an issue": func(m map[string]any) { actionOf(t, m, "issue-security")["evidence"] = nil },
+		"eight sources":            func(m map[string]any) { m["sources"] = m["sources"].([]any)[:8] },
+		"viewer before issues": func(m map[string]any) {
+			s := m["sources"].([]any)
+			s[7], s[8] = s[8], s[7]
 		},
 		"missing source": func(m map[string]any) {
 			delete(jobj(jobj(jobj(m["repos"].([]any)[0])["remote"])["sources"]), "ci_main")

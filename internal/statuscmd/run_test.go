@@ -59,6 +59,7 @@ type forgeFake struct {
 	calls []string
 	err   error
 	draft bool
+	issue bool // the repository has one open issue labelled security
 }
 
 func (f *forgeFake) enter(call string) error {
@@ -103,7 +104,11 @@ func (f *forgeFake) Statuses(_ context.Context, repo, _ string, _ int, _ string)
 }
 
 func (f *forgeFake) IssuesPage(_ context.Context, repo string, _ int) (hosting.WatchResponse, error) {
-	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, f.enter("issues " + repo)
+	body := `[]`
+	if f.issue {
+		body = `[{"number":7,"title":"leak","html_url":"https://github.com/` + repo + `/issues/7","created_at":"2026-10-20T09:00:00Z","comments":0,"user":{"login":"alice","type":"User"},"labels":[{"name":"security"}],"assignees":[]}]`
+	}
+	return hosting.WatchResponse{Status: 200, Body: []byte(body)}, f.enter("issues " + repo)
 }
 
 func (f *forgeFake) Viewer(context.Context) (string, error) { return "wstein", f.enter("user") }
@@ -179,6 +184,28 @@ func TestRunReadsTheGitHubRepositoryOnly(t *testing.T) {
 	}
 	if !drafts || !repoErr {
 		t.Fatalf("the model must combine the remote and local findings: %+v", rep.Overview.Items)
+	}
+}
+
+func TestRunReadsTheIssuesAndTheViewer(t *testing.T) {
+	forge := &forgeFake{issue: true}
+	rep, _ := runWith(t, forge, nil, nil)
+	root, sub := rep.Remote.Repos[0], rep.Remote.Repos[1]
+	if root.Remote.Sources[overview.SourceIssues].Outcome != overview.OutcomeOK || root.Issues == nil || root.Issues.Open != 1 {
+		t.Fatalf("%+v %+v", root.Remote.Sources, root.Issues)
+	}
+	if sub.Remote.Sources[overview.SourceIssues].Reason != overview.ReasonOtherHost {
+		t.Fatalf("%+v", sub.Remote.Sources)
+	}
+	if rep.Remote.Viewer.Outcome != overview.OutcomeOK {
+		t.Fatalf("%+v", rep.Remote.Viewer)
+	}
+	var found bool
+	for _, it := range rep.Overview.Items {
+		found = found || (it.Category == overview.IssueSecurity && it.Repo == "acme/root" && it.Subject.Number == 7)
+	}
+	if !found {
+		t.Fatalf("the security issue is an action: %+v", rep.Overview.Items)
 	}
 }
 
@@ -479,6 +506,12 @@ func TestADeadlineThatCutsTheReadsIsNoFailure(t *testing.T) {
 	})
 	if err != nil || rep.Failure() != nil || rep.Overview.Summary.Failed || !rep.Overview.Summary.Degraded {
 		t.Fatalf("%v %v %+v", err, rep.Failure(), rep.Overview.Summary)
+	}
+	if got := rep.Remote.Repos[0].Remote.Sources[overview.SourceIssues]; got.Reason != overview.ReasonDeadline || got.Outcome != overview.OutcomeSkipped {
+		t.Errorf("the issues source is cut by the deadline, not failed: %+v", got)
+	}
+	if rep.Remote.Viewer.Reason != overview.ReasonDeadline {
+		t.Errorf("the viewer read is cut by the deadline too: %+v", rep.Remote.Viewer)
 	}
 	var deadline bool
 	for _, n := range rep.Overview.Notices {

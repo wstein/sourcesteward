@@ -83,7 +83,7 @@ type DocRemote struct {
 	Sources DocRepoSource `json:"sources"`
 }
 
-// DocRepoSource holds the six remote sources of one repository.
+// DocRepoSource holds the seven remote sources of one repository.
 type DocRepoSource struct {
 	Repo      DocSourceRead `json:"repo"`
 	Pulls     DocSourceRead `json:"pulls"`
@@ -91,6 +91,7 @@ type DocRepoSource struct {
 	Tags      DocSourceRead `json:"tags"`
 	CIMain    DocSourceRead `json:"ci_main"`
 	CIRelease DocSourceRead `json:"ci_release"`
+	Issues    DocSourceRead `json:"issues"`
 }
 
 // DocSourceRead is the outcome of one source of one repository: its data when it ended ok, the error
@@ -185,6 +186,19 @@ type DocReleaseTag struct {
 	Runs       []DocRun `json:"runs"`
 }
 
+// DocIssuesData is the data of the `issues` source: the number of open issues, their number per priority
+// (so Open is the sum of the four), the pull request entries of the list that were dropped and whether the
+// repository has more open items than the page limit allows.
+type DocIssuesData struct {
+	Open         int  `json:"open"`
+	Red          int  `json:"red"`
+	Yellow       int  `json:"yellow"`
+	Blue         int  `json:"blue"`
+	Violet       int  `json:"violet"`
+	PullsDropped int  `json:"pulls_dropped"`
+	Truncated    bool `json:"truncated"`
+}
+
 // DocReleaseData is the data of the `ci_release` source.
 type DocReleaseData struct {
 	Tags []DocReleaseTag `json:"tags"`
@@ -264,7 +278,7 @@ func summary(s overview.Summary) DocSummary {
 func action(it overview.Item) DocAction {
 	a := DocAction{
 		ID: it.ID, Priority: string(it.Priority), Category: string(it.Category), Repo: it.Repo, Path: nullable(it.Path),
-		Title: cut(it.Title, maxString), URL: nullable(overview.HTTPSURL(it.URL)), Evidence: it.Evidence,
+		Title: cut(it.Title, maxString), URL: nullable(overview.HTTPSURL(it.URL)), Evidence: cutEvidence(it.Evidence),
 		Command: nullable(it.Command), Effect: nullable(string(it.Effect)), Hint: nullable(it.Hint),
 		Subject: DocSubject{Kind: string(it.Subject.Kind), Tag: nullable(it.Subject.Tag), SHA: nullable(it.Subject.SHA), Name: nullable(cut(it.Subject.Name, maxString))},
 	}
@@ -274,13 +288,47 @@ func action(it overview.Item) DocAction {
 	return a
 }
 
-// remote summarises the six sources of one repository: ok when all are, skipped (with the reason of
+// cutEvidence bounds the strings of the evidence of an item, and the strings in its lists, to 2048 bytes.
+// The evidence of the model is not changed.
+func cutEvidence(ev map[string]any) map[string]any {
+	if ev == nil {
+		return nil
+	}
+	out := make(map[string]any, len(ev))
+	for k, v := range ev {
+		switch v := v.(type) {
+		case string:
+			out[k] = cut(v, maxString)
+		case []string:
+			cuts := make([]string, len(v))
+			for i, e := range v {
+				cuts[i] = cut(e, maxString)
+			}
+			out[k] = cuts
+		default:
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// outcome is the outcome of a source for the counts of the document. An issues source that is skipped
+// because the repository has its issues disabled has read everything there is: it is a fact about the
+// repository, as it is for the summary of the action model.
+func outcome(src overview.Source, st overview.SourceState) overview.Outcome {
+	if src == overview.SourceIssues && st.Outcome == overview.OutcomeSkipped && st.Reason == overview.ReasonIssuesDisabled {
+		return overview.OutcomeOK
+	}
+	return st.Outcome
+}
+
+// remote summarises the sources of one repository: ok when all are, skipped (with the reason of
 // the first) when none was read and none failed, error when every one failed, degraded otherwise.
 func remote(rr statusremote.RepoResult) DocRemote {
 	ok, skipped, failed := 0, 0, 0
 	reason := ""
-	for _, src := range overview.StatusSources {
-		switch st := rr.Remote.Sources[src]; st.Outcome {
+	for _, src := range overview.Sources {
+		switch st := rr.Remote.Sources[src]; outcome(src, st) {
 		case overview.OutcomeOK:
 			ok++
 		case overview.OutcomeSkipped:
@@ -294,11 +342,11 @@ func remote(rr statusremote.RepoResult) DocRemote {
 	}
 	out := DocRemote{Repo: nullable(rr.Slug), State: "degraded", Sources: sourceReads(rr)}
 	switch {
-	case ok == len(overview.StatusSources):
+	case ok == len(overview.Sources):
 		out.State = "ok"
-	case skipped == len(overview.StatusSources):
+	case skipped == len(overview.Sources):
 		out.State, out.Reason = "skipped", nullable(reason)
-	case failed == len(overview.StatusSources):
+	case failed == len(overview.Sources):
 		out.State = "error"
 	}
 	return out
@@ -325,6 +373,7 @@ func sourceReads(rr statusremote.RepoResult) DocRepoSource {
 		Tags:      read(overview.SourceTags, func() any { return tagsData(rr) }),
 		CIMain:    read(overview.SourceCIMain, func() any { return mainData(rr.Remote.Main) }),
 		CIRelease: read(overview.SourceCIRelease, func() any { return releaseData(rr.CIRelease) }),
+		Issues:    read(overview.SourceIssues, func() any { return issuesData(rr.Issues) }),
 	}
 }
 
@@ -386,6 +435,11 @@ func tagsData(rr statusremote.RepoResult) DocTagsData {
 	return d
 }
 
+func issuesData(i *statusremote.Issues) DocIssuesData {
+	c := i.Counts
+	return DocIssuesData{Open: i.Open, Red: c.Red, Yellow: c.Yellow, Blue: c.Blue, Violet: c.Violet, PullsDropped: i.Dropped, Truncated: i.Truncated}
+}
+
 func mainData(m *overview.Main) DocMainData {
 	return DocMainData{Branch: cut(m.Branch, maxString), Head: m.Head, Class: nullable(m.Class), BehindOrigin: m.BehindOrigin}
 }
@@ -427,10 +481,10 @@ func (r Report) sources() []DocSource {
 		}
 	}
 	out := []DocSource{local.withState()}
-	for _, src := range overview.StatusSources {
+	for _, src := range overview.Sources {
 		s := DocSource{ID: string(src)}
 		for _, rr := range r.Remote.Repos {
-			switch rr.Remote.Sources[src].Outcome {
+			switch outcome(src, rr.Remote.Sources[src]) {
 			case overview.OutcomeOK:
 				s.Read++
 			case overview.OutcomeError:
@@ -441,7 +495,24 @@ func (r Report) sources() []DocSource {
 		}
 		out = append(out, s.withState())
 	}
-	return out
+	return append(out, r.viewerSource().withState())
+}
+
+// viewerSource counts the one `user` read of the run, which is no repository's: read when it answered,
+// degraded when it failed, skipped when it was skipped (the token class cannot read it, no request was
+// made, no repository is on GitHub); a report that has no remote half (a failed local read) made no attempt
+// and counts nothing.
+func (r Report) viewerSource() DocSource {
+	s := DocSource{ID: "viewer"}
+	switch r.Remote.Viewer.Outcome {
+	case overview.OutcomeOK:
+		s.Read++
+	case overview.OutcomeError:
+		s.Degraded++
+	case overview.OutcomeSkipped:
+		s.Skipped++
+	}
+	return s
 }
 
 // withState sets the state of a source from its counts: ok when everything was read, skipped when
