@@ -60,6 +60,8 @@ type forgeFake struct {
 	err   error
 	draft bool
 	issue bool // the repository has one open issue labelled security
+	// issuePage, when set, is the body of the only page of the issue list.
+	issuePage string
 }
 
 func (f *forgeFake) enter(call string) error {
@@ -105,7 +107,9 @@ func (f *forgeFake) Statuses(_ context.Context, repo, _ string, _ int, _ string)
 
 func (f *forgeFake) IssuesPage(_ context.Context, repo string, _ int) (hosting.WatchResponse, error) {
 	body := `[]`
-	if f.issue {
+	if f.issuePage != "" {
+		body = f.issuePage
+	} else if f.issue {
 		body = `[{"number":7,"title":"leak","html_url":"https://github.com/` + repo + `/issues/7","created_at":"2026-10-20T09:00:00Z","comments":0,"user":{"login":"alice","type":"User"},"labels":[{"name":"security"}],"assignees":[]}]`
 	}
 	return hosting.WatchResponse{Status: 200, Body: []byte(body)}, f.enter("issues " + repo)
