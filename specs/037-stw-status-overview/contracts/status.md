@@ -25,7 +25,7 @@ Two documents, never mixed:
 | `note` | str or null | as v1 |
 | `actions` | array | the action items, ordered as in the spec (priority, category, repo, subject), every item, no cap |
 | `repos` | array | one object per repository: **all members of the v1 repository object unchanged** (`name`, `path`, `kind`, `state`, `head`, `branch`, ... `attention`, `reasons`, `error`) plus `remote` (below) |
-| `sources` | array | one entry per source id with `{id, state, read, degraded, skipped}`: counts of repositories per outcome (`ok` = `read`) |
+| `sources` | array | exactly seven entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, each `{id, state, read, degraded, skipped}`: counts of repositories per outcome (`ok` = `read`, `error` = `degraded`); `state` is `ok` (everything read), `skipped` (nothing read, nothing failed), `error` (everything failed) or `degraded` |
 | `notices` | array | `{code, source, repos, message}`: one per missing source, `message` sanitized, at most 512 bytes; `repos` array of repository names affected (at most 256) |
 | `summary` | object | see below |
 | `error` | object or null | run-level local failure only, as v1 (`code`, `message`) |
@@ -41,7 +41,7 @@ Two documents, never mixed:
 | `path` | str or null | workspace-relative path of the repository when local |
 | `title` | str | one-line text, the same words as the human item line |
 | `url` | str or null | deep link, `https` only (PR, release, actions page, repository) |
-| `subject` | object | `{kind, number, tag, sha}`: `kind` in `pr`, `release`, `tag`, `branch`, `repository`, `worktree`, `gitlink`, `fact`, `source` (`fact` for the local fact kinds `dirty`, `detached`, `untracked`, `behind`, `diverged`, `no-upstream`, `stash`, `operation`, `conflicts`, `branches`; `source` for `read-error`); the other keys null when not applicable |
+| `subject` | object | `{kind, number, tag, sha, name}` (`name` is the id part that is neither a number nor a tag: the fact kind, the branch, the path of a gitlink or worktree, the source id; null for `pr`, `release`, `tag`, `repository`): `kind` in `pr`, `release`, `tag`, `branch`, `repository`, `worktree`, `gitlink`, `fact`, `source` (`fact` for the local fact kinds `dirty`, `detached`, `untracked`, `behind`, `diverged`, `no-upstream`, `stash`, `operation`, `conflicts`, `branches`; `source` for `read-error`); the other keys null when not applicable |
 | `evidence` | object or null | small fixed facts for the category (for example `{"group":"ready","checks":"green","mergeable_state":"clean"}` for a PR; `{"drafts_visibility":"write-access","assets":4}` for a draft) |
 | `command` | str or null | suggested command, a hint that `stw` never runs; validated tokens only; null when no safe command exists (for example `tag-without-release`) |
 | `effect` | enum `read`, `owner`, or null | `read` = changes nothing when run; `owner` = changes something and is the owner's operation (`gh pr merge`, `gh release edit`, `git -C ROOT add PATH`); null exactly when `command` is null |
@@ -50,10 +50,10 @@ Two documents, never mixed:
 ### `repos[].remote`
 
 `{repo, state, reason, sources}`. `repo` `OWNER/NAME` or null; `state` `ok`, `degraded`, `skipped`, `error`; `reason` (only for `skipped`, else null) is one of `not-github-origin`, `other-host`,
-`not-read-locally`, `invalid-repo`, `offline`, `no-token`, `deadline`, `not-found`; failures are never skip reasons, they are source errors; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
-`ci_release`, each `{state, error}` with state `ok`, `skipped` (reasons `offline`, `no-token`, `deadline`, `not-found` (a 404 for the release workflow)) and `error` (a failed read) and `error` a code or null (`unauthorized`, `forbidden`,
+`not-read-locally`, `invalid-repo`, `offline`, `no-token`, `deadline`, `not-found`, `not-attempted`; failures are never skip reasons, they are source errors; `sources` an object with the keys `repo`, `pulls`, `releases`, `tags`, `ci_main`,
+`ci_release`, each `{state, error, reason, data}` with state `ok`, `skipped` (with a `reason`: `offline`, `no-token`, `deadline`, `not-found` (a 404 for the release workflow), `not-attempted` (a CI source whose input source failed) or one of the repository reasons above) and `error` (a failed read, with a code); `reason` is null unless skipped, `error` null unless failed, `data` null unless ok; the error code is one of (`unauthorized`, `forbidden`,
 `rate-limited`, `network`, `http-5xx`, `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases` (also the tags listing past page 10),
-`too-many-open-prs`, `contract-invalid` (`ci_release`: a release contract exists but is not usable); `network` is an error code, never a skip reason). The data of each source:
+`too-many-open-prs`, `contract-invalid` (`ci_release`: a release contract exists but is not usable), `hosting-api-unavailable` (the reader could not be opened for another reason than a missing token, for example no `gh`); `network` is an error code, never a skip reason). The data of each source:
 
 | Source key | Data (null when the source is not `ok`) |
 | --- | --- |
@@ -72,3 +72,29 @@ and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent 
 ## Exit status
 
 0 in exactly these situations: everything attempted succeeded, `--offline`, no usable token before any request (`no-token`), a deadline skip, a `not-found` skip (404 release workflow); items never matter. 1 on a single condition: an **attempted** request failed (any `error` source, including `network`), plus a repository unreadable locally or a run failure; 2 usage error.
+
+## Amendments recorded with the implementation
+
+Decisions taken while implementing the work packages; they refine the text above and the schema follows them.
+
+- **Per-source reason.** Every source of a repository is `{state, error, reason, data}`, so a deadline, a missing workflow
+  (`not-found`) and a source that was never attempted (`not-attempted`) are told apart per source and not only when the whole
+  repository was skipped. `remote.state` is `ok` (all six sources ok), `skipped` (all skipped, with the reason of the first),
+  `error` (all failed) or `degraded`.
+- **Dependent sources.** `ci-main` needs the default branch of the `repo` source and `ci-release` the tags of the `tags` source.
+  When that source failed, the CI source is not attempted and is `skipped` with `not-attempted` (its failure is reported once, as a
+  notice of the source that failed); when it was skipped, the CI source carries the same skip. An unusable release contract is
+  still `contract-invalid`.
+- **One pool.** All sources but the pull requests share one pool of four repositories; one worker reads `repo`, `releases`,
+  `tags`, `ci-main` and `ci-release` of a repository in this order.
+- **No usable token.** The text output is exactly the `--offline` output followed by the notices, with no Needs action section,
+  no `remote:` lines and no second summary. The JSON keeps the skipped states of the schema.
+- **Evidence keys by category** (all other categories have `evidence: null`): the `pr-*` categories `group` and, when set,
+  `reason` and `past_budget`; `release-draft` `drafts_visibility` (`write-access`) and `assets`; `release-run-failed`
+  `conclusion` and `released`; `main-red` `class`; `read-error` `source` and `code`; `repo-error` `code` (or null);
+  `local-changes` `staged` and `unstaged`; `local-operation` `operation` or `conflicts`; `local-behind` `behind` and, when
+  diverged, `ahead`; `local-untracked` `untracked`; `local-stash` `stash`; `branches-unmerged` `not_integrated`;
+  `gitlink-drift` and `gitlink-ahead` `relation`.
+- **Notices** use the singular for a count of one (`1 repository`, `1 source`).
+- **Out of this document.** The `viewer-unknown` skip reason and the issue sources of [Spec 038](../../038-stw-issues/spec.md)
+  join the document when that work lands, as optional additions to schema 2.
