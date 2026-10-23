@@ -62,7 +62,13 @@ func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconS
 		line("note: " + escapeReposLine(*rep.Local.Note))
 	}
 	marks := statusMarks{attention: icons.Attention(), failed: icons.Failure()}
-	writeStatusRepos(line, rep.Local, worktrees, paint, marks, func(i int) string { return statusRemoteLine(rep.Remote.Repos[i]) })
+	writeStatusRepos(line, rep.Local, worktrees, paint, marks, func(i int) []string {
+		rr := rep.Remote.Repos[i]
+		if issues := statusIssuesLine(rr); issues != "" {
+			return []string{statusRemoteLine(rr), issues}
+		}
+		return []string{statusRemoteLine(rr)}
+	})
 	if len(rep.Overview.Notices) > 0 {
 		line("")
 		line("Notices")

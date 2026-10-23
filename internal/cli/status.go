@@ -290,7 +290,7 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 
 // writeStatusRepos writes the block of every repository: one line, the extra facts and, with worktrees,
 // the linked worktrees. remote, when set, gives the line that goes right under the line of repository i.
-func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees bool, paint func(s, code string) string, marks statusMarks, remote func(i int) string) {
+func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees bool, paint func(s, code string) string, marks statusMarks, remote func(i int) []string) {
 	esc := escapeReposLine
 	nameWidth, branchWidth := 1, 1
 	branchOf := func(rp stwsync.RepoStatus) string {
@@ -319,7 +319,9 @@ func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees bool,
 		}
 		line(fmt.Sprintf("%s%-*s  %-*s  %s%s", paint(marker, code), nameWidth, esc(rp.Name), branchWidth, branchOf(rp), sync, changes))
 		if remote != nil {
-			line("    " + remote(i))
+			for _, l := range remote(i) {
+				line("    " + l)
+			}
 		}
 		for _, d := range statusDetails(rp) {
 			line("    " + paint(esc(d), "2"))

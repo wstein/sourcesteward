@@ -179,11 +179,6 @@ const (
 // Sources lists the remote sources in a fixed order.
 var Sources = []Source{SourceRepo, SourcePulls, SourceReleases, SourceTags, SourceCIMain, SourceCIRelease, SourceIssues}
 
-// StatusSources are the remote sources the online `stw status` reads: the sources of Spec 037 without the
-// issues source, whose orchestration is work package G of Spec 037 (Spec 038). The model, the action table and
-// the notices already know the issues source; the run, the output and the document list this set until WP-G.
-var StatusSources = Sources[:len(Sources)-1]
-
 // Outcome is how one source ended.
 type Outcome string
 
