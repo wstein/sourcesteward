@@ -48,6 +48,10 @@ func (f *statusForge) TagList(context.Context, string) ([]hosting.StatusTag, err
 func (f *statusForge) ListOpenPullItems(context.Context, string, int) ([]hosting.PullListItem, error) {
 	return nil, f.read()
 }
+func (f *statusForge) IssuesPage(context.Context, string, int) (hosting.WatchResponse, error) {
+	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, f.read()
+}
+func (f *statusForge) Viewer(context.Context) (string, error) { return "wstein", f.read() }
 func (f *statusForge) Branch(context.Context, string, string, string) (hosting.WatchResponse, error) {
 	return hosting.WatchResponse{Status: 200, Body: []byte(`{"name":"main","commit":{"sha":"` + strings.Repeat("a", 40) + `"}}`)}, f.read()
 }

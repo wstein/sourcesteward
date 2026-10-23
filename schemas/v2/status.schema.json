@@ -760,7 +760,8 @@
                       "releases",
                       "tags",
                       "ci-main",
-                      "ci-release"
+                      "ci-release",
+                      "issues"
                     ]
                   },
                   "code": {

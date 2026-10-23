@@ -44,7 +44,7 @@ type Options struct {
 }
 
 // RepoResult is what the remote sources read for one workspace repository. Remote carries the states of
-// all six sources and the data of those that ended `ok`, in the input form of overview.Build; the data of
+// all seven sources and the data of those that ended `ok`, in the input form of overview.Build; the data of
 // a source that did not end `ok` is empty. Pulls and CIRelease hold what the overview does not carry (the
 // counts of the pulls source, the runs and workflows of the release tags), and are nil unless their
 // source ended `ok`. Slug is empty for a repository that is skipped for what its origin is.
@@ -54,13 +54,16 @@ type RepoResult struct {
 	Remote    *overview.Remote
 	Pulls     *Pulls
 	CIRelease *CIRelease
+	Issues    *Issues
 }
 
 // Result is the outcome of Collect, one RepoResult per repository in the order of the input. Timeout is
 // the overall deadline that applied and RateLimitReset the reset time of the first rate-limit evidence
-// (zero when there was none or it gave no time): the two inputs of the notices of overview.Build.
+// (zero when there was none or it gave no time): the two inputs of the notices of overview.Build. Viewer
+// is the outcome of the one `user` read of the run (the zero value when there was none to make).
 type Result struct {
 	Repos          []RepoResult
+	Viewer         overview.SourceState
 	Timeout        time.Duration
 	RateLimitReset time.Time
 }
@@ -73,7 +76,7 @@ func (r Result) Input(root string, locals []stwsync.RepoStatus) overview.Input {
 	for _, rr := range r.Repos {
 		byName[rr.Name] = rr
 	}
-	in := overview.Input{Root: root, Deadline: r.Timeout, RateLimitReset: r.RateLimitReset, Repos: make([]overview.Repo, len(locals))}
+	in := overview.Input{Root: root, Viewer: r.Viewer, Deadline: r.Timeout, RateLimitReset: r.RateLimitReset, Repos: make([]overview.Repo, len(locals))}
 	for i, local := range locals {
 		in.Repos[i] = overview.Repo{Local: local}
 		if rr, ok := byName[local.Name]; ok {
@@ -87,8 +90,8 @@ func (r Result) Input(root string, locals []stwsync.RepoStatus) overview.Input {
 // fails as a whole, every outcome is the state of a source. Repositories whose origin is no GitHub
 // repository are skipped (see Select) and never cost a request. Under Offline, without a usable token
 // or when the reader cannot be opened, nothing is read and every source of the repositories that could
-// have been read carries the reason. Otherwise the pull request source and the others run side by side,
-// each over its own pool of four repositories, one repository after the other inside a source, all
+// have been read carries the reason. Otherwise the pull request source, the issues source and the others run
+// side by side, each over its own pool of four repositories, one repository after the other inside a source, all
 // under one deadline: when it passes (or ctx ends) requests not yet sent are dropped, requests in
 // flight are cancelled and the unfinished sources are skipped with the reason `deadline`, keeping what
 // the finished ones read. The first rate-limit evidence of any source stops every further request; the
@@ -113,8 +116,10 @@ func Collect(ctx context.Context, repos []Repository, o Options) Result {
 	defer cancel()
 	if len(c.selected) > 0 {
 		c.run(ctx, o)
+	} else { // no repository on GitHub: no `user` read is made (Spec 038)
+		c.viewerRead = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotGitHub}
 	}
-	res := Result{Repos: c.results(), Timeout: timeout}
+	res := Result{Repos: c.results(), Viewer: c.viewer(), Timeout: timeout}
 	if c.gate != nil {
 		res.RateLimitReset = c.gate.resetAt()
 	}
@@ -159,22 +164,25 @@ type slot struct {
 	products ReleaseProducts
 	main     CIMainResult
 	ci       CIReleaseResult
+	issues   Issues
 }
 
 // collector is the state of one run.
 type collector struct {
-	repos    []Repository
-	targets  []Target
-	selected []int // indices of the repositories that can be read
-	slots    []slot
-	gate     *gate
-	fallback *overview.SourceState // the state of every source of the selected repositories when nothing was read
+	repos      []Repository
+	targets    []Target
+	selected   []int // indices of the repositories that can be read
+	slots      []slot
+	gate       *gate
+	fallback   *overview.SourceState // the state of every source of the selected repositories when nothing was read
+	viewerRead overview.SourceState  // the outcome of the one `user` read
 }
 
-// read runs the pull request source and, beside it, all other sources on one pool of repositories.
+// read runs the pull request source, the issues source and, beside them, all other sources on one pool of repositories.
 func (c *collector) read(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { c.readPulls(ctx) })
+	wg.Go(func() { c.readIssues(ctx) })
 	wg.Go(func() { c.each(ctx) })
 	wg.Wait()
 }
@@ -237,6 +245,30 @@ func (c *collector) readPulls(ctx context.Context) {
 	}
 }
 
+func (c *collector) readIssues(ctx context.Context) {
+	targets := make([]Target, len(c.selected))
+	for i, idx := range c.selected {
+		targets[i] = c.targets[idx]
+	}
+	got := ReadIssues(ctx, c.gate, targets)
+	c.viewerRead = got.Viewer
+	for _, idx := range c.selected {
+		c.slots[idx].issues = got.Repos[c.targets[idx].Name]
+	}
+}
+
+// viewer is the outcome of the `user` read: the state of the read, or what kept every source from being
+// read when nothing was. A failed attempt to open the reader attempted no `user` read.
+func (c *collector) viewer() overview.SourceState {
+	switch {
+	case c.fallback == nil:
+		return c.viewerRead
+	case c.fallback.Outcome == overview.OutcomeError:
+		return overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotAttempted}
+	}
+	return *c.fallback
+}
+
 // results assembles one RepoResult per repository.
 func (c *collector) results() []RepoResult {
 	out := make([]RepoResult, len(c.repos))
@@ -256,7 +288,7 @@ func (c *collector) results() []RepoResult {
 }
 
 func setAll(r *overview.Remote, st overview.SourceState) {
-	for _, src := range overview.StatusSources {
+	for _, src := range overview.Sources {
 		r.Sources[src] = st
 	}
 }
@@ -281,6 +313,10 @@ func (c *collector) fill(r *RepoResult, s slot) {
 		// the entries with a run are added to those of the tags source; the overview merges them per tag
 		r.CIRelease = s.ci.Release
 		r.Remote.Tags = append(r.Remote.Tags, s.ci.Release.ReleaseTags()...)
+	}
+	r.Remote.Sources[overview.SourceIssues] = s.issues.State
+	if s.issues.State == okState {
+		r.Issues, r.Remote.Issues = &s.issues, s.issues.Rows
 	}
 }
 
