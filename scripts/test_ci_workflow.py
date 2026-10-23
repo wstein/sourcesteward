@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / '.github/workflows/ci.yml').read_text()
 CONFORMANCE = (ROOT / '.github/workflows/conformance.yml').read_text()
 FULL = (ROOT / '.github/workflows/ci-full.yml').read_text()
-ALL = (WORKFLOW, CONFORMANCE, FULL)
+RACE = (ROOT / '.github/workflows/race.yml').read_text()
+ALL = (WORKFLOW, CONFORMANCE, FULL, RACE)
 _SPEC = importlib.util.spec_from_file_location('ci_shards', ROOT / 'scripts/ci_shards.py')
 SHARDS = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(SHARDS)
@@ -536,6 +537,95 @@ class SuiteAggregateTests(unittest.TestCase):
         for event in ('push', 'workflow_dispatch', 'schedule', 'release', 'create'):
             self.assertFalse(self.passes('skipped', 'true', event), event)
             self.assertFalse(self.passes('skipped', 'false', event), event)
+
+
+class RaceWorkflowTests(unittest.TestCase):
+    """race.yml (Spec 039 T4): scheduled race runs and the only place with issues: write."""
+
+    def head(self):
+        return RACE.split('\non:\n', 1)[1].split('\npermissions:', 1)[0]
+
+    def test_triggers_are_schedule_and_dispatch_only(self):
+        on = self.head()
+        self.assertRegex(on, r'(?m)^  schedule:\n    - cron: ')
+        self.assertRegex(on, r'(?m)^  workflow_dispatch:')
+        self.assertEqual(len(re.findall(r'(?m)^    - cron: ', on)), 2, 'nightly and weekly')
+        for forbidden in ('pull_request', 'pull_request_target', 'push:', 'workflow_run', 'issues:', 'issue_comment'):
+            self.assertNotIn(forbidden, on)
+
+    def test_workflow_permissions_are_read_only(self):
+        top = RACE.split('\njobs:', 1)[0]
+        self.assertRegex(top, r'(?m)^permissions:\n  contents: read\n(?!  )')
+
+    def test_both_jobs_are_guarded_to_main(self):
+        for job in ('race', 'report'):
+            self.assertRegex(job_text(job, RACE), r"(?m)^    if: .*github\.ref == 'refs/heads/main'")
+
+    def test_race_job_runs_the_conformance_shards_with_race_true(self):
+        race = job_text('race', RACE)
+        self.assertIn('uses: ./.github/workflows/conformance.yml', race)
+        self.assertIn('race: true', race)
+        self.assertIn('lane: ${{ matrix.lane }}', race)
+        self.assertNotIn('docs_only', race)
+
+    def test_lane_is_current_nightly_and_minimum_weekly(self):
+        self.assertIn("github.event.schedule == '17 4 * * 0'", job_text('race', RACE))
+        self.assertIn("&& 'minimum' || 'current'", job_text('race', RACE))
+        self.assertIn("&& 'weekly' || 'nightly'", RACE.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0])
+
+    def test_race_runs_are_never_cancelled_and_have_their_own_groups(self):
+        conc = RACE.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0]
+        self.assertIn('t4-', conc)
+        self.assertIn('cancel-in-progress: false', conc)
+
+    def test_report_runs_after_race_on_failure_or_cancel(self):
+        report = job_text('report', RACE)
+        self.assertIn('needs: [race]', report)
+        self.assertIn("if: github.ref == 'refs/heads/main' && (failure() || cancelled())", report)
+        self.assertNotIn('needs: [race]', job_text('race', RACE))
+
+    def test_report_jobs_of_both_schedules_share_one_non_cancelling_group(self):
+        report = job_text('report', RACE)
+        self.assertRegex(report, r'(?m)^    concurrency:\n      group: race-report\n      cancel-in-progress: false\n')
+        self.assertNotIn('github.event', report.split('concurrency:', 1)[1].split('permissions:', 1)[0])
+
+    def test_report_permissions_exactly(self):
+        report = job_text('report', RACE)
+        self.assertRegex(report, r'(?m)^    permissions:\n      contents: read\n      actions: read\n      issues: write\n(?!      )')
+
+    def test_issues_write_exists_only_in_the_report_job(self):
+        for name, text in (('ci.yml', WORKFLOW), ('conformance.yml', CONFORMANCE), ('ci-full.yml', FULL)):
+            self.assertNotRegex(text, r'issues:\s*write', name)
+            self.assertNotRegex(text, r'write-all', name)
+        self.assertEqual(len(re.findall(r'(?m)^[^#\n]*issues: write', RACE)), 1)
+        self.assertNotIn('issues: write', job_text('race', RACE))
+        self.assertNotRegex(RACE, r'write-all')
+        for other in sorted((ROOT / '.github/workflows').glob('*.yml')):
+            if other.name != 'race.yml':
+                self.assertNotRegex(other.read_text(), r'issues:\s*write', other.name)
+
+    def test_report_checks_out_the_default_branch_only(self):
+        report = job_text('report', RACE)
+        self.assertRegex(report, r'actions/checkout@[0-9a-f]{40} # v\d+\.\d+\.\d+\n        with:\n          ref: main\n          persist-credentials: false\n')
+        self.assertEqual(report.count('actions/checkout@'), 1)
+        self.assertNotIn('github.head_ref', report)
+        self.assertNotIn('github.event.pull_request', RACE)
+
+    def test_report_runs_the_reporter_with_token_from_env(self):
+        report = job_text('report', RACE)
+        self.assertIn('python3 -B scripts/race_report.py', report)
+        self.assertIn('GH_TOKEN: ${{ github.token }}', report)
+        self.assertNotIn('${{ github.token }}', report.split('run: |', 1)[1])  # never interpolated into the script
+        self.assertNotIn('toJSON(', RACE)
+
+    def test_the_tier_job_is_not_part_of_race_yml(self):
+        self.assertNotRegex(RACE, r'(?m)^  tier:')
+        self.assertNotIn('ci_tier.py', RACE)
+        self.assertNotIn('docs_only', RACE)
+
+    def test_the_reporter_is_a_script_with_unit_tests(self):
+        self.assertTrue((ROOT / 'scripts/race_report.py').is_file())
+        self.assertTrue((ROOT / 'scripts/test_race_report.py').is_file())
 
 
 if __name__ == '__main__':
