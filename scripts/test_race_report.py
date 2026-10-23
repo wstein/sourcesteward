@@ -39,6 +39,8 @@ class FakeGh:
         self.logs = dict(logs) if logs is not None else {j: LOG for j in jobs}
         self.logs.update(self.passed)
         self.fail_logs = fail_logs
+        self.labels = set()  # labels that exist
+        self.label_error = None  # a GhError detail for the existence check, e.g. 'HTTP 403'
 
     def __call__(self, args, stdin=None):
         self.calls.append((list(args), stdin))
@@ -46,6 +48,12 @@ class FakeGh:
             if 'select(.conclusion == "failure")' in args[args.index('--jq') + 1]:
                 return '\n'.join(self.jobs)
             return '\n'.join(self.jobs + list(self.passed))
+        if args[0] == 'api' and '/labels/' in args[1]:
+            if self.label_error:
+                raise RR.GhError('api', self.label_error)
+            if args[1].rsplit('/', 1)[1] not in self.labels:
+                raise RR.GhError('api', 'gh: Not Found (HTTP 404)')
+            return '{}'
         if args[0] == 'api':
             if self.fail_logs:
                 raise RR.GhError('api')
@@ -62,6 +70,7 @@ class FakeGh:
             self.issues[int(args[2]) - 1]['comments'].append(stdin)
             return ''
         if args[:2] == ['label', 'create']:
+            self.labels.add(args[2])
             return ''
         raise AssertionError(args)
 
@@ -102,10 +111,16 @@ class BodyTests(unittest.TestCase):
         for part in (RUN_URL, 'weekly', 'minimum', 'failed', 'TestAlpha'):
             self.assertIn(part, body)
 
+    def test_failed_reason_wording_says_failure_and_that_a_timeout_looks_the_same(self):
+        body = RR.build_body(RUN_URL, 'nightly', 'current', 'failed', [])
+        self.assertIn('Reason: failed or timed out (job result: failure)', body)
+        self.assertIn('a timed-out job also ends as failure', body)
+        self.assertIn('may be missing', body)
+        self.assertNotIn('cancelled', body)
+
     def test_cancelled_reason_wording(self):
         body = RR.build_body(RUN_URL, 'nightly', 'current', 'cancelled', [])
-        self.assertIn('failed, cancelled or timed out', body)
-        self.assertIn('may be missing', body)
+        self.assertIn('Reason: cancelled (job result: cancelled)', body)
         self.assertNotIn('TestAlpha', body)
         self.assertIn('No test name matched, see the run.', body)
 
@@ -163,7 +178,7 @@ class ReportTests(unittest.TestCase):
         gh = FakeGh(jobs=())
         run(gh, reason='cancelled')
         self.assertEqual(len(gh.issues), 1)
-        self.assertIn('failed, cancelled or timed out', gh.issues[0]['body'])
+        self.assertIn('Reason: cancelled (job result: cancelled)', gh.issues[0]['body'])
 
     def test_only_failed_jobs_are_read(self):
         gh = FakeGh(jobs=('11',), logs={'11': LOG}, passed={'99': '--- FAIL: TestFromPassedJob (0s)'})
@@ -189,7 +204,7 @@ class ReportTests(unittest.TestCase):
     def test_a_failed_job_listing_still_files_the_issue(self):
         class NoJobs(FakeGh):
             def __call__(self, args, stdin=None):
-                if args[0] == 'api':
+                if args[0] == 'api' and '/labels/' not in args[1]:
                     raise RR.GhError('api')
                 return super().__call__(args, stdin)
         gh = NoJobs()
@@ -204,6 +219,117 @@ class ReportTests(unittest.TestCase):
                 return super().__call__(args, stdin)
         with self.assertRaises(RR.GhError):
             run(NoIssues())
+
+    def test_label_option_selects_the_issue_label(self):
+        gh = FakeGh()
+        RR.report(gh, REPO, '777', RUN_URL, 'nightly', 'current', 'failed', label='race-flake')
+        self.assertIn('race-flake', gh.issues[0]['args'])
+        self.assertNotIn('race-failure', gh.issues[0]['args'])
+        self.assertIn('race-flake', [c[0][2] for c in gh.calls if c[0][:2] == ['label', 'create']])
+        self.assertTrue([c for c in gh.calls if c[0][0] == 'api' and c[0][1].endswith('/labels/race-flake')])
+        RR.report(gh, REPO, '777', RUN_URL, 'nightly', 'current', 'failed', label='race-flake')
+        self.assertEqual(len(gh.issues), 1)
+        self.assertEqual(len(gh.issues[0]['comments']), 1)
+
+    def test_label_defaults_to_race_failure_and_rejects_odd_values(self):
+        gh = FakeGh()
+        run(gh)
+        self.assertIn('race-failure', gh.issues[0]['args'])
+        for bad in ('', '--x', 'a b', 'a,b', 'x' * 51):
+            with self.assertRaises(ValueError):
+                RR.report(FakeGh(), REPO, '777', RUN_URL, 'nightly', 'current', 'failed', label=bad)
+
+    def test_main_passes_label_and_exits_one_when_an_issue_call_fails(self):
+        from unittest import mock
+        args = ['--repo', REPO, '--run-id', '777', '--run-url', RUN_URL, '--tier', 'nightly', '--lane', 'current',
+                '--reason', 'failed', '--label', 'race-flake']
+        gh = FakeGh()
+        with mock.patch.object(RR, '_gh', gh), mock.patch('builtins.print'):
+            RR.main(args)
+        self.assertIn('race-flake', gh.issues[0]['args'])
+
+        class NoIssues(FakeGh):
+            def __call__(self, args, stdin=None):
+                if args[0] == 'issue':
+                    raise RR.GhError('issue')
+                return super().__call__(args, stdin)
+        with mock.patch.object(RR, '_gh', NoIssues()), self.assertRaises(SystemExit) as ctx:
+            RR.main(args)
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_a_failed_label_create_is_not_swallowed(self):
+        import subprocess
+        from unittest import mock
+        done = subprocess.CompletedProcess(['gh'], 1, stdout=b'', stderr=b'HTTP 403')
+        with mock.patch.object(RR.subprocess, 'run', return_value=done), mock.patch.object(RR.sys.stderr, 'write'):
+            with self.assertRaises(RR.GhError):
+                RR._gh(['label', 'create', 'race-failure', '--repo', REPO])
+
+    def test_an_existing_label_is_left_untouched(self):
+        gh = FakeGh()
+        gh.labels.add('race-failure')
+        run(gh)
+        self.assertFalse([c for c in gh.calls if c[0][:2] == ['label', 'create']])
+        self.assertEqual(len(gh.issues), 1)
+
+    def test_a_missing_label_is_created_with_a_fixed_colour_and_no_force(self):
+        gh = FakeGh()
+        run(gh)
+        create = [c[0] for c in gh.calls if c[0][:2] == ['label', 'create']]
+        self.assertEqual(len(create), 1)
+        self.assertEqual(create[0][create[0].index('--color') + 1], 'B60205')
+        self.assertNotIn('--force', create[0])
+        self.assertIn('--description', create[0])
+
+    def test_any_other_label_check_failure_is_not_a_missing_label(self):
+        for detail in ('gh: Forbidden (HTTP 403)', 'gh: Server Error (HTTP 500)', 'connection refused'):
+            gh = FakeGh()
+            gh.label_error = detail
+            with self.assertRaises(RR.GhError):
+                run(gh)
+            self.assertFalse(gh.issues)
+            self.assertFalse([c for c in gh.calls if c[0][:2] == ['label', 'create']])
+
+    def test_main_exits_one_with_a_message_when_the_label_check_fails(self):
+        from unittest import mock
+        gh = FakeGh()
+        gh.label_error = 'gh: Forbidden (HTTP 403)'
+        args = ['--repo', REPO, '--run-id', '777', '--run-url', RUN_URL, '--tier', 'nightly', '--lane', 'current', '--reason', 'failed']
+        with mock.patch.object(RR, '_gh', gh), mock.patch.object(RR.sys.stderr, 'write') as err, self.assertRaises(SystemExit) as ctx:
+            RR.main(args)
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn('403', ''.join(c.args[0] for c in err.call_args_list))
+
+    def test_an_invalid_label_option_is_a_usage_error_without_traceback(self):
+        from unittest import mock
+        args = ['--repo', REPO, '--run-id', '777', '--run-url', RUN_URL, '--tier', 'nightly', '--lane', 'current',
+                '--reason', 'failed', '--label', 'a b']
+        with mock.patch.object(RR.sys.stderr, 'write') as err, self.assertRaises(SystemExit) as ctx:
+            RR.main(args)
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn('label', ''.join(c.args[0] for c in err.call_args_list))
+
+    def _real_gh_label_check(self, stderr):
+        import subprocess
+        from unittest import mock
+        done = subprocess.CompletedProcess(['gh'], 1, stdout=b'', stderr=stderr)
+        with mock.patch.object(RR.subprocess, 'run', return_value=done), mock.patch.object(RR.sys.stderr, 'write'):
+            return RR._label_exists(RR._gh, REPO, 'race-failure')
+
+    def test_the_real_gh_wrapper_carries_stderr_so_a_404_means_a_missing_label(self):
+        import subprocess
+        from unittest import mock
+        done = subprocess.CompletedProcess(['gh'], 1, stdout=b'', stderr=b'gh: Not Found (HTTP 404)\n')
+        with mock.patch.object(RR.subprocess, 'run', return_value=done), mock.patch.object(RR.sys.stderr, 'write'):
+            with self.assertRaises(RR.GhError) as ctx:
+                RR._gh(['api', 'repos/x/labels/y'])
+        self.assertIn('HTTP 404', ctx.exception.detail)
+        self.assertFalse(self._real_gh_label_check(b'gh: Not Found (HTTP 404)'))
+
+    def test_the_real_gh_wrapper_does_not_treat_other_failures_as_a_missing_label(self):
+        for stderr in (b'gh: Forbidden (HTTP 403)', b'gh: Server Error (HTTP 500)', b''):
+            with self.assertRaises(RR.GhError):
+                self._real_gh_label_check(stderr)
 
     def test_non_numeric_job_ids_are_ignored(self):
         gh = FakeGh(jobs=('11', '../x'), logs={'11': LOG})

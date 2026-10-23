@@ -173,10 +173,12 @@ four `internal/workspace` shards under `-race`); weekly (Sunday 04:17 UTC) it do
 `minimum` lane. A manual dispatch takes a `lane` input. The runs always happen, also on quiet days,
 and are never cancelled (groups `t4-nightly` and `t4-weekly`). When `race` fails or is cancelled,
 job `report` (the only job in the repository with `issues: write`; it checks out `main` only)
-runs `scripts/race_report.py`: it comments on the open issue labelled `race-failure`, or creates it
-if none is open, so at most one is open. The body holds the run link, the tier (nightly or weekly),
-the lane, the reason (failed, cancelled or timed out: a timed-out job normally reports as failed,
-so the two are not told apart, and the log of a timed-out job may be missing) and at most 20 test
+runs `scripts/race_report.py`: it comments on the open issue labelled `race-failure` (option
+`--label`, default `race-failure`), or creates it if none is open, so at most one is open. The
+script creates the label (fixed colour) only when a lookup returns 404 and leaves an existing label
+untouched; it exits 1 when any `gh` issue, label or comment call fails, so the report job turns red. The body holds the run link, the tier (nightly or weekly),
+the lane, the reason (failed or timed out: a timed-out job normally reports as failed, so the two
+are not told apart, and its log may be missing; or cancelled) and at most 20 test
 names matched from the failed job logs by `^--- FAIL: (Test\w+)`; no other log text is ever
 copied. If the logs cannot be fetched or hold no match, the report still files with "No test name
 matched, see the run." The `report` jobs of both schedules share the concurrency group

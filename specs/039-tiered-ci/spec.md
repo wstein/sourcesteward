@@ -171,7 +171,7 @@ There is **no race list** and no derivation machinery: `-race` is not run on pul
   goroutines; this specification does not depend on it.
 
 **Failure issue (`race-failure`).** A workflow `race.yml` (`schedule`, `workflow_dispatch` on the default branch) has a job `race` and a
-job `report` (`needs: race`, `if: failure() || cancelled()`). **Both jobs carry `if: github.ref == 'refs/heads/main'`**, because `workflow_dispatch` can run on any ref and `issues: write` and the race runs must never run on a topic branch; a workflow test pins this. The issue states the reason (failed, or cancelled or timed out). `report` has `permissions: contents: read, actions: read, issues: write` (issues write
+job `report` (`needs: race`, `if: failure() || cancelled()`). **Both jobs carry `if: github.ref == 'refs/heads/main'`**, because `workflow_dispatch` can run on any ref and `issues: write` and the race runs must never run on a topic branch; a workflow test pins this. The issue states the reason (failed, including a job timeout, or cancelled). `report` has `permissions: contents: read, actions: read, issues: write` (issues write
 exists **only** in this workflow), checks out **`main` only**, runs only trusted repository scripts and never PR code. It lists open
 issues with the label `race-failure`; if one exists it adds a comment, otherwise it creates the issue, so at most one is open. The body
 contains the run link, the tier (nightly or weekly), the lane and the failing test names extracted from the failed job log by a strict
