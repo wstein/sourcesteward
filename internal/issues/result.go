@@ -38,12 +38,15 @@ type Row struct {
 }
 
 // RepoStatus is the per-repository line of the document. Open and PullsDropped are nil unless
-// the issues were read (state ok or partial) or the repository has issues disabled (zero).
+// the issues were read (state ok or partial) or the repository has issues disabled (zero). Counts
+// is the number of issues of the repository per priority with the filters applied and the cap not,
+// as Summary.Counts is for all repositories.
 type RepoStatus struct {
 	Repo         string
 	State        string
 	Reason       string // issues-disabled or viewer-unknown, only with StateSkipped
 	Open         *int   // issues read, before the filters
+	Counts       Counts
 	PullsDropped *int
 	Error        string
 }

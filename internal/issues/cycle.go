@@ -128,7 +128,7 @@ func (c *cycle) run(ctx context.Context, repos []string) {
 		}
 	}
 	sort.Slice(rows, func(a, b int) bool { return before(rows[a], rows[b]) })
-	c.counts(rows)
+	c.counts(rows, status)
 	if len(rows) > c.o.Limit {
 		c.res.Summary.Omitted = len(rows) - c.o.Limit
 		rows = rows[:c.o.Limit]
@@ -230,18 +230,25 @@ func before(a, b Row) bool {
 	return a.Number < b.Number
 }
 
-// counts records what was read with the filters applied and the cap not.
-func (c *cycle) counts(rows []Row) {
+// counts records what was read with the filters applied and the cap not, for the run and for each
+// repository (status holds one entry per repository read, found by name).
+func (c *cycle) counts(rows []Row, status []RepoStatus) {
+	byRepo := make(map[string]*Counts, len(status))
+	for i := range status {
+		byRepo[status[i].Repo] = &status[i].Counts
+	}
 	for _, r := range rows {
-		switch r.Priority {
-		case Red:
-			c.res.Summary.Counts.Red++
-		case Yellow:
-			c.res.Summary.Counts.Yellow++
-		case Blue:
-			c.res.Summary.Counts.Blue++
-		default:
-			c.res.Summary.Counts.Violet++
+		for _, n := range []*Counts{&c.res.Summary.Counts, byRepo[r.Repo]} {
+			switch r.Priority {
+			case Red:
+				n.Red++
+			case Yellow:
+				n.Yellow++
+			case Blue:
+				n.Blue++
+			default:
+				n.Violet++
+			}
 		}
 	}
 }

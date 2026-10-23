@@ -223,3 +223,16 @@ func TestAssigneeMeWithALoginListsTheAssignedIssues(t *testing.T) {
 		t.Errorf("rows %v errors %+v", got, res.Errors)
 	}
 }
+
+func TestCountsAreKeptPerRepositoryAndIgnoreTheCap(t *testing.T) {
+	f := newForge()
+	f.pages["a/x"] = []string{body(raw(1), raw(2), raw(3, withLabels("bug")))}
+	f.pages["z/y"] = []string{body(raw(1, withLabels("security")), raw(2, withAuthor("b[bot]", "Bot")), raw(3))}
+	res := run(t, f, Options{Repos: []string{"a/x", "z/y"}, Limit: 1})
+	if got := repoStatus(t, res, "a/x").Counts; got != (Counts{Yellow: 1, Blue: 2}) {
+		t.Errorf("a/x counts %+v", got)
+	}
+	if got := repoStatus(t, res, "z/y").Counts; got != (Counts{Red: 1, Blue: 1, Violet: 1}) {
+		t.Errorf("z/y counts %+v", got)
+	}
+}
