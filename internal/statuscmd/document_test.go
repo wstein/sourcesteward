@@ -24,7 +24,7 @@ var (
 
 func allSources(st overview.SourceState) map[overview.Source]overview.SourceState {
 	m := map[overview.Source]overview.SourceState{}
-	for _, s := range overview.Sources {
+	for _, s := range overview.StatusSources {
 		m[s] = st
 	}
 	return m

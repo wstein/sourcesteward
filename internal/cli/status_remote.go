@@ -19,7 +19,7 @@ const maxStatusDrafts = 3
 func statusRemoteLine(rr statusremote.RepoResult) string {
 	src := rr.Remote.Sources
 	allMissing, first := true, ""
-	for _, s := range overview.Sources {
+	for _, s := range overview.StatusSources {
 		if src[s].Outcome == overview.OutcomeOK {
 			allMissing = false
 		} else if first == "" {

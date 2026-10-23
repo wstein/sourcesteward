@@ -90,7 +90,7 @@ func TestADocumentWithAnErrorSourceOfEveryCodeValidates(t *testing.T) {
 		"too-many-releases", "too-many-open-prs", statusremote.CodeContractInvalid, statusremote.CodeHostingUnavailable}
 	for _, code := range codes {
 		rep := fixtureReport()
-		for _, src := range overview.Sources {
+		for _, src := range overview.StatusSources {
 			rep.Remote.Repos[1].Remote.Sources[src] = overview.SourceState{Outcome: overview.OutcomeError, Code: code}
 		}
 		rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
@@ -99,7 +99,7 @@ func TestADocumentWithAnErrorSourceOfEveryCodeValidates(t *testing.T) {
 	for _, reason := range []string{overview.ReasonNoToken, overview.ReasonDeadline, overview.ReasonNotFound, overview.ReasonOffline, overview.ReasonNotAttempted,
 		overview.ReasonNotGitHub, overview.ReasonOtherHost, overview.ReasonNotReadLocally, overview.ReasonInvalidRepo} {
 		rep := fixtureReport()
-		for _, src := range overview.Sources {
+		for _, src := range overview.StatusSources {
 			rep.Remote.Repos[1].Remote.Sources[src] = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: reason}
 		}
 		rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))

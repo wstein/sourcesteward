@@ -28,6 +28,7 @@ var statusLineNoun = map[overview.Category]string{
 	overview.ReleaseDraft: "release drafts are waiting", overview.PRChecksPending: "PRs are waiting for checks",
 	overview.PRUnread: "PRs were not read", overview.LocalStash: "stashes", overview.GitlinkAhead: "gitlinks ahead",
 	overview.BranchesUnmerged: "branch findings", overview.WorktreeStale: "stale worktrees", overview.PRBot: "bot PRs",
+	overview.IssueSecurity: "security issues", overview.IssueAssigned: "issues are assigned to you", overview.IssueBug: "bug issues",
 }
 
 // maxStatusRepoWidth bounds the repository column of the action lines.
