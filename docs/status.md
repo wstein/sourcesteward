@@ -4,8 +4,8 @@
 the one command to run in the morning, at midday and in the evening. It answers "what needs me?" for the whole workspace: it
 starts with a **prioritised list of things to do**, then shows the state of every repository, then names anything it could
 not read. It reads the local state of the workspace root and every submodule and, by default, what GitHub knows about each
-repository: open pull requests, release drafts, tags without a release and the CI of the default branch and of the release
-workflow. Everything is read-only. The command **suggests** and the owner acts: a suggested command is a hint that `stw` never
+repository: open pull requests, open issues, release drafts, tags without a release and the CI of the default branch and of the
+release workflow. Everything is read-only. The command **suggests** and the owner acts: a suggested command is a hint that `stw` never
 runs, and it says whether running it only reads (`read`) or changes something (`owner`).
 
 ```sh
@@ -38,6 +38,7 @@ skipped, with the reason named):
 | `repo`, `releases`, `tags` | `repos/OWNER/NAME`, its releases and its tags | release drafts, tags without a release, the draft visibility |
 | `ci-main` | the head of the default branch and its checks, and whether the local clone lacks that commit (decided in the local object store, nothing is fetched) | `main-red`, `main-behind-origin` |
 | `ci-release` | the newest release workflow run of the latest tag of every release tag pattern and of at most five unreleased tags | `release-run-failed` |
+| `issues` | the open issues, with the cycle and the priority rules of [`stw issues`](issues.md), and the login of the token (the `viewer`, one `user` read per run) | `issue-*` items and the line `issues: N open (R red, Y yellow)`; the counts equal `stw issues` for the same repository |
 
 A repository declares its release tag patterns in the `.stw/release*.toml` contracts of its clone (semver and pattern tag
 grammars); without a contract the pattern is `v*.*.*` and the workflow `release.yml`. A contract that exists but cannot be used
@@ -47,7 +48,9 @@ ends `ci-release` with the error `contract-invalid`; the defaults do not replace
 `releases` and `tags` (page 1 each, more pages only when GitHub says there are more, at most 10), the branch and its check
 runs and commit statuses, and one workflow-run read (page 1) for the latest tag of each pattern and for each of at most five
 unreleased tags, so N+5 at most. Pull requests cost what `stw pulls` costs (one list per repository, the detail of at most 200
-pull requests, one bounded re-read of an unknown mergeability). Search is never used. A run uses far fewer requests than the
+pull requests, one bounded re-read of an unknown mergeability). Issues cost one list read per 100 open issues and pull requests
+of a repository (at most 10) and one `user` read for the whole run; the list also returns the pull requests, which are dropped.
+Search is never used, so `stw status` knows only the repositories of the workspace (`stw issues --owner` discovers others). A run uses far fewer requests than the
 hourly limit of a personal token (5000) allows.
 
 ## Needs action
@@ -56,8 +59,8 @@ Items are ordered by priority, then category, then repository and subject, so th
 
 | Priority | Categories |
 | --- | --- |
-| red | `repo-error`, `local-operation`, `main-red`, `release-run-failed` |
-| yellow | `read-error`, `local-changes`, `local-detached`, `local-untracked`, `local-behind`, `local-no-upstream`, `main-behind-origin`, `gitlink-drift`, `worktree-dirty`, `pr-conflict`, `pr-blocked`, `tag-without-release` |
+| red | `repo-error`, `local-operation`, `main-red`, `release-run-failed`, `issue-security` |
+| yellow | `read-error`, `local-changes`, `local-detached`, `local-untracked`, `local-behind`, `local-no-upstream`, `main-behind-origin`, `gitlink-drift`, `worktree-dirty`, `pr-conflict`, `pr-blocked`, `tag-without-release`, `issue-assigned`, `issue-bug` |
 | green | `pr-ready`, `release-draft` |
 | blue | `pr-checks-pending`, `pr-unread`, `local-stash`, `gitlink-ahead`, `branches-unmerged`, `worktree-stale` |
 | violet | `pr-bot` |
@@ -67,6 +70,19 @@ release run wins over "no release"). Release drafts are listed only when the tok
 because GitHub shows drafts to no one else and does not say that it withheld any: otherwise a notice says that drafts are not
 visible or unknown, never "0 drafts". The text shows at most ten lines per priority (`N more`), the JSON every item. Each
 item has a stable id such as `pr-ready:wstein/sourcesteward:57`, a link (`https` only) and, where one exists, the command to run.
+
+**Issues.** Each repository block has a line `issues: N open (R red, Y yellow)`: N counts every open issue read, the bot issues
+and the plain ones included, and the red and yellow ones are the only issues that become items (`issue-security` for a
+`security` label, `issue-assigned` for an issue assigned to the authenticated user, `issue-bug` for a `bug` label; the rules and
+their precedence are those of [`stw issues`](issues.md), whose `--repo OWNER/NAME` is the drill-down named by a grouped line and, as
+`other issues: stw issues --repo OWNER/NAME`, by the `remote:` line when blue or violet issues exist).
+A repository with more open items than ten pages of 100 shows `issues: N+ open (R red, Y yellow, truncated)`, one with its issues
+disabled `issues: disabled` (a fact: no notice, the run is not degraded), and one that was not read `issues: not read (CODE)`
+with a skip reason (`deadline`, `no-token`) or an error code; a failed read is also one `read-error` item that points to
+`stw issues --repo OWNER/NAME`. When the token cannot read `user` (a 403 or 404 without rate-limit evidence) the rule "assigned to
+you" is off and a notice `no-identity` says so; the status run keeps at most 500 issue rows (the largest cap of `stw issues --limit`),
+the counts and `N` stay exact, and only the lowest-priority rows (blue and violet, never items) are dropped first, so an item is
+lost only beyond 500 red and yellow issues in the workspace; a failed `user` read is an error (exit 1) with the notice `viewer-unknown`.
 
 ## Notices, deadlines and rate limits
 
@@ -79,7 +95,8 @@ source failed is not attempted and ends `skipped` `not-attempted`, so its failur
 never retries.
 
 A source ends `ok`, `skipped` (reasons `offline`, `no-token`, `deadline`, `not-found` for a missing release workflow,
-`not-attempted` for a CI source whose input source failed, and the repository reasons `not-github-origin`, `other-host`,
+`not-attempted` for a CI source whose input source failed, `issues-disabled` for the issues of a repository that has them
+disabled, and the repository reasons `not-github-origin`, `other-host`,
 `not-read-locally`, `invalid-repo`) or `error` (`unauthorized`, `forbidden`, `rate-limited`, `network`, `http-5xx`,
 `malformed-response`, `page-too-large`, `repo-moved`, `too-many-releases`, `too-many-open-prs`, `contract-invalid`,
 `hosting-api-unavailable`). Without a usable token no request is sent at all: the text is exactly the `--offline` output followed by the notice (`run: gh auth
@@ -109,6 +126,6 @@ unreadable repository, a usage error); the report itself, notices included, is o
 
 `stw status --json` prints one [schema 2](../schemas/v2/status.schema.json) document (unpublished and byte-frozen until the
 feature is accepted): `actions`, `repos` (every v1 member plus `remote`), `sources`, `notices`, `summary` and the run-level
-`error`. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`. See
-[JSON contracts](json-contracts.md#status-schema-v2-unpublished). The issue sources of [Spec 038](../specs/038-stw-issues/spec.md)
-join the document when that work lands.
+`error`. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the
+`issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. The document-level `sources` list ends with
+`issues` and `viewer`. See [JSON contracts](json-contracts.md#status-schema-v2-unpublished).

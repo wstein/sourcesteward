@@ -174,6 +174,9 @@ each GitHub repository with local state `ok` (the other Spec 037 sources and the
 
   Blue (rule 5) and violet (rule 3) issues are **never items**: counts only (`issues` data in the JSON and the line above); the
   drill-down is `stw issues --repo OWNER/NAME`, named in the `remote:` line when any exist.
+- **Row limit**: the status run asks the issues cycle for at most 500 rows (the largest `--limit`); the counts per priority and
+  repository cover everything read and stay exact, rows drop lowest priority first (violet, blue, yellow, red), so an item is lost
+  only beyond 500 red and yellow issues in the whole workspace. The omitted count of the cycle is not shown by status.
 - **Grouping**: Spec 037's rule applies unchanged: items with the same (priority, category, repository) form one human line with the
   count and the first 3 identifiers (`+N more`), here `3 security issues: #12, #15, #19`; a single item keeps its URL
   (`https` only, the issue's `html_url`); the JSON keeps one item per id; the human section caps lines per priority at 10.

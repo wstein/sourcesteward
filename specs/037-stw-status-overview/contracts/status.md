@@ -25,7 +25,7 @@ Two documents, never mixed:
 | `note` | str or null | as v1 |
 | `actions` | array | the action items, ordered as in the spec (priority, category, repo, subject), every item, no cap |
 | `repos` | array | one object per repository: **all members of the v1 repository object unchanged** (`name`, `path`, `kind`, `state`, `head`, `branch`, ... `attention`, `reasons`, `error`) plus `remote` (below) |
-| `sources` | array | exactly seven entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, each `{id, state, read, degraded, skipped}`: counts of repositories per outcome (`ok` = `read`, `error` = `degraded`); `state` is `ok` (everything read), `skipped` (nothing read, nothing failed), `error` (everything failed) or `degraded` |
+| `sources` | array | exactly nine entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, `issues`, `viewer`, each `{id, state, read, degraded, skipped}`: counts of repositories per outcome (`ok` = `read`, `error` = `degraded`); `state` is `ok` (everything read), `skipped` (nothing read, nothing failed), `error` (everything failed) or `degraded` |
 | `notices` | array | `{code, source, repos, message}`: one per missing source, `message` sanitized, at most 512 bytes; `repos` array of repository names affected (at most 256) |
 | `summary` | object | see below |
 | `error` | object or null | run-level local failure only, as v1 (`code`, `message`) |
@@ -96,5 +96,6 @@ Decisions taken while implementing the work packages; they refine the text above
   diverged, `ahead`; `local-untracked` `untracked`; `local-stash` `stash`; `branches-unmerged` `not_integrated`;
   `gitlink-drift` and `gitlink-ahead` `relation`.
 - **Notices** use the singular for a count of one (`1 repository`, `1 source`).
-- **Out of this document.** The `viewer-unknown` skip reason and the issue sources of [Spec 038](../../038-stw-issues/spec.md)
-  join the document when that work lands, as optional additions to schema 2.
+- **Issues.** The issue sources of [Spec 038](../../038-stw-issues/spec.md) (`issues` per repository, `issues` and `viewer` among
+  the document-level `sources`, the categories 26 to 28, `subject.kind` `issue`, the notices `no-identity` and `viewer-unknown`)
+  are additions to schema 2 while it is unpublished; the schema and its frozen digest carry them.
