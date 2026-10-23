@@ -424,3 +424,18 @@ func TestStatusReadsTheRealWorkspaceByDefault(t *testing.T) {
 		}
 	}
 }
+
+// Without a usable token the marks of the output are those of the offline output for the same flags: the plain
+// ones by default and the glyphs of --icons when it is given, so a UTF-8 terminal that asked for unicode or
+// nerd glyphs sees them before the notices too.
+func TestStatusWithoutATokenKeepsTheIconMarksOfTheOfflineOutput(t *testing.T) {
+	forge := &statusForge{err: errors.New("no request may be sent")}
+	open := fmt.Errorf("gh: %w", hosting.ErrAuthentication)
+	for set, mark := range map[string]string{"unicode": "▲ sub", "nerd": " sub", "ascii": "! sub"} {
+		offline := runOnline(t, statusCLIResult(), forge, open, "--offline", "--icons", set)
+		run := runOnline(t, statusCLIResult(), forge, open, "--icons", set)
+		if run.err != nil || !strings.HasPrefix(run.out, offline.out) || !strings.Contains(run.out, mark) {
+			t.Errorf("%s: %v\n%s", set, run.err, run.out)
+		}
+	}
+}
