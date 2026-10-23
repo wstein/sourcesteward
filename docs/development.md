@@ -122,14 +122,20 @@ cancelled or skipped-otherwise fails it. `check` (static and documentation check
 suite) and the docs, architecture and spec checks inside it always run.
 T1 tests only what a pull request can affect (Spec 039). The `changes` job also runs
 `scripts/ci_changes.py affected`, which prints `affected` (the changed Go packages plus every
-package that imports them, test imports included) and `affected_reason` (`docs-only`, `packages` or
+package that imports them, test imports included, plus the packages declared in `scripts/ci-test-reads.json`
+whose tests read or build another package's files without importing it) and `affected_reason` (`docs-only`, `packages` or
 `all`). `check` waits for `changes` but still runs when it failed; it runs plain `go test` of the
 affected packages, of every package when the reason is `all` or the output is empty, and of nothing for
-`docs-only`, which also skips the sandbox install. Any changed path outside a Go package and outside
+`docs-only`, which also skips the sandbox install. Prose that a Go test reads (for example `README.md`, read by
+`internal/releaseworkflow`) is declared in `scripts/ci-test-reads.json` and is not `docs-only`: its readers' tests run. Any changed path outside a Go package and outside
 documentation prose (`go.mod`, `schemas/`, `scripts/`, `.github/`, spec contracts), a deleted package,
 a non-merge checkout, a failing `go list` and every event other than `pull_request` give `all`.
+Any error of the classifier gives the same `all` with exit status 0. `scripts/test_ci_affected.py` scans the Go tests and
+fails when a test reads or builds another package's files, or reads a prose file, and has no entry of the right kind in that file;
+root-level `.go` files select the tests that build `./cmd/stw`.
 `ci_changes.py affected --files-from FILE` classifies a path list by path only. When the conformance
-tier applies, `ci_shards.py packages --within` drops `internal/workspace`, which the shards run.
+tier applies (the `CONFORMANCE_TIER` value), `check` leaves `internal/workspace` to the shards and
+`ci_shards.py packages --within` drops it from the affected list; when it does not apply, `check` tests it plain.
 
 Never require a per-shard check: a shard skipped inside a matrix reports under the
 unexpanded matrix name and would stay pending. Require only checks that always report:
