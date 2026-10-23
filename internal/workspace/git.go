@@ -466,36 +466,11 @@ func (gitAdapter) Create(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	return n, nil
 }
 
-func (gitAdapter) Verify(ctx context.Context, p MutationPlan) (NativeWorkspace, error) {
-	n := NativeWorkspace{Phase: "unknown", Effects: []string{}, Limitations: []string{"Ownership verification is sampled; normal task commits and dirty files are preserved."}}
-	id, err := gitNativeIdentity(ctx, p.Destination)
+// Verify is the identity part plus the creation digest equality; the workspace
+// and handoff paths keep both (Spec 041 FR-020a).
+func (a gitAdapter) Verify(ctx context.Context, p MutationPlan) (NativeWorkspace, error) {
+	n, source, bin, err := a.verifyIdentity(ctx, p)
 	if err != nil {
-		return n, err
-	}
-	if id.WorkspaceRoot != p.Destination || id.RepositoryDir != p.Expected.Identity.RepositoryDir || id.GitDir == p.Expected.Identity.GitDir {
-		return n, failure("git-foreign-workspace", "destination does not identify the planned native linked worktree")
-	}
-	parent := filepath.Join(id.RepositoryDir, "worktrees")
-	if filepath.Dir(id.GitDir) != parent {
-		return n, failure("git-foreign-workspace", "destination Git directory is not a native worktree registration")
-	}
-	lock, err := gitMetadata(filepath.Join(id.GitDir, "locked"))
-	if err != nil || string(lock) != "stw:"+p.TaskID+"\n" {
-		return n, failure("git-foreign-workspace", "native worktree lock does not match the recorded task identity")
-	}
-	gitdir, err := gitMetadata(filepath.Join(id.GitDir, "gitdir"))
-	if err != nil || strings.TrimSuffix(string(gitdir), "\n") != filepath.Join(p.Destination, ".git") {
-		return n, failure("git-foreign-workspace", "native worktree backlink does not match the recorded destination")
-	}
-	source, err := gitNativeIdentity(ctx, p.SourcePath)
-	if err != nil {
-		return n, err
-	}
-	bin, err := gitExecutable()
-	if err != nil {
-		return n, err
-	}
-	if _, _, err := gitLayoutSafety(ctx, bin, id); err != nil {
 		return n, err
 	}
 	safety, err := gitSafety(ctx, bin, source, p.Expected.BaseCommit)
@@ -505,11 +480,62 @@ func (gitAdapter) Verify(ctx context.Context, p MutationPlan) (NativeWorkspace, 
 	if safety != p.Expected.SafetyDigest {
 		return n, failure("git-stale-plan", "Git source layout or safety configuration changed; replan before further effects")
 	}
-	n.Identity = id
+	return a.verified(n, source, p), nil
+}
+
+// VerifyIdentity checks only who owns the registration: destination, common
+// directory, lock, backlink and layout. Owned retirement replaces the creation
+// digest equality with its fresh safety admission, whose digest the stored plan
+// binds and apply re-checks (Spec 041 FR-020a).
+func (a gitAdapter) VerifyIdentity(ctx context.Context, p MutationPlan) (NativeWorkspace, error) {
+	n, source, _, err := a.verifyIdentity(ctx, p)
+	if err != nil {
+		return n, err
+	}
+	return a.verified(n, source, p), nil
+}
+
+func (gitAdapter) verified(n NativeWorkspace, source NativeIdentity, p MutationPlan) NativeWorkspace {
 	n.Phase = "materialized"
 	n.Complete = true
 	n.SourceUnchanged = reflect.DeepEqual(source, p.Expected.Identity)
-	return n, nil
+	return n
+}
+
+func (gitAdapter) verifyIdentity(ctx context.Context, p MutationPlan) (NativeWorkspace, NativeIdentity, string, error) {
+	n := NativeWorkspace{Phase: "unknown", Effects: []string{}, Limitations: []string{"Ownership verification is sampled; normal task commits and dirty files are preserved."}}
+	id, err := gitNativeIdentity(ctx, p.Destination)
+	if err != nil {
+		return n, NativeIdentity{}, "", err
+	}
+	if id.WorkspaceRoot != p.Destination || id.RepositoryDir != p.Expected.Identity.RepositoryDir || id.GitDir == p.Expected.Identity.GitDir {
+		return n, NativeIdentity{}, "", failure("git-foreign-workspace", "destination does not identify the planned native linked worktree")
+	}
+	parent := filepath.Join(id.RepositoryDir, "worktrees")
+	if filepath.Dir(id.GitDir) != parent {
+		return n, NativeIdentity{}, "", failure("git-foreign-workspace", "destination Git directory is not a native worktree registration")
+	}
+	lock, err := gitMetadata(filepath.Join(id.GitDir, "locked"))
+	if err != nil || string(lock) != "stw:"+p.TaskID+"\n" {
+		return n, NativeIdentity{}, "", failure("git-foreign-workspace", "native worktree lock does not match the recorded task identity")
+	}
+	gitdir, err := gitMetadata(filepath.Join(id.GitDir, "gitdir"))
+	if err != nil || strings.TrimSuffix(string(gitdir), "\n") != filepath.Join(p.Destination, ".git") {
+		return n, NativeIdentity{}, "", failure("git-foreign-workspace", "native worktree backlink does not match the recorded destination")
+	}
+	source, err := gitNativeIdentity(ctx, p.SourcePath)
+	if err != nil {
+		return n, NativeIdentity{}, "", err
+	}
+	bin, err := gitExecutable()
+	if err != nil {
+		return n, NativeIdentity{}, "", err
+	}
+	if _, _, err := gitLayoutSafety(ctx, bin, id); err != nil {
+		return n, NativeIdentity{}, "", err
+	}
+	n.Identity = id
+	return n, source, bin, nil
 }
 
 // Report the matched rule without disclosing config values or subsection names.

@@ -232,9 +232,20 @@ func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3Plan
 		return out, failure("invalid-evidence", "Target identity does not bind an exact linked registration in the source repository.")
 	}
 	if owned != nil {
-		verified, e := (gitAdapter{}).Verify(ctx, owned.CreationPlan)
-		if e != nil || !verified.Complete || verified.Identity != target || !sameOwner(target, owned.Task.Native) || target.ObjectFormat != owned.Task.Native.ObjectFormat || target.HeadRef != "" {
-			return out, failure("changed-ownership", "Exact original stable registration, format and task lock must bind the current detached target.")
+		// Identity is exact; the position may advance: HEAD, attached or detached,
+		// must contain the recorded creation commit (Spec 041 FR-020, FR-021). The
+		// creation-time safety digest is not required: this admission runs the fresh
+		// one and the stored plan binds it.
+		verified, e := (gitAdapter{}).VerifyIdentity(ctx, owned.CreationPlan)
+		if e != nil || !verified.Complete || verified.Identity != target || !sameOwner(target, owned.Task.Native) || target.ObjectFormat != owned.Task.Native.ObjectFormat {
+			return out, failure("changed-ownership", "Exact original stable registration, format and task lock must bind the current target.")
+		}
+		contains, e := tidyV3NativeAncestry(ctx, before.Expected, owned.CreationPlan.Expected.BaseCommit, target.CommitID)
+		if e != nil {
+			return out, e
+		}
+		if !contains {
+			return out, failure("changed-ownership", "The current HEAD does not contain the recorded creation commit.")
 		}
 	}
 	if e = retirementV3NoOperation(ctx, before.Expected.Identity); e != nil {
@@ -407,7 +418,7 @@ func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3Plan
 		if e != nil || !reflect.DeepEqual(fresh, *owned) {
 			return out, failure("changed-ownership", "Original creation journal/task evidence changed during observation.")
 		}
-		verified, e := (gitAdapter{}).Verify(ctx, owned.CreationPlan)
+		verified, e := (gitAdapter{}).VerifyIdentity(ctx, owned.CreationPlan)
 		if e != nil || !verified.Complete || verified.Identity != target {
 			return out, failure("changed-ownership", "Original owned native binding changed during observation.")
 		}
