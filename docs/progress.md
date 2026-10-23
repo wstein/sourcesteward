@@ -1,5 +1,15 @@
 # Progress and handoff
 
+## Active work: Spec 039 tiered CI, WP-3 scheduled race tier (source candidate)
+
+Branch `ci/039-wp3-race` adds `.github/workflows/race.yml` (nightly `-race` of all packages on the `current` lane, weekly
+`minimum` lane; `schedule` and `workflow_dispatch` only, both jobs guarded to `refs/heads/main`), the `report` job with the only
+`issues: write` and `scripts/race_report.py` (one open `race-failure` issue, at most 20 matched test names), tests and
+`docs/development.md`. It stacks on WP-1 and adds the `race` input (boolean, default false) to `conformance.yml`, which only
+`race.yml` sets. Cost is modelled, not measured: about 430 runner minutes a week (seven nightly runs and one weekly run of about
+54 minutes each). Residual risk: a data race is found after the merge, up to a day later (a week for the `minimum` lane), only as a
+`race-failure` issue; Ready no longer implies a race-clean head. Reviewed CLEAR; not yet merged or run on a schedule.
+
 ## Active work: Spec 029 tidy safety (source candidate, acceptance pending)
 
 Explicit `tidy --contract 3` adds native Git reference proof, local tracking cleanup and
