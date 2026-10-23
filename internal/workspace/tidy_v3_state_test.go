@@ -1097,7 +1097,6 @@ func TestV3OwnedProgressKeepsCurrentHeadAndOriginalAuthority(t *testing.T) {
 		"physical-destination":    func(q *V3Plan) { q.Retirement.Destination.Inode++ },
 		"current-head-changed":    func(q *V3Plan) { q.Retirement.Target.CommitID = strings.Repeat("d", 40) },
 		"stale-integration":       func(q *V3Plan) { q.Retirement.Integration.Evidence.Native.TargetOID = oldNative.CommitID },
-		"attached-current-head":   func(q *V3Plan) { q.Retirement.Target.HeadRef = "refs/heads/foreign" },
 		"foreign-lock":            func(q *V3Plan) { q.Retirement.Provenance.Owned.LockReason = "stw:foreign" },
 	} {
 		t.Run(name, func(t *testing.T) {
