@@ -50,15 +50,15 @@ class TriggerTests(unittest.TestCase):
 
 
 class CheckJobTests(unittest.TestCase):
-    def test_check_job_runs_static_checks_and_race_suite_once(self):
+    def test_check_job_runs_static_checks_and_plain_test_suite_once(self):
         check = job_text('check')
         self.assertIn('run: make check-static', check)
         self.assertNotIn('run: make check\n', check)
         runs = re.findall(r'go test\b[^\n]*', check)
-        self.assertEqual(len(runs), 2, 'one race run per tier branch, never both')
+        self.assertEqual(len(runs), 2, 'one test run per tier branch, never both')
         for run in runs:
-            self.assertIn('-timeout 40m -race', run)
-        self.assertIn('go test -timeout 40m -race ./...', runs[1])
+            self.assertIn('-timeout 40m', run)
+        self.assertIn('go test -timeout 40m ./...', runs[1])
 
     def test_make_check_keeps_every_step_and_check_static_omits_only_go_test(self):
         makefile = (ROOT / 'Makefile').read_text()
@@ -71,6 +71,21 @@ class CheckJobTests(unittest.TestCase):
                          'scripts/test_theme.mjs', 'scripts/check-docs.py', 'scripts/check-architecture.py',
                          'git diff --check'):
             self.assertIn(required, static)
+
+
+class NoRaceOnPullRequestTests(unittest.TestCase):
+    """Owner decision 2026-10-22 (Spec 039): -race never runs on a pull request or a main push."""
+
+    def test_no_go_test_command_uses_race_in_ci_yml_conformance_yml_or_ci_full_yml(self):
+        for name, text in (('ci.yml', WORKFLOW), ('conformance.yml', CONFORMANCE), ('ci-full.yml', FULL)):
+            commands = re.findall(r'^[^#\n]*\bgo test\b[^\n]*', text, re.M)
+            for command in commands:
+                self.assertNotRegex(command, r'(^|\s)-race\b', '%s: %s' % (name, command))
+
+    def test_no_race_option_or_race_step_remains_in_the_pull_request_workflows(self):
+        for name, text in (('ci.yml', WORKFLOW), ('conformance.yml', CONFORMANCE), ('ci-full.yml', FULL)):
+            code = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
+            self.assertNotRegex(code, r'(?i)-race\b|name: Race tests', name)
 
 
 class CacheTests(unittest.TestCase):
@@ -191,9 +206,9 @@ class ShardedConformanceTests(unittest.TestCase):
         self.assertIn('matrix.shard == 0', text)
         self.assertIn('if: matrix.shard == 5', text)
 
-    def test_check_verifies_shard_coverage_before_the_race_suite(self):
+    def test_check_verifies_shard_coverage_before_the_test_suite(self):
         text = job_text('check')
-        self.assertLess(text.index('scripts/ci_shards.py check'), text.index('go test -timeout 40m -race'))
+        self.assertLess(text.index('scripts/ci_shards.py check'), text.index('go test -timeout 40m'))
 
 
 class LongPoleTests(unittest.TestCase):
@@ -225,7 +240,7 @@ class LongPoleTests(unittest.TestCase):
         self.assertIn('if [ "$CONFORMANCE_TIER" = true ]; then', text)
         full = text.index('else\n')
         self.assertIn('ci_shards.py packages', text[:full])
-        self.assertIn('go test -timeout 40m -race ./...', text[full:])
+        self.assertIn('go test -timeout 40m ./...', text[full:])
 
 
 class DocsOnlyClassifierTests(unittest.TestCase):

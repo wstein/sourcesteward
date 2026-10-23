@@ -100,21 +100,21 @@ jobs:
         run: python3 -B scripts/smoke-jj-inspection.py --preflight "$BACKEND_LANE"
       # Command substitutions are assigned first so a failing script fails the step (bash -e)
       # instead of silently running go test on the wrong package set.
-      - name: Workspace shard with real backends and race checks
+      - name: Workspace shard with real backends
         if: matrix.shard != 0 && matrix.shard != 5
         env:
           SHARD: ${{ matrix.shard }}
         run: |
           regex="$(python3 -B scripts/ci_shards.py regex --shard "$SHARD" --shards "$SHARD_COUNT")"
           test -n "$regex"
-          go test -count=1 -timeout 40m -race -run "$regex" ./internal/workspace
-      - name: Other packages with real backends, schema conformance and race checks
+          go test -count=1 -timeout 40m -run "$regex" ./internal/workspace
+      - name: Other packages with real backends, schema conformance
         if: matrix.shard == 0
         run: |
           packages="$(python3 -B scripts/ci_shards.py packages)"
           set -- $packages
           test "$#" -gt 1
-          go test -count=1 -timeout 40m -race "$@"
+          go test -count=1 -timeout 40m "$@"
       - name: Real CLI inspection and zero-write acceptance
         if: matrix.shard == 5
         run: |

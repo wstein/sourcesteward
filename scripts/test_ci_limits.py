@@ -17,9 +17,9 @@ def job_text(name, workflow=WORKFLOW):
 
 
 class CILimitTests(unittest.TestCase):
-    def test_race_test_jobs_have_explicit_timeout_below_job_limit(self):
+    def test_go_test_jobs_have_explicit_timeout_below_job_limit(self):
         for job, text in (('check', job_text('check')), ('shard', job_text('shard', CONFORMANCE))):
-            tests = re.findall(r'go test [^\n]*-race[^\n]*', text)
+            tests = re.findall(r'go test [^\n]*-timeout[^\n]*', text)
             self.assertTrue(tests, job)
             job_limit = int(re.search(r'timeout-minutes: (\d+)', text).group(1))
             for command in tests:
@@ -36,7 +36,7 @@ class CILimitTests(unittest.TestCase):
         for command in commands:
             self.assertRegex(command, r'-timeout \d+m')
 
-    def test_check_job_runs_one_race_pass_per_branch_within_its_limit(self):
+    def test_check_job_runs_one_test_pass_per_branch_within_its_limit(self):
         text = job_text('check')
         self.assertEqual(len(re.findall(r'go test\b', text)), 2)  # one per tier branch
         limit = int(re.search(r'timeout-minutes: (\d+)', text).group(1))
