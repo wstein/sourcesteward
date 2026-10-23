@@ -10,6 +10,7 @@ the shards do not cover the full list exactly once.
   ci_shards.py plan [--shards N]            print the shards with their weights
   ci_shards.py regex --shard K [--shards N] print the -run regex of shard K (1-based)
   ci_shards.py packages                     print every package except the sharded one
+  ci_shards.py packages --within "P ..."    print the listed packages except the sharded one (may print nothing)
   ci_shards.py check [--shards N]           verify the shards via go test -list
 """
 import argparse
@@ -62,6 +63,11 @@ def exclude(listed, heavy):
     return rest
 
 
+def subset(listed, heavy):
+    """The listed packages without the sharded one; unlike exclude() the result may be empty."""
+    return [package for package in listed if package != heavy]
+
+
 def verify(full, shard_lists):
     if not full:
         sys.exit('shard coverage check failed: no tests listed')
@@ -99,9 +105,14 @@ def main():
     parser.add_argument('command', choices=('plan', 'regex', 'packages', 'check'))
     parser.add_argument('--shards', type=int, default=DEFAULT_SHARDS)
     parser.add_argument('--shard', type=int)
+    parser.add_argument('--within', help='space separated import paths (packages command only)')
     args = parser.parse_args()
     if args.shards < 1:
         parser.error('--shards must be positive')
+    if args.command == 'packages' and args.within is not None:
+        module = subprocess.run(['go', 'list', '-m'], cwd=ROOT, text=True, capture_output=True, check=True).stdout.strip()
+        print(' '.join(subset(args.within.split(), module + '/' + load_weights()[0].removeprefix('./'))))
+        return
     if args.command == 'packages':
         package = load_weights()[0]
         listed = subprocess.run(['go', 'list', './...'], cwd=ROOT, text=True, capture_output=True, check=True).stdout.split()

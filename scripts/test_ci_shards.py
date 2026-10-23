@@ -104,6 +104,16 @@ class PackagesTests(unittest.TestCase):
             shards.exclude(['m/internal/workspace'], 'm/internal/workspace')
 
 
+class SubsetTests(unittest.TestCase):
+    def test_subset_drops_the_sharded_package_and_keeps_order(self):
+        self.assertEqual(shards.subset(['m/internal/b', 'm/internal/workspace', 'm/internal/a'], 'm/internal/workspace'),
+                         ['m/internal/b', 'm/internal/a'])
+
+    def test_subset_may_be_empty_when_only_the_sharded_package_is_listed(self):
+        self.assertEqual(shards.subset(['m/internal/workspace'], 'm/internal/workspace'), [])
+        self.assertEqual(shards.subset([], 'm/internal/workspace'), [])
+
+
 class WeightsFileTests(unittest.TestCase):
     def test_weights_file_is_well_formed(self):
         data = json.loads((ROOT / 'scripts/ci-test-weights.json').read_text())
