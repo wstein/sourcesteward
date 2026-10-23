@@ -1,0 +1,77 @@
+name: Race (T4)
+
+# Scheduled race runs (Spec 039 T4): nightly `go test -race` of all packages on the current lane,
+# weekly the minimum lane. They always run, also on quiet days, and never on a pull request. A failed
+# or cancelled run is reported as the one open `race-failure` issue by the `report` job, the only
+# place in the repository with `issues: write`. Both jobs run on the default branch only because a
+# workflow_dispatch can name any ref.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+    - cron: '17 4 * * 0'
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Pinned backend lane (minimum or current)
+        required: false
+        default: current
+        type: choice
+        options: [current, minimum]
+
+permissions:
+  contents: read
+
+# Own groups per tier; a run is never cancelled by a newer one, nor by a push.
+concurrency:
+  group: t4-${{ (github.event.schedule == '17 4 * * 0' || inputs.lane == 'minimum') && 'weekly' || 'nightly' }}
+  cancel-in-progress: false
+
+jobs:
+  race:
+    name: race (${{ matrix.lane }})
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: ${{ fromJSON(format('["{0}"]', (github.event.schedule == '17 4 * * 0' || inputs.lane == 'minimum') && 'minimum' || 'current')) }}
+    uses: ./.github/workflows/conformance.yml
+    with:
+      lane: ${{ matrix.lane }}
+      race: true
+
+  report:
+    name: report
+    needs: [race]
+    if: github.ref == 'refs/heads/main' && (failure() || cancelled())
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # One group for both schedules: on a Sunday the nightly and weekly reports must not race in
+    # the find-or-create step and file two issues.
+    concurrency:
+      group: race-report
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      # The default branch only: trusted scripts, never pull request code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Open or update the race-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          LANE: ${{ (github.event.schedule == '17 4 * * 0' || inputs.lane == 'minimum') && 'minimum' || 'current' }}
+          RACE_RESULT: ${{ needs.race.result }}
+        run: |
+          tier=nightly
+          if [ "$LANE" = minimum ]; then tier=weekly; fi
+          reason=failed
+          if [ "$RACE_RESULT" = cancelled ]; then reason=cancelled; fi
+          python3 -B scripts/race_report.py --repo "$REPO" --run-id "$RUN_ID" --run-url "$RUN_URL" \
+            --tier "$tier" --lane "$LANE" --reason "$reason"
