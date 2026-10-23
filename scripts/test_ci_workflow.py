@@ -77,16 +77,35 @@ class CheckJobTests(unittest.TestCase):
 class NoRaceOnPullRequestTests(unittest.TestCase):
     """Owner decision 2026-10-22 (Spec 039): -race never runs on a pull request or a main push."""
 
-    def test_no_go_test_command_uses_race_in_ci_yml_conformance_yml_or_ci_full_yml(self):
+    def test_no_go_test_command_uses_a_literal_race_flag(self):
         for name, text in (('ci.yml', WORKFLOW), ('conformance.yml', CONFORMANCE), ('ci-full.yml', FULL)):
             commands = re.findall(r'^[^#\n]*\bgo test\b[^\n]*', text, re.M)
             for command in commands:
                 self.assertNotRegex(command, r'(^|\s)-race\b', '%s: %s' % (name, command))
 
-    def test_no_race_option_or_race_step_remains_in_the_pull_request_workflows(self):
-        for name, text in (('ci.yml', WORKFLOW), ('conformance.yml', CONFORMANCE), ('ci-full.yml', FULL)):
+    def test_no_race_option_or_race_step_remains_in_ci_yml_and_ci_full_yml(self):
+        for name, text in (('ci.yml', WORKFLOW), ('ci-full.yml', FULL)):
             code = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
-            self.assertNotRegex(code, r'(?i)-race\b|name: Race tests', name)
+            self.assertNotRegex(code, r'(?i)-race\b|name: Race tests|\brace:', name)
+
+    def test_conformance_race_input_is_boolean_and_defaults_to_false(self):
+        self.assertRegex(CONFORMANCE, r'(?m)^      race:\n        description: [^\n]*\n        required: false\n        default: false\n        type: boolean\n')
+
+    def test_conformance_runs_race_only_when_the_input_is_true(self):
+        code = '\n'.join(line for line in CONFORMANCE.splitlines() if not line.lstrip().startswith('#'))
+        self.assertEqual(len(re.findall(r'-race\b', code)), 2, 'one gated assignment per go test step')
+        self.assertEqual(len(re.findall(r'RACE: \$\{\{ inputs\.race \}\}', code)), 2)
+        self.assertEqual(len(re.findall(r'(?m)^ *if \[ "\$RACE" = true \]; then race_flag=-race; fi$', code)), 2)
+        self.assertEqual(len(re.findall(r'go test -count=1 -timeout 40m \$race_flag ', code)), 2)
+
+    def test_no_pull_request_or_push_caller_passes_race(self):
+        for name in ('ci.yml', 'ci-full.yml'):
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertNotRegex(text, r'(?m)^\s+race:', name)
+        for path in (ROOT / '.github/workflows').glob('*.yml'):
+            text = path.read_text()
+            if path.name != 'race.yml' and 'conformance.yml' in text and path.name != 'conformance.yml':
+                self.assertNotRegex(text, r'(?m)^\s+race:', path.name)
 
 
 class NoForbiddenTriggerTests(unittest.TestCase):
