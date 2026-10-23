@@ -330,3 +330,45 @@ func TestGitRefDeleteCommandPinsOldOIDCompareAndSwap(t *testing.T) {
 		t.Fatal("stale compare-and-swap changed the target")
 	}
 }
+
+// A cancelled refusal must not depend on whether the cancel watcher or a clean
+// abort acknowledgment wins: it is uncertain and the child is killed and reaped.
+func TestGitRefTransactionRefuseAfterCancellationIsUncertain(t *testing.T) {
+	d, bin, id, ro := refTransactionFixture(t, false)
+	tx, e := prepareGitRefDeletion(context.Background(), bin, id, "refs/heads/target", id.CommitID, []string{id.RepositoryDir}, ro)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the watcher goroutine has not run: the transaction itself is not cancelled
+	out, e := tx.refuse(ctx, errors.New("cancelled after intent"))
+	if e == nil || !out.Prepared || out.CommitAttempted || out.Committed || !out.Uncertain {
+		t.Fatalf("cancelled refusal not uncertain: %+v %v", out, e)
+	}
+	if !tx.stopped || tx.cmd.ProcessState == nil {
+		t.Fatal("cancelled refusal did not reap the child")
+	}
+	if gitFixture(t, d, "rev-parse", "refs/stw/recovery/transaction") != id.CommitID {
+		t.Fatal("cancelled refusal lost recovery")
+	}
+}
+
+// Commit with a cancelled caller context while the prepare context stays live
+// must not be a confirmed abort.
+func TestGitRefTransactionCommitCancelledCallerIsUncertain(t *testing.T) {
+	_, bin, id, ro := refTransactionFixture(t, false)
+	tx, e := prepareGitRefDeletion(context.Background(), bin, id, "refs/heads/target", id.CommitID, []string{id.RepositoryDir}, ro)
+	if e != nil {
+		t.Fatal(e)
+	}
+	caller, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	out, e := tx.Commit(caller, func(context.Context) error { called = true; return nil })
+	if e == nil || called || !out.Prepared || out.CommitAttempted || out.Committed || !out.Uncertain {
+		t.Fatalf("cancelled caller not uncertain: %+v called=%v %v", out, called, e)
+	}
+	if !tx.stopped || tx.cmd.ProcessState == nil {
+		t.Fatal("child not reaped")
+	}
+}

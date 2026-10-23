@@ -229,7 +229,16 @@ func (t *gitRefTransaction) outcome() gitRefTransactionOutcome {
 	}
 	return t.out
 }
-func (t *gitRefTransaction) refuse(cause error) (gitRefTransactionOutcome, error) {
+
+// refuse ends a prepared transaction without COMMIT. When the operation was
+// cancelled, the cancel watcher and a clean abort acknowledgment race, so a
+// cancelled refusal never trusts an abort: it kills the owned process now and
+// reports the outcome as uncertain, whichever side would have won.
+func (t *gitRefTransaction) refuse(ctx context.Context, cause error) (gitRefTransactionOutcome, error) {
+	if ctx.Err() != nil && !t.stopped {
+		t.out.Uncertain = true
+		return t.out, errors.Join(cause, t.finish(true))
+	}
 	e := t.abortFor(cause)
 	return t.out, e
 }
@@ -274,7 +283,7 @@ func (t *gitRefTransaction) Commit(ctx context.Context, revalidate func(context.
 		return t.out, errors.Join(errGitRefTransaction, t.terminalErr)
 	}
 	if e := ctx.Err(); e != nil {
-		return t.refuse(errors.Join(e, context.Cause(ctx)))
+		return t.refuse(ctx, errors.Join(e, context.Cause(ctx)))
 	}
 	commitDone := make(chan struct{})
 	defer close(commitDone)
@@ -286,16 +295,16 @@ func (t *gitRefTransaction) Commit(ctx context.Context, revalidate func(context.
 		}
 	}()
 	if revalidate == nil {
-		return t.refuse(errGitRefTransaction)
+		return t.refuse(ctx, errGitRefTransaction)
 	}
 	if e := t.readback(ctx); e != nil {
-		return t.refuse(errors.Join(e, context.Cause(ctx)))
+		return t.refuse(ctx, errors.Join(e, context.Cause(ctx)))
 	}
 	if e := revalidate(ctx); e != nil {
-		return t.refuse(errors.Join(e, context.Cause(ctx)))
+		return t.refuse(ctx, errors.Join(e, context.Cause(ctx)))
 	}
 	if e := ctx.Err(); e != nil {
-		return t.refuse(errors.Join(e, context.Cause(ctx)))
+		return t.refuse(ctx, errors.Join(e, context.Cause(ctx)))
 	}
 	t.out.CommitAttempted = true
 	e := t.write("commit\x00")
