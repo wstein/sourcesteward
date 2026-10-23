@@ -80,4 +80,4 @@ Triggers: `schedule` (nightly and weekly crons) and `workflow_dispatch`; no `pul
 runs the conformance shards with `race: true` (nightly: all packages, lane `current`; weekly: lane `minimum`). Job `report`
 (`needs: race`, `if: failure() || cancelled()`): `permissions: contents: read, actions: read, issues: write`; checks out the default branch only; finds an
 open issue with the label `race-failure` (comment on it) or creates one (so at most one is open); the body holds the run link, the tier,
-the lane, the reason (failed, or cancelled or timed out) and at most 20 test names matched by `^--- FAIL: (Test\w+)`; the log text itself is never copied.
+the lane, the reason (failed, including a job timeout, or cancelled) and at most 20 test names matched by `^--- FAIL: (Test\w+)`; the log text itself is never copied.
