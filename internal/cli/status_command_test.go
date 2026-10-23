@@ -439,3 +439,17 @@ func TestStatusWithoutATokenKeepsTheIconMarksOfTheOfflineOutput(t *testing.T) {
 		}
 	}
 }
+
+// --worktrees lists the linked worktrees in the output without a token exactly as it does offline.
+func TestStatusWithoutATokenListsTheWorktreesLikeTheOfflineOutput(t *testing.T) {
+	forge := &statusForge{err: errors.New("no request may be sent")}
+	open := fmt.Errorf("gh: %w", hosting.ErrAuthentication)
+	offline := runOnline(t, statusCLIResult(), forge, open, "--offline", "--worktrees")
+	run := runOnline(t, statusCLIResult(), forge, open, "--worktrees")
+	if run.err != nil || forge.reads != 0 || !strings.HasPrefix(run.out, offline.out) || !strings.Contains(run.out, "worktree /wt/one") {
+		t.Fatalf("%v\n%s", run.err, run.out)
+	}
+	if notices := strings.TrimPrefix(run.out, offline.out); !strings.HasPrefix(notices, "\nNotices\n  ") {
+		t.Errorf("%q", notices)
+	}
+}
