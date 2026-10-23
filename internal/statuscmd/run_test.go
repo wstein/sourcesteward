@@ -102,6 +102,12 @@ func (f *forgeFake) Statuses(_ context.Context, repo, _ string, _ int, _ string)
 	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, f.enter("statuses " + repo)
 }
 
+func (f *forgeFake) IssuesPage(_ context.Context, repo string, _ int) (hosting.WatchResponse, error) {
+	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, f.enter("issues " + repo)
+}
+
+func (f *forgeFake) Viewer(context.Context) (string, error) { return "wstein", f.enter("user") }
+
 func (f *forgeFake) requests() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -149,7 +155,7 @@ func TestRunReadsTheGitHubRepositoryOnly(t *testing.T) {
 		t.Fatalf("%+v", rec)
 	}
 	for _, c := range forge.calls {
-		if !strings.HasSuffix(c, " acme/root") {
+		if !strings.HasSuffix(c, " acme/root") && c != "user" {
 			t.Errorf("a repository that is no GitHub origin was read: %s", c)
 		}
 	}
@@ -331,7 +337,9 @@ func TestProgressCountsEveryKindOfRequest(t *testing.T) {
 	_, _ = c.RepoInfo(ctx, "o/r")
 	_, _ = c.ReleaseList(ctx, "o/r")
 	_, _ = c.TagList(ctx, "o/r")
-	if !strings.HasSuffix(out.String(), "reading remote: 13 requests") {
+	_, _ = c.IssuesPage(ctx, "o/r", 1)
+	_, _ = c.Viewer(ctx)
+	if !strings.HasSuffix(out.String(), "reading remote: 15 requests") {
 		t.Fatalf("%q", out.String())
 	}
 	c.line.clear()
@@ -375,6 +383,10 @@ func (everyRead) WorkflowRuns(context.Context, string, string, string) (hosting.
 func (everyRead) RepoInfo(context.Context, string) (hosting.RepoInfo, error) {
 	return hosting.RepoInfo{}, nil
 }
+func (everyRead) IssuesPage(context.Context, string, int) (hosting.WatchResponse, error) {
+	return hosting.WatchResponse{}, nil
+}
+func (everyRead) Viewer(context.Context) (string, error) { return "", nil }
 func (everyRead) ReleaseList(context.Context, string) ([]hosting.StatusRelease, error) {
 	return nil, nil
 }
@@ -440,6 +452,14 @@ func (blockingForge) ReleaseList(ctx context.Context, _ string) ([]hosting.Statu
 func (blockingForge) TagList(ctx context.Context, _ string) ([]hosting.StatusTag, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
+}
+func (blockingForge) IssuesPage(ctx context.Context, _ string, _ int) (hosting.WatchResponse, error) {
+	<-ctx.Done()
+	return hosting.WatchResponse{}, ctx.Err()
+}
+func (blockingForge) Viewer(ctx context.Context) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
 }
 func (blockingForge) ListOpenPullItems(ctx context.Context, _ string, _ int) ([]hosting.PullListItem, error) {
 	<-ctx.Done()

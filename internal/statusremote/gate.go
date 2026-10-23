@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
+	"github.com/wstein/sourcesteward/internal/issues"
 	"github.com/wstein/sourcesteward/internal/pulls"
 )
 
@@ -18,6 +19,7 @@ type Client interface {
 	pulls.Reader
 	CIReader
 	Reader
+	issues.Reader
 }
 
 var _ Client = (*hosting.WatchReader)(nil)
@@ -132,6 +134,14 @@ func (g *gate) ReleaseList(ctx context.Context, repo string) ([]hosting.StatusRe
 
 func (g *gate) TagList(ctx context.Context, repo string) ([]hosting.StatusTag, error) {
 	return through(ctx, g, func() ([]hosting.StatusTag, error) { return g.c.TagList(ctx, repo) })
+}
+
+func (g *gate) IssuesPage(ctx context.Context, repo string, page int) (hosting.WatchResponse, error) {
+	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.IssuesPage(ctx, repo, page) })
+}
+
+func (g *gate) Viewer(ctx context.Context) (string, error) {
+	return through(ctx, g, func() (string, error) { return g.c.Viewer(ctx) })
 }
 
 var _ Client = (*gate)(nil)

@@ -27,12 +27,17 @@ type world struct {
 	tags  map[string][]hosting.StatusTag
 	heads map[string]string // repository -> head of its default branch
 	flows map[string]string // "repo workflow@sha" -> workflow runs body
+
+	issues    map[string][]string // repository -> bodies of its issue list pages
+	viewer    string              // the login `user` answers with
+	viewerErr error
 }
 
 func newWorld() *world {
 	return &world{
 		errs: map[string]error{}, pulls: newForge(), info: map[string]hosting.RepoInfo{}, rels: map[string][]hosting.StatusRelease{},
 		tags: map[string][]hosting.StatusTag{}, heads: map[string]string{}, flows: map[string]string{},
+		issues: map[string][]string{}, viewer: "wstein",
 	}
 }
 
@@ -162,4 +167,44 @@ func (w *world) PullCommits(ctx context.Context, repo string, n, _ int, _ string
 
 func (w *world) RateLimit(ctx context.Context) (hosting.RateInfo, error) {
 	return hosting.RateInfo{}, w.enter(ctx, "rate-limit")
+}
+
+// IssuesPage serves the canned pages of a repository ("issues o/r#N" is the request line); a page that has a
+// successor announces it in the Link header, which only says that another page exists.
+func (w *world) IssuesPage(ctx context.Context, repo string, page int) (hosting.WatchResponse, error) {
+	if err := w.enter(ctx, fmt.Sprintf("issues %s#%d", repo, page)); err != nil {
+		return hosting.WatchResponse{}, err
+	}
+	bodies := w.issues[repo]
+	res := hosting.WatchResponse{Status: 200, Body: []byte("[]")}
+	if page >= 1 && page <= len(bodies) {
+		res.Body = []byte(bodies[page-1])
+	}
+	if page < len(bodies) {
+		res.Link = fmt.Sprintf(`<https://api.github.com/repos/%s/issues?page=%d>; rel="next"`, repo, page+1)
+	}
+	return res, nil
+}
+
+func (w *world) Viewer(ctx context.Context) (string, error) {
+	if err := w.enter(ctx, "user"); err != nil {
+		return "", err
+	}
+	return w.viewer, w.viewerErr
+}
+
+// issueList is the body of an issue list page: entries are (number, label...) tuples written by issue().
+func issueList(entries ...string) string { return "[" + strings.Join(entries, ",") + "]" }
+
+// issue is one list entry created a day ago by alice, with the labels and assignees given.
+func issue(number int, labels, assignees []string) string {
+	named := func(key string, names []string) string {
+		var parts []string
+		for _, n := range names {
+			parts = append(parts, fmt.Sprintf(`{%q:%q}`, key, n))
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	}
+	return fmt.Sprintf(`{"number":%d,"title":"issue %d","html_url":"https://github.com/o/r/issues/%d","created_at":"2026-10-20T09:00:00Z","comments":0,`+
+		`"user":{"login":"alice","type":"User"},"labels":%s,"assignees":%s}`, number, number, number, named("name", labels), named("login", assignees))
 }

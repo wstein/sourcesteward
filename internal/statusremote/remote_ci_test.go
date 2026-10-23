@@ -212,9 +212,9 @@ func TestTheDeadlineSkipsTheCISourcesThatWereNotFinished(t *testing.T) {
 	})
 }
 
-// All sources but the pull requests share one pool: at most four repositories are in flight for them
+// All sources but the pull requests and the issues share one pool: at most four repositories are in flight for them
 // together, however many sources a repository still has to read.
-func TestAtMostFourRepositoriesAreInFlightForAllSourcesButThePullRequests(t *testing.T) {
+func TestAtMostFourRepositoriesAreInFlightForAllSourcesButPullRequestsAndIssues(t *testing.T) {
 	for _, prefix := range []string{"repo ", "branch ", "flow "} {
 		t.Run(strings.TrimSpace(prefix), func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -228,8 +228,8 @@ func TestAtMostFourRepositoriesAreInFlightForAllSourcesButThePullRequests(t *tes
 				var inFlight, peak atomic.Int32
 				release := make(chan struct{})
 				w.hook = func(_ context.Context, call string) error {
-					if strings.HasPrefix(call, "list ") || strings.HasPrefix(call, "detail ") {
-						return nil
+					if strings.HasPrefix(call, "list ") || strings.HasPrefix(call, "detail ") || strings.HasPrefix(call, "issues ") || call == "user" {
+						return nil // the pull requests and the issues have a pool of their own
 					}
 					n := inFlight.Add(1)
 					for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
@@ -302,7 +302,7 @@ func TestTheFirstRateLimitStopsEverySourceWithoutSleeping(t *testing.T) {
 			}
 		}
 		for _, r := range res.Repos {
-			for _, src := range overview.StatusSources {
+			for _, src := range overview.Sources {
 				if st := sourceState(t, r, src); st != okState && st != failed(hosting.CodeRateLimited) && st != skipped(overview.ReasonNotAttempted) {
 					t.Errorf("%s %s: %+v", r.Name, src, st)
 				}

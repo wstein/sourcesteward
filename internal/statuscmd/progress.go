@@ -109,3 +109,13 @@ func (c progressClient) TagList(ctx context.Context, repo string) ([]hosting.Sta
 	c.line.tick()
 	return c.Client.TagList(ctx, repo)
 }
+
+func (c progressClient) IssuesPage(ctx context.Context, repo string, page int) (hosting.WatchResponse, error) {
+	c.line.tick()
+	return c.Client.IssuesPage(ctx, repo, page)
+}
+
+func (c progressClient) Viewer(ctx context.Context) (string, error) {
+	c.line.tick()
+	return c.Client.Viewer(ctx)
+}

@@ -246,6 +246,9 @@ func (r Report) Document() Document {
 	}
 	for i, n := range r.Overview.Notices {
 		d.Notices[i] = DocNotice{Code: cut(n.Code, maxString), Source: n.Source, Repos: n.Repos, Message: cut(n.Message, maxMessage)}
+		if n.Repos == nil { // the notice of the viewer is about the run, not about a repository
+			d.Notices[i].Repos = []string{}
+		}
 	}
 	return d
 }
