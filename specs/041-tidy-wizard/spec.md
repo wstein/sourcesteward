@@ -203,7 +203,7 @@ Candidate kinds: `worktree` (linked task worktree: registration, files, optional
 
 Reason codes (stable, kebab-case; the list extends Spec 011/029 codes, none is renamed): `unmerged` (no proof), `dirty`,
 `ignored-extras`, `locked-foreign`, `locked-stw` (decision), `unregistered` (information: no stw creation record), `current-worktree`, `primary-checkout`,
-`protected`, `recently-active`, `registration-record-missing`, `registration-record-ambiguous`, `scope-not-authorized`, `safety-config-changed`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
+`protected`, `recently-active`, `registration-record-missing`, `registration-record-ambiguous`, `scope-not-authorized`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
 real identity change, see below), `registration-moved`, `lock-mismatch`, `branch-attached-elsewhere`, `retirement-file-limit`,
 `retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`.
 
@@ -284,8 +284,11 @@ independent reasons:
   unchanged. This is a deliberate, documented change of what retirement requires, **not** a silent weakening of the digest: instead of "the
   safety-relevant state equals what it was at creation", retirement requires "the safety-relevant state is acceptable now", which is the
   question that matters for deleting files, and the plan stores the fresh digest so apply re-checks that it did not change after planning.
-  An added hook, an unsafe config key, a changed layout or an unrecognised safety state still refuses, with its own code
-  `safety-config-changed` (not `changed-ownership`). The re-bind alternative (a human-authorized, journaled re-registration step in the plan) is
+  **No new refusal code and no policy change:** retirement runs in planning mode, where hooks, `core.hooksPath`, fsmonitor and `submodule.*`
+  are notes that are switched off at apply (Spec 031 FR-020/021). A hook added before planning is a note and the worktree still
+  retires; a hook or key added between plan and apply refuses through the existing `evidence-changed` stale check; an unsafe
+  layout keeps its existing code. Existing refusal codes are kept (renaming one would change expert-layer output). The split applies at
+  **both** `Verify` call sites of the owned retirement path; the older v2 retirement path keeps its rule. The re-bind alternative (a human-authorized, journaled re-registration step in the plan) is
   rejected as default because it asks for a confirmation per worktree (61); it remains available as the `decision` path of the legacy completion.
 - **Integration proof of the real HEAD** (already how the code proves: `proveTidyV3Commit(target.CommitID)`): ancestor, patch-id,
   merge-noop or no-net-change; clean tree, no extras, no submodule or symlink problem.
@@ -407,7 +410,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **FR-015** The worktree of the working directory, primary checkouts and any non-provably-completed worktree are protected automatically.
 - **FR-016** `--online` is the only way to network; default offline.
 - **FR-020** Ownership identity (admin dir, path, common dir, lock, format, journal) stays exact; HEAD position may be the detached creation commit or any descendant, attached or detached (#174).
-- **FR-020a** Retirement does not require equality with the creation-time safety digest; it requires the fresh safety admission, stores the fresh digest in the plan and re-checks it at apply. An added hook, unsafe key or layout change refuses with `safety-config-changed`. Workspace and handoff paths keep the creation digest check.
+- **FR-020a** Retirement does not require equality with the creation-time safety digest; it requires the fresh safety admission, stores the fresh digest in the plan and re-checks it at apply. Hooks and similar settings stay notes in planning mode as today (Spec 031); a change between plan and apply refuses through the existing `evidence-changed`; no refusal code is added or renamed. The split applies at both `Verify` call sites; the v2 retirement path is unchanged. Workspace and handoff paths keep the creation digest check.
 - **FR-021** A HEAD that does not contain the creation commit is `changed-ownership`.
 - **FR-022** Retirement requires the integration proof of the real HEAD, a clean tree and no extras; the branch is deleted only if proven integrated, listed in the plan and attached nowhere else.
 - **FR-023** The stored retirement plan binds HEAD ref and OID (existing fields); apply refuses (`stale`) on any change of HEAD, branch tip or base.
@@ -429,7 +432,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 
 - **SC-001** On a fixture reproducing the 2026-10-23 situation (stw-created worktrees whose records are in a known store passed by `--state-dir`, branches pushed with `-u` and merged by rebase), the overview classifies every worktree, proposes each completed one as `safe`, and `stw tidy` with the answer `a` plus `stw tidy apply` removes them with recovery evidence. Worktrees whose records live in a store not passed are `retain` `registration-record-missing`, never guessed.
 - **SC-002** A fixture for every case of the behaviour table yields the stated verdict and reason, and no fixture of `retain` is ever changed by apply (mutation probe: forcing any of them into the plan makes apply refuse).
-- **SC-003** The real sequence of #174 (apply workspace detached, `git switch -c b`, commit, `git push -u` to a bare remote, rebase-merge so SHAs differ, `tidy`) retires registration, directory and branch; a changed unrelated config key and a changed Git binary identity retire; an added hook or unsafe key refuses `safety-config-changed`; wrong owner, moved or foreign lock, dirty tree and unintegrated branch are refused with their codes.
+- **SC-003** The real sequence of #174 (apply workspace detached, `git switch -c b`, commit, `git push -u` to a bare remote, rebase-merge so SHAs differ, `tidy`) retires registration, directory and branch; a changed unrelated config key and a changed Git binary identity retire; a hook added before planning is a note and the worktree still retires, one added between plan and apply refuses with the existing `evidence-changed`; wrong owner, moved or foreign lock, dirty tree and unintegrated branch are refused with their codes.
 - **SC-004** `stw tidy` with no TTY never blocks (test with closed and with silent stdin) and stores nothing.
 - **SC-005** Existing tidy tests, goldens and schemas pass byte-unchanged; every flag registered by the tidy commands is classified (wizard, expert or shared), and `plan --base X` without `PATH` stays expert.
 - **SC-006** An ambiguous base never produces a candidate for that repository (tests: no `refs/remotes/origin/HEAD`, two remotes, dangling HEAD).
@@ -438,7 +441,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **SC-009** `make check` and `scripts/check-docs.py` pass; independent review of the exact head is CLEAR.
 - **SC-010** With worktrees of Claude, Codex and an unknown owner present, a human `stw tidy` with no flag lists all of them grouped by owner with the owner column; JSON carries `owner`, `owner_source`, `scope` for each.
 - **SC-011** Answering `a` selects own safe items only; an other or unknown item is in the stored plan only if chosen by number or `o` with the typed `/dev/tty` confirmation, and is then marked in plan and prompt.
-- **SC-012** `--mine` lists and plans own items only (agent mode: only `task-record` owners); agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized` and changes nothing; editing `authorized_scopes` in the store changes the plan id and is refused; with it set by the human path it applies.
+- **SC-012** `--mine` lists and plans own items only (agent mode: only `task-record` owners); agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized` and changes nothing; editing `authorized_scopes` in the store changes the plan id and is refused; a plan with `authorized_scopes` is applied only by the human path: the typed `/dev/tty` confirmation is required, so an agent-mode apply of it fails closed without a controlling terminal (exit 1, nothing changed).
 - **SC-013** State directories: the shared default is used by both commands; repeatable `--state-dir` finds records in several stores; missing and ambiguous records give their reasons and hints; an unsafe store is skipped with exit 1 at the end.
 - **SC-014** Mode detection: pty with `STW_AGENT` or an agent marker yields agent mode; both streams on terminals without markers yields human mode; the mode evidence is in plan, journal and `history`; `--mine` forces agent mode.
 - **SC-015** The branch leg: HEAD attached to the base branch never gets a leg; a failed retirement skips the leg; the leg re-checks Spec 011 protections and the planned tip OID.
@@ -453,18 +456,18 @@ Each has a recommended default; the foreman decides.
 2. **Does the wizard apply itself?** Recommended: yes only after a typed `y` for the plan id, using the same apply code; `stw tidy` alone never applies.
 3. **Base source.** Recommended: remote symbolic HEAD only in v1, workspace config (`.stw/tidy.toml`, key `base` per repository) as a follow-up if a
    repository lacks a symbolic HEAD. Alternative: ship the config now.
-4. **State directory default location.** Recommended `$XDG_STATE_HOME/stw/tidy`. Alternative: inside the workspace repository's `.stw/` (rejected: inside a repository).
+4. **State directory default location.** Superseded: the shared default is `${XDG_STATE_HOME:-~/.local/state}/stw/workspace` for `stw workspace` and `stw tidy`. Alternative: inside the workspace repository's `.stw/` (rejected: inside a repository).
 5. **`locked-stw` as `decision`.** Now only for an stw-format lock without a (matching) record. Recommended: selectable in human mode through the legacy completion with a second confirmation. Alternative: always `retain`.
 6. **Plan set versus single plans.** Recommended: plan set of independent sub-plans (keeps the Spec 029 one-worktree rule). Alternative: lift the rule to batch plans (larger review surface).
-7. **Wizard flags `--only`, `--repo`.** Recommended: keep, small. Alternative: omit in v1.
+7. **Wizard flags `--only`, `--member`.** Recommended: keep, small. Alternative: omit in v1.
 8. **Tracking refs in the default analysis.** Recommended: only with `--online` (contract 3 needs it); offline wizard skips them with a notice.
 9. **jj in the wizard.** Recommended: include bookmarks and empty working-copy retirement exactly as Spec 011; no new jj proof.
 10. **Prompt library.** Recommended: plain line prompts on stdin/stdout, no dependency. Alternative: a TUI library (rejected: pinned-dependency cost).
 12. **Human versus agent mode detection.** Recommended: the accident guard of Mode detection (both terminals, no `STW_AGENT`, no agent marker table). Alternative: an explicit `--as-agent` flag (rejected: an agent could omit it).
 13. **Owner of an unregistered worktree.** Recommended: ordered derivation task record, then path/branch-prefix table (`/tmp/whr*` and `codex/` = codex, `claude/` = claude, others unknown) extendable in workspace config, then `unknown`; the branch-tip author is shown as a hint only and never grants `own`. Alternative: author-based owner (rejected: agents commit under the human's identity).
 14. **Removing an unregistered foreign worktree.** Recommended: via the Spec 029 legacy completion path (exact path, declared complete by the human's explicit choice, same proofs). Alternative: refuse until adopted into a registration (safer, slower).
-15. **Recently-active window and bare `stw tidy`.** Recommended: 24 hours for `other`/`unknown` scope, and bare `stw tidy` becomes the wizard (it printed help; `--help` stays). Alternative: 4 hours; bare `stw tidy` stays help and the wizard is `stw tidy wizard`.
-16. **Workspace config list of state dirs.** Recommended: ship flags and `$STW_STATE_DIR` first, the config key with OQ3. Alternative: ship both together.
+15. **Recently-active window and bare `stw tidy`.** **Decided (foreman):** 24 hours; bare `stw tidy` becomes the wizard, `stw tidy --help` stays help. Original recommendation: 24 hours for `other`/`unknown` scope, and bare `stw tidy` becomes the wizard (it printed help; `--help` stays). Alternative: 4 hours; bare `stw tidy` stays help and the wizard is `stw tidy wizard`.
+16. **Workspace config list of state dirs.** **Decided (foreman):** later (flags, `$STW_STATE_DIR` and the shared default first). Original recommendation: ship flags and `$STW_STATE_DIR` first, the config key with OQ3. Alternative: ship both together.
 11. **`stw status` hint.** Recommended: the `branches-unmerged` and `worktree-stale` items (Spec 037 rows 23, 24) change their suggested command to `stw tidy` once this ships.
 
 ## Docs impact
