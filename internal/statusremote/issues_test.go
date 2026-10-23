@@ -162,21 +162,55 @@ func TestTheDeadlineSkipsTheIssuesSource(t *testing.T) {
 	})
 }
 
-// A rate limit stops the issue reads without sleeping, the repositories not read carry it.
+// A rate limit stops the issue reads without sleeping: the reads in flight when the evidence arrived finish, no read
+// starts after it, and the repositories not read carry the rate limit. The evidence is held back until the other three
+// reads of the pool of four are in flight, and they are held until the evidence has been recorded, so the count is exact
+// and does not depend on the scheduler (the reads of the neighbours may legitimately complete after the evidence).
 func TestARateLimitStopsTheIssuesSource(t *testing.T) {
-	w := newWorld()
-	w.errs["issues o/a#1"] = &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "m"}
-	var repos []Repository
-	for i := 0; i < 8; i++ {
-		repos = append(repos, repository(fmt.Sprintf("o/%c", 'a'+i)))
-	}
-	res := Collect(context.Background(), repos, (&opener{client: w}).options())
-	if got := sourceState(t, res.Repos[0], overview.SourceIssues); got != failed(hosting.CodeRateLimited) {
-		t.Errorf("%+v", got)
-	}
-	if n := w.count("issues "); n >= 8 {
-		t.Errorf("%d issue reads after the rate limit", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		w := newWorld()
+		w.errs["issues o/a#1"] = &hosting.WatchError{Code: hosting.CodeRateLimited, Message: "m"}
+		release, four := make(chan struct{}), make(chan struct{})
+		var started atomic.Int32
+		w.hook = func(ctx context.Context, call string) error {
+			if !strings.HasPrefix(call, "issues ") {
+				return nil
+			}
+			if started.Add(1) == 4 {
+				close(four)
+			}
+			if call == "issues o/a#1" {
+				<-four // the evidence arrives while the other three reads are in flight
+			} else {
+				<-release // and they are in flight until it has been recorded
+			}
+			return nil
+		}
+		var repos []Repository
+		for i := 0; i < 8; i++ {
+			repos = append(repos, repository(fmt.Sprintf("o/%c", 'a'+i)))
+		}
+		done := make(chan Result)
+		go func() { done <- Collect(context.Background(), repos, (&opener{client: w}).options()) }()
+		synctest.Wait() // o/a has failed, the other three reads of the pool are in flight, the rest wait for a slot
+		if got := started.Load(); got != 4 {
+			t.Fatalf("%d reads in flight, want the pool of 4", got)
+		}
+		close(release)
+		res := <-done
+		if n := w.count("issues "); n != 4 {
+			t.Errorf("%d issue reads, want the 4 that were in flight: none may start after the rate limit", n)
+		}
+		for i, r := range res.Repos {
+			want := okState
+			if i == 0 || i >= 4 {
+				want = failed(hosting.CodeRateLimited)
+			}
+			if got := sourceState(t, r, overview.SourceIssues); got != want {
+				t.Errorf("%s: %+v, want %+v", r.Name, got, want)
+			}
+		}
+	})
 }
 
 // At most four repositories are in flight in the issues source.
