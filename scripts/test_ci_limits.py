@@ -38,7 +38,7 @@ class CILimitTests(unittest.TestCase):
 
     def test_check_job_runs_one_test_pass_per_branch_within_its_limit(self):
         text = job_text('check')
-        self.assertEqual(len(re.findall(r'go test\b', text)), 2)  # one per tier branch
+        self.assertEqual(len(re.findall(r'go test\b', text)), 1)
         limit = int(re.search(r'timeout-minutes: (\d+)', text).group(1))
         self.assertGreaterEqual(limit, MIN_TEST_MINUTES + JOB_MARGIN_MINUTES)
 

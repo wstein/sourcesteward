@@ -6,6 +6,7 @@ Standard library only: the workflow is inspected as text.
 import importlib.util
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -55,10 +56,10 @@ class CheckJobTests(unittest.TestCase):
         self.assertIn('run: make check-static', check)
         self.assertNotIn('run: make check\n', check)
         runs = re.findall(r'go test\b[^\n]*', check)
-        self.assertEqual(len(runs), 2, 'one test run per tier branch, never both')
+        self.assertEqual(len(runs), 1, 'one test run, never a plain pass repeated')
         for run in runs:
             self.assertIn('-timeout 40m', run)
-        self.assertIn('go test -timeout 40m ./...', runs[1])
+        self.assertIn('go test -timeout 40m "$@"', runs[0])
 
     def test_make_check_keeps_every_step_and_check_static_omits_only_go_test(self):
         makefile = (ROOT / 'Makefile').read_text()
@@ -86,6 +87,62 @@ class NoRaceOnPullRequestTests(unittest.TestCase):
         for name, text in (('ci.yml', WORKFLOW), ('conformance.yml', CONFORMANCE), ('ci-full.yml', FULL)):
             code = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
             self.assertNotRegex(code, r'(?i)-race\b|name: Race tests', name)
+
+
+class NoForbiddenTriggerTests(unittest.TestCase):
+    def test_no_workflow_uses_pull_request_target_or_an_edited_trigger(self):
+        for name, text in (('ci.yml', WORKFLOW), ('ci-full.yml', FULL), ('conformance.yml', CONFORMANCE)):
+            self.assertNotIn('pull_request_target', text, name)
+        self.assertNotRegex(WORKFLOW.split('\npermissions:', 1)[0], r'edited')
+
+    def test_ci_full_has_no_race_input_or_race_value(self):
+        self.assertNotRegex(FULL, r'(?m)^\s*race\b')
+        self.assertNotIn('race:', FULL)
+
+
+class GoTestsStepExecutionTests(unittest.TestCase):
+    """Runs the `Go tests` step of ci.yml with a stub `go` that records its arguments."""
+
+    def step(self):
+        text = job_text('check')
+        body = text.split('- name: Go tests\n', 1)[1].split('\n      - name:', 1)[0]
+        return body.split('        run: |\n', 1)[1]
+
+    def run_step(self, reason, affected, tier):
+        real_go = shutil.which('go')
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = Path(tmp, 'go')
+            stub.write_text('#!/bin/sh\nif [ "$1" = test ]; then echo "GOTEST $*"; exit 0; fi\nexec %s "$@"\n' % real_go)
+            stub.chmod(0o755)
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ['PATH'], AFFECTED=affected,
+                       AFFECTED_REASON=reason, CONFORMANCE_TIER=tier, GITHUB_STEP_SUMMARY=os.devnull)
+            out = subprocess.run(['bash', '-e', '-c', self.step()], cwd=ROOT, env=env, capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return [line for line in out.stdout.splitlines() if line.startswith('GOTEST')]
+
+    def test_an_empty_or_unknown_reason_tests_everything(self):
+        for reason in ('', 'all', 'bogus'):
+            self.assertEqual(self.run_step(reason, 'm/internal/a', 'false'), ['GOTEST test -timeout 40m ./...'], reason)
+
+    def test_packages_with_an_empty_list_tests_everything(self):
+        self.assertEqual(self.run_step('packages', '', 'false'), ['GOTEST test -timeout 40m ./...'])
+
+    def test_docs_only_runs_no_go_test(self):
+        self.assertEqual(self.run_step('docs-only', '', 'false'), [])
+
+    def test_packages_run_exactly_the_affected_list(self):
+        self.assertEqual(self.run_step('packages', 'm/a m/b', 'false'), ['GOTEST test -timeout 40m m/a m/b'])
+
+    @unittest.skipUnless(shutil.which('go'), 'needs go')
+    def test_the_workspace_package_is_left_to_the_shards_only_when_they_run(self):
+        module = subprocess.run(['go', 'list', '-m'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        ws, other = module + '/internal/workspace', module + '/internal/cli'
+        self.assertEqual(self.run_step('packages', ws + ' ' + other, 'false'), ['GOTEST test -timeout 40m %s %s' % (ws, other)])
+        self.assertEqual(self.run_step('packages', ws + ' ' + other, 'true'), ['GOTEST test -timeout 40m ' + other])
+        self.assertEqual(self.run_step('packages', ws, 'true'), [])
+        everything = self.run_step('all', '', 'true')[0]
+        self.assertNotIn(ws + ' ', everything + ' ')
+        self.assertIn(other, everything)
 
 
 class CacheTests(unittest.TestCase):
@@ -134,7 +191,7 @@ class TieringTests(unittest.TestCase):
         self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', text)
 
     def test_check_job_always_runs(self):
-        self.assertNotRegex(job_text('check'), r'(?m)^    if:')
+        self.assertNotRegex(job_text('check'), r'(?m)^    if: (?!\$\{\{ !cancelled\(\) \}\}$)')
 
     def test_ci_does_not_react_to_label_events(self):
         on = WORKFLOW.split('\npermissions:', 1)[0]
@@ -238,9 +295,10 @@ class LongPoleTests(unittest.TestCase):
     def test_check_skips_the_workspace_package_only_in_the_tier(self):
         text = job_text('check')
         self.assertIn('if [ "$CONFORMANCE_TIER" = true ]; then', text)
-        full = text.index('else\n')
-        self.assertIn('ci_shards.py packages', text[:full])
-        self.assertIn('go test -timeout 40m ./...', text[full:])
+        tier = text.split('if [ "$CONFORMANCE_TIER" = true ]; then', 1)[1].split('\n          fi\n', 1)[0]
+        self.assertIn('ci_shards.py packages)', tier)
+        self.assertIn('ci_shards.py packages --within', tier)
+        self.assertLess(text.index('if [ "$CONFORMANCE_TIER" = true ]; then'), text.index('go test -timeout 40m'))
 
 
 class DocsOnlyClassifierTests(unittest.TestCase):
@@ -363,12 +421,53 @@ class DocsOnlyWorkflowTests(unittest.TestCase):
         self.assertIn('docs_only: ${{ needs.changes.outputs.docs_only }}', text)
         self.assertNotIn('docs_only', text.split('\n    if:', 1)[1].split('\n', 1)[0])
 
-    def test_check_job_and_docs_checks_never_depend_on_docs_only(self):
+    def test_check_job_never_depends_on_docs_only_and_still_runs_every_static_check(self):
         text = job_text('check')
         self.assertNotIn('docs_only', text)
-        self.assertNotIn('needs:', text)
         self.assertIn('make check-static', text)
         self.assertIn('scripts/check-architecture.py', text)
+        self.assertIn('scripts/ci_shards.py check', text)
+        for step in ('make check-static', 'go mod tidy', 'scripts/ci_shards.py check', 'scripts/check-architecture.py',
+                     'scripts/package-pages.py'):
+            lines = [line for line in text.splitlines() if step in line]
+            self.assertTrue(lines, step)
+
+    def test_check_waits_for_changes_but_runs_even_when_it_failed(self):
+        text = job_text('check')
+        self.assertIn('needs: [changes]', text)
+        self.assertIn('if: ${{ !cancelled() }}', text)
+
+    def test_changes_job_publishes_affected_and_the_reason(self):
+        text = job_text('changes')
+        self.assertIn('affected: ${{ steps.affected.outputs.affected }}', text)
+        self.assertIn('affected_reason: ${{ steps.affected.outputs.affected_reason }}', text)
+        self.assertIn('python3 -B scripts/ci_changes.py affected >> "$GITHUB_OUTPUT"', text)
+        self.assertIn('actions/setup-go@', text)
+
+    def test_the_changes_job_does_not_save_a_go_cache(self):
+        text = job_text('changes')
+        block = text.split('actions/setup-go@', 1)[1].split('\n      - ', 1)[0]
+        self.assertIn('cache: false', block)
+        self.assertNotIn('cache: true', block)
+        self.assertNotIn('cache-dependency-path', block)
+
+    def test_go_tests_honour_the_affected_set_and_fail_closed(self):
+        text = job_text('check')
+        step = text.split('- name: Go tests\n', 1)[1].split('\n      - name:', 1)[0]
+        self.assertIn('AFFECTED: ${{ needs.changes.outputs.affected }}', step)
+        self.assertIn('AFFECTED_REASON: ${{ needs.changes.outputs.affected_reason }}', step)
+        self.assertIn('[ "$AFFECTED_REASON" = docs-only ]', step)
+        self.assertIn('[ "$AFFECTED_REASON" = packages ] && [ -n "$AFFECTED" ]', step)
+        self.assertIn("packages='./...'", step)
+        self.assertIn('ci_shards.py packages --within', step)
+        self.assertEqual(len(re.findall(r'go test\b', step)), 1)
+
+    def test_sandbox_install_is_skipped_only_for_documentation_changes(self):
+        text = job_text('check')
+        for name in ('Install distro sandbox without relaxing host protections', 'Require sandbox capability before source checks',
+                     'Read-only sandbox failure diagnostics'):
+            step = text.split('- name: ' + name + '\n', 1)[1].split('\n      - ', 1)[0]
+            self.assertIn("needs.changes.outputs.affected_reason != 'docs-only'", step, name)
 
     def test_ci_full_label_runs_never_skip(self):
         self.assertNotIn('docs_only', FULL)

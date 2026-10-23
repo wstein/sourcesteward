@@ -12,7 +12,8 @@ permissions:
 
 env:
   # True when the conformance shards run for this event (same expression as the conformance
-  # job's if:); the check job then leaves internal/workspace to the shards.
+  # job's if:); the check job then leaves internal/workspace to the shards. When false, check
+  # tests it plain (no -race).
   CONFORMANCE_TIER: ${{ github.event_name != 'pull_request' || github.event.pull_request.base.ref == github.event.repository.default_branch || contains(github.event.pull_request.labels.*.name, 'ci-full') }}
 
 concurrency:
@@ -21,26 +22,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Classifies the change set. docs_only is true only for a pull_request whose every changed
-  # file is documentation prose (scripts/ci_changes.py); it lets conformance skip its shards.
-  # No path filter is used, so every check still reports a status.
+  # Classifies the change set (scripts/ci_changes.py). docs_only is true only for a pull_request
+  # whose every changed file is documentation prose; it lets conformance skip its shards.
+  # affected lists the changed Go packages plus their reverse dependencies (T1, Spec 039) and
+  # affected_reason is docs-only, packages or all (fail closed: all). No path filter is used,
+  # so every check still reports a status.
   changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
+      affected: ${{ steps.affected.outputs.affected }}
+      affected_reason: ${{ steps.affected.outputs.affected_reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
           persist-credentials: false
+      # No cache here: this job finishes first and would save a near-empty cache under the key
+      # of the check and shard jobs, which then could not save their full one.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Detect documentation-only pull requests
         id: classify
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: python3 -B scripts/ci_changes.py >> "$GITHUB_OUTPUT"
+      - name: Select the affected Go packages
+        id: affected
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 -B scripts/ci_changes.py affected >> "$GITHUB_OUTPUT"
 
   check:
+    needs: [changes]
+    # Runs even when the classifier job failed: its empty outputs mean every package is tested.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -60,6 +79,7 @@ jobs:
       - name: Install checked Hugo release
         run: python3 -B scripts/install-hugo.py
       - name: Install distro sandbox without relaxing host protections
+        if: needs.changes.outputs.affected_reason != 'docs-only'
         run: |
           sandbox_settings() {
             for setting in kernel/unprivileged_userns_clone kernel/apparmor_restrict_unprivileged_userns user/max_user_namespaces; do
@@ -75,9 +95,10 @@ jobs:
           python3 -B scripts/activate-sandbox-profile.py
           test "$before" = "$(sandbox_settings)"
       - name: Require sandbox capability before source checks
+        if: needs.changes.outputs.affected_reason != 'docs-only'
         run: python3 -B scripts/smoke-jj-inspection.py --sandbox-preflight
       - name: Read-only sandbox failure diagnostics
-        if: failure()
+        if: failure() && needs.changes.outputs.affected_reason != 'docs-only'
         run: python3 -B scripts/smoke-jj-inspection.py --sandbox-diagnostics
       - name: Source and documentation checks
         run: make check-static
@@ -88,16 +109,36 @@ jobs:
       - name: Workspace test shards cover every test exactly once
         run: python3 -B scripts/ci_shards.py check --shards 4
       - name: Go tests
+        env:
+          AFFECTED: ${{ needs.changes.outputs.affected }}
+          AFFECTED_REASON: ${{ needs.changes.outputs.affected_reason }}
         run: |
+          if [ "$AFFECTED_REASON" = docs-only ]; then
+            echo 'Documentation-only change: no Go tests' | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Fail closed: only a non-empty list with reason packages narrows the run.
+          packages='./...'
+          if [ "$AFFECTED_REASON" = packages ] && [ -n "$AFFECTED" ]; then
+            packages="$AFFECTED"
+          fi
           if [ "$CONFORMANCE_TIER" = true ]; then
             # internal/workspace runs in the conformance shards of both lanes.
-            packages="$(python3 -B scripts/ci_shards.py packages)"
-            set -- $packages
-            test "$#" -gt 1
-            go test -timeout 40m "$@"
-          else
-            go test -timeout 40m ./...
+            if [ "$packages" = './...' ]; then
+              packages="$(python3 -B scripts/ci_shards.py packages)"
+              set -- $packages
+              test "$#" -gt 1
+            else
+              packages="$(python3 -B scripts/ci_shards.py packages --within "$packages")"
+            fi
           fi
+          set -- $packages
+          if [ "$#" -eq 0 ]; then
+            echo 'Only internal/workspace is affected: the conformance shards run it' | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Go tests ($AFFECTED_REASON): $*" >> "$GITHUB_STEP_SUMMARY"
+          go test -timeout 40m "$@"
       - name: Check import boundaries
         run: python3 -B scripts/check-architecture.py
       - name: Build and validate exact checked Pages artifact
