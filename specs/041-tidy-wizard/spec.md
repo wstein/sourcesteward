@@ -131,7 +131,7 @@ Wizard-layer flags:
 | `--member-base NAME=REF` | override the derived base of one member repository (repeatable); there is no global `--base` in the wizard layer |
 | `--state-dir DIR` | repeatable: stores to read creation records from and to write plans to (the first is the plan store); adds to the defaults, see [State directories](#state-directories-and-creation-records) |
 | `--online` | allow the contract-3 authenticated reads (default off, as today) |
-| `--save` | `plan` only: store the plan set of all *safe* items (non-interactive wizard) |
+| `--save` | `plan` only: store the plan set of the *safe* items of scope `own` (non-interactive wizard; in agent mode only owners from a task record) |
 | `--yes` | `apply` only: skip the confirmation prompt; requires an explicit plan id; refused with no id; **not honoured for plans containing `other` or `unknown` items** (those always need the typed confirmation below) |
 | `--json` / `--human` | as `stw status`: text is the default, `--json` selects JSON, `--human` forces text; they exclude each other (exit 2) |
 | `--timeout DURATION` | as in contract 3, over the whole analysis |
@@ -454,6 +454,7 @@ plans".
 worktree, the existing Spec 011/029 plan kinds with their current ids, plus the dependent branch leg defined above) plus a content-addressed `plan_id` over the sorted sub-plan ids, the
 derived values, the selected items, `authorized_scopes` and the mode evidence. Planning never deletes and writes only the private store, and only when the owner confirms
 (wizard) or passes `--save`.
+The plan id needs the ids of the sub-plans, and the sub-plans are ordinary stored plans, so they are written to the private store before the plan set is stored. When a typed confirmation is required (a foreign item) and the answer is wrong, the sub-plans stay as stored plans that no plan set references and nothing applies; with no terminal available the build refuses before any sub-plan is made. The plan set itself is stored only after the confirmation.
 
 - `stw tidy apply <plan-id>` loads the set, verifies the store (mode, owner), re-runs each sub-plan's stale checks, and applies the
   sub-plans **one at a time in a fixed order** (worktree retirements, then branch/bookmark deletions, then tracking refs), each with its own
