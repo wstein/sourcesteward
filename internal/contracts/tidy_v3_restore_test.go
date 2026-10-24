@@ -112,7 +112,8 @@ func TestTidyV3RestoreSchemaAcceptsPlanAndApplyAndRefusesViolations(t *testing.T
 func historyFixtureResult() workspace.V3HistoryResult {
 	return workspace.V3HistoryResult{SchemaVersion: 1, Command: "tidy-history", Status: "ok", Total: 4096, ScanTruncated: true,
 		Entries: []workspace.V3HistoryEntry{
-			{PlanID: "p1", Time: "2026-10-01T12:00:00Z", Mode: "local-refs", Deleted: 3, Retained: 1, Restorable: 2, RecoveryRefs: "partial", DecisionKinds: workspace.V3HistoryDecisions{Human: 1, AI: 2}, JournalStatus: "complete"},
+			{PlanID: "p1", Time: "2026-10-01T12:00:00Z", Mode: "local-refs", Deleted: 3, Retained: 1, Restorable: 2, RecoveryRefs: "partial", DecisionKinds: workspace.V3HistoryDecisions{Human: 1, AI: 2}, JournalStatus: "complete",
+				RunMode: &workspace.V3RunMode{Mode: "agent", StdinTTY: false, StdoutTTY: true, Markers: []string{"CLAUDECODE"}, Mine: true, ByOwner: []string{"codex"}, Caller: "claude", CallerSource: "env"}},
 			{PlanID: "p2", Time: "2026-09-30T12:00:00.5Z", Mode: "tracking-refs", Deleted: 1, RecoveryRefs: "present", JournalStatus: "complete"},
 			{PlanID: "p3", Time: "2026-09-29T12:00:00Z", Mode: "unknown", RecoveryRefs: "absent", JournalStatus: "unreadable"},
 		},
@@ -128,6 +129,7 @@ func TestTidyV3HistorySchemaAcceptsTheViewAndRefusesViolations(t *testing.T) {
 	list.Command = "tidy-restore"
 	valid(t, s, asDocument(t, list))
 	first := func(v map[string]any) map[string]any { return v["entries"].([]any)[0].(map[string]any) }
+	runMode := func(e map[string]any) map[string]any { return e["run_mode"].(map[string]any) }
 	mutations := map[string]func(map[string]any){
 		"unknown top-level field":      func(v map[string]any) { v["extra"] = 1 },
 		"command":                      func(v map[string]any) { v["command"] = "tidy-plan" },
@@ -147,6 +149,13 @@ func TestTidyV3HistorySchemaAcceptsTheViewAndRefusesViolations(t *testing.T) {
 		"unreadable with restorable":   func(v map[string]any) { v["entries"].([]any)[2].(map[string]any)["restorable"] = 1 },
 		"unreadable with a known mode": func(v map[string]any) { v["entries"].([]any)[2].(map[string]any)["mode"] = "local-refs" },
 		"plan id with a path":          func(v map[string]any) { first(v)["plan_id"] = "../x" },
+		"run mode value":               func(v map[string]any) { runMode(first(v))["mode"] = "root" },
+		"run mode field":               func(v map[string]any) { runMode(first(v))["token"] = "x" },
+		"run mode missing field":       func(v map[string]any) { delete(runMode(first(v)), "caller") },
+		"run mode markers type":        func(v map[string]any) { runMode(first(v))["markers"] = "CLAUDECODE" },
+		"run mode too many markers":    func(v map[string]any) { runMode(first(v))["markers"] = make([]any, 33) },
+		"run mode long caller":         func(v map[string]any) { runMode(first(v))["caller"] = strings.Repeat("a", 129) },
+		"run mode null":                func(v map[string]any) { first(v)["run_mode"] = nil },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {

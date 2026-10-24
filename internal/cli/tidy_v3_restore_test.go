@@ -232,6 +232,27 @@ func TestTidyHistoryHumanAndJSONAgree(t *testing.T) {
 	}
 }
 
+func TestTidyHistoryShowsTheRunModeQuoted(t *testing.T) {
+	var s restoreSpy
+	mode := &workspace.V3RunMode{Mode: "agent", StdinTTY: false, StdoutTTY: true, Markers: []string{"CLAUDECODE", "A\x1b[31m"}, Mine: true, ByOwner: []string{"codex"}, Caller: "cl\naude", CallerSource: "env"}
+	s.historyResult = workspace.V3HistoryResult{SchemaVersion: 1, Command: "tidy-history", Status: "ok", Total: 2,
+		Entries: []workspace.V3HistoryEntry{
+			{PlanID: "p1", Time: "2026-10-01T12:00:00Z", Mode: "local-refs", RecoveryRefs: "present", JournalStatus: "complete", RunMode: mode},
+			{PlanID: "p2", Time: "2026-10-01T11:00:00Z", Mode: "local-refs", RecoveryRefs: "present", JournalStatus: "complete"}},
+		Truncated: []workspace.V3HistoryTruncation{}, Diagnostics: []workspace.Diagnostic{}}
+	text, err := s.run([]string{"history", "--contract", "3", "--state-dir", stateArg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `  Run mode: mode="agent" stdin_tty=false stdout_tty=true markers=["CLAUDECODE" "A\x1b[31m"] mine=true by_owner=["codex"] caller="cl\naude" caller_source="env"`
+	if !strings.Contains(text, want) {
+		t.Errorf("text lacks the run mode:\n%s", text)
+	}
+	if strings.Count(text, "Run mode:") != 1 || strings.Contains(text, "\x1b") || strings.Contains(text, "cl\naude") {
+		t.Errorf("only the entry with a run mode shows one, and no control byte reaches the terminal:\n%q", text)
+	}
+}
+
 func TestTidyRestoreCommandsAreListedInHelp(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := Run(context.Background(), "dev", []string{"tidy", "--help"}, &out, &errOut); code != 0 {

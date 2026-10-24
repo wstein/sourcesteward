@@ -476,6 +476,18 @@ func TestBranchLegOnARealRepository(t *testing.T) {
 	if f.branchExists("feat") {
 		t.Error("the merged branch must be deleted by the leg")
 	}
+	// Both journals (the retirement and the branch deletion) carry the mode evidence of the run,
+	// and history shows it.
+	h := workspace.HistoryTidyV3(context.Background(), workspace.V3HistoryOptions{Path: f.repo, StateDir: f.state})
+	withMode := 0
+	for _, e := range h.Entries {
+		if e.RunMode != nil && e.RunMode.Mode == "human" && e.RunMode.Caller == human.Caller {
+			withMode++
+		}
+	}
+	if h.Status != "ok" || len(h.Entries) != 2 || withMode != 2 {
+		t.Fatalf("history %+v", h)
+	}
 }
 
 func TestReplayOfACompletedSetWithTheLegIsAVerifiedNoOp(t *testing.T) {
