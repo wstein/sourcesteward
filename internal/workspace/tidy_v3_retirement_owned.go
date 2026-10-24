@@ -24,6 +24,12 @@ func readTidyV3OwnedProvenance(o V3PlanOptions) (V3OwnedProvenance, error) {
 	return V3OwnedProvenance{CreationPlan: creation, Task: task, CreationJournalDigest: digest, LockReason: "stw:" + task.TaskID}, nil
 }
 func observeTidyV3Retirement(ctx context.Context, o V3PlanOptions, budget *tidyV3ProofBudget) (tidyV3LegacyObservation, error) {
+	return observeTidyV3RetirementWith(ctx, o, budget, tidyV3LegacyObserver{source: observeTidyV3Git, target: gitNativeIdentity})
+}
+
+// observeTidyV3RetirementWith is the entry of both retirement paths over an
+// observer, so tests can watch the context the native observation receives.
+func observeTidyV3RetirementWith(ctx context.Context, o V3PlanOptions, budget *tidyV3ProofBudget, observer tidyV3LegacyObserver) (tidyV3LegacyObservation, error) {
 	if o.Task == "" {
 		return observeTidyV3Legacy(ctx, o, budget)
 	}
@@ -38,5 +44,5 @@ func observeTidyV3Retirement(ctx context.Context, o V3PlanOptions, budget *tidyV
 	if e != nil {
 		return tidyV3LegacyObservation{}, e
 	}
-	return (tidyV3LegacyObserver{source: observeTidyV3Git, target: gitNativeIdentity}).observeWithOwnership(ctx, o, budget, &owned)
+	return observer.observeWithOwnership(ctx, o, budget, &owned)
 }
