@@ -4,6 +4,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"github.com/wstein/sourcesteward/internal/attribution"
 	"github.com/wstein/sourcesteward/internal/inspection"
 	"os"
 	"path/filepath"
@@ -17,10 +18,11 @@ type coordinator struct {
 	inspect   func(context.Context, string) inspection.Result
 	adapter   func(string) (nativeAdapter, error)
 	inventory func(context.Context, string, inspection.InventoryOptions) inspection.InventoryResult
+	origin    *attribution.Origin // origin of the creating run, set per apply; recorded once
 }
 
 func defaultCoordinator() coordinator {
-	return coordinator{inspection.Inspect, selectAdapter, inspection.Inventory}
+	return coordinator{inspection.Inspect, selectAdapter, inspection.Inventory, nil}
 }
 func selectAdapter(backend string) (nativeAdapter, error) {
 	switch backend {
@@ -274,6 +276,7 @@ func validatePlan(p MutationPlan, state, id string) error {
 }
 func (c coordinator) apply(ctx context.Context, o ApplyOptions) Result {
 	r := newResult("workspace-apply")
+	c.origin = o.Origin
 	if !o.Authorize {
 		return refuse(r, "authorization-required", "Apply requires explicit --authorize for the stored local effects.")
 	}
@@ -456,13 +459,14 @@ func (c coordinator) finalize(ctx context.Context, s *store, p MutationPlan, j j
 	if e != nil || !native.Complete || native.Identity != j.Native.Identity {
 		return c.incomplete(s, p, j, r, failure("verification-failed", "Native registration ownership could not be verified after creation."))
 	}
-	task := TaskRecord{SchemaVersion: 1, TaskID: p.TaskID, Owner: p.Owner, PlanID: p.PlanID, Backend: p.Backend, Destination: p.Destination, RecoveryPointer: filepath.Join(p.StateDir, "operations", p.PlanID+".json"), Native: j.Native.Identity, DestinationIdentity: *j.DestinationIdentity, BaseCommit: p.Expected.BaseCommit, BaseChange: p.Expected.BaseChange, State: "complete", RemainingWork: []string{}, RecoveryLimits: p.RecoveryLimits}
+	task := TaskRecord{SchemaVersion: 1, TaskID: p.TaskID, Owner: p.Owner, PlanID: p.PlanID, Backend: p.Backend, Destination: p.Destination, RecoveryPointer: filepath.Join(p.StateDir, "operations", p.PlanID+".json"), Native: j.Native.Identity, DestinationIdentity: *j.DestinationIdentity, BaseCommit: p.Expected.BaseCommit, BaseChange: p.Expected.BaseChange, State: "complete", RemainingWork: []string{}, RecoveryLimits: p.RecoveryLimits, Origin: c.origin}
 	var existing TaskRecord
 	readErr := s.read("tasks", p.TaskID, &existing)
 	if readErr == nil {
 		if !validTask(existing, p) || !sameOwner(existing.Native, task.Native) || existing.DestinationIdentity != task.DestinationIdentity {
 			return c.incomplete(s, p, j, r, failure("task-collision", "Existing task ownership does not match this creation."))
 		}
+		task.Origin = existing.Origin // the origin is written once
 	} else if !errors.Is(readErr, os.ErrNotExist) {
 		return c.incomplete(s, p, j, r, readErr)
 	} else if e = s.write("tasks", p.TaskID, task, true); e != nil {

@@ -35,6 +35,8 @@ func readRetirementOwnership(s *store, taskID, owner string) (MutationPlan, Task
 	if err := s.read("tasks", taskID, &task); err != nil {
 		return p, task, "", err
 	}
+	// The origin is attribution for remote writes only; retirement records embed the task under a closed schema.
+	task.Origin = nil
 	if task.TaskID != taskID || task.Owner != owner || !validID(task.PlanID) {
 		return p, task, "", failure("invalid-ownership", "Task record does not match the exact requested identity and owner label.")
 	}
