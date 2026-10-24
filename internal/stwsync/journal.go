@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -80,8 +79,6 @@ func (j *journal) changedOK() bool {
 // retainedRuns is how many completed runs of one repository keep their record and recovery refs.
 const retainedRuns = 10
 
-var runIDPattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}([0-9]{6})?Z-[0-9a-f]{8}$`)
-
 // retain is the last step of a real run: it removes the record and the recovery refs of the runs older
 // than the retainedRuns most recent completed ones. A run with an incomplete (prepared) record is kept
 // until a restore has dealt with it. A recovery ref is deleted only when the record names it inside the
@@ -99,7 +96,7 @@ func (j *journal) retain(ctx context.Context) {
 	var completed []run
 	for _, f := range files {
 		id, ok := strings.CutSuffix(f.Name(), ".json")
-		if !ok || !runIDPattern.MatchString(id) || f.IsDir() {
+		if !ok || !recordRunID.MatchString(id) || f.IsDir() {
 			continue
 		}
 		raw, err := os.ReadFile(filepath.Join(j.dir, f.Name()))
@@ -128,7 +125,7 @@ func (j *journal) retain(ctx context.Context) {
 		}
 	}
 	completed = others
-	sort.Slice(completed, func(a, b int) bool { return completed[a].id < completed[b].id })
+	sort.Slice(completed, func(a, b int) bool { return runIDLess(completed[a].id, completed[b].id) })
 	for len(completed) > retainedRuns-1 {
 		old := completed[0]
 		completed = completed[1:]
