@@ -79,19 +79,31 @@ func TestRemoteWriteGateTaskWithoutRecord(t *testing.T) {
 	}
 }
 
-// The null device is a character device but no terminal: a run with stdin and stdout on it is not
-// human, whatever the environment.
-func TestOriginForStreamsDoesNotTreatTheNullDeviceAsATerminal(t *testing.T) {
+// Only a real terminal is human: the null device (a character device), a bytes buffer, a pipe
+// and a regular file are not, whatever the environment.
+func TestOriginForStreamsIsHumanOnlyOnARealTerminal(t *testing.T) {
 	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer null.Close()
-	if o := originForStreams([]string{"HOME=/h"}, null, null, attributionNow); o.Kind == "human" {
-		t.Fatalf("%+v", o)
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer pr.Close()
+	defer pw.Close()
+	reg, err := os.CreateTemp(t.TempDir(), "f")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
 	var buf bytes.Buffer
-	if o := originForStreams(nil, &buf, &buf, attributionNow); o.Kind == "human" {
-		t.Fatalf("%+v", o)
+	for name, c := range map[string][2]any{
+		"null device": {null, null}, "buffer": {&buf, &buf}, "pipe": {pr, pw}, "regular file": {reg, reg},
+	} {
+		if o := originForStreams([]string{"HOME=/h"}, c[0], c[1], attributionNow); o.Kind == attribution.KindHuman {
+			t.Errorf("%s: %+v", name, o)
+		}
 	}
 }
