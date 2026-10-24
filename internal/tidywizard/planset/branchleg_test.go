@@ -294,6 +294,11 @@ func TestV3ApplierRefusesALegThatWouldDeleteAnotherBranchThanTheChosenOne(t *tes
 	if err := mk("refs/heads/other", true).CheckBranchLeg(context.Background(), step(chosen("feat"))); err == nil {
 		t.Error("the plan deletes another branch than the chosen one")
 	}
+	for _, ref := range []string{"refs/heads/x-feat", "refs/heads/feat-2", "refs/heads/team/feat", "refs/heads/feat/sub", "refs/heads/Feat"} {
+		if err := mk(ref, true).CheckBranchLeg(context.Background(), step(chosen("feat"))); err == nil {
+			t.Errorf("the plan deletes %s, which only resembles the chosen branch feat", ref)
+		}
+	}
 	if err := mk("", false).CheckBranchLeg(context.Background(), step(chosen("feat"))); err != nil {
 		t.Errorf("no leg is reported afterwards, not refused: %v", err)
 	}

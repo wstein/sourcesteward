@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 )
@@ -98,5 +99,37 @@ func TestReadTidyV3RetirementOfAReferencePlanIsNeverCompleted(t *testing.T) {
 	r, err := ReadTidyV3Retirement(context.Background(), f.state, p.PlanID)
 	if err != nil || r.Completed || r.BranchGone || r.Plan.PlanID != p.PlanID {
 		t.Fatalf("%+v %v", r, err)
+	}
+}
+
+// An interrupted retirement removed the directory but its journal is incomplete: it must never be
+// read as completed, or a replay would report an uncertain operation as applied.
+func TestReadTidyV3RetirementOfAnInterruptedRetirementIsNotCompleted(t *testing.T) {
+	o, _ := tidyV3LegacyFixture(t, false)
+	o.StateDir = privateDir(t)
+	c := defaultTidyV3RetirementCoordinator()
+	planned := c.plan(context.Background(), o)
+	if planned.Plan == nil {
+		t.Fatal(planned.Diagnostics)
+	}
+	p := *planned.Plan
+	remove := c.remove
+	c.remove = func(ctx context.Context, bin string, args []string, cwd string, wr, ro []string) (string, int, error) {
+		out, code, e := remove(ctx, bin, args, cwd, wr, ro)
+		if e != nil || code != 0 {
+			t.Fatalf("native fixture removal failed %v %d", e, code)
+		}
+		return out, code, errors.New("lost native completion response")
+	}
+	opts := V3ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, CompletedWorktree: o.CompletedWorktree, Owner: o.Owner, ProtectWorktrees: o.ProtectWorktrees}
+	if r := c.apply(context.Background(), opts); r.Status != "partial" {
+		t.Fatalf("the lost response is an uncertain, partial operation: %+v", r)
+	}
+	if _, err := os.Lstat(o.CompletedWorktree); !os.IsNotExist(err) {
+		t.Fatal("fixture: the native removal must have happened")
+	}
+	r, err := ReadTidyV3Retirement(context.Background(), p.StateDir, p.PlanID)
+	if err != nil || r.Completed || r.BranchGone {
+		t.Fatalf("an incomplete journal is not a completion: %+v %v", r, err)
 	}
 }
