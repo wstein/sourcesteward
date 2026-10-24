@@ -32,6 +32,13 @@ The generated plan ID identifies a stored immutable record. A plan alone never g
 permission. Apply requires explicit `--authorize` and revalidates relevant source/base,
 registrations, destination and ownership. Changed or uncertain evidence refuses.
 
+The plan names the source checkout, the base as resolved to a full commit id and the source HEAD.
+`PATH` (default: the current directory) is where `--base HEAD` is resolved. If the current directory
+is another checkout (worktree) of the same repository, the plan adds a notice naming both checkouts and
+both HEADs; it does not refuse. `--json` carries these facts as `source_context`
+(`source_path`, `base_selector`, `base_commit`, `source_head`, `caller_directory`, `caller_checkout`,
+`caller_head`, `caller_differs`, `notice`) on plan results only.
+
 Git creates a detached worktree and no branch. Ordinary checkouts, initialized submodule
 checkouts and separate-Git-directory checkouts, including their linked worktrees, require
 canonical native identities and matching `.git`, `commondir` and registration backlinks.
