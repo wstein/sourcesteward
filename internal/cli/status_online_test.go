@@ -264,6 +264,20 @@ func TestRemoteLineTexts(t *testing.T) {
 	}
 }
 
+func TestRemoteLineSaysAMissingReleaseWorkflowAsAFact(t *testing.T) {
+	rr := onlineReport().Remote.Repos[0]
+	rr.Remote.Sources = onlineSources(onlineOK)
+	rr.Remote.Sources[overview.SourceCIRelease] = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound}
+	got := statusRemoteLine(rr)
+	if !strings.Contains(got, "no release workflow") || strings.Contains(got, "release runs not read") || strings.Contains(got, "not-found") {
+		t.Errorf("%s", got)
+	}
+	rr.Remote.Sources[overview.SourceCIRelease] = overview.SourceState{Outcome: overview.OutcomeError, Code: "network"}
+	if got := statusRemoteLine(rr); !strings.Contains(got, "release runs not read (network)") {
+		t.Errorf("%s", got)
+	}
+}
+
 func TestOnlineTextEscapesHostileStrings(t *testing.T) {
 	const canary = "ghp_CANARY0123456789"
 	hostile := "x\x1b[31m\u202e\n\x07" + strings.Repeat("A", 10_000)

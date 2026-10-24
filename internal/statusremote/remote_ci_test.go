@@ -322,3 +322,31 @@ func TestTheFirstRateLimitStopsEverySourceWithoutSleeping(t *testing.T) {
 		}
 	})
 }
+
+// The runs read before a declared workflow turned out missing stay on the entries of the tags source, so a
+// failed run is still an item; the source itself is skipped (a gap) and has no data of its own.
+func TestCIReleasePartialRunsSurviveAMissingDeclaredWorkflow(t *testing.T) {
+	tag := overview.ReleaseTag{Pattern: "a-v*", Tag: "a-v1.0.0", SHA: sha("2"), Latest: true}
+	other := overview.ReleaseTag{Pattern: "b-v*", Tag: "b-v1.0.0", SHA: sha("3"), Latest: true}
+	run := overview.Run{Workflow: "a.yml", Conclusion: "failure", Status: "completed"}
+	r := &RepoResult{Remote: &overview.Remote{Sources: map[overview.Source]overview.SourceState{}}}
+	declared := overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound, Code: CodeDeclaredWorkflow}
+	rel := &CIRelease{Tags: []CIReleaseTag{{Pattern: tag.Pattern, Tag: tag.Tag, SHA: tag.SHA, Latest: true, Runs: []overview.Run{run}}}}
+	(&collector{}).fill(r, slot{releases: Releases{Tags: []overview.ReleaseTag{tag, other}}, ci: CIReleaseResult{State: declared, Release: rel}})
+	for _, src := range overview.Sources {
+		if src != overview.SourceCIRelease {
+			r.Remote.Sources[src] = okState
+		}
+	}
+	if r.CIRelease != nil || len(r.Remote.Tags) != 2 || r.Remote.Tags[0].Run == nil || r.Remote.Tags[1].Run != nil {
+		t.Fatalf("%+v %+v", r.CIRelease, r.Remote.Tags)
+	}
+	items := overview.Build(overview.Input{Repos: []overview.Repo{{Slug: "o/a", Remote: r.Remote}}}).Items
+	if len(items) != 1 || items[0].Category != overview.ReleaseRunFailed {
+		t.Fatalf("%+v", items)
+	}
+	ov := overview.Build(overview.Input{Repos: []overview.Repo{{Slug: "o/a", Remote: r.Remote}}})
+	if !ov.Summary.Degraded || len(ov.Notices) != 1 || ov.Notices[0].Code != "not-found" {
+		t.Fatalf("%+v %+v", ov.Summary, ov.Notices)
+	}
+}

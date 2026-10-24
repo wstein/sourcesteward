@@ -313,6 +313,16 @@ func (c *collector) fill(r *RepoResult, s slot) {
 		// the entries with a run are added to those of the tags source; the overview merges them per tag
 		r.CIRelease = s.ci.Release
 		r.Remote.Tags = append(r.Remote.Tags, s.ci.Release.ReleaseTags()...)
+	} else if s.ci.Release != nil {
+		// A source that did not end ok has no data of its own, but the runs already read are kept on the
+		// entries of the tags source: a failed run must not vanish because another workflow is missing.
+		for _, t := range s.ci.Release.ReleaseTags() {
+			for i := range r.Remote.Tags {
+				if e := &r.Remote.Tags[i]; e.Pattern == t.Pattern && e.Tag == t.Tag && e.SHA == t.SHA {
+					e.Run = t.Run
+				}
+			}
+		}
 	}
 	r.Remote.Sources[overview.SourceIssues] = s.issues.State
 	if s.issues.State == okState {

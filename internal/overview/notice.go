@@ -46,7 +46,9 @@ func notices(in Input) []Notice {
 				switch st.Reason {
 				case ReasonOffline, ReasonNotAttempted, ReasonIssuesDisabled: // nothing was read, or a fact about the repository; the notice of the source it needs says why
 				case ReasonNotFound:
-					add(key{ReasonNotFound, string(src)}, name, st.Reason, src)
+					if st.Code != "" { // a declared release workflow the forge does not know; without a code there is no workflow to read
+						add(key{ReasonNotFound, string(src)}, name, st.Reason, src)
+					}
 				case ReasonNoToken, ReasonDeadline:
 					add(key{st.Reason, "remote"}, name, st.Reason, src)
 				default:
@@ -127,7 +129,7 @@ func noticeMessage(in Input, key, code string, src Source, repos, pairs int) str
 	case ReasonDeadline:
 		return fmt.Sprintf("deadline of %d s reached: %s of %s not read; raise --timeout", int(in.Deadline.Seconds()), count1(pairs, "source", "sources"), count1(repos, "repository", "repositories"))
 	case ReasonNotFound:
-		return fmt.Sprintf("release workflow not found in %s: runs not read", count1(repos, "repository", "repositories"))
+		return fmt.Sprintf("declared release workflow not found in %s: runs not read", count1(repos, "repository", "repositories"))
 	case CodeRateLimited:
 		at := ""
 		if !in.RateLimitReset.IsZero() {

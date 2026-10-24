@@ -214,6 +214,17 @@ type SourceState struct {
 	Code    string
 }
 
+// FactOfRepository is true for a skipped source that reports a fact about the repository and not a gap in
+// the data: the issues of a repository that has them disabled, and the release runs of a repository that
+// has no release workflow. Such a source is not applicable; it neither degrades the run nor raises a notice.
+func (s SourceState) FactOfRepository(src Source) bool {
+	if s.Outcome != OutcomeSkipped {
+		return false
+	}
+	// not-found with a Code is a workflow that a contract declares and the forge does not know: a gap
+	return src == SourceIssues && s.Reason == ReasonIssuesDisabled || src == SourceCIRelease && s.Reason == ReasonNotFound && s.Code == ""
+}
+
 // Visibility says whether the token can see release drafts.
 type Visibility string
 

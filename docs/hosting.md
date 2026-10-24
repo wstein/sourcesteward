@@ -151,7 +151,7 @@ existing check-run and commit-status reads, classified `none`, `pending`, `green
 The reads live in `internal/statusremote`. `ci-release` does not choose tags: it takes the entries of the `tags` source (one per release
 tag pattern and tag, the latest of the pattern or unreleased) and adds the newest runs to the latest entry of every pattern and to at most 5 unreleased ones, so that a repository
 makes N+5 reads of page 1 for N patterns and no product hides a failed run. Each entry uses the `ci.release_workflow` (file name only) of the product that declares its
-pattern, and `release.yml` for a pattern no contract declares; a 404 for a workflow ends the source as `skipped`, reason `not-found`.
+pattern, and `release.yml` for a pattern no contract declares; a 404 for the default `release.yml` of an undeclared pattern is not applicable (the entry is left out; the source is `skipped`, `not-found`, only when no entry has a workflow, and then neither degrades the run nor raises a notice), and a 404 for a declared workflow ends the source as `skipped`, reason `not-found`, with a notice; the runs already read are kept.
 The contracts are read through the reader of `release check` (`release.ReadWorktreeContracts`: no symlink is followed, a file that
 changes while it is opened is refused). A repository without `.stw` uses the defaults; a contract that exists but cannot be used ends the
 source with the error code `contract-invalid` before any request, and the defaults are not a substitute. Only semver and pattern tag

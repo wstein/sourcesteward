@@ -94,7 +94,7 @@ that was not read yet ends `error` `rate-limited`; a CI source (`ci-main` after 
 source failed is not attempted and ends `skipped` `not-attempted`, so its failure is reported once. The command never sleeps and
 never retries.
 
-A source ends `ok`, `skipped` (reasons `offline`, `no-token`, `deadline`, `not-found` for a missing release workflow,
+A source ends `ok`, `skipped` (reasons `offline`, `no-token`, `deadline`, `not-found` for a missing release workflow (the default `release.yml` of a pattern no contract declares is a fact about the repository: not applicable, no notice, the run is not degraded, the text line says `no release workflow`; a workflow that a contract declares and the forge does not know is a gap: a notice and a degraded run),
 `not-attempted` for a CI source whose input source failed, `issues-disabled` for the issues of a repository that has them
 disabled, and the repository reasons `not-github-origin`, `other-host`,
 `not-read-locally`, `invalid-repo`) or `error` (`unauthorized`, `forbidden`, `rate-limited`, `network`, `http-5xx`,

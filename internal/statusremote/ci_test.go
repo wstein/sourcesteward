@@ -544,16 +544,14 @@ func TestReadCIReleaseDoesNotTrustForgeValues(t *testing.T) {
 	}
 }
 
-func TestReadCIReleaseFailuresAreStatesNotData(t *testing.T) {
+func TestReadCIReleaseFailuresAreStatesAndKeepTheRunsAlreadyRead(t *testing.T) {
 	entries := []overview.ReleaseTag{ciEntry(defaultPattern, "v1.1.0", "a", true, false), ciEntry(defaultPattern, "v1.0.0", "b", false, true)}
 	key := "flow release.yml@" + entries[1].SHA
-	notFound := &hosting.WatchError{Code: hosting.CodeForbidden, Status: 404}
 	for _, tc := range []struct {
 		name string
 		err  error
 		want overview.SourceState
 	}{
-		{"missing workflow is skipped, not failed", notFound, overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound}},
 		{"forbidden", &hosting.WatchError{Code: hosting.CodeForbidden, Status: 403}, ciErrState("forbidden")},
 		{"rate limited", &hosting.WatchError{Code: hosting.CodeRateLimited}, ciErrState("rate-limited")},
 		{"malformed", &hosting.WatchError{Code: hosting.CodeMalformed}, ciErrState("malformed-response")},
@@ -561,21 +559,70 @@ func TestReadCIReleaseFailuresAreStatesNotData(t *testing.T) {
 		f := newCIFake()
 		f.errs[key] = tc.err
 		got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries})
-		if got.State != tc.want || got.Release != nil {
+		if got.State != tc.want || got.Release == nil || len(got.Release.Tags) != 1 || got.Release.Tags[0].Tag != "v1.1.0" {
 			t.Errorf("%s: %+v %+v", tc.name, got.State, got.Release)
 		}
 	}
 	f := newCIFake()
 	f.flows["release.yml@"+entries[1].SHA] = `{"workflow_runs":null}`
-	if got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries}); got.State != ciErrState("malformed-response") || got.Release != nil {
+	if got := ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Tags: entries}); got.State != ciErrState("malformed-response") || got.Release == nil || len(got.Release.Tags) != 1 {
 		t.Errorf("%+v %+v", got.State, got.Release)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	f = newCIFake()
 	f.errs[key] = &hosting.WatchError{Code: hosting.CodeNetwork}
-	if got := ReadCIRelease(ctx, f, CIReleaseInput{Repo: ciRepo, Tags: entries}); got.State != (overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}) || got.Release != nil {
+	if got := ReadCIRelease(ctx, f, CIReleaseInput{Repo: ciRepo, Tags: entries}); got.State != (overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}) {
 		t.Errorf("%+v %+v", got.State, got.Release)
+	}
+}
+
+// Only the default release.yml of a pattern nobody declares is "not applicable" when it is missing; the
+// entries already read are kept whatever the order, and a declared workflow that is missing keeps its meaning
+// (skipped, not-found, with the declared mark that makes it a notice and a degraded source).
+func TestReadCIReleaseAMissingDefaultWorkflowIsNotApplicable(t *testing.T) {
+	notFound := &hosting.WatchError{Code: hosting.CodeForbidden, Status: 404}
+	declared := ciEntry("zlib-v*", "zlib-v1.3.1", "b", true, false)
+	undeclared := ciEntry(defaultPattern, "v2.0.0", "c", true, false)
+	fact := overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound}
+	declaredState := overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound, Code: CodeDeclaredWorkflow}
+	read := func(entries []overview.ReleaseTag, missing ...overview.ReleaseTag) CIReleaseResult {
+		f := newCIFake()
+		for _, m := range missing {
+			workflow := "release.yml"
+			if m.Pattern == "zlib-v*" {
+				workflow = "zlib-release.yml"
+			}
+			f.errs["flow "+workflow+"@"+m.SHA] = notFound
+		}
+		return ReadCIRelease(context.Background(), f, CIReleaseInput{Repo: ciRepo, Products: ciTwoProducts(t), Tags: entries})
+	}
+	tags := func(r CIReleaseResult) string {
+		var out []string
+		if r.Release != nil {
+			for _, e := range r.Release.Tags {
+				out = append(out, e.Tag)
+			}
+		}
+		return fmt.Sprint(out)
+	}
+	for name, order := range map[string][]overview.ReleaseTag{"declared first": {declared, undeclared}, "undeclared first": {undeclared, declared}} {
+		// the undeclared default workflow is missing, the declared one answers: ok, its run kept
+		if got := read(order, undeclared); got.State.Outcome != overview.OutcomeOK || tags(got) != "[zlib-v1.3.1]" {
+			t.Errorf("%s, default missing: %+v %s", name, got.State, tags(got))
+		}
+		// the declared workflow is missing, the default answers: its run is kept, the declared 404 counts
+		if got := read(order, declared); got.State != declaredState || tags(got) != "[v2.0.0]" {
+			t.Errorf("%s, declared missing: %+v %s", name, got.State, tags(got))
+		}
+		// both missing: the declared one decides
+		if got := read(order, declared, undeclared); got.State != declaredState || got.Release != nil {
+			t.Errorf("%s, both missing: %+v %s", name, got.State, tags(got))
+		}
+	}
+	// nothing but missing default workflows: not applicable
+	if got := read([]overview.ReleaseTag{undeclared}, undeclared); got.State != fact || got.Release != nil {
+		t.Errorf("only default missing: %+v %s", got.State, tags(got))
 	}
 }
 
