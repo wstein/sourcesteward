@@ -23,7 +23,8 @@ not a secret. The mechanism only has to catch honest mix-ups.
   bytes. The Codex source is not measured yet: until it is, a Codex session id stays absent, never guessed. No other variable value is read
   or stored; `CLAUDE_CODE_MESSAGING_TOKEN` and any secret-looking variable are never read.
 - **D3 Storage.** Only in the stw state store, in the task record file. Never in git config, commits, branch names, PR text or the
-  new checkout. The field is additive and optional (`omitempty`); the frozen v1 workspace schema does not forbid it.
+  new checkout. Command output (workspace apply and handoff, text and JSON) shows the origin kind and time only, never the session
+  id. The field is additive and optional (`omitempty`); the frozen v1 workspace schema does not forbid it.
 - **D4 Written once.** The origin belongs to the creation. A retry or a second apply of the same plan returns the stored origin and
   never overwrites it.
 - **D5 Remote-write gate.** Every stw command that pushes or sets a PR Ready for a task calls the gate first. The gate refuses with the
@@ -49,5 +50,5 @@ the harness restarts with a new id is refused until the owner acts.
 
 Tests: same session allowed; different session refused with the reason; agent without a session id on an attributed task refused;
 human allowed; origin written once; session id absent from every git object, commit and the new checkout and present only in the task
-record; a sentinel in `CLAUDE_CODE_MESSAGING_TOKEN` absent from every state file. No PR body generator exists in stw, so there is no
-generated output to scan.
+record; a sentinel in `CLAUDE_CODE_MESSAGING_TOKEN` absent from every state file. The session id is also absent from the JSON of apply, retry and
+handoff. No PR body generator exists in stw, so the PR-body check is a placeholder task (T006), not a green test.

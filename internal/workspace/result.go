@@ -222,6 +222,7 @@ func validText(s string) bool {
 	return len(s) <= 4096 && utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 func bounded(r Result) Result {
+	r = withoutSessionID(r)
 	b, e := json.Marshal(r)
 	if e == nil && len(b) <= recordLimit && resultRecordCount(r) <= observationLimit {
 		return r
@@ -307,4 +308,17 @@ func resultRecordCount(r Result) int {
 		}
 	}
 	return count
+}
+
+// withoutSessionID shows the origin kind and time in output, never the session id: the id is for the
+// remote-write gate and lives only in the state store.
+func withoutSessionID(r Result) Result {
+	if r.Task != nil && r.Task.Origin != nil {
+		task := *r.Task
+		origin := *task.Origin
+		origin.SessionID = ""
+		task.Origin = &origin
+		r.Task = &task
+	}
+	return r
 }

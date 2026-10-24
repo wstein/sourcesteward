@@ -4,6 +4,7 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -38,7 +39,8 @@ func originFixture(t *testing.T, origin *attribution.Origin) (source, dest, stat
 func TestApplyRecordsOriginInStoredTask(t *testing.T) {
 	want := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
 	_, _, state, applied := originFixture(t, &want)
-	if applied.Task.Origin == nil || *applied.Task.Origin != want {
+	shown := attribution.Origin{Kind: "claude", CreatedAt: want.CreatedAt}
+	if applied.Task.Origin == nil || *applied.Task.Origin != shown {
 		t.Fatalf("result origin %+v", applied.Task.Origin)
 	}
 	stored, found, err := ReadTask(state, "attributed")
@@ -60,7 +62,7 @@ func TestSecondApplyDoesNotOverwriteOrigin(t *testing.T) {
 	_, _, state, applied := originFixture(t, &first)
 	other := attribution.Origin{Kind: "claude", SessionID: "other-session", CreatedAt: "2026-10-25T12:00:00Z"}
 	again := Apply(context.Background(), ApplyOptions{StateDir: state, PlanID: applied.Plan.PlanID, Authorize: true, Origin: &other})
-	if again.Status != "ok" || again.Task == nil || again.Task.Origin == nil || *again.Task.Origin != first {
+	if again.Status != "ok" || again.Task == nil || again.Task.Origin == nil || again.Task.Origin.CreatedAt != first.CreatedAt || again.Task.Origin.Kind != first.Kind {
 		t.Fatalf("retry changed the origin: %+v %+v", again.Diagnostics, again.Task)
 	}
 	stored, _, _ := ReadTask(state, "attributed")
@@ -139,5 +141,25 @@ func TestRetirementOwnershipDoesNotCarryTheOrigin(t *testing.T) {
 	}
 	if task.Origin != nil {
 		t.Fatalf("origin embedded in a closed-schema record: %+v", task.Origin)
+	}
+}
+
+// No output shows the session id: the JSON of apply (first and retry) and handoff carries kind and time only.
+func TestSessionIDAppearsInNoOutput(t *testing.T) {
+	origin := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	_, dest, state, applied := originFixture(t, &origin)
+	retry := Apply(context.Background(), ApplyOptions{StateDir: state, PlanID: applied.Plan.PlanID, Authorize: true, Origin: &origin})
+	handoff := Handoff(context.Background(), Options{Path: dest, StateDir: state})
+	for name, r := range map[string]Result{"apply": applied, "retry": retry, "handoff": handoff} {
+		b, err := json.Marshal(r)
+		if err != nil || bytes.Contains(b, []byte(originSession)) {
+			t.Errorf("%s output shows the session id or fails: %v", name, err)
+		}
+		if r.Task == nil || r.Task.Origin == nil || r.Task.Origin.Kind != "claude" || r.Task.Origin.CreatedAt == "" {
+			t.Errorf("%s: kind and time missing: %+v", name, r.Task)
+		}
+	}
+	if stored, _, _ := ReadTask(state, "attributed"); stored.Origin == nil || stored.Origin.SessionID != originSession {
+		t.Error("the stored record lost the session id")
 	}
 }
