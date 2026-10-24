@@ -248,9 +248,9 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 		}
 	})
 	if cancelled != nil {
-		// Never started because the context ended: reported, never left empty.
+		// Never started because the context ended (no state was ever set): reported, never left empty.
 		for i, name := range names {
-			if results[i].Name == "" {
+			if results[i].State == "" {
 				results[i] = RepoResult{Name: name, State: "error", Reason: bound(cancelled.Error(), MaxEvidenceBytes), Notices: []string{}}
 			}
 		}
