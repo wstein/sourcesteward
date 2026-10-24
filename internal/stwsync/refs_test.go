@@ -27,12 +27,13 @@ func TestLocalRefsReadsBranchesRemotesAndSymbolicHeads(t *testing.T) {
 	// A second remote without a symbolic HEAD, and a branch that is not the remote's default.
 	runGit(t, w.dir("dev"), "remote", "add", "extra", w.bare["a"])
 	runGit(t, w.dir("dev"), "fetch", "-q", "extra")
+	runGit(t, w.dir("dev"), "remote", "set-head", "extra", "--delete")
 	runGit(t, w.dir("dev"), "branch", "feature/x")
 	got, err = LocalRefs(context.Background(), w.dir("dev"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.Remotes, []string{"extra", "origin"}) || got.Heads["origin"] != "refs/remotes/origin/develop" || got.Heads["extra"] != "" || !got.Refs["refs/heads/feature/x"] {
+	if !reflect.DeepEqual(got.Remotes, []string{"extra", "origin"}) || got.Heads["origin"] != "refs/remotes/origin/main" || got.Heads["extra"] != "" || !got.Refs["refs/heads/feature/x"] {
 		t.Errorf("remotes %v heads %v", got.Remotes, got.Heads)
 	}
 }
