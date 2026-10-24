@@ -16,10 +16,10 @@ repository or pushes the default branch. Tests use temporary repositories only.
 
 ## WP-2 Derivation
 
-- [ ] T006 Failing table tests for workspace, remote, base (symbolic HEAD present, missing, dangling; two remotes; jj trunk), owner, protected set.
-- [ ] T007 Failing tests for state directories: shared default `stw/workspace` used by `stw workspace` and `stw tidy` (explicit `--state-dir` unchanged), creation 0700, refuse 0755, symlink, inside a repository, other owner; `$STW_STATE_DIR`; repeatable `--state-dir`; records found in a second store; `registration-record-missing` with hint; `registration-record-ambiguous`; an unsafe store skipped, exit 1.
-- [ ] T007a Failing test and implementation in the CLI of `stw workspace`: without `--state-dir` it uses the shared default `${XDG_STATE_HOME:-~/.local/state}/stw/workspace` (or `$STW_STATE_DIR`), created 0700 with the same checks; an explicit `--state-dir` behaves exactly as today; existing workspace tests unchanged.
-- [ ] T008 Implement `internal/tidywizard/derive`; `derived[]` with sources and `overridden`; ambiguity is a typed result.
+- [x] T006 Failing table tests for workspace, remote, base (symbolic HEAD present, missing, dangling; two remotes; jj trunk), owner, protected set.
+- [x] T007 Failing tests for state directories: shared default `stw/workspace` used by `stw workspace` and `stw tidy` (explicit `--state-dir` unchanged), creation 0700, refuse 0755, symlink, inside a repository, other owner; `$STW_STATE_DIR`; repeatable `--state-dir`; records found in a second store; `registration-record-missing` with hint; `registration-record-ambiguous`; an unsafe store skipped, exit 1.
+- [x] T007a Failing test and implementation in the CLI of `stw workspace`: without `--state-dir` it uses the shared default `${XDG_STATE_HOME:-~/.local/state}/stw/workspace` (or `$STW_STATE_DIR`), created 0700 with the same checks; an explicit `--state-dir` behaves exactly as today; existing workspace tests unchanged.
+- [x] T008 Implement `internal/tidywizard/derive`; `derived[]` with sources and `overridden`; ambiguity is a typed result.
 
 ## WP-2b Owner scope
 
