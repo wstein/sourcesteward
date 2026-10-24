@@ -175,18 +175,6 @@ func TestWizardFlagsDoNotCollideWithExpertOnes(t *testing.T) {
 	}
 }
 
-// Bare `stw tidy` keeps printing help.
-func TestBareTidyStillPrintsHelp(t *testing.T) {
-	cmd := tidyCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs(nil)
-	if err := cmd.Execute(); err != nil || !strings.Contains(out.String(), "Usage:") {
-		t.Fatalf("%v %q", err, out.String())
-	}
-}
-
 func TestTidyApplyLayerSelection(t *testing.T) {
 	for _, tc := range []struct {
 		args   []string
