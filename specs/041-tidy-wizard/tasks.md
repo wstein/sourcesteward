@@ -57,6 +57,8 @@ repository or pushes the default branch. Tests use temporary repositories only.
 - [ ] T018a Failing CLI usage test: `--as` does not exist; `stw tidy --as x` and `stw tidy plan --as x` exit 2 (`restore --as` keeps its meaning).
 - [ ] T019a Failing tests and implementation of the terminal facts for mode detection: both streams are terminals (isatty on stdin and stdout) feed `owner.Detect`; a pty test shows human mode, non-tty shows agent mode.
 - [ ] T019b Mode evidence reaches the plan, the journal and `history` (with T013b).
+- [ ] T019c Bound and allowlist the tracking-reference reason the adapter passes on (`remote-source-present`, a protection such as `workspace-used`): it becomes the reason code of a retained tracking reference, so it needs a closed list and a length bound, with a failing test first.
+- [ ] T019d Escape the repository notices (`RepoResult.Notices`: the observation's `TrackingSkipped` and `Limitations`) on render: they pass control bytes unescaped, so the overview applies `esc` and the 120-character bound to them (with T017).
 - [ ] T019 Implement the command layer, flags, prompts and rendering; exit codes 0/1/2; wizard applies only after a typed `y` for the plan id through the same apply code.
 
 ## WP-6 Docs and acceptance
