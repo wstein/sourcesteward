@@ -6,6 +6,7 @@ package owner
 
 import (
 	"os"
+	"strconv"
 	"slices"
 	"testing"
 
@@ -27,23 +28,12 @@ func openPTY(t *testing.T) (master, slave *os.File) {
 	if err != nil {
 		t.Skipf("pty number: %v", err)
 	}
-	s, err := os.OpenFile("/dev/pts/"+itoa(n), os.O_RDWR|unix.O_NOCTTY, 0)
+	s, err := os.OpenFile("/dev/pts/"+strconv.Itoa(n), os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
 		t.Skipf("open pty slave: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	return m, s
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for ; n > 0; n /= 10 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-	}
-	return string(b)
 }
 
 func TestTerminalFactsOnAPseudoTerminal(t *testing.T) {

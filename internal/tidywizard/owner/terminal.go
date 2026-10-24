@@ -10,7 +10,7 @@ import "github.com/mattn/go-isatty"
 // descriptor, so every doubt reads as "no terminal" and mode detection stays on the agent side.
 func IsTerminal(v any) bool {
 	f, ok := v.(interface{ Fd() uintptr })
-	if !ok || f == nil {
+	if !ok {
 		return false
 	}
 	return isatty.IsTerminal(f.Fd())
