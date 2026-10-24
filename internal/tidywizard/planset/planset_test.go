@@ -139,6 +139,18 @@ func TestSelectSafeAgentNeedsTheTaskRecord(t *testing.T) {
 	}
 }
 
+func TestSelectSafeSkipsAKindWithoutAPlanKindSoBuildSucceeds(t *testing.T) {
+	a := own(tidywizard.KindWorktree, "r", "a")
+	stale := own(tidywizard.KindStaleWorktree, "r", "gone")
+	got := SelectSafe([]tidywizard.Candidate{stale, a}, human)
+	if len(got) != 1 || got[0] != a.ID {
+		t.Fatalf("selected %v, want only %s", got, a.ID)
+	}
+	if _, err := build(t, []tidywizard.Candidate{stale, a}, got, human, &fakePlanner{}); err != nil {
+		t.Fatalf("the selection must build: %v", err)
+	}
+}
+
 func TestSelectSafeIsPermutationInvariant(t *testing.T) {
 	x, y, z := own(tidywizard.KindWorktree, "r", "x"), own(tidywizard.KindBranch, "r", "y"), own(tidywizard.KindWorktree, "q", "z")
 	a := SelectSafe([]tidywizard.Candidate{x, y, z}, human)
@@ -186,7 +198,7 @@ func TestBuildGroupsSubPlansByEffectKind(t *testing.T) {
 	}
 }
 
-func TestOrderRunsRetirementsThenStaleThenBranchesThenTracking(t *testing.T) {
+func TestOrderRunsRetirementsThenBranchesThenTracking(t *testing.T) {
 	all := []tidywizard.Candidate{
 		own(tidywizard.KindTrackingRef, "a", "origin/old"), own(tidywizard.KindBranch, "a", "b"),
 		own(tidywizard.KindWorktree, "b", "w2"), own(tidywizard.KindWorktree, "a", "w1"),

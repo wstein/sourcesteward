@@ -268,11 +268,12 @@ func entry(c tidywizard.Candidate) owner.Entry {
 
 // SelectSafe returns the ids a non-interactive run stores (--save) or the wizard's "all" answer
 // selects: every safe item of scope own, and in agent mode only those whose owner came from the
-// task record. Other, unknown, retain and decision rows are never included.
+// task record. Other, unknown, retain and decision rows are never included, and neither is a kind
+// with no plan kind (a stale registration, T012b), so the selection always builds.
 func SelectSafe(cands []tidywizard.Candidate, ev owner.Evidence) []string {
 	entries := []owner.Entry{}
 	for _, c := range cands {
-		if c.Verdict == tidywizard.VerdictSafe && c.Scope == owner.ScopeOwn {
+		if _, plannable := subKind(c.Kind); plannable && c.Verdict == tidywizard.VerdictSafe && c.Scope == owner.ScopeOwn {
 			entries = append(entries, entry(c))
 		}
 	}
