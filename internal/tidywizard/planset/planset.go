@@ -329,6 +329,9 @@ func choose(req Request) ([]tidywizard.Candidate, error) {
 		case c.Verdict != tidywizard.VerdictSafe && c.Verdict != tidywizard.VerdictDecision:
 			return nil, fmt.Errorf("%w: %q has verdict %q", ErrNotPlannable, id, c.Verdict)
 		}
+		if c.Kind == tidywizard.KindStaleWorktree {
+			return nil, unplannable(ReasonStaleNoPlanKind, "no existing plan kind removes a registration whose directory is missing (%q)", id)
+		}
 		if _, ok := subKind(c.Kind); !ok {
 			return nil, fmt.Errorf("%w: %q has kind %q", ErrNotPlannable, id, c.Kind)
 		}
