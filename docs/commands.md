@@ -111,8 +111,10 @@ override), `pull.ff=only` forbids it, `rebase.autoStash` and `merge.autoStash` s
 `branch.NAME.rebase` is `true`, `interactive` or `merges` (the last keeps local merge commits while rebasing, as git
 does); it is merged only with the explicit `--merge`, which excludes `--rebase` and `--ff-only` (usage error, exit 2) and
 overrides `pull.rebase` and `pull.ff=only`. No Git setting enables a merge commit: with `pull.rebase=false`, `pull.ff=true|false`,
-`merge.ff` or none at all, a diverged branch is reported as `diverged` (`needs a choice: use --rebase or --merge`) and left unchanged. The earlier
-`--no-rebase` and `--no-ff` flags are gone. `pull.ff=only` (or `--ff-only`) refuses a diverged branch even when `pull.rebase=true`; `--rebase` overrides it. A dirty tree (submodule changes ignored, as git does) is fine when the update touches
+`merge.ff` or none at all, a diverged branch is reported as `diverged` (`needs a choice: use --rebase or --merge`) and left unchanged. `pull.rebase=interactive` is a plain non-interactive rebase (stw never opens an editor), and `pull.rebase=false` and
+`branch.NAME.rebase=false` are ignored, not an error. The autostash of a `--merge` run follows `merge.autoStash`. `--merge` is
+deliberately stricter than `git pull --no-rebase` in one more place, without data risk: a dirty file that only the local
+commits touch is `skipped-dirty`, where git would merge. The earlier `--no-rebase` and `--no-ff` flags are gone. `pull.ff=only` (or `--ff-only`) refuses a diverged branch even when `pull.rebase=true`; `--rebase` overrides it. A dirty tree (submodule changes ignored, as git does) is fine when the update touches
 none of its files, as for `git merge --ff-only`; with a rebase configured it needs `rebase.autoStash` or `--autostash`, even for a fast-forward, as for `git pull --rebase`. A failure in one repository does not stop the others.
 
 Output is one line per repository, then a summary line (colour only on a terminal with `NO_COLOR` unset):

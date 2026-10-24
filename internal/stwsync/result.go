@@ -2,8 +2,8 @@
 
 // Package stwsync implements `stw sync` (Spec 032): the replacement for `git pull` in a workspace root
 // repository and in each of its submodules that sits on a branch. Per repository it fetches the upstream
-// remote and then fast-forwards the current branch (or, on request, rebases it), without a merge commit
-// and without losing a local commit. It starts Git itself, because the fetch needs the network, which the
+// remote and then fast-forwards the current branch (or, on request, rebases it or, only with the explicit --merge,
+// merges it), creating a merge commit only for --merge and never losing a local commit. It starts Git itself, because the fetch needs the network, which the
 // sandboxed internal/workspace readers deny. Branches other than the current one and linked worktrees
 // are out of scope.
 package stwsync
