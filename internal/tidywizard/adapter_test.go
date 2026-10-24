@@ -757,3 +757,52 @@ func TestAdapterReadsTheJJRecordsOncePerRun(t *testing.T) {
 		t.Errorf("a Git repository scanned the records %d times", gscans)
 	}
 }
+
+// An Adapter built as a struct literal, without NewAdapter, is safe: a jj repository does not
+// panic, and the records are read once per Facts call (the run-wide sharing needs NewAdapter).
+func TestAdapterStructLiteralIsSafeForJJ(t *testing.T) {
+	scans := 0
+	var calls []destCall
+	a := Adapter{
+		Repos: map[string]RepoSpec{"r": {Name: "r", Path: "/ws/r", Base: "main"}},
+		Observe: func(context.Context, workspace.ObserveOptions) (workspace.WorktreeObservation, error) {
+			return jjObservation("/ws/wt/a", "/ws/wt/b", "/ws/wt/c"), nil
+		},
+		JJRecords: func() JJRecords {
+			scans++
+			return fakeJJ{lookup: func(c destCall) derive.TaskLookup {
+				if c.dest == "/ws/wt/a" {
+					return foundFor("ta", "werner")
+				}
+				return lookupFailure("registration-record-missing")
+			}, calls: &calls}
+		},
+	}
+	f, err := a.Facts(context.Background(), "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scans != 1 || len(calls) != 3 {
+		t.Fatalf("scans %d (want 1 per call), lookups %d", scans, len(calls))
+	}
+	owned := 0
+	for _, w := range f.Worktrees {
+		if w.JJOwned {
+			owned++
+		}
+	}
+	if owned != 1 {
+		t.Errorf("owned %d", owned)
+	}
+	// Without a record source a jj repository is analysed as before, nothing owned and no panic.
+	b := Adapter{Repos: a.Repos, Observe: a.Observe}
+	f, err = b.Facts(context.Background(), "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range f.Worktrees {
+		if w.JJOwned {
+			t.Errorf("owned without a record source: %+v", w)
+		}
+	}
+}
