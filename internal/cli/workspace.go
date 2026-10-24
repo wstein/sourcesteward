@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
+	"github.com/wstein/sourcesteward/internal/attribcmd"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
@@ -44,7 +45,11 @@ func workspaceCommandWith(operations workspaceOperations) *cobra.Command {
 	apply.Flags().StringVar(&a.PlanID, "plan", "", "Generated immutable plan identity")
 	apply.Flags().StringVar(&a.StateDir, "state-dir", "", "Private store containing the plan and recovery journal; default as for plan")
 	apply.Flags().BoolVar(&a.Authorize, "authorize", false, "Authorize only the reviewed plan's declared local effects")
-	apply.RunE = workspaceRun(apply, func(cmd *cobra.Command, _ []string) workspace.Result { return operations.apply(cmd.Context(), a) }, func() error { return validateWorkspaceDefaulted("plan", a.PlanID, "state-dir", a.StateDir) }, &a.StateDir)
+	apply.RunE = workspaceRun(apply, func(cmd *cobra.Command, _ []string) workspace.Result {
+		origin := attribcmd.Current()
+		a.Origin = &origin
+		return operations.apply(cmd.Context(), a)
+	}, func() error { return validateWorkspaceDefaulted("plan", a.PlanID, "state-dir", a.StateDir) }, &a.StateDir)
 	for _, entry := range []struct {
 		name, short string
 		run         func(context.Context, workspace.Options) workspace.Result
