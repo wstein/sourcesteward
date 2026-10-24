@@ -49,6 +49,8 @@ type tidyWizardOptions struct {
 	member     []string
 	memberBase []string
 	only       string
+	// stateDirs records every --state-dir of the command line, for the wizard layer.
+	stateDirs []string
 }
 
 func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
@@ -148,10 +150,4 @@ func selectTidyPlanLayer(cmd *cobra.Command, args []string, o *tidyWizardOptions
 		return tidyWizard, nil
 	}
 	return tidyExpert, nil
-}
-
-// errTidyWizardUnavailable is the usage error of the wizard layer until it is wired (Spec 041
-// T019): these command lines were usage errors before, and still are.
-func errTidyWizardUnavailable() error {
-	return fmt.Errorf("the wizard layer of tidy plan is not available in this build yet; use the expert layer (tidy plan --base REF [PATH])")
 }
