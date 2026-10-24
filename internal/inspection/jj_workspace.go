@@ -396,16 +396,45 @@ func jjWorkspaceVerifySession(ctx context.Context, s jjSession, destination, nam
 	return j, nil
 }
 
+// verifyInspect is the identity read of VerifyJJWorkspace; tests replace it.
+var verifyInspect = Inspect
+
+// inspectionStopped reports an inspection that ended on a deadline or a
+// cancellation. It observed nothing, so it is not evidence of a foreign owner.
+func inspectionStopped(ctx context.Context, r Result) error {
+	if r.Status == "ok" {
+		return nil
+	}
+	for _, d := range r.Diagnostics {
+		switch d.Code {
+		case "jj-timeout":
+			return fmt.Errorf("jj workspace verification stopped: %w", context.DeadlineExceeded)
+		case "canceled":
+			if e := ctx.Err(); e != nil {
+				return fmt.Errorf("jj workspace verification stopped: %w", e)
+			}
+			return fmt.Errorf("jj workspace verification stopped: %w", context.Canceled)
+		}
+	}
+	return nil
+}
+
 // VerifyJJWorkspace accepts legitimate progressed task identities while checking stable native registration.
 func VerifyJJWorkspace(ctx context.Context, source, name, destination, repo string) (JJRepository, error) {
 	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
 	defer cancel()
 	var j JJRepository
-	identity := Inspect(ctx, source)
+	identity := verifyInspect(ctx, source)
+	if e := inspectionStopped(ctx, identity); e != nil {
+		return j, e
+	}
 	if identity.Status != "ok" || identity.JJRepository == nil || identity.JJRepository.RepositoryDir != repo {
 		return j, errors.New("source jj repository identity changed")
 	}
-	destinationIdentity := Inspect(ctx, destination)
+	destinationIdentity := verifyInspect(ctx, destination)
+	if e := inspectionStopped(ctx, destinationIdentity); e != nil {
+		return j, e
+	}
 	if destinationIdentity.Status != "ok" || destinationIdentity.Backend != "jj" || destinationIdentity.JJRepository == nil || destinationIdentity.JJRepository.RepositoryDir != repo || destinationIdentity.JJRepository.WorkspaceName != name {
 		return j, errors.New("foreign or ambiguous jj destination ownership")
 	}
