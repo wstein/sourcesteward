@@ -61,6 +61,8 @@ const (
 	ProofMergeNoop   Proof = "merge-noop"
 	ProofNoNetChange Proof = "no-net-change"
 	ProofNone        Proof = "none"
+	// ProofEmptyWorkingCopy proves a jj workspace: its working copy is empty and its parent is integrated.
+	ProofEmptyWorkingCopy Proof = "empty-working-copy-integrated-parent"
 	// ProofBranchAbsent proves a remote-tracking reference: the remote no longer has its source branch.
 	ProofBranchAbsent Proof = "github-branch-absent"
 )
