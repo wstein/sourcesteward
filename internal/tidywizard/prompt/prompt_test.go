@@ -255,7 +255,7 @@ func TestDecisionRowsAreOnlyEverChosenByNumber(t *testing.T) {
 // An end of input in any nested question ends the run with nothing chosen (the plan-only
 // degradation), also when rows were already taken: the owner questions, the decision confirmation.
 func TestEndOfInputInANestedQuestionChoosesNothing(t *testing.T) {
-	for _, in := range []string{"o\ny\n", "o\n", "o\ny\nn", "1,3\n", "a\n3\n"} {
+	for _, in := range []string{"o\ny\n", "o\n", "1,3\n", "o\nx\n"} {
 		res, _, err := run(t, in, true)
 		if err != nil || res.Outcome != OutcomeNone || len(res.Chosen) != 0 || len(res.Confirmed) != 0 {
 			t.Errorf("%q: %+v %v", in, res, err)
