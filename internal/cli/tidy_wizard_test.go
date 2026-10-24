@@ -531,3 +531,60 @@ func TestWizardPlanDeadlineDuringTheAnalysis(t *testing.T) {
 		t.Errorf("%v\n%s", err, out)
 	}
 }
+
+// escFull must not cut an ordinary message: 250 plain characters come back as they are, whatever
+// the size of the pieces it escapes in (a piece over esc's 120-character bound would be cut).
+func TestEscFullDoesNotCutOrdinaryMessages(t *testing.T) {
+	for _, n := range []int{1, 99, 100, 101, 119, 120, 121, 130, 200, 250, 1000} {
+		msg := strings.Repeat("x", n)
+		if got := escFull(msg); got != msg {
+			t.Errorf("%d characters: cut to %d (%q...)", n, len(got), got[max(0, len(got)-8):])
+		}
+	}
+	// Multibyte text is counted in characters, not bytes.
+	if got := escFull(strings.Repeat("ä", 250)); got != strings.Repeat("ä", 250) {
+		t.Errorf("multibyte message was cut: %d bytes", len(got))
+	}
+	// Escapes lengthen a piece but never trigger the cut either: 100 ESC characters per piece.
+	if got := escFull(strings.Repeat("\x1b", 250)); got != strings.Repeat(`\x1b`, 250) {
+		t.Errorf("escaped message was cut: %d bytes", len(got))
+	}
+}
+
+// The escaped message is bounded as a whole, so an enormous error cannot flood the terminal.
+func TestEscFullBoundsTheWholeMessage(t *testing.T) {
+	got := escFull(strings.Repeat("e", 100000))
+	if len(got) > maxEscapedMessage+8 || !strings.HasSuffix(got, "...") || !strings.HasPrefix(got, "eeee") {
+		t.Errorf("%d bytes, tail %q", len(got), got[max(0, len(got)-8):])
+	}
+	hostile := escFull(strings.Repeat("\x1b", 100000))
+	if len(hostile) > maxEscapedMessage*4+8 {
+		t.Errorf("hostile message of %d bytes", len(hostile))
+	}
+	if short := escFull("short"); short != "short" {
+		t.Errorf("%q", short)
+	}
+}
+
+// A store or planner error that follows a timeout does not hide the timeout: the cause comes
+// first and the save error is shown as detail.
+func TestWizardPlanSaveErrorAfterATimeoutKeepsTheCause(t *testing.T) {
+	w := newWizardWorld(t, true, true)
+	w.planner.err = errors.New("planner failed: context deadline exceeded")
+	tidyAnalyse = func(ctx context.Context, _ analysis.Prepared, _ tidywizard.Config) tidywizard.Result {
+		<-ctx.Done()
+		return w.res
+	}
+	_, err := runTidy(t, "", "plan", "--save", "--timeout", "1ns")
+	var failure runtimeFailure
+	if !errors.As(err, &failure) || !strings.Contains(err.Error(), "--timeout of 1ns elapsed") || !strings.Contains(err.Error(), "planner failed") {
+		t.Errorf("%v", err)
+	}
+	// Without a timeout the save error stands alone.
+	w = newWizardWorld(t, true, true)
+	w.planner.err = errors.New("planner failed")
+	_, err = runTidy(t, "", "plan", "--save")
+	if !errors.As(err, &failure) || strings.Contains(err.Error(), "--timeout") || !strings.Contains(err.Error(), "planner failed") {
+		t.Errorf("%v", err)
+	}
+}
