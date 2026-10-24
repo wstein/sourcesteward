@@ -6,11 +6,11 @@ repository or pushes the default branch. Tests use temporary repositories only.
 
 ## WP-1 Ownership position, issue #174
 
-- [ ] T001 Write the failing acceptance test in `internal/workspace`: create a workspace with `workspace apply` (detached), `git switch -c b`, commit, `git push -u` to a bare remote (adds `branch.b.remote/merge` to the common config), integrate into the base by rebase-merge (different SHAs), expect `tidy plan` retirement to be `ok` (today: `changed-ownership`). Red: the current error.
+- [x] T001 Write the failing acceptance test in `internal/workspace`: create a workspace with `workspace apply` (detached), `git switch -c b`, commit, `git push -u` to a bare remote (adds `branch.b.remote/merge` to the common config), integrate into the base by rebase-merge (different SHAs), expect `tidy plan` retirement to be `ok` (today: `changed-ownership`). Red: the current error.
 - [x] T001a Write failing tests for the Verify split (cause 2): unrelated config key changed, Git binary identity changed (retire ok); hook added before planning (a note, the worktree still retires) and added between plan and apply (refuses with the existing `evidence-changed`), unsafe layout (existing code); the split applies at both `Verify` call sites, the v2 retirement path unchanged; no new refusal code; the creation-digest equality still holds on the workspace and handoff paths (unchanged tests).
 - [x] T002 Write failing refusal tests: dirty tree, unintegrated branch, wrong owner, moved lock, foreign lock, changed gitdir pointer, unrelated checkout that lacks the creation commit; each with its own code.
-- [ ] T003 Implement the position rule and the Verify split (identity part plus fresh admission and stored fresh digest for retirement); no new plan field; T001, T001a and T002 green.
-- [x] T004 Stale tests: move HEAD, branch tip, base and the fresh safety digest between plan and apply, each refuses with `stale` and changes nothing; old stored plans still apply.
+- [x] T003 Implement the position rule, the Verify split and the reuse of the Spec 011 integration proofs by retirement (amendment: retirement reuses the Spec 011 integration proofs) (identity part plus fresh admission and stored fresh digest for retirement); no new plan field; T001, T001a and T002 green.
+- [x] T004 Stale tests: move HEAD, branch tip, base and the fresh safety digest between plan and apply, each refuses with the existing `evidence-changed` and changes nothing; old stored plans still apply.
 - [x] T004a Failing tests and implementation of the dependent branch leg: applied only after a successful retirement and re-observed; no leg when HEAD is attached to the base branch; changed tip OID, attached elsewhere, workspace ref and symbolic ref refuse; failed retirement skips the leg.
 - [ ] T005 Mutation probes of the plan table, recorded; `go test -race ./internal/workspace` once; independent review of the exact head.
 

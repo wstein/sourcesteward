@@ -290,9 +290,13 @@ independent reasons:
   layout keeps its existing code. Existing refusal codes are kept (renaming one would change expert-layer output). The split applies at
   **both** `Verify` call sites of the owned retirement path; the older v2 retirement path keeps its rule. The re-bind alternative (a human-authorized, journaled re-registration step in the plan) is
   rejected as default because it asks for a confirmation per worktree (61); it remains available as the `decision` path of the legacy completion.
-- **Integration proof of the real HEAD** (already how the code proves: `proveTidyV3Commit(target.CommitID)`): ancestor, patch-id,
-  merge-noop or no-net-change; clean tree, no extras, no submodule or symlink problem.
-- **Stale binding.** The stored plan binds HEAD ref, OID, branch tip and base; any change refuses with `stale`.
+- **Integration proof of the real HEAD** (amended: before this amendment retirement proved native ancestry only, which retains every
+  rebase-merged worktree). Retirement now reuses the Spec 011 forge-free proofs on the real HEAD through the same code as local-reference
+  plans: ancestor, patch-id, merge-noop or no-net-change, honouring `--integration-proof` and `--accept-whitespace-differences`. The
+  policy is stored in the plan (`proof_policy`); a plan stored without one keeps the ancestry proof. A head the proofs do not cover
+  (extra unmerged commit, whitespace-only difference without the flag, a class left out) stays `retain` `integration-not-proven`.
+  Clean tree, no extras, no submodule or symlink problem as before.
+- **Stale binding.** The stored plan binds HEAD ref, OID, branch tip and base; any change refuses with the existing `evidence-changed` (the stale re-check of the code; no `stale` refusal code exists).
 
 **Branch leg (new plan form, defined).** `owned-retirement` and `legacy-retirement` plans carry no selected refs today and the branch is
 attached while planned, so Spec 011 ref planning would retain it. The wizard therefore plans a **dependent branch sub-plan**: it records
@@ -412,8 +416,8 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **FR-020** Ownership identity (admin dir, path, common dir, lock, format, journal) stays exact; HEAD position may be the detached creation commit or any descendant, attached or detached (#174).
 - **FR-020a** Retirement does not require equality with the creation-time safety digest; it requires the fresh safety admission, stores the fresh digest in the plan and re-checks it at apply. Hooks and similar settings stay notes in planning mode as today (Spec 031); a change between plan and apply refuses through the existing `evidence-changed`; no refusal code is added or renamed. The split applies at both `Verify` call sites; the v2 retirement path is unchanged. Workspace and handoff paths keep the creation digest check.
 - **FR-021** A HEAD that does not contain the creation commit is `changed-ownership`.
-- **FR-022** Retirement requires the integration proof of the real HEAD, a clean tree and no extras; the branch is deleted only if proven integrated, listed in the plan and attached nowhere else.
-- **FR-023** The stored retirement plan binds HEAD ref and OID (existing fields); apply refuses (`stale`) on any change of HEAD, branch tip or base.
+- **FR-022** Retirement requires the Spec 011 integration proof of the real HEAD (retirement reuses those proofs and their two flags), a clean tree and no extras; the branch is deleted only if proven integrated, listed in the plan and attached nowhere else.
+- **FR-023** The stored retirement plan binds HEAD ref and OID (existing fields); apply refuses (the existing `evidence-changed`) on any change of HEAD, branch tip or base.
 - **FR-024** Existing creation records, journals and stored plans need no migration.
 - **FR-025** The branch leg is a dependent sub-plan applied after a successful retirement, re-observed, under all Spec 011 ref protections; never planned for the base branch.
 - **FR-030** `--save` and the wizard store a plan set of independent sub-plans (one worktree per retirement sub-plan) with a content-addressed `plan_id`.
@@ -436,7 +440,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **SC-004** `stw tidy` with no TTY never blocks (test with closed and with silent stdin) and stores nothing.
 - **SC-005** Existing tidy tests, goldens and schemas pass byte-unchanged; every flag registered by the tidy commands is classified (wizard, expert or shared), and `plan --base X` without `PATH` stays expert.
 - **SC-006** An ambiguous base never produces a candidate for that repository (tests: no `refs/remotes/origin/HEAD`, two remotes, dangling HEAD).
-- **SC-007** Stale checks: moving HEAD, the branch tip or the base between plan and apply makes apply refuse with `stale` and change nothing.
+- **SC-007** Stale checks: moving HEAD, the branch tip or the base between plan and apply makes apply refuse with the existing `evidence-changed` and change nothing.
 - **SC-008** Output bounds hold under 5000 candidates; `esc` holds for ANSI, CR, NUL and bidi in branch names, tasks and paths.
 - **SC-009** `make check` and `scripts/check-docs.py` pass; independent review of the exact head is CLEAR.
 - **SC-010** With worktrees of Claude, Codex and an unknown owner present, a human `stw tidy` with no flag lists all of them grouped by owner with the owner column; JSON carries `owner`, `owner_source`, `scope` for each.
