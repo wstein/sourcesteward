@@ -402,3 +402,21 @@ func editRecord(t *testing.T, w *workspace, dir, id string, fn func(*journalReco
 		t.Fatal(err)
 	}
 }
+
+// Retention orders an old-format run ID and a microsecond ID of the same second by time, not as raw text
+// ('Z' sorts after the digits): at the boundary the genuinely older run is the one pruned.
+func TestRetentionOrdersMixedRunIDFormatsByTime(t *testing.T) {
+	w := newWorkspace(t)
+	fakeRuns(t, w, 8, "2099")
+	older, newer := "20260101T120000Z-00000000", "20260101T120000500000Z-00000000"
+	fakeRun(t, w, older)
+	fakeRun(t, w, newer)
+	w.advance(t, ".", "main")
+	run(t, w, Options{})
+	if hasRecord(w, older) || !hasRecord(w, newer) {
+		t.Fatalf("older kept: %v, newer kept: %v", hasRecord(w, older), hasRecord(w, newer))
+	}
+	if runGit(t, w.ws, "for-each-ref", "refs/stw/recovery/sync/"+newer) == "" {
+		t.Fatal("the newer run lost its recovery ref")
+	}
+}
