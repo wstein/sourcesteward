@@ -90,7 +90,7 @@ func (a Adapter) worktree(e workspace.WorktreeEvidence) Worktree {
 		w.Incomplete = e.Incomplete
 	case e.Primary || e.DirMissing:
 	default:
-		w.Proof, w.Incomplete = proofFact(e.Proof, "", kindBranch)
+		w.Proof, w.Incomplete = proofFact(e.Proof, "", kindWorktree)
 	}
 	return w
 }
@@ -143,11 +143,13 @@ func (a Adapter) record(task, path string) (Record, string) {
 }
 
 // proofKind selects the proofs a kind of candidate may carry: a worktree or a branch is proven by
-// integration into the base, a remote-tracking reference by the absence of its source branch.
+// integration into the base (a jj workspace also by an empty working copy on an integrated parent),
+// a remote-tracking reference by the absence of its source branch.
 type proofKind int
 
 const (
-	kindBranch proofKind = iota // also the proofs of a worktree
+	kindWorktree proofKind = iota
+	kindBranch
 	kindTracking
 )
 
@@ -160,10 +162,14 @@ func proofFact(word, incomplete string, kind proofKind) (Proof, string) {
 	}
 	p := Proof(word)
 	switch kind {
-	case kindBranch:
+	case kindWorktree, kindBranch:
 		switch p {
 		case ProofAncestor, ProofPatchID, ProofMergeNoop, ProofNoNetChange, ProofNone:
 			return p, ""
+		case ProofEmptyWorkingCopy:
+			if kind == kindWorktree {
+				return p, ""
+			}
 		}
 	case kindTracking:
 		switch p {

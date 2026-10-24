@@ -410,3 +410,31 @@ func TestAdapterCarriesNoticesToTheRepositoryResult(t *testing.T) {
 		t.Fatalf("notices not bounded: %d, %d bytes", len(got), len(got[1]))
 	}
 }
+
+// The empty working copy of a jj workspace on an integrated parent is a proof of a workspace only.
+func TestAdapterAcceptsTheEmptyWorkingCopyProofForWorktreesOnly(t *testing.T) {
+	w := evid("/ws/wt/jj", "")
+	w.Proof = "empty-working-copy-integrated-parent"
+	obs := workspace.WorktreeObservation{
+		Worktrees: []workspace.WorktreeEvidence{w},
+		Branches:  []workspace.BranchEvidence{{Name: "b", Proof: "empty-working-copy-integrated-parent"}},
+	}
+	a, _ := testAdapter(obs, nil)
+	f, err := a.Facts(context.Background(), "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Worktrees[0]; got.Incomplete != "" || got.Proof != ProofEmptyWorkingCopy {
+		t.Errorf("worktree: %+v", got)
+	}
+	if got := f.Branches[0]; got.Incomplete != "unknown-proof" {
+		t.Errorf("branch: %+v", got)
+	}
+	// Without a lock or a record the workspace is unregistered, and safe only for a human.
+	res := Classify(context.Background(), a, []string{"r"}, cfg())
+	for _, c := range res.Candidates {
+		if c.Kind == KindWorktree && (c.Verdict != VerdictSafe || c.Reason != "unregistered" || c.Scope == "own") {
+			t.Errorf("%+v", c)
+		}
+	}
+}
