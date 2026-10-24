@@ -243,7 +243,16 @@ Per repository one call, `workspace.ObserveWorktrees(ctx, ObserveOptions) (Workt
   `Locked`, `LockReason`, `Prunable`, `DirMissing`. Content facts: `Dirty`, `IgnoredExtras`, `LastActivity`, `Ahead`, `AuthorHint`, `HasOwnCommit`
   (HEAD has a commit the base lacks), `Proof` (`ancestor|patch-id|merge-noop|no-net-change|none` of HEAD against the base, the Spec 011 proofs with
   the default policy, no forge). `Incomplete` is empty or a short reason that applies to the content facts, which are then zero.
-- `BranchEvidence` (`Name`, `OID`, `IsBase`, `Proof`, `Ahead`, `AuthorHint`, `Incomplete`) and `TrackingRefEvidence` (`Name`, `Proof`, `Incomplete`) carry their own `Incomplete`.
+- `BranchEvidence` (`Name`, `OID`, `IsBase`, `Proof`, `Ahead`, `AuthorHint`, `Incomplete`) and `TrackingRefEvidence` (`Name`, `Proof`, `Incomplete`) carry their own `Incomplete`. `BranchEvidence.Name` is the full `refs/heads/` name; `IsBase` is true for the base
+  reference itself and for the local branch of the same short name as a remote-tracking base (`refs/heads/main` for `refs/remotes/origin/main`). A tracking reference's `Proof` is
+  `github-branch-absent` (the typed advertisement lacks the source branch) or `none`.
+- **Primary checkout.** The primary checkout is the worktree whose Git directory is the repository's common directory (`GitDir == RepositoryDir` of its native identity). This holds for
+  a `.git` directory, a `--separate-git-dir` checkout and a submodule checkout alike (a gitfile `.git` is no sign of a linked worktree), and is decided from the identity read at the registered path, not
+  from the shape of `.git`. It is listed with its registration facts only: its content facts stay zero without `Incomplete`, because it is retained as `primary-checkout` whatever its content. When the identity cannot be read, the
+  item is `Incomplete`. A repository with a bare registration is refused as a whole (the existing registration rule).
+- **The directory is the registered worktree.** Before any content fact is read, the identity at the registered path must have the same repository (common directory), the registered HEAD OID and the registered
+  HEAD ref, and, for a linked worktree, an administrative directory whose `gitdir` file names this path. Anything else (another repository, a clone, another linked worktree, a HEAD that moved since the
+  registrations were listed) is `Incomplete` `registration-mismatch`, never observed as clean and proven.
 - The stw lock form (`stw:<task>`) is read from `LockReason`; the creation record lookup stays in the state-directory code (WP-2) and the adapter
   joins the two. The observers never look at a state store.
 - **Tracking references** need the network proof of contract 3 (OQ8). The tracking evidence exists today only inside `tidyV3TrackingCoordinator.planTracking`
@@ -254,25 +263,36 @@ Per repository one call, `workspace.ObserveWorktrees(ctx, ObserveOptions) (Workt
 **Failure rule.** An error, timeout, exceeded bound or unreadable path while observing one worktree, branch or reference sets the `Incomplete` reason of
 that item and leaves its content facts zero; the registration facts stay. The adapter maps `Incomplete` to a classifier fact on `Worktree`, `Branch` and
 `TrackingRef` (T011a3, test first) that yields `retain` `evidence-incomplete` for every owner scope; the classifier's zero-`LastActivity` rule covers only
-other and unknown scopes and is not relied on. Nothing is guessed or defaulted to a safe value, and an `Incomplete` branch is never `Proof` `none`. An error of the
+other and unknown scopes and is not relied on. Nothing is guessed or defaulted to a safe value, and an `Incomplete` item is never `Proof` `none`. The reasons are closed words or failure codes, never a path or a message of the repository: `worktree-limit`,
+`branch-limit`, `registration-mismatch`, `activity-unreadable`, `deadline-exceeded`, `observation-failed`, the proof reasons `proof-limit`, `object-dir-unavailable`, `ambiguous-merge-base`, `proof-budget-exhausted`, `history-override` and
+`unsupported-metadata` (shallow or grafted history and alternate object stores are tolerated as hard stops of the proofs, not as a refusal of the whole repository), and the failure code of a refused check (for example `retirement-file-limit`, `git-tree-refused`). An error of the
 repository as a whole (not a repository, base missing) is the returned `error`: the repository is `error` in the overview and the others proceed.
 
-**From refusals to facts.** The retirement checks answer yes or refuse; the observers need facts, so each check is wrapped as follows: a refusal with the code of the
-finding becomes the fact (`dirty` or a tracked difference sets `Dirty`; `retirement-unrecorded-entry` and untracked or ignored entries set `IgnoredExtras`), a refusal for
-a limit (`retirement-file-limit`, deadline, budget) or any other error sets `Incomplete` with that code as the reason, and success leaves both false; a disk content difference has no refusal code of its own and therefore shows as `Incomplete` (`evidence-incomplete`, fail-closed), not as a clean worktree. The mapping is a table in
-the tests, one row per refusal code. The shared proof budget (`tidyV3ProofBudget`) allows only three observations per operation, which would run out after about three
-worktrees, so each worktree gets its own content budget (a fresh `newTidyV3ProofBudget` for its comparison, bounded by the same per-worktree limits as one retirement plan);
-the repository-level cap stays the 60 s observation deadline and the 1024 worktree limit, and a worktree that exceeds its budget is `Incomplete`.
+**From refusals to facts.** The retirement checks answer yes or refuse; the observers need facts. The mapping is a table in the tests (`TestObserveContentOutcomeTable`, one row per outcome):
+
+| Check | Outcome | Fact |
+| --- | --- | --- |
+| stored files (HEAD tree and `ls-files --stage`) | success | none, the manifest check follows |
+| | `retirement-index-not-clean` (staged, conflicted or missing index entries) | `Dirty`; the untracked check is not made |
+| | `retirement-file-limit`, `git-tree-refused`, deadline, any other error | `Incomplete` with that code or word |
+| manifest (the disk against the stored tree) | success | clean |
+| | tracked file differs from the stored tree, or is missing (sentinel errors `errRetirementStoredDiffers`, `errRetirementStoredMissing`) | `Dirty` |
+| | `retirement-unrecorded-entry` (untracked or ignored entry) | `IgnoredExtras` |
+| | `retirement-file-limit`, deadline, any other error | `Incomplete` |
+
+The walk stops at the first finding in path order, so when `IgnoredExtras` is reported `Dirty` is not determined, and when `Dirty` comes from the index `IgnoredExtras` is not; both retain. The other content facts (last activity, ahead, author) are kept for a
+dirty worktree. The shared proof budget (`tidyV3ProofBudget`) allows only three observations per operation, which would run out after about three worktrees, so each worktree gets its own content budget (a fresh `newTidyV3ProofBudget`,
+bounded by the same per-worktree limits as one retirement plan); the repository-level cap stays the 60 s observation deadline and the worktree limit, and a worktree that exceeds its budget is `Incomplete`.
 
 **Git without `git status`.** Every Git command runs under `runSandboxed` with no write roots and the planning policy of `git_planning.go`
 (`planningPolicyFactory`: `planningGitOptions`, `planningConfigArgs`, `planningEnvironment`: no global or system configuration, no hooks, no filters, no
 replace objects, `core.fsmonitor` off, `GIT_OPTIONAL_LOCKS=0`); the bare `gitRead` is not enough because it leaves global fsmonitor, filter and hook
 configuration active. `git status` is not run: it can refresh the index stat information, write the untracked cache, start or update the fsmonitor
-token or daemon and write a split index, and each of these is prevented here only by not calling it. `Dirty` and `IgnoredExtras` come from the filter-free
+token or daemon and write a split index; none of these can happen here because no observer calls it, and the planning policy (locks off, fsmonitor off, no hooks) is the second line of defence for every other command. `Dirty` and `IgnoredExtras` come from the filter-free
 comparison of retirement (`retirement_git.go` stored-files check and `retirement_manifest_v3.go` manifest: the disk against the HEAD tree, untracked and ignored entries
-against the stored tree) and from `git diff-index --cached` (the index against HEAD, which reads and never refreshes the index). `LastActivity` is the newest
-modification time (`lstat`) of the worktree's HEAD file, its index file and every tracked file, at most `checkoutLeafLimit` (16,384, the measured bound
-of `git.go`) tracked files per worktree; more makes the worktree `Incomplete`. Other commands: worktree list, rev-parse, merge-base, rev-list count, log of the tip.
+against the stored tree) and the same stored-files check compares the index against HEAD with `ls-files --stage` (which reads and never refreshes the index), so `diff-index` is not run: `retirement-index-not-clean` is `Dirty`, and then the untracked check is not made (`IgnoredExtras` stays false, the worktree is retained as dirty anyway). `LastActivity` is the newest
+modification time (`lstat`) of the worktree's HEAD file, its index file and every tracked file (when the index differs from HEAD the tracked files are not listed and only HEAD and the index count), at most 8,192 files and directories per worktree (the bound of the
+retirement manifest, which counts both, `retirement-file-limit`; the 16,384 `checkoutLeafLimit` bounds only the index listing); more makes the worktree `Incomplete`. A deleted tracked file contributes no time. Other commands: worktree list, for-each-ref, rev-list count and log of the tip. The identity inspection of a path (`inspection.Inspect`, used by every tidy plan) runs outside the sandbox: it executes only read-only `rev-parse` queries with `core.fsmonitor=false` and `GIT_OPTIONAL_LOCKS=0`, which read configuration and refs and run no hook or filter, and the write test below covers it. A repository with an active filter attribute is refused as a whole by the existing admission, so no observer command ever runs a filter.
 
 **jj.** Every jj command goes through the existing `jjSession.query` form: `--ignore-working-copy` and `--at-operation=<observed operation>` (the operation
 is observed once per repository and pinned), so nothing snapshots the working copy and no operation is written or merged. Bookmarks are fully observable
@@ -282,19 +302,22 @@ commit of the pinned operation, as the existing jj retirement admission does (`O
 comparison of an empty working-copy change is the empty working-copy retirement of Spec 011 (SI7, OQ9). Only a comparison that cannot complete is `Incomplete`
 (`jj-working-copy-comparison-failed`). jj workspaces thus stay eligible for the empty working-copy rule; this reconciles the safety invariants and OQ9 with the read-only rule.
 
-**Read-only guarantee as a test.** The sandbox mounts the file system read-only, so a probe inside it cannot expose a write. The test therefore requires: a
-fixture whose files are stat-dirty and content-clean (touched, so a status would rewrite the index), linked worktrees with their own index, an fsmonitor-enabled
-global and local configuration, and a hook and a filter in the configuration; a snapshot before and after of the repository (`.git` bytes including refs, packed refs, config and every
-`.git/worktrees/<name>/index`), of every worktree (file list, contents, modification times, its own index) and of the state directory, required equal; and a
-**probe run without the sandbox** (the same observers with the sandbox disabled by the test seam) that must fail the snapshot when an observer calls plain `git status`,
-proving the test can fail. A second fixture with an online tracking remote served by the existing hosting test double covers the tracking path. For jj the snapshot includes the operation log and the working-copy state.
+**Read-only guarantee as a test.** The sandbox mounts the file system read-only, so a probe inside it cannot expose a write. The tests therefore require: a fixture whose files are
+stat-dirty and content-clean in the primary checkout and in each linked worktree (each has its own index), with an untracked cache and a configured fsmonitor hook; a snapshot before and after
+(repository bytes including refs, config and every `.git/worktrees/<name>/index`, every worktree's files, contents and times, the state directory and the markers directory), required equal after the observers
+ran (a) sandboxed and (b) with the sandbox switched off for every native command of the process (a test-only switch at the one place commands are prepared, `prepareSandboxed`, so the reused retirement checks and streaming reads are covered too).
+The harness is shown to be able to fail: a plain `git status` with its default environment over the same fixture (and over a fixture with a clean filter) changes a worktree's index and runs the fsmonitor hook and
+the filter, and the snapshot shows it. What the tests do **not** claim: that the planning policy is what stops those effects. `git status` through the native runner is neutralized by
+`GIT_OPTIONAL_LOCKS=0`, the pinned `core.fsmonitor=false` and the hooks path, and a mutation that adds it there is not detected; the guard against it is that no observer calls `git status`, which the code review and
+the mutation probes of the pull request check, while a command that writes despite the policy (an `update-ref`, an index refresh with locks) is detected by (b). A second fixture with an online tracking remote served by the existing
+hosting test double covers the tracking path. For jj the snapshot includes the operation log and the working-copy state.
 
 **Bounds (stated numbers; the 61-worktree fixture of the tests confirms them and this section is amended if it cannot).** At most 1024 worktrees and 1024
 branches per repository (`observationLimit`), the surplus sorted by path or name is `Incomplete`. One observation deadline of 60 s (`planObservationTimeout`) and
 one integration proof phase of 60 s for the repository (`integrationPhaseTimeout`, Spec 029 FR-008), with the existing per-command timeout of 10 s
 (`integrationCommandTimeout`) and per-tip timeout of 20 s (`integrationTipTimeout`); the proof of a commit is computed once per distinct HEAD or tip OID. When the phase is
 exhausted, the remaining items are `Incomplete` (`proof-budget-exhausted`), never `none`. With 61 worktrees the phase leaves about 1 s per tip on average, which suffices for the
-ancestor and merge-noop proofs; the fixture must also include patch-id tips, the expensive case, and records how many fit. The 61-worktree fixture uses realistic checkouts (a few thousand tracked files each, generated at test time from a shared object store), not empty worktrees, and records the total time. Native command output is bounded by the existing stream limits.
+ancestor and merge-noop proofs. The 61-worktree fixture (`TestObserveSixtyOneRealisticWorktrees`) uses realistic checkouts (2,000 tracked files each, generated at test time, shared object store), sixty distinct tips of which thirty need the patch-id evaluation against a base that moved on, and measured about 10 s in total (observation and proofs) on the development machine, far inside the 60 s and 60 s windows. Native command output is bounded by the existing stream limits.
 
 ## Scope of ownership is a view
 
