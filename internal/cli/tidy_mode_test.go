@@ -107,8 +107,8 @@ func TestTidyPlanLayerSelection(t *testing.T) {
 		{[]string{"plan", "--member", "a", "--repo", "r"}, "usage", "cannot be combined"},
 		{[]string{"plan", "--by-owner", "x", "--owner", "o"}, "usage", "cannot be combined"},
 		{[]string{"plan", "--mine", "--contract", "3"}, "usage", "cannot be combined"},
-		{[]string{"plan", "/repo", "--mine"}, "usage", "PATH"},
-		{[]string{"plan", "/repo", "--save"}, "usage", "PATH"},
+		{[]string{"plan", "/repo", "--mine"}, "usage", "cannot be used with a PATH"},
+		{[]string{"plan", "/repo", "--save"}, "usage", "cannot be used with a PATH"},
 		{[]string{"plan", "--json", "--human"}, "usage", "exclude each other"},
 		{[]string{"plan", "--yes"}, "usage", "unknown flag"},
 		{[]string{"plan", "--only", "retire,nonsense"}, "usage", "--only"},
@@ -140,7 +140,7 @@ func TestTidyPlanLayerSelection(t *testing.T) {
 // An expert invocation that succeeds today is byte-identical: the options reach the seam unchanged.
 func TestTidyExpertPlanOptionsAreUnchanged(t *testing.T) {
 	err, ran, o := runMode("plan", "--base", "HEAD", "--state-dir", "/s", "--ref", "r1")
-	if err != nil || !ran || o.Base != "HEAD" || o.StateDir != "/s" || len(o.Refs) != 1 || o.Path != "" {
+	if err != nil || !ran || o.Base != "HEAD" || o.StateDir != "/s" || len(o.Refs) != 1 || o.Path != "." {
 		t.Fatalf("%v %v %+v", err, ran, o)
 	}
 }
@@ -208,4 +208,3 @@ func TestTidyApplyLayerSelection(t *testing.T) {
 		}
 	}
 }
-
