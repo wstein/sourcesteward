@@ -69,11 +69,14 @@ type TrackingRefEvidence struct {
 // WorktreeObservation is the read-only evidence of one Git repository.
 type WorktreeObservation struct {
 	Backend, Base, BaseOID string
-	Worktrees              []WorktreeEvidence
-	Branches               []BranchEvidence
-	TrackingRefs           []TrackingRefEvidence
-	TrackingSkipped        string
-	Limitations            []string
+	// RepositoryDir is the shared native repository directory of the observed repository (set for
+	// jj, where a creation record is joined to a workspace by it).
+	RepositoryDir   string
+	Worktrees       []WorktreeEvidence
+	Branches        []BranchEvidence
+	TrackingRefs    []TrackingRefEvidence
+	TrackingSkipped string
+	Limitations     []string
 }
 
 // observerWorktreeLimit bounds the worktrees whose content is observed; the surplus keeps its

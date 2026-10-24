@@ -31,7 +31,7 @@ func (c worktreeObserver) observeJJ(ctx context.Context, o ObserveOptions) (Work
 	if !reflect.DeepEqual(tidy.Expected, reg.Expected) {
 		return WorktreeObservation{}, failure("evidence-changed", "The jj operation changed during observation.")
 	}
-	out := WorktreeObservation{Backend: "jj", Base: o.Base, BaseOID: reg.Expected.BaseCommit, Worktrees: []WorktreeEvidence{}, Branches: []BranchEvidence{}, TrackingRefs: []TrackingRefEvidence{}, TrackingSkipped: "tracking-unsupported-for-jj",
+	out := WorktreeObservation{Backend: "jj", Base: o.Base, BaseOID: reg.Expected.BaseCommit, RepositoryDir: reg.Expected.Source.RepositoryDir, Worktrees: []WorktreeEvidence{}, Branches: []BranchEvidence{}, TrackingRefs: []TrackingRefEvidence{}, TrackingSkipped: "tracking-unsupported-for-jj",
 		Limitations: []string{"Evidence is sampled at one jj operation; nothing was changed, no working copy was snapshotted and nothing was fetched."}}
 	candidates := append([]inspection.JJTidyCandidate{}, tidy.Candidates...)
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Name < candidates[j].Name })

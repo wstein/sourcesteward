@@ -102,6 +102,10 @@ func TestObserveJJRegistrationAndContentFacts(t *testing.T) {
 	if o.Backend != "jj" || o.Base != "main" || o.BaseOID == "" || o.TrackingSkipped != "tracking-unsupported-for-jj" || len(o.TrackingRefs) != 0 {
 		t.Fatalf("header: %+v", o)
 	}
+	// The repository identity the creation records are joined by: the shared jj repository directory.
+	if o.RepositoryDir == "" || !sameFile(o.RepositoryDir, filepath.Join(repo, ".jj", "repo")) {
+		t.Fatalf("repository dir %q", o.RepositoryDir)
+	}
 	p := evidenceOf(t, o, repo)
 	if !p.Primary || p.Incomplete != "" || p.HeadRef != "" || p.Locked || p.Proof != "" || !p.LastActivity.IsZero() {
 		t.Fatalf("primary: %+v", p)
