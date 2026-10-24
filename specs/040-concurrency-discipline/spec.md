@@ -107,13 +107,14 @@ Rules the implementation must satisfy for `Do` (each is a test, see the plan); `
 2. **Deterministic result order.** `Map` returns results by input index. `Do` callers write `out[i]` only; the contract forbids a shared
    append. Cancellation never reorders: skipped items keep the zero value, and the caller learns of it from `ctx.Err()`.
 3. **No leak.** When `Do` returns no goroutine started by it is alive, on every path (normal, cancelled before start, cancelled during,
-   panic). `fn` receives a context that is cancelled when the first panic is recorded, so a cooperative `fn` stops.
+   panic). `fn` receives a context that is cancelled when the first panic or `runtime.Goexit` is recorded, so a cooperative `fn` stops.
 4. **No new deadline.** `fanout` adds no timeout of its own. Deadlines stay with the caller's context (`hosting` and `inspection`
    per-call bounds are unchanged).
 5. **Late cancellation is not an error.** `Do` returns `ctx.Err()` only when at least one item was skipped for it.
 6. **No wait on a dead context.** If `n > 0` and `ctx` is already done, nothing is started and `Do` returns `ctx.Err()` without a goroutine. If `n == 0`, no item exists to skip, so `Do` returns nil even when `ctx` is done (rule 5 governs; one test row for each).
 7. **Panic is the caller's.** A recovered panic is re-raised unchanged (same value) in the calling goroutine so the existing top-level
    handling applies; it is never swallowed and never logged by `fanout`.
+   A `runtime.Goexit` in `fn` (for example `t.FailNow`) is handled the same way: the context of `fn` is cancelled, no new item starts, every started worker is waited for, and the caller then ends with `runtime.Goexit`; a panic wins over a Goexit. `Session.Close` (T003) applies the same rule to its jobs.
 
 ## The architecture rule
 
