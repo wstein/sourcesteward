@@ -32,6 +32,16 @@ func stwTree(name string) Worktree {
 	}
 }
 
+// jjOwned is a jj workspace whose creation record was found by its destination (no stw lock).
+func jjOwned(task string) Worktree { return jjOwnedBy(task, "werner") }
+
+func jjOwnedBy(task, ownerLabel string) Worktree {
+	return Worktree{
+		Path: "/ws/wt/" + task, Task: task, JJOwned: true, TaskOwner: ownerLabel, Proof: ProofEmptyWorkingCopy,
+		LastActivity: old,
+	}
+}
+
 func repo(trees []Worktree, branches []Branch) RepoFacts {
 	return RepoFacts{Name: "r", Worktrees: trees, Branches: branches}
 }
@@ -71,6 +81,12 @@ func TestWorktreeBehaviourTable(t *testing.T) {
 		{"locked-foreign", mod(func(w *Worktree) { w.Lock = LockForeign; w.Record = RecordMissing }), VerdictRetain, "locked-foreign", owner.ScopeUnknown, nil},
 		{"other owner by record", mod(func(w *Worktree) { w.TaskOwner = "codex" }), VerdictSafe, "", owner.ScopeOther, []string{"remove-registration", "remove-files"}},
 		{"primary checkout", mod(func(w *Worktree) { w.Primary = true }), VerdictRetain, "primary-checkout", owner.ScopeOwn, nil},
+		{"owned jj workspace is retained until a jj retirement kind exists", jjOwned("t"), VerdictRetain, "jj-retirement-unsupported", owner.ScopeOwn, nil},
+		{"owned jj workspace of another owner", jjOwnedBy("t", "codex"), VerdictRetain, "jj-retirement-unsupported", owner.ScopeOther, nil},
+		{"owned jj workspace that is dirty keeps the specific reason", func() Worktree { w := jjOwned("t"); w.Dirty = true; return w }(), VerdictRetain, "dirty", owner.ScopeOwn, nil},
+		{"owned jj workspace that is unmerged keeps the specific reason", func() Worktree { w := jjOwned("t"); w.Proof = ProofNone; return w }(), VerdictRetain, "unmerged", owner.ScopeOwn, nil},
+		{"owned jj workspace with incomplete evidence", func() Worktree { w := jjOwned("t"); w.Incomplete = "x"; return w }(), VerdictRetain, "evidence-incomplete", owner.ScopeOwn, nil},
+		{"unowned jj workspace is unchanged", func() Worktree { w := jjOwned("t"); w.JJOwned, w.Task, w.TaskOwner = false, "", ""; return w }(), VerdictSafe, "unregistered", owner.ScopeUnknown, []string{"remove-registration", "remove-files"}},
 		{"cwd worktree", mod(func(w *Worktree) { w.Path = "/ws/repo/cwd-tree" }), VerdictRetain, "current-worktree", owner.ScopeOwn, nil},
 		{"sibling with a common prefix", mod(func(w *Worktree) { w.Path = "/ws/repo/cwd-tree-2" }), VerdictSafe, "", owner.ScopeOwn, []string{"remove-registration", "remove-files"}},
 	}

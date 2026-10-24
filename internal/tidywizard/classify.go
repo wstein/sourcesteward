@@ -102,6 +102,9 @@ type Worktree struct {
 	Task                 string
 	Record               Record
 	TaskOwner            string // owner label of the found record
+	// JJOwned: a jj workspace (it has no stw lock) whose complete creation record was found by its
+	// destination and repository; Task and TaskOwner come from it.
+	JJOwned              bool
 	Dirty, IgnoredExtras bool
 	Proof                Proof // integration proof of HEAD
 	Ahead                int
@@ -365,7 +368,7 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 		record = RecordMissing
 	}
 	it := owner.Item{Path: w.Path, Branch: w.Branch, AuthorHint: w.AuthorHint}
-	if record == RecordFound {
+	if record == RecordFound || (w.JJOwned && w.Lock == LockNone) {
 		it.TaskOwner = w.TaskOwner
 	}
 	c = c.withOwner(owner.Resolve(it, cfg.Caller, cfg.Agent))
@@ -394,6 +397,10 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 		return c.retain("evidence-incomplete", "no activity time was observed")
 	case c.Scope != owner.ScopeOwn && cfg.Now.Sub(w.LastActivity) < RecentWindow:
 		return c.retain("recently-active", "HEAD, index or a tracked file changed within the last 24 hours")
+	case w.JJOwned && w.Lock == LockNone:
+		// The owner is known from the creation record, but no plan kind retires a jj workspace
+		// yet (Spec 041 T011a5): the workspace stays and no deletion path is opened for it.
+		return c.retain("jj-retirement-unsupported", "owned by a creation record; no plan kind retires a jj workspace yet")
 	case record == RecordMismatch:
 		c.Verdict, c.Reason = VerdictDecision, "locked-stw"
 		c.Evidence = "stw lock whose creation record does not match"
