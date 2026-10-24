@@ -98,6 +98,13 @@ func validateRetirementV3Manifest(m V3Manifest, root string, metadata bool, poli
 	return nil
 }
 
+// The two ways a tracked file can differ from the stored tree, as values so that a read-only
+// observer can tell a dirty worktree from an unreadable one.
+var (
+	errRetirementStoredDiffers = errors.New("stored content differs from physical disk")
+	errRetirementStoredMissing = errors.New("stored file missing")
+)
+
 // The caller starts one full observation on its operation-wide ledger. A disk
 // observation is a fresh user pass plus a physical metadata pass; a registration
 // observation is one metadata pass. No prior digest is reused as read evidence.
@@ -309,7 +316,7 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 				entry.Digest = digest
 				entry.Executable = id.Mode&0111 != 0
 				if ok && (fact.Digest != digest || fact.Size != id.Size || fact.Executable != entry.Executable) {
-					return errors.New("stored content differs from physical disk")
+					return errRetirementStoredDiffers
 				}
 				m.Entries = append(m.Entries, entry)
 			}
@@ -326,7 +333,7 @@ func observeRetirementV3Manifest(ctx context.Context, path string, a retirementM
 	}
 	for p := range stored {
 		if !seen[p] {
-			return empty, errors.New("stored file missing")
+			return empty, errRetirementStoredMissing
 		}
 	}
 	after, e := root.Stat(".")
