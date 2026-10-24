@@ -39,6 +39,8 @@ type V3HistoryEntry struct {
 	RecoveryRefs  string             `json:"recovery_refs"`
 	DecisionKinds V3HistoryDecisions `json:"decision_kinds"`
 	JournalStatus string             `json:"journal_status"`
+	// RunMode is the mode evidence of the apply (Spec 041); absent for journals without it.
+	RunMode *V3RunMode `json:"run_mode,omitempty"`
 }
 
 // V3HistoryTruncation is the marker of a bound that was reached: Shown of Total.
@@ -293,6 +295,7 @@ func (c tidyV3HistoryCoordinator) describe(ctx context.Context, n restoreNative,
 	view := *row.view
 	e := &row.entry
 	e.Mode = view.Plan.Mode
+	e.RunMode = cloneRunMode(view.Journal.RunMode)
 	e.JournalStatus = "incomplete"
 	if view.Journal.Phase == "complete" {
 		e.JournalStatus = "complete"

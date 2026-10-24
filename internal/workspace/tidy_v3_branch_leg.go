@@ -23,6 +23,8 @@ type V3BranchLeg struct {
 	// integration policy, so branch and worktree are judged alike.
 	Destination string
 	Policy      *V3ProofPolicy
+	// RunMode is recorded in the journal of the branch deletion (Spec 041); the caller sets it.
+	RunMode *V3RunMode
 }
 
 // TidyV3BranchLeg returns the leg of an eligible retirement plan, or false when
@@ -73,7 +75,7 @@ func ApplyTidyV3BranchLeg(ctx context.Context, leg V3BranchLeg, retirement V3Res
 			r.Actions = []ActionOutcome{{Name: "delete-branch", Status: "refused", Detail: "The branch was kept."}}
 			return r
 		}
-		return ApplyTidyV3(ctx, V3ApplyOptions{StateDir: leg.StateDir, PlanID: planned.Plan.PlanID, Authorize: true, ProtectWorktrees: []string{}})
+		return ApplyTidyV3(ctx, V3ApplyOptions{StateDir: leg.StateDir, PlanID: planned.Plan.PlanID, Authorize: true, ProtectWorktrees: []string{}, RunMode: leg.RunMode})
 	}
 	return failTidyV3(r, failure("unknown-reference", "The planned branch no longer exists."))
 }

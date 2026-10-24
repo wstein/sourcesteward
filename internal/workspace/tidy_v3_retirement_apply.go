@@ -77,6 +77,9 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	budget := newTidyV3ProofBudget(true)
 	defer func() { retirementV3BudgetResult(&r, budget); r = boundV3Result(r) }()
 	r = newV3Result("tidy-apply")
+	if !validV3RunMode(o.RunMode) {
+		return failTidyV3(r, failure("invalid-options", "A complete bounded run mode is required."))
+	}
 	if !o.Authorize || !validID(o.PlanID) || !v3CanonicalPath(o.StateDir) {
 		return failTidyV3(r, failure("authorization-required", "Exact private stored identity and explicit effect authorization are required."))
 	}
@@ -180,7 +183,7 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	if e = sample(ctx, p.Expected, native); e != nil {
 		return failTidyV3(r, e)
 	}
-	j := newV3Journal(p, native)
+	j := newV3JournalWithMode(p, native, o.RunMode)
 	if e = s.prepareJournal(p, j); e != nil {
 		return failTidyV3(r, e)
 	}
