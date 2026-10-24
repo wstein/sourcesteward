@@ -31,6 +31,9 @@ result file is `ff-experiment-results.md` in the session scratchpad. This docume
 - **N1** One private repository, one run. Not measured: `delete_branch_on_merge` on, required status checks, required reviews, signed
   commits, merge queue, forks, several children of one bottom, Draft pull requests, `mergeable` computation delay after the push.
 - **N2** The time between the push and GitHub's MERGED mark was not recorded; the bounded wait in FR-022 is a design choice.
+- **N4** GitHub documents that when a head branch is deleted after a merge, dependent pull requests may be retargeted automatically. The
+  measured run (R3) closed the child when the branch was deleted by hand before any merge-time retarget; whether `delete_branch_on_merge`
+  auto-retargets a child of the landed branch is not measured. Both outcomes are possible and T002 must record whichever occurs.
 - **N3** The results file does not say whether R3 and R4 were separate runs. B was closed in R3 and cannot be reopened with the old base,
   so R4 necessarily used a second stack or a recreated B; how it was set up is not recorded.
 
@@ -56,7 +59,9 @@ gh api repos/wstein/sourcesteward/rulesets/<id> --jq '{bypass_actors,rules:[.rul
 owner: the `pull_request` rule requires a pull request and the only bypass mode is `pull_request`. If so, the owner must change the
 ruleset (owner-only) for `stw land` to be usable there. Because `delete_branch_on_merge` is true on both repositories, the measured
 order R4 (land, then retarget) would let GitHub delete the bottom branch first and close the child (R3); the pre-retarget order
-(Spec 043 FR-031) is therefore the one real stacks would need, and it is unmeasured.
+(Spec 043 FR-031) is the conservative order for real stacks, and it is unmeasured; GitHub may also auto-retarget the child (N4), in which
+case it would not be needed. A private repository on the free plan cannot serve as the scratch repository for the ruleset shape (403, as
+observed on `wstein/anchorage-workspace`).
 
 ## What the spec takes from this
 
