@@ -247,20 +247,6 @@ func TestPlanRetirementNeedsBothActionsDeletable(t *testing.T) {
 	}
 }
 
-func TestPreflightRunsBeforeAnySubPlanIsMade(t *testing.T) {
-	r := &recorder{result: okResult("planid1", "delete")}
-	p := newPlanner(r)
-	good := own(tidywizard.KindBranch, "r", "x")
-	stale := own(tidywizard.KindStaleWorktree, "r", "gone")
-	_, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{good, stale}, Chosen: ids(good, stale), Mode: human}, p)
-	if !errors.Is(err, ErrNotPlannable) || reasonOf(t, err) != ReasonStaleNoPlanKind {
-		t.Fatalf("err %v", err)
-	}
-	if len(r.opts) != 0 {
-		t.Errorf("the planner ran %d times before the preflight refused", len(r.opts))
-	}
-}
-
 func TestV3PlannerOnARealRepository(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required")
@@ -315,5 +301,80 @@ func TestNewV3PlannerWiring(t *testing.T) {
 	w.Task = "no-such-task"
 	if _, err := p.Options(spec(KindRetire, w)); reasonOf(t, err) != "registration-record-missing" {
 		t.Errorf("%v", err)
+	}
+}
+
+func TestPreflightRefusesBeforeTheFirstSubPlanIsPlanned(t *testing.T) {
+	r := &recorder{result: okResult("planid1", "delete")}
+	p := newPlanner(r, func(p *V3Planner) {
+		p.Repos["r"] = RepoSpec{Name: "r", Path: repoPath, Base: "refs/heads/main", Remote: "origin"} // offline
+	})
+	b := own(tidywizard.KindBranch, "r", "x") // plannable, and its id sorts before the tracking reference
+	tr := own(tidywizard.KindTrackingRef, "r", "refs/remotes/origin/old")
+	tr.Branch = "refs/remotes/origin/old"
+	_, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{b, tr}, Chosen: ids(b, tr), Mode: human}, p)
+	if reasonOf(t, err) != ReasonTrackingOnline {
+		t.Fatalf("err %v", err)
+	}
+	if len(r.opts) != 0 {
+		t.Fatalf("the branch sub-plan was planned (%d) although the tracking sub-plan cannot be", len(r.opts))
+	}
+}
+
+func TestLockMismatchRowWithATaskUsesTheLegacyCompletion(t *testing.T) {
+	// A locked-stw decision row carries a task but its owner is not from a creation record.
+	d := cand(tidywizard.KindWorktree, "r", "locked", tidywizard.VerdictDecision, "codex", owner.SourcePathConvention, owner.ScopeOther)
+	d.Task = "task-9"
+	called := false
+	p := newPlanner(&recorder{}, func(p *V3Planner) {
+		p.RecordStore = func(string) (string, string) { called = true; return "/state/records", "" }
+	})
+	o, err := p.Options(spec(KindRetire, d))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.CompletedWorktree != d.Path || o.Task != "" || o.Owner != "codex" || called {
+		t.Fatalf("%+v record lookup %t", o, called)
+	}
+}
+
+func TestOptionsRemainingRefusalsHaveStableReasons(t *testing.T) {
+	r := &recorder{}
+	f := foreign(tidywizard.KindWorktree, "r", "whr1")
+	w := own(tidywizard.KindWorktree, "r", "wt")
+	w.Task = "t"
+	b := own(tidywizard.KindBranch, "r", "x")
+	tr := own(tidywizard.KindTrackingRef, "r", "t")
+	tr.Branch = "refs/remotes/origin/"
+	noStore := func(p *V3Planner) { p.PlanStore = "" }
+	cases := map[string]struct {
+		planner V3Planner
+		spec    SubSpec
+		reason  string
+	}{
+		"legacy completion without a plan store":   {newPlanner(r, noStore), spec(KindRetire, f), ReasonPlanStoreMissing},
+		"owned retirement without a record lookup": {newPlanner(r), spec(KindRetire, w), "registration-record-missing"},
+		"branch spelled as a full reference":       {newPlanner(r), spec(KindBranches, func() tidywizard.Candidate { c := b; c.Branch = "refs/heads/x"; return c }()), ReasonBranchUnmappable},
+		"empty branch name":                        {newPlanner(r), spec(KindBranches, func() tidywizard.Candidate { c := b; c.Branch = ""; return c }()), ReasonBranchUnmappable},
+		"tracking ref empty after the remote":      {newPlanner(r), spec(KindTracking, tr), ReasonTrackingRefUnmappable},
+		"no item":                                  {newPlanner(r), SubSpec{Repo: "r", Kind: KindBranches}, ReasonPlanShapeInvalid},
+		"unknown kind":                             {newPlanner(r), SubSpec{Repo: "r", Kind: "format-disk", Items: []tidywizard.Candidate{b}}, ReasonPlanShapeInvalid},
+		"two worktrees in one retirement":          {newPlanner(r), SubSpec{Repo: "r", Kind: KindRetire, Worktree: f.Path, Items: []tidywizard.Candidate{f, f}}, ReasonPlanShapeInvalid},
+		"retirement without a worktree":            {newPlanner(r), SubSpec{Repo: "r", Kind: KindRetire, Items: []tidywizard.Candidate{f}}, ReasonPlanShapeInvalid},
+		"retirement of another worktree":           {newPlanner(r), SubSpec{Repo: "r", Kind: KindRetire, Worktree: "/w/other", Items: []tidywizard.Candidate{f}}, ReasonPlanShapeInvalid},
+	}
+	for name, tc := range cases {
+		if _, err := tc.planner.Options(tc.spec); reasonOf(t, err) != tc.reason {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestPlanRefusesAnOkResultWithoutADeletablePlanOrWithAnErrorStatus(t *testing.T) {
+	b := own(tidywizard.KindBranch, "r", "x")
+	p := &workspace.V3Plan{PlanID: "planid1", Candidates: []workspace.V3Candidate{{Decision: "delete"}}}
+	r := &recorder{result: workspace.V3Result{Status: "refused", Plan: p}}
+	if _, err := newPlanner(r).Plan(context.Background(), spec(KindBranches, b)); err == nil {
+		t.Fatal("a result whose status is not ok must fail even when it carries a plan")
 	}
 }

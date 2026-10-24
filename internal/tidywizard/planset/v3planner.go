@@ -17,6 +17,7 @@ import (
 // wizard shows the item as retained with the code, and nothing is guessed.
 const (
 	ReasonRepositoryUnknown     = "plan-repository-unknown"
+	ReasonPlanShapeInvalid      = "plan-shape-invalid"
 	ReasonBaseMissing           = "plan-base-missing"
 	ReasonPlanStoreMissing      = "plan-state-dir-missing"
 	ReasonLegacyOwnerUnknown    = "legacy-owner-unknown"
@@ -118,7 +119,7 @@ func (p V3Planner) Options(s SubSpec) (workspace.V3PlanOptions, error) {
 	}
 	o := workspace.V3PlanOptions{Path: repo.Path, Base: repo.Base, ProtectWorktrees: []string{}}
 	if len(s.Items) == 0 {
-		return o, unplannable(ReasonRepositoryUnknown, "the sub-plan covers no item")
+		return o, unplannable(ReasonPlanShapeInvalid, "the sub-plan covers no item")
 	}
 	if s.Kind == KindRetire {
 		return p.retirement(o, s)
@@ -151,7 +152,7 @@ func (p V3Planner) Options(s SubSpec) (workspace.V3PlanOptions, error) {
 		}
 		o.TrackingRemote, o.Online = repo.Remote, true
 	default:
-		return o, unplannable(ReasonRepositoryUnknown, "unknown sub-plan kind %q", s.Kind)
+		return o, unplannable(ReasonPlanShapeInvalid, "unknown sub-plan kind %q", s.Kind)
 	}
 	sort.Strings(o.Refs)
 	return o, nil
@@ -159,7 +160,7 @@ func (p V3Planner) Options(s SubSpec) (workspace.V3PlanOptions, error) {
 
 func (p V3Planner) retirement(o workspace.V3PlanOptions, s SubSpec) (workspace.V3PlanOptions, error) {
 	if len(s.Items) != 1 || s.Worktree == "" || s.Worktree != s.Items[0].Path {
-		return o, unplannable(ReasonRepositoryUnknown, "a retirement covers exactly one worktree")
+		return o, unplannable(ReasonPlanShapeInvalid, "a retirement covers exactly one worktree")
 	}
 	c := s.Items[0]
 	o.RemoveRegistration, o.RemoveFiles = true, s.Worktree
