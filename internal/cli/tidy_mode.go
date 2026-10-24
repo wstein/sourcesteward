@@ -81,9 +81,7 @@ var tidyOnlyKinds = map[string]bool{"retire": true, "branches": true, "tracking"
 func validateTidyWizardValues(cmd *cobra.Command, o *tidyWizardOptions) error {
 	changed := func(name string) bool { return cmd.Flags().Changed(name) }
 	if changed("only") {
-		if o.only == "" {
-			return fmt.Errorf("--only needs a comma list of retire, branches, tracking, stale-worktrees")
-		}
+		// An empty list splits into one empty kind, which is rejected like any unknown kind.
 		for _, kind := range strings.Split(o.only, ",") {
 			if !tidyOnlyKinds[kind] {
 				return fmt.Errorf("--only: unknown kind %q (retire, branches, tracking, stale-worktrees)", kind)
