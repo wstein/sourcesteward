@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/wstein/sourcesteward/internal/attribution"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/workspace"
@@ -21,12 +22,19 @@ func OriginForRun(environ []string, stdinTTY, stdoutTTY bool, now time.Time) att
 
 // Current is the origin of this process.
 func Current() attribution.Origin {
-	return OriginForRun(os.Environ(), isCharDevice(os.Stdin), isCharDevice(os.Stdout), time.Now())
+	return originForStreams(os.Environ(), os.Stdin, os.Stdout, time.Now())
 }
 
-func isCharDevice(f *os.File) bool {
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+// originForStreams reads the terminal facts of the two streams (isatty, so the null device is no
+// terminal) and derives the origin.
+func originForStreams(environ []string, stdin, stdout any, now time.Time) attribution.Origin {
+	return OriginForRun(environ, isTerminal(stdin), isTerminal(stdout), now)
+}
+
+// isTerminal is isatty on a value with a file descriptor; everything else is no terminal.
+func isTerminal(v any) bool {
+	f, ok := v.(interface{ Fd() uintptr })
+	return ok && isatty.IsTerminal(f.Fd())
 }
 
 // RemoteWriteGate refuses a remote write (a push, setting a PR ready) for a task whose creating
