@@ -134,9 +134,9 @@ repositories exit 0; usage errors exit 2 before any effect.
 Before each branch change a `sync` journal record (`.git/stw/sync/RUN_ID.json` of that repository) and a recovery
 ref `refs/stw/recovery/sync/RUN_ID/N` are written and the record is completed afterwards; HEAD and `ORIG_HEAD` are
 checked around `git merge --ff-only NEW_OID` and `git rebase`. A submodule HEAD moved by the superproject is not
-touched. As its last step a run that changed a branch removes the records and recovery refs of the runs older than the
-ten most recent completed runs of that repository; a run with an incomplete record is kept, a recovery ref is deleted
-only inside its own run's namespace and while it still points at the journaled old OID, and no other ref is removed.
+touched. As its last step a run that completed a journaled branch change in a repository removes, in that repository, the records and recovery refs of the runs older than the
+ten most recent completed runs (the current run is always kept and counts as one); a run with an incomplete record is kept, a recovery ref is deleted
+only inside its own run's namespace and while it still points at the journaled old OID, and no other ref is removed. A recovery ref that is symbolic, has another name or a bad old OID is kept with its record. Retention is best effort and silent: a failure leaves the older runs in place. Repositories that no run changes keep their old runs until their next change, and run IDs have second resolution (microseconds from this release), so runs are ordered by ID.
 `stw sync restore` comes in a later slice. See the
 [JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 

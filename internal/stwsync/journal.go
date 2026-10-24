@@ -67,6 +67,16 @@ func newRunID() (string, error) {
 	return fmt.Sprintf("%s%06dZ-%s", now.Format("20060102T150405"), now.Nanosecond()/1000, hex.EncodeToString(b)), nil
 }
 
+// changedOK reports whether this run completed at least one journaled branch change here.
+func (j *journal) changedOK() bool {
+	for _, en := range j.rec.Entries {
+		if en.State == stateCompleted {
+			return true
+		}
+	}
+	return false
+}
+
 // retainedRuns is how many completed runs of one repository keep their record and recovery refs.
 const retainedRuns = 10
 
@@ -110,8 +120,16 @@ func (j *journal) retain(ctx context.Context) {
 			completed = append(completed, run{id, rec})
 		}
 	}
+	// The current run is protected first, whatever the clock-based IDs say, and counts as one of the retained runs.
+	others := completed[:0]
+	for _, r := range completed {
+		if r.id != j.rec.RunID {
+			others = append(others, r)
+		}
+	}
+	completed = others
 	sort.Slice(completed, func(a, b int) bool { return completed[a].id < completed[b].id })
-	for len(completed) > retainedRuns {
+	for len(completed) > retainedRuns-1 {
 		old := completed[0]
 		completed = completed[1:]
 		if j.dropRecoveryRefs(ctx, old.rec) {
@@ -120,19 +138,30 @@ func (j *journal) retain(ctx context.Context) {
 	}
 }
 
-// dropRecoveryRefs deletes the recovery refs of one run and reports whether none is left.
+// dropRecoveryRefs deletes the recovery refs of one run and reports whether none is left. The record is
+// data: only the exact name refs/stw/recovery/sync/RUN_ID/N of the entry itself, a valid old OID as the
+// expected value and a non-symbolic ref qualify. Only a verified-missing ref counts as gone; a ref that
+// cannot be read keeps the record.
 func (j *journal) dropRecoveryRefs(ctx context.Context, rec journalRecord) bool {
-	prefix := "refs/stw/recovery/sync/" + rec.RunID + "/"
 	clean := true
 	for _, en := range rec.Entries {
-		if !strings.HasPrefix(en.RecoveryRef, prefix) || !oidPattern.MatchString(en.OldOID) {
-			clean = false // not this run's own ref: never touched, and the record stays
+		if en.N < 1 || en.RecoveryRef != fmt.Sprintf("refs/stw/recovery/sync/%s/%d", rec.RunID, en.N) || !oidPattern.MatchString(en.OldOID) {
+			clean = false // not this entry's own ref: never touched, and the record stays
 			continue
 		}
-		if cur := j.e.revParse(ctx, j.e.dir, en.RecoveryRef); cur == "" {
-			continue // already gone
+		list, err := j.e.g(ctx, "for-each-ref", "--format=%(refname)", en.RecoveryRef)
+		if err != nil || list.Code != 0 {
+			clean = false
+			continue
 		}
-		if out, err := j.e.g(ctx, "update-ref", "-d", en.RecoveryRef, en.OldOID); err != nil || out.Code != 0 {
+		if strings.TrimSpace(list.Out) == "" {
+			continue // verified missing
+		}
+		if sym, err := j.e.g(ctx, "symbolic-ref", "-q", en.RecoveryRef); err != nil || sym.Code != 1 {
+			clean = false // symbolic (or unreadable): never followed
+			continue
+		}
+		if out, err := j.e.g(ctx, "update-ref", "--no-deref", "-d", en.RecoveryRef, en.OldOID); err != nil || out.Code != 0 {
 			clean = false
 		}
 	}
@@ -161,7 +190,7 @@ func (j *journal) prepare(ctx context.Context, ref, worktree, oldOID, newOID str
 	j.rec.Entries = append(j.rec.Entries, journalEntry{N: n, Ref: ref, Worktree: worktree, OldOID: oldOID, PlannedNewOID: newOID, RecoveryRef: recovery, State: statePrepared})
 	if err := j.write(); err != nil {
 		j.rec.Entries = j.rec.Entries[:n-1]
-		j.e.g(ctx, "update-ref", "-d", recovery, oldOID)
+		j.e.g(ctx, "update-ref", "--no-deref", "-d", recovery, oldOID)
 		return 0, err
 	}
 	return n - 1, nil
