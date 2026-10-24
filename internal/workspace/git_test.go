@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -192,7 +193,8 @@ func TestGitMetadataPreparationReportsActualContainerCreation(t *testing.T) {
 }
 func gitFixture(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	c := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	// Automatic maintenance would detach a process that keeps writing in .git while t.TempDir removes it.
+	c := exec.Command("git", append([]string{"-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", dir}, args...)...)
 	b, err := c.CombinedOutput()
 	if err != nil {
 		t.Fatalf("fixture git %v: %v %s", args, err, b)
@@ -328,4 +330,26 @@ func isolateFixtureHome(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", gitTempDir(t))
 	t.Setenv("XDG_CONFIG_HOME", gitTempDir(t))
+}
+
+// A commit of a large fixture must not start automatic maintenance: above the default gc.auto of 6,700
+// loose objects (the 8,242-file commit of the retirement bound test) git detaches a maintenance process
+// that keeps writing in .git while t.TempDir removes it ("directory not empty"). The repository here runs
+// the maintenance in the foreground, so a fixture command that does not switch it off leaves packs behind,
+// every time.
+func TestGitFixtureNeverRunsAutoMaintenance(t *testing.T) {
+	d := fixtureGit(t)
+	gitFixture(t, d, "config", "gc.autoDetach", "false")
+	gitFixture(t, d, "config", "maintenance.autoDetach", "false")
+	for i := 0; i < 9000; i++ {
+		if err := os.WriteFile(filepath.Join(d, fmt.Sprintf("f%04d", i)), []byte(fmt.Sprintf("blob %d\n", i)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitFixture(t, d, "add", ".")
+	gitFixture(t, d, "commit", "-qm", "many loose objects")
+	packs, err := filepath.Glob(filepath.Join(d, ".git", "objects", "pack", "*.pack"))
+	if err != nil || len(packs) != 0 {
+		t.Fatalf("automatic maintenance ran during the fixture commit: %v %v", packs, err)
+	}
 }
