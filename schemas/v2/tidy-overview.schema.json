@@ -10,7 +10,6 @@
           "items": {
             "type": "string"
           },
-          "maxItems": 8,
           "type": "array"
         },
         "evidence": {
@@ -124,26 +123,20 @@
       "properties": {
         "by_owner": {
           "items": {
-            "maxLength": 128,
             "type": "string"
           },
-          "maxItems": 32,
           "type": "array"
         },
         "caller": {
-          "maxLength": 128,
           "type": "string"
         },
         "caller_source": {
-          "maxLength": 64,
           "type": "string"
         },
         "markers": {
           "items": {
-            "maxLength": 128,
             "type": "string"
           },
-          "maxItems": 32,
           "type": "array"
         },
         "mine": {
@@ -241,7 +234,7 @@
   "$id": "https://wstein.github.io/sourcesteward/schemas/v2/tidy-overview.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The analysis of the stw tidy wizard: repositories, candidates and their verdicts. Unpublished candidate: it is validated but not copied to the site until the documentation work item of Spec 041 publishes it.",
+  "description": "The analysis of the stw tidy wizard: repositories, candidates and their verdicts. Unpublished candidate: it is validated but not copied to the site until the documentation work item of Spec 041 publishes it. The schema bounds only what the producer enforces (4096 candidates with the truncated flag, 512 bytes of evidence, the 12-hex plan id); the document as a whole is capped at 4 MiB by the renderer.",
   "properties": {
     "candidates": {
       "items": {
@@ -257,7 +250,6 @@
       "items": {
         "$ref": "#/$defs/Derived"
       },
-      "maxItems": 64,
       "type": "array"
     },
     "mode": {
@@ -267,7 +259,6 @@
       "items": {
         "type": "string"
       },
-      "maxItems": 5120,
       "type": "array"
     },
     "plan_id": {
@@ -279,7 +270,6 @@
       "items": {
         "$ref": "#/$defs/Repository"
       },
-      "maxItems": 1024,
       "type": "array"
     },
     "schema_version": {
@@ -292,7 +282,6 @@
       "type": "boolean"
     },
     "workspace": {
-      "maxLength": 4096,
       "type": "string"
     }
   },

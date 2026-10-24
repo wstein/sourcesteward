@@ -115,18 +115,8 @@ func TestTidyOverviewSchemaRefusesViolations(t *testing.T) {
 		"mode field":               func(v map[string]any) { v["mode"].(map[string]any)["token"] = "x" },
 		"mode missing field":       func(v map[string]any) { delete(v["mode"].(map[string]any), "caller") },
 		"mode markers null":        func(v map[string]any) { v["mode"].(map[string]any)["markers"] = nil },
-		"mode markers many": func(v map[string]any) {
-			list := make([]any, 33)
-			for i := range list {
-				list[i] = "A"
-			}
-			v["mode"].(map[string]any)["markers"] = list
-		},
-		"mode marker long":         func(v map[string]any) { v["mode"].(map[string]any)["markers"] = []any{strings.Repeat("A", 129)} },
 		"mode by_owner entry type": func(v map[string]any) { v["mode"].(map[string]any)["by_owner"] = []any{7} },
 		"mode tty type":            func(v map[string]any) { v["mode"].(map[string]any)["stdin_tty"] = "yes" },
-		"mode caller long":         func(v map[string]any) { v["mode"].(map[string]any)["caller"] = strings.Repeat("a", 129) },
-		"mode source long":         func(v map[string]any) { v["mode"].(map[string]any)["caller_source"] = strings.Repeat("s", 65) },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {

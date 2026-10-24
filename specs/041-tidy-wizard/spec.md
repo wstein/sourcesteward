@@ -29,7 +29,7 @@ authorization, stale checks and a recorded recovery manifest.
 
 ## Non-goals
 
-- No new deletion proof and no relaxed one: the proofs stay ancestor, patch-id, merge-noop and no-net-change (Spec 031); unproven work
+- No new deletion proof and no relaxed one: the proofs stay ancestor, patch-id, merge-noop and no-net-change (Spec 031) (the two further words of the overview's `proof` field, `empty-working-copy-integrated-parent` and `github-branch-absent`, are the existing jj and tracking-reference evidence words, not new deletion proofs); unproven work
   is retained and reported.
 - No force, no unlock of a lock that is not stw's, no stash, reset or hook skip. Work of other owners or agents (for example
   `/tmp/whr010-*` of a Codex run) is **visible to a human owner and removable only by explicit choice with the full proof**
@@ -243,7 +243,7 @@ Per repository one call, `workspace.ObserveWorktrees(ctx, ObserveOptions) (Workt
 - `WorktreeObservation{Backend, Base, BaseOID string; Worktrees []WorktreeEvidence; Branches []BranchEvidence; TrackingRefs []TrackingRefEvidence; TrackingSkipped string; Limitations []string}`.
 - `WorktreeEvidence`, registration facts (always kept, never zeroed by a later failure): `Path`, `HeadOID`, `HeadRef` (empty when detached), `Primary`,
   `Locked`, `LockReason`, `Prunable`, `DirMissing`. Content facts: `Dirty`, `IgnoredExtras`, `LastActivity`, `Ahead`, `AuthorHint`, `HasOwnCommit`
-  (HEAD has a commit the base lacks), `Proof` (`ancestor|patch-id|merge-noop|no-net-change|none` of HEAD against the base, the Spec 011 proofs with
+  (HEAD has a commit the base lacks), `Proof` (`ancestor|patch-id|merge-noop|no-net-change|none` of HEAD against the base, the Spec 011 proofs; the overview JSON adds the existing jj and tracking evidence words `empty-working-copy-integrated-parent` and `github-branch-absent`, which are not new deletion proofs, with
   the default policy, no forge). `Incomplete` is empty or a short reason that applies to the content facts, which are then zero.
 - `BranchEvidence` (`Name`, `OID`, `IsBase`, `Proof`, `Ahead`, `AuthorHint`, `Incomplete`) and `TrackingRefEvidence` (`Name`, `Proof`, `Incomplete`) carry their own `Incomplete`. `BranchEvidence.Name` is the full `refs/heads/` name; `IsBase` is true for the base
   reference itself and for the local branch of the same short name as a remote-tracking base (`refs/heads/main` for `refs/remotes/origin/main`). A tracking reference's `Proof` is
