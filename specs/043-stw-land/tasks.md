@@ -8,8 +8,8 @@ fixtures); never a real repository. Failing test first for each task. Each slice
 ## Slice 0 - Design
 
 - [ ] T001 Independent review of the exact committed head of this spec (strongest tier, executed checks).
-- [ ] T002 Scratch repository with a copy of the real sourcesteward ruleset and `delete_branch_on_merge` true: measure the direct owner push and the FR-031 pre-retarget order; append to research.md as measurements (OQ2, OQ4).
-- [ ] T002a Failing tests then the `land-unmeasured` gate: apply refuses for an unrecorded shape, `--plan` works and lists it; allowlist keyed by normalised shape.
+- [ ] T002 **Owner-run** (ruleset settings are an owner operation): a scratch repository that is public or on a plan that serves rulesets (a private free repository answers 403 and cannot hold the shape), with a copy of the real sourcesteward ruleset and `delete_branch_on_merge` true. Measure the direct owner push and, for a stack, what happens to the child when the bottom branch is deleted after the merge: GitHub may auto-retarget the dependent pull request or close it; list both as possible and record whichever is measured (OQ2, OQ4). Append to research.md as measurements and add the shape to `internal/land/shapes.json`, the single allowlist.
+- [ ] T002a Failing tests then the `land-unmeasured` gate: apply refuses for an unrecorded shape, `--plan` works and lists it; the single allowlist `internal/land/shapes.json` keyed by normalised shape; an unreadable shape (403) never matches.
 
 ## Slice 1 - `--plan` (read-only)
 
@@ -26,7 +26,7 @@ fixtures); never a real repository. Failing test first for each task. Each slice
 ## Slice 3 - Apply
 
 - [ ] T009 Failing tests then the landing push as a plain `git push --porcelain <remote> <sha>:refs/heads/<default>`; a moved default branch (`fetch first`) gives `base-moved` and changes nothing; mutation probe that adds `--force*`, a lease or a `+` refspec fails a test.
-- [ ] T010 Allowlist test of every git and gh argument vector (FR-033); no other write reachable.
+- [ ] T010 Argument-vector allowlist test of every git and gh argument vector (FR-033); no other write reachable.
 - [ ] T011 Bounded wait for MERGED (fake clock under `testing/synctest`), `landed-not-marked`, `merged-other-sha`.
 - [ ] T012a Failing tests then FR-034: after a retarget everything is re-read; `mergeable` null or pending checks refuse before the push; FR-031 order and its failure branch print `gh pr edit CHILD --base OLD_BASE` and run nothing.
 - [ ] T012 Stack order: retarget children before deletion; deletion only with `--delete-branch`, only the PR's own head ref, lease on the head SHA; closed-child report; failure of one retarget blocks deletion.
