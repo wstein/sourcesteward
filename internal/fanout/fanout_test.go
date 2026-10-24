@@ -169,7 +169,7 @@ func TestDoReRaisesTheLowestIndexPanicAfterAllWorkersStopped(t *testing.T) {
 		var stopped []int
 		var started []int
 		var got any
-		highPanicked, allStarted := make(chan struct{}), make(chan struct{})
+		allStarted := make(chan struct{})
 		func() {
 			defer func() { got = recover() }()
 			_ = Do(context.Background(), 6, 6, func(ctx context.Context, i int) {
@@ -182,11 +182,11 @@ func TestDoReRaisesTheLowestIndexPanicAfterAllWorkersStopped(t *testing.T) {
 				<-allStarted
 				switch i {
 				case 4:
-					close(highPanicked)
 					panic(high)
 				case 1:
-					// Let the higher index panic first: the lowest index must still win.
-					<-highPanicked
+					// The higher index panics first and its panic is recorded before the context of fn
+					// is cancelled: the lowest index must still win.
+					<-ctx.Done()
 					panic(low)
 				default:
 					<-ctx.Done()
