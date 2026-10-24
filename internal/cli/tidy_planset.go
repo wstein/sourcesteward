@@ -25,10 +25,10 @@ var (
 	}
 	tidyFindPlanSet = planset.Find
 	tidyEnviron     = planset.Environ
-	// tidyTerminalFacts reports whether stdin and stdout are terminals. Until the isatty source of
-	// the wizard exists (Spec 041 T019a) neither is reported as a terminal: every run is then agent
-	// mode, which fails closed (no prompt, no foreign item, the plan id with --yes authorizes).
-	tidyTerminalFacts = func(any, any) (bool, bool) { return false, false }
+	// tidyTerminalFacts reports whether stdin and stdout are terminals (isatty on each). A stream
+	// that is not an *os.File, a pipe, a file and the null device are no terminal, so only a real
+	// terminal run can be human mode; everything else is agent mode, which fails closed.
+	tidyTerminalFacts = owner.TerminalFacts
 )
 
 var tidyPlanSetID = regexp.MustCompile(`^[0-9a-f]{12}$`)
