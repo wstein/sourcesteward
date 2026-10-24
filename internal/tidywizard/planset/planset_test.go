@@ -448,7 +448,6 @@ func TestValidateRefusesIncoherentSets(t *testing.T) {
 		"sub-plan item not selected":          func(s *Set) { s.Items = s.Items[:1] },
 		"unknown kind":                        func(s *Set) { s.SubPlans[0].Kind = "format-disk" },
 		"empty set":                           func(s *Set) { s.SubPlans, s.Items = nil, nil },
-		"agent mode with scopes":              func(s *Set) { s.Mode.Mode = owner.ModeAgent; s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} },
 		"own scope authorized":                func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOwn} },
 		"authorized scope no item carries":    func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} },
 		"relative state dir":                  func(s *Set) { s.SubPlans[0].StateDir = "state" },
@@ -465,6 +464,21 @@ func TestValidateRefusesIncoherentSets(t *testing.T) {
 		if err := c.Validate(); err == nil {
 			t.Errorf("%s must be invalid", name)
 		}
+	}
+}
+
+func TestValidateRefusesAuthorizedScopesInAgentMode(t *testing.T) {
+	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
+	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
+	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	if err != nil || set.Validate() != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	// The scope is carried by the foreign item, so only the mode rule can refuse this set.
+	forged := set.clone()
+	forged.Mode.Mode = owner.ModeAgent
+	if forged.Validate() == nil {
+		t.Error("only the human path writes authorized_scopes")
 	}
 }
 
