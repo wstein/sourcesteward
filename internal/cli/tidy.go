@@ -38,7 +38,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 			return err
 		}
 		if layer == tidyWizard {
-			return errTidyWizardUnavailable()
+			return runTidyWizardPlan(cmd, &wizard, structured, v3.Timeout)
 		}
 		if cmd.Flags().Changed("contract") {
 			if contract != "3" {
@@ -133,6 +133,8 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	apply.Flags().Bool("human", false, "Force text output; excludes --json")
 	apply.Flags().BoolVar(&applyStructured, "json", false, "Output one versioned tidy result, including operational refusals and partial effects")
 	addTidyV3ApplyFlags(apply, &applyContract, &applyV3Options)
+	// The recorder sits inside the counting wrapper, so contract 3 still sees every occurrence.
+	recordStateDirs(plan, &wizard.stateDirs)
 	trackTidyV3Singletons(plan)
 	trackTidyV3Singletons(apply)
 	family.AddCommand(plan, apply, tidyRestoreCommand(restoreV3, historyV3), tidyHistoryCommand(historyV3))
