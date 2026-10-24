@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -102,5 +104,47 @@ func TestScanTasksIsBounded(t *testing.T) {
 	}
 	if _, _, err = ScanTasks(p); err == nil {
 		t.Fatal("scanned a store over the record bound")
+	}
+}
+
+// EachTask hands the records over one at a time and keeps none: the peak is one record, not the
+// store (Spec 041 T011a5 follow-up). 40 records of about 1 MiB each are visited with the heap
+// growing by far less than their 40 MiB.
+func TestEachTaskStreamsTheRecords(t *testing.T) {
+	p := privateDir(t)
+	s, err := openStore(p, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	big := strings.Repeat("w", 1<<20-4096)
+	const count = 40
+	for i := 0; i < count; i++ {
+		id := "t" + strconv.Itoa(1000+i)
+		if err = s.write("tasks", id, TaskRecord{TaskID: id, Owner: "claude", RemainingWork: []string{big}}, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	var base, peak uint64
+	heap := func() uint64 {
+		var m runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&m)
+		return m.HeapAlloc
+	}
+	base = heap()
+	seen := 0
+	unreadable, err := EachTask(p, func(r TaskRecord) {
+		seen++
+		if len(r.RemainingWork) != 1 || r.Owner != "claude" {
+			t.Errorf("record %+v", r.TaskID)
+		}
+		peak = max(peak, heap())
+	})
+	if err != nil || len(unreadable) != 0 || seen != count {
+		t.Fatalf("seen %d unreadable %v err %v", seen, unreadable, err)
+	}
+	if growth := int64(peak) - int64(base); growth > 12<<20 {
+		t.Errorf("the heap grew by %d MiB while the store holds %d MiB: the records are retained", growth>>20, count)
 	}
 }
