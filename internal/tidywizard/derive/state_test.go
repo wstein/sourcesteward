@@ -458,3 +458,55 @@ func TestLookupTaskByDestinationSkipsAndReportsUnreadableRecords(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+// Spec 041 T011a5 review: the stores are read once into an index; every lookup of one run sees
+// that one snapshot, whatever happens to the files afterwards.
+func TestDestinationIndexIsOneSnapshot(t *testing.T) {
+	const repo = "/w/r/.jj/repo"
+	p := storeWithRecords(t, jjRecord("t1", "claude", "/w/wt/a", repo), jjRecord("t2", "codex", "/w/wt/b", repo))
+	idx := IndexRecords(Stores([]string{p}, "", ""), "jj")
+	if err := os.Remove(filepath.Join(p, "tasks", "t1.json")); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(jjRecord("t3", "x", "/w/wt/c", repo))
+	if err := os.WriteFile(filepath.Join(p, "tasks", "t3.json"), b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if r := idx.Lookup("/w/wt/a", repo); r.Ambiguity != nil || r.Record.TaskID != "t1" || r.Record.Owner != "claude" {
+		t.Errorf("a record removed after the scan is still in the snapshot: %+v", r)
+	}
+	if r := idx.Lookup("/w/wt/b", repo); r.Record.TaskID != "t2" {
+		t.Errorf("%+v", r)
+	}
+	if r := idx.Lookup("/w/wt/c", repo); r.Ambiguity == nil || r.Record.TaskID != "" {
+		t.Errorf("a record written after the scan is not in the snapshot: %+v", r)
+	}
+}
+
+// A store that cannot be listed is not a store without records: it is counted as a skipped store,
+// separately from unreadable records, and owns nothing.
+func TestDestinationIndexReportsAStoreThatCannotBeListed(t *testing.T) {
+	const dest, repo = "/w/wt/a", "/w/r/.jj/repo"
+	good := storeWithRecords(t, jjRecord("t1", "claude", dest, repo))
+	broken := storeWithRecords(t, jjRecord("t1", "claude", dest, repo))
+	if err := os.Mkdir(filepath.Join(broken, "tasks", "stray"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	idx := IndexRecords([]Store{{Path: broken}, {Path: good}}, "jj")
+	if idx.SkippedStores != 1 || len(idx.Skipped) != 0 {
+		t.Errorf("skipped stores %d, records %v", idx.SkippedStores, idx.Skipped)
+	}
+	if r := idx.Lookup(dest, repo); r.Ambiguity != nil || r.Record.TaskID != "t1" {
+		t.Errorf("the other store still answers: %+v", r)
+	}
+	only := IndexRecords([]Store{{Path: broken}}, "jj")
+	if only.SkippedStores != 1 {
+		t.Errorf("%d", only.SkippedStores)
+	}
+	if r := only.Lookup(dest, repo); r.Ambiguity == nil || r.Record.TaskID != "" {
+		t.Errorf("an unlistable store owns nothing: %+v", r)
+	}
+	if l := LookupTaskByDestination([]Store{{Path: broken}}, "jj", dest, repo); l.SkippedStores != 1 {
+		t.Errorf("%+v", l)
+	}
+}

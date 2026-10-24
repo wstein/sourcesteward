@@ -256,57 +256,99 @@ func LookupTask(stores []Store, task string) TaskLookup {
 }
 
 // DestinationLookup is the result of the creation record lookup of a jj workspace by its path.
-// Skipped lists the ids of records that could not be read (skipped, never fatal).
+// Skipped lists the ids of records that could not be read; SkippedStores counts the stores that
+// could not be listed at all. Both are skipped, never fatal.
 type DestinationLookup struct {
 	TaskLookup
-	Skipped []string
+	Skipped       []string
+	SkippedStores int
 }
 
-// LookupTaskByDestination finds the creation record that owns the workspace at dest of the
-// repository repoDir (Spec 041 T011a5). A jj workspace has no stw:<task> lock, so the record is
-// joined by what it recorded: the backend (the record's and its native identity's), the cleaned
-// destination, the cleaned repository directory and a complete creation. A task id or a name
-// never matches on its own, and an empty path owns nothing. Differing matching records are
-// registration-record-ambiguous; none is registration-record-missing.
-func LookupTaskByDestination(stores []Store, backend, dest, repoDir string) DestinationLookup {
+// DestinationIndex is a snapshot of the complete creation records of one backend, read from every
+// valid store exactly once (Spec 041 T011a5): every lookup of a run sees the same records, however
+// many workspaces are joined, and a store is never read again for a lookup. It keeps only the
+// fields the join needs (task id, owner, backend, destination, state, repository directory).
+type DestinationIndex struct {
+	backend       string
+	byDest        map[string][]indexed
+	Skipped       []string // ids of records that could not be read, sorted
+	SkippedStores int      // stores that could not be listed
+}
+
+type indexed struct {
+	rec   workspace.TaskRecord
+	store string
+	repo  string
+}
+
+// IndexRecords reads the creation records of every valid store once.
+func IndexRecords(stores []Store, backend string) *DestinationIndex {
+	x := &DestinationIndex{backend: backend, byDest: map[string][]indexed{}, Skipped: []string{}}
+	for _, s := range stores {
+		if s.Issue != nil {
+			continue
+		}
+		records, unreadable, err := workspace.ScanTasks(s.Path)
+		if err != nil {
+			// A store that cannot be listed is not a store without records.
+			x.SkippedStores++
+			continue
+		}
+		x.Skipped = append(x.Skipped, unreadable...)
+		for _, rec := range records {
+			if rec.State != "complete" || rec.Backend != backend || rec.Native.Backend != backend {
+				continue
+			}
+			d, repo := cleanPath(rec.Destination), cleanPath(rec.Native.RepositoryDir)
+			if d == "" || repo == "" {
+				continue
+			}
+			kept := workspace.TaskRecord{TaskID: rec.TaskID, Owner: rec.Owner, Backend: rec.Backend, Destination: rec.Destination, State: rec.State,
+				Native: workspace.NativeIdentity{Backend: rec.Native.Backend, RepositoryDir: rec.Native.RepositoryDir}}
+			x.byDest[d] = append(x.byDest[d], indexed{rec: kept, store: s.Path, repo: repo})
+		}
+	}
+	sort.Strings(x.Skipped)
+	return x
+}
+
+// Lookup finds the record that owns the workspace at dest of the repository repoDir: the cleaned
+// destination and repository directory must both match. Equal records in several stores are one
+// record; differing matches are registration-record-ambiguous; none is registration-record-missing.
+// An empty path owns nothing. A task id or a name never matches on its own.
+func (x *DestinationIndex) Lookup(dest, repoDir string) TaskLookup {
 	name := "owner-by-destination"
 	d, repo := cleanPath(dest), cleanPath(repoDir)
-	var found []workspace.TaskRecord
-	var where, skipped []string
+	var found []indexed
 	if d != "" && repo != "" {
-		for _, s := range stores {
-			if s.Issue != nil {
-				continue
-			}
-			records, unreadable, err := workspace.ScanTasks(s.Path)
-			if err != nil {
-				// A store that cannot be listed is reported, never taken for a store without records.
-				skipped = append(skipped, "store:"+filepath.Base(s.Path))
-				continue
-			}
-			skipped = append(skipped, unreadable...)
-			for _, rec := range records {
-				if rec.State == "complete" && rec.Backend == backend && rec.Native.Backend == backend &&
-					cleanPath(rec.Destination) == d && cleanPath(rec.Native.RepositoryDir) == repo {
-					found, where = append(found, rec), append(where, s.Path)
-				}
+		for _, e := range x.byDest[d] {
+			if e.repo == repo {
+				found = append(found, e)
 			}
 		}
-	}
-	sort.Strings(skipped)
-	if skipped == nil {
-		skipped = []string{}
 	}
 	if len(found) == 0 {
-		r := ambiguous(name, "registration-record-missing", dest, nil)
-		return DestinationLookup{TaskLookup: TaskLookup{Result: r}, Skipped: skipped}
+		return TaskLookup{Result: ambiguous(name, "registration-record-missing", dest, nil)}
 	}
-	for _, rec := range found[1:] {
-		if !reflect.DeepEqual(rec, found[0]) {
-			return DestinationLookup{TaskLookup: TaskLookup{Result: ambiguous(name, "registration-record-ambiguous", dest, where)}, Skipped: skipped}
+	var where []string
+	for _, e := range found {
+		where = append(where, e.store)
+		if !reflect.DeepEqual(e.rec, found[0].rec) {
+			return TaskLookup{Result: ambiguous(name, "registration-record-ambiguous", dest, where)}
 		}
 	}
-	return DestinationLookup{TaskLookup: TaskLookup{Result: Result{Derived: Derived{Name: "owner:" + found[0].TaskID, Value: found[0].Owner, Source: "task-record"}}, Record: found[0]}, Skipped: skipped}
+	rec := found[0].rec
+	return TaskLookup{Result: Result{Derived: Derived{Name: "owner:" + rec.TaskID, Value: rec.Owner, Source: "task-record"}}, Record: rec}
+}
+
+// Skips reports the ids of the records that could not be read and the number of stores that could not be listed.
+func (x *DestinationIndex) Skips() ([]string, int) { return x.Skipped, x.SkippedStores }
+
+// LookupTaskByDestination is IndexRecords followed by one Lookup (one scan per call; a run that
+// joins several workspaces builds the index once instead).
+func LookupTaskByDestination(stores []Store, backend, dest, repoDir string) DestinationLookup {
+	x := IndexRecords(stores, backend)
+	return DestinationLookup{TaskLookup: x.Lookup(dest, repoDir), Skipped: x.Skipped, SkippedStores: x.SkippedStores}
 }
 
 // cleanPath is the one canonical form paths are compared in; an empty path stays empty.
