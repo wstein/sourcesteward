@@ -16,7 +16,7 @@ def validate(lines):
         package, *imports = line.split()
         if package == MODULE + 'internal/cli':
             for dependency in imports:
-                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace', MODULE + 'internal/hosting', MODULE + 'internal/release', MODULE + 'internal/restack', MODULE + 'internal/stwsync', MODULE + 'internal/watchcmd', MODULE + 'internal/pullscmd', MODULE + 'internal/issuescmd', MODULE + 'internal/untrusted', MODULE + 'internal/statuscmd', MODULE + 'internal/statusremote', MODULE + 'internal/overview')):
+                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace', MODULE + 'internal/hosting', MODULE + 'internal/release', MODULE + 'internal/restack', MODULE + 'internal/stwsync', MODULE + 'internal/watchcmd', MODULE + 'internal/pullscmd', MODULE + 'internal/issuescmd', MODULE + 'internal/untrusted', MODULE + 'internal/statuscmd', MODULE + 'internal/statusremote', MODULE + 'internal/overview', MODULE + 'internal/tidywizard/derive')):
                     raise ValueError('CLI may access only reviewed inspection/workspace/hosting operations: ' + dependency)
         if package.startswith(MODULE + 'cmd/'):
             for dependency in imports:
@@ -38,7 +38,7 @@ PROCESS_IMPORTS = ('os/exec', 'syscall', 'plugin')
 OPEN_FILES = re.compile(r'^internal/release/openfile_[a-z0-9_]+\.go$')
 SYSCALL_OPEN_FLAGS = re.compile(r'\bsyscall\.(?!O_[A-Z]+\b)[A-Za-z_]+')
 LINKNAME = re.compile(r'^\s*//go:linkname\b', re.M)
-NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace', 'internal/restack', 'internal/untrusted', 'internal/overview')
+NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace', 'internal/restack', 'internal/untrusted', 'internal/overview', 'internal/tidywizard/derive')
 
 
 def is_network_import(path):
@@ -190,7 +190,7 @@ def validate_dependencies(graph):
     """
     for local in NETWORK_FREE_PACKAGES:
         package = MODULE + local
-        boundary = MODULE + 'internal/hosting' if local in ('internal/release', 'internal/workspace') else None
+        boundary = MODULE + 'internal/hosting' if local in ('internal/release', 'internal/workspace', 'internal/tidywizard/derive') else None
         for dependency in reachable(graph, package, boundary):
             if is_network_import(dependency):
                 raise ValueError(package + ' reaches network outside internal/hosting: ' + dependency)
