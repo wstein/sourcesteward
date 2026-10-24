@@ -11,4 +11,4 @@
 | Dependencies | pinned modules, verification and Dependabot | Automated update proposals still require review |
 
 Do not interpret absence of a known failure as proof of feature completion. Record commands,
-revision and remaining platform/behavior gaps in verification.md. No CLI binaries are released.
+revision and remaining platform/behavior gaps in verification.md.
