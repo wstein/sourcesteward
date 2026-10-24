@@ -124,6 +124,14 @@ type SourceContext struct {
 	CallerDiffers   bool   `json:"caller_differs"`
 	Notice          string `json:"notice"`
 }
+
+// NextCall is the apply call that matches a stored plan, as copyable shell text and
+// as an argument vector. It is only text: planning applies nothing, and running the
+// call is the caller's explicit authorization.
+type NextCall struct {
+	Command string   `json:"command"`
+	Argv    []string `json:"argv"`
+}
 type Result struct {
 	SchemaVersion int             `json:"schema_version"`
 	Command       string          `json:"command"`
@@ -131,6 +139,7 @@ type Result struct {
 	Backend       string          `json:"backend"`
 	Plan          *MutationPlan   `json:"plan"`
 	Source        *SourceContext  `json:"source_context,omitempty"`
+	Next          *NextCall       `json:"next_call,omitempty"`
 	Task          *TaskRecord     `json:"task"`
 	Actions       []ActionOutcome `json:"actions"`
 	Diagnostics   []Diagnostic    `json:"diagnostics"`
@@ -228,6 +237,7 @@ func bounded(r Result) Result {
 	}
 	r.Plan = nil
 	r.Source = nil
+	r.Next = nil
 	r.Task = nil
 	if len(r.Actions) > observationLimit-8 {
 		r.Actions = r.Actions[:observationLimit-8]

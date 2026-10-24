@@ -164,6 +164,14 @@ func renderWorkspaceText(writer io.Writer, result workspace.Result) error {
 			fmt.Fprintf(&text, "Notice: %q\n", s.Notice)
 		}
 	}
+	if n := result.Next; n != nil {
+		if n.Command != "" {
+			fmt.Fprintf(&text, "Next: %s\n", n.Command)
+		} else {
+			text.WriteString("Next: the apply call holds characters that are not safe to print; take it from next_call.argv of --json.\n")
+		}
+		text.WriteString("Nothing is applied until you run it; running it is the authorization of the effects above.\n")
+	}
 	if result.Task != nil {
 		t := result.Task
 		fmt.Fprintf(&text, "Task: %q\nOwner: %q\nDestination: %q\nCommit: %q\nChange: %q\nOperation: %q\nRecovery: %q\n", t.TaskID, t.Owner, t.Destination, t.Native.CommitID, t.Native.ChangeID, t.Native.OperationID, t.RecoveryPointer)
