@@ -244,3 +244,23 @@ caller is standing in.
    additive and valid; the schema file stays byte-frozen.
 4. `base_commit` is the plan's own `expected.base_commit`; `source_head` is the source checkout's current
    commit (for jj the working-copy commit). `caller_head` is the Git HEAD object id or jj working-copy commit id.
+
+## Next call and base hint amendment
+
+Amends the plan output and one refusal message; it adds no command, flag, refusal code or exit code, and
+the stored plan and its digest are unchanged. Issue #184.
+
+1. **Next call.** A successful `workspace plan` prints `Next: <command>`, the matching
+   `stw workspace apply --plan PLAN_ID --state-dir STATE --authorize` call quoted for a POSIX `sh` (single quotes only, `'\''` for a quote), and states that
+   nothing is applied until it is run (running it is the authorization of the plan's effects). JSON carries
+   the additive top-level `next_call` key `{command, argv}` on successful `workspace-plan` results only; `argv` is the
+   unquoted argument vector, `command` its shell-quoted text. When an argument holds a non-printable character (control, C1,
+   bidirectional or other format character) `command` is empty, the human output says to take the call from `next_call.argv`, and
+   nothing unprintable is written to the terminal. Refused, partial and error results carry none.
+2. **Base hint.** A `git-base-refused` message (code and exit code unchanged) names the accepted forms: a full
+   commit id (40 or 64 hex digits by object format), `HEAD`, or a fully qualified ref such as
+   `refs/remotes/origin/main`. It echoes the given base when printable and, from read-only lookups, adds `Did you mean
+   <ref>?` for each of `refs/heads/`, `refs/remotes/` and `refs/tags/` plus the given spelling that exists, or the
+   full commit id for an abbreviated one (only when the commit really starts with the given digits; a hexadecimal branch name
+   is treated as a ref). No hint is invented: none is added when nothing matches. The
+   short spelling is still refused; the hint is text only.

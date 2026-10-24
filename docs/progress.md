@@ -7,6 +7,13 @@ notices (without refusing) a caller standing in another checkout of the same rep
 key, frozen schema untouched ([contract amendment](../specs/010-isolated-task-workspaces/contracts/workspace.md#source-and-base-review-amendment)).
 `stw tidy` derivation (Spec 041) is not touched; its consistency is a follow-up for that spec's authors. Independent review pending.
 
+## Active work: workspace plan next call and base hints (issue #184, source candidate)
+
+Stacked on the #190 branch (PR for issue #183). A successful `stw workspace plan` prints the matching `workspace apply --plan ... --authorize` call (text and
+`next_call` argv in JSON, nothing applied), and a refused Git base names the accepted forms and the qualified spelling
+([contract amendment](../specs/010-isolated-task-workspaces/contracts/workspace.md#next-call-and-base-hint-amendment)). `stw tidy`
+output is not changed (Spec 041 area). Independent review pending.
+
 ## Active work: Spec 039 tiered CI, WP-3 scheduled race tier (source candidate)
 
 Branch `ci/039-wp3-race` adds `.github/workflows/race.yml` (nightly `-race` of all packages on the `current` lane, weekly
