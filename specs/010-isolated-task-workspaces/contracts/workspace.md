@@ -223,3 +223,24 @@ hook, fsmonitor and submodule admissions: the strict apply admission still refus
 such a repository is not retired by `stw` until a later specification defines that policy; retention is the safe outcome. Creation admits `core.hooksPath`
 and gitlinks only because it carries the creation mark and neutralizes both on the command line; no other
 consumer does.
+
+## Source and base review amendment
+
+Amends the plan output only; it adds no command, flag, refusal code or exit code, and changes neither
+the stored plan nor its digest (the stored record keeps its closed field set). Issue #183: `--base HEAD`
+is resolved in the source checkout (the `PATH` argument), which can be another worktree than the one the
+caller is standing in.
+
+1. **Human plan** names, next to the destination, `Source checkout`, `Base: <selector> resolved to <full
+   commit id>` and `Source HEAD`, and `Caller directory` when it is known.
+2. **Notice, not refusal.** When the caller's directory is a checkout of the same repository (same native
+   repository directory) with a different checkout root than the source, the plan adds one `Notice` that names
+   both checkouts and both HEADs. Status and exit code are unchanged. A caller inside the source checkout
+   (any subdirectory), in an unrelated repository, in no repository or unknown produces no notice.
+3. **JSON** carries one additive top-level key `source_context` on `workspace-plan` results only
+   (omitted for every other command): `source_path`, `base_selector`, `base_commit`, `source_head`,
+   `caller_directory`, `caller_checkout`, `caller_head`, `caller_differs`, `notice`. Empty strings mean unknown or not
+   applicable. The frozen `workspace.schema.json` declares no `additionalProperties: false`, so the key is
+   additive and valid; the schema file stays byte-frozen.
+4. `base_commit` is the plan's own `expected.base_commit`; `source_head` is the source checkout's current
+   commit (for jj the working-copy commit). `caller_head` is the Git HEAD object id or jj working-copy commit id.

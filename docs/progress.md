@@ -1,5 +1,12 @@
 # Progress and handoff
 
+## Active work: workspace plan source and base review (issue #183, source candidate)
+
+`stw workspace plan` now names the source checkout, the base resolved to a full commit id and the caller directory, and
+notices (without refusing) a caller standing in another checkout of the same repository; additive `source_context` JSON
+key, frozen schema untouched ([contract amendment](../specs/010-isolated-task-workspaces/contracts/workspace.md#source-and-base-review-amendment)).
+`stw tidy` derivation (Spec 041) is not touched; its consistency is a follow-up for that spec's authors. Independent review pending.
+
 ## Active work: Spec 039 tiered CI, WP-3 scheduled race tier (source candidate)
 
 Branch `ci/039-wp3-race` adds `.github/workflows/race.yml` (nightly `-race` of all packages on the `current` lane, weekly
