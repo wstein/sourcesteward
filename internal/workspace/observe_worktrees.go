@@ -53,9 +53,12 @@ type BranchEvidence struct {
 
 // TrackingRefEvidence holds the facts of one remote-tracking reference.
 type TrackingRefEvidence struct {
-	Name       string
-	Proof      string
-	Incomplete string
+	Name string
+	// Proof is github-branch-absent or none. Reason is the tracking evidence's reason: the proof
+	// itself for an absent source branch, remote-source-present or a protection (workspace-used)
+	// for a reference that stays.
+	Proof, Reason string
+	Incomplete    string
 }
 
 // WorktreeObservation is the read-only evidence of one Git repository.
@@ -220,7 +223,7 @@ func (c worktreeObserver) observeTracking(ctx context.Context, o ObserveOptions,
 		return
 	}
 	for _, cand := range p.Candidates {
-		out.TrackingRefs = append(out.TrackingRefs, TrackingRefEvidence{Name: cand.Name, Proof: cand.Proof})
+		out.TrackingRefs = append(out.TrackingRefs, TrackingRefEvidence{Name: cand.Name, Proof: cand.Proof, Reason: cand.Reason})
 	}
 }
 
