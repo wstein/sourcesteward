@@ -205,7 +205,7 @@ Reason codes (stable, kebab-case; the list extends Spec 011/029 codes, none is r
 `ignored-extras`, `locked-foreign`, `locked-stw` (decision), `unregistered` (information: no stw creation record), `current-worktree`, `primary-checkout`,
 `protected`, `recently-active`, `registration-record-missing`, `registration-record-ambiguous`, `scope-not-authorized`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
 real identity change, see below), `registration-moved`, `lock-mismatch`, `branch-attached-elsewhere`, `retirement-file-limit`,
-`retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`.
+`retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`; `workspace-not-found` (no workspace discovered and no `--workspace`: usage error, exit 2) and the notice `workspace-members-none` (only the workspace repository is analysed).
 
 ### Required behaviour per case
 
