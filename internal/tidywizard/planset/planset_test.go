@@ -450,6 +450,9 @@ func TestValidateRefusesIncoherentSets(t *testing.T) {
 		"empty set":                           func(s *Set) { s.SubPlans, s.Items = nil, nil },
 		"agent mode with scopes":              func(s *Set) { s.Mode.Mode = owner.ModeAgent; s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} },
 		"own scope authorized":                func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOwn} },
+		"authorized scope no item carries":    func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} },
+		"relative state dir":                  func(s *Set) { s.SubPlans[0].StateDir = "state" },
+		"unclean state dir":                   func(s *Set) { s.SubPlans[0].StateDir = "/state/../x" },
 		"item of another repository":          func(s *Set) { s.Items[0].Repo = "other" },
 		"item kind of another sub-plan":       func(s *Set) { s.Items[0].Kind = string(tidywizard.KindBranch) },
 		"item path differs from the worktree": func(s *Set) { s.Items[0].Path = "/w/elsewhere" },
@@ -462,6 +465,20 @@ func TestValidateRefusesIncoherentSets(t *testing.T) {
 		if err := c.Validate(); err == nil {
 			t.Errorf("%s must be invalid", name)
 		}
+	}
+}
+
+func TestValidateRefusesAnAuthorizedScopeThatNoItemCarries(t *testing.T) {
+	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
+	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
+	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	if err != nil || set.Validate() != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	extra := set.clone()
+	extra.AuthorizedScopes = []owner.Scope{owner.ScopeOther, owner.ScopeUnknown}
+	if extra.Validate() == nil {
+		t.Error("the unknown scope covers no item and must be refused")
 	}
 }
 
@@ -549,7 +566,7 @@ func TestStoreRefusesAnInvalidOrForgedSet(t *testing.T) {
 	a := own(tidywizard.KindWorktree, "r", "a")
 	set, _ := build(t, []tidywizard.Candidate{a}, ids(a), human, &fakePlanner{})
 	forged := set.clone()
-	forged.AuthorizedScopes = []owner.Scope{owner.ScopeOther}
+	forged.Derived = append(forged.Derived, derive.Derived{Name: "forged", Value: "x", Source: "test"})
 	if err := Store(dir, forged); !errors.Is(err, ErrIDMismatch) {
 		t.Errorf("a set whose id does not match its content must not be stored: %v", err)
 	}

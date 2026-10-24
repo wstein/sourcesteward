@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -74,6 +75,17 @@ func TestTidyApplyPlanIDWithYesAuthorizesAndReportsJSON(t *testing.T) {
 	var res planset.ApplyResult
 	if err := json.Unmarshal([]byte(out), &res); err != nil || res.Command != "tidy-apply-set" || len(res.Outcomes) != 1 {
 		t.Fatalf("%s %v", out, err)
+	}
+}
+
+func TestTidyApplyConfirmsOnTheControllingTerminalNeverOnStdin(t *testing.T) {
+	got := fakeSet(t, okSet(), false, false)
+	if _, err := runTidy(t, "codex 3f9c2a\n", "apply", setID, "--yes", "--state-dir", "/s"); err != nil {
+		t.Fatal(err)
+	}
+	confirm := (*got)[0].Confirm
+	if confirm == nil || reflect.ValueOf(confirm).Pointer() != reflect.ValueOf(owner.DevTTY).Pointer() {
+		t.Fatal("the typed confirmation must be read from /dev/tty (owner.DevTTY), not from stdin")
 	}
 }
 

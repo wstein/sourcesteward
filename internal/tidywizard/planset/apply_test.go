@@ -4,6 +4,7 @@ package planset
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -157,12 +158,25 @@ func TestApplyOrdersASetThatWasStoredInAnotherOrder(t *testing.T) {
 	}
 }
 
-func TestAgentNeverAppliesAPlanWithAuthorizedScopesEvenForOwnItems(t *testing.T) {
+func TestAPlanWithAuthorizedScopesForNoItemIsInvalidToApply(t *testing.T) {
 	_, set := stored(t, own(tidywizard.KindWorktree, "r", "a"))
-	dir, forged := storeForged(t, set, func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} })
-	f := &fakeApplier{}
-	if res := Apply(context.Background(), req(dir, forged, agent, f)); res.Code != CodeScopeNotAuthorized || len(f.calls) != 0 {
-		t.Fatalf("%+v", res)
+	c := set.clone()
+	c.AuthorizedScopes = []owner.Scope{owner.ScopeOther}
+	c.PlanID = c.computeID()
+	if err := Store(stateDir(t), c); err == nil {
+		t.Fatal("such a set cannot be stored")
+	}
+	// A record forged straight into the store is refused at load, for any mode.
+	dir := stateDir(t)
+	raw, _ := json.Marshal(c)
+	if err := workspace.WriteTidyPlanSet(dir, c.PlanID, raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []owner.Evidence{agent, human} {
+		f := &fakeApplier{}
+		if res := Apply(context.Background(), req(dir, c, mode, f)); res.Code != CodePlanSetInvalid || len(f.calls) != 0 {
+			t.Errorf("%s: %+v", mode.Mode, res)
+		}
 	}
 }
 
@@ -226,8 +240,8 @@ func TestApplyScopeNotAuthorized(t *testing.T) {
 		"human apply of a foreign item without scopes": {authorized, func(s *Set) { s.AuthorizedScopes = []owner.Scope{} }, human},
 		"agent apply of a set with authorized scopes":  {authorized, func(*Set) {}, agent},
 		"scopes that miss the unknown item": {authorized, func(s *Set) {
-			s.Items[1].Scope = owner.ScopeUnknown
-			s.Items[1].Owner = ""
+			s.Items[0].Scope = owner.ScopeUnknown // the own item becomes unknown; only "other" is authorized
+			s.Items[0].Owner = ""
 		}, human},
 	}
 	for name, tc := range cases {
