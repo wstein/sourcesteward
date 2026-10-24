@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/wstein/sourcesteward/internal/fanout"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/untrusted"
@@ -212,13 +213,10 @@ type Result struct {
 	Truncated    bool
 }
 
-// eachRepo is the one-line seam for the per-repository analysis; it is sequential until
-// internal/fanout (Spec 040) is available.
-func eachRepo(repos []string, fn func(string)) {
-	for _, r := range repos {
-		fn(r)
-	}
-}
+// repoWidth is the number of repositories analysed at the same time (Spec 041 T011a4). Only the
+// read-only per-repository work runs in parallel; every result goes to the slot of its repository,
+// so the output does not depend on the completion order.
+const repoWidth = 4
 
 // Classify analyses the repositories through the source. A repository that fails or is skipped is
 // reported and never hides the others; the output is sorted and bounded.
@@ -228,12 +226,10 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 	names = dedupe(names)
 	results := make([]RepoResult, len(names))
 	found := make([][]Candidate, len(names))
-	index := map[string]int{}
-	for i, n := range names {
-		index[n] = i
-	}
-	eachRepo(names, func(name string) {
-		i := index[name]
+	// A panic or Goexit of the source is re-raised by fanout.Do after the others stopped; a
+	// cancelled context leaves the repositories that were never started to the loop below.
+	cancelled := fanout.Do(ctx, len(names), repoWidth, func(ctx context.Context, i int) {
+		name := names[i]
 		results[i] = RepoResult{Name: name, State: "analysed", Notices: []string{}}
 		if err := ctx.Err(); err != nil {
 			results[i] = RepoResult{Name: name, State: "error", Reason: bound(err.Error(), MaxEvidenceBytes), Notices: []string{}}
@@ -251,6 +247,14 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 			results[i].Notices = boundNotices(facts.Notices)
 		}
 	})
+	if cancelled != nil {
+		// Never started because the context ended: reported, never left empty.
+		for i, name := range names {
+			if results[i].Name == "" {
+				results[i] = RepoResult{Name: name, State: "error", Reason: bound(cancelled.Error(), MaxEvidenceBytes), Notices: []string{}}
+			}
+		}
+	}
 	res := Result{Repositories: results, Candidates: []Candidate{}}
 	for _, c := range found {
 		res.Candidates = append(res.Candidates, c...)
