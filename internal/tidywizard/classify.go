@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -23,6 +24,8 @@ import (
 const (
 	MaxCandidates    = 4096
 	MaxEvidenceBytes = 512
+	// MaxNotices bounds the notices of one repository.
+	MaxNotices = 8
 	// RecentWindow is how recent the activity of an other or unknown worktree must be to retain it.
 	RecentWindow = 24 * time.Hour
 )
@@ -120,6 +123,9 @@ type TrackingRef struct {
 	Name       string
 	Proof      Proof
 	Incomplete string // as Worktree.Incomplete
+	// Reason is why the tracking evidence keeps the reference (remote-source-present, or a
+	// protection); empty means no reason was given and an unproven reference is unmerged.
+	Reason string
 }
 
 // RepoFacts is everything the classifier reads about one repository. Skip is the reason code of a
@@ -130,6 +136,9 @@ type RepoFacts struct {
 	Worktrees    []Worktree
 	Branches     []Branch
 	TrackingRefs []TrackingRef
+	// Notices are facts about the whole repository that the overview shows (for example that
+	// tracking references were skipped offline); the classifier carries them unchanged.
+	Notices []string
 }
 
 // Source supplies the facts of a repository; it is the I/O seam of the classifier.
@@ -166,9 +175,10 @@ type Candidate struct {
 
 // RepoResult reports one repository: State is analysed, skipped or error.
 type RepoResult struct {
-	Name   string `json:"name"`
-	State  string `json:"state"`
-	Reason string `json:"reason"`
+	Name    string   `json:"name"`
+	State   string   `json:"state"`
+	Reason  string   `json:"reason"`
+	Notices []string `json:"notices"`
 }
 
 // Result is the classification of all repositories, ordered independently of the input order.
@@ -200,20 +210,21 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 	}
 	eachRepo(names, func(name string) {
 		i := index[name]
-		results[i] = RepoResult{Name: name, State: "analysed"}
+		results[i] = RepoResult{Name: name, State: "analysed", Notices: []string{}}
 		if err := ctx.Err(); err != nil {
-			results[i] = RepoResult{Name: name, State: "error", Reason: bound(err.Error(), MaxEvidenceBytes)}
+			results[i] = RepoResult{Name: name, State: "error", Reason: bound(err.Error(), MaxEvidenceBytes), Notices: []string{}}
 			return
 		}
 		facts, err := src.Facts(ctx, name)
 		switch {
 		case err != nil:
-			results[i] = RepoResult{Name: name, State: "error", Reason: bound(err.Error(), MaxEvidenceBytes)}
+			results[i] = RepoResult{Name: name, State: "error", Reason: bound(err.Error(), MaxEvidenceBytes), Notices: []string{}}
 		case facts.Skip != "":
-			results[i] = RepoResult{Name: name, State: "skipped", Reason: facts.Skip}
+			results[i] = RepoResult{Name: name, State: "skipped", Reason: facts.Skip, Notices: []string{}}
 		default:
 			facts.Name = name
 			found[i] = classifyRepo(facts, cfg)
+			results[i].Notices = boundNotices(facts.Notices)
 		}
 	})
 	res := Result{Repositories: results, Candidates: []Candidate{}}
@@ -231,6 +242,18 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 		res.Candidates, res.Truncated = res.Candidates[:MaxCandidates], true
 	}
 	return res
+}
+
+// boundNotices keeps the first MaxNotices notices, each cut to MaxEvidenceBytes.
+func boundNotices(in []string) []string {
+	out := []string{}
+	for _, n := range in {
+		if len(out) == MaxNotices {
+			break
+		}
+		out = append(out, bound(n, MaxEvidenceBytes))
+	}
+	return out
 }
 
 func dedupe(sorted []string) []string {
@@ -406,11 +429,14 @@ func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate 
 func classifyTrackingRef(repo string, r TrackingRef, cfg Config) Candidate {
 	c := newCandidate(repo, KindTrackingRef, r.Name)
 	c.Branch, c.Proof = r.Name, normalize(r.Proof)
-	c = c.withOwner(owner.Resolve(owner.Item{Branch: r.Name}, cfg.Caller, cfg.Agent))
+	c = c.withOwner(owner.Resolve(owner.Item{Branch: trackingBranch(r.Name)}, cfg.Caller, cfg.Agent))
 	if r.Incomplete != "" {
 		return c.retain("evidence-incomplete", r.Incomplete)
 	}
 	if !proven(c.Proof) {
+		if r.Reason != "" {
+			return c.retain(r.Reason, r.Reason)
+		}
 		return c.retain("unmerged", "not integrated into the base")
 	}
 	c.Verdict = VerdictSafe
@@ -431,6 +457,17 @@ func normalize(p Proof) Proof {
 		return ProofNone
 	}
 	return p
+}
+
+// trackingBranch is the branch part of a remote-tracking reference name, which the owner
+// conventions of branches (codex/, claude/) match: refs/remotes/<remote>/<branch>.
+func trackingBranch(name string) string {
+	if rest, ok := strings.CutPrefix(name, "refs/remotes/"); ok {
+		if _, branch, ok := strings.Cut(rest, "/"); ok {
+			return branch
+		}
+	}
+	return name
 }
 
 func aheadEvidence(n int, name string) string {
