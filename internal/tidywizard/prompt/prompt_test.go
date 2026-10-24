@@ -98,7 +98,7 @@ func TestOwnerAsksPerOwner(t *testing.T) {
 		t.Errorf("owners asked in sorted order:\n%s", out)
 	}
 	res, _, _ = run(t, "o\ny\ny\n", true)
-	if !reflect.DeepEqual(ids(res), []string{"w1", "w2", "b6", "o4", "o5"}) {
+	if !reflect.DeepEqual(ids(res), []string{"w1", "w2", "o4", "o5", "b6"}) {
 		t.Errorf("%+v", res)
 	}
 	res, _, _ = run(t, "o\n\n\n", true)
@@ -124,7 +124,7 @@ func TestDetailsShowAndReask(t *testing.T) {
 
 // Anything else is re-asked, three times in all, then the run fails with nothing chosen.
 func TestStrictParsingRetriesThreeTimes(t *testing.T) {
-	for _, bad := range []string{"x", "A", "all", "N", "0", "7", "1-", "-2", "2-1", "1,,2", "1 2", "1;2", "a b", "o x", "1.5", "+1", "99999999999999999999", "d", "d x", "n n"} {
+	for _, bad := range []string{"x", "A", "all", "N", "0", "7", "1-", "-2", "2-1", "1,,2", "1 2", "1;2", "a b", "o x", "1.5", "+1", "2-1,1", "6-4,6", "99999999999999999999", "d", "d x", "n n"} {
 		res, out, err := run(t, strings.Repeat(bad+"\n", 3)+"1\n", true)
 		if !errors.Is(err, ErrTooManyInvalid) || len(res.Chosen) != 0 || res.Outcome != OutcomeNone {
 			t.Errorf("%q: %+v %v", bad, res, err)
@@ -200,7 +200,7 @@ func TestYesNo(t *testing.T) {
 			t.Errorf("%q: %v %v %q", in, got, err, out.String())
 		}
 	}
-	for _, bad := range []string{"yes", "Y", "N", "1", "y y", " "} {
+	for _, bad := range []string{"yes", "Y", "N", "1", "y y"} {
 		var out bytes.Buffer
 		got, err := YesNo(bufio.NewReader(strings.NewReader(strings.Repeat(bad+"\n", 3)+"y\n")), &out, "Apply it now?", true)
 		if got || !errors.Is(err, ErrTooManyInvalid) {
@@ -215,5 +215,24 @@ func TestYesNo(t *testing.T) {
 	got, err = YesNo(bufio.NewReader(neverRead{t}), io.Discard, "Q?", false)
 	if err != nil || got {
 		t.Errorf("%v %v", got, err)
+	}
+}
+
+// A decision row with an owner label of its own scope is still no "own safe" item and no owner answer
+// takes it; a valid answer padded beyond the line bound is not an answer.
+func TestDecisionRowsAreOnlyEverChosenByNumber(t *testing.T) {
+	list := append(items(), Item{Number: 7, ID: "d7", Verdict: Decision, Scope: owner.ScopeOwn, Owner: "claude", Detail: "own decision"})
+	var out bytes.Buffer
+	res, err := Select(bufio.NewReader(strings.NewReader("a\ny\ny\n")), &out, list, Options{Interactive: true})
+	if err != nil || !reflect.DeepEqual(res.Chosen, []string{"w1", "w2", "b6"}) {
+		t.Errorf("a: %+v %v", res, err)
+	}
+	res, err = Select(bufio.NewReader(strings.NewReader("o\ny\ny\ny\ny\n")), &out, list, Options{Interactive: true})
+	if err != nil || !reflect.DeepEqual(res.Chosen, []string{"w1", "w2", "o4", "o5", "b6"}) {
+		t.Errorf("o: %+v %v", res, err)
+	}
+	res, err = Select(bufio.NewReader(strings.NewReader("1"+strings.Repeat(" ", 300)+"\n"+"1"+strings.Repeat(" ", 300)+"\n"+"1"+strings.Repeat(" ", 300)+"\n")), &out, list, Options{Interactive: true})
+	if !errors.Is(err, ErrTooManyInvalid) || len(res.Chosen) != 0 {
+		t.Errorf("over-long: %+v %v", res, err)
 	}
 }
