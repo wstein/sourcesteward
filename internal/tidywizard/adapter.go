@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/workspace"
@@ -28,17 +29,34 @@ type Adapter struct {
 	Repos   map[string]RepoSpec
 	Observe func(context.Context, workspace.ObserveOptions) (workspace.WorktreeObservation, error)
 	Records func(task string) derive.TaskLookup
-	// RecordsByDestination finds the creation record of a jj workspace (no stw lock) by backend,
-	// destination and repository directory.
-	RecordsByDestination func(backend, dest, repoDir string) derive.DestinationLookup
+	// JJRecords reads the creation records of jj workspaces (no stw lock) once; the adapter calls it
+	// at most once per run, the first time a jj repository is analysed, so every workspace of the
+	// run is joined against the same snapshot.
+	JJRecords func() JJRecords
+	jj        *jjSnapshot
+}
+
+// JJRecords is the snapshot of the creation records a jj workspace is joined against; see
+// derive.DestinationIndex.
+type JJRecords interface {
+	Lookup(dest, repoDir string) derive.TaskLookup
+	Skips() (records []string, stores int)
+}
+
+type jjSnapshot struct {
+	once sync.Once
+	recs JJRecords
+}
+
+func (a Adapter) jjRecords() JJRecords {
+	a.jj.once.Do(func() { a.jj.recs = a.JJRecords() })
+	return a.jj.recs
 }
 
 // NewAdapter returns the adapter for the repositories, looking creation records up in the stores.
 func NewAdapter(repos []RepoSpec, stores []derive.Store) Adapter {
 	a := Adapter{Repos: map[string]RepoSpec{}, Observe: workspace.ObserveWorktrees, Records: func(task string) derive.TaskLookup { return derive.LookupTask(stores, task) },
-		RecordsByDestination: func(backend, dest, repoDir string) derive.DestinationLookup {
-			return derive.LookupTaskByDestination(stores, backend, dest, repoDir)
-		}}
+		JJRecords: func() JJRecords { return derive.IndexRecords(stores, "jj") }, jj: &jjSnapshot{}}
 	for _, r := range repos {
 		a.Repos[r.Name] = r
 	}
@@ -61,11 +79,10 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		return RepoFacts{}, err
 	}
 	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}}
-	unreadable := map[string]bool{}
 	for _, e := range obs.Worktrees {
 		w := a.worktree(e)
-		if obs.Backend == "jj" && a.RecordsByDestination != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
-			a.joinJJRecord(&w, obs.RepositoryDir, unreadable)
+		if obs.Backend == "jj" && a.JJRecords != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
+			a.joinJJRecord(&w, obs.RepositoryDir)
 		}
 		f.Worktrees = append(f.Worktrees, w)
 	}
@@ -83,9 +100,11 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		}
 		f.TrackingRefs = append(f.TrackingRefs, TrackingRef{Name: r.Name, Proof: proof, Incomplete: incomplete, Reason: reason})
 	}
-	if len(unreadable) > 0 {
-		// A fixed text with a count: the ids of unreadable records are never echoed.
-		f.Notices = append(f.Notices, fmt.Sprintf("creation-records-unreadable: %d", len(unreadable)))
+	if obs.Backend == "jj" && a.JJRecords != nil {
+		if records, stores := a.jjRecords().Skips(); len(records)+stores > 0 {
+			// A fixed text with counts: the ids of unreadable records are never echoed.
+			f.Notices = append(f.Notices, fmt.Sprintf("creation-records-unreadable: %d records, %d stores that could not be listed", len(records), stores))
+		}
 	}
 	if obs.TrackingSkipped != "" {
 		f.Notices = append(f.Notices, obs.TrackingSkipped)
@@ -110,11 +129,8 @@ const unrecognizedTrackingReason = "tracking-reason-unrecognized"
 // found record owns it (owner and scope only; the classifier still retains it); several differing
 // records retain it as incomplete evidence; none leaves it unregistered, as before. Unreadable
 // records are collected, never fatal.
-func (a Adapter) joinJJRecord(w *Worktree, repoDir string, unreadable map[string]bool) {
-	l := a.RecordsByDestination("jj", w.Path, repoDir)
-	for _, id := range l.Skipped {
-		unreadable[id] = true
-	}
+func (a Adapter) joinJJRecord(w *Worktree, repoDir string) {
+	l := a.jjRecords().Lookup(w.Path, repoDir)
 	switch {
 	case l.Ambiguity != nil:
 		if l.Ambiguity.Code == "registration-record-ambiguous" && w.Incomplete == "" {
