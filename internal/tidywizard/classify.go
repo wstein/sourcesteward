@@ -194,7 +194,8 @@ type RepoResult struct {
 
 // EscapedNotices is the form of the notices the overview shows: each one passes `esc` (control,
 // ANSI, CR, NUL and bidirectional characters become visible escapes) and the 120-character bound
-// of Spec 041 FR-042. The notices carry text of the observation (limitations, tracking skips), so
+// of Spec 041 FR-042. The bound counts the characters of the notice before escaping, so escapes
+// may lengthen what is displayed (up to about six times, in the worst case). The notices carry text of the observation (limitations, tracking skips), so
 // they must never reach a terminal unescaped. The stored notices are not changed.
 func (r RepoResult) EscapedNotices() []string {
 	out := make([]string, 0, len(r.Notices))
