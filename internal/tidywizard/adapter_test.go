@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -570,30 +571,46 @@ func jjObservation(paths ...string) workspace.WorktreeObservation {
 
 type destCall struct{ backend, dest, repoDir string }
 
-func jjAdapter(obs workspace.WorktreeObservation, lookup func(destCall) derive.DestinationLookup) (Adapter, *[]destCall) {
+// fakeJJ is a JJRecords whose lookups and skips the test decides, counting the scans.
+type fakeJJ struct {
+	lookup  func(destCall) derive.TaskLookup
+	records []string
+	stores  int
+	calls   *[]destCall
+}
+
+func (f fakeJJ) Lookup(dest, repoDir string) derive.TaskLookup {
+	c := destCall{"jj", dest, repoDir}
+	*f.calls = append(*f.calls, c)
+	return f.lookup(c)
+}
+func (f fakeJJ) Skips() ([]string, int) { return f.records, f.stores }
+
+func jjAdapter(obs workspace.WorktreeObservation, lookup func(destCall) derive.TaskLookup) (Adapter, *[]destCall) {
+	a, scans := jjAdapterSkips(obs, lookup, nil, 0)
+	return a, scans
+}
+
+// jjAdapterSkips also reports the unreadable records and stores; the second result counts lookups.
+func jjAdapterSkips(obs workspace.WorktreeObservation, lookup func(destCall) derive.TaskLookup, records []string, stores int) (Adapter, *[]destCall) {
 	var calls []destCall
 	a, _ := testAdapter(obs, nil)
-	a.RecordsByDestination = func(backend, dest, repoDir string) derive.DestinationLookup {
-		c := destCall{backend, dest, repoDir}
-		calls = append(calls, c)
-		return lookup(c)
-	}
+	a.JJRecords = func() JJRecords { return fakeJJ{lookup: lookup, records: records, stores: stores, calls: &calls} }
 	return a, &calls
 }
 
-func foundFor(task, owner string) derive.DestinationLookup {
-	return derive.DestinationLookup{TaskLookup: derive.TaskLookup{
+func foundFor(task, owner string) derive.TaskLookup {
+	return derive.TaskLookup{
 		Result: derive.Result{Derived: derive.Derived{Name: "owner:" + task, Value: owner, Source: "task-record"}},
 		Record: workspace.TaskRecord{TaskID: task, Owner: owner},
-	}}
+	}
 }
-
 func TestAdapterJoinsAJJWorkspaceToItsRecordByDestination(t *testing.T) {
-	a, calls := jjAdapter(jjObservation("/ws/wt/a", "/ws/wt/b"), func(c destCall) derive.DestinationLookup {
+	a, calls := jjAdapter(jjObservation("/ws/wt/a", "/ws/wt/b"), func(c destCall) derive.TaskLookup {
 		if c.dest == "/ws/wt/a" {
 			return foundFor("ta", "werner")
 		}
-		return derive.DestinationLookup{TaskLookup: lookupFailure("registration-record-missing")}
+		return lookupFailure("registration-record-missing")
 	})
 	f, err := a.Facts(context.Background(), "r")
 	if err != nil {
@@ -626,7 +643,7 @@ func TestAdapterJoinsAJJWorkspaceToItsRecordByDestination(t *testing.T) {
 
 func TestAdapterNeverLooksAGitWorktreeUpByDestination(t *testing.T) {
 	obs := workspace.WorktreeObservation{Backend: "git", RepositoryDir: "/ws/r/.git", Worktrees: []workspace.WorktreeEvidence{evid("/ws/wt/a", "refs/heads/x")}}
-	a, calls := jjAdapter(obs, func(destCall) derive.DestinationLookup { return foundFor("t", "werner") })
+	a, calls := jjAdapter(obs, func(destCall) derive.TaskLookup { return foundFor("t", "werner") })
 	f, _ := a.Facts(context.Background(), "r")
 	if len(*calls) != 0 || f.Worktrees[0].JJOwned {
 		t.Fatalf("%v %+v", *calls, f.Worktrees[0])
@@ -634,10 +651,9 @@ func TestAdapterNeverLooksAGitWorktreeUpByDestination(t *testing.T) {
 }
 
 func TestAdapterRetainsAJJWorkspaceWithAmbiguousRecordsAndReportsSkippedOnes(t *testing.T) {
-	a, _ := jjAdapter(jjObservation("/ws/wt/a"), func(destCall) derive.DestinationLookup {
-		l := derive.DestinationLookup{TaskLookup: lookupFailure("registration-record-ambiguous"), Skipped: []string{"x\x1b[31m", "y"}}
-		return l
-	})
+	a, _ := jjAdapterSkips(jjObservation("/ws/wt/a"), func(destCall) derive.TaskLookup {
+		return lookupFailure("registration-record-ambiguous")
+	}, []string{"x\x1b[31m", "y"}, 1)
 	f, _ := a.Facts(context.Background(), "r")
 	var w Worktree
 	for _, x := range f.Worktrees {
@@ -648,46 +664,58 @@ func TestAdapterRetainsAJJWorkspaceWithAmbiguousRecordsAndReportsSkippedOnes(t *
 	if w.JJOwned || w.Incomplete != "registration-record-ambiguous" {
 		t.Errorf("ambiguous records must retain: %+v", w)
 	}
-	found := false
-	for _, n := range f.Notices {
-		if strings.Contains(n, "creation-records-unreadable") {
-			found = true
-			if strings.Contains(n, "\x1b") || strings.Contains(n, "x") && strings.Contains(n, "[31m") {
-				t.Errorf("a record id leaked into the notice: %q", n)
+	// The notice is a fixed text with honest counts: unreadable records and, apart from them,
+	// stores that could not be listed at all. No record id is echoed.
+	want := "creation-records-unreadable: 2 records, 1 stores that could not be listed"
+	n := 0
+	for _, x := range f.Notices {
+		if strings.Contains(x, "creation-records-unreadable") {
+			n++
+			if x != want {
+				t.Errorf("notice %q, want %q", x, want)
 			}
 		}
 	}
-	if !found {
-		t.Errorf("unreadable records are not reported: %v", f.Notices)
+	if n != 1 {
+		t.Errorf("want one notice, got %d: %v", n, f.Notices)
 	}
-	// Reported once for the repository, not once per workspace.
-	a2, _ := jjAdapter(jjObservation("/ws/wt/a", "/ws/wt/b"), func(destCall) derive.DestinationLookup {
-		return derive.DestinationLookup{TaskLookup: lookupFailure("registration-record-missing"), Skipped: []string{"y"}}
-	})
+	// Reported once for the repository, not once per workspace; nothing skipped, no notice.
+	a2, _ := jjAdapterSkips(jjObservation("/ws/wt/a", "/ws/wt/b"), func(destCall) derive.TaskLookup { return lookupFailure("registration-record-missing") }, []string{"y"}, 0)
 	f2, _ := a2.Facts(context.Background(), "r")
-	n := 0
+	n = 0
 	for _, x := range f2.Notices {
-		if strings.Contains(x, "creation-records-unreadable") {
+		if x == "creation-records-unreadable: 1 records, 0 stores that could not be listed" {
 			n++
 		}
 	}
 	if n != 1 {
 		t.Errorf("want one notice, got %d: %v", n, f2.Notices)
 	}
+	a4, _ := jjAdapterSkips(jjObservation("/ws/wt/a"), func(destCall) derive.TaskLookup { return lookupFailure("registration-record-missing") }, nil, 2)
+	f4, _ := a4.Facts(context.Background(), "r")
+	if !slices.Contains(f4.Notices, "creation-records-unreadable: 0 records, 2 stores that could not be listed") {
+		t.Errorf("a store that cannot be listed is reported on its own: %v", f4.Notices)
+	}
+	a3, _ := jjAdapter(jjObservation("/ws/wt/a"), func(destCall) derive.TaskLookup { return lookupFailure("registration-record-missing") })
+	for _, x := range func() []string { f, _ := a3.Facts(context.Background(), "r"); return f.Notices }() {
+		if strings.Contains(x, "creation-records") {
+			t.Errorf("a notice without anything skipped: %q", x)
+		}
+	}
 }
 
 // Whatever the lookup returns, only a found record with a valid task id and the task-record source
 // owns a workspace, and a locked workspace is never looked up.
 func TestAdapterJJOwnershipFailsClosed(t *testing.T) {
-	for name, l := range map[string]derive.DestinationLookup{
+	for name, l := range map[string]derive.TaskLookup{
 		"task id with a path":  foundFor("../x", "werner"),
 		"empty task id":        foundFor("", "werner"),
-		"no source":            {TaskLookup: derive.TaskLookup{Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
-		"source of a guess":    {TaskLookup: derive.TaskLookup{Result: derive.Result{Derived: derive.Derived{Source: "os-user"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
-		"missing with a hit":   {TaskLookup: derive.TaskLookup{Result: derive.Result{Ambiguity: &derive.Ambiguity{Code: "registration-record-missing"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
-		"ambiguous with a hit": {TaskLookup: derive.TaskLookup{Result: derive.Result{Ambiguity: &derive.Ambiguity{Code: "registration-record-ambiguous"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
+		"no source":            {Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}},
+		"source of a guess":    {Result: derive.Result{Derived: derive.Derived{Source: "os-user"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}},
+		"missing with a hit":   {Result: derive.Result{Ambiguity: &derive.Ambiguity{Code: "registration-record-missing"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}},
+		"ambiguous with a hit": {Result: derive.Result{Ambiguity: &derive.Ambiguity{Code: "registration-record-ambiguous"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}},
 	} {
-		a, _ := jjAdapter(jjObservation("/ws/wt/a"), func(destCall) derive.DestinationLookup { return l })
+		a, _ := jjAdapter(jjObservation("/ws/wt/a"), func(destCall) derive.TaskLookup { return l })
 		f, _ := a.Facts(context.Background(), "r")
 		for _, w := range f.Worktrees {
 			if w.JJOwned {
@@ -697,9 +725,35 @@ func TestAdapterJJOwnershipFailsClosed(t *testing.T) {
 	}
 	obs := jjObservation("/ws/wt/a")
 	obs.Worktrees[1].Locked, obs.Worktrees[1].LockReason = true, "something"
-	a, calls := jjAdapter(obs, func(destCall) derive.DestinationLookup { return foundFor("t", "werner") })
+	a, calls := jjAdapter(obs, func(destCall) derive.TaskLookup { return foundFor("t", "werner") })
 	f, _ := a.Facts(context.Background(), "r")
 	if len(*calls) != 0 || f.Worktrees[1].JJOwned {
 		t.Errorf("a locked workspace was joined: %v %+v", *calls, f.Worktrees[1])
+	}
+}
+
+// Spec 041 T011a5 review: the records are read once per run, however many workspaces and
+// repositories are analysed, and a Git repository never reads them.
+func TestAdapterReadsTheJJRecordsOncePerRun(t *testing.T) {
+	scans := 0
+	a, calls := jjAdapter(jjObservation("/ws/wt/a", "/ws/wt/b", "/ws/wt/c"), func(destCall) derive.TaskLookup { return lookupFailure("registration-record-missing") })
+	inner := a.JJRecords
+	a.JJRecords = func() JJRecords { scans++; return inner() }
+	for i := 0; i < 3; i++ {
+		if _, err := a.Facts(context.Background(), "r"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if scans != 1 || len(*calls) != 9 {
+		t.Fatalf("scans %d (want 1), lookups %d (want 9: 3 workspaces x 3 runs)", scans, len(*calls))
+	}
+	git := workspace.WorktreeObservation{Backend: "git", Worktrees: []workspace.WorktreeEvidence{evid("/ws/wt/a", "refs/heads/x")}}
+	ga, _ := jjAdapter(git, func(destCall) derive.TaskLookup { return foundFor("t", "werner") })
+	gscans := 0
+	ginner := ga.JJRecords
+	ga.JJRecords = func() JJRecords { gscans++; return ginner() }
+	_, _ = ga.Facts(context.Background(), "r")
+	if gscans != 0 {
+		t.Errorf("a Git repository scanned the records %d times", gscans)
 	}
 }
