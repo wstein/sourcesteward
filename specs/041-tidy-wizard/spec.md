@@ -295,12 +295,41 @@ modification time (`lstat`) of the worktree's HEAD file, its index file and ever
 retirement manifest, which counts both, `retirement-file-limit`; the 16,384 `checkoutLeafLimit` bounds only the index listing); more makes the worktree `Incomplete`. A deleted tracked file contributes no time. Other commands: worktree list, for-each-ref, rev-list count and log of the tip. The identity inspection of a path (`inspection.Inspect`, used by every tidy plan) runs outside the sandbox: it executes only read-only `rev-parse` queries with `core.fsmonitor=false` and `GIT_OPTIONAL_LOCKS=0`, which read configuration and refs and run no hook or filter, and the write test below covers it. A repository with an active filter attribute is refused as a whole by the existing admission, so no observer command ever runs a filter.
 
 **jj.** Every jj command goes through the existing `jjSession.query` form: `--ignore-working-copy` and `--at-operation=<observed operation>` (the operation
-is observed once per repository and pinned), so nothing snapshots the working copy and no operation is written or merged. Bookmarks are fully observable
-(`IsBase` from the trunk bookmark, `Proof`, `Ahead`, `AuthorHint`). For a jj workspace the observer compares the disk with the files stored in the working-copy
-commit of the pinned operation, as the existing jj retirement admission does (`ObserveJJRetirement`, stored files and manifest): any difference is `Dirty` or
-`IgnoredExtras`, honestly relative to the pinned operation (edits made since the last snapshot show as a difference, which is the safe direction), and a clean
-comparison of an empty working-copy change is the empty working-copy retirement of Spec 011 (SI7, OQ9). Only a comparison that cannot complete is `Incomplete`
-(`jj-working-copy-comparison-failed`). jj workspaces thus stay eligible for the empty working-copy rule; this reconciles the safety invariants and OQ9 with the read-only rule.
+is observed once per repository and pinned, and observed again at the end), so nothing snapshots the working copy and no operation is written or merged; no jj argument list is added beyond the reads
+the existing inspection already makes (`bookmark list`, `workspace list`, `log`, `file list`, `file show`, `diff`, `sparse list`). The new read-only function is `inspection.ObserveJJWorkspaces`
+(workspace registrations, local bookmarks, and ahead count and author of each commit); proofs of bookmarks come from `inspection.ObserveJJTidy` and the stored files of a workspace from
+`inspection.ObserveJJRetirement`. Facts:
+
+- **Bookmarks** (local only): `Name` is the bookmark name, `IsBase` is true for the bookmark named like the base, `Proof` is `ancestor` (native ancestry) or `none` (jj proves integration by ancestry only, as Spec 011), `Ahead` the commits
+  that are not ancestors of the base, `AuthorHint` the author name. **The native tidy decides what may be deleted**: only its `delete` decision is a proof for deletion; every keep reason of the native tidy
+  (`remote-counterpart` for a bookmark with a remote counterpart, `recovery-reference` for `stw-recovery-*`, `selected-base` for the base and any alias at the base commit, `workspace-used`) is passed on as `BranchEvidence.Reason`, and the
+  classifier retains the bookmark with that reason and no delete effect. (In a colocated repository every bookmark has a `@git` counterpart, so it is retained as `remote-counterpart`, as stw tidy does.) A bookmark with no single target is `Incomplete`
+  `ambiguous-target`; a bookmark whose commit differs between the tidy read and the registrations read is `Incomplete` `evidence-changed`.
+- **Workspaces** are told apart from bookmarks and from Git worktrees by their facts: `HeadOID` is the working-copy commit, `HeadRef` is empty (a workspace has no attached branch, so a workspace can never carry a
+  delete-branch effect), nothing is `Locked`, a missing directory is `DirMissing` and `Prunable`. The primary workspace is the one whose `.jj/repo` is a directory; its content facts stay zero without `Incomplete`.
+  The workspace the observation starts from, when it is not the primary one, cannot be compared with itself: `Incomplete` `source-workspace`. A directory at a registered path that is not a workspace of this repository
+  (another jj repository, whose own `.jj/repo` is a directory) is `Incomplete` `registration-mismatch` and never primary. jj 0.45.1 reports no root for a workspace whose directory was deleted (it prints `null`; jj 0.46 still reports the
+  registered root): the path is then unknown and the workspace is `Incomplete` `workspace-path-unknown`, never present and clean; the tests assert exactly that for the version in use.
+- **One operation per run.** The retirement read of each workspace pins its own operation; the observer requires it to equal the operation of the registrations read and the working-copy commit to equal the registered one, otherwise the
+  workspace is `Incomplete` `evidence-changed`, so no record mixes facts of two operations.
+- **Content** of a secondary workspace is the disk compared with the files stored in its working-copy commit at the pinned operation, as the jj retirement admission does (`ObserveJJRetirement` for the stored
+  files, `observeRetirementManifest` for the disk). A tracked file that differs or is missing is `Dirty` and an entry the stored tree does not hold is `IgnoredExtras` (sentinel errors of the contract 2 manifest,
+  as for Git; the first finding in path order wins); both are relative to the pinned operation, so an edit that is not yet snapshotted shows as a difference, which is the safe direction. Only a comparison that cannot
+  complete is `Incomplete` (its failure code or a closed word). `Proof` is `ancestor` for an integrated working-copy commit, `empty-working-copy-integrated-parent` for an empty working copy on an integrated parent (the empty
+  working-copy retirement of Spec 011, SI7, OQ9) and `none` otherwise; `HasOwnCommit` is `Ahead > 0` except for the empty working copy. `LastActivity` is the newest modification time of `.jj/working_copy/tree_state`,
+  `.jj/working_copy/checkout` and every stored file.
+- **Bounds.** At most 1,024 files and directories per workspace (the contract 2 manifest bound, `retirement-file-limit`: more is `Incomplete`), 10 s per workspace (`jjTimeout`), 60 s for the whole observation, and the shared
+  1,024 registration bound. History (ahead count and author) is read for at most 256 commits, the workspace commits first and then the bookmark commits in order; a commit beyond that is absent and its item is `Incomplete`
+  `history-unavailable` (about 12 ms a commit measured). The existing bookmark read has its own output bound: 200 bookmarks on distinct commits take about 2.5 s, and about 400 exceed the output limit, which fails the whole repository as an
+  `error` (fail closed, no partial observation). Each workspace reads its stored files with one jj process per file, so the number of workspaces a run can finish is bounded by that time; measured: a primary and 20 secondary workspaces
+  with ten tracked files each take about 9 s. A read that fails while the observation's context is done is `Incomplete` `deadline-exceeded`; a single jj call that exceeds its own 10 s limit while the observation is still running fails
+  as `observation-failed`. Neither is ever clean. A secondary workspace of a colocated repository carries a `.git` file and `.jj/.gitignore` with jj 0.46 (not with 0.45.1), which the retirement
+  admission does not hold: they show as `IgnoredExtras` and the workspace is retained, as retirement would refuse it.
+- **No lock, no owner in v1.** A jj workspace has no stw lock, so the adapter cannot join it to its creation record: in v1 every jj workspace is `unregistered` (owner by path convention, never `own`, and selectable only by an explicit human
+  choice with the Spec 029 legacy completion). stw-created jj workspaces are therefore not treated as owned in v1: a documented, fail-closed gap, closed by T011a5 (join the creation records by destination path).
+- **No tracking evidence.** `TrackingSkipped` is `tracking-unsupported-for-jj` online and offline.
+
+Closed reasons added by jj: `source-workspace`, `workspace-path-unknown`, `registration-mismatch`, `ambiguous-target`, `history-unavailable`, `evidence-changed`. jj workspaces thus stay eligible for the empty working-copy rule; this reconciles the safety invariants and OQ9 with the read-only rule.
 
 **Read-only guarantee as a test.** The sandbox mounts the file system read-only, so a probe inside it cannot expose a write. The tests therefore require: a fixture whose files are
 stat-dirty and content-clean in the primary checkout and in each linked worktree (each has its own index), with an untracked cache and a configured fsmonitor hook; a snapshot before and after
@@ -310,7 +339,7 @@ The harness is shown to be able to fail: a plain `git status` with its default e
 the filter, and the snapshot shows it. What the tests do **not** claim: that the planning policy is what stops those effects. `git status` through the native runner is neutralized by
 `GIT_OPTIONAL_LOCKS=0`, the pinned `core.fsmonitor=false` and the hooks path, and a mutation that adds it there is not detected; the guard against it is that no observer calls `git status`, which the code review and
 the mutation probes of the pull request check, while a command that writes despite the policy (an `update-ref`, an index refresh with locks) is detected by (b). A second fixture with an online tracking remote served by the existing
-hosting test double covers the tracking path. For jj the snapshot includes the operation log and the working-copy state.
+hosting test double covers the tracking path. For jj the snapshot covers the repository (operation log, operation heads, the Git refs of a colocated store), every workspace's files and times and its working-copy state, with a plain `jj status` as the sensitivity check; the jj session proves a read-only sandbox before its first query and refuses to run without it, so the run cannot be repeated without the sandbox.
 
 **Bounds (stated numbers; the 61-worktree fixture of the tests confirms them and this section is amended if it cannot).** At most 1024 worktrees and 1024
 branches per repository (`observationLimit`), the surplus sorted by path or name is `Incomplete`. One observation deadline of 60 s (`planObservationTimeout`) and
