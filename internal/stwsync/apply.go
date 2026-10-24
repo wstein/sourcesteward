@@ -71,12 +71,8 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 	}
 	var out gitOutput
 	if action == ResultMerge {
-		// the one case where a merge commit is wanted: the owner configured or requested it, and git's own merge makes it
-		args := []string{"-c", "submodule.recurse=false", "merge", "--no-edit", stash}
-		if mode.noFF {
-			args = append(args, "--no-ff")
-		}
-		out, err = e.g(ctx, append(args, upstreamOID)...)
+		// the one case where a merge commit is wanted: only an explicit --merge on a diverged branch, made by git's own merge
+		out, err = e.g(ctx, "-c", "submodule.recurse=false", "merge", "--no-edit", "--ff", stash, upstreamOID)
 	} else if action == ResultFastForward {
 		out, err = e.g(ctx, "-c", "submodule.recurse=false", "merge", "--ff-only", stash, upstreamOID)
 	} else {

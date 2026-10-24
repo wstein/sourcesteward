@@ -40,10 +40,8 @@ func TestSyncFollowsGitPull(t *testing.T) {
 					want = ResultSkippedDirty // git pull --rebase refuses a dirty tree without autostash, even for a fast-forward
 				case diverged && rb == "":
 					want = ResultDiverged
-				case diverged && rb == "false" && dirty:
-					want = ResultSkippedDirty // git merge refuses a non-fast-forward with staged changes
 				case diverged && rb == "false":
-					want = ResultMerged // an explicit pull.rebase=false: git merges, so stw sync does
+					want = ResultDiverged // owner decision 2026-10-24: pull.rebase=false never makes stw sync merge
 				case diverged && rb == "true" && dirty:
 					want = ResultSkippedDirty // git pull --rebase refuses a dirty tree without autostash
 				case diverged && rb == "true":
@@ -84,15 +82,11 @@ func TestSyncFollowsGitPull(t *testing.T) {
 			if got.Result != c.want {
 				t.Fatalf("got %s (%v), want %s", got.Result, deref(got.Reason), c.want)
 			}
-			wantMerges := "0"
-			if c.want == ResultMerged {
-				wantMerges = "1" // only when the configuration chose a merge
-			}
-			if n := runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD"); n != wantMerges {
-				t.Errorf("%s merge commits, want %s", n, wantMerges)
+			if n := runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD"); n != "0" {
+				t.Errorf("%s merge commits, want none", n)
 			}
 			switch c.want {
-			case ResultFastForwarded, ResultRebased, ResultMerged:
+			case ResultFastForwarded, ResultRebased:
 				if w.oid(t, ".", "HEAD") == oldHead {
 					t.Error("HEAD did not move")
 				}
@@ -315,46 +309,112 @@ func TestPlanPredictsWhatARunWouldDoWithADirtyTree(t *testing.T) {
 	}
 }
 
-func TestSyncMergesOnlyWhenTheConfigurationOrAFlagAsksForIt(t *testing.T) {
-	// unset: needs a choice, nothing changes
+// Owner decision 2026-10-24: a merge commit exists only with the explicit --merge flag; no Git
+// configuration enables it.
+func TestSyncNeverMergesWithoutTheMergeFlag(t *testing.T) {
+	for _, cfg := range []map[string]string{
+		{}, {"pull.rebase": "false"}, {"pull.ff": "false"}, {"pull.ff": "true"},
+		{"pull.rebase": "false", "pull.ff": "false"}, {"branch.main.rebase": "false", "pull.rebase": "false"},
+		{"merge.ff": "false"}, {"branch.main.mergeOptions": "--no-ff"},
+	} {
+		w := newWorkspace(t)
+		for k, v := range cfg {
+			runGit(t, w.ws, "config", k, v)
+		}
+		commit(t, w.ws, "local.txt", "l\n")
+		w.advance(t, ".", "main")
+		old := w.oid(t, ".", "HEAD")
+		plan := repoByName(t, run(t, w, Options{Plan: true}))["."]
+		g := repoByName(t, run(t, w, Options{}))["."]
+		if g.Result != ResultDiverged || plan.Result != ResultDiverged || w.oid(t, ".", "HEAD") != old || runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD") != "0" {
+			t.Fatalf("%v: %+v", cfg, g)
+		}
+		if g.Reason == nil || !strings.Contains(*g.Reason, "needs a choice") || !strings.Contains(*g.Reason, "--rebase") || !strings.Contains(*g.Reason, "--merge") {
+			t.Errorf("%v: the hint must name --rebase and --merge: %v", cfg, deref(g.Reason))
+		}
+	}
+}
+
+// A fast-forwardable branch fast-forwards in every case, also with --merge and pull.ff=false: no merge commit.
+func TestSyncFastForwardsWhenPossibleEvenWithMergeSettings(t *testing.T) {
+	for _, tc := range []struct {
+		cfg  map[string]string
+		opts Options
+	}{{nil, Options{}}, {map[string]string{"pull.ff": "false"}, Options{}}, {map[string]string{"pull.rebase": "false"}, Options{}}, {nil, Options{Merge: true}}, {map[string]string{"pull.ff": "false"}, Options{Merge: true}}} {
+		w := newWorkspace(t)
+		for k, v := range tc.cfg {
+			runGit(t, w.ws, "config", k, v)
+		}
+		w.advance(t, ".", "main")
+		plan := tc.opts
+		plan.Plan = true
+		if p := repoByName(t, run(t, w, plan))["."]; p.Result != ResultFastForward {
+			t.Fatalf("%v %+v: plan %+v", tc.cfg, tc.opts, p)
+		}
+		if g := repoByName(t, run(t, w, tc.opts))["."]; g.Result != ResultFastForwarded || runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD") != "0" {
+			t.Fatalf("%v %+v: %+v", tc.cfg, tc.opts, g)
+		}
+	}
+}
+
+func TestSyncMergeFlagMergesADivergedBranch(t *testing.T) {
 	w := newWorkspace(t)
 	commit(t, w.ws, "local.txt", "l\n")
 	w.advance(t, ".", "main")
 	old := w.oid(t, ".", "HEAD")
-	if g := repoByName(t, run(t, w, Options{}))["."]; g.Result != ResultDiverged || w.oid(t, ".", "HEAD") != old {
-		t.Fatalf("%+v", g)
+	if p := repoByName(t, run(t, w, Options{Merge: true, Plan: true}))["."]; p.Result != ResultMerge || w.oid(t, ".", "HEAD") != old {
+		t.Fatalf("plan: %+v", p)
 	}
-	// --no-rebase asks for the merge explicitly
-	g := repoByName(t, run(t, w, Options{NoRebase: true}))["."]
+	g := repoByName(t, run(t, w, Options{Merge: true}))["."]
 	if g.Result != ResultMerged || runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD") != "1" || !fileExists(filepath.Join(w.ws, "local.txt")) {
 		t.Fatalf("%+v %v", g, deref(g.Reason))
 	}
 	if err := gitCmd(w.ws, "merge-base", "--is-ancestor", old, "HEAD").Run(); err != nil {
 		t.Error("the local commit is not contained")
 	}
-	// pull.ff=false: a fast-forward becomes a merge commit, as for git pull
-	w2 := newWorkspace(t)
-	runGit(t, w2.ws, "config", "pull.ff", "false")
-	w2.advance(t, ".", "main")
-	if g := repoByName(t, run(t, w2, Options{}))["."]; g.Result != ResultMerged || runGit(t, w2.ws, "rev-list", "--merges", "--count", "HEAD") != "1" {
-		t.Fatalf("%+v", g)
+	// --merge wins over pull.rebase=true and pull.ff=only; the flags themselves exclude each other
+	for _, cfg := range []map[string]string{{"pull.rebase": "true"}, {"pull.ff": "only"}} {
+		w := newWorkspace(t)
+		for k, v := range cfg {
+			runGit(t, w.ws, "config", k, v)
+		}
+		commit(t, w.ws, "local.txt", "l\n")
+		w.advance(t, ".", "main")
+		if g := repoByName(t, run(t, w, Options{Merge: true}))["."]; g.Result != ResultMerged {
+			t.Fatalf("%v: %+v", cfg, g)
+		}
 	}
-	// --ff-only wins over the configuration
-	w3 := newWorkspace(t)
-	runGit(t, w3.ws, "config", "pull.rebase", "false")
-	commit(t, w3.ws, "local.txt", "l\n")
-	w3.advance(t, ".", "main")
-	if g := repoByName(t, run(t, w3, Options{Rebase: Off}))["."]; g.Result != ResultDiverged {
-		t.Fatalf("%+v", g)
+	for _, o := range []Options{{Merge: true, Rebase: On}, {Merge: true, Rebase: Off}} {
+		if ValidateOptions(o) == nil {
+			t.Errorf("%+v accepted", o)
+		}
 	}
-	// a merge conflict stops as git stops
-	w4 := newWorkspace(t)
-	runGit(t, w4.ws, "config", "pull.rebase", "false")
-	commit(t, w4.ws, "ws.txt", "local\n")
-	w4.advanceFile(t, ".", "main", "ws.txt")
-	r := run(t, w4, Options{})
+}
+
+func TestSyncMergeConflictStopsAsGitStops(t *testing.T) {
+	w := newWorkspace(t)
+	commit(t, w.ws, "ws.txt", "local\n")
+	w.advanceFile(t, ".", "main", "ws.txt")
+	r := run(t, w, Options{Merge: true})
 	if g := repoByName(t, r)["."]; g.Result != ResultConflict || !strings.Contains(*g.Reason, "git merge --abort") || r.ExitCode() != 1 {
 		t.Fatalf("%+v", g)
+	}
+}
+
+func TestSyncRebaseByConfigurationOrFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg  map[string]string
+		opts Options
+	}{"pull.rebase=true": {map[string]string{"pull.rebase": "true"}, Options{}}, "branch.rebase=true": {map[string]string{"branch.main.rebase": "true", "pull.rebase": "false"}, Options{}}, "--rebase": {map[string]string{"pull.rebase": "false"}, Options{Rebase: On}}} {
+		w := newWorkspace(t)
+		for k, v := range tc.cfg {
+			runGit(t, w.ws, "config", k, v)
+		}
+		commit(t, w.ws, "local.txt", "l\n")
+		w.advance(t, ".", "main")
+		if g := repoByName(t, run(t, w, tc.opts))["."]; g.Result != ResultRebased || runGit(t, w.ws, "rev-list", "--merges", "--count", "HEAD") != "0" {
+			t.Fatalf("%s: %+v", name, g)
+		}
 	}
 }
 

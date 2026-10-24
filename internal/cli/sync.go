@@ -16,22 +16,24 @@ import (
 func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Sync) }
 
 func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result) *cobra.Command {
-	var jsonOutput, planOnly, dryRun, rebase, ffOnly, noRebase, noFF, autostash, noAutostash, prune, noPrune bool
+	var jsonOutput, planOnly, dryRun, rebase, ffOnly, merge, autostash, noAutostash, prune, noPrune bool
 	var options stwsync.Options
 	command := &cobra.Command{
-		Use:   "sync [PATH] [--plan] [--rebase|--ff-only|--no-rebase] [--no-ff] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
+		Use:   "sync [PATH] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
 		Short: "Bring the workspace root and its submodules up to date, like git pull",
 		Long: "Do what git pull would do in every repository of the workspace, from any directory inside it: the top-level\n" +
 			"superproject and, depth-first, each initialized submodule (nested ones too; uninitialized ones are reported, never cloned).\n" +
 			"Only the main worktree of each repository is synced, on whatever branch it sits (main, develop, a feature branch) as long as\n" +
 			"that branch has an upstream; linked worktrees are never touched. A detached HEAD (a pinned submodule) is reported only.\n" +
 			"There is no separate apply step; stw sync is the action, --plan (alias --dry-run) the preview.\n" +
-			"It is never stricter than git pull: pull.rebase, branch.NAME.rebase, pull.ff, rebase.autoStash, merge.autoStash\n" +
-			"and fetch.prune apply as they do for git pull, so with pull.rebase=true a diverged branch is rebased and with\n" +
-			"rebase.autoStash=true a dirty tree is stashed and restored. --rebase, --ff-only, --no-rebase, --no-ff, --autostash,\n" +
-			"--no-autostash, --prune and --no-prune override the configuration. Without pull.rebase a diverged branch is reported\n" +
-			"as needing a choice; a merge commit is created only when pull.rebase=false, pull.ff=true|false, --no-rebase or --no-ff asks\n" +
-			"for it. A rebase or merge conflict is left in progress as git leaves it. A branch without an upstream, an operation in\n" +
+			"It is never stricter than git pull, except in one respect (owner decision 2026-10-24): it never creates a merge commit on\n" +
+			"its own. pull.rebase, branch.NAME.rebase, pull.ff=only, rebase.autoStash, merge.autoStash and fetch.prune apply as they do\n" +
+			"for git pull, so with pull.rebase=true a diverged branch is rebased and with rebase.autoStash=true a dirty tree is stashed\n" +
+			"and restored. --rebase, --ff-only, --merge, --autostash, --no-autostash, --prune and --no-prune override the configuration.\n" +
+			"A branch that can be fast-forwarded is fast-forwarded. A diverged branch is rebased only with --rebase or pull.rebase=true,\n" +
+			"merged only with the explicit --merge (no configuration, pull.rebase=false and pull.ff included, enables a merge commit),\n" +
+			"and otherwise reported as needing a choice and left unchanged. A rebase or merge conflict is left in progress as git leaves it.\n" +
+			"A branch without an upstream, an operation in\n" +
 			"progress, and local changes the update would overwrite are reported and skipped; a failure in one repository does not\n" +
 			"stop the others. --plan fetches the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
 			"Each branch change is journaled with a recovery ref under refs/stw/recovery/sync/RUN_ID. Git only: a jj-owned path is refused.\n" +
@@ -45,7 +47,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 			options.Path = workspacePath(args)
 			options.Plan = planOnly || dryRun
 			options.Rebase = triFlag(rebase, ffOnly)
-			options.NoRebase, options.NoFF = noRebase, noFF
+			options.Merge = merge
 			options.Autostash = triFlag(autostash, noAutostash)
 			options.Prune = triFlag(prune, noPrune)
 			if err := stwsync.ValidateOptions(options); err != nil {
@@ -81,14 +83,13 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 	flags.BoolVar(&dryRun, "dry-run", false, "Alias of --plan")
 	flags.BoolVar(&rebase, "rebase", false, "Rebase a diverged branch onto its upstream (overrides pull.rebase)")
 	flags.BoolVar(&ffOnly, "ff-only", false, "Only fast-forward; a diverged branch is reported (overrides pull.rebase)")
-	flags.BoolVar(&noRebase, "no-rebase", false, "Merge a diverged branch, as pull.rebase=false does (the only way besides that setting to get a merge commit)")
-	flags.BoolVar(&noFF, "no-ff", false, "Create a merge commit even when a fast-forward is possible, as pull.ff=false does (with --no-rebase)")
+	flags.BoolVar(&merge, "merge", false, "Merge a diverged branch (the only way to get a merge commit; a fast-forwardable branch is still fast-forwarded)")
 	flags.BoolVar(&autostash, "autostash", false, "Stash local changes around the update and reapply them (overrides rebase.autoStash)")
 	flags.BoolVar(&noAutostash, "no-autostash", false, "Never stash local changes")
 	flags.BoolVar(&prune, "prune", false, "Fetch with --prune (overrides fetch.prune)")
 	flags.BoolVar(&noPrune, "no-prune", false, "Fetch without pruning")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
-	command.MarkFlagsMutuallyExclusive("rebase", "ff-only", "no-rebase")
+	command.MarkFlagsMutuallyExclusive("rebase", "ff-only", "merge")
 	command.MarkFlagsMutuallyExclusive("autostash", "no-autostash")
 	command.MarkFlagsMutuallyExclusive("prune", "no-prune")
 	return command

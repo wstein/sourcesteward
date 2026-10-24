@@ -85,7 +85,7 @@ func gitPull(t *testing.T, dir string, args ...string) {
 
 // TestSyncHasTheOutcomeOfGitPull runs real `git pull` and `stw sync` on twin repositories for every
 // combination of pull.rebase, pull.ff, autostash settings, local changes and history shape, and requires
-// the same outcome class, the same tree and the same worktree and stash state.
+// the same outcome class (except where git pull merges, see below), the same tree and the same worktree and stash state.
 func TestSyncHasTheOutcomeOfGitPull(t *testing.T) {
 	for _, rebase := range []string{"", "true", "false"} {
 		for _, ff := range []string{"", "true", "false", "only"} {
@@ -114,7 +114,20 @@ func TestSyncHasTheOutcomeOfGitPull(t *testing.T) {
 							if r.Error != nil {
 								t.Fatal(r.Error)
 							}
-							if got := b.outcome(t, oldB); got != want {
+							got := b.outcome(t, oldB)
+							if strings.HasPrefix(want, "merged|") {
+								// owner decision 2026-10-24: the one deliberate difference to git pull. Where git pull would
+								// create a merge commit, stw sync does not: a diverged branch stays, a fast-forwardable one is
+								// fast-forwarded without a merge commit.
+								if strings.HasPrefix(got, "merged|") {
+									t.Errorf("stw sync created a merge commit where only git pull does: %s", got)
+								}
+								if mergeCount := runGit(t, b.work, "rev-list", "--merges", "--count", oldB+"..HEAD"); mergeCount != "0" {
+									t.Errorf("%s merge commits", mergeCount)
+								}
+								return
+							}
+							if got != want {
 								t.Errorf("sync: %s (%v)\ngit pull: %s", got, deref(r.Repos[0].Reason), want)
 							}
 						})

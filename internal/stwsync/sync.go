@@ -27,6 +27,9 @@ func ValidateOptions(o Options) error {
 	if len(o.Path) > 4096 || !utf8.ValidString(o.Path) || strings.ContainsRune(o.Path, 0) {
 		return errors.New("PATH must be valid UTF-8 text without NUL, at most 4096 bytes")
 	}
+	if o.Merge && o.Rebase != Unset {
+		return errors.New("--merge excludes --rebase and --ff-only")
+	}
 	return nil
 }
 
@@ -37,7 +40,7 @@ func newResult(o Options) Result {
 	}
 	return Result{
 		SchemaVersion: 1, Command: "sync", Mode: mode,
-		Options: ResultOptions{Rebase: o.Rebase.json(), Prune: o.Prune.json(), Autostash: o.Autostash.json()},
+		Options: ResultOptions{Rebase: o.Rebase.json(), Prune: o.Prune.json(), Autostash: o.Autostash.json(), Merge: o.Merge},
 		Repos:   []Repo{}, Summary: Summary{ByResult: map[string]int{}},
 	}
 }
@@ -337,18 +340,16 @@ func (s *session) repo(ctx context.Context, e env, name, kind string) Repo {
 	case rp.Behind == 0:
 		rp.Result = ResultAhead
 		return rp
-	case rp.Ahead == 0 && mode.noFF && !mode.rebase:
-		action = ResultMerge
 	case rp.Ahead == 0:
-		action = ResultFastForward
+		action = ResultFastForward // also with --merge and pull.ff=false: never a merge commit when a fast-forward is possible
+	case mode.merge:
+		action = ResultMerge
 	case mode.rebase:
 		action = ResultRebase
-	case mode.merge && !mode.ffOnly:
-		action = ResultMerge
 	case mode.ffOnly:
 		return skip(ResultDiverged, "not a fast-forward and --ff-only or pull.ff=only forbids anything else")
 	default:
-		return skip(ResultDiverged, "needs a choice: use --rebase or --no-rebase, or set pull.rebase (stw sync merges only when asked)")
+		return skip(ResultDiverged, "needs a choice: use --rebase or --merge, or set pull.rebase=true (stw sync never merges on its own)")
 	}
 	autostash := e.autostash(ctx, s.opts, mode)
 	if action == ResultFastForward {
