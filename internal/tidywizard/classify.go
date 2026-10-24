@@ -61,6 +61,8 @@ const (
 	ProofMergeNoop   Proof = "merge-noop"
 	ProofNoNetChange Proof = "no-net-change"
 	ProofNone        Proof = "none"
+	// ProofBranchAbsent proves a remote-tracking reference: the remote no longer has its source branch.
+	ProofBranchAbsent Proof = "github-branch-absent"
 )
 
 // Lock is the lock state of a worktree.
