@@ -13,7 +13,7 @@ import (
 )
 
 func TestTidyUsageBeforeObservation(t *testing.T) {
-	for _, args := range [][]string{{"plan"}, {"plan", "one", "two", "--base", "HEAD"}, {"plan", "--base", "HEAD", "--authorize"}, {"apply"}, {"plan", "--base", strings.Repeat("x", 4097)}, {"plan", "--base", "HEAD", "--ref", ""}} {
+	for _, args := range [][]string{{"plan", "one", "two", "--base", "HEAD"}, {"plan", "--base", "HEAD", "--authorize"}, {"apply"}, {"plan", "--base", strings.Repeat("x", 4097)}, {"plan", "--base", "HEAD", "--ref", ""}} {
 		called := false
 		cmd := tidyCommandWith(func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult {
 			called = true

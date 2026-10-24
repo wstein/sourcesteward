@@ -123,6 +123,7 @@ func TestTidyPlanLayerSelection(t *testing.T) {
 		{[]string{"plan", "--human", "--base", "HEAD", "--json"}, "usage", "exclude each other"},
 	}
 	for _, r := range rows {
+		w := newWizardWorld(t, true, true, "STW_OWNER=claude")
 		err, ran, _ := runMode(r.args...)
 		switch r.layer {
 		case "expert":
@@ -130,10 +131,9 @@ func TestTidyPlanLayerSelection(t *testing.T) {
 				t.Errorf("%q: want the expert layer, err=%v ran=%v", r.args, err, ran)
 			}
 		case "wizard":
-			// The wizard layer is selected but not wired yet: a usage error, as these forms were
-			// before, and the expert layer never runs.
-			if !isUsage(err) || ran || !strings.Contains(err.Error(), "wizard") {
-				t.Errorf("%q: want the wizard layer (not available yet), err=%v ran=%v", r.args, err, ran)
+			// The wizard layer ran (against the stubbed analysis); the expert layer never did.
+			if err != nil || ran || w.prepared != 1 {
+				t.Errorf("%q: want the wizard layer, err=%v ran=%v prepared=%d", r.args, err, ran, w.prepared)
 			}
 		default:
 			if !isUsage(err) || ran || !strings.Contains(err.Error(), r.expect) {
