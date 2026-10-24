@@ -573,3 +573,7 @@ the prose, cross-package and build dependencies are covered by the declared entr
 cannot see (a read through an unusual helper) is not covered, which T3 on `main` catches. The 5 minute goal of D3 is therefore
 met only for pull requests whose shards run or whose change does not reach the workspace package. The owner and the
 specification decide the rest with the first CI figures.
+
+## Spec 042 agent attribution (Draft, 2026-10-24)
+
+[The specification](../specs/042-agent-attribution/spec.md) and [tasks](../specs/042-agent-attribution/tasks.md) record the session that created a task (stw state only) and gate remote writes on it (`attribution-mismatch`, `attribution-unknown`); attribution, not a security boundary. Test-first code is in the same pull request; independent review of the exact head pending. No build, release, tag or push of the default branch was run.
