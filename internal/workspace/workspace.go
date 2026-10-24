@@ -31,6 +31,9 @@ func selectAdapter(backend string) (nativeAdapter, error) {
 	return nil, failure("unsupported-backend", "Task workspace creation requires unambiguous native Git or jj ownership.")
 }
 func PlanCreate(ctx context.Context, o PlanOptions) Result {
+	if o.CallerDir == "" {
+		o.CallerDir, _ = os.Getwd()
+	}
 	ctx, cancel := context.WithTimeout(withCreationPolicy(ctx), planObservationTimeout)
 	defer cancel()
 	return bounded(defaultCoordinator().plan(ctx, o))
@@ -145,9 +148,65 @@ func (c coordinator) plan(ctx context.Context, o PlanOptions) Result {
 	}
 	r.Status = "ok"
 	r.Plan = &p
+	r.Source = c.sourceContext(ctx, o.CallerDir, p)
 	r.Actions = []ActionOutcome{{"store-plan", "completed", "Immutable plan stored; native repository and destination are unchanged."}}
 	r.Limitations = append(r.Limitations, p.RecoveryLimits...)
 	return r
+}
+
+// sourceContext reports the facts a reviewer needs to notice a plan built on a
+// commit the caller did not mean: the source checkout, the resolved base and, when
+// the caller stands in another checkout of the same repository, both HEADs.
+func (c coordinator) sourceContext(ctx context.Context, callerDir string, p MutationPlan) *SourceContext {
+	s := &SourceContext{SourcePath: p.SourcePath, BaseSelector: p.Expected.BaseSelector, BaseCommit: p.Expected.BaseCommit, SourceHead: p.Expected.Identity.CommitID}
+	if callerDir == "" || !validText(callerDir) {
+		return s
+	}
+	if abs, e := filepath.Abs(callerDir); e == nil {
+		callerDir = abs
+	}
+	if real, e := filepath.EvalSymlinks(callerDir); e == nil {
+		callerDir = real
+	}
+	s.CallerDirectory = callerDir
+	in := c.inspect(ctx, callerDir)
+	if in.Status != "ok" || in.Backend != p.Backend {
+		return s
+	}
+	var repository, root, head string
+	switch {
+	case in.Repository != nil && p.Backend == "git":
+		repository = in.Repository.CommonDir
+		if in.Repository.Worktree != nil {
+			root = *in.Repository.Worktree
+		}
+		if in.Repository.Head.OID != nil {
+			head = *in.Repository.Head.OID
+		}
+	case in.JJRepository != nil && p.Backend == "jj":
+		repository, root, head = in.JJRepository.RepositoryDir, in.JJRepository.WorkspaceRoot, in.JJRepository.CommitID
+	default:
+		return s
+	}
+	if root == "" || !sameFile(repository, p.Expected.Identity.RepositoryDir) {
+		return s
+	}
+	s.CallerCheckout, s.CallerHead = root, head
+	if sameFile(root, p.Expected.Identity.WorkspaceRoot) {
+		return s
+	}
+	s.CallerDiffers = true
+	s.Notice = "The current directory " + callerDir + " is in another checkout (" + root + ", HEAD " + head + ") of the same repository as the source " + p.SourcePath + " (HEAD " + p.Expected.Identity.CommitID + "); the base " + p.Expected.BaseSelector + " was resolved in the source to " + p.Expected.BaseCommit + ". Plan from the other checkout if that was meant."
+	return s
+}
+
+func sameFile(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	x, e1 := os.Stat(a)
+	y, e2 := os.Stat(b)
+	return e1 == nil && e2 == nil && os.SameFile(x, y)
 }
 
 type journal struct {

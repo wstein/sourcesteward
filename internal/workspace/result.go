@@ -23,7 +23,9 @@ const (
 	v3NativeFactsLimit = 16 * observationLimit
 )
 
-type PlanOptions struct{ Path, Base, Destination, Task, Owner, StateDir string }
+// PlanOptions.CallerDir is the directory the command was started in; it is only
+// compared with the source checkout to disclose a mismatch, never planned from.
+type PlanOptions struct{ Path, Base, Destination, Task, Owner, StateDir, CallerDir string }
 type ApplyOptions struct {
 	StateDir, PlanID string
 	Authorize        bool
@@ -106,12 +108,29 @@ type TaskRecord struct {
 	RemainingWork       []string                    `json:"remaining_work"`
 	RecoveryLimits      []string                    `json:"recovery_limits"`
 }
+
+// SourceContext is the additive review of what a plan was built from: the source
+// checkout, the base as resolved to a full commit id, and the caller's directory.
+// It is not part of the stored plan or its digest. Notice is non-empty only when
+// the caller is another checkout of the same repository than the source path.
+type SourceContext struct {
+	SourcePath      string `json:"source_path"`
+	BaseSelector    string `json:"base_selector"`
+	BaseCommit      string `json:"base_commit"`
+	SourceHead      string `json:"source_head"`
+	CallerDirectory string `json:"caller_directory"`
+	CallerCheckout  string `json:"caller_checkout"`
+	CallerHead      string `json:"caller_head"`
+	CallerDiffers   bool   `json:"caller_differs"`
+	Notice          string `json:"notice"`
+}
 type Result struct {
 	SchemaVersion int             `json:"schema_version"`
 	Command       string          `json:"command"`
 	Status        string          `json:"status"`
 	Backend       string          `json:"backend"`
 	Plan          *MutationPlan   `json:"plan"`
+	Source        *SourceContext  `json:"source_context,omitempty"`
 	Task          *TaskRecord     `json:"task"`
 	Actions       []ActionOutcome `json:"actions"`
 	Diagnostics   []Diagnostic    `json:"diagnostics"`
@@ -208,6 +227,7 @@ func bounded(r Result) Result {
 		return r
 	}
 	r.Plan = nil
+	r.Source = nil
 	r.Task = nil
 	if len(r.Actions) > observationLimit-8 {
 		r.Actions = r.Actions[:observationLimit-8]
