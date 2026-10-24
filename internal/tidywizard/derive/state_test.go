@@ -394,9 +394,9 @@ func TestLookupTaskByDestinationJoinsOnBackendDestinationRepositoryAndCompletene
 	recordGit.Backend = "git"
 	for name, rec := range map[string]workspace.TaskRecord{
 		"record backend differs": recordGit,
-		"other destination": jjRecord("x1", "claude", "/w/wt/b", repo),
-		"other repository":  jjRecord("x2", "claude", dest, "/w/other/.jj/repo"),
-		"partial creation":  partial, "git backend": git, "native backend differs": nativeGit,
+		"other destination":      jjRecord("x1", "claude", "/w/wt/b", repo),
+		"other repository":       jjRecord("x2", "claude", dest, "/w/other/.jj/repo"),
+		"partial creation":       partial, "git backend": git, "native backend differs": nativeGit,
 		"task id alone": jjRecord("a", "claude", "/w/wt/zzz", repo),
 	} {
 		r := LookupTaskByDestination(Stores([]string{storeWithRecords(t, rec)}, "", ""), "jj", dest, repo)
