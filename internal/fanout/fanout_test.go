@@ -5,6 +5,7 @@ package fanout
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -266,6 +267,83 @@ func TestDoCoversEveryIndexOnce(t *testing.T) {
 			if c != 1 {
 				t.Errorf("item %d ran %d times", i, c)
 			}
+		}
+	})
+}
+
+// A runtime.Goexit in fn (t.FailNow inside fn) ends the caller the same way, after every worker
+// has stopped, and is not turned into a panic; the other items are cancelled.
+func TestDoReissuesGoexitInTheCaller(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var mu sync.Mutex
+		var started, stopped int
+		allStarted := make(chan struct{})
+		var reached, deferred bool
+		var recovered any
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			defer func() { deferred = true; recovered = recover() }()
+			_ = Do(context.Background(), 4, 4, func(ctx context.Context, i int) {
+				mu.Lock()
+				started++
+				if started == 4 {
+					close(allStarted)
+				}
+				mu.Unlock()
+				<-allStarted
+				if i == 2 {
+					runtime.Goexit()
+				}
+				<-ctx.Done()
+				mu.Lock()
+				stopped++
+				mu.Unlock()
+			})
+			reached = true
+		}()
+		<-done
+		if !deferred || reached || recovered != nil {
+			t.Fatalf("deferred %v, code after Do reached %v, recovered %v: the caller must be ended by Goexit", deferred, reached, recovered)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if stopped != 3 {
+			t.Errorf("cooperative workers stopped: %d, want 3 (Goexit returns only after all workers stopped)", stopped)
+		}
+	})
+}
+
+// A panic wins over a Goexit of another item.
+func TestDoPanicWinsOverGoexit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		boom := errors.New("boom")
+		allStarted := make(chan struct{})
+		var mu sync.Mutex
+		started := 0
+		var got any
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			defer func() { got = recover() }()
+			_ = Do(context.Background(), 2, 2, func(ctx context.Context, i int) {
+				mu.Lock()
+				started++
+				if started == 2 {
+					close(allStarted)
+				}
+				mu.Unlock()
+				<-allStarted
+				if i == 0 {
+					<-ctx.Done()
+					runtime.Goexit()
+				}
+				panic(boom)
+			})
+		}()
+		<-done
+		if got != boom {
+			t.Fatalf("got %v", got)
 		}
 	})
 }
