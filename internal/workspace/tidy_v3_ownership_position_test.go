@@ -428,10 +428,6 @@ func TestGitVerifyIdentityKeepsTheExactLockAndBacklink(t *testing.T) {
 // retirement, owned or legacy; the observation must not be cut at 60 s.
 func TestTidyV3OwnedObservationGetsTheProofBudget(t *testing.T) {
 	w := ownedPositionFixture(t)
-	owned, e := readTidyV3OwnedProvenance(w.Options)
-	if e != nil {
-		t.Fatal(e)
-	}
 	var budget time.Duration
 	observer := tidyV3LegacyObserver{target: gitNativeIdentity, source: func(ctx context.Context, path, base string) (tidyV3NativeObservation, error) {
 		if deadline, ok := ctx.Deadline(); ok && budget == 0 {
@@ -439,7 +435,7 @@ func TestTidyV3OwnedObservationGetsTheProofBudget(t *testing.T) {
 		}
 		return observeTidyV3Git(ctx, path, base)
 	}}
-	if _, e = observer.observeWithOwnership(context.Background(), w.Options, newTidyV3ProofBudget(false), &owned); e != nil {
+	if _, e := observeTidyV3RetirementWith(context.Background(), w.Options, newTidyV3ProofBudget(false), observer); e != nil {
 		t.Fatal(e)
 	}
 	if budget <= planObservationTimeout {
