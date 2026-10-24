@@ -48,11 +48,17 @@ func TestReadTaskAndTaskIDsAreReadOnly(t *testing.T) {
 	}
 }
 
-// ScanTasks reads every creation record of a store, read only: a record that cannot be read is
+// EachTask reads every creation record of a store, read only: a record that cannot be read is
 // reported by id and skipped, never fatal, and a store without a tasks directory has none.
-func TestScanTasksSkipsAndReportsUnreadableRecords(t *testing.T) {
+// collectTasks gathers what EachTask hands over, for the assertions below.
+func collectTasks(stateDir string) (records []TaskRecord, unreadable []string, err error) {
+	unreadable, err = EachTask(stateDir, func(r TaskRecord) { records = append(records, r) })
+	return records, unreadable, err
+}
+
+func TestEachTaskSkipsAndReportsUnreadableRecords(t *testing.T) {
 	p := privateDir(t)
-	if recs, bad, err := ScanTasks(p); err != nil || len(recs) != 0 || len(bad) != 0 {
+	if recs, bad, err := collectTasks(p); err != nil || len(recs) != 0 || len(bad) != 0 {
 		t.Fatalf("a store without a tasks directory: %v %v %v", recs, bad, err)
 	}
 	if _, err := os.Lstat(filepath.Join(p, "tasks")); err == nil {
@@ -77,7 +83,7 @@ func TestScanTasksSkipsAndReportsUnreadableRecords(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(p, "tasks", "open.json"), []byte(`{}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	recs, bad, err := ScanTasks(p)
+	recs, bad, err := collectTasks(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +96,7 @@ func TestScanTasksSkipsAndReportsUnreadableRecords(t *testing.T) {
 }
 
 // A store with more records than the bound is an error of the whole scan: nothing is guessed.
-func TestScanTasksIsBounded(t *testing.T) {
+func TestEachTaskIsBounded(t *testing.T) {
 	p := privateDir(t)
 	s, err := openStore(p, true)
 	if err != nil {
@@ -102,8 +108,8 @@ func TestScanTasksIsBounded(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err = ScanTasks(p); err == nil {
-		t.Fatal("scanned a store over the record bound")
+	if _, _, err = collectTasks(p); err == nil {
+		t.Fatal("visited a store over the record bound")
 	}
 }
 

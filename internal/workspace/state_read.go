@@ -70,16 +70,3 @@ func EachTask(stateDir string, visit func(TaskRecord)) (unreadable []string, err
 	}
 	return unreadable, nil
 }
-
-// ScanTasks collects every readable creation record of a store, sorted by task id (see EachTask,
-// which does not retain them).
-func ScanTasks(stateDir string) (records []TaskRecord, unreadable []string, err error) {
-	unreadable, err = EachTask(stateDir, func(r TaskRecord) { records = append(records, r) })
-	if err != nil || unreadable == nil {
-		return nil, nil, err
-	}
-	if records == nil {
-		records = []TaskRecord{}
-	}
-	return records, unreadable, nil
-}
