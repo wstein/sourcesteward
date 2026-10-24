@@ -119,11 +119,15 @@ func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool
 		return err
 	}
 	// The overview is always printed first; what went wrong is reported after it (exit 1).
+	if cause := interruption(ctx, cmd.Flags().Changed("timeout"), timeout); cause != nil {
+		// The cause comes first; a save error that followed it is only detail.
+		if saveErr != nil {
+			cause = fmt.Errorf("%w (storing the plan set failed: %s)", cause, escFull(saveErr.Error()))
+		}
+		return runtimeFailure{cause}
+	}
 	if saveErr != nil {
 		return runtimeFailure{errors.New(escFull(saveErr.Error()))}
-	}
-	if cause := interruption(ctx, cmd.Flags().Changed("timeout"), timeout); cause != nil {
-		return runtimeFailure{cause}
 	}
 	return wizardExit(doc.Truncated || cut, prep, res)
 }
@@ -143,15 +147,27 @@ func interruption(ctx context.Context, timeoutSet bool, timeout time.Duration) e
 	return errors.New("interrupted; nothing was changed")
 }
 
-// escFull escapes a message that carries outside text without cutting it: esc bounds its input to
-// 120 characters, so the message is escaped in pieces of at most 100 characters and joined.
+// maxEscapedMessage bounds the input of one escaped message (characters): a longer one is cut
+// with "...", so an enormous error cannot flood the terminal.
+const maxEscapedMessage = 4096
+
+// escFull escapes a message that carries outside text without cutting it at esc's 120-character
+// bound: the message is escaped in pieces of at most 100 characters and joined, up to
+// maxEscapedMessage characters in all.
 func escFull(s string) string {
 	var b strings.Builder
 	rs := []rune(s)
+	cut := false
+	if len(rs) > maxEscapedMessage {
+		rs, cut = rs[:maxEscapedMessage], true
+	}
 	for len(rs) > 0 {
 		n := min(len(rs), 100)
 		b.WriteString(untrusted.Esc(string(rs[:n])))
 		rs = rs[n:]
+	}
+	if cut {
+		b.WriteString("...")
 	}
 	return b.String()
 }
