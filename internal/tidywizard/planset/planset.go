@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -81,10 +82,11 @@ func (i Item) key() string {
 }
 
 // SubPlan is one independent sub-plan: ID is the id of the stored plan the Planner made (a Spec
-// 011 or 029 plan), Items the ids of the selected items it covers, Worktree the one worktree of a
+// 011 or 029 plan) and StateDir the private state directory that holds it, Items the ids of the selected items it covers, Worktree the one worktree of a
 // retirement.
 type SubPlan struct {
 	ID       string   `json:"id"`
+	StateDir string   `json:"state_dir"`
 	Repo     string   `json:"repo"`
 	Kind     SubKind  `json:"kind"`
 	Worktree string   `json:"worktree"`
@@ -94,7 +96,7 @@ type SubPlan struct {
 func (s SubPlan) key() string {
 	items := append([]string{}, s.Items...)
 	sort.Strings(items)
-	return strings.Join([]string{s.ID, string(s.Kind), s.Repo, s.Worktree, strings.Join(items, "\x1e")}, "\x1f")
+	return strings.Join([]string{s.ID, s.StateDir, string(s.Kind), s.Repo, s.Worktree, strings.Join(items, "\x1e")}, "\x1f")
 }
 
 // Set is the stored plan set.
@@ -195,6 +197,9 @@ func (s Set) Validate() error {
 		if !validPlanID(p.ID) || seen[p.ID] {
 			return bad("sub-plan id %q is not a plain unique identifier", p.ID)
 		}
+		if !filepath.IsAbs(p.StateDir) || filepath.Clean(p.StateDir) != p.StateDir {
+			return bad("sub-plan %s has no canonical state directory", p.ID)
+		}
 		seen[p.ID] = true
 		if len(p.Items) == 0 {
 			return bad("sub-plan %s covers no item", p.ID)
@@ -245,9 +250,14 @@ type SubSpec struct {
 }
 
 // Planner makes and stores one sub-plan (the existing Spec 011/029 plan kinds) and returns its
-// plan id. It is the seam to internal/workspace; it must not apply anything.
+// plan id and state directory. It is the seam to internal/workspace; it must not apply anything.
 type Planner interface {
-	Plan(ctx context.Context, spec SubSpec) (string, error)
+	Plan(ctx context.Context, spec SubSpec) (Planned, error)
+}
+
+// Planned is a stored sub-plan: its plan id and the state directory that holds it.
+type Planned struct {
+	ID, StateDir string
 }
 
 // Preflight is an optional interface of a Planner: it checks, without planning anything, that a
@@ -414,14 +424,14 @@ func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
 	}
 	for _, key := range order {
 		g := groups[key]
-		id, err := planner.Plan(ctx, SubSpec{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: g.items})
+		planned, err := planner.Plan(ctx, SubSpec{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: g.items})
 		if err != nil {
 			return Set{}, fmt.Errorf("planning %s sub-plan of %s: %w", g.kind, g.repo, err)
 		}
-		if !validPlanID(id) {
-			return Set{}, fmt.Errorf("%w: the planner returned the sub-plan id %q", ErrInvalid, id)
+		if !validPlanID(planned.ID) {
+			return Set{}, fmt.Errorf("%w: the planner returned the sub-plan id %q", ErrInvalid, planned.ID)
 		}
-		sp := SubPlan{ID: id, Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: []string{}}
+		sp := SubPlan{ID: planned.ID, StateDir: planned.StateDir, Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: []string{}}
 		for _, c := range g.items {
 			sp.Items = append(sp.Items, c.ID)
 		}

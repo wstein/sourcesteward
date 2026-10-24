@@ -210,9 +210,9 @@ func TestStaleRegistrationHasNoPlanKind(t *testing.T) {
 func TestPlanReturnsThePlanIDOnlyWhenEverySelectedItemIsDeletable(t *testing.T) {
 	b := own(tidywizard.KindBranch, "r", "x")
 	r := &recorder{result: okResult("planid1", "delete")}
-	id, err := newPlanner(r).Plan(context.Background(), spec(KindBranches, b))
-	if err != nil || id != "planid1" || len(r.opts) != 1 {
-		t.Fatalf("%q %v", id, err)
+	got, err := newPlanner(r).Plan(context.Background(), spec(KindBranches, b))
+	if err != nil || got.ID != "planid1" || got.StateDir != planStore || len(r.opts) != 1 {
+		t.Fatalf("%+v %v", got, err)
 	}
 	r = &recorder{result: okResult("planid2", "delete", "retain")}
 	if _, err := newPlanner(r).Plan(context.Background(), spec(KindBranches, b)); reasonOf(t, err) != "reason-retain" {
@@ -238,8 +238,8 @@ func TestPlanRetirementNeedsBothActionsDeletable(t *testing.T) {
 		return newPlanner(r, func(p *V3Planner) { p.RecordStore = func(string) (string, string) { return "/state/records", "" } })
 	}
 	r := &recorder{result: mk("delete", "delete")}
-	if id, err := withStore(r).Plan(context.Background(), spec(KindRetire, w)); err != nil || id != "ret1" {
-		t.Fatalf("%q %v", id, err)
+	if got, err := withStore(r).Plan(context.Background(), spec(KindRetire, w)); err != nil || got.ID != "ret1" || got.StateDir != "/state/records" {
+		t.Fatalf("%+v %v", got, err)
 	}
 	r = &recorder{result: mk("delete", "retain")}
 	if _, err := withStore(r).Plan(context.Background(), spec(KindRetire, w)); reasonOf(t, err) != "r2" {
@@ -276,11 +276,11 @@ func TestV3PlannerOnARealRepository(t *testing.T) {
 	git("merge", "-q", "--no-ff", "-m", "merge", "merged")
 	p := V3Planner{Repos: map[string]RepoSpec{"r": {Name: "r", Path: repo, Base: "refs/heads/main"}}, PlanStore: state, PlanFunc: workspace.PlanTidyV3}
 	b := own(tidywizard.KindBranch, "r", "merged")
-	id, err := p.Plan(context.Background(), spec(KindBranches, b))
-	if err != nil || id == "" {
-		t.Fatalf("plan: %q %v", id, err)
+	got, err := p.Plan(context.Background(), spec(KindBranches, b))
+	if err != nil || got.ID == "" || got.StateDir != state {
+		t.Fatalf("plan: %+v %v", got, err)
 	}
-	if _, err := os.Stat(filepath.Join(state, "tidy-v3-plans", id+".json")); err != nil {
+	if _, err := os.Stat(filepath.Join(state, "tidy-v3-plans", got.ID+".json")); err != nil {
 		t.Fatalf("the sub-plan is stored as an ordinary v3 plan: %v", err)
 	}
 }

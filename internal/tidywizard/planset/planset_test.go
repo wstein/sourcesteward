@@ -61,16 +61,16 @@ type fakePlanner struct {
 	id    func(SubSpec) string
 }
 
-func (p *fakePlanner) Plan(_ context.Context, s SubSpec) (string, error) {
+func (p *fakePlanner) Plan(_ context.Context, s SubSpec) (Planned, error) {
 	p.specs = append(p.specs, s)
 	if p.err != nil {
-		return "", p.err
+		return Planned{}, p.err
 	}
 	if p.id != nil {
-		return p.id(s), nil
+		return Planned{ID: p.id(s), StateDir: "/state/plans"}, nil
 	}
 	h := sha256.Sum256([]byte(fmt.Sprint(s.Kind, s.Repo, s.Worktree, s.Items)))
-	return "sub" + hex.EncodeToString(h[:8]), nil
+	return Planned{ID: "sub" + hex.EncodeToString(h[:8]), StateDir: "/state/plans"}, nil
 }
 
 type fakeTTY struct {
@@ -256,6 +256,7 @@ func TestPlanIDIsStableAndBindsEveryPart(t *testing.T) {
 		"item branch":            func(s *Set) { s.Items[0].Branch = "x" },
 		"item task":              func(s *Set) { s.Items[0].Task = "t" },
 		"sub-plan id":            func(s *Set) { s.SubPlans[0].ID = "subtampered" },
+		"sub-plan state dir":     func(s *Set) { s.SubPlans[0].StateDir = "/elsewhere" },
 	}
 	for name, edit := range edits {
 		c := base.clone()
