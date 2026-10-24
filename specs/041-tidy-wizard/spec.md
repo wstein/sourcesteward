@@ -205,7 +205,7 @@ Reason codes (stable, kebab-case; the list extends Spec 011/029 codes, none is r
 `ignored-extras`, `locked-foreign`, `locked-stw` (decision, `lock-mismatch` only), `unregistered` (information: no stw creation record), `current-worktree`, `primary-checkout`,
 `protected`, `recently-active`, `registration-record-missing`, `registration-record-ambiguous`, `scope-not-authorized`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
 real identity change, see below), `registration-moved`, `lock-mismatch`, `branch-attached-elsewhere`, `retirement-file-limit`,
-`retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`; `workspace-not-found` (no workspace discovered and no `--workspace`: usage error, exit 2) and the notice `workspace-members-none` (only the workspace repository is analysed).
+`retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`, `jj-retirement-unsupported`; `workspace-not-found` (no workspace discovered and no `--workspace`: usage error, exit 2) and the notice `workspace-members-none` (only the workspace repository is analysed).
 
 The reason a tracking reference is retained with comes from a closed list, applied by the adapter: `remote-source-present`, and the protections `symbolic-reference`, `selected-base`, `workspace-used` (plus `github-branch-absent`, the proof of a deletable reference). Any other reason, whatever its length or bytes, is not passed on: the reference is retained as `evidence-incomplete` with the fixed evidence text `tracking-reason-unrecognized`.
 
@@ -328,7 +328,12 @@ the existing inspection already makes (`bookmark list`, `workspace list`, `log`,
   as `observation-failed`. Neither is ever clean. A secondary workspace of a colocated repository carries a `.git` file and `.jj/.gitignore` with jj 0.46 (not with 0.45.1), which the retirement
   admission does not hold: they show as `IgnoredExtras` and the workspace is retained, as retirement would refuse it.
 - **No lock, no owner in v1.** A jj workspace has no stw lock, so the adapter cannot join it to its creation record: in v1 every jj workspace is `unregistered` (owner by path convention, never `own`, and selectable only by an explicit human
-  choice with the Spec 029 legacy completion). stw-created jj workspaces are therefore not treated as owned in v1: a documented, fail-closed gap, closed by T011a5 (join the creation records by destination path).
+  choice with the Spec 029 legacy completion). Until T011a5 stw-created jj workspaces are not treated as owned: a documented, fail-closed gap.
+- **Owned jj workspaces (T011a5).** The adapter joins a jj workspace to a creation record found by `derive.LookupTaskByDestination`, built on the read-only `workspace.ScanTasks` of each valid state directory. A record owns the workspace only if its
+  backend and its native identity's backend are `jj`, its cleaned destination equals the workspace path, its cleaned native repository directory equals the observed repository's (`WorktreeObservation.RepositoryDir`) and its creation is complete
+  (`state` is `complete`); a task id or a name never matches alone and an empty path owns nothing. Equal records in several stores are one record; differing matches retain the workspace as `evidence-incomplete`
+  (`registration-record-ambiguous`). An unreadable record is skipped and counted in the notice `creation-records-unreadable: N` (ids are not echoed); it never fails the run. An owned workspace takes owner, `owner_source` `task-record` and scope from
+  the record, but stays `retain` with the reason `jj-retirement-unsupported` (after the specific reasons `evidence-incomplete`, `dirty`, `ignored-extras` and `unmerged`) and has no effect, until a plan kind retires a jj workspace.
 - **No tracking evidence.** `TrackingSkipped` is `tracking-unsupported-for-jj` online and offline.
 
 Closed reasons added by jj: `source-workspace`, `workspace-path-unknown`, `registration-mismatch`, `ambiguous-target`, `history-unavailable`, `evidence-changed`. jj workspaces thus stay eligible for the empty working-copy rule; this reconciles the safety invariants and OQ9 with the read-only rule.
