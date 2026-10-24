@@ -84,7 +84,8 @@ type Document struct {
 
 // Build assembles the document. No array is nil. The candidates keep the order of the result
 // (repository, then id); more than MaxCandidates are cut and flagged. The summary counts every
-// analysed candidate, also those a cut (here or in JSON) leaves out of the list.
+// candidate it receives, also those a cut made here or in JSON leaves out of the list; the 4096 cut
+// of the classifier happens upstream of this package and is aligned when the pipeline is wired (T019).
 func Build(in Input) Document {
 	d := Document{
 		SchemaVersion: 1, Command: "tidy-overview", Workspace: in.Workspace,
