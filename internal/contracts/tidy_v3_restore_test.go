@@ -109,6 +109,15 @@ func TestTidyV3RestoreSchemaAcceptsPlanAndApplyAndRefusesViolations(t *testing.T
 	}
 }
 
+// strings33 is 33 well-typed strings: only the item count can refuse it.
+func strings33() []any {
+	out := make([]any, 33)
+	for i := range out {
+		out[i] = "x"
+	}
+	return out
+}
+
 func historyFixtureResult() workspace.V3HistoryResult {
 	return workspace.V3HistoryResult{SchemaVersion: 1, Command: "tidy-history", Status: "ok", Total: 4096, ScanTruncated: true,
 		Entries: []workspace.V3HistoryEntry{
@@ -153,7 +162,16 @@ func TestTidyV3HistorySchemaAcceptsTheViewAndRefusesViolations(t *testing.T) {
 		"run mode field":               func(v map[string]any) { runMode(first(v))["token"] = "x" },
 		"run mode missing field":       func(v map[string]any) { delete(runMode(first(v)), "caller") },
 		"run mode markers type":        func(v map[string]any) { runMode(first(v))["markers"] = "CLAUDECODE" },
-		"run mode too many markers":    func(v map[string]any) { runMode(first(v))["markers"] = make([]any, 33) },
+		"run mode too many markers":    func(v map[string]any) { runMode(first(v))["markers"] = strings33() },
+		"run mode too many by_owner":   func(v map[string]any) { runMode(first(v))["by_owner"] = strings33() },
+		"run mode long marker":         func(v map[string]any) { runMode(first(v))["markers"] = []any{strings.Repeat("A", 129)} },
+		"run mode long by_owner entry": func(v map[string]any) { runMode(first(v))["by_owner"] = []any{strings.Repeat("o", 129)} },
+		"run mode marker type":         func(v map[string]any) { runMode(first(v))["markers"] = []any{7} },
+		"run mode by_owner entry type": func(v map[string]any) { runMode(first(v))["by_owner"] = []any{7} },
+		"run mode long source":         func(v map[string]any) { runMode(first(v))["caller_source"] = strings.Repeat("s", 65) },
+		"run mode stdin_tty type":      func(v map[string]any) { runMode(first(v))["stdin_tty"] = "yes" },
+		"run mode stdout_tty type":     func(v map[string]any) { runMode(first(v))["stdout_tty"] = "yes" },
+		"run mode mine type":           func(v map[string]any) { runMode(first(v))["mine"] = "yes" },
 		"run mode long caller":         func(v map[string]any) { runMode(first(v))["caller"] = strings.Repeat("a", 129) },
 		"run mode null":                func(v map[string]any) { first(v)["run_mode"] = nil },
 	}
