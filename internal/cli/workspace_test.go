@@ -156,3 +156,41 @@ func TestWorkspaceHelpLinksImplementedRetirement(t *testing.T) {
 		t.Fatalf("workspace help must point to implemented retirement: code%d %s %s", code, out.String(), diagnostic.String())
 	}
 }
+
+func TestWorkspacePlanRendersSourceContext(t *testing.T) {
+	realCaller := "/other/checkout"
+	sha := strings.Repeat("a", 40)
+	other := strings.Repeat("b", 40)
+	run := func(extra ...string) string {
+		cmd := workspaceCommandWith(workspaceRunner(func(_ context.Context, name string, _ workspace.PlanOptions, _ workspace.ApplyOptions, _ workspace.Options) workspace.Result {
+			return workspace.Result{SchemaVersion: 1, Command: name, Status: "ok", Backend: "git", Plan: &workspace.MutationPlan{PlanID: "p1", SourcePath: "/src", Destination: "/dst"},
+				Source: &workspace.SourceContext{SourcePath: "/src", BaseSelector: "HEAD", BaseCommit: sha, SourceHead: sha, CallerDirectory: realCaller, CallerCheckout: realCaller, CallerHead: other, CallerDiffers: true, Notice: "caller differs"}}
+		}))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(append([]string{"plan", "/src", "--base", "HEAD", "--destination", "/dst", "--task", "t", "--owner", "o", "--state-dir", "/tmp/state"}, extra...))
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	human := run()
+	for _, want := range []string{"Source checkout: \"/src\"", "Base: \"HEAD\" resolved to " + `"` + sha + `"`, "Source HEAD: \"" + sha + "\"", "Caller directory: \"" + realCaller + "\"", "Notice: \"caller differs\""} {
+		if !strings.Contains(human, want) {
+			t.Fatalf("human output lacks %q:\n%s", want, human)
+		}
+	}
+	js := run("--json")
+	var decoded struct {
+		Source map[string]any `json:"source_context"`
+	}
+	if err := json.Unmarshal([]byte(js), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"source_path", "base_selector", "base_commit", "source_head", "caller_directory", "caller_checkout", "caller_head", "caller_differs", "notice"} {
+		if _, ok := decoded.Source[key]; !ok {
+			t.Fatalf("json lacks source_context.%s: %s", key, js)
+		}
+	}
+}

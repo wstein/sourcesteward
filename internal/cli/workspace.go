@@ -28,7 +28,7 @@ func workspaceCommandWith(operations workspaceOperations) *cobra.Command {
 	family := &cobra.Command{Use: "workspace", Short: "Plan and create isolated native Git or jj task workspaces", Long: "Create isolated task workspaces through reviewable plans and explicit local authorization.\nPlanning writes private state records; applying creates a native workspace and recovery journal.\nHandoff and retirement preparation preserve work; use stw tidy for separately authorized owned retirement.\nGit and jj are native Tier 1 backends. No fetch, push, setup scripts or automatic cleanup.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
 	var p workspace.PlanOptions
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Persist an inspectable isolated-workspace creation plan", Args: cobra.MaximumNArgs(1)}
-	plan.Flags().StringVar(&p.Base, "base", "", "Explicit native base revision")
+	plan.Flags().StringVar(&p.Base, "base", "", "Explicit native base revision, resolved in the source checkout PATH (not in the current directory); the plan shows the resolved commit")
 	plan.Flags().StringVar(&p.Destination, "destination", "", "Unused absolute destination path")
 	plan.Flags().StringVar(&p.Task, "task", "", "Task identity label")
 	plan.Flags().StringVar(&p.Owner, "owner", "", "Owner label; private store access is the trust boundary")
@@ -153,6 +153,15 @@ func renderWorkspaceText(writer io.Writer, result workspace.Result) error {
 		}
 		for _, limit := range p.RecoveryLimits {
 			fmt.Fprintf(&text, "Recovery limit: %q\n", limit)
+		}
+	}
+	if s := result.Source; s != nil {
+		fmt.Fprintf(&text, "Source checkout: %q\nBase: %q resolved to %q\nSource HEAD: %q\n", s.SourcePath, s.BaseSelector, s.BaseCommit, s.SourceHead)
+		if s.CallerDirectory != "" {
+			fmt.Fprintf(&text, "Caller directory: %q\n", s.CallerDirectory)
+		}
+		if s.Notice != "" {
+			fmt.Fprintf(&text, "Notice: %q\n", s.Notice)
 		}
 	}
 	if result.Task != nil {
