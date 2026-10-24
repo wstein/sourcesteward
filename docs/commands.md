@@ -155,14 +155,13 @@ last; the workspace is found as for `stw sync`, `--run` takes the ID printed by 
 changed it moves the branch back to the journaled old tip, but only while the branch still points at the tip the run
 left: `git reset --keep OLD` when the branch is checked out in the main worktree and that worktree is clean and idle,
 `git update-ref` with the expected value when no worktree has it checked out. Results: `restored`, `already-restored`
-(a rerun changes nothing), `changed-since` (the branch moved, the worktree is dirty or busy, or another worktree holds
+(verified by the branch position; a rerun changes nothing), `changed-since` (the branch moved, the worktree is dirty or busy, or another worktree holds
 the branch; left alone), `journal-incomplete` (a record of a rebase or merge that never completed has no planned new
 tip; left alone, the recovery ref names the old tip for a manual reset) and `failed`; the last three exit 1. An
 incomplete fast-forward record is restored when the branch is at the planned new tip, `already-restored` at the old
 tip and `changed-since` anywhere else, and a restore that dealt with it marks it done. A restore never undoes pruned
 remote-tracking refs, a stash reapply or a submodule HEAD moved by the superproject, and it accepts no sync option.
-Known limits: run IDs have second resolution, so the latest run is found by the modification time of its record and
-the ID only breaks a tie; and the records of a repository are only looked at for the run asked for.
+The default run is the highest run ID (never a file time, so restoring an older run does not change it); IDs made before microseconds were added order by their second and, within a second, by their random suffix, so two such runs in one second can be mistaken for each other, in which case pass `--run`. A branch an operation works on in any worktree (rebase, merge, cherry-pick, revert, bisect, also from a linked worktree with a detached HEAD), a symbolic ref and a branch the run's journal does not describe are `changed-since`; a missing old object is `failed`.
 
 ## Show what needs action in the workspace
 
