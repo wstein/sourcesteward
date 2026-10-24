@@ -74,7 +74,7 @@ func TestTidyV3OwnedRetirementAfterBranchSwitchPushAndMerge(t *testing.T) {
 	c := defaultTidyV3RetirementCoordinator()
 	planned := c.plan(context.Background(), w.Options)
 	if planned.Status != "ok" || planned.Plan == nil {
-		t.Fatalf("retirement of a switched, pushed, rebase-merged worktree: %+v", planned.Diagnostics)
+		t.Fatalf("retirement of a switched, pushed, merged worktree: %+v", planned.Diagnostics)
 	}
 	p := *planned.Plan
 	if p.Mode != "owned-retirement" || p.Retirement.Target.HeadRef != "refs/heads/b" || p.Retirement.Integration.Decision != "delete" {
@@ -123,7 +123,8 @@ func TestGitVerifySplitsIdentityFromCreationDigest(t *testing.T) {
 	}
 }
 
-// The workspace path keeps the digest equality too (unchanged behaviour).
+// A config key, the Git binary or a hook added before planning no longer blocks
+// the retirement of an unswitched (detached) owned worktree.
 func TestRetirementUnrelatedChangesStillRetireWithoutBranchSwitch(t *testing.T) {
 	for _, kind := range []string{"config-key", "git-binary", "hook-before-planning"} {
 		t.Run(kind, func(t *testing.T) {
@@ -401,4 +402,23 @@ func commitUnintegratedChange(t *testing.T, dir, name string) {
 	}
 	gitFixture(t, dir, "add", name)
 	gitFixture(t, dir, "commit", "-qm", "not integrated: "+name)
+}
+
+// The exact lock and the backlink are part of the identity that VerifyIdentity
+// keeps: each mutation of either comparison must be caught here, not by a later check.
+func TestGitVerifyIdentityKeepsTheExactLockAndBacklink(t *testing.T) {
+	for _, kind := range []string{"lock", "backlink"} {
+		t.Run(kind, func(t *testing.T) {
+			_, creation, task := gitRetirementFixture(t)
+			file, content := "locked", "stw:other\n"
+			if kind == "backlink" {
+				file, content = "gitdir", "/elsewhere/.git\n"
+			}
+			if e := os.WriteFile(filepath.Join(task.Native.GitDir, file), []byte(content), 0600); e != nil {
+				t.Fatal(e)
+			}
+			_, e := (gitAdapter{}).VerifyIdentity(context.Background(), creation)
+			requireOperationCode(t, e, "git-foreign-workspace")
+		})
+	}
 }

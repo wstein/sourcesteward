@@ -13,8 +13,8 @@ func PlanTidyV3(ctx context.Context, o V3PlanOptions) V3Result {
 	if o.Online {
 		timeout += planOnlineTimeout
 	}
-	if o.Task == "" && o.CompletedWorktree == "" && o.TrackingRemote == "" {
-		timeout = v3ProofPlanTimeout(o) // local-reference plans include the proof phase
+	if o.TrackingRemote == "" {
+		timeout = v3ProofPlanTimeout(o) // local-reference and retirement plans include the proof phase
 	}
 	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, timeout))
 	defer cancel()
