@@ -82,7 +82,8 @@ type Document struct {
 }
 
 // Build assembles the document. No array is nil. The candidates keep the order of the result
-// (repository, then id); more than MaxCandidates are cut and flagged.
+// (repository, then id); more than MaxCandidates are cut and flagged. The summary counts every
+// analysed candidate, also those a cut (here or in JSON) leaves out of the list.
 func Build(in Input) Document {
 	d := Document{
 		SchemaVersion: 1, Command: "tidy-overview", Workspace: in.Workspace,
@@ -105,14 +106,8 @@ func Build(in Input) Document {
 		}
 	}
 	for _, c := range in.Result.Candidates {
-		if len(d.Candidates) == tidywizard.MaxCandidates {
-			d.Truncated = true
-			break
-		}
-		if c.Effects == nil {
-			c.Effects = []string{}
-		}
-		d.Candidates = append(d.Candidates, c)
+		// The summary counts every analysed candidate, before any cut; `truncated` says that the
+		// candidates list is partial.
 		switch c.Verdict {
 		case tidywizard.VerdictSafe:
 			d.Summary.Safe++
@@ -121,6 +116,14 @@ func Build(in Input) Document {
 		case tidywizard.VerdictDecision:
 			d.Summary.Decision++
 		}
+		if len(d.Candidates) == tidywizard.MaxCandidates {
+			d.Truncated = true
+			continue
+		}
+		if c.Effects == nil {
+			c.Effects = []string{}
+		}
+		d.Candidates = append(d.Candidates, c)
 	}
 	return d
 }
