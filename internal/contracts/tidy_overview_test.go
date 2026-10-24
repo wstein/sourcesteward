@@ -71,20 +71,27 @@ func TestTidyOverviewSchemaRefusesViolations(t *testing.T) {
 	raw := overviewRaw(t, nil)
 	first := func(v map[string]any, key string) map[string]any { return v[key].([]any)[0].(map[string]any) }
 	mutations := map[string]func(map[string]any){
-		"unknown top-level field":  func(v map[string]any) { v["extra"] = 1 },
-		"command":                  func(v map[string]any) { v["command"] = "tidy-plan" },
-		"schema version":           func(v map[string]any) { v["schema_version"] = 2 },
-		"missing workspace":        func(v map[string]any) { delete(v, "workspace") },
-		"missing summary":          func(v map[string]any) { delete(v, "summary") },
-		"missing truncated":        func(v map[string]any) { delete(v, "truncated") },
-		"truncated type":           func(v map[string]any) { v["truncated"] = "yes" },
-		"plan id with a path":      func(v map[string]any) { v["plan_id"] = "../x" },
-		"plan id upper case":       func(v map[string]any) { v["plan_id"] = "3F9C2A7E41B8" },
-		"plan id too short":        func(v map[string]any) { v["plan_id"] = "3f9c" },
-		"null candidates":          func(v map[string]any) { v["candidates"] = nil },
-		"null notices":             func(v map[string]any) { v["notices"] = nil },
-		"notice type":              func(v map[string]any) { v["notices"] = []any{1} },
-		"too many candidates":      func(v map[string]any) { v["candidates"] = make([]any, 4097) },
+		"unknown top-level field": func(v map[string]any) { v["extra"] = 1 },
+		"command":                 func(v map[string]any) { v["command"] = "tidy-plan" },
+		"schema version":          func(v map[string]any) { v["schema_version"] = 2 },
+		"missing workspace":       func(v map[string]any) { delete(v, "workspace") },
+		"missing summary":         func(v map[string]any) { delete(v, "summary") },
+		"missing truncated":       func(v map[string]any) { delete(v, "truncated") },
+		"truncated type":          func(v map[string]any) { v["truncated"] = "yes" },
+		"plan id with a path":     func(v map[string]any) { v["plan_id"] = "../x" },
+		"plan id upper case":      func(v map[string]any) { v["plan_id"] = "3F9C2A7E41B8" },
+		"plan id too short":       func(v map[string]any) { v["plan_id"] = "3f9c" },
+		"null candidates":         func(v map[string]any) { v["candidates"] = nil },
+		"null notices":            func(v map[string]any) { v["notices"] = nil },
+		"notice type":             func(v map[string]any) { v["notices"] = []any{1} },
+		"too many candidates": func(v map[string]any) {
+			one := first(v, "candidates")
+			list := make([]any, 4097)
+			for i := range list {
+				list[i] = one
+			}
+			v["candidates"] = list
+		},
 		"candidate field":          func(v map[string]any) { first(v, "candidates")["extra"] = 1 },
 		"candidate missing field":  func(v map[string]any) { delete(first(v, "candidates"), "evidence") },
 		"candidate kind":           func(v map[string]any) { first(v, "candidates")["kind"] = "tag" },
@@ -108,7 +115,13 @@ func TestTidyOverviewSchemaRefusesViolations(t *testing.T) {
 		"mode field":               func(v map[string]any) { v["mode"].(map[string]any)["token"] = "x" },
 		"mode missing field":       func(v map[string]any) { delete(v["mode"].(map[string]any), "caller") },
 		"mode markers null":        func(v map[string]any) { v["mode"].(map[string]any)["markers"] = nil },
-		"mode markers many":        func(v map[string]any) { v["mode"].(map[string]any)["markers"] = make([]any, 33) },
+		"mode markers many": func(v map[string]any) {
+			list := make([]any, 33)
+			for i := range list {
+				list[i] = "A"
+			}
+			v["mode"].(map[string]any)["markers"] = list
+		},
 		"mode marker long":         func(v map[string]any) { v["mode"].(map[string]any)["markers"] = []any{strings.Repeat("A", 129)} },
 		"mode by_owner entry type": func(v map[string]any) { v["mode"].(map[string]any)["by_owner"] = []any{7} },
 		"mode tty type":            func(v map[string]any) { v["mode"].(map[string]any)["stdin_tty"] = "yes" },
