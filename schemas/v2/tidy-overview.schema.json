@@ -1,0 +1,314 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "evidence": {
+          "maxLength": 512,
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "worktree",
+            "branch",
+            "tracking-ref",
+            "stale-worktree"
+          ]
+        },
+        "owner": {
+          "type": "string"
+        },
+        "owner_source": {
+          "enum": [
+            "task-record",
+            "path-convention",
+            "commit-author",
+            "unknown"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "proof": {
+          "enum": [
+            "ancestor",
+            "patch-id",
+            "merge-noop",
+            "no-net-change",
+            "empty-working-copy-integrated-parent",
+            "github-branch-absent",
+            "none"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "own",
+            "other",
+            "unknown"
+          ]
+        },
+        "task": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "safe",
+            "retain",
+            "decision"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "kind",
+        "verdict",
+        "reason",
+        "owner",
+        "owner_source",
+        "scope",
+        "path",
+        "branch",
+        "task",
+        "proof",
+        "effects",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "Derived": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "overridden": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source",
+        "overridden"
+      ],
+      "type": "object"
+    },
+    "Mode": {
+      "additionalProperties": false,
+      "properties": {
+        "by_owner": {
+          "items": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array"
+        },
+        "caller": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "caller_source": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "markers": {
+          "items": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array"
+        },
+        "mine": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "human",
+            "agent"
+          ]
+        },
+        "stdin_tty": {
+          "type": "boolean"
+        },
+        "stdout_tty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "stdin_tty",
+        "stdout_tty",
+        "markers",
+        "mine",
+        "by_owner",
+        "caller",
+        "caller_source"
+      ],
+      "type": "object"
+    },
+    "Repository": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "analysed",
+            "skipped",
+            "error"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "backend",
+        "base",
+        "remote",
+        "state",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retain": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "safe": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "safe",
+        "retain",
+        "decision"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v2/tidy-overview.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The analysis of the stw tidy wizard: repositories, candidates and their verdicts. Unpublished candidate: it is validated but not copied to the site until the documentation work item of Spec 041 publishes it.",
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      },
+      "maxItems": 4096,
+      "type": "array"
+    },
+    "command": {
+      "const": "tidy-overview"
+    },
+    "derived": {
+      "items": {
+        "$ref": "#/$defs/Derived"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode"
+    },
+    "notices": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5120,
+      "type": "array"
+    },
+    "plan_id": {
+      "maxLength": 12,
+      "pattern": "^([0-9a-f]{12})?$",
+      "type": "string"
+    },
+    "repositories": {
+      "items": {
+        "$ref": "#/$defs/Repository"
+      },
+      "maxItems": 1024,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "workspace": {
+      "maxLength": 4096,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "workspace",
+    "derived",
+    "repositories",
+    "candidates",
+    "summary",
+    "mode",
+    "plan_id",
+    "notices",
+    "truncated"
+  ],
+  "title": "stw tidy overview (Spec 041)",
+  "type": "object"
+}
