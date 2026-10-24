@@ -250,6 +250,13 @@ type Planner interface {
 	Plan(ctx context.Context, spec SubSpec) (string, error)
 }
 
+// Preflight is an optional interface of a Planner: it checks, without planning anything, that a
+// sub-plan can be made. Build asks it for every sub-plan before the first one is planned, so a
+// selection that cannot be mapped stores nothing.
+type Preflight interface {
+	Preflight(spec SubSpec) error
+}
+
 // Request is what Build needs. Chosen are candidate ids (the wizard maps numbers to ids).
 // DecisionConfirmed names the decision rows the second confirmation covered. Confirm opens the
 // terminal for the typed confirmation of foreign items; it is only used when Chosen has one.
@@ -393,6 +400,14 @@ func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
 	}
 	for _, c := range chosen {
 		set.Items = append(set.Items, Item{ID: c.ID, Repo: c.Repo, Kind: string(c.Kind), Owner: c.Owner, OwnerSource: c.OwnerSource, Scope: c.Scope, Path: c.Path, Branch: c.Branch, Task: c.Task})
+	}
+	if pre, ok := planner.(Preflight); ok {
+		for _, key := range order {
+			g := groups[key]
+			if err := pre.Preflight(SubSpec{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: g.items}); err != nil {
+				return Set{}, err
+			}
+		}
 	}
 	for _, key := range order {
 		g := groups[key]
