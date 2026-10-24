@@ -56,7 +56,7 @@ authorization, stale checks and a recorded recovery manifest.
 - **US4a (P1, whole workspace in view).** The human owner sees every worktree and branch of every owner or tool (Claude, Codex,
   Google, others, unknown) without typing a flag, grouped by owner, and may select items of other owners by an explicit choice; they are
   never preselected and need the same proof.
-- **US4b (P1, agents narrow).** An agent runs `stw tidy plan --mine` (or `--by-owner LABEL`); it sees and plans only its own items, and
+- **US4b (P1, agents narrow).** An agent runs `stw tidy plan --mine`; it sees and plans only its own items, and
   its `apply` never touches another owner's item unless the human explicitly authorized that very plan.
 - **US5 (P1, derived defaults).** Base, remote, owner and state directory are derived and printed with their source; an ambiguous
   derivation is never guessed: the wizard asks, or in non-interactive mode refuses (exit 1, `base-ambiguous`).
@@ -125,7 +125,7 @@ Wizard-layer flags:
 | --- | --- |
 | `--workspace [PATH]` | workspace to use; default: discovery as `stw status` does (Spec 037); outside a workspace a usage error (exit 2) with the hint to give `PATH` or use the expert layer |
 | `--mine` | only items owned by the caller's owner label (derived, see below); the narrowing for agents |
-| `--by-owner LABEL` | only items of that owner label (repeatable); read-only view in agent mode unless LABEL is the caller label |
+| `--by-owner LABEL` | only items of that owner label (repeatable); narrows the view in any mode and does not select the run mode: a human may then choose those items (typed confirmation), an agent only sees them |
 | `--member NAME` | restrict to member repositories (the workspace repository is `.`); repeatable |
 | `--only KINDS` | comma list of `retire`, `branches`, `tracking`, `stale-worktrees`; default all |
 | `--member-base NAME=REF` | override the derived base of one member repository (repeatable); there is no global `--base` in the wizard layer |
@@ -181,7 +181,7 @@ environment variables. The deletion safety never rests on it; it rests on the pr
 `docs/agent-guide.md` additionally forbids driving `stw tidy` through pty wrappers or `send-keys`.
 
 Human mode requires **all** of: stdin and stdout are terminals; `STW_AGENT` is unset; no known agent marker is in the environment
-(`CLAUDECODE`, `CLAUDE_CODE_*`, `CODEX_*`, `AGY_*`; a code table with tests, extendable by pull request); and neither `--mine` nor `--by-owner` is given.
+(`CLAUDECODE`, `CLAUDE_CODE_*`, `CODEX_*`, `AGY_*`; a code table with tests, extendable by pull request); and `--mine` is not given.
 Otherwise the run is agent mode. `--mine` forces agent mode.
 
 **Mode evidence** (terminal yes/no per stream, markers seen, caller label and its source, derived mode) is recorded in the stored plan,
@@ -240,15 +240,15 @@ proofs, not on the label.
 
 `scope` is `own` when the owner equals the caller label, `other` when it is a different known label, `unknown` otherwise.
 
-**Human mode (default).** Everything is shown, **grouped by owner**, with the owner column visible; the `--mine` and `--by-owner LABEL` flags
-narrow it. No candidate with `scope` `other` or `unknown` is ever preselected: `a` (all safe) in the wizard selects `own` items only,
+**Human mode (default).** Everything is shown, **grouped by owner**, with the owner column visible; `--by-owner LABEL` narrows it (for
+example to look at, and deliberately choose, the items of `codex`) and `--mine` is the agents' narrowing flag (own items only; it selects agent mode). No candidate with `scope` `other` or `unknown` is ever preselected: `a` (all safe) in the wizard selects `own` items only,
 the other owners' items are chosen by number or by `o` ("also all safe items of owner LABEL", asked per owner) and carry a clear marking
 (`[other: codex]`, `[unknown owner]`) in the overview, in the confirmation prompt and in the stored plan (`scope`, `owner`). The proof
 requirements (integration proof, clean tree, no non-stw lock, recovery manifest) are identical for every owner.
 
 **Agent mode** (see [Mode detection](#mode-detection-an-accident-guard)). `plan` lists and plans only `own` items, and `own` in agent mode
 requires `owner_source` `task-record` (a path or author guess never makes an item `own` for an agent); `--by-owner LABEL` of another
-label is a read-only view. `apply` refuses (exit 1, `scope-not-authorized`) any sub-plan with an `other` or `unknown` item **unless the
+label is a view only: agent-mode planning admits only own `task-record` items whatever the flags, and only the human path (human mode plus the typed `/dev/tty` confirmation) writes or applies `authorized_scopes`. Mode detection stays an accident guard. `apply` refuses (exit 1, `scope-not-authorized`) any sub-plan with an `other` or `unknown` item **unless the
 plan carries `authorized_scopes`**, which is written only by the human path, is part of the content-addressed `plan_id` (editing it
 changes the id and the store entry no longer matches the id typed at apply), and is recorded with its mode evidence. `--save` in agent
 mode never includes `other` or `unknown` items. The residual risk (an evasive same-user process forging the human path or the
@@ -256,7 +256,7 @@ label) is accepted and documented; proofs and the recovery manifest still bound 
 
 **Typed confirmation for foreign items.** Choosing an `other` or `unknown` item in the wizard, and `apply` of a plan with
 `authorized_scopes`, requires a confirmation **read from `/dev/tty`** (never stdin): the owner label followed by the first 6 characters
-of the plan id, for example `codex 3f9c2a`. A bare `y` does not suffice; `--yes` is not honoured for such plans. Without a controlling terminal
+of the plan id, for example `codex 3f9c2a`; for every item of scope `unknown`, and for an owner label that is empty or not one word, the confirmation word is the literal word `unknown` (`unknown 3f9c2a`), asked once per word. An owner label that is literally `unknown` belongs to the unknown group: same word, same prompt. A bare `y` does not suffice; `--yes` is not honoured for such plans. Without a controlling terminal
 the confirmation fails and nothing is stored or applied.
 
 ## Fixing #174: ownership binding after a branch switch
@@ -400,9 +400,9 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **FR-006** Every candidate carries `owner`, `owner_source` and `scope` (`own`, `other`, `unknown`); the owner column is always visible in text and present in JSON.
 - **FR-006a** Default for a human: all candidates of all owners are visible without any flag, grouped by owner.
 - **FR-006b** Candidates with `scope` `other` or `unknown` are never preselected (`a` selects `own` only); they are selected only by explicit choice, marked clearly in the overview, the prompt and the stored plan, and need the same proof as any other.
-- **FR-006c** `--mine` and `--by-owner LABEL` narrow the view and the plan; agent mode (see Mode detection) lists and plans own items only, and `own` there requires `owner_source` `task-record`.
-- **FR-006d** `apply` in agent mode refuses (`scope-not-authorized`, exit 1) any sub-plan with an `other` or `unknown` item unless the stored plan carries `authorized_scopes`, which is part of the content-addressed plan id and recorded with the mode evidence.
-- **FR-006f** Choosing an `other` or `unknown` item, and applying a plan with `authorized_scopes`, needs the typed confirmation (owner label and plan-id prefix) read from `/dev/tty`; `--yes` is not honoured for such plans.
+- **FR-006c** `--by-owner LABEL` narrows the view and the plan in any mode and is not a mode input; `--mine` narrows to own items and selects agent mode. Agent mode (see Mode detection) lists and plans own items only, and `own` there requires `owner_source` `task-record`. A human using `--by-owner` stays in human mode and may choose those items with the typed confirmation; an agent with `--by-owner` sees them but cannot plan or apply them.
+- **FR-006d** `apply` in agent mode refuses (`scope-not-authorized`, exit 1) any sub-plan with an `other` or `unknown` item unless the stored plan carries `authorized_scopes`, which is part of the content-addressed plan id and recorded with the mode evidence; only the human path applies a plan with `authorized_scopes`.
+- **FR-006f** Choosing an `other` or `unknown` item, and applying a plan with `authorized_scopes`, needs the typed confirmation (confirmation word, the owner label or the literal word `unknown`, and plan-id prefix) read from `/dev/tty`; `--yes` is not honoured for such plans.
 - **FR-006g** Mode detection is documented as an accident guard, not a boundary; human mode needs both streams on terminals, no `STW_AGENT`, no agent marker; mode evidence is recorded in plan and journal and shown by `history`.
 - **FR-006h** An `other` or `unknown` worktree that is recently active (default 24 h) is `retain` `recently-active`; a safe one with no commit of its own carries evidence `no-work`.
 - **FR-006e** The owner of an item is derived by the ordered rule above; the source is reported; `commit-author` is a hint only and never makes an item `own`.
@@ -449,7 +449,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **SC-009** `make check` and `scripts/check-docs.py` pass; independent review of the exact head is CLEAR.
 - **SC-010** With worktrees of Claude, Codex and an unknown owner present, a human `stw tidy` with no flag lists all of them grouped by owner with the owner column; JSON carries `owner`, `owner_source`, `scope` for each.
 - **SC-011** Answering `a` selects own safe items only; an other or unknown item is in the stored plan only if chosen by number or `o` with the typed `/dev/tty` confirmation, and is then marked in plan and prompt.
-- **SC-012** `--mine` lists and plans own items only (agent mode: only `task-record` owners); agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized` and changes nothing; editing `authorized_scopes` in the store changes the plan id and is refused; a plan with `authorized_scopes` is applied only by the human path: the typed `/dev/tty` confirmation is required, so an agent-mode apply of it fails closed without a controlling terminal (exit 1, nothing changed).
+- **SC-012** `--mine` lists and plans own items only (agent mode: only `task-record` owners); agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized` and changes nothing; editing `authorized_scopes` in the store changes the plan id and is refused; a plan with `authorized_scopes` is applied only by the human path: the typed `/dev/tty` confirmation is required and only the human path applies it, so an agent-mode apply of it is refused (exit 1, nothing changed); without a controlling terminal the confirmation itself fails closed.
 - **SC-013** State directories: the shared default is used by both commands; repeatable `--state-dir` finds records in several stores; missing and ambiguous records give their reasons and hints; an unsafe store is skipped with exit 1 at the end.
 - **SC-014** Mode detection: pty with `STW_AGENT` or an agent marker yields agent mode; both streams on terminals without markers yields human mode; the mode evidence is in plan, journal and `history`; `--mine` forces agent mode.
 - **SC-015** The branch leg: HEAD attached to the base branch never gets a leg; a failed retirement skips the leg; the leg re-checks Spec 011 protections and the planned tip OID.

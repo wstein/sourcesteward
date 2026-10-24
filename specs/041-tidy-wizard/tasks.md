@@ -23,10 +23,10 @@ repository or pushes the default branch. Tests use temporary repositories only.
 
 ## WP-2b Owner scope
 
-- [ ] T006a Failing table tests for item-owner derivation (task record, path/branch table incl. `/tmp/whr*`, `codex/`, `claude/`, author hint never `own`, unknown) and `scope`; run-mode detection (TTY, `STW_AGENT`, `--mine`, `--by-owner`).
-- [ ] T006b Failing tests: `--save` in agent mode excludes `other` and `unknown` items; `own` in agent mode only via `task-record`; `--as` does not exist; `authorized_scopes` is part of the plan id (editing it changes the id).
-- [ ] T006c Failing tests for mode detection: pty plus `STW_AGENT`, plus each marker of the table (`CLAUDECODE`, `CLAUDE_CODE_*`, `CODEX_*`, `AGY_*`), plain pty (human), non-tty, `--mine`; mode evidence recorded in plan and journal and shown by `history`.
-- [ ] T006d Failing tests for the typed confirmation read from `/dev/tty` (label plus 6-character plan-id prefix): bare `y`, stdin input and `--yes` refused for foreign items; no controlling terminal fails closed. Implement `internal/tidywizard/owner` and the mode and confirmation code.
+- [x] T006a Failing table tests for item-owner derivation (task record, path/branch table incl. `/tmp/whr*`, `codex/`, `claude/`, author hint never `own`, unknown) and `scope`; run-mode detection (TTY, `STW_AGENT`, markers, `--mine`; `--by-owner` is a view filter and not a mode input).
+- [x] T006b Failing tests: `--save` in agent mode excludes `other` and `unknown` items; `own` in agent mode only via `task-record`; `authorized_scopes` is part of the plan id (editing it changes the id).
+- [x] T006c Failing tests for mode detection: pty plus `STW_AGENT`, plus each marker of the table (`CLAUDECODE`, `CLAUDE_CODE_*`, `CODEX_*`, `AGY_*`), plain pty (human), non-tty; `--mine`; the mode evidence type with its JSON form (recording it in plan, journal and `history` is T013b and T019b; the terminal facts come from the caller, the isatty source is T019a).
+- [x] T006d Failing tests for the typed confirmation read from `/dev/tty` (confirmation word, the owner label or `unknown`, plus 6-character plan-id prefix): bare `y`, stdin input and `--yes` refused for foreign items; no controlling terminal fails closed. Implement `internal/tidywizard/owner` and the mode and confirmation code.
 
 ## WP-3 Classification
 
@@ -40,7 +40,8 @@ repository or pushes the default branch. Tests use temporary repositories only.
 
 - [ ] T012 Failing tests for the plan set: content-addressed id over sorted sub-plans, derived values and selection; one worktree per retirement sub-plan; store mode checks.
 - [ ] T013 Failing tests for apply: stale per sub-plan, fixed order, journal and recovery ref before the native effect, partial failure reporting with exit 1, completed replay is a verified no-op, the dependent branch leg runs after, and only after, a successful retirement (not atomic with it; skipped when the retirement fails), `--yes` without id exits 2, no authorization no effect.
-- [ ] T013a Failing tests: agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized`, nothing changed; a plan with human-written `authorized_scopes` applies only on the human path with the typed `/dev/tty` confirmation, and an agent-mode apply of it fails closed without a terminal; the marking is in the stored plan.
+- [ ] T013a Failing tests: agent-mode `apply` of a plan with an other or unknown item and no `authorized_scopes` exits 1 `scope-not-authorized`, nothing changed; a plan with human-written `authorized_scopes` applies only on the human path with the typed `/dev/tty` confirmation, and an agent-mode apply of it is refused; the marking is in the stored plan.
+- [ ] T013b Failing tests: the mode evidence is recorded in the stored plan and in the apply journal and is shown by `history`.
 - [ ] T014 Implement plan-set store and `apply <plan-id>` on top of the existing sub-plan apply; `apply --plan` unchanged.
 
 ## WP-5 CLI, wizard, JSON, schema
@@ -49,6 +50,9 @@ repository or pushes the default branch. Tests use temporary repositories only.
 - [ ] T016 Failing prompt tests: strict parsing, default none, 3 retries then exit 1 storing nothing, EOF, closed and silent stdin without a TTY (never read, never blocks, exit 0, nothing stored), `a` excludes `decision` rows and other/unknown-owner rows, `o` asks per owner, `decision` asks a second confirmation.
 - [ ] T017 Failing golden tests: text overview (10 rows per repository, `and N more`), `esc` (ANSI, CR, NUL, bidi, 10 kB names), 120-character bound; JSON `tidy-overview` golden; truncation and `output-limit`.
 - [ ] T018 Failing schema tests: `schemas/v2/tidy-overview.schema.json` valid and broken fixtures, `additionalProperties` false, freeze digest, `UNPUBLISHED_SCHEMAS`, check `package-pages.py` for the path.
+- [ ] T018a Failing CLI usage test: `--as` does not exist; `stw tidy --as x` and `stw tidy plan --as x` exit 2 (`restore --as` keeps its meaning).
+- [ ] T019a Failing tests and implementation of the terminal facts for mode detection: both streams are terminals (isatty on stdin and stdout) feed `owner.Detect`; a pty test shows human mode, non-tty shows agent mode.
+- [ ] T019b Mode evidence reaches the plan, the journal and `history` (with T013b).
 - [ ] T019 Implement the command layer, flags, prompts and rendering; exit codes 0/1/2; wizard applies only after a typed `y` for the plan id through the same apply code.
 
 ## WP-6 Docs and acceptance
