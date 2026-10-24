@@ -43,11 +43,15 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 	if err := validateV3PlanOptions(o); err != nil {
 		return failTidyV3(r, err)
 	}
+	policy, err := v3ProofPolicyFromOptions(o)
+	if err != nil {
+		return failTidyV3(r, err)
+	}
 	first, err := c.observe(ctx, o, budget)
 	if err != nil {
 		return failTidyV3(r, err)
 	}
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "legacy-retirement", SourcePath: o.Path, StateDir: o.StateDir, Expected: first.Native.Expected, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Retirement: &first.Retirement, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: first.Native.ConfigNotes}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "legacy-retirement", SourcePath: o.Path, StateDir: o.StateDir, Expected: first.Native.Expected, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Retirement: &first.Retirement, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: first.Native.ConfigNotes, ProofPolicy: &policy}
 	if o.Task != "" {
 		p.Mode = "owned-retirement"
 	}

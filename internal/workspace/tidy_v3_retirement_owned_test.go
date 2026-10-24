@@ -137,7 +137,7 @@ func TestTidyV3ReadOnlyOwnedTaskProgressBindsCurrentIntegratedHead(t *testing.T)
 
 func TestTidyV3ReadOnlyOwnedTaskProgressRetainsUnintegratedCurrentHead(t *testing.T) {
 	source, creation, task := gitRetirementFixture(t)
-	gitFixture(t, task.Destination, "commit", "--allow-empty", "-qm", "unintegrated detached task progress")
+	commitUnintegratedChange(t, task.Destination, "unintegrated-progress")
 	current := gitFixture(t, task.Destination, "rev-parse", "HEAD")
 	o := V3PlanOptions{Path: source, Base: "HEAD", StateDir: creation.StateDir, Task: task.TaskID, Owner: task.Owner, RemoveRegistration: true, RemoveFiles: task.Destination, ProtectWorktrees: []string{}}
 	observed, e := observeTidyV3Retirement(context.Background(), o, newTidyV3ProofBudget(false))

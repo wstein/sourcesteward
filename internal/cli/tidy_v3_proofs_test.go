@@ -48,6 +48,15 @@ func TestTidyV3IntegrationProofFlagsReachThePlanner(t *testing.T) {
 	}
 }
 
+// Retirement reuses the Spec 011 integration proofs, so both flags reach its planner.
+func TestTidyV3IntegrationProofFlagsApplyToRetirementPlans(t *testing.T) {
+	base := []string{"plan", "--contract", "3", "--base", "HEAD", "--task", "t", "--owner", "o", "--state-dir", "/tmp/state", "--remove-registration", "--remove-files", "/tmp/task"}
+	called, got, err := runProofCLI(append(append([]string{}, base...), "--integration-proof", "patch-id", "--accept-whitespace-differences"))
+	if err != nil || !called || !reflect.DeepEqual(got.IntegrationProofs, []string{"patch-id"}) || !got.AcceptWhitespaceDifferences {
+		t.Fatalf("retirement flags: err=%v called=%t %+v", err, called, got)
+	}
+}
+
 func TestTidyV3IntegrationProofFlagMisuseExitsBeforeNativeWork(t *testing.T) {
 	base := []string{"plan", "/tmp/repo", "--contract", "3", "--base", "refs/heads/main"}
 	cases := map[string][]string{
@@ -61,8 +70,6 @@ func TestTidyV3IntegrationProofFlagMisuseExitsBeforeNativeWork(t *testing.T) {
 		"spaces":                    append(append([]string{}, base...), "--integration-proof", "patch-id, merge-noop"),
 		"without contract 3":        {"plan", "--base", "refs/heads/main", "--integration-proof", "patch-id"},
 		"accept without contract 3": {"plan", "--base", "refs/heads/main", "--accept-whitespace-differences"},
-		"with retirement":           {"plan", "--contract", "3", "--base", "HEAD", "--task", "t", "--owner", "o", "--state-dir", "/tmp/state", "--remove-registration", "--remove-files", "/tmp/task", "--integration-proof", "patch-id"},
-		"accept with retirement":    {"plan", "--contract", "3", "--base", "HEAD", "--task", "t", "--owner", "o", "--state-dir", "/tmp/state", "--remove-registration", "--remove-files", "/tmp/task", "--accept-whitespace-differences"},
 		"with tracking refs":        append(append([]string{}, base...), "--online", "--tracking-remote", "origin", "--integration-proof", "patch-id"),
 		"accept with tracking refs": append(append([]string{}, base...), "--online", "--tracking-remote", "origin", "--accept-whitespace-differences"),
 	}

@@ -459,7 +459,7 @@ func TestTidyV3LegacyNativeRemovalKeepsCanonicalPrimaryLayouts(t *testing.T) {
 func TestTidyV3RetainedRetirementCompletedRetryIsReadOnly(t *testing.T) {
 	o, _ := tidyV3LegacyFixture(t, false)
 	o.StateDir = privateDir(t)
-	gitFixture(t, o.CompletedWorktree, "commit", "--allow-empty", "-qm", "not integrated")
+	commitUnintegratedChange(t, o.CompletedWorktree, "not-integrated")
 	c := defaultTidyV3RetirementCoordinator()
 	planned := c.plan(context.Background(), o)
 	if planned.Plan == nil {

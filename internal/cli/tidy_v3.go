@@ -201,8 +201,8 @@ func validateTidyV3PlanCLI(args []string, o *workspace.V3PlanOptions, hints []st
 		return bad()
 	}
 	retirement := o.Task != "" || o.CompletedWorktree != ""
-	if (retirement || o.TrackingRemote != "") && (len(o.IntegrationProofs) > 0 || o.AcceptWhitespaceDifferences) {
-		return fmt.Errorf("--integration-proof and --accept-whitespace-differences apply to local-reference plans only")
+	if o.TrackingRemote != "" && (len(o.IntegrationProofs) > 0 || o.AcceptWhitespaceDifferences) {
+		return fmt.Errorf("--integration-proof and --accept-whitespace-differences do not apply to tracking-reference plans")
 	}
 	if retirement {
 		switch {

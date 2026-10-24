@@ -126,7 +126,7 @@ func validateV3PlanOptions(o V3PlanOptions) error {
 		}
 		refs[name] = true
 	}
-	if (retire || o.TrackingRemote != "") && (len(o.IntegrationProofs) > 0 || o.AcceptWhitespaceDifferences) {
+	if o.TrackingRemote != "" && (len(o.IntegrationProofs) > 0 || o.AcceptWhitespaceDifferences) {
 		return bad()
 	}
 	if _, err := v3ProofPolicyFromOptions(o); err != nil {
