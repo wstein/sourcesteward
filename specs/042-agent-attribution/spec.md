@@ -25,8 +25,10 @@ not a secret. The mechanism only has to catch honest mix-ups.
 - **D3 Storage.** Only in the stw state store, in the task record file. Never in git config, commits, branch names, PR text or the
   new checkout. Command output (workspace apply and handoff, text and JSON) shows the origin kind and time only, never the session
   id. The field is additive and optional (`omitempty`); the frozen v1 workspace schema does not forbid it.
-- **D4 Written once.** The origin belongs to the creation. A retry or a second apply of the same plan returns the stored origin and
-  never overwrites it.
+- **D4 Written once.** The origin is recorded at the first successful task-record write and never overwritten: a retry or a second
+  apply of the same plan, with the record present, returns the stored origin. The journal schema is not changed, so the origin is not
+  journaled: when the first apply stopped before the task record was written (journal at `native-created`), the session that completes
+  the creation by retrying is recorded. This is a known residual risk, pinned by a test.
 - **D5 Remote-write gate.** Every stw command that pushes or sets a PR Ready for a task calls the gate first. The gate refuses with the
   typed reason `attribution-mismatch` when the recorded session id differs from the current one, and `attribution-unknown` when a
   session id is recorded and the current run has none (an unreadable task record also refuses an agent run). The exit status is 1, as for
