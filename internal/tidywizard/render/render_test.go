@@ -275,3 +275,107 @@ func TestBuildBoundsTheCandidates(t *testing.T) {
 		t.Errorf("%d candidates, truncated %v", len(d.Candidates), d.Truncated)
 	}
 }
+
+// An astral format character (a tag character, an invisible musical symbol) is written as a UTF-16
+// surrogate pair, so the JSON decodes to exactly the input string.
+func TestJSONRoundTripsAstralFormatCharacters(t *testing.T) {
+	const astral = "\U000e0041\U000e007f\U0001d173x\u202e"
+	in := input()
+	in.Workspace = "/ws/" + astral
+	c := cand("bundledock", tidywizard.KindWorktree, "/tmp/"+astral, tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	c.Branch = "br" + astral
+	in.Result.Candidates = append(in.Result.Candidates, c)
+	b, _, err := JSON(Build(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range string(b) {
+		if r > 0xffff {
+			t.Errorf("raw astral U+%X in the JSON", r)
+		}
+	}
+	var back Document
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Workspace != in.Workspace {
+		t.Errorf("workspace %q", back.Workspace)
+	}
+	found := false
+	for _, got := range back.Candidates {
+		if got.ID == c.ID {
+			found = true
+			if got.Path != c.Path || got.Branch != c.Branch {
+				t.Errorf("path %q branch %q", got.Path, got.Branch)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("the candidate id %q did not round-trip", c.ID)
+	}
+}
+
+// The summary counts every analysed candidate, before any cut; `truncated` says the list is partial.
+func TestSummaryCountsEveryCandidateEvenWhenTheListIsCut(t *testing.T) {
+	in := input()
+	in.Result.Candidates = nil
+	total := tidywizard.MaxCandidates + 5
+	for i := 0; i < total; i++ {
+		in.Result.Candidates = append(in.Result.Candidates, cand("bundledock", tidywizard.KindBranch, "b"+string(rune(0x4e00+i)), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn))
+	}
+	d := Build(in)
+	if d.Summary.Retain != total || len(d.Candidates) != tidywizard.MaxCandidates || !d.Truncated {
+		t.Errorf("4096 cap: retain %d candidates %d truncated %v", d.Summary.Retain, len(d.Candidates), d.Truncated)
+	}
+	// The 4 MiB cut keeps the summary of the whole analysis too.
+	in.Result.Candidates = nil
+	for i := 0; i < tidywizard.MaxCandidates; i++ {
+		c := cand("bundledock", tidywizard.KindBranch, strings.Repeat("b", 900)+string(rune(0x4e00+i)), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn)
+		c.Evidence = strings.Repeat("e", 512)
+		in.Result.Candidates = append(in.Result.Candidates, c)
+	}
+	b, truncated, err := JSON(Build(in))
+	if err != nil || !truncated {
+		t.Fatal(err, truncated)
+	}
+	var back Document
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Summary.Retain != tidywizard.MaxCandidates || len(back.Candidates) >= tidywizard.MaxCandidates {
+		t.Errorf("after the 4 MiB cut: summary %+v, candidates %d", back.Summary, len(back.Candidates))
+	}
+}
+
+// A run-level notice that itself starts with "<repo>: " is still shown, and once.
+func TestRunNoticeLookingLikeARepositoryNoticeIsShown(t *testing.T) {
+	in := input()
+	in.Notices = []string{"bundledock: a run notice that merely looks like a repository notice"}
+	out := Text(Build(in), TextOptions{})
+	if n := strings.Count(out, "a run notice that merely looks like a repository notice"); n != 1 {
+		t.Errorf("shown %d times:\n%s", n, out)
+	}
+	if !strings.Contains(out, "notice: bundledock: a run notice") {
+		t.Errorf("not shown as a run notice:\n%s", out)
+	}
+}
+
+// The agent markers are outside text too: they are escaped in the mode line, and a nil list is an
+// empty array in the document.
+func TestModeMarkersAreEscapedAndNeverNull(t *testing.T) {
+	in := input()
+	in.Mode.Markers = []string{"CLAUDE_CODE_\x1b[31mX", "CODEX_\u202e"}
+	out := Text(Build(in), TextOptions{})
+	if !strings.Contains(out, `agent marker CLAUDE_CODE_\x1b[31mX, CODEX_\u202e`) || strings.Contains(out, "\x1b") {
+		t.Errorf("markers not escaped:\n%s", out)
+	}
+	in = input()
+	in.Mode.Markers, in.Mode.ByOwner = nil, nil
+	b, _, err := JSON(Build(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"markers": []`) || !strings.Contains(string(b), `"by_owner": []`) {
+		t.Errorf("nil lists in the mode:\n%s", b)
+	}
+}
