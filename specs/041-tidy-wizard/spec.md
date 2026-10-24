@@ -319,6 +319,16 @@ one integration proof phase of 60 s for the repository (`integrationPhaseTimeout
 exhausted, the remaining items are `Incomplete` (`proof-budget-exhausted`), never `none`. With 61 worktrees the phase leaves about 1 s per tip on average, which suffices for the
 ancestor and merge-noop proofs. The 61-worktree fixture (`TestObserveSixtyOneRealisticWorktrees`) uses realistic checkouts (2,000 tracked files each, generated at test time, shared object store), sixty distinct tips of which thirty need the patch-id evaluation against a base that moved on, and measured about 10 s in total (observation and proofs) on the development machine, far inside the 60 s and 60 s windows. Native command output is bounded by the existing stream limits.
 
+**Adapter to the classifier (T011a3).** `tidywizard.Adapter` is the `Source` of the classifier over the observers. It maps `Incomplete` to a fact on `Worktree`, `Branch` and `TrackingRef` that the classifier
+retains as `evidence-incomplete` for every owner scope (never selectable, no effect, and never a delete-branch effect of a safe worktree). A lock is stw's only in the exact `stw:<task>` form; the creation
+record is looked up with `derive.LookupTask`, and a record owns the worktree only when the lookup names a `task-record` source, the record names this task and this path (`RecordFound`); a record that names
+another task or path is a lock mismatch, none (or a lookup that gives neither a record nor an ambiguity), a failed lookup and a missing record are missing, and several differing ones are ambiguous. Proofs are
+**per kind**: a worktree or a branch is proven by `ancestor`, `patch-id`, `merge-noop` or `no-net-change` (or none), a remote-tracking reference by `github-branch-absent` (or none); a word of another kind, an unknown word, or none
+for a finished observation of a linked worktree is `Incomplete` `unknown-proof`. The primary checkout and a registration without directory need no proof. A tracking reference keeps the reason the tracking evidence gave
+(`remote-source-present`, a protection such as `workspace-used`) as its retain reason, and its owner convention is matched on the branch part of `refs/remotes/<remote>/<branch>`. A repository with a skip reason is not
+observed. The observation's `TrackingSkipped` and `Limitations` travel as the notices of the repository (`RepoResult.Notices`, at most 8, each at most 512 bytes), which the overview shows. Repositories are analysed one after the
+other behind the one-line seam of `Classify`; the width 4 of `internal/fanout` waits for Spec 040 (T011a4). An observation error of the repository as a whole is returned and reported as `error` for that repository only.
+
 ## Scope of ownership is a view
 
 Owner amendment (2026-10-23, supersedes any earlier "never touched" wording for other agents' work, which now applies to **agent-run
