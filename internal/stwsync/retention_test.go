@@ -215,15 +215,53 @@ func TestRetentionNeverDeletesTheCurrentRun(t *testing.T) {
 	}
 }
 
-// F2: a symbolic ref in the recovery namespace is kept, never followed, and its target survives.
+// F2: a symbolic ref in the recovery namespace is kept, never followed, and its target survives. The target
+// sits exactly at the journaled old OID, so only the guards (not a moved branch) protect it.
 func TestRetentionNeverFollowsASymbolicRecoveryRef(t *testing.T) {
 	w := newWorkspace(t)
 	ids := fakeRuns(t, w, 1, "2001")
-	runGit(t, w.ws, "symbolic-ref", "refs/stw/recovery/sync/"+ids[0]+"/1", "refs/heads/main")
-	main := w.oid(t, ".", "refs/heads/main")
+	ref := "refs/stw/recovery/sync/" + ids[0] + "/1"
+	old := runGit(t, w.ws, "rev-parse", ref)
+	runGit(t, w.ws, "update-ref", "refs/heads/victim", old)
+	runGit(t, w.ws, "update-ref", "-d", ref)
+	runGit(t, w.ws, "symbolic-ref", ref, "refs/heads/victim")
 	syncRuns(t, w, 10)
-	if w.oid(t, ".", "refs/heads/main") == "" || runGit(t, w.ws, "symbolic-ref", "refs/stw/recovery/sync/"+ids[0]+"/1") != "refs/heads/main" || !hasRecord(w, ids[0]) {
-		t.Fatalf("symbolic recovery ref followed or removed (main was %s)", main)
+	if runGit(t, w.ws, "rev-parse", "--verify", "refs/heads/victim") != old || runGit(t, w.ws, "symbolic-ref", ref) != "refs/heads/victim" || !hasRecord(w, ids[0]) {
+		t.Fatal("the symbolic recovery ref was followed or removed")
+	}
+}
+
+// N1: a dangling symbolic ref is not listed by for-each-ref but exists; it is kept with its record.
+func TestRetentionKeepsADanglingSymbolicRecoveryRef(t *testing.T) {
+	w := newWorkspace(t)
+	ids := fakeRuns(t, w, 1, "2001")
+	ref := "refs/stw/recovery/sync/" + ids[0] + "/1"
+	runGit(t, w.ws, "update-ref", "-d", ref)
+	runGit(t, w.ws, "symbolic-ref", ref, "refs/heads/does-not-exist")
+	syncRuns(t, w, 10)
+	if runGit(t, w.ws, "symbolic-ref", ref) != "refs/heads/does-not-exist" || !hasRecord(w, ids[0]) {
+		t.Fatal("a dangling symbolic recovery ref was treated as gone")
+	}
+}
+
+// F3: a record copied under an old file name must not be treated as that old run: it describes a recent run
+// whose recovery ref has to survive.
+func TestRetentionIgnoresARecentRecordUnderAnOldName(t *testing.T) {
+	w := newWorkspace(t)
+	ids := syncRuns(t, w, 10)
+	recent := ids[len(ids)-1]
+	raw, err := os.ReadFile(filepath.Join(journalDir(w), recent+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := "20010101T000000Z-00000000"
+	write(t, filepath.Join(journalDir(w), old+".json"), string(raw))
+	syncRuns(t, w, 1)
+	if runGit(t, w.ws, "for-each-ref", "refs/stw/recovery/sync/"+recent) == "" {
+		t.Fatal("the recent run's recovery ref was deleted through a record under an old name")
+	}
+	if !hasRecord(w, old) {
+		t.Fatal("the mismatching record was removed")
 	}
 }
 

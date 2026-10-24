@@ -149,6 +149,11 @@ func (j *journal) dropRecoveryRefs(ctx context.Context, rec journalRecord) bool 
 			clean = false // not this entry's own ref: never touched, and the record stays
 			continue
 		}
+		// a symbolic ref is detected first: a dangling one is not listed by for-each-ref but exists
+		if sym, err := j.e.g(ctx, "symbolic-ref", "-q", en.RecoveryRef); err != nil || sym.Code != 1 {
+			clean = false // symbolic (or unreadable): never followed, never counted as gone
+			continue
+		}
 		list, err := j.e.g(ctx, "for-each-ref", "--format=%(refname)", en.RecoveryRef)
 		if err != nil || list.Code != 0 {
 			clean = false
@@ -156,10 +161,6 @@ func (j *journal) dropRecoveryRefs(ctx context.Context, rec journalRecord) bool 
 		}
 		if strings.TrimSpace(list.Out) == "" {
 			continue // verified missing
-		}
-		if sym, err := j.e.g(ctx, "symbolic-ref", "-q", en.RecoveryRef); err != nil || sym.Code != 1 {
-			clean = false // symbolic (or unreadable): never followed
-			continue
 		}
 		if out, err := j.e.g(ctx, "update-ref", "--no-deref", "-d", en.RecoveryRef, en.OldOID); err != nil || out.Code != 0 {
 			clean = false
