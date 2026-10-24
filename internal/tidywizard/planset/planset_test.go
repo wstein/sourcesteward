@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -590,5 +591,43 @@ func TestStoreRefusesAnInvalidOrForgedSet(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Errorf("nothing stored: %v", entries)
+	}
+}
+
+type jjSource struct{}
+
+func (jjSource) Facts(context.Context, string) (tidywizard.RepoFacts, error) {
+	return tidywizard.RepoFacts{Name: "r", Worktrees: []tidywizard.Worktree{{
+		Path: "/ws/wt/jj", Task: "jt", JJOwned: true, TaskOwner: "claude", Proof: tidywizard.ProofEmptyWorkingCopy,
+		LastActivity: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	}}}, nil
+}
+
+// Spec 041 T011a5: an owned jj workspace carries a task and the task-record source, which a Git
+// retirement plan would accept; only its retain verdict keeps it out of every plan. Pin that, for
+// the real classifier output: never selected, never buildable, never planned, whatever is chosen.
+func TestAnOwnedJJWorkspaceIsNeverSelectedOrPlanned(t *testing.T) {
+	res := tidywizard.Classify(context.Background(), jjSource{}, []string{"r"}, tidywizard.Config{Caller: "claude", CWD: "/elsewhere", Now: time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)})
+	if len(res.Candidates) != 1 {
+		t.Fatalf("%+v", res.Candidates)
+	}
+	c := res.Candidates[0]
+	if c.Verdict != tidywizard.VerdictRetain || c.Reason != "jj-retirement-unsupported" || c.Task != "jt" || c.OwnerSource != owner.SourceTaskRecord || c.Scope != owner.ScopeOwn || len(c.Effects) != 0 {
+		t.Fatalf("classifier output: %+v", c)
+	}
+	if got := SelectSafe(res.Candidates, human); len(got) != 0 {
+		t.Errorf("selected %v", got)
+	}
+	p := &fakePlanner{}
+	for name, req := range map[string]Request{
+		"chosen":            {Candidates: res.Candidates, Chosen: ids(c), Mode: human},
+		"chosen, confirmed": {Candidates: res.Candidates, Chosen: ids(c), Mode: human, DecisionConfirmed: map[string]bool{c.ID: true}},
+	} {
+		if _, err := Build(context.Background(), req, p); err == nil {
+			t.Errorf("%s: built", name)
+		}
+	}
+	if len(p.specs) != 0 {
+		t.Errorf("planned %d", len(p.specs))
 	}
 }
