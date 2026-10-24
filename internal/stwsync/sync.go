@@ -86,24 +86,10 @@ func Sync(ctx context.Context, o Options) Result {
 	if err := ValidateOptions(o); err != nil {
 		return r.fail("sync-invalid-options", err.Error())
 	}
-	bin, err := exec.LookPath("git")
-	if err != nil {
-		return r.fail("sync-git-unavailable", "the Git executable is unavailable")
-	}
-	if bin, err = filepath.Abs(bin); err != nil {
-		return r.fail("sync-git-unavailable", "the Git executable is unavailable")
-	}
-	id := inspection.Inspect(ctx, o.Path)
-	if len(id.Evidence) > 0 || id.Backend == "jj" {
-		return r.fail("sync-unsupported-backend", "jj-owned paths are not supported by stw sync; use jj git fetch (Git only, Spec 032)")
-	}
-	if id.Status != "ok" || id.Backend != "git" || id.Repository == nil {
-		return r.fail("sync-unsupported-backend", "stw sync needs an unambiguous Git repository: "+id.Error())
-	}
-	e := env{bin, id.InputPath}
-	root, linked, err := e.workspaceRoot(ctx)
-	if err != nil {
-		return r.fail("sync-read-failed", err.Error())
+	root, linked, failure := openWorkspace(ctx, o.Path)
+	if failure != nil {
+		r.Error = failure
+		return r
 	}
 	if linked != "" {
 		r.Note = ptr("started inside the linked worktree " + oneLine(linked) + "; it was not touched, the main worktrees of the workspace were synced")
@@ -129,6 +115,32 @@ func Sync(ctx context.Context, o Options) Result {
 	}
 	r.Summary.Total = len(r.Repos)
 	return r
+}
+
+// openWorkspace resolves Git and the workspace root of path; a jj-owned or non-Git path is refused.
+func openWorkspace(ctx context.Context, path string) (root env, linked string, failure *Failure) {
+	refuse := func(code, message string) (env, string, *Failure) {
+		return env{}, "", &Failure{Code: code, Message: oneLine(message)}
+	}
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		return refuse("sync-git-unavailable", "the Git executable is unavailable")
+	}
+	if bin, err = filepath.Abs(bin); err != nil {
+		return refuse("sync-git-unavailable", "the Git executable is unavailable")
+	}
+	id := inspection.Inspect(ctx, path)
+	if len(id.Evidence) > 0 || id.Backend == "jj" {
+		return refuse("sync-unsupported-backend", "jj-owned paths are not supported by stw sync; use jj git fetch (Git only, Spec 032)")
+	}
+	if id.Status != "ok" || id.Backend != "git" || id.Repository == nil {
+		return refuse("sync-unsupported-backend", "stw sync needs an unambiguous Git repository: "+id.Error())
+	}
+	root, linked, err = env{bin, id.InputPath}.workspaceRoot(ctx)
+	if err != nil {
+		return refuse("sync-read-failed", err.Error())
+	}
+	return root, linked, nil
 }
 
 // walk syncs the repository at e and then, depth-first, each of its submodules that is initialized. An
