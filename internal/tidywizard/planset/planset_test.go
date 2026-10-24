@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,14 @@ func own(kind tidywizard.Kind, repo, subject string) tidywizard.Candidate {
 
 func foreign(kind tidywizard.Kind, repo, subject string) tidywizard.Candidate {
 	return cand(kind, repo, subject, tidywizard.VerdictSafe, "codex", owner.SourcePathConvention, owner.ScopeOther)
+}
+
+// clone returns a deep copy, so a test can edit a set without touching the original.
+func (s Set) clone() Set {
+	b, _ := json.Marshal(s)
+	var c Set
+	_ = json.Unmarshal(b, &c)
+	return c
 }
 
 type fakePlanner struct {
@@ -144,14 +153,13 @@ func TestBuildGroupsSubPlansByEffectKind(t *testing.T) {
 	b1, b2 := own(tidywizard.KindBranch, "r", "b1"), own(tidywizard.KindBranch, "r", "b2")
 	b3 := own(tidywizard.KindBranch, "q", "b3")
 	tr := own(tidywizard.KindTrackingRef, "r", "origin/old")
-	st := own(tidywizard.KindStaleWorktree, "r", "gone")
-	all := []tidywizard.Candidate{w1, w2, b1, b2, b3, tr, st}
+	all := []tidywizard.Candidate{w1, w2, b1, b2, b3, tr}
 	p := &fakePlanner{}
 	set, err := build(t, all, ids(all...), human, p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var retire, branches, tracking, stale, qBranches int
+	var retire, branches, tracking, qBranches int
 	for _, s := range set.SubPlans {
 		switch {
 		case s.Kind == KindRetire:
@@ -168,14 +176,12 @@ func TestBuildGroupsSubPlansByEffectKind(t *testing.T) {
 			qBranches++
 		case s.Kind == KindTracking:
 			tracking++
-		case s.Kind == KindStaleWorktrees:
-			stale++
 		}
 	}
-	if retire != 2 || branches != 1 || qBranches != 1 || tracking != 1 || stale != 1 || len(set.SubPlans) != 6 {
-		t.Fatalf("retire %d branches %d q %d tracking %d stale %d total %d", retire, branches, qBranches, tracking, stale, len(set.SubPlans))
+	if retire != 2 || branches != 1 || qBranches != 1 || tracking != 1 || len(set.SubPlans) != 5 {
+		t.Fatalf("retire %d branches %d q %d tracking %d total %d", retire, branches, qBranches, tracking, len(set.SubPlans))
 	}
-	if len(p.specs) != 6 {
+	if len(p.specs) != 5 {
 		t.Fatalf("the planner is asked once per sub-plan, got %d", len(p.specs))
 	}
 }
@@ -183,7 +189,7 @@ func TestBuildGroupsSubPlansByEffectKind(t *testing.T) {
 func TestOrderRunsRetirementsThenStaleThenBranchesThenTracking(t *testing.T) {
 	all := []tidywizard.Candidate{
 		own(tidywizard.KindTrackingRef, "a", "origin/old"), own(tidywizard.KindBranch, "a", "b"),
-		own(tidywizard.KindStaleWorktree, "a", "gone"), own(tidywizard.KindWorktree, "b", "w2"), own(tidywizard.KindWorktree, "a", "w1"),
+		own(tidywizard.KindWorktree, "b", "w2"), own(tidywizard.KindWorktree, "a", "w1"),
 	}
 	set, err := build(t, all, ids(all...), human, &fakePlanner{})
 	if err != nil {
@@ -195,7 +201,7 @@ func TestOrderRunsRetirementsThenStaleThenBranchesThenTracking(t *testing.T) {
 		kinds = append(kinds, string(s.Kind))
 		repos = append(repos, s.Repo)
 	}
-	if strings.Join(kinds, ",") != "retire,retire,stale-worktrees,branches,tracking" || strings.Join(repos, ",") != "a,b,a,a,a" {
+	if strings.Join(kinds, ",") != "retire,retire,branches,tracking" || strings.Join(repos, ",") != "a,b,a,a" {
 		t.Fatalf("order %v %v", kinds, repos)
 	}
 }
@@ -232,6 +238,11 @@ func TestPlanIDIsStableAndBindsEveryPart(t *testing.T) {
 		"item scope":             func(s *Set) { s.Items[0].Scope = owner.ScopeOther },
 		"item owner":             func(s *Set) { s.Items[0].Owner = "codex" },
 		"item owner source":      func(s *Set) { s.Items[0].OwnerSource = owner.SourcePathConvention },
+		"item repository":        func(s *Set) { s.Items[0].Repo = "other" },
+		"item kind":              func(s *Set) { s.Items[0].Kind = "branch" },
+		"item path":              func(s *Set) { s.Items[0].Path = "/w/elsewhere" },
+		"item branch":            func(s *Set) { s.Items[0].Branch = "x" },
+		"item task":              func(s *Set) { s.Items[0].Task = "t" },
 		"sub-plan id":            func(s *Set) { s.SubPlans[0].ID = "subtampered" },
 	}
 	for name, edit := range edits {
@@ -354,6 +365,14 @@ func TestBuildAgentModeNeverPlansForeignOrGuessedItems(t *testing.T) {
 	}
 }
 
+func TestBuildRefusesAStaleRegistrationBecauseNoPlanKindExists(t *testing.T) {
+	st := own(tidywizard.KindStaleWorktree, "r", "gone")
+	p := &fakePlanner{}
+	if _, err := build(t, []tidywizard.Candidate{st}, ids(st), human, p); !errors.Is(err, ErrNotPlannable) || len(p.specs) != 0 {
+		t.Fatalf("err %v planned %d", err, len(p.specs))
+	}
+}
+
 func TestBuildRefusesRowsThatAreNotChoosable(t *testing.T) {
 	ret := cand(tidywizard.KindWorktree, "r", "t", tidywizard.VerdictRetain, "claude", owner.SourceTaskRecord, owner.ScopeOwn)
 	dec := cand(tidywizard.KindWorktree, "r", "d", tidywizard.VerdictDecision, "claude", owner.SourceTaskRecord, owner.ScopeOwn)
@@ -409,16 +428,20 @@ func TestValidateRefusesIncoherentSets(t *testing.T) {
 			s.SubPlans[0].Items = append(s.SubPlans[0].Items, s.SubPlans[1].Items...)
 			s.SubPlans = s.SubPlans[:1]
 		},
-		"one worktree in two retirements": func(s *Set) { s.SubPlans[1].Worktree = s.SubPlans[0].Worktree },
-		"retirement without a worktree":   func(s *Set) { s.SubPlans[0].Worktree = "" },
-		"duplicate sub-plan id":           func(s *Set) { s.SubPlans[1].ID = s.SubPlans[0].ID },
-		"item without a sub-plan":         func(s *Set) { s.SubPlans = s.SubPlans[:1] },
-		"sub-plan item not selected":      func(s *Set) { s.Items = s.Items[:1] },
-		"unknown kind":                    func(s *Set) { s.SubPlans[0].Kind = "format-disk" },
-		"empty set":                       func(s *Set) { s.SubPlans, s.Items = nil, nil },
-		"agent mode with scopes":          func(s *Set) { s.Mode.Mode = owner.ModeAgent; s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} },
-		"own scope authorized":            func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOwn} },
-		"bad sub-plan id":                 func(s *Set) { s.SubPlans[0].ID = "a/b" },
+		"one worktree in two retirements":     func(s *Set) { s.SubPlans[1].Worktree = s.SubPlans[0].Worktree },
+		"retirement without a worktree":       func(s *Set) { s.SubPlans[0].Worktree = "" },
+		"duplicate sub-plan id":               func(s *Set) { s.SubPlans[1].ID = s.SubPlans[0].ID },
+		"item without a sub-plan":             func(s *Set) { s.SubPlans = s.SubPlans[:1] },
+		"sub-plan item not selected":          func(s *Set) { s.Items = s.Items[:1] },
+		"unknown kind":                        func(s *Set) { s.SubPlans[0].Kind = "format-disk" },
+		"empty set":                           func(s *Set) { s.SubPlans, s.Items = nil, nil },
+		"agent mode with scopes":              func(s *Set) { s.Mode.Mode = owner.ModeAgent; s.AuthorizedScopes = []owner.Scope{owner.ScopeOther} },
+		"own scope authorized":                func(s *Set) { s.AuthorizedScopes = []owner.Scope{owner.ScopeOwn} },
+		"item of another repository":          func(s *Set) { s.Items[0].Repo = "other" },
+		"item kind of another sub-plan":       func(s *Set) { s.Items[0].Kind = string(tidywizard.KindBranch) },
+		"item path differs from the worktree": func(s *Set) { s.Items[0].Path = "/w/elsewhere" },
+		"item kind unknown":                   func(s *Set) { s.Items[0].Kind = "format-disk" },
+		"bad sub-plan id":                     func(s *Set) { s.SubPlans[0].ID = "a/b" },
 	}
 	for name, mutate := range cases {
 		c := good.clone()
