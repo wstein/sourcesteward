@@ -21,9 +21,12 @@ owner's choice of the GitHub merge button.
 5. **Two network writes only**, each from a closed set: `git push <remote> <sha>:refs/heads/<default>` and the base edit of a child
    (`PATCH /repos/{o}/{r}/pulls/{n}` with `base`, run as `gh pr edit <child> --base <default>`), an explicit extension of the Spec 022
    transport (see Reconciliation). Optional third, only on request: delete of the landed bottom branch (decision 7).
-6. **Order for a stack (measured, research.md R3 and R4).** Land the bottom; for every child pull request whose base is the landed
-   branch run `gh pr edit CHILD --base DEFAULT`; only then, and only if decision 7 allows, delete the landed branch; then land the child.
-   Deleting the bottom branch before retargeting closes the child and cannot be undone by reopening (R3).
+6. **Order for a stack.** With `delete_branch_on_merge` readable and off, the measured order (R3, R4): land the bottom; for every child
+   whose base is the landed branch run `gh pr edit CHILD --base DEFAULT`; only then, and only if decision 7 allows, delete the landed
+   branch; then land the child. With the setting on or unreadable (both real repositories), FR-031 applies instead: retarget the
+   children, re-read (FR-034), land the bottom; this order is unmeasured and gated (decision 9). Deleting the bottom branch before
+   retargeting closed the child in the measured run (R3); GitHub documents an automatic retarget in some deletion cases, which is not
+   measured here (research.md N4), so the spec never relies on either outcome.
 7. **Branch deletion.** Only on request (`--delete-branch`), or never by stw when GitHub's `delete_branch_on_merge` is on (GitHub does it,
    and the retarget step then has to precede the landing push of the bottom, see FR-031). stw never deletes a branch it cannot show was
    pushed for this pull request by its head repository owner (head repository equals the base repository, branch name equals the PR head
@@ -41,8 +44,9 @@ owner's choice of the GitHub merge button.
    endpoints answer 403 (plan limit), so its shape is unreadable. **Apply fails closed** with the typed refusal `land-unmeasured` (exit
    1) for a repository until research.md records a measured scratch run for that repository's ruleset shape (ruleset rule types and
    bypass modes, `delete_branch_on_merge`, children present or not); `--plan` still works and reports `land-unmeasured` among its
-   preconditions. The measured shapes are an explicit allowlist compiled into the command (data file reviewed in a PR), keyed by the
-   normalised shape, never by repository name. If the ruleset forbids the push, the owner must change the ruleset (owner-only); this
+   preconditions. The measured shapes are the **single allowlist** `internal/land/shapes.json` (one data file reviewed in a PR, the only place; every other
+   mention refers to it), keyed by the normalised shape, never by repository name. A shape stw cannot read (a 403 on rulesets or
+   protection, as on `wstein/anchorage-workspace`) never matches the allowlist and is always `land-unmeasured`. If the ruleset forbids the push, the owner must change the ruleset (owner-only); this
    spec and the command never do, and never suggest a workaround.
 
 ## Mode: owner-only
@@ -68,10 +72,10 @@ The owner, or an agent preparing the hand-over, wants every effect and the exact
 
 1. **Given** a reviewed pull request whose head fast-forwards the default branch, **When** `stw land --pr 123 --head SHA --reviewed SHA
    --plan` runs, **Then** it prints the preconditions with their fresh values, the ordered effects and the exact `git` and `gh` argument
-   vectors, performs no write and exits 0.
+   vectors, performs no write to any branch, worktree, index, config or remote (only the private fetch of FR-002) and exits 0.
 2. **Given** any failing precondition, **When** `--plan` runs, **Then** it lists every failing precondition (not only the first), the
    plan is marked `landable: false` and the exit status is 1.
-3. **Given** agent mode, **When** `--plan` runs, **Then** the plan is shown with `mode: agent` and `apply_allowed: false`.
+3. **Given** agent mode, **When** `--plan` runs, **Then** the plan is shown with `mode: agent`, and its JSON `apply_allowed` is false (FR-051).
 
 ### US2 (P1) Land one reviewed pull request
 
@@ -137,7 +141,8 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
 - **FR-001** Apply runs only in human mode as defined by Spec 041; otherwise it exits 1 with `agent-mode` before any write and before
   any credentialed read.
 - **FR-002** `--plan` never writes a branch, worktree, index, config or remote and never prompts. Its one disclosed local effect is the
-  fetch of FR-016 into a private namespace (`refs/stw/land/...`: objects and that namespace only, as Spec 032 discloses its fetch); no
+  fetch of FR-016 into a private namespace (`refs/stw/land/...`: objects and that namespace only; `FETCH_HEAD` is not written because the
+  fetch runs with `--no-write-fetch-head`; as Spec 032 discloses its fetch); no
   user ref and no remote-tracking ref changes; it is allowed in agent mode and states the mode.
 - **FR-003** Apply requires the typed confirmation on `/dev/tty` (`land NUMBER SHA8`); anything else is re-asked up to 3 times, then exit 1
   `confirmation-failed`. No terminal: exit 1 `confirmation-unavailable`. `--yes` is a usage error (exit 2).
@@ -164,7 +169,7 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
 - **FR-015** The base is the default branch, or the PR's base is the head branch of a pull request that is **already merged** and whose
   merged SHA is an ancestor of the default branch (the stack's bottom is landed). In the second case the retarget effect (FR-030) is
   part of the plan. Any other base refuses `base-not-default`.
-- **FR-016** The object `--head` and the old tip exist locally (after one `git fetch` of the PR head ref and the default branch into a private
+- **FR-016** The object `--head` and the old tip exist locally (after one `git fetch --no-write-fetch-head` of the PR head ref and the default branch into a private
   namespace, never into a user ref)
   and `git merge-base --is-ancestor <old-tip> <head>` holds (exit 0), where `<old-tip>` is the remote default branch tip read with `git ls-remote`
   in this run. Exit 1: `not-fast-forward` (the owner restacks per Spec 015/016; stw never rewrites). Exit 128 (an object, for example the old tip, is absent after the fetch) is `object-missing` or `ancestry-unproven`, never a fast-forward verdict.
@@ -216,8 +221,8 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
 - **FR-032** Deletion of the landed branch (`git push <remote> --delete refs/heads/<ref>`; the only permitted lease is the delete guard
   `--force-with-lease=refs/heads/<ref>:<head>`) happens only with `--delete-branch`, only after FR-030 completed without failure for all
   children, only when decision 7 holds, and never when `delete_branch_on_merge` already removed it (then it is a no-op `already-absent`).
-- **FR-033** No other write exists: no comment, label, ready flag, merge call, review call, reopen, branch creation, tag, local ref or
-  worktree change. A static test pins the argument vectors (allowlist) of the git and gh invocations.
+- **FR-033** No other write exists: no comment, label, ready flag, merge call, review call, reopen, branch creation, tag, worktree, index
+  or config change, and no local ref change other than objects and `refs/stw/land/*` from the FR-016 fetch. A static test pins the argument vectors (allowlist) of the git and gh invocations.
 
 ### Failure, replay and refusal text
 
@@ -242,7 +247,7 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
   listed in `UNPUBLISHED_SCHEMAS`): `schema_version`, `command: "land"`, `operation` (`plan` or `apply`), `mode` (`human` or `agent`) with
   the mode evidence as in Spec 041, `repository`, `pull_request` (number, state as read, head sha, base ref, `github_reported` mergeable fields,
   draft), `inputs` (`head`, `reviewed`, `ack_draft`, `delete_branch`), `preconditions` (array of `{id, ok, value, reason}`),
-  `landable`, `effects` (array of `{id, kind, argv, outcome, detail}` where `kind` is `fetch`, `retarget`, `push`, `delete-branch`;
+  `landable`, `apply_allowed` (false in agent mode or while any precondition including `land-unmeasured` fails), `effects` (array of `{id, kind, argv, outcome, detail}` where `kind` is `fetch`, `retarget`, `push`, `delete-branch`;
   argv is the exact vector), `children`, `result` (`landed`, `already-landed`, `landed-not-marked`, `refused`, `failed`), `reasons`,
   `truncated`.
 - **FR-052** `--json` and `--human` are one result model; the schema carries valid and invalid fixtures.
