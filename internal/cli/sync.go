@@ -13,13 +13,14 @@ import (
 	"github.com/wstein/sourcesteward/internal/stwsync"
 )
 
-func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Sync) }
+func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Sync, stwsync.Restore) }
 
-func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result) *cobra.Command {
+func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result, restore func(context.Context, stwsync.RestoreOptions) stwsync.Result) *cobra.Command {
+	var runID string
 	var jsonOutput, planOnly, dryRun, rebase, ffOnly, merge, autostash, noAutostash, prune, noPrune bool
 	var options stwsync.Options
 	command := &cobra.Command{
-		Use:   "sync [PATH] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
+		Use:   "sync [restore] [PATH] [--run ID] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
 		Short: "Bring the workspace root and its submodules up to date, like git pull",
 		Long: "Do what git pull would do in every repository of the workspace, from any directory inside it: the top-level\n" +
 			"superproject and, depth-first, each initialized submodule (nested ones too; uninitialized ones are reported, never cloned).\n" +
@@ -37,12 +38,27 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 			"progress, and local changes the update would overwrite are reported and skipped; a failure in one repository does not\n" +
 			"stop the others. --plan fetches the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
 			"Each branch change is journaled with a recovery ref under refs/stw/recovery/sync/RUN_ID. Git only: a jj-owned path is refused.\n" +
+			"stw sync restore [PATH] [--run ID] moves each branch the run changed back to its journaled old tip, only where the branch\n" +
+			"still points at the tip the run left and a checked-out worktree is clean (git reset --keep); other branches are reported\n" +
+			"changed-since and left alone. The default run is the latest one; pruned refs, stash reapplies and submodule moves are not undone.\n" +
 			"Exit statuses: 0 unless a repository failed (failed, conflict, autostash-conflict) or the run was refused, 1 then, 2 usage error.",
-		Args:         cobra.MaximumNArgs(1),
+		Args:         cobra.MaximumNArgs(2),
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 && args[0] == "restore" {
-				return errors.New("stw sync restore is not available yet; use ./restore for a directory of that name")
+			if len(args) > 0 && args[0] == "restore" {
+				for _, name := range []string{"plan", "dry-run", "rebase", "ff-only", "merge", "autostash", "no-autostash", "prune", "no-prune"} {
+					if cmd.Flags().Changed(name) {
+						return fmt.Errorf("--%s does not apply to stw sync restore", name)
+					}
+				}
+				result := restore(cmd.Context(), stwsync.RestoreOptions{Path: workspacePath(args[1:]), RunID: runID})
+				return finishSync(cmd, result, jsonOutput)
+			}
+			if len(args) == 2 {
+				return errors.New("stw sync takes at most one PATH; use stw sync restore [PATH] to undo a run")
+			}
+			if runID != "" {
+				return errors.New("--run applies to stw sync restore only")
 			}
 			options.Path = workspacePath(args)
 			options.Plan = planOnly || dryRun
@@ -53,29 +69,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 			if err := stwsync.ValidateOptions(options); err != nil {
 				return err
 			}
-			result := sync(cmd.Context(), options)
-			if result.Error != nil && !jsonOutput {
-				return runtimeFailure{fmt.Errorf("sync: %s: %s", result.Error.Code, result.Error.Message)}
-			}
-			var err error
-			if jsonOutput {
-				err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
-			} else {
-				err = renderSyncText(cmd.OutOrStdout(), result, stwsync.ColorEnabled(cmd.OutOrStdout()))
-			}
-			if err != nil {
-				return runtimeFailure{err}
-			}
-			if err = cmd.Context().Err(); err != nil {
-				return runtimeFailure{err}
-			}
-			if result.Error != nil {
-				return runtimeFailure{fmt.Errorf("sync: %s: %s", result.Error.Code, result.Error.Message)}
-			}
-			if result.ExitCode() != 0 {
-				return runtimeFailure{fmt.Errorf("sync: %d of %d repositories need attention", syncAttention(result), len(result.Repos))}
-			}
-			return nil
+			return finishSync(cmd, sync(cmd.Context(), options), jsonOutput)
 		},
 	}
 	flags := command.Flags()
@@ -88,11 +82,38 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result)
 	flags.BoolVar(&noAutostash, "no-autostash", false, "Never stash local changes")
 	flags.BoolVar(&prune, "prune", false, "Fetch with --prune (overrides fetch.prune)")
 	flags.BoolVar(&noPrune, "no-prune", false, "Fetch without pruning")
+	flags.StringVar(&runID, "run", "", "With restore: the run ID to undo (default: the latest run)")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
 	command.MarkFlagsMutuallyExclusive("rebase", "ff-only", "merge")
 	command.MarkFlagsMutuallyExclusive("autostash", "no-autostash")
 	command.MarkFlagsMutuallyExclusive("prune", "no-prune")
 	return command
+}
+
+// finishSync prints one result and maps it to the exit status (1 for a refusal or an item needing attention).
+func finishSync(cmd *cobra.Command, result stwsync.Result, jsonOutput bool) error {
+	if result.Error != nil && !jsonOutput {
+		return runtimeFailure{fmt.Errorf("sync: %s: %s", result.Error.Code, result.Error.Message)}
+	}
+	var err error
+	if jsonOutput {
+		err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+	} else {
+		err = renderSyncText(cmd.OutOrStdout(), result, stwsync.ColorEnabled(cmd.OutOrStdout()))
+	}
+	if err != nil {
+		return runtimeFailure{err}
+	}
+	if err = cmd.Context().Err(); err != nil {
+		return runtimeFailure{err}
+	}
+	if result.Error != nil {
+		return runtimeFailure{fmt.Errorf("sync: %s: %s", result.Error.Code, result.Error.Message)}
+	}
+	if result.ExitCode() != 0 {
+		return runtimeFailure{fmt.Errorf("sync: %d of %d repositories need attention", syncAttention(result), len(result.Repos))}
+	}
+	return nil
 }
 
 func triFlag(on, off bool) stwsync.Tri {
@@ -109,7 +130,7 @@ func syncAttention(r stwsync.Result) int {
 	n := 0
 	for _, it := range r.Repos {
 		switch it.Result {
-		case stwsync.ResultFailed, stwsync.ResultConflict, stwsync.ResultAutostashConflict:
+		case stwsync.ResultFailed, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete:
 			n++
 		}
 	}
@@ -169,6 +190,14 @@ func syncText(rp stwsync.Repo, plan bool) (text, class string) {
 		return skipped("busy")
 	case stwsync.ResultSkippedUninitialized:
 		return "skipped: " + reason, "yellow"
+	case stwsync.ResultRestored:
+		return "restored " + moved, "green"
+	case stwsync.ResultAlreadyRestored:
+		return "already restored", "dim"
+	case stwsync.ResultChangedSince:
+		return "changed since: " + reason, "yellow"
+	case stwsync.ResultJournalIncomplete:
+		return "journal incomplete: " + reason, "yellow"
 	case stwsync.ResultConflict:
 		return "conflict: " + reason, "red"
 	case stwsync.ResultAutostashConflict:
@@ -189,7 +218,9 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 		return "\x1b[" + syncColors[class] + "m" + s + "\x1b[0m"
 	}
 	plan := r.Mode == "plan"
-	if plan {
+	if r.Mode == "restore" {
+		line("SourceSteward sync restore: " + plural(len(r.Repos), "branch", "branches"))
+	} else if plan {
 		line("SourceSteward sync plan: " + plural(len(r.Repos), "repository", "repositories") + "; only remote-tracking refs were fetched")
 	} else {
 		line("SourceSteward sync: " + plural(len(r.Repos), "repository", "repositories"))
@@ -220,7 +251,7 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 		}
 	}
 	var counts []string
-	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultFailed}
+	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultRestored, stwsync.ResultAlreadyRestored, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultFailed}
 	for _, name := range order {
 		if n := r.Summary.ByResult[name]; n > 0 {
 			counts = append(counts, fmt.Sprintf("%d %s", n, strings.ReplaceAll(name, "-", " ")))

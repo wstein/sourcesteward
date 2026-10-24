@@ -39,7 +39,7 @@ func runSync(result stwsync.Result, args ...string) (stwsync.Options, int, strin
 		calls++
 		got = o
 		return result
-	})
+	}, nil)
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
@@ -65,7 +65,10 @@ func TestSyncUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
 		{"--json=maybe"},
 		{"a\x00b"},
 		{"\xff"},
-		{"restore"}, // reserved for a later slice
+		{"restore", "--plan"}, // restore takes no sync option
+		{"restore", "--rebase"},
+		{"restore", "a", "b"},
+		{"--run", "20260101T000000Z-00000000"}, // --run belongs to restore
 	} {
 		_, calls, out, err := runSync(syncCLIResult(), args...)
 		var failure runtimeFailure
@@ -226,7 +229,7 @@ func TestSyncWriterFailureIsARuntimeFailure(t *testing.T) {
 	for _, args := range [][]string{{}, {"--json"}} {
 		cmd := syncCommandWith(func(context.Context, stwsync.Options) stwsync.Result {
 			return syncCLIResult(syncRepo(".", "root", "up-to-date"))
-		})
+		}, nil)
 		cmd.SetOut(&failOnWrite{fail: 1})
 		cmd.SetArgs(args)
 		var failure runtimeFailure
@@ -261,5 +264,41 @@ func TestSyncColourOnlyWhenRequestedAndNeverFromRepositoryText(t *testing.T) {
 	}
 	if !strings.Contains(colored.String(), "\x1b[32mfast-forwarded") || strings.Contains(colored.String(), "\x1b[31m") {
 		t.Fatalf("%q", colored.String())
+	}
+}
+
+func TestSyncRestoreCommandPassesPathAndRunAndMapsTheExitStatus(t *testing.T) {
+	for _, tc := range []struct {
+		result string
+		fail   bool
+	}{{"restored", false}, {"already-restored", false}, {"changed-since", true}, {"journal-incomplete", true}, {"failed", true}} {
+		var got stwsync.RestoreOptions
+		cmd := syncCommandWith(nil, func(_ context.Context, o stwsync.RestoreOptions) stwsync.Result {
+			got = o
+			r := syncCLIResult(syncRepo(".", "root", tc.result))
+			r.Mode = "restore"
+			return r
+		})
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"restore", "/some/ws", "--run", "20260101T000000Z-00000000"})
+		err := cmd.ExecuteContext(context.Background())
+		var failure runtimeFailure
+		if got.Path != "/some/ws" || got.RunID != "20260101T000000Z-00000000" || errors.As(err, &failure) != tc.fail || !strings.Contains(out.String(), "sync restore") {
+			t.Errorf("%s: %+v %v %q", tc.result, got, err, out.String())
+		}
+	}
+	// without PATH the current directory is used, like sync
+	var got stwsync.RestoreOptions
+	cmd := syncCommandWith(nil, func(_ context.Context, o stwsync.RestoreOptions) stwsync.Result {
+		got = o
+		return syncCLIResult()
+	})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetArgs([]string{"restore"})
+	cmd.ExecuteContext(context.Background())
+	if got.Path != workspacePath(nil) {
+		t.Errorf("%+v", got)
 	}
 }
