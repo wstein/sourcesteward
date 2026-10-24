@@ -23,7 +23,7 @@ func syncFixture(t *testing.T, name string) []byte {
 
 func TestSyncSchemaFixtures(t *testing.T) {
 	s := schema(t, "sync")
-	for _, name := range []string{"plan", "run", "refused"} {
+	for _, name := range []string{"plan", "run", "refused", "restore"} {
 		valid(t, s, syncFixture(t, name))
 	}
 }
@@ -76,7 +76,7 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"wrong command":              {"plan", func(m map[string]any, _ []any) { m["command"] = "repos" }},
 		"run id on a plan":           {"plan", func(m map[string]any, _ []any) { m["run_id"] = "20261021T101500Z-0a1b2c3d" }},
 		"bad run id":                 {"run", func(m map[string]any, _ []any) { m["run_id"] = "r1" }},
-		"unknown mode":               {"plan", func(m map[string]any, _ []any) { m["mode"] = "restore" }},
+		"unknown mode":               {"plan", func(m map[string]any, _ []any) { m["mode"] = "undo" }},
 		"run result in a plan":       {"plan", func(_ map[string]any, r []any) { syncRepoOf(r, "fast-forward")["result"] = "fast-forwarded" }},
 		"plan result in a run":       {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "rebased")["result"] = "rebase" }},
 		"unknown result":             {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "merged" }},
@@ -99,11 +99,17 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"unknown summary result": {"plan", func(m map[string]any, _ []any) {
 			m["summary"].(map[string]any)["by_result"].(map[string]any)["bogus"] = 1
 		}},
-		"error without code":   {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
-		"missing merge option": {"plan", func(m map[string]any, _ []any) { delete(m["options"].(map[string]any), "merge") }},
-		"string merge option":  {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["merge"] = "yes" }},
-		"string option":        {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
-		"null repos":           {"plan", func(m map[string]any, _ []any) { m["repos"] = nil }},
+		"error without code":        {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
+		"missing merge option":      {"plan", func(m map[string]any, _ []any) { delete(m["options"].(map[string]any), "merge") }},
+		"string merge option":       {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["merge"] = "yes" }},
+		"string option":             {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
+		"sync result in a restore":  {"restore", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "fast-forwarded" }},
+		"restore result in a run":   {"run", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "restored" }},
+		"restore without run id":    {"restore", func(m map[string]any, _ []any) { m["run_id"] = nil }},
+		"restored without new":      {"restore", func(_ map[string]any, r []any) { syncRepoOf(r, "restored")["new_oid"] = nil }},
+		"changed-since no reason":   {"restore", func(_ map[string]any, r []any) { syncRepoOf(r, "changed-since")["reason"] = nil }},
+		"incomplete without reason": {"restore", func(_ map[string]any, r []any) { syncRepoOf(r, "journal-incomplete")["reason"] = nil }},
+		"null repos":                {"plan", func(m map[string]any, _ []any) { m["repos"] = nil }},
 	} {
 		if err := s.Validate(value(t, mutateSync(t, tc.fixture, tc.fn))); err == nil {
 			t.Errorf("%s: the schema accepted a broken result", name)
@@ -207,10 +213,19 @@ func TestSyncRealOutputValidates(t *testing.T) {
 	if r := results(run(0, "--json", "--rebase", ws)); r["."] != "rebased" {
 		t.Fatalf("%v", r)
 	}
+	// restore undoes the latest run: the real output validates, and a second restore is already-restored
+	v = run(0, "restore", "--json", ws)
+	if v["mode"] != "restore" || v["run_id"] == nil || results(v)["."] != "restored" {
+		t.Fatalf("%v", v)
+	}
+	if r := results(run(0, "restore", "--json", ws)); r["."] != "already-restored" {
+		t.Fatalf("%v", r)
+	}
 	// refusals: a plain directory (JSON with error, exit 1) and usage errors (exit 2, no JSON)
 	if v = run(1, "--json", t.TempDir()); v["error"] == nil {
 		t.Fatalf("%v", v)
 	}
 	run(2, "--rebase", "--ff-only", ws)
+	run(2, "restore", "--rebase", ws)
 	run(2, "--bogus", ws)
 }
