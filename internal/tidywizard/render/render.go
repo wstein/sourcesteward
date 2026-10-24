@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+	"unicode/utf16"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -366,6 +367,12 @@ func escapeInvisible(b []byte) []byte {
 		if r == unicode.ReplacementChar || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) || unicode.Is(unicode.Cc, r) && r > 0x7e {
 			if r == unicode.ReplacementChar {
 				out.WriteRune(r)
+				continue
+			}
+			if r > 0xffff {
+				// JSON writes a character above the basic plane as a UTF-16 surrogate pair.
+				hi, lo := utf16.EncodeRune(r)
+				fmt.Fprintf(&out, "\\u%04x\\u%04x", hi, lo)
 				continue
 			}
 			fmt.Fprintf(&out, "\\u%04x", r)
