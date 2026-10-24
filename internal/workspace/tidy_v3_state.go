@@ -82,20 +82,46 @@ const (
 )
 
 // validV3RunMode reports whether the run mode is absent or complete and bounded.
-func validV3RunMode(m *V3RunMode) bool {
+func validV3RunMode(m *V3RunMode) bool { return ValidateV3RunMode(m) == nil }
+
+// ValidateV3RunMode says why a run mode cannot be recorded in a journal, naming the field, or
+// returns nil for an absent or complete, bounded one. The apply path of the plan set uses it to
+// refuse mode evidence early with a clear message (for example a caller label from STW_OWNER that
+// is too long or not UTF-8).
+func ValidateV3RunMode(m *V3RunMode) error {
 	if m == nil {
-		return true
+		return nil
 	}
-	if m.Mode != "human" && m.Mode != "agent" || m.Markers == nil || m.ByOwner == nil || len(m.Markers) > runModeListMax || len(m.ByOwner) > runModeListMax {
-		return false
+	bad := func(field, why string) error {
+		return failure("invalid-options", "The mode evidence field "+field+" "+why+".")
+	}
+	if m.Mode != "human" && m.Mode != "agent" {
+		return bad("mode", "must be human or agent")
+	}
+	if m.Markers == nil || len(m.Markers) > runModeListMax {
+		return bad("markers", "must be a list of at most 32 names")
+	}
+	if m.ByOwner == nil || len(m.ByOwner) > runModeListMax {
+		return bad("by_owner", "must be a list of at most 32 labels")
 	}
 	short := func(s string, max int) bool { return len(s) <= max && validText(s) }
-	for _, s := range append(append([]string{}, m.Markers...), m.ByOwner...) {
+	for _, s := range m.Markers {
 		if !short(s, runModeTextMax) {
-			return false
+			return bad("markers", "has an entry over 128 bytes or not valid UTF-8")
 		}
 	}
-	return short(m.Caller, runModeTextMax) && short(m.CallerSource, 64)
+	for _, s := range m.ByOwner {
+		if !short(s, runModeTextMax) {
+			return bad("by_owner", "has an entry over 128 bytes or not valid UTF-8")
+		}
+	}
+	if !short(m.Caller, runModeTextMax) {
+		return bad("caller", "is over 128 bytes or not valid UTF-8")
+	}
+	if !short(m.CallerSource, 64) {
+		return bad("caller_source", "is over 64 bytes or not valid UTF-8")
+	}
+	return nil
 }
 
 func cloneRunMode(m *V3RunMode) *V3RunMode {

@@ -460,3 +460,30 @@ func TestApplyOnARealRepositoryDeletesTheMergedBranchAndReplaysAsANoOp(t *testin
 		t.Fatalf("a completed replay is a verified no-op: %+v", again)
 	}
 }
+
+func TestApplyRefusesModeEvidenceThatCannotBeRecordedWithAClearCode(t *testing.T) {
+	dir, set := stored(t, own(tidywizard.KindWorktree, "r", "a"))
+	cases := map[string]func(*owner.Evidence){
+		"STW_OWNER over 128 bytes": func(e *owner.Evidence) { e.Caller = strings.Repeat("o", 129) },
+		"STW_OWNER not UTF-8":      func(e *owner.Evidence) { e.Caller = "\xff\xfe" },
+		"too many markers":         func(e *owner.Evidence) { e.Markers = make([]string, 33) },
+		"unknown mode":             func(e *owner.Evidence) { e.Mode = "root" },
+	}
+	for name, mutate := range cases {
+		mode := human
+		mode.Markers = []string{}
+		mutate(&mode)
+		f := &fakeApplier{}
+		res := Apply(context.Background(), req(dir, set, mode, f))
+		if res.Status != "refused" || res.Code != CodeModeEvidenceInvalid || len(f.calls) != 0 || !strings.Contains(res.Message, "mode evidence") {
+			t.Errorf("%s: %+v calls %d", name, res, len(f.calls))
+		}
+	}
+	// A mode the journal can record is not refused here.
+	ok := human
+	ok.Markers = []string{}
+	ok.Caller = strings.Repeat("o", 128)
+	if res := Apply(context.Background(), req(dir, set, ok, &fakeApplier{})); res.Status != "ok" {
+		t.Fatalf("%+v", res)
+	}
+}
