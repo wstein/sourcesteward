@@ -9,12 +9,23 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 )
 
 // stateRestored marks an entry whose incomplete record a restore has dealt with; retention treats it
 // as a finished record.
 const stateRestored = "restored"
+
+// runIDLess orders run IDs by their time stamp, whether they carry microseconds or not (an ID without
+// them counts as microsecond zero), then by the random suffix. Retention must order runs the same way.
+func runIDLess(a, b string) bool { return runIDKey(a) < runIDKey(b) }
+
+func runIDKey(id string) string {
+	stamp, suffix, _ := strings.Cut(id, "Z-")
+	if len(stamp) == 15 {
+		stamp += "000000"
+	}
+	return stamp + "-" + suffix
+}
 
 // RestoreOptions selects one restore: the workspace path and the run to undo (empty: the latest run).
 type RestoreOptions struct {
@@ -71,18 +82,12 @@ func Restore(ctx context.Context, o RestoreOptions) Result {
 	}
 	id := o.RunID
 	if id == "" {
-		// the latest run is the one whose record was written last; run IDs have second resolution, so the
-		// ID only breaks a tie of the modification times
-		var latest time.Time
+		// the latest run is the highest run ID (the order retention uses too), never a modification time:
+		// a restore rewrites the record of an older run
 		for _, e := range repos {
-			dir := journalDirOf(ctx, e)
 			for _, found := range recordIDs(ctx, e) {
-				fi, err := os.Stat(filepath.Join(dir, found+".json"))
-				if err != nil {
-					continue
-				}
-				if id == "" || fi.ModTime().After(latest) || (fi.ModTime().Equal(latest) && found > id) {
-					id, latest = found, fi.ModTime()
+				if id == "" || runIDLess(id, found) {
+					id = found
 				}
 			}
 		}
@@ -171,6 +176,43 @@ func loadJournal(ctx context.Context, e env, id string) (*journal, bool) {
 	return j, true
 }
 
+// operationOn reports a reason when an operation in any worktree of the repository involves the branch:
+// the branch is checked out there, or a rebase or bisect there works on it while HEAD is detached.
+func operationOn(ctx context.Context, e env, ref string) string {
+	out, err := e.g(ctx, "worktree", "list", "--porcelain")
+	if err != nil || out.Code != 0 {
+		return "the worktrees cannot be listed"
+	}
+	trees := []string{e.dir}
+	checkedOut := map[string]bool{}
+	cur := ""
+	for _, l := range strings.Split(out.Out, "\n") {
+		l = strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(l, "worktree "):
+			cur = strings.TrimPrefix(l, "worktree ")
+			trees = append(trees, cur)
+		case strings.HasPrefix(l, "branch ") && cur != "":
+			checkedOut[cur] = strings.TrimPrefix(l, "branch ") == ref
+		}
+	}
+	for _, tree := range trees {
+		reason, involved := e.operation(ctx, tree)
+		if reason == "" {
+			continue
+		}
+		if checkedOut[tree] {
+			return reason
+		}
+		for _, name := range involved {
+			if name == ref {
+				return reason
+			}
+		}
+	}
+	return ""
+}
+
 // heldElsewhere reports whether a linked worktree has the branch checked out.
 func heldElsewhere(ctx context.Context, e env, ref string) bool {
 	out, err := e.g(ctx, "worktree", "list", "--porcelain")
@@ -186,7 +228,7 @@ func heldElsewhere(ctx context.Context, e env, ref string) bool {
 }
 
 // restoreHook is a test seam called after the checks and before the branch change.
-var restoreHook func(dir string)
+var restoreHook, restoreAfterHook func(dir string)
 
 // restoreEntry restores entry k of the record and reports it. The record is data: a ref that is not a
 // branch or an OID that is not an object ID is failed before Git sees it.
@@ -209,17 +251,11 @@ func restoreEntry(ctx context.Context, e env, j *journal, k int) Repo {
 	if out, err := e.g(ctx, "check-ref-format", en.Ref); err != nil || out.Code != 0 {
 		return fail("bad-record")
 	}
-	switch en.State {
-	case stateFailed, "conflict":
-		// the change never happened (or a rebase is left to the owner): nothing to restore
-		rp.Result, rp.Reason = ResultAlreadyRestored, ptr("the run did not change the branch")
+	if en.State == statePrepared && expected == "" {
+		rp.Result, rp.Reason = ResultJournalIncomplete, ptr("no planned new tip is recorded; the recovery ref "+oneLine(en.RecoveryRef)+" names the old tip for a manual reset")
 		return rp
-	case statePrepared:
-		if expected == "" {
-			rp.Result, rp.Reason = ResultJournalIncomplete, ptr("no planned new tip is recorded; the recovery ref "+oneLine(en.RecoveryRef)+" names the old tip for a manual reset")
-			return rp
-		}
 	}
+	// failed and conflict entries are classified like the others, by where the branch really is
 	cur := e.revParse(ctx, e.dir, en.Ref)
 	if cur == "" {
 		return changed("the branch no longer exists")
@@ -238,14 +274,20 @@ func restoreEntry(ctx context.Context, e env, j *journal, k int) Repo {
 	if cur == en.OldOID {
 		return done(ResultAlreadyRestored)
 	}
-	if cur != expected {
+	if expected == "" || cur != expected {
 		return changed("the branch moved since the run")
+	}
+	if sym, err := e.g(ctx, "symbolic-ref", "-q", en.Ref); err != nil || sym.Code != 1 {
+		return changed("the branch ref is symbolic")
+	}
+	if out, err := e.g(ctx, "cat-file", "-e", en.OldOID+"^{commit}"); err != nil || out.Code != 0 {
+		return fail("old-object-missing")
+	}
+	if reason := operationOn(ctx, e, en.Ref); reason != "" {
+		return changed(reason)
 	}
 	sym, _ := e.g(ctx, "symbolic-ref", "-q", "HEAD")
 	if strings.TrimSpace(sym.Out) == en.Ref {
-		if reason, _ := e.operation(ctx, e.dir); reason != "" {
-			return changed(reason)
-		}
 		if hasTrackedChanges(ctx, e, e.dir) {
 			return changed("the worktree has local changes")
 		}
@@ -254,6 +296,9 @@ func restoreEntry(ctx context.Context, e env, j *journal, k int) Repo {
 		}
 		if out, err := e.g(ctx, "-c", "submodule.recurse=false", "reset", "--keep", en.OldOID, "--"); err != nil || out.Code != 0 {
 			return fail("git-failed: " + firstLine(out.Diagnostic+"\n"+out.Out))
+		}
+		if restoreAfterHook != nil {
+			restoreAfterHook(e.dir)
 		}
 		if e.revParse(ctx, e.dir, en.Ref) != en.OldOID {
 			return fail("raced")
@@ -266,7 +311,7 @@ func restoreEntry(ctx context.Context, e env, j *journal, k int) Repo {
 	if restoreHook != nil {
 		restoreHook(e.dir)
 	}
-	if out, err := e.g(ctx, "update-ref", en.Ref, en.OldOID, expected); err != nil || out.Code != 0 {
+	if out, err := e.g(ctx, "update-ref", "--no-deref", en.Ref, en.OldOID, expected); err != nil || out.Code != 0 {
 		return changed("the branch moved while restoring")
 	}
 	return done(ResultRestored)

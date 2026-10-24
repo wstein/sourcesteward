@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func restore(t *testing.T, w *workspace, runID string) Result {
@@ -123,6 +124,7 @@ func TestRestoreIncompleteRecords(t *testing.T) {
 
 func TestRestoreRunSelectionAndRefusals(t *testing.T) {
 	w, first, old, _ := movedWorkspace(t)
+	time.Sleep(1100 * time.Millisecond) // second-resolution run IDs on this branch
 	w.advance(t, ".", "main")
 	second := *run(t, w, Options{}).RunID
 	if r := restore(t, w, ""); *r.RunID != second {
@@ -197,5 +199,136 @@ func TestRestoreRacesNeverLoseWork(t *testing.T) {
 	r = repoByName(t, restore(t, w, ""))["."]
 	if r.Result != ResultChangedSince || w.oid(t, ".", "main") != racer {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// F1: a branch an operation works on is never moved, in the main or in a linked worktree, although HEAD
+// is detached there; the user's next `git rebase --continue` must still work.
+func TestRestoreRefusesABranchInTheMiddleOfAnOperation(t *testing.T) {
+	cases := map[string]func(t *testing.T, w *workspace){
+		"rebase in the main worktree": func(t *testing.T, w *workspace) {
+			runGit(t, w.ws, "checkout", "-q", "--detach")
+			os.MkdirAll(filepath.Join(w.ws, ".git", "rebase-merge"), 0o755)
+			write(t, filepath.Join(w.ws, ".git", "rebase-merge", "head-name"), "refs/heads/main\n")
+		},
+		"rebase in a linked worktree": func(t *testing.T, w *workspace) {
+			runGit(t, w.ws, "checkout", "-q", "-b", "other")
+			lw := filepath.Join(w.root, "lw")
+			runGit(t, w.ws, "worktree", "add", "-q", "--detach", lw)
+			dir := filepath.Join(runGit(t, lw, "rev-parse", "--absolute-git-dir"), "rebase-apply")
+			os.MkdirAll(dir, 0o755)
+			write(t, filepath.Join(dir, "head-name"), "refs/heads/main\n")
+		},
+		"bisect in a linked worktree": func(t *testing.T, w *workspace) {
+			runGit(t, w.ws, "checkout", "-q", "-b", "other")
+			lw := filepath.Join(w.root, "lw")
+			runGit(t, w.ws, "worktree", "add", "-q", "--detach", lw)
+			gd := runGit(t, lw, "rev-parse", "--absolute-git-dir")
+			write(t, filepath.Join(gd, "BISECT_LOG"), "git bisect start\n")
+			write(t, filepath.Join(gd, "BISECT_START"), "main\n")
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			w, _, _, now := movedWorkspace(t)
+			setup(t, w)
+			r := restore(t, w, "")
+			if got := repoByName(t, r)["."]; got.Result != ResultChangedSince || r.ExitCode() != 1 || w.oid(t, ".", "main") != now {
+				t.Fatalf("%+v", got)
+			}
+		})
+	}
+}
+
+// F2: a failed or conflict entry is classified by where the branch really is.
+func TestRestoreClassifiesFailedEntriesByTheBranchPosition(t *testing.T) {
+	for _, state := range []string{stateFailed, "conflict"} {
+		// the branch moved to the planned new tip (a 'raced' failure after the move): restored
+		w, id, old, _ := movedWorkspace(t)
+		editRecord(t, w, w.ws, id, func(r *journalRecord) { r.Entries[0].State, r.Entries[0].NewOID = state, "" })
+		if got := repoByName(t, restore(t, w, ""))["."]; got.Result != ResultRestored || w.oid(t, ".", "main") != old {
+			t.Fatalf("%s at planned tip: %+v", state, got)
+		}
+		// at the old tip: verified already restored
+		if got := repoByName(t, restore(t, w, ""))["."]; got.Result != ResultAlreadyRestored {
+			t.Fatalf("%s at old tip: %+v", state, got)
+		}
+		// anywhere else: changed-since, untouched
+		w, id, _, _ = movedWorkspace(t)
+		editRecord(t, w, w.ws, id, func(r *journalRecord) { r.Entries[0].State, r.Entries[0].NewOID = state, "" })
+		commit(t, w.ws, "later.txt", "x\n")
+		tip := w.oid(t, ".", "main")
+		if got := repoByName(t, restore(t, w, ""))["."]; got.Result != ResultChangedSince || w.oid(t, ".", "main") != tip {
+			t.Fatalf("%s elsewhere: %+v", state, got)
+		}
+	}
+}
+
+// F3: the default run is the highest run ID, also after a restore rewrote an older record.
+func TestRestoreDefaultRunIsOrderedByRunIDNotByModificationTime(t *testing.T) {
+	w, first, _, _ := movedWorkspace(t)
+	editRecord(t, w, w.ws, first, func(r *journalRecord) { r.Entries[0].State, r.Entries[0].NewOID = statePrepared, "" })
+	time.Sleep(1100 * time.Millisecond) // second-resolution run IDs on this branch: the later run needs a later second
+	w.advance(t, ".", "main")
+	second := *run(t, w, Options{}).RunID
+	if r := restore(t, w, first); *r.RunID != first {
+		t.Fatalf("%v", *r.RunID) // rewrites the record of the older run
+	}
+	if r := restore(t, w, ""); *r.RunID != second {
+		t.Fatalf("the default run is %s, want the highest run ID %s", *r.RunID, second)
+	}
+}
+
+func TestRunIDOrderMixesBothFormats(t *testing.T) {
+	ids := []string{"20261024T201051Z-00000001", "20261024T201050Z-ffffffff", "20261024T201050000001Z-00000000", "20261024T201050999999Z-00000000"}
+	var latest string
+	for _, id := range ids {
+		if latest == "" || runIDLess(latest, id) {
+			latest = id
+		}
+	}
+	if latest != "20261024T201051Z-00000001" || !runIDLess("20261024T201050Z-ffffffff", "20261024T201050000001Z-00000000") || runIDLess("20261024T201050999999Z-00000000", "20261024T201050000001Z-00000000") {
+		t.Fatal(latest)
+	}
+}
+
+// F4: a symbolic ref is never followed.
+func TestRestoreNeverFollowsASymbolicBranchRef(t *testing.T) {
+	w, id, _, now := movedWorkspace(t)
+	runGit(t, w.ws, "checkout", "-q", "-b", "other")
+	runGit(t, w.ws, "symbolic-ref", "refs/heads/alias", "refs/heads/main")
+	editRecord(t, w, w.ws, id, func(r *journalRecord) { r.Entries[0].Ref = "refs/heads/alias" })
+	if got := repoByName(t, restore(t, w, ""))["."]; got.Result != ResultChangedSince || w.oid(t, ".", "main") != now {
+		t.Fatalf("%+v", got)
+	}
+}
+
+// F5: a missing old object is a failure of the record, not a branch change.
+func TestRestoreWithAMissingOldObjectFails(t *testing.T) {
+	w, id, _, now := movedWorkspace(t)
+	editRecord(t, w, w.ws, id, func(r *journalRecord) { r.Entries[0].OldOID = "1111111111111111111111111111111111111111" })
+	r := restore(t, w, "")
+	if got := repoByName(t, r)["."]; got.Result != ResultFailed || r.ExitCode() != 1 || w.oid(t, ".", "main") != now {
+		t.Fatalf("%+v", got)
+	}
+}
+
+// F6: a bad --run is a usage error, not "no such run".
+func TestRestoreRunPatternIsCheckedBeforeAnyLookup(t *testing.T) {
+	w, _, _, _ := movedWorkspace(t)
+	for _, bad := range []string{"../x", "nope", "20261024T201050Z-0000000g"} {
+		if r := restore(t, w, bad); r.Error == nil || r.Error.Code != "sync-invalid-options" {
+			t.Fatalf("%q: %+v", bad, r.Error)
+		}
+	}
+}
+
+// F6: the branch must have landed on the old tip after reset --keep.
+func TestRestoreChecksWhereTheBranchLanded(t *testing.T) {
+	defer func() { restoreAfterHook = nil }()
+	w, _, _, _ := movedWorkspace(t)
+	restoreAfterHook = func(dir string) { commit(t, dir, "after.txt", "x\n") }
+	if got := repoByName(t, restore(t, w, ""))["."]; got.Result != ResultFailed {
+		t.Fatalf("%+v", got)
 	}
 }
