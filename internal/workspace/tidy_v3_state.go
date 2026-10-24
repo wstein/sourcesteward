@@ -60,6 +60,53 @@ type V3JournalEntry struct {
 	// branch deletion (Spec 031 T045). Journals written before it lack the field.
 	Branch *V3BranchEvidence `json:"branch_evidence,omitempty"`
 }
+
+// V3RunMode is the mode evidence of an apply (Spec 041 FR-006g): whether the run was the human
+// path or an agent, what the terminal and the environment showed (variable names, never values),
+// and the caller label with its source. It is recorded once in the apply journal and shown by
+// history. The field set mirrors the wizard's owner.Evidence JSON.
+type V3RunMode struct {
+	Mode         string   `json:"mode"`
+	StdinTTY     bool     `json:"stdin_tty"`
+	StdoutTTY    bool     `json:"stdout_tty"`
+	Markers      []string `json:"markers"`
+	Mine         bool     `json:"mine"`
+	ByOwner      []string `json:"by_owner"`
+	Caller       string   `json:"caller"`
+	CallerSource string   `json:"caller_source"`
+}
+
+const (
+	runModeListMax = 32
+	runModeTextMax = 128
+)
+
+// validV3RunMode reports whether the run mode is absent or complete and bounded.
+func validV3RunMode(m *V3RunMode) bool {
+	if m == nil {
+		return true
+	}
+	if m.Mode != "human" && m.Mode != "agent" || m.Markers == nil || m.ByOwner == nil || len(m.Markers) > runModeListMax || len(m.ByOwner) > runModeListMax {
+		return false
+	}
+	short := func(s string, max int) bool { return len(s) <= max && validText(s) }
+	for _, s := range append(append([]string{}, m.Markers...), m.ByOwner...) {
+		if !short(s, runModeTextMax) {
+			return false
+		}
+	}
+	return short(m.Caller, runModeTextMax) && short(m.CallerSource, 64)
+}
+
+func cloneRunMode(m *V3RunMode) *V3RunMode {
+	if m == nil {
+		return nil
+	}
+	c := *m
+	c.Markers, c.ByOwner = append([]string{}, m.Markers...), append([]string{}, m.ByOwner...)
+	return &c
+}
+
 type V3Journal struct {
 	PrivatePlanDigest string           `json:"private_plan_digest"`
 	SchemaVersion     int              `json:"schema_version"`
@@ -73,6 +120,9 @@ type V3Journal struct {
 	Entries           []V3JournalEntry `json:"entries"`
 	KnownEffects      []string         `json:"known_effects"`
 	Diagnostics       []Diagnostic     `json:"diagnostics"`
+	// RunMode is the mode evidence of the apply that wrote the journal (Spec 041); absent in
+	// journals of other applies. It is fixed when the journal is prepared and never changes.
+	RunMode *V3RunMode `json:"run_mode,omitempty"`
 }
 type v3Store struct {
 	*store
@@ -339,7 +389,10 @@ func v3Eligible(p V3Plan) []V3Candidate {
 	return out
 }
 func newV3Journal(p V3Plan, native V3NativeState) V3Journal {
-	j := V3Journal{PrivatePlanDigest: v3PrivatePlanDigest(p, native), SchemaVersion: 3, PlanID: p.PlanID, PlanDigest: p.Digest, Mode: p.Mode, Phase: "prepared", InitialNative: cloneV3Native(native), CurrentNative: cloneV3Native(native), CurrentExpected: p.Expected, Entries: []V3JournalEntry{}, KnownEffects: []string{}, Diagnostics: []Diagnostic{}}
+	return newV3JournalWithMode(p, native, nil)
+}
+func newV3JournalWithMode(p V3Plan, native V3NativeState, mode *V3RunMode) V3Journal {
+	j := V3Journal{PrivatePlanDigest: v3PrivatePlanDigest(p, native), SchemaVersion: 3, PlanID: p.PlanID, PlanDigest: p.Digest, Mode: p.Mode, Phase: "prepared", InitialNative: cloneV3Native(native), CurrentNative: cloneV3Native(native), CurrentExpected: p.Expected, Entries: []V3JournalEntry{}, KnownEffects: []string{}, Diagnostics: []Diagnostic{}, RunMode: cloneRunMode(mode)}
 	for _, c := range v3Eligible(p) {
 		registration, files := "not-selected", "not-selected"
 		if p.Retirement != nil {
@@ -421,7 +474,7 @@ func validateV3Journal(j V3Journal, p V3Plan) error {
 	bad := func() error {
 		return failure("invalid-state", "V3 journal phases, recovery, effects or exact native deltas disagree with the immutable plan.")
 	}
-	if validateV3Plan(p, p.StateDir, p.PlanID) != nil || j.PrivatePlanDigest != v3PrivatePlanDigest(p, j.InitialNative) || j.SchemaVersion != 3 || j.PlanID != p.PlanID || j.PlanDigest != p.Digest || j.Mode != p.Mode || j.Entries == nil || j.KnownEffects == nil || j.Diagnostics == nil || !validV3NativeState(j.InitialNative, p, p.Expected) || !reflect.DeepEqual(j.KnownEffects, v3JournalEffects(p, j)) {
+	if validateV3Plan(p, p.StateDir, p.PlanID) != nil || j.PrivatePlanDigest != v3PrivatePlanDigest(p, j.InitialNative) || j.SchemaVersion != 3 || j.PlanID != p.PlanID || j.PlanDigest != p.Digest || j.Mode != p.Mode || j.Entries == nil || j.KnownEffects == nil || j.Diagnostics == nil || !validV3RunMode(j.RunMode) || !validV3NativeState(j.InitialNative, p, p.Expected) || !reflect.DeepEqual(j.KnownEffects, v3JournalEffects(p, j)) {
 		return bad()
 	}
 	targets := v3Eligible(p)
@@ -561,7 +614,7 @@ func (s *v3Store) prepareJournal(p V3Plan, j V3Journal) error {
 	if e != nil {
 		return e
 	}
-	if !reflect.DeepEqual(stored, p) || !reflect.DeepEqual(j, newV3Journal(p, native)) {
+	if !reflect.DeepEqual(stored, p) || !reflect.DeepEqual(j, newV3JournalWithMode(p, native, j.RunMode)) {
 		return failure("invalid-state", "Initial journal must exactly match the immutable complete plan.")
 	}
 	if e = validateV3Journal(j, p); e != nil {
@@ -609,7 +662,7 @@ func (s *v3Store) advanceJournal(p V3Plan, prior, next V3Journal) error {
 	return s.writeRecord("tidy-v3-operations", p.PlanID, next, false)
 }
 func validV3Forward(before, after V3Journal, p V3Plan) bool {
-	if before.PrivatePlanDigest != after.PrivatePlanDigest || before.SchemaVersion != after.SchemaVersion || before.PlanID != after.PlanID || before.PlanDigest != after.PlanDigest || before.Mode != after.Mode || !reflect.DeepEqual(before.InitialNative, after.InitialNative) || len(before.Entries) != len(after.Entries) {
+	if before.PrivatePlanDigest != after.PrivatePlanDigest || before.SchemaVersion != after.SchemaVersion || before.PlanID != after.PlanID || before.PlanDigest != after.PlanDigest || before.Mode != after.Mode || !reflect.DeepEqual(before.RunMode, after.RunMode) || !reflect.DeepEqual(before.InitialNative, after.InitialNative) || len(before.Entries) != len(after.Entries) {
 		return false
 	}
 	changed := -1

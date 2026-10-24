@@ -69,6 +69,8 @@ type V3ApplyOptions struct {
 	ProtectWorktrees         []string
 	// Timeout replaces the default deadlines of the operation when positive.
 	Timeout time.Duration
+	// RunMode is the mode evidence recorded in the journal (Spec 041); nil records none.
+	RunMode *V3RunMode
 }
 
 func validateV3PlanOptions(o V3PlanOptions) error {

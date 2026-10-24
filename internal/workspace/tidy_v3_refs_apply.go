@@ -121,8 +121,8 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	if !o.Authorize {
 		return failTidyV3(r, failure("authorization-required", "Apply requires explicit acknowledgment of exact stored local effects."))
 	}
-	if !validID(o.PlanID) || !v3CanonicalPath(o.StateDir) {
-		return failTidyV3(r, failure("invalid-options", "An exact stored plan identity and canonical private state directory are required."))
+	if !validID(o.PlanID) || !v3CanonicalPath(o.StateDir) || !validV3RunMode(o.RunMode) {
+		return failTidyV3(r, failure("invalid-options", "An exact stored plan identity, canonical private state directory and a complete run mode are required."))
 	}
 	if err := ctx.Err(); err != nil {
 		return failTidyV3(r, err)
@@ -248,7 +248,7 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	if _, err = c.observeCurrent(ctx, p, p.Expected, initial); err != nil {
 		return failTidyV3(r, err)
 	}
-	journal := newV3Journal(p, initial)
+	journal := newV3JournalWithMode(p, initial, o.RunMode)
 	if err = s.prepareJournal(p, journal); err != nil {
 		return failTidyV3(r, err)
 	}
