@@ -295,7 +295,11 @@ independent reasons:
   plans: ancestor, patch-id, merge-noop or no-net-change, honouring `--integration-proof` and `--accept-whitespace-differences`. The
   policy is stored in the plan (`proof_policy`); a plan stored without one keeps the ancestry proof. A head the proofs do not cover
   (extra unmerged commit, whitespace-only difference without the flag, a class left out) stays `retain` `integration-not-proven`.
-  Clean tree, no extras, no submodule or symlink problem as before.
+  Clean tree, no extras, no submodule or symlink problem as before. Consequence: Spec 011 US1-AS2 ("an empty commit alone never
+  authorizes deletion") no longer holds for retirement, as Spec 031 FR-004a already changed it for references: an empty commit, or a
+  commit whose net change is nil, is proven by no-net-change and the worktree is retired. This is safe because the worktree is clean
+  and has no extras, and apply pins the HEAD under a recovery reference before anything is removed. The retirement plan deadline
+  includes the 60 s forge-free proof phase of local-reference plans; the apply deadline keeps its per-entry scaling.
 - **Stale binding.** The stored plan binds HEAD ref, OID, branch tip and base; any change refuses with the existing `evidence-changed` (the stale re-check of the code; no `stale` refusal code exists).
 
 **Branch leg (new plan form, defined).** `owned-retirement` and `legacy-retirement` plans carry no selected refs today and the branch is
