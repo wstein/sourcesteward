@@ -117,9 +117,6 @@ func (p V3Planner) Options(s SubSpec) (workspace.V3PlanOptions, error) {
 		return workspace.V3PlanOptions{}, unplannable(ReasonBaseMissing, "repository %q has no derived base", s.Repo)
 	}
 	o := workspace.V3PlanOptions{Path: repo.Path, Base: repo.Base, ProtectWorktrees: []string{}}
-	if s.Kind == KindStaleWorktrees {
-		return o, unplannable(ReasonStaleNoPlanKind, "no existing plan kind removes a registration whose directory is missing")
-	}
 	if len(s.Items) == 0 {
 		return o, unplannable(ReasonRepositoryUnknown, "the sub-plan covers no item")
 	}

@@ -198,8 +198,8 @@ func TestOptionsNeverGuessMissingInputs(t *testing.T) {
 func TestStaleRegistrationHasNoPlanKind(t *testing.T) {
 	r := &recorder{}
 	s := own(tidywizard.KindStaleWorktree, "r", "gone")
-	_, err := newPlanner(r).Options(spec(KindStaleWorktrees, s))
-	if reasonOf(t, err) != ReasonStaleNoPlanKind {
+	_, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{s}, Chosen: ids(s), Mode: human}, newPlanner(r))
+	if !errors.Is(err, ErrNotPlannable) || reasonOf(t, err) != ReasonStaleNoPlanKind {
 		t.Fatal(err)
 	}
 	if len(r.opts) != 0 {
