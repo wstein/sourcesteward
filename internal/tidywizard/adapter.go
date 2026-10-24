@@ -48,7 +48,12 @@ type jjSnapshot struct {
 	recs JJRecords
 }
 
+// jjRecords returns the snapshot of the run. An Adapter built as a struct literal (without
+// NewAdapter) has no shared snapshot: it reads the records afresh, and Facts asks once per call.
 func (a Adapter) jjRecords() JJRecords {
+	if a.jj == nil {
+		return a.JJRecords()
+	}
 	a.jj.once.Do(func() { a.jj.recs = a.JJRecords() })
 	return a.jj.recs
 }
@@ -79,10 +84,14 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		return RepoFacts{}, err
 	}
 	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}}
+	var jj JJRecords
+	if obs.Backend == "jj" && a.JJRecords != nil {
+		jj = a.jjRecords()
+	}
 	for _, e := range obs.Worktrees {
 		w := a.worktree(e)
-		if obs.Backend == "jj" && a.JJRecords != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
-			a.joinJJRecord(&w, obs.RepositoryDir)
+		if jj != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
+			joinJJRecord(jj, &w, obs.RepositoryDir)
 		}
 		f.Worktrees = append(f.Worktrees, w)
 	}
@@ -100,8 +109,8 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		}
 		f.TrackingRefs = append(f.TrackingRefs, TrackingRef{Name: r.Name, Proof: proof, Incomplete: incomplete, Reason: reason})
 	}
-	if obs.Backend == "jj" && a.JJRecords != nil {
-		if records, stores := a.jjRecords().Skips(); len(records)+stores > 0 {
+	if jj != nil {
+		if records, stores := jj.Skips(); len(records)+stores > 0 {
 			// A fixed text with counts: the ids of unreadable records are never echoed.
 			f.Notices = append(f.Notices, fmt.Sprintf("creation-records-unreadable: %d records, %d stores that could not be listed", len(records), stores))
 		}
@@ -129,8 +138,8 @@ const unrecognizedTrackingReason = "tracking-reason-unrecognized"
 // found record owns it (owner and scope only; the classifier still retains it); several differing
 // records retain it as incomplete evidence; none leaves it unregistered, as before. Unreadable
 // records are collected, never fatal.
-func (a Adapter) joinJJRecord(w *Worktree, repoDir string) {
-	l := a.jjRecords().Lookup(w.Path, repoDir)
+func joinJJRecord(jj JJRecords, w *Worktree, repoDir string) {
+	l := jj.Lookup(w.Path, repoDir)
 	switch {
 	case l.Ambiguity != nil:
 		if l.Ambiguity.Code == "registration-record-ambiguous" && w.Incomplete == "" {
