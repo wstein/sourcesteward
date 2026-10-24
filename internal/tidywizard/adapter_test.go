@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
+	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
@@ -551,5 +552,154 @@ func TestAdapterAllowlistsTheTrackingReason(t *testing.T) {
 	a, _ := testAdapter(obs, nil)
 	if c := Classify(context.Background(), a, []string{"r"}, cfg()).Candidates[0]; c.Verdict != VerdictSafe {
 		t.Errorf("absence: %+v", c)
+	}
+}
+
+// Spec 041 T011a5: a jj workspace (no stw lock) is joined to its creation record by backend,
+// destination and repository directory, through derive only.
+func jjObservation(paths ...string) workspace.WorktreeObservation {
+	obs := workspace.WorktreeObservation{Backend: "jj", Base: "main", RepositoryDir: "/ws/r/.jj/repo"}
+	obs.Worktrees = append(obs.Worktrees, workspace.WorktreeEvidence{Path: "/ws/r", Primary: true})
+	for _, p := range paths {
+		e := evid(p, "")
+		e.Proof = "empty-working-copy-integrated-parent"
+		obs.Worktrees = append(obs.Worktrees, e)
+	}
+	return obs
+}
+
+type destCall struct{ backend, dest, repoDir string }
+
+func jjAdapter(obs workspace.WorktreeObservation, lookup func(destCall) derive.DestinationLookup) (Adapter, *[]destCall) {
+	var calls []destCall
+	a, _ := testAdapter(obs, nil)
+	a.RecordsByDestination = func(backend, dest, repoDir string) derive.DestinationLookup {
+		c := destCall{backend, dest, repoDir}
+		calls = append(calls, c)
+		return lookup(c)
+	}
+	return a, &calls
+}
+
+func foundFor(task, owner string) derive.DestinationLookup {
+	return derive.DestinationLookup{TaskLookup: derive.TaskLookup{
+		Result: derive.Result{Derived: derive.Derived{Name: "owner:" + task, Value: owner, Source: "task-record"}},
+		Record: workspace.TaskRecord{TaskID: task, Owner: owner},
+	}}
+}
+
+func TestAdapterJoinsAJJWorkspaceToItsRecordByDestination(t *testing.T) {
+	a, calls := jjAdapter(jjObservation("/ws/wt/a", "/ws/wt/b"), func(c destCall) derive.DestinationLookup {
+		if c.dest == "/ws/wt/a" {
+			return foundFor("ta", "werner")
+		}
+		return derive.DestinationLookup{TaskLookup: lookupFailure("registration-record-missing")}
+	})
+	f, err := a.Facts(context.Background(), "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []destCall{{"jj", "/ws/wt/a", "/ws/r/.jj/repo"}, {"jj", "/ws/wt/b", "/ws/r/.jj/repo"}}
+	if !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("the primary workspace is never looked up, the others by destination and repository: %v", *calls)
+	}
+	byPath := map[string]Worktree{}
+	for _, w := range f.Worktrees {
+		byPath[w.Path] = w
+	}
+	if w := byPath["/ws/wt/a"]; !w.JJOwned || w.Task != "ta" || w.TaskOwner != "werner" || w.Lock != LockNone {
+		t.Errorf("owned: %+v", w)
+	}
+	if w := byPath["/ws/wt/b"]; w.JJOwned || w.TaskOwner != "" || w.Incomplete != "" {
+		t.Errorf("without a record: %+v", w)
+	}
+	if w := byPath["/ws/r"]; w.JJOwned {
+		t.Errorf("primary: %+v", w)
+	}
+	res := Classify(context.Background(), a, []string{"r"}, cfg())
+	for _, c := range res.Candidates {
+		if c.Path == "/ws/wt/a" && (c.Verdict != VerdictRetain || c.Reason != "jj-retirement-unsupported" || c.Scope != owner.ScopeOwn || len(c.Effects) != 0) {
+			t.Errorf("owned workspace: %+v", c)
+		}
+	}
+}
+
+func TestAdapterNeverLooksAGitWorktreeUpByDestination(t *testing.T) {
+	obs := workspace.WorktreeObservation{Backend: "git", RepositoryDir: "/ws/r/.git", Worktrees: []workspace.WorktreeEvidence{evid("/ws/wt/a", "refs/heads/x")}}
+	a, calls := jjAdapter(obs, func(destCall) derive.DestinationLookup { return foundFor("t", "werner") })
+	f, _ := a.Facts(context.Background(), "r")
+	if len(*calls) != 0 || f.Worktrees[0].JJOwned {
+		t.Fatalf("%v %+v", *calls, f.Worktrees[0])
+	}
+}
+
+func TestAdapterRetainsAJJWorkspaceWithAmbiguousRecordsAndReportsSkippedOnes(t *testing.T) {
+	a, _ := jjAdapter(jjObservation("/ws/wt/a"), func(destCall) derive.DestinationLookup {
+		l := derive.DestinationLookup{TaskLookup: lookupFailure("registration-record-ambiguous"), Skipped: []string{"x\x1b[31m", "y"}}
+		return l
+	})
+	f, _ := a.Facts(context.Background(), "r")
+	var w Worktree
+	for _, x := range f.Worktrees {
+		if x.Path == "/ws/wt/a" {
+			w = x
+		}
+	}
+	if w.JJOwned || w.Incomplete != "registration-record-ambiguous" {
+		t.Errorf("ambiguous records must retain: %+v", w)
+	}
+	found := false
+	for _, n := range f.Notices {
+		if strings.Contains(n, "creation-records-unreadable") {
+			found = true
+			if strings.Contains(n, "\x1b") || strings.Contains(n, "x") && strings.Contains(n, "[31m") {
+				t.Errorf("a record id leaked into the notice: %q", n)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("unreadable records are not reported: %v", f.Notices)
+	}
+	// Reported once for the repository, not once per workspace.
+	a2, _ := jjAdapter(jjObservation("/ws/wt/a", "/ws/wt/b"), func(destCall) derive.DestinationLookup {
+		return derive.DestinationLookup{TaskLookup: lookupFailure("registration-record-missing"), Skipped: []string{"y"}}
+	})
+	f2, _ := a2.Facts(context.Background(), "r")
+	n := 0
+	for _, x := range f2.Notices {
+		if strings.Contains(x, "creation-records-unreadable") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("want one notice, got %d: %v", n, f2.Notices)
+	}
+}
+
+// Whatever the lookup returns, only a found record with a valid task id and the task-record source
+// owns a workspace, and a locked workspace is never looked up.
+func TestAdapterJJOwnershipFailsClosed(t *testing.T) {
+	for name, l := range map[string]derive.DestinationLookup{
+		"task id with a path":  foundFor("../x", "werner"),
+		"empty task id":        foundFor("", "werner"),
+		"no source":            {TaskLookup: derive.TaskLookup{Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
+		"source of a guess":    {TaskLookup: derive.TaskLookup{Result: derive.Result{Derived: derive.Derived{Source: "os-user"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
+		"missing with a hit":   {TaskLookup: derive.TaskLookup{Result: derive.Result{Ambiguity: &derive.Ambiguity{Code: "registration-record-missing"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
+		"ambiguous with a hit": {TaskLookup: derive.TaskLookup{Result: derive.Result{Ambiguity: &derive.Ambiguity{Code: "registration-record-ambiguous"}}, Record: workspace.TaskRecord{TaskID: "t", Owner: "werner"}}},
+	} {
+		a, _ := jjAdapter(jjObservation("/ws/wt/a"), func(destCall) derive.DestinationLookup { return l })
+		f, _ := a.Facts(context.Background(), "r")
+		for _, w := range f.Worktrees {
+			if w.JJOwned {
+				t.Errorf("%s owns: %+v", name, w)
+			}
+		}
+	}
+	obs := jjObservation("/ws/wt/a")
+	obs.Worktrees[1].Locked, obs.Worktrees[1].LockReason = true, "something"
+	a, calls := jjAdapter(obs, func(destCall) derive.DestinationLookup { return foundFor("t", "werner") })
+	f, _ := a.Facts(context.Background(), "r")
+	if len(*calls) != 0 || f.Worktrees[1].JJOwned {
+		t.Errorf("a locked workspace was joined: %v %+v", *calls, f.Worktrees[1])
 	}
 }
