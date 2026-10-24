@@ -36,16 +36,15 @@ const (
 // SubKind is the effect kind of a sub-plan.
 type SubKind string
 
-// The effect kinds. The order of apply is retirements, stale registrations, branches, tracking
-// references (see Ordered).
+// The effect kinds. The order of apply is retirements, branches, tracking references (see
+// Ordered). A stale registration has no plan kind (T012b).
 const (
-	KindRetire         SubKind = "retire"
-	KindStaleWorktrees SubKind = "stale-worktrees"
-	KindBranches       SubKind = "branches"
-	KindTracking       SubKind = "tracking"
+	KindRetire   SubKind = "retire"
+	KindBranches SubKind = "branches"
+	KindTracking SubKind = "tracking"
 )
 
-var rank = map[SubKind]int{KindRetire: 0, KindStaleWorktrees: 1, KindBranches: 2, KindTracking: 3}
+var rank = map[SubKind]int{KindRetire: 0, KindBranches: 1, KindTracking: 2}
 
 // Errors of building, storing and loading a set.
 var (
@@ -74,8 +73,11 @@ type Item struct {
 	Task        string       `json:"task"`
 }
 
+// key is the canonical JSON of the whole item, so that no stored field can change without
+// changing the plan id.
 func (i Item) key() string {
-	return strings.Join([]string{i.ID, string(i.Scope), i.Owner, string(i.OwnerSource)}, "\x1f")
+	b, _ := json.Marshal(i) // plain strings: cannot fail
+	return string(b)
 }
 
 // SubPlan is one independent sub-plan: ID is the id of the stored plan the Planner made (a Spec
@@ -106,13 +108,6 @@ type Set struct {
 	Mode             owner.Evidence   `json:"mode"`
 }
 
-func (s Set) clone() Set {
-	b, _ := json.Marshal(s)
-	var c Set
-	_ = json.Unmarshal(b, &c)
-	return c
-}
-
 func (s Set) computeID() string {
 	subs := make([]string, 0, len(s.SubPlans))
 	for _, p := range s.SubPlans {
@@ -136,8 +131,8 @@ func (s Set) NeedsAuthorization() bool {
 	return false
 }
 
-// Ordered returns the sub-plans in the fixed apply order: retirements, stale registrations,
-// branches, tracking references; within a kind by repository, worktree and id.
+// Ordered returns the sub-plans in the fixed apply order: retirements, branches,
+// tracking references; within a kind by repository, worktree and id.
 func (s Set) Ordered() []SubPlan {
 	out := append([]SubPlan{}, s.SubPlans...)
 	sort.SliceStable(out, func(a, b int) bool {
@@ -183,12 +178,12 @@ func (s Set) Validate() error {
 	if len(s.SubPlans) == 0 || len(s.Items) == 0 || len(s.SubPlans) > MaxSubPlans || len(s.Items) > MaxItems {
 		return bad("%d sub-plans and %d items are outside 1..%d", len(s.SubPlans), len(s.Items), MaxItems)
 	}
-	items := map[string]bool{}
+	items := map[string]Item{}
 	for _, i := range s.Items {
-		if i.ID == "" || items[i.ID] {
+		if _, dup := items[i.ID]; i.ID == "" || dup {
 			return bad("item %q is empty or repeated", i.ID)
 		}
-		items[i.ID] = true
+		items[i.ID] = i
 	}
 	covered := map[string]bool{}
 	seen := map[string]bool{}
@@ -213,8 +208,15 @@ func (s Set) Validate() error {
 			return bad("only a retirement names a worktree (%s)", p.ID)
 		}
 		for _, id := range p.Items {
-			if !items[id] || covered[id] {
+			item, ok := items[id]
+			if !ok || covered[id] {
 				return bad("item %q of sub-plan %s is not selected or covered twice", id, p.ID)
+			}
+			if kind, known := subKind(tidywizard.Kind(item.Kind)); !known || kind != p.Kind || item.Repo != p.Repo {
+				return bad("item %q (repository %q, kind %q) does not belong to sub-plan %s (%s, %s)", id, item.Repo, item.Kind, p.ID, p.Repo, p.Kind)
+			}
+			if p.Kind == KindRetire && item.Path != p.Worktree {
+				return bad("item %q names worktree %q, not the one of sub-plan %s", id, item.Path, p.ID)
 			}
 			covered[id] = true
 		}
@@ -269,11 +271,9 @@ func entry(c tidywizard.Candidate) owner.Entry {
 // task record. Other, unknown, retain and decision rows are never included.
 func SelectSafe(cands []tidywizard.Candidate, ev owner.Evidence) []string {
 	entries := []owner.Entry{}
-	byID := map[string]tidywizard.Candidate{}
 	for _, c := range cands {
 		if c.Verdict == tidywizard.VerdictSafe && c.Scope == owner.ScopeOwn {
 			entries = append(entries, entry(c))
-			byID[c.ID] = c
 		}
 	}
 	out := []string{}
@@ -288,8 +288,6 @@ func subKind(k tidywizard.Kind) (SubKind, bool) {
 	switch k {
 	case tidywizard.KindWorktree:
 		return KindRetire, true
-	case tidywizard.KindStaleWorktree:
-		return KindStaleWorktrees, true
 	case tidywizard.KindBranch:
 		return KindBranches, true
 	case tidywizard.KindTrackingRef:
