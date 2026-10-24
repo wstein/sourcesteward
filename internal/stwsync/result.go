@@ -28,6 +28,11 @@ const (
 	ResultConflict             = "conflict"
 	ResultAutostashConflict    = "autostash-conflict"
 	ResultFailed               = "failed"
+	// restore results
+	ResultRestored          = "restored"
+	ResultAlreadyRestored   = "already-restored"
+	ResultChangedSince      = "changed-since"
+	ResultJournalIncomplete = "journal-incomplete"
 )
 
 // Tri is an option that overrides the user's Git configuration when set.
@@ -121,7 +126,7 @@ func (r Result) ExitCode() int {
 	}
 	for _, it := range r.Repos {
 		switch it.Result {
-		case ResultFailed, ResultConflict, ResultAutostashConflict:
+		case ResultFailed, ResultConflict, ResultAutostashConflict, ResultChangedSince, ResultJournalIncomplete:
 			return 1
 		}
 	}
