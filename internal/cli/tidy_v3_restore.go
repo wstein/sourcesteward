@@ -216,6 +216,9 @@ func renderTidyHistoryText(w io.Writer, r workspace.V3HistoryResult) error {
 	fmt.Fprintf(&text, "Tidy operation: %q\nContract: 3\nStatus: %q\nTotal: %d scan_truncated=%t\n", r.Command, r.Status, r.Total, r.ScanTruncated)
 	for _, e := range r.Entries {
 		fmt.Fprintf(&text, "Journal: plan=%q time=%q mode=%q deleted=%d retained=%d restorable=%d recovery_refs=%q decisions_human=%d decisions_ai=%d status=%q\n", e.PlanID, e.Time, e.Mode, e.Deleted, e.Retained, e.Restorable, e.RecoveryRefs, e.DecisionKinds.Human, e.DecisionKinds.AI, e.JournalStatus)
+		if m := e.RunMode; m != nil {
+			fmt.Fprintf(&text, "  Run mode: mode=%q stdin_tty=%t stdout_tty=%t markers=%q mine=%t by_owner=%q caller=%q caller_source=%q\n", m.Mode, m.StdinTTY, m.StdoutTTY, m.Markers, m.Mine, m.ByOwner, m.Caller, m.CallerSource)
+		}
 	}
 	for _, t := range r.Truncated {
 		fmt.Fprintf(&text, "Truncated: unit=%q shown=%d total=%d\n", t.Unit, t.Shown, t.Total)

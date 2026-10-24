@@ -106,6 +106,61 @@
           "minimum": 0,
           "type": "integer"
         },
+        "run_mode": {
+          "additionalProperties": false,
+          "properties": {
+            "by_owner": {
+              "items": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array"
+            },
+            "caller": {
+              "maxLength": 128,
+              "type": "string"
+            },
+            "caller_source": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "markers": {
+              "items": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array"
+            },
+            "mine": {
+              "type": "boolean"
+            },
+            "mode": {
+              "enum": [
+                "human",
+                "agent"
+              ]
+            },
+            "stdin_tty": {
+              "type": "boolean"
+            },
+            "stdout_tty": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "mode",
+            "stdin_tty",
+            "stdout_tty",
+            "markers",
+            "mine",
+            "by_owner",
+            "caller",
+            "caller_source"
+          ],
+          "type": "object"
+        },
         "time": {
           "maxLength": 64,
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$",

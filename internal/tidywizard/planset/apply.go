@@ -42,6 +42,13 @@ const (
 type Step struct {
 	SubPlan SubPlan
 	Items   []Item
+	// Mode is the mode evidence of this run; the applier records it in the journal.
+	Mode owner.Evidence
+}
+
+// runMode converts the evidence of the run to the form the journal records.
+func runMode(e owner.Evidence) *workspace.V3RunMode {
+	return &workspace.V3RunMode{Mode: string(e.Mode), StdinTTY: e.StdinTTY, StdoutTTY: e.StdoutTTY, Markers: append([]string{}, e.Markers...), Mine: e.Mine, ByOwner: append([]string{}, e.ByOwner...), Caller: e.Caller, CallerSource: e.CallerSource}
 }
 
 // Applier applies one stored sub-plan with the existing Spec 011/029/031 apply, which re-checks
@@ -127,7 +134,7 @@ func (a V3Applier) CheckBranchLeg(ctx context.Context, s Step) error {
 
 // ApplyBranchLeg derives the leg from the plan of the successful retirement result and applies it
 // through the existing leg apply, which re-observes the branch and keeps every Spec 011 protection.
-func (a V3Applier) ApplyBranchLeg(ctx context.Context, _ Step, retirement workspace.V3Result) (workspace.V3Result, bool) {
+func (a V3Applier) ApplyBranchLeg(ctx context.Context, step Step, retirement workspace.V3Result) (workspace.V3Result, bool) {
 	for _, act := range retirement.Actions {
 		if act.Name == replayAction {
 			return workspace.V3Result{Status: "ok", Actions: []workspace.ActionOutcome{{Name: "delete-branch", Status: "complete", Detail: "already deleted"}}}, true
@@ -147,6 +154,7 @@ func (a V3Applier) ApplyBranchLeg(ctx context.Context, _ Step, retirement worksp
 	if !ok {
 		return workspace.V3Result{}, false
 	}
+	leg.RunMode = runMode(step.Mode)
 	return run(ctx, leg, retirement), true
 }
 
@@ -165,7 +173,7 @@ func (a V3Applier) Apply(ctx context.Context, s Step) workspace.V3Result {
 			return workspace.V3Result{Status: "ok", Plan: &plan, Actions: []workspace.ActionOutcome{{Name: replayAction, Status: "complete", Detail: "already applied; the branch was already deleted"}}}
 		}
 	}
-	o := workspace.V3ApplyOptions{StateDir: s.SubPlan.StateDir, PlanID: s.SubPlan.ID, Authorize: true, ProtectWorktrees: []string{}}
+	o := workspace.V3ApplyOptions{StateDir: s.SubPlan.StateDir, PlanID: s.SubPlan.ID, Authorize: true, ProtectWorktrees: []string{}, RunMode: runMode(s.Mode)}
 	switch {
 	case s.SubPlan.Kind == KindTracking:
 		o.Online = true
@@ -285,10 +293,10 @@ func Apply(ctx context.Context, req ApplyRequest) ApplyResult {
 	} else if !req.Authorize {
 		return refused(set.PlanID, CodeAuthorizationRequired, "applying a plan set needs the explicit authorization of its plan id")
 	}
-	return applySteps(ctx, set, req.Applier)
+	return applySteps(ctx, set, req.Applier, req.Mode)
 }
 
-func applySteps(ctx context.Context, set Set, applier Applier) ApplyResult {
+func applySteps(ctx context.Context, set Set, applier Applier, mode owner.Evidence) ApplyResult {
 	byID := map[string]Item{}
 	for _, i := range set.Items {
 		byID[i.ID] = i
@@ -313,7 +321,7 @@ func applySteps(ctx context.Context, set Set, applier Applier) ApplyResult {
 	applied := 0
 	for _, sp := range set.Ordered() {
 		o := Outcome{SubPlan: sp.ID, Repo: sp.Repo, Kind: sp.Kind, Worktree: sp.Worktree}
-		step := Step{SubPlan: sp}
+		step := Step{SubPlan: sp, Mode: mode}
 		for _, id := range sp.Items {
 			step.Items = append(step.Items, byID[id])
 		}

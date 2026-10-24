@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -110,6 +111,60 @@ func TestApplyRefusesAnUnknownOrDamagedSet(t *testing.T) {
 	if res := Apply(context.Background(), r); res.Code != CodePlanSetNotFound {
 		t.Errorf("no store: %+v", res)
 	}
+}
+
+func TestApplyHandsTheModeEvidenceOfTheRunToEveryStep(t *testing.T) {
+	dir, set := stored(t, own(tidywizard.KindWorktree, "r", "a"), own(tidywizard.KindBranch, "r", "b"))
+	f := &fakeApplier{}
+	Apply(context.Background(), req(dir, set, agent, f))
+	if len(f.calls) != 2 {
+		t.Fatalf("%d calls", len(f.calls))
+	}
+	for _, c := range f.calls {
+		if c.Mode.Mode != owner.ModeAgent || c.Mode.Caller != "claude" || len(c.Mode.Markers) != 1 {
+			t.Errorf("the step carries the evidence of this run, not of the plan: %+v", c.Mode)
+		}
+	}
+}
+
+func TestV3ApplierRecordsTheRunModeInEveryApplyAndInTheLeg(t *testing.T) {
+	var got []workspace.V3ApplyOptions
+	var leg workspace.V3BranchLeg
+	a := V3Applier{
+		ApplyFunc: func(_ context.Context, o workspace.V3ApplyOptions) workspace.V3Result {
+			got = append(got, o)
+			return workspace.V3Result{Status: "ok"}
+		},
+		LegOf: func(workspace.V3Plan) (workspace.V3BranchLeg, bool) { return workspace.V3BranchLeg{}, true },
+		LegFunc: func(_ context.Context, l workspace.V3BranchLeg, _ workspace.V3Result) workspace.V3Result {
+			leg = l
+			return workspace.V3Result{Status: "ok"}
+		},
+	}
+	mode := owner.Evidence{Mode: owner.ModeAgent, StdinTTY: false, StdoutTTY: true, Markers: []string{"CLAUDECODE"}, Mine: true, ByOwner: []string{"codex"}, Caller: "claude", CallerSource: "env"}
+	want := &workspace.V3RunMode{Mode: "agent", StdoutTTY: true, Markers: []string{"CLAUDECODE"}, Mine: true, ByOwner: []string{"codex"}, Caller: "claude", CallerSource: "env"}
+	for _, kind := range []SubKind{KindRetire, KindBranches, KindTracking} {
+		a.Apply(context.Background(), Step{SubPlan: SubPlan{ID: "p", StateDir: "/s", Kind: kind}, Mode: mode})
+	}
+	for i, o := range got {
+		if !reflect.DeepEqual(o.RunMode, want) {
+			t.Errorf("apply %d: %+v", i, o.RunMode)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("%d applies", len(got))
+	}
+	a.ApplyBranchLeg(context.Background(), Step{Mode: mode}, workspace.V3Result{Status: "ok", Plan: &workspace.V3Plan{}})
+	if !reflect.DeepEqual(leg.RunMode, want) {
+		t.Errorf("leg: %+v", leg.RunMode)
+	}
+	empty := V3Applier{ApplyFunc: func(_ context.Context, o workspace.V3ApplyOptions) workspace.V3Result {
+		if len(o.RunMode.Markers) != 0 || o.RunMode.Markers == nil || o.RunMode.ByOwner == nil {
+			t.Errorf("empty lists must stay non-nil: %+v", o.RunMode)
+		}
+		return workspace.V3Result{Status: "ok"}
+	}}
+	empty.Apply(context.Background(), Step{SubPlan: SubPlan{Kind: KindBranches}, Mode: owner.Evidence{Mode: owner.ModeHuman}})
 }
 
 func TestApplyRunsSubPlansInTheFixedOrderWithTheirOwnStore(t *testing.T) {
