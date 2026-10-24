@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: EUPL-1.2
+package workspace
+
+import (
+	"bytes"
+	"context"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/wstein/sourcesteward/internal/attribution"
+)
+
+const originSession = "sess-7f3a-sentinel"
+
+func originFixture(t *testing.T, origin *attribution.Origin) (source, dest, state string, applied Result) {
+	t.Helper()
+	source = fixtureGit(t)
+	ctx := context.Background()
+	state = gitTempDir(t)
+	if e := os.Chmod(state, 0700); e != nil {
+		t.Fatal(e)
+	}
+	dest = filepath.Join(gitTempDir(t), "task")
+	plan := PlanCreate(ctx, PlanOptions{Path: source, Base: "HEAD", Destination: dest, Task: "attributed", Owner: "fixture", StateDir: state})
+	if plan.Status != "ok" {
+		t.Fatalf("plan: %+v", plan.Diagnostics)
+	}
+	applied = Apply(ctx, ApplyOptions{StateDir: state, PlanID: plan.Plan.PlanID, Authorize: true, Origin: origin})
+	if applied.Status != "ok" || applied.Task == nil {
+		t.Fatalf("apply: %+v", applied.Diagnostics)
+	}
+	return source, dest, state, applied
+}
+
+func TestApplyRecordsOriginInStoredTask(t *testing.T) {
+	want := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	_, _, state, applied := originFixture(t, &want)
+	if applied.Task.Origin == nil || *applied.Task.Origin != want {
+		t.Fatalf("result origin %+v", applied.Task.Origin)
+	}
+	stored, found, err := ReadTask(state, "attributed")
+	if err != nil || !found || stored.Origin == nil || *stored.Origin != want {
+		t.Fatalf("stored origin %+v %v %v", stored.Origin, found, err)
+	}
+}
+
+func TestApplyWithoutOriginRecordsNone(t *testing.T) {
+	_, _, state, _ := originFixture(t, nil)
+	stored, _, _ := ReadTask(state, "attributed")
+	if stored.Origin != nil {
+		t.Fatalf("origin invented: %+v", stored.Origin)
+	}
+}
+
+func TestSecondApplyDoesNotOverwriteOrigin(t *testing.T) {
+	first := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	_, _, state, applied := originFixture(t, &first)
+	other := attribution.Origin{Kind: "claude", SessionID: "other-session", CreatedAt: "2026-10-25T12:00:00Z"}
+	again := Apply(context.Background(), ApplyOptions{StateDir: state, PlanID: applied.Plan.PlanID, Authorize: true, Origin: &other})
+	if again.Status != "ok" || again.Task == nil || again.Task.Origin == nil || *again.Task.Origin != first {
+		t.Fatalf("retry changed the origin: %+v %+v", again.Diagnostics, again.Task)
+	}
+	stored, _, _ := ReadTask(state, "attributed")
+	if stored.Origin == nil || *stored.Origin != first {
+		t.Fatalf("stored origin overwritten: %+v", stored.Origin)
+	}
+}
+
+// The session id lives in stw state only: not in the source repository (objects, refs, config,
+// logs), not in the new checkout or its native registration.
+func TestOriginSessionAppearsInNoGitArtifact(t *testing.T) {
+	origin := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	source, dest, state, _ := originFixture(t, &origin)
+	gitFixture(t, dest, "-c", "user.name=F", "-c", "user.email=f@example.invalid", "commit", "-q", "--allow-empty", "-m", "task commit")
+	for _, root := range []string{source, dest} {
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if b, e := os.ReadFile(p); e == nil && bytes.Contains(b, []byte(originSession)) {
+				t.Errorf("session id found in %s", p)
+			}
+			return nil
+		})
+	}
+	log := gitFixture(t, source, "log", "--all", "--format=%H %an %ae %cn %ce %s%n%b")
+	if bytes.Contains([]byte(log), []byte(originSession)) {
+		t.Error("session id in a commit")
+	}
+	// The state store holds it, in the task record only.
+	found := 0
+	_ = filepath.WalkDir(state, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if b, e := os.ReadFile(p); e == nil && bytes.Contains(b, []byte(originSession)) {
+				found++
+				if filepath.Base(filepath.Dir(p)) != "tasks" {
+					t.Errorf("session id outside the task record: %s", p)
+				}
+			}
+		}
+		return nil
+	})
+	if found != 1 {
+		t.Errorf("session id in %d state files, want 1", found)
+	}
+}
+
+func TestSecretLookingVariablesReachNoStateFile(t *testing.T) {
+	const sentinel = "MSG-TOKEN-SENTINEL-93b1"
+	environ := []string{"CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=" + originSession, "CLAUDE_CODE_MESSAGING_TOKEN=" + sentinel, "CODEX_API_KEY=" + sentinel}
+	origin := attribution.FromEnviron(environ, []string{"CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_TOKEN", "CODEX_API_KEY"}, false, time.Now())
+	source, dest, state, _ := originFixture(t, &origin)
+	for _, root := range []string{state, source, dest} {
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				if b, e := os.ReadFile(p); e == nil && bytes.Contains(b, []byte(sentinel)) {
+					t.Errorf("secret-looking value found in %s", p)
+				}
+			}
+			return nil
+		})
+	}
+}
+
+func TestRetirementOwnershipDoesNotCarryTheOrigin(t *testing.T) {
+	origin := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	_, _, state, _ := originFixture(t, &origin)
+	s, err := openStore(state, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	_, task, _, err := readRetirementOwnership(s, "attributed", "fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Origin != nil {
+		t.Fatalf("origin embedded in a closed-schema record: %+v", task.Origin)
+	}
+}

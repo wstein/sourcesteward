@@ -105,12 +105,12 @@ func TestCoordinatorIncompleteNeverAdoptsOrReexecutes(t *testing.T) {
 	c, f, o := fixtureCoordinator(t)
 	p := c.plan(context.Background(), o)
 	f.fail = true
-	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true, nil})
 	if r.Status != "partial" || f.creates != 1 {
 		t.Fatalf("partial %#v", r)
 	}
 	f.fail = false
-	r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true, nil})
 	if r.Status != "partial" || f.creates != 1 {
 		t.Fatalf("incomplete retried %#v", r)
 	}
@@ -124,7 +124,7 @@ func TestCoordinatorHandoffRetirementAndTaskCollision(t *testing.T) {
 	if second := c.plan(context.Background(), o); second.Status != "refused" {
 		t.Fatal("task reservation collision")
 	}
-	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true, nil})
 	if r.Status != "ok" {
 		t.Fatalf("apply %#v", r)
 	}
@@ -156,7 +156,7 @@ func TestIncompleteEffectsAreNotClaimedComplete(t *testing.T) {
 	c, f, o := fixtureCoordinator(t)
 	p := c.plan(context.Background(), o)
 	f.fail = true
-	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true, nil})
 	for _, a := range r.Actions {
 		if a.Name == "native-effect" && a.Status == "completed" {
 			t.Fatal("uncertain native effect claimed complete")
@@ -188,7 +188,7 @@ func TestInitialFinalizeRequiresExactNativeIdentity(t *testing.T) {
 func TestHandoffRejectsIncompleteJournalEvidence(t *testing.T) {
 	c, _, o := fixtureCoordinator(t)
 	p := c.plan(context.Background(), o)
-	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true, nil})
 	if r.Status != "ok" {
 		t.Fatal(r.Error())
 	}
@@ -214,7 +214,7 @@ func TestHandoffRejectsIncompleteJournalEvidence(t *testing.T) {
 func TestTaskOwnershipRejectsForgedRecoveryAndCompletion(t *testing.T) {
 	c, _, o := fixtureCoordinator(t)
 	p := c.plan(context.Background(), o)
-	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true})
+	r := c.apply(context.Background(), ApplyOptions{o.StateDir, p.Plan.PlanID, true, nil})
 	if r.Status != "ok" {
 		t.Fatal(r.Error())
 	}
@@ -245,7 +245,7 @@ func TestMalformedSemanticPlansNeverEscapeIntoResults(t *testing.T) {
 			t.Fatal(e)
 		}
 		s.Close()
-		r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true})
+		r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true, nil})
 		if r.Status != "error" || r.Plan != nil || r.Task != nil {
 			t.Fatalf("malformed stored plan escaped result: %#v", r)
 		}
@@ -264,7 +264,7 @@ func TestMalformedJournalActionsNeverEscapeIntoResults(t *testing.T) {
 		t.Fatal(e)
 	}
 	s.Close()
-	r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true})
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, p.PlanID, true, nil})
 	if r.Status != "error" || len(r.Actions) != 0 {
 		t.Fatalf("malformed journal action escaped: %#v", r)
 	}
@@ -280,7 +280,7 @@ func TestJournalPersistenceFailurePreventsNativeAction(t *testing.T) {
 		}
 	}
 	defer os.Chmod(ops, 0700)
-	r = c.apply(context.Background(), ApplyOptions{o.StateDir, r.Plan.PlanID, true})
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, r.Plan.PlanID, true, nil})
 	if r.Status != "error" || f.creates != 0 {
 		t.Fatalf("native executed without secure durable journal: %#v", r)
 	}
@@ -298,7 +298,7 @@ func TestTaskStoreFailureAfterNativePreservesPreparedRecovery(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true})
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true, nil})
 	if r.Status != "partial" || f.creates != 1 {
 		t.Fatalf("lost partial outcome: %#v", r)
 	}
@@ -330,7 +330,7 @@ func TestTaskStoreFailureAfterNativePreservesPreparedRecovery(t *testing.T) {
 	if j.Phase != "prepared" {
 		t.Fatalf("earlier durable recovery lost: %s", j.Phase)
 	}
-	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true})
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true, nil})
 	if r.Status != "partial" || f.creates != 1 {
 		t.Fatal("unproven recovery recreated/adopted native destination")
 	}
@@ -347,7 +347,7 @@ func TestCancellationAfterNativeRetainsPartialEffects(t *testing.T) {
 		}
 		cancel()
 	}
-	r = c.apply(ctx, ApplyOptions{o.StateDir, id, true})
+	r = c.apply(ctx, ApplyOptions{o.StateDir, id, true, nil})
 	if r.Status != "partial" || f.creates != 1 {
 		t.Fatalf("cancellation lost completed or partial effects: %#v", r)
 	}
@@ -358,7 +358,7 @@ func TestCancellationAfterNativeRetainsPartialEffects(t *testing.T) {
 		t.Fatal("cancellation removed destination")
 	}
 	f.onCreate = nil
-	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true})
+	r = c.apply(context.Background(), ApplyOptions{o.StateDir, id, true, nil})
 	if r.Status != "partial" || f.creates != 1 {
 		t.Fatal("canceled native action was repeated")
 	}

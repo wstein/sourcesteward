@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/wstein/sourcesteward/internal/attribution"
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
@@ -29,6 +30,8 @@ type PlanOptions struct{ Path, Base, Destination, Task, Owner, StateDir, CallerD
 type ApplyOptions struct {
 	StateDir, PlanID string
 	Authorize        bool
+	// Origin is the creating run's attribution, stored once in the task record (stw state only).
+	Origin *attribution.Origin
 }
 type Options struct{ Path, StateDir string }
 type Diagnostic struct {
@@ -107,6 +110,8 @@ type TaskRecord struct {
 	Inventory           *inspection.InventoryResult `json:"inventory"`
 	RemainingWork       []string                    `json:"remaining_work"`
 	RecoveryLimits      []string                    `json:"recovery_limits"`
+	// Origin is additive and absent for records created without attribution.
+	Origin *attribution.Origin `json:"origin,omitempty"`
 }
 
 // SourceContext is the additive review of what a plan was built from: the source
