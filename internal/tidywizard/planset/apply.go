@@ -57,7 +57,7 @@ func (a V3Applier) Apply(ctx context.Context, s Step) workspace.V3Result {
 	switch {
 	case s.SubPlan.Kind == KindTracking:
 		o.Online = true
-	case s.SubPlan.Kind == KindRetire && len(s.Items) == 1 && !(s.Items[0].Task != "" && s.Items[0].OwnerSource == owner.SourceTaskRecord):
+	case s.SubPlan.Kind == KindRetire && len(s.Items) == 1 && (s.Items[0].Task == "" || s.Items[0].OwnerSource != owner.SourceTaskRecord):
 		o.Owner, o.CompletedWorktree = s.Items[0].Owner, s.SubPlan.Worktree
 	}
 	return a.ApplyFunc(ctx, o)
@@ -119,6 +119,19 @@ func confirmWords(items []Item) []string {
 	return words
 }
 
+// Find loads the plan set with that id from the first state directory that holds it. A set that
+// is stored but invalid is an error, not a reason to look further.
+func Find(stateDirs []string, id string) (Set, error) {
+	for _, dir := range stateDirs {
+		set, err := Load(dir, id)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		return set, err
+	}
+	return Set{}, ErrNotFound
+}
+
 // Apply applies a stored plan set one sub-plan at a time in the fixed order. It verifies the
 // stored set (the id is recomputed from the content), refuses scope-not-authorized for an other
 // or unknown item unless the human path wrote authorized_scopes for it, refuses an agent-mode
@@ -127,19 +140,9 @@ func confirmWords(items []Item) []string {
 // re-checks its own evidence: a sub-plan that turned stale or failed is reported and the others
 // continue. A sub-plan that was already completed replays as a verified no-op of that apply.
 func Apply(ctx context.Context, req ApplyRequest) ApplyResult {
-	var set Set
-	var err error
-	found := false
-	for _, dir := range req.StateDirs {
-		set, err = Load(dir, req.PlanID)
-		if errors.Is(err, ErrNotFound) {
-			continue
-		}
-		found = true
-		break
-	}
+	set, err := Find(req.StateDirs, req.PlanID)
 	switch {
-	case !found:
+	case errors.Is(err, ErrNotFound):
 		return refused(req.PlanID, CodePlanSetNotFound, "no stored plan set %q in the known state directories", req.PlanID)
 	case err != nil:
 		return refused(req.PlanID, CodePlanSetInvalid, "the stored plan set %q is not valid: %v", req.PlanID, err)

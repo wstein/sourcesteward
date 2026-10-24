@@ -47,10 +47,11 @@ class ArchitectureTests(unittest.TestCase):
         for other in ('internal/statuscmdx', 'internal/statusremotex', 'internal/overviewx'):
             with self.assertRaises(ValueError, msg=other): architecture.validate([prefix + 'internal/cli ' + prefix + other])
 
-    def test_cli_may_import_the_tidy_wizard_derivation_only(self):
+    def test_cli_may_import_the_tidy_wizard_derivation_owner_and_plan_set_only(self):
         prefix = architecture.MODULE
-        architecture.validate([prefix + 'internal/cli ' + prefix + 'internal/tidywizard/derive'])
-        for other in ('internal/tidywizard', 'internal/tidywizard/derivex', 'internal/tidywizard/classify'):
+        for allowed in ('internal/tidywizard/derive', 'internal/tidywizard/owner', 'internal/tidywizard/planset'):
+            architecture.validate([prefix + 'internal/cli ' + prefix + allowed])
+        for other in ('internal/tidywizard', 'internal/tidywizard/derivex', 'internal/tidywizard/ownerx', 'internal/tidywizard/plansetx', 'internal/tidywizard/classify'):
             with self.assertRaises(ValueError, msg=other): architecture.validate([prefix + 'internal/cli ' + prefix + other])
 
     def test_restack_starts_processes_only_in_its_git_runner_and_stays_offline(self):
