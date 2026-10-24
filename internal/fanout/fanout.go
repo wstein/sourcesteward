@@ -17,7 +17,7 @@ import (
 // workers have stopped; a runtime.Goexit in fn ends the caller the same way, after all workers
 // have stopped. width < 1 is 1; width > n is n; n < 1 runs nothing and returns nil.
 //
-// The context fn receives is cancelled when the first panic is recorded. Do adds no deadline of its
+// The context fn receives is cancelled when the first panic or runtime.Goexit is recorded. Do adds no deadline of its
 // own. Callers write out[i] only; they never append to a shared slice.
 func Do(ctx context.Context, n, width int, fn func(ctx context.Context, i int)) error {
 	if n < 1 {
