@@ -18,6 +18,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
 // Bounds of the output (Spec 041 JSON section).
@@ -186,6 +187,18 @@ type RepoResult struct {
 	State   string   `json:"state"`
 	Reason  string   `json:"reason"`
 	Notices []string `json:"notices"`
+}
+
+// EscapedNotices is the form of the notices the overview shows: each one passes `esc` (control,
+// ANSI, CR, NUL and bidirectional characters become visible escapes) and the 120-character bound
+// of Spec 041 FR-042. The notices carry text of the observation (limitations, tracking skips), so
+// they must never reach a terminal unescaped. The stored notices are not changed.
+func (r RepoResult) EscapedNotices() []string {
+	out := make([]string, 0, len(r.Notices))
+	for _, n := range r.Notices {
+		out = append(out, untrusted.Esc(n))
+	}
+	return out
 }
 
 // Result is the classification of all repositories, ordered independently of the input order.

@@ -609,3 +609,39 @@ func TestBranchKeepReasonRetainsAProvenBranch(t *testing.T) {
 		}
 	}
 }
+
+// Spec 041 T019d: the notices reach the overview only through EscapedNotices: control bytes,
+// ANSI, CR, NUL and bidi controls are made visible, each notice is bounded to 120 characters, and
+// the stored (JSON) notices are not changed.
+func TestEscapedNoticesMakeNoticesInert(t *testing.T) {
+	r := RepoResult{Name: "r", Notices: []string{
+		"plain notice", "ansi \x1b[31mred\x1b[0m", "cr\rline\nbreak\x00nul", "bidi ‮gnp.exe", strings.Repeat("n", 10000),
+	}}
+	got := r.EscapedNotices()
+	if len(got) != len(r.Notices) {
+		t.Fatalf("%q", got)
+	}
+	if got[0] != "plain notice" {
+		t.Errorf("plain: %q", got[0])
+	}
+	for i, s := range got {
+		if strings.ContainsAny(s, "\x1b\r\n\x00‮") {
+			t.Errorf("notice %d keeps a control byte: %q", i, s)
+		}
+		if utf8.RuneCountInString(s) > 123 {
+			t.Errorf("notice %d is %d characters", i, utf8.RuneCountInString(s))
+		}
+	}
+	if got[1] != `ansi \x1b[31mred\x1b[0m` || got[2] != `cr\rline\nbreak\x00nul` || got[3] != "bidi \\u202egnp.exe" {
+		t.Errorf("%q", got)
+	}
+	if !strings.HasSuffix(got[4], "...") {
+		t.Errorf("the long notice is not marked as cut: %q", got[4][len(got[4])-6:])
+	}
+	if !strings.Contains(r.Notices[1], "\x1b") || len(r.Notices[4]) != 10000 {
+		t.Error("the stored notices were changed")
+	}
+	if got := (RepoResult{}).EscapedNotices(); got == nil || len(got) != 0 {
+		t.Errorf("empty: %#v", got)
+	}
+}
