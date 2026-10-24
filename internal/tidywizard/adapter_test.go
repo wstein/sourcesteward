@@ -137,7 +137,7 @@ func TestAdapterMapsIncompleteAndUnknownProofs(t *testing.T) {
 		Worktrees: []workspace.WorktreeEvidence{bad, weird, blank},
 		Branches: []workspace.BranchEvidence{
 			{Name: "refs/heads/main", IsBase: true, Proof: "ancestor"},
-			{Name: "refs/heads/x", Proof: "patch-id", Ahead: 2, AuthorHint: "Ana"},
+			{Name: "refs/heads/x", Proof: "patch-id", Ahead: 2, AuthorHint: "Ana", Reason: "workspace-used"},
 			{Name: "refs/heads/y", Incomplete: "branch-limit"},
 			{Name: "refs/heads/z", Proof: "invented"},
 		},
@@ -172,7 +172,7 @@ func TestAdapterMapsIncompleteAndUnknownProofs(t *testing.T) {
 	if b := br["main"]; !b.IsBase || b.Proof != ProofAncestor {
 		t.Errorf("main: %+v", b)
 	}
-	if b := br["x"]; b.Proof != ProofPatchID || b.Ahead != 2 || b.AuthorHint != "Ana" || b.Incomplete != "" {
+	if b := br["x"]; b.Proof != ProofPatchID || b.Ahead != 2 || b.AuthorHint != "Ana" || b.Incomplete != "" || b.Reason != "workspace-used" {
 		t.Errorf("x: %+v", b)
 	}
 	if b := br["y"]; b.Incomplete != "branch-limit" {
@@ -436,5 +436,87 @@ func TestAdapterAcceptsTheEmptyWorkingCopyProofForWorktreesOnly(t *testing.T) {
 		if c.Kind == KindWorktree && (c.Verdict != VerdictSafe || c.Reason != "unregistered" || c.Scope == "own") {
 			t.Errorf("%+v", c)
 		}
+	}
+}
+
+// The whole chain over a real jj repository: only a bookmark with no keep reason is safe.
+func TestAdapterOverARealJJRepository(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("STW_REQUIRE_JJ") == "1" {
+			t.Fatal(err)
+		}
+		t.Skip("jj unavailable")
+	}
+	jj := func(dir string, args ...string) string {
+		t.Helper()
+		c := exec.Command("jj", args...)
+		c.Dir = dir
+		c.Env = append(os.Environ(), "JJ_CONFIG=", "JJ_USER=Test", "JJ_EMAIL=test@example.invalid")
+		out, err := c.CombinedOutput()
+		if err != nil {
+			t.Fatalf("jj %v: %s %v", args, out, err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	last := func(s string) string { f := strings.Fields(s); return f[len(f)-1] }
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(root, "repo")
+	jj(root, "git", "init", "--no-colocate", repo)
+	if err := os.WriteFile(filepath.Join(repo, "file"), []byte("stored\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	jj(repo, "commit", "-m", "base")
+	jj(repo, "bookmark", "create", "main", "-r", "@-")
+	if err := os.WriteFile(filepath.Join(repo, "feature"), []byte("work\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	jj(repo, "commit", "-m", "feature work")
+	jj(repo, "bookmark", "create", "feature", "-r", "@-")
+	store := filepath.Join(repo, ".jj", "repo", "store", "git")
+	featureID := last(jj(repo, "log", "-r", "feature", "--no-graph", "-T", "commit_id"))
+	for _, args := range [][]string{{"remote", "add", "origin", "https://example.invalid/r.git"}, {"update-ref", "refs/remotes/origin/pushed", featureID}} {
+		if out, err := exec.Command("git", append([]string{"--git-dir", store}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%s %v", out, err)
+		}
+	}
+	old := last(jj(repo, "log", "-r", "main", "--no-graph", "-T", "commit_id"))
+	jj(repo, "new", "main", "-m", "next")
+	jj(repo, "bookmark", "move", "main", "--to", "@")
+	jj(repo, "bookmark", "create", "merged", "-r", old)
+	jj(repo, "bookmark", "create", "pushed", "-r", "feature")
+	jj(repo, "bookmark", "create", "stw-recovery-x", "-r", "feature")
+	jj(repo, "bookmark", "create", "trunk", "-r", "main")
+	jj(repo, "git", "import")
+	a := NewAdapter([]RepoSpec{{Name: "r", Path: repo, Base: "main"}}, nil)
+	res := Classify(context.Background(), a, []string{"r"}, Config{Caller: "werner", CWD: "/elsewhere", Now: time.Now()})
+	if res.Repositories[0].State != "analysed" {
+		if strings.Contains(res.Repositories[0].Reason, "bubblewrap") && os.Getenv("STW_REQUIRE_JJ") != "1" {
+			t.Skip("native jj sandbox unavailable")
+		}
+		t.Fatalf("%+v", res.Repositories)
+	}
+	got := map[string]Candidate{}
+	for _, c := range res.Candidates {
+		got[c.ID] = c
+	}
+	if c := got["branch:r:merged"]; c.Verdict != VerdictSafe || !reflect.DeepEqual(c.Effects, []string{"delete-branch:merged"}) {
+		t.Errorf("merged: %+v", c)
+	}
+	for name, reason := range map[string]string{"pushed": "remote-counterpart", "stw-recovery-x": "recovery-reference", "trunk": "selected-base"} {
+		if c := got["branch:r:"+name]; c.Verdict != VerdictRetain || c.Reason != reason || len(c.Effects) != 0 {
+			t.Errorf("%s: %+v", name, c)
+		}
+	}
+	if c := got["branch:r:feature"]; c.Verdict != VerdictRetain || c.Reason != "unmerged" {
+		t.Errorf("feature: %+v", c)
+	}
+	if _, ok := got["branch:r:main"]; ok {
+		t.Error("the base bookmark must not be a candidate")
+	}
+	if c := got["worktree:r:"+repo]; c.Reason != "primary-checkout" {
+		t.Errorf("primary: %+v", c)
 	}
 }
