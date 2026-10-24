@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type coordinator struct {
@@ -149,6 +150,7 @@ func (c coordinator) plan(ctx context.Context, o PlanOptions) Result {
 	r.Status = "ok"
 	r.Plan = &p
 	r.Source = c.sourceContext(ctx, o.CallerDir, p)
+	r.Next = nextCall(p.PlanID, p.StateDir)
 	r.Actions = []ActionOutcome{{"store-plan", "completed", "Immutable plan stored; native repository and destination are unchanged."}}
 	r.Limitations = append(r.Limitations, p.RecoveryLimits...)
 	return r
@@ -198,6 +200,40 @@ func (c coordinator) sourceContext(ctx context.Context, callerDir string, p Muta
 	s.CallerDiffers = true
 	s.Notice = "The current directory " + callerDir + " is in another checkout (" + root + ", HEAD " + head + ") of the same repository as the source " + p.SourcePath + " (HEAD " + p.Expected.Identity.CommitID + "); the base " + p.Expected.BaseSelector + " was resolved in the source to " + p.Expected.BaseCommit + ". Plan from the other checkout if that was meant."
 	return s
+}
+
+// nextCall is the apply call for a stored plan. Every argument is the validated plan
+// identity or the plan's own state directory. The text is quoted for a POSIX sh (single
+// quotes only); when an argument holds a character that is not printable (control, C1,
+// bidirectional or other format characters) no text is offered and Command stays empty,
+// so that nothing unprintable reaches a terminal. Argv is always complete.
+func nextCall(planID, stateDir string) *NextCall {
+	argv := []string{"stw", "workspace", "apply", "--plan", planID, "--state-dir", stateDir, "--authorize"}
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		q, ok := shellQuote(a)
+		if !ok {
+			return &NextCall{Command: "", Argv: argv}
+		}
+		quoted[i] = q
+	}
+	return &NextCall{Command: strings.Join(quoted, " "), Argv: argv}
+}
+
+func shellQuote(a string) (string, bool) {
+	safe := a != ""
+	for _, c := range a {
+		if !unicode.IsPrint(c) {
+			return "", false
+		}
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("-._/=:@%+,", c)) {
+			safe = false
+		}
+	}
+	if safe {
+		return a, true
+	}
+	return "'" + strings.ReplaceAll(a, "'", `'\''`) + "'", true
 }
 
 func sameFile(a, b string) bool {
