@@ -82,10 +82,16 @@ func Prepare(ctx context.Context, o Options, d Deps) (Prepared, error) {
 	p := Prepared{Workspace: ws.Root, Derived: []derive.Derived{wsDerived.Derived}, Meta: map[string]render.RepoMeta{}, Specs: []tidywizard.RepoSpec{}, Names: []string{}, Notices: []string{}}
 
 	byName := map[string]stwsync.Member{}
-	var order []string
+	var discovered []string
 	for _, m := range ws.Members {
 		byName[m.Name] = m
-		order = append(order, m.Name)
+		discovered = append(discovered, m.Name)
+	}
+	// The member set is the workspace repository first and then the members once each; a
+	// workspace without another member says so (Spec 041, derivation of defaults).
+	order, none := derive.Members(discovered)
+	if none != "" {
+		p.Notices = append(p.Notices, none)
 	}
 	selected := order
 	if len(o.Members) > 0 {
@@ -121,7 +127,8 @@ func Prepare(ctx context.Context, o Options, d Deps) (Prepared, error) {
 	for _, name := range selected {
 		m := byName[name]
 		if !m.Initialized {
-			p.Notices = append(p.Notices, "member-uninitialized: "+name)
+			// The existing code of the repository inspection (Spec 023).
+			p.Notices = append(p.Notices, "submodule-uninitialized: "+name)
 			continue
 		}
 		spec := tidywizard.RepoSpec{Name: name, Path: m.Path}
@@ -129,8 +136,8 @@ func Prepare(ctx context.Context, o Options, d Deps) (Prepared, error) {
 		refs, err := d.Refs(ctx, m.Path)
 		switch {
 		case err != nil:
-			p.Notices = append(p.Notices, name+": "+err.Error())
-			spec.Skip = "base-ambiguous"
+			// Not an ambiguity: the repository is reported as an error with the reason.
+			spec.Error = err.Error()
 		case len(refs.Remotes) == 0:
 			// Without a remote there is no symbolic HEAD to derive the base from.
 			spec.Skip = "base-ambiguous"

@@ -235,7 +235,7 @@ func TestPrepareReportsUnreadableAndUninitializedMembers(t *testing.T) {
 		t.Errorf("names %v", p.Names)
 	}
 	joined := strings.Join(p.Notices, "\n")
-	if !strings.Contains(joined, "a: the references cannot be read: boom") || !strings.Contains(joined, "submodule-uninitialized: b") || strings.Contains(joined, "member-uninitialized") {
+	if strings.Contains(joined, "boom") || !strings.Contains(joined, "submodule-uninitialized: b") || strings.Contains(joined, "member-uninitialized") {
 		t.Errorf("notices %q", joined)
 	}
 	// A member without any remote cannot have a symbolic HEAD either.
