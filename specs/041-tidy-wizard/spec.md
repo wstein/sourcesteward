@@ -520,7 +520,7 @@ details)`, and JSON lists every candidate.
 One document `tidy-overview` (schema `schemas/v2/tidy-overview.schema.json`, additive, v1/v3 tidy schemas unchanged): `workspace`,
 `derived[]`, `repositories[]` (`name`, `path`, `backend`, `base`, `remote`, `state` `analysed|skipped|error`, `reason`), `candidates[]`
 (`id`, `repo`, `kind`, `verdict`, `reason`, `owner`, `owner_source`, `scope`, `path`, `branch`, `task`, `proof` `ancestor|patch-id|merge-noop|no-net-change|none`,
-`effects[]`, `evidence`), `summary` (counts per verdict), `mode` (evidence), `plan_id` (empty unless saved), `notices[]`. Item ids are
+`effects[]`, `evidence`), `summary` (counts per verdict of every analysed candidate, also those a cut leaves out of the list), `mode` (evidence), `plan_id` (empty unless saved), `notices[]`. Item ids are
 `KIND:REPO:SUBJECT`, stable across runs. Output is bounded (candidates 4096, evidence 512 bytes each, document 4 MiB; beyond that
 `truncated: true` and exit 1 `output-limit`).
 
