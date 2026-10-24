@@ -3,7 +3,13 @@
 // Package prompt asks the human which of the overview's rows to plan, and whether to apply the
 // stored plan set (Spec 041 T016). It is pure: it reads one *bufio.Reader and writes one io.Writer.
 // Answers are parsed strictly and the default is always none/no. Without a terminal it neither
-// reads nor asks, so it can never block on stdin and a pipe can never choose anything.
+// reads nor asks, so it can never block on stdin and a pipe can never choose anything. The end of
+// input anywhere in a choice ends it with nothing chosen. Surrounding spaces around an answer are
+// ignored, number tokens may carry leading zeros ("01"), and letters are case-sensitive.
+//
+// Contract with the caller: every Item.Detail and Item.Owner is text the caller has already put
+// through `esc` and its bound (the shared untrusted.Esc); this package prints it after flattening
+// control characters to spaces and does no escaping of its own.
 package prompt
 
 import (
@@ -30,6 +36,10 @@ const MaxAttempts = 3
 // maxLine bounds one answer; a longer line is an invalid answer.
 const maxLine = 256
 
+// ErrEndOfInput is what YesNo reports at the end of input: not a "no", so that a caller in the
+// middle of a choice can end the whole run instead of going on with a partial answer.
+var ErrEndOfInput = errors.New("end of input")
+
 // ErrTooManyInvalid ends the run after MaxAttempts invalid answers: exit 1, nothing is stored.
 var ErrTooManyInvalid = errors.New("too many invalid answers; nothing was chosen")
 
@@ -40,7 +50,10 @@ type Item struct {
 	Verdict string // Safe or Decision
 	Scope   owner.Scope
 	Owner   string // owner label, empty for an unknown owner
-	Detail  string // text shown by "d N" and by the confirmation of a decision row
+	// Detail is shown by "d N" and by the confirmation of a decision row. The caller puts the lock of
+	// a decision row into it (the confirmation names the lock only through this text) and passes text
+	// that already went through `esc`; the prompt only flattens control characters to spaces.
+	Detail string
 }
 
 // Options say whether the run has a terminal on both streams.
@@ -104,7 +117,7 @@ func Select(in *bufio.Reader, out io.Writer, items []Item, opt Options) (Result,
 				var err error
 				chosen, err = askOwners(in, out, items)
 				if err != nil {
-					return none, err
+					return none, endOfInputIsNone(err)
 				}
 			case strings.HasPrefix(answer, "d "):
 				n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(answer, "d ")))
@@ -127,8 +140,21 @@ func Select(in *bufio.Reader, out io.Writer, items []Item, opt Options) (Result,
 			fmt.Fprintln(out, "Not understood; answer a, n, o, d N, numbers like 1,2 or 1-3, or nothing for none.")
 			continue
 		}
-		return finish(in, out, chosen)
+		res, err := finish(in, out, chosen)
+		if err != nil {
+			return none, endOfInputIsNone(err)
+		}
+		return res, nil
 	}
+}
+
+// endOfInputIsNone turns the end of input inside a nested question into "nothing chosen" (the
+// wizard then behaves as plan without --save); any other error stays an error.
+func endOfInputIsNone(err error) error {
+	if errors.Is(err, ErrEndOfInput) {
+		return nil
+	}
+	return err
 }
 
 // finish asks the second confirmation of each decision row and builds the result.
@@ -187,9 +213,10 @@ func askOwners(in *bufio.Reader, out io.Writer, items []Item) ([]Item, error) {
 	return chosen, nil
 }
 
-// YesNo asks a yes/no question whose default is no. Only an exact "y" is yes; an end of input and
-// an empty line or "n" are no; anything else is asked again, MaxAttempts times in all, then
-// ErrTooManyInvalid. Without a terminal it neither reads nor asks and answers no.
+// YesNo asks a yes/no question whose default is no. Only an exact "y" (surrounding spaces ignored)
+// is yes; an empty line or "n" is no; anything else is asked again, MaxAttempts times in all, then
+// ErrTooManyInvalid. The end of input is ErrEndOfInput, also after an invalid answer. Without a
+// terminal it neither reads nor asks and answers no.
 func YesNo(in *bufio.Reader, out io.Writer, question string, interactive bool) (bool, error) {
 	if !interactive {
 		return false, nil
@@ -198,7 +225,7 @@ func YesNo(in *bufio.Reader, out io.Writer, question string, interactive bool) (
 		fmt.Fprintf(out, "%s [y/N]: ", question)
 		line, ok := readLine(in)
 		if !ok {
-			return false, nil
+			return false, ErrEndOfInput
 		}
 		switch strings.TrimSpace(line.text) {
 		case "y":
@@ -241,9 +268,6 @@ func parseNumbers(answer string, byNumber map[int]Item) ([]Item, bool) {
 				return nil, false
 			}
 			out = append(out, it)
-		}
-		if len(out) > len(byNumber)*MaxAttempts+len(byNumber) {
-			return nil, false
 		}
 	}
 	return out, len(out) > 0
