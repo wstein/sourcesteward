@@ -43,29 +43,43 @@ func ReadTask(stateDir, taskID string) (record TaskRecord, found bool, err error
 	return record, true, nil
 }
 
-// ScanTasks reads every creation record of a private store, read only, sorted by task id. A record
-// that cannot be read (wrong mode, unknown field, over the size bound) is skipped and its id
-// returned in unreadable, so one bad record never hides the others and is never taken for absent.
-// A store with more than observationLimit records, or one that cannot be listed, is an error.
-func ScanTasks(stateDir string) (records []TaskRecord, unreadable []string, err error) {
+// EachTask reads the creation records of a private store one at a time, read only, in task id
+// order, and hands each to visit; no record is kept, so the peak is one record and not the store.
+// visit must copy what it needs. A record that cannot be read (wrong mode, unknown field, over the
+// size bound, or whose own task id is not its file name) is skipped and its id returned in
+// unreadable, so one bad record never hides the others and is never taken for absent. A store with
+// more than observationLimit records, or one that cannot be listed, is an error.
+func EachTask(stateDir string, visit func(TaskRecord)) (unreadable []string, err error) {
 	s, err := readOnlyTasks(stateDir)
 	if s == nil || err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer s.Close()
 	ids, err := s.list("tasks")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	records, unreadable = []TaskRecord{}, []string{}
+	unreadable = []string{}
 	for _, id := range ids {
 		var record TaskRecord
-		// A record whose own task id is not its file name is as unreadable as a damaged one.
 		if err := s.read("tasks", id, &record); err != nil || record.TaskID != id {
 			unreadable = append(unreadable, id)
 			continue
 		}
-		records = append(records, record)
+		visit(record)
+	}
+	return unreadable, nil
+}
+
+// ScanTasks collects every readable creation record of a store, sorted by task id (see EachTask,
+// which does not retain them).
+func ScanTasks(stateDir string) (records []TaskRecord, unreadable []string, err error) {
+	unreadable, err = EachTask(stateDir, func(r TaskRecord) { records = append(records, r) })
+	if err != nil || unreadable == nil {
+		return nil, nil, err
+	}
+	if records == nil {
+		records = []TaskRecord{}
 	}
 	return records, unreadable, nil
 }
