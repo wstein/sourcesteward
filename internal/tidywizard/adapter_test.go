@@ -520,3 +520,36 @@ func TestAdapterOverARealJJRepository(t *testing.T) {
 		t.Errorf("primary: %+v", c)
 	}
 }
+
+// Spec 041 T019c: the tracking reason the adapter passes on becomes the reason code of a retained
+// reference, so it is a closed list; anything else is replaced by the fixed evidence-incomplete
+// retention with a fixed evidence text, never echoed.
+func TestAdapterAllowlistsTheTrackingReason(t *testing.T) {
+	long := strings.Repeat("x", 4096)
+	for _, reason := range []string{"remote-source-present", "symbolic-reference", "selected-base", "workspace-used"} {
+		obs := workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{{Name: "refs/remotes/origin/a", Proof: "none", Reason: reason}}}
+		a, _ := testAdapter(obs, nil)
+		res := Classify(context.Background(), a, []string{"r"}, cfg())
+		if c := res.Candidates[0]; c.Verdict != VerdictRetain || c.Reason != reason {
+			t.Errorf("%s: %+v", reason, c)
+		}
+	}
+	for name, reason := range map[string]string{
+		"unknown": "made-up-reason", "control bytes": "workspace-used\x1b[31m\n", "long": long,
+		"case": "Workspace-Used", "prefix": "workspace-used-x", "space": " selected-base",
+	} {
+		obs := workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{{Name: "refs/remotes/origin/a", Proof: "none", Reason: reason}}}
+		a, _ := testAdapter(obs, nil)
+		res := Classify(context.Background(), a, []string{"r"}, cfg())
+		c := res.Candidates[0]
+		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 || strings.Contains(c.Evidence, "\x1b") || len(c.Evidence) > 128 || strings.Contains(c.Evidence, "xxxx") {
+			t.Errorf("%s: %+v", name, c)
+		}
+	}
+	// A proven absence stays deletable and its own reason is allowed.
+	obs := workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{{Name: "refs/remotes/origin/a", Proof: "github-branch-absent", Reason: "github-branch-absent"}}}
+	a, _ := testAdapter(obs, nil)
+	if c := Classify(context.Background(), a, []string{"r"}, cfg()).Candidates[0]; c.Verdict != VerdictSafe {
+		t.Errorf("absence: %+v", c)
+	}
+}

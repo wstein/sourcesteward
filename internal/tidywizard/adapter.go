@@ -64,7 +64,13 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	}
 	for _, r := range obs.TrackingRefs {
 		proof, incomplete := proofFact(r.Proof, r.Incomplete, kindTracking)
-		f.TrackingRefs = append(f.TrackingRefs, TrackingRef{Name: r.Name, Proof: proof, Incomplete: incomplete, Reason: r.Reason})
+		reason := r.Reason
+		if !trackingReasons[reason] && reason != "" {
+			// Not one of the reasons the observers can give: never echoed (it becomes a reason code
+			// and evidence text), the reference is retained as incomplete evidence instead.
+			reason, incomplete = "", unrecognizedTrackingReason
+		}
+		f.TrackingRefs = append(f.TrackingRefs, TrackingRef{Name: r.Name, Proof: proof, Incomplete: incomplete, Reason: reason})
 	}
 	if obs.TrackingSkipped != "" {
 		f.Notices = append(f.Notices, obs.TrackingSkipped)
@@ -72,6 +78,18 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	f.Notices = append(f.Notices, obs.Limitations...)
 	return f, nil
 }
+
+// trackingReasons is the closed list of reasons the observers give for a tracking reference:
+// remote-source-present (the source branch still exists) and the protections of the reference
+// plan (symbolic-reference, selected-base, workspace-used), plus the proof github-branch-absent
+// that a deletable reference carries as its reason. Spec 041 lists them in the reason codes.
+var trackingReasons = map[string]bool{
+	"remote-source-present": true, "symbolic-reference": true, "selected-base": true,
+	"workspace-used": true, "github-branch-absent": true,
+}
+
+// unrecognizedTrackingReason is the fixed evidence text of a reference whose reason is not listed.
+const unrecognizedTrackingReason = "tracking-reason-unrecognized"
 
 func (a Adapter) worktree(e workspace.WorktreeEvidence) Worktree {
 	w := Worktree{
