@@ -5,6 +5,7 @@ package fanout
 
 import (
 	"context"
+	"runtime"
 	"sync"
 )
 
@@ -13,7 +14,8 @@ import (
 // ctx.Err(). If every item had started before ctx ended, Do returns nil: a late cancellation is not
 // an error of this call. A panic in fn is recovered in its worker, the remaining items are
 // cancelled, and the first panic (by index) is re-raised, unchanged, in the caller after all
-// workers have stopped. width < 1 is 1; width > n is n; n < 1 runs nothing and returns nil.
+// workers have stopped; a runtime.Goexit in fn ends the caller the same way, after all workers
+// have stopped. width < 1 is 1; width > n is n; n < 1 runs nothing and returns nil.
 //
 // The context fn receives is cancelled when the first panic is recorded. Do adds no deadline of its
 // own. Callers write out[i] only; they never append to a shared slice.
@@ -34,6 +36,7 @@ func Do(ctx context.Context, n, width int, fn func(ctx context.Context, i int)) 
 		panicked bool
 		panicIdx int
 		panicVal any
+		goexit   bool
 		wg       sync.WaitGroup
 	)
 	// claim hands out the next index, or reports that there is none (all handed out, or the
@@ -49,21 +52,36 @@ func Do(ctx context.Context, n, width int, fn func(ctx context.Context, i int)) 
 		return i, true
 	}
 	run := func(i int) {
-		returned := false
+		returned, recovered := false, false
 		defer func() {
-			if returned {
+			if returned || recovered {
 				return
 			}
-			r := recover()
+			// Neither a return nor a recovered panic: fn ended its goroutine with runtime.Goexit
+			// (t.FailNow, for example). Remember it, cancel the rest, and end the caller the same
+			// way once every worker has stopped.
 			mu.Lock()
-			if !panicked || i < panicIdx {
-				panicked, panicIdx, panicVal = true, i, r
-			}
+			goexit = true
 			mu.Unlock()
 			cancel()
 		}()
-		fn(workCtx, i)
-		returned = true
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					return
+				}
+				recovered = true
+				mu.Lock()
+				if !panicked || i < panicIdx {
+					panicked, panicIdx, panicVal = true, i, r
+				}
+				mu.Unlock()
+				cancel()
+			}()
+			fn(workCtx, i)
+			returned = true
+		}()
 	}
 	wg.Add(width)
 	for w := 0; w < width; w++ {
@@ -81,6 +99,9 @@ func Do(ctx context.Context, n, width int, fn func(ctx context.Context, i int)) 
 	wg.Wait()
 	if panicked {
 		panic(panicVal)
+	}
+	if goexit {
+		runtime.Goexit()
 	}
 	if next < n {
 		// At least one item was skipped, and only the end of the caller's context (a panic is
