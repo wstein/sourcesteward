@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -75,5 +76,22 @@ func TestRemoteWriteGateTaskWithoutRecord(t *testing.T) {
 	}
 	if err := RemoteWriteGate(broken, t.TempDir(), "task", attribution.Origin{Kind: "claude", SessionID: "s2"}); err == nil {
 		t.Fatal("an unreadable record must refuse")
+	}
+}
+
+// The null device is a character device but no terminal: a run with stdin and stdout on it is not
+// human, whatever the environment.
+func TestOriginForStreamsDoesNotTreatTheNullDeviceAsATerminal(t *testing.T) {
+	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer null.Close()
+	if o := originForStreams([]string{"HOME=/h"}, null, null, attributionNow); o.Kind == "human" {
+		t.Fatalf("%+v", o)
+	}
+	var buf bytes.Buffer
+	if o := originForStreams(nil, &buf, &buf, attributionNow); o.Kind == "human" {
+		t.Fatalf("%+v", o)
 	}
 }
