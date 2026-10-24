@@ -348,3 +348,18 @@ func TestRestoreFailedRebaseEntryWithoutATipIsLeftAlone(t *testing.T) {
 		}
 	}
 }
+
+// Restore picks the latest run by time: an old-format ID and a microsecond ID of the same second sort by
+// their time stamp, not as raw text ('Z' sorts after the digits).
+func TestRestoreDefaultRunOrdersMixedRunIDFormatsByTime(t *testing.T) {
+	w := newWorkspace(t)
+	if err := os.MkdirAll(journalDir(w), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	older, newer := "20260101T120000Z-ffffffff", "20260101T120000500000Z-00000000"
+	fakeRun(t, w, older)
+	fakeRun(t, w, newer)
+	if r := restore(t, w, ""); r.RunID == nil || *r.RunID != newer {
+		t.Fatalf("%v", r.RunID)
+	}
+}

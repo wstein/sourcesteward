@@ -302,3 +302,22 @@ func TestSyncRestoreCommandPassesPathAndRunAndMapsTheExitStatus(t *testing.T) {
 		t.Errorf("%+v", got)
 	}
 }
+
+// Every sync option is refused by restore, so dropping one from the refusal list fails here.
+func TestSyncRestoreRefusesEverySyncOption(t *testing.T) {
+	for _, flag := range []string{"--plan", "--dry-run", "--rebase", "--ff-only", "--merge", "--autostash", "--no-autostash", "--prune", "--no-prune"} {
+		called := false
+		cmd := syncCommandWith(nil, func(context.Context, stwsync.RestoreOptions) stwsync.Result {
+			called = true
+			return syncCLIResult()
+		})
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"restore", flag})
+		err := cmd.ExecuteContext(context.Background())
+		var failure runtimeFailure
+		if err == nil || errors.As(err, &failure) || called {
+			t.Errorf("%s: err=%v called=%v", flag, err, called)
+		}
+	}
+}
