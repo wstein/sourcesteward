@@ -220,7 +220,7 @@ real identity change, see below), `registration-moved`, `lock-mismatch`, `branch
 | Worktree of another owner or created by another tool (no stw registration), proven integrated, clean, unlocked, not recently active | `safe`, `scope` `other` or `unknown`, evidence `no-work` when it has no commit of its own | human mode: shown, never preselected, removable only by explicit choice; removal of an unregistered worktree uses the Spec 029 legacy completion (exact path, declared complete, cooperative); agent mode: not shown and not plannable |
 | The same, but dirty, unmerged or locked by another | `retain` | none |
 | Worktree of scope `other` or `unknown` whose `HEAD`, index or any tracked-file mtime is within the last 24 hours (a possibly running job, for example a fresh `/tmp/whr010-*` at the base commit is trivially an ancestor and clean) | `retain` `recently-active` | none; the window is OQ15 |
-| Worktree directory missing, registration present | `safe` (`stale-worktree`) if stw-owned and the Git admin entry proves prunable; else `retain` | registration removal only |
+| Worktree directory missing, registration present | `retain` (`stale-worktree`), reason `stale-registration-no-plan-kind` when stw-owned and the Git admin entry proves prunable (no existing plan kind removes it, T012b; not selectable by `--save` or `a`), else the reason of the failed check | none |
 | Branch integrated, not checked out anywhere | `safe` | delete branch with recovery ref (Spec 011 WI2) |
 | Branch integrated but checked out in a retained worktree | `retain` `branch-attached-elsewhere` | none |
 | The worktree of the current working directory | `retain` `current-worktree` | none |
