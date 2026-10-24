@@ -582,3 +582,28 @@ func TestIncompleteFactsAreRetainedForEveryScope(t *testing.T) {
 		}
 	})
 }
+
+// A branch the observer keeps for a native reason is retained with that reason and carries no
+// effect, whatever its proof says.
+func TestBranchKeepReasonRetainsAProvenBranch(t *testing.T) {
+	c := only(t, repo(nil, []Branch{{Name: "pushed", Proof: ProofAncestor, Reason: "remote-counterpart"}}), cfg())
+	if c.Verdict != VerdictRetain || c.Reason != "remote-counterpart" || len(c.Effects) != 0 {
+		t.Fatalf("%+v", c)
+	}
+	// Incomplete still outranks the reason.
+	c = only(t, repo(nil, []Branch{{Name: "pushed", Proof: ProofAncestor, Reason: "remote-counterpart", Incomplete: "x"}}), cfg())
+	if c.Reason != "evidence-incomplete" {
+		t.Fatalf("%+v", c)
+	}
+	// A kept branch is not deleted with a safe worktree.
+	w := stwTree("a")
+	w.Branch = "kept"
+	got := classifyRepo(repo([]Worktree{w}, []Branch{{Name: "kept", Proof: ProofAncestor, Reason: "recovery-reference"}}), cfg())
+	for _, c := range got {
+		for _, e := range c.Effects {
+			if strings.HasPrefix(e, "delete-branch") {
+				t.Fatalf("a kept branch got a delete effect: %+v", got)
+			}
+		}
+	}
+}

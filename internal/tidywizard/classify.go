@@ -120,6 +120,9 @@ type Branch struct {
 	Ahead      int
 	AuthorHint string
 	Incomplete string // as Worktree.Incomplete
+	// Reason is a native reason to keep the branch whatever its proof says (jj: remote-counterpart,
+	// recovery-reference, selected-base, workspace-used); the branch is then retained with it.
+	Reason string
 }
 
 // TrackingRef holds the facts of one local remote-tracking reference.
@@ -291,7 +294,7 @@ func classifyRepo(f RepoFacts, cfg Config) []Candidate {
 	for _, w := range f.Worktrees {
 		c := classifyWorktree(f.Name, w, protected[w.Path], cfg)
 		if w.Branch != "" && c.Verdict == VerdictSafe && c.Kind == KindWorktree {
-			if b, ok := branches[w.Branch]; ok && !b.IsBase && b.Incomplete == "" && proven(b.Proof) && attached[w.Branch] == 1 {
+			if b, ok := branches[w.Branch]; ok && !b.IsBase && b.Incomplete == "" && b.Reason == "" && proven(b.Proof) && attached[w.Branch] == 1 {
 				c.Effects = append(c.Effects, "delete-branch:"+w.Branch)
 				deleted[w.Branch] = true
 			}
@@ -420,6 +423,8 @@ func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate 
 	switch {
 	case b.Incomplete != "":
 		return c.retain("evidence-incomplete", b.Incomplete)
+	case b.Reason != "":
+		return c.retain(b.Reason, b.Reason)
 	case !proven(c.Proof):
 		return c.retain("unmerged", aheadEvidence(b.Ahead, b.Name))
 	case attached:
