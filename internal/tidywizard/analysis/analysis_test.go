@@ -227,14 +227,15 @@ func TestPrepareReportsUnreadableAndUninitializedMembers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := specOf(p, "a"); s.Skip != "base-ambiguous" {
+	// An unreadable repository is an error row, not an ambiguity.
+	if s := specOf(p, "a"); s.Skip != "" || !strings.Contains(s.Error, "the references cannot be read: boom") {
 		t.Errorf("%+v", s)
 	}
 	if !reflect.DeepEqual(p.Names, []string{".", "a", "c"}) {
 		t.Errorf("names %v", p.Names)
 	}
 	joined := strings.Join(p.Notices, "\n")
-	if !strings.Contains(joined, "a: the references cannot be read: boom") || !strings.Contains(joined, "member-uninitialized: b") {
+	if !strings.Contains(joined, "a: the references cannot be read: boom") || !strings.Contains(joined, "submodule-uninitialized: b") || strings.Contains(joined, "member-uninitialized") {
 		t.Errorf("notices %q", joined)
 	}
 	// A member without any remote cannot have a symbolic HEAD either.
@@ -334,3 +335,65 @@ func TestPrepareAndRunOverARealRepository(t *testing.T) {
 }
 
 func nowForTest() time.Time { return time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC) }
+
+// The member set is derive.Members: the workspace repository first, then the members once each; a
+// workspace without any other member analyses only "." and says so with the notice of the
+// specification. --member keeps the member order, not the order of the flags.
+func TestPrepareMembersFollowDeriveMembers(t *testing.T) {
+	w := world()
+	p, err := Prepare(context.Background(), Options{CWD: "/ws", Members: []string{"c", "a"}}, w.deps())
+	if err != nil || !reflect.DeepEqual(p.Names, []string{"a", "c"}) {
+		t.Fatalf("%v %v", err, p.Names)
+	}
+	for _, n := range p.Notices {
+		if n == "workspace-members-none" {
+			t.Errorf("members exist: %v", p.Notices)
+		}
+	}
+	solo := world()
+	solo.ws.Members = solo.ws.Members[:1]
+	p, err = Prepare(context.Background(), Options{CWD: "/ws"}, solo.deps())
+	if err != nil || !reflect.DeepEqual(p.Names, []string{"."}) || !contains(p.Notices, "workspace-members-none") {
+		t.Errorf("%v %v %v", err, p.Names, p.Notices)
+	}
+	// A duplicated member name is analysed once.
+	dup := world()
+	dup.ws.Members = append(dup.ws.Members, member("a", "/ws/a"))
+	p, _ = Prepare(context.Background(), Options{CWD: "/ws"}, dup.deps())
+	if !reflect.DeepEqual(p.Names, []string{".", "a", "b", "c"}) {
+		t.Errorf("%v", p.Names)
+	}
+}
+
+func contains(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// A single configured remote that was never fetched is still the remote; nothing is invented and
+// the base is ambiguous. Two configured remotes without origin are remote-ambiguous even when only
+// one of them was ever fetched.
+func TestPrepareUsesTheConfiguredRemotes(t *testing.T) {
+	w := world()
+	w.refs["/ws/b"] = stwsync.RepoRefs{Refs: map[string]bool{"refs/heads/main": true}, Remotes: []string{"never"}, Heads: map[string]string{"never": ""}}
+	w.refs["/ws/c"] = stwsync.RepoRefs{Refs: map[string]bool{"refs/heads/main": true, "refs/remotes/fork/main": true}, Remotes: []string{"fork", "upstream"}, Heads: map[string]string{"fork": "refs/remotes/fork/main", "upstream": ""}}
+	p, err := Prepare(context.Background(), Options{CWD: "/ws"}, w.deps())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := specOf(p, "b"); s.Skip != "base-ambiguous" {
+		t.Errorf("b: %+v", s)
+	}
+	if s := specOf(p, "c"); s.Skip != "remote-ambiguous" {
+		t.Errorf("c: %+v", s)
+	}
+	for _, d := range p.Derived {
+		if d.Name == "remote:c" {
+			t.Errorf("a remote was invented for c: %+v", d)
+		}
+	}
+}
