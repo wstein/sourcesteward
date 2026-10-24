@@ -4,9 +4,11 @@ package derive
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -508,5 +510,34 @@ func TestDestinationIndexReportsAStoreThatCannotBeListed(t *testing.T) {
 	}
 	if l := LookupTaskByDestination([]Store{{Path: broken}}, "jj", dest, repo); l.SkippedStores != 1 {
 		t.Errorf("%+v", l)
+	}
+}
+
+// The index keeps the join fields only: 40 records of about 1 MiB leave a few KiB behind.
+func TestIndexRecordsRetainsOnlyTheJoinFields(t *testing.T) {
+	const repo = "/w/r/.jj/repo"
+	big := strings.Repeat("w", 1<<20-4096)
+	var recs []workspace.TaskRecord
+	for i := 0; i < 40; i++ {
+		r := jjRecord(fmt.Sprintf("t%04d", i), "claude", fmt.Sprintf("/w/wt/%d", i), repo)
+		r.RemainingWork = []string{big}
+		recs = append(recs, r)
+	}
+	stores := Stores([]string{storeWithRecords(t, recs...)}, "", "")
+	heap := func() uint64 {
+		var m runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&m)
+		return m.HeapAlloc
+	}
+	before := heap()
+	idx := IndexRecords(stores, "jj")
+	after := heap()
+	runtime.KeepAlive(idx)
+	if growth := int64(after) - int64(before); growth > 2<<20 {
+		t.Errorf("the index retains %d KiB of 40 MiB of records", growth>>10)
+	}
+	if r := idx.Lookup("/w/wt/7", repo); r.Record.TaskID != "t0007" || len(r.Record.RemainingWork) != 0 {
+		t.Errorf("%+v", r.Record.TaskID)
 	}
 }

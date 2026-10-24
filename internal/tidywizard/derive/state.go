@@ -288,25 +288,26 @@ func IndexRecords(stores []Store, backend string) *DestinationIndex {
 		if s.Issue != nil {
 			continue
 		}
-		records, unreadable, err := workspace.ScanTasks(s.Path)
+		// Stream the records: only the join fields of the complete ones are kept, so the peak
+		// is one record and not the store.
+		unreadable, err := workspace.EachTask(s.Path, func(rec workspace.TaskRecord) {
+			if rec.State != "complete" || rec.Backend != backend || rec.Native.Backend != backend {
+				return
+			}
+			d, repo := cleanPath(rec.Destination), cleanPath(rec.Native.RepositoryDir)
+			if d == "" || repo == "" {
+				return
+			}
+			kept := workspace.TaskRecord{TaskID: rec.TaskID, Owner: rec.Owner, Backend: rec.Backend, Destination: rec.Destination, State: rec.State,
+				Native: workspace.NativeIdentity{Backend: rec.Native.Backend, RepositoryDir: rec.Native.RepositoryDir}}
+			x.byDest[d] = append(x.byDest[d], indexed{rec: kept, store: s.Path, repo: repo})
+		})
 		if err != nil {
 			// A store that cannot be listed is not a store without records.
 			x.SkippedStores++
 			continue
 		}
 		x.Skipped = append(x.Skipped, unreadable...)
-		for _, rec := range records {
-			if rec.State != "complete" || rec.Backend != backend || rec.Native.Backend != backend {
-				continue
-			}
-			d, repo := cleanPath(rec.Destination), cleanPath(rec.Native.RepositoryDir)
-			if d == "" || repo == "" {
-				continue
-			}
-			kept := workspace.TaskRecord{TaskID: rec.TaskID, Owner: rec.Owner, Backend: rec.Backend, Destination: rec.Destination, State: rec.State,
-				Native: workspace.NativeIdentity{Backend: rec.Native.Backend, RepositoryDir: rec.Native.RepositoryDir}}
-			x.byDest[d] = append(x.byDest[d], indexed{rec: kept, store: s.Path, repo: repo})
-		}
 	}
 	sort.Strings(x.Skipped)
 	return x
