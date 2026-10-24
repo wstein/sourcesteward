@@ -163,3 +163,57 @@ func TestSessionIDAppearsInNoOutput(t *testing.T) {
 		t.Error("the stored record lost the session id")
 	}
 }
+
+// rewindJournal puts the operation journal back to native-created, the state after a first apply that
+// stopped before the task record was finalized.
+func rewindJournal(t *testing.T, state, planID string) {
+	t.Helper()
+	s, err := openStore(state, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var j journal
+	if err = s.read("operations", planID, &j); err != nil {
+		t.Fatal(err)
+	}
+	j.Phase = "native-created"
+	if err = s.write("operations", planID, j, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// With a task record already present and the journal at native-created, finalize takes its
+// existing-record branch: the stored origin is kept and is what the result shows.
+func TestFinalizeWithExistingRecordKeepsTheFirstOrigin(t *testing.T) {
+	first := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	_, _, state, applied := originFixture(t, &first)
+	rewindJournal(t, state, applied.Plan.PlanID)
+	other := attribution.Origin{Kind: "claude", SessionID: "other-session", CreatedAt: "2026-10-25T12:00:00Z"}
+	again := Apply(context.Background(), ApplyOptions{StateDir: state, PlanID: applied.Plan.PlanID, Authorize: true, Origin: &other})
+	if again.Status != "ok" || again.Task == nil || again.Task.Origin == nil || again.Task.Origin.CreatedAt != first.CreatedAt {
+		t.Fatalf("finalize showed another origin: %+v %+v", again.Diagnostics, again.Task)
+	}
+	if stored, _, _ := ReadTask(state, "attributed"); stored.Origin == nil || *stored.Origin != first {
+		t.Fatalf("stored origin changed: %+v", stored.Origin)
+	}
+}
+
+// Known residual risk (Spec 042 D4): the origin is recorded at the first successful task-record write.
+// When the first apply stopped before that write, the session that completes the creation is recorded.
+func TestRetryAfterPartialFirstApplyRecordsTheRetryingSession(t *testing.T) {
+	first := attribution.Origin{Kind: "claude", SessionID: originSession, CreatedAt: "2026-10-24T12:00:00Z"}
+	_, _, state, applied := originFixture(t, &first)
+	rewindJournal(t, state, applied.Plan.PlanID)
+	if err := os.Remove(filepath.Join(state, "tasks", "attributed.json")); err != nil {
+		t.Fatal(err)
+	}
+	retrying := attribution.Origin{Kind: "claude", SessionID: "retrying-session", CreatedAt: "2026-10-25T12:00:00Z"}
+	again := Apply(context.Background(), ApplyOptions{StateDir: state, PlanID: applied.Plan.PlanID, Authorize: true, Origin: &retrying})
+	if again.Status != "ok" {
+		t.Fatalf("retry: %+v", again.Diagnostics)
+	}
+	if stored, _, _ := ReadTask(state, "attributed"); stored.Origin == nil || *stored.Origin != retrying {
+		t.Fatalf("stored origin %+v", stored.Origin)
+	}
+}
