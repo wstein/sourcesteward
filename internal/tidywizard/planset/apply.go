@@ -147,7 +147,7 @@ func Apply(ctx context.Context, req ApplyRequest) ApplyResult {
 	case err != nil:
 		return refused(req.PlanID, CodePlanSetInvalid, "the stored plan set %q is not valid: %v", req.PlanID, err)
 	}
-	if set.NeedsAuthorization() || len(set.AuthorizedScopes) > 0 {
+	if set.NeedsAuthorization() { // a set with authorized_scopes always has such an item (Validate)
 		if req.Mode.Mode != owner.ModeHuman {
 			return refused(set.PlanID, CodeScopeNotAuthorized, "only the human path applies an other or unknown item or a plan with authorized_scopes")
 		}

@@ -232,9 +232,16 @@ func (s Set) Validate() error {
 	if len(s.AuthorizedScopes) > 0 && s.Mode.Mode != owner.ModeHuman {
 		return bad("only the human path writes authorized_scopes")
 	}
+	carried := map[owner.Scope]bool{}
+	for _, i := range s.Items {
+		carried[i.Scope] = true
+	}
 	for _, sc := range s.AuthorizedScopes {
 		if sc != owner.ScopeOther && sc != owner.ScopeUnknown {
 			return bad("scope %q does not need authorization", sc)
+		}
+		if !carried[sc] {
+			return bad("authorized scope %q is carried by no selected item", sc)
 		}
 	}
 	return nil
