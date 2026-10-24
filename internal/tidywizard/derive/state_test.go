@@ -359,3 +359,102 @@ func TestStoresReportAnUnreadableRecordDirectory(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// jjRecord is a creation record of a jj workspace; the fields the lookup joins by can be changed.
+func jjRecord(task, owner, dest, repoDir string) workspace.TaskRecord {
+	return workspace.TaskRecord{SchemaVersion: 1, TaskID: task, Owner: owner, Backend: "jj", Destination: dest, State: "complete",
+		Native: workspace.NativeIdentity{Backend: "jj", RepositoryDir: repoDir, WorkspaceRoot: dest}}
+}
+
+func storeWithRecords(t *testing.T, recs ...workspace.TaskRecord) string {
+	t.Helper()
+	p := storeWith(t, nil)
+	for _, r := range recs {
+		b, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(p, "tasks", r.TaskID+".json"), b, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return p
+}
+
+func TestLookupTaskByDestinationJoinsOnBackendDestinationRepositoryAndCompleteness(t *testing.T) {
+	const dest, repo = "/w/wt/a", "/w/r/.jj/repo"
+	good := jjRecord("a", "claude", dest, repo)
+	partial := jjRecord("p", "claude", dest, repo)
+	partial.State = "planned"
+	git := jjRecord("g", "claude", dest, repo)
+	git.Backend, git.Native.Backend = "git", "git"
+	nativeGit := jjRecord("ng", "claude", dest, repo)
+	nativeGit.Native.Backend = "git"
+	recordGit := jjRecord("rg", "claude", dest, repo)
+	recordGit.Backend = "git"
+	for name, rec := range map[string]workspace.TaskRecord{
+		"record backend differs": recordGit,
+		"other destination": jjRecord("x1", "claude", "/w/wt/b", repo),
+		"other repository":  jjRecord("x2", "claude", dest, "/w/other/.jj/repo"),
+		"partial creation":  partial, "git backend": git, "native backend differs": nativeGit,
+		"task id alone": jjRecord("a", "claude", "/w/wt/zzz", repo),
+	} {
+		r := LookupTaskByDestination(Stores([]string{storeWithRecords(t, rec)}, "", ""), "jj", dest, repo)
+		if r.Ambiguity == nil || r.Ambiguity.Code != "registration-record-missing" || r.Record.TaskID != "" {
+			t.Errorf("%s owns: %+v", name, r)
+		}
+	}
+	r := LookupTaskByDestination(Stores([]string{storeWithRecords(t, good, partial)}, "", ""), "jj", dest, repo)
+	if r.Ambiguity != nil || r.Record.TaskID != "a" || r.Derived != (Derived{Name: "owner:a", Value: "claude", Source: "task-record"}) {
+		t.Fatalf("%+v", r)
+	}
+	// Paths are compared in cleaned form.
+	r = LookupTaskByDestination(Stores([]string{storeWithRecords(t, good)}, "", ""), "jj", "/w/wt/./a/", "/w/r/x/../.jj/repo")
+	if r.Ambiguity != nil || r.Record.TaskID != "a" {
+		t.Fatalf("cleaned: %+v", r)
+	}
+	// An empty destination or repository never matches (an unknown path owns nothing).
+	empty := jjRecord("e", "claude", "", "")
+	if r = LookupTaskByDestination(Stores([]string{storeWithRecords(t, empty)}, "", ""), "jj", "", ""); r.Ambiguity == nil || r.Record.TaskID != "" {
+		t.Fatalf("empty: %+v", r)
+	}
+}
+
+func TestLookupTaskByDestinationStoresAndAmbiguity(t *testing.T) {
+	const dest, repo = "/w/wt/a", "/w/r/.jj/repo"
+	a := storeWithRecords(t, jjRecord("t1", "claude", dest, repo))
+	same := storeWithRecords(t, jjRecord("t1", "claude", dest, repo))
+	other := storeWithRecords(t, jjRecord("t2", "codex", dest, repo))
+	if r := LookupTaskByDestination(Stores([]string{a, same}, "", ""), "jj", dest, repo); r.Ambiguity != nil || r.Record.TaskID != "t1" {
+		t.Fatalf("equal records in two stores are one: %+v", r)
+	}
+	r := LookupTaskByDestination(Stores([]string{a, other}, "", ""), "jj", dest, repo)
+	if r.Ambiguity == nil || r.Ambiguity.Code != "registration-record-ambiguous" || r.Derived.Value != "" {
+		t.Fatalf("two different records for one destination: %+v", r)
+	}
+	two := storeWithRecords(t, jjRecord("t1", "claude", dest, repo), jjRecord("t3", "claude", dest, repo))
+	if r = LookupTaskByDestination(Stores([]string{two}, "", ""), "jj", dest, repo); r.Ambiguity == nil || r.Ambiguity.Code != "registration-record-ambiguous" {
+		t.Fatalf("two records in one store: %+v", r)
+	}
+}
+
+// An unreadable record is skipped and reported; it never fails the lookup and never owns, and the
+// readable records of the same store still do.
+func TestLookupTaskByDestinationSkipsAndReportsUnreadableRecords(t *testing.T) {
+	const dest, repo = "/w/wt/a", "/w/r/.jj/repo"
+	a := storeWithRecords(t, jjRecord("t1", "claude", dest, repo), jjRecord("t2", "codex", "/w/wt/b", repo))
+	if err := os.Chmod(filepath.Join(a, "tasks", "t2.json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	r := LookupTaskByDestination(Stores([]string{a}, "", ""), "jj", dest, repo)
+	if r.Ambiguity != nil || r.Record.TaskID != "t1" || !reflect.DeepEqual(r.Skipped, []string{"t2"}) {
+		t.Fatalf("%+v", r)
+	}
+	unsafe := storeWith(t, nil)
+	if err := os.Chmod(unsafe, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if r = LookupTaskByDestination(Stores([]string{unsafe}, "", ""), "jj", dest, repo); r.Ambiguity == nil || r.Ambiguity.Code != "registration-record-missing" {
+		t.Fatalf("%+v", r)
+	}
+}

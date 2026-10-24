@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -252,4 +253,66 @@ func LookupTask(stores []Store, task string) TaskLookup {
 		}
 	}
 	return TaskLookup{Result: Result{Derived: Derived{Name: name, Value: found[0].Owner, Source: "task-record"}}, Record: found[0]}
+}
+
+// DestinationLookup is the result of the creation record lookup of a jj workspace by its path.
+// Skipped lists the ids of records that could not be read (skipped, never fatal).
+type DestinationLookup struct {
+	TaskLookup
+	Skipped []string
+}
+
+// LookupTaskByDestination finds the creation record that owns the workspace at dest of the
+// repository repoDir (Spec 041 T011a5). A jj workspace has no stw:<task> lock, so the record is
+// joined by what it recorded: the backend (the record's and its native identity's), the cleaned
+// destination, the cleaned repository directory and a complete creation. A task id or a name
+// never matches on its own, and an empty path owns nothing. Differing matching records are
+// registration-record-ambiguous; none is registration-record-missing.
+func LookupTaskByDestination(stores []Store, backend, dest, repoDir string) DestinationLookup {
+	name := "owner-by-destination"
+	d, repo := cleanPath(dest), cleanPath(repoDir)
+	var found []workspace.TaskRecord
+	var where, skipped []string
+	if d != "" && repo != "" {
+		for _, s := range stores {
+			if s.Issue != nil {
+				continue
+			}
+			records, unreadable, err := workspace.ScanTasks(s.Path)
+			if err != nil {
+				// A store that cannot be listed is reported, never taken for a store without records.
+				skipped = append(skipped, "store:"+filepath.Base(s.Path))
+				continue
+			}
+			skipped = append(skipped, unreadable...)
+			for _, rec := range records {
+				if rec.State == "complete" && rec.Backend == backend && rec.Native.Backend == backend &&
+					cleanPath(rec.Destination) == d && cleanPath(rec.Native.RepositoryDir) == repo {
+					found, where = append(found, rec), append(where, s.Path)
+				}
+			}
+		}
+	}
+	sort.Strings(skipped)
+	if skipped == nil {
+		skipped = []string{}
+	}
+	if len(found) == 0 {
+		r := ambiguous(name, "registration-record-missing", dest, nil)
+		return DestinationLookup{TaskLookup: TaskLookup{Result: r}, Skipped: skipped}
+	}
+	for _, rec := range found[1:] {
+		if !reflect.DeepEqual(rec, found[0]) {
+			return DestinationLookup{TaskLookup: TaskLookup{Result: ambiguous(name, "registration-record-ambiguous", dest, where)}, Skipped: skipped}
+		}
+	}
+	return DestinationLookup{TaskLookup: TaskLookup{Result: Result{Derived: Derived{Name: "owner:" + found[0].TaskID, Value: found[0].Owner, Source: "task-record"}}, Record: found[0]}, Skipped: skipped}
+}
+
+// cleanPath is the one canonical form paths are compared in; an empty path stays empty.
+func cleanPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	return filepath.Clean(p)
 }
