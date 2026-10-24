@@ -225,6 +225,77 @@ real identity change, see below), `registration-moved`, `lock-mismatch`, `branch
 | Branch integrated but checked out in a retained worktree | `retain` `branch-attached-elsewhere` | none |
 | The worktree of the current working directory | `retain` `current-worktree` | none |
 
+## Read-only observers (FR-052)
+
+The classifier reads facts; `internal/workspace` supplies them through new exported **read-only observers**, the only evidence source of the
+wizard's analysis. `PlanTidyV3` and the retirement planning are not used for the overview: they write plan records into a state store, and the
+overview writes nothing. The observers reuse the existing building blocks (the Git planning policy, the filter-free retirement comparison, the
+Spec 011 integration proofs, the jj session) and add no new proof.
+
+Per repository one call, `workspace.ObserveWorktrees(ctx, ObserveOptions) (WorktreeObservation, error)`:
+
+- `ObserveOptions{Path string; Base string; Online bool; Remote string}`. `Base` is the reference name the derivation (WP-2,
+  `derive.Base`) produced for this repository (for example `refs/remotes/origin/main`, or the jj trunk bookmark); it must exist locally and is
+  resolved to a commit once, reported as `BaseOID`; it is never fetched. `Online` and `Remote` are set only by `--online`; without `Online` no network is
+  attempted and `Remote` must be empty. The options have no timeout field: `--timeout` bounds the whole analysis (CLI surface), so the analysis owns one deadline, passes it down in the `context`, and each repository's observation and proof phase are bounded by the smaller of that deadline and the 60 s and 60 s windows below.
+- `WorktreeObservation{Backend, Base, BaseOID string; Worktrees []WorktreeEvidence; Branches []BranchEvidence; TrackingRefs []TrackingRefEvidence; TrackingSkipped string; Limitations []string}`.
+- `WorktreeEvidence`, registration facts (always kept, never zeroed by a later failure): `Path`, `HeadOID`, `HeadRef` (empty when detached), `Primary`,
+  `Locked`, `LockReason`, `Prunable`, `DirMissing`. Content facts: `Dirty`, `IgnoredExtras`, `LastActivity`, `Ahead`, `AuthorHint`, `HasOwnCommit`
+  (HEAD has a commit the base lacks), `Proof` (`ancestor|patch-id|merge-noop|no-net-change|none` of HEAD against the base, the Spec 011 proofs with
+  the default policy, no forge). `Incomplete` is empty or a short reason that applies to the content facts, which are then zero.
+- `BranchEvidence` (`Name`, `OID`, `IsBase`, `Proof`, `Ahead`, `AuthorHint`, `Incomplete`) and `TrackingRefEvidence` (`Name`, `Proof`, `Incomplete`) carry their own `Incomplete`.
+- The stw lock form (`stw:<task>`) is read from `LockReason`; the creation record lookup stays in the state-directory code (WP-2) and the adapter
+  joins the two. The observers never look at a state store.
+- **Tracking references** need the network proof of contract 3 (OQ8). The tracking evidence exists today only inside `tidyV3TrackingCoordinator.planTracking`
+  (`tidy_v3_tracking.go`), which also writes a plan; PR B extracts its read-only part (the observation and proof up to, not including, plan validation and the store write) into a function the
+  observer and `planTracking` both call, with `planTracking`'s behaviour and tests unchanged. With `Online` the observer calls it (a hosting session, the extra 30 s online phase of `planOnlineTimeout`, no write) and fills `TrackingRefs`; without it the slice is empty and
+  `TrackingSkipped` is `tracking-requires-online`.
+
+**Failure rule.** An error, timeout, exceeded bound or unreadable path while observing one worktree, branch or reference sets the `Incomplete` reason of
+that item and leaves its content facts zero; the registration facts stay. The adapter maps `Incomplete` to a classifier fact on `Worktree`, `Branch` and
+`TrackingRef` (T011a3, test first) that yields `retain` `evidence-incomplete` for every owner scope; the classifier's zero-`LastActivity` rule covers only
+other and unknown scopes and is not relied on. Nothing is guessed or defaulted to a safe value, and an `Incomplete` branch is never `Proof` `none`. An error of the
+repository as a whole (not a repository, base missing) is the returned `error`: the repository is `error` in the overview and the others proceed.
+
+**From refusals to facts.** The retirement checks answer yes or refuse; the observers need facts, so each check is wrapped as follows: a refusal with the code of the
+finding becomes the fact (`dirty` or a tracked difference sets `Dirty`; `retirement-unrecorded-entry` and untracked or ignored entries set `IgnoredExtras`), a refusal for
+a limit (`retirement-file-limit`, deadline, budget) or any other error sets `Incomplete` with that code as the reason, and success leaves both false; a disk content difference has no refusal code of its own and therefore shows as `Incomplete` (`evidence-incomplete`, fail-closed), not as a clean worktree. The mapping is a table in
+the tests, one row per refusal code. The shared proof budget (`tidyV3ProofBudget`) allows only three observations per operation, which would run out after about three
+worktrees, so each worktree gets its own content budget (a fresh `newTidyV3ProofBudget` for its comparison, bounded by the same per-worktree limits as one retirement plan);
+the repository-level cap stays the 60 s observation deadline and the 1024 worktree limit, and a worktree that exceeds its budget is `Incomplete`.
+
+**Git without `git status`.** Every Git command runs under `runSandboxed` with no write roots and the planning policy of `git_planning.go`
+(`planningPolicyFactory`: `planningGitOptions`, `planningConfigArgs`, `planningEnvironment`: no global or system configuration, no hooks, no filters, no
+replace objects, `core.fsmonitor` off, `GIT_OPTIONAL_LOCKS=0`); the bare `gitRead` is not enough because it leaves global fsmonitor, filter and hook
+configuration active. `git status` is not run: it can refresh the index stat information, write the untracked cache, start or update the fsmonitor
+token or daemon and write a split index, and each of these is prevented here only by not calling it. `Dirty` and `IgnoredExtras` come from the filter-free
+comparison of retirement (`retirement_git.go` stored-files check and `retirement_manifest_v3.go` manifest: the disk against the HEAD tree, untracked and ignored entries
+against the stored tree) and from `git diff-index --cached` (the index against HEAD, which reads and never refreshes the index). `LastActivity` is the newest
+modification time (`lstat`) of the worktree's HEAD file, its index file and every tracked file, at most `checkoutLeafLimit` (16,384, the measured bound
+of `git.go`) tracked files per worktree; more makes the worktree `Incomplete`. Other commands: worktree list, rev-parse, merge-base, rev-list count, log of the tip.
+
+**jj.** Every jj command goes through the existing `jjSession.query` form: `--ignore-working-copy` and `--at-operation=<observed operation>` (the operation
+is observed once per repository and pinned), so nothing snapshots the working copy and no operation is written or merged. Bookmarks are fully observable
+(`IsBase` from the trunk bookmark, `Proof`, `Ahead`, `AuthorHint`). For a jj workspace the observer compares the disk with the files stored in the working-copy
+commit of the pinned operation, as the existing jj retirement admission does (`ObserveJJRetirement`, stored files and manifest): any difference is `Dirty` or
+`IgnoredExtras`, honestly relative to the pinned operation (edits made since the last snapshot show as a difference, which is the safe direction), and a clean
+comparison of an empty working-copy change is the empty working-copy retirement of Spec 011 (SI7, OQ9). Only a comparison that cannot complete is `Incomplete`
+(`jj-working-copy-comparison-failed`). jj workspaces thus stay eligible for the empty working-copy rule; this reconciles the safety invariants and OQ9 with the read-only rule.
+
+**Read-only guarantee as a test.** The sandbox mounts the file system read-only, so a probe inside it cannot expose a write. The test therefore requires: a
+fixture whose files are stat-dirty and content-clean (touched, so a status would rewrite the index), linked worktrees with their own index, an fsmonitor-enabled
+global and local configuration, and a hook and a filter in the configuration; a snapshot before and after of the repository (`.git` bytes including refs, packed refs, config and every
+`.git/worktrees/<name>/index`), of every worktree (file list, contents, modification times, its own index) and of the state directory, required equal; and a
+**probe run without the sandbox** (the same observers with the sandbox disabled by the test seam) that must fail the snapshot when an observer calls plain `git status`,
+proving the test can fail. A second fixture with an online tracking remote served by the existing hosting test double covers the tracking path. For jj the snapshot includes the operation log and the working-copy state.
+
+**Bounds (stated numbers; the 61-worktree fixture of the tests confirms them and this section is amended if it cannot).** At most 1024 worktrees and 1024
+branches per repository (`observationLimit`), the surplus sorted by path or name is `Incomplete`. One observation deadline of 60 s (`planObservationTimeout`) and
+one integration proof phase of 60 s for the repository (`integrationPhaseTimeout`, Spec 029 FR-008), with the existing per-command timeout of 10 s
+(`integrationCommandTimeout`) and per-tip timeout of 20 s (`integrationTipTimeout`); the proof of a commit is computed once per distinct HEAD or tip OID. When the phase is
+exhausted, the remaining items are `Incomplete` (`proof-budget-exhausted`), never `none`. With 61 worktrees the phase leaves about 1 s per tip on average, which suffices for the
+ancestor and merge-noop proofs; the fixture must also include patch-id tips, the expensive case, and records how many fit. The 61-worktree fixture uses realistic checkouts (a few thousand tracked files each, generated at test time from a shared object store), not empty worktrees, and records the total time. Native command output is bounded by the existing stream limits.
+
 ## Scope of ownership is a view
 
 Owner amendment (2026-10-23, supersedes any earlier "never touched" wording for other agents' work, which now applies to **agent-run
@@ -436,6 +507,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **FR-043** Exit codes 0/1/2 as in the table.
 - **FR-050** Git and jj backends behave as in Spec 011; unsupported proof retains.
 - **FR-051** Windows is unsupported; no Windows content.
+- **FR-052** The wizard's evidence comes from exported read-only observers of `internal/workspace` (no plan record, no store write, no `git status`, no fetch, jj pinned with `--ignore-working-copy --at-operation`); any observation error makes the item `evidence-incomplete`; the read-only guarantee is a test that can fail.
 
 ### Success criteria
 
