@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
+	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
 // ObserveOptions selects one repository for ObserveWorktrees (Spec 041 FR-052). Base is the
@@ -43,9 +44,13 @@ type WorktreeEvidence struct {
 
 // BranchEvidence holds the facts of one local branch (a full refs/heads name).
 type BranchEvidence struct {
-	Name, OID  string
-	IsBase     bool
-	Proof      string
+	Name, OID string
+	IsBase    bool
+	Proof     string
+	// Reason is why the observer keeps the branch whatever its proof says (jj: the keep reasons of the
+	// native tidy such as remote-counterpart, recovery-reference, selected-base, workspace-used);
+	// empty for Git, where the classifier decides.
+	Reason     string
 	Ahead      int
 	AuthorHint string
 	Incomplete string
@@ -90,10 +95,12 @@ type worktreeObserver struct {
 	read func(ctx context.Context, bin, dir string, args ...string) (string, error)
 	// activity reads the last activity time; a field for the same reason.
 	activity func(gitDir, root string, tracked []RetirementStoredFile) (time.Time, error)
+	// retire reads the stored files of one jj workspace; a field so a test can present another operation.
+	retire func(ctx context.Context, source, base, destination, name, repo string) (inspection.JJRetirementState, error)
 }
 
 func defaultWorktreeObserver() worktreeObserver {
-	return worktreeObserver{refs: defaultTidyV3RefsCoordinator(), tracking: defaultTidyV3TrackingCoordinator(), read: gitRead, activity: lastActivity}
+	return worktreeObserver{refs: defaultTidyV3RefsCoordinator(), tracking: defaultTidyV3TrackingCoordinator(), read: gitRead, activity: lastActivity, retire: inspection.ObserveJJRetirement}
 }
 
 // ObserveWorktrees observes the registrations, worktree contents, branches and (online) tracking
@@ -120,6 +127,13 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	}
 	// The history hard stops (grafts, alternates) end as Incomplete proofs of the items, not as a
 	// refusal of the whole repository.
+	switch inspection.Inspect(ctx, o.Path).Backend {
+	case "jj":
+		return c.observeJJ(ctx, o)
+	case "git":
+	default:
+		return WorktreeObservation{}, failure("unsupported-backend", "Observation requires an unambiguous native Git or jj repository.")
+	}
 	ctx, _, closeSession, err := withPlanningSession(withHistoryHardStops(ctx))
 	if err != nil {
 		return WorktreeObservation{}, err
@@ -350,9 +364,9 @@ func manifestOutcome(err error) (dirty, extras bool, reason string) {
 	switch {
 	case err == nil:
 		return false, false, ""
-	case errors.Is(err, errRetirementStoredDiffers), errors.Is(err, errRetirementStoredMissing):
+	case errors.Is(err, errRetirementStoredDiffers), errors.Is(err, errRetirementStoredMissing), errors.Is(err, errRetirementV2StoredMissing):
 		return true, false, ""
-	case isCode(err, "retirement-unrecorded-entry"):
+	case isCode(err, "retirement-unrecorded-entry"), errors.Is(err, errRetirementV2UnknownPayload):
 		return false, true, ""
 	}
 	return false, false, incompleteReason(err)
@@ -361,14 +375,20 @@ func manifestOutcome(err error) (dirty, extras bool, reason string) {
 // lastActivity is the newest modification time of the worktree's HEAD, its index and every
 // tracked file (at most the stored-file bound of one retirement manifest).
 func lastActivity(gitDir, root string, tracked []RetirementStoredFile) (time.Time, error) {
+	return newestModTime([]string{filepath.Join(gitDir, "HEAD"), filepath.Join(gitDir, "index")}, root, tracked)
+}
+
+// newestModTime is the newest modification time of the required files, which must exist, and of
+// the tracked files below root, of which a deleted one contributes nothing.
+func newestModTime(required []string, root string, tracked []RetirementStoredFile) (time.Time, error) {
 	var newest time.Time
-	paths := []string{filepath.Join(gitDir, "HEAD"), filepath.Join(gitDir, "index")}
+	paths := append([]string{}, required...)
 	for _, f := range tracked {
 		paths = append(paths, filepath.Join(root, filepath.FromSlash(f.Path)))
 	}
 	for i, p := range paths {
 		st, err := os.Lstat(p)
-		if os.IsNotExist(err) && i >= 2 {
+		if os.IsNotExist(err) && i >= len(required) {
 			continue // a deleted tracked file has no time
 		}
 		if err != nil {
