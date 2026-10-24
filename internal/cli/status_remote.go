@@ -50,7 +50,11 @@ func statusRemoteLine(rr statusremote.RepoResult) string {
 		parts = append(parts, statusDraftsText(rr.Remote))
 	}
 	missing(overview.SourceTags, "tags")
-	missing(overview.SourceCIRelease, "release runs")
+	if src[overview.SourceCIRelease].FactOfRepository(overview.SourceCIRelease) {
+		parts = append(parts, "no release workflow") // a fact about the repository, not a gap in the data
+	} else {
+		missing(overview.SourceCIRelease, "release runs")
+	}
 	if i := rr.Issues; src[overview.SourceIssues].Outcome == overview.OutcomeOK && i.Counts.Blue+i.Counts.Violet > 0 && untrusted.ValidRepo(rr.Slug) {
 		parts = append(parts, "other issues: stw issues --repo "+rr.Slug) // blue and violet issues are counted, never items
 	}

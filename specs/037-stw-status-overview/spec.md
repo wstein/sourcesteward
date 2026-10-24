@@ -109,8 +109,10 @@ Bounded to the **latest** run; no history is read.
   file name of the `ci.release_workflow` of the contract that declares the pattern (Spec 026 config; a path, its file name is used in the
   request), or `release.yml` (the name the member repositories use) for a pattern no contract declares. A repository without contract files
   uses the defaults. A contract that **exists but is invalid or unreadable** is not replaced by the defaults: the source ends `error` with
-  the code `contract-invalid` (exit 1; the owner fixes the contract). A 404 for a workflow means `skipped`, reason `not-found`, with a
-  notice (not a failure). The newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
+  the code `contract-invalid` (exit 1; the owner fixes the contract). A 404 for a **declared** workflow (a
+  `ci.release_workflow` of a contract) means `skipped`, reason `not-found`, with a notice (not a failure); a 404 for the default `release.yml`
+  of a pattern no contract declares means the repository has no release workflow: not applicable, no notice, the run is not degraded
+  (Amendments of the status contract). The entries already read are kept in every case. The newest run is read through the existing `runs?head_sha=SHA&per_page=100&page=1` shape (at most 20 runs
   are kept in the JSON; a run whose `head_sha` is not the tag's commit is ignored). Conclusion `failure`, `cancelled` or `timed_out` is a
   failed run; one not completed, or with a status or conclusion this specification does not know, is information.
 - **One item per tag.** A tag whose run failed yields exactly one item, `release-run-failed` (`red`), whether the tag is released or

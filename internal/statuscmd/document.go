@@ -312,11 +312,11 @@ func cutEvidence(ev map[string]any) map[string]any {
 	return out
 }
 
-// outcome is the outcome of a source for the counts of the document. An issues source that is skipped
-// because the repository has its issues disabled has read everything there is: it is a fact about the
-// repository, as it is for the summary of the action model.
+// outcome is the outcome of a source for the counts of the document. A source that is skipped because
+// the repository has its issues disabled or has no release workflow has read everything there is: it is a
+// fact about the repository (not applicable), as it is for the summary of the action model.
 func outcome(src overview.Source, st overview.SourceState) overview.Outcome {
-	if src == overview.SourceIssues && st.Outcome == overview.OutcomeSkipped && st.Reason == overview.ReasonIssuesDisabled {
+	if st.FactOfRepository(src) {
 		return overview.OutcomeOK
 	}
 	return st.Outcome
@@ -421,7 +421,7 @@ func tagsData(rr statusremote.RepoResult) DocTagsData {
 	}
 	if rr.CIRelease == nil {
 		for _, t := range rr.Remote.Tags {
-			add(t.Pattern, t.Tag, t.SHA, t.Latest, t.Unreleased, nil)
+			add(t.Pattern, t.Tag, t.SHA, t.Latest, t.Unreleased, t.Run)
 		}
 		return d
 	}

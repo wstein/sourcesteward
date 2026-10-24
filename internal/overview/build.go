@@ -39,12 +39,12 @@ func Build(in Input) Overview {
 		if r.Remote == nil {
 			continue
 		}
-		for _, st := range r.Remote.Sources {
+		for src, st := range r.Remote.Sources {
 			switch st.Outcome {
 			case OutcomeError:
 				ov.Summary.Failed, ov.Summary.Degraded = true, true
 			case OutcomeSkipped:
-				if st.Reason != ReasonIssuesDisabled { // a fact about the repository, not a gap in the data
+				if !st.FactOfRepository(src) {
 					ov.Summary.Degraded = true
 				}
 			}

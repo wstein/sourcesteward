@@ -459,6 +459,42 @@ func TestDocumentSubjectName(t *testing.T) {
 	}
 }
 
+// A repository without a release workflow is not applicable to ci-release: it counts as read, the
+// repository is not degraded, and the repository's own source still says skipped, not-found. A failed
+// read of the runs still degrades.
+func TestDocumentMissingReleaseWorkflowIsNotDegraded(t *testing.T) {
+	rep := fixtureReport()
+	first := &rep.Remote.Repos[0]
+	read := func() (DocSource, map[string]any) {
+		doc := rep.Document()
+		var src DocSource
+		for _, s := range doc.Sources {
+			if s.ID == "ci-release" {
+				src = s
+			}
+		}
+		return src, decode(t, doc)["repos"].([]any)[0].(map[string]any)["remote"].(map[string]any)
+	}
+	baseline, remote := read()
+	if remote["state"] != "ok" {
+		t.Fatalf("fixture repository is not ok: %v", remote["state"])
+	}
+	first.Remote.Sources[overview.SourceCIRelease] = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound}
+	src, remote := read()
+	if src != baseline || remote["state"] != "ok" {
+		t.Errorf("not-found: %+v (was %+v), repository %v", src, baseline, remote["state"])
+	}
+	ci := remote["sources"].(map[string]any)["ci_release"].(map[string]any)
+	if ci["state"] != "skipped" || ci["reason"] != "not-found" {
+		t.Errorf("the repository's source changed: %v", ci)
+	}
+	first.Remote.Sources[overview.SourceCIRelease] = overview.SourceState{Outcome: overview.OutcomeError, Code: "network"}
+	src, remote = read()
+	if src.Degraded != baseline.Degraded+1 || remote["state"] != "degraded" {
+		t.Errorf("failed read: %+v, repository %v", src, remote["state"])
+	}
+}
+
 func TestDocumentSourceErrorCarriesOnlyItsCode(t *testing.T) {
 	rep := fixtureReport()
 	rep.Remote.Repos[1].Remote.Sources[overview.SourceTags] = overview.SourceState{Outcome: overview.OutcomeError, Code: "http-5xx"}
@@ -546,5 +582,18 @@ func TestDocumentCutsTheEvidenceStrings(t *testing.T) {
 	}
 	if got := rep.Overview.Items[idx].Evidence["author"].(string); len(got) != 4000 {
 		t.Errorf("the evidence of the model was changed")
+	}
+}
+
+// When ci_release did not end ok (a declared workflow was not found) the runs already read stay on the
+// entries of the tags source, and the tags data carries them.
+func TestDocumentTagsCarryTheRunsReadBeforeCIReleaseFailed(t *testing.T) {
+	rr := statusremote.RepoResult{Remote: &overview.Remote{Tags: []overview.ReleaseTag{
+		{Pattern: "a-v*", Tag: "a-v1.0.0", SHA: strings.Repeat("a", 40), Unreleased: true, Run: &overview.Run{Workflow: "a.yml", Conclusion: "failure", Status: "completed"}},
+		{Pattern: "b-v*", Tag: "b-v1.0.0", SHA: strings.Repeat("b", 40), Unreleased: true},
+	}}}
+	d := tagsData(rr)
+	if len(d.Unreleased) != 2 || d.Unreleased[0].Run == nil || d.Unreleased[0].Run.Conclusion == nil || *d.Unreleased[0].Run.Conclusion != "failure" || d.Unreleased[1].Run != nil {
+		t.Fatalf("%+v", d.Unreleased)
 	}
 }

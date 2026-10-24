@@ -120,8 +120,7 @@ type CIReleaseResult struct {
 
 // ReadCIRelease adds the newest runs of the release workflow to the latest tag entry of every pattern and the first maxUnreleasedTags unreleased ones: for
 // each, the runs of the workflow of its product (release.yml for a pattern no contract declares) for
-// the commit of the tag, at most 20, newest first. A run of another commit is ignored. A workflow the
-// forge does not know ends the source as skipped, reason not-found; an existing but unusable
+// the commit of the tag, at most 20, newest first. A run of another commit is ignored. The default workflow of a pattern no contract declares that the forge does not know is not applicable (skipped, not-found, when no entry has one); a declared workflow it does not know ends the source skipped, not-found, with CodeDeclaredWorkflow. The entries read are kept with every state; an existing but unusable
 // contract ends it with the error code contract-invalid before any request.
 func ReadCIRelease(ctx context.Context, r CIReader, in CIReleaseInput) CIReleaseResult {
 	if in.Products.invalid {
@@ -129,20 +128,56 @@ func ReadCIRelease(ctx context.Context, r CIReader, in CIReleaseInput) CIRelease
 	}
 	entries := tagsToRead(in.Tags)
 	out := &CIRelease{Tags: []CIReleaseTag{}}
+	defaultMissing, declaredMissing := false, false
 	for _, e := range entries {
 		product, workflow := in.Products.of(e.Pattern)
 		res, err := r.WorkflowRuns(ctx, in.Repo, workflow, e.SHA)
+		if isWorkflowNotFound(err) {
+			// Only the default release.yml of a pattern nobody declares is not applicable; a workflow a
+			// contract declares and the forge does not know is a gap. Either way the entries read stay.
+			if product == "" {
+				defaultMissing = true
+			} else {
+				declaredMissing = true
+			}
+			continue
+		}
 		if err != nil {
-			return CIReleaseResult{State: ciReleaseState(ctx, err)}
+			return CIReleaseResult{State: ciState(ctx, err), Release: partial(out)}
 		}
 		runs, err := hosting.DecodeWorkflowRuns(res.Body)
 		if err != nil {
-			return CIReleaseResult{State: ciState(ctx, err)}
+			return CIReleaseResult{State: ciState(ctx, err), Release: partial(out)}
 		}
 		out.Tags = append(out.Tags, CIReleaseTag{Pattern: e.Pattern, Product: product, Tag: e.Tag, SHA: e.SHA, Latest: e.Latest,
 			Unreleased: e.Unreleased, Workflow: workflow, Runs: newestRuns(in.Repo, workflow, e.SHA, runs)})
 	}
+	switch {
+	case declaredMissing:
+		return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound, Code: CodeDeclaredWorkflow}, Release: partial(out)}
+	case defaultMissing && len(out.Tags) == 0:
+		return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound}}
+	}
 	return CIReleaseResult{State: overview.SourceState{Outcome: overview.OutcomeOK}, Release: out}
+}
+
+// partial is the entries read before a source did not end ok, or nil when there are none.
+func partial(c *CIRelease) *CIRelease {
+	if len(c.Tags) == 0 {
+		return nil
+	}
+	return c
+}
+
+// CodeDeclaredWorkflow marks, in the Code of a source skipped as not-found, that the missing workflow is one
+// a contract declares: a gap that is reported, not the fact that a repository has no release workflow. It is
+// internal and never printed.
+const CodeDeclaredWorkflow = "declared-workflow"
+
+// isWorkflowNotFound is true for the 404 of a workflow the forge does not know.
+func isWorkflowNotFound(err error) bool {
+	var we *hosting.WatchError
+	return errors.As(err, &we) && we.Code == hosting.CodeForbidden && we.Status == 404
 }
 
 // tagsToRead keeps, in order, every latest entry and the unreleased entries up to maxUnreleasedTags; an
@@ -233,14 +268,4 @@ func ciState(ctx context.Context, err error) overview.SourceState {
 		return overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}
 	}
 	return overview.SourceState{Outcome: overview.OutcomeError, Code: code}
-}
-
-// ciReleaseState is ciState for the workflow runs, where a 404 means the workflow does not exist: the
-// source is skipped, not failed.
-func ciReleaseState(ctx context.Context, err error) overview.SourceState {
-	var we *hosting.WatchError
-	if errors.As(err, &we) && we.Code == hosting.CodeForbidden && we.Status == 404 {
-		return overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonNotFound}
-	}
-	return ciState(ctx, err)
 }

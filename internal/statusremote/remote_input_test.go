@@ -122,7 +122,7 @@ func TestTheExitRuleDependsOnWhatWasAttempted(t *testing.T) {
 		"a 404 for the release workflow": {func(w *world) Options {
 			w.errs["flow o/a release.yml@2222"] = &hosting.WatchError{Code: hosting.CodeForbidden, Status: 404, Message: "m"}
 			return (&opener{client: w}).options()
-		}, two, exit{false, true}, overview.ReasonNotFound},
+		}, two, exit{false, false}, ""}, // not applicable: no degraded run, no notice
 		"no usable token": {func(*world) Options { return (&opener{err: hosting.ErrAuthentication}).options() }, two, exit{false, true}, overview.ReasonNoToken},
 		"offline":         {func(*world) Options { return Options{Offline: true} }, two, exit{false, true}, ""},
 		"the limit is reached": {func(w *world) Options {
@@ -144,6 +144,17 @@ func TestTheExitRuleDependsOnWhatWasAttempted(t *testing.T) {
 				t.Errorf("no notice %q: %+v", tc.notice, ov.Notices)
 			}
 		})
+	}
+}
+
+func TestAMissingReleaseWorkflowRaisesNoNotice(t *testing.T) {
+	w := newWorld()
+	w.addRepo("o/a", true)
+	w.errs["flow o/a release.yml@2222"] = &hosting.WatchError{Code: hosting.CodeForbidden, Status: 404, Message: "m"}
+	res := Collect(context.Background(), []Repository{repository("o/a")}, (&opener{client: w}).options())
+	ov := overviewOf(t, res, "a")
+	if len(ov.Notices) != 0 || ov.Summary.Degraded || ov.Summary.Failed {
+		t.Fatalf("%+v %+v", ov.Notices, ov.Summary)
 	}
 }
 

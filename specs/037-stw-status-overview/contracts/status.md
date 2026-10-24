@@ -67,11 +67,11 @@ Two documents, never mixed:
 ### `summary`
 
 `{repos, attention, errors, priorities: {red, yellow, green, blue, violet}, degraded, failed, notices}`. `repos`, `attention`
-and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent of priorities); `priorities` counts all items; `degraded` true when any source is not `ok` (missing token, offline, deadline, failed read); `failed` true when a requested remote read failed (the exit status 1 condition); `notices` the count.
+and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent of priorities); `priorities` counts all items; `degraded` true when any source is not `ok` (missing token, offline, deadline, failed read), except a skipped source that is a fact of the repository (`issues-disabled`, and `not-found` of `ci-release` when only the default `release.yml` of undeclared patterns is missing: the repository has no release workflow); a 404 for a workflow that a contract declares stays a gap and degrades; `failed` true when a requested remote read failed (the exit status 1 condition); `notices` the count.
 
 ## Exit status
 
-0 in exactly these situations: everything attempted succeeded, `--offline`, no usable token before any request (`no-token`), a deadline skip, a `not-found` skip (404 release workflow); items never matter. 1 on a single condition: an **attempted** request failed (any `error` source, including `network`), plus a repository unreadable locally or a run failure; 2 usage error.
+0 in exactly these situations: everything attempted succeeded, `--offline`, no usable token before any request (`no-token`), a deadline skip, a `not-found` skip (404 release workflow; it never fails the run); items never matter. 1 on a single condition: an **attempted** request failed (any `error` source, including `network`), plus a repository unreadable locally or a run failure; 2 usage error.
 
 ## Amendments recorded with the implementation
 
@@ -81,6 +81,15 @@ Decisions taken while implementing the work packages; they refine the text above
   (`not-found`) and a source that was never attempted (`not-attempted`) are told apart per source and not only when the whole
   repository was skipped. `remote.state` is `ok` (all six sources ok), `skipped` (all skipped, with the reason of the first),
   `error` (all failed) or `degraded`.
+- **Missing release workflow.** Only the default `release.yml` of a pattern that no contract declares is optional: when the
+  forge answers 404 for it, that entry is left out and the repository has no release workflow for it. If no entry has one, `ci_release`
+  stays `skipped` with the reason `not-found` (the schema vocabulary is unchanged) and is *not applicable*: the run is not degraded,
+  no notice is raised, the per-source counts of `sources[]` and the repository `remote.state` count it as read, as they do
+  `issues-disabled`, and the text `remote:` line says `no release workflow`. If some entries have the default workflow the
+  source is `ok`. A 404 for a workflow that a contract declares (`ci.release_workflow`) keeps its meaning: `ci_release` is
+  `skipped`/`not-found`, degraded, with a notice. The runs already read are kept in every case and still yield
+  `release-run-failed` items; the read stops only at a real failure (an `error` source). A real failure to read the runs
+  is an `error` source and degrades.
 - **Dependent sources.** `ci-main` needs the default branch of the `repo` source and `ci-release` the tags of the `tags` source.
   When that source failed, the CI source is not attempted and is `skipped` with `not-attempted` (its failure is reported once, as a
   notice of the source that failed); when it was skipped, the CI source carries the same skip. An unusable release contract is

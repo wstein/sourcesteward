@@ -47,10 +47,17 @@ func TestNotices(t *testing.T) {
 			withSources("a", "w/a", map[Source]SourceState{SourcePulls: {Outcome: OutcomeSkipped, Reason: ReasonDeadline}}),
 		}}, []Notice{{Code: "deadline", Source: "remote", Repos: []string{"w/a"},
 			Message: "deadline of 7 s reached: 1 source of 1 repository not read; raise --timeout"}}, true},
-		{"workflow not found", Input{Repos: []Repo{
+		{"workflow not found is not applicable", Input{Repos: []Repo{
 			withSources("a", "w/a", map[Source]SourceState{SourceCIRelease: {Outcome: OutcomeSkipped, Reason: ReasonNotFound}}),
+		}}, nil, false},
+		{"declared workflow not found is a gap", Input{Repos: []Repo{
+			withSources("a", "w/a", map[Source]SourceState{SourceCIRelease: {Outcome: OutcomeSkipped, Reason: ReasonNotFound, Code: "declared-workflow"}}),
 		}}, []Notice{{Code: "not-found", Source: "ci-release", Repos: []string{"w/a"},
-			Message: "release workflow not found in 1 repository: runs not read"}}, true},
+			Message: "declared release workflow not found in 1 repository: runs not read"}}, true},
+		{"workflow with a failed read still degrades", Input{Repos: []Repo{
+			withSources("a", "w/a", map[Source]SourceState{SourceCIRelease: {Outcome: OutcomeError, Code: CodeNetwork}}),
+			withSources("b", "w/b", map[Source]SourceState{SourceCIRelease: {Outcome: OutcomeSkipped, Reason: ReasonNotFound}}),
+		}}, []Notice{{Code: "network", Source: "ci-release", Repos: []string{"w/a"}, Message: "network error: release workflow runs of 1 repository not read"}}, true},
 		{"not github", Input{Repos: []Repo{
 			withSources("local-only", "", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonNotGitHub})),
 			withSources("other", "", all(SourceState{Outcome: OutcomeSkipped, Reason: ReasonOtherHost})),
