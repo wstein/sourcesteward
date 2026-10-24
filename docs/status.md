@@ -127,5 +127,9 @@ unreadable repository, a usage error); the report itself, notices included, is o
 `stw status --json` prints one [schema 2](../schemas/v2/status.schema.json) document (unpublished and byte-frozen until the
 feature is accepted): `actions`, `repos` (every v1 member plus `remote`), `sources`, `notices`, `summary` and the run-level
 `error`. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the
-`issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. The document-level `sources` list ends with
+`issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. `pulls_dropped` is the number of pull
+requests that the GitHub issues list returned (the endpoint lists pull requests with the issues) and that `stw` dropped, so
+that `open`, the counts and the rows are issues only; it counts only the pages that were read (see `truncated`). It is
+information, not an error and not lost data: a repository with open pull requests shows a non-zero value, which is normal
+(the pull requests themselves are the `pulls` source). The document-level `sources` list ends with
 `issues` and `viewer`. See [JSON contracts](json-contracts.md#status-schema-v2-unpublished).
