@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -677,5 +680,44 @@ func TestEscapedNoticesBoundCharactersNotBytes(t *testing.T) {
 	}
 	if want := strings.Repeat("日", 120) + "..."; got[2] != want {
 		t.Errorf("121 characters: %q", got[2])
+	}
+}
+
+// AllProofs is what the tidy-overview schema enumerates: it must list every Proof constant of this
+// file, so that a new proof word cannot reach the JSON without the schema (and this list) knowing it.
+func TestAllProofsListsEveryProofConstant(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "classify.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := map[string]bool{}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			vs := spec.(*ast.ValueSpec)
+			typed := false
+			if id, ok := vs.Type.(*ast.Ident); ok && id.Name == "Proof" {
+				typed = true
+			}
+			if !typed {
+				continue
+			}
+			for _, v := range vs.Values {
+				if lit, ok := v.(*ast.BasicLit); ok {
+					declared[strings.Trim(lit.Value, `"`)] = true
+				}
+			}
+		}
+	}
+	listed := map[string]bool{}
+	for _, p := range AllProofs {
+		listed[string(p)] = true
+	}
+	if len(declared) < 7 || !reflect.DeepEqual(declared, listed) {
+		t.Errorf("AllProofs %v does not match the Proof constants %v", listed, declared)
 	}
 }
