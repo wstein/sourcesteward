@@ -4,6 +4,7 @@ package tidywizard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -20,6 +21,9 @@ type RepoSpec struct {
 	Online           bool
 	Remote           string
 	Skip             string
+	// Error is a failure of the preparation for this repository (for example unreadable references):
+	// the repository is reported as an error row with this reason and is not observed.
+	Error string
 }
 
 // Adapter is the Source of the classifier over the read-only observers of internal/workspace and
@@ -75,6 +79,9 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	spec, ok := a.Repos[name]
 	if !ok {
 		return RepoFacts{}, fmt.Errorf("unknown repository %q", name)
+	}
+	if spec.Error != "" {
+		return RepoFacts{}, errors.New(spec.Error)
 	}
 	if spec.Skip != "" {
 		return RepoFacts{Name: name, Skip: spec.Skip}, nil
