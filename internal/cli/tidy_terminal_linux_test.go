@@ -61,7 +61,7 @@ func TestTidyApplyModeFollowsTheRealStreams(t *testing.T) {
 		calls = append(calls, r)
 		return okSet()
 	}
-	run := func(in, out any) owner.Mode {
+	run := func(in, out any) owner.Evidence {
 		calls = nil
 		cmd := tidyCommand()
 		cmd.SetIn(in.(interface{ Read([]byte) (int, error) }))
@@ -71,15 +71,15 @@ func TestTidyApplyModeFollowsTheRealStreams(t *testing.T) {
 		if err := cmd.Execute(); err != nil || len(calls) != 1 {
 			t.Fatalf("err %v calls %d", err, len(calls))
 		}
-		return calls[0].Mode.Mode
+		return calls[0].Mode
 	}
-	if m := run(tty, tty); m != owner.ModeHuman {
-		t.Errorf("both terminals: %s", m)
+	check := func(name string, e owner.Evidence, mode owner.Mode, stdin, stdout bool) {
+		t.Helper()
+		if e.Mode != mode || e.StdinTTY != stdin || e.StdoutTTY != stdout {
+			t.Errorf("%s: %+v", name, e)
+		}
 	}
-	if m := run(strings.NewReader(""), tty); m != owner.ModeAgent {
-		t.Errorf("stdin not a terminal: %s", m)
-	}
-	if m := run(tty, &bytes.Buffer{}); m != owner.ModeAgent {
-		t.Errorf("stdout not a terminal: %s", m)
-	}
+	check("both terminals", run(tty, tty), owner.ModeHuman, true, true)
+	check("stdin not a terminal", run(strings.NewReader(""), tty), owner.ModeAgent, false, true)
+	check("stdout not a terminal", run(tty, &bytes.Buffer{}), owner.ModeAgent, true, false)
 }
