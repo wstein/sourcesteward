@@ -82,7 +82,14 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	var applyStructured bool
 	var applyContract string
 	var applyV3Options workspace.V3ApplyOptions
-	apply := &cobra.Command{Use: "apply", Short: "Apply an authorized stored reference or task retirement plan", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	var applyYes bool
+	apply := &cobra.Command{Use: "apply [PLAN-ID]", Short: "Apply a stored plan set or an authorized stored reference or task retirement plan", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateTidyPlanSetApply(cmd, args, applyYes); err != nil {
+			return err
+		}
+		if len(args) == 1 {
+			return runTidyApplyPlanSet(cmd, args[0], applyOptions.StateDir, applyYes, applyStructured)
+		}
 		if cmd.Flags().Changed("contract") {
 			if applyContract != "3" {
 				return fmt.Errorf("--contract accepts exactly 3")
@@ -110,6 +117,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	apply.Flags().StringVar(&applyOptions.PlanID, "plan", "", "Exact generated immutable tidy plan identity")
 	apply.Flags().StringVar(&applyOptions.StateDir, "state-dir", "", "Private store containing the reviewed plan and durable recovery journal")
 	apply.Flags().BoolVar(&applyOptions.Authorize, "authorize", false, "Authorize only the reviewed plan's declared recovery, reference or retirement effects")
+	apply.Flags().BoolVar(&applyYes, "yes", false, "Authorize the plan set named by the explicit plan id without a prompt; never honoured for other or unknown items")
 	apply.Flags().BoolVar(&applyStructured, "json", false, "Output one versioned tidy result, including operational refusals and partial effects")
 	addTidyV3ApplyFlags(apply, &applyContract, &applyV3Options)
 	trackTidyV3Singletons(plan)
