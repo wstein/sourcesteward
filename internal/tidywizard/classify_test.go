@@ -230,7 +230,9 @@ func TestStaleRegistration(t *testing.T) {
 		return w
 	}
 	c := only(t, repo([]Worktree{stale(func(*Worktree) {})}, nil), cfg())
-	if c.Kind != KindStaleWorktree || c.Verdict != VerdictSafe || !reflect.DeepEqual(c.Effects, []string{"remove-registration"}) || c.ID != "stale-worktree:r:/ws/wt/gone" {
+	// No existing plan kind removes a stale registration (T012b), so a provably prunable one is
+	// retained with a stable reason and carries no effect.
+	if c.Kind != KindStaleWorktree || c.Verdict != VerdictRetain || c.Reason != "stale-registration-no-plan-kind" || len(c.Effects) != 0 || c.ID != "stale-worktree:r:/ws/wt/gone" {
 		t.Fatalf("%+v", c)
 	}
 	c = only(t, repo([]Worktree{stale(func(w *Worktree) { w.Prunable = false })}, nil), cfg())
