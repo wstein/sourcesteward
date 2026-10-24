@@ -68,14 +68,14 @@ func input() Input {
 	dirty.Evidence = "uncommitted changes"
 	branch := cand("bundledock", tidywizard.KindBranch, "codex/old-1", tidywizard.VerdictSafe, "", owner.ScopeOwn)
 	branch.Proof, branch.Effects = tidywizard.ProofMergeNoop, []string{"delete-branch:codex/old-1"}
-	hostile := cand("bundledock", tidywizard.KindWorktree, "/tmp/\x1b[2Jevil\r\x00‮gnp.exe", tidywizard.VerdictRetain, "dirty", owner.ScopeUnknown)
+	hostile := cand("bundledock", tidywizard.KindWorktree, "/tmp/\x1b[2Jevil\r\x00\u202egnp.exe", tidywizard.VerdictRetain, "dirty", owner.ScopeUnknown)
 	hostile.Owner, hostile.OwnerSource = "ow\x1bner\n", owner.SourceCommitAuthor
 	hostile.Branch, hostile.Task = "br\x1b]0;title\x07anch", "ta​sk"
 	hostile.Evidence = "ev\x1b[31mid\nence " + strings.Repeat("e", 600)
 	long := cand("bundledock", tidywizard.KindBranch, strings.Repeat("n", 10000), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn)
 	res := tidywizard.Result{
 		Repositories: []tidywizard.RepoResult{
-			{Name: "bundledock", State: "analysed", Notices: []string{"tracking-requires-online", "limit \x1b[31mreached\r\nnow‮ " + strings.Repeat("ä", 200)}},
+			{Name: "bundledock", State: "analysed", Notices: []string{"tracking-requires-online", "limit \x1b[31mreached\r\nnow\u202e " + strings.Repeat("ä", 200)}},
 			{Name: "chartscribe", State: "skipped", Reason: "base-ambiguous", Notices: []string{}},
 			{Name: "sheetmill", State: "error", Reason: "boom\x1b[0m\n" + strings.Repeat("x", 500), Notices: []string{}},
 			{Name: "sourcesteward", State: "analysed", Notices: []string{}},
@@ -129,7 +129,7 @@ func TestTextNeverPrintsRawControlCharacters(t *testing.T) {
 	if strings.Contains(out, "\x1b") || strings.Contains(out, "\r") {
 		t.Error("raw ESC or CR in the text")
 	}
-	for _, want := range []string{`limit \x1b[31mreached\r\nnow‮`, `\x1b[2Jevil`, `‮gnp.exe`, `/ws/\x1b[31mAnchorage`} {
+	for _, want := range []string{`limit \x1b[31mreached\r\nnow\u202e`, `\x1b[2Jevil`, `\u202egnp.exe`, `/ws/\x1b[31mAnchorage`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("escaped form %q is missing", want)
 		}
@@ -232,5 +232,46 @@ func TestJSONIsBounded(t *testing.T) {
 	var back Document
 	if err := json.Unmarshal(b, &back); err != nil || !back.Truncated || len(back.Candidates) == 0 || len(back.Candidates) >= tidywizard.MaxCandidates {
 		t.Errorf("%v truncated=%v candidates=%d", err, back.Truncated, len(back.Candidates))
+	}
+}
+
+// Raw JSON shown on a terminal cannot carry bidirectional or invisible characters either; the
+// document decodes to the very same strings.
+func TestJSONEscapesInvisibleCharacters(t *testing.T) {
+	in := input()
+	b, _, err := JSON(Build(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range string(b) {
+		if unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) || r > 0x7e && unicode.IsControl(r) {
+			t.Errorf("raw U+%04X in the JSON", r)
+		}
+	}
+	var back Document
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	want := Build(in)
+	for i := range want.Candidates {
+		if back.Candidates[i].Path != want.Candidates[i].Path || back.Candidates[i].Owner != want.Candidates[i].Owner {
+			t.Errorf("candidate %d changed by the escape: %q", i, back.Candidates[i].Path)
+		}
+	}
+	if back.Workspace != want.Workspace || back.Notices[1] != want.Notices[1] {
+		t.Error("strings changed")
+	}
+}
+
+// More candidates than the bound are cut and flagged, whatever the classification handed over.
+func TestBuildBoundsTheCandidates(t *testing.T) {
+	in := input()
+	in.Result.Candidates = nil
+	for i := 0; i < tidywizard.MaxCandidates+5; i++ {
+		in.Result.Candidates = append(in.Result.Candidates, cand("bundledock", tidywizard.KindBranch, "b"+strings.Repeat("x", 3)+string(rune(0x4e00+i)), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn))
+	}
+	d := Build(in)
+	if len(d.Candidates) != tidywizard.MaxCandidates || !d.Truncated {
+		t.Errorf("%d candidates, truncated %v", len(d.Candidates), d.Truncated)
 	}
 }
