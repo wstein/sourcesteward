@@ -644,9 +644,11 @@ func TestEscapedNoticesMakeNoticesInert(t *testing.T) {
 		if strings.ContainsAny(s, "\x1b\r\n\x00‮") {
 			t.Errorf("notice %d keeps a control byte: %q", i, s)
 		}
-		if utf8.RuneCountInString(s) > 123 {
-			t.Errorf("notice %d is %d characters", i, utf8.RuneCountInString(s))
-		}
+	}
+	// The bound counts the characters of the notice before escaping, so the display is not bounded
+	// by 123 characters once escapes lengthen it; only an input without escapes is.
+	if n := utf8.RuneCountInString(got[4]); n != 123 {
+		t.Errorf("the long plain notice is %d characters, want 120 and the mark", n)
 	}
 	if got[1] != `ansi \x1b[31mred\x1b[0m` || got[2] != `cr\rline\nbreak\x00nul` || got[3] != "bidi \\u202egnp.exe" {
 		t.Errorf("%q", got)
@@ -659,5 +661,21 @@ func TestEscapedNoticesMakeNoticesInert(t *testing.T) {
 	}
 	if got := (RepoResult{}).EscapedNotices(); got == nil || len(got) != 0 {
 		t.Errorf("empty: %#v", got)
+	}
+}
+
+// The bound is 120 characters, not bytes: a long multibyte notice keeps 120 whole characters, and
+// a multibyte notice that is short enough is not cut at all.
+func TestEscapedNoticesBoundCharactersNotBytes(t *testing.T) {
+	r := RepoResult{Notices: []string{strings.Repeat("ä", 130), strings.Repeat("ä", 100), strings.Repeat("日", 121)}}
+	got := r.EscapedNotices()
+	if want := strings.Repeat("ä", 120) + "..."; got[0] != want {
+		t.Errorf("130 characters: %q", got[0])
+	}
+	if got[1] != strings.Repeat("ä", 100) {
+		t.Errorf("100 characters (200 bytes) must not be cut: %q", got[1])
+	}
+	if want := strings.Repeat("日", 120) + "..."; got[2] != want {
+		t.Errorf("121 characters: %q", got[2])
 	}
 }
