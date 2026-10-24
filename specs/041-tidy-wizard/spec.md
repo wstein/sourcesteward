@@ -437,13 +437,20 @@ independent reasons:
 - **Stale binding.** The stored plan binds HEAD ref, OID, branch tip and base; any change refuses with the existing `evidence-changed` (the stale re-check of the code; no `stale` refusal code exists).
 
 **Branch leg (new plan form, defined).** `owned-retirement` and `legacy-retirement` plans carry no selected refs today and the branch is
-attached while planned, so Spec 011 ref planning would retain it. The wizard therefore plans a **dependent branch sub-plan**: it records
-branch name, tip OID, proof and `depends_on` (the retirement sub-plan id). At apply it runs only **after the retirement succeeded**, is
+attached while planned, so Spec 011 ref planning would retain it. The wizard therefore plans a **dependent branch leg**. Decision (2026-10-24): the leg is **not stored** as a sub-plan and carries no
+`depends_on`: the owner's choice is recorded with the item (effect `delete-branch:NAME`, bound to the plan id) and the leg is derived at apply
+time from the stored retirement plan (branch name, tip OID, proof policy), with a fresh proof. Before the first effect of the set the chosen
+branch must equal the retirement plan's head reference, else the whole set is refused (`branch-leg-mismatch`); a chosen deletion for which
+the plan has no leg is reported `skipped` (`branch-leg-absent`), so the set is `partial`. At apply it runs only **after the retirement succeeded**, is
 re-observed (the branch is then unattached), and goes through the unchanged Spec 011 reference deletion with **all its protections**:
 `selected-base`, workspace name and OID, attached elsewhere, symbolic ref, tip equal to the planned OID, proof re-run, recovery ref and
 journal. A failed or stale retirement makes the dependent sub-plan `skipped`. A worktree whose HEAD is attached to the base branch itself
 (for example `main`) never gets a branch leg. This combined form is new, so it is stated as such; it is **not** "exactly Spec 011/029
 plans".
+A completed set replays as a verified no-op: a retirement whose journal is complete and whose destination is gone, together with its chosen branch
+already deleted, counts as applied; a branch that is still there or back at another tip takes the ordinary apply and its stale detection.
+Plan sets stored before the leg decision (items without `effects`, sub-plans without `state_dir`, the narrower item hash) fail the id
+verification and are refused as `plan-set-invalid`; there is no migration, because plan sets are unreleased.
 
 **Compatibility.** Creation records and journals stay valid (same fields). Documented in `docs/tidy.md` as the lifecycle
 *workspace -> work -> retirement* (acceptance item of #174).
