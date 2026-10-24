@@ -538,13 +538,13 @@ func TestAdapterAllowlistsTheTrackingReason(t *testing.T) {
 	}
 	for name, reason := range map[string]string{
 		"unknown": "made-up-reason", "control bytes": "workspace-used\x1b[31m\n", "long": long,
-		"case": "Workspace-Used", "prefix": "workspace-used-x", "space": " selected-base",
+		"case": "Workspace-Used", "prefix": "workspace-used-x", "space": " selected-base", "invalid utf-8": "workspace-used\xff\xfe",
 	} {
 		obs := workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{{Name: "refs/remotes/origin/a", Proof: "none", Reason: reason}}}
 		a, _ := testAdapter(obs, nil)
 		res := Classify(context.Background(), a, []string{"r"}, cfg())
 		c := res.Candidates[0]
-		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 || strings.Contains(c.Evidence, "\x1b") || len(c.Evidence) > 128 || strings.Contains(c.Evidence, "xxxx") {
+		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 || c.Evidence != "tracking-reason-unrecognized" {
 			t.Errorf("%s: %+v", name, c)
 		}
 	}
