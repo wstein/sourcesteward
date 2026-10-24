@@ -28,11 +28,17 @@ type Adapter struct {
 	Repos   map[string]RepoSpec
 	Observe func(context.Context, workspace.ObserveOptions) (workspace.WorktreeObservation, error)
 	Records func(task string) derive.TaskLookup
+	// RecordsByDestination finds the creation record of a jj workspace (no stw lock) by backend,
+	// destination and repository directory.
+	RecordsByDestination func(backend, dest, repoDir string) derive.DestinationLookup
 }
 
 // NewAdapter returns the adapter for the repositories, looking creation records up in the stores.
 func NewAdapter(repos []RepoSpec, stores []derive.Store) Adapter {
-	a := Adapter{Repos: map[string]RepoSpec{}, Observe: workspace.ObserveWorktrees, Records: func(task string) derive.TaskLookup { return derive.LookupTask(stores, task) }}
+	a := Adapter{Repos: map[string]RepoSpec{}, Observe: workspace.ObserveWorktrees, Records: func(task string) derive.TaskLookup { return derive.LookupTask(stores, task) },
+		RecordsByDestination: func(backend, dest, repoDir string) derive.DestinationLookup {
+			return derive.LookupTaskByDestination(stores, backend, dest, repoDir)
+		}}
 	for _, r := range repos {
 		a.Repos[r.Name] = r
 	}
@@ -55,8 +61,13 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		return RepoFacts{}, err
 	}
 	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}}
-	for _, w := range obs.Worktrees {
-		f.Worktrees = append(f.Worktrees, a.worktree(w))
+	unreadable := map[string]bool{}
+	for _, e := range obs.Worktrees {
+		w := a.worktree(e)
+		if obs.Backend == "jj" && a.RecordsByDestination != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
+			a.joinJJRecord(&w, obs.RepositoryDir, unreadable)
+		}
+		f.Worktrees = append(f.Worktrees, w)
 	}
 	for _, b := range obs.Branches {
 		proof, incomplete := proofFact(b.Proof, b.Incomplete, kindBranch)
@@ -71,6 +82,10 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 			reason, incomplete = "", unrecognizedTrackingReason
 		}
 		f.TrackingRefs = append(f.TrackingRefs, TrackingRef{Name: r.Name, Proof: proof, Incomplete: incomplete, Reason: reason})
+	}
+	if len(unreadable) > 0 {
+		// A fixed text with a count: the ids of unreadable records are never echoed.
+		f.Notices = append(f.Notices, fmt.Sprintf("creation-records-unreadable: %d", len(unreadable)))
 	}
 	if obs.TrackingSkipped != "" {
 		f.Notices = append(f.Notices, obs.TrackingSkipped)
@@ -90,6 +105,25 @@ var trackingReasons = map[string]bool{
 
 // unrecognizedTrackingReason is the fixed evidence text of a reference whose reason is not listed.
 const unrecognizedTrackingReason = "tracking-reason-unrecognized"
+
+// joinJJRecord joins a jj workspace to its creation record by destination (Spec 041 T011a5). A
+// found record owns it (owner and scope only; the classifier still retains it); several differing
+// records retain it as incomplete evidence; none leaves it unregistered, as before. Unreadable
+// records are collected, never fatal.
+func (a Adapter) joinJJRecord(w *Worktree, repoDir string, unreadable map[string]bool) {
+	l := a.RecordsByDestination("jj", w.Path, repoDir)
+	for _, id := range l.Skipped {
+		unreadable[id] = true
+	}
+	switch {
+	case l.Ambiguity != nil:
+		if l.Ambiguity.Code == "registration-record-ambiguous" && w.Incomplete == "" {
+			w.Incomplete = "registration-record-ambiguous"
+		}
+	case l.Derived.Source == "task-record" && l.Record.TaskID != "" && validTask(l.Record.TaskID):
+		w.JJOwned, w.Task, w.TaskOwner = true, l.Record.TaskID, l.Record.Owner
+	}
+}
 
 func (a Adapter) worktree(e workspace.WorktreeEvidence) Worktree {
 	w := Worktree{
