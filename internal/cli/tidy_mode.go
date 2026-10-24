@@ -28,10 +28,8 @@ var tidyFlagClasses = map[string]flagClass{
 	// wizard-only
 	"workspace": flagWizard, "mine": flagWizard, "by-owner": flagWizard, "member": flagWizard, "member-base": flagWizard,
 	"only": flagWizard, "save": flagWizard, "yes": flagWizard,
-	// --human is new, so unlike --json it has no expert meaning.
-	"human": flagWizard,
-	// shared
-	"state-dir": flagShared, "online": flagShared, "timeout": flagShared, "json": flagShared,
+	// shared (--human forces text, which is also what the expert layer prints without --json)
+	"state-dir": flagShared, "online": flagShared, "timeout": flagShared, "json": flagShared, "human": flagShared,
 	// expert
 	"base": flagExpert, "ref": flagExpert, "task": flagExpert, "owner": flagExpert, "remove-registration": flagExpert,
 	"remove-files": flagExpert, "completed-worktree": flagExpert, "protect-worktree": flagExpert, "contract": flagExpert,
@@ -62,7 +60,7 @@ func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 	f.StringArrayVar(&o.memberBase, "member-base", nil, "Override the derived base of one member as NAME=REF (wizard layer, repeatable)")
 	f.StringVar(&o.only, "only", "", "Comma list of retire, branches, tracking, stale-worktrees (wizard layer; default all)")
 	f.BoolVar(&o.save, "save", false, "Store the plan set of the safe items of scope own (wizard layer)")
-	f.BoolVar(&o.human, "human", false, "Force text output (wizard layer); excludes --json")
+	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
 }
 
 // changedTidyFlags returns the names of the flags set on the command line, sorted.

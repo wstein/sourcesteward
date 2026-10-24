@@ -51,12 +51,13 @@ func TestEveryTidyFlagIsClassified(t *testing.T) {
 
 // The classes of the specification, flag by flag.
 func TestTidyFlagClasses(t *testing.T) {
-	for _, name := range []string{"workspace", "mine", "by-owner", "member", "member-base", "only", "save", "yes", "human"} {
+	for _, name := range []string{"workspace", "mine", "by-owner", "member", "member-base", "only", "save", "yes"} {
 		if tidyFlagClasses[name] != flagWizard {
 			t.Errorf("--%s must be wizard-only", name)
 		}
 	}
-	for _, name := range []string{"state-dir", "online", "timeout", "json"} {
+	// --human is shared (Spec 041 CLI surface): valid in both layers, a plain text request.
+	for _, name := range []string{"state-dir", "online", "timeout", "json", "human"} {
 		if tidyFlagClasses[name] != flagShared {
 			t.Errorf("--%s must be shared", name)
 		}
@@ -96,6 +97,7 @@ func TestTidyPlanLayerSelection(t *testing.T) {
 		{[]string{"plan", "--base", "HEAD", "--json"}, "expert", ""},
 		{[]string{"plan", "/repo", "--base", "HEAD"}, "expert", ""},
 		{[]string{"plan", "/repo", "--base", "HEAD", "--state-dir", "/s"}, "expert", ""},
+		{[]string{"plan", "/repo"}, "usage", "--base is required"},
 		{[]string{"plan"}, "wizard", ""},
 		{[]string{"plan", "--state-dir", "/s"}, "wizard", ""},
 		{[]string{"plan", "--json"}, "wizard", ""},
@@ -115,6 +117,10 @@ func TestTidyPlanLayerSelection(t *testing.T) {
 		{[]string{"plan", "--only", ""}, "usage", "--only"},
 		{[]string{"plan", "--member-base", "no-equals"}, "usage", "--member-base"},
 		{[]string{"plan", "--by-owner", ""}, "usage", "--by-owner"},
+		{[]string{"plan", "--member", ""}, "usage", "--member needs"},
+		{[]string{"plan", "--workspace", ""}, "usage", "--workspace needs"},
+		{[]string{"plan", "--base", "HEAD", "--human"}, "expert", ""},
+		{[]string{"plan", "--human", "--base", "HEAD", "--json"}, "usage", "exclude each other"},
 	}
 	for _, r := range rows {
 		err, ran, _ := runMode(r.args...)
@@ -193,7 +199,8 @@ func TestTidyApplyLayerSelection(t *testing.T) {
 		{[]string{"apply", setID, "--plan", "x"}, true, "cannot be combined"},
 		{[]string{"apply", setID, "--mine"}, true, "unknown flag"},
 		{[]string{"apply", "--plan", "x", "--yes", "--state-dir", "/s"}, true, ""},
-		{[]string{"apply", "--human"}, true, "wizard"},
+		{[]string{"apply", "--human"}, true, "--plan is required"},
+		{[]string{"apply", "--plan", "x", "--state-dir", "/s", "--human", "--json"}, true, "exclude each other"},
 	} {
 		got := fakeSet(t, okSet(), false, false)
 		_, err := runTidy(t, "", tc.args...)
