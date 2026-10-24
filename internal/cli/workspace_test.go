@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wstein/sourcesteward/internal/attribution"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
@@ -269,5 +270,24 @@ func TestTidyNeverPrintsAPrefabricatedAuthorizeCall(t *testing.T) {
 				t.Fatalf("%s:%d prints an authorize call: %s", name, i+1, line)
 			}
 		}
+	}
+}
+
+func TestWorkspaceApplyPassesTheCurrentOrigin(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "sess-apply")
+	var got *attribution.Origin
+	cmd := workspaceCommandWith(workspaceRunner(func(_ context.Context, _ string, _ workspace.PlanOptions, a workspace.ApplyOptions, _ workspace.Options) workspace.Result {
+		got = a.Origin
+		return workspace.Result{Status: "ok"}
+	}))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"apply", "--plan", "p1", "--state-dir", t.TempDir(), "--authorize"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.Kind != "claude" || got.SessionID != "sess-apply" || got.CreatedAt == "" {
+		t.Fatalf("origin %+v", got)
 	}
 }
