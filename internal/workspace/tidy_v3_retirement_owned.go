@@ -27,8 +27,7 @@ func observeTidyV3Retirement(ctx context.Context, o V3PlanOptions, budget *tidyV
 	if o.Task == "" {
 		return observeTidyV3Legacy(ctx, o, budget)
 	}
-	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, planObservationTimeout))
-	defer cancel()
+	// The observation itself carries the deadline, including the proof phase.
 	if e := ctx.Err(); e != nil {
 		return tidyV3LegacyObservation{}, e
 	}
