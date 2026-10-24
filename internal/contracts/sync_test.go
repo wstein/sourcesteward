@@ -99,9 +99,11 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"unknown summary result": {"plan", func(m map[string]any, _ []any) {
 			m["summary"].(map[string]any)["by_result"].(map[string]any)["bogus"] = 1
 		}},
-		"error without code": {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
-		"string option":      {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
-		"null repos":         {"plan", func(m map[string]any, _ []any) { m["repos"] = nil }},
+		"error without code":   {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
+		"missing merge option": {"plan", func(m map[string]any, _ []any) { delete(m["options"].(map[string]any), "merge") }},
+		"string merge option":  {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["merge"] = "yes" }},
+		"string option":        {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
+		"null repos":           {"plan", func(m map[string]any, _ []any) { m["repos"] = nil }},
 	} {
 		if err := s.Validate(value(t, mutateSync(t, tc.fixture, tc.fn))); err == nil {
 			t.Errorf("%s: the schema accepted a broken result", name)
