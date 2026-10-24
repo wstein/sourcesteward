@@ -21,6 +21,8 @@ func fixtureTidyV3RetirementMergedHead(t *testing.T, o V3PlanOptions) (V3PlanOpt
 	gitFixture(t, o.Path, "remote", "add", "origin", "https://github.com/owner/repo.git")
 	repo := hosting.TidyRepositoryIdentity{Host: "github.com", TidyRepositoryID: hosting.TidyRepositoryID{ID: 1, NodeID: "R_fixture", FullName: "owner/repo"}, DefaultBranch: "main"}
 	row := tidyV3PR(repo, head, root, result, "deleted-intermediate-stack-base", 1)
+	// The provider proof is under test: keep the local forge-free classes out of it.
+	o.IntegrationProofs = []string{"ancestor"}
 	o.Online = true
 	o.Remote = "origin"
 	o.PRHints = []V3PRHint{{OID: head, Number: 1}}

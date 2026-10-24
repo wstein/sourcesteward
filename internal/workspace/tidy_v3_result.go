@@ -401,7 +401,7 @@ func validateV3Plan(p V3Plan, state, id string) error {
 	if e != nil {
 		return e
 	}
-	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || p.ProofPolicy != nil && (p.Mode != "local-refs" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review, p)) {
+	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || p.ProofPolicy != nil && (p.Mode != "local-refs" && p.Mode != "owned-retirement" && p.Mode != "legacy-retirement" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review, p)) {
 		return bad()
 	}
 	if state == "" {
@@ -527,7 +527,7 @@ func integrationProofTag(proof string) bool {
 // proof tag and the plan's recorded policy.
 func validV3IntegrationProven(c V3CommitProof, p V3Plan) bool {
 	e := c.Evidence.Integration
-	return p.Mode == "local-refs" && e != nil && c.Evidence.Native == nil && c.Evidence.GitHub == nil && c.Decision == "delete" && c.Reason == c.Proof &&
+	return (p.Mode == "local-refs" || p.Mode == "owned-retirement" || p.Mode == "legacy-retirement") && e != nil && c.Evidence.Native == nil && c.Evidence.GitHub == nil && c.Decision == "delete" && c.Reason == c.Proof &&
 		e.Disposition == integrationProvenDisposition && e.Class == c.Proof && validV3IntegrationEvidence(*e, c.OID, p)
 }
 

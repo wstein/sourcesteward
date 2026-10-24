@@ -80,7 +80,7 @@ func TestTidyV3BranchLegIsAbsentWhenThereIsNothingToDelete(t *testing.T) {
 	}
 	t.Run("retained", func(t *testing.T) {
 		w := ownedPositionFixture(t)
-		gitFixture(t, w.Dest, "commit", "-q", "--allow-empty", "-m", "unintegrated")
+		commitUnintegratedChange(t, w.Dest, "unintegrated")
 		planned := defaultTidyV3RetirementCoordinator().plan(context.Background(), w.Options)
 		if _, ok := TidyV3BranchLeg(*planned.Plan); ok {
 			t.Fatal("a retained worktree has no leg")

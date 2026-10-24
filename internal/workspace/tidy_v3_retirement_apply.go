@@ -40,6 +40,16 @@ func readTidyV3RetirementRecords(o V3ApplyOptions) (V3Plan, V3NativeState, *V3Jo
 	return p, native, &j, nil
 }
 func retirementV3Options(p V3Plan) V3PlanOptions {
+	o := retirementV3BaseOptions(p)
+	// A plan stored before retirement reused the integration proofs has no
+	// policy and keeps the ancestry proof it was planned with.
+	o.IntegrationProofs = []string{integrationAncestor}
+	if p.ProofPolicy != nil {
+		o.IntegrationProofs, o.AcceptWhitespaceDifferences = p.ProofPolicy.Kinds, p.ProofPolicy.AcceptWhitespaceDifferences
+	}
+	return o
+}
+func retirementV3BaseOptions(p V3Plan) V3PlanOptions {
 	l := p.Retirement.Provenance.Legacy
 	if p.Mode == "owned-retirement" {
 		owned := p.Retirement.Provenance.Owned

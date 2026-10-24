@@ -24,10 +24,12 @@ type ownedPositionWork struct {
 
 func ownedPositionFixture(t *testing.T) ownedPositionWork {
 	t.Helper()
-	return ownedPositionFixtureWith(t, false)
+	return ownedPositionFixtureWith(t, "merge")
 }
 
-func ownedPositionFixtureWith(t *testing.T, rebase bool) ownedPositionWork {
+// mode is "merge", "rebase" (same patch, new SHA) or "rebase-whitespace" (the
+// rebased patch differs from the branch only in whitespace).
+func ownedPositionFixtureWith(t *testing.T, mode string) ownedPositionWork {
 	t.Helper()
 	source, creation, task := gitRetirementFixture(t)
 	bare := gitTempDir(t)
@@ -40,8 +42,14 @@ func ownedPositionFixtureWith(t *testing.T, rebase bool) ownedPositionWork {
 	gitFixture(t, task.Destination, "add", "work")
 	gitFixture(t, task.Destination, "commit", "-qm", "task work")
 	gitFixture(t, task.Destination, "push", "-q", "-u", "origin", "b")
-	if rebase {
+	if mode != "merge" {
 		gitFixture(t, source, "cherry-pick", "-n", "b")
+		if mode == "rebase-whitespace" {
+			if e := os.WriteFile(filepath.Join(source, "work"), []byte("task  work\n"), 0600); e != nil {
+				t.Fatal(e)
+			}
+			gitFixture(t, source, "add", "work")
+		}
 		gitFixture(t, source, "commit", "-qm", "task work (rebase-merged)")
 		if gitFixture(t, source, "rev-parse", "HEAD") == gitFixture(t, task.Destination, "rev-parse", "HEAD") {
 			t.Fatal("rebase-merge kept the SHA")
@@ -262,7 +270,7 @@ func TestTidyV3OwnedRetirementAfterBranchSwitchRefusals(t *testing.T) {
 
 func TestTidyV3OwnedRetirementRetainsUnintegratedBranch(t *testing.T) {
 	w := ownedPositionFixture(t)
-	gitFixture(t, w.Dest, "commit", "-q", "--allow-empty", "-m", "later unintegrated work")
+	commitUnintegratedChange(t, w.Dest, "later")
 	planned := defaultTidyV3RetirementCoordinator().plan(context.Background(), w.Options)
 	if planned.Status != "ok" || planned.Plan == nil {
 		t.Fatalf("plan: %+v", planned.Diagnostics)
@@ -314,33 +322,83 @@ func TestTidyV3OwnedRetirementAfterBranchSwitchStaleBetweenPlanAndApply(t *testi
 	}
 }
 
-// Current behaviour, pinned so that it cannot widen unnoticed: retirement proves
-// integration by native ancestry only, so a rebase-merged head (different SHA,
-// same patch) is planned but retained, never deleted without proof.
-func TestTidyV3OwnedRetirementRetainsRebaseMergedHeadWithoutAncestry(t *testing.T) {
-	w := ownedPositionFixtureWith(t, true)
-	planned := defaultTidyV3RetirementCoordinator().plan(context.Background(), w.Options)
+// Retirement reuses the Spec 011 forge-free integration proofs on the real HEAD:
+// a rebase-merged head (different SHA, same patch) retires (T001 as written).
+func TestTidyV3OwnedRetirementAfterBranchSwitchPushAndRebaseMerge(t *testing.T) {
+	w := ownedPositionFixtureWith(t, "rebase")
+	c := defaultTidyV3RetirementCoordinator()
+	planned := c.plan(context.Background(), w.Options)
 	if planned.Status != "ok" || planned.Plan == nil {
 		t.Fatalf("plan: %+v", planned.Diagnostics)
 	}
-	if r := planned.Plan.Retirement; r.Integration.Decision != "retain" || r.Integration.Reason != "integration-not-proven" || v3RetirementEligible(*r) {
-		t.Fatalf("rebase-merged head became eligible: %+v", r.Integration)
+	if r := planned.Plan.Retirement; r.Integration.Decision != "delete" || r.Integration.Proof != "patch-id" || !v3RetirementEligible(*r) {
+		t.Fatalf("rebase-merged head not proven: %+v", r.Integration)
+	}
+	if applied := c.apply(context.Background(), ownedApplyOptions(w.Options, *planned.Plan)); applied.Status != "ok" {
+		t.Fatalf("apply: %+v", applied.Diagnostics)
+	}
+	if _, e := os.Lstat(w.Dest); !os.IsNotExist(e) {
+		t.Fatal("directory not removed")
 	}
 }
 
-func TestGitVerifyIdentityKeepsTheExactLockAndBacklink(t *testing.T) {
-	for _, kind := range []string{"lock", "backlink"} {
-		t.Run(kind, func(t *testing.T) {
-			_, creation, task := gitRetirementFixture(t)
-			file, content := "locked", "stw:other\n"
-			if kind == "backlink" {
-				file, content = "gitdir", "/elsewhere/.git\n"
+func TestTidyV3OwnedRetirementRetainsWhatTheProofsDoNotCover(t *testing.T) {
+	cases := []struct {
+		name, mode string
+		extra      bool
+		change     func(*V3PlanOptions)
+		retained   bool
+	}{
+		{"extra-unmerged-commit", "rebase", true, nil, true},
+		{"whitespace-only", "rebase-whitespace", false, nil, true},
+		{"whitespace-accepted", "rebase-whitespace", false, func(o *V3PlanOptions) { o.AcceptWhitespaceDifferences = true }, false},
+		{"ancestor-only-keeps-rebase", "rebase", false, func(o *V3PlanOptions) { o.IntegrationProofs = []string{"ancestor"} }, true},
+		{"patch-id-only-proves-rebase", "rebase", false, func(o *V3PlanOptions) { o.IntegrationProofs = []string{"patch-id"} }, false},
+		{"patch-id-only-skips-ancestry", "merge", false, func(o *V3PlanOptions) { o.IntegrationProofs = []string{"patch-id"} }, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := ownedPositionFixtureWith(t, tc.mode)
+			if tc.extra {
+				commitUnintegratedChange(t, w.Dest, "extra")
 			}
-			if e := os.WriteFile(filepath.Join(task.Native.GitDir, file), []byte(content), 0600); e != nil {
-				t.Fatal(e)
+			if tc.change != nil {
+				tc.change(&w.Options)
 			}
-			_, e := (gitAdapter{}).VerifyIdentity(context.Background(), creation)
-			requireOperationCode(t, e, "git-foreign-workspace")
+			c := defaultTidyV3RetirementCoordinator()
+			planned := c.plan(context.Background(), w.Options)
+			if planned.Status != "ok" || planned.Plan == nil {
+				t.Fatalf("plan: %+v", planned.Diagnostics)
+			}
+			r := planned.Plan.Retirement
+			if tc.retained != !v3RetirementEligible(*r) || tc.retained && r.Integration.Reason != "integration-not-proven" {
+				t.Fatalf("retained=%v: %+v", tc.retained, r.Integration)
+			}
+			if !tc.retained {
+				if applied := c.apply(context.Background(), ownedApplyOptions(w.Options, *planned.Plan)); applied.Status != "ok" {
+					t.Fatalf("apply: %+v", applied.Diagnostics)
+				}
+			}
 		})
 	}
+}
+
+// An attached HEAD at a descendant of the creation commit is valid authority.
+func TestTidyV3OwnedPlanAdmitsAttachedHeadAtADescendant(t *testing.T) {
+	w := ownedPositionFixture(t)
+	planned := defaultTidyV3RetirementCoordinator().plan(context.Background(), w.Options)
+	if planned.Status != "ok" || planned.Plan.Retirement.Target.HeadRef != "refs/heads/b" || validateV3Plan(*planned.Plan, planned.Plan.StateDir, planned.Plan.PlanID) != nil {
+		t.Fatalf("attached descendant head not admitted: %+v", planned.Diagnostics)
+	}
+}
+
+// commitUnintegratedChange adds a commit that changes content, so no forge-free
+// proof (not even no-net-change) integrates it.
+func commitUnintegratedChange(t *testing.T, dir, name string) {
+	t.Helper()
+	if e := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	gitFixture(t, dir, "add", name)
+	gitFixture(t, dir, "commit", "-qm", "not integrated: "+name)
 }

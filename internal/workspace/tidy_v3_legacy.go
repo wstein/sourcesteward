@@ -327,9 +327,11 @@ func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3Plan
 			paths = append(paths, w.Path)
 		}
 	}
-	proof, e := proveTidyV3Commit(ctx, before.Expected, target.CommitID, paths, nil, nil, func(ctx context.Context, target, base string) (bool, error) {
-		return tidyV3NativeAncestry(ctx, before.Expected, target, base)
-	})
+	integrationPolicy, e := v3ProofPolicyFromOptions(o)
+	if e != nil {
+		return out, e
+	}
+	proof, e := proveTidyV3RetirementCommit(ctx, before, integrationPolicy, target.CommitID, paths)
 	if e != nil {
 		return out, e
 	}
@@ -428,7 +430,7 @@ func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3Plan
 	}
 	// Consume the shared observer's proven primary checkout binding, then
 	// retain the complete central source/target/protection and record guards.
-	plan := V3Plan{SourcePath: o.Path, StateDir: o.StateDir, Expected: before.Expected, Mode: "legacy-retirement", Retirement: &r, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits()}
+	plan := V3Plan{SourcePath: o.Path, StateDir: o.StateDir, Expected: before.Expected, Mode: "legacy-retirement", Retirement: &r, SelectedRefs: []string{}, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ProofPolicy: &integrationPolicy}
 	if owned != nil {
 		plan.Mode = "owned-retirement"
 	}
