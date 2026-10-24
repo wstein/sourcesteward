@@ -79,6 +79,7 @@ type Document struct {
 
 	// notices of each repository, for the text (not part of the JSON).
 	repoNotices map[string][]string
+	runNotices  []string
 }
 
 // Build assembles the document. No array is nil. The candidates keep the order of the result
@@ -89,7 +90,7 @@ func Build(in Input) Document {
 		SchemaVersion: 1, Command: "tidy-overview", Workspace: in.Workspace,
 		Derived: append([]derive.Derived{}, in.Derived...), Repositories: []Repository{},
 		Candidates: []tidywizard.Candidate{}, Mode: in.Mode, PlanID: in.PlanID,
-		Notices: append([]string{}, in.Notices...), Truncated: in.Result.Truncated, repoNotices: map[string][]string{},
+		Notices: append([]string{}, in.Notices...), runNotices: append([]string{}, in.Notices...), Truncated: in.Result.Truncated, repoNotices: map[string][]string{},
 	}
 	if d.Mode.Markers == nil {
 		d.Mode.Markers = []string{}
@@ -263,25 +264,13 @@ func Text(d Document, _ TextOptions) string {
 		fmt.Fprintf(&b, ", %d decision", d.Summary.Decision)
 	}
 	b.WriteString("\n")
-	for _, n := range d.Notices {
-		if !strings.Contains(n, ": ") || isRunNotice(d, n) {
-			fmt.Fprintf(&b, "notice: %s\n", e(n))
-		}
+	for _, n := range d.runNotices {
+		fmt.Fprintf(&b, "notice: %s\n", e(n))
 	}
 	if d.Truncated {
 		b.WriteString("truncated: the overview is cut (use a narrower selection)\n")
 	}
 	return b.String()
-}
-
-// isRunNotice tells a run-level notice from a repository notice (those are shown under their repository).
-func isRunNotice(d Document, n string) bool {
-	for _, r := range d.Repositories {
-		if strings.HasPrefix(n, r.Name+": ") {
-			return false
-		}
-	}
-	return true
 }
 
 func baseOrNone(base string, e func(string) string) string {
