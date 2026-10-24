@@ -340,7 +340,10 @@ func TestSyncFastForwardsWhenPossibleEvenWithMergeSettings(t *testing.T) {
 	for _, tc := range []struct {
 		cfg  map[string]string
 		opts Options
-	}{{nil, Options{}}, {map[string]string{"pull.ff": "false"}, Options{}}, {map[string]string{"pull.rebase": "false"}, Options{}}, {nil, Options{Merge: true}}, {map[string]string{"pull.ff": "false"}, Options{Merge: true}}} {
+	}{{nil, Options{}}, {map[string]string{"pull.ff": "false"}, Options{}}, {map[string]string{"pull.rebase": "false"}, Options{}}, {nil, Options{Merge: true}}, {map[string]string{"pull.ff": "false"}, Options{Merge: true}},
+		// Git's own merge settings must not create a merge commit on the fast-forward path either (it runs --ff-only)
+		{map[string]string{"merge.ff": "false"}, Options{}}, {map[string]string{"branch.main.mergeOptions": "--no-ff"}, Options{}},
+		{map[string]string{"merge.ff": "false"}, Options{Merge: true}}, {map[string]string{"branch.main.mergeOptions": "--no-ff"}, Options{Merge: true}}} {
 		w := newWorkspace(t)
 		for k, v := range tc.cfg {
 			runGit(t, w.ws, "config", k, v)
@@ -388,6 +391,51 @@ func TestSyncMergeFlagMergesADivergedBranch(t *testing.T) {
 		if ValidateOptions(o) == nil {
 			t.Errorf("%+v accepted", o)
 		}
+	}
+}
+
+// The merge of --merge never opens an editor (--no-edit), even when Git is told to always edit.
+func TestSyncMergeNeverOpensAnEditor(t *testing.T) {
+	t.Setenv("GIT_MERGE_AUTOEDIT", "yes")
+	t.Setenv("GIT_EDITOR", "false")
+	w := newWorkspace(t)
+	commit(t, w.ws, "local.txt", "l\n")
+	w.advance(t, ".", "main")
+	if g := repoByName(t, run(t, w, Options{Merge: true}))["."]; g.Result != ResultMerged {
+		t.Fatalf("%+v %v", g, deref(g.Reason))
+	}
+}
+
+// The merge of --merge is `git merge --ff`: Git's own settings merge.ff=only and --ff-only in
+// branch.NAME.mergeOptions must not turn the explicit --merge into a refusal.
+func TestSyncMergeIgnoresGitsFastForwardOnlySettings(t *testing.T) {
+	for _, cfg := range []map[string]string{{"merge.ff": "only"}, {"branch.main.mergeOptions": "--ff-only"}} {
+		w := newWorkspace(t)
+		for k, v := range cfg {
+			runGit(t, w.ws, "config", k, v)
+		}
+		commit(t, w.ws, "local.txt", "l\n")
+		w.advance(t, ".", "main")
+		if g := repoByName(t, run(t, w, Options{Merge: true}))["."]; g.Result != ResultMerged {
+			t.Fatalf("%v: %+v %v", cfg, g, deref(g.Reason))
+		}
+	}
+}
+
+// Deliberately stricter than git pull --no-rebase (F4): --merge refuses a dirty file even when only the
+// local commits touch it; the refusal is safe and documented.
+func TestSyncMergeRefusesADirtyFileTheLocalCommitsTouch(t *testing.T) {
+	w := newWorkspace(t)
+	commit(t, w.ws, "ws.txt", "local commit\n")
+	w.advance(t, ".", "main")
+	write(t, filepath.Join(w.ws, "ws.txt"), "dirty edit\n")
+	before := w.oid(t, ".", "HEAD")
+	g := repoByName(t, run(t, w, Options{Merge: true}))["."]
+	if g.Result != ResultSkippedDirty || w.oid(t, ".", "HEAD") != before {
+		t.Fatalf("%+v", g)
+	}
+	if b, _ := os.ReadFile(filepath.Join(w.ws, "ws.txt")); string(b) != "dirty edit\n" {
+		t.Error("the dirty file changed")
 	}
 }
 

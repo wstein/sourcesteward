@@ -125,6 +125,16 @@ func TestSyncHasTheOutcomeOfGitPull(t *testing.T) {
 								if mergeCount := runGit(t, b.work, "rev-list", "--merges", "--count", oldB+"..HEAD"); mergeCount != "0" {
 									t.Errorf("%s merge commits", mergeCount)
 								}
+								// and the right alternative: a diverged branch is unchanged and reported diverged, a
+								// fast-forwardable one reaches the upstream tip
+								head := runGit(t, b.work, "rev-parse", "HEAD")
+								if diverged {
+									if head != oldB || r.Repos[0].Result != ResultDiverged {
+										t.Errorf("a diverged branch must stay unchanged and diverged: %s (%v)", r.Repos[0].Result, deref(r.Repos[0].Reason))
+									}
+								} else if head != runGit(t, b.work, "rev-parse", "origin/main") && r.Repos[0].Result != ResultSkippedDirty {
+									t.Errorf("a fast-forwardable branch must reach the upstream: %s", r.Repos[0].Result)
+								}
 								return
 							}
 							if got != want {
