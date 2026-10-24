@@ -15,6 +15,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
 | `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--merge] [--autostash\|--no-autostash] [--prune\|--no-prune]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
+| `stw sync restore [PATH] [--run ID]` | Move the branches a `stw sync` run changed back to their journaled old tips | Only while the branch still points at the tip the run left and a checked-out worktree is clean (`git reset --keep`, or `update-ref` with the expected value); no fetch |
 | `stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons SET] [--timeout D]` | What needs action in the workspace, ordered by priority with a command to run for each item, then every repository (branch, upstream, changes, conflicts, operation, stashes, unmerged branches, worktrees, gitlink drift) and the pull requests, release drafts, unreleased tags and CI of its GitHub repository; Git only locally | Read-only. Online by default with `GET` requests through the `gh` token of the hosting commands; `--offline` reads no credential and sends nothing; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
@@ -146,8 +147,22 @@ namespace and while it still points at the journaled old OID, and no other ref i
 symbolic, has another name or a bad old OID is kept with its record. Retention is best effort and silent: a failure
 leaves the older runs in place. Repositories that no run changes keep their old runs until their next change. Run IDs
 carry microseconds from this release on (older IDs have second resolution), and runs are ordered by their ID.
-`stw sync restore` comes in a later slice. See the
+See the
 [JSON contract](json-contracts.md#sync-schema-v1-unpublished).
+
+`stw sync restore [PATH] [--run ID] [--json]` undoes a run (default: the latest run, the one whose record was written
+last; the workspace is found as for `stw sync`, `--run` takes the ID printed by the run). For each branch the run
+changed it moves the branch back to the journaled old tip, but only while the branch still points at the tip the run
+left: `git reset --keep OLD` when the branch is checked out in the main worktree and that worktree is clean and idle,
+`git update-ref` with the expected value when no worktree has it checked out. Results: `restored`, `already-restored`
+(a rerun changes nothing), `changed-since` (the branch moved, the worktree is dirty or busy, or another worktree holds
+the branch; left alone), `journal-incomplete` (a record of a rebase or merge that never completed has no planned new
+tip; left alone, the recovery ref names the old tip for a manual reset) and `failed`; the last three exit 1. An
+incomplete fast-forward record is restored when the branch is at the planned new tip, `already-restored` at the old
+tip and `changed-since` anywhere else, and a restore that dealt with it marks it done. A restore never undoes pruned
+remote-tracking refs, a stash reapply or a submodule HEAD moved by the superproject, and it accepts no sync option.
+Known limits: run IDs have second resolution, so the latest run is found by the modification time of its record and
+the ID only breaks a tie; and the records of a repository are only looked at for the run asked for.
 
 ## Show what needs action in the workspace
 
