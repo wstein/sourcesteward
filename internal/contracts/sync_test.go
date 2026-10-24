@@ -28,6 +28,19 @@ func TestSyncSchemaFixtures(t *testing.T) {
 	}
 }
 
+// Run IDs with and without microseconds validate; the retention release writes the longer form.
+func TestSyncSchemaAcceptsBothRunIDForms(t *testing.T) {
+	s := schema(t, "sync")
+	for _, id := range []string{"20261021T101500Z-0a1b2c3d", "20261021T101500123456Z-0a1b2c3d"} {
+		valid(t, s, mutateSync(t, "run", func(m map[string]any, _ []any) { m["run_id"] = id }))
+	}
+	for _, id := range []string{"20261021T10150012Z-0a1b2c3d", "20261021T101500123456-0a1b2c3d"} {
+		if err := s.Validate(value(t, mutateSync(t, "run", func(m map[string]any, _ []any) { m["run_id"] = id }))); err == nil {
+			t.Errorf("%s accepted", id)
+		}
+	}
+}
+
 // mutateSync applies fn to a copy of a fixture and returns the JSON.
 func mutateSync(t *testing.T, fixture string, fn func(m map[string]any, repos []any)) []byte {
 	t.Helper()
