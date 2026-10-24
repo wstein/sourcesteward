@@ -332,3 +332,19 @@ func TestRestoreChecksWhereTheBranchLanded(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// F7: a failed or conflict entry with no planned and no new tip (a rebase) whose branch is not at the old
+// tip is changed-since, never reset: the owner may have finished the rebase after a conflict stop.
+func TestRestoreFailedRebaseEntryWithoutATipIsLeftAlone(t *testing.T) {
+	for _, state := range []string{stateFailed, "conflict"} {
+		w, id, _, now := movedWorkspace(t)
+		editRecord(t, w, w.ws, id, func(r *journalRecord) {
+			r.Entries[0].State, r.Entries[0].NewOID, r.Entries[0].PlannedNewOID = state, "", ""
+		})
+		before := trees(t, []string{w.ws})
+		r := restore(t, w, "")
+		if got := repoByName(t, r)["."]; got.Result != ResultChangedSince || r.ExitCode() != 1 || w.oid(t, ".", "main") != now || trees(t, []string{w.ws})[w.ws] != before[w.ws] {
+			t.Fatalf("%s: %+v", state, got)
+		}
+	}
+}
