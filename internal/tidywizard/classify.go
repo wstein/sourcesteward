@@ -69,6 +69,10 @@ const (
 	ProofBranchAbsent Proof = "github-branch-absent"
 )
 
+// AllProofs lists every proof the classifier can emit, in the order of the constants above. The
+// tidy-overview schema enumerates the same words; a test keeps this list and the constants equal.
+var AllProofs = []Proof{ProofAncestor, ProofPatchID, ProofMergeNoop, ProofNoNetChange, ProofEmptyWorkingCopy, ProofBranchAbsent, ProofNone}
+
 // Lock is the lock state of a worktree.
 type Lock int
 
