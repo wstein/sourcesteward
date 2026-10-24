@@ -4,9 +4,11 @@ package tidywizard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -159,6 +161,25 @@ func TestClassifyCancellationReportsTheRepositoriesNotStarted(t *testing.T) {
 				errs++
 			}
 		}
+		for _, r := range res.Repositories {
+			if r.State != "error" {
+				continue
+			}
+			if r.Notices == nil || len(r.Notices) != 0 || r.Reason != context.Canceled.Error() {
+				t.Errorf("an unstarted row carries an empty notices array and the context error: %+v", r)
+			}
+			b, err := json.Marshal(r)
+			if err != nil || !strings.Contains(string(b), `"notices":[]`) || strings.Contains(string(b), `"notices":null`) {
+				t.Errorf("json %s %v", b, err)
+			}
+		}
+		for _, c := range res.Candidates {
+			for _, r := range res.Repositories {
+				if r.State == "error" && r.Name == c.Repo {
+					t.Errorf("an error row has a candidate: %+v", c)
+				}
+			}
+		}
 		if analysed != 4 || errs != len(names)-4 {
 			t.Errorf("the four started repositories keep their results and the other %d are reported: analysed %d, errors %d", len(names)-4, analysed, errs)
 		}
@@ -182,6 +203,27 @@ func TestClassifyReRaisesAPanicOfTheSource(t *testing.T) {
 		}()
 		if got != boom {
 			t.Fatalf("re-raised %v", got)
+		}
+	})
+}
+
+// A started repository is recognised by its result, not by its name: one with an empty name keeps
+// its result when the run is cancelled.
+func TestClassifyCancellationKeepsAStartedRepositoryWithAnEmptyName(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		names := append([]string{""}, repoNames(9)...)
+		ctx, cancel := context.WithCancel(context.Background())
+		g := &gatedSource{gates: map[string]chan struct{}{}, facts: func(n string) (RepoFacts, error) { return mixedRepo(n)() }}
+		for _, n := range names {
+			g.gates[n] = make(chan struct{})
+		}
+		done := make(chan Result)
+		go func() { done <- Classify(ctx, g, names, cfg()) }()
+		synctest.Wait()
+		cancel()
+		res := <-done
+		if r := res.Repositories[0]; r.Name != "" || r.State != "analysed" || r.Reason != "" {
+			t.Errorf("the started empty-named repository was overwritten: %+v", r)
 		}
 	})
 }
