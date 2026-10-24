@@ -253,26 +253,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(observed.Native), o.StateDir); err != nil {
 		return failTidyV3Tracking(r, err)
 	}
-	mapping, targets, err := selectTidyV3Tracking(observed, o.TrackingRemote, o.Repo, o.Refs)
-	if err != nil {
-		return failTidyV3Tracking(r, err)
-	}
-	selected := append([]string{}, o.Refs...)
-	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "tracking-refs", SourcePath: source, StateDir: o.StateDir, Expected: observed.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observed.ConfigNotes}
-	if !validV3NativeState(observed.Native, p, p.Expected) {
-		return failTidyV3Tracking(r, failure("incomplete-evidence", "Complete native tracking, symbolic and registered workspace protections are required before online evidence."))
-	}
-	if p.StateDir != "" {
-		p.PlanID, err = randomID()
-		if err != nil {
-			return failTidyV3Tracking(r, err)
-		}
-	}
-	if err = ctx.Err(); err != nil {
-		return failTidyV3Tracking(r, err)
-	}
-	session, err := c.openHosting(ctx, source, hosting.TidySessionOptions{Online: true, Remote: mapping.Remote, Repo: o.Repo})
+	p, session, advertisement, err := c.trackingCandidates(ctx, o, source, observed)
 	if session != nil {
 		defer func() {
 			budget := session.Budget()
@@ -283,42 +264,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 		}()
 	}
 	if err != nil {
-		return failTidyV3Tracking(r, tidyV3HostingError(err))
-	}
-	if session == nil {
-		return failTidyV3Tracking(r, failure("hosting-evidence-unavailable", "A complete typed branch-advertisement session is required."))
-	}
-	repository := session.Repository()
-	if !v3Repo(tidyV3Repository(repository)) || !v3RemoteMatches(mapping.FetchURL, repository.FullName) {
-		return failTidyV3Tracking(r, failure("evidence-changed", "Provider repository identity does not match the exact selected fetch URL."))
-	}
-	advertisement, err := session.ReadBranches(ctx)
-	if err != nil {
-		return failTidyV3Tracking(r, tidyV3HostingError(err))
-	}
-	if err = validateTidyV3Advertisement(advertisement, repository); err != nil {
 		return failTidyV3Tracking(r, err)
-	}
-	if err = session.RevalidateBranches(ctx, advertisement); err != nil {
-		return failTidyV3Tracking(r, tidyV3HostingError(err))
-	}
-	p.Online = &V3OnlineSelection{Repository: tidyV3Repository(repository), Remote: mapping.Remote, RemoteURL: mapping.FetchURL, ConfigDigest: mapping.ConfigDigest, PRHints: []V3PRHint{}, ObservationDigests: []string{advertisement.Fingerprint}, BudgetPolicy: "github-read-v3"}
-	present := map[string]bool{}
-	for _, branch := range advertisement.Branches {
-		present[branch.Name] = true
-	}
-	for _, target := range targets {
-		ref := target.Reference
-		candidate := V3Candidate{ActionID: "tracking-" + gitDigest(ref.Name)[:32], Kind: "tracking-ref", Name: ref.Name, OID: ref.OID, Decision: "retain", Reason: target.ProtectedReason, Proof: "none", WorkspacePaths: target.WorkspacePaths}
-		if candidate.Reason == "" {
-			if present[strings.TrimPrefix(target.SourceRef, "refs/heads/")] {
-				candidate.Reason = "remote-source-present"
-			} else {
-				candidate.Decision, candidate.Reason, candidate.Proof = "delete", "github-branch-absent", "github-branch-absent"
-				candidate.Evidence = &V3ProofEvidence{Absence: &V3AbsenceProof{Repository: p.Online.Repository, Remote: mapping.Remote, SourceRef: target.SourceRef, TrackingRef: ref.Name, Refspec: mapping.Refspec, ConfigDigest: mapping.ConfigDigest, AdvertisementDigest: advertisement.Fingerprint}}
-			}
-		}
-		p.Candidates = append(p.Candidates, candidate)
 	}
 	p.Effects = v3PlanEffects(p)
 	p.Digest, err = v3PlanDigest(p)
@@ -371,6 +317,72 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 	r.Status, r.Plan, r.Boundary.Complete = "ok", &p, true
 	r.Limitations = append(append([]string{}, p.RecoveryLimits...), tidyV3TrackingSamplingLimit)
 	return r
+}
+
+// trackingCandidates is the read-only part of tracking planning: the mapping and targets of the
+// selected remote, the typed branch advertisement and the resulting candidates, in a plan value
+// that is neither validated as a whole nor stored. The returned session, when not nil, belongs to
+// the caller, who closes it, also after an error. It performs no write of any kind.
+func (c tidyV3TrackingCoordinator) trackingCandidates(ctx context.Context, o V3PlanOptions, source string, observed tidyV3NativeObservation) (p V3Plan, session tidyV3TrackingHosting, advertisement hosting.TidyBranchAdvertisement, err error) {
+	mapping, targets, err := selectTidyV3Tracking(observed, o.TrackingRemote, o.Repo, o.Refs)
+	if err != nil {
+		return p, nil, advertisement, err
+	}
+	selected := append([]string{}, o.Refs...)
+	sort.Strings(selected)
+	p = V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "tracking-refs", SourcePath: source, StateDir: o.StateDir, Expected: observed.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observed.ConfigNotes}
+	if !validV3NativeState(observed.Native, p, p.Expected) {
+		return p, nil, advertisement, failure("incomplete-evidence", "Complete native tracking, symbolic and registered workspace protections are required before online evidence.")
+	}
+	if p.StateDir != "" {
+		p.PlanID, err = randomID()
+		if err != nil {
+			return p, nil, advertisement, err
+		}
+	}
+	if err = ctx.Err(); err != nil {
+		return p, nil, advertisement, err
+	}
+	session, err = c.openHosting(ctx, source, hosting.TidySessionOptions{Online: true, Remote: mapping.Remote, Repo: o.Repo})
+	if err != nil {
+		return p, session, advertisement, tidyV3HostingError(err)
+	}
+	if session == nil {
+		return p, nil, advertisement, failure("hosting-evidence-unavailable", "A complete typed branch-advertisement session is required.")
+	}
+	repository := session.Repository()
+	if !v3Repo(tidyV3Repository(repository)) || !v3RemoteMatches(mapping.FetchURL, repository.FullName) {
+		return p, session, advertisement, failure("evidence-changed", "Provider repository identity does not match the exact selected fetch URL.")
+	}
+	advertisement, err = session.ReadBranches(ctx)
+	if err != nil {
+		return p, session, advertisement, tidyV3HostingError(err)
+	}
+	if err = validateTidyV3Advertisement(advertisement, repository); err != nil {
+		return p, session, advertisement, err
+	}
+	if err = session.RevalidateBranches(ctx, advertisement); err != nil {
+		return p, session, advertisement, tidyV3HostingError(err)
+	}
+	p.Online = &V3OnlineSelection{Repository: tidyV3Repository(repository), Remote: mapping.Remote, RemoteURL: mapping.FetchURL, ConfigDigest: mapping.ConfigDigest, PRHints: []V3PRHint{}, ObservationDigests: []string{advertisement.Fingerprint}, BudgetPolicy: "github-read-v3"}
+	present := map[string]bool{}
+	for _, branch := range advertisement.Branches {
+		present[branch.Name] = true
+	}
+	for _, target := range targets {
+		ref := target.Reference
+		candidate := V3Candidate{ActionID: "tracking-" + gitDigest(ref.Name)[:32], Kind: "tracking-ref", Name: ref.Name, OID: ref.OID, Decision: "retain", Reason: target.ProtectedReason, Proof: "none", WorkspacePaths: target.WorkspacePaths}
+		if candidate.Reason == "" {
+			if present[strings.TrimPrefix(target.SourceRef, "refs/heads/")] {
+				candidate.Reason = "remote-source-present"
+			} else {
+				candidate.Decision, candidate.Reason, candidate.Proof = "delete", "github-branch-absent", "github-branch-absent"
+				candidate.Evidence = &V3ProofEvidence{Absence: &V3AbsenceProof{Repository: p.Online.Repository, Remote: mapping.Remote, SourceRef: target.SourceRef, TrackingRef: ref.Name, Refspec: mapping.Refspec, ConfigDigest: mapping.ConfigDigest, AdvertisementDigest: advertisement.Fingerprint}}
+			}
+		}
+		p.Candidates = append(p.Candidates, candidate)
+	}
+	return p, session, advertisement, nil
 }
 
 // The provider owns collection/exhaustion and branch syntax. At this typed
