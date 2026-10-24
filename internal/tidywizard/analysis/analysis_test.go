@@ -114,7 +114,7 @@ func TestPrepareDerivesRemoteAndBaseOfEveryMember(t *testing.T) {
 	if !reflect.DeepEqual(p.Names, []string{".", "a", "b", "c"}) {
 		t.Errorf("names %v", p.Names)
 	}
-	if s := specOf(p, "."); s.Skip != "" || s.Base != "refs/heads/main" || s.Remote != "origin" || s.Path != "/ws" {
+	if s := specOf(p, "."); s.Skip != "" || s.Base != "refs/heads/main" || s.Remote != "" || s.Path != "/ws" {
 		t.Errorf(".: %+v", s)
 	}
 	if s := specOf(p, "a"); s.Skip != "" || s.Base != "refs/remotes/origin/main" {
@@ -315,7 +315,7 @@ func TestPrepareAndRunOverARealRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := specOf(p, "."); s.Skip != "" || s.Base != "refs/heads/main" || s.Remote != "origin" {
+	if s := specOf(p, "."); s.Skip != "" || s.Base != "refs/heads/main" || s.Remote != "" || s.Online {
 		t.Fatalf("%+v", s)
 	}
 	res := Run(context.Background(), p, tidywizard.Config{Caller: "tester", CWD: repo, Now: nowForTest()})
