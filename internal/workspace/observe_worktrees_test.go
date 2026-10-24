@@ -521,8 +521,9 @@ func TestObserveTrackingOnline(t *testing.T) {
 		t.Fatalf("opens=%d closed=%v: %+v", *opens, s.closed, got)
 	}
 	want := map[string]string{"refs/remotes/origin/stale": "github-branch-absent", "refs/remotes/origin/live": "none"}
+	reason := map[string]string{"refs/remotes/origin/stale": "github-branch-absent", "refs/remotes/origin/live": "remote-source-present"}
 	for _, r := range got.TrackingRefs {
-		if r.Incomplete != "" || r.Proof != want[r.Name] {
+		if r.Incomplete != "" || r.Proof != want[r.Name] || r.Reason != reason[r.Name] {
 			t.Fatalf("tracking ref: %+v", r)
 		}
 	}
