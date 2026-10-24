@@ -99,7 +99,8 @@ workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for pushes to `m
 whose base is the default branch, and for any PR that carries the `ci-full` label when it is
 opened or pushed; a PR stacked on another PR branch skips it otherwise. The separate workflow
 `ci-full.yml` runs it when the `ci-full` label is applied (a `labeled` event), so labelling
-never re-runs `check`. The owner or dispatcher puts `ci-full` on the top PR of a stack. A
+never re-runs `check`. A pull request runs only the `current` lane; the `minimum` lane runs on
+pushes to `main` (the post-merge gate), in `ci-full.yml` and in the scheduled race workflow. The owner or dispatcher puts `ci-full` on the top PR of a stack. A
 skipped job reports a neutral result, so it does not block merging; the stack tip with
 `ci-full` carries the evidence for the whole stack, and the post-merge push to `main` runs
 everything again. When GitHub retargets a stacked PR to `main` after its parent merged, the
@@ -145,8 +146,11 @@ event rules and the `suite` truth table.
 
 Check names of the conformance jobs are prefixed by the calling job: a lane reports as
 `Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`), from `ci.yml` and from
-`ci-full.yml` alike. No branch protection exists today; a future required check should
-reference `Git/jj conformance (minimum) / suite` and `Git/jj conformance (current) / suite`.
+`ci-full.yml` alike. Classic branch protection is not used; the ruleset `main` (id 25683357)
+requires status checks. Require only `check` and `Git/jj conformance (current) / suite`: a
+pull request does not run the `minimum` lane, so a required `Git/jj conformance (minimum) / suite`
+would stay pending forever. Remove that context from the ruleset before the change that made the
+lane main-only merges.
 The cache key also hashes `scripts/backend-releases.json`.
 
 The heavy `internal/workspace` package is sharded. `scripts/ci_shards.py` lists its top-level
