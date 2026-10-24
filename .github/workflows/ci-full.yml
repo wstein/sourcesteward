@@ -2,7 +2,7 @@ name: CI full
 
 # Applying the ci-full label to a pull request runs the full conformance lanes for it, e.g. for
 # the top PR of a stack. This is a separate workflow so that labelling never re-runs the check
-# job of ci.yml. Later pushes to a labelled PR are covered by ci.yml itself.
+# job of ci.yml. Later pushes to a labelled PR run both lanes through ci.yml itself.
 on:
   pull_request:
     types: [labeled]
