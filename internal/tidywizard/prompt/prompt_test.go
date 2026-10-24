@@ -74,9 +74,17 @@ func TestDecisionRowAsksASecondConfirmation(t *testing.T) {
 	if !strings.Contains(out, "stw lock whose creation record does not match") || !strings.Contains(out, "[y/N]") {
 		t.Errorf("the confirmation does not name the lock:\n%s", out)
 	}
-	for _, answer := range []string{"\n", "n\n", "yes\n", "Y\n", ""} {
+	for _, answer := range []string{"\n", "n\n"} {
 		res, _, err := run(t, "1,3\n"+answer, true)
 		if err != nil || !reflect.DeepEqual(ids(res), []string{"w1"}) || res.Confirmed["d3"] {
+			t.Errorf("answer %q: %+v %v", answer, res, err)
+		}
+	}
+	// An end of input inside the question (also after an invalid answer) is the end of the wizard:
+	// nothing is chosen, not even the rows taken before the question.
+	for _, answer := range []string{"", "yes\n", "Y\n"} {
+		res, _, err := run(t, "1,3\n"+answer, true)
+		if err != nil || res.Outcome != OutcomeNone || len(res.Chosen) != 0 || len(res.Confirmed) != 0 {
 			t.Errorf("answer %q: %+v %v", answer, res, err)
 		}
 	}
@@ -193,7 +201,7 @@ func TestLongLinesAreBounded(t *testing.T) {
 // The question to apply the stored plan set: only an exact "y" is yes, the default is no, anything
 // else is re-asked three times and then fails.
 func TestYesNo(t *testing.T) {
-	for in, want := range map[string]bool{"y\n": true, "n\n": false, "\n": false, "": false} {
+	for in, want := range map[string]bool{"y\n": true, "n\n": false, "\n": false} {
 		var out bytes.Buffer
 		got, err := YesNo(bufio.NewReader(strings.NewReader(in)), &out, "Apply it now?", true)
 		if err != nil || got != want || !strings.Contains(out.String(), "[y/N]") {
@@ -205,6 +213,13 @@ func TestYesNo(t *testing.T) {
 		got, err := YesNo(bufio.NewReader(strings.NewReader(strings.Repeat(bad+"\n", 3)+"y\n")), &out, "Apply it now?", true)
 		if got || !errors.Is(err, ErrTooManyInvalid) {
 			t.Errorf("%q: %v %v", bad, got, err)
+		}
+	}
+	// The end of input is reported on its own, so a caller can tell it from a "no".
+	for _, in := range []string{"", "zz\n", "zz\nzz\n"} {
+		got, err := YesNo(bufio.NewReader(strings.NewReader(in)), io.Discard, "Q?", true)
+		if got || !errors.Is(err, ErrEndOfInput) {
+			t.Errorf("%q: %v %v", in, got, err)
 		}
 	}
 	got, err := YesNo(bufio.NewReader(strings.NewReader("zz\ny\n")), io.Discard, "Q?", true)
@@ -234,5 +249,65 @@ func TestDecisionRowsAreOnlyEverChosenByNumber(t *testing.T) {
 	res, err = Select(bufio.NewReader(strings.NewReader("1"+strings.Repeat(" ", 300)+"\n"+"1"+strings.Repeat(" ", 300)+"\n"+"1"+strings.Repeat(" ", 300)+"\n")), &out, list, Options{Interactive: true})
 	if !errors.Is(err, ErrTooManyInvalid) || len(res.Chosen) != 0 {
 		t.Errorf("over-long: %+v %v", res, err)
+	}
+}
+
+// An end of input in any nested question ends the run with nothing chosen (the plan-only
+// degradation), also when rows were already taken: the owner questions, the decision confirmation.
+func TestEndOfInputInANestedQuestionChoosesNothing(t *testing.T) {
+	for _, in := range []string{"o\ny\n", "o\n", "o\ny\nn", "1,3\n", "a\n3\n"} {
+		res, _, err := run(t, in, true)
+		if err != nil || res.Outcome != OutcomeNone || len(res.Chosen) != 0 || len(res.Confirmed) != 0 {
+			t.Errorf("%q: %+v %v", in, res, err)
+		}
+	}
+	// "a" has no nested question: its end of input after the answer is irrelevant.
+	res, _, err := run(t, "a\n", true)
+	if err != nil || !reflect.DeepEqual(ids(res), []string{"w1", "w2", "b6"}) {
+		t.Errorf("%+v %v", res, err)
+	}
+}
+
+// A repeated range is accepted and de-duplicated; there is no cap on the number of tokens beyond
+// the line bound.
+func TestRepeatedRangesAreAcceptedOnce(t *testing.T) {
+	res, _, err := run(t, "1-6,1-6,1-6,1-6,1-6\nn\n", true)
+	if err != nil || !reflect.DeepEqual(ids(res), []string{"w1", "w2", "o4", "o5", "b6"}) {
+		t.Errorf("%+v %v", res, err)
+	}
+}
+
+// The details number is digits only, and the text of a detail or an owner label cannot carry control
+// characters into the prompt.
+func TestDetailsNumberIsStrictAndTextIsFlattened(t *testing.T) {
+	for _, bad := range []string{"d +4", "d 04x", "d -4", "d 4 5", "d 0x4"} {
+		_, _, err := run(t, strings.Repeat(bad+"\n", 3), true)
+		if !errors.Is(err, ErrTooManyInvalid) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	list := []Item{
+		{Number: 1, ID: "a", Verdict: Safe, Scope: owner.ScopeOwn, Owner: "cl\x1b[31maude\n", Detail: "det\x1b[2Jail\nline\x00"},
+		{Number: 2, ID: "b", Verdict: Decision, Scope: owner.ScopeUnknown, Detail: "lock\rforged\x07"},
+	}
+	var out bytes.Buffer
+	_, err := Select(bufio.NewReader(strings.NewReader("d 1\no\nn\n")), &out, list, Options{Interactive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Select(bufio.NewReader(strings.NewReader("2\nn\n")), &out, list, Options{Interactive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, r := range text {
+		if r != '\n' && (r < 0x20 || r == 0x7f) {
+			t.Errorf("control character %q in the prompt output", r)
+		}
+	}
+	for _, want := range []string{"det [2Jail line ", "cl [31maude ", "lock forged "} {
+		if !strings.Contains(text, want) {
+			t.Errorf("flattened text %q missing:\n%q", want, text)
+		}
 	}
 }
