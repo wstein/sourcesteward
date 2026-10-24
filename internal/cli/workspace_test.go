@@ -30,9 +30,9 @@ func workspaceRunner(run func(context.Context, string, workspace.PlanOptions, wo
 }
 func TestWorkspaceUsageBeforeOperation(t *testing.T) {
 	for _, args := range [][]string{
-		{"plan"}, {"plan", "--base", "HEAD", "--destination", "/tmp/dest", "--task", "task", "--owner", "owner"},
+		{"plan"}, {"plan", "--base", "HEAD", "--destination", "/tmp/dest", "--task", "task"},
 		{"plan", "one", "two"}, {"apply", "--state-dir", "/tmp/state"}, {"apply", "--plan", "id", "--state-dir", "/tmp/state", "--base", "HEAD"},
-		{"handoff"}, {"retire-plan", "--state-dir", "/tmp/state", "--authorize"}, {"unknown"},
+		{"handoff", "one", "two"}, {"retire-plan", "--state-dir", "/tmp/state", "--authorize"}, {"unknown"},
 		{"apply", "--plan", "../escape", "--state-dir", "/tmp/state"},
 		{"handoff", strings.Repeat("x", 4097), "--state-dir", "/tmp/state"},
 	} {

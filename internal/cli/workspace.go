@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
+	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
@@ -31,30 +32,30 @@ func workspaceCommandWith(operations workspaceOperations) *cobra.Command {
 	plan.Flags().StringVar(&p.Destination, "destination", "", "Unused absolute destination path")
 	plan.Flags().StringVar(&p.Task, "task", "", "Task identity label")
 	plan.Flags().StringVar(&p.Owner, "owner", "", "Owner label; private store access is the trust boundary")
-	plan.Flags().StringVar(&p.StateDir, "state-dir", "", "Existing private mode0700 state directory")
+	plan.Flags().StringVar(&p.StateDir, "state-dir", "", "Private mode0700 state directory; default ${XDG_STATE_HOME:-~/.local/state}/stw/workspace or $STW_STATE_DIR")
 	plan.RunE = workspaceRun(plan, func(cmd *cobra.Command, args []string) workspace.Result {
 		p.Path = workspacePath(args)
 		return operations.plan(cmd.Context(), p)
 	}, func() error {
-		return validateWorkspaceCLI("base", p.Base, "destination", p.Destination, "task", p.Task, "owner", p.Owner, "state-dir", p.StateDir)
-	})
+		return validateWorkspaceDefaulted("base", p.Base, "destination", p.Destination, "task", p.Task, "owner", p.Owner, "state-dir", p.StateDir)
+	}, &p.StateDir)
 	var a workspace.ApplyOptions
 	apply := &cobra.Command{Use: "apply", Short: "Apply a stored plan after explicit authorization and stale-state checks", Args: cobra.NoArgs}
 	apply.Flags().StringVar(&a.PlanID, "plan", "", "Generated immutable plan identity")
-	apply.Flags().StringVar(&a.StateDir, "state-dir", "", "Private store containing the plan and recovery journal")
+	apply.Flags().StringVar(&a.StateDir, "state-dir", "", "Private store containing the plan and recovery journal; default as for plan")
 	apply.Flags().BoolVar(&a.Authorize, "authorize", false, "Authorize only the reviewed plan's declared local effects")
-	apply.RunE = workspaceRun(apply, func(cmd *cobra.Command, _ []string) workspace.Result { return operations.apply(cmd.Context(), a) }, func() error { return validateWorkspaceCLI("plan", a.PlanID, "state-dir", a.StateDir) })
+	apply.RunE = workspaceRun(apply, func(cmd *cobra.Command, _ []string) workspace.Result { return operations.apply(cmd.Context(), a) }, func() error { return validateWorkspaceDefaulted("plan", a.PlanID, "state-dir", a.StateDir) }, &a.StateDir)
 	for _, entry := range []struct {
 		name, short string
 		run         func(context.Context, workspace.Options) workspace.Result
 	}{{"handoff", "Describe an owned task workspace and remaining work", operations.handoff}, {"retire-plan", "Prepare retention evidence without deleting a workspace", operations.retire}} {
 		var o workspace.Options
 		command := &cobra.Command{Use: entry.name + " [PATH]", Short: entry.short, Args: cobra.MaximumNArgs(1)}
-		command.Flags().StringVar(&o.StateDir, "state-dir", "", "Private task ownership and recovery store")
+		command.Flags().StringVar(&o.StateDir, "state-dir", "", "Private task ownership and recovery store; default as for plan")
 		command.RunE = workspaceRun(command, func(cmd *cobra.Command, args []string) workspace.Result {
 			o.Path = workspacePath(args)
 			return entry.run(cmd.Context(), o)
-		}, func() error { return validateWorkspaceCLI("state-dir", o.StateDir) })
+		}, func() error { return validateWorkspaceDefaulted("state-dir", o.StateDir) }, &o.StateDir)
 		family.AddCommand(command)
 	}
 	family.AddCommand(plan, apply)
@@ -65,6 +66,18 @@ func workspacePath(args []string) string {
 		return args[0]
 	}
 	return "."
+}
+
+// validateWorkspaceDefaulted validates like validateWorkspaceCLI but lets --state-dir be omitted: the
+// shared default (or $STW_STATE_DIR) is used then, see derive.ResolveStateDir.
+func validateWorkspaceDefaulted(pairs ...string) error {
+	var given []string
+	for i := 0; i < len(pairs); i += 2 {
+		if pairs[i] != "state-dir" || pairs[i+1] != "" {
+			given = append(given, pairs[i], pairs[i+1])
+		}
+	}
+	return validateWorkspaceCLI(given...)
 }
 func validateWorkspaceCLI(pairs ...string) error {
 	for i := 0; i < len(pairs); i += 2 {
@@ -89,7 +102,7 @@ func validateWorkspaceCLI(pairs ...string) error {
 	}
 	return nil
 }
-func workspaceRun(command *cobra.Command, run func(*cobra.Command, []string) workspace.Result, validate func() error) func(*cobra.Command, []string) error {
+func workspaceRun(command *cobra.Command, run func(*cobra.Command, []string) workspace.Result, validate func() error, stateDir *string) func(*cobra.Command, []string) error {
 	var structured bool
 	command.Flags().BoolVar(&structured, "json", false, "Output one versioned workspace result, including operational refusals")
 	return func(cmd *cobra.Command, args []string) error {
@@ -102,7 +115,15 @@ func workspaceRun(command *cobra.Command, run func(*cobra.Command, []string) wor
 		if err := cmd.Context().Err(); err != nil {
 			return runtimeFailure{err}
 		}
-		result := run(cmd, args)
+		var result workspace.Result
+		if dir, err := derive.ResolveStateDir(*stateDir); err != nil {
+			// Like an explicit unsafe --state-dir, the refusal is a versioned result, not a bare error.
+			result = workspace.Result{SchemaVersion: 1, Command: "workspace-" + cmd.Name(), Status: "error", Backend: "unknown",
+				Actions: []workspace.ActionOutcome{}, Limitations: []string{}, Diagnostics: []workspace.Diagnostic{{Code: "unsafe-state", Message: err.Error()}}}
+		} else {
+			*stateDir = dir
+			result = run(cmd, args)
+		}
 		var err error
 		if structured {
 			err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
