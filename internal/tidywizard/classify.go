@@ -411,9 +411,9 @@ func classifyStale(c Candidate, w Worktree, record Record) Candidate {
 	case !w.Prunable:
 		return c.retain("evidence-incomplete", "the Git administrative entry is not provably prunable")
 	}
-	c.Verdict = VerdictSafe
-	c.Effects = []string{"remove-registration"}
-	return c
+	// Provably prunable and stw-owned, but no existing plan kind removes a registration whose
+	// directory is missing (Spec 041 T012b): retained until Spec 011 gains a narrow prune kind.
+	return c.retain("stale-registration-no-plan-kind", "the registration is prunable; no plan kind removes it yet")
 }
 
 func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate {
