@@ -123,7 +123,7 @@ jobs:
             packages="$AFFECTED"
           fi
           if [ "$CONFORMANCE_TIER" = true ]; then
-            # internal/workspace runs in the conformance shards of both lanes.
+            # internal/workspace runs in the conformance shards (the current lane on pull requests).
             if [ "$packages" = './...' ]; then
               packages="$(python3 -B scripts/ci_shards.py packages)"
               set -- $packages
@@ -156,15 +156,16 @@ jobs:
 
   # Tiered: main pushes and PRs against the default branch run it; a PR stacked on another
   # PR branch runs it only with the ci-full label (applied later, ci-full.yml runs it). A
-  # skipped job is neutral. Pull requests run only the current lane; the minimum lane gates
-  # main after the merge, and runs for the ci-full label (ci-full.yml) and the race schedule.
+  # skipped job is neutral. Pull requests run only the current lane, unless they carry the
+  # ci-full label (both lanes on every push); the minimum lane also gates main after the merge
+  # and runs in the race schedule.
   conformance:
     name: Git/jj conformance (${{ matrix.lane }})
     if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == github.event.repository.default_branch || contains(github.event.pull_request.labels.*.name, 'ci-full')
     strategy:
       fail-fast: false
       matrix:
-        lane: ${{ fromJSON(github.event_name == 'pull_request' && '["current"]' || '["minimum","current"]') }}
+        lane: ${{ fromJSON(github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci-full') && '["current"]' || '["minimum","current"]') }}
     needs: [changes]
     uses: ./.github/workflows/conformance.yml
     with:
