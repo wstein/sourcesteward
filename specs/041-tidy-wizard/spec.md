@@ -170,7 +170,7 @@ a worktree are in the directory its creator passed to `stw workspace`, which has
 - **Record lookup.** For every linked worktree locked with the exact `stw:<task>` form, the creation record is looked up by task id in
   every known store. Found in one store: owned (`owner_source` `task-record`). Found in several with different content: `retain`
   `registration-record-ambiguous`. Found in none: `retain` `registration-record-missing` with the hint `pass the --state-dir that
-  created it`; such a worktree is **not** treated as owned and is classed like an unregistered one (see the table).
+  created it`; such a worktree is **not** treated as owned and offers no deletion path (see the table).
 - A wizard run shows the stores it read and how many records each held (`derived[]`, name `state-dirs`).
 
 ## Mode detection (an accident guard)
@@ -196,13 +196,13 @@ order for output). Each candidate has exactly one `verdict` and, separately, an 
 | --- | --- | --- |
 | `safe` | proven integrated and every precondition holds | yes |
 | `retain` | kept; a stable `reason` explains | no |
-| `decision` | safe in principle but needs the owner (for example a locked worktree with an stw lock, legacy unregistered worktree) | yes, with an explicit second confirmation per item |
+| `decision` | safe in principle but needs the owner (for example a stw-locked worktree whose record does not match, `lock-mismatch`; legacy unregistered worktree) | yes, with an explicit second confirmation per item |
 
 Candidate kinds: `worktree` (linked task worktree: registration, files, optionally its branch), `branch` (local branch or jj bookmark),
 `tracking-ref` (local remote-tracking ref, contract 3), `stale-worktree` (registration with a missing directory, `prunable`).
 
 Reason codes (stable, kebab-case; the list extends Spec 011/029 codes, none is renamed): `unmerged` (no proof), `dirty`,
-`ignored-extras`, `locked-foreign`, `locked-stw` (decision), `unregistered` (information: no stw creation record), `current-worktree`, `primary-checkout`,
+`ignored-extras`, `locked-foreign`, `locked-stw` (decision, `lock-mismatch` only), `unregistered` (information: no stw creation record), `current-worktree`, `primary-checkout`,
 `protected`, `recently-active`, `registration-record-missing`, `registration-record-ambiguous`, `scope-not-authorized`, `base-ambiguous`, `base-missing`, `changed-ownership` (the registration no longer binds the worktree: now only for a
 real identity change, see below), `registration-moved`, `lock-mismatch`, `branch-attached-elsewhere`, `retirement-file-limit`,
 `retirement-unrecorded-entry`, `retirement-sibling-refused`, `git-tree-refused`, `evidence-incomplete`, `state-dir-unsafe`; `workspace-not-found` (no workspace discovered and no `--workspace`: usage error, exit 2) and the notice `workspace-members-none` (only the workspace repository is analysed).
@@ -214,7 +214,8 @@ real identity change, see below), `registration-moved`, `lock-mismatch`, `branch
 | Completed task worktree: exact `stw:<task>` lock, matching creation record in a known store, clean, branch integrated (every `stw workspace apply` worktree is locked this way, so this is the normal owned case) | `safe` | remove registration + files; delete the branch iff it is a proven-integrated local branch in the same plan |
 | Same, but branch not integrated | `retain` `unmerged` | none; report the ahead commits count and the closest evidence (for example "3 commits ahead, not in origin/main") |
 | Dirty or has untracked/ignored extras the stored tree does not hold | `retain` `dirty` or `ignored-extras` | none |
-| Lock in the `stw:<task>` format, but no record (`registration-record-missing`) or a mismatching record (`lock-mismatch`) | `decision` `locked-stw` | only through the legacy completion of Spec 029 (exact path, declared complete by the human's explicit choice); no `git worktree unlock --force` of a lock that is not ours; human mode only |
+| Lock in the `stw:<task>` format, no creation record in any known store (usually a wrong or missing `--state-dir`) | `retain` `registration-record-missing`, hint `pass the --state-dir that created it` | none; no deletion path is offered |
+| Lock in the `stw:<task>` format, a record exists but does not match (`lock-mismatch`) | `decision` `locked-stw` | only through the legacy completion of Spec 029 (exact path, declared complete by the human's explicit choice); no `git worktree unlock --force` of a lock that is not ours; human mode only |
 | Locked with any other lock | `retain` `locked-foreign` | none |
 | Worktree of another owner or created by another tool (no stw registration), proven integrated, clean, unlocked, not recently active | `safe`, `scope` `other` or `unknown`, evidence `no-work` when it has no commit of its own | human mode: shown, never preselected, removable only by explicit choice; removal of an unregistered worktree uses the Spec 029 legacy completion (exact path, declared complete, cooperative); agent mode: not shown and not plannable |
 | The same, but dirty, unmerged or locked by another | `retain` | none |
@@ -465,7 +466,7 @@ Each has a recommended default; the foreman decides.
 3. **Base source.** Recommended: remote symbolic HEAD only in v1, workspace config (`.stw/tidy.toml`, key `base` per repository) as a follow-up if a
    repository lacks a symbolic HEAD. Alternative: ship the config now.
 4. **State directory default location.** Superseded: the shared default is `${XDG_STATE_HOME:-~/.local/state}/stw/workspace` for `stw workspace` and `stw tidy`. Alternative: inside the workspace repository's `.stw/` (rejected: inside a repository).
-5. **`locked-stw` as `decision`.** Now only for an stw-format lock without a (matching) record. Recommended: selectable in human mode through the legacy completion with a second confirmation. Alternative: always `retain`.
+5. **`locked-stw` as `decision`.** Only for `lock-mismatch` (a record exists but does not match); a missing record is `retain` `registration-record-missing`. Recommended: selectable in human mode through the legacy completion with a second confirmation. Alternative: always `retain`.
 6. **Plan set versus single plans.** Recommended: plan set of independent sub-plans (keeps the Spec 029 one-worktree rule). Alternative: lift the rule to batch plans (larger review surface).
 7. **Wizard flags `--only`, `--member`.** Recommended: keep, small. Alternative: omit in v1.
 8. **Tracking refs in the default analysis.** Recommended: only with `--online` (contract 3 needs it); offline wizard skips them with a notice.

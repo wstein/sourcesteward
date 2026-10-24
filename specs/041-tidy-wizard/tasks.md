@@ -30,11 +30,12 @@ repository or pushes the default branch. Tests use temporary repositories only.
 
 ## WP-3 Classification
 
-- [ ] T009 Failing fixtures for each case of the behaviour table: safe worktree, unmerged, dirty, ignored extras, locked-stw, locked-foreign, other owner, `/tmp/whr010-*` style worktree (visible to a human, owner `codex` by path convention, never preselected), stale registration, integrated branch, branch attached elsewhere, cwd worktree, primary checkout.
+- [x] T009 Failing fixtures for each case of the behaviour table: safe worktree, unmerged, dirty, ignored extras, locked-stw (`lock-mismatch`), registration-record-missing (retain), locked-foreign, other owner, `/tmp/whr010-*` style worktree (visible to a human, owner `codex` by path convention, never preselected), stale registration, integrated branch, branch attached elsewhere, cwd worktree, primary checkout.
 - [ ] T009a Failing tests: default human view lists all owners grouped with the owner column; no candidate of scope other or unknown is preselected; `--mine` and `--by-owner` filter; JSON carries `owner`, `owner_source`, `scope`.
-- [ ] T010a Failing tests: other/unknown worktree with recent mtime is `retain recently-active`; old and commitless carries `no-work`; a fresh `/tmp/whr*` at the base commit is never `safe`.
-- [ ] T010 Failing tests: no `retain` or `foreign` candidate carries an effect; ids stable; order permutation-invariant; an erroring repository is reported and the rest survives; bounds (4096 candidates, evidence 512 bytes).
-- [ ] T011 Implement the classifier over the existing read-only evidence, repositories through `internal/fanout` width 4 (or sequential behind a seam if Spec 040 is not merged); jj bookmarks as in Spec 011.
+- [x] T010a Failing tests: other/unknown worktree with recent mtime is `retain recently-active`; old and commitless carries `no-work`; a fresh `/tmp/whr*` at the base commit is never `safe`.
+- [x] T010 Failing tests: no `retain` or `foreign` candidate carries an effect; ids stable; order permutation-invariant; an erroring repository is reported and the rest survives; bounds (4096 candidates, evidence 512 bytes).
+- [x] T011 Implement the classifier as a pure function over a facts interface, repositories sequential behind a one-line seam (Spec 040 `internal/fanout` is not merged).
+- [ ] T011a Adapter from the existing `internal/workspace` read-only evidence to the facts interface (second pull request, stacked on the classifier); jj bookmarks as in Spec 011; repositories through `internal/fanout` width 4 once Spec 040 is merged.
 
 ## WP-4 Plan set and apply
 

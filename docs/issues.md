@@ -97,6 +97,12 @@ per-repository list, because search lags the index.
 
 ## Reading and failures
 
+**`pulls_dropped`.** The GitHub issues list returns pull requests as well, marked by a `pull_request` key. `stw` drops these
+entries and `repos[].pulls_dropped` (and `pulls_dropped` in the `issues` data of [`stw status`](status.md)) is how many it
+dropped from the pages it read. It is information only: not an error and not a lost issue. It is not a pull request
+report: the open pull requests of the repository are the `pulls` source of `stw status` and `stw pulls`. `open` and every count are issues only and exclude the dropped entries.
+It is `0` for a repository with issues disabled and null when the repository was not read.
+
 Per repository `ceil((open issues + open pull requests) / 100)` list reads of 100 entries (the endpoint returns pull requests
 too; entries with a `pull_request` key are dropped and counted in `repos[].pulls_dropped`), at most 10 pages, plus one `user` read
 per run. There is no per-issue read. Repositories are read sequentially, four at a time, with 30 s per request and 1 MiB per page.
