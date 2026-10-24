@@ -365,8 +365,9 @@ another task or path is a lock mismatch, none (or a lookup that gives neither a 
 **per kind**: a worktree or a branch is proven by `ancestor`, `patch-id`, `merge-noop` or `no-net-change` (or none), a remote-tracking reference by `github-branch-absent` (or none); a word of another kind, an unknown word, or none
 for a finished observation of a linked worktree is `Incomplete` `unknown-proof`. The primary checkout and a registration without directory need no proof. A tracking reference keeps the reason the tracking evidence gave
 (`remote-source-present`, a protection such as `workspace-used`) as its retain reason, and its owner convention is matched on the branch part of `refs/remotes/<remote>/<branch>`. A repository with a skip reason is not
-observed. The observation's `TrackingSkipped` and `Limitations` travel as the notices of the repository (`RepoResult.Notices`, at most 8, each at most 512 bytes), which the overview shows. Repositories are analysed one after the
-other behind the one-line seam of `Classify`; the width 4 of `internal/fanout` waits for Spec 040 (T011a4). An observation error of the repository as a whole is returned and reported as `error` for that repository only.
+observed. The observation's `TrackingSkipped` and `Limitations` travel as the notices of the repository (`RepoResult.Notices`, at most 8, each at most 512 bytes), which the overview shows. Repositories are analysed at most four at a time
+through `internal/fanout` (T011a4); each result goes to the slot of its repository, so the output does not depend on the completion order. If the context ends, repositories that were never started are
+reported as `error` rows carrying the context error with an empty notices array and no candidates; a run cancelled this way is not a verdict. An observation error of the repository as a whole is returned and reported as `error` for that repository only.
 
 ## Scope of ownership is a view
 
