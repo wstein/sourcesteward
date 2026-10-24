@@ -156,3 +156,82 @@ func TestTidyOverviewSchemaAcceptsEveryProofTheClassifierEmits(t *testing.T) {
 		t.Error("an unknown proof was admitted")
 	}
 }
+
+// A schema never invents a bound the producer does not enforce: whatever render.JSON writes within
+// its own 4 MiB cap validates. These sizes are all reachable (STW_OWNER and the agent variable
+// prefixes are unbounded, a result can list any number of repositories and notices).
+func TestTidyOverviewSchemaAcceptsEverythingTheRendererCanWrite(t *testing.T) {
+	s := schemaAt(t, "v2", "tidy-overview")
+	cases := map[string]func(*render.Input){
+		"10k-character caller": func(in *render.Input) { in.Mode.Caller = strings.Repeat("c", 10000) },
+		"long caller source":   func(in *render.Input) { in.Mode.CallerSource = strings.Repeat("s", 5000) },
+		"100 markers": func(in *render.Input) {
+			in.Mode.Markers = nil
+			for i := 0; i < 100; i++ {
+				in.Mode.Markers = append(in.Mode.Markers, "CODEX_"+strings.Repeat("M", 300)+string(rune('A'+i%26))+strings.Repeat("x", i))
+			}
+		},
+		"100 by_owner entries": func(in *render.Input) {
+			in.Mode.ByOwner = nil
+			for i := 0; i < 100; i++ {
+				in.Mode.ByOwner = append(in.Mode.ByOwner, strings.Repeat("o", 300)+strings.Repeat("x", i))
+			}
+		},
+		"2000 repositories": func(in *render.Input) {
+			in.Result.Repositories = nil
+			for i := 0; i < 2000; i++ {
+				in.Result.Repositories = append(in.Result.Repositories, tidywizard.RepoResult{Name: "r" + strings.Repeat("x", i%7) + string(rune(0x4e00+i)), State: "analysed", Notices: []string{}})
+			}
+		},
+		"6000 notices": func(in *render.Input) {
+			in.Notices = nil
+			for i := 0; i < 6000; i++ {
+				in.Notices = append(in.Notices, "run notice "+strings.Repeat("n", i%5)+string(rune(0x4e00+i)))
+			}
+		},
+		"200 derived values": func(in *render.Input) {
+			in.Derived = nil
+			for i := 0; i < 200; i++ {
+				in.Derived = append(in.Derived, derive.Derived{Name: "d" + string(rune(0x4e00+i)), Value: "v", Source: "s"})
+			}
+		},
+		"long workspace": func(in *render.Input) { in.Workspace = "/" + strings.Repeat("w", 20000) },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			raw := overviewRaw(t, mutate)
+			if len(raw) > render.MaxDocumentBytes {
+				t.Fatalf("%d bytes", len(raw))
+			}
+			valid(t, s, raw)
+		})
+	}
+}
+
+// One valid document per value of every closed enum, taken from the constants of the code, so that a
+// word the classifier or the renderer can write cannot be missing from the schema.
+func TestTidyOverviewSchemaAcceptsEveryEnumValue(t *testing.T) {
+	s := schemaAt(t, "v2", "tidy-overview")
+	for _, kind := range []tidywizard.Kind{tidywizard.KindWorktree, tidywizard.KindBranch, tidywizard.KindTrackingRef, tidywizard.KindStaleWorktree} {
+		valid(t, s, overviewRaw(t, func(in *render.Input) { in.Result.Candidates[0].Kind = kind }))
+	}
+	for _, v := range []tidywizard.Verdict{tidywizard.VerdictSafe, tidywizard.VerdictRetain, tidywizard.VerdictDecision} {
+		valid(t, s, overviewRaw(t, func(in *render.Input) { in.Result.Candidates[0].Verdict = v }))
+	}
+	for _, src := range []owner.Source{owner.SourceTaskRecord, owner.SourcePathConvention, owner.SourceCommitAuthor, owner.SourceUnknown} {
+		valid(t, s, overviewRaw(t, func(in *render.Input) { in.Result.Candidates[0].OwnerSource = src }))
+	}
+	for _, sc := range []owner.Scope{owner.ScopeOwn, owner.ScopeOther, owner.ScopeUnknown} {
+		valid(t, s, overviewRaw(t, func(in *render.Input) { in.Result.Candidates[0].Scope = sc }))
+	}
+	for _, m := range []owner.Mode{owner.ModeHuman, owner.ModeAgent} {
+		valid(t, s, overviewRaw(t, func(in *render.Input) { in.Mode.Mode = m }))
+	}
+	for _, state := range []string{"analysed", "skipped", "error"} {
+		valid(t, s, overviewRaw(t, func(in *render.Input) { in.Result.Repositories[0].State = state }))
+	}
+	// A classifier row can carry every effect it plans: remove registration, files and the branch.
+	valid(t, s, overviewRaw(t, func(in *render.Input) {
+		in.Result.Candidates[0].Effects = []string{"remove-registration", "remove-files", "delete-branch:b", "delete-tracking-ref:r"}
+	}))
+}
