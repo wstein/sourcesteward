@@ -39,6 +39,12 @@ both HEADs; it does not refuse. `--json` carries these facts as `source_context`
 (`source_path`, `base_selector`, `base_commit`, `source_head`, `caller_directory`, `caller_checkout`,
 `caller_head`, `caller_differs`, `notice`) on plan results only.
 
+A successful plan ends with `Next: stw workspace apply --plan PLAN_ID --state-dir STATE --authorize`
+(`next_call` with `command` and `argv` in `--json`). It is text only (POSIX `sh` quoting; with a non-printable character in the state directory the text is withheld and `next_call.argv` of `--json` is the call): nothing is applied until you run it, and running it is the
+authorization. A short base such as `origin/main` stays refused (`git-base-refused`), but the message now names the accepted forms
+(a full commit id, `HEAD` or a fully qualified ref such as `refs/remotes/origin/main`) and suggests the qualified spelling
+of the ref you gave when it exists.
+
 Git creates a detached worktree and no branch. Ordinary checkouts, initialized submodule
 checkouts and separate-Git-directory checkouts, including their linked worktrees, require
 canonical native identities and matching `.git`, `commondir` and registration backlinks.
