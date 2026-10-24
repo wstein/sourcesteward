@@ -207,8 +207,23 @@ class TieringTests(unittest.TestCase):
         text = job_text('conformance')
         self.assertIn('if: ' + self.CONDITION + '\n', text)
         self.assertIn('uses: ./.github/workflows/conformance.yml', text)
-        self.assertIn('lane: [minimum, current]', text)
+        self.assertIn(self.LANES, text)
+        self.assertNotIn('lane: [minimum, current]', text)
         self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', text)
+
+    LANES = ("lane: ${{ fromJSON(github.event_name == 'pull_request' "
+             "&& '[\"current\"]' || '[\"minimum\",\"current\"]') }}")
+
+    def test_pull_requests_run_only_the_current_lane(self):
+        # The minimum lane gates main after merge, the ci-full label and the race schedule.
+        match = re.search(r"lane: \$\{\{ fromJSON\((.+)\) \}\}", job_text('conformance'))
+        self.assertTrue(match)
+        python = match.group(1).replace('github.event_name', 'event')
+        python = python.replace('&&', ' and ').replace('||', ' or ')
+        import json
+        lanes = lambda event: json.loads(eval(python, {}, {'event': event}))
+        self.assertEqual(lanes('pull_request'), ['current'])
+        self.assertEqual(lanes('push'), ['minimum', 'current'])
 
     def test_check_job_always_runs(self):
         self.assertNotRegex(job_text('check'), r'(?m)^    if: (?!\$\{\{ !cancelled\(\) \}\}$)')
