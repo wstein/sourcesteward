@@ -576,4 +576,4 @@ specification decide the rest with the first CI figures.
 
 ## Spec 042 agent attribution (Draft, 2026-10-24)
 
-[The specification](../specs/042-agent-attribution/spec.md) and [tasks](../specs/042-agent-attribution/tasks.md) record the session that created a task (stw state only) and gate remote writes on it (`attribution-mismatch`, `attribution-unknown`); attribution, not a security boundary. Test-first code is in the same pull request; independent review of the exact head pending. No build, release, tag or push of the default branch was run.
+[The specification](../specs/042-agent-attribution/spec.md) and [tasks](../specs/042-agent-attribution/tasks.md) record the session that created a task (stw state only) and provide a remote-write gate (`attribution-mismatch`, `attribution-unknown`) that has no caller yet (T004), so nothing is enforced; attribution, not a security boundary. Test-first code is in the same pull request; independent review of the exact head pending. No build, release, tag or push of the default branch was run.

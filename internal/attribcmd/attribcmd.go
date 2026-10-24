@@ -30,8 +30,8 @@ func isCharDevice(f *os.File) bool {
 }
 
 // RemoteWriteGate refuses a remote write (a push, setting a PR ready) for a task whose creating
-// agent session differs from the current one. Every command that writes remotely for a task calls
-// it first. It is attribution for honest mix-ups, not a security boundary. A human run is always
+// agent session differs from the current one. No command calls it yet (Spec 042 T004), so nothing is
+// enforced today; every command that writes remotely for a task must call it first. It is attribution for honest mix-ups, not a security boundary. A human run is always
 // allowed; a task without a record or without a recorded session is not gated; an unreadable
 // record refuses an agent run. The caller wraps the typed refusal as a CLI runtime failure, exit status 1 like the other typed refusals.
 func RemoteWriteGate(read func(stateDir, task string) (workspace.TaskRecord, bool, error), stateDir, task string, current attribution.Origin) error {
