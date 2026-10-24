@@ -138,3 +138,21 @@ func TestTidyOverviewSchemaRefusesViolations(t *testing.T) {
 		})
 	}
 }
+
+// Every proof the classifier can emit is valid in a candidate row: the schema enum cannot drift
+// from the constants (AllProofs is tied to them by a test of its own).
+func TestTidyOverviewSchemaAcceptsEveryProofTheClassifierEmits(t *testing.T) {
+	s := schemaAt(t, "v2", "tidy-overview")
+	for _, proof := range tidywizard.AllProofs {
+		raw := overviewRaw(t, func(in *render.Input) { in.Result.Candidates[0].Proof = proof })
+		valid(t, s, raw)
+	}
+	if len(tidywizard.AllProofs) != 7 {
+		t.Errorf("%d proofs", len(tidywizard.AllProofs))
+	}
+	v := value(t, overviewRaw(t, nil)).(map[string]any)
+	v["candidates"].([]any)[0].(map[string]any)["proof"] = "trust-me"
+	if s.Validate(v) == nil {
+		t.Error("an unknown proof was admitted")
+	}
+}
