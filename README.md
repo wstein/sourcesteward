@@ -33,7 +33,7 @@ synchronization and native GitButler integration. Bounded recovery evidence is n
 **Release source work:** hidden `stw release check|plan|verify|record|build|dispatch`
 commands, bounded online evidence and pinned attestation verification have source
 implementations; workflows, bootstrap and release acceptance remain pending.
-See the [current matrix](docs/release.md) and [owner preparation](docs/releasing.md). No release readiness is implied.
+See the [current matrix](docs/release.md) and [owner preparation](docs/releasing.md).
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·
 [Specification](specs/001-project-foundation/spec.md) ·
@@ -41,7 +41,7 @@ See the [current matrix](docs/release.md) and [owner preparation](docs/releasing
 
 ## Install a release
 
-No release exists yet; the first one (`v0.1.0`) is planned by the
+The first release, `v0.1.0`, followed the
 [bootstrap release plan](specs/034-bootstrap-release/spec.md). Archives for linux and macOS
 (amd64 and arm64; Windows and the BSDs are not shipped) are published on the
 [releases page](https://github.com/wstein/sourcesteward/releases). From the directory holding a download
@@ -108,7 +108,6 @@ read-only bubblewrap on Linux or sandbox-exec on macOS; unavailable enforcement 
 without a Git fallback. Inspection reports stored identity, not file status or disk freshness.
 Git/version retain schema v1; native jj results use schema v2. See the
 [backend contract](docs/backends.md) and [jj inspection contract](specs/008-jj-inspection/contracts/inspect.md).
-No release binaries have been published.
 
 ## Develop with specifications
 
