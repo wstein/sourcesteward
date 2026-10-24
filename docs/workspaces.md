@@ -20,6 +20,12 @@ stw workspace handoff /path/to/task --state-dir /path/to/private-state --json
 stw workspace retire-plan /path/to/task --state-dir /path/to/private-state --json
 ```
 
+`--state-dir` may be omitted: `stw workspace` then uses `$STW_STATE_DIR`, else
+`${XDG_STATE_HOME:-~/.local/state}/stw/workspace`, created with mode 0700 and refused
+(`state-dir-unsafe`) unless it is user-owned, a real directory with mode exactly 0700,
+free of symlink components and outside every repository. An explicit `--state-dir` is
+used as given.
+
 Use a supported literal native base selector; jj revset programs are not accepted.
 Read the returned plan, native base identities, effects and recovery limits before apply.
 The generated plan ID identifies a stored immutable record. A plan alone never grants
