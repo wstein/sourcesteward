@@ -27,6 +27,8 @@ func TestFromEnvironKinds(t *testing.T) {
 		{"declared agent", []string{"STW_AGENT=1"}, []string{"STW_AGENT"}, false, "agent", ""},
 		{"agent without marker", nil, nil, false, "unknown", ""},
 		{"unsafe session id is not recorded", []string{"CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=a b\n"}, []string{"CLAUDECODE"}, false, "claude", ""},
+		{"128 byte session id is kept", []string{"CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=" + strings.Repeat("a", 128)}, []string{"CLAUDECODE"}, false, "claude", strings.Repeat("a", 128)},
+		{"129 byte session id is dropped", []string{"CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=" + strings.Repeat("a", 129)}, []string{"CLAUDECODE"}, false, "claude", ""},
 		{"human never records a session", []string{"CLAUDE_CODE_SESSION_ID=abc"}, nil, true, "human", ""},
 	}
 	for _, c := range cases {
