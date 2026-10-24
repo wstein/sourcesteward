@@ -20,7 +20,15 @@ const (
 	CodePlanSetInvalid        = "plan-set-invalid"
 	CodeScopeNotAuthorized    = "scope-not-authorized"
 	CodeConfirmationRefused   = "confirmation-refused"
+	// CodeBranchLegMismatch refuses the whole set before any effect: the branch the owner chose to
+	// delete is not the one the retirement plan would delete, or the choice is ambiguous.
+	CodeBranchLegMismatch = "branch-leg-mismatch"
+	// CodeBranchLegAbsent is the code of a skipped leg: the owner chose a branch deletion but the
+	// retirement plan has no leg (for example HEAD was attached to the base branch).
+	CodeBranchLegAbsent = "branch-leg-absent"
 )
+
+const replayAction = "replay-completed-retirement"
 
 // Outcome statuses of one sub-plan.
 const (
@@ -54,17 +62,77 @@ type LegApplier interface {
 	ApplyBranchLeg(ctx context.Context, step Step, retirement workspace.V3Result) (workspace.V3Result, bool)
 }
 
+// LegChecker is an optional interface of an Applier: before the first effect of a set it checks
+// that the branch deletion the owner chose with a worktree is the one the retirement plan's leg
+// would perform. A returned error refuses the whole set.
+type LegChecker interface {
+	CheckBranchLeg(ctx context.Context, step Step) error
+}
+
 // V3Applier is the Applier over workspace.ApplyTidyV3. LegOf and LegFunc default to
 // workspace.TidyV3BranchLeg and workspace.ApplyTidyV3BranchLeg.
 type V3Applier struct {
 	ApplyFunc func(context.Context, workspace.V3ApplyOptions) workspace.V3Result
 	LegOf     func(workspace.V3Plan) (workspace.V3BranchLeg, bool)
 	LegFunc   func(context.Context, workspace.V3BranchLeg, workspace.V3Result) workspace.V3Result
+	// ReadFunc reads a stored retirement plan and its completion; default
+	// workspace.ReadTidyV3Retirement.
+	ReadFunc func(ctx context.Context, stateDir, planID string) (workspace.V3StoredRetirement, error)
+}
+
+func (a V3Applier) read() func(context.Context, string, string) (workspace.V3StoredRetirement, error) {
+	if a.ReadFunc != nil {
+		return a.ReadFunc
+	}
+	return workspace.ReadTidyV3Retirement
+}
+
+// chosenBranches returns the branch names the items chose to delete (effect delete-branch:NAME).
+func chosenBranches(items []Item) []string {
+	var out []string
+	for _, i := range items {
+		for _, e := range i.Effects {
+			if name, ok := strings.CutPrefix(e, "delete-branch:"); ok {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
+}
+
+// CheckBranchLeg binds the leg to the chosen item: the retirement plan's leg must delete exactly
+// the branch the owner chose, and the owner must have chosen at most one. A plan without a leg
+// passes here; the missing leg is reported after the retirement.
+func (a V3Applier) CheckBranchLeg(ctx context.Context, s Step) error {
+	want := chosenBranches(s.Items)
+	if len(want) == 0 {
+		return nil
+	}
+	if len(want) != 1 {
+		return fmt.Errorf("worktree %q chose %d branch deletions; exactly one is allowed", s.SubPlan.Worktree, len(want))
+	}
+	rt, err := a.read()(ctx, s.SubPlan.StateDir, s.SubPlan.ID)
+	if err != nil {
+		return fmt.Errorf("cannot read the retirement plan %s to check its branch deletion: %w", s.SubPlan.ID, err)
+	}
+	legOf := a.LegOf
+	if legOf == nil {
+		legOf = workspace.TidyV3BranchLeg
+	}
+	if leg, ok := legOf(rt.Plan); ok && leg.Ref != "refs/heads/"+want[0] {
+		return fmt.Errorf("worktree %q: the owner chose to delete branch %q but the retirement plan would delete %q", s.SubPlan.Worktree, want[0], leg.Ref)
+	}
+	return nil
 }
 
 // ApplyBranchLeg derives the leg from the plan of the successful retirement result and applies it
 // through the existing leg apply, which re-observes the branch and keeps every Spec 011 protection.
 func (a V3Applier) ApplyBranchLeg(ctx context.Context, _ Step, retirement workspace.V3Result) (workspace.V3Result, bool) {
+	for _, act := range retirement.Actions {
+		if act.Name == replayAction {
+			return workspace.V3Result{Status: "ok", Actions: []workspace.ActionOutcome{{Name: "delete-branch", Status: "complete", Detail: "already deleted"}}}, true
+		}
+	}
 	if retirement.Plan == nil {
 		return workspace.V3Result{}, false
 	}
@@ -87,6 +155,16 @@ func (a V3Applier) ApplyBranchLeg(ctx context.Context, _ Step, retirement worksp
 // the declarations the set binds (owner and exact worktree); the protection set is empty, as the
 // planner made it.
 func (a V3Applier) Apply(ctx context.Context, s Step) workspace.V3Result {
+	// A retirement that an earlier run completed, together with the branch deletion the owner chose
+	// and that run also completed, is already applied. The ordinary apply would see the deleted
+	// branch as a changed fact; a branch that is still there, or back at another tip, takes the
+	// ordinary path and its stale detection.
+	if s.SubPlan.Kind == KindRetire && hasBranchEffect(s.Items) {
+		if rt, err := a.read()(ctx, s.SubPlan.StateDir, s.SubPlan.ID); err == nil && rt.Completed && rt.BranchGone {
+			plan := rt.Plan
+			return workspace.V3Result{Status: "ok", Plan: &plan, Actions: []workspace.ActionOutcome{{Name: replayAction, Status: "complete", Detail: "already applied; the branch was already deleted"}}}
+		}
+	}
 	o := workspace.V3ApplyOptions{StateDir: s.SubPlan.StateDir, PlanID: s.SubPlan.ID, Authorize: true, ProtectWorktrees: []string{}}
 	switch {
 	case s.SubPlan.Kind == KindTracking:
@@ -215,6 +293,22 @@ func applySteps(ctx context.Context, set Set, applier Applier) ApplyResult {
 	for _, i := range set.Items {
 		byID[i.ID] = i
 	}
+	if lc, ok := applier.(LegChecker); ok {
+		for _, sp := range set.Ordered() {
+			if sp.Kind != KindRetire {
+				continue
+			}
+			step := Step{SubPlan: sp}
+			for _, id := range sp.Items {
+				step.Items = append(step.Items, byID[id])
+			}
+			if hasBranchEffect(step.Items) {
+				if err := lc.CheckBranchLeg(ctx, step); err != nil {
+					return refused(set.PlanID, CodeBranchLegMismatch, "%v", err)
+				}
+			}
+		}
+	}
 	res := ApplyResult{SchemaVersion: 1, Command: "tidy-apply-set", PlanID: set.PlanID, Outcomes: []Outcome{}}
 	applied := 0
 	for _, sp := range set.Ordered() {
@@ -297,6 +391,9 @@ func branchLegOutcome(ctx context.Context, applier Applier, step Step, sp SubPla
 	}
 	o := Outcome{SubPlan: sp.ID, Repo: sp.Repo, Kind: KindBranchLeg, Worktree: sp.Worktree}
 	switch {
+	case retire.Status == StatusSkipped && retire.Code == "cancelled":
+		o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before the retirement this branch deletion depends on"
+		return o, true
 	case retire.Status != StatusApplied:
 		o.Status, o.Code, o.Message = StatusSkipped, "retirement-not-applied", "the retirement this branch deletion depends on did not succeed; the branch was kept"
 		return o, true
@@ -306,7 +403,8 @@ func branchLegOutcome(ctx context.Context, applier Applier, step Step, sp SubPla
 	}
 	r, has := la.ApplyBranchLeg(ctx, step, result)
 	if !has {
-		return Outcome{}, false
+		o.Status, o.Code, o.Message = StatusSkipped, CodeBranchLegAbsent, "the retirement plan has no branch deletion for the branch the owner chose; the branch was kept"
+		return o, true
 	}
 	if r.Status == "ok" {
 		o.Status = StatusApplied
