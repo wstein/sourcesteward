@@ -115,6 +115,9 @@ func Sync(ctx context.Context, o Options) Result {
 	}
 	if s.journaled {
 		r.RunID = ptr(runID)
+		for _, j := range s.journals {
+			j.retain(ctx)
+		}
 	}
 	for _, it := range r.Repos {
 		r.Summary.ByResult[it.Result]++
