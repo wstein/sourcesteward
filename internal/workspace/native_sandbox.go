@@ -182,6 +182,9 @@ func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string
 		return nil, errNativeSandboxUnavailable
 	}
 	c := exec.CommandContext(ctx, sandbox, argv...)
+	if nativeUnsandboxed {
+		c = exec.CommandContext(ctx, bin, args...)
+	}
 	c.Dir = cwd
 	c.Env = sandboxEnvironment(bin)
 	if session != nil {
@@ -190,6 +193,11 @@ func prepareSandboxed(ctx context.Context, bin string, args []string, cwd string
 	c.WaitDelay = time.Second
 	return c, nil
 }
+
+// nativeUnsandboxed runs native commands directly, with the same arguments, environment and
+// directory. Only tests set it, to prove that an operation writes nothing by itself: the sandbox
+// mounts the file system read-only and would hide a write of the command.
+var nativeUnsandboxed bool
 
 func runSandboxed(ctx context.Context, bin string, args []string, cwd string, writeRoots, readOnlyRoots []string) (string, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
