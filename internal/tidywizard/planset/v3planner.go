@@ -195,12 +195,12 @@ func (p V3Planner) Preflight(s SubSpec) error {
 }
 
 // Plan maps and plans the sub-plan through PlanTidyV3, which stores it as an ordinary v3 plan,
-// and returns its id. Every selected item must be deletable by the plan's own judgement: a plan
+// and returns its id and state directory. Every selected item must be deletable by the plan's own judgement: a plan
 // that retains one is not stored as a sub-plan of the set, its reason is returned.
-func (p V3Planner) Plan(ctx context.Context, s SubSpec) (string, error) {
+func (p V3Planner) Plan(ctx context.Context, s SubSpec) (Planned, error) {
 	o, err := p.Options(s)
 	if err != nil {
-		return "", err
+		return Planned{}, err
 	}
 	res := p.PlanFunc(ctx, o)
 	if res.Status != "ok" || res.Plan == nil {
@@ -208,12 +208,12 @@ func (p V3Planner) Plan(ctx context.Context, s SubSpec) (string, error) {
 		if len(res.Diagnostics) > 0 {
 			code, msg = res.Diagnostics[0].Code, res.Diagnostics[0].Message
 		}
-		return "", fmt.Errorf("planning %s sub-plan of %s: %s: %s", s.Kind, s.Repo, code, msg)
+		return Planned{}, fmt.Errorf("planning %s sub-plan of %s: %s: %s", s.Kind, s.Repo, code, msg)
 	}
 	if reason := notDeletable(res.Plan, s.Kind); reason != "" {
-		return "", unplannable(reason, "the %s plan of %s retains an item", s.Kind, s.Repo)
+		return Planned{}, unplannable(reason, "the %s plan of %s retains an item", s.Kind, s.Repo)
 	}
-	return res.Plan.PlanID, nil
+	return Planned{ID: res.Plan.PlanID, StateDir: o.StateDir}, nil
 }
 
 // notDeletable returns the reason of the first item the plan retains, or "".
