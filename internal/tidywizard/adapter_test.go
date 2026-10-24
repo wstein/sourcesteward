@@ -806,3 +806,17 @@ func TestAdapterStructLiteralIsSafeForJJ(t *testing.T) {
 		}
 	}
 }
+
+// A repository the preparation could not read is an error row with its reason, never skipped or analysed.
+func TestAdapterReportsARepositoryErrorOfThePreparation(t *testing.T) {
+	a := NewAdapter([]RepoSpec{{Name: "r", Path: "/ws/r", Error: "the references cannot be read: boom"}}, nil)
+	observed := false
+	a.Observe = func(context.Context, workspace.ObserveOptions) (workspace.WorktreeObservation, error) {
+		observed = true
+		return workspace.WorktreeObservation{}, nil
+	}
+	res := Classify(context.Background(), a, []string{"r"}, cfg())
+	if observed || len(res.Repositories) != 1 || res.Repositories[0].State != "error" || !strings.Contains(res.Repositories[0].Reason, "boom") {
+		t.Errorf("%+v observed=%v", res.Repositories, observed)
+	}
+}
