@@ -117,11 +117,11 @@ func observeGitWithPrimary(ctx context.Context, path, base string, primary *gitP
 	}
 	if !fullGitOID(base, id.ObjectFormat) {
 		if base != "HEAD" && !strings.HasPrefix(base, "refs/") || len(base) > 4096 || strings.ContainsAny(base, "\x00\r\n") {
-			return Snapshot{}, failure("git-base-refused", "base must be a full Git commit ID or a literal fully qualified reference")
+			return Snapshot{}, gitBaseRefused(ctx, bin, id, base, "base must be a full Git commit ID or a literal fully qualified reference")
 		}
 		if base != "HEAD" {
 			if _, err = gitRead(ctx, bin, id.WorkspaceRoot, "check-ref-format", base); err != nil {
-				return Snapshot{}, failure("git-base-refused", "base is not a valid literal fully qualified reference")
+				return Snapshot{}, gitBaseRefused(ctx, bin, id, base, "base is not a valid literal fully qualified reference")
 			}
 		}
 	}
@@ -558,4 +558,62 @@ func gitSafetyRule(key string) string {
 		}
 		return key
 	}
+}
+
+// gitBaseRefused is the git-base-refused failure with the accepted forms and, where the
+// repository can tell, concrete spellings of the base that was given. The code is unchanged;
+// only the message is longer. Lookups are read-only and best-effort: no hint is ever invented.
+func gitBaseRefused(ctx context.Context, bin string, id NativeIdentity, base, reason string) error {
+	var m strings.Builder
+	m.WriteString(reason)
+	m.WriteString(". Accepted forms: a full commit id (")
+	if id.ObjectFormat == "sha256" {
+		m.WriteString("64")
+	} else {
+		m.WriteString("40")
+	}
+	m.WriteString(" hex digits), HEAD, or a fully qualified ref such as refs/remotes/origin/main or refs/heads/NAME.")
+	if validText(base) && !strings.ContainsAny(base, "\x00\r\n") && base != "" && len(base) <= 200 {
+		m.WriteString(" Given: " + strconv.Quote(base) + ".")
+		if hint := gitBaseHint(ctx, bin, id, base); hint != "" {
+			m.WriteString(" " + hint)
+		}
+	}
+	return failure("git-base-refused", m.String())
+}
+
+func gitBaseHint(ctx context.Context, bin string, id NativeIdentity, base string) string {
+	resolve := func(rev string) string {
+		out, err := gitRead(ctx, bin, id.WorkspaceRoot, "rev-parse", "--verify", "--quiet", "--end-of-options", rev+"^{commit}")
+		if out = strings.TrimSuffix(out, "\n"); err == nil && fullGitOID(out, id.ObjectFormat) {
+			return out
+		}
+		return ""
+	}
+	var hints []string
+	// An abbreviated commit id only if the commit it resolves to really starts with it;
+	// otherwise the text is a ref name that happens to be hexadecimal.
+	if strings.Trim(base, "0123456789abcdef") == "" && len(base) >= 4 {
+		if full := resolve(base); strings.HasPrefix(full, base) {
+			hints = append(hints, "An abbreviated commit id is not accepted; use the full commit id "+full+".")
+		}
+	}
+	var found []string
+	for _, ns := range []string{"refs/heads/", "refs/remotes/", "refs/tags/"} {
+		candidate := ns + base
+		if _, err := gitRead(ctx, bin, id.WorkspaceRoot, "check-ref-format", candidate); err != nil {
+			continue
+		}
+		if resolve(candidate) != "" {
+			found = append(found, candidate)
+		}
+	}
+	switch len(found) {
+	case 0:
+	case 1:
+		hints = append(hints, "Did you mean "+found[0]+"?")
+	default:
+		hints = append(hints, "Did you mean one of "+strings.Join(found, ", ")+"?")
+	}
+	return strings.Join(hints, " ")
 }
