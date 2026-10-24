@@ -43,9 +43,43 @@ type Applier interface {
 	Apply(ctx context.Context, step Step) workspace.V3Result
 }
 
-// V3Applier is the Applier over workspace.ApplyTidyV3.
+// KindBranchLeg is the kind of the outcome of a dependent branch leg. It is not a sub-plan kind:
+// the leg is derived from the stored retirement plan and adds nothing to the set.
+const KindBranchLeg SubKind = "branch-leg"
+
+// LegApplier is an optional interface of an Applier: after a successful retirement it applies the
+// dependent branch leg of the retirement plan (Spec 041 FR-025). It reports false when the plan
+// has no leg (for example HEAD was attached to the base branch).
+type LegApplier interface {
+	ApplyBranchLeg(ctx context.Context, step Step, retirement workspace.V3Result) (workspace.V3Result, bool)
+}
+
+// V3Applier is the Applier over workspace.ApplyTidyV3. LegOf and LegFunc default to
+// workspace.TidyV3BranchLeg and workspace.ApplyTidyV3BranchLeg.
 type V3Applier struct {
 	ApplyFunc func(context.Context, workspace.V3ApplyOptions) workspace.V3Result
+	LegOf     func(workspace.V3Plan) (workspace.V3BranchLeg, bool)
+	LegFunc   func(context.Context, workspace.V3BranchLeg, workspace.V3Result) workspace.V3Result
+}
+
+// ApplyBranchLeg derives the leg from the plan of the successful retirement result and applies it
+// through the existing leg apply, which re-observes the branch and keeps every Spec 011 protection.
+func (a V3Applier) ApplyBranchLeg(ctx context.Context, _ Step, retirement workspace.V3Result) (workspace.V3Result, bool) {
+	if retirement.Plan == nil {
+		return workspace.V3Result{}, false
+	}
+	legOf, run := a.LegOf, a.LegFunc
+	if legOf == nil {
+		legOf = workspace.TidyV3BranchLeg
+	}
+	if run == nil {
+		run = workspace.ApplyTidyV3BranchLeg
+	}
+	leg, ok := legOf(*retirement.Plan)
+	if !ok {
+		return workspace.V3Result{}, false
+	}
+	return run(ctx, leg, retirement), true
 }
 
 // Apply builds the apply options of the sub-plan kind and runs the existing apply. Authorization
@@ -185,14 +219,19 @@ func applySteps(ctx context.Context, set Set, applier Applier) ApplyResult {
 	applied := 0
 	for _, sp := range set.Ordered() {
 		o := Outcome{SubPlan: sp.ID, Repo: sp.Repo, Kind: sp.Kind, Worktree: sp.Worktree}
-		if err := ctx.Err(); err != nil {
-			o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before this sub-plan"
-			res.Outcomes = append(res.Outcomes, o)
-			continue
-		}
 		step := Step{SubPlan: sp}
 		for _, id := range sp.Items {
 			step.Items = append(step.Items, byID[id])
+		}
+		if err := ctx.Err(); err != nil {
+			o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before this sub-plan"
+			res.Outcomes = append(res.Outcomes, o)
+			if sp.Kind == KindRetire && hasBranchEffect(step.Items) {
+				if leg, ok := branchLegOutcome(ctx, applier, step, sp, o, workspace.V3Result{}); ok {
+					res.Outcomes = append(res.Outcomes, leg)
+				}
+			}
+			continue
 		}
 		r := applier.Apply(ctx, step)
 		if r.Status == "ok" {
@@ -202,6 +241,14 @@ func applySteps(ctx context.Context, set Set, applier Applier) ApplyResult {
 			o.Status, o.Code, o.Message = failureOf(r)
 		}
 		res.Outcomes = append(res.Outcomes, o)
+		if sp.Kind == KindRetire && hasBranchEffect(step.Items) {
+			if leg, ok := branchLegOutcome(ctx, applier, step, sp, o, r); ok {
+				if leg.Status == StatusApplied {
+					applied++
+				}
+				res.Outcomes = append(res.Outcomes, leg)
+			}
+		}
 	}
 	switch {
 	case applied == len(res.Outcomes):
@@ -226,4 +273,45 @@ func failureOf(r workspace.V3Result) (status, code, message string) {
 		return StatusStale, code, message
 	}
 	return StatusFailed, code, message
+}
+
+// hasBranchEffect reports whether the owner chose the deletion of the branch with the worktree.
+func hasBranchEffect(items []Item) bool {
+	for _, i := range items {
+		for _, e := range i.Effects {
+			if strings.HasPrefix(e, "delete-branch:") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// branchLegOutcome applies the dependent branch leg of a retirement that selected it. The leg runs
+// only after, and only if, the retirement was applied; otherwise (or after cancellation) it is
+// reported as skipped. It is not reported at all when the retirement plan has no leg.
+func branchLegOutcome(ctx context.Context, applier Applier, step Step, sp SubPlan, retire Outcome, result workspace.V3Result) (Outcome, bool) {
+	la, ok := applier.(LegApplier)
+	if !ok {
+		return Outcome{}, false
+	}
+	o := Outcome{SubPlan: sp.ID, Repo: sp.Repo, Kind: KindBranchLeg, Worktree: sp.Worktree}
+	switch {
+	case retire.Status != StatusApplied:
+		o.Status, o.Code, o.Message = StatusSkipped, "retirement-not-applied", "the retirement this branch deletion depends on did not succeed; the branch was kept"
+		return o, true
+	case ctx.Err() != nil:
+		o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before the branch deletion"
+		return o, true
+	}
+	r, has := la.ApplyBranchLeg(ctx, step, result)
+	if !has {
+		return Outcome{}, false
+	}
+	if r.Status == "ok" {
+		o.Status = StatusApplied
+	} else {
+		o.Status, o.Code, o.Message = failureOf(r)
+	}
+	return o, true
 }

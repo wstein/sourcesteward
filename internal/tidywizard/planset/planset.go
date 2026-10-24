@@ -72,6 +72,9 @@ type Item struct {
 	Path        string       `json:"path"`
 	Branch      string       `json:"branch"`
 	Task        string       `json:"task"`
+	// Effects are the effects the owner chose with the item (for example delete-branch:NAME for
+	// the dependent branch leg of a worktree retirement). They are bound to the plan id.
+	Effects []string `json:"effects"`
 }
 
 // key is the canonical JSON of the whole item, so that no stored field can change without
@@ -419,7 +422,7 @@ func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
 		set.Derived = []derive.Derived{}
 	}
 	for _, c := range chosen {
-		set.Items = append(set.Items, Item{ID: c.ID, Repo: c.Repo, Kind: string(c.Kind), Owner: c.Owner, OwnerSource: c.OwnerSource, Scope: c.Scope, Path: c.Path, Branch: c.Branch, Task: c.Task})
+		set.Items = append(set.Items, Item{ID: c.ID, Repo: c.Repo, Kind: string(c.Kind), Owner: c.Owner, OwnerSource: c.OwnerSource, Scope: c.Scope, Path: c.Path, Branch: c.Branch, Task: c.Task, Effects: append([]string{}, c.Effects...)})
 	}
 	if pre, ok := planner.(Preflight); ok {
 		for _, key := range order {
