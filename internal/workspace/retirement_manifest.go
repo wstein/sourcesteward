@@ -42,6 +42,15 @@ func retirementManifestEntriesDigest(entries []RetirementEntry) (string, error) 
 	}
 	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
+
+// The contract 2 manifest check reports an entry the stored tree does not hold and a missing
+// stored file as values (the content difference shares errRetirementStoredDiffers with contract 3),
+// so that a read-only observer can tell a dirty workspace from an unreadable one.
+var (
+	errRetirementV2UnknownPayload = errors.New("unknown physical retirement payload")
+	errRetirementV2StoredMissing  = errors.New("stored file is missing")
+)
+
 func observeRetirementManifest(ctx context.Context, path string, a retirementManifestAdmission) (RetirementManifest, error) {
 	policy, e := retirementPolicy(a.Backend, 2)
 	if e != nil {
@@ -100,12 +109,12 @@ func observeRetirementManifest(ctx context.Context, path string, a retirementMan
 	seen := map[string]bool{}
 	for _, entry := range m.Entries {
 		if !known[entry.Path] {
-			return RetirementManifest{}, errors.New("unknown physical retirement payload")
+			return RetirementManifest{}, errRetirementV2UnknownPayload
 		}
 		seen[entry.Path] = true
 		if f, ok := stored[entry.Path]; ok {
 			if entry.Kind != "regular" || entry.Digest != f.Digest || entry.Size != f.Size || entry.Executable != f.Executable {
-				return RetirementManifest{}, errors.New("stored content differs from physical disk")
+				return RetirementManifest{}, errRetirementStoredDiffers
 			}
 		} else if !metadata[entry.Path] && entry.Kind != "directory" {
 			return RetirementManifest{}, errors.New("unexpected physical file")
@@ -118,7 +127,7 @@ func observeRetirementManifest(ctx context.Context, path string, a retirementMan
 	}
 	for p := range stored {
 		if !seen[p] {
-			return RetirementManifest{}, errors.New("stored file is missing")
+			return RetirementManifest{}, errRetirementV2StoredMissing
 		}
 	}
 	return m, nil
