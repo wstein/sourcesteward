@@ -100,6 +100,9 @@ type Worktree struct {
 	AuthorHint           string
 	LastActivity         time.Time // newest of HEAD, index and tracked-file mtime
 	HasOwnCommit         bool
+	// Incomplete is the reason the observation of this worktree could not finish; the item is
+	// then retained as evidence-incomplete whatever the other facts say.
+	Incomplete string
 }
 
 // Branch holds the facts of one local branch or jj bookmark.
@@ -109,12 +112,14 @@ type Branch struct {
 	Proof      Proof
 	Ahead      int
 	AuthorHint string
+	Incomplete string // as Worktree.Incomplete
 }
 
 // TrackingRef holds the facts of one local remote-tracking reference.
 type TrackingRef struct {
-	Name  string
-	Proof Proof
+	Name       string
+	Proof      Proof
+	Incomplete string // as Worktree.Incomplete
 }
 
 // RepoFacts is everything the classifier reads about one repository. Skip is the reason code of a
@@ -259,7 +264,7 @@ func classifyRepo(f RepoFacts, cfg Config) []Candidate {
 	for _, w := range f.Worktrees {
 		c := classifyWorktree(f.Name, w, protected[w.Path], cfg)
 		if w.Branch != "" && c.Verdict == VerdictSafe && c.Kind == KindWorktree {
-			if b, ok := branches[w.Branch]; ok && !b.IsBase && proven(b.Proof) && attached[w.Branch] == 1 {
+			if b, ok := branches[w.Branch]; ok && !b.IsBase && b.Incomplete == "" && proven(b.Proof) && attached[w.Branch] == 1 {
 				c.Effects = append(c.Effects, "delete-branch:"+w.Branch)
 				deleted[w.Branch] = true
 			}
@@ -328,6 +333,8 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 	switch {
 	case protectedReason != "":
 		return c.retain(protectedReason, "")
+	case w.Incomplete != "":
+		return c.retain("evidence-incomplete", w.Incomplete)
 	case w.Lock == LockForeign:
 		return c.retain("locked-foreign", "locked by something other than stw")
 	case record == RecordMissing:
@@ -384,6 +391,8 @@ func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate 
 	c.Branch, c.Proof = b.Name, normalize(b.Proof)
 	c = c.withOwner(owner.Resolve(owner.Item{Branch: b.Name, AuthorHint: b.AuthorHint}, cfg.Caller, cfg.Agent))
 	switch {
+	case b.Incomplete != "":
+		return c.retain("evidence-incomplete", b.Incomplete)
 	case !proven(c.Proof):
 		return c.retain("unmerged", aheadEvidence(b.Ahead, b.Name))
 	case attached:
@@ -398,6 +407,9 @@ func classifyTrackingRef(repo string, r TrackingRef, cfg Config) Candidate {
 	c := newCandidate(repo, KindTrackingRef, r.Name)
 	c.Branch, c.Proof = r.Name, normalize(r.Proof)
 	c = c.withOwner(owner.Resolve(owner.Item{Branch: r.Name}, cfg.Caller, cfg.Agent))
+	if r.Incomplete != "" {
+		return c.retain("evidence-incomplete", r.Incomplete)
+	}
 	if !proven(c.Proof) {
 		return c.retain("unmerged", "not integrated into the base")
 	}

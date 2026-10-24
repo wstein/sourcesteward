@@ -523,3 +523,62 @@ func TestDuplicateRepositoryNamesAreAnalysedOnce(t *testing.T) {
 		t.Fatalf("duplicate names changed the result: %d vs %d candidates", len(one.Candidates), len(two.Candidates))
 	}
 }
+
+// An observation that could not finish is retained as evidence-incomplete for every owner scope
+// and carries no effect, whatever the other facts say.
+func TestIncompleteFactsAreRetainedForEveryScope(t *testing.T) {
+	t.Run("own worktree", func(t *testing.T) {
+		w := stwTree("a")
+		w.Incomplete = "deadline-exceeded"
+		c := only(t, repo([]Worktree{w}, nil), cfg())
+		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 || c.Scope != owner.ScopeOwn || !strings.Contains(c.Evidence, "deadline-exceeded") {
+			t.Fatalf("%+v", c)
+		}
+	})
+	t.Run("other worktree", func(t *testing.T) {
+		w := unregistered("/tmp/whr010-x", "")
+		w.Incomplete = "registration-mismatch"
+		c := only(t, repo([]Worktree{w}, nil), cfg())
+		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 {
+			t.Fatalf("%+v", c)
+		}
+	})
+	t.Run("lock mismatch is not selectable when incomplete", func(t *testing.T) {
+		w := stwTree("a")
+		w.Record, w.TaskOwner, w.Incomplete = RecordMismatch, "", "observation-failed"
+		if c := only(t, repo([]Worktree{w}, nil), cfg()); c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" {
+			t.Fatalf("%+v", c)
+		}
+	})
+	t.Run("primary and current worktree keep their reason", func(t *testing.T) {
+		w := stwTree("a")
+		w.Primary, w.Incomplete = true, "x"
+		if c := only(t, repo([]Worktree{w}, nil), cfg()); c.Reason != "primary-checkout" {
+			t.Fatalf("%+v", c)
+		}
+	})
+	t.Run("branch", func(t *testing.T) {
+		c := only(t, repo(nil, []Branch{{Name: "feat/x", Proof: ProofAncestor, Incomplete: "branch-limit"}}), cfg())
+		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 {
+			t.Fatalf("%+v", c)
+		}
+	})
+	t.Run("tracking reference", func(t *testing.T) {
+		c := only(t, RepoFacts{Name: "r", TrackingRefs: []TrackingRef{{Name: "origin/x", Proof: ProofAncestor, Incomplete: "hosting"}}}, cfg())
+		if c.Verdict != VerdictRetain || c.Reason != "evidence-incomplete" || len(c.Effects) != 0 {
+			t.Fatalf("%+v", c)
+		}
+	})
+	t.Run("an incomplete branch is not deleted by its safe worktree", func(t *testing.T) {
+		w := stwTree("a")
+		w.Branch = "feat/x"
+		got := classifyRepo(repo([]Worktree{w}, []Branch{{Name: "feat/x", Proof: ProofAncestor, Incomplete: "x"}}), cfg())
+		for _, c := range got {
+			for _, e := range c.Effects {
+				if strings.HasPrefix(e, "delete-branch") {
+					t.Fatalf("an incomplete branch got a delete effect: %+v", got)
+				}
+			}
+		}
+	})
+}
