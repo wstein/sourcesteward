@@ -274,7 +274,8 @@ func restoreEntry(ctx context.Context, e env, j *journal, k int) Repo {
 	if cur == en.OldOID {
 		return done(ResultAlreadyRestored)
 	}
-	if expected == "" || cur != expected {
+	// with no recorded tip (expected is empty, e.g. a rebase) cur, which is never empty here, cannot equal it
+	if cur != expected {
 		return changed("the branch moved since the run")
 	}
 	if sym, err := e.g(ctx, "symbolic-ref", "-q", en.Ref); err != nil || sym.Code != 1 {
