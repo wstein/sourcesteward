@@ -20,6 +20,9 @@ const (
 	CodePlanSetInvalid        = "plan-set-invalid"
 	CodeScopeNotAuthorized    = "scope-not-authorized"
 	CodeConfirmationRefused   = "confirmation-refused"
+	// CodeModeEvidenceInvalid refuses an apply whose mode evidence cannot be recorded in the
+	// journal (for example a caller label from STW_OWNER over 128 bytes or not UTF-8).
+	CodeModeEvidenceInvalid = "mode-evidence-invalid"
 	// CodeBranchLegMismatch refuses the whole set before any effect: the branch the owner chose to
 	// delete is not the one the retirement plan would delete, or the choice is ambiguous.
 	CodeBranchLegMismatch = "branch-leg-mismatch"
@@ -260,6 +263,9 @@ func Find(stateDirs []string, id string) (Set, error) {
 // re-checks its own evidence: a sub-plan that turned stale or failed is reported and the others
 // continue. A sub-plan that was already completed replays as a verified no-op of that apply.
 func Apply(ctx context.Context, req ApplyRequest) ApplyResult {
+	if err := workspace.ValidateV3RunMode(runMode(req.Mode)); err != nil {
+		return refused(req.PlanID, CodeModeEvidenceInvalid, "the mode evidence of this run cannot be recorded in the journal: %v Fix the environment (for example STW_OWNER) and retry.", err)
+	}
 	set, err := Find(req.StateDirs, req.PlanID)
 	switch {
 	case errors.Is(err, ErrNotFound):

@@ -199,3 +199,38 @@ func TestRetirementApplyRefusesAnInvalidRunModeFirst(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestValidateV3RunModeNamesTheFieldThatIsRefused(t *testing.T) {
+	good := runModeFixture()
+	if err := ValidateV3RunMode(good); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateV3RunMode(nil); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]struct {
+		mutate func(*V3RunMode)
+		field  string
+	}{
+		"mode":                {func(m *V3RunMode) { m.Mode = "root" }, "mode"},
+		"markers":             {func(m *V3RunMode) { m.Markers = make([]string, 33) }, "markers"},
+		"marker length":       {func(m *V3RunMode) { m.Markers = []string{strings.Repeat("A", 129)} }, "markers"},
+		"by_owner entry":      {func(m *V3RunMode) { m.ByOwner = []string{strings.Repeat("o", 129)} }, "by_owner"},
+		"by_owner":            {func(m *V3RunMode) { m.ByOwner = make([]string, 33) }, "by_owner"},
+		"caller too long":     {func(m *V3RunMode) { m.Caller = strings.Repeat("o", 129) }, "caller"},
+		"caller invalid utf8": {func(m *V3RunMode) { m.Caller = "\xff" }, "caller"},
+		"caller source":       {func(m *V3RunMode) { m.CallerSource = strings.Repeat("s", 65) }, "caller_source"},
+	}
+	for name, tc := range cases {
+		m := *good
+		m.Markers, m.ByOwner = append([]string{}, good.Markers...), append([]string{}, good.ByOwner...)
+		tc.mutate(&m)
+		err := ValidateV3RunMode(&m)
+		if err == nil || !strings.Contains(err.Error(), tc.field) {
+			t.Errorf("%s: %v must name %q", name, err, tc.field)
+		}
+		if validV3RunMode(&m) {
+			t.Errorf("%s: validV3RunMode must agree", name)
+		}
+	}
+}
