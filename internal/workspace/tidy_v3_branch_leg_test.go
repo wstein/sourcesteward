@@ -131,3 +131,45 @@ func TestTidyV3BranchLegRefusesWhatSpec011Protects(t *testing.T) {
 		})
 	}
 }
+
+func TestTidyV3BranchLegHonoursTheStoredProofPolicy(t *testing.T) {
+	w := ownedPositionFixtureWith(t, "rebase-whitespace")
+	w.Options.AcceptWhitespaceDifferences = true
+	_, leg, retirement := retireWithLeg(t, w)
+	if r := ApplyTidyV3BranchLeg(context.Background(), leg, retirement); r.Status != "ok" {
+		t.Fatalf("branch and worktree must be judged by the same policy: %+v", r.Diagnostics)
+	}
+	if gitFixture(t, w.Source, "for-each-ref", "refs/heads/b") != "" {
+		t.Fatal("branch not deleted")
+	}
+}
+
+func TestTidyV3BranchLegBindsTheRetirementItDependsOn(t *testing.T) {
+	t.Run("other plan", func(t *testing.T) {
+		w := ownedPositionFixture(t)
+		_, leg, retirement := retireWithLeg(t, w)
+		other := *retirement.Plan
+		other.PlanID = strings.Repeat("a", len(other.PlanID))
+		retirement.Plan = &other
+		r := ApplyTidyV3BranchLeg(context.Background(), leg, retirement)
+		if r.Status == "ok" || len(r.Actions) != 1 || r.Actions[0].Status != "skipped" {
+			t.Fatalf("result of another plan accepted: %+v", r)
+		}
+		requireBranchKept(t, w)
+	})
+	t.Run("worktree still present", func(t *testing.T) {
+		w := ownedPositionFixture(t)
+		planned := defaultTidyV3RetirementCoordinator().plan(context.Background(), w.Options)
+		leg, ok := TidyV3BranchLeg(*planned.Plan)
+		if !ok {
+			t.Fatal("no leg")
+		}
+		claimed := newV3Result("tidy-apply")
+		claimed.Status, claimed.Plan = "ok", planned.Plan
+		r := ApplyTidyV3BranchLeg(context.Background(), leg, claimed)
+		if r.Status == "ok" || len(r.Actions) != 1 || r.Actions[0].Status != "skipped" {
+			t.Fatalf("leg ran while the worktree exists: %+v", r)
+		}
+		requireBranchKept(t, w)
+	})
+}

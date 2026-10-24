@@ -26,11 +26,9 @@ func defaultTidyV3RetirementCoordinator() tidyV3RetirementCoordinator {
 	return tidyV3RetirementCoordinator{observe: observeTidyV3Retirement, openStore: openV3Store, pin: pinTidyV3Recovery, remove: runSandboxed, ownedRemove: gitRetirementOwnedNativeRemove, refs: defaultTidyV3RefsCoordinator()}
 }
 func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) (r V3Result) {
-	timeout := planObservationTimeout
-	if o.Online {
-		timeout += planOnlineTimeout
-	}
-	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, timeout))
+	// The forge-free proof phase of the integration proofs (60 s) is part of a
+	// retirement plan as it is of a local-reference plan.
+	ctx, cancel := context.WithTimeout(ctx, v3Timeout(ctx, v3ProofPlanTimeout(o)))
 	defer cancel()
 	budget := newTidyV3ProofBudget(false)
 	defer func() { retirementV3BudgetResult(&r, budget); r = boundV3Result(r) }()

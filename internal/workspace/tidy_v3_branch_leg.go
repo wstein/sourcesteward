@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"os"
 	"strings"
 )
 
@@ -18,6 +19,10 @@ type V3BranchLeg struct {
 	PlanID               string
 	SourcePath, StateDir string
 	Base, Ref, TipOID    string
+	// Destination is the retired worktree; Policy is the retirement's stored
+	// integration policy, so branch and worktree are judged alike.
+	Destination string
+	Policy      *V3ProofPolicy
 }
 
 // TidyV3BranchLeg returns the leg of an eligible retirement plan, or false when
@@ -28,7 +33,7 @@ func TidyV3BranchLeg(p V3Plan) (V3BranchLeg, bool) {
 	if r == nil || !v3RetirementEligible(*r) || r.Target.HeadRef == "" || tidyV3IsBaseBranch(p, r.Target.HeadRef) {
 		return V3BranchLeg{}, false
 	}
-	return V3BranchLeg{PlanID: p.PlanID, SourcePath: p.SourcePath, StateDir: p.StateDir, Base: p.Expected.BaseSelector, Ref: r.Target.HeadRef, TipOID: r.Target.CommitID}, true
+	return V3BranchLeg{PlanID: p.PlanID, SourcePath: p.SourcePath, StateDir: p.StateDir, Base: p.Expected.BaseSelector, Ref: r.Target.HeadRef, TipOID: r.Target.CommitID, Destination: r.Destination.Path, Policy: p.ProofPolicy}, true
 }
 
 func tidyV3IsBaseBranch(p V3Plan, ref string) bool {
@@ -42,12 +47,16 @@ func tidyV3IsBaseBranch(p V3Plan, ref string) bool {
 func ApplyTidyV3BranchLeg(ctx context.Context, leg V3BranchLeg, retirement V3Result) V3Result {
 	r := newV3Result("tidy-apply")
 	r.Backend = "git"
-	if retirement.Status != "ok" {
+	if _, gone := os.Lstat(leg.Destination); retirement.Status != "ok" || retirement.Plan == nil || retirement.Plan.PlanID != leg.PlanID || !os.IsNotExist(gone) {
 		r.Status = "refused"
 		r.Actions = []ActionOutcome{{Name: "delete-branch", Status: "skipped", Detail: "The retirement this branch depends on did not succeed; the branch " + leg.Ref + " was kept."}}
 		return r
 	}
-	planned := PlanTidyV3(ctx, V3PlanOptions{Path: leg.SourcePath, Base: leg.Base, StateDir: leg.StateDir, Refs: []string{leg.Ref}, ProtectWorktrees: []string{}})
+	o := V3PlanOptions{Path: leg.SourcePath, Base: leg.Base, StateDir: leg.StateDir, Refs: []string{leg.Ref}, ProtectWorktrees: []string{}}
+	if leg.Policy != nil {
+		o.IntegrationProofs, o.AcceptWhitespaceDifferences = leg.Policy.Kinds, leg.Policy.AcceptWhitespaceDifferences
+	}
+	planned := PlanTidyV3(ctx, o)
 	if planned.Status != "ok" || planned.Plan == nil {
 		return planned
 	}

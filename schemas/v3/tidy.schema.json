@@ -985,6 +985,46 @@
               "const": "github-merged-head"
             }
           }
+        },
+        {
+          "properties": {
+            "decision": {
+              "const": "delete"
+            },
+            "evidence": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/V3ProofEvidence"
+                },
+                {
+                  "properties": {
+                    "absence": {
+                      "type": "null"
+                    },
+                    "github": {
+                      "type": "null"
+                    },
+                    "integration": {
+                      "$ref": "#/$defs/V3IntegrationEvidence"
+                    },
+                    "native": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "integration"
+                  ]
+                }
+              ]
+            },
+            "proof": {
+              "enum": [
+                "patch-id",
+                "merge-noop",
+                "no-net-change"
+              ]
+            }
+          }
         }
       ],
       "properties": {
@@ -1021,6 +1061,9 @@
           "enum": [
             "none",
             "native-ancestry",
+            "patch-id",
+            "merge-noop",
+            "no-net-change",
             "github-merged-head",
             "github-branch-absent"
           ],
