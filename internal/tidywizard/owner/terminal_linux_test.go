@@ -6,8 +6,8 @@ package owner
 
 import (
 	"os"
-	"strconv"
 	"slices"
+	"strconv"
 	"testing"
 
 	"golang.org/x/sys/unix"
