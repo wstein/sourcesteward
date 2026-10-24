@@ -31,7 +31,15 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	var contract string
 	var hints []string
 	var proofKinds string
+	var wizard tidyWizardOptions
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		layer, err := selectTidyPlanLayer(cmd, args, &wizard)
+		if err != nil {
+			return err
+		}
+		if layer == tidyWizard {
+			return errTidyWizardUnavailable()
+		}
 		if cmd.Flags().Changed("contract") {
 			if contract != "3" {
 				return fmt.Errorf("--contract accepts exactly 3")
@@ -78,12 +86,19 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	plan.Flags().StringVar(&options.RemoveFiles, "remove-files", "", "Separately select the exact owned absolute destination for filesystem removal")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
 	addTidyV3PlanFlags(plan, &contract, &v3, &hints, &proofKinds)
+	addTidyWizardPlanFlags(plan, &wizard)
 	var applyOptions workspace.TidyApplyOptions
 	var applyStructured bool
 	var applyContract string
 	var applyV3Options workspace.V3ApplyOptions
 	var applyYes bool
 	apply := &cobra.Command{Use: "apply [PLAN-ID]", Short: "Apply a stored plan set or an authorized stored reference or task retirement plan", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Flags().Changed("json") && cmd.Flags().Changed("human") {
+			return fmt.Errorf("--json and --human exclude each other")
+		}
+		if cmd.Flags().Changed("human") && len(args) == 0 {
+			return fmt.Errorf("--human belongs to the wizard layer of apply, which needs an explicit plan id")
+		}
 		if err := validateTidyPlanSetApply(cmd, args, applyYes); err != nil {
 			return err
 		}
@@ -118,6 +133,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	apply.Flags().StringVar(&applyOptions.StateDir, "state-dir", "", "Private store containing the reviewed plan and durable recovery journal")
 	apply.Flags().BoolVar(&applyOptions.Authorize, "authorize", false, "Authorize only the reviewed plan's declared recovery, reference or retirement effects")
 	apply.Flags().BoolVar(&applyYes, "yes", false, "Authorize the plan set named by the explicit plan id without a prompt; never honoured for other or unknown items")
+	apply.Flags().Bool("human", false, "Force text output (wizard layer, with a plan id); excludes --json")
 	apply.Flags().BoolVar(&applyStructured, "json", false, "Output one versioned tidy result, including operational refusals and partial effects")
 	addTidyV3ApplyFlags(apply, &applyContract, &applyV3Options)
 	trackTidyV3Singletons(plan)
