@@ -2,8 +2,8 @@
 
 Status: proposed future contract under the owner-approved scope of 2026-10-25.
 Implementation and conformance are pending. This amendment does not enable cleanup;
-the current wizard retains stale registrations. The schema and absence-witness decisions
-below require owner resolution before source work. Broad Git worktree prune stays excluded.
+the current wizard retains stale registrations. Only the frozen-schema/interface decision
+below requires owner resolution before source work; the absence predicate is defined here. Broad Git worktree prune stays excluded.
 
 ## Selection, ownership and effects
 
@@ -13,7 +13,8 @@ not a wildcard, directory scan, branch name, inferred basename or implicit selec
 More than one or no name refuses. A plan set MAY contain separately selected sub-plans,
 but each carries its own evidence, recovery and outcome; no batched native prune runs.
 
-The registration MUST have the exact stw-created lock and matching original completed
+The registration MUST have the exact raw lock reason `stw:<task-id>` derived from the
+matching original completed
 Spec 010 creation plan, task and journal from one unambiguous private store. Bind those
 records by digest, original owner/task/repository/destination and native registration
 identity. A lock that merely resembles stw's format, or a copied/mismatched record,
@@ -34,43 +35,52 @@ leg is inferred from a missing checkout. Git-only capability does not authorize 
 inside jj-managed or colocated jj workspaces, or GitButler-managed state. Native jj
 workspace forgetting is outside this amendment and must report its capability gap.
 
-## Missing versus moved or unmounted: Needs owner decision
+## Defined missing-directory predicate and residual risk
 
-ENOENT at the recorded destination, even with Git's prunable indication, proves only
-absence at that pathname. It cannot prove that the tree was deleted rather than moved,
-or that a mount holding it is available. A matching stw lock proves ownership, not deletion.
-A namespace scan, age threshold or owner acknowledgment does not close that proof gap.
+"Verifiably missing" means verified absence at the exact registered pathname under
+stable accessible filesystem evidence, not proof that the user's files were deleted.
+This contract defines the predicate; it is not another owner decision or a requirement
+for an unavailable authoritative deletion witness. All of the following MUST hold at
+plan time and freshly at each pre-effect validation boundary:
 
-A locked missing registration need not carry Git's native prunable indication. That
-indication MUST NOT be the new ownership/deletion proof or a required substitute for it.
-The future observer/classifier must carry the approved evidence independently.
+1. Starting from a trusted root descriptor, every ancestor through the immediate
+   parent exists as a real directory under no-follow opens. Bind each ancestor's
+   device/inode/type/owner/mode and the open descriptor identities. A missing ancestor,
+   symlink, or unreadable/unsearchable parent refuses; absence of a mount or parent
+   cannot be treated as absence of the selected directory.
+2. A descriptor-relative `lstat` of the selected final path component returns
+   precisely ENOENT. A present entry of any type refuses, including a dangling
+   symlink. EACCES, EPERM, ENOTDIR, EIO, ESTALE, cancellation and all other failures
+   are refusals, never missing evidence. The registered `<destination>/.git` backlink
+   is absent; no live backlink is removed or followed.
+3. The immediate parent's device equals the admitted repository common directory's
+   device. Bind filesystem/mount identity and availability for the common directory
+   and ancestor chain, including mount points. Recheck stable mount identity and
+   descriptor/path correspondence before effects. Changed devices, mount replacement,
+   unavailable/stale mounts or incomplete observation refuse. Cross-device destinations
+   are unsupported in this capability. Each supported Linux/macOS adapter MUST prove
+   its mount/identity observation in native fixtures; lack of that capability refuses,
+   without requiring a platform deletion event or a new owner answer.
+4. Exact registration pointers/lock/original creation records remain bound, and the
+   complete private recovery payload and history pin can be durably preserved before
+   removal. Git's native `prunable` marker is neither required nor deletion proof:
+   locked missing registrations do not normally carry it.
 
-Planning MUST bind the recorded destination's complete existing ancestor chain with
-no-follow identity/type/device/inode/owner/mode evidence, the nearest existing parent,
-and the platform mount/filesystem identity and availability evidence. Apply MUST freshly
-compare it at every pre-effect boundary. A missing ancestor, changed mount, inaccessible
-parent, symlink substitution or incomplete platform observation refuses. Stable ancestors
-and mounts still do not rule out a rename of the child elsewhere; report that limitation.
-
-Two implementation choices need owner decision before a deletable plan can exist:
-
-- Require an independently validated deletion witness tied to the original directory
-  identity and registration, with complete move/mount coverage on each supported platform.
-  The platform adapter and tests must demonstrate what makes that witness authoritative;
-  no such portable witness is established by this amendment. Unsupported platforms retain.
-- Ship only fail-closed detection/planning until such a witness is available; do not expose
-  an executable prune for arbitrary missing paths. This is the recommended initial gate.
-
-Weakening the requirement to pathname absence with an acknowledged moved-tree risk would
-be a separate owner-approved contract change, not implementation discretion. Neither a
-fresh sample nor exclusive stw store locking excludes arbitrary external filesystem writers.
+A rename/move elsewhere on the same available filesystem can satisfy this predicate.
+An unobserved mount transition or same-user ABA race can evade sampled identity checks.
+No directory scan or age/acknowledgment heuristic claims to distinguish these cases.
+The bounded effect removes administrative metadata only; it never deletes the moved
+checkout. A move can temporarily detach that checkout, which the private raw payload,
+history pin and explicit restore/repair procedure below make recoverable within the
+stated limits. Disclose this residual risk in the plan before authorization. No store
+lock excludes arbitrary external filesystem writers.
 
 ## Immutable plan and fresh validation
 
 The future plan MUST bind source/backend/common repository identity and admitted layout,
 source/current/primary protection identities, exact administrative registration name/path,
 registration parent and complete protected sibling set, recorded destination and ancestors,
-mount/deletion witness, exact raw lock reason, raw HEAD representation and resolved full
+defined absence/mount evidence, exact raw lock reason, raw HEAD representation and resolved full
 HEAD OID, index presence/absence and digest, and the complete admitted registration manifest.
 Bind original creation record digests, owner/task, native executable/configuration safety,
 selected effect, recovery location/digest/limits and policy. All evidence contributes to
@@ -182,8 +192,8 @@ contract/operation and explicit dispatch, preserving existing frozen bytes; (C) 
 current capability until that choice is made. Recommend B for a distinct recovery-bearing
 operation, with C as the implementation gate meanwhile. The owner must choose the exact
 version, enum spellings, expert selector and restore interface; none is reserved here.
-Published contracts remain unchanged under every option. Schema resolution and the absence
-witness gate both precede implementation; accepting this design alone does not decide them.
+Published contracts remain unchanged under every option. Schema/interface resolution precedes implementation; accepting this design does not
+choose a frozen representation. The absence predicate above is already defined.
 
 ## Outcomes and acceptance
 
@@ -193,8 +203,9 @@ stale state, cancellation, operational/output failure or partial/unknown effect;
 usage. Human and structured outcomes must agree and expose recovery availability and known
 partial effects. Missing evidence is never success. These are future acceptance requirements.
 
-Acceptance MUST include minimum/current Git on Linux/macOS, a supported witness fixture and
-unsupported-witness refusal, moved and unmounted lookalikes, all ownership/selection refusals,
+Acceptance MUST include Git 2.29 or later and current Git on Linux/macOS, successful
+absence-predicate fixtures and unsupported-observation refusal, moved and unmounted
+lookalikes, all ownership/selection refusals,
 metadata corruption/overflow/binary bytes, private-storage failure, concurrent changes at every
 boundary, interrupted removal/restore and completed replay. Compare all protected state and
 sentinels, including jj/colocated rejection with no raw Git mutation. New docs examples must
