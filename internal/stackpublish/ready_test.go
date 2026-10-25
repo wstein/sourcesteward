@@ -89,30 +89,31 @@ func TestEachUnknownFalseOrMovedSourceBlocksReady(t *testing.T) {
 			in.Checks.Required = append(in.Checks.Required, "")
 			in.Checks.Runs = append(in.Checks.Runs, CheckRun{"", sha('a'), "success"})
 		}, []string{"checks-unknown/checks-evidence-invalid"}},
-		"duplicate required context": {func(in *ReadyInput) { in.Checks.Required = append(in.Checks.Required, "check") }, []string{"checks-unknown/checks-evidence-invalid"}},
-		"run without a context":      {func(in *ReadyInput) { in.Checks.Runs = append(in.Checks.Runs, CheckRun{"", sha('a'), "success"}) }, []string{"checks-unknown/checks-evidence-invalid"}},
-		"too many required contexts": {func(in *ReadyInput) { in.Checks.Required = manyNames(1001) }, []string{"bound-exceeded/checks-too-many"}},
-		"too many runs":              {func(in *ReadyInput) { in.Checks.Runs = manyRuns(1001, sha('a')) }, []string{"bound-exceeded/checks-too-many"}},
-		"checks absent":              {func(in *ReadyInput) { in.Checks = nil }, []string{"checks-unknown/checks-absent"}},
-		"checks source not accepted": {func(in *ReadyInput) { in.Checks.Source = "ci-status-api" }, []string{"checks-unknown/checks-untrusted"}},
-		"checks sources incomplete":  {func(in *ReadyInput) { in.Checks.Complete = false }, []string{"checks-unknown/checks-incomplete"}},
-		"no required contexts":       {func(in *ReadyInput) { in.Checks.Required = nil }, []string{"checks-unknown/checks-no-required"}},
-		"required run missing":       {func(in *ReadyInput) { in.Checks.Runs = in.Checks.Runs[:1] }, []string{"checks-unknown/checks-run-missing"}},
-		"run reported for old head":  {func(in *ReadyInput) { in.Checks.Runs[1].HeadSHA = sha('9') }, []string{"checks-unknown/checks-stale-head"}},
-		"required run failed":        {func(in *ReadyInput) { in.Checks.Runs[1].Conclusion = "failure" }, []string{"checks-not-green/checks-red"}},
-		"required run pending":       {func(in *ReadyInput) { in.Checks.Runs[1].Conclusion = "" }, []string{"checks-not-green/checks-red"}},
-		"one green one red same ctx": {func(in *ReadyInput) { in.Checks.Runs = append(in.Checks.Runs, CheckRun{"suite", sha('a'), "failure"}) }, []string{"checks-not-green/checks-red"}},
-		"rebase absent":              {func(in *ReadyInput) { in.Rebase = nil }, []string{"rebaseable-unknown/rebaseable-absent"}},
-		"rebase null":                {func(in *ReadyInput) { in.Rebase.Rebaseable = TriUnknown }, []string{"rebaseable-unknown/rebaseable-null"}},
-		"rebase empty":               {func(in *ReadyInput) { in.Rebase.Rebaseable = "" }, []string{"rebaseable-unknown/rebaseable-null"}},
-		"rebase false":               {func(in *ReadyInput) { in.Rebase.Rebaseable = TriNo }, []string{"rebaseable-unknown/rebaseable-false"}},
-		"rebase for an old head":     {func(in *ReadyInput) { in.Rebase.EvaluatedHead = sha('9') }, []string{"rebaseable-unknown/rebaseable-stale"}},
-		"rebase for an old base":     {func(in *ReadyInput) { in.Rebase.EvaluatedBase = sha('9') }, []string{"rebaseable-unknown/rebaseable-stale"}},
-		"scope absent":               {func(in *ReadyInput) { in.Scope = nil }, []string{"scope-not-accepted/scope-absent"}},
-		"scope source not accepted":  {func(in *ReadyInput) { in.Scope.Source = "chat" }, []string{"scope-not-accepted/scope-untrusted"}},
-		"scope unknown":              {func(in *ReadyInput) { in.Scope.Accepted = TriUnknown }, []string{"scope-not-accepted/scope-unknown"}},
-		"scope not accepted":         {func(in *ReadyInput) { in.Scope.Accepted = TriNo }, []string{"scope-not-accepted/scope-not-accepted"}},
-		"unmet acceptance in scope":  {func(in *ReadyInput) { in.Scope.UnmetInScope = []string{"T030 test missing"} }, []string{"scope-not-accepted/scope-unmet-acceptance"}},
+		"empty required context only": {func(in *ReadyInput) { in.Checks.Required = append(in.Checks.Required, "") }, []string{"checks-unknown/checks-evidence-invalid"}},
+		"duplicate required context":  {func(in *ReadyInput) { in.Checks.Required = append(in.Checks.Required, "check") }, []string{"checks-unknown/checks-evidence-invalid"}},
+		"run without a context":       {func(in *ReadyInput) { in.Checks.Runs = append(in.Checks.Runs, CheckRun{"", sha('a'), "success"}) }, []string{"checks-unknown/checks-evidence-invalid"}},
+		"too many required contexts":  {func(in *ReadyInput) { in.Checks.Required = manyNames(1001) }, []string{"bound-exceeded/checks-too-many"}},
+		"too many runs":               {func(in *ReadyInput) { in.Checks.Runs = manyRuns(1001, sha('a')) }, []string{"bound-exceeded/checks-too-many"}},
+		"checks absent":               {func(in *ReadyInput) { in.Checks = nil }, []string{"checks-unknown/checks-absent"}},
+		"checks source not accepted":  {func(in *ReadyInput) { in.Checks.Source = "ci-status-api" }, []string{"checks-unknown/checks-untrusted"}},
+		"checks sources incomplete":   {func(in *ReadyInput) { in.Checks.Complete = false }, []string{"checks-unknown/checks-incomplete"}},
+		"no required contexts":        {func(in *ReadyInput) { in.Checks.Required = nil }, []string{"checks-unknown/checks-no-required"}},
+		"required run missing":        {func(in *ReadyInput) { in.Checks.Runs = in.Checks.Runs[:1] }, []string{"checks-unknown/checks-run-missing"}},
+		"run reported for old head":   {func(in *ReadyInput) { in.Checks.Runs[1].HeadSHA = sha('9') }, []string{"checks-unknown/checks-stale-head"}},
+		"required run failed":         {func(in *ReadyInput) { in.Checks.Runs[1].Conclusion = "failure" }, []string{"checks-not-green/checks-red"}},
+		"required run pending":        {func(in *ReadyInput) { in.Checks.Runs[1].Conclusion = "" }, []string{"checks-not-green/checks-red"}},
+		"one green one red same ctx":  {func(in *ReadyInput) { in.Checks.Runs = append(in.Checks.Runs, CheckRun{"suite", sha('a'), "failure"}) }, []string{"checks-not-green/checks-red"}},
+		"rebase absent":               {func(in *ReadyInput) { in.Rebase = nil }, []string{"rebaseable-unknown/rebaseable-absent"}},
+		"rebase null":                 {func(in *ReadyInput) { in.Rebase.Rebaseable = TriUnknown }, []string{"rebaseable-unknown/rebaseable-null"}},
+		"rebase empty":                {func(in *ReadyInput) { in.Rebase.Rebaseable = "" }, []string{"rebaseable-unknown/rebaseable-null"}},
+		"rebase false":                {func(in *ReadyInput) { in.Rebase.Rebaseable = TriNo }, []string{"rebaseable-unknown/rebaseable-false"}},
+		"rebase for an old head":      {func(in *ReadyInput) { in.Rebase.EvaluatedHead = sha('9') }, []string{"rebaseable-unknown/rebaseable-stale"}},
+		"rebase for an old base":      {func(in *ReadyInput) { in.Rebase.EvaluatedBase = sha('9') }, []string{"rebaseable-unknown/rebaseable-stale"}},
+		"scope absent":                {func(in *ReadyInput) { in.Scope = nil }, []string{"scope-not-accepted/scope-absent"}},
+		"scope source not accepted":   {func(in *ReadyInput) { in.Scope.Source = "chat" }, []string{"scope-not-accepted/scope-untrusted"}},
+		"scope unknown":               {func(in *ReadyInput) { in.Scope.Accepted = TriUnknown }, []string{"scope-not-accepted/scope-unknown"}},
+		"scope not accepted":          {func(in *ReadyInput) { in.Scope.Accepted = TriNo }, []string{"scope-not-accepted/scope-not-accepted"}},
+		"unmet acceptance in scope":   {func(in *ReadyInput) { in.Scope.UnmetInScope = []string{"T030 test missing"} }, []string{"scope-not-accepted/scope-unmet-acceptance"}},
 	}
 	for name, tc := range cases {
 		in := goodReady()
@@ -213,5 +214,20 @@ func TestEveryTierValueAgainstTheReadyFloor(t *testing.T) {
 		if want == "" && len(got) != 0 || want != "" && !reflect.DeepEqual(got, []string{want}) {
 			t.Errorf("tier %q: %v want %q", tier, got, want)
 		}
+	}
+}
+
+func TestIdsOutsideTheLowerCaseGrammarAreNeverTrusted(t *testing.T) {
+	in := goodReady()
+	in.Policy.Authors = append(in.Policy.Authors, "Claude-Author")
+	in.AuthorID = "Claude-Author"
+	if got := blockerList(EvaluateReady(in)); !reflect.DeepEqual(got, []string{"review-missing/review-not-independent"}) {
+		t.Fatalf("an author id outside the grammar: %v", got)
+	}
+	in = goodReady()
+	in.Policy.Reviewers = append(in.Policy.Reviewers, Reviewer{ID: "Opus-Reviewer", Tier: TierStrongest})
+	in.Review.ReviewerID = "Opus-Reviewer"
+	if got := blockerList(EvaluateReady(in)); !reflect.DeepEqual(got, []string{"review-missing/review-untrusted"}) {
+		t.Fatalf("a reviewer id outside the grammar: %v", got)
 	}
 }

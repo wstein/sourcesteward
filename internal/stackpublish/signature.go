@@ -32,7 +32,8 @@ type SigningEvidence struct {
 	FinalHead    string
 }
 
-// EvaluateSigning applies the signature policy to the actual candidate. It refuses a dropped source
+// EvaluateSigning applies the signature policy to the actual candidate; rangeIDs are the commits
+// of the publication range (needed when the remote requires signatures). It refuses a dropped source
 // signature, an unreadable or unmet policy, and an unavailable, unverified or inconsistent re-sign;
 // there is no unsigned fallback and no signer invocation. It returns every refusal found, in order.
 func EvaluateSigning(p WorkspacePolicy, ev *SigningEvidence, newHead string, rangeIDs []string) []Refusal {
@@ -59,7 +60,7 @@ func EvaluateSigning(p WorkspacePolicy, ev *SigningEvidence, newHead string, ran
 		}
 		return nil
 	case SigningSigned:
-		return signedChainRefusals(p, ev)
+		return signedChainRefusals(p, ev, rangeIDs)
 	}
 	return refuse("signing-mode-unknown")
 }
@@ -67,13 +68,16 @@ func EvaluateSigning(p WorkspacePolicy, ev *SigningEvidence, newHead string, ran
 // signedChainRefusals verifies the bottom-up old to unsigned to signed mapping: only the host
 // helper's verified signatures by allowed signers count, each child sits on the signed commit of
 // the link below it, and the last signed commit is the final head the review covers.
-func signedChainRefusals(p WorkspacePolicy, ev *SigningEvidence) []Refusal {
+func signedChainRefusals(p WorkspacePolicy, ev *SigningEvidence, rangeIDs []string) []Refusal {
 	refuse := func(detail string) []Refusal { return []Refusal{{ReasonSignaturePolicyUnknown, detail}} }
-	if p.Resign == nil {
+	if !p.Resign.usable() {
 		return refuse("signing-capability-unavailable")
 	}
 	if len(ev.Chain) == 0 {
 		return refuse("provenance-lost")
+	}
+	if len(ev.Chain) > DefaultLimits().IdentityCommits || len(ev.SourceSigned) > DefaultLimits().IdentityCommits {
+		return []Refusal{{ReasonBoundExceeded, "chain-too-long"}}
 	}
 	covered := map[string]bool{}
 	for i, l := range ev.Chain {
@@ -100,6 +104,22 @@ func signedChainRefusals(p WorkspacePolicy, ev *SigningEvidence) []Refusal {
 	if ev.Chain[len(ev.Chain)-1].Signed != ev.FinalHead {
 		return refuse("final-head-mismatch")
 	}
+	if p.RemoteSignatures == TriYes {
+		// A required signature covers every commit that is pushed: a parent outside the re-signed
+		// chain is unsigned (or signed by someone else) and would be rejected by the remote.
+		if len(rangeIDs) == 0 {
+			return refuse("range-unknown")
+		}
+		signed := map[string]bool{}
+		for _, l := range ev.Chain {
+			signed[l.Signed] = true
+		}
+		for _, id := range rangeIDs {
+			if !signed[id] {
+				return refuse("required-signature-unmet")
+			}
+		}
+	}
 	return nil
 }
 
@@ -116,7 +136,7 @@ type ResignHandoff struct {
 // ResignHandoffFor describes the optional local re-sign step; without a configured helper it is
 // unavailable (signing-capability-unavailable), never an unsigned fallback.
 func ResignHandoffFor(p WorkspacePolicy) ResignHandoff {
-	if !p.Loaded || p.Resign == nil || p.Resign.HelperID == "" || p.Resign.VerifierID == "" {
+	if !p.Loaded || !p.Resign.usable() {
 		return ResignHandoff{Detail: "signing-capability-unavailable"}
 	}
 	return ResignHandoff{Available: true, LocalFlag: "--re-sign", HelperID: p.Resign.HelperID, VerifierID: p.Resign.VerifierID}

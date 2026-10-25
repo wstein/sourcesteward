@@ -3,6 +3,7 @@
 package stackpublish
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -319,6 +320,7 @@ func TestMoreThanTwoHundredCommitsAreRefused(t *testing.T) {
 	in.Range.Commits = nil
 	for i := 0; i < 201; i++ {
 		c := commitOf('a', "docs/a.md")
+		c.ID = fmt.Sprintf("%040x", i+1)
 		in.Range.Commits = append(in.Range.Commits, c)
 	}
 	in.Range.Commits[200].ID = sha('f')
@@ -406,5 +408,21 @@ func TestAnAbsentOrInvalidMovedScopeNeverGetsTheCheapReviewRow(t *testing.T) {
 	r := EvaluatePublication(in)
 	if r.MinTier != TierStrongest || !r.ClassUnknown || !reflect.DeepEqual(pubBlockers(r), []string{"identity-mismatch/moved-scope-absent", "review-missing/review-tier-too-low"}) {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestRequiredRemoteSignaturesCoverTheWholePublicationRange(t *testing.T) {
+	in := codePublication()
+	in.Policy = helperPolicy()
+	in.Policy.RemoteSignatures = TriYes
+	in.Signing = signedEvidence()
+	in.RangeDiff = &RangeDiff{Complete: true, OldCount: 2, NewCount: 2, Rows: []string{"=", "="}}
+	in.Range.Commits = []Commit{commitOf('e', "internal/x.go"), commitOf('f', "internal/y.go")}
+	if r := EvaluatePublication(in); !r.Allowed() {
+		t.Fatalf("%v", pubBlockers(r))
+	}
+	in.Range.Commits = append([]Commit{commitOf('d', "internal/open-parent.go")}, in.Range.Commits...)
+	if got := pubBlockers(EvaluatePublication(in)); !reflect.DeepEqual(got, []string{"signature-policy-unknown/required-signature-unmet"}) {
+		t.Fatalf("an open parent outside the re-signed chain: %v", got)
 	}
 }
