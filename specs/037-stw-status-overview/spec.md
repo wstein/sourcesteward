@@ -155,13 +155,13 @@ risk to work in progress (`operation`, `conflicts`, `error`: `red`); `blue` is r
 | 20 | `pr-unread` | PR number | non-bot PR **past the detail budget** only (the `PastBudget` flag of the row) | blue | `stw pulls --repo OWNER/NAME` |
 | 21 | `local-stash` | `stash` | stash count > 0 (information in Spec 033) | blue | `git -C PATH stash list` |
 | 22 | `gitlink-ahead` | submodule path | checked-out commit ahead of the recorded gitlink | blue | `git -C ROOT add PATH` (effect `owner`) |
-| 23 | `branches-unmerged` | `branches` | `branches.not_integrated` > 0 | blue | `stw tidy plan PATH` |
-| 24 | `worktree-stale` | worktree path | linked worktree prunable, missing or locked | blue | `stw tidy plan PATH` |
+| 23 | `branches-unmerged` | `branches` | `branches.not_integrated` > 0 | blue | `stw tidy` |
+| 24 | `worktree-stale` | worktree path | linked worktree prunable, missing or locked | blue | `stw tidy` |
 | 25 | `pr-bot` | PR number | non-draft PR by a bot, whatever its group, including past the budget | violet | `stw pulls --repo OWNER/NAME --bots-only` |
 
-Note (Spec 041, 2026-10-25): rows 23 and 24 keep `stw tidy plan PATH`; the whole-workspace wizard `stw tidy` exists, and changing these hints to it is Spec 041 open question 11, not decided and not implemented.
+Decision (2026-10-25, owner, Spec 041 open question 11): rows 23 and 24 suggest `stw tidy`, the whole-workspace wizard of Spec 041, instead of `stw tidy plan PATH`. The hint takes no path, because the wizard discovers the workspace from the working directory and shows every repository. Effect stays `read`: the analysis changes nothing, and a plan set is stored and applied only after the person's own answers. The hint is a free string of the unpublished status schemas (`command`, at most 2048 characters); their frozen bytes do not change.
 
-Every suggested command exists in the current CLI (`stw status`, `stw sync [PATH] --plan`, `stw tidy plan [PATH]` of the `tidy`
+Every suggested command exists in the current CLI (`stw status`, `stw sync [PATH] --plan`, `stw tidy` of the `tidy`
 family, `stw pulls --repo`, `--bots-only`) or is a plain `gh` or `git` command; `stw status --offline` exists once this spec is
 implemented. WP-E re-checks every string against `internal/cli` in a test.
 
