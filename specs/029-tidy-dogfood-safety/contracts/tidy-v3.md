@@ -56,3 +56,13 @@ V3 uses `ok|refused|partial|error`, command `tidy-plan|tidy-apply`, and candidat
 ## Journal entry field added by Spec 031 T045
 
 `schema_version` stays 3. A local-reference journal entry may carry the optional `branch_evidence` object (`config_status`, `config`, `config_truncated`, `branch_oid`, `reflog_tip`): it is written once, together with the transition to `recovery-confirmed` and before the native deletion is prepared, never changes afterwards and is absent from journals written earlier, which remain valid and unchanged. Details and bounds: Spec 031 [restore contract](../../031-tidy-integration-proofs/contracts/restore.md#branch-configuration-t045-fr-048).
+
+## Proposed narrow registration prune boundary
+
+The future [Spec 011 narrow prune contract](../../011-workspace-reference-tidy/contracts/narrow-registration-prune.md)
+is separate from the modes above. Its one named stw-locked missing-directory target cannot
+satisfy live-checkout retirement by fabricated disk evidence. Reuse secure-store/journal and
+history-pin discipline only where valid; raw registration recovery needs an additional private
+payload and explicit restoration. The frozen plan/apply contract and strict readers remain
+unchanged pending owner schema/interface decision. Existing branch restore does not restore
+registrations. Absence/deletion witness support is a separate pre-implementation gate.

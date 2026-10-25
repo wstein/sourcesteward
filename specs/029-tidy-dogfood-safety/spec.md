@@ -171,3 +171,12 @@ Baseline source: `c0832055dbd3f7c89355a39489a14a85231b605e`. Original RC counts 
 - [GitHub branches](https://docs.github.com/en/rest/branches/branches#list-branches): complete unfiltered branch inventory, paginated read permissions.
 - [Git worktree](https://git-scm.com/docs/git-worktree) and [conditional reference updates](https://git-scm.com/docs/git-update-ref): native removal/locking and exact-reference update boundaries.
 - [Spec 010](../010-isolated-task-workspaces/spec.md), [Spec 011](../011-workspace-reference-tidy/spec.md), [hosting effects](../020-gh-jj-inspection/contracts/hosting.md), [inventory-only limits](../027-inventory-limits/contracts/inventory-limits.md).
+
+## Proposed narrow registration recovery extension (2026-10-25)
+
+Spec 011's [narrow prune contract](../011-workspace-reference-tidy/contracts/narrow-registration-prune.md)
+adds proposed future recovery of one named stw-locked missing-directory Git registration.
+Its raw private metadata payload is additional to committed-history pins; existing recovery
+limits and present-checkout retirement are unchanged. Broad prune stays excluded. Frozen
+unpublished schema changes and the absence-witness capability require owner decisions;
+no existing v3 plan/apply/restore capability is extended by this documentation amendment.
