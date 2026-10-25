@@ -48,7 +48,8 @@ Git must meet the project's existing minimum and support `worktree repair` (Git 
 or later); unsupported native versions refuse before any recovery/removal effect.
 
 The only destructive effect is removal of that selected administrative registration.
-No user-directory traversal/removal, branch deletion, checkout, index reset, existing-reference
+No recursive user-content traversal or user-directory removal, branch deletion, checkout,
+index reset, existing-reference
 rewrite, remote effect, hook, helper, broad prune or garbage collection is authorized.
 A later branch cleanup requires an independent fresh reference plan; no dependent branch
 leg is inferred from a missing checkout. Git-only capability does not authorize raw Git
