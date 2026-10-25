@@ -71,7 +71,7 @@ authorization, stale checks and a recorded recovery manifest.
 ## CLI surface
 
 ```
-stw tidy                      # wizard: find workspace, analyse, overview, ask, store the chosen plan set (never applies)
+stw tidy                      # wizard: find workspace, analyse, overview, ask, store the chosen plan set (applies only after an explicit y for that plan id)
 stw tidy plan [PATH]          # overview only; with no expert flag it is the wizard's analysis, non-interactive
 stw tidy apply [PLAN-ID]      # apply a stored plan set (or a legacy single plan) after explicit authorization
 stw tidy restore | history    # unchanged
@@ -166,7 +166,7 @@ a worktree are in the directory its creator passed to `stw workspace`, which has
   config (a follow-up if OQ3 defers the config; until then flags and environment), the shared default. Each is validated; an unsafe one is
   reported (`state-dir-unsafe`) and skipped, the run continues (exit 1 at the end). The plan store is the first valid store.
   Helper scripts that create worktrees (for example an agent's scratch store) are found by passing that directory once, for example
-  `stw tidy --state-dir "$STW_WT_STATE"` (implemented today on `stw tidy plan` only; bare `stw tidy` takes no flags until T019e); this is documented in `docs/tidy.md` and `docs/workspaces.md`.
+  `stw tidy --state-dir "$STW_WT_STATE"`; this is documented in `docs/tidy.md` and `docs/workspaces.md`.
 - **Record lookup.** For every linked worktree locked with the exact `stw:<task>` form, the creation record is looked up by task id in
   every known store. Found in one store: owned (`owner_source` `task-record`). Found in several with different content: `retain`
   `registration-record-ambiguous`. Found in none: `retain` `registration-record-missing` with the hint `pass the --state-dir that
@@ -611,7 +611,7 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 
 ## Implementation decisions (2026-10-25)
 
-Deliberate choices made while implementing WP-5 (pull requests #230, #232, #233 and #235). Where one differs from the text above it says so. One gap is not a decision: the wizard flag set on bare `stw tidy` (T019e) is not implemented yet.
+Deliberate choices made while implementing WP-5 (pull requests #230, #232, #233 and #235). Where one differs from the text above it says so. The wizard flag set on bare `stw tidy` (T019e, #245) is implemented.
 
 - **Git-only discovery.** The wizard layer finds its workspace through `stwsync.Discover`, which knows Git only. Outside a Git
   workspace `stw tidy` and `stw tidy plan` exit 2 with `workspace-not-found` and the hint to give `--workspace PATH` or use the expert
@@ -633,6 +633,14 @@ Deliberate choices made while implementing WP-5 (pull requests #230, #232, #233 
 - **Bare `stw tidy` and `stw tidy plan` become wizard forms.** The back-compat rule allows exactly this: `TestBareTidyStillPrintsHelp` and
   the `{"plan"}` row of `TestTidyUsageBeforeObservation` were replaced by wizard tests; `stw tidy --help` still prints help and a stray
   argument is still a usage error.
+- **Bare `stw tidy` refuses `--yes` and `--save` (#245).** Both are usage errors (exit 2) in every spelling, including `--yes=false` and
+  `--save=false`. `--yes` never authorizes a plan made in the same run (FR-032) and needs an explicit plan id, so it belongs to
+  `stw tidy apply PLAN-ID`; `--save` is `plan` only, because the wizard stores exactly the set you choose. The other wizard flags
+  (`--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`), the repeatable `--state-dir`, `--online`, `--timeout`,
+  `--json` and `--human` are accepted; `--json` with `--human`, an expert flag, a PATH and `--as` are usage errors.
+- **Bare `stw tidy --json` is the non-interactive overview (#245).** It prints the one `tidy-overview` document exactly as
+  `stw tidy plan --json` does: it never prompts, stores or applies, and has no `plan_id` (FR-040, US7). Applying from the wizard still
+  needs the explicit `y`.
 - **The wizard needs the real standard input.** `cmd/stw` hands `os.Stdin` to the command (`cli.RunWithStdin`); `Run` keeps an empty input
   for callers without a terminal. Without it the wizard would always see agent mode.
 - **The apply question.** After storing, the wizard asks `Apply it now? Run: stw tidy apply ID (or answer y here) [y/N]`. Only an explicit
