@@ -65,7 +65,7 @@ Items are ordered by priority, then category, then repository and subject, so th
 | blue | `pr-checks-pending`, `pr-unread`, `local-stash`, `gitlink-ahead`, `branches-unmerged`, `worktree-stale` |
 | violet | `pr-bot` |
 
-The suggested commands of `branches-unmerged` and `worktree-stale` stay `stw tidy plan PATH`; the whole-workspace [tidy wizard](tidy.md#the-tidy-wizard) (`stw tidy`) exists, and changing the hint to it is an open question (Spec 041 OQ11), not implemented.
+The suggested command of `branches-unmerged` and `worktree-stale` is `stw tidy`, the whole-workspace [tidy wizard](tidy.md#the-tidy-wizard) (Spec 041 OQ11, accepted 2026-10-25). It takes no path and has effect `read`: the analysis changes nothing until you answer its prompts.
 
 A draft pull request is never an item; a bot pull request is `pr-bot` whatever its group; a tag has exactly one item (a failed
 release run wins over "no release"). Release drafts are listed only when the token has write access to the repository,
