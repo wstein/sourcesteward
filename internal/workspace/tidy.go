@@ -395,7 +395,8 @@ func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string
 // native state plus the caller-declared extra roots. One registration is judged by a weaker but
 // still sound rule: Git reports it prunable (missing directory, not locked) and the leaf is
 // absent below a canonical real parent. Nothing can then be written there, and the lexical
-// state-overlap check on the unchanged path is exact. The registration stays in the native
+// state-overlap check on the unchanged path is exact on case-sensitive file systems (on a
+// case-insensitive one a case variant of the path is not recognized). The registration stays in the native
 // state, so snapshots, digests and the retained row keep it; it is never pruned. A locked,
 // replaced, aliased or parentless root keeps the refusal.
 func qualifyTidyV3Registrations(ctx context.Context, native V3NativeState, extra []string, state string) error {

@@ -767,5 +767,6 @@ retained row. The v3 plans now qualify such a registration by a narrower rule (`
 parent is a canonical real directory; the state directory is still checked against its path. Every other
 unavailable root keeps the old refusal. The registration stays in the native state of the plan, so the
 snapshot, the digest and the apply-time re-check cover it, and nothing prunes it (T012b is unchanged).
-Tests: `TestTidyV3StaleRegistration*` and `TestAbsentBelowCanonicalParent` in
+Tests: `TestTidyV3StaleRegistration*`, `TestAbsentBelowCanonicalParent`, `TestQualifyTidyV3RegistrationsRules` and
+`TestValidV3NativeStateStaleRegistrationRules` in
 `internal/workspace/tidy_v3_stale_registration_test.go`.
