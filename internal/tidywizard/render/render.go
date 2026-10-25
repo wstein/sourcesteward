@@ -25,7 +25,7 @@ import (
 const (
 	// MaxDocumentBytes bounds the JSON document (Spec 041 JSON section).
 	MaxDocumentBytes = 4 << 20
-	// MaxRowsPerRepository is the number of rows the text shows per repository.
+	// MaxRowsPerRepository is the number of rows the text shows per repository inside each owner group.
 	MaxRowsPerRepository = 10
 )
 
@@ -167,7 +167,7 @@ type NumberedCandidate struct {
 	Candidate tidywizard.Candidate
 }
 
-// Numbered numbers the safe and decision rows in display order (repository, then id), from 1.
+// Numbered numbers the safe and decision rows in the order of the text (owner group, then repository, then the order of the analysis), from 1.
 // Retain rows and the rows of repositories that were skipped or failed get no number.
 func Numbered(d Document) []NumberedCandidate {
 	out := []NumberedCandidate{}
@@ -181,8 +181,8 @@ func Numbered(d Document) []NumberedCandidate {
 
 // ownerGroup is the candidates of one owner heading, split by repository in the order of the document.
 type ownerGroup struct {
-	heading string
-	repos   []repoRows
+	label, suffix string // the heading is `owner LABEL SUFFIX`; the label is escaped alone
+	repos         []repoRows
 }
 
 type repoRows struct {
@@ -192,14 +192,14 @@ type repoRows struct {
 
 // ownerKey orders and names the owner group of a candidate (FR-006a): own scope first, then the
 // other owners sorted by label, `unknown` last.
-func ownerKey(c tidywizard.Candidate) (rank int, label, heading string) {
+func ownerKey(c tidywizard.Candidate) (rank int, label, suffix string) {
 	switch {
 	case c.Scope == owner.ScopeOwn && c.Owner != "":
-		return 0, c.Owner, "owner " + c.Owner + " (own)"
+		return 0, c.Owner, "(own)"
 	case c.Scope == owner.ScopeOther && c.Owner != "":
-		return 1, c.Owner, "owner " + c.Owner + " (other)"
+		return 1, c.Owner, "(other)"
 	}
-	return 2, "", "owner unknown"
+	return 2, "", ""
 }
 
 // ownerGroups groups the candidates of the repositories of the document by owner. The order does
@@ -217,11 +217,11 @@ func ownerGroups(d Document) []ownerGroup {
 			if c.Repo != r.Name {
 				continue
 			}
-			rank, label, heading := ownerKey(c)
+			rank, label, suffix := ownerKey(c)
 			k := key{rank, label}
 			g := byKey[k]
 			if g == nil {
-				g = &ownerGroup{heading: heading}
+				g = &ownerGroup{label: label, suffix: suffix}
 				byKey[k] = g
 				keys = append(keys, k)
 			}
@@ -300,7 +300,11 @@ func Text(d Document, _ TextOptions) string {
 		}
 	}
 	for _, g := range ownerGroups(d) {
-		fmt.Fprintf(&b, "\n%s\n", e(g.heading))
+		if g.suffix == "" {
+			b.WriteString("\nowner unknown\n")
+		} else {
+			fmt.Fprintf(&b, "\nowner %s %s\n", e(g.label), g.suffix)
+		}
 		for _, r := range g.repos {
 			fmt.Fprintf(&b, "  %s\n", e(r.name))
 			for i, c := range r.candidates {
