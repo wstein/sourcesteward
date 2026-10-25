@@ -38,6 +38,14 @@ selection, add proposed `--save --state-dir EXISTING_PRIVATE_DIR` to persist int
 that explicitly selected validated directory; no default store is accepted.
 `--save` without the directory is usage 2; empty selection never persists.
 Apply an unsaved result or missing id and verify refusal, with no implicit save.
+Supply current 012 nested `restack-advised` evidence and separately a published
+035 `restack-needed` event: discriminate producer/kind/version and never use the
+event's merge-commit destination as an unvalidated trunk/target. Supply 014
+preflight without full-H attribute-source pin/private-context proof and reject
+its profile evidence; a clean jj tip cannot bypass OQ-JJCONF. Supply 013 checkpoint
+metadata and native jj samples without a CAS; independent safety-copy retention
+and invoker working-copy exclusion never authorize publication.
+
 Supply valid 012 relationship evidence, then vary PR head SHA, head/base repository,
 ambiguous matches and stale local identities. Names alone never verify linkage.
 Default offline consumes bounded evidence without auth/HTTP/fetch/cache. A remote
