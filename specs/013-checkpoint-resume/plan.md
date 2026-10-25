@@ -76,7 +76,7 @@ Payload storage behind `internal/checkpoint/store.go` (proposed) handles selecte
 bytes, content digest, native mode/type, missing/deleted state and Git staged vs
 disk layers. Root-preserved committed objects and jj operation identities cannot
 stand in for uncaptured bytes. The store validates trusted ownership, no-follow
-paths and integrity; journal metadata references the payload receipt.
+paths and integrity; journal metadata references the payload receipt. Explicit 0700 directories/0600 files and external-location proof protect selected bytes independently of umask. Enforce a checkpoint cap and approved physical-store quota; separately planned/authorized/confirmed drop removes only exclusive owned bytes/roots with partial receipts, never automatic eviction or secure-erasure promises.
 
 Documentation lives only in `specs/013-checkpoint-resume/`: spec, plan, research,
 data model, three contracts, quickstart, tasks, checklist and analysis. No source,

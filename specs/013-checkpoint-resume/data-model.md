@@ -53,6 +53,26 @@ A missing payload makes the corresponding restore unavailable, even if native
 objects/operation ids remain. Deletions are explicit missing markers, not empty
 files. Metadata and selected-byte availability/retention are reported separately.
 
+Payloads may contain secrets: every private directory is explicitly `0700` and
+every file `0600`, verified with current-actor ownership independently of umask
+`0000`; existing foreign/group/world-accessible state refuses rather than being
+adopted. A no-follow canonical/native/layout proof must establish state-dir is
+outside every encountered repository and inventoried worktree; unknown discovery
+or containment refuses. No captured content enters logs or output. Per-checkpoint
+payload is at most 32 MiB; OQ-3 recommends a 1 GiB total physical-store quota that
+counts metadata, orphan/incomplete and in-flight staging bytes under a store lock.
+Quota admission is mandatory before writes; numeric total remains an owner choice.
+
+DropPlan binds one checkpoint id, selected exclusive payload/metadata/013 roots,
+complete dependencies, expected file identities/digests/OIDs, byte totals and
+confirmation id. Explicit plan plus authorization and exact checkpoint-id
+confirmation precede deletion. Pending mutation/dependency or unknown inventory
+refuses. DropOutcome records removed/remaining/uncertain files/roots/bytes;
+receipts survive until actual deletion is verified, followed by a bounded
+metadata-only tombstone. Partial deletion is inspectable/reconcilable, never
+reported as erased content merely because metadata disappeared. No secure erase,
+backup/native-object purge, automatic expiry or other feature's deletion is promised.
+
 ## ResumeComparison and RestorePlan
 
 ResumeComparison has checkpoint availability/integrity, saved/current native

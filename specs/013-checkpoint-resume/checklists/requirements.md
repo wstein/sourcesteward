@@ -16,7 +16,7 @@ future implementation tasks remain unchecked and product evidence is absent.
 - [x] Every FR and SC has its own task and literal test-idea row in analysis.md.
 - [x] Acceptance scenarios include unsupported, malformed, concurrent and interrupted outcomes.
 - [x] Default-none capture and explicit untracked/ignored selection are stated.
-- [x] Payload bytes, journal metadata and native retained objects have separate promises.
+- [x] Payload bytes, journal metadata and native retained objects have separate promises; explicit 0700/0600 external storage, quotas and exact confirmed drop protect the payload lifecycle.
 - [x] Native Git index/worktree and jj working-copy/change/operation semantics stay distinct.
 - [x] Expected-state/ownership/parent/descendant scope and separate authorization are explicit.
 - [x] Resume is offline/read-only; no helper/hook/prompt/network or automatic rollback is implied.

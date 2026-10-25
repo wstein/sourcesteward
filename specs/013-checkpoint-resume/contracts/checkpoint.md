@@ -14,7 +14,7 @@ confirmation. 013 remains noninteractive even without a terminal.
 
 | Input/output | Proposed 013 meaning and compatibility boundary |
 | --- | --- |
-| `--state-dir PRIVATE_DIR` | Required explicit private artifact-store selection in these examples, subject to OQ-3's location/ownership decision. Store plans, typed records and selected-payload receipts there through the reviewed seam; never treat the path as capture selection or authority. Resume only reads an existing store and never creates or repairs it. |
+| `--state-dir PRIVATE_DIR` | Required explicit private artifact-store selection outside every admitted or encountered repository/worktree, subject to OQ-3's location/quota decision and the mandatory containment/mode rules below. Store plans, typed records and selected-payload receipts there through the reviewed seam; never treat the path as capture selection or authority. Resume only reads an existing store and never creates or repairs it. |
 | `--plan PLAN_ID --authorize` | Both are required for the selected native capture/restore/undo effects; the id binds the exact reviewed plan, and authorization is explicit for that action. An authorization flag alone cannot select targets or advance a plan. Declared private planning writes remain the planning effect only. |
 | Default human text / `--json` | Proposed complete-result formats from one model, with no TTY requirement, prompt, editor or pager. `--json` selects one final versioned object; output format never changes authorization or native effects. |
 | `--online` | Inapplicable to this offline feature; the proposed parser rejects it as usage (exit 2), rather than broadening the operation. No network mode or implicit fetch is introduced. |
@@ -81,6 +81,64 @@ A crash between payload and receipt leaves owned orphan evidence for inspection,
 never automatic deletion or authority to restore. Capture does not clear dirty
 files or alter unrelated index entries. Future native effects require a reviewed
 capability/effects table before enablement; default is unsupported.
+
+## Private payload storage and explicit deletion
+
+Selected source bytes may contain secrets despite the deny set. Create private
+store/staging/checkpoint directories with explicit mode `0700` and all payload,
+manifest, plan and journal files with explicit mode `0600`; verify those modes
+and current-actor ownership independent of inherited umask, including `0000`.
+Refuse an existing foreign-owned or group/world-accessible store/file, including
+mode `0666`; do not silently chmod, adopt or follow it. Use no-follow handles and
+revalidate ownership/path identity before every write, rename, read or deletion.
+Never include captured content in logs, diagnostics, human output or JSON.
+
+`--state-dir` must be outside every repository/worktree relevant to its location
+proof, including native metadata and the target's linked-workspace inventory.
+Resolve canonical existing ancestors securely, run native Git/jj discovery at
+those ancestors and use complete native linked-workspace/layout evidence;
+reject a directory inside an encountered ordinary/bare/nested repository,
+colocated jj repository or linked worktree, even when ignored. Reject symlink,
+replacement, incomplete discovery or uncertain containment. This is a fail-closed
+native/layout proof, not a claim to discover every repository on the filesystem.
+No private state is written until the external-location proof succeeds.
+
+Retain the 32 MiB payload cap per checkpoint across every selected layer and
+invocation, not just per command. OQ-3 recommends a 1 GiB total physical-store
+quota including metadata, staging, incomplete/orphan payloads and retained records;
+reserve/count in-flight bytes under the reviewed store lock and refuse before
+any write would exceed it. Count all physical files, not deduplicated logical
+receipts. The exact quota remains an owner choice before store admission; no
+unbounded store or automatic eviction is admitted in the meantime.
+
+Proposed OQ-3/OQ-5 interface, not an implemented or approved command:
+
+```text
+stw checkpoint drop-plan --checkpoint CHECKPOINT_ID --state-dir PRIVATE_DIR [--json]
+stw checkpoint drop --plan DROP_PLAN_ID --state-dir PRIVATE_DIR --authorize --confirm-checkpoint CHECKPOINT_ID [--json]
+```
+
+Drop-plan selects one exact checkpoint and enumerates its owned payload files,
+metadata and 013 roots, dependencies, expected digests/OIDs and physical bytes.
+Apply requires that stored plan, `--authorize` and exact checkpoint-id confirmation;
+there is no prompt, wildcard/default selection or force bypass. Freshly verify
+ownership/modes/location, complete reference/dependency inventory and expected
+values. Refuse unresolved prepared mutations or another record's live receipt;
+only reconciled incomplete captures with no live dependency may be selected.
+Unlink only exclusive owned payloads and delete only exact 013 roots by expected-
+OID CAS; never traverse another feature's state or run native GC. No pre-drop
+byte backup is created that would defeat the explicit deletion request.
+
+Journal intent without payload content and preserve manifests/receipts until
+per-file/root deletion is verified. A crash or changed file/root reports partial
+with removed/remaining/uncertain files, roots and byte counts; retain sufficient
+metadata for inspection/retry and never claim bytes removed merely because a
+receipt was deleted. An already absent verified owned target can reconcile;
+replaced or unreadable targets refuse. Completion means the selected private
+payloads and exclusive roots are verified absent, with a bounded metadata-only
+tombstone. Unlinking is not secure erasure: backups, storage snapshots, retained
+native objects/history and prior external copies are outside this guarantee.
+No automatic expiry, GC or cross-feature cleanup is authorized.
 
 ## Bounds
 
