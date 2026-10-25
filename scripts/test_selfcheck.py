@@ -98,7 +98,13 @@ class GluedChecks(Repo):
     def test_identifiers_from_the_repository_stay_silent(self):
         weights = ROOT / 'scripts/ci-test-weights.json'
         import json
-        names = list(json.loads(weights.read_text()))
+
+        def keys(node):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    yield k
+                    yield from keys(v)
+        names = [k for k in keys(json.loads(weights.read_text())) if ' ' not in k]
         self.assertGreater(len(names), 20)
         extra = ['MDQ6VXNlcjExNjExNjA', 'SHA256SUMS', 'TestTidyV3ApplyRetries', 'TestTidyV4Apply',
                  'ipv4', 'HTTP2Server', 'schema_v2_ok', 'SCHEMA_VERSION1', 'VERSION2', 'ROWS3', 'k8s',
@@ -352,7 +358,7 @@ class CommitChecks(Repo):
         self.docs('fine\n')
         code, out, _ = self.check(owner=None, env={'GIT_CONFIG_GLOBAL': str(cfg)})
         self.assertEqual(code, 0, out)
-        self.assertIn('INFO identity: owner identity taken from git config: %s; pass --owner to pin it' % OWNER_STR, out)
+        self.assertIn('INFO identity: -: owner identity taken from git config: %s; pass --owner to pin it' % OWNER_STR, out)
         self.git('reset', '-q', '--hard', 'refs/remotes/origin/main')
         self.write('docs/a.md', 'fine\n')
         self.commit(who=('Else', 'e@example.invalid'))
@@ -374,7 +380,7 @@ class CommitChecks(Repo):
                     self.assertIn('FAIL identity', out)
                     self.assertIn('placeholder', out)
                 else:
-                    self.assertIn('INFO identity: skipped', out)
+                    self.assertIn('INFO identity: -: skipped', out)
 
     def test_explicit_owner_overrides_the_git_identity(self):
         cfg = Path(self.tmp.name) / 'else.gitconfig'

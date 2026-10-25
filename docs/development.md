@@ -269,18 +269,22 @@ The tool is read-only, uses only the Python standard library and is covered by
 
 It reads only the lines added by `BASE...HEAD` (file names and hunks are read with explicit git
 options, so host diff settings, spaces and non-ASCII characters in paths do not change the result)
-and fails on: words glued to numbers (`hidden015planner`, `Exit0`; code spans, fenced blocks, link
-targets, reference definitions and URLs are ignored, and a code span silences a false positive;
-hex tokens of seven or more characters, `sha256sum`, `base64url` and similar are accepted), an
-added blank line right after another one in Markdown, more than one `Source:` line outside fences
-in a `chartroom/notes/*.md` note, `git diff --check` errors, a claude.ai link or `Claude-Session`
-trailer in a commit message, and an author or committer that differs from the expected identity.
+and fails on: lowercase words glued to numbers in Markdown (`hidden015planner`, `Exit0`; identifiers
+such as CamelCase, snake_case, ALL_CAPS and base64-like tokens never match, JSON is not checked,
+code spans, fenced blocks, link targets, reference definitions and URLs are ignored, and a code
+span silences a false positive; hex tokens of seven or more characters, `sha256sum`, `base64url`
+and similar are accepted), an added blank line right after another one in Markdown, more than one
+`Source:` line outside fences in a `chartroom/notes/*.md` note, `git diff --check` errors, a
+claude.ai link or `Claude-Session` trailer in a commit message, and an author or committer that
+differs from the expected identity.
 
-The expected identity is `--owner 'NAME <EMAIL>'`, or else the current git identity
-(`user.name` and `user.email`, read only; the tool never writes git configuration). With neither,
-the identity check is skipped with an `INFO identity` line. A containing workspace may also
-require a `Co-Authored-By` trailer: `--require-trailer` fails any commit without one in its
-trailer block.
+The expected identity is `--owner 'NAME <EMAIL>'` (the reliable form), or else the current git
+identity (`user.name` and `user.email`, read only; the tool never writes git configuration). A git
+identity is printed on every run as `INFO identity: owner identity taken from git config`, and it
+FAILs when it looks like a placeholder (a name of two characters or fewer, or an email without a
+dotted domain), so a leaked throwaway identity does not become the expectation. With neither, the
+identity check is skipped with an `INFO identity` line. A containing workspace may also require a
+`Co-Authored-By` trailer: `--require-trailer` fails any commit without one in its trailer block.
 
 `INFO` lines never fail the run. `claims` lists each added doc line that names a `file:line`, an
 exit status or a `--flag`; `tick` flags an "N/M done" statement that differs from the ticked
