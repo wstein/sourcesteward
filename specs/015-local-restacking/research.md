@@ -102,8 +102,13 @@ not local or remote authorization. Native-stack management must not be raced.
 **Alternatives considered:** local mutation authorizes lease push; a local old
 head is treated as observed remote head; name matching or a closed PR proves
 integration; 015 executes owner resync/retarget/landing. All violate the boundary.
-OQ-7 retains settled 012 opt-in `--pull-requests` reads despite ambiguous strict
-no-network phrasing; 015 remains offline with supplied qualified evidence only.
+OQ-7 recommends retaining 012's offline default and explicit bounded
+`--pull-requests` proposal alongside qualified cached evidence, but that is not
+an owner-approved/settled network contract. [Spec 012 plan question 3](../012-stack-inspection/plan.md#open-questions-for-the-owner-recommendations)
+still recommends keep-opt-in and remains open. The recorded owner acceptance of
+`--after-fetch` in 012's analysis is a separate decision, not network approval.
+The brief's strict no-network wording and that proposal require an explicit
+owner resolution in 012; 015 remains offline with supplied qualified evidence only.
 
 ## Remaining research and decisions
 

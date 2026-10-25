@@ -120,8 +120,10 @@ feature selection and no persistence; existing templates/history are not reset.
 | V native peers | Git first under D4; jj enabled only after native operation/bookmark proof, no raw Git writes or false parity |
 | Publication boundary | D8: every remote step is a 016 plan/action with exact actual-new-SHA CLEAR and fresh checks; 043 remains the human owner's landing invocation |
 
-Open OQ-1 to OQ-6 and OQ-8 block the affected implementations. OQ-7 preserves 012's
-explicit opt-in reads without adding network here. Recommendations are not
+Open OQ-1 to OQ-6 and OQ-8 block the affected implementations. OQ-7 recommends
+retaining 012's proposed explicit opt-in reads, pending the still-open owner
+question 3 in its plan; only `--after-fetch` has recorded separate acceptance.
+Strict no-network wording versus that proposal is unresolved; no network is added here. Recommendations are not
 settled policy. This plan is ready for independent documentation review, not
 blanket runtime implementation or product acceptance.
 
