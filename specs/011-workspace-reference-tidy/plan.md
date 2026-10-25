@@ -75,9 +75,14 @@ original creation ownership and native recovery mechanisms where valid; add a co
 bounded private registration payload and a separately authorized restoration path.
 Do not reuse present-checkout retirement by inventing disk evidence or clear the stw lock.
 
-Deliver this specification PR first. Source work waits for independent CLEAR, owner merge,
-and owner resolution of the contract's frozen-schema/interface choice. The defined
-absence predicate is not another owner gate. Then
-implement expert planning/apply/recovery test-first in a separate PR; only after its accepted
-capability exists, implement Spec 041 T012b classification/plan-set wiring in the final PR.
-No task/progress completion is asserted here. T501–T508 define the dependencies and evidence.
+The owner selected option B on 2026-10-25: a separate versioned operation and
+explicit dispatch, preserving the frozen old bytes. The
+[contract-4 proposal](contracts/registration-prune-v4.md) assigns exact interfaces
+and the manifest-2 boundary, still pending independent CLEAR and explicit owner
+acceptance. Read-only admission has merged; it is not a stored plan or authority
+to remove a registration. The defined absence predicate is not another gate.
+
+After acceptance, deliver the planner/stored-plan slice first, then a separate
+apply/recovery slice, then Spec 041 T012b wizard classification and manifest
+wiring. Each source slice is test-first and independently reviewed. No task or
+progress completion is asserted here; T501-T508 retain their dependency gates.
