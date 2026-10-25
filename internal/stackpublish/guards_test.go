@@ -4,6 +4,7 @@ package stackpublish
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -143,6 +144,7 @@ func TestStaleEvidenceRefusesWithTheTypedReasonBeforeAnyIntent(t *testing.T) {
 		"old sha disappeared":    {push, func(f *Fresh) { f.Expected.OldSHA = nil }, ReasonRemoteChanged},
 		"pr head moved":          {retarget, func(f *Fresh) { f.Expected.HeadSHA = str(sha('9')) }, ReasonHeadChanged},
 		"pr base moved":          {retarget, func(f *Fresh) { f.Expected.BaseRef = str("refs/heads/elsewhere") }, ReasonPlanStale},
+		"body digest changed":    {validAction(KindEditBody), func(f *Fresh) { f.Expected.BodyDigest = str(strings.Repeat("0", 64)) }, ReasonPlanStale},
 		"planned base moved":     {retarget, func(f *Fresh) { f.Expected.PlannedBase = str("refs/heads/other") }, ReasonPlanStale},
 	}
 	for name, tc := range cases {
@@ -295,5 +297,21 @@ func TestEvaluationDoesNotChangeThePlan(t *testing.T) {
 	}
 	if mustJSON(t, p) != before {
 		t.Fatal("apply evaluation mutated the stored plan")
+	}
+}
+
+func TestATamperedStoredPlanIsNotTheSavedPlan(t *testing.T) {
+	p := savedPlan(t, twoPushes()[0])
+	id := *p.PlanID()
+	for _, st := range []ActionState{StatePrepared, StateCompleted, StateRefused, StateBlocked} {
+		tampered := p
+		tampered.doc.Actions = p.Actions()
+		tampered.doc.Actions[0].State = st
+		var asked []string
+		_, err := EvaluateApply(tampered, ApplyRequest{PlanID: id, Online: true, AuthorizeRemote: []string{"p1"}}, allCapabilities(), newBudget(), matching(&asked, nil))
+		wantCode(t, err, "plan-not-found", false)
+		if len(asked) != 0 {
+			t.Errorf("evidence read for a tampered plan: %v", asked)
+		}
 	}
 }
