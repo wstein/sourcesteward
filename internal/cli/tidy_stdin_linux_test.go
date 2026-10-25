@@ -78,3 +78,19 @@ func TestApplyPromptsOnARealTerminalThroughRunWithStdin(t *testing.T) {
 		}
 	}
 }
+
+// Bare `stw tidy` through the real entry point on a pseudo-terminal is human mode and asks: the
+// answers typed on the terminal choose the rows, the second question declines to apply.
+func TestBareTidyAsksOnARealTerminalThroughRunWithStdin(t *testing.T) {
+	master, tty := testPTYPair(t)
+	i := newInteractive(t, true, true)
+	tidyTerminalFacts = owner.TerminalFacts // the real descriptors, not the stub
+	if _, err := master.WriteString("a\nn\n"); err != nil {
+		t.Fatal(err)
+	}
+	var diag bytes.Buffer
+	code := RunWithStdin(context.Background(), "test", []string{"tidy"}, tty, tty, &diag)
+	if code != 0 || len(i.planner.specs) == 0 || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 1 {
+		t.Errorf("code %d, planned %d, applied %d, stored %v, stderr %q", code, len(i.planner.specs), len(i.applied), storedSets(t, i.prep.PlanStore), diag.String())
+	}
+}

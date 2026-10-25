@@ -290,7 +290,7 @@ func TestInteractiveOwnerLabelsAreEscaped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, `co\x1b[31mdex\n`) || strings.Contains(out, "\x1b") {
+	if !strings.Contains(out, `of owner co\x1b[31mdex\n?`) || strings.Contains(out, "\x1b") {
 		t.Errorf("%q", out)
 	}
 }
@@ -319,7 +319,7 @@ func TestInteractiveInvalidAnswersAtTheApplyQuestion(t *testing.T) {
 		t.Fatalf("%v %v", err, files)
 	}
 	id := strings.TrimSuffix(filepath.Base(files[0]), ".json")
-	if !strings.Contains(err.Error(), id) || !strings.Contains(err.Error(), "stored") || !strings.Contains(err.Error(), "nothing was applied") || strings.Contains(err.Error(), "nothing was chosen") {
+	if !strings.Contains(err.Error(), id) || !strings.Contains(err.Error(), "stored") || !strings.Contains(err.Error(), "nothing was applied") || strings.Contains(err.Error(), "nothing was chosen") || !strings.Contains(err.Error(), "too many invalid answers at the apply question") {
 		t.Errorf("%v", err)
 	}
 }
@@ -350,7 +350,22 @@ func (c *cancelOnRead) Read(p []byte) (int, error) {
 	if c.reads > c.after {
 		c.cancel()
 	}
-	return c.r.Read(p)
+	// One line per read, like a terminal: the later questions are read later.
+	var line []byte
+	for len(line) < len(p) {
+		b, err := c.r.ReadByte()
+		if err != nil {
+			if len(line) == 0 {
+				return 0, err
+			}
+			break
+		}
+		line = append(line, b)
+		if b == '\n' {
+			break
+		}
+	}
+	return copy(p, line), nil
 }
 
 func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
