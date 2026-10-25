@@ -89,12 +89,26 @@ class GluedChecks(Repo):
         self.assertIn('FAIL glued: docs/a.md:2', out)
         self.assertIn('revision2', out)
 
-    def test_glued_in_json_fails(self):
-        self.docs('{"a": "hidden015planner"}\n', name='docs/a.json')
-        self.assertIn('FAIL glued: docs/a.json:1', self.check()[1])
+    def test_json_is_not_checked_for_glued_words(self):
+        self.docs('{"TestTidyV4ApplyRetries": 12, "id": "MDQ6VXNlcjExNjExNjA", "f": "SHA256SUMS", '
+                  '"x": "hidden015planner"}\n', name='docs/a.json')
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+
+    def test_identifiers_from_the_repository_stay_silent(self):
+        weights = ROOT / 'scripts/ci-test-weights.json'
+        import json
+        names = list(json.loads(weights.read_text()))
+        self.assertGreater(len(names), 20)
+        extra = ['MDQ6VXNlcjExNjExNjA', 'SHA256SUMS', 'TestTidyV3ApplyRetries', 'TestTidyV4Apply',
+                 'ipv4', 'HTTP2Server', 'schema_v2_ok', 'SCHEMA_VERSION1', 'VERSION2', 'ROWS3', 'k8s',
+                 'ext4fs_v2', 'AbcDef012ghi']
+        self.docs(''.join('Name %s here.\n' % n for n in names + extra))
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
 
     def test_table_of_rejected_patterns(self):
-        for text in ('Exit0', 'exit0', 'Hidden015Planner', 'hidden1planner', 'schema_version1',
+        for text in ('Exit0', 'exit0', 'hidden015planner', 'hidden1planner', 'schema_version1',
                      'revision2', 'Version3', 'rows2', 'codes7', 'ghi12jkl', 'xyz9abc'):
             with self.subTest(text):
                 self.write('docs/a.md', 'lead %s tail\n' % text)
@@ -338,18 +352,37 @@ class CommitChecks(Repo):
         self.docs('fine\n')
         code, out, _ = self.check(owner=None, env={'GIT_CONFIG_GLOBAL': str(cfg)})
         self.assertEqual(code, 0, out)
-        self.assertNotIn('INFO identity', out)
+        self.assertIn('INFO identity: owner identity taken from git config: %s; pass --owner to pin it' % OWNER_STR, out)
         self.git('reset', '-q', '--hard', 'refs/remotes/origin/main')
         self.write('docs/a.md', 'fine\n')
         self.commit(who=('Else', 'e@example.invalid'))
         self.assertEqual(self.check(owner=None, env={'GIT_CONFIG_GLOBAL': str(cfg)})[0], 1)
         self.assertEqual(cfg.read_text(), before)
 
+    def test_placeholder_git_identity_fails_even_when_commits_match(self):
+        for name, email in (('t', 't@t'), ('Owner Test', 'owner@localhost'), ('Ab', 'ab@example.org'),
+                            ('Owner Test', '')):
+            with self.subTest(name + email):
+                cfg = Path(self.tmp.name) / 'leak.gitconfig'
+                cfg.write_text('[user]\n\tname = %s\n\temail = %s\n' % (name, email))
+                self.git('reset', '-q', '--hard', 'refs/remotes/origin/main')
+                self.write('docs/a.md', 'fine\n')
+                self.commit(who=(name, email))
+                code, out, _ = self.check(owner=None, env={'GIT_CONFIG_GLOBAL': str(cfg)})
+                if email:
+                    self.assertEqual(code, 1, out)
+                    self.assertIn('FAIL identity', out)
+                    self.assertIn('placeholder', out)
+                else:
+                    self.assertIn('INFO identity: skipped', out)
+
     def test_explicit_owner_overrides_the_git_identity(self):
         cfg = Path(self.tmp.name) / 'else.gitconfig'
         cfg.write_text('[user]\n\tname = Else\n\temail = e@example.invalid\n')
         self.docs('fine\n')
-        self.assertEqual(self.check(env={'GIT_CONFIG_GLOBAL': str(cfg)})[0], 0)
+        code, out, _ = self.check(env={'GIT_CONFIG_GLOBAL': str(cfg)})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('git config', out)
 
     def test_no_identity_skips_the_check_with_info(self):
         self.docs('fine\n')
@@ -398,6 +431,87 @@ class Info(Repo):
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)
         self.assertIn('INFO encoding', out)
+
+
+class Gaps(Repo):
+    def test_two_dot_diff_would_report_what_the_base_deleted(self):
+        self.write('docs/g.md', 'hidden015planner\n')
+        self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        self.git('switch', '-q', '-c', 'side')
+        self.write('docs/ok.md', 'fine\n')
+        self.commit()
+        self.git('switch', '-q', 'main')
+        (self.dir / 'docs/g.md').unlink()
+        self.commit('docs: drop')
+        self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        code, out, _ = self.check('refs/remotes/origin/main', '--head', 'side')
+        self.assertEqual(code, 0, out)
+
+    def test_identity_superstring_fails(self):
+        self.write('docs/a.md', 'fine\n')
+        self.commit(who=('x ' + OWNER[0], OWNER[1]))
+        self.assertEqual(self.check()[0], 1)
+        self.git('reset', '-q', '--hard', 'refs/remotes/origin/main')
+        self.write('docs/a.md', 'fine\n')
+        self.commit(who=(OWNER[0], OWNER[1] + 'x'))
+        self.assertEqual(self.check()[0], 1)
+
+    def test_bad_commit_in_the_middle_is_found(self):
+        for i, trailer in enumerate((True, False, True)):
+            self.write('docs/f%d.md' % i, 'x\n')
+            self.commit(trailer=trailer)
+        out = self.check('--require-trailer')[1]
+        self.assertEqual(out.count('FAIL trailer'), 1)
+
+    def test_trailer_in_a_middle_paragraph_is_not_a_trailer(self):
+        self.write('docs/a.md', 'fine\n')
+        self.commit('docs: x\n\nCo-Authored-By: A <a@example.org>\n\nClosing prose.', trailer=False)
+        self.assertEqual(self.check('--require-trailer')[0], 1)
+
+    def test_fence_closes_only_with_the_same_character(self):
+        self.docs('```\nhidden015planner\n~~~\nhidden016planner\n```\nok\n')
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+
+    def test_backtick_in_the_info_string_is_not_a_fence(self):
+        self.docs('``` a`b\nhidden015planner\n')
+        self.assertIn('FAIL glued: docs/a.md:2', self.check()[1])
+
+    def test_glob_characters_in_a_path_are_literal(self):
+        self.write('docs/x1.md', 'clean\n')
+        self.write('docs/x[1].md', 'hidden015planner\n')
+        self.commit()
+        out = self.check()[1]
+        self.assertIn('FAIL glued: docs/x[1].md:1', out)
+        self.assertEqual(out.count('FAIL glued'), 1)
+
+    def test_file_header_is_not_content_even_for_a_glued_name(self):
+        self.docs('clean\n', name='docs/hidden015planner.md')
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+
+    def test_textconv_does_not_hide_changes(self):
+        cfg = Path(self.tmp.name) / 'tc.gitconfig'
+        cfg.write_text('[diff "hide"]\n\ttextconv = /bin/echo constant\n')
+        self.write('.gitattributes', '*.md diff=hide\n')
+        self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        self.docs('x hidden015planner\n')
+        code, out, _ = self.check(env={'GIT_CONFIG_GLOBAL': str(cfg)})
+        self.assertEqual(code, 1, out)
+        self.assertIn('FAIL glued: docs/a.md:1', out)
+
+    def test_a_failing_git_command_is_exit_two(self):
+        cfg = Path(self.tmp.name) / 'bad.gitconfig'
+        cfg.write_text('[core]\n\twhitespace = trailing-space,tab-in-indent,blank-at-eol,bogus=\n')
+        self.docs('fine\n')
+        self.write('docs/a.md', 'x \n')
+        self.commit()
+        code, out, err = self.check(env={'GIT_CONFIG_GLOBAL': str(cfg)})
+        self.assertIn(code, (1, 2), out + err)
+        if code == 2:
+            self.assertIn('selfcheck:', err)
 
 
 class Usage(Repo):
