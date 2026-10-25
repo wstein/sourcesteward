@@ -68,9 +68,10 @@ const (
 )
 
 // emptyTree is the id of the empty tree of a SHA-1 repository. Git knows it without an object in
-// the store. It is the default attribute source of every command (issue 241): no command reads a
-// .gitattributes file of the worktree, the index or the repository, which belong to the owner and
-// are in no sampled commit. A command that needs attributes names the sampled tree itself.
+// the store. It is the default attribute source of every prediction and evidence command (issue 241): none
+// reads a .gitattributes file of the worktree, the index or the repository, which belong to the
+// owner and are in no sampled commit. A command that needs attributes names the sampled tree
+// itself; only the dirty check (runInWorktree) reads the real worktree, because it reports its state.
 const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 type gitRunner struct {
@@ -78,6 +79,9 @@ type gitRunner struct {
 	objectDir      string // private quarantine
 	alternates     string // repository objects, read only
 	now            func() time.Time
+	// worktreeAttributes lets a command that reports the REAL worktree state (git status) read the
+	// attributes of the worktree: the empty-tree pin would change what counts as modified.
+	worktreeAttributes bool
 }
 
 type gitOutput struct {
@@ -91,7 +95,9 @@ func (g *gitRunner) environment(extra []string) []string {
 		"GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "GIT_ATTR_NOSYSTEM=1",
 		"GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_NO_LAZY_FETCH=1", "GIT_PAGER=cat", "PAGER=cat", "GIT_EDITOR=:", "GIT_ASKPASS=",
 	}
-	env = append(env, "GIT_ATTR_SOURCE="+emptyTree)
+	if !g.worktreeAttributes {
+		env = append(env, "GIT_ATTR_SOURCE="+emptyTree)
+	}
 	if g.objectDir != "" {
 		env = append(env, "GIT_OBJECT_DIRECTORY="+g.objectDir, "GIT_ALTERNATE_OBJECT_DIRECTORIES="+g.alternates)
 	}
@@ -131,6 +137,13 @@ func (g *gitRunner) start(ctx context.Context, plain bool, in []byte, extra []st
 		return gitOutput{out.Bytes(), exit.ExitCode()}, nil
 	}
 	return gitOutput{}, err
+}
+
+// runInWorktree runs a command that must see the real worktree state, attributes included.
+func (g *gitRunner) runInWorktree(ctx context.Context, args ...string) (gitOutput, error) {
+	u := *g
+	u.worktreeAttributes = true
+	return u.start(ctx, false, nil, nil, commandOutputLimit, args...)
 }
 
 func (g *gitRunner) run(ctx context.Context, args ...string) (gitOutput, error) {
