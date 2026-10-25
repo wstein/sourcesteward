@@ -95,21 +95,16 @@ mutation authority; Spec 043 is the owner's separate landing invocation.
 Spec 040 requires pure derivation with concurrency only at the reviewed edge.
 
 **Alternatives considered:** observation implies apply, local apply implies push,
-or clean prediction supplies exact-actual-head CLEAR/green checks. None is valid.
-Spec 012 question 3 remains open on online-by-default versus explicit
+or clean prediction supplies publication/Ready evidence. None is valid.
+[Spec 012](../012-stack-inspection/spec.md) OQ-NET remains open on online-by-default versus explicit
 `--pull-requests` opt-in reads; retaining explicit opt-in is its recommendation,
 not a recorded owner approval. This feature does not resolve or amend that choice.
 014 performs no network; supplied remote context is external sampled data without
 a refresh.
 
-## Unresolved research and workflow
+## Unresolved research
 
 The OQs in [spec.md](spec.md#needs-owner-decision) retain real unsettled
 semantic/topology, native jj conflict evolution, hunk, scratch and exit choices with recommendations. There are
 no invented owner answers or new approval flows. Their affected implementation
 units cannot start until their decisions and measurements are recorded.
-Installed Spec Kit workflows select this existing directory with
-`SPECIFY_FEATURE_DIRECTORY=specs/014-conflict-diagnosis` and
-`SPECIFY_FEATURE_NO_PERSIST=1`; existing templates/history are preserved.
-No extension hooks are configured at the inspected base. Analysis is read-only;
-its requested durable report is incorporated by the author into analysis.md.
