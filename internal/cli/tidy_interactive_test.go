@@ -19,6 +19,8 @@ import (
 type interactive struct {
 	*wizardWorld
 	applied []planset.ApplyRequest
+	// confirmOpened counts the openings of the controlling terminal for the typed confirmation.
+	confirmOpened int
 }
 
 func newInteractive(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *interactive {
@@ -30,7 +32,10 @@ func newInteractive(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *
 		i.applied = append(i.applied, r)
 		return okSet()
 	}
-	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { return nil, owner.ErrNoTerminal }
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) {
+		i.confirmOpened++
+		return nil, owner.ErrNoTerminal
+	}
 	return i
 }
 
@@ -84,8 +89,15 @@ func TestInteractiveAppliesOnlyAfterAnExplicitYes(t *testing.T) {
 	}
 	for _, answer := range []string{"a\nyes\nyes\nyes\n", "a\nn\n", "a\n", "a\nY\nY\nY\n"} {
 		i := newInteractive(t, true, true)
-		if _, err := runTidy(t, answer); len(i.applied) != 0 {
+		_, err := runTidy(t, answer)
+		if len(i.applied) != 0 {
 			t.Errorf("%q applied %d (err %v)", answer, len(i.applied), err)
+		}
+		// Declining, an invalid answer repeated and the end of input are not failures of the run.
+		if answer == "a\n" || answer == "a\nn\n" {
+			if err != nil {
+				t.Errorf("%q: %v", answer, err)
+			}
 		}
 	}
 }
@@ -162,8 +174,8 @@ func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 	i := newInteractive(t, true, true)
 	_, err := runTidy(t, "3\n")
 	var failure runtimeFailure
-	if !errors.As(err, &failure) || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 {
-		t.Errorf("err %v", err)
+	if !errors.As(err, &failure) || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 || i.confirmOpened == 0 {
+		t.Errorf("err %v, terminal opened %d times", err, i.confirmOpened)
 	}
 }
 
@@ -172,12 +184,17 @@ func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 func TestInteractiveDetailsAreEscaped(t *testing.T) {
 	i := newInteractive(t, true, true)
 	i.res.Candidates[3].Evidence = "stw lock \x1b[31mforged\x1b[0m\nline"
-	out, err := runTidy(t, "d 5\nn\n")
+	out, err := runTidy(t, "d 4\nn\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out, "\x1b") || !strings.Contains(out, `stw lock \x1b[31mforged`) {
-		t.Errorf("%q", out)
+	// The detail is printed right after the question (the answer is not echoed by the test input).
+	detail := ""
+	if k := strings.LastIndex(out, "default n): [4] "); k >= 0 {
+		detail, _, _ = strings.Cut(out[k:], "\n")
+	}
+	if strings.Contains(out, "\x1b") || !strings.Contains(detail, `stw lock \x1b[31mforged`) {
+		t.Errorf("detail line %q\n%q", detail, out)
 	}
 }
 

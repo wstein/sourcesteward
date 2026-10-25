@@ -61,48 +61,70 @@ func recordStateDirs(cmd *cobra.Command, all *[]string) {
 	}
 }
 
-// runTidyWizardPlan is `stw tidy plan` in the wizard layer: it analyses the workspace read only,
-// narrows the view (--only, --mine, --by-owner), optionally stores the plan set of the safe own
-// items (--save), prints the overview as text or JSON, and never applies anything.
-func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool, timeout time.Duration) error {
+// wizardRun is the read-only analysis both wizard entry points start from.
+type wizardRun struct {
+	ctx        context.Context
+	cancel     context.CancelFunc
+	prep       analysis.Prepared
+	res        tidywizard.Result
+	mode       owner.Evidence
+	timeoutSet bool
+	timeout    time.Duration
+}
+
+// startWizard detects the mode, derives the caller, analyses the workspace read only and narrows the
+// view (--only, --mine, --by-owner). The caller must call cancel.
+func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration) (*wizardRun, error) {
 	if cmd.Flags().Changed("timeout") && timeout <= 0 {
-		return fmt.Errorf("--timeout must be a positive duration")
+		return nil, fmt.Errorf("--timeout must be a positive duration")
 	}
 	stdinTTY, stdoutTTY := tidyTerminalFacts(cmd.InOrStdin(), cmd.OutOrStdout())
 	environ := tidyEnviron()
 	mode := owner.Detect(owner.Env{StdinTTY: stdinTTY, StdoutTTY: stdoutTTY, Environ: environ, OSUser: planset.Getenv("USER"), Mine: w.mine, ByOwner: w.byOwner})
 	caller := derive.Caller(environValue(environ, "STW_OWNER"), planset.Getenv("USER"), mode.Mode == owner.ModeAgent)
 	if w.mine && caller.Value == "" {
-		return fmt.Errorf("--mine needs the caller label: set $STW_OWNER")
+		return nil, fmt.Errorf("--mine needs the caller label: set $STW_OWNER")
 	}
 	cwd, err := tidyGetwd()
 	if err != nil {
-		return runtimeFailure{err}
+		return nil, runtimeFailure{err}
 	}
-	ctx := cmd.Context()
-	if cmd.Flags().Changed("timeout") {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
+	r := &wizardRun{ctx: cmd.Context(), cancel: func() {}, mode: mode, timeoutSet: cmd.Flags().Changed("timeout"), timeout: timeout}
+	if r.timeoutSet {
+		r.ctx, r.cancel = context.WithTimeout(r.ctx, timeout)
 	}
-	prep, err := tidyPrepare(ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: cmd.Flags().Changed("online")})
+	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: cmd.Flags().Changed("online")})
 	if err != nil {
+		r.cancel()
 		// A deadline or an interrupt comes first: discovery reports its context ending as a
 		// missing workspace, which it is not.
-		if cause := interruption(ctx, cmd.Flags().Changed("timeout"), timeout); cause != nil {
-			return runtimeFailure{cause}
+		if cause := interruption(r.ctx, r.timeoutSet, timeout); cause != nil {
+			return nil, runtimeFailure{cause}
 		}
 		// The message carries paths and error text from outside: it passes esc, whole.
 		safe := errors.New(escFull(err.Error()))
 		var usage *analysis.UsageError
 		if errors.As(err, &usage) {
-			return safe
+			return nil, safe
 		}
-		return runtimeFailure{safe}
+		return nil, runtimeFailure{safe}
 	}
-	res := tidyAnalyse(ctx, prep, tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()})
-	res.Candidates = narrowView(res.Candidates, w, caller.Value)
+	r.prep = prep
+	r.res = tidyAnalyse(r.ctx, prep, tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()})
+	r.res.Candidates = narrowView(r.res.Candidates, w, caller.Value)
+	return r, nil
+}
 
+// runTidyWizardPlan is `stw tidy plan` in the wizard layer: it analyses the workspace read only,
+// narrows the view (--only, --mine, --by-owner), optionally stores the plan set of the safe own
+// items (--save), prints the overview as text or JSON, and never applies anything.
+func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool, timeout time.Duration) error {
+	run, err := startWizard(cmd, w, timeout)
+	if err != nil {
+		return err
+	}
+	defer run.cancel()
+	ctx, prep, res, mode := run.ctx, run.prep, run.res, run.mode
 	planID, stored := "", ""
 	var notices []string
 	var saveErr error
@@ -119,7 +141,7 @@ func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool
 		return err
 	}
 	// The overview is always printed first; what went wrong is reported after it (exit 1).
-	if cause := interruption(ctx, cmd.Flags().Changed("timeout"), timeout); cause != nil {
+	if cause := interruption(ctx, run.timeoutSet, timeout); cause != nil {
 		// The cause comes first; a save error that followed it is only detail.
 		if saveErr != nil {
 			cause = fmt.Errorf("%w (storing the plan set failed: %s)", cause, escFull(saveErr.Error()))
@@ -238,17 +260,7 @@ func savePlanSet(ctx context.Context, prep analysis.Prepared, res tidywizard.Res
 	if err := planset.Store(prep.PlanStore, set); err != nil {
 		return "", "", "", err
 	}
-	byID := map[string]tidywizard.Candidate{}
-	for _, c := range res.Candidates {
-		byID[c.ID] = c
-	}
-	effects, repos := 0, map[string]bool{}
-	for _, it := range set.Items {
-		c := byID[it.ID]
-		effects += len(c.Effects)
-		repos[c.Repo] = true
-	}
-	return set.PlanID, fmt.Sprintf("%d effects in %d repositories", effects, len(repos)), "", nil
+	return set.PlanID, summarize(set, res.Candidates), "", nil
 }
 
 // writeWizardOverview prints the overview and reports whether the JSON had to be cut to its bound.
