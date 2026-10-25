@@ -35,7 +35,11 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	var hints []string
 	var proofKinds string
 	var wizard tidyWizardOptions
+	var pruneV4 pruneV4Flags
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if contract == "4" || cmd.Flags().Changed("prune-registration") || cmd.Flags().Changed("registration-gitdir") {
+			return runPruneV4Plan(cmd, args, contract, pruneV4)
+		}
 		layer, err := selectTidyPlanLayer(cmd, args, &wizard)
 		if err != nil {
 			return err
@@ -89,6 +93,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	plan.Flags().StringVar(&options.RemoveFiles, "remove-files", "", "Separately select the exact owned absolute destination for filesystem removal")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
 	addTidyV3PlanFlags(plan, &contract, &v3, &hints, &proofKinds)
+	addPruneV4Flags(plan, &pruneV4)
 	addTidyWizardPlanFlags(plan, &wizard)
 	var applyOptions workspace.TidyApplyOptions
 	var applyStructured bool
