@@ -70,11 +70,12 @@ the owner's workflow. A detached caller may inspect but is never switched.
    hook execution: an installed relevant hook must cause refusal before the
    write rather than be silently skipped. Journal completion and resample the
    ref. A race is refusal or partial/unknown outcome, never an automatic reset.
-7. Emit the receipt with actual identities, evidence, completed effects and
-   `review_gate.state: required`. Obtain independent review of this actual new
-   SHA **after** local replay and before a remote step; no review of a prediction
-   or old head counts. Required checks/review inputs are consumed separately by
-   Spec 016; this apply never pushes or changes PR state.
+7. Emit actual identities/evidence/effects and `review_gate.state: pending-policy-check`
+   bound to the actual new SHA, with `change_class` (`docs-only` or `code`) and
+   `pure_rebase` (all rows `=` and unchanged moved count). Classify actual changed
+   paths; any code/test/script/generated or unclassified path means `code`.
+   Spec 016 applies the AGENTS.md gate table below after replay; old-head or
+   predicted-head review never counts. This apply never pushes or changes PR state.
 
 CAS protects the selected ref value, not a whole repository transaction. The
 registration/ownership/config resamples cannot exclude same-user replacement or
@@ -116,7 +117,7 @@ files. No consumer should use this sketch as a production schema.
   "run_id": "journal-run-id",
   "backend": "git",
   "target": {"ref": "refs/heads/topic", "old_head": "1111111111111111111111111111111111111111", "new_head": "2222222222222222222222222222222222222222"},
-  "review_gate": {"state": "required", "head_sha": "2222222222222222222222222222222222222222"},
+  "review_gate": {"state": "pending-policy-check", "head_sha": "2222222222222222222222222222222222222222", "change_class": "code", "pure_rebase": true},
   "remote_authorized": false,
   "actions": [{"id": "local-ref-1", "outcome": "completed"}],
   "limitations": ["semantic-breaks-not-detected", "sampled-state-not-a-transaction"]
@@ -140,13 +141,30 @@ when remaining budget cannot safely journal and reconcile a commit point.
 
 The receipt contains repository/backend identity, exact old/new head and parents,
 selected ref, complete actual mapping/equality/identity evidence, ownership
-binding, journal/recovery pointers and a review requirement for the actual new
-SHA. A remote plan must independently bind a full **observed remote** SHA; v1's
-observed local old head is not a remote advertisement. Spec 016 accepts an
-independent CLEAR only from its owner-approved issuer/freshness policy for that
-exact new SHA, with green required checks and fresh attribution/identity checks.
+binding, journal/recovery pointers and a policy-gate input for the actual new
+SHA, including `change_class`, `pure_rebase` and their complete evidence. A remote plan must independently bind a full **observed remote** SHA; v1's
+observed local old head is not a remote advertisement. The agent rewrite policy is:
+
+| Change class and replay | Before push | Before marking Ready |
+| --- | --- | --- |
+| `docs-only`, pure rebase | Green local docs checks plus all `=` range-diff and same count; no review precedes push | Independent CLEAR for exact current head plus all required checks green |
+| `docs-only`, other rewrite | Green local docs checks; no pre-push review required | Independent CLEAR for exact current head plus all required checks green |
+| `code`, pure rebase | Independent exact-new-SHA CLEAR before push; middle-tier reviewer allowed with all `=`/same-count evidence; required local checks | Independent CLEAR for exact current head plus all required checks green |
+| `code`, other rewrite or unknown classification/purity | Independent exact-new-SHA review before push at the applicable required tier; required local checks | Independent CLEAR for exact current head plus all required checks green |
+
+`pure_rebase` is derived from every actual pairing row and exact old/new count;
+unknown is false, never a path to a weaker tier. `change_class` is derived from
+actual diffs, not a caller claim; unknown becomes `code`. OQ-2 leaves trusted
+review issuer/format/freshness unresolved but cannot remove the established
+docs-only exemption or middle-tier pure-rebase allowance. Review-required code
+uses accepted independent CLEAR for the exact actual new SHA, never an old or
+predicted head. Spec 043 `--reviewed SHA` remains the separately invoked human
+owner's statement, not agent independent-review evidence or a policy override.
+
 Every selected push/link/retarget has its own authorization flag and remote plan
-id. A successful local CAS authorizes none of them.
+id, with fresh attribution/identity and the checks required by its scope. A
+successful local CAS authorizes none of them. Independent exact-head CLEAR and
+green required checks always gate Ready, including docs-only branches.
 
 Retargeting is a separate 016 effect, never bundled with local apply. A future
 lease push uses only `--force-with-lease=REF:OBSERVED_FULL_REMOTE_SHA` and explicit

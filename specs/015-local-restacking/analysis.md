@@ -53,7 +53,7 @@ are recorded in [verification](verification.md#documentation-amendment-2026-10-2
 | A5 | Owner decision, capability blocker | jj write/operation/bookmark/recovery guarantees are unmeasured; OQ-4/T037 keep capability unavailable, no invented native CAS/fallback |
 | A6 | Owner decision, retention blocker | Existing sync writer is unexported and type-specific; OQ-5/T031/T032 propose typed seam with unchanged sync compatibility, no duplicated writer or automatic root pruning |
 | A7 | Owner wording decision | Strict no-network wording and settled 012 opt-in reads conflict literally; OQ-7 preserves offline default plus explicit bounded online 012 evidence and keeps 015 offline |
-| A8 | Resolved scope/timing | Actual candidate SHA appears before independent review; 015 receipt requires review, 016 verifies exact actual new SHA before remote write. Local apply never requires a prediction to be reviewed |
+| A8 | Resolved scope/timing | Actual candidate SHA appears before independent review; 015 receipt carries derived change class/pure-rebase evidence; 016 preserves docs-only checks/equality without pre-push review, code exact-new-SHA review and equal-pure-rebase middle-tier allowance. Ready always requires independent exact-head CLEAR and green checks; 043 human `--reviewed` is separate. Local apply never requires a prediction to be reviewed |
 | A9 | Retained acceptance gap | T021/T023/T024 remain pending, T004 stays skipped, new tasks unchecked; no first-slice conformance or new apply verification inferred from docs checks |
 
 No critical constitution conflict is proposed: mutation is explicit and scoped,
@@ -95,7 +95,7 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | FR-022 | T029, T030 | Proposed `TestApplyRejectsAnyNonEqualRow` and `TestApplyReadsActualAuthorAndCommitter`: `!`, `<`, `>`, unpaired, unknown or leaked actual committer all block target CAS | Future pending |
 | FR-023 | T031, T032, T033, T034 | Proposed `TestRestackRecoveryPreparedBeforeTargetMove`: crash/write/fsync/rename/root-collision faults stop before target move with retained evidence | Future pending |
 | FR-024 | T033, T034, T035, T036 | Proposed `TestRestackCrashReconcilesEveryBoundary` and `TestRestackRestoreRequiresSeparatePlanAndCAS`: current third value remains untouched | Future pending |
-| FR-025 | T040, T041 | Proposed `TestRestackReceiptNeedsReviewOfActualNewSHA` and `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: old/predicted/other SHA CLEAR does not authorize remote consumption | Future pending; 016 consumer gate |
+| FR-025 | T040, T041 | Proposed `TestRestackReceiptPreservesChangeClassReviewPolicy` and `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: docs-only checks/equality need no pre-push review; code pure rebase permits exact-new-SHA middle-tier CLEAR; old/predicted/other SHA cannot satisfy required review; Ready always exact-head CLEAR plus green checks | Future pending; 016 consumer gate |
 | FR-026 | T040, T041 | Proposed `TestRestackTextsRemainInertData`: recorder forbids reset/switch/push/link/retarget; consumer requires separate observed full remote SHA and plan/action auth | Future pending; 016 actions outside 015 |
 | FR-027 | T037, T038, T039 | Proposed `TestJJRestackRejectsChangedOperation` and `TestJJRestackNeverFallsBackToGit`: missing capability/sandbox refuses with original native state unchanged | Future pending; OQ-4 |
 | FR-028 | T029, T030, T038, T039 | Proposed `TestApplyConflictStaysInQuarantine`: original Git operation sentinel absent; jj stored conflict remains and refuses without resolution/snapshot | Future pending |
@@ -111,7 +111,7 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | SC-004 | T022, T026, T043, T044 | Literal audit: extract every FR/SC id and require one trace row naming an existing task plus a test/fixture idea; missing T021 execution never becomes accepted | This trace mapping; execution pending |
 | SC-005 | T029, T030, T033, T034, T042 | Proposed `TestApplyCASMovesOnlyOwnedTopic` plus negative equality/actual-identity fixtures prove only one named ref moves with all rows equal | Future pending |
 | SC-006 | T035, T036, T043 | Proposed `TestRestackCrashReconcilesEveryBoundary` and `TestRestackRestoreRequiresSeparatePlanAndCAS` exercise old/new/third/missing state at each crash boundary | Future pending |
-| SC-007 | T040, T041, T043 | Proposed `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization` rejects missing/stale/other-SHA review, auth and remote-head changes; 015 write recorder stays empty | Future pending; consuming 016 acceptance |
+| SC-007 | T040, T041, T043 | Proposed `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization` checks docs-only pre-push exemption and code pure-rebase middle-tier allowance, rejects missing/stale/other-SHA review where required, missing auth and remote-head changes; 015 write recorder stays empty | Future pending; consuming 016 acceptance |
 | SC-008 | T037, T038, T039, T042 | Proposed `TestJJRestackPreservesNativeIdentities` with operation/bookmark/conflict/native sentinel matrix on both versions; disabled capability returns explicit refusal | Future pending; OQ-4 |
 
 Coverage audit: **34/34 FRs and 8/8 SCs** individually mapped (42 rows), each
