@@ -14,7 +14,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
-| `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--merge] [--autostash\|--no-autostash] [--prune\|--no-prune]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
+| `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--merge] [--autostash\|--no-autostash] [--prune\|--no-prune] [--submodules]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
 | `stw sync restore [PATH] [--run ID]` | Move the branches a `stw sync` run changed back to their journaled old tips | Only while the branch still points at the tip the run left and a checked-out worktree is clean (`git reset --keep`, or `update-ref` with the expected value); no fetch |
 | `stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons SET] [--timeout D]` | What needs action in the workspace, ordered by priority with a command to run for each item, then every repository (branch, upstream, changes, conflicts, operation, stashes, unmerged branches, worktrees, gitlink drift) and the pull requests, release drafts, unreleased tags and CI of its GitHub repository; Git only locally | Read-only. Online by default with `GET` requests through the `gh` token of the hosting commands; `--offline` reads no credential and sends nothing; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
@@ -157,6 +157,20 @@ The kept autostash entry is found by comparing `refs/stash` before and after git
 subject `autostash` whose first parent is the old tip counts. The stash list is shared by all worktrees, so an entry another
 worktree pushed, one that predates the run, or an ambiguous pair is never claimed (`stash_oid` is then null); stw never
 drops, applies or edits a stash entry itself.
+
+`--submodules` also acts on the pinned (detached) submodules, which a plain `stw sync` only reports as
+`skipped-detached`; submodules that sit on a branch are synced like `git pull` as before. For each initialized detached
+direct submodule of a repository of the workspace it runs `git submodule sync -- PATH` and, when the commit the
+superproject index records is present in the submodule, clean, and a fast-forward of its HEAD,
+`git -c submodule.recurse=false submodule update --no-fetch --checkout -- PATH`; it never passes `--init`, `--remote`,
+`--recursive` or `--force`, never clones or fetches (the one fetch per branch repository is unchanged), never changes a
+gitlink and does not journal or restore the move. The submodule's own hooks (for example `post-checkout`) run as plain Git
+runs them, and a failing hook fails only that item. Results in `repos[]`: `updated` (old and new commit), `up-to-date`,
+`skipped-dirty`, `diverged` (the recorded commit is not a fast-forward of HEAD, including HEAD ahead of it),
+`unreachable` (not initialized, or the recorded commit is not in the submodule; fetch or init it with plain Git) and
+`failed`; `unreachable` and `failed` exit 1. `git submodule sync` rewrites the submodule's remote URL from `.gitmodules`;
+a change is shown in the item's reason as `old -> new`. Paths from the index are untrusted: an absolute, `..`, option-like
+or symlinked path is `unreachable` and never handed to Git. `--plan --submodules` previews nothing and runs no sync.
 
 `stw sync restore [PATH] [--run ID] [--json]` undoes a run (default: the latest run, the one with the highest run ID;
 the workspace is found as for `stw sync`, `--run` takes the ID printed by the run). For each branch the run
