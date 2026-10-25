@@ -171,7 +171,7 @@ func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
 	f.StringVar(&o.only, "only", "", "Comma list of retire, branches, tracking, stale-worktrees (default all)")
 	f.StringArrayVar(&o.stateDirs, "state-dir", nil, "Extra private state directory holding creation records (repeatable; the first valid one stores plans)")
 	f.Bool("online", false, "Permit the contract-3 authenticated reads (default off)")
-	f.DurationVar(&o.timeout, "timeout", 0, "Deadline over the whole analysis")
+	f.DurationVar(&o.timeout, "timeout", 0, "Deadline over the whole analysis; it also replaces the scaled observation window of each repository (at most 1h)")
 	f.BoolVar(&o.json, "json", false, "Print the overview as one document; asks nothing, stores nothing")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
 	// save and yes are registered hidden, unbound, only to refuse them whatever their value.
