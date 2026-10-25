@@ -66,7 +66,6 @@ clean final tip while 014 OQ-JJCONF remains unresolved. Supplied 013 recovery
 metadata never proves a generic operation-head CAS or remote reversibility;
 its independent safety-copy receipt/lifetime is distinct from checkpoint metadata.
 
-
 ## ForgePlan
 
 Unsaved rendering is the default and has `saved: false`, `plan_id: null`; it
@@ -118,7 +117,8 @@ and explicit trunk base; it is not an executable extension command.
 
 See [receipts](contracts/receipts.md) for the normative gate matrix.
 `PublicationReceipt` binds actual old/new heads and complete affected ranges,
-validated 015 `moved_scope_change_class`, and independently recomputed
+the 016-only alias `moved_scope_change_class := source.review_gate.change_class`
+from the [015 actual apply receipt](../015-local-restacking/contracts/restack-apply.md#proposed-result-shape-and-exit-status), and independently recomputed
 `publication_range_change_class`: the UNION OF PER-COMMIT PATHS across observed
 remote-default..actual-new-head, including every still-open parent commit.
 No net tree diff, child-only range or supplied path list replaces that union;
@@ -129,6 +129,15 @@ binds `pure_rebase` (same
 count and every range-diff row `=`), local checks, exact-actual-SHA independent
 review/tier where needed, trusted owner identity and full default..new range,
 config origins, signature policy and native capability.
+The adapter validates accepted producer/command/kind/version, repository/backend/
+task, complete moved-range inputs and `review_gate.head_sha == target.new_head ==`
+selected actual candidate full SHA before using the source class. The current
+015 sketch proposes `kind: restack-apply`, schema version 2; version admission
+remains 015 OQ-1/016 OQ-POLICY. 015 has no `moved_scope_change_class` field, and
+its `review_gate.change_class` cannot bypass 016's publication-range recomputation.
+Unknown/malformed/missing source evidence never proves docs-only. Effective-code
+receipts in this initial capability do not support the workspace wording-only
+review exception; the normal exact-new-SHA code gate remains required.
 
 `ReadyReceipt` separately binds current PR head/base, accepted PR scope,
 independent reviewer/provenance/CLEAR at that exact head, required CI contexts
