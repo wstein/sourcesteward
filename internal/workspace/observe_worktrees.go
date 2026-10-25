@@ -281,6 +281,10 @@ func (c worktreeObserver) observeWorktreeContent(ctx context.Context, bin string
 	}
 	id, err := gitNativeIdentity(ctx, w.Path)
 	if err != nil {
+		// An expired deadline makes the identity inspection fail like a refusal; it is not one.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			err = ctx.Err()
+		}
 		fail(incompleteReason(err))
 		return
 	}
