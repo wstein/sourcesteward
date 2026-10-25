@@ -24,7 +24,10 @@ func tidyCommandWithV3Operations(run func(context.Context, workspace.TidyPlanOpt
 	return tidyCommandWithRestoreOperations(run, applyRun, planV3, applyV3, workspace.RestoreTidyV3, workspace.HistoryTidyV3)
 }
 func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult, applyRun func(context.Context, workspace.TidyApplyOptions) workspace.TidyResult, planV3 func(context.Context, workspace.V3PlanOptions) workspace.V3Result, applyV3 func(context.Context, workspace.V3ApplyOptions) workspace.V3Result, restoreV3 func(context.Context, workspace.V3RestoreOptions) workspace.V3RestoreResult, historyV3 func(context.Context, workspace.V3HistoryOptions) workspace.V3HistoryResult) *cobra.Command {
-	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files. Default v1/v2 planning stays offline.\nContract 3 permits explicitly selected authenticated GitHub reads with --online.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nOwned task retirement requires separate registration and exact filesystem selections.", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return runTidyInteractive(cmd) }}
+	family := &cobra.Command{Use: "tidy", Short: "Review evidence-based local Git branch or jj bookmark cleanup", Long: "Review bounded local cleanup evidence against an explicit integration base.\nPlanning never deletes references, registrations or files. Default v1/v2 planning stays offline.\nContract 3 permits explicitly selected authenticated GitHub reads with --online.\nGit and jj are native Tier 1 backends; unsupported proof retains work.\nApply requires a stored plan, explicit authorization, stale checks and recorded recovery.\nOwned task retirement requires separate registration and exact filesystem selections.", Args: cobra.NoArgs}
+	var bare tidyBareOptions
+	family.RunE = func(cmd *cobra.Command, _ []string) error { return runTidyBare(cmd, &bare) }
+	addTidyBareFlags(family, &bare)
 	var options workspace.TidyPlanOptions
 	var structured bool
 	var v3 workspace.V3PlanOptions
