@@ -109,7 +109,8 @@ func TestEveryRealD5Row(t *testing.T) {
 			in := pushInput(tc.task, tc.current)
 			in.Kind = kind
 			if kind == KindReady {
-				in.Subject = Subject{PRHeadRef: str("refs/heads/feat/own")}
+				in.PlanRepo = RepoRef{Host: "github.com", Owner: "owner", Name: "project"}
+				in.Subject = Subject{PRHeadRef: str("refs/heads/feat/own"), HeadRepo: repoRef("owner", "project"), BaseRepo: repoRef("owner", "project")}
 			}
 			gs := OwnershipGuards(in)
 			want(t, gs, GuardAttribution, tc.result, tc.reason)
@@ -142,14 +143,14 @@ func TestD5AppliesToPushAndReadyOnly(t *testing.T) {
 
 func TestPullRequestActionsAreOwnedThroughTheirHeadRef(t *testing.T) {
 	for _, kind := range []ActionKind{KindEditBody, KindRetarget, KindReady} {
-		in := OwnershipInput{PlanTask: "spec016-slice1", Kind: kind, Task: ownTask(), Current: human(), Subject: Subject{PRHeadRef: str("refs/heads/feat/own")}}
+		in := prInput(kind, repoRef("owner", "project"), repoRef("owner", "project"))
 		want(t, OwnershipGuards(in), GuardOwnership, GuardPass, "")
 		in.Subject.PRHeadRef = str("refs/heads/someone/else")
 		want(t, OwnershipGuards(in), GuardOwnership, GuardFail, ReasonNotOwned)
 		in.Subject.PRHeadRef = nil
 		want(t, OwnershipGuards(in), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 		// A ref subject cannot stand in for the PR's head.
-		in.Subject = Subject{Ref: str("refs/heads/feat/own")}
+		in.Subject = Subject{Ref: str("refs/heads/feat/own"), HeadRepo: repoRef("owner", "project"), BaseRepo: repoRef("owner", "project")}
 		want(t, OwnershipGuards(in), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 	}
 	create := OwnershipInput{PlanTask: "spec016-slice1", Kind: KindCreatePR, Task: ownTask(), Current: human(), Subject: Subject{Ref: str("refs/heads/feat/own")}}
