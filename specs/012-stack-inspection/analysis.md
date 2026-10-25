@@ -2,11 +2,26 @@
 
 **2026-10-25 status**: author cross-artifact analysis complete; independent exact-head review of this refresh is pending. Historical round 9 READY below applies only to its recorded revision and never to this changed head. Spec 012 remains unimplemented; no acceptance task is marked complete.
 
-## Read-only Spec Kit analysis provenance
+## Analysis method and provenance
 
-The installed existing-feature specify → plan → tasks workflow updated the existing ten Markdown artifacts without replacing templates or creating another feature. `setup-plan.sh --json` found the existing plan and skipped template copy. The analysis phase ran `.specify/scripts/bash/check-prerequisites.sh --json --require-spec --require-tasks --include-tasks` with `SPECIFY_FEATURE_DIRECTORY=specs/012-stack-inspection` and `SPECIFY_FEATURE_NO_PERSIST=1`; it resolved the owned worktree's existing feature and found research, data model, contracts, quickstart and tasks. `.specify/extensions.yml` is absent, so no before/after hooks ran. No feature-state file was persisted.
+The installed read-only Spec Kit analysis examined the existing feature’s spec, plan, tasks, model/contracts, constitution 1.2.0 and the referenced adjacent specs. Prerequisites resolved the existing feature with no persisted state or extension hooks. This document records the author report separately from that read-only operation; it is not independent clearance. The source base was `3d4c867a451217a2942564a7dcb4736d45a09b70`. Historical 2026-10-17 review rounds remain below with their own revisions and verdicts.
 
-The analysis itself made no writes. After that read-only phase ended, this report was recorded by the separately authorized documentation workflow, together with routine task-path/coverage wording corrections. This author report does not impersonate independent review. Its inputs were spec.md, plan.md, tasks.md, model/contracts, constitution 1.2.0 and the adjacent/reference specs named in the source reconciliation. The base was `3d4c867a451217a2942564a7dcb4736d45a09b70`.
+## Independent PR review and appended corrections
+
+The [independent PR #237 review](https://github.com/wstein/sourcesteward/pull/237#pullrequestreview-5640826412) reviewed exact head `c3b39da683d815307efb81ec5abaf15c9204a06b` and returned **NOT CLEAR: nine open findings**, plus one non-blocking information item. The resolutions below are author changes appended after that reviewed head; they require an independent delta review of the exact corrected head. Neither this table nor the old historical READY transfers clearance.
+
+| Finding | Author resolution and traceable artifact | Future assertion/task |
+| --- | --- | --- |
+| F1 | spec.md OQ-NET, plan question 3 and research/quickstart/contract/checklist remove invented network approval; scope and name remain open | T001/T020 gate the affected surface on an owner answer |
+| F2 | FR-020, plan decision 16 and contract caller orchestration select bounded repositories with per-entry native evidence, shared budgets and aggregate exit 1 for any incomplete/refused/error outcome | T037 mixed Git/jj, reverse completion, independent samples, cancellation and aggregate outcomes |
+| F3 | Commands vocabulary and OQ-FLAGS distinguish proposed --pull-requests from shared --online, human/default output, fixed deadline and no store; no unselected alias/flag is accepted | T020 selected/rejected flag matrix before implementation |
+| F4 | data-model.md field-to-flag table maps fully qualified branch, old/new/expected head, Git SHA-1-only v1 limits, actual predecessor apply and explicit caller-only identity; diagnostics stay command-specific | T036 rejects unsupported ids, inferred identity, missing actual predecessor or stale values |
+| F5 | depth retains local layers; qualified complete open_depth excludes only proven-landed layers, incomplete/error is null, and advice uses candidate open_depth >2 | T035 includes the local-depth-3/open-depth-2 example and unknown/incomplete cases |
+| F6 | US2.12 and data model locate boundaries in referenced Layer/base/plan fields rather than claiming ids live in the finding; later destination remains null pending actual predecessor apply | T038 verifies child indices and boundary location; T036 checks the downstream mapping |
+| F7 | tasks.md forward/reverse FR/SC/story tables and analysis rows now share exactly the task Coverage/US edges, including all added tasks and remote/acceptance entries | Read-only document coverage audit; future T001/T033 maintain traceability |
+| F8 | native-stack finding and human summary retain M3’s head-deletion-enabled-only measurement; no disabled-setting result is called measured | T027 checks qualified summary wording |
+| F9 | group 6 and contract always print a validated explicit trunk with --base, retain it in expected and block unknown/unsafe trunk without GitHub-default substitution | T006 tests non-default trunk, unknown/unsafe blocking and no wrong-base advice |
+| F10 | Session execution/publication instructions were removed from plan/tasks; analysis retains durable method, review provenance, checks and open evidence only | Documentation scope review; no product behavior added |
 
 ## Findings and owner questions
 
@@ -65,15 +80,11 @@ Every FR and every SC has its own row. “Covered” means a proposed task and c
 - Constitution alignment: no proposed exception. No prompt, implicit network, borrowed ownership, config-derived expected identity, original-workspace simulation, implicit remote action or agent landing is authorized.
 - Requirement and task paths are explicit; future implementation work outside this feature directory is a proposal, not an edit authorized by this documentation refresh.
 
-## Appended repository fan-out clarification
+## Documentation verification and remaining acceptance
 
-Root documentation review identified that the generic edge-read wording did not explicitly cover the brief’s repository fan-out requirement. FR-020, plan decision 16, T037 and the contract now specify an explicit caller-selected repository list with independent native ownership/base/tip/status/sampling, indexed outcomes shared budgets and aggregate exit 1 for any incomplete/refused/error member (exit 0 is completeness only, never readiness). The 1..16 repository and at-most-four-worker values cite the existing Spec 023 bounds; no discovery, multi-PATH CLI or aggregate JSON schema is inferred. This is an appended correction to the reviewed lineage, not a rewrite or inherited clearance. Coverage remains 20 FR + 8 SC and 38 unchecked future tasks. The added mixed Git/jj reverse-completion/cancellation assertions remain design ideas, not executed backend tests. Network scope/name was not settled; current owner questions are OQ-NET, OQ-FLAGS and OQ-EXIT; no multi-repository CLI spelling is proposed or needed for this caller-only contract.
+The offline `python3 -I -B scripts/check-docs.py` check passed for 352 authored documents. Targeted `/opt/bundledock/toolbox/bin/typos specs/012-stack-inspection` and `git diff --check` passed. The document coverage audit requires every FR/SC to have an individual task plus literal test idea, every task to map back, and all forward/reverse/story edges to agree. Go tests, make targets, builds, native conformance, live GitHub calls and executable JSON/schema tests were not run for this Markdown-only change and are not passing acceptance claims.
 
-## Documentation verification and next action
-
-`python3 -I -B scripts/check-docs.py` passed on the baseline and the refreshed artifacts: 352 authored documents. `git diff --check` passed. No repository typos configuration was found; a coordinator-requested targeted `/opt/bundledock/toolbox/bin/typos specs/012-stack-inspection` run passed after spelling out the old final-PR placeholder as `P_N` (the first run flagged that notation as a word). Go tests, make targets, builds, native conformance, live GitHub calls and executable JSON/schema tests were not run for this Markdown-only task and are not reported as passing.
-
-Next: coordinator independent documentation review on the exact committed final head, then its one authorized publication round and required CI. Pending independent review/CI are named publication/readiness blockers; historical READY never clears them. No author push, PR creation, CI action, merge or owner-checkout resync is performed. Implementation remains gated by its own source task, tests and acceptance evidence. Routine remediation of the documentation scope was already owner-authorized; this report grants no new scope.
+Independent delta review of the exact corrected head and required CI remain pending. The unimplemented feature still needs its source tasks, owner selections for unresolved surfaces, native/backend/schema conformance and actual acceptance evidence. Historical clearance, author traceability and complete observations never imply implementation readiness or permission to execute an effect.
 
 # Historical 2026-10-17 independent analysis rounds
 
