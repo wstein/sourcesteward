@@ -44,8 +44,8 @@ Findings:
   [notice] [inferred] restack-needed: Layers 2 retain old parent commits; local restack advice is conditional on native status: unchecked. (git-cherry, git-range)
   [notice] [observed] stack-behind-base: The stack is based 1 commit(s) behind the base. (git-range)
 Plan (advisory; nothing was executed, and a plan authorizes nothing; native stack status not checked):
-  s1  git rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2
-  s2  git rebase --onto s2 eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa s3   (after s1)
+  s1  git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2
+  s2  git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto s2 eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa s3   (after s1)
 Complete: yes. Network reads: none.
 Notice: Sampled advisory evidence; stw ran none of the printed commands and a plan authorizes nothing.
 ```
@@ -266,13 +266,17 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
     "performed_by": "maintainer",
     "argv": [
      "git",
+     "-c",
+     "rebase.updateRefs=false",
+     "-c",
+     "rerere.enabled=false",
      "rebase",
      "--onto",
      "main",
      "5758b572620f6940ef3b8292408c97f91ece4f8b",
      "s2"
     ],
-    "display": "git rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2",
+    "display": "git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2",
     "environment": [],
     "expected": {
      "layer_tip": "eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa",
@@ -294,13 +298,17 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
     "performed_by": "maintainer",
     "argv": [
      "git",
+     "-c",
+     "rebase.updateRefs=false",
+     "-c",
+     "rerere.enabled=false",
      "rebase",
      "--onto",
      "s2",
      "eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa",
      "s3"
     ],
-    "display": "git rebase --onto s2 eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa s3",
+    "display": "git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto s2 eceac4e6d2eb9d8cb7fda6e8425ee7bdc7aeadfa s3",
     "environment": [],
     "expected": {
      "layer_tip": "88da0eb74325695bbfd47adb9d3771cde353bc28",
@@ -359,7 +367,7 @@ Every existing command, flag, schema and fixture is unchanged and byte-identical
 
 `restack-needed` uses the exact Findings rule and is conditional when native status is unchecked. Rebase-merge SHA inequality and branch-name matches alone are never landing proof. `git cherry`/patch ids qualify linear patch content; merge commits, squash mismatches and conflict resolutions limit that evidence. A parent that is closed but not merged is not landed; its child's stale base remains only `base-mismatch`. No observation authorizes a retarget, rewrite or publication.
 
-The displayed `git rebase --onto <new parent> <full old parent> <child>` is an inert human reference for the exact replay boundary. Spec 015 owner D7 requires plumbing/quarantine and compare-and-swap; its executor never runs this argv. The field-to-flag table in [data-model.md](../data-model.md#field-to-flag-mapping-for-the-implemented-spec-015-git-v1-plan) maps selected branches to validated `refs/heads/...`, old/new parents and expected child head to full ids, and never derives `--identity` from 012. Later null destinations require the actual predecessor apply outcome; the current 015 v1 accepts only native Git SHA-1, not 012’s jj or 64-hex Git observations. Diagnostics and exit mappings remain per-command namespaces. Actual Spec 015 apply must produce its own actual-head evidence and pass independent exact-head review before a separate Spec 016 lease-push plan/apply, with explicit action authorization and plan id. Neither a predicted head nor `Layer.upstream.commit_id` is a fresh publishable head/lease receipt.
+The displayed `git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto <new parent> <full old parent> <child>` is an inert human reference for the exact replay boundary. Spec 015 owner D7 requires plumbing/quarantine and compare-and-swap; its executor never runs this argv. The field-to-flag table in [data-model.md](../data-model.md#field-to-flag-mapping-for-the-implemented-spec-015-git-v1-plan) maps selected branches to validated `refs/heads/...`, old/new parents and expected child head to full ids, and never derives `--identity` from 012. Later null destinations require the actual predecessor apply outcome; the current 015 v1 accepts only native Git SHA-1, not 012’s jj or 64-hex Git observations. Diagnostics and exit mappings remain per-command namespaces. Actual Spec 015 apply must produce its own actual-head evidence and pass independent exact-head review before a separate Spec 016 lease-push plan/apply, with explicit action authorization and plan id. Neither a predicted head nor `Layer.upstream.commit_id` is a fresh publishable head/lease receipt.
 
 The owner performs Spec 043 landing separately. 012 never starts 015/016/043, fetches, prompts, or resyncs an owner's checkout. OQ-NET keeps online scope and flag naming open; the draft `--pull-requests` mode was a recommendation, never a recorded owner approval.
 
@@ -376,3 +384,5 @@ The orchestrator shares one 30-second deadline, 50-request counter and 1 MiB out
 A link advisory always passes `--base` with the known, Argument-rules-valid `base.trunk_ref`, even when it differs from the selected repository’s default branch. It never forwards a remote-qualified `--base` selector such as `origin/release` instead of the trunk `release`. The step records `{numbers, trunk_ref}` in `expected` and `GH_REPO` in its environment. Unknown trunk blocks at layer 1 with `trunk-ref-unknown`; an unsafe trunk blocks with `unsafe-name`, with no link argv/display and no fallback to GitHub’s default. The local/native result is retained; this advisory block alone does not fail a complete observation. The link remains print-only and authorizes no write.
 
 For higher-level caller aggregation, any incomplete, refused/error, canceled/not-started or output-limited member yields aggregate exit 1; exit 0 requires every member observation complete. Invalid selection before workers start is usage exit 2. This is caller completeness/error evidence only, not a readiness verdict or a new aggregate JSON schema, and changes no single-PATH exit contract.
+
+The two fixed Git reference overrides disable config-driven automatic updates of other references and rerere recording: every printed replay argv includes `-c rebase.updateRefs=false -c rerere.enabled=false` before `rebase`. They are neither inherited choices nor a claim that executing arbitrary repository hooks is safe. Spec 012 starts none of these commands, and Spec 015 D7 still uses plumbing/quarantine/CAS instead of this porcelain reference.

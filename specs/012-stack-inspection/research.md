@@ -70,7 +70,7 @@ Scratch repository: `main` with commit `base`; branches `s1 <- s2 <- s3` one com
 | then `git rebase --onto s2 eceac4e…(full id of the old s2) s3` (writes) | `Successfully rebased`; `main..s3` is `s3` and `s2` |
 | `git rebase main` on the stale `s2` (writes) | also succeeds and skips the already applied commit, with an advice message |
 
-The exact printed form therefore is `git rebase --onto <new parent> <old parent tip id> <branch>` applied bottom up, recording old tips before the first rewrite. The same `git cherry` call on Git 2.47.3 reproduced the `-`/`+` classification for the rebased state. The minimum lane (Git 2.46.0) was not run here.
+The historical draft’s printed form was `git rebase --onto <new parent> <old parent tip id> <branch>` applied bottom up, recording old tips before the first rewrite. The same `git cherry` call on Git 2.47.3 reproduced the `-`/`+` classification for the rebased state. The minimum lane (Git 2.46.0) was not run here.
 
 ### M10. A merge simulation writes objects
 
@@ -166,3 +166,7 @@ See OQ-NET, OQ-FLAGS and OQ-EXIT in [spec.md](spec.md). Recommendation: keep an 
 ### Native-link trunk qualification from review
 
 The independent PR #237 review reported that installed `gh stack link` v0.2.1 help documents `--base` defaulting to the repository default branch. This review evidence is not a new live-write measurement. The proposed group 6 advisory now always passes a known validated `base.trunk_ref` explicitly, blocks an unknown/unsafe trunk and records it in step `expected`; no missing trunk is silently mapped to GitHub’s default. M3 remains measured with head deletion enabled only; no behavior with head deletion disabled is inferred as measured.
+
+### Current inert Git reference guardrails
+
+M2/M9/M16 command quotes and the D9 shorthand preserve their historical measured forms; they were not rerun or silently rewritten. The current proposed print-only Git replay form is `git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto <new parent> <full old parent> <child>`. The fixed overrides disable config-driven automatic ref updates and rerere recording for that reference form, without authorizing execution or claiming arbitrary hooks are safe. Future T006/T010 assert argv/display and unrelated-ref/rr-cache preservation in disposable copies. Spec 015 D7 remains native plumbing/quarantine/CAS and never executes this porcelain argv.
