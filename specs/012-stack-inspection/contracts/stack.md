@@ -9,7 +9,7 @@ stw stack show [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] 
 stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] [--host HOST] [--remote NAME]] [--after-fetch] [--json]
 ```
 
-`PATH` defaults to the current directory. `--base` and `--tip` are required and each names one reference; `--tip` is a local branch or jj bookmark, `--base` may also be a remote-tracking branch or a tracked remote bookmark. `--repo`, `--host` and `--remote` are valid only with `--pull-requests` and follow Spec 020 (host default `github.com`, remote text never selects a credential host, `--repo` never overrides ownership, `--repo` and `--remote` must agree). Without an explicit `show` or `plan` subcommand the group shows help and performs no observation, prompt or mutation. The commands accept no other flags, never prompt, open an editor or pager, or read input. No `gh jj` entry point exists for them.
+`PATH` defaults to the current directory. `--base` and `--tip` are required and each names one reference; `--tip` is a local branch or jj bookmark, `--base` may also be a remote-tracking branch or a tracked remote bookmark. `--repo`, `--host` and `--remote` are valid only with `--pull-requests` and follow Spec 020 (host default `github.com`, remote text never selects a credential host, `--repo` never overrides ownership, `--repo` and `--remote` must agree). Without an explicit `show` or `plan` subcommand the group shows help and performs no observation, prompt or mutation. Under the current proposed surface the commands accept no other flags, never prompt, open an editor or pager, or read input. No `gh jj` entry point exists for them.
 
 | Flag | Meaning |
 | --- | --- |
@@ -18,6 +18,10 @@ stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] 
 | `--pull-requests` | also read the pull requests and native stacks of the layers from GitHub (network effect, disclosed) |
 | `--after-fetch` | `plan` only: the caller declares a fetch was just done; not verified; a still-missing object becomes the terminating note `object-unreachable` |
 | `--json` | emit one `StackResult` object, including `incomplete` and `error` results |
+
+## Shared flag vocabulary and owner decision gates
+
+This proposed contract uses `--pull-requests` only; it has no implicit `--online` alias. Spec 041 uses shared `--online` and `--timeout`; Specs 041/043 both use `--json`/`--human`. `--state-dir` is inapplicable here because no observation store exists. This draft defaults to human output and a fixed 30-second deadline; it does not yet accept `--human` or `--timeout`. OQ-NET recommends shared `--online` with an optional explicit `--pull-requests` alias; OQ-FLAGS recommends explicit `--human` exclusive with `--json` and a timeout that only shortens LIM-1. These are recommendations, not selected flags. Owner decisions precede implementation of the affected CLI/remote surface; the current table/examples describe only the draft, with no approved network exception inferred from older text.
 
 ## Exit status
 
@@ -377,7 +381,7 @@ Every existing command, flag, schema and fixture is unchanged and byte-identical
 
 The displayed `git rebase --onto <new parent> <full old parent> <child>` is an inert human reference for the exact replay boundary. Spec 015 owner D7 requires plumbing/quarantine and compare-and-swap; its executor never runs this argv. Actual Spec 015 apply must produce its own actual-head evidence and pass independent exact-head review before a separate Spec 016 lease-push plan/apply, with explicit action authorization and plan id. Neither a predicted head nor `Layer.upstream.commit_id` is a fresh publishable head/lease receipt.
 
-The owner performs Spec 043 landing separately. 012 never starts 015/016/043, fetches, prompts, or resyncs an owner's checkout. OQ-NET retains approved `--pull-requests` semantics pending any explicit owner amendment of the literal no-network wording.
+The owner performs Spec 043 landing separately. 012 never starts 015/016/043, fetches, prompts, or resyncs an owner's checkout. OQ-NET keeps online scope and flag naming open; the draft `--pull-requests` mode was a recommendation, never a recorded owner approval.
 
 ## Explicit caller orchestration over repositories
 

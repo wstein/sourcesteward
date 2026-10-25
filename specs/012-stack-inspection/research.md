@@ -116,7 +116,7 @@ Native stack `s1` (two commits), `s2`, `s3`; GitHub squash-merges `s1`, deletes 
 
 **D6. Explicit `--base` and `--tip`.** No default tip from HEAD: a jj workspace has no current branch, and peers should behave the same. Rejected: discover the stack from all local branches (ambiguity, FR-004).
 
-**D7. Network is opt-in.** `--pull-requests` makes the network effect visible in the command line (constitution: network calls are effects a contract must disclose; Spec 016 FR-002). Rejected: always read when a remote exists (surprise authentication and rate use).
+**D7. Proposed opt-in design (owner question remains open).** `--pull-requests` makes the network effect visible in the command line (constitution: network calls are effects a contract must disclose; Spec 016 FR-002). Rejected: always read when a remote exists (surprise authentication and rate use).
 
 **D8. Delegation, not reimplementation, for native stacks.** M6 shows `gh stack link` is the supported path for jj-style workflows. For the later link effect the owner wants the bounded transport, not a subprocess; the write endpoints are unmeasured (writes need explicit authorization), so the effect catalog ([contracts/later-effects.md](contracts/later-effects.md)) lists the measurement as a precondition and keeps the printed `gh stack link` line as the only 012 output.
 
@@ -161,4 +161,4 @@ No new API/library recommendation or current GitHub claim is made here; recorded
 
 ### Needs owner decision
 
-See OQ-NET and OQ-EXIT in [spec.md](spec.md). Recommendation: retain the approved explicit online read mode and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.
+See OQ-NET, OQ-FLAGS and OQ-EXIT in [spec.md](spec.md). Recommendation: keep an offline default with explicitly opted-in reads using shared `--online` and, if selected by the owner, a `--pull-requests` alias; align output/timeout flags through OQ-FLAGS, and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. No artifact records owner acceptance of the old network recommendation. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.

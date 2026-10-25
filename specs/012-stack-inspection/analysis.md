@@ -12,8 +12,9 @@ The analysis itself made no writes. After that read-only phase ended, this repor
 
 | ID | Category | Severity | Location | Result and next action |
 | --- | --- | --- | --- | --- |
-| OQ-NET | Scope question | Medium | spec.md, Needs owner decision; FR-005/FR-007 | Literal no-network wording could contradict the approved explicit `--pull-requests` mode. Recommendation: retain offline default plus bounded uncached opt-in GETs. Current contract preserves the approved mode; changing it needs an explicit owner amendment. |
+| OQ-NET | Scope/naming question | Medium | spec.md, Needs owner decision; FR-005/FR-007 | Opt-in network scope and naming were open recommendations, not approved decisions. Recommend offline default plus shared `--online` and an optional `--pull-requests` alias. The current draft proposes only `--pull-requests`; owner scope/name selection precedes remote-surface implementation. |
 | OQ-EXIT | Compatibility question | Medium | spec.md, Needs owner decision; contracts/stack.md, Exit status | A future shared 0/1/2 convention differs from implemented hidden Spec 015 v1 incomplete exit 3. Recommendation: preserve v1 and require a versioned migration decision. Current unimplemented 012 stays 0/1/2 and changes no runtime/schema file. |
+| OQ-FLAGS | Vocabulary question | Medium | spec.md, Shared toolbelt vocabulary; contracts/stack.md | Recommend `--human` exclusive with `--json` and caller `--timeout` that only shortens LIM-1. Current draft accepts neither; `--state-dir` is inapplicable because no store exists. Owner selection precedes those flag changes. |
 
 These are explicit owner questions, not silently chosen answers or contradictory current execution rules. No critical/high defect or zero-coverage requirement remains in the current documentation design. They do not prevent review of this Markdown scope; future work changing either contract must wait for its decision. External/native measurements U1–U10 remain unverified and are future implementation gates.
 
@@ -23,7 +24,7 @@ Every FR and every SC has its own row. “Covered” means a proposed task and c
 
 | Requirement | Task IDs | Literal future test idea |
 | --- | --- | --- |
-| FR-001 | T020, T036 | Invoke show and plan with the same base/tip and compare observations; invoke the bare group and assert help with zero observation calls, prompts or mutation. |
+| FR-001 | T020, T036 | Invoke show and plan with the same base/tip and compare observations; require owner-selected shared/network vocabulary before implementation and reject unselected flags; invoke the bare group and assert help with zero observation calls, prompts or mutation. |
 | FR-002 | T008, T016 | Omit tip, supply an ambiguous ref and supply a remote tip; assert usage/ref refusal, then resolve explicit valid base/tip to exact native ids. |
 | FR-003 | T002, T016, T017, T021 | Run a colocated and secondary jj fixture and assert the Git adapter call count is zero; unavailable jj refuses and declared gaps remain visible. |
 | FR-004 | T008, T009, T011, T016 | Build a three-layer linear range, then add a merge or divergent jj change; assert ordered partitioned layers for the first and explicit topology refusal for the second. |
@@ -59,13 +60,13 @@ Every FR and every SC has its own row. “Covered” means a proposed task and c
 - Combined design coverage: 28/28 (100%); zero untraceable grouped requirements.
 - Tasks: 38, all unchecked. Story labels: US1 6, US2 6, US3 7, US4 10, US5 2; setup/foundation/final evidence tasks 7. The retained work-item structure reflects existing reviewed dependencies rather than manufacturing a documentation PR stack.
 - Unmapped tasks: none; T001 gates SC-007 traceability, T034 records actual acceptance, and the remaining tasks map directly through their story/FR/SC entries.
-- Critical issues: 0. High issues: 0. Open owner questions: 2. Duplicate requirements needing consolidation: 0.
+- Critical issues: 0. High issues: 0. Open owner questions: 3. Duplicate requirements needing consolidation: 0.
 - Constitution alignment: no proposed exception. No prompt, implicit network, borrowed ownership, config-derived expected identity, original-workspace simulation, implicit remote action or agent landing is authorized.
 - Requirement and task paths are explicit; future implementation work outside this feature directory is a proposal, not an edit authorized by this documentation refresh.
 
 ## Appended repository fan-out clarification
 
-Root documentation review identified that the generic edge-read wording did not explicitly cover the brief’s repository fan-out requirement. FR-020, plan decision 16, T037 and the contract now specify an explicit caller-selected repository list with independent native ownership/base/tip/status/sampling, indexed outcomes and shared budgets. The 1..16 repository and at-most-four-worker values cite the existing Spec 023 bounds; no discovery, multi-PATH CLI or aggregate JSON schema is inferred. This is an appended correction to the reviewed lineage, not a rewrite or inherited clearance. Coverage remains 20 FR + 8 SC and 38 unchecked future tasks. The added mixed Git/jj reverse-completion/cancellation assertions remain design ideas, not executed backend tests. Owner questions OQ-NET/OQ-EXIT are unchanged; no multi-repository CLI spelling is proposed or needed for this caller-only contract.
+Root documentation review identified that the generic edge-read wording did not explicitly cover the brief’s repository fan-out requirement. FR-020, plan decision 16, T037 and the contract now specify an explicit caller-selected repository list with independent native ownership/base/tip/status/sampling, indexed outcomes and shared budgets. The 1..16 repository and at-most-four-worker values cite the existing Spec 023 bounds; no discovery, multi-PATH CLI or aggregate JSON schema is inferred. This is an appended correction to the reviewed lineage, not a rewrite or inherited clearance. Coverage remains 20 FR + 8 SC and 38 unchecked future tasks. The added mixed Git/jj reverse-completion/cancellation assertions remain design ideas, not executed backend tests. Network scope/name was not settled; current owner questions are OQ-NET, OQ-FLAGS and OQ-EXIT; no multi-repository CLI spelling is proposed or needed for this caller-only contract.
 
 ## Documentation verification and next action
 

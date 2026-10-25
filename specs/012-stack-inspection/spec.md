@@ -14,7 +14,7 @@
 
 ## Toolbelt boundary (2026-10-25)
 
-This feature supplies **stack observation**. Spec 014 owns isolated integration preflight/replay evidence, Spec 015 owns local restack plan/apply, Spec 013 owns checkpoint/restore/selective undo, Spec 016 owns separately selected forge effect plan/apply, and Spec 043 owns human-only landing. Observation authorizes no local mutation; local mutation authorizes no remote write. With no explicit `show` or `plan` subcommand the group shows help and performs no observation, prompt or mutation. Local observation is offline by default; `--pull-requests` remains the owner-approved explicit online read, not an implicit fetch. Existing local objects and remote-tracking refs are the only offline cache; this feature adds no HTTP cache or persistent evidence store.
+This feature supplies **stack observation**. Spec 014 owns isolated integration preflight/replay evidence, Spec 015 owns local restack plan/apply, Spec 013 owns checkpoint/restore/selective undo, Spec 016 owns separately selected forge effect plan/apply, and Spec 043 owns human-only landing. Observation authorizes no local mutation; local mutation authorizes no remote write. With no explicit `show` or `plan` subcommand the group shows help and performs no observation, prompt or mutation. Local observation is offline by default; the draft proposes `--pull-requests` as an explicit online read, never an implicit fetch. Network scope and flag naming remain open owner question OQ-NET; no recorded owner answer approved that proposal. Existing local objects and remote-tracking refs are the only offline cache; this feature adds no HTTP cache or persistent evidence store.
 
 A specification is neither implementation evidence nor an execution instruction. The 2026-10-17 spike and review rounds are historical measurements, with their original limits; this refresh makes no live GitHub or new backend measurement. New JSON shapes are **UNPUBLISHED Markdown proposals** until implementation and conformance. Existing JSON files remain frozen.
 
@@ -161,6 +161,10 @@ A caller can see which effects a stack workflow would need and that none is part
 | `stw stack plan [PATH]` | the same flags and `--after-fetch` | `plan` |
 
 `PATH` defaults to the current directory. `--repo`, `--host` and `--remote` are valid only with `--pull-requests` and follow Spec 020 (`--host` defaults to `github.com`; `--repo` never overrides ownership). `--after-fetch` (plan only, echoed as `after_fetch` in the result) declares that the caller has just fetched; it is not verified and changes how a missing object is reported (Plan rules group 2). Any other combination, including `--after-fetch` with `show`, is a usage error (exit 2, no JSON).
+
+### Shared toolbelt vocabulary (proposed surface)
+
+Spec 041 uses shared `--online`, `--timeout` and `--state-dir`; Specs 041/043 both use `--json`/`--human`. In this still-unimplemented draft, `--state-dir` is not applicable because observation has no store; `--json` selects structured output and omission selects human output; `--human` and caller `--timeout` are not accepted, and LIM-1 remains the fixed deadline. The proposed `--pull-requests` spelling requests online evidence, whereas Spec 041 permits network only with its `--online` flag. This is an unresolved cross-command naming choice, not an approved exception or an implicit alias. OQ-NET and OQ-FLAGS give recommendations for owner selection before the affected CLI/remote surface is implemented; until then examples describe only the existing draft proposal.
 
 ### Capability table (normative)
 
@@ -332,7 +336,8 @@ These are actual unresolved choices, not invented approvals. The current rules a
 
 | ID | Choice requiring owner decision | Recommended default | Current contract |
 | --- | --- | --- | --- |
-| OQ-NET | Does the new brief's literal “no-network read-only” prohibit even the 2026-10-17 approved `--pull-requests` GET mode? | Keep offline default plus explicit online reads, with cached local evidence labelled sampled. | Retain approved explicit online semantics; do not add any implicit request, fetch or HTTP cache. A prohibition would need an explicit amendment of FR-007. |
+| OQ-NET | Should 012 include explicit opt-in GitHub reads, and should the opt-in be `--pull-requests`, shared `--online`, or an alias? | Keep offline default; use `--online` as the shared opt-in, with `--pull-requests` as an explicit alias if the owner wants to retain the draft spelling. | The draft below still proposes `--pull-requests` only; no online scope/name is owner-approved. Resolve before implementing the remote command surface. No implicit request, fetch or HTTP cache is proposed. |
 | OQ-EXIT | Should a later shared toolbelt protocol standardize 0/1/2 while the implemented hidden Spec 015 v1 returns 3 for incomplete? | Preserve v1 exit 3; require an explicit versioned migration before unifying. | This unimplemented 012 contract uses 0/1/2; it changes no implemented 015 behavior or published file. |
+| OQ-FLAGS | Should 012 adopt shared `--human` and `--timeout` flags from Specs 041/043? | Add explicit `--human` (mutually exclusive with `--json`) and a positive caller timeout that can only shorten the 30-second operation bound. Keep `--state-dir` inapplicable because observation has no store. | Neither `--human` nor `--timeout` is accepted by the current proposed Commands table; output defaults to human and the fixed timeout applies. Resolve before implementing that flag surface. |
 
 Other scoped recommendations and unmeasured endpoint/capability questions remain in [plan.md](plan.md) and [research.md](research.md). They do not silently expand the current command surface.
