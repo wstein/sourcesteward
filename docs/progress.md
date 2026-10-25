@@ -44,10 +44,12 @@ Windows and Darwin remain unverified here.
 ## Stack toolbelt owner decisions (2026-10-25; implementation planned)
 
 The owner settled all **39 former OQ IDs** across Specs 012/013/014/015/016/043;
-unlisted choices adopt the source research recommendations. The [dated decision
+nine source IDs have direct answers; IDs without an explicit answer adopt the source research recommendations. Cross-spec owner-answer overrides are marked in the index. The [dated decision
 index](../specs/016-stacked-pr-coordination/research.md#cross-spec-decision-index)
 and [concrete profiles](../specs/016-stacked-pr-coordination/contracts/owner-decisions.md)
 record direction separately from unimplemented/native-measurement gates.
+Separate 043 endpoint/ownership/constitution reconciliation remains OPEN for
+owner decisions; these indexed answers do not approve those amendments.
 
 012 uses only `--online`, default offline, with no old alias; single repository
 now, batch later under its own decision. Shared human/JSON and shortening-timeout
@@ -60,17 +62,17 @@ independent safety copies stay in an explicitly selected EXTERNAL payload store.
 Trusted workspace policy supplies owner identity, reviewer allowlist/check
 sources; global Git identity corroborates only and missing authority blocks
 push/Ready. Default signature policy refuses loss/unmet/unknown requirements.
-Optional re-sign is separately planned/authorized local015 work through a fixed
+Optional re-sign is separately planned/authorized local 015 work through a fixed
 trusted HOST helper/verifier, no stw keys, unavailable without measured helper.
 Signed chain parents are rebuilt bottom-up and final verified SHA exists before
-review;016 validates receipts and never runs signing under remote authorization.
+review; 016 validates receipts and never runs signing under remote authorization.
 
-The owner chose target CLI exit-contract revision2 **0/1/2 now**: incomplete1,
-no legacy3 selector. CURRENT hidden015code still returns3 until red-first T045/
-T046 change `restackIncomplete` root dispatch/help; frozen JSONschema1 bytes are
-a separate version domain. Original20/24 history remains; no task is ticked by
+The owner chose target CLI exit-contract revision 2 **0/1/2 now**: incomplete 1,
+no legacy 3 selector. CURRENT hidden 015 code still returns 3 until red-first T045/
+T046 change `restackIncomplete` root dispatch/help; frozen JSON schema 1 bytes are
+a separate version domain. Original 20/24 history remains; no task is ticked by
 this amendment. Native jj/forge effects require measurements and reviewed closed
-allowlists. 014 stays helper-free;043 stays human-only with existing typed
+allowlists. 014 stays helper-free; 043 stays human-only with existing typed
 confirmation, conditional retarget/deletion and unmeasured-shape refusal.
 No build, schema-file change, helper execution or live operation is implied.
 
@@ -84,7 +86,7 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 (20 of 24 done) and [verification](../specs/015-local-restacking/verification.md). Open:
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply` and jj are later proposed local slices, while push belongs to Spec 016.
-The 015 follow-up now has 24 unchecked future tasks, including explicit exit-revision and optional host-signing work; none is claimed implemented, and the original20/24 history remains intact.
+The 015 follow-up now has 25 unchecked future tasks, including explicit exit-revision and optional host-signing work; none is claimed implemented, and the original 20/24 history remains intact.
 
 ## Spec 041 stw tidy wizard (implemented, unpublished schema, T021 open, 2026-10-25)
 
