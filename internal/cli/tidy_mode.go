@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -150,4 +151,56 @@ func selectTidyPlanLayer(cmd *cobra.Command, args []string, o *tidyWizardOptions
 		return tidyWizard, nil
 	}
 	return tidyExpert, nil
+}
+
+// tidyBareOptions holds the flags of bare `stw tidy`, the interactive wizard: the wizard-only
+// flags and the shared ones (the state directories are repeatable here).
+type tidyBareOptions struct {
+	tidyWizardOptions
+	json    bool
+	timeout time.Duration
+	// save and yes are registered hidden only to refuse them with a usage message.
+	save, yes bool
+}
+
+func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
+	f := cmd.Flags()
+	f.StringVar(&o.workspace, "workspace", "", "Workspace to use (default: discovery from the working directory)")
+	f.BoolVar(&o.mine, "mine", false, "Only items owned by the caller's owner label; selects agent mode (no prompt)")
+	f.StringArrayVar(&o.byOwner, "by-owner", nil, "Only items of this owner label (repeatable); narrows the view, never selects the run mode")
+	f.StringArrayVar(&o.member, "member", nil, "Restrict to a member repository (repeatable; the workspace repository is .)")
+	f.StringArrayVar(&o.memberBase, "member-base", nil, "Override the derived base of one member as NAME=REF (repeatable)")
+	f.StringVar(&o.only, "only", "", "Comma list of retire, branches, tracking, stale-worktrees (default all)")
+	f.StringArrayVar(&o.stateDirs, "state-dir", nil, "Extra private state directory holding creation records (repeatable; the first valid one stores plans)")
+	f.Bool("online", false, "Permit the contract-3 authenticated reads (default off)")
+	f.DurationVar(&o.timeout, "timeout", 0, "Deadline over the whole analysis")
+	f.BoolVar(&o.json, "json", false, "Print the overview as one document; asks nothing, stores nothing")
+	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
+	f.BoolVar(&o.save, "save", false, "")
+	f.BoolVar(&o.yes, "yes", false, "")
+	_ = f.MarkHidden("save")
+	_ = f.MarkHidden("yes")
+}
+
+// runTidyBare is bare `stw tidy`. The flag values are validated before anything is analysed.
+func runTidyBare(cmd *cobra.Command, o *tidyBareOptions) error {
+	if o.yes {
+		return fmt.Errorf("--yes belongs to `stw tidy apply PLAN-ID` and requires an explicit plan id")
+	}
+	if o.save {
+		return fmt.Errorf("--save belongs to `stw tidy plan`; bare `stw tidy` stores the plan set you choose")
+	}
+	if cmd.Flags().Changed("json") && cmd.Flags().Changed("human") {
+		return fmt.Errorf("--json and --human exclude each other")
+	}
+	if err := validateTidyWizardValues(cmd, &o.tidyWizardOptions); err != nil {
+		return err
+	}
+	if cmd.Flags().Changed("timeout") && o.timeout <= 0 {
+		return fmt.Errorf("--timeout must be a positive duration")
+	}
+	if o.json {
+		return runTidyWizardPlan(cmd, &o.tidyWizardOptions, true, o.timeout)
+	}
+	return runTidyInteractive(cmd, &o.tidyWizardOptions, o.timeout)
 }

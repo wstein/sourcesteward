@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/tidywizard"
@@ -23,9 +24,8 @@ var tidyConfirmOpener owner.Opener = owner.DevTTY
 // overview, ask which rows to plan, store the plan set of the choice, and apply it only after an
 // explicit "y" on that plan id, through the very same apply path as `stw tidy apply`. Without a
 // terminal, or in agent mode, it does not prompt: it behaves as `tidy plan` without --save.
-func runTidyInteractive(cmd *cobra.Command) error {
-	var w tidyWizardOptions
-	run, err := startWizard(cmd, &w, 0)
+func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration) error {
+	run, err := startWizard(cmd, w, timeout)
 	if err != nil {
 		return err
 	}
