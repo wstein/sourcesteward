@@ -71,6 +71,21 @@ no-op. In an agent run, an `other` or `unknown` item is refused with `scope-not-
 not drive the wizard through a pty wrapper or `send-keys`. The wizard's own `Apply it now?` question accepts only an explicit `y`, which
 runs the same apply code for that plan id.
 
+**Non-interactive use.**
+
+```sh
+stw tidy plan --mine --json            # overview of the caller's own items (needs $STW_OWNER, else exit 2; use --by-owner NAME)
+stw tidy plan --save --json            # store the safe own items; prints plan_id
+stw tidy apply PLAN-ID --yes --json    # explicit id authorizes; refused without an id
+```
+
+**Exit codes.** 0 analysis complete (also with retained or other-owner candidates, and the no-terminal degradation when the evidence is complete) or apply fully
+completed. 1 refusal, incomplete evidence, a repository `error`, a repository skipped as `base-ambiguous`, `base-missing` or `remote-ambiguous`, an unsafe state directory, stale or failed sub-plan, cancellation
+(`--timeout`, interrupt), a store problem, or output cut at its bounds (`output-limit`); the overview is printed first. 2 invalid usage:
+mixed layers, `--yes` without an id, `--plan` with a positional id, unknown `--only`, `--mine` without `$STW_OWNER`, a missing workspace.
+
+The JSON form is the `tidy-overview` document (`schemas/v2/tidy-overview.schema.json`, not yet published to Pages).
+
 ### Lifecycle and position rule
 
 The lifecycle of a task worktree is *workspace -> work -> retirement*. `stw workspace apply` creates it detached at the recorded
@@ -85,15 +100,16 @@ the worktree (the `stw:<task>` lock, the gitdir backlink, the worktrees parent, 
 **current** safety state, instead of requiring the safety digest of the creation time: an unrelated config key, a Git upgrade or the
 upstream written by `git push -u` no longer blocks it, while a hook or key added between plan and apply refuses with
 `evidence-changed`. Integration is proved on the real HEAD with the same forge-free proofs as local references (ancestor, `patch-id`,
-`merge-noop`, `no-net-change`; `--integration-proof` and `--accept-whitespace-differences` apply); a head the proofs do not cover stays
-`retain` `integration-not-proven`. The plan binds HEAD reference, commit id, branch tip and base, so any change refuses with
+`merge-noop`, `no-net-change`). The proof-policy flags `--integration-proof` and `--accept-whitespace-differences` belong to the expert
+layer (`stw tidy plan PATH`), not to the wizard. In the overview a head the proofs do not cover is `retain` `unmerged`; if such an item is
+chosen anyway, the retirement plan retains it with `integration-not-proven` and building the plan set fails with that reason. The plan binds HEAD reference, commit id, branch tip and base, so any change refuses with
 `evidence-changed`. A worktree whose HEAD is attached to the base branch itself never gets a branch deletion.
 
 When the owner chose `delete-branch:NAME` for a retired worktree, the **dependent branch leg** runs right after, and only after, that
 retirement succeeded: the branch is re-observed and deleted through the unchanged local-reference rules (recovery reference and
-journal included). The leg is derived at apply time, not stored; a failed retirement skips it (`retirement-not-applied`), a branch
+journal included). The leg is derived at apply time, not stored; a failed retirement skips it (code `retirement-not-applied`), a branch
 that is not the retirement plan's head refuses the whole set (`branch-leg-mismatch`), and a chosen deletion without a leg is skipped
-(`branch-leg-absent`) so the set is `partial`.
+(code `branch-leg-absent`), so the set is `partial`.
 
 ### Derived defaults
 
@@ -106,55 +122,51 @@ Every value the wizard assumed is shown in the overview and in `derived[]` (`nam
 | Remote | `origin`, else the single remote; several remotes without `origin` are `remote-ambiguous` |
 | Base | the local branch of the remote's symbolic HEAD, else the remote-tracking reference; `--member-base NAME=REF` overrides; none: `base-ambiguous` or `base-missing`; the wizard never fetches |
 | Caller label | `$STW_OWNER`, else (human mode only) the operating-system user; `--mine` without one is a usage error |
-| Item owner | the task record, then path and branch convention (`/tmp/whr*`, `codex/`, `claude/`), then a commit author hint that never makes an item `own`, then `unknown` |
+| Item owner | the task record, then path and branch convention (`/tmp/whr*` is `codex`; the branch prefixes `codex/`, `claude/` and `claude-`), then a commit author hint that never makes an item `own`, then `unknown` |
 | State directories | the repeatable `--state-dir`, `$STW_STATE_DIR`, the shared default; the first valid one holds the plan set |
 
 ### Reason codes
 
-The reason of a `retain` row (the evidence line says why):
+Every code below is a string of the code base; the file names are the places to check.
 
-| Reason | Meaning |
+**Why an item is kept (`retain`, or the one `decision`).** The reason is the `reason` of the candidate and the evidence line says why
+(`internal/tidywizard/classify.go`).
+
+| Applies to | Reasons |
 | --- | --- |
-| `unmerged` | commits ahead of the base, or a reference not integrated into it |
-| `dirty`, `ignored-extras` | uncommitted changes; untracked or ignored files the stored tree does not hold |
-| `recently-active` | HEAD, index or a tracked file changed within the last 24 hours (only for an owner other than the caller or unknown) |
-| `locked-foreign` | locked by something other than stw |
-| `registration-record-missing`, `registration-record-ambiguous` | an stw lock whose creation record is in no known store, or in several with different content |
-| `lock-mismatch` | a stale registration whose stw lock does not match its creation record |
-| `unregistered` | the registration of a missing directory without an stw lock |
-| `branch-attached-elsewhere` | the branch is checked out in a worktree that is retained or kept |
-| `jj-retirement-unsupported` | a jj workspace owned by a creation record; no plan kind retires one yet |
-| `stale-registration-no-plan-kind` | the registration is prunable; no plan kind removes it yet |
-| `evidence-incomplete` | an observation failed or was bounded; the item is never judged on partial evidence |
+| Worktrees, automatic protections | `primary-checkout`, `current-worktree` |
+| Worktrees, in the order they are tested | `evidence-incomplete` (an observation failed or was bounded, or no activity time was observed for an item of another or unknown owner), `locked-foreign` (locked by something other than stw), `registration-record-missing`, `registration-record-ambiguous` (an stw lock whose creation record is in no known store, or in several with different content), `dirty`, `ignored-extras` (untracked or ignored files the stored tree does not hold), `unmerged` (commits ahead of the base), `recently-active` (HEAD, index or a tracked file changed within 24 hours, only for an owner other than the caller or unknown), `jj-retirement-unsupported` (a jj workspace owned by a creation record; no plan kind retires one yet) |
+| Worktrees, the `decision` row | `locked-stw`: an stw lock whose creation record does not match; choosing it asks a second confirmation naming the lock |
+| Worktrees whose directory is missing | `unregistered` (no stw lock), `registration-record-missing`, `registration-record-ambiguous`, `lock-mismatch` (an stw lock whose creation record does not match), `evidence-incomplete` (the Git administrative entry is not provably prunable), `stale-registration-no-plan-kind` (prunable, but no plan kind removes it yet) |
+| Branches | `evidence-incomplete`, `unmerged` (not proven integrated), `branch-attached-elsewhere` (checked out in a worktree that is retained or kept), and for jj the keep reason of the native tidy passed on unchanged (for example `remote-counterpart`, `recovery-reference`, `selected-base`, `workspace-used`) |
+| Remote-tracking references | `evidence-incomplete`, `unmerged` (not integrated into the base), and the observer's reason for a reference that stays: `remote-source-present`, `symbolic-reference`, `selected-base`, `workspace-used`. Any other reason is replaced by `evidence-incomplete` with the evidence text `tracking-reason-unrecognized` (`adapter.go`). `github-branch-absent` is not a keep reason: it is the proof of a deletable reference, which is `safe` |
 
-The one `decision` row is `locked-stw`: a worktree whose stw lock does not match its creation record; choosing it asks a second
-confirmation naming the lock. A `safe` worktree without an stw lock carries the reason `unregistered`, and the evidence `no-work`
-when it has no commit of its own.
+A `safe` worktree without an stw lock carries the reason `unregistered`, and the evidence `no-work` when it has no commit of its own.
+Integration proofs of a safe row are `ancestor`, `patch-id`, `merge-noop`, `no-net-change`, `empty-working-copy-integrated-parent`
+(jj) and `github-branch-absent`.
 
-Reasons for an item that was chosen but cannot become a sub-plan (the plan set is not built, nothing is guessed): `plan-repository-unknown`,
-`plan-shape-invalid`, `plan-base-missing` (no base for the repository), `plan-state-dir-missing` (no plan store),
-`legacy-owner-unknown` (a legacy completion needs one plain owner label, not an unknown owner or an author hint), `tracking-remote-missing` (no remote for the repository), `tracking-online-required` (a tracking plan needs `--online`),
-`tracking-ref-unmappable`, `branch-name-unmappable` and `stale-registration-no-plan-kind`. A tracking reference that is kept carries
-one of `remote-source-present`, `symbolic-reference`, `selected-base`, `workspace-used` or `github-branch-absent`; any other
-reason from the observer is shown as `tracking-reason-unrecognized`. Apply refusals: `plan-set-invalid` (the stored set fails its
-id verification; sets from before the branch-leg decision are not migrated), `scope-not-authorized` (an `other` or `unknown` item in an
-agent-mode apply or without `authorized_scopes`), `evidence-changed` (something moved between plan and apply), `branch-leg-mismatch`,
-`branch-leg-absent` and the outcomes `skipped`, `partial` and `cancelled`.
+**Why a chosen item cannot become a sub-plan** (building the plan set fails; nothing is guessed;
+`internal/tidywizard/planset/v3planner.go`):
+`plan-repository-unknown` (the repository has no path), `plan-base-missing` (no derived base), `plan-shape-invalid` (an empty
+sub-plan, an unknown kind, or a retirement that does not cover exactly one worktree), `plan-state-dir-missing` (no plan store),
+`branch-name-unmappable` (not a short branch name), `tracking-remote-missing` (no derived remote), `tracking-online-required` (tracking
+references are planned only with `--online`), `tracking-ref-unmappable` (not a reference of that remote), `legacy-owner-unknown` (a
+legacy completion needs one plain owner label, not an unknown owner or an author hint), `stale-registration-no-plan-kind`, and the reason
+of the creation-record lookup (for example `registration-record-missing`). When the existing plan kind itself retains a chosen item,
+that plan's own reason is reported (for example `integration-not-proven`; otherwise `retirement-not-eligible`, `no-candidate` or
+`retained`). A planning failure carries the diagnostic code of the failed plan.
 
-**Non-interactive use.**
+**Why an apply is refused** (status `refused`, nothing changed, exit 1; `internal/tidywizard/planset/apply.go`):
+`mode-evidence-invalid` (the mode evidence cannot be recorded, for example an overlong `STW_OWNER`), `plan-set-not-found`,
+`plan-set-invalid` (the stored set fails its id verification; sets from before the branch-leg decision are not migrated),
+`scope-not-authorized` (an `other` or `unknown` item in an agent-mode apply, or without `authorized_scopes`), `confirmation-refused`
+(the typed confirmation failed or there is no terminal), `authorization-required` (no explicit plan id) and `branch-leg-mismatch`.
 
-```sh
-stw tidy plan --mine --json            # overview of the caller's own items (needs $STW_OWNER)
-stw tidy plan --save --json            # store the safe own items; prints plan_id
-stw tidy apply PLAN-ID --yes --json    # explicit id authorizes; refused without an id
-```
-
-**Exit codes.** 0 analysis complete (also with retained or other-owner candidates, and the no-terminal degradation when the evidence is complete) or apply fully
-completed. 1 refusal, incomplete evidence, a repository `error`, a repository skipped as `base-ambiguous`, `base-missing` or `remote-ambiguous`, an unsafe state directory, stale or failed sub-plan, cancellation
-(`--timeout`, interrupt), a store problem, or output cut at its bounds (`output-limit`); the overview is printed first. 2 invalid usage:
-mixed layers, `--yes` without an id, `--plan` with a positional id, unknown `--only`, `--mine` without `$STW_OWNER`, a missing workspace.
-
-The JSON form is the `tidy-overview` document (`schemas/v2/tidy-overview.schema.json`, not yet published to Pages).
+**What an apply reports per sub-plan.** The status is `applied`, `stale`, `failed` or `skipped`. A `skipped` sub-plan carries the code
+`cancelled` (the run was cancelled before it), `retirement-not-applied` (the retirement a branch deletion depends on did not succeed) or
+`branch-leg-absent`. A `stale` sub-plan carries `evidence-changed` (or a code containing `stale`); a `failed` one carries the diagnostic
+code of the native apply. The set status is `ok` (every sub-plan applied), `failed` (none applied) or `partial`; anything but `ok` is
+exit 1.
 
 ## Default v1/v2 evidence and retention
 
