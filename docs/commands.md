@@ -21,8 +21,11 @@ Every data command supports human output and `--json`; help is available at each
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
 | `stw workspace retire-plan [PATH]` | Prepare retention and retirement evidence | Preparation only; does not delete a workspace |
+| `stw tidy` | Interactive workspace-wide cleanup: overview, choice, stored plan set | Read-only analysis; stores a plan set after your choice; applies only after an explicit `y` |
+| `stw tidy plan` (no PATH, no expert flag) | Non-interactive workspace overview; `--save` stores the safe own items | Read-only; `--save` writes a private plan set |
 | `stw tidy plan [PATH]` | Review branch/bookmark integration or owned-workspace retirement | No deletion; optional private stored plan |
-| `stw tidy apply` | Apply the reviewed reference or retirement plan | Explicit local authorization; recovery evidence and fresh checks |
+| `stw tidy apply PLAN-ID` | Apply a stored plan set | Typed or explicit authorization; recovery evidence and fresh checks per sub-plan |
+| `stw tidy apply --plan ID` | Apply the reviewed reference or retirement plan | Explicit local authorization; recovery evidence and fresh checks |
 | `stw hosting repo [PATH]` | Resolve local GitHub repository candidates | Local only; no gh or authentication required |
 | `stw hosting pr NUMBER [PATH]` | Inspect one explicitly numbered PR; `--json-version 2`, `--compact` and `--expect-head SHA` add lifecycle and merge evidence | Authenticated, bounded GitHub reads; one GET; no retry on rate limits |
 | `stw hosting prs SHA [PATH]` | List the PRs GitHub associates with a commit (one page of 30) | Authenticated, one bounded GET; no PR selection, no retry |
@@ -246,6 +249,26 @@ stw workspace retire-plan /path/to/task --state-dir /path/to/private-state --jso
 Git creates a detached worktree; jj creates a native named workspace/change. No setup
 scripts, fetch or push runs. Retirement preparation does not remove registrations or
 files. See [task workspaces](workspaces.md) for prerequisites and refusal cases.
+
+## Tidy a whole workspace
+
+`stw tidy` without arguments is the wizard (see the [tidy guide](tidy.md#the-tidy-wizard)). It finds the Git workspace, analyses every
+member repository read only, prints an overview, asks `Apply which?`, stores the chosen plan set and asks whether to apply it. It changes
+nothing until you answer `y` for that plan id.
+
+```sh
+stw tidy                      # interactive wizard on a terminal
+stw tidy plan                 # the same overview, never asks, stores nothing
+stw tidy plan --json          # one tidy-overview document
+stw tidy plan --save --json   # also store the plan set of the safe own items; prints the plan id
+stw tidy apply PLAN-ID        # asks "Apply plan PLAN-ID? [y/N]" on a terminal
+stw tidy apply PLAN-ID --yes  # non-interactive; the explicit plan id is the authorization
+```
+
+Wizard flags: `--workspace PATH`, `--member NAME`, `--member-base NAME=REF`, `--only retire,branches,tracking,stale-worktrees`,
+`--mine`, `--by-owner LABEL`, `--save`, `--yes`, repeatable `--state-dir`, `--online`, `--timeout`, `--json`, `--human`. Any other flag, or a
+`PATH`, selects the expert layer below, unchanged. Exit codes: 0 complete (also when nothing was asked because there is no terminal),
+1 refusal, incomplete or partial evidence, cancellation or output at its limit, 2 invalid usage.
 
 ## Review local cleanup
 

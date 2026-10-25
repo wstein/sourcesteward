@@ -17,6 +17,73 @@ An unknown or duplicate selected reference refuses the plan. Git base selectors 
 The base is required; SourceSteward
 does not infer `main`, `master` or `origin`.
 
+## The tidy wizard
+
+`stw tidy` cleans up a whole workspace instead of one repository. It is for the person at a terminal; agents use `stw tidy plan`
+(see below). Outside a Git workspace it exits 2 with `workspace-not-found` (discovery is Git only; give `--workspace PATH` or use the
+expert layer described in the rest of this guide).
+
+```text
+$ stw tidy
+Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
+sourcesteward   base refs/heads/main (origin/HEAD)
+  [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
+  [2] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
+summary: 1 safe, 1 retain
+
+Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner  [d]etails N  [n]one (default n): a
+Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
+Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]: n
+```
+
+**Flow.** Analysis is read only and offline unless `--online`. Each repository gets a derived remote (`origin`, else the single remote)
+and base (the local branch of the remote's symbolic HEAD, else the remote-tracking reference); override a base with
+`--member-base NAME=REF`. A repository whose remote or base cannot be derived is shown as skipped (`remote-ambiguous`, `base-ambiguous`,
+`base-missing`) and makes the run exit 1 after the overview. Creation records are read from the shared state directory
+(`${XDG_STATE_HOME:-~/.local/state}/stw/workspace` or `$STW_STATE_DIR`) and every `--state-dir`; the first valid store holds the plan set.
+
+**Modes.** Human mode needs a terminal on both stdin and stdout and no agent marker (`STW_AGENT`, `CLAUDECODE`, `CLAUDE_CODE_*`,
+`CODEX_*`, `AGY_*`). Every other run is agent mode, and `--mine` forces it. A human sees every owner, grouped, with the owner column;
+nothing owned by another owner or of unknown owner is preselected. An agent should narrow the view with `--mine`; in agent mode only
+items owned by a task record count as `own`. `--by-owner LABEL` narrows the view in any mode and never selects the mode. The mode is
+recorded in the plan set, the apply journal and `stw tidy history`.
+
+**Verdicts.** `safe` (every proof holds), `decision` (for example a `locked-stw` worktree whose lock does not match), `retain`
+(a reason such as `unmerged`, `dirty`, `recently-active`, `registration-record-missing`, `evidence-incomplete`,
+`stale-registration-no-plan-kind`) and `foreign` rows never carry an effect. Only `safe` and `decision` rows get a number.
+Text shows at most 10 rows per repository (`and N more`); `--json` lists all candidates.
+
+**Prompts.** The answer is parsed strictly and the default is none. `a` chooses all safe rows of scope own (never `decision` rows and
+never rows of other or unknown owners), numbers and ranges (`1,2,6`, `1-3`) choose rows, `o` asks per owner, `d N` shows the details of
+row N, and Enter or `n` chooses nothing. Anything else asks again; after three invalid answers the wizard exits 1 and stores nothing.
+A `decision` row asks a second confirmation that names its lock and path. A foreign item needs the typed confirmation read from
+`/dev/tty` (confirmation word, the owner label or `unknown`, and the first six characters of the plan id) while the plan set is built
+and again when it is applied; `y`, standard input and `--yes` never replace it. With no terminal, in agent mode or when nothing is
+choosable, the wizard prints the overview, stores nothing, never reads stdin and exits 0.
+
+**Plan and apply.** The chosen rows become one stored plan set with a content-addressed id; its sub-plans are the existing
+reference, tracking and retirement plans. Storing changes nothing. `stw tidy apply PLAN-ID` applies the sub-plans in a fixed order with
+fresh checks, a journal and a recovery reference before each native effect; a retirement's dependent branch deletion runs after, and
+only after, that retirement succeeded. A partial failure is reported per sub-plan and exits 1; replaying a completed set is a verified
+no-op. In an agent run, an `other` or `unknown` item is refused with `scope-not-authorized`; agents never apply foreign items and must
+not drive the wizard through a pty wrapper or `send-keys`. The wizard's own `Apply it now?` question accepts only an explicit `y`, which
+runs the same apply code for that plan id.
+
+**Non-interactive use.**
+
+```sh
+stw tidy plan --mine --json            # overview of the caller's own items (needs $STW_OWNER)
+stw tidy plan --save --json            # store the safe own items; prints plan_id
+stw tidy apply PLAN-ID --yes --json    # explicit id authorizes; refused without an id
+```
+
+**Exit codes.** 0 analysis complete (also with retained or other-owner candidates, and the no-terminal degradation) or apply fully
+completed. 1 refusal, incomplete evidence, a repository `error` or skipped repository, stale or failed sub-plan, cancellation
+(`--timeout`, interrupt), a store problem, or output cut at its bounds (`output-limit`); the overview is printed first. 2 invalid usage:
+mixed layers, `--yes` without an id, `--plan` with a positional id, unknown `--only`, `--mine` without `$STW_OWNER`, a missing workspace.
+
+The JSON form is the `tidy-overview` document (`schemas/v2/tidy-overview.schema.json`, not yet published to Pages).
+
 ## Default v1/v2 evidence and retention
 
 Only native ancestry proves integration in the default v1/v2 contracts. Squash equivalence and
