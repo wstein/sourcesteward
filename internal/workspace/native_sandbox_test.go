@@ -83,6 +83,9 @@ func TestNativeSandboxHelper(t *testing.T) {
 		case "hold":
 			// The descendant lives until the test closes the control pipe.
 			io.Copy(io.Discard, os.NewFile(3, "control"))
+			// Closed before exiting, so that the test sees the end of alive no later
+			// than the end of stderr, which the exit closes.
+			os.NewFile(4, "alive").Close()
 		case "wait":
 			time.Sleep(time.Minute)
 		case "env":
