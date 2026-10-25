@@ -1,5 +1,10 @@
 # Feature Specification: `stw land`, the owner's fast-forward landing of a reviewed pull request
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Human-only landing and measured-shape/retarget gates remain; trusted workspace policy is authority.
+> This is a documentation target, not implementation or native acceptance.
+
 **Branch**: `docs/spec-043-stw-land` | **Created**: 2026-10-24
 **Status**: Draft specification; no runtime implementation. Requires an independent review of the exact head before tasks start.
 **Input**: Owner decision 2026-10-24: yes to `stw land`, the fast-forward landing of a reviewed PR, as an owner-only command. Measured basis: [research.md](research.md).
@@ -173,12 +178,7 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
   namespace, never into a user ref)
   and `git merge-base --is-ancestor <old-tip> <head>` holds (exit 0), where `<old-tip>` is the remote default branch tip read with `git ls-remote`
   in this run. Exit 1: `not-fast-forward` (the owner restacks per Spec 015/016; stw never rewrites). Exit 128 (an object, for example the old tip, is absent after the fetch) is `object-missing` or `ancestry-unproven`, never a fast-forward verdict.
-- **FR-017** The commits `old-tip..head` have owner-only identities: author and committer name and email, read from the commits themselves, each equal the owner's **global**
-  identity (`git config --global user.name` and `user.email`, read only, never written). The effective configuration with local or
-  worktree scope is never the expectation (AGENTS.md identity-leak rule). Also `git config --show-origin --get-regexp '^user\.'` must
-  show no `user.name` or `user.email` outside the global scope, else `identity-leak`. Any other commit value refuses
-  `identity-mismatch` and lists at most 10 offending commits with escaped fields. The check catches leaked throwaway identities, not
-  agent authorship: agent commits carry the owner identity.
+- **FR-017** The commits old-tip..head must have author AND committer name/email equal to the exact trusted workspace-policy owner identity. Read-only global Git identity corroborates only; missing policy refuses. Bounded config-origin evidence must show no foreign identity, with only policy-needed name/email values rendered and other user.* values omitted/redacted; never write config. Report at most ten offending commits with escaped fields. Apply the decided default signature policy to this exact reviewed head: unreadable/unmet requirements or unverified signer evidence refuse; any optional host re-sign must already have occurred as a separately authorized015local operation and the final SHA must be independently reviewed.043runs no signer and creates no commit.
 - **FR-018** The number of commits in `old-tip..head` is at most the configured bound (default 200), else `range-too-large`; the
   list is part of the plan.
 - **FR-019** Every refusal is typed; the plan lists all failing preconditions, the apply stops at the first and reports it.
@@ -233,9 +233,7 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
 - **FR-041** Idempotence: every step is checked against fresh state before it runs. Already merged with `merge_commit_sha == head` and
   all children retargeted: exit 0 `already-landed` with no effect. A different state is classified, never guessed.
 - **FR-042** A lost race (the remote rejects the push as `fetch first` or `non-fast-forward`) is `base-moved`, exit 1, no retry; the owner reruns after re-review.
-- **FR-043** The run writes a **journal line** to the stw state store before each effect and completes it after (run id, PR, head, old
-  tip, effect, result, mode evidence); the journal is local only and is never committed or pushed. A run interrupted between effects
-  is replayed through FR-041, not through the journal (the journal is the audit record).
+- **FR-043** Before each effect, durably create an immutable intent fact in the validated private land-action namespace; after the effect create a separate linked outcome fact. Bind run/action/attempt/previous digest, PR/head/old tip/effect/result/mode evidence under the shared profile; reserve count/bytes for bounded intent and outcome before effects, never overwrite old facts. Missing completion is unknown, never success or blind retry. The journal is audit evidence; replay revalidates FR-041 native state. stw never stages/commits/pushes journal bytes; ignored/untracked validation and residual export risk remain explicit, not a promise that mode 0700 prevents owner export.
 - **FR-044** Cancellation (signal) between effects stops before the next effect and reports what was done; an in-flight `git push` is
   allowed to finish or is waited on, never killed mid-protocol by stw.
 
@@ -299,7 +297,7 @@ guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported 
 
 ## Reconciliation (owner decisions, not assumed)
 
-This spec clashes with existing text. It edits none of it; each item needs an owner decision and the proposed amendment is given.
+The owner adopted the reconciliation direction on 2026-10-25. Implementation/measurement gates and the constitution remain; none of the following text grants an agent landing/settings action.
 
 - **Spec 022** ("no write API is added"; read-only transport). `stw land` adds one write endpoint, `PATCH /repos/{o}/{r}/pulls/{n}` with
   `base`, through `gh pr edit`. Proposed amendment: "Spec 043 adds exactly one write through this transport, the base edit of an open pull
@@ -324,19 +322,27 @@ the terminal, measuring both the direct-push refusal or acceptance and the pre-r
 or the verbatim refusal, with the shape) in research.md, which is what lifts `land-unmeasured` for that shape. If the ruleset forbids the
 push, the owner must change the ruleset, an owner-only action this spec does not perform or propose to automate.
 
+## Owner decisions (2026-10-25)
+
+All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
+choices adopt the source recommendations; implementation/native measurement and
+review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
+distinguish saved-plan metadata, external capture payloads, trusted policy,
+optional host-only signing and CLI exit-contract revision 2.
+
+| Decision ID | Dated disposition | Remaining implementation/verification gate |
+| --- | --- | --- |
+| OQ1 | DECIDED: adopt trusted workspace reviewer/check-source policy; retain human --reviewed SHA statement and typed confirmation, no invented ledger. | Independent source/check policy implementation; no agent landing. |
+| OQ2 | DECIDED: retain measured-shape scratch gate for ruleset/direct-owner-push acceptance. | Unmeasured/unreadable shapes remain land-unmeasured; no owner settings workaround. |
+| OQ3 | DECIDED: no checks-unknown override in this v1 capability. | Unknown required checks refuse owner apply. |
+| OQ4 | DECIDED: preserve conditional readable-off vs on/unreadable order; measure pre-retarget shape before apply. | Unmeasured stack shape stays land-unmeasured; fresh post-retarget checks remain. |
+| OQ5 | DECIDED: trusted workspace policy is identity authority; global Git identity corroborates, never supplies authority. | Missing policy/source or foreign config/commit fields refuse. |
+| OQ6 | DECIDED: refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
+| OQ7 | DECIDED: forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | No native or forge fallback. |
+| OQ8 | DECIDED: use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | Journal integration/conformance before owner apply; sync v1 unchanged. |
+
 ## Open questions (not decided here)
 
-- **OQ1 Review evidence.** `--reviewed SHA` is only the owner's statement. Whether stw should read a machine-checkable CLEAR (a ledger
-  line, a signed-off PR review by an allowed reviewer on the exact head, a status/check named by the owner) is open. No ledger format is
-  invented here.
-- **OQ2 Rulesets (hard gate).** Whether the default branches of the real repositories accept an owner push of a reviewed head is
-  unknown and, for `sourcesteward`, expected to be refused (`pull_request` rule, bypass mode `pull_request`). Apply stays
-  `land-unmeasured` until a scratch run for the shape is recorded; no default accepts it.
-- **OQ3 Unknown required checks.** Should the owner be able to override `checks-unknown` explicitly? Not in v1 unless asked.
-- **OQ4 `delete_branch_on_merge` ordering (hard gate).** The pre-retarget order (FR-031) is not measured and both real repositories have
-  the setting on. A scratch run must measure it; until then apply refuses `land-unmeasured` for stacks on such shapes.
-- **OQ5 Identity source.** Which value is "the owner identity": the global Git configuration read, a workspace setting, or
-  `CODEOWNERS`. AGENTS.md rule is a pre-push check against the global identity; this spec follows it and asks to confirm.
-- **OQ6 Signed commits.** Should `--require-signed` be a later option for repositories that require signatures on the default branch?
-- **OQ7 Fork pull requests and other forges.** Left to a later spec; jj colocated repositories are refused in v1.
-- **OQ8 Journal location.** Reuse of the Spec 029/031 journal record type versus a plain audit file.
+Compatibility anchor only: the IDs above are settled owner decisions, not open
+questions. Remaining unavailable capabilities require implementation/measurement
+evidence, not an invented additional owner answer.

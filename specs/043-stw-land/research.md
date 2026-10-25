@@ -1,5 +1,10 @@
 # Research: fast-forward landing of a pull request
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Human-only landing and measured-shape/retarget gates remain; trusted workspace policy is authority.
+> This is a documentation target, not implementation or native acceptance.
+
 **Measured**: 2026-10-24, on a private throwaway repository on github.com, by the owner's session. Rebase-merge was **not** used. The raw
 result file is `ff-experiment-results.md` in the session scratchpad. This document has three labelled parts: the copy of that file
 (Setup, Results, Caveats from the file), the author's notes (not measurements), and the read-only observations of the real repositories
