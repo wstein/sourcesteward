@@ -291,15 +291,19 @@ guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported 
 - **Spec 025.** The merge-state evidence format and its `not-asserted` verdict are reused for reading mergeability; `stw land` itself does
   assert nothing about mergeability beyond its own preconditions, and the Spec 025 rule against claiming a PR "can merge" applies to
   `stw hosting merge-state`, not to this command's explicit refusals.
-- **Spec 022.** All reads and the `gh pr edit` go through the bounded transport; the push uses the native Git runner.
+- **Spec 022.** Reads use the bounded transport. Proposed child-base editing through `gh pr edit` needs the separately reviewed write allowlist below; no endpoint is admitted by this draft. The push uses the native Git runner only after the human landing capability gates pass.
 - **Spec 041/042.** Mode detection and the typed confirmation pattern are reused; the agent-attribution gate is not applicable.
 - **Spec 032.** After a landing the owner runs `stw sync`; `stw land` does not touch local branches or worktrees.
 
 ## Reconciliation (owner decisions, not assumed)
 
-The owner adopted the reconciliation direction on 2026-10-25. Implementation/measurement gates and the constitution remain; none of the following text grants an agent landing/settings action.
+The dated OQ-WRITES and OQ-POLICY answers adopt measure-before-enable and
+trusted-policy direction only. They do not approve any endpoint, ownership
+amendment or constitution change listed below. Each reconciliation item remains
+OPEN for a separate owner decision after its proposed amendment and evidence are
+reviewable; these recommendations grant no landing/settings authorization.
 
-- **Spec 022** ("no write API is added"; read-only transport). `stw land` adds one write endpoint, `PATCH /repos/{o}/{r}/pulls/{n}` with
+- **Spec 022** ("no write API is added"; read-only transport). `stw land` proposes one write endpoint, `PATCH /repos/{o}/{r}/pulls/{n}` with
   `base`, through `gh pr edit`. Proposed amendment: "Spec 043 adds exactly one write through this transport, the base edit of an open pull
   request, from a closed allowlist, in human mode only."
 - **Spec 016 FR-006** ("do not merge PRs, delete remote refs, force-push ... in this slice") and the **Spec 012 later-effects catalog L5**

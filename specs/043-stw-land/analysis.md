@@ -17,6 +17,10 @@ its recorded revision; current hidden015code still returns3 until the new task.
 | D3 | Optional actual re-sign belongs only to015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review;016 receipt validation only. |
 | D4 | Target CLI exit-contract revision2 is0/1/2, no legacy3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
 
+The endpoint, ownership and constitution amendments in the spec reconciliation
+section remain OPEN for separate owner decisions. Settling the eight indexed OQs
+does not accept those amendments or enable human landing.
+
 ## Individual requirement coverage and literal future tests
 
 Each current definition has one row, real task IDs and a literal future test.
