@@ -1,10 +1,11 @@
 # Narrow missing-directory registration prune (T012b)
 
-Status: proposed future contract under the owner-approved scope of 2026-10-25.
-Implementation and conformance are pending. This amendment does not enable cleanup;
-the current wizard retains stale registrations. The owner selected separate versioning (option B) on 2026-10-25. Exact interface
-details are proposed in the companion contract and still require owner acceptance
-before planner/stored-plan source work; the absence predicate is defined here. Broad Git worktree prune stays excluded.
+Status: proposed future contract under the owner-approved scope of 2026-10-25. Implementation
+and conformance are pending. This amendment does not enable cleanup; the current wizard retains
+stale registrations. The owner selected separate versioning (option B) on 2026-10-25. Exact
+interface details are proposed in the companion contract and still require owner acceptance
+before planner/stored-plan source work; the absence predicate is defined here. Broad Git
+worktree prune stays excluded.
 
 ## Selection, ownership and effects
 
@@ -126,15 +127,16 @@ confirmation and immediately before removal; verify all original records again. 
 recovery-root addition may advance only its declared exact delta. No apply-first baseline,
 refreshed manifest, reconstructed lock or automatically repaired pointer is trusted.
 
-Use descriptor-confined, no-follow removal of only the selected administrative entry and
-its immutable admitted children, with per-entry identity/content checks and protected
-parent/sibling grants. No destination or destination-parent write grant is permitted.
-A native remove primitive that could delete a reappearing checkout is insufficient even if an earlier absence check
-passed; demonstrate the metadata-only confinement or refuse the capability.
-Remove directories only when empty. A replacement or unexpected child stops further deletion and preserves partial evidence. Feasibility of this narrow
-filesystem effect, sandbox grants and Git-version compatibility must be demonstrated in
-disposable native fixtures before implementation acceptance. Never substitute broad
-`git worktree prune`, forced worktree removal or an unlock-and-prune sequence.
+Use descriptor-confined, no-follow removal of only the selected administrative entry and its
+immutable admitted children, with per-entry identity/content checks and protected parent/sibling
+grants. No destination or destination-parent write grant is permitted. A native remove primitive
+that could delete a reappearing checkout is insufficient even if an earlier absence check
+passed; demonstrate the metadata-only confinement or refuse the capability. Remove directories
+only when empty. A replacement or unexpected child stops further deletion and preserves partial
+evidence. Feasibility of this narrow filesystem effect, sandbox grants and Git-version
+compatibility must be demonstrated in disposable native fixtures before implementation
+acceptance. Never substitute broad `git worktree prune`, forced worktree removal or an
+unlock-and-prune sequence.
 
 Git has no registration old-value transaction equivalent to direct-reference old-OID CAS.
 A stw lock/store lock and descriptor confinement constrain cooperating writers and path
@@ -160,8 +162,9 @@ Use digest-bound private binary sidecars for raw contents, streamed and hashed i
 64 KiB buffers; the manifest binds exact byte lengths and SHA-256 digests. Sidecars obey
 the same per-file/total quotas and durable private-store rules. Insufficient storage,
 overflow, short/extra bytes or cancellation refuses before removal; never truncate or
-silently omit entries. The enclosing schema/record representation still needs the frozen
-contract decision, without relaxing these byte-preservation requirements.
+silently omit entries. Option B is decided; the exact separate record
+representation in [the contract-4 proposal](registration-prune-v4.md) still
+needs owner acceptance without relaxing these byte-preservation requirements.
 
 The bounds derive from a read-only 2026-10-25 measurement of all 201 regular registration
 directories below this live repository's native common-dir/worktrees. The walk used
@@ -206,8 +209,9 @@ no-op only after checking the exact recorded postconditions and recovery evidenc
 The future recovery path MUST first inspect the plan, private payload and prune journal
 read-only and report whether that exact registration can be restored. Restoration requires
 separate explicit authorization and its own durable intent/outcome record, never automatic
-rollback or reuse of prune authorization. Its CLI spelling and machine shape remain pending
-owner schema/interface decision; no existing command is claimed to implement it.
+rollback or reuse of prune authorization. Option B is decided; the proposed
+restore flags and machine records in [contract 4](registration-prune-v4.md)
+remain pending exact owner acceptance. No existing command implements them.
 
 Before writing, verify repository/common-dir and parent identities, all payload digests and
 bounds, intact HEAD pin, exact original registration name unoccupied, and destination still
@@ -265,10 +269,10 @@ stale state, cancellation, operational/output failure or partial/unknown effect;
 usage. Human and structured outcomes must agree and expose recovery availability and known
 partial effects. Missing evidence is never success. These are future acceptance requirements.
 
-Acceptance MUST include the project minimum (at least Git 2.29) and current Git on Linux/macOS, successful
-absence-predicate fixtures and unsupported-observation refusal, moved and unmounted
-lookalikes, all ownership/selection refusals,
-metadata corruption/overflow/binary bytes, private-storage failure, concurrent changes at every
-boundary, interrupted removal/restore and completed replay. Compare all protected state and
-sentinels, including jj/colocated rejection with no raw Git mutation. New docs examples must
-come from real fixture output once implementation exists.
+Acceptance MUST include the project minimum (at least Git 2.29) and current Git on Linux/macOS,
+successful absence-predicate fixtures and unsupported-observation refusal, moved and unmounted
+lookalikes, all ownership/selection refusals, metadata corruption/overflow/binary bytes,
+private-storage failure, concurrent changes at every boundary, interrupted removal/restore and
+completed replay. Compare all protected state and sentinels, including jj/colocated rejection
+with no raw Git mutation. New docs examples must come from real fixture output once
+implementation exists.

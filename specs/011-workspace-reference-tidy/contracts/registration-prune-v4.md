@@ -74,10 +74,10 @@ absence/ancestor/device/mount witness. Native jj/colocated/GitButler ownership
 refuses, without raw Git fallback. Plan generation writes only its disclosed
 private immutable plan, not recovery payload, journal, ref or registration.
 
-Reject old branch/retirement/proof selectors with this expert operation,
-including `--base`, `--ref`, `--task`, `--owner`, `--remove-registration`, `--remove-files`, `--retire-worktree`, `--online` and any
-completion/adoption override. Unknown flags refuse, not silently ignore.
-No prompt, editor, pager, network or native mutation runs during planning.
+Reject old branch/retirement/proof selectors with this expert operation, including `--base`,
+`--ref`, `--task`, `--owner`, `--remove-registration`, `--remove-files`, `--retire-worktree`,
+`--online` and any completion/adoption override. Unknown flags refuse, not silently ignore. No
+prompt, editor, pager, network or native mutation runs during planning.
 
 Prune apply uses the named `--plan` expert path, never a positional ID. The
 existing `tidy apply <12-hex-id>` path remains manifest 1, with its current
@@ -85,14 +85,13 @@ existing `tidy apply <12-hex-id>` path remains manifest 1, with its current
 `--contract`. A positional 32- or 64-hex ID still refuses on that old path.
 No ID length or file sniffing silently selects a new operation.
 
-Prune apply requires the matching stored plan and explicit authorization. Restore
-without both mutation flags inspects eligibility and writes no journal or
-recovery file. Matching contract-3 conventions, both `--apply` and `--authorize`
-are required together for mutation; either flag alone is usage exit 2. Authorized
-restore revalidates and writes its separate intent before changing metadata. `--as` and branch-ref selectors
-are invalid for registration restore. Restored registration remains missing
-and locked; finding a moved checkout is not itself a refusal. Native
-`git worktree repair` stays a separately authorized owner step, printed as
+Prune apply requires the matching stored plan and explicit authorization. Restore without both
+mutation flags inspects eligibility and writes no journal or recovery file. Matching contract-3
+conventions, both `--apply` and `--authorize` are required together for mutation; either flag
+alone is usage exit 2. Authorized restore revalidates and writes its separate intent before
+changing metadata. `--as` and branch-ref selectors are invalid for registration restore.
+Restored registration remains missing and locked; finding a moved checkout is not itself a
+refusal. Native `git worktree repair` stays a separately authorized owner step, printed as
 escaped argv data; it is never run by either prune or administrative restore.
 
 History follows contract 3: default limit 256 journals, explicit `--limit` in
@@ -183,15 +182,13 @@ Its ID uses the row encoding and domain in the digest table below.
 Revalidate evidence before
 persisting a plan; a stable row ID is not freshness or permission.
 
-The new overview preserves the 4-MiB renderer bound and 4096 combined candidate
-limit across old candidates and `registration_prunes`. A registration represented in the new array is omitted
-from the legacy candidate array in overview 4, so no target is counted twice.
-The new overview `plan_id` is empty until save, then the full 64-hex manifest ID.
-Truncation or incomplete
-inventory never authorizes the omitted or uncertain rows. Contract-4 human
-wizard starts with no selection. Later T012b `all`/`--save` may select only safe
-rows through the new manifest; an old-contract stale row never becomes safe
-merely because this proposal exists.
+The new overview preserves the 4-MiB renderer bound and 4096 combined candidate limit across old
+candidates and `registration_prunes`. A registration represented in the new array is omitted
+from the legacy candidate array in overview 4, so no target is counted twice. The new overview
+`plan_id` is empty until save, then the full 64-hex manifest ID. Truncation or incomplete
+inventory never authorizes the omitted or uncertain rows. Contract-4 human wizard starts with no
+selection. Later T012b `all`/`--save` may select only safe rows through the new manifest; an
+old-contract stale row never becomes safe merely because this proposal exists.
 
 ## Digest encodings and domains
 
@@ -306,7 +303,7 @@ Manifest fields are `schema_version`, `plan_id`, `sub_plans`, `derived`, `items`
 verified before decoding; the dispatched reader also verifies its internal
 digest and semantics. This rule does not alter old plan files.
 For prune, `worktree` is the exact registered missing destination, never a
-filesystem-delete instruction. Selected items additionally bind the registration
+filesystem-delete instruction. Selected prune items additionally bind the registration
 name/gitdir, scope and evidence digest; changing a label, effect or witness changes
 the manifest ID. All legacy item fields remain bound too.
 
