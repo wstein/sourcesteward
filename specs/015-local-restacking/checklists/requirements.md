@@ -1,28 +1,37 @@
-# Specification Quality Checklist: Local Restacking
+# Specification quality checklist: local restacking
 
-**Purpose**: Author review of specification completeness before planning.
-**Created**: 2026-10-15
-**Feature**: [Specification](../spec.md)
+**Created**: 2026-10-15; **amended**: 2026-10-25.
+**Feature**: [spec.md](../spec.md). Author document review, not implementation or
+independent acceptance. Historical first-slice implementation/evidence remains
+separate from proposed local apply/recovery/jj work.
 
-## Content, completeness and readiness
+## Author completeness review
 
-- [x] No implementation details (languages, frameworks, APIs)
-- [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
-- [x] All mandatory sections completed
-- [x] No unresolved clarification markers remain
-- [x] Requirements are testable and unambiguous
-- [x] Success criteria are measurable
-- [x] Success criteria describe observable outcomes rather than implementation
-- [x] All acceptance scenarios are defined
-- [x] Edge cases are identified
-- [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified
-- [x] Functional requirements have acceptance coverage
-- [x] User scenarios cover primary flows
-- [x] Measurable outcomes can be acceptance-tested
-- [x] No implementation architecture is prescribed
+- [x] Existing hidden v1 source, UNPUBLISHED frozen schema, actual exit3 and T024 limitation gap are stated accurately.
+- [x] D4–D9/D12/D13 and original dates/historical review evidence are preserved.
+- [x] T001 historical CLEAR is distinguished from this amendment's unreviewed head; T004/T021/T023/T024 remain unchecked.
+- [x] User outcomes and acceptance scenarios cover explicit local scope, stale state, native effects, partial outcomes and contract failure.
+- [x] Exact two-dot `--onto` replay semantics preserve D7 plumbing/quarantine/CAS, no porcelain rebase or implicit descendants.
+- [x] Actual new SHA/equality/author AND committer evidence precedes a review-required receipt; 016 requires independent exact-new-SHA CLEAR before push.
+- [x] Owned unoccupied-ref first apply is an explicit recommendation pending OQ-6, with original worktree/index/config unchanged.
+- [x] Proposed typed recovery seam reuses Spec 032; no existing shared API, jj support or frozen sync-record compatibility is fabricated.
+- [x] Native jj operation/bookmark/change/commit identities and capability gaps are explicit; no Git fallback.
+- [x] D8 remote push/retarget belongs to separately authorized 016; owner resync/reset remains inert destructive-marked data and 043 landing separate.
+- [x] All 34 FRs and 8 SCs have an individual task plus literal test/fixture row in [analysis](../analysis.md).
+- [x] Research, plan, data model, contracts, quickstart, tasks and verification use the same proposed/implemented boundary.
+- [x] New JSON examples exist only in Markdown and are clearly UNPUBLISHED fragments, not production schemas.
+- [x] Every new implementation unit has dependencies, bounded scope and red-first security/effects/failure fixture ideas.
 
-## Notes
+## Gates still open
 
-Author review only: these checks assess draft clarity, not implementation or independent acceptance. Native backend names and JSON are user-facing compatibility requirements, not an implementation design. Plans/tasks, concrete contract design, per-requirement test mapping and cross-artifact analysis remain pending. No extension hooks are configured in this checkout.
+- [ ] Owner dispositions for affected OQ-1–OQ-6; OQ-7 wording clarification remains explicit.
+- [ ] Independent complete-artifact review of this exact documentation head.
+- [ ] First-slice T021 minimum/current Git and T023 exact implementation-head acceptance; T024 actual limitation emission.
+- [ ] Implementation, failing/passing fixture evidence and enabled native Git/jj conformance for proposed apply/recovery.
+- [ ] Accepted future machine protocol/version/migration, fixture validation and publication.
+
+The specification intentionally contains settled replay/ownership compatibility
+constraints and unresolved owner choices; no blanket “no implementation details”
+or “all ambiguities resolved” box is asserted. Documentation checks can validate
+links/whitespace and coverage bookkeeping only; absent native or independent
+review evidence never counts as passed acceptance.
