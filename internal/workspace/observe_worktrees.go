@@ -161,7 +161,8 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 			items++
 		}
 	}
-	obsCtx, cancelScaled := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, items)))
+	end := start.Add(c.windowFor(ctx, items))
+	obsCtx, cancelScaled := context.WithDeadline(ctx, end)
 	defer cancelScaled()
 	bin, err := gitExecutable()
 	if err != nil {
@@ -199,7 +200,10 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 		out.Branches = append(out.Branches, b)
 	}
 	// Proof phase: one integration run for the repository, every distinct tip once.
-	proofCtx, cancelProof := context.WithTimeout(ctx, integrationPhaseTimeout)
+	// It gets the rest of the window, never less than the old 60 s.
+	phase := proofPhaseTimeout(time.Until(end))
+	c.refs.integration.phaseTimeout = phase
+	proofCtx, cancelProof := context.WithTimeout(ctx, phase)
 	defer cancelProof()
 	proofs, closeRun, err := c.proofs(proofCtx, observed)
 	if err != nil {
