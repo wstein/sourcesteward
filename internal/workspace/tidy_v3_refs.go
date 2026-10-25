@@ -102,7 +102,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err != nil {
 		return failTidyV3(r, err)
 	}
-	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(observation.Native), o.StateDir); err != nil {
+	if err = qualifyTidyV3Registrations(ctx, observation.Native, nil, o.StateDir); err != nil {
 		return failTidyV3(r, err)
 	}
 	if o.ReportDir != "" {
@@ -262,7 +262,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if !sameTidyV3Observation(observation, fresh) {
 		return failTidyV3(r, failure("evidence-changed", "Native evidence changed while planning; replan."))
 	}
-	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(fresh.Native), o.StateDir); err != nil {
+	if err = qualifyTidyV3Registrations(ctx, fresh.Native, nil, o.StateDir); err != nil {
 		return failTidyV3(r, err)
 	}
 	if written != nil {
@@ -285,7 +285,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		if !sameTidyV3Observation(observation, fresh) {
 			return failTidyV3(r, failure("evidence-changed", "Native evidence changed under the private plan lock."))
 		}
-		if e = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(fresh.Native), o.StateDir); e != nil {
+		if e = qualifyTidyV3Registrations(ctx, fresh.Native, nil, o.StateDir); e != nil {
 			return failTidyV3(r, e)
 		}
 		if e = ctx.Err(); e != nil {

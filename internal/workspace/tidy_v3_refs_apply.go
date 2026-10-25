@@ -374,7 +374,7 @@ func (c tidyV3RefsApplyCoordinator) observeCurrent(ctx context.Context, p V3Plan
 	if out.Expected != expected || !reflect.DeepEqual(out.Native, native) {
 		return out, failure("evidence-changed", "Native source, base, references, registrations or safety differ from the exact allowed state.")
 	}
-	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(out.Native), p.StateDir); err != nil {
+	if err = qualifyTidyV3Registrations(ctx, out.Native, nil, p.StateDir); err != nil {
 		return out, err
 	}
 	if p.Online != nil {

@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/wstein/sourcesteward/internal/inspection"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -387,6 +389,35 @@ func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string
 		}
 	}
 	return nil
+}
+
+// qualifyTidyV3Registrations applies qualifyTidyWorkspaceRoots to every registered root of a v3
+// native state plus the caller-declared extra roots. One registration is judged by a weaker but
+// still sound rule: Git reports it prunable (missing directory, not locked) and the leaf is
+// absent below a canonical real parent. Nothing can then be written there, and the lexical
+// state-overlap check on the unchanged path is exact. The registration stays in the native
+// state, so snapshots, digests and the retained row keep it; it is never pruned. A locked,
+// replaced, aliased or parentless root keeps the refusal.
+func qualifyTidyV3Registrations(ctx context.Context, native V3NativeState, extra []string, state string) error {
+	paths := []string{}
+	for _, r := range native.Registrations {
+		if r.Prunable && !r.Locked && !r.Bare && absentBelowCanonicalParent(r.Path) {
+			if state != "" && overlaps(state, r.Path) {
+				return failure("state-overlap", "Tidy state directory must be disjoint from every registered workspace, including unselected or detached work.")
+			}
+			continue
+		}
+		paths = append(paths, r.Path)
+	}
+	return qualifyTidyWorkspaceRoots(ctx, append(paths, extra...), state)
+}
+
+func absentBelowCanonicalParent(path string) bool {
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	_, err := currentIdentity(filepath.Dir(path))
+	return err == nil
 }
 
 func tidyResultRecoveryPointer(r TidyResult) string {

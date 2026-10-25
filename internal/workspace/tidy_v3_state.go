@@ -299,7 +299,7 @@ func validV3NativeState(state V3NativeState, p V3Plan, snapshot Snapshot) bool {
 	last = ""
 	roots := []string{}
 	for _, r := range state.Registrations {
-		if (!r.Locked && r.LockReason != "") || r.Bare || r.Prunable || r.Path <= last || !v3CanonicalPath(r.Path) || !v3OID(r.HeadOID, p.Expected.Identity.ObjectFormat) || (r.HeadRef != "" && !v3Ref(r.HeadRef)) || !validText(r.LockReason) {
+		if (!r.Locked && r.LockReason != "") || r.Bare || (r.Prunable && r.Locked) || r.Path <= last || !v3CanonicalPath(r.Path) || !v3OID(r.HeadOID, p.Expected.Identity.ObjectFormat) || (r.HeadRef != "" && !v3Ref(r.HeadRef)) || !validText(r.LockReason) {
 			return false
 		}
 		last = r.Path
