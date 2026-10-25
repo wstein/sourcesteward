@@ -294,15 +294,17 @@ def acceptance(binary=BINARY):
         commit(fx.ws, 'local.txt', 'local\n')
         fx.upstream_commit('up.txt')
         tip = git(['rev-parse', 'refs/remotes/origin/main'], fx.ws)
-        result = sync_json(['--rebase', str(fx.ws)], 0)
-        entry = by_name(result)['.']
-        assert entry['result'] == 'rebased' and git(['rev-list', '--merges', '--count', 'HEAD'], fx.ws) == '0', result
-        assert git(['rev-parse', 'HEAD~1'], fx.ws) == git(['rev-parse', 'refs/remotes/origin/main'], fx.ws) and (fx.ws / 'local.txt').read_text() == 'local\n'
+        def assert_rebased_on_top(result, ws):
+            assert by_name(result)['.']['result'] == 'rebased', result
+            assert git(['rev-list', '--merges', '--count', 'HEAD'], ws) == '0', 'a merge commit exists'
+            assert git(['rev-parse', 'HEAD~1'], ws) == git(['rev-parse', 'refs/remotes/origin/main'], ws), 'the local commit is not on top of the upstream tip'
+            assert (ws / 'local.txt').read_text() == 'local\n' and (ws / 'up.txt').is_file(), 'a file is missing after the rebase'
+
+        assert_rebased_on_top(sync_json(['--rebase', str(fx.ws)], 0), fx.ws)
         fx = make('rebase-config')
         commit(fx.ws, 'local.txt', 'local\n')
         fx.upstream_commit('up.txt')
-        result = sync_json([str(fx.ws)], 0, environment=configured('[pull]\n\trebase = true\n'))
-        assert by_name(result)['.']['result'] == 'rebased', result
+        assert_rebased_on_top(sync_json([str(fx.ws)], 0, environment=configured('[pull]\n\trebase = true\n')), fx.ws)
         completed.add('S.rebase')
 
         # --- S.rebase-merged-upstream: the branch was rebase-merged upstream; the local copy catches up ------
@@ -343,10 +345,10 @@ def acceptance(binary=BINARY):
         commit(fx.ws, 'local.txt', 'local\n')
         fx.upstream_commit('up.txt')
         (fx.ws / 'root.txt').write_text('dirty edit\n')
-        head = git(['rev-parse', 'HEAD'], fx.ws)
+        blocked_state = state(fx.ws)
         blocked = sync_json(['--rebase', str(fx.ws)], 0)
-        assert by_name(blocked)['.']['result'] == 'skipped-dirty' and git(['rev-parse', 'HEAD'], fx.ws) == head, blocked
-        assert (fx.ws / 'root.txt').read_text() == 'dirty edit\n'
+        assert by_name(blocked)['.']['result'] == 'skipped-dirty' and state(fx.ws) == blocked_state, blocked
+        assert git(['stash', 'list'], fx.ws) == '', 'a stash was made for a refused rebase'
         stashed = sync_json(['--rebase', '--autostash', str(fx.ws)], 0)
         assert by_name(stashed)['.']['result'] == 'rebased' and git(['stash', 'list'], fx.ws) == '', stashed
         assert (fx.ws / 'root.txt').read_text() == 'dirty edit\n', 'the stashed edit did not come back'
