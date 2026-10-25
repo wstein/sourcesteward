@@ -53,3 +53,6 @@ func (c worktreeObserver) windowFor(ctx context.Context, n int) time.Duration {
 	}
 	return observationWindow(ctx, n)
 }
+
+// proofPhaseTimeout is the budget of the proof phase given the rest of the window (stub).
+func proofPhaseTimeout(rest time.Duration) time.Duration { return integrationPhaseTimeout }
