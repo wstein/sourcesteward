@@ -89,7 +89,7 @@ func TestRefTransactionKillReportsSurvivingDescendantHonestly(t *testing.T) {
 	gitRefDescendantWait = 100 * time.Millisecond
 	t.Cleanup(func() { gitRefDescendantWait = old })
 	tx, release, alive := refTransactionWithDescendant(t, "spawn")
-	err := tx.finish(true)
+	err := finishWithin(t, tx, true)
 	if !errors.Is(err, errGitRefDescendants) {
 		t.Fatalf("killed writer reported as fully stopped while its descendant runs: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestRefTransactionKillReportsSurvivingDescendantHonestly(t *testing.T) {
 	if !tx.stopped || tx.cmd.ProcessState == nil {
 		t.Fatal("owned process was not reaped")
 	}
-	if again := tx.finish(true); !errors.Is(again, errGitRefDescendants) {
+	if again := finishWithin(t, tx, true); !errors.Is(again, errGitRefDescendants) {
 		t.Fatalf("repeated finish lost the descendant result: %v", again)
 	}
 	release()
@@ -113,7 +113,7 @@ func TestRefTransactionCleanStopReportsSurvivingDescendantHonestly(t *testing.T)
 	gitRefDescendantWait = 100 * time.Millisecond
 	t.Cleanup(func() { gitRefDescendantWait = old })
 	tx, release, _ := refTransactionWithDescendant(t, "spawn-exit")
-	err := tx.finish(false)
+	err := finishWithin(t, tx, false)
 	if !errors.Is(err, errGitRefDescendants) || !tx.out.Uncertain {
 		t.Fatalf("clean finish hid a surviving descendant: %v uncertain=%v", err, tx.out.Uncertain)
 	}
@@ -130,7 +130,7 @@ func TestRefTransactionStderrFloodDoesNotSkipTheDescendantWait(t *testing.T) {
 	if n, err := tx.output.Read(make([]byte, 1)); n != 0 || err == nil {
 		t.Fatalf("unexpected output after the flood: %d %v", n, err)
 	}
-	err := tx.finish(true)
+	err := finishWithin(t, tx, true)
 	if !errors.Is(err, errNativeOutputLimit) {
 		t.Fatalf("flood past the stderr limit was not reported: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestRefTransactionDescendantWaitEndsWithTheContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tx.ctx = ctx
 	cancel()
-	err := tx.finish(true)
+	err := finishWithin(t, tx, true)
 	if !errors.Is(err, errGitRefDescendants) || !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled context did not end the descendant wait honestly: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestRefTransactionDescendantWaitEndsWithTheContext(t *testing.T) {
 func TestRefTransactionKillWaitsForDescendantThatIsGone(t *testing.T) {
 	tx, release, alive := refTransactionWithDescendant(t, "spawn")
 	release()
-	err := tx.finish(true)
+	err := finishWithin(t, tx, true)
 	if errors.Is(err, errGitRefDescendants) {
 		t.Fatalf("exited descendant reported as running: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestRefTransactionCleanStopLeavesNoDescendantToUnlinkARestoredLock(t *testi
 	t.Cleanup(func() { gitRefDescendantWait = old })
 	lock := filepath.Join(t.TempDir(), "integrated.lock")
 	tx, release, alive := refTransactionWithDescendant(t, "spawn", lock)
-	err := tx.finish(true)
+	err := finishWithin(t, tx, true)
 	clean := !errors.Is(err, errGitRefDescendants)
 	if clean {
 		if err := os.WriteFile(lock, []byte("restored\n"), 0o600); err != nil {
@@ -195,5 +195,24 @@ func TestRefTransactionCleanStopLeavesNoDescendantToUnlinkARestoredLock(t *testi
 		if _, err := os.Lstat(lock); err != nil {
 			t.Fatal("a stop reported as clean let a descendant remove the restored lock:", err)
 		}
+	}
+}
+
+// finishWithin is a watchdog: a finish that does not return within a few
+// seconds fails the test by assertion instead of hanging until the package
+// timeout. After the Fatalf the goroutine ends only through the helper's cleanup:
+// its release() closes the control pipe, so the descendant exits and stderr
+// reaches end of file, which lets finish return; the cancel ends the run.
+func finishWithin(t *testing.T, tx *gitRefTransaction, kill bool) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- tx.finish(kill) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(5 * time.Second):
+		tx.cancel()
+		t.Fatalf("finish(%v) did not return within 5s", kill)
+		return nil
 	}
 }
