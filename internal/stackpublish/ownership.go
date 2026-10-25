@@ -4,7 +4,6 @@ package stackpublish
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/wstein/sourcesteward/internal/attribution"
 )
@@ -107,13 +106,26 @@ func ownershipGuard(in OwnershipInput) Guard {
 // known reports a repository identity that is complete and well formed: a lower-case host and
 // owner and repository names of the hosting grammar. Anything else is unreadable evidence.
 func (r RepoRef) known() bool {
-	return hostGrammar.MatchString(strings.ToLower(r.Host)) && validName(r.Owner) && validName(r.Name)
+	return hostGrammar.MatchString(asciiLower(r.Host)) && validName(r.Owner) && validName(r.Name)
 }
 
 // same compares host, owner and name the way GitHub does, but folds ASCII only: known() has
 // already restricted every field to ASCII, so similar-looking Unicode letters never reach the comparison.
 func (r RepoRef) same(o RepoRef) bool {
 	return asciiEqualFold(r.Host, o.Host) && asciiEqualFold(r.Owner, o.Owner) && asciiEqualFold(r.Name, o.Name)
+}
+
+// asciiLower lower-cases ASCII letters only. strings.ToLower would turn the Kelvin sign U+212A into
+// "k" and let a look-alike host pass the grammar; with this, such a host is rejected by known()
+// (and would in any case fail same(), which folds ASCII only, so the outcome is safe either way).
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 // asciiEqualFold is case-insensitive for ASCII letters only (no Unicode folding such as U+212A).
