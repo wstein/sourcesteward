@@ -41,6 +41,24 @@ output has paths/types/participant identities only. An unrequested body is never
 read solely for rendering. Source reads required by replay do not imply permission
 to emit those bodies.
 
+## Shared flag vocabulary and noninteractive use
+
+Text output is the draft default; `--json` selects structured output. Neither
+mode requires a TTY, reads stdin or introduces a prompt. Relative to the shared
+vocabulary in Specs 041/043, `--human` and `--timeout` are not proposed accepted
+flags here pending explicit CLI alignment; the current draft instead has fixed
+60-second operation and 10-second native-process bounds. If an explicit text or
+timeout selector is later adopted, recommend those shared names rather than
+new aliases; that recommendation is not an owner decision or an accepted flag.
+
+`--state-dir` is not applicable: diagnosis/preflight creates no saved plan,
+checkpoint or evidence store. Disclosed private scratch is disposable execution
+state, not a plan store. `--online` is not applicable and is refused: this feature
+is offline and never refreshes supplied remote evidence. Under the current draft,
+all four unproposed/inapplicable flags are usage errors (exit 2) before native
+reads or scratch effects, including when no TTY is present. A later accepted
+flag alignment requires contract and test updates rather than implicit inheritance.
+
 ## Outcomes and exit status
 
 | Status | Prediction | Proposed exit and meaning |
