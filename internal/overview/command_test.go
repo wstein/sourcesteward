@@ -131,8 +131,8 @@ func TestBuildCommand(t *testing.T) {
 		{PRUnread, base, "stw pulls --repo wstein/sourcesteward", Read},
 		{LocalStash, base, "git -C crewbook stash list", Read},
 		{GitlinkAhead, base, "git -C /ws add crewbook", Owner},
-		{BranchesUnmerged, base, "stw tidy", Read},
-		{WorktreeStale, base, "stw tidy", Read},
+		{BranchesUnmerged, base, "stw tidy", Owner},
+		{WorktreeStale, base, "stw tidy", Owner},
 		{PRBot, base, "stw pulls --repo wstein/sourcesteward --bots-only", Read},
 		{IssueSecurity, base, "gh issue view 7 -R wstein/sourcesteward", Read},
 		{IssueAssigned, base, "gh issue view 7 -R wstein/sourcesteward", Read},
@@ -217,12 +217,12 @@ func TestBuildCommandQuotesPath(t *testing.T) {
 	}
 }
 
-// Rows 23 and 24 suggest the workspace-wide wizard (Spec 037 OQ11): it takes no value from the target,
+// Rows 23 and 24 suggest the workspace-wide wizard (Spec 041 OQ11): it takes no value from the target,
 // so a hostile path can neither reach the string nor suppress it.
 func TestTidyHintIgnoresTheTarget(t *testing.T) {
 	for _, c := range []Category{BranchesUnmerged, WorktreeStale} {
 		for _, path := range []string{"", "-x", "a;b", "$(x)", "x\ny"} {
-			if cmd, eff := buildCommand(c, target{Path: path}); cmd != "stw tidy" || eff != Read {
+			if cmd, eff := buildCommand(c, target{Path: path}); cmd != "stw tidy" || eff != Owner {
 				t.Errorf("%s Path=%q: %q (%q)", c, path, cmd, eff)
 			}
 		}
