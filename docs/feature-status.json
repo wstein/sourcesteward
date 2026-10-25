@@ -210,6 +210,12 @@
       "status": "implemented",
       "spec": "../specs/035-stw-watch/spec.md",
       "evidence": "../docs/progress.md#spec-035-stw-watch-accepted-visible-2026-10-22"
+    },
+    {
+      "id": "041-tidy-wizard",
+      "status": "implemented",
+      "spec": "../specs/041-tidy-wizard/spec.md",
+      "evidence": "../docs/progress.md#spec-041-stw-tidy-wizard-implemented-unpublished-schema-t021-open-2026-10-25"
     }
   ]
 }
