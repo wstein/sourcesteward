@@ -1,8 +1,13 @@
 # Contract: Publication, Ready and Owner Handoff Receipts
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **UNPUBLISHED proposal**; these are typed evidence requirements, not a new ledger,
 review provider, signing service or proof that any source already emits them.
-Trusted provenance/serialization remain OQ-POLICY. A caller-provided SHA without
+Trusted workspace policy is the owner-decided authority; serialization/measurement implementation remains. A caller-provided SHA without
 accepted source evidence is not an agent CLEAR receipt. Spec 043's separate
 human `--reviewed SHA` statement remains its own contract.
 
@@ -105,7 +110,7 @@ run. Inspect every actual author AND committer in
 parent commits. Missing objects, more than 200 commits or unknown range refuses;
 no implicit fetch. Compare names/emails to exactly the trusted owner identity,
 never a repeatable caller allowlist or repository/effective-config expectation.
-The proposed trusted-source selection stays OQ-POLICY; lack of a source blocks.
+OQ-POLICY is decided: trusted workspace policy supplies the source; lack of it blocks.
 
 Read and report bounded, escaped `git config --show-origin --get-regexp '^user\.'`
 origin evidence; no foreign `user.name` or `user.email` is allowed. Check local,
@@ -115,12 +120,16 @@ for this check, not arbitrary configuration/environment values or secret-looking
 keys. Source code must pin allowed keys before output. GitHub co-author trailers
 never replace actual commit fields.
 
-Actual signing policy must be explicit. 015 proposes unsigned actual candidates
-using `--no-gpg-sign`, with signing program neutralized and per-signed-source
-`signature-dropped` evidence even if range-diff is `=`. No signing helper may run.
-Until its signed-source/required-signature decision is accepted, publication
-blocks signed input, dropped signatures or unknown/unmet remote requirements.
-Spec 043 OQ6 remains separate; it is not silently answered by this gate.
+Actual signing policy is explicit: default refuse source-signature loss or
+unreadable/unmet required policy. Owner decisions 015 OQ-8/016 OQ-SIGN permit
+only optional, separately planned/authorized local 015 host-helper re-sign under
+the shared owner profile. 016 executes no signer: it verifies the final actual
+signed chain/head, allowed signer and bottom-up signed-parent/old→unsigned→signed
+provenance, loss/replacement and final-SHA independent review. No stw key access,
+repository helper selection, remote-auth local signing or unsigned fallback.
+Current predictions stay unsigned/helper-free; missing helper/native profile
+keeps re-sign capability unavailable. 043 human landing consumes the exact final
+reviewed SHA and never signs it.
 
 ## Mode, ownership and attribution
 

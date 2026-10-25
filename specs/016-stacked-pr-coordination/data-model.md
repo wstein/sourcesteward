@@ -1,5 +1,10 @@
 # Data Model: Stacked PR Coordination
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status**: Proposed and UNPUBLISHED; no JSON/schema file or implemented storage
 contract changes. All null/unknown facts remain explicit.
 
@@ -62,18 +67,18 @@ worktree/index and repeated per-invocation/final checks. Missing/unsupported pin
 or original-worktree/index attribute contamination makes it unusable as that
 profile's evidence. It remains prediction, never an actual candidate/review.
 Native jj aggregate conflict state cannot be inferred from Git stop-first or a
-clean final tip while 014 OQ-JJCONF remains unresolved. Supplied 013 recovery
+clean final tip while native aggregation under adopted014 OQ-JJCONF remains unmeasured. Supplied 013 recovery
 metadata never proves a generic operation-head CAS or remote reversibility;
 its independent safety-copy receipt/lifetime is distinct from checkpoint metadata.
 
 ## ForgePlan
 
-Unsaved rendering is the default and has `saved: false`, `plan_id: null`; it
-writes no plan and creates/repairs no store. Explicit `--save --state-dir DIR`
-may persist a nonempty plan only into that existing validated private directory,
-then returns `saved: true`. Empty selection never persists, even with `--save`.
-There is no implicit directory default pending OQ-SURFACE/OQ-STORE. Apply accepts
-only the exact existing saved id and explicit validated directory.
+Unsaved rendering is default (saved:false, plan_id:null), with no namespace
+creation/repair. Explicit --save persists nonempty plans into validated default
+workspace .work/stw metadata or explicit --state-dir. Empty selection never saves.
+Metadata role/quotas/ignore-untracked/native-layout/no-follow/race/durability guards
+follow the owner profile; 013 selected-byte payloads remain explicitly external.
+Apply requires the exact saved id and validated default/explicit metadata store.
 
 For a saved plan, `plan_id` is the content identity of a canonical immutable plan; `schema_version`
 is 1 and `kind` is `forge-effect-plan`. `created_at`, repository, task binding,
@@ -159,22 +164,31 @@ task without recorded session is not gated by D5; unreadable task record refuses
 an agent. Separate own-scope guards still refuse unknown/foreign ownership. No
 copy of a session id is placed in a new journal, plan, public result or PR text.
 
-## ActionRecord
+## Immutable ActionRecord facts
 
-A proposed typed private record binds repository, plan/run/action ids, effect
-kind, exact expected state, intent time, outcome time, known remote identity and
-sanitized outcome/reason. No token/session id/raw response body is stored. This
-is a reviewed integration using existing durable primitives, not a new claim
-that sync v1 is a remote transaction log.
+A typed journal consists of immutable create-only intent, outcome, reservation
+and resolution facts, not one overwritten mutable record. Each fact binds
+repository/task/plan/run/action/attempt id, fact kind/version, previous-fact digest,
+exact expected identities/effects, source/evidence digest and bounded sanitized
+reason. No token/session/key/raw response bytes. Append via owned staging,
+create-only publication and file/directory fsync; never modify an existing fact.
 
-Transitions: planned → blocked or prepared; prepared → completed/refused/failed/
-unknown. Every unattempted suffix is not-started. Write intent durably before the
-remote effect; record outcome durably after. Lost response or outcome-write
-failure remains unknown even if the effect likely succeeded. Before retry,
-resample exact post-state: prove completion → completed without replay; prove
-no effect and unchanged guard → a newly authorized attempt may proceed; unknown
-or changed state → refuse. Never convert a network timeout into proven no effect.
-Unresolved records are retained, not automatically expired.
+Before an effect, durably reserve count/physical quota for the exact bounded
+intent plus one bounded outcome (outcome at most64KiB, including 2KiB sanitized
+error) and reservation metadata/staging; refuse full/quota-unknown before intent
+and effect. Count reservations against the256-record/32MiB namespace profile.
+Private staging is not an authoritative fact; an outcome is valid only after
+create-only publication. Quota reservation cannot guarantee disk/permission/I/O
+success, so an effect followed by failed/missing outcome remains unknown.
+
+Displayed states planned/prepared/completed/refused/failed/unknown are derived
+from a validated full fact chain, never authority in a mutable cache. A missing,
+forged, duplicate-attempt, broken-digest, foreign or incomplete chain cannot prove
+no effect or completion. Retry independently samples exact remote state and
+appends a new resolution/attempt fact only after its own guards/authorization;
+never fill gaps by overwriting old bytes or blindly repeating a write. Proven
+completion appends its proof without duplication; unknown remains retained and
+never auto-expires. Sync v1 format/retention stays unchanged.
 
 ## OwnerHandoff
 
@@ -189,3 +203,16 @@ retarget/read child, delete bottom only after all child retargets, land child.
 On/unreadable: retarget, re-read, owner land, gated by 043 FR-031/034 and measured
 shape admission; unreadable shape cannot pass. No 016 action id is a landing,
 default-branch push or deletion action.
+
+## Owner-decided metadata and signed-publication receipts
+
+Plan/action metadata stores include trusted workspace/root/native-layout identity,
+namespace, actor/mode, ignore/untracked admission and residual export notice,
+quota accounting and durable immutable digest. Never embed selected capture
+bytes, session ids or key material. A cleanup plan lists only completed,
+nondependent metadata ids/digests and separate local authorization; unresolved
+records never auto-expire. Signed publication evidence references the final 015
+receipt: fixed host-helper/verifier profile and public signer evidence, each
+old→unsigned→signed commit and signed-parent id, old signature loss/replacement,
+verified final SHA/tree and review at that exact SHA. 016 has no signer invocation
+or key field; remote authorization cannot select a local re-sign step.

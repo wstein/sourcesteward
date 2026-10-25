@@ -1,36 +1,18 @@
-# Specification Quality Checklist: Stacked PR Coordination
+# Owner-Decision Quality Checklist: Spec 016
 
-**Purpose**: Author assessment of the design, not implementation acceptance.
-**Updated**: 2026-10-25 | **Feature**: [spec.md](../spec.md)
+**Owner decisions recorded 2026-10-25. Author document review only.**
+See [spec](../spec.md), [analysis](../analysis.md) and [profiles](../contracts/owner-decisions.md).
 
-## Content quality
+- [x] Former OQ IDs are dated DECISIONS, with all39 source pairs indexed and no native measurement invented.
+- [x] Current owner direction is distinguished from historical implementation evidence and unchecked future work.
+- [x] All 40 current FR/SC definitions have real task IDs and literal future tests in analysis.md.
+- [x] .work saved-plan metadata and external selected-byte/safety payload roles remain distinct with honest export risk.
+- [x] Trusted workspace policy, missing-source refusal, native capability gaps and separate local/remote authority remain explicit.
+- [x] Default signature refusal and optional015 HOST helper/no-stw-key/final-signed-SHA boundary are explicit;013/014 remain helper-free.
+- [x] Target CLI exit revision2 0/1/2 is distinct from frozen JSON schema 1 and CURRENT 015 code 3; no legacy3 selector.
+- [ ] Independent review of this exact amended head is CLEAR.
+- [ ] Required implementation/source/native/helper/forge measurements are executed and accepted for enabled capabilities.
+- [ ] New structured output conformance/publication and separately authorized live-operation gates are satisfied.
 
-- [x] User value, scope and independently testable stories are explicit.
-- [x] Mandatory specification sections, edge cases and assumptions are present.
-- [x] Native/forge compatibility requirements are separated from plan architecture.
-- [x] All new contracts are labelled UNPUBLISHED; current behavior is not overstated.
-
-## Requirements and coverage
-
-- [x] Each FR and SC is individually traceable to existing future task ids and a literal test idea in analysis.md.
-- [x] All 38 implementation tasks are unchecked and ordered tests before implementation.
-- [x] No unresolved choice is silently recorded as owner approval.
-- [x] Offline/default-none, per-action remote authority, ownership, exact leases, actual identity/review/signing, Ready and retry limits are testable.
-- [x] Shared flags and hidden 015 exit 3 compatibility are explicitly reconciled as proposals.
-- [x] Native jj and native stack publication gaps remain capability-gated, without raw Git fallback or inferred endpoint effects.
-
-## Gates still open
-
-- [ ] OQ-SURFACE/POLICY/WRITES/NATIVE/SIGN/STORE/EXIT accepted for each affected capability.
-- [ ] Independent review of the exact artifact/source head is CLEAR.
-- [ ] Declared implementation/source/native minimum/current acceptance is executed and recorded.
-- [ ] New structured contracts pass implemented conformance and any separate publication gate.
-
-## Notes
-
-Checked items are author document-completeness assessments. Unchecked gates block
-affected implementation/acceptance; they do not erase accepted historical 015
-source work or imply all future work must fit one PR. No runtime or live forge
-behavior is verified by this checklist. Local observation authorizes no mutation;
-local apply authorizes no remote effect. Spec 043 landing remains owner-only and
-separately invoked, with its conditional order and unmeasured-shape gates intact.
+No implementation task is ticked by this checklist. Numeric profile limits are
+concrete engineering design, not invented owner quotations or throughput proof.

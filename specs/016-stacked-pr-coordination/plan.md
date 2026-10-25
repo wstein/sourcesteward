@@ -1,5 +1,10 @@
 # Implementation Plan: Stacked PR Coordination
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **Branch**: `codex/spec-016-stack-toolbelt` | **Date**: 2026-10-25 | **Spec**: [spec.md](spec.md)
 **Status**: Proposed design, no implementation or native publication acceptance.
 
@@ -21,7 +26,7 @@ operation. No stack merge or remote deletion is added here.
 | Dependencies | Existing pinned official go-gh/v2, native Git/jj adapters; no new dependency, provider SDK or extension installation |
 | Functional core | Proposed `internal/stackpublish` typed evidence, validation, planning, gate evaluation and outcomes; no I/O, clock or goroutines in derivation |
 | Imperative edges | Existing inspection/hosting/private-state seams, extended only by reviewed closed capabilities; native Git own-topic push, separately measured native jj publication |
-| Storage | Immutable plans and action intent/outcome records in a validated private store outside repositories; typed integration with existing durability conventions, not reuse of sync JSON as though generic |
+| Storage | Immutable plans and action intent/outcome records in validated workspace .work METADATA (captured013bytes remain external); typed integration with existing durability conventions, not reuse of sync JSON as though generic |
 | Target | Existing supported Linux/macOS native enforcement lanes; exact minimum/current versions from backend policy, with explicit capability evidence |
 | Testing | Temporary repositories/bare remotes, fake HTTP/processes/clocks, effect sentinels, proposed offline contract fixtures; failing tests before behavior |
 | Performance/scope | One repository per plan, at most two open stack levels and 16 selected actions; fixed operation budgets in the contract |
@@ -132,31 +137,25 @@ work still open; its own unmet acceptance cannot be ignored.
 
 ## Shared vocabulary and compatibility
 
-Use [the proposed surface](contracts/forge-effects.md#proposed-command-surface)
-with shared `--online`, `--human`, `--json`, `--timeout`, `--state-dir`, stored
-`--plan ID` and a distinct per-action `--authorize-remote ACTION_ID`. Local actions
-retain established `--authorize`; that flag cannot authorize remote writes.
-Plans render unsaved by default (`saved: false`, null plan id) with no store
-creation/repair or plan write. Explicit `--save` requires an existing validated
-private `--state-dir DIR`; there is no accepted default. Empty selection never
-persists. Apply requires an existing saved id and explicit validated directory.
-A directory supplied without `--save` can read existing task evidence but cannot
-persist the plan. Surface/default changes remain OQ-SURFACE/OQ-STORE.
+Owner decisions 2026-10-25 adopt --online only (no old --pull-requests alias),
+--human/--json exclusivity and shortening --timeout. Local observation stays
+offline; local --authorize and per-action remote --authorize-remote remain
+separate. Rendering stays unsaved; explicit --save uses validated default
+WORKSPACE_ROOT/.work/stw plan/action metadata or explicit --state-dir override.
+No preview repairs/creates the namespace. Trusted workspace policy defines the
+unique root, identity, reviewer/check sources; missing policy refuses. Metadata
+needs explicit private modes, ignore/untracked export-risk and no-follow/race/
+quota/fsync guards with no auto-ignore/config/index edit. Captured 013 bytes
+and safety copies remain in explicit EXTERNAL --payload-dir, never .work.
 
-These spellings remain OQ-SURFACE, not accepted current CLI flags. Spec 012's
-online scope and `--pull-requests` spelling remain an open owner question; its
-accepted `--after-fetch` observation hint never performs a fetch. Spec 014's
-OQ-FLAGS human/shortening-timeout proposals and Spec 013's checkpoint/resume/undo
-contracts grant no implicit network. 013 deliberately separates checkpoint/resume/undo planning and apply; its
-`--human`/`--timeout` spelling recommendations remain open, and `--online` is
-inapplicable/rejected. The 015 proposed restore leaf uses explicit plan/save/apply
-selection rather than a new `restore-plan` command; neither feature is an alias
-for Spec 032 sync restore.
-
-New proposed results use 0 complete, 1 refused/incomplete/partial/operational or
-cancelled, 2 usage. Existing hidden 015 v1 incomplete exit 3 and its unpublished
-schema bytes remain frozen; OQ-EXIT is required for any shared migration.
-No JSON or schema file is added or published by this design.
+The target CLI exit-contract revision2 is unified 0/1/2, including 015 incomplete 1
+without a legacy3 selector; CURRENT hidden015code3 remains until its red-first
+mapping/help task. JSON schema1 bytes are a separate version domain and stay
+frozen. 013/014 remain helper/network-free. Optional re-sign is separately
+planned/authorized local015 work through a measured fixed HOST helper/verifier;
+no stw keys or implicit invocation under remote authorization. 016 validates
+the final signed chain/head before independent exact-SHA review/push. All native
+measurement/transport gates remain; adopted decisions are not conformance.
 
 ## Risks and verification gates
 
@@ -168,7 +167,7 @@ No JSON or schema file is added or published by this design.
   bounded config origins, including the whole open parent's range.
 - Signed source replay can lose signatures despite equal range-diff. Preserve
   015's explicit unsigned candidate/signature-dropped evidence and fail closed
-  while OQ-SIGN is unsettled; no signing helper is introduced.
+  under decided default refusal; optional 015 host-only signing is disabled without accepted measured profile.
 - Native GitHub rewriting and head deletion were measured together only with
   deletion on. No claim about independent causation or another setting is made.
   043's readable-off handoff and on/unreadable unmeasured pre-retarget gate stay

@@ -1,5 +1,10 @@
 # Research: Stacked PR Coordination
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **Date**: 2026-10-25 | **Status**: Local source/policy research and proposed
 choices; no new live forge measurement or runtime implementation.
 
@@ -10,7 +15,7 @@ choices; no new live forge measurement or runtime implementation.
 | Repository AGENTS and containing workspace workflow | Own topic branches/PRs; full explicit leases; two-level code-dependent stacks; per-PR Ready; owner-only merge; commit/config identity and rewrite review tier |
 | Specs 020/022 | Native ownership and explicit repository resolution, bounded caller-owned auth, fixed HTTPS GET transport, redirect/body/time controls; current transport adds no generic write capability |
 | Specs 025/030 | Exact sampled PR head/base and lifecycle, unknown/denied sources; 025 explains waits without Ready/merge promise; 030 lookup can return zero/one/many and does not establish ownership |
-| Spec 012 | Merged design uses nested restack-advised finding, separate from published 035 restack-needed; SC-009 caller fanout remains OQ-FANOUT-gated, online scope/name OPEN; no remote effects |
+| Spec 012 | Merged design uses nested restack-advised finding, separate from published 035 restack-needed; SC-009 now rejects batch under decided OQ-FANOUT, online scope/name DECIDED --online only; no remote effects |
 | Spec 015 D4–D9/D12–D13 | Git-only first read-only plan, explicit boundaries independent of 012, plumbing/quarantine plus CAS, push owned here; historical v1 prediction has fixed committer and incomplete exit 3 |
 | Specs 013/014/032 | Merged 013 design has independent pre-action safety copies, invoker-inclusive jj working-copy-effect refusal and no operation-head CAS; 014 binds full-H attribute source/private context and gates jj conflict aggregation; sync is not generic remote undo |
 | Spec 040 | Indexed bounded independent reads at the edge; no new per-repository budget or competing writes |
@@ -30,9 +35,9 @@ The 012/013/014/015 design artifacts are present on main; this is documentation
 integration, not implementation/conformance acceptance. 012's current finding
 code is `restack-advised`; its earlier pending `restack-needed` spelling in 015
 is a historical snapshot, never a shared schema. The published 035 event remains
-unchanged. 012 SC-009 requires isolated indexed 1..16 repository observations
-with at most four workers/shared budgets, but OQ-FANOUT must select a reachable
-entry before production orchestration; 016 remains single-repository.
+unchanged. 012 SC-009 now proves single-repository admission/rejected batch; the old
+1..16/four-worker proposal is dated deferred future design. No batch entry is
+approved; 016 remains single-repository.
 
 013 safety copies are self-contained, have distinct safety ids/roots/payloads and
 survive checkpoint drop/completed restore; deletion needs their own separate
@@ -117,76 +122,80 @@ or Git CAS restore cannot reverse a pushed branch, base edit, comment or native 
 **Alternatives considered**: Blind automatic retry, automatic inverse write and
 reuse of sync restore for remote effects are rejected.
 
+## Owner decisions (2026-10-25)
+
+All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
+choices adopt the source recommendations; implementation/native measurement and
+review gates remain, never inferred as passing. The concrete [owner profiles](contracts/owner-decisions.md)
+distinguish saved-plan metadata, external capture payloads, trusted policy,
+optional host-only signing and CLI exit-contract revision 2.
+
+| Decision ID | Dated disposition | Remaining implementation/verification gate |
+| --- | --- | --- |
+| OQ-SURFACE | DECIDED: shared surface, --online-only opt-in, explicit save with default workspace .work metadata store, single repository now. | CLI/store profile implementation, not an owner answer gap. |
+| OQ-POLICY | DECIDED: trusted workspace policy supplies exact identity, reviewer allowlist/check source; global config corroborates only. | Missing trusted source blocks push/Ready; receipt/provenance implementation. |
+| OQ-WRITES | DECIDED: measure in separately authorized disposable forge, then review small closed 022 write allowlist; comments deferred. | Unmeasured PR/ref/Ready effects stay unavailable; no GraphQL/arbitrary fallback. |
+| OQ-NATIVE | DECIDED: Git publication first; measure native link/unstack separately; native jj unavailable without measured native proof. | No extension installation/execution or Git fallback. |
+| OQ-SIGN | DECIDED: default refuse dropped/unmet/unknown signatures; optional local 015 re-sign with trusted host-only helper, no stw keys. | 016 validates final signed receipt; remote authorization never invokes local signing; no unsigned fallback. |
+| OQ-STORE | DECIDED: immutable typed action record, fsync, bounded validated .work metadata profile and no automatic unresolved expiry; sync v1 unchanged. | Durability/race/export-risk/quota and separate manual cleanup implementation. |
+| OQ-EXIT | DECIDED: unified target CLI revision 2 uses 0/1/2 now; 015 current code3 changes in explicit red-first task. | Exit-only revision is separate from frozen result JSON schema1; no legacy3 selector. |
+
 ## Needs owner decision
 
-No row below is an owner approval. Affected capabilities remain disabled; no row
-reopens settled Spec 015 D4–D9/D12–D13 or Spec 043's conditional landing design.
+Compatibility anchor only: the IDs above are settled owner decisions, not open
+questions. Remaining unavailable capabilities require implementation/measurement
+evidence, not an invented additional owner answer.
 
-| ID | Unsettled choice | Recommendation and blocking boundary |
-| --- | --- | --- |
-| OQ-SURFACE | Exact publish group/action selection syntax and shared flags; 012 online scope/name | Adopt `stack publish plan/apply`, `--online`, `--human`/`--json`, shortening `--timeout`, explicit `--save --state-dir DIR` into an existing validated private directory, no implicit store default, `--plan ID`, per-action `--authorize-remote ID`; keep local `--authorize`. Reconcile 012 `--pull-requests` as an explicit alias only if approved. 012 OQ-NET is open; only `--after-fetch` has recorded acceptance. Surface stays proposed. |
-| OQ-POLICY | Trusted owner identity, independent review provenance/tier, local check and accepted-scope receipt source | Use trusted workspace policy, never repository text/caller-widened lists/config-derived identity expectation; record exact SHA/evidence kind and allowlisted independent reviewer. Global owner identity is read-only corroboration consistent with workspace rules; record source choice explicitly. Missing source blocks push/Ready rather than invent a ledger or provider. 043's human statement remains separate. |
-| OQ-WRITES | Which fixed method/path/body shapes, permissions and idempotency measurements enable PR create/body/retarget/Ready and absent-ref creation? | Measure in a separately authorized disposable forge fixture, then review an additive 022 capability allowlist with request/body bounds and fresh post-state tests. Until then plan those actions as capability-unavailable; current GET modes never write. Standalone comments are deferred original-draft scope, requiring a separate owner capability decision rather than automatic first-slice admission. No arbitrary endpoint/GraphQL fallback. |
-| OQ-NATIVE | Native stack link/unstack effects, supported versions, and native jj publication | Measure numeric link with explicit trunk base and `GH_REPO`, native unstack, side effects and retry reconciliation separately; do not run a dependency extension or install one. First Git publication is independent; jj stays capability-unavailable until native semantics/conformance, with no Git fallback. |
-| OQ-SIGN | Signed moved commits or required signatures in the actual candidate | Keep 015 candidates explicitly unsigned/no signing helper and report signature-dropped per source commit. Recommend refusing publication when any signature was dropped or signature requirements cannot be satisfied/read, until owner accepts a distinct policy. 015 OQ-8 and separate 043 OQ6 are preserved; no silently dropped signature. |
-| OQ-STORE | Typed plan/action journal integration, retention and interrupted action lookup | Reuse reviewed private store/durability primitives with a new typed remote-action record, immutable ids and fsync discipline; retain unresolved actions without automatic expiry. Do not mutate sync v1 record semantics or promise its restore reverses publication. Decide concrete retention before enabling writes. |
-| OQ-EXIT | Future shared result version and incomplete exit | Propose 0 complete/1 refused-incomplete-partial-error/2 usage for new 016; preserve hidden 015 v1 exit 3 and every implemented/published contract. Any migration needs an explicit versioned owner decision. |
+## Cross-spec decision index
 
-### Cross-spec decision index
+All **39 (spec, former OQ ID) pairs are owner decisions dated 2026-10-25**.
+Unlisted choices adopt source research recommendations. This index records no
+native/helper/forge measurements or implementation passes; remaining gates are
+verification/implementation, not unanswered owner choices. The concrete
+[owner profiles](contracts/owner-decisions.md) refine metadata, external payload,
+trusted-policy, optional host-only re-sign and exit-revision boundaries.
 
-This final-wave index names **all 39 current (spec, ID) pairs** from the linked
-source decision sections. It repeats their recommendations or existing deferral;
-no row records an owner answer or changes a settled decision. The related 016
-group identifies an evidence dependency or owner-handoff boundary, not a demand
-that unrelated future work block an accepted independent PR. 043 entries remain
-human-only landing choices and never enable a 016 landing/deletion effect.
-
-| Source decision | Existing recommendation or deferral | Blocked capability | Related 016 group |
+| Source decision | Status/date | Adopted direction | Remaining capability gate |
 | --- | --- | --- | --- |
-| [012 OQ-NET](../012-stack-inspection/spec.md#needs-owner-decision) | Keep offline default; choose explicit online scope/name, recommending --online with optional approved alias. | 012 remote command surface | OQ-SURFACE |
-| [012 OQ-EXIT](../012-stack-inspection/spec.md#needs-owner-decision) | Preserve hidden 015 v1 exit 3; require a versioned decision before unifying 0/1/2. | Shared protocol migration | OQ-EXIT |
-| [012 OQ-FLAGS](../012-stack-inspection/spec.md#needs-owner-decision) | Recommend exclusive --human and shortening timeout; keep no store/offline alias unless selected. | 012 shared-flag admission | OQ-SURFACE |
-| [012 OQ-FANOUT](../012-stack-inspection/spec.md#needs-owner-decision) | Recommend a named reachable higher-level caller; defer batch code until entry approval. | 012 production batch orchestration | OQ-NATIVE (caller capability; 016 stays single-repository) |
-| [013 OQ-1](../013-checkpoint-resume/research.md#needs-owner-decision) | Measure native capture matrix; start ordinary selected Git index/disk paths without false jj parity. | Checkpoint capture adapters/versions | OQ-NATIVE, OQ-STORE |
-| [013 OQ-2](../013-checkpoint-resume/research.md#needs-owner-decision) | Recommend explicit owned inverse changes; gate native undo/topology/signing and no-jj-CAS restoration limits. | Undo/operation restoration/signing admission | OQ-NATIVE, OQ-SIGN |
-| [013 OQ-3](../013-checkpoint-resume/research.md#needs-owner-decision) | Recommend external private quota-bound payload store and separately authorized drop; independent safety copies survive. | Payload store/quota/drop capability | OQ-STORE |
-| [013 OQ-4](../013-checkpoint-resume/research.md#needs-owner-decision) | Recommend trusted task/native layout and actor binding; missing/foreign/shared proof refuses. | Local apply/shared-history ownership admission | OQ-POLICY |
-| [013 OQ-5](../013-checkpoint-resume/research.md#needs-owner-decision) | Recommend characterized typed durability/root seam; preserve sync v1, separate namespaces and reviewed restore/flag surface. | Recovery writers, retention mechanism and CLI admission | OQ-STORE, OQ-SURFACE |
-| [014 OQ-SEM](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Recommend initial single-parent linear replay; separately measure merge/empty/redundant semantics. | Unaccepted merge/replay variants | OQ-NATIVE |
-| [014 OQ-TOPO](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Use explicit measured topology allowlist; refuse unmeasured Git/jj shapes. | Merge/rename/mode/gitlink/native graph support | OQ-NATIVE |
-| [014 OQ-HUNK](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Keep paths/types default; require exact selected paths and accepted privacy policy for bounded hunks. | Optional hunk/location/content capability | OQ-NATIVE (evidence privacy) |
-| [014 OQ-SCRATCH](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Measure native/platform confinement with no shared writable original store or fallback. | Unproved native preflight/isolation | OQ-NATIVE |
-| [014 OQ-JJCONF](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Measure native per-revision conflict evolution and aggregate semantics; clean tip/Git stop-first is insufficient. | Native jj preflight aggregate capability | OQ-NATIVE |
-| [014 OQ-FLAGS](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Recommend exclusive human alias/shortening timeout; keep store/online/offline unsupported pending choice. | 014 CLI flag admission | OQ-SURFACE |
-| [014 OQ-EXIT](../014-conflict-diagnosis/spec.md#needs-owner-decision) | Propose new 014 0/1/2 only; preserve hidden 015 exit 3 until explicit migration. | Shared result/exit migration | OQ-EXIT |
-| [015 OQ-1](../015-local-restacking/spec.md#needs-owner-decision) | Keep v1 frozen; choose opted-in version selector and restore preview/save/apply interface. | Future local protocol/publication, not historical planner | OQ-SURFACE, OQ-EXIT |
-| [015 OQ-2](../015-local-restacking/spec.md#needs-owner-decision) | Require trusted task/ref ownership and accepted independent exact-SHA review/check provenance where required. | Trusted local inputs and 016 receipt consumption | OQ-POLICY |
-| [015 OQ-3](../015-local-restacking/spec.md#needs-owner-decision) | Recommend explicit actual committer equal to trusted owner, preserve author/date, never config-derived expectation. | Actual candidate identity/date policy | OQ-POLICY |
-| [015 OQ-4](../015-local-restacking/spec.md#needs-owner-decision) | Measure native jj expectation/effects/recovery; no Git fallback or claimed Git CAS. | Native jj restack enablement | OQ-NATIVE |
-| [015 OQ-5](../015-local-restacking/spec.md#needs-owner-decision) | Reuse reviewed durability seam; retain incomplete runs, no first-slice automatic pruning. | Cross-operation retention deletion | OQ-STORE |
-| [015 OQ-6](../015-local-restacking/spec.md#needs-owner-decision) | Initial apply refuses every occupied branch, including caller; any worktree-aware widening needs separate design. | Occupied-ref/worktree-update capability | OQ-NATIVE |
-| [015 OQ-7](../015-local-restacking/spec.md#needs-owner-decision) | Keep 015 offline; resolve proposed 012 opt-in network scope in 012 without inventing approval. | Disputed 012 remote capability only | OQ-SURFACE |
-| [015 OQ-8](../015-local-restacking/spec.md#needs-owner-decision) | Recommend refusal for signed input/required-or-unknown signatures; unsigned candidate and loss evidence explicit. | Signed/required-signature local acceptance | OQ-SIGN |
-| [043 OQ1](../043-stw-land/spec.md#open-questions-not-decided-here) | Owner --reviewed remains a statement; machine-checkable CLEAR source is undecided. | Future owner-landing review receipt source | OQ-POLICY (separate human handoff) |
-| [043 OQ2](../043-stw-land/spec.md#open-questions-not-decided-here) | Measure scratch ruleset shape before admission; real direct-push acceptance is unknown. | Owner land apply under unmeasured shapes | OQ-WRITES (owner-handoff boundary only) |
-| [043 OQ3](../043-stw-land/spec.md#open-questions-not-decided-here) | No unknown-required-check override in v1 unless asked. | Owner override of checks-unknown | OQ-POLICY (separate human handoff) |
-| [043 OQ4](../043-stw-land/spec.md#open-questions-not-decided-here) | Measure on/unreadable-setting pre-retarget order; keep land-unmeasured until admitted shape. | Owner stacked landing for unmeasured deletion setting | OQ-WRITES (conditional handoff only) |
-| [043 OQ5](../043-stw-land/spec.md#open-questions-not-decided-here) | Confirm owner identity source; current owner-landing proposal follows read-only global identity. | Final owner identity-source choice | OQ-POLICY (separate human handoff) |
-| [043 OQ6](../043-stw-land/spec.md#open-questions-not-decided-here) | Whether require-signed is a later owner option remains deferred; no answer supplied. | Future owner-landing signature option | OQ-SIGN (related, separate decision) |
-| [043 OQ7](../043-stw-land/spec.md#open-questions-not-decided-here) | Forks/other forges are deferred; native jj remains refused in owner landing v1. | Owner fork/forge/jj landing support | OQ-NATIVE (boundary only; no 016 landing) |
-| [043 OQ8](../043-stw-land/spec.md#open-questions-not-decided-here) | Typed 029/031 journal versus plain audit location remains undecided. | Owner landing journal integration choice | OQ-STORE (separate human operation) |
-| [016 OQ-SURFACE](#needs-owner-decision) | Propose explicit publish plan/apply, shared flags, save/store and per-action remote authorization; no implicit defaults. | 016 command/flag/store surface admission | OQ-SURFACE |
-| [016 OQ-POLICY](#needs-owner-decision) | Choose trusted owner/review/check/scope inputs; no caller-widened identities or invented issuer ledger. | 016 push/Ready trusted receipts | OQ-POLICY |
-| [016 OQ-WRITES](#needs-owner-decision) | Measure fixed method/path/body/effects and idempotency; retain GET-only current modes and deferred comments. | 016 new PR/Ready/ref-creation writes | OQ-WRITES |
-| [016 OQ-NATIVE](#needs-owner-decision) | Measure native link/unstack and native jj publication separately; no extension execution or Git fallback. | 016 unmeasured native publication kinds | OQ-NATIVE |
-| [016 OQ-SIGN](#needs-owner-decision) | Keep unsigned/loss evidence explicit; recommend refusal of dropped/unmet/unknown signature policy until accepted. | 016 signed-history publication | OQ-SIGN |
-| [016 OQ-STORE](#needs-owner-decision) | Choose typed durable immutable action integration/retention; retain unresolved outcomes, preserve sync v1. | 016 durable write/retry enablement | OQ-STORE |
-| [016 OQ-EXIT](#needs-owner-decision) | Propose new 016 0/1/2; preserve existing bytes/v1 exit 3 until versioned migration decision. | 016 result-version/shared migration admission | OQ-EXIT |
-
-Single-repository plans deliberately exclude multi-repository/workspace action
-fanout. A future batch command would need explicit repository selections,
-per-member capability/action authorization and one run-wide budget; it is not
-silently supplied by internal read fanout or Spec 023 inventory.
+| [012 OQ-NET](../012-stack-inspection/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | default offline; `--online` is the ONLY opt-in, with no `--pull-requests` alias. | Remote GET admission still needs reviewed transport/native evidence. |
+| [012 OQ-EXIT](../012-stack-inspection/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | unified CLI exit contract revision 2 targets 0/1/2 now, including 015 incomplete=1, no legacy-3 selector. | 015 code/test amendment is unimplemented; current hidden code still returns 3. |
+| [012 OQ-FLAGS](../012-stack-inspection/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt shared --human exclusive with --json and positive shortening --timeout; no redundant --offline or observation store. | CLI registration/output/bounds tests precede implementation. |
+| [012 OQ-FANOUT](../012-stack-inspection/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | single-repository operation now; batch is deferred to its own later decision, with no approved caller entry. | No current batch API/CLI/helper or unused production orchestration; only deferred future invariants remain. |
+| [013 OQ-1](../013-checkpoint-resume/research.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt measured capture matrix recommendation: explicit ordinary Git tracked index/disk paths first, jj independently measured without implicit snapshot. | Unmeasured/special/index/conflicted/ignored capabilities remain unavailable. |
+| [013 OQ-2](../013-checkpoint-resume/research.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt narrow inverse/restore recommendations, occupied-destination refusal and native jj direct-parent/all-workspace/no-head-CAS limits. | Native semantics, signing and expected-state effects need conformance; no broad undo fallback or invoker working-copy change. |
+| [013 OQ-3](../013-checkpoint-resume/research.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | selected bytes and independent safety copies remain EXTERNAL, private, quota bounded and separately deleted; .work is saved-plan metadata only. | Payload-role validation/capture/drop implementation and evidence; no automatic expiry. |
+| [013 OQ-4](../013-checkpoint-resume/research.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | trusted workspace/task/native layout/actor policy supplies ownership; labels/config/session hints do not. | Missing/foreign/shared proof refuses affected local action. |
+| [013 OQ-5](../013-checkpoint-resume/research.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt characterized typed durability/root seam, separate namespaces and explicit stored restore plan; shared human/shortening-timeout vocabulary. | Implementation/migration/conformance remains; metadata defaults to validated workspace .work while --payload-dir stays explicit/external. |
+| [014 OQ-SEM](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt initial single-parent linear replay and refuse empty/redundant commits; merge variants require separately measured explicit profile. | Accepted direction does not prove any native strategy; unmeasured variants unavailable. |
+| [014 OQ-TOPO](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | use explicit measured topology allowlist and refuse every unmeasured Git/jj shape. | Native topology/rename/mode/gitlink conformance before enablement. |
+| [014 OQ-HUNK](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | paths/types default; bounded hunks require exact selected paths and accepted measured privacy capability. | Optional context stays disabled without privacy/conformance evidence; no complete secret detector claim. |
+| [014 OQ-SCRATCH](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | require measured read-only original and isolated native scratch, no shared writable original store/fallback. | Platform/native isolation conformance; no helper execution. |
+| [014 OQ-JJCONF](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt measure-before-classification recommendation for per-revision/aggregate native conflict evolution. | Algorithm/native graph semantics remain unmeasured; clean tip/Git stop-first cannot prove jj aggregate. |
+| [014 OQ-FLAGS](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | --human exclusive with --json and positive shortening --timeout; --online/--offline/--state-dir remain inapplicable. | CLI/timeout tests before wiring; fixed maximum process bound stays. |
+| [014 OQ-EXIT](../014-conflict-diagnosis/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | target unified 0/1/2 CLI revision 2, including 015 incomplete=1 after its code task. | Current 015 implementation still 3; no schema byte edit in these docs. |
+| [015 OQ-1](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | unify target exits NOW at CLI exit-contract revision 2; incomplete=1, errors=1, usage=2, no legacy-3 selector. | Red root-dispatch/help/status tests then hidden restack CLI/root mapping change; result schema1 bytes stay frozen. |
+| [015 OQ-2](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | trusted workspace policy supplies owner, reviewer allowlist/check sources and task/ref/native association. | Missing source blocks push/Ready; human 043 statement remains separate. |
+| [015 OQ-3](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | actual committer matches trusted owner, preserve author/date, capture timestamp in plan; global identity corroborates only. | Actual candidate creation/identity implementation and conformance. |
+| [015 OQ-4](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | native jj stays capability-unavailable until measured exact operation/bookmark/descendant/recovery behavior. | No raw Git fallback or claimed Git CAS; independent native acceptance. |
+| [015 OQ-5](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | reuse typed fsync durability; preserve sync v1; incomplete/partial actions never auto-expire, no automatic pruning. | Bounded metadata profile/validated manual cleanup implementation. |
+| [015 OQ-6](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | first apply refuses ALL occupied branches including caller; no worktree update permission. | Any worktree-aware widening remains future separate design/measurement. |
+| [015 OQ-7](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | 015 stays offline; 012 remote reads use only explicit --online. | 015 consumes qualified supplied evidence; no implicit refresh. |
+| [015 OQ-8](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | default refuse dropped/unmet/unknown signatures; optional explicit re-sign only through fixed trusted HOST helper, no stw keys. | Signing/verifier profile must be implemented/measured; absent helper disables option; final signed chain SHA before review. |
+| [016 OQ-SURFACE](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | shared surface, --online-only opt-in, explicit save with default workspace .work metadata store, single repository now. | CLI/store profile implementation, not an owner answer gap. |
+| [016 OQ-POLICY](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | trusted workspace policy supplies exact identity, reviewer allowlist/check source; global config corroborates only. | Missing trusted source blocks push/Ready; receipt/provenance implementation. |
+| [016 OQ-WRITES](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | measure in separately authorized disposable forge, then review small closed 022 write allowlist; comments deferred. | Unmeasured PR/ref/Ready effects stay unavailable; no GraphQL/arbitrary fallback. |
+| [016 OQ-NATIVE](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | Git publication first; measure native link/unstack separately; native jj unavailable without measured native proof. | No extension installation/execution or Git fallback. |
+| [016 OQ-SIGN](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | default refuse dropped/unmet/unknown signatures; optional local 015 re-sign with trusted host-only helper, no stw keys. | 016 validates final signed receipt; remote authorization never invokes local signing; no unsigned fallback. |
+| [016 OQ-STORE](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | immutable typed action record, fsync, bounded validated .work metadata profile and no automatic unresolved expiry; sync v1 unchanged. | Durability/race/export-risk/quota and separate manual cleanup implementation. |
+| [016 OQ-EXIT](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | unified target CLI revision 2 uses 0/1/2 now; 015 current code3 changes in explicit red-first task. | Exit-only revision is separate from frozen result JSON schema1; no legacy3 selector. |
+| [043 OQ1](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopt trusted workspace reviewer/check-source policy; retain human --reviewed SHA statement and typed confirmation, no invented ledger. | Independent source/check policy implementation; no agent landing. |
+| [043 OQ2](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | retain measured-shape scratch gate for ruleset/direct-owner-push acceptance. | Unmeasured/unreadable shapes remain land-unmeasured; no owner settings workaround. |
+| [043 OQ3](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | no checks-unknown override in this v1 capability. | Unknown required checks refuse owner apply. |
+| [043 OQ4](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | preserve conditional readable-off vs on/unreadable order; measure pre-retarget shape before apply. | Unmeasured stack shape stays land-unmeasured; fresh post-retarget checks remain. |
+| [043 OQ5](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | trusted workspace policy is identity authority; global Git identity corroborates, never supplies authority. | Missing policy/source or foreign config/commit fields refuse. |
+| [043 OQ6](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
+| [043 OQ7](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | No native or forge fallback. |
+| [043 OQ8](../043-stw-land/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | Journal integration/conformance before owner apply; sync v1 unchanged. |
 
 ## Validation implications
 
