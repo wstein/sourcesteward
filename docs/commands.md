@@ -273,6 +273,7 @@ nothing until you answer `y` for that plan id.
 
 ```sh
 stw tidy                      # interactive wizard on a terminal
+stw tidy --json               # the overview document only: no prompt, nothing stored or applied
 stw tidy plan                 # the same overview, never asks, stores nothing
 stw tidy plan --json          # one tidy-overview document
 stw tidy plan --save --json   # also store the plan set of the safe own items; prints the plan id
@@ -280,9 +281,9 @@ stw tidy apply PLAN-ID        # asks "Apply plan PLAN-ID (N sub-plans, M items)?
 stw tidy apply PLAN-ID --yes  # non-interactive; the explicit plan id is the authorization
 ```
 
-Bare `stw tidy` takes no flags today: it finds the workspace from the working directory and uses the default state directories (the flag set on bare `stw tidy` is planned, task T019e). These flags belong to `stw tidy plan` (and `--yes` to `apply`): `--workspace PATH`, `--member NAME`, `--member-base NAME=REF`, `--only retire,branches,tracking,stale-worktrees`,
-`--mine`, `--by-owner LABEL`, `--save`, `--yes`, repeatable `--state-dir`, `--online`, `--timeout`, `--json`, `--human`. Any other flag, or a
-`PATH`, selects the expert layer below, unchanged. Exit codes: 0 complete (also when nothing was asked because there is no terminal),
+Wizard flags (bare `stw tidy` and `stw tidy plan`): `--workspace PATH`, `--member NAME`, `--member-base NAME=REF`, `--only retire,branches,tracking,stale-worktrees`,
+`--mine`, `--by-owner LABEL`, repeatable `--state-dir`, `--online`, `--timeout`, `--json`, `--human`; `--save` belongs to `stw tidy plan` and `--yes` to `stw tidy apply PLAN-ID`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (a plan made in the same run is never authorized by `--yes`), and `stw tidy --json` prints the overview without asking, storing or applying (no `plan_id`). On `stw tidy plan`, any other flag, or a
+`PATH`, selects the expert layer below, unchanged; on bare `stw tidy` an expert flag or a PATH is a usage error. Exit codes: 0 complete (also when nothing was asked because there is no terminal),
 1 refusal, incomplete or partial evidence, cancellation or output at its limit, 2 invalid usage.
 
 ## Review local cleanup
