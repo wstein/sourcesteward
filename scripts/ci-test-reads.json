@@ -1,6 +1,7 @@
 {
   "comment": "Tests that read files of, or build, other packages or the repository without importing them. kind read: a changed path that matches (prefix ending in /, exact file, or regular expression pattern) selects the dependents, whose own reverse dependencies follow; prose that a test reads is therefore not docs-only. kind build: the dependents compile those non-test .go files. scripts/test_ci_affected.py scans the tests and fails when a cross-package read, a build or a read of a prose file has no entry of the right kind.",
   "reads": [
+    {"kind": "read", "prefix": "schemas/v4/registration-prune.schema.json", "dependents": ["internal/workspace"], "why": "prune_v4_schema_unix_test.go validates real native plans against the isolated contract-4 schema"},
     {"kind": "read", "prefix": "internal/cli/", "dependents": ["internal/release"], "why": "internal/release/build_boundary_test.go reads ../cli/*.go"},
     {"kind": "read", "prefix": "internal/watch/", "dependents": ["internal/cli"], "why": "internal/cli/watch_acceptance_test.go globs ../watch/*.go and ../watch/watchhost/*.go"},
     {"kind": "read", "prefix": "internal/watchcmd/", "dependents": ["internal/cli"], "why": "internal/cli/watch_acceptance_test.go globs ../watchcmd/*.go"},
