@@ -34,10 +34,21 @@ commits, branch names, public output, PR text or a receipt.
 
 ## Before-push review matrix
 
-Compute `change_class` from the full affected old/new diffs, including every moved
-commit and affected parent range, rather than a path list supplied by a caller.
+Recompute `publication_range_change_class` from the UNION OF PER-COMMIT PATHS
+across `<observed remote default branch>..<full actual new head>`, including every
+still-open parent commit. Inspect each commit's changed paths; a net tree diff,
+child-only/moved range or caller-supplied path list cannot establish docs-only.
+Code added by one parent commit and removed by a later commit still makes this
+range code, even if the final tree diff cancels it. Missing/unreadable parent
+commits or paths make the publication-range class code (and preserve any separate
+incomplete-evidence refusal); never infer docs-only from missing evidence.
+
+Keep validated 015 `moved_scope_change_class` separate from this recomputed
+publication-range class. Effective `change_class` is `code` if EITHER class is
+code or unknown; it is `docs-only` only when BOTH are completely proved docs-only.
 `docs-only` means only specification/documentation prose, no code, tests, scripts
-or generated files. Unknown classification becomes `code`. `pure_rebase` is true
+or generated files. Thus a docs-only child above a still-open code parent needs
+the code before-push gate. `pure_rebase` is true
 only with the same commit count and every range-diff pairing row `=`; changed,
 missing, extra or unknown rows make it false. Preserve complete equality evidence
 rather than claiming tree equality alone is a pure rebase.
