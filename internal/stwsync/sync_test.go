@@ -176,7 +176,7 @@ func TestSyncSkipsBusyRepos(t *testing.T) {
 	}
 	got := repoByName(t, Sync(context.Background(), Options{Path: w.ws}))
 	for _, n := range []string{".", "b"} {
-		if got[n].Result != ResultSkippedBusy && !(n == "." && got[n].Result == ResultSkippedDetached) {
+		if got[n].Result != ResultSkippedBusy {
 			t.Errorf("%s: %+v", n, got[n])
 		}
 		if snapshot(t, w, n) != before[n] {
@@ -189,5 +189,83 @@ func TestSyncRefusesNonGitAndJJPaths(t *testing.T) {
 	r := Sync(context.Background(), Options{Path: t.TempDir()})
 	if r.Error == nil || r.Error.Code != "sync-unsupported-backend" || len(r.Repos) != 0 || r.ExitCode() != 1 {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// busyStates starts a real Git operation that stops in the repository at dir and leaves it in progress.
+var busyStates = map[string]func(t *testing.T, dir string){
+	"merge": func(t *testing.T, dir string) {
+		conflictBranch(t, dir)
+		_ = gitCmd(dir, "merge", "other").Run()
+	},
+	"cherry-pick": func(t *testing.T, dir string) {
+		conflictBranch(t, dir)
+		_ = gitCmd(dir, "cherry-pick", "other").Run()
+	},
+	"revert": func(t *testing.T, dir string) {
+		commit(t, dir, "busy.txt", "first\n")
+		commit(t, dir, "busy.txt", "second\n")
+		_ = gitCmd(dir, "revert", "--no-edit", "HEAD~1").Run()
+	},
+	"rebase-merge": func(t *testing.T, dir string) {
+		conflictBranch(t, dir)
+		_ = gitCmd(dir, "rebase", "other").Run()
+	},
+	"rebase-apply": func(t *testing.T, dir string) {
+		conflictBranch(t, dir)
+		patch := filepath.Join(dir, "..", filepath.Base(dir)+".patch")
+		out := runGit(t, dir, "format-patch", "-1", "other", "--stdout")
+		write(t, patch, out+"\n")
+		_ = gitCmd(dir, "am", patch).Run()
+	},
+	"bisect": func(t *testing.T, dir string) {
+		for i := 0; i < 4; i++ {
+			commit(t, dir, "bisect"+itoa(i)+".txt", "x\n")
+		}
+		runGit(t, dir, "bisect", "start")
+		runGit(t, dir, "bisect", "bad", "HEAD")
+		runGit(t, dir, "bisect", "good", runGit(t, dir, "rev-list", "--max-parents=0", "HEAD"))
+	},
+}
+
+// conflictBranch leaves a branch "other" that conflicts with the tip of the current branch on one file.
+func conflictBranch(t *testing.T, dir string) {
+	t.Helper()
+	commit(t, dir, "busy.txt", "main side\n")
+	runGit(t, dir, "checkout", "-q", "-b", "other", "HEAD~1")
+	commit(t, dir, "busy.txt", "other side\n")
+	runGit(t, dir, "checkout", "-q", "main")
+}
+
+// An operation in progress makes the repository skipped-busy, in a plan and in a run, in the root and in a submodule:
+// the branch, the worktree and the Git directory are byte-identical afterwards and the exit status is 0.
+func TestSkippedBusyForEveryOperationInPlanAndRun(t *testing.T) {
+	for op, start := range busyStates {
+		for _, repo := range []string{".", "b"} {
+			for _, plan := range []bool{true, false} {
+				name := op + "/" + repo + "/" + map[bool]string{true: "plan", false: "run"}[plan]
+				t.Run(name, func(t *testing.T) {
+					w := newWorkspace(t)
+					w.advance(t, repo, "main")
+					start(t, w.dir(repo))
+					before := snapshot(t, w, repo)
+					head := w.oid(t, repo, "HEAD")
+					r := Sync(context.Background(), Options{Path: w.ws, Plan: plan})
+					if r.Error != nil {
+						t.Fatal(r.Error)
+					}
+					g := repoByName(t, r)[repo]
+					if g.Result != ResultSkippedBusy || g.Reason == nil || r.ExitCode() != 0 {
+						t.Fatalf("%+v exit %d", g, r.ExitCode())
+					}
+					if snapshot(t, w, repo) != before || w.oid(t, repo, "HEAD") != head {
+						t.Error("the repository changed")
+					}
+					if r.RunID != nil {
+						t.Errorf("a skipped repository was journaled: %v", *r.RunID)
+					}
+				})
+			}
+		}
 	}
 }
