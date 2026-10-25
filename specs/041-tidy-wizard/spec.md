@@ -1,6 +1,6 @@
 # Specification: `stw tidy`, a workspace-wide cleanup wizard
 
-**Created**: 2026-10-23 | **Status**: proposed (spec-light: this page, [plan.md](plan.md) and [tasks.md](tasks.md) are the whole
+**Created**: 2026-10-23 | **Status**: implemented, unpublished schema, T021 open (originally proposed; spec-light: this page, [plan.md](plan.md) and [tasks.md](tasks.md) are the whole
 design; documentation only, no Go code, script or schema is changed by this specification; owner request of 2026-10-23). It builds
 on [Spec 011](../011-workspace-reference-tidy/spec.md) (evidence-based plans and apply), [Spec 029](../029-tidy-dogfood-safety/spec.md)
 (owned retirement, journals, recovery), [Spec 037](../037-stw-status-overview/spec.md) (workspace discovery, action vocabulary),
@@ -608,6 +608,43 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 - **SC-014** Mode detection: pty with `STW_AGENT` or an agent marker yields agent mode; both streams on terminals without markers yields human mode; the mode evidence is in plan, journal and `history`; `--mine` forces agent mode.
 - **SC-015** The branch leg: HEAD attached to the base branch never gets a leg; a failed retirement skips the leg; the leg re-checks Spec 011 protections and the planned tip OID.
 - **SC-016** A recently active other or unknown worktree is `retain` `recently-active`; an old one with no commit carries `no-work`.
+
+## Implementation decisions (2026-10-25)
+
+Deliberate choices made while implementing WP-5 (pull requests #232, #233 and #235); each keeps the text above true.
+
+- **Git-only discovery.** The wizard layer finds its workspace through `stwsync.Discover`, which knows Git only. Outside a Git
+  workspace `stw tidy` and `stw tidy plan` exit 2 with `workspace-not-found` and the hint to give `--workspace PATH` or use the expert
+  layer; a jj-only workspace is not discovered.
+- **Derived base and remote.** The base is the local branch named by the symbolic `refs/remotes/<remote>/HEAD` when it exists, else the
+  remote-tracking reference (`refs/heads/main (origin/HEAD)` in the sample). The remote is `origin`, else the single remote. A repository
+  with no remote is `base-ambiguous` (no symbolic HEAD can exist). An uninitialized member is not analysed and is named in a notice with
+  the code `submodule-uninitialized: NAME` (Spec 023), not a skipped row. Offline observation reads no remote, so an offline specification
+  carries none; the overview still shows the derived remote.
+- **Repeatable `--state-dir` only in the wizard layer.** The expert flag stays single-valued (contract 3 still counts duplicates).
+- **`--mine` needs a caller label.** It reads `$STW_OWNER`, forces agent mode, and without a label is a usage error (exit 2).
+  `--by-owner` narrows the view only and never selects the run mode.
+- **Deadline and interrupt.** `--timeout` firing, or an interrupt, during discovery, analysis or a prompt is exit 1 naming the cause
+  (`--timeout of ... elapsed`, `interrupted`); once a plan set is stored the message names its id and says nothing was applied.
+- **Messages with outside text** are escaped whole in pieces of at most 100 characters (so the 120-character bound never cuts a fixed
+  hint) and the whole message is bounded to 4096 characters.
+- **`--save` failure.** The overview is printed first; a store problem or planner error follows, exit 1. A stored set prints
+  `Stored plan set ID (N effects in M repositories). Nothing has been changed.`
+- **Bare `stw tidy` and `stw tidy plan` become wizard forms.** The back-compat rule allows exactly this: `TestBareTidyStillPrintsHelp` and
+  the `{"plan"}` row of `TestTidyUsageBeforeObservation` were replaced by wizard tests; `stw tidy --help` still prints help and a stray
+  argument is still a usage error.
+- **The wizard needs the real standard input.** `cmd/stw` hands `os.Stdin` to the command (`cli.RunWithStdin`); `Run` keeps an empty input
+  for callers without a terminal. Without it the wizard would always see agent mode.
+- **The apply question.** After storing, the wizard asks `Apply it now? Run: stw tidy apply ID (or answer y here) [y/N]`. Only an explicit
+  `y` runs the same apply code for that plan id; `n`, Enter and end of input apply nothing; three invalid answers are exit 1 saying the
+  plan set is stored and nothing was applied. Foreign items still need the typed `/dev/tty` confirmation inside the apply path.
+- **Prompt details.** Surrounding spaces are ignored, number tokens may carry leading zeros, letters are case-sensitive, a line longer
+  than 256 characters is an invalid answer, and the end of input inside any question chooses nothing.
+- **Architecture policy.** `scripts/check-architecture.py` lets the CLI import `internal/tidywizard`, `analysis`, `render` and `prompt`
+  (the CLI still imports no `os`, process or network packages); `render` and `analysis` join `NETWORK_FREE_PACKAGES`, `prompt` does not
+  because it imports `owner`.
+- **Unpublished schema.** `schemas/v2/tidy-overview.schema.json` is frozen but listed in `UNPUBLISHED_SCHEMAS`, so it is not
+  published to Pages yet.
 
 ## Open questions
 
