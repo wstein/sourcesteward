@@ -89,12 +89,43 @@ checks are deliberately the authorized check scope, not substitutes for required
 future implementation/source checks. Nothing absent is reported as passing.
 New test names in tasks/analysis are proposals only, not files or measured runs.
 
-Seven [owner choices](spec.md#needs-owner-decision) retain recommendations and
+Eight [owner choices](spec.md#needs-owner-decision) retain recommendations and
 specific affected blockers: legacy exit migration, trusted ownership/review
 inputs, actual committer/date, native jj operation guarantees, typed shared
 recovery retention/index, attached-worktree capability and strict no-network
-wording versus 012 opt-in reads. The first six gate affected implementation;
-the wording issue grants no network effect here. Independent exact-head document
+wording versus 012 proposed opt-in reads, and signed-input/signature-required
+refusal versus disclosed unsigned candidates (OQ-8). OQ-1–OQ-6 and OQ-8 gate
+affected implementation; OQ-7 is the genuine unresolved 012 network-policy
+question (only --after-fetch was separately accepted), not owner-approved online
+reads. No network effect is granted here. Independent exact-head document
 review and required PR CI are the coordinator's publication/readiness gates,
 not acceptance of local apply. The first-slice T021/T023/T024 and each future
 capability's minimum/current conformance remain separate product gates.
+
+
+### PR 238 correction round (2026-10-25)
+
+Foreman Opus returned NOT CLEAR with F1–F7 on exact original amendment head
+`98908cb293b6f6a90ace9a4bbc3ab60ae2b40a94`. The author appended focused commits
+for all seven findings, the corrected open 012-network decision provenance,
+conservative full-publication-range change classification and minimal config
+evidence disclosure. [Analysis](analysis.md#pr-238-independent-review-and-author-corrections-2026-10-25)
+records each correction, fixture idea and remaining gate. No historical commit
+was rewritten, no original task checkbox/date changed, and the author did not
+push, edit the PR or run CI; root coordinates those separate actions.
+
+Corrected-doc checks actually run: `python3 -I -B scripts/check-docs.py` exit0
+(356 authored documents), scoped `typos specs/015-local-restacking` exit0 and
+`git diff --check` over the appended correction range exit0. Installed Spec Kit
+read-only prerequisite resolution again returned exit0 with this existing
+feature selected and no-persist; no extension hooks/presets/overrides exist.
+Isolated Markdown bookkeeping found 42 unique FR/SC rows, 44 unique task ids and
+157 symmetric row/tag edges; historical 20 checked/24 unchecked remain intact.
+Final frozen-head documentation checks are repeated for the coordinator handoff.
+
+No Go/product/native fixture, new signing experiment, build, format/vet/module,
+`make check`, browser/live-host/API or mutation test ran in this correction round.
+New fixture names and policy fields remain UNPUBLISHED Markdown proposals. V1
+schema bytes and source behavior, D4–D9/D12/D13 and T004/T021/T023/T024 limits
+remain unchanged. The exact corrected head has no independent CLEAR yet; the
+review and green required CI gates remain with the coordinator before Ready.
