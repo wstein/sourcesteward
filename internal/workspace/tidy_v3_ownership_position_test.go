@@ -221,6 +221,8 @@ func TestTidyV3OwnedRetirementAfterBranchSwitchRefusals(t *testing.T) {
 	}{
 		{"dirty-tracked", "workspace-failed"},
 		{"dirty-untracked", "retirement-unrecorded-entry"},
+		{"untracked-empty-directory", "retirement-unrecorded-entry"},
+		{"untracked-symlink", "retirement-unrecorded-entry"},
 		{"wrong-owner", "invalid-ownership"},
 		{"moved-lock", "active-workspace"},
 		{"foreign-lock", "active-workspace"},
@@ -239,6 +241,14 @@ func TestTidyV3OwnedRetirementAfterBranchSwitchRefusals(t *testing.T) {
 				}
 			case "dirty-untracked":
 				if e := os.WriteFile(filepath.Join(w.Dest, "new"), []byte("x"), 0600); e != nil {
+					t.Fatal(e)
+				}
+			case "untracked-empty-directory":
+				if e := os.Mkdir(filepath.Join(w.Dest, "untracked"), 0700); e != nil {
+					t.Fatal(e)
+				}
+			case "untracked-symlink":
+				if e := os.Symlink("file", filepath.Join(w.Dest, "untracked")); e != nil {
 					t.Fatal(e)
 				}
 			case "wrong-owner":
