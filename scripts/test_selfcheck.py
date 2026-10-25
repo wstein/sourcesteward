@@ -385,7 +385,7 @@ class Info(Repo):
         self.assertNotIn('INFO tick', self.check()[1])
 
     def test_invalid_utf8_does_not_crash_and_is_reported(self):
-        self.write('docs/a.md', b'caf\xe9 hidden015planner\n')
+        self.write('docs/a.md', b'x\xe9y hidden015planner\n')
         self.commit()
         code, out, _ = self.check()
         self.assertEqual(code, 1)
@@ -393,7 +393,7 @@ class Info(Repo):
         self.assertIn('INFO encoding: docs/a.md', out)
 
     def test_invalid_utf8_alone_passes_with_info(self):
-        self.write('docs/a.md', b'caf\xe9\n')
+        self.write('docs/a.md', b'x\xe9y\n')
         self.commit()
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)
