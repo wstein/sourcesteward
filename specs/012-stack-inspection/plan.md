@@ -26,7 +26,7 @@ Add `stw stack show` and `stw stack plan`: one shared, read-only operation that 
 
 **Constraints**: Read-only, no fetch, no process other than the allowlist below, no network without `--pull-requests`, fixed GET only, closed endpoint allowlist, hostile text, no executed or unprintable-unsafe command.
 
-**Scale/Scope**: One repository, one explicit base and tip, at most 32 layers.
+**Scale/Scope**: Each CLI invocation remains one repository, one explicit base and tip, at most 32 layers. A higher-level caller may explicitly supply 1..16 independent repository entries and use at most four workers, reusing the [Spec 023](../023-multi-repo-inventory/contracts/repos.md) repository/worker bounds. This caller orchestration does not add a CLI mode, discovery or published aggregate schema.
 
 ## Constitution Check
 
@@ -49,6 +49,7 @@ internal/inspection/stack_jj.go           # jj bookmarks and range on the pinned
 internal/inspection/stack_findings.go     # pure derivation: observation -> findings (the Findings table)
 internal/inspection/stack_plan.go         # pure plan builder, argument rules, quoting
 internal/hosting/stack_remote.go          # opt-in sources: pulls by head, native stacks; linkage rule
+internal/hosting/stack_batch.go           # explicit caller entries only; bounded fanout, no CLI binding
 internal/hosting/transport.go             # additive: two allowlisted request shapes
 internal/cli/stack.go                     # command group, flags, text rendering, injection seam
 schemas/v1/stack.schema.json              # new contract
@@ -102,7 +103,7 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 - This documentation change edits only the ten existing `specs/012-stack-inspection/**/*.md` artifacts. It edits no other spec, source, executable schema, generated docs, progress or command status. It targets main independently; a conceptual handoff is not a code dependency and does not justify a text-only PR stack.
 
 15. **Advisory depth and stale-parent signal.** Implement `stack-too-deep` only as the spec's notice at depth >2; keep the 32-layer observation cap. `restack-needed` uses qualified parent/patch evidence and explicitly labels unchecked native status. Closed-unmerged parents never become landed; stale child bases use `base-mismatch`. These findings never override the six plan groups or confer effect authority.
-16. **Pure core and bounded fan-out.** `deriveFindings` and `buildPlan` take immutable values; all I/O, clocks, cancellation and resampling stay in adapters. Default reads remain sequential. Any parallel independent reads use Spec 040 `internal/fanout` with fixed bounded width, shared request/deadline budgets, indexed output and no ad hoc `go` statements, shared-map append or completion-order results. A skipped read remains incomplete, never an empty success.
+16. **Pure core and bounded repository fan-out.** `deriveFindings` and `buildPlan` take immutable values; all I/O, clocks, cancellation and independent per-repository resampling stay in adapters. Reads within one repository remain sequential by default. For caller-selected repository entries, `internal/hosting/stack_batch.go` uses Spec 040 `internal/fanout` with 1..16 explicit entries and at most four workers, reusing the actual [Spec 023 repository/worker bounds](../023-multi-repo-inventory/contracts/repos.md), not its discovery or inventory behavior. Each entry supplies its own path, base, tip and hosting opt-in; it resolves native ownership/backend and credentials independently, with no cross-repository inference or raw-Git fallback for jj. Indexed caller evidence retains each result’s native status, identities, findings, sample time and uncertainty; canceled/not-started entries carry explicit incomplete caller outcomes, never zero-value success. The caller validates the complete selection before starting, shares one 30-second total deadline, at most 50 GETs and 1 MiB output budget (the existing LIM-1/LIM-4/LIM-6 values, not multiplied by entry/worker count), and keeps each entry’s 5-second process bound and other native caps. Output exhaustion retains a bounded indexed outcome naming the limit instead of silently omitting an entry/result. These are orchestrator limits; existing single-PATH invocation caps and its result schema do not change. No ad hoc `go` statements, shared-map append, completion-order results, background polling, new aggregate JSON schema or CLI flag is introduced. Reuse a higher-level explicit caller rather than invent a multi-repository command spelling; adding a CLI surface would require a separate owner decision.
 17. **Qualified proof.** `cherry BASE TIP` is used only to classify linear-layer patch content; merge omissions and squash/conflict-resolution patch mismatches are disclosed. It is never proof for cleanup, identity, review, semantic validity or lease publication. Exact old/new boundaries are data for optional later plans, not trusted instructions.
 
 ## Open questions for the owner (recommendations)
