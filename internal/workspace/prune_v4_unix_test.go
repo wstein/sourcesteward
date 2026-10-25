@@ -146,7 +146,6 @@ func TestRegistrationPruneV4StrictReaderRefusesResignedInvalidPlans(t *testing.T
 
 		"state-dir": func(q *RegistrationPruneV4Plan) {
 			q.StateDir += "-other"
-			q.PayloadPath = filepath.Join(q.StateDir, pruneV4Namespace, "payloads", q.PlanID)
 		},
 		"backend":      func(q *RegistrationPruneV4Plan) { q.Backend = "jj" },
 		"invalid-mode": func(q *RegistrationPruneV4Plan) { q.Mode.Mode = "robot" },
@@ -191,8 +190,11 @@ func TestRegistrationPruneV4StrictReaderRefusesResignedInvalidPlans(t *testing.T
 		},
 		"last-ancestor-parent": func(q *RegistrationPruneV4Plan) { q.Expected.Absence.Parent.Inode++ },
 		"metadata-traversal":   func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Path = "../../outside" },
-		"metadata-nul":         func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Path = "a\x00" },
-		"metadata-long-path":   func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Path = strings.Repeat("a", 4097) },
+		"metadata-nul":         func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[len(q.Expected.Metadata)-1].Path = "z\x00" },
+		"metadata-long-path": func(q *RegistrationPruneV4Plan) {
+			q.Expected.Metadata[len(q.Expected.Metadata)-1].Path = strings.Repeat("z", 4097)
+		},
+		"missing-root-ancestor": func(q *RegistrationPruneV4Plan) { q.Expected.Absence.Ancestors = q.Expected.Absence.Ancestors[1:] },
 		"duplicate-ancestor": func(q *RegistrationPruneV4Plan) {
 			a := q.Expected.Absence.Ancestors
 			q.Expected.Absence.Ancestors = append([]PruneV4Directory{a[0]}, a...)
