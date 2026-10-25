@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -40,7 +42,7 @@ func clonePruneV4(t *testing.T, p RegistrationPruneV4Plan) RegistrationPruneV4Pl
 	}
 	return q
 }
-func savePruneV4Fixture(t *testing.T, p RegistrationPruneV4Plan) {
+func savePruneV4Fixture(t *testing.T, p RegistrationPruneV4Plan, target ...string) {
 	t.Helper()
 	var e error
 	p.Digest, e = pruneV4Digest("stw-registration-plan-v4", p, "digest")
@@ -51,7 +53,11 @@ func savePruneV4Fixture(t *testing.T, p RegistrationPruneV4Plan) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(pruneV4PlanPath(p), append(b, '\n'), 0600); e != nil {
+	path := pruneV4PlanPath(p)
+	if len(target) > 0 {
+		path = target[0]
+	}
+	if e = os.WriteFile(path, append(b, '\n'), 0600); e != nil {
 		t.Fatal(e)
 	}
 }
@@ -137,6 +143,108 @@ func TestRegistrationPruneV4CommonMountDetectsChangedObservation(t *testing.T) {
 func TestRegistrationPruneV4StrictReaderRefusesResignedInvalidPlans(t *testing.T) {
 	_, p := fixturePruneV4(t)
 	cases := map[string]func(*RegistrationPruneV4Plan){
+
+		"state-dir": func(q *RegistrationPruneV4Plan) {
+			q.StateDir += "-other"
+			q.PayloadPath = filepath.Join(q.StateDir, pruneV4Namespace, "payloads", q.PlanID)
+		},
+		"backend":      func(q *RegistrationPruneV4Plan) { q.Backend = "jj" },
+		"invalid-mode": func(q *RegistrationPruneV4Plan) { q.Mode.Mode = "robot" },
+		"missing-caller": func(q *RegistrationPruneV4Plan) {
+			q.Mode.Caller = ""
+			q.Mode.Mode = "human"
+			q.Registration.Scope = "other"
+			q.AuthorizedScopes = []string{"other"}
+		},
+		"nil-recovery-limits":   func(q *RegistrationPruneV4Plan) { q.RecoveryLimits = nil },
+		"empty-recovery-limits": func(q *RegistrationPruneV4Plan) { q.RecoveryLimits = []string{} },
+		"owner-source":          func(q *RegistrationPruneV4Plan) { q.Registration.OwnerSource = "inferred" },
+		"agent-other-scope": func(q *RegistrationPruneV4Plan) {
+			q.Mode.Caller = "other-agent"
+			q.Registration.Scope = "other"
+			q.AuthorizedScopes = []string{"other"}
+		},
+		"human-other-no-authorization": func(q *RegistrationPruneV4Plan) {
+			q.Mode.Mode = "human"
+			q.Mode.Caller = "other-human"
+			q.Registration.Scope = "other"
+		},
+		"own-scope-with-authorization": func(q *RegistrationPruneV4Plan) { q.AuthorizedScopes = []string{"other"} },
+		"creation-digest":              func(q *RegistrationPruneV4Plan) { q.Expected.CreationDigest = "short" },
+		"journal-digest":               func(q *RegistrationPruneV4Plan) { q.Expected.CreationJournalDigest = "short" },
+		"absence-destination":          func(q *RegistrationPruneV4Plan) { q.Expected.Absence.Destination += "-other" },
+		"absence-parent": func(q *RegistrationPruneV4Plan) {
+			q.Expected.Absence.Parent = q.Expected.Absence.Ancestors[0].Identity
+			q.Expected.Absence.Ancestors = q.Expected.Absence.Ancestors[:1]
+		},
+		"nil-native-refs": func(q *RegistrationPruneV4Plan) {
+			q.Expected.Native.References = nil
+			q.Expected.SourceSnapshot = v3SnapshotWithState(q.Expected.SourceSnapshot, q.Expected.Native)
+		},
+		"nil-native-registrations": func(q *RegistrationPruneV4Plan) {
+			q.Expected.Native.Registrations = nil
+			q.Expected.SourceSnapshot = v3SnapshotWithState(q.Expected.SourceSnapshot, q.Expected.Native)
+		},
+		"nil-native-protected-roots": func(q *RegistrationPruneV4Plan) {
+			q.Expected.Native.ProtectedRoots = nil
+			q.Expected.SourceSnapshot = v3SnapshotWithState(q.Expected.SourceSnapshot, q.Expected.Native)
+		},
+		"last-ancestor-parent": func(q *RegistrationPruneV4Plan) { q.Expected.Absence.Parent.Inode++ },
+		"metadata-traversal":   func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Path = "../../outside" },
+		"metadata-nul":         func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Path = "a\x00" },
+		"metadata-long-path":   func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Path = strings.Repeat("a", 4097) },
+		"duplicate-ancestor": func(q *RegistrationPruneV4Plan) {
+			a := q.Expected.Absence.Ancestors
+			q.Expected.Absence.Ancestors = append([]PruneV4Directory{a[0]}, a...)
+		},
+		"reordered-ancestors": func(q *RegistrationPruneV4Plan) { a := q.Expected.Absence.Ancestors; a[0], a[1] = a[1], a[0] },
+		"metadata-order":      func(q *RegistrationPruneV4Plan) { m := q.Expected.Metadata; m[0], m[1] = m[1], m[0] },
+		"metadata-kind":       func(q *RegistrationPruneV4Plan) { q.Expected.Metadata[0].Kind = "device" },
+		"metadata-file-bound": func(q *RegistrationPruneV4Plan) {
+			for i, m := range q.Expected.Metadata {
+				if m.Kind == "file" {
+					q.Expected.MetadataBytes += (64 << 20) + 1 - m.Size
+					q.Expected.Metadata[i].Size = (64 << 20) + 1
+					return
+				}
+			}
+		},
+		"metadata-total-bound": func(q *RegistrationPruneV4Plan) {
+			var m PruneV4Metadata
+			for _, v := range q.Expected.Metadata {
+				if v.Kind == "file" {
+					m = v
+					break
+				}
+			}
+			m.Size = 64 << 20
+			q.Expected.Metadata = nil
+			for i := 0; i < 5; i++ {
+				m.Path = fmt.Sprintf("f%d", i)
+				q.Expected.Metadata = append(q.Expected.Metadata, m)
+			}
+			q.Expected.MetadataBytes = 5 * (64 << 20)
+		},
+		"metadata-count-bound": func(q *RegistrationPruneV4Plan) {
+			q.Expected.Metadata = nil
+			for i := 0; i < 1025; i++ {
+				q.Expected.Metadata = append(q.Expected.Metadata, PruneV4Metadata{Path: fmt.Sprintf("f%04d", i), Kind: "absent"})
+			}
+			q.Expected.MetadataBytes = 0
+		},
+		"sibling-path": func(q *RegistrationPruneV4Plan) { q.Expected.ProtectedSiblings[0].Identity.Path += "-other" },
+		"sibling-order": func(q *RegistrationPruneV4Plan) {
+			m := q.Expected.ProtectedSiblings[0]
+			a, b := m, m
+			a.Name = "a"
+			a.Identity.Path = filepath.Join(q.Expected.SourceSnapshot.Identity.RepositoryDir, "worktrees", "a")
+			b.Name = "b"
+			b.Identity.Path = filepath.Join(q.Expected.SourceSnapshot.Identity.RepositoryDir, "worktrees", "b")
+			q.Expected.ProtectedSiblings = []PruneV4Sibling{b, a}
+		},
+		"head-oid":        func(q *RegistrationPruneV4Plan) { q.Expected.ResolvedHEAD = "short" },
+		"markers-order":   func(q *RegistrationPruneV4Plan) { q.Mode.Markers = []string{"z", "a"} },
+		"owners-order":    func(q *RegistrationPruneV4Plan) { q.Mode.ByOwner = []string{"z", "a"} },
 		"old-version":     func(q *RegistrationPruneV4Plan) { q.SchemaVersion = 3 },
 		"wrong-operation": func(q *RegistrationPruneV4Plan) { q.Operation = "tidy-v3" },
 		"common-mount":    func(q *RegistrationPruneV4Plan) { q.Expected.CommonDirMount.Mount = "" },
@@ -152,13 +260,35 @@ func TestRegistrationPruneV4StrictReaderRefusesResignedInvalidPlans(t *testing.T
 		"task-digest":     func(q *RegistrationPruneV4Plan) { q.Expected.TaskDigest = "short" },
 		"nil-ancestors":   func(q *RegistrationPruneV4Plan) { q.Expected.Absence.Ancestors = nil },
 	}
+
+	for _, field := range []string{"digest", "physical", "size"} {
+		field := field
+		cases["absent-"+field] = func(q *RegistrationPruneV4Plan) {
+			m := &q.Expected.Metadata[0]
+			if m.Kind == "file" {
+				q.Expected.MetadataBytes -= m.Size
+			}
+			m.Kind = "absent"
+			m.Digest = ""
+			m.Physical = V3PhysicalIdentity{}
+			m.Size = 0
+			switch field {
+			case "digest":
+				m.Digest = strings.Repeat("a", 64)
+			case "physical":
+				m.Physical.Inode = 1
+			case "size":
+				m.Size = 1
+			}
+		}
+	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			q := clonePruneV4(t, p)
 			mutate(&q)
-			savePruneV4Fixture(t, q)
+			savePruneV4Fixture(t, q, pruneV4PlanPath(p))
 			_, e := ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID)
-			assertPruneReason(t, e, "prune-plan-refused", "")
+			assertPruneReason(t, e, "prune-plan-refused", "Contract-4 plan version, operation, witness, scope or digest is invalid.")
 		})
 	}
 }
@@ -169,7 +299,7 @@ func TestRegistrationPruneV4ReaderNeverFallsBackOrCreates(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, kind := range []string{"unknown-field", "duplicate-key", "trailing-data", "wrong-case", "invalid-utf8", "missing-file", "symlink", "wide-mode"} {
+	for _, kind := range []string{"unknown-field", "duplicate-key", "trailing-data", "wrong-case", "invalid-utf8", "indented", "missing-lf", "extra-lf", "missing-file", "symlink", "wide-mode"} {
 		t.Run(kind, func(t *testing.T) {
 			path := pruneV4PlanPath(p)
 			_ = os.Remove(path)
@@ -184,7 +314,21 @@ func TestRegistrationPruneV4ReaderNeverFallsBackOrCreates(t *testing.T) {
 			case "wrong-case":
 				b = bytes.Replace(b, []byte(`"schema_version"`), []byte(`"Schema_version"`), 1)
 			case "invalid-utf8":
-				b = bytes.Replace(b, []byte(`"registration-prune"`), []byte{'"', 0xff, '"'}, 1)
+				// Re-sign the plan with the decoder's replacement character so neither
+				// the digest nor another semantic field masks invalid raw UTF-8.
+				q := clonePruneV4(t, p)
+				q.RecoveryLimits = []string{"\ufffd"}
+				savePruneV4Fixture(t, q)
+				b, _ = os.ReadFile(path)
+				b = bytes.Replace(b, []byte("\ufffd"), []byte{0xff}, 1)
+			case "indented":
+				var pretty bytes.Buffer
+				pruneMust(t, json.Indent(&pretty, raw, "", "  "))
+				b = pretty.Bytes()
+			case "missing-lf":
+				b = bytes.TrimSuffix(b, []byte("\n"))
+			case "extra-lf":
+				b = append(b, '\n')
 			case "symlink":
 				outside := filepath.Join(t.TempDir(), "foreign")
 				if e = os.WriteFile(outside, raw, 0600); e != nil {
@@ -204,8 +348,20 @@ func TestRegistrationPruneV4ReaderNeverFallsBackOrCreates(t *testing.T) {
 					}
 				}
 			}
-			if _, e = ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID); e == nil {
-				t.Fatal("incompatible or unsafe stored record accepted")
+			_, e = ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID)
+			switch kind {
+			case "missing-file":
+				if !errors.Is(e, os.ErrNotExist) {
+					t.Fatalf("want missing-file reason, got %v", e)
+				}
+			case "symlink", "wide-mode":
+				assertPruneReason(t, e, "invalid-state", "Record must be a private bounded single-link regular file.")
+			case "duplicate-key", "trailing-data", "wrong-case":
+				assertPruneReason(t, e, "invalid-state", "")
+			case "indented", "missing-lf", "extra-lf":
+				assertPruneReason(t, e, "prune-plan-refused", "Contract-4 record must use canonical JSON followed by one LF.")
+			default:
+				assertPruneReason(t, e, "prune-plan-refused", "Contract-4 record contains incompatible JSON.")
 			}
 			for _, name := range []string{"journals", "payloads", "restores"} {
 				if _, e = os.Lstat(filepath.Join(p.StateDir, pruneV4Namespace, name)); !os.IsNotExist(e) {
