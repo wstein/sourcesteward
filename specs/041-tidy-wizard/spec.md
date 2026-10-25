@@ -166,7 +166,7 @@ a worktree are in the directory its creator passed to `stw workspace`, which has
   config (a follow-up if OQ3 defers the config; until then flags and environment), the shared default. Each is validated; an unsafe one is
   reported (`state-dir-unsafe`) and skipped, the run continues (exit 1 at the end). The plan store is the first valid store.
   Helper scripts that create worktrees (for example an agent's scratch store) are found by passing that directory once, for example
-  `stw tidy --state-dir "$STW_WT_STATE"`; this is documented in `docs/tidy.md` and `docs/workspaces.md`.
+  `stw tidy --state-dir "$STW_WT_STATE"` (implemented today on `stw tidy plan` only; bare `stw tidy` takes no flags until T019e); this is documented in `docs/tidy.md` and `docs/workspaces.md`.
 - **Record lookup.** For every linked worktree locked with the exact `stw:<task>` form, the creation record is looked up by task id in
   every known store. Found in one store: owned (`owner_source` `task-record`). Found in several with different content: `retain`
   `registration-record-ambiguous`. Found in none: `retain` `registration-record-missing` with the hint `pass the --state-dir that
@@ -611,13 +611,13 @@ SI9 no network unless `--online`; SI10 the token never appears in output.
 
 ## Implementation decisions (2026-10-25)
 
-Deliberate choices made while implementing WP-5 (pull requests #232, #233 and #235); each keeps the text above true.
+Deliberate choices made while implementing WP-5 (pull requests #230, #232, #233 and #235). Where one differs from the text above it says so. One gap is not a decision: the wizard flag set on bare `stw tidy` (T019e) is not implemented yet.
 
 - **Git-only discovery.** The wizard layer finds its workspace through `stwsync.Discover`, which knows Git only. Outside a Git
   workspace `stw tidy` and `stw tidy plan` exit 2 with `workspace-not-found` and the hint to give `--workspace PATH` or use the expert
   layer; a jj-only workspace is not discovered.
-- **Derived base and remote.** The base is the local branch named by the symbolic `refs/remotes/<remote>/HEAD` when it exists, else the
-  remote-tracking reference (`refs/heads/main (origin/HEAD)` in the sample). The remote is `origin`, else the single remote. A repository
+- **Derived base and remote.** The base is the local branch named by the symbolic `refs/remotes/<remote>/HEAD` when it exists (`refs/heads/main (origin/HEAD)` in the
+  sample), else the remote-tracking reference. The remote is `origin`, else the single remote. A repository
   with no remote is `base-ambiguous` (no symbolic HEAD can exist). An uninitialized member is not analysed and is named in a notice with
   the code `submodule-uninitialized: NAME` (Spec 023), not a skipped row. Offline observation reads no remote, so an offline specification
   carries none; the overview still shows the derived remote.
@@ -638,8 +638,8 @@ Deliberate choices made while implementing WP-5 (pull requests #232, #233 and #2
 - **The apply question.** After storing, the wizard asks `Apply it now? Run: stw tidy apply ID (or answer y here) [y/N]`. Only an explicit
   `y` runs the same apply code for that plan id; `n`, Enter and end of input apply nothing; three invalid answers are exit 1 saying the
   plan set is stored and nothing was applied. Foreign items still need the typed `/dev/tty` confirmation inside the apply path.
-- **Prompt details.** Surrounding spaces are ignored, number tokens may carry leading zeros, letters are case-sensitive, a line longer
-  than 256 characters is an invalid answer, and the end of input inside any question chooses nothing.
+- **Prompt details (from #230).** Surrounding spaces are ignored, number tokens may carry leading zeros, letters are case-sensitive, a line longer
+  than 256 bytes is an invalid answer, and the end of input inside any question chooses nothing.
 - **Architecture policy.** `scripts/check-architecture.py` lets the CLI import `internal/tidywizard`, `analysis`, `render` and `prompt`
   (the CLI still imports no `os`, process or network packages); `render` and `analysis` join `NETWORK_FREE_PACKAGES`, `prompt` does not
   because it imports `owner`.
