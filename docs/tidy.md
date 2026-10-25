@@ -52,7 +52,7 @@ recorded in the plan set, the apply journal and `stw tidy history`.
 
 **Verdicts.** `safe` (every proof holds), `decision` (for example a `locked-stw` worktree whose lock does not match), `retain`
 (a reason such as `unmerged`, `dirty`, `recently-active`, `registration-record-missing`, `evidence-incomplete`,
-`stale-registration-no-plan-kind`) and `foreign` rows never carry an effect. Only `safe` and `decision` rows get a number.
+`stale-registration-no-plan-kind`) rows never carry an effect; items of another or an unknown owner are shown with their `scope` and are never preselected. Only `safe` and `decision` rows get a number.
 Text shows at most 10 rows per repository (`and N more`); `--json` lists all candidates.
 
 **Prompts.** The answer is parsed strictly and the default is none. `a` chooses all safe rows of scope own (never `decision` rows and
@@ -70,6 +70,76 @@ only after, that retirement succeeded. A partial failure is reported per sub-pla
 no-op. In an agent run, an `other` or `unknown` item is refused with `scope-not-authorized`; agents never apply foreign items and must
 not drive the wizard through a pty wrapper or `send-keys`. The wizard's own `Apply it now?` question accepts only an explicit `y`, which
 runs the same apply code for that plan id.
+
+### Lifecycle and position rule
+
+The lifecycle of a task worktree is *workspace -> work -> retirement*. `stw workspace apply` creates it detached at the recorded
+creation commit and locks it `stw:<task>`; the agent then works in it, typically `git switch -c <branch>`, commits and pushes
+(`git push -u` writes `branch.<b>.remote` and `branch.<b>.merge` into the common config); the branch is integrated into the base,
+possibly by rebase-merge with different commit ids; the wizard then retires the worktree.
+
+An owned retirement used to be refused as `changed-ownership` after such a branch switch (issue #174). It now follows a
+**position rule**: HEAD may be the detached creation commit, attached to a local branch, or detached at a descendant, provided its
+history contains the recorded creation commit; an unrelated checkout is still `changed-ownership`. Retirement checks the identity of
+the worktree (the `stw:<task>` lock, the gitdir backlink, the worktrees parent, the layout and the creation journal entry) and the
+**current** safety state, instead of requiring the safety digest of the creation time: an unrelated config key, a Git upgrade or the
+upstream written by `git push -u` no longer blocks it, while a hook or key added between plan and apply refuses with
+`evidence-changed`. Integration is proved on the real HEAD with the same forge-free proofs as local references (ancestor, `patch-id`,
+`merge-noop`, `no-net-change`; `--integration-proof` and `--accept-whitespace-differences` apply); a head the proofs do not cover stays
+`retain` `integration-not-proven`. The plan binds HEAD reference, commit id, branch tip and base, so any change refuses with
+`evidence-changed`. A worktree whose HEAD is attached to the base branch itself never gets a branch deletion.
+
+When the owner chose `delete-branch:NAME` for a retired worktree, the **dependent branch leg** runs right after, and only after, that
+retirement succeeded: the branch is re-observed and deleted through the unchanged local-reference rules (recovery reference and
+journal included). The leg is derived at apply time, not stored; a failed retirement skips it (`retirement-not-applied`), a branch
+that is not the retirement plan's head refuses the whole set (`branch-leg-mismatch`), and a chosen deletion without a leg is skipped
+(`branch-leg-absent`) so the set is `partial`.
+
+### Derived defaults
+
+Every value the wizard assumed is shown in the overview and in `derived[]` (`name`, `value`, `source`, `overridden`).
+
+| Value | Derivation |
+| --- | --- |
+| Workspace | `--workspace`, else discovery from the working directory |
+| Members | the direct members plus the workspace repository `.` (notice `workspace-members-none` when there is no other member); an uninitialized member is named in a `submodule-uninitialized` notice |
+| Remote | `origin`, else the single remote; several remotes without `origin` are `remote-ambiguous` |
+| Base | the local branch of the remote's symbolic HEAD, else the remote-tracking reference; `--member-base NAME=REF` overrides; none: `base-ambiguous` or `base-missing`; the wizard never fetches |
+| Caller label | `$STW_OWNER`, else (human mode only) the operating-system user; `--mine` without one is a usage error |
+| Item owner | the task record, then path and branch convention (`/tmp/whr*`, `codex/`, `claude/`), then a commit author hint that never makes an item `own`, then `unknown` |
+| State directories | the repeatable `--state-dir`, `$STW_STATE_DIR`, the shared default; the first valid one holds the plan set |
+
+### Reason codes
+
+The reason of a `retain` row (the evidence line says why):
+
+| Reason | Meaning |
+| --- | --- |
+| `unmerged` | commits ahead of the base, or a reference not integrated into it |
+| `dirty`, `ignored-extras` | uncommitted changes; untracked or ignored files the stored tree does not hold |
+| `recently-active` | HEAD, index or a tracked file changed within the last 24 hours (only for an owner other than the caller or unknown) |
+| `locked-foreign` | locked by something other than stw |
+| `registration-record-missing`, `registration-record-ambiguous` | an stw lock whose creation record is in no known store, or in several with different content |
+| `lock-mismatch` | a stale registration whose stw lock does not match its creation record |
+| `unregistered` | the registration of a missing directory without an stw lock |
+| `branch-attached-elsewhere` | the branch is checked out in a worktree that is retained or kept |
+| `jj-retirement-unsupported` | a jj workspace owned by a creation record; no plan kind retires one yet |
+| `stale-registration-no-plan-kind` | the registration is prunable; no plan kind removes it yet |
+| `evidence-incomplete` | an observation failed or was bounded; the item is never judged on partial evidence |
+
+The one `decision` row is `locked-stw`: a worktree whose stw lock does not match its creation record; choosing it asks a second
+confirmation naming the lock. A `safe` worktree without an stw lock carries the reason `unregistered`, and the evidence `no-work`
+when it has no commit of its own.
+
+Reasons for an item that was chosen but cannot become a sub-plan (the plan set is not built, nothing is guessed): `plan-repository-unknown`,
+`plan-shape-invalid`, `plan-base-missing` (no base for the repository), `plan-state-dir-missing` (no plan store),
+`legacy-owner-unknown` (a legacy completion needs one plain owner label, not an unknown owner or an author hint), `tracking-remote-missing` (no remote for the repository), `tracking-online-required` (a tracking plan needs `--online`),
+`tracking-ref-unmappable`, `branch-name-unmappable` and `stale-registration-no-plan-kind`. A tracking reference that is kept carries
+one of `remote-source-present`, `symbolic-reference`, `selected-base`, `workspace-used` or `github-branch-absent`; any other
+reason from the observer is shown as `tracking-reason-unrecognized`. Apply refusals: `plan-set-invalid` (the stored set fails its
+id verification; sets from before the branch-leg decision are not migrated), `scope-not-authorized` (an `other` or `unknown` item in an
+agent-mode apply or without `authorized_scopes`), `evidence-changed` (something moved between plan and apply), `branch-leg-mismatch`,
+`branch-leg-absent` and the outcomes `skipped`, `partial` and `cancelled`.
 
 **Non-interactive use.**
 
