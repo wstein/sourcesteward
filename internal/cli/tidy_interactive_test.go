@@ -194,7 +194,7 @@ func TestInteractiveAgentModeDoesNotPrompt(t *testing.T) {
 // one the choice fails with exit 1 and nothing is stored or applied.
 func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 	i := newInteractive(t, true, true)
-	_, err := runTidy(t, "3\n")
+	_, err := runTidy(t, "4\n")
 	var failure runtimeFailure
 	if !errors.As(err, &failure) || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 || i.confirmOpened == 0 {
 		t.Errorf("err %v, terminal opened %d times", err, i.confirmOpened)
@@ -206,13 +206,13 @@ func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 func TestInteractiveDetailsAreEscaped(t *testing.T) {
 	i := newInteractive(t, true, true)
 	i.res.Candidates[3].Evidence = "stw lock \x1b[31mforged\x1b[0m\nline"
-	out, err := runTidy(t, "d 4\nn\n")
+	out, err := runTidy(t, "d 5\nn\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The detail is printed right after the question (the answer is not echoed by the test input).
 	detail := ""
-	if k := strings.LastIndex(out, "default n): [4] "); k >= 0 {
+	if k := strings.LastIndex(out, "default n): [5] "); k >= 0 {
 		detail, _, _ = strings.Cut(out[k:], "\n")
 	}
 	if strings.Contains(out, "\x1b") || !strings.Contains(detail, `stw lock \x1b[31mforged`) {
