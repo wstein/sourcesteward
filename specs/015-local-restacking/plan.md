@@ -218,3 +218,8 @@ settings or deployment command is executed by this feature.
 | Generic restore silently undoes later edits | T036 requires current==recorded-new and retained root==old, otherwise changed-since |
 | jj native rebase rewrites foreign descendants | T037 spike must enumerate effects and prove operation expectation; otherwise capability-unavailable |
 | Old review or local head reused for push | T041 exact actual-new-SHA binding and separate full observed remote SHA; 016 owns remote gate |
+
+Optional signing dependencies: T030 provides actual unsigned candidate creation;
+T047 adds red signer/profile tests; separately authorized T049 measures and records
+the host profile; only then may T048 integrate the one shared production adapter.
+T018 characterization precedes T045 red exit tests and T046 root/CLI mapping.
