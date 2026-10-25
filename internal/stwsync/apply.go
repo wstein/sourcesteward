@@ -69,6 +69,12 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 	if autostash {
 		stash = "--autostash"
 	}
+	// refs/stash is shared by all worktrees: remember its entries to recognise the one git stores for this run
+	var stashBefore []stashEntry
+	stashReadable := false
+	if autostash {
+		stashBefore, stashReadable = e.stashEntries(ctx)
+	}
 	var out gitOutput
 	if action == ResultMerge {
 		// the one case where a merge commit is wanted: only an explicit --merge on a diverged branch, made by git's own merge
@@ -113,6 +119,16 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 			return finish(stateFailed, "raced")
 		}
 	}
+	conflicted := strings.Contains(text, "resulted in conflicts")
+	var stashOID string
+	if conflicted && stashReadable {
+		stashOID = e.claimAutostash(ctx, stashBefore, oldOID)
+	}
+	if stashOID != "" {
+		if err := j.stash(i, stashOID); err != nil {
+			rp.Reason = ptr("the journal record lacks the stash OID: " + oneLine(err.Error()))
+		}
+	}
 	if err := j.finish(i, stateCompleted, newOID, origHead, ""); err != nil {
 		rp.Reason = ptr("the journal record stays incomplete: " + oneLine(err.Error()))
 	}
@@ -124,9 +140,12 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 	case ResultMerge:
 		rp.Result = ResultMerged
 	}
-	if strings.Contains(text, "resulted in conflicts") {
+	if conflicted {
 		rp.Result, rp.Reason = ResultAutostashConflict, ptr("your changes are kept in the stash; resolve with git stash pop or git stash drop")
 		rp.Detail = ptr(detail(text))
+		if stashOID != "" {
+			rp.StashOID = ptr(stashOID)
+		}
 	}
 	return rp
 }
@@ -169,4 +188,58 @@ func (s *session) journal(ctx context.Context, e env) (*journal, error) {
 	}
 	s.journals[e.dir] = j
 	return j, nil
+}
+
+// stashEntry is one entry of the stash reflog: the stash commit, its reflog subject and its first parent.
+type stashEntry struct{ oid, subject, parent string }
+
+// stashEntries lists the entries of refs/stash. A missing ref is an empty list; any other failure is
+// reported as not readable so that nothing is claimed.
+func (e env) stashEntries(ctx context.Context) ([]stashEntry, bool) {
+	if out, err := e.g(ctx, "rev-parse", "--verify", "--quiet", "refs/stash"); err != nil {
+		return nil, false
+	} else if out.Code == 1 {
+		return nil, true
+	} else if out.Code != 0 {
+		return nil, false
+	}
+	out, err := e.g(ctx, "log", "-g", "--format=%H%x1f%gs%x1f%P%x1e", "refs/stash", "--")
+	if err != nil || out.Code != 0 {
+		return nil, false
+	}
+	var entries []stashEntry
+	for _, rec := range strings.Split(out.Out, "\x1e") {
+		f := strings.Split(strings.TrimSpace(rec), "\x1f")
+		if len(f) != 3 || !oidPattern.MatchString(f[0]) {
+			continue
+		}
+		parent, _, _ := strings.Cut(f[2], " ")
+		entries = append(entries, stashEntry{f[0], f[1], parent})
+	}
+	return entries, true
+}
+
+// claimAutostash returns the OID of the one new stash entry that is this run's autostash: stored by
+// git with the reflog subject "autostash" on top of the old tip. An entry another worktree pushed or one
+// that predates the run is never claimed; with none or more than one candidate it returns "".
+func (e env) claimAutostash(ctx context.Context, before []stashEntry, oldOID string) string {
+	after, ok := e.stashEntries(ctx)
+	if !ok {
+		return ""
+	}
+	known := map[string]bool{}
+	for _, en := range before {
+		known[en.oid] = true
+	}
+	found := ""
+	for _, en := range after {
+		if known[en.oid] || en.subject != "autostash" || en.parent != oldOID {
+			continue
+		}
+		if found != "" {
+			return "" // ambiguous
+		}
+		found = en.oid
+	}
+	return found
 }

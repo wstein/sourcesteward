@@ -90,6 +90,9 @@ type Repo struct {
 	Pruned int     `json:"pruned"`
 	Reason *string `json:"reason"`
 	Detail *string `json:"detail"` // Git's own message for a stopped rebase or a kept autostash
+	// StashOID is the stash entry git kept after an autostash that could not be reapplied (autostash-conflict); nil when
+	// there is none or when the entry cannot be identified without doubt.
+	StashOID *string `json:"stash_oid"`
 }
 
 // Summary counts the repositories by result.
