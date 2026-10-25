@@ -18,7 +18,7 @@ remain explicitly unavailable while other accepted units proceed.
 
 ## Phase 1 — decisions and design gate
 
-- [ ] T001 Verify/encode the dated decisions for OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/FLAGS/EXIT and their affected capabilities in specs/014-conflict-diagnosis/research.md; adopted recommendations require native evidence; Spec 015 D7 remains and exit revision2 targets incomplete 1 (current code3). (Coverage: SC-004).
+- [ ] T001 Verify/encode the dated decisions for OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/FLAGS/EXIT and their affected capabilities in specs/014-conflict-diagnosis/research.md; adopted recommendations require native evidence; Spec 015 D7 remains and exit revision 2 targets incomplete 1 (current code 3). (Coverage: SC-004).
 - [ ] T002 Obtain independent complete-artifact exact-head design review and reconcile accepted contract/coverage findings in specs/014-conflict-diagnosis/analysis.md before implementation. (Coverage: SC-004).
 
 ## Phase 2 — shared foundation
@@ -73,7 +73,7 @@ before effects, all bounds fail honestly and hidden restack v1 stays unchanged.
 
 - [ ] T025 [US3] Write failing CLI tests in internal/cli/conflict_test.go for group default-none/help, explicit leaves/selectors, text-default/--json parity with no TTY or stdin/editor/pager, fixed 60-second/10-second bounds, decided --human/--json exclusivity and positive shortening --timeout, while --state-dir/--online/--offline refuse usage before effects, unsupported capability, 0 complete conflict, 1 incomplete/refusal/cancel and 2 usage; fixed notice appears in every admitted result. (Coverage: FR-007, FR-008, FR-013, FR-015, FR-020, SC-008).
 - [ ] T026 [US3] Wire parsing/rendering in internal/cli/conflict.go through the reviewed operation only, preserve architectural import limits and escape terminal text; enforce single final object and output-write failure without a second JSON document. (Coverage: FR-007, FR-013, FR-015, FR-020, SC-008).
-- [ ] T027 [US3] Write failing contract/compatibility tests in internal/conflict/contract_test.go for complete/incomplete/error fixtures, all finite bounds, byte-path round-trip, shared 015 diagnostic mapping and operation-specific status distinctions, no readiness/authorization fields, no network and unchanged published/frozen JSON files plus decided hidden-restack target incomplete 1 after the 015 revision2 code task, with current code3 recorded separately. (Coverage: FR-005, FR-007, FR-013, FR-020, FR-022, SC-003, SC-007, SC-008).
+- [ ] T027 [US3] Write failing contract/compatibility tests in internal/conflict/contract_test.go for complete/incomplete/error fixtures, all finite bounds, byte-path round-trip, shared 015 diagnostic mapping and operation-specific status distinctions, no readiness/authorization fields, no network and unchanged published/frozen JSON files plus decided hidden-restack target incomplete 1 after the 015 revision 2 code task, with current code 3 recorded separately. (Coverage: FR-005, FR-007, FR-013, FR-020, FR-022, SC-003, SC-007, SC-008).
 - [ ] T028 [US3] Only after accepted implementation/conformance design, add a separate self-contained proposed conflict-evidence schema and fixtures under schemas/v1/ with additive publication wiring; preserve every existing schema/fixture/digest and implement bounded typed serialization in internal/conflict/render.go. (Coverage: FR-007, FR-020, SC-003).
 
 ## Phase 7 — conformance and review evidence

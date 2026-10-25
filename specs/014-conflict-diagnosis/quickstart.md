@@ -87,7 +87,7 @@ lane is an acceptance gap, never a skipped pass.
 
 Once implemented, validate complete/incomplete/error JSON fixtures offline against
 the new separate contract and confirm every existing schema/fixture and hidden
-restack-plan JSON schema1 bytes are unchanged; CURRENT code3 becomes target1 only after the decided exit task. Record real
+restack-plan JSON schema 1 bytes are unchanged; CURRENT code 3 becomes target 1 only after the decided exit task. Record real
 native acceptance and independent exact-head review in a future verification
 artifact. Run the source/format/test/conformance gates applicable to that code;
 none was run or implied by this documentation amendment.

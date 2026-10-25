@@ -3,19 +3,19 @@
 **Owner decisions: 2026-10-25. Author cross-artifact analysis only.** All former
 OQ IDs are settled and indexed in [the decision index](../016-stacked-pr-coordination/research.md#cross-spec-decision-index).
 The [concrete profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) distinguish workspace .work metadata from
-external capture payloads, trusted policy, host-only optional local015 re-sign
-and CLI exit-contract revision2. No new implementation/native/helper/forge test
+external capture payloads, trusted policy, host-only optional local 015 re-sign
+and CLI exit-contract revision 2. No new implementation/native/helper/forge test
 or independent CLEAR is claimed. Historical implementation evidence stays at
-its recorded revision; current hidden015code still returns3 until the new task.
+its recorded revision; current hidden 015 code still returns 3 until the new task.
 
 ## Current findings and gates
 
 | ID | Disposition | Remaining evidence |
 | --- | --- | --- |
-| D1 | All39 owner directions are DECIDED, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
+| D1 | All 39 dispositions are recorded as direct owner answers or adopted recommendations; cross-spec owner overrides are marked, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
 | D2 | Metadata and external selected-byte/safety stores are distinct roles with explicit modes/race/layout/quota/export-risk guards. | Red-first shared store and role-separation tasks; no auto-ignore edits/expiry. |
-| D3 | Optional actual re-sign belongs only to015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review;016 receipt validation only. |
-| D4 | Target CLI exit-contract revision2 is0/1/2, no legacy3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
+| D3 | Optional actual re-sign belongs only to 015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review; 016 receipt validation only. |
+| D4 | Target CLI exit-contract revision 2 is 0/1/2, no legacy 3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
 
 ## Individual requirement coverage and literal future tests
 
@@ -30,7 +30,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-004 | T007, T008, T009, T010, T021 | Diagnose interrupted operations and dirty jj disk; compare index/files/refs/oplog sentinels and assert zero stage/snapshot/continue/abort calls. |
 | FR-005 | T011, T012, T013, T014, T027 | Use path bytes containing newline, ESC, bidi and invalid UTF-8 plus a secret body; assert byte-identical decoded path, escaped display and absent default body. |
 | FR-006 | T003, T004, T009, T010, T023, T024 | Run in ordinary Git, colocated jj, missing jj and ambiguous/GitButler layouts; assert native selection or typed refusal and no raw Git fallback. |
-| FR-007 | T025, T026, T027, T028 | Render the same complete conflict and admitted error as default text/--json with no TTY; compare identities/status/reasons, assert no stdin/pager/editor and frozen existing contract bytes. Pass accepted --human/--timeout and rejected --state-dir/--online/--offline with usage2 before native reads/scratch effects. |
+| FR-007 | T025, T026, T027, T028 | Render the same complete conflict and admitted error as default text/--json with no TTY; compare identities/status/reasons, assert no stdin/pager/editor and frozen existing contract bytes. Pass accepted --human/--timeout and rejected --state-dir/--online/--offline with usage 2 before native reads/scratch effects. |
 | FR-008 | T005, T006, T021, T022, T025 | Exhaust a process/result bound and cancel replay before step 2; assert exit 1/incomplete, explicit omissions and no clean full-range or authorization claim. |
 | FR-009 | T003, T004, T029, T030, T031, T032 | Omit the minimum-jj conformance lane from the evidence matrix; assert the capability acceptance remains blocked rather than counted as a skipped pass. |
 | FR-010 | T015, T016, T017, T018, T019, T020 | Diagnose an existing conflict, then preflight explicit merge and restack inputs; assert existing-native versus predicted-scratch origin and no semantics inference. |
@@ -62,7 +62,7 @@ checked tasks; 33 unchecked. Coverage 30/30 (100% design
 mapping), zero requirement orphans. No implementation checkbox is changed by
 owner answers or this analysis. All new exit/store/signing tasks are unchecked.
 Task dependencies remain red test → implementation → native/effect conformance
-→ exact-source independent review. Spec043 human-only landing remains separate.
+→ exact-source independent review. Spec 043 human-only landing remains separate.
 
 ## Compatibility and acceptance boundary
 
