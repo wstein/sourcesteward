@@ -40,7 +40,7 @@ These local safety requirements do not supply a publication receipt or authority
 No capability is implemented by this document. Spec 015 D4–D9 and D12–D13 remain
 binding: first Git-only plan, explicit old/new parent and branch without a hard
 012 dependency, plumbing/quarantine plus CAS rather than porcelain rebase, and
-push in 016 (D8). JSON schema 1 bytes stay frozen; CURRENT hidden 015 code 3 becomes target1 only after the decided revision2 implementation task.
+push in 016 (D8). JSON schema 1 bytes stay frozen; CURRENT hidden 015 code 3 becomes target 1 only after the decided revision 2 implementation task.
 
 Spec 043 owns the human owner's separate landing invocation, its conditional
 retarget order and deletion gates. An agent never invokes landing apply, merges,
@@ -210,7 +210,7 @@ and boundary fixtures for every declared backend/version/platform capability.
 - **FR-020**: Retarget only an explicitly selected owned child PR to the planned verified base (including default branch). Read state/head/base before and after, require head unchanged, report partial results, and invalidate old Ready evidence after any base edit. Remote permission uncertainty refuses.
 - **FR-021**: Reuse bounded hosting resolution/read evidence from Specs 020/022/025/030. Current 022 is GET-only; new writes require a reviewed additive closed method/path/body allowlist and conformance before enablement. Never accept arbitrary endpoints/methods, response URLs, generic `gh` forwarding or hidden native-stack API behavior.
 - **FR-022**: Bind immutable plans and durable action intent/outcome records to repository, task, plan/run/action ids and expected state before effects, using reviewed private-state durability conventions from Specs 010/011/032. Journal failure refuses; retry reconciles rather than blindly replays. Store no credentials or session ids in public output.
-- **FR-023**: Reconcile shared `--online`, `--human`/`--json`, shortening `--timeout` and `--state-dir` vocabulary explicitly. The owner chose --online only, shared human/shortening-timeout direction and .work saved-plan metadata; captured bytes remain external. Target exit-contract revision2 is 0/1/2; current hidden015code3 persists until T045/T046, with schema1 unchanged. Unlike online-default 033/037, this proposal defaults offline and proposes no --offline flag (unknown/usage 2); any alias needs OQ-SURFACE acceptance.
+- **FR-023**: Reconcile shared `--online`, `--human`/`--json`, shortening `--timeout` and `--state-dir` vocabulary explicitly. The owner chose --online only, shared human/shortening-timeout direction and .work saved-plan metadata; captured bytes remain external. Target exit-contract revision 2 is 0/1/2; current hidden 015 code 3 persists until T045/T046, with schema 1 unchanged. Unlike online-default 033/037, this proposal defaults offline and proposes no --offline flag (unknown/usage 2); any alias needs OQ-SURFACE acceptance.
 - **FR-024**: Compose observation → optional preflight → separately authorized local restack → separately authorized forge plan/apply as explicit steps. No automatic sync, replay, checkpoint, resolver or child rewrite; each consumer obtains fresh own-scope evidence and recovery/authorization.
 - **FR-025**: Render both conditional Spec 043 owner landing handoffs as data only, preserving readable-off versus on/unreadable ordering and unmeasured-shape gates. 043 alone owns landing/deletion policy; 016 agents never invoke its apply.
 - **FR-026**: After a rewritten push report old pushed SHA, actual new SHA and inert owner resync commands: fetch/prune, then rebase onto remote from full old pushed SHA if local commits exist, otherwise switch/reset-hard labelled destructive. Never run those commands in the owner's checkout.
@@ -257,9 +257,9 @@ specified in [data-model.md](data-model.md).
 
 ## Needs owner decision
 
-Compatibility anchor only: all39 former OQ IDs are DECIDED by the owner on
+Compatibility anchor only: all 39 former OQ IDs are DECIDED by the owner on
 2026-10-25. [Research](research.md#cross-spec-decision-index) records every dated
 disposition; the shared profiles define .work metadata, external payloads,
-trusted policy, optional host-only015re-sign and exit revision2. Remaining
+trusted policy, optional host-only 015 re-sign and exit revision 2. Remaining
 source/native/helper/forge evidence gates are unimplemented acceptance work,
 not unanswered owner choices. No decision itself authorizes runtime effects.

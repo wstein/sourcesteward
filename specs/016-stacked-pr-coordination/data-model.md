@@ -67,7 +67,7 @@ worktree/index and repeated per-invocation/final checks. Missing/unsupported pin
 or original-worktree/index attribute contamination makes it unusable as that
 profile's evidence. It remains prediction, never an actual candidate/review.
 Native jj aggregate conflict state cannot be inferred from Git stop-first or a
-clean final tip while native aggregation under adopted014 OQ-JJCONF remains unmeasured. Supplied 013 recovery
+clean final tip while native aggregation under adopted 014 OQ-JJCONF remains unmeasured. Supplied 013 recovery
 metadata never proves a generic operation-head CAS or remote reversibility;
 its independent safety-copy receipt/lifetime is distinct from checkpoint metadata.
 
@@ -174,9 +174,9 @@ reason. No token/session/key/raw response bytes. Append via owned staging,
 create-only publication and file/directory fsync; never modify an existing fact.
 
 Before an effect, durably reserve count/physical quota for the exact bounded
-intent plus one bounded outcome (outcome at most64KiB, including 2KiB sanitized
+intent plus one bounded outcome (outcome at most 64 KiB, including 2 KiB sanitized
 error) and reservation metadata/staging; refuse full/quota-unknown before intent
-and effect. Count reservations against the256-record/32MiB namespace profile.
+and effect. Count reservations against the 256-record/32 MiB namespace profile.
 Private staging is not an authoritative fact; an outcome is valid only after
 create-only publication. Quota reservation cannot guarantee disk/permission/I/O
 success, so an effect followed by failed/missing outcome remains unknown.
