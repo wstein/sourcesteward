@@ -6,7 +6,8 @@
 > This is a documentation target, not implementation or native acceptance.
 
 **Date**: 2026-10-25 | **Status**: Local source/policy research and proposed
-choices; no new live forge measurement or runtime implementation.
+choices, plus the fixture measurement run `20261025T170737Z` (summarized under
+Measured forge effects); no runtime implementation.
 
 ## Evidence and settled boundaries
 
@@ -26,7 +27,10 @@ Native stack evidence in the workspace records a GitHub rebase/retarget with
 `delete_branch_on_merge=true`. This does not prove the result with deletion off
 or the independent cause of the rewrite. `gh stack link` uses `GH_REPO` rather
 than unsupported `-R`; help distinguishes numeric PR arguments from branch
-arguments that push. Numeric-link write endpoints/effects are not measured here.
+arguments that push. The numeric-link write endpoints and effects were measured
+on the fixture (see Measured forge effects); the owner-only merge probes M1 to
+M3, the retarget probe N4, the unstack probe N5 and the second unstack O-N5
+were not run.
 No new API method, dependency execution or native jj publication is inferred.
 
 ## Merged design qualifications
@@ -56,6 +60,37 @@ neither fixes that implementation nor supplies new replay acceptance. 014
 OQ-JJCONF blocks native jj conflict-evolution/aggregate semantics: Git stop-first
 and a clean final tip cannot replace complete native graph evidence. OQ-SEM,
 TOPO, HUNK, SCRATCH, FLAGS and EXIT remain explicit, unapproved capabilities.
+
+## Measured forge effects
+
+Run `20261025T170737Z` on the disposable fixture `wstein/stw-forge-fixture`
+(private repository on a free plan; the rulesets and branch-protection reads
+answer 403, which the owner accepted as no rules in force). Evidence files:
+[part 1](evidence/measurement-20261025T170737Z.md) and
+[continuation](evidence/measurement-20261025T170737Z-continuation.md), cited
+below as `E1:LINE` and `E2:LINE`. Tools: `gh` 2.102.0, `git` 2.56.0, `gh stack`
+v0.2.1 (E2:28). These are observations of that one fixture; they accept no
+allowlist and enable no capability. The measured behavior is described per
+kind in [forge effects](contracts/forge-effects.md#capabilityeffect-table).
+
+| Id | Observed result | Evidence |
+| --- | --- | --- |
+| W1 | A lease with an empty expected value creates an absent ref (exit 0, one new-branch line). With the ref present, the same push of another commit is rejected as stale (exit 1), as is a lease naming a nonexistent SHA for an absent ref; the remote ref is unchanged and the ref is not created. A repeated identical push exits 0 with `[up to date]`. The Git trace showed credential-helper calls and no hook; the hook and credential boundary stays unmeasured | E1:62-76 |
+| W2 | `POST` of a pull request with title, body, head, base and `draft` answers 201 and `draft` follows the field. An identical second `POST` answers 422 and the open list for the head shows one PR. A nonexistent base answers 422 and creates no PR. An unknown body field is ignored (201) | E1:85-89, E1:99 |
+| W3 | A body-only `PATCH` changes the body and `updated_at` only. A `PATCH` with a stale `If-Match` answers 400 and the body stays unchanged (both runs): REST has no conditional body write through `If-Match`, so the digest guard is a client-side read before write. A body of 65537 bytes is accepted (200) | E1:103-104, E1:112-116 (inconclusive there), E2:67-76, E2:78-82 |
+| W4 | A base-only `PATCH` answers 200 and changes `base.ref`, `base.sha` and `updated_at` only, on a Draft and on a non-Draft PR (`draft` stays false, `head.sha` unchanged). A nonexistent base answers 422 and changes nothing. A `PATCH` to the current base answers 200 and changes nothing | E2:84-95 |
+| W5 | `PATCH` with `draft=false` answers 200 and the PR stays Draft: REST cannot set Ready. `gh pr ready` exits 0 and sets `draft` false, changing only `draft` and `updated_at`; its trace holds a `POST /graphql` query `PullRequestByNumber` and a `POST /graphql` mutation `PullRequestReadyForReview` with the field `markPullRequestReadyForReview` and an `input` object holding `pullRequestId`. On an already-Ready PR it exits 0, sends only the lookup and changes nothing | E2:99-114 |
+| N1, N2 | `GH_REPO=OWNER/NAME gh stack link --base main A B` with numeric PRs creates one stack of two (exit 0), pushes no ref and leaves both PRs unchanged. Its trace holds `GET /repos/{r}/stacks`, four `POST /graphql` lookups (`FindPRByNumber`) and `POST /repos/{r}/stacks` with the body field `pull_requests` (201). The repeat exits 0 and sends no write | E2:127-151 |
+| N3 | `gh stack link STACK N` appends a member through `POST /repos/{r}/stacks/{number}/add` (200). The same `--base` command with all three members is idempotent. The reversed order of two existing members exits 5 with `Cannot update stack` and changes nothing | E2:153-166 |
+| Unstack | Observed in cleanup only, not an N5 verdict: `gh stack unstack STACK` (explicit number) exits 0 through `POST /repos/{r}/stacks/{number}/unstack` (204); the stack is gone and the PRs and branches are unchanged | E2:176-185 |
+
+Not measured: the hook and credential boundary of a Git push (E1:73-76); the
+source of the pull request node id for the Ready mutation, the mutation's own
+response, and a repeat of the mutation (the repeat run of `gh pr ready` sent no
+mutation, E2:111-114); the body fields of the stack `add` request; N4 (retarget
+of a linked member), N5 and O-N5 (E2:168-172, E2:185); the owner-only merge
+probes M1 to M3 (E2:199-200); comments (deferred). Ordering gates of Ready
+(review, CI, rebaseability) are policy and were not measured.
 
 ## Design decisions
 
@@ -99,8 +134,10 @@ to reproduce the governing workflow, so rejected.
 
 **Decision**: Keep existing GET-only modes unchanged. New write operations need
 a new narrow reviewed mode with fixed validated method/path/body union and tests.
-Git lease pushes use a separately admitted native capability. Link/unstack and jj
-publication remain unavailable until measured. Reference commands remain data.
+Git lease pushes use a separately admitted native capability. Link/unstack remain
+unavailable until the reviewed allowlist accepts the endpoints observed for them
+(unstack only in cleanup), and jj publication until measured. Reference
+commands remain data.
 
 **Rationale**: A pinned SDK or installed extension is not an effect allowlist.
 Native colocation must never give permission to bypass jj ownership with raw Git.
@@ -136,7 +173,7 @@ optional host-only signing and CLI exit-contract revision 2.
 | --- | --- | --- | --- |
 | OQ-SURFACE | DECIDED: shared surface, --online-only opt-in, explicit save with default workspace .work metadata store, single repository now. | owner answer | CLI/store profile implementation, not an owner answer gap. |
 | OQ-POLICY | DECIDED: trusted workspace policy supplies exact identity, reviewer allowlist/check source; global config corroborates only. | owner answer | Missing trusted source blocks push/Ready; receipt/provenance implementation. |
-| OQ-WRITES | DECIDED: measure in separately authorized disposable forge, then review small closed 022 write allowlist; comments deferred. | owner answer | Unmeasured PR/ref/Ready effects stay unavailable; no GraphQL/arbitrary fallback. Exception (owner decision 2026-10-25): one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), only if W5a confirms that REST cannot set Ready; see `measurement-plan.md` section 1. |
+| OQ-WRITES | DECIDED: measure in separately authorized disposable forge, then review small closed 022 write allowlist; comments deferred. | owner answer | PR/ref/Ready effects are measured (see Measured forge effects) but stay unavailable until the reviewed closed allowlist is implemented; no GraphQL/arbitrary fallback. Exception (owner decision 2026-10-25): one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), W5a has confirmed that REST cannot set Ready (`PATCH` with `draft=false` answered 200 and left the PR Draft; [evidence](evidence/measurement-20261025T170737Z-continuation.md), W5a), so the exception applies; see `measurement-plan.md` section 1. |
 | OQ-NATIVE | DECIDED: Git publication first; measure native link/unstack separately; native jj unavailable without measured native proof. | owner answer | No extension installation/execution or Git fallback. |
 | OQ-SIGN | DECIDED: default refuse dropped/unmet/unknown signatures; optional local 015 re-sign with trusted host-only helper, no stw keys. | owner answer | 016 validates final signed receipt; remote authorization never invokes local signing; no unsigned fallback. |
 | OQ-STORE | DECIDED: immutable typed action record, fsync, bounded validated .work metadata profile and no automatic unresolved expiry; sync v1 unchanged. | owner answer | Durability/race/export-risk/quota and separate manual cleanup implementation. |
@@ -189,7 +226,7 @@ trusted-policy, optional host-only re-sign and exit-revision boundaries.
 | [015 OQ-8](../015-local-restacking/spec.md#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | adopted recommendation; owner-answer override: 016 OQ-SIGN | default refuse dropped/unmet/unknown signatures; optional explicit re-sign only through fixed trusted HOST helper, no stw keys. | Signing/verifier profile must be implemented/measured; absent helper disables option; final signed chain SHA before review. |
 | [016 OQ-SURFACE](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | shared surface, --online-only opt-in, explicit save with default workspace .work metadata store, single repository now. | CLI/store profile implementation, not an owner answer gap. |
 | [016 OQ-POLICY](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | trusted workspace policy supplies exact identity, reviewer allowlist/check source; global config corroborates only. | Missing trusted source blocks push/Ready; receipt/provenance implementation. |
-| [016 OQ-WRITES](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | measure in separately authorized disposable forge, then review small closed 022 write allowlist; comments deferred. | Unmeasured PR/ref/Ready effects stay unavailable; no GraphQL/arbitrary fallback. Exception (owner decision 2026-10-25): one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), only if W5a confirms that REST cannot set Ready; see `measurement-plan.md` section 1. |
+| [016 OQ-WRITES](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | measure in separately authorized disposable forge, then review small closed 022 write allowlist; comments deferred. | PR/ref/Ready effects are measured (see Measured forge effects) but stay unavailable until the reviewed closed allowlist is implemented; no GraphQL/arbitrary fallback. Exception (owner decision 2026-10-25): one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), W5a has confirmed that REST cannot set Ready (`PATCH` with `draft=false` answered 200 and left the PR Draft; [evidence](evidence/measurement-20261025T170737Z-continuation.md), W5a), so the exception applies; see `measurement-plan.md` section 1. |
 | [016 OQ-NATIVE](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | Git publication first; measure native link/unstack separately; native jj unavailable without measured native proof. | No extension installation/execution or Git fallback. |
 | [016 OQ-SIGN](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | default refuse dropped/unmet/unknown signatures; optional local 015 re-sign with trusted host-only helper, no stw keys. | 016 validates final signed receipt; remote authorization never invokes local signing; no unsigned fallback. |
 | [016 OQ-STORE](#owner-decisions-2026-10-25) | DECIDED 2026-10-25 | owner answer | immutable typed action record, fsync, bounded validated .work metadata profile and no automatic unresolved expiry; sync v1 unchanged. | Durability/race/export-risk/quota and separate manual cleanup implementation. |

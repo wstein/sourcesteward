@@ -1,12 +1,14 @@
 # Measurement Plan: OQ-WRITES and OQ-NATIVE
 
-**Status**: PLAN MERGED (pull request 271, `f4558cfb`; the G3 release is pull
-request 272, merged as `2b4ca5b4`). A first run, `20261025T170737Z`, executed
-P0, W1, W2 and W3a and stopped at W3b; its evidence is pull request 274. This
-amendment (section 13) covers the continuation and is UNDER REVIEW; its
-reviewed head becomes the G1 head of the continuation once it is merged.
-Document only. This plan authorizes nothing by itself: section 2 lists the
-gates that must all be open before any run. Every GitHub behaviour below is a
+**Status**: CLOSED after run `20261025T170737Z`. The plan was merged as pull
+request 271 (`f4558cfb`); the G3 release is pull request 272 (`2b4ca5b4`). The
+first part of the run executed P0, W1, W2 and W3a and stopped at W3b (evidence:
+pull request 274); the amendment of section 13 is pull request 275 (`3b93e229`)
+and the continuation evidence is pull request 276. The sections below keep the
+plan text as it was run, as history; the results are in the evidence files and
+in `research.md` under "Measured forge effects". Document only. This plan
+authorizes nothing by itself: section 2 lists the gates that must all be open
+before any run. Every GitHub behaviour below is a
 HYPOTHESIS to be tested, never a finding.
 
 ## 1. Owner decisions this plan rests on (restated, dated 2026-10-25)
@@ -14,12 +16,14 @@ HYPOTHESIS to be tested, never a finding.
 - OQ-WRITES: measure first in a separately authorized disposable forge fixture,
   then review a small closed write allowlist; comments deferred; no GraphQL or
   arbitrary endpoint fallback in stw, with the single exception of the fixed
-  Ready mutation decided below (the exception is also stated at `research.md`
-  lines 139 and 192, `contracts/owner-decisions.md` line 212,
-  `contracts/forge-effects.md` line 101 and `tasks.md` line 50, T021).
+  Ready mutation decided below (the exception is also stated in the OQ-WRITES
+  rows of `research.md`, in `contracts/owner-decisions.md` under
+  "Measure-before-enable and owner-only boundaries", in
+  `contracts/forge-effects.md` under "Transport admission" and in `tasks.md`
+  T021).
 - OQ-NATIVE: Git publication first; measure native link/unstack separately;
   native jj publication stays `capability-unavailable`, no Git fallback
-  (`research.md` line 140). In this plan: native stacks are measured, jj is
+  (the OQ-NATIVE rows of `research.md`). In this plan: native stacks are measured, jj is
   BLOCKED and no jj command touches the fixture.
 - Fixture authorization: the owner created ONE private repository
   `wstein/stw-forge-fixture` (README only, default branch `main`, no rulesets)

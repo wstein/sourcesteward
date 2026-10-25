@@ -36,7 +36,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-010 | T007, T008, T027 | Exhaust each request/record/body/result/deadline cap and cancel; no complete-success or next effect. |
 | FR-011 | T001, T004, T035, T036, T038 | Omit one mandatory minimum/current native lane; acceptance remains blocked, not passed/skipped green. |
 | FR-012 | T006, T008, T009, T010 | Authorize one action with wrong plan or local authorization only; no remote write occurs. |
-| FR-013 | T011, T012, T022, T023 | Foreign task with matching branch prefix/author or raced body ownership refuses own-PR/body action. |
+| FR-013 | T011, T012, T022, T023 | Foreign task with matching branch prefix/author or a body mismatch found by the pre-write read refuses own-PR/body action; a race inside the window is found only by the post-write re-read (`remote-changed` or `unknown`). |
 | FR-014 | T017, T019 | Race remote old SHA after sampling; full ref/full old/full actual new lease rejects without retry widening. |
 | FR-015 | T017, T018, T036 | Docs-only child above open code parent, parent add/remove code cancellation in net tree diff, and unknown parent/path fixtures all yield effective code from the per-commit publication path union OR validated moved-scope class; map only producer/version/head-validated 015 review_gate.change_class into the 016 alias, reject field/provenance confusion, and require actual-SHA code review even for the explicitly unsupported later wording-only exception. |
 | FR-016 | T017, T018, T036 | Owner-only child above foreign-committer open parent fails full default..new-head identity gate. |

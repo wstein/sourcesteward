@@ -124,8 +124,9 @@ intent before each write; reread the effect and record actual/unknown outcome.
 Stop on a failed/unknown guard or cancellation before the next effect.
 
 A native Git lease push is one exact full-SHA refspec and full-SHA expected-old
-lease on an owned existing topic. Ref creation stays disabled until absent-ref
-capability is measured. Retarget edits only the selected base and verifies head
+lease on an owned existing topic. Ref creation stays disabled until the
+allowlist review accepts the measured absent-ref lease (W1) and the
+hook/credential boundary. Retarget edits only the selected base and verifies head
 unchanged. Link/unstack cannot use generic extension execution or inferred API
 semantics; until accepted, they are blocked plan entries and inert reference data.
 

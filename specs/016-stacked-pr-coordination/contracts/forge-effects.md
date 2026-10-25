@@ -68,13 +68,13 @@ native acceptance and never auto-edits .gitignore or relocates payload bytes.
 
 | Kind | Exact scope and guards | Current proposed enablement |
 | --- | --- | --- |
-| `push-topic` | One verified own existing native Git topic, exact ref and actual new SHA, observed old SHA, trusted owner range/config/signature and review gates | Requires accepted native transport/hook confinement and receipt policy; absent-ref creation separately unavailable until measured |
-| `create-pr` | One own head branch and explicit verified base in same repository; bounded selected title/body, no labels/reviewers/auto-merge extras | Fixed method/path/body/duplicate reconciliation must be measured and allowlisted under OQ-WRITES |
-| `edit-body` | Own PR, own-body provenance, expected current body digest and bounded exact replacement; no remote instructions executed | OQ-WRITES gate; raced/foreign body refuses |
+| `push-topic` | One verified own existing native Git topic, exact ref and actual new SHA, observed old SHA, trusted owner range/config/signature and review gates | Requires accepted native transport/hook confinement and receipt policy; absent-ref creation separately unavailable: its expected-absence lease push is measured (W1, [measurements](../research.md#measured-forge-effects)) but stays blocked until the allowlist review and the hook/credential boundary are accepted |
+| `create-pr` | One own head branch and explicit verified base in same repository; bounded selected title/body, no labels/reviewers/auto-merge extras | Measured on the fixture (W2, [measurements](../research.md#measured-forge-effects)): one `POST` of the pull request with title, body, head, base and `draft` (201; a duplicate answers 422 and the open list for the head shows the one PR; a nonexistent base answers 422; an unknown field is ignored, so the validator accepts none). Needs the reviewed OQ-WRITES allowlist before enablement |
+| `edit-body` | Own PR, own-body provenance, expected current body digest and bounded exact replacement; no remote instructions executed | Measured on the fixture (W3, [measurements](../research.md#measured-forge-effects)): a body-only `PATCH` changes only the body and `updated_at`; a stale `If-Match` answers 400 with the body unchanged, so REST has no conditional write through `If-Match` and the digest guard is a client-side read before write. A mismatch found by the pre-write read refuses; a race inside the remaining window is found only by the post-write re-read and reported as `remote-changed` or `unknown`. Needs the reviewed OQ-WRITES allowlist |
 | `comment` (deferred original draft) | No standalone comment execution in the first agent capability; own PR body edits are the current proposal | Separate owner scope choice plus OQ-WRITES unique-completion/idempotency gate before any future admission |
-| `retarget` | Own open child, exact old head/base and explicit new verified base, head unchanged after edit | Proposed bounded base-only PR edit; requires additive write allowlist acceptance, no other PR field |
-| `ready` | Own PR and exact-current-head independent CLEAR, required green CI, `rebaseable == true`, accepted scope/no in-scope blocker, D5 | Exact Ready operation/method unmeasured here; OQ-WRITES must pin it before enablement |
-| `native-link`, `native-unstack` | Own selected PRs, verified member order/trunk, stable complete native evidence and permission | Endpoint/method/effects/version/idempotency unmeasured; capability-unavailable, reference data only |
+| `retarget` | Own open child, exact old head/base and explicit new verified base, head unchanged after edit | Measured on the fixture (W4, [measurements](../research.md#measured-forge-effects)): a base-only `PATCH` (200) moved only the base fields and `updated_at`, on a Draft and a non-Draft PR; a nonexistent base answers 422 and changes nothing. Requires additive write allowlist acceptance, no other PR field |
+| `ready` | Own PR and exact-current-head independent CLEAR, required green CI, `rebaseable == true`, accepted scope/no in-scope blocker, D5 | Measured on the fixture (W5, [measurements](../research.md#measured-forge-effects)): REST `draft=false` cannot set Ready. The one admitted operation is the fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class `ready`, validated); `gh pr ready` sent it with an `input` object holding `pullRequestId`. The source of the node id and the mutation response are not measured, so the implementation pins and tests them; stw reads `draft` first and sends no mutation to an already-Ready PR, because a repeat mutation is unmeasured (the repeat of `gh pr ready` sent only the lookup, continuation evidence lines 111-114). Needs the reviewed allowlist before enablement |
+| `native-link`, `native-unstack` | Own selected PRs, verified member order/trunk, stable complete native evidence and permission | Measured on the fixture with `gh stack` v0.2.1 (N1 to N3, unstack, [measurements](../research.md#measured-forge-effects)): `POST /repos/{r}/stacks` with `pull_requests` (201), `POST .../stacks/{number}/add` (200); a repeat link is idempotent; a reversed order of existing members exits 5 and changes nothing. `POST .../stacks/{number}/unstack` (204) was observed in cleanup only (continuation evidence lines 176-185), not as an N5 verdict. N4, N5 and O-N5 were not run. These endpoints were read from the extension's trace; capability-unavailable and reference data only until the reviewed allowlist accepts them |
 
 Forbidden action kinds: merge/land, remote deletion, default/protected-branch or
 tag push, release, ruleset/settings/protection edit, auto-merge, review submission,
@@ -98,7 +98,13 @@ and effects have accepted measurements/tests, that kind refuses
 `capability-unavailable` without a request. Supplied 014 evidence must retain accepted profile/full-H attribute-source and
 private-context guard binding; unsupported enforcement or missing binding refuses
 that evidence. 013 safety-copy/native operation records cannot be treated as a
-remote transaction, generic jj CAS or reversible publication. No arbitrary REST/GraphQL (sole exception, owner decision 2026-10-25: one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), only if W5a confirms that REST cannot set Ready; see `measurement-plan.md` section 1; fixture evidence: W5b trace), redirects,
+remote transaction, generic jj CAS or reversible publication. No arbitrary REST/GraphQL (sole exception, owner decision 2026-10-25: one
+fixed `markPullRequestReadyForReview` mutation, pull request node id as the only
+variable, fixed query string, own effect class, validated; W5a has confirmed that
+REST cannot set Ready, a `PATCH` with `draft=false` answered 200 and left the PR
+Draft, see [evidence](../evidence/measurement-20261025T170737Z-continuation.md)
+W5a, so the exception applies; see `measurement-plan.md` section 1; fixture
+evidence: W5b trace), redirects,
 response-selected URLs, repository SDK discovery or dependency extension launch.
 
 Native link reference data has this inert shape:
@@ -106,11 +112,12 @@ Native link reference data has this inert shape:
 ```text
 environment: GH_REPO=OWNER/NAME
 argv: [gh, stack, link, --base, TRUNK_REF, BOTTOM_PR_NUMBER, CHILD_PR_NUMBER]
-effect: unmeasured remote write; not executed
+effect: remote write measured on the fixture (N1); not executed
 ```
 
-`gh stack link` has no `-R`. Numeric PRs avoid branch arguments that may push, but
-numeric-link effects themselves remain unmeasured. No inference from its help,
+`gh stack link` has no `-R`. Numeric PRs avoid branch arguments that may push, and
+the measured numeric link (N1) pushed no ref and left both PRs
+unchanged. No inference from its help,
 installed version or native stack GET enables extension execution. Link/unstack
 must not race observed/pending GitHub member rewrites; `native-rewrite-pending`
 or unknown native state blocks dependent publication. No rebase/force push is
@@ -142,8 +149,11 @@ not borrowed from a stale local tracking ref. Lease rejection is `remote-changed
 never an invitation to update the lease and retry automatically.
 
 A newly absent ref needs a distinct expected-absence capability; unknown/not-found
-or denied does not prove absence. Creation stays blocked until its contract is
-measured and accepted. No remote branch deletion is available.
+or denied does not prove absence. The lease with an empty expected value is
+measured (W1): it created the absent ref, and was rejected as stale when the ref
+existed or when it named a nonexistent SHA. Creation stays blocked until its
+contract is accepted, including the hook and credential boundary that W1 did not
+measure. No remote branch deletion is available.
 
 ## Execution, retarget and retry
 
