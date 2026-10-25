@@ -178,7 +178,7 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
   namespace, never into a user ref)
   and `git merge-base --is-ancestor <old-tip> <head>` holds (exit 0), where `<old-tip>` is the remote default branch tip read with `git ls-remote`
   in this run. Exit 1: `not-fast-forward` (the owner restacks per Spec 015/016; stw never rewrites). Exit 128 (an object, for example the old tip, is absent after the fetch) is `object-missing` or `ancestry-unproven`, never a fast-forward verdict.
-- **FR-017** The commits old-tip..head must have author AND committer name/email equal to the exact trusted workspace-policy owner identity. Read-only global Git identity corroborates only; missing policy refuses. Bounded config-origin evidence must show no foreign identity, with only policy-needed name/email values rendered and other user.* values omitted/redacted; never write config. Report at most ten offending commits with escaped fields. Apply the decided default signature policy to this exact reviewed head: unreadable/unmet requirements or unverified signer evidence refuse; any optional host re-sign must already have occurred as a separately authorized015local operation and the final SHA must be independently reviewed.043runs no signer and creates no commit.
+- **FR-017** The commits old-tip..head must have author AND committer name/email equal to the exact trusted workspace-policy owner identity. Read-only global Git identity corroborates only; missing policy refuses. Bounded config-origin evidence must show no foreign identity, with only policy-needed name/email values rendered and other user.* values omitted/redacted; never write config. Report at most ten offending commits with escaped fields. Apply the decided default signature policy to this exact reviewed head: unreadable/unmet requirements or unverified signer evidence refuse; any optional host re-sign must already have occurred as a separately authorized 015 local operation and the final SHA must be independently reviewed. 043 runs no signer and creates no commit.
 - **FR-018** The number of commits in `old-tip..head` is at most the configured bound (default 200), else `range-too-large`; the
   list is part of the plan.
 - **FR-019** Every refusal is typed; the plan lists all failing preconditions, the apply stops at the first and reports it.
@@ -328,25 +328,28 @@ push, the owner must change the ruleset, an owner-only action this spec does not
 
 ## Owner decisions (2026-10-25)
 
-All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
-choices adopt the source recommendations; implementation/native measurement and
+All listed former OQ IDs have a **dated disposition on 2026-10-25**.
+IDs without an explicit answer adopt the source research recommendations. The
+source column distinguishes direct owner answers, adopted recommendations and
+cross-spec owner-answer overrides; implementation/native measurement and
 review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
 distinguish saved-plan metadata, external capture payloads, trusted policy,
 optional host-only signing and CLI exit-contract revision 2.
 
-| Decision ID | Dated disposition | Remaining implementation/verification gate |
-| --- | --- | --- |
-| OQ1 | DECIDED: adopt trusted workspace reviewer/check-source policy; retain human --reviewed SHA statement and typed confirmation, no invented ledger. | Independent source/check policy implementation; no agent landing. |
-| OQ2 | DECIDED: retain measured-shape scratch gate for ruleset/direct-owner-push acceptance. | Unmeasured/unreadable shapes remain land-unmeasured; no owner settings workaround. |
-| OQ3 | DECIDED: no checks-unknown override in this v1 capability. | Unknown required checks refuse owner apply. |
-| OQ4 | DECIDED: preserve conditional readable-off vs on/unreadable order; measure pre-retarget shape before apply. | Unmeasured stack shape stays land-unmeasured; fresh post-retarget checks remain. |
-| OQ5 | DECIDED: trusted workspace policy is identity authority; global Git identity corroborates, never supplies authority. | Missing policy/source or foreign config/commit fields refuse. |
-| OQ6 | DECIDED: refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
-| OQ7 | DECIDED: forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | No native or forge fallback. |
-| OQ8 | DECIDED: use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | Journal integration/conformance before owner apply; sync v1 unchanged. |
+| Decision ID | Dated disposition | Source | Remaining implementation/verification gate |
+| --- | --- | --- | --- |
+| OQ1 | DECIDED: adopt trusted workspace reviewer/check-source policy; retain human --reviewed SHA statement and typed confirmation, no invented ledger. | adopted recommendation; owner-answer override: 016 OQ-POLICY | Independent source/check policy implementation; no agent landing. |
+| OQ2 | DECIDED: retain measured-shape scratch gate for ruleset/direct-owner-push acceptance. | adopted recommendation | Unmeasured/unreadable shapes remain land-unmeasured; no owner settings workaround. |
+| OQ3 | DECIDED: no checks-unknown override in this v1 capability. | adopted recommendation | Unknown required checks refuse owner apply. |
+| OQ4 | DECIDED: preserve conditional readable-off vs on/unreadable order; measure pre-retarget shape before apply. | adopted recommendation | Unmeasured stack shape stays land-unmeasured; fresh post-retarget checks remain. |
+| OQ5 | DECIDED: trusted workspace policy is identity authority; global Git identity corroborates, never supplies authority. | adopted recommendation; owner-answer override: 016 OQ-POLICY | Missing policy/source or foreign config/commit fields refuse. |
+| OQ6 | DECIDED: refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | adopted recommendation; owner-answer override: 016 OQ-SIGN | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
+| OQ7 | DECIDED: forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | adopted recommendation | No native or forge fallback. |
+| OQ8 | DECIDED: use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | adopted recommendation; owner-answer override: 016 OQ-STORE | Journal integration/conformance before owner apply; sync v1 unchanged. |
 
 ## Open questions (not decided here)
 
 Compatibility anchor only: the IDs above are settled owner decisions, not open
 questions. Remaining unavailable capabilities require implementation/measurement
-evidence, not an invented additional owner answer.
+evidence, not an invented additional answer to these eight IDs. The separate
+reconciliation amendments above remain OPEN for owner decisions.
