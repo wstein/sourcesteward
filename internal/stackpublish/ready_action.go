@@ -138,10 +138,12 @@ func d5Refusal(g Guard) *Refusal {
 }
 
 // ExecuteReady performs one Ready attempt in the fixed order: D5, fresh PR read, state checks,
-// Ready gate on fresh evidence, node id check, durable intent, the one write, fresh re-read. It
-// writes nothing unless every earlier step passed and the intent is durable. An already-Ready PR
-// is proven complete without a write. A write whose reply is lost, or whose effect the re-read does
-// not show, is unknown and is never retried here: reconciliation decides (Spec 016 forge effects).
+// Ready gate on fresh evidence, node id check, write availability, durable intent, the one write,
+// fresh re-read. It writes nothing unless every earlier step passed and the intent is durable. An
+// already-Ready PR is proven complete without a write. A write the edge never sent is a refusal
+// (capability-unavailable), not unknown. A write whose reply is lost, or whose effect the re-read
+// does not show, is unknown and is never retried here: reconciliation decides (Spec 016 forge
+// effects).
 func ExecuteReady(edge ReadyEdge, req ReadyRequest) ReadyResult {
 	switch {
 	case edge == nil:

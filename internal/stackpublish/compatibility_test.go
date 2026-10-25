@@ -275,7 +275,14 @@ func TestTheNodeIdGrammarsOfTheActionAndTheWriteEdgeAreEqual(t *testing.T) {
 		if m == nil {
 			t.Fatalf("no nodeIDGrammar literal in %s", path)
 		}
-		return strings.NewReplacer(`^`, "", `$`, "", `\A`, "", `\z`, "").Replace(m[1])
+		g := m[1]
+		for _, lead := range []string{`^`, `\A`} {
+			g = strings.TrimPrefix(g, lead)
+		}
+		for _, tail := range []string{`$`, `\z`} {
+			g = strings.TrimSuffix(g, tail)
+		}
+		return g
 	}
 	a, b := grammar("internal/stackpublish/ready_action.go"), grammar("internal/hosting/stack_write.go")
 	if a != b || a != "[A-Za-z0-9_=-]{4,128}" {
