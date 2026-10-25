@@ -2,7 +2,12 @@
 
 package stackpublish
 
-import "time"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"time"
+)
 
 // Pinned identity of the UNPUBLISHED forge-effect-plan proposal (Spec 016 data model).
 const (
@@ -203,24 +208,37 @@ const (
 )
 
 // ExitCode maps a status to its exit status. An unrecognized status fails closed as 1.
-func ExitCode(Status) int { return -1 }
+func ExitCode(s Status) int {
+	switch s {
+	case StatusComplete:
+		return ExitComplete
+	case StatusUsage:
+		return ExitUsage
+	}
+	return ExitRefused
+}
 
 // ValidationError is a typed refusal to build or admit a model value. Usage marks errors the
-// caller made before any effect (exit status 2).
+// caller made before any effect (exit status 2). It never carries the offending input text.
 type ValidationError struct {
 	Code  string
 	Field string
 	Usage bool
 }
 
-func (e *ValidationError) Error() string { return "" }
+func (e *ValidationError) Error() string {
+	if e.Field == "" {
+		return e.Code
+	}
+	return e.Code + ": " + e.Field
+}
 
 // CapabilitySet names the action kinds that are admitted for execution. Nothing is measured and
 // reviewed yet, so the production set is empty and every kind is capability-unavailable.
 type CapabilitySet map[ActionKind]bool
 
 // Has reports whether the kind is admitted.
-func (c CapabilitySet) Has(ActionKind) bool { return false }
+func (c CapabilitySet) Has(k ActionKind) bool { return c[k] }
 
 // PlanInput carries everything a plan is derived from; the clock value is passed in.
 type PlanInput struct {
@@ -260,35 +278,104 @@ type planDoc struct {
 }
 
 // NewPlan validates the input and returns an immutable, unsaved plan (saved=false, plan_id=null).
-func NewPlan(PlanInput) (Plan, error) { return Plan{}, nil }
+// Every slice and pointer is copied, so later changes to the input cannot reach the plan.
+func NewPlan(in PlanInput) (Plan, error) {
+	d := planDoc{SchemaVersion: SchemaVersion, Kind: KindForgeEffectPlan, Operation: OperationPlan, CreatedAt: in.CreatedAt.UTC().Format(time.RFC3339),
+		Task: in.Task, Mode: cloneMode(in.Mode), Limits: in.Limits, Options: PlanOptions{Online: in.Options.Online, Selected: cloneStrings(in.Options.Selected)},
+		Blockers: cloneBlockers(in.Blockers), Boundary: in.Boundary, Error: cloneFailure(in.Error)}
+	for _, a := range in.Actions {
+		d.Actions = append(d.Actions, cloneAction(a))
+	}
+	if d.Actions == nil {
+		d.Actions = []Action{}
+	}
+	if in.Repository != nil {
+		r := *in.Repository
+		d.Repository = &r
+	}
+	if err := validPlan(d, in.Capabilities); err != nil {
+		return Plan{}, err
+	}
+	return Plan{doc: d}, nil
+}
+
+// ID is the content identity of the canonical plan: the SHA-256 of its JSON with plan_id null,
+// saved false and no disclosed save write, so saving a plan never changes its id.
+func (p Plan) ID() string {
+	canonical := p.doc
+	canonical.PlanID, canonical.Saved = nil, false
+	canonical.Boundary.PrivateStateWrites = 0
+	raw, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// Saved reports whether the plan was persisted.
+func (p Plan) Saved() bool { return p.doc.Saved }
+
+// PlanID returns the persisted id, or nil for an unsaved plan.
+func (p Plan) PlanID() *string { return cloneString(p.doc.PlanID) }
+
+// Repository returns a copy of the bound repository, or nil.
+func (p Plan) Repository() *Repository {
+	if p.doc.Repository == nil {
+		return nil
+	}
+	r := *p.doc.Repository
+	return &r
+}
+
+// Actions returns a deep copy of the selected actions.
+func (p Plan) Actions() []Action {
+	out := make([]Action, 0, len(p.doc.Actions))
+	for _, a := range p.doc.Actions {
+		out = append(out, cloneAction(a))
+	}
+	return out
+}
+
+// Limits returns the limits the plan was built with.
+func (p Plan) Limits() Limits { return p.doc.Limits }
+
+// Options returns a copy of the options.
+func (p Plan) Options() PlanOptions {
+	return PlanOptions{Online: p.doc.Options.Online, Selected: cloneStrings(p.doc.Options.Selected)}
+}
+
+// Task returns the task binding.
+func (p Plan) Task() TaskBinding { return p.doc.Task }
+
+// MarshalJSON renders the one human/JSON model.
+func (p Plan) MarshalJSON() ([]byte, error) { return json.Marshal(p.doc) }
 
 // SelectActions returns the displayed candidates named by ids, in candidate order. Unknown or
 // duplicate ids are usage errors; no id selects nothing.
-func SelectActions(candidates []Action, ids []string) ([]Action, error) { return nil, nil }
-
-// ID is the content identity of the canonical plan (plan_id null, saved false).
-func (p Plan) ID() string { return "" }
-
-// Saved reports whether the plan was persisted; PlanID is its id then, nil otherwise.
-func (p Plan) Saved() bool { return false }
-
-// PlanID returns the persisted id or nil.
-func (p Plan) PlanID() *string { return nil }
-
-// Repository returns a copy of the bound repository, or nil.
-func (p Plan) Repository() *Repository { return nil }
-
-// Actions returns a deep copy of the selected actions.
-func (p Plan) Actions() []Action { return nil }
-
-// Limits returns the limits the plan was built with.
-func (p Plan) Limits() Limits { return Limits{} }
-
-// Options returns a copy of the options.
-func (p Plan) Options() PlanOptions { return PlanOptions{} }
-
-// MarshalJSON renders the one human/JSON model.
-func (p Plan) MarshalJSON() ([]byte, error) { return nil, nil }
+func SelectActions(candidates []Action, ids []string) ([]Action, error) {
+	known := map[string]bool{}
+	for _, c := range candidates {
+		known[c.ID] = true
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		if want[id] {
+			return nil, &ValidationError{Code: "selection-duplicate", Field: "select", Usage: true}
+		}
+		if !known[id] {
+			return nil, &ValidationError{Code: "selection-unknown", Field: "select", Usage: true}
+		}
+		want[id] = true
+	}
+	out := []Action{}
+	for _, c := range candidates {
+		if want[c.ID] {
+			out = append(out, cloneAction(c))
+		}
+	}
+	return out, nil
+}
 
 // StoreState is the verdict of the (separate) validation of a plan metadata store.
 type StoreState string
@@ -305,7 +392,7 @@ const (
 // SaveRequest is what the caller asked for and what it knows about the target store.
 type SaveRequest struct {
 	Save     bool
-	StateDir string // explicit --state-dir, empty for the default workspace metadata store
+	StateDir string // explicit --state-dir; empty selects the default workspace metadata store
 	Store    StoreState
 }
 
@@ -326,11 +413,58 @@ type SaveAdmission struct {
 	Target          SaveTarget
 }
 
-// AdmitSave decides whether a plan may be persisted. It writes nothing.
-func (p Plan) AdmitSave(SaveRequest) (SaveAdmission, error) { return SaveAdmission{}, nil }
+// AdmitSave decides whether a plan may be persisted. It writes nothing. Without Save, and for an
+// empty selection even with Save, nothing persists. A nonempty save needs a store the caller
+// validated, and writes the default workspace metadata store or the explicit absolute directory.
+func (p Plan) AdmitSave(req SaveRequest) (SaveAdmission, error) {
+	if !req.Save {
+		return SaveAdmission{}, nil
+	}
+	if len(p.doc.Actions) == 0 {
+		return SaveAdmission{NothingSelected: true}, nil
+	}
+	target := TargetWorkspaceDefault
+	if req.StateDir != "" {
+		if !absolutePath(req.StateDir) {
+			return SaveAdmission{}, &ValidationError{Code: "state-dir-invalid", Field: "state_dir", Usage: true}
+		}
+		target = TargetExplicitDir
+	}
+	switch req.Store {
+	case StoreValidated:
+		return SaveAdmission{Persist: true, Target: target}, nil
+	case StoreWorkspaceUnknown, StoreExportRisk, StoreFull:
+		return SaveAdmission{}, &ValidationError{Code: string(req.Store), Field: "store"}
+	}
+	return SaveAdmission{}, &ValidationError{Code: string(StoreUnsafe), Field: "store"}
+}
 
 // WithSaved returns the saved form of the plan (saved=true, plan_id=ID()) after an admitted save.
-func (p Plan) WithSaved(SaveAdmission) (Plan, error) { return Plan{}, nil }
+// It records the one disclosed private-state write and leaves the original plan unchanged.
+func (p Plan) WithSaved(a SaveAdmission) (Plan, error) {
+	if !a.Persist || a.Target == TargetNone || len(p.doc.Actions) == 0 {
+		return Plan{}, &ValidationError{Code: "save-not-admitted", Field: "save"}
+	}
+	if p.doc.Saved {
+		return Plan{}, &ValidationError{Code: "already-saved", Field: "save"}
+	}
+	saved := p
+	id := p.ID()
+	saved.doc.PlanID, saved.doc.Saved = &id, true
+	saved.doc.Boundary.PrivateStateWrites = 1
+	return saved, nil
+}
 
-// AdmitApply refuses a plan that is unsaved, has no id or whose id is not the id the caller named.
-func (p Plan) AdmitApply(planID string) error { return nil }
+// AdmitApply refuses a plan that is unsaved or whose id is not exactly the one the caller named.
+func (p Plan) AdmitApply(planID string) error {
+	if !p.doc.Saved || p.doc.PlanID == nil {
+		return &ValidationError{Code: "plan-not-saved", Field: "plan"}
+	}
+	if !isLowerHex(planID, 64) {
+		return &ValidationError{Code: "plan-id-invalid", Field: "plan", Usage: true}
+	}
+	if planID != *p.doc.PlanID || planID != p.ID() {
+		return &ValidationError{Code: "plan-not-found", Field: "plan"}
+	}
+	return nil
+}

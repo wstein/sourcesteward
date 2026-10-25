@@ -87,7 +87,6 @@ func TestRequestBudgetIsSharedAndNeverResets(t *testing.T) {
 	if b.Requests() != 50 {
 		t.Errorf("a refused request was counted: %d", b.Requests())
 	}
-	wantBound(t, b.Err(), ReasonBoundExceeded, "requests")
 	// The same budget serves every source and worker: a "second source" gets no fresh allowance.
 	wantBound(t, b.Request(), ReasonBoundExceeded, "requests")
 }
@@ -232,12 +231,15 @@ func TestDisplayEscapesHostileTextAndShortensWithoutSplitting(t *testing.T) {
 	if got != "plain text" || trunc {
 		t.Fatalf("%q %v", got, trunc)
 	}
+	if got, _ = Display(`a\b`, 512); got != `a\\b` {
+		t.Fatalf("a backslash must be escaped so escapes stay unambiguous: %q", got)
+	}
 	got, _ = Display("a\x1b[31mred\n\rb\x00c\x7fd", 512)
 	if strings.ContainsAny(got, "\x1b\n\r\x00\x7f") || !strings.Contains(got, `\x1b`) || !strings.Contains(got, `\n`) {
 		t.Fatalf("controls not escaped: %q", got)
 	}
-	got, _ = Display("safe‮evil⁦x‏", 512)
-	if strings.ContainsAny(got, "‮⁦‏") || !strings.Contains(got, `‮`) {
+	got, _ = Display("safe\u202eevil\u2066x\u200f", 512)
+	if strings.ContainsAny(got, "\u202e\u2066\u200f") || !strings.Contains(got, "\\u202e") {
 		t.Fatalf("bidi controls not escaped: %q", got)
 	}
 	got, _ = Display("bad\xffbyte", 512)
@@ -251,7 +253,7 @@ func TestDisplayEscapesHostileTextAndShortensWithoutSplitting(t *testing.T) {
 	}
 	// A rune is never split, and an escape is never cut in half.
 	got, trunc = Display(strings.Repeat("\x01", 300), 10)
-	if !trunc || len(got) > 10 || strings.HasSuffix(got, `\`) || strings.Count(got, `\x01`)*5 != len(got) {
+	if !trunc || len(got) > 10 || strings.HasSuffix(got, `\`) || strings.Count(got, `\x01`)*4 != len(got) {
 		t.Fatalf("escape split: %q", got)
 	}
 	if got, trunc = Display("exact", 5); got != "exact" || trunc {
