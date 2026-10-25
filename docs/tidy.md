@@ -20,8 +20,8 @@ does not infer `main`, `master` or `origin`.
 ## The tidy wizard
 
 `stw tidy` cleans up a whole workspace instead of one repository. It is for the person at a terminal; agents use `stw tidy plan`
-(see below). Outside a Git workspace it exits 2 with `workspace-not-found` (discovery is Git only and starts from the working directory; `stw tidy plan --workspace PATH` names another workspace, or use the
-expert layer described in the rest of this guide). Bare `stw tidy` takes no flags yet (the flag set is planned, task T019e); the non-interactive `stw tidy plan` takes them.
+(see below). Outside a Git workspace it exits 2 with `workspace-not-found` (discovery is Git only and starts from the working directory; `stw tidy --workspace PATH` names another workspace, or use the
+expert layer described in the rest of this guide).
 
 ```text
 $ stw tidy
@@ -35,6 +35,8 @@ Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner  [d]etails N  [n]one (defa
 Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
 Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]: n
 ```
+
+**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json` and `--human`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
 **Flow.** Analysis is read only and offline unless `--online`. Each repository gets a derived remote (`origin`, else the single remote)
 and base (the local branch of the remote's symbolic HEAD, else the remote-tracking reference); override a base with
