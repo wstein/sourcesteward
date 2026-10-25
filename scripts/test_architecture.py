@@ -356,3 +356,47 @@ class ArchitectureTests(unittest.TestCase):
         architecture.validate_release_graph({release: ['golang.org/x/sys/unix'], 'golang.org/x/sys/unix': ['syscall', 'unsafe']})
         for file in ('internal/release/record.go', 'internal/release/sub/helper.go', 'internal/release/openfile_write_unix.go'):
             with self.assertRaises(ValueError): architecture.validate_sources({file: 'package release\nimport "example.org/helper"\n'})
+
+
+class StackpublishAllowListTests(unittest.TestCase):
+    """Review F3: the pure core is an ALLOW list of imports and time selectors, not a deny list."""
+    PATH = 'internal/stackpublish/probe.go'
+
+    def probe(self, body):
+        return {self.PATH: 'package stackpublish\n\n' + body}
+
+    def test_reviewer_probe_file_is_refused_in_every_part(self):
+        for name, body in {
+            'os/user': 'import "os/user"\n\nfunc a() { _, _ = user.Current() }\n',
+            'filepath glob': 'import "path/filepath"\n\nfunc a() { _, _ = filepath.Glob("/etc/*") }\n',
+            'template parse files': 'import "text/template"\n\nfunc a() { _, _ = template.ParseFiles("/etc/passwd") }\n',
+            'log': 'import "log"\n\nfunc a() { log.Print("x") }\n',
+            'aliased time Now': 'import t "time"\n\nfunc a() { _ = t.Now() }\n',
+            'aliased time LoadLocation': 'import t "time"\n\nfunc a() { _, _ = t.LoadLocation("UTC") }\n',
+            'dot import of time': 'import . "time"\n\nfunc a() { _ = Now() }\n',
+            'context WithTimeout': 'import "context"\n\nfunc a() { _, _ = context.WithTimeout(context.Background(), 1) }\n',
+            'time Local': 'import "time"\n\nvar _ = time.Local\n',
+            'time Sleep in a block import': 'import (\n\t"fmt"\n\t"time"\n)\n\nfunc a() { time.Sleep(1); fmt.Println() }\n',
+        }.items():
+            with self.assertRaises(ValueError, msg=name):
+                architecture.validate_sources(self.probe(body))
+
+    def test_the_whole_probe_file_in_one_piece_is_refused(self):
+        body = ('import (\n\t"context"\n\t"log"\n\t"os/user"\n\t"path/filepath"\n\t"text/template"\n\tt "time"\n)\n\n'
+                'func a() {\n\t_, _ = user.Current()\n\t_, _ = filepath.Glob("/etc/*")\n\t_, _ = template.ParseFiles("/etc/passwd")\n'
+                '\tlog.Print("x")\n\t_ = t.Now()\n\t_, _ = t.LoadLocation("UTC")\n\t_, _ = context.WithTimeout(context.Background(), 1)\n}\n')
+        with self.assertRaises(ValueError):
+            architecture.validate_sources(self.probe(body))
+
+    def test_permitted_imports_and_time_values_pass(self):
+        body = ('import (\n\t"crypto/sha256"\n\t"encoding/hex"\n\t"encoding/json"\n\t"fmt"\n\t"regexp"\n\t"sort"\n\t"strconv"\n\t"strings"\n\t"sync"\n\t"time"\n\t"unicode/utf8"\n\t"'
+                + architecture.MODULE + 'internal/attribution"\n)\n\nvar _ time.Duration = time.Second\nvar _ time.Time\nvar _ = time.RFC3339\n')
+        architecture.validate_sources(self.probe(body))
+        architecture.validate_sources(self.probe('import tm "time"\n\nvar _ tm.Duration = tm.Millisecond\n'))
+        # Test files are outside the production seam.
+        architecture.validate_sources({'internal/stackpublish/x_test.go': 'package stackpublish\n\nimport (\n\t"os"\n\t"context"\n)\n'})
+
+    def test_every_listed_import_is_the_complete_allow_list(self):
+        self.assertEqual(sorted(architecture.STACKPUBLISH_ALLOWED_IMPORTS), sorted([
+            'crypto/sha256', 'encoding/hex', 'encoding/json', 'fmt', 'regexp', 'sort', 'strconv', 'strings', 'sync', 'time', 'unicode/utf8',
+            architecture.MODULE + 'internal/attribution']))
