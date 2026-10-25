@@ -47,6 +47,11 @@ type Step struct {
 	Items   []Item
 	// Mode is the mode evidence of this run; the applier records it in the journal.
 	Mode owner.Evidence
+	// Siblings are the plan ids that explain this repository to the sub-plan (Spec 041 FR-031):
+	// the other sub-plans of the set that share its repository and state directory, and the
+	// branch-deletion plans this run applied there. They are candidates only: apply uses just
+	// those whose journals are complete and rejects any that is not a plan of the repository.
+	Siblings []string
 }
 
 // runMode converts the evidence of the run to the form the journal records.
@@ -176,7 +181,7 @@ func (a V3Applier) Apply(ctx context.Context, s Step) workspace.V3Result {
 			return workspace.V3Result{Status: "ok", Plan: &plan, Actions: []workspace.ActionOutcome{{Name: replayAction, Status: "complete", Detail: "already applied; the branch was already deleted"}}}
 		}
 	}
-	o := workspace.V3ApplyOptions{StateDir: s.SubPlan.StateDir, PlanID: s.SubPlan.ID, Authorize: true, ProtectWorktrees: []string{}, RunMode: runMode(s.Mode)}
+	o := workspace.V3ApplyOptions{StateDir: s.SubPlan.StateDir, PlanID: s.SubPlan.ID, Authorize: true, ProtectWorktrees: []string{}, RunMode: runMode(s.Mode), SiblingPlans: append([]string{}, s.Siblings...)}
 	switch {
 	case s.SubPlan.Kind == KindTracking:
 		o.Online = true
@@ -325,9 +330,19 @@ func applySteps(ctx context.Context, set Set, applier Applier, mode owner.Eviden
 	}
 	res := ApplyResult{SchemaVersion: 1, Command: "tidy-apply-set", PlanID: set.PlanID, Outcomes: []Outcome{}}
 	applied := 0
+	// Each applied sub-plan changes its repository, which the stored baselines of the other
+	// sub-plans of that repository do not know. Their journals explain it (see Step.Siblings).
+	legs := map[string][]string{}
 	for _, sp := range set.Ordered() {
 		o := Outcome{SubPlan: sp.ID, Repo: sp.Repo, Kind: sp.Kind, Worktree: sp.Worktree}
 		step := Step{SubPlan: sp, Mode: mode}
+		key := sp.Repo + "\x00" + sp.StateDir
+		for _, other := range set.SubPlans {
+			if other.ID != sp.ID && other.Repo == sp.Repo && other.StateDir == sp.StateDir {
+				step.Siblings = append(step.Siblings, other.ID)
+			}
+		}
+		step.Siblings = append(step.Siblings, legs[key]...)
 		for _, id := range sp.Items {
 			step.Items = append(step.Items, byID[id])
 		}
@@ -335,7 +350,7 @@ func applySteps(ctx context.Context, set Set, applier Applier, mode owner.Eviden
 			o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before this sub-plan"
 			res.Outcomes = append(res.Outcomes, o)
 			if sp.Kind == KindRetire && hasBranchEffect(step.Items) {
-				if leg, ok := branchLegOutcome(ctx, applier, step, sp, o, workspace.V3Result{}); ok {
+				if leg, _, ok := branchLegOutcome(ctx, applier, step, sp, o, workspace.V3Result{}); ok {
 					res.Outcomes = append(res.Outcomes, leg)
 				}
 			}
@@ -350,9 +365,12 @@ func applySteps(ctx context.Context, set Set, applier Applier, mode owner.Eviden
 		}
 		res.Outcomes = append(res.Outcomes, o)
 		if sp.Kind == KindRetire && hasBranchEffect(step.Items) {
-			if leg, ok := branchLegOutcome(ctx, applier, step, sp, o, r); ok {
+			if leg, legPlan, ok := branchLegOutcome(ctx, applier, step, sp, o, r); ok {
 				if leg.Status == StatusApplied {
 					applied++
+					if legPlan != "" {
+						legs[key] = append(legs[key], legPlan)
+					}
 				}
 				res.Outcomes = append(res.Outcomes, leg)
 			}
@@ -398,32 +416,35 @@ func hasBranchEffect(items []Item) bool {
 // branchLegOutcome applies the dependent branch leg of a retirement that selected it. The leg runs
 // only after, and only if, the retirement was applied; otherwise (or after cancellation) it is
 // reported as skipped. It is not reported at all when the retirement plan has no leg.
-func branchLegOutcome(ctx context.Context, applier Applier, step Step, sp SubPlan, retire Outcome, result workspace.V3Result) (Outcome, bool) {
+func branchLegOutcome(ctx context.Context, applier Applier, step Step, sp SubPlan, retire Outcome, result workspace.V3Result) (Outcome, string, bool) {
 	la, ok := applier.(LegApplier)
 	if !ok {
-		return Outcome{}, false
+		return Outcome{}, "", false
 	}
 	o := Outcome{SubPlan: sp.ID, Repo: sp.Repo, Kind: KindBranchLeg, Worktree: sp.Worktree}
 	switch {
 	case retire.Status == StatusSkipped && retire.Code == "cancelled":
 		o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before the retirement this branch deletion depends on"
-		return o, true
+		return o, "", true
 	case retire.Status != StatusApplied:
 		o.Status, o.Code, o.Message = StatusSkipped, "retirement-not-applied", "the retirement this branch deletion depends on did not succeed; the branch was kept"
-		return o, true
+		return o, "", true
 	case ctx.Err() != nil:
 		o.Status, o.Code, o.Message = StatusSkipped, "cancelled", "the run was cancelled before the branch deletion"
-		return o, true
+		return o, "", true
 	}
 	r, has := la.ApplyBranchLeg(ctx, step, result)
 	if !has {
 		o.Status, o.Code, o.Message = StatusSkipped, CodeBranchLegAbsent, "the retirement plan has no branch deletion for the branch the owner chose; the branch was kept"
-		return o, true
+		return o, "", true
 	}
-	if r.Status == "ok" {
-		o.Status = StatusApplied
-	} else {
+	if r.Status != "ok" {
 		o.Status, o.Code, o.Message = failureOf(r)
+		return o, "", true
 	}
-	return o, true
+	o.Status = StatusApplied
+	if r.Plan != nil {
+		return o, r.Plan.PlanID, true
+	}
+	return o, "", true
 }
