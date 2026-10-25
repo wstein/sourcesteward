@@ -9,6 +9,8 @@
     {"kind": "read", "prefix": "internal/workspace/testdata/tidy_v3_report/", "dependents": ["internal/contracts"], "why": "internal/contracts/tidy_v3_report_test.go reads the report fixture"},
     {"kind": "read", "prefix": "README.md", "dependents": ["internal/release", "internal/releaseworkflow"], "why": "releaseworkflow reads README.md; release names it in allowlist fixtures"},
     {"kind": "read", "prefix": "docs/README.md", "dependents": ["internal/release"], "why": "internal/release tests name docs/README.md"},
+    {"kind": "read", "prefix": "docs/tidy.md", "dependents": ["internal/cli"], "why": "internal/cli/tidy_interactive_test.go compares the sample session with it"},
+    {"kind": "read", "prefix": "specs/041-tidy-wizard/spec.md", "dependents": ["internal/cli"], "why": "internal/cli/tidy_interactive_test.go compares the sample session with it"},
     {"kind": "read", "prefix": "docs/agent-guide.md", "dependents": ["internal/cli", "internal/releaseworkflow"], "why": "cli root_test names it, releaseworkflow scripts_test packages it"},
     {"kind": "read", "prefix": "specs/027-inventory-limits/data-model.md", "dependents": ["internal/contracts"], "why": "internal/contracts/inventory_test.go reads it"},
     {"kind": "read", "prefix": "specs/034-bootstrap-release/spec.md", "dependents": ["internal/releaseworkflow"], "why": "internal/releaseworkflow/workflow_test.go reads it"},
