@@ -209,20 +209,18 @@ func TestRestackStaysHiddenAndNoStackCommandExists(t *testing.T) {
 	}
 }
 
-// TestRestackReplayDoesNotYetPinAttributeSource characterizes the separately tracked issue #241
-// (replay attributes come from the original worktree). It claims no repair: when #241 lands this
-// test is replaced by that change's own red-first test.
-func TestRestackReplayDoesNotYetPinAttributeSource(t *testing.T) {
-	for _, path := range nonTestGoFiles(t, "internal/restack") {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, marker := range []string{"--attr-source", "GIT_ATTR_SOURCE"} {
-			if bytes.Contains(raw, []byte(marker)) {
-				t.Errorf("%s mentions %s: issue #241 appears fixed; replace this characterization", filepath.Base(path), marker)
-			}
-		}
+// TestRestackReplayPinsTheAttributeSource characterizes the fix of issue #241: the hidden restack
+// runner starts its prediction commands with GIT_ATTR_SOURCE set to the empty tree, so the
+// worktree's attribute files cannot change a replay. It claims no more than that: the full-H pin
+// of Spec 014 is a different, unimplemented profile. The behavior itself is tested in
+// internal/restack (TestUntrackedAttributesCannotFlipAPredictedConflict).
+func TestRestackReplayPinsTheAttributeSource(t *testing.T) {
+	raw, err := os.ReadFile(repoFile(t, "internal/restack/git.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"GIT_ATTR_SOURCE="+emptyTree`)) {
+		t.Errorf("internal/restack/git.go no longer pins GIT_ATTR_SOURCE to the empty tree: issue #241 is open again")
 	}
 }
 
