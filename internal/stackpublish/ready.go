@@ -78,14 +78,193 @@ type ReadyReceipt struct {
 	Blockers []Refusal
 }
 
-// EvaluateReady evaluates the Ready gate as a pure function of the evidence passed in.
-func EvaluateReady(in ReadyInput) ReadyReceipt { return ReadyReceipt{} }
+// EvaluateReady evaluates the Ready gate as a pure function of the evidence passed in. It names
+// every blocker, in a fixed order (guards, review, checks, rebaseability, scope); unknown, stale
+// or untrusted evidence blocks, and a missing trusted source never becomes a default. A docs-only
+// push exception does not exist here: Ready always needs its own review of the exact head.
+func EvaluateReady(in ReadyInput) ReadyReceipt {
+	r := ReadyReceipt{Head: in.Head, BaseSHA: in.BaseSHA, Blockers: []Refusal{}}
+	if !isLowerHex(in.Head, 40) {
+		r.Blockers = append(r.Blockers, Refusal{ReasonHeadChanged, "head-invalid"})
+	}
+	if !isLowerHex(in.BaseSHA, 40) {
+		r.Blockers = append(r.Blockers, Refusal{ReasonHeadChanged, "base-invalid"})
+	}
+	if len(r.Blockers) > 0 {
+		return r
+	}
+	for _, reason := range guardRefusals(KindReady, in.Guards) {
+		r.Blockers = append(r.Blockers, Refusal{reason, "guard"})
+	}
+	if !in.Policy.Loaded {
+		r.Blockers = append(r.Blockers, Refusal{ReasonReviewMissing, "policy-missing"}, Refusal{ReasonChecksUnknown, "policy-missing"})
+	} else {
+		r.Blockers = appendIf(r.Blockers, reviewRefusal(in.Policy, in.Head, in.AuthorID, in.Review, ""))
+		r.Blockers = appendIf(r.Blockers, checksRefusal(in.Policy, in.Head, in.Checks))
+	}
+	r.Blockers = appendIf(r.Blockers, rebaseRefusal(in.Head, in.BaseSHA, in.Rebase))
+	if !in.Policy.Loaded {
+		r.Blockers = append(r.Blockers, Refusal{ReasonScopeNotAccepted, "policy-missing"})
+	} else {
+		r.Blockers = appendIf(r.Blockers, scopeRefusal(in.Policy, in.Scope))
+	}
+	return r
+}
+
+func appendIf(list []Refusal, r *Refusal) []Refusal {
+	if r != nil {
+		list = append(list, *r)
+	}
+	return list
+}
+
+// guardRefusals lists, in order, the reason of every malformed, failed or unknown guard and of every
+// required guard that is absent (or only not-applicable). Unknown relevant evidence never passes.
+func guardRefusals(k ActionKind, gs []Guard) []Reason {
+	var out []Reason
+	passed, reported := map[string]bool{}, map[string]bool{}
+	for _, g := range gs {
+		switch {
+		case validGuard(g, "guard") != nil:
+			out = append(out, ReasonPlanStale)
+			reported[g.Name] = true
+		case g.Result == GuardFail || g.Result == GuardUnknown:
+			out = append(out, g.Reason)
+			reported[g.Name] = true
+		case g.Result == GuardPass:
+			passed[g.Name] = true
+		}
+	}
+	for _, req := range requiredGuards(k) {
+		if !passed[req.name] && !reported[req.name] {
+			out = append(out, req.reason)
+		}
+	}
+	return out
+}
+
+// reviewRefusal checks a review receipt against the exact subject and a minimum reviewer tier (empty:
+// any allowlisted tier). The review of another SHA, a prediction or an unsigned head is not this one.
+func reviewRefusal(p WorkspacePolicy, subject, author string, rv *ReviewEvidence, min ReviewTier) *Refusal {
+	refuse := func(detail string) *Refusal { return &Refusal{ReasonReviewMissing, detail} }
+	if rv == nil {
+		return refuse("review-absent")
+	}
+	reviewer, ok := p.reviewer(rv.ReviewerID)
+	if !ok || !contains(p.ReviewSources, rv.Source) {
+		return refuse("review-untrusted")
+	}
+	if reviewer.Tier.rank() < min.rank() {
+		return refuse("review-tier-too-low")
+	}
+	if !isLowerHex(rv.EvidenceDigest, 64) || rv.Locator == "" || len(rv.Locator) > 512 {
+		return refuse("review-evidence-invalid")
+	}
+	if author == "" || rv.ReviewerID == author {
+		return refuse("review-not-independent")
+	}
+	if rv.SubjectSHA != subject {
+		return refuse("review-wrong-head")
+	}
+	if rv.Verdict != VerdictClear {
+		return refuse("review-not-clear")
+	}
+	return nil
+}
+
+func checksRefusal(p WorkspacePolicy, head string, c *ChecksEvidence) *Refusal {
+	unknown := func(detail string) *Refusal { return &Refusal{ReasonChecksUnknown, detail} }
+	switch {
+	case c == nil:
+		return unknown("checks-absent")
+	case !contains(p.CheckSources, c.Source):
+		return unknown("checks-untrusted")
+	case !c.Complete:
+		return unknown("checks-incomplete")
+	case len(c.Required) == 0:
+		return unknown("checks-no-required")
+	}
+	red := false
+	missing, stale := false, false
+	for _, ctx := range c.Required {
+		atHead, elsewhere := 0, 0
+		for _, run := range c.Runs {
+			switch {
+			case run.Context != ctx:
+			case run.HeadSHA != head:
+				elsewhere++
+			case run.Conclusion == "success":
+				atHead++
+			default:
+				atHead++
+				red = true
+			}
+		}
+		if atHead == 0 && elsewhere == 0 {
+			missing = true
+		} else if atHead == 0 {
+			stale = true
+		}
+	}
+	switch {
+	case missing:
+		return unknown("checks-run-missing")
+	case stale:
+		return unknown("checks-stale-head")
+	case red:
+		return &Refusal{ReasonChecksNotGreen, "checks-red"}
+	}
+	return nil
+}
+
+func rebaseRefusal(head, base string, rb *RebaseEvidence) *Refusal {
+	refuse := func(detail string) *Refusal { return &Refusal{ReasonRebaseableUnknown, detail} }
+	switch {
+	case rb == nil:
+		return refuse("rebaseable-absent")
+	case rb.EvaluatedHead != head || rb.EvaluatedBase != base:
+		return refuse("rebaseable-stale")
+	case rb.Rebaseable == TriNo:
+		return refuse("rebaseable-false")
+	case rb.Rebaseable != TriYes:
+		return refuse("rebaseable-null")
+	}
+	return nil
+}
+
+func scopeRefusal(p WorkspacePolicy, sc *ScopeEvidence) *Refusal {
+	refuse := func(detail string) *Refusal { return &Refusal{ReasonScopeNotAccepted, detail} }
+	switch {
+	case sc == nil:
+		return refuse("scope-absent")
+	case !contains(p.ScopeSources, sc.Source):
+		return refuse("scope-untrusted")
+	case sc.Accepted == TriNo:
+		return refuse("scope-not-accepted")
+	case sc.Accepted != TriYes:
+		return refuse("scope-unknown")
+	case len(sc.UnmetInScope) > 0:
+		return refuse("scope-unmet-acceptance")
+	}
+	return nil
+}
 
 // Ready reports whether no blocker remains.
-func (r ReadyReceipt) Ready() bool { return false }
+func (r ReadyReceipt) Ready() bool { return len(r.Blockers) == 0 }
 
 // Status is complete for a Ready receipt and refused otherwise (exit 0 or 1).
-func (r ReadyReceipt) Status() Status { return StatusComplete }
+func (r ReadyReceipt) Status() Status {
+	if r.Ready() {
+		return StatusComplete
+	}
+	return StatusRefused
+}
 
-// Guards renders the receipt as the guard the step API consumes.
-func (r ReadyReceipt) Guards() []Guard { return nil }
+// Guards renders the receipt as the guard the step API consumes: pass, or fail with the first
+// blocker's reason.
+func (r ReadyReceipt) Guards() []Guard {
+	if r.Ready() {
+		return []Guard{{Name: GuardReady, Result: GuardPass}}
+	}
+	return []Guard{{Name: GuardReady, Result: GuardFail, Reason: r.Blockers[0].Reason}}
+}
