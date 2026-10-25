@@ -3,6 +3,8 @@
 import hashlib
 import importlib.util
 import io
+import json
+import re
 from pathlib import Path
 import tarfile
 import tempfile
@@ -100,8 +102,18 @@ class BackendInstallerTests(unittest.TestCase):
     def test_ci_requires_both_lanes_and_exact_artifact_gate(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         workflow = (ROOT / '.github/workflows/conformance.yml').read_text()
-        for required in ('lane: [minimum, current]', 'needs: [check, conformance]'):
-            self.assertIn(required, ci)
+        self.assertIn('needs: [check, conformance]', ci)
+        # Both lanes on push and for a PR labelled ci-full; only current for an unlabelled PR.
+        match = re.search(r'(?m)^        lane: \$\{\{ fromJSON\((.+)\) \}\}$', ci)
+        self.assertIsNotNone(match)
+        python = match.group(1).replace('github.event_name', 'event')
+        python = python.replace("!contains(github.event.pull_request.labels.*.name, 'ci-full')",
+                                "('ci-full' not in labels)")
+        python = python.replace('&&', ' and ').replace('||', ' or ')
+        lanes = lambda event, labels=(): json.loads(eval(python, {}, {'event': event, 'labels': list(labels)}))
+        self.assertEqual(lanes('push'), ['minimum', 'current'])
+        self.assertEqual(lanes('pull_request', ['ci-full']), ['minimum', 'current'])
+        self.assertEqual(lanes('pull_request'), ['current'])
         for required in ('STW_REQUIRE_JJ:', 'scripts/smoke-jj-inspection.py'):
             self.assertIn(required, workflow)
         for forbidden in ('--privileged', 'apparmor_restrict_unprivileged_userns=0', 'chmod u+s'):
