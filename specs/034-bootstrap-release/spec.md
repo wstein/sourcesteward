@@ -1,6 +1,6 @@
 # Specification: bootstrap release of `stw` (v0.1.0)
 
-**Created**: 2026-10-22 | **Status**: implemented in source, never run (spec-light: workflow, scripts and offline tests first;
+**Created**: 2026-10-22 | **Status**: implemented; run once for `v0.1.0` (evidence: [verification](verification.md)) (spec-light: workflow, scripts and offline tests first;
 this page is the plan and the contract). Nothing here tags, builds, publishes or changes a repository setting.
 
 `stw` has no release, no tag and no release workflow. Spec 026 (D7, D8, [bootstrap contract](../026-release-process/contracts/bootstrap.md))
