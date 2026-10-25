@@ -52,7 +52,7 @@ and durably records native recovery before changes. Owned retirement has distinc
 and exact-path file effects, full fresh disk proof and versioned v2 results. Git registration-only
 removal of a present worktree retains unsupported; jj forget preserves files. Read the
 [tidy guide](tidy.md) and [Spec 011 evidence](../specs/011-workspace-reference-tidy/verification.md).
-`stw tidy` without arguments is the workspace-wide wizard of [Spec 041](../specs/041-tidy-wizard/spec.md): read-only overview of all repositories and owners, a stored plan set and `stw tidy apply PLAN-ID`; it is implemented with an unpublished schema and its dogfood dry run (T021) is open.
+`stw tidy` without arguments is the workspace-wide wizard of [Spec 041](../specs/041-tidy-wizard/spec.md): read-only overview of all repositories and owners, a stored plan set and `stw tidy apply PLAN-ID`; it is implemented with an unpublished schema and its plan-only dogfood dry run (T021) is recorded in the [evidence](../specs/041-tidy-wizard/evidence/T021.md).
 External races/ABA remain sampled; recovery is bounded manual evidence, not automatic restoration.
 
 ## Worktrees, jj and GitButler
