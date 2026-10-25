@@ -112,6 +112,10 @@ func TestApplyAdmitsOnlyTheExactSavedID(t *testing.T) {
 			t.Errorf("apply admitted the id %q", id)
 		}
 	}
+	err = saved.AdmitApply(strings.ToUpper(*saved.PlanID()))
+	wantCode(t, err, "plan-id-invalid", true)
+	err = saved.AdmitApply(strings.Repeat("0", 64))
+	wantCode(t, err, "plan-not-found", false)
 	// A saved plan with an empty selection cannot exist, so there is nothing to apply.
 	if err := mustPlan(t, fixtureInput()).AdmitApply(""); err == nil {
 		t.Error("an unsaved empty plan was admitted for apply")

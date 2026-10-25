@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEmptySelectionBindsOneRepositoryAndIsUnsaved(t *testing.T) {
@@ -105,7 +106,7 @@ func TestChangedEffectsGiveANewIDAndTheSameInputTheSameID(t *testing.T) {
 		"task":          func(in *PlanInput) { in.Task.TaskID = "other" },
 		"repository":    func(in *PlanInput) { r := *in.Repository; r.Name = "other"; in.Repository = &r },
 		"online":        func(in *PlanInput) { in.Options.Online = true },
-		"created at":    func(in *PlanInput) { in.CreatedAt = in.CreatedAt.Add(1) },
+		"created at":    func(in *PlanInput) { in.CreatedAt = in.CreatedAt.Add(time.Second) },
 		"limits":        func(in *PlanInput) { in.Limits.OperationSeconds = 30 },
 		"blocker added": func(in *PlanInput) { in.Blockers = []Blocker{{Reason: ReasonStackTooDeep}} },
 	} {
@@ -236,6 +237,7 @@ func TestEveryKindValidatesItsExactTargetAndExpectedState(t *testing.T) {
 		"push control ref":             func(a *Action) { a.Target.Ref = str("refs/heads/to\x01pic") },
 		"push long ref":                func(a *Action) { a.Target.Ref = str("refs/heads/" + strings.Repeat("a", 200)) },
 		"push tag ref":                 func(a *Action) { a.Target.Ref = str("refs/tags/v1") },
+		"push hidden component":        func(a *Action) { a.Target.Ref = str("refs/heads/.hidden") },
 		"push url target":              func(a *Action) { a.Target.Ref = str("https://github.com/o/p.git") },
 	}
 	for name, mutate := range mutations {
@@ -326,6 +328,10 @@ func TestActionStateAndBlockerAreConsistent(t *testing.T) {
 	g.Guards = []Guard{{Name: "owned", Result: "maybe"}}
 	if _, err := NewPlan(fixtureInput(g)); err == nil {
 		t.Error("an untyped guard result accepted")
+	}
+	g.Guards = []Guard{{Name: "owned", Result: GuardPass, Reason: ReasonNotOwned}}
+	if _, err := NewPlan(fixtureInput(g)); err == nil {
+		t.Error("a passing guard that names a refusal reason accepted")
 	}
 	g.Guards = []Guard{{Name: "owned", Result: GuardFail}}
 	if _, err := NewPlan(fixtureInput(g)); err == nil {
