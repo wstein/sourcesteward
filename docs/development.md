@@ -253,3 +253,24 @@ line; `--json` prints the same data as JSON.
 
 The tool never re-runs, cancels or dispatches workflows and never merges or changes a PR. Tests
 use a fake `gh` through `GH`, with `CI_WAIT_SLEEP` and `CI_WAIT_NOW` replacing `sleep` and the clock.
+
+## Pre-push self-check
+
+Run `python3 scripts/selfcheck.py [BASE]` inside the worktree before every push, including a push
+of review fixes. `BASE` defaults to `refs/remotes/origin/main`; if that ref is missing the tool
+stops with exit status 2 and says how to fetch it. `--head REF` checks another commit and
+`--owner NAME` (default `Werner Stein`) sets the expected author and committer.
+
+It reads only the lines added by `BASE...HEAD` and fails (exit status 1) on: words glued to
+numbers (`hidden015planner`; code spans, fenced blocks, link targets and URLs are ignored), an
+added blank line right after another one in Markdown, a second `Source:` line in a
+`chartroom/notes/` note, `git diff --check` errors, a commit without a `Co-Authored-By` trailer,
+an author or committer other than the owner, and a claude.ai link or `Claude-Session` trailer in
+a commit message.
+
+`INFO` lines never fail the run. `claims` lists each added doc line that names a `file:line`, an
+exit status or a `--flag`; `tick` flags an "N/M done" statement that differs from the ticked
+tasks in a changed `tasks.md`. Verify every INFO line against the code and tests yourself (the
+tool cannot) and say so in the PR body. The tool is read-only, uses only the Python standard
+library and is covered by `scripts/test_selfcheck.py`, which `make check` runs with the other
+script tests.
