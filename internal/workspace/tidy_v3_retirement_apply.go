@@ -87,6 +87,10 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 	if e != nil {
 		return failTidyV3(r, e)
 	}
+	c.chain, e = loadV3Chain(o.StateDir, p, native, o.SiblingPlans)
+	if e != nil {
+		return failTidyV3(r, e)
+	}
 	// The deadline scales with the stored plan (60 s + 5 s + 50 ms per recorded
 	// entry); reading the plan, bounded local state I/O, precedes it.
 	ctx, cancelDeadline := context.WithTimeout(ctx, v3Timeout(ctx, v3PlanApplyTimeout(p)))
@@ -112,10 +116,11 @@ func (c tidyV3RetirementCoordinator) apply(ctx context.Context, o V3ApplyOptions
 			return failTidyV3(r, e)
 		}
 		if p.Online != nil {
-			first.Retirement.Integration = p.Retirement.Integration
+			first.Retirement.Integration = c.chain.retirement(*p.Retirement).Integration
 			first.Retirement.Actions = p.Retirement.Actions
 		}
-		if first.Native.Expected != p.Expected || !reflect.DeepEqual(first.Native.Native, native) || !reflect.DeepEqual(first.Retirement, *p.Retirement) {
+		wantExpected, wantNative := c.chain.apply(p.Expected, native)
+		if first.Native.Expected != wantExpected || !reflect.DeepEqual(first.Native.Native, wantNative) || !c.chain.sameRetirement(first.Retirement, *p.Retirement) {
 			return failTidyV3(r, failure("evidence-changed", "Stored retirement authority/native/physical/content evidence changed before apply."))
 		}
 	} else if e = c.verifyAbsent(ctx, p, prior.CurrentExpected, prior.CurrentNative, nil); e != nil {
@@ -356,6 +361,7 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 	}
 	out.Native.ProtectedRoots = append([]string{}, p.Retirement.ProtectedRoots...)
 	out.Expected = v3SnapshotWithState(out.Expected, out.Native)
+	expected, native = c.chain.apply(expected, native)
 	if out.Expected != expected || !reflect.DeepEqual(out.Native, native) {
 		return failure("evidence-changed", "Native post-state differs from exact recovery/registration delta; branches remain protected.")
 	}
@@ -394,11 +400,12 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 			return failure("retirement-outcome-incomplete", "Selected destination and registration must both be proven absent.")
 		}
 	}
+	stored := c.chain.retirement(*p.Retirement)
 	siblings, e := retirementV3Siblings(p.Retirement.Parent.Path, p.Retirement.Destination.Path)
 	if e != nil {
 		return e
 	}
-	if !retirementV3SamePostSiblings(siblings, p.Retirement.Siblings, p.Retirement.RegistrationParent) {
+	if !retirementV3SamePostSiblings(siblings, stored.Siblings, p.Retirement.RegistrationParent, c.chain) {
 		return failure("evidence-changed", "Unrelated destination siblings changed across native removal.")
 	}
 	regParent, e := retirementV3Directory(p.Retirement.RegistrationParent.Path)
@@ -410,7 +417,7 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 	if e != nil {
 		return e
 	}
-	if !reflect.DeepEqual(regSiblings, p.Retirement.RegistrationSiblings) {
+	if !reflect.DeepEqual(regSiblings, stored.RegistrationSiblings) {
 		return failure("evidence-changed", "Unrelated registration siblings changed from the immutable retirement plan.")
 	}
 
@@ -422,13 +429,13 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 func retirementV3SamePostParent(got, want V3PhysicalIdentity) bool {
 	return got.Path == want.Path && got.Device == want.Device && got.Inode == want.Inode && got.UID == want.UID && got.Mode == want.Mode && got.Kind == want.Kind && got.Kind == "directory" && got.OwnerKnown && want.OwnerKnown && got.TimestampPrecision == want.TimestampPrecision
 }
-func retirementV3SamePostSiblings(got, want []V3PhysicalIdentity, registrationParent V3PhysicalIdentity) bool {
+func retirementV3SamePostSiblings(got, want []V3PhysicalIdentity, registrationParent V3PhysicalIdentity, chain *v3Chain) bool {
 	if len(got) != len(want) {
 		return false
 	}
 	for i := range want {
-		if want[i] == registrationParent {
-			if !retirementV3SamePostParent(got[i], registrationParent) {
+		if want[i] == registrationParent || chain.changed(want[i].Path) {
+			if !retirementV3SamePostParent(got[i], want[i]) {
 				return false
 			}
 		} else if got[i] != want[i] {
