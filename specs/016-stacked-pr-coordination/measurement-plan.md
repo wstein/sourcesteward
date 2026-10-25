@@ -1,16 +1,21 @@
 # Measurement Plan: OQ-WRITES and OQ-NATIVE
 
-**Status**: PLAN UNDER REVIEW (pull request 271 carries the review verdicts and
-the reviewed head). Document only. No measurement has been run and no request
-has been sent to any forge. This plan authorizes nothing by itself: section 2
-lists the gates that must all be open before any run. Every GitHub behaviour
-below is a HYPOTHESIS to be tested, never a finding.
+**Status**: PLAN MERGED (pull request 271, `f4558cfb`); the update that records
+the owner release of gate G3 is pull request 272 and is UNDER REVIEW; its
+reviewed head becomes the G1 head once it is merged. Document only. No
+measurement has been run and no request has been sent to any forge. This plan
+authorizes nothing by itself: section 2 lists the gates that must all be open
+before any run. Every GitHub behaviour below is a HYPOTHESIS to be tested,
+never a finding.
 
 ## 1. Owner decisions this plan rests on (restated, dated 2026-10-25)
 
 - OQ-WRITES: measure first in a separately authorized disposable forge fixture,
   then review a small closed write allowlist; comments deferred; no GraphQL or
-  arbitrary endpoint fallback in stw (`research.md` lines 139-140).
+  arbitrary endpoint fallback in stw, with the single exception of the fixed
+  Ready mutation decided below (the exception is also stated at `research.md`
+  lines 139 and 192, `contracts/owner-decisions.md` line 212,
+  `contracts/forge-effects.md` line 101 and `tasks.md` line 50, T021).
 - OQ-NATIVE: Git publication first; measure native link/unstack separately;
   native jj publication stays `capability-unavailable`, no Git fallback
   (`research.md` line 140). In this plan: native stacks are measured, jj is
@@ -21,12 +26,24 @@ below is a HYPOTHESIS to be tested, never a finding.
   an Opus review of this plan reports CLEAR for the exact plan head. Deletion of
   the fixture, every setting change and the owner-only probes M1 to M3 (section
   7) stay with the owner.
-- PENDING OWNER DECISION, NOT YET AUTHORIZED: running the installed convenience
-  commands `gh pr ready` and `gh stack link` / `gh stack unstack` in the fixture
-  as measurement acts (they may send GraphQL mutations or extension requests
-  internally; the "no GraphQL" and "no extension execution" rules bind the stw
-  implementation, whether they also bind a measurement is the owner's call).
-  Until the owner decides, W5b, O-W5 and N1 to N5 are not run (gate G3).
+- Owner decision of 2026-10-25, gate G3 RELEASED: running the installed
+  convenience commands `gh pr ready` and `gh stack` (link / unstack) as
+  measurement acts is allowed in `wstein/stw-forge-fixture` ONLY and nowhere
+  else. They may send GraphQL mutations or extension requests internally; the
+  "no GraphQL" and "no extension execution" rules bind the stw implementation,
+  not these measurements. W5b, O-W5 and N1 to N5 are therefore no longer held
+  back by an open owner item.
+- Owner decision of 2026-10-25 on W5a: if REST cannot set Ready, stw may use
+  exactly ONE fixed GraphQL mutation, `markPullRequestReadyForReview`, with the
+  pull request node id as its only variable. It is sent only through one fixed
+  query string, as its own effect class, validated like every other effect; no
+  other GraphQL is allowed in stw. The mutation name and its input
+  (`MarkPullRequestReadyForReviewInput`, required field `pullRequestId: ID!`)
+  were checked read-only against the GitHub GraphQL schema by `gh api graphql`
+  introspection on 2026-10-25. This decision is conditional on W5a CONFIRMING
+  that REST cannot set Ready; if W5a refutes that, the REST form is used and
+  no GraphQL is admitted. The decision allows the mutation in the stw
+  implementation; it does not run it as a measurement here.
 
 These decisions are recorded here so that a reader needs no session context.
 The fixture authorization is not recorded in another repository file; the
@@ -37,8 +54,9 @@ owner's statement of 2026-10-25 is the source.
 - G1: an independent Opus review of the exact plan head reports CLEAR; record
   that head SHA.
 - G2: the owner gives the go for a run of this plan.
-- G3: for W5b, O-W5 and N1 to N5 only, the owner has decided the pending item of
-  section 1 in favour of running them. Without G3 only P0, W1 to W4 and W5a run.
+- G3: for W5b, O-W5 and N1 to N5 only; RELEASED by the owner on 2026-10-25
+  (section 1), for the fixture only. G3 no longer holds back any experiment;
+  G1, G2 and G4 still apply. The run order is unchanged.
 - G4: the target guard of section 3 passes before every write.
 
 ## 3. Scope, run rules and guards
@@ -152,8 +170,8 @@ Cleanup after a stop, limited to objects whose names carry `m016/RUN/`:
 
 1. If the API guard still passes: for a stack the run created and whose stack
    number is recorded, `gh stack unstack STACK_NUMBER` (explicit number, never
-   without an argument, never `--local`); this needs G3 and is skipped if the
-   number is unknown.
+   without an argument, never `--local`); this needs G3 (released, section 1)
+   and is skipped if the number is unknown.
 2. Close the PRs the run opened (`PATCH state=closed`).
 3. Leave the `m016/RUN/*` branches; list them and every open PR or stack that
    cleanup could not close in the evidence file for the owner.
@@ -258,19 +276,29 @@ fields and `updated_at` moved in W4a to W4c. This is the head-unchanged rule of
 Hypothesis W5a: the REST update (`PATCH pulls/N` with `draft=false`) does not
 leave Draft state. Confirm: 2xx or 4xx with `draft` still true. Refute:
 `draft == false`; the REST triple is then the Ready candidate. If W5a is
-CONFIRMED it is a recorded outcome, not a stop: Ready then has no REST form,
-which collides with the "no GraphQL" decision, and the plan neither picks an
-alternative nor tries one. W5a ends there; W5b and O-W5 still run only under
-G3, and N1 to N5 follow their own precondition (section 8). The open owner
-choices, stated neutrally:
-(i) allow exactly one fixed GraphQL mutation for Ready in stw; (ii) keep
-`ready` `capability-unavailable` in stw; (iii) another forge-supported path.
+CONFIRMED it is a recorded outcome, not a stop: Ready then has no REST form.
+The owner decision of 2026-10-25 (section 1) resolves the three former choices:
+stw may use exactly ONE fixed GraphQL mutation, `markPullRequestReadyForReview`
+(variable: the pull request node id only), through a fixed query string, as its
+own effect class, validated, with no other GraphQL; `ready` is not left
+`capability-unavailable` and no other path is sought. W5a itself still sends no
+GraphQL and tries no alternative; W5b and O-W5 run under the released G3, and N1
+to N5 follow their own precondition (section 8). Consequence for the spec
+files: this PR adds the exception clause to `research.md` lines 139 and 192,
+`contracts/owner-decisions.md` line 212, `contracts/forge-effects.md` line 101
+and `tasks.md` line 50 (T021). The `ready` row of `contracts/forge-effects.md`
+(line 76) still says the method is unmeasured and `contracts/` needs the
+fixed-mutation edge, fields and tests in the Spec 016 implementation PR; no
+checkbox is ticked here.
 Hypothesis W5b (needs G3): `gh pr ready N -R wstein/stw-forge-fixture` on a
 Draft PR sets `draft == false`; the requests it sends are recorded to a trace
 file (rule 10) as method, path and operation name only. Confirm: exit 0,
 `draft == false`, no other section 5 field changed except computed ones.
 Refute: still Draft or another field changed. This observes what exists; it
-does not adopt a transport, and no hand-written GraphQL is sent.
+does not adopt a transport, and no hand-written GraphQL is sent. It also
+records, by name only, whether the trace shows the operation or field
+`markPullRequestReadyForReview`; that is the fixture evidence for the fixed
+form (an absent name is recorded as such).
 Observation O-W5 (needs G3): the same command on an already-Ready PR (exit code
 and message).
 
@@ -403,7 +431,7 @@ owner's acceptance of the allowlist proposal) may unblock, never tick by itself:
 | W2 | `create-pr` row of `contracts/forge-effects.md` line 72; `tasks.md` T020, T021, T023 (create part) |
 | W3 | `edit-body` row (`contracts/forge-effects.md` line 73); T021, T023, T022 raced-body test design |
 | W4 | `retarget` row (`contracts/forge-effects.md` line 75); T021, T023, T022 |
-| W5 | `ready` row (`contracts/forge-effects.md` line 76); T031 (Ready wiring through the admitted edge, `tasks.md` line 68) and T021 only if the owner picks a transport after W5a; T029 and T030 are policy tests and are NOT unblocked by measurement |
+| W5 | `ready` row (`contracts/forge-effects.md` line 76); T031 (Ready wiring through the admitted edge, `tasks.md` line 68) and T021 for the fixed Ready mutation if W5a confirms that REST cannot set Ready (owner decision, section 1); T029 and T030 are policy tests and are NOT unblocked by measurement |
 | W1 | absent-ref creation part of T019 (`contracts/forge-effects.md` lines 144-146); the hook and credential boundary stays unmeasured |
 | N1 to N5 | `native-link` / `native-unstack` row (`contracts/forge-effects.md` line 77); T024 (two-member results only); the native link/unstack no-write sentinel fixtures of T034 (`tasks.md` line 75), not its jj refusal part; native lines of `quickstart.md` section 3 |
 | M1 to M3 | the unmeasured on/unreadable row (`contracts/receipts.md` line 211) for the measured setting and shape only; T032 landing-handoff fixtures (`tasks.md` line 69) conditionally |
@@ -424,9 +452,10 @@ Native jj publication and the Git push hook / credential-helper confinement
 - Any repository other than the fixture; forks; cross-repository PRs; the
   owner's workspace repositories.
 - Native jj publication and colocated jj; extension installation or upgrade; raw
-  hand-written GraphQL; arbitrary REST endpoints beyond those listed in sections
-  7 and 8 (stack endpoints are only observed through the command's own trace in
-  N1).
+  hand-written GraphQL (the fixed Ready mutation is an stw implementation
+  decision, not a measurement); arbitrary REST endpoints beyond those listed in
+  sections 7 and 8 (stack endpoints are only observed through the command's own
+  trace in N1).
 - Git hook, credential-helper and signing-helper behaviour (separate gate).
 - Whether results hold in another repository, with rulesets or protected
   branches (the fixture has none); every result is scoped to the recorded

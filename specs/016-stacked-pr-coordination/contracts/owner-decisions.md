@@ -209,7 +209,7 @@ capability acceptance. Separate 043 endpoint/ownership/constitution reconciliati
 remains OPEN; those proposed amendments are not owner-approved by these answers.
 Measure forge effects in separately authorized disposable fixtures, then review
 the small additive Spec 022 method/path/body allowlist; current GET modes stay
-read-only. Comments remain deferred; no arbitrary endpoint/GraphQL execution.
+read-only. Comments remain deferred; no arbitrary endpoint/GraphQL execution, except, by the owner decision of 2026-10-25, one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), only if W5a confirms that REST cannot set Ready; see `measurement-plan.md` section 1; fixture evidence: W5b trace.
 Native link/unstack is measured separately; Git publication comes first; jj stays
 capability-unavailable without raw Git fallback. 014 native semantic/topology/
 hunk/scratch/jj aggregate recommendations are adopted as measure-and-refuse gates,
