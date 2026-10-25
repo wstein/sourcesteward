@@ -148,11 +148,12 @@ symbolic, has another name or a bad old OID is kept with its record. Retention i
 leaves the older runs in place. Repositories that no run changes keep their old runs until their next change. Run IDs
 carry microseconds from this release on (older IDs have second resolution), and runs are ordered by their ID.
 See the
+[JSON contract](json-contracts.md#sync-schema-v1-unpublished).
+
 The kept autostash entry is found by comparing `refs/stash` before and after git's own update: only a new entry with the reflog
 subject `autostash` whose first parent is the old tip counts. The stash list is shared by all worktrees, so an entry another
 worktree pushed, one that predates the run, or an ambiguous pair is never claimed (`stash_oid` is then null); stw never
 drops, applies or edits a stash entry itself.
-[JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 
 `stw sync restore [PATH] [--run ID] [--json]` undoes a run (default: the latest run, the one with the highest run ID;
 the workspace is found as for `stw sync`, `--run` takes the ID printed by the run). For each branch the run
