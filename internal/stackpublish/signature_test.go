@@ -61,6 +61,14 @@ func TestSigningRefusals(t *testing.T) {
 			e.SourceSigned = append(e.SourceSigned, sha('7'))
 			return e
 		}, []string{"signature-policy-unknown/provenance-lost"}},
+		"chain empty and nothing signed in the source": {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain, e.SourceSigned = nil, nil; return e }, []string{"signature-policy-unknown/provenance-lost"}},
+		"first link has no signed parent":              {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[0].SignedParent = ""; return e }, []string{"signature-policy-unknown/mapping-invalid"}},
+		"signed equals unsigned": {helperPolicy, func() *SigningEvidence {
+			e := signedEvidence()
+			e.Chain[0].Signed = e.Chain[0].Unsigned
+			e.Chain[1].SignedParent = e.Chain[0].Unsigned
+			return e
+		}, []string{"signature-policy-unknown/mapping-invalid"}},
 		"signature unverified":           {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[1].Verified = false; return e }, []string{"signature-policy-unknown/signature-unverified"}},
 		"signer not allowed":             {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[0].Signer = "SHA256:other"; return e }, []string{"signature-policy-unknown/signer-not-allowed"}},
 		"child not on the signed parent": {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[1].SignedParent = sha('3'); return e }, []string{"signature-policy-unknown/parent-mismatch"}},
@@ -112,6 +120,13 @@ func TestResignHandoffIsInertDataAndUnavailableWithoutAHelper(t *testing.T) {
 	h = ResignHandoffFor(WorkspacePolicy{})
 	if h.Available || h.Detail != "signing-capability-unavailable" {
 		t.Fatalf("%+v", h)
+	}
+	for _, bad := range []*HelperProfile{{HelperID: "h"}, {VerifierID: "v"}, {}} {
+		p := helperPolicy()
+		p.Resign = bad
+		if h := ResignHandoffFor(p); h.Available {
+			t.Errorf("a helper profile without both fixed ids is unavailable: %+v", bad)
+		}
 	}
 	h = ResignHandoffFor(helperPolicy())
 	if !h.Available || h.LocalFlag != "--re-sign" || h.HelperID != "host-signer-1" || h.VerifierID != "host-verifier-1" || h.Detail != "" {

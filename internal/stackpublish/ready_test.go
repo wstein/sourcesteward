@@ -56,6 +56,12 @@ func TestEachUnknownFalseOrMovedSourceBlocksReady(t *testing.T) {
 		"d5 guard fails": {func(in *ReadyInput) {
 			in.Guards[1] = Guard{Name: GuardAttribution, Result: GuardFail, Reason: ReasonAttributionMismatch}
 		}, []string{"attribution-mismatch/guard"}},
+		"guard unknown": {func(in *ReadyInput) {
+			in.Guards[0] = Guard{Name: GuardOwnership, Result: GuardUnknown, Reason: ReasonPermissionUnknown}
+		}, []string{"permission-unknown/guard"}},
+		"guard malformed":            {func(in *ReadyInput) { in.Guards = append(in.Guards, Guard{Name: "x", Result: "maybe"}) }, []string{"plan-stale/guard"}},
+		"author unknown":             {func(in *ReadyInput) { in.AuthorID = "" }, []string{"review-missing/review-not-independent"}},
+		"scope verdict empty":        {func(in *ReadyInput) { in.Scope.Accepted = "" }, []string{"scope-not-accepted/scope-unknown"}},
 		"review absent":              {func(in *ReadyInput) { in.Review = nil }, []string{"review-missing/review-absent"}},
 		"review of an older head":    {func(in *ReadyInput) { in.Review.SubjectSHA = sha('9') }, []string{"review-missing/review-wrong-head"}},
 		"review of a short sha":      {func(in *ReadyInput) { in.Review.SubjectSHA = "aaaaaaa" }, []string{"review-missing/review-wrong-head"}},

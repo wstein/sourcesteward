@@ -368,3 +368,21 @@ func TestAKelvinSignHostIsUnknown(t *testing.T) {
 	in.Plan = plan
 	want(t, OwnershipGuards(in), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 }
+
+// Review N5: asciiLower must fold the whole A-Z range, including Z, before the host grammar.
+func TestHostWithUppercaseZIsFoldedBeforeTheGrammar(t *testing.T) {
+	in := fixtureInput()
+	r := *in.Repository
+	r.Host, r.Owner, r.Name = "zz.example.org", "zed", "zone"
+	in.Repository = &r
+	plan := mustPlan(t, in)
+	for _, head := range []*RepoRef{{Host: "ZZ.EXAMPLE.ORG", Owner: "ZED", Name: "ZONE"}, {Host: "Zz.Example.Org", Owner: "Zed", Name: "Zone"}} {
+		pr := prInput(KindReady, head, head)
+		pr.Plan = plan
+		pr.Task.TaskID = plan.Task().TaskID
+		want(t, OwnershipGuards(pr), GuardOwnership, GuardPass, "")
+	}
+	if got := asciiLower("AZaz09-Z"); got != "azaz09-z" {
+		t.Fatalf("%q", got)
+	}
+}

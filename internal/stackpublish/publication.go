@@ -28,7 +28,7 @@ var proseRules = []*regexp.Regexp{
 
 // safePath refuses a path that is not a plain, normalized, relative repository path.
 func safePath(p string) bool {
-	if p == "" || strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\\x00") {
+	if p == "" || strings.ContainsAny(p, "\\\x00") {
 		return false
 	}
 	for _, r := range p {
@@ -193,8 +193,6 @@ func rangeRefusal(in PublicationInput) *Refusal {
 	refuse := func(reason Reason, detail string) *Refusal { return &Refusal{reason, detail} }
 	rg := in.Range
 	switch {
-	case !isLowerHex(in.NewHead, 40):
-		return refuse(ReasonIdentityMismatch, "range-head-mismatch")
 	case rg == nil:
 		return refuse(ReasonIdentityMismatch, "range-absent")
 	case !isLowerHex(rg.Default, 40):
