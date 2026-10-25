@@ -347,9 +347,21 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 	if r.Plan == nil || r.Status != "ok" || calls != 1 {
 		t.Fatalf("stale registration blocked the plan %+v calls=%d", r, calls)
 	}
+	protectedHeads := 0
 	for _, candidate := range r.Plan.Candidates {
-		if candidate.OID == rows[0].HeadOID && (candidate.Decision != "retain" || !containsString(candidate.WorkspacePaths, detached)) {
-			t.Fatalf("stale registration lost its protection %+v", candidate)
+		if candidate.OID == rows[0].HeadOID || candidate.OID == rows[1].HeadOID {
+			protectedHeads++
+			if candidate.Decision != "retain" || candidate.Reason != "workspace-used" || len(candidate.WorkspacePaths) != 1 {
+				t.Fatalf("stale registration lost its protection %+v", candidate)
+			}
+		}
+	}
+	if protectedHeads == 0 {
+		t.Fatal("vacuous: no workspace-protected candidate")
+	}
+	for _, target := range s.targets[len(s.targets)-1] {
+		if target == rows[0].HeadOID || target == rows[1].HeadOID {
+			t.Fatal("provider discovery attempted for a workspace-protected head")
 		}
 	}
 	// A registered root that is replaced by an alias is an unavailable root: no auth, no plan.

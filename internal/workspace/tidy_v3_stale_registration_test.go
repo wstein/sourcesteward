@@ -69,7 +69,7 @@ func TestTidyV3StaleRegistrationDoesNotBlockReferencePlan(t *testing.T) {
 
 // Everything that is not a plainly missing leaf below a canonical parent keeps the old refusal.
 func TestTidyV3StaleRegistrationRefusalsStayUnchanged(t *testing.T) {
-	for _, kind := range []string{"locked-missing", "replaced-by-symlink", "missing-parent", "inside-state"} {
+	for _, kind := range []string{"locked-missing", "replaced-by-symlink", "missing-parent", "symlinked-parent", "inside-state"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, _ := fixtureTidyV3Git(t)
 			state := privateDir(t)
@@ -85,6 +85,15 @@ func TestTidyV3StaleRegistrationRefusalsStayUnchanged(t *testing.T) {
 			case "missing-parent":
 				staleRegistration(t, dir, filepath.Join(parent, "sub"), "gone", false)
 				if err := os.RemoveAll(filepath.Join(parent, "sub")); err != nil {
+					t.Fatal(err)
+				}
+			case "symlinked-parent":
+				sub := filepath.Join(parent, "sub")
+				staleRegistration(t, dir, sub, "gone", false)
+				if err := os.RemoveAll(sub); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(gitTempDir(t), sub); err != nil {
 					t.Fatal(err)
 				}
 			case "inside-state":
@@ -106,8 +115,8 @@ func TestTidyV3StaleRegistrationRefusalsStayUnchanged(t *testing.T) {
 	}
 }
 
-// Git records canonical registration paths, so an aliased parent cannot be produced through Git;
-// the qualification rule itself must still refuse it (a hand-edited or racing registration).
+// An aliased parent can arise through Git too (register below a directory, then replace the
+// directory with a symlink); the rule must refuse it, and anything else that is not a plain ENOENT.
 func TestAbsentBelowCanonicalParent(t *testing.T) {
 	root := gitTempDir(t)
 	real := filepath.Join(root, "real")
@@ -121,13 +130,14 @@ func TestAbsentBelowCanonicalParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]bool{
-		filepath.Join(real, "gone"):          true,
-		filepath.Join(root, "link", "gone"):  false, // aliased parent
-		filepath.Join(root, "nodir", "gone"): false, // parent missing
-		filepath.Join(real, "file", "gone"):  false, // parent is not a directory
-		real:                                 false, // present
-		filepath.Join(root, "link"):          false, // present symlink
-		filepath.Join(real, "file"):          false, // present file
+		filepath.Join(real, "gone"):                   true,
+		filepath.Join(root, "link", "gone"):           false, // aliased parent
+		filepath.Join(root, "nodir", "gone"):          false, // parent missing
+		filepath.Join(real, "file", "gone"):           false, // parent is not a directory
+		filepath.Join(real, strings.Repeat("a", 300)): false, // ENAMETOOLONG is not absence
+		real:                        false, // present
+		filepath.Join(root, "link"): false, // present symlink
+		filepath.Join(real, "file"): false, // present file
 	} {
 		if got := absentBelowCanonicalParent(path); got != want {
 			t.Errorf("%s: got %v want %v", path, got, want)
@@ -214,8 +224,8 @@ func TestQualifyTidyV3RegistrationsRules(t *testing.T) {
 		t.Error("missing protected root accepted")
 	}
 	// The state directory above or at the missing path is an overlap, not unknown.
-	if err := qualifyTidyV3Registrations(ctx, reg(true, false, false), nil, parent); err == nil || err.Error() == "" {
-		t.Error("state directory containing the stale root accepted")
+	if err := qualifyTidyV3Registrations(ctx, reg(true, false, false), nil, parent); err == nil || tidyErrorCode(err) != "state-overlap" {
+		t.Errorf("state directory containing the stale root: %v", err)
 	}
 }
 
@@ -226,5 +236,46 @@ func TestTidyV3StaleRegistrationDoesNotBlockTrackingPlan(t *testing.T) {
 	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: "HEAD", Online: true, TrackingRemote: "origin", StateDir: privateDir(t), ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil || *opens != 1 {
 		t.Fatalf("stale registration blocked the tracking plan: status=%s diagnostics=%+v opens=%d", r.Status, r.Diagnostics, *opens)
+	}
+}
+
+// The structural validator keeps rejecting bare and prunable-plus-locked records, and accepts a
+// plain prunable one.
+func TestValidV3NativeStateStaleRegistrationRules(t *testing.T) {
+	dir, _ := fixtureTidyV3Git(t)
+	stale := staleRegistration(t, dir, gitTempDir(t), "gone", false)
+	base := gitFixture(t, dir, "symbolic-ref", "HEAD")
+	o, err := observeTidyV3Git(context.Background(), dir, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(edit func(*V3Registration)) bool {
+		n := o.Native
+		n.Registrations = append([]V3Registration{}, o.Native.Registrations...)
+		found := false
+		for i := range n.Registrations {
+			if n.Registrations[i].Path == stale {
+				edit(&n.Registrations[i])
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("stale registration not observed")
+		}
+		exp := v3SnapshotWithState(o.Expected, n)
+		return validV3NativeState(n, V3Plan{SourcePath: dir, Expected: exp}, exp)
+	}
+	if !check(func(r *V3Registration) {
+		if !r.Prunable {
+			t.Fatal("not observed as prunable")
+		}
+	}) {
+		t.Fatal("plain prunable registration rejected")
+	}
+	if check(func(r *V3Registration) { r.Locked = true; r.LockReason = "x" }) {
+		t.Error("prunable plus locked accepted")
+	}
+	if check(func(r *V3Registration) { r.Bare = true }) {
+		t.Error("bare accepted")
 	}
 }
