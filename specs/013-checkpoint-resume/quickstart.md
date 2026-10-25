@@ -48,7 +48,9 @@ operation log; track private state writes separately from repository effects.
 For each admitted capability record exact backend/platform/version, fixture name,
 red-before-green proof, observed effects, command/result digest, outcome and
 limitations in future `verification.md`. Record sync v1 regression behavior and
-published contract byte digests separately. Mutation probes must fail when the
+published contract byte digests separately. Keep 013 checkpoint/undo roots and
+receipts beside more than ten finished sync runs: retention must leave all 013
+state unchanged; collision or foreign-root substitution must refuse. Mutation probes must fail when the
 implementation removes explicit selection/authorization, skips expected-state
 or ownership guards, marks a payloadless checkpoint complete, broadens jj undo,
 uses raw Git for jj, resets unknown new heads, drops incomplete evidence, runs a

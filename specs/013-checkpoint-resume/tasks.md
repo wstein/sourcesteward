@@ -13,8 +13,8 @@ Paths below are proposed source/test targets; none is created by this amendment.
 
 ## Phase 2: Foundations — blocking every effect
 
-- [ ] T002 Characterize current sync v1 durability/retention/restore in `internal/stwsync/journal_test.go` and `internal/stwsync/restore_test.go`, then add failing typed-seam tests for new record types, collision, unsafe record and fail-closed durability in proposed `internal/recovery/journal_test.go` (FR-001).
-- [ ] T003 Extract/reuse only reviewed durable-write/root/validation primitives in proposed `internal/recovery/journal.go` with operation-specific adapters in `internal/stwsync/journal.go` and `internal/stwsync/restore.go`; preserve sync v1 bytes/semantics, no second generic writer (T002; OQ-5).
+- [ ] T002 Characterize current sync v1 durability/retention/restore in `internal/stwsync/journal_test.go` and `internal/stwsync/restore_test.go`, then add failing typed-seam tests for new record types, reserved checkpoint/undo root ownership, collision, unsafe record, sync-retention coexistence and fail-closed durability in proposed `internal/recovery/journal_test.go` (FR-001).
+- [ ] T003 Extract/reuse only reviewed durable-write/root/validation primitives in proposed `internal/recovery/journal.go` with operation-specific adapters in `internal/stwsync/journal.go` and `internal/stwsync/restore.go`; preserve sync v1 bytes/semantics and its sync-only retention; enforce exact reserved 013 root/type/expected-value guards, no second generic writer (T002; OQ-5).
 - [ ] T004 [P] Write failing native ownership/colocation/GitButler/missing-backend tests in `internal/checkpoint/ownership_test.go`; config/session/name identity never proves ownership (FR-007).
 - [ ] T005 Implement approved native repository/layout/task/actor guards in `internal/checkpoint/ownership.go`, refusing ambiguous/shared/foreign/unknown evidence without Git fallback (T004; OQ-4).
 - [ ] T006 [P] Write failing count/byte/deadline/cancellation tests in `internal/checkpoint/limits_test.go` for 256 paths, 8 MiB per payload, 32 MiB total, 16 KiB context, 1 MiB result, 2 KiB diagnostics, 30-second reads/plans and 120-second actions (FR-009).
