@@ -183,7 +183,7 @@ the branch; left alone), `journal-incomplete` (a record of a rebase or merge tha
 tip; left alone, the recovery ref names the old tip for a manual reset) and `failed`; the last three exit 1. An
 incomplete fast-forward record is restored when the branch is at the planned new tip, `already-restored` at the old
 tip and `changed-since` anywhere else, and a restore that dealt with it marks it done. A restore never undoes pruned
-remote-tracking refs, a stash reapply or a submodule HEAD moved by the superproject, and it accepts no sync option.
+remote-tracking refs, a stash reapply or a submodule HEAD moved by the superproject, and any sync option given to it (`--submodules`, `--plan` and the others) is a usage error, exit 2.
 The default run is the highest run ID, never a file time, so restoring an older run does not change it. A run ID is a UTC time stamp and a random suffix; IDs made before microseconds were added count as microsecond zero, so old and new IDs order by time, and two old IDs of one second are ordered by their random suffix and can be mistaken for each other, in which case pass `--run`. Retention orders runs the same way. A branch an operation works on in any worktree (rebase, merge, cherry-pick, revert, bisect, also from a linked worktree with a detached HEAD), a symbolic ref and a branch the run's journal does not describe are `changed-since`; a missing old object is `failed`.
 
 ## Show what needs action in the workspace

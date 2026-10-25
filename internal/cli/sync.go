@@ -43,8 +43,10 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			"Each branch change is journaled with a recovery ref under refs/stw/recovery/sync/RUN_ID. Git only: a jj-owned path is refused.\n" +
 			"stw sync restore [PATH] [--run ID] moves each branch the run changed back to its journaled old tip, only where the branch\n" +
 			"still points at the tip the run left and a checked-out worktree is clean (git reset --keep); other branches are reported\n" +
-			"changed-since and left alone. The default run is the latest one; pruned refs, stash reapplies and submodule moves are not undone.\n" +
-			"Exit statuses: 0 unless a repository failed (failed, conflict, autostash-conflict) or the run was refused, 1 then, 2 usage error.",
+			"changed-since and left alone. The default run is the highest run ID; pruned refs, stash reapplies and submodule moves are not undone.\n" +
+			"Exit statuses: 1 when the run is refused or a repository ended failed, conflict, autostash-conflict or unreachable (restore also exits 1\n" +
+			"for changed-since and journal-incomplete); skipped repositories (skipped-dirty, skipped-busy, diverged, ...) exit 0; usage errors,\n" +
+			"including any sync option given to restore (--submodules too), exit 2.",
 		Args:         cobra.MaximumNArgs(2),
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

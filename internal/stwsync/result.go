@@ -125,9 +125,10 @@ type Result struct {
 	Error         *Failure      `json:"error"`
 }
 
-// ExitCode is 1 when the run was refused or any repository failed (failed, conflict, autostash-conflict)
-// and 0 otherwise: a repository that is up to date or skipped (dirty, diverged, detached, busy, without
-// upstream) is not an error.
+// ExitCode is 1 when the run was refused or any repository ended failed, conflict (a rebase or merge left in progress),
+// autostash-conflict or unreachable (--submodules), or a restore ended changed-since or journal-incomplete, and 0
+// otherwise: a repository that is up to date or skipped (dirty, diverged, detached, busy, without upstream) is not
+// an error. Usage errors (exit 2) are decided before any Result exists.
 func (r Result) ExitCode() int {
 	if r.Error != nil {
 		return 1
