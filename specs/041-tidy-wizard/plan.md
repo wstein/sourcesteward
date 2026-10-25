@@ -75,5 +75,5 @@ follow the normal two-round cap. The wizard introduces the first interactive inp
 WP-1 to WP-5 are on main (pull requests #194, #199, #229, #230, #232, #233, #235 and their stacks). The command layer is
 `internal/cli/tidy_mode.go` (layer selection), `tidy_wizard.go` (`stw tidy plan` in the wizard layer), `tidy_interactive.go` (bare `stw tidy`)
 and `tidy_planset.go` (`stw tidy apply PLAN-ID`), over `internal/tidywizard/{analysis,render,prompt,planset,owner,derive}`.
-Remaining: T005, T012b (deferred), T019e (wizard flag set on bare `stw tidy`), T020 (partly done: `docs/tidy.md`, `docs/commands.md` and `docs/progress.md`; undelivered: `docs/json-contracts.md`, `docs/agent-guide.md`, `docs/workspaces.md`, `docs/status.md`, `docs/README.md`, `docs/roadmap.md`, `docs/feature-status.json`, Spec 037 rows 23 and 24, and the pointers from Specs 011 and 029), T021 (dogfood dry run) and T022. The deliberate decisions are listed in the
+Remaining: T005, T012b (deferred), T020 (all docs delivered except the Spec 037 hint of rows 23 and 24, which waits for OQ11), T021 (dogfood dry run) and T022. T019 and T019e are done (#245). The deliberate decisions are listed in the
 [specification](spec.md#implementation-decisions-2026-10-25).
