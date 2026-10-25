@@ -12,6 +12,18 @@ stw checkpoint restore-plan --checkpoint CHECKPOINT_ID --path WORKSPACE --state-
 stw checkpoint restore --plan RESTORE_PLAN_ID --state-dir PRIVATE_DIR --authorize [--json]
 ```
 
+The separate stored restore plan is proposed because 013 can replace explicitly
+selected byte layers as well as native identities: the caller needs to review
+current expected state, exact replacement scope and required pre-action byte
+recovery before authorizing effects. This extends FR-004's inspection/action
+separation; it is not a claim that 032's single `stw sync restore` command already
+provides this protocol. That command keeps its existing narrow sync semantics.
+The example `checkpoint restore-plan`/`checkpoint restore` spellings, stored-plan
+interface and common flag admission remain under OQ-5/interface acceptance; an
+accepted plan/apply command shape must preserve the same separate review,
+expected-state checks and explicit action authorization. Reuse of journal
+mechanisms does not require identical CLI spelling or amend 032's command.
+
 Resume explicitly names a checkpoint, not an implicit latest entry. Read saved
 manifest/receipt, validate repository/native/task bindings and integrity, compare
 current selected state through read-only native inspection and bounded no-follow
