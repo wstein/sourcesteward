@@ -609,11 +609,14 @@ func TestDeadlineNoticeCountsTheItemsNotJudged(t *testing.T) {
 		c.Evidence = "deadline-exceeded"
 		in.Result.Candidates = append(in.Result.Candidates, c)
 	}
+	budget := cand("sourcesteward", tidywizard.KindBranch, "late-proof", tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeUnknown)
+	budget.Evidence = "proof-budget-exhausted" // the proof phase ran out: --timeout widens it, so it counts
+	in.Result.Candidates = append(in.Result.Candidates, budget)
 	other := cand("sourcesteward", tidywizard.KindWorktree, "/tmp/wt-other", tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeUnknown)
 	other.Evidence = "registration-mismatch" // incomplete for another reason: not counted
 	in.Result.Candidates = append(in.Result.Candidates, other)
 	doc := Build(in)
-	want := "2 of 10 not judged (deadline); retry with a larger window, for example --timeout 15m"
+	want := "3 of 11 not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m"
 	if len(doc.Notices) != base+1 || doc.Notices[len(doc.Notices)-1] != want {
 		t.Fatalf("notices %q, want the last to be %q", doc.Notices, want)
 	}
@@ -624,7 +627,7 @@ func TestDeadlineNoticeCountsTheItemsNotJudged(t *testing.T) {
 	if !strings.Contains(string(b), want) {
 		t.Errorf("JSON lacks the notice")
 	}
-	if doc.Summary.Retain != 3+3 {
+	if doc.Summary.Retain != 3+4 {
 		t.Errorf("the verdicts changed: %+v", doc.Summary)
 	}
 }
