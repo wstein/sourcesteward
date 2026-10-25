@@ -7,7 +7,7 @@
 
 **Date**: 2026-10-25. Design research uses repository source and cited official
 documentation; no native runtime experiment or product acceptance was executed.
-The owner adopted the recommendations on2026-10-25; concrete native capabilities remain unmeasured.
+The owner adopted the recommendations on 2026-10-25; concrete native capabilities remain unmeasured.
 
 ## Source facts and design choices
 
@@ -82,7 +82,7 @@ separate. Spec 011 recovery roots retain committed history within their limits.
 
 **Decision**: revalidate each consumer's inputs and permissions. No observation,
 checkpoint, local restore or undo authorizes remote writes or owner resync.
-013target exits0/1/2 align with decided CLI revision2; CURRENT 015 code 3 persists until its explicit incomplete 1 mapping task.
+013 target exits 0/1/2 align with decided CLI revision 2; CURRENT 015 code 3 persists until its explicit incomplete 1 mapping task.
 
 ### R5 — jj operations span the repository and are version-dependent
 
@@ -125,19 +125,21 @@ and must appear in every jj mutation result; Git's one-ref CAS remains distinct.
 
 ## Owner decisions (2026-10-25)
 
-All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
-choices adopt the source recommendations; implementation/native measurement and
+All listed former OQ IDs have a **dated disposition on 2026-10-25**.
+IDs without an explicit answer adopt the source research recommendations. The
+source column distinguishes direct owner answers, adopted recommendations and
+cross-spec owner-answer overrides; implementation/native measurement and
 review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
 distinguish saved-plan metadata, external capture payloads, trusted policy,
 optional host-only signing and CLI exit-contract revision 2.
 
-| Decision ID | Dated disposition | Remaining implementation/verification gate |
-| --- | --- | --- |
-| OQ-1 | DECIDED: adopt measured capture matrix recommendation: explicit ordinary Git tracked index/disk paths first, jj independently measured without implicit snapshot. | Unmeasured/special/index/conflicted/ignored capabilities remain unavailable. |
-| OQ-2 | DECIDED: adopt narrow inverse/restore recommendations, occupied-destination refusal and native jj direct-parent/all-workspace/no-head-CAS limits. | Native semantics, signing and expected-state effects need conformance; no broad undo fallback or invoker working-copy change. |
-| OQ-3 | DECIDED: selected bytes and independent safety copies remain EXTERNAL, private, quota bounded and separately deleted; .work is saved-plan metadata only. | Payload-role validation/capture/drop implementation and evidence; no automatic expiry. |
-| OQ-4 | DECIDED: trusted workspace/task/native layout/actor policy supplies ownership; labels/config/session hints do not. | Missing/foreign/shared proof refuses affected local action. |
-| OQ-5 | DECIDED: adopt characterized typed durability/root seam, separate namespaces and explicit stored restore plan; shared human/shortening-timeout vocabulary. | Implementation/migration/conformance remains; metadata defaults to validated workspace .work while --payload-dir stays explicit/external. |
+| Decision ID | Dated disposition | Source | Remaining implementation/verification gate |
+| --- | --- | --- | --- |
+| OQ-1 | DECIDED: adopt measured capture matrix recommendation: explicit ordinary Git tracked index/disk paths first, jj independently measured without implicit snapshot. | adopted recommendation | Unmeasured/special/index/conflicted/ignored capabilities remain unavailable. |
+| OQ-2 | DECIDED: adopt narrow inverse/restore recommendations, occupied-destination refusal and native jj direct-parent/all-workspace/no-head-CAS limits. | adopted recommendation | Native semantics, signing and expected-state effects need conformance; no broad undo fallback or invoker working-copy change. |
+| OQ-3 | DECIDED: selected bytes and independent safety copies remain EXTERNAL, private, quota bounded and separately deleted; .work is saved-plan metadata only. | adopted recommendation | Payload-role validation/capture/drop implementation and evidence; no automatic expiry. |
+| OQ-4 | DECIDED: trusted workspace/task/native layout/actor policy supplies ownership; labels/config/session hints do not. | adopted recommendation | Missing/foreign/shared proof refuses affected local action. |
+| OQ-5 | DECIDED: adopt characterized typed durability/root seam, separate namespaces and explicit stored restore plan; shared human/shortening-timeout vocabulary. | adopted recommendation; owner-answer override: 016 OQ-SURFACE (saved-plan location only) | Implementation/migration/conformance remains; metadata defaults to validated workspace .work while --payload-dir stays explicit/external. |
 
 ## Needs owner decision
 
