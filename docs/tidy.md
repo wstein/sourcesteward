@@ -20,8 +20,8 @@ does not infer `main`, `master` or `origin`.
 ## The tidy wizard
 
 `stw tidy` cleans up a whole workspace instead of one repository. It is for the person at a terminal; agents use `stw tidy plan`
-(see below). Outside a Git workspace it exits 2 with `workspace-not-found` (discovery is Git only; give `--workspace PATH` or use the
-expert layer described in the rest of this guide).
+(see below). Outside a Git workspace it exits 2 with `workspace-not-found` (discovery is Git only and starts from the working directory; `stw tidy plan --workspace PATH` names another workspace, or use the
+expert layer described in the rest of this guide). Bare `stw tidy` takes no flags yet (the flag set is planned, task T019e); the non-interactive `stw tidy plan` takes them.
 
 ```text
 $ stw tidy
@@ -57,9 +57,9 @@ Text shows at most 10 rows per repository (`and N more`); `--json` lists all can
 never rows of other or unknown owners), numbers and ranges (`1,2,6`, `1-3`) choose rows, `o` asks per owner, `d N` shows the details of
 row N, and Enter or `n` chooses nothing. Anything else asks again; after three invalid answers the wizard exits 1 and stores nothing.
 A `decision` row asks a second confirmation that names its lock and path. A foreign item needs the typed confirmation read from
-`/dev/tty` (confirmation word, the owner label or `unknown`, and the first six characters of the plan id) while the plan set is built
+`/dev/tty` (the owner label, or `unknown`, followed by the first six characters of the plan id) while the plan set is built
 and again when it is applied; `y`, standard input and `--yes` never replace it. With no terminal, in agent mode or when nothing is
-choosable, the wizard prints the overview, stores nothing, never reads stdin and exits 0.
+choosable, the wizard prints the overview, stores nothing, never reads stdin and exits 0 unless the evidence is incomplete (a repository error or a skipped repository), which exits 1 as for `plan`.
 
 **Plan and apply.** The chosen rows become one stored plan set with a content-addressed id; its sub-plans are the existing
 reference, tracking and retirement plans. Storing changes nothing. `stw tidy apply PLAN-ID` applies the sub-plans in a fixed order with
@@ -77,7 +77,7 @@ stw tidy plan --save --json            # store the safe own items; prints plan_i
 stw tidy apply PLAN-ID --yes --json    # explicit id authorizes; refused without an id
 ```
 
-**Exit codes.** 0 analysis complete (also with retained or other-owner candidates, and the no-terminal degradation) or apply fully
+**Exit codes.** 0 analysis complete (also with retained or other-owner candidates, and the no-terminal degradation when the evidence is complete) or apply fully
 completed. 1 refusal, incomplete evidence, a repository `error` or skipped repository, stale or failed sub-plan, cancellation
 (`--timeout`, interrupt), a store problem, or output cut at its bounds (`output-limit`); the overview is printed first. 2 invalid usage:
 mixed layers, `--yes` without an id, `--plan` with a positional id, unknown `--only`, `--mine` without `$STW_OWNER`, a missing workspace.
