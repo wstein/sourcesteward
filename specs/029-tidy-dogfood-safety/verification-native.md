@@ -278,13 +278,17 @@ primitive; it does not create or remove recovery. A started-but-failed prepare
 may return a nonnull session with an error: inspect `outcome()` for confirmed
 preparation and uncertain locks/effects. A lost commit response never implies
 no mutation or rollback. Abort and close/reap are bounded by the original
-context; uncertain locks remain for manual inspection, never blind removal.
+context (plus at most 5 s for descendants, below); uncertain locks remain for
+manual inspection, never blind removal.
 Close/reap also waits for the sandbox descendants of the owned process (under
 bubblewrap, Git is a grandchild that can outlive it): end of file on the
-command's stderr means every holder of it is gone. If a holder remains after
-5 seconds, the result joins `errGitRefDescendants` and the outcome is uncertain,
-so a lock the caller finds afterwards is never treated as abandoned. Descendants
-that close stderr are not detected.
+command's stderr means every holder of it is gone. The wait is the same after
+a kill, a clean finish, a stderr read error and a stderr flood past the limit
+(the capture then keeps draining, discarding). It ends after 5 seconds or when
+the original context ends, whichever is first; then the result joins
+`errGitRefDescendants` and the outcome is uncertain, so a lock the caller finds
+afterwards is never treated as abandoned. Descendants that close stderr are not
+detected.
 Successful aborts preserve actors' changed targets and unrelated/recovery refs.
 Native cooperating writers are locked out; raw filesystem/ABA races after
 sampling retain the existing disclosed limitation.
