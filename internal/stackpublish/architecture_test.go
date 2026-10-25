@@ -29,6 +29,10 @@ var timeValueNames = map[string]bool{
 	"Minute": true, "Hour": true, "RFC3339": true, "RFC3339Nano": true,
 }
 
+// fmtValueNames are the only members of package fmt the core may use: value formatting, never the
+// print, scan or Fprint families (stdout, stdin, writers).
+var fmtValueNames = map[string]bool{"Errorf": true, "Sprintf": true, "Sprint": true, "Sprintln": true}
+
 // seamViolations reports every use that would let the pure core escape: an import outside the
 // allow list, a dot or blank import, a member of time (under any local name) that is not a plain
 // value, or a goroutine.
@@ -38,7 +42,7 @@ func seamViolations(name, source string) []string {
 		return []string{err.Error()}
 	}
 	var out []string
-	timeName := ""
+	timeName, fmtName := "", ""
 	for _, spec := range file.Imports {
 		path, _ := strconv.Unquote(spec.Path.Value)
 		if !allowedImports[path] {
@@ -51,10 +55,15 @@ func seamViolations(name, source string) []string {
 		if local == "." || local == "_" {
 			out = append(out, "dot or blank import of "+path)
 		}
-		if path == "time" {
-			timeName = "time"
+		if path == "time" || path == "fmt" {
+			name := path
 			if local != "" {
-				timeName = local
+				name = local
+			}
+			if path == "time" {
+				timeName = name
+			} else {
+				fmtName = name
 			}
 		}
 	}
@@ -62,7 +71,17 @@ func seamViolations(name, source string) []string {
 		switch x := n.(type) {
 		case *ast.GoStmt:
 			out = append(out, "goroutine")
+		case *ast.FuncDecl:
+			if x.Recv == nil && x.Name.Name == "init" {
+				out = append(out, "init function")
+			}
 		case *ast.SelectorExpr:
+			if x.Sel.Name == "Local" || x.Sel.Name == "In" {
+				out = append(out, "Local or In reads the local zone: "+x.Sel.Name)
+			}
+			if id, ok := x.X.(*ast.Ident); ok && fmtName != "" && id.Name == fmtName && !fmtValueNames[x.Sel.Name] {
+				out = append(out, fmt.Sprintf("%s.%s is not value formatting", fmtName, x.Sel.Name))
+			}
 			if id, ok := x.X.(*ast.Ident); ok && timeName != "" && id.Name == timeName && !timeValueNames[x.Sel.Name] {
 				out = append(out, fmt.Sprintf("%s.%s is not a plain time value", timeName, x.Sel.Name))
 			}

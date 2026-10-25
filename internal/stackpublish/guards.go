@@ -114,6 +114,7 @@ type Run struct {
 	current    *Action // begun, awaiting Complete
 	prepared   bool    // completed as prepared, awaiting Advance
 	stopped    bool
+	finished   bool // sealed by Finish
 	eval       Evaluation
 }
 
@@ -164,7 +165,7 @@ func (r *Run) stoppedByBudget() bool {
 // or the budget stopped it. It is an error to begin while an action awaits Complete or Advance:
 // the previous effect must be recorded first.
 func (r *Run) Begin() (Action, bool, error) {
-	if r.current != nil || r.prepared {
+	if r.finished || r.current != nil || r.prepared {
 		return Action{}, false, &ValidationError{Code: "step-out-of-order", Field: "begin"}
 	}
 	if r.stopped || r.next >= len(r.actions) {
@@ -194,7 +195,7 @@ func (r *Run) Begin() (Action, bool, error) {
 // Complete evaluates the begun action with the evidence the caller fetched for it. An action
 // that cannot be evaluated (no begun action) is never prepared.
 func (r *Run) Complete(f Fresh, ok bool) Decision {
-	if r.current == nil {
+	if r.finished || r.current == nil {
 		return Decision{State: StateRefused, Reason: reasonRef(ReasonPlanStale)}
 	}
 	a := *r.current
@@ -220,7 +221,7 @@ func (r *Run) Complete(f Fresh, ok bool) Decision {
 // Advance records the outcome of the prepared action's effect: completed, failed or unknown. Any
 // outcome but completed stops the run; the truth of the outcome is kept, never upgraded.
 func (r *Run) Advance(outcome ActionState) error {
-	if !r.prepared {
+	if r.finished || !r.prepared {
 		return &ValidationError{Code: "step-out-of-order", Field: "advance"}
 	}
 	switch outcome {
@@ -235,8 +236,10 @@ func (r *Run) Advance(outcome ActionState) error {
 	return nil
 }
 
-// Finish returns the ordered result; actions never reached are not-started.
+// Finish seals the run (every later step is refused) and returns the ordered result; actions
+// never reached are not-started. A Run is for one goroutine: the caller serializes the steps.
 func (r *Run) Finish() Evaluation {
+	r.finished = true
 	out := Evaluation{cancelled: r.eval.cancelled, bounded: r.eval.bounded, Decisions: append([]Decision{}, r.eval.Decisions...)}
 	for i := len(out.Decisions); i < len(r.actions); i++ {
 		out.Decisions = append(out.Decisions, Decision{ActionID: r.actions[i].ID, State: StateNotStarted})

@@ -12,7 +12,7 @@ var (
 	actionIDGrammar = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 	taskIDGrammar   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 	markerGrammar   = regexp.MustCompile(`^[A-Z0-9_]{1,64}$`)
-	nameGrammar     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
+	nameGrammar     = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
 	hostGrammar     = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
 	componentRule   = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
@@ -109,10 +109,10 @@ func validRepository(r *Repository, l Limits) error {
 	if !hostGrammar.MatchString(r.Host) {
 		return invalid("repository-invalid", "repository.host")
 	}
-	if !nameGrammar.MatchString(r.Owner) {
+	if !validName(r.Owner) {
 		return invalid("repository-invalid", "repository.owner")
 	}
-	if !nameGrammar.MatchString(r.Name) {
+	if !validName(r.Name) {
 		return invalid("repository-invalid", "repository.name")
 	}
 	for _, f := range []struct{ name, value string }{{"layout_identity", r.LayoutIdentity}, {"selection_provenance", r.SelectionProvenance}, {"default_source", r.DefaultSource}} {
@@ -125,6 +125,10 @@ func validRepository(r *Repository, l Limits) error {
 	}
 	return checkSHA("repository.default_commit_id", r.DefaultCommitID)
 }
+
+// validName is the owner/repository name grammar of the hosting layer: ASCII letters, digits, "-",
+// "_" and ".", at most 100 bytes, and neither "." nor "..".
+func validName(s string) bool { return nameGrammar.MatchString(s) && s != "." && s != ".." }
 
 func validReason(r Reason) bool {
 	switch r {
