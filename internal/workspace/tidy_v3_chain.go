@@ -31,6 +31,10 @@ type v3ChainEffect struct {
 	kind, id string
 }
 
+// v3ChainLimit bounds the sibling plans one apply reads; a plan set names at most the
+// sub-plans of one repository.
+const v3ChainLimit = 1024
+
 // loadV3Chain reads the named sibling plans of one apply. A name that is malformed, unknown, the
 // plan itself or a plan of another repository is rejected: the caller is not trusted. A sibling
 // without a journal, or with a journal that is not complete, contributes nothing (a failed or
@@ -40,6 +44,9 @@ type v3ChainEffect struct {
 func loadV3Chain(stateDir string, self V3Plan, baseline V3NativeState, ids []string) (*v3Chain, error) {
 	if len(ids) == 0 {
 		return nil, nil
+	}
+	if len(ids) > v3ChainLimit {
+		return nil, failure("invalid-options", "Too many sibling plans.")
 	}
 	chain := &v3Chain{removedDestinations: map[string]bool{}, removedRegistrations: map[string]bool{}, changedDirectories: map[string]bool{}}
 	state := cloneV3Native(baseline)

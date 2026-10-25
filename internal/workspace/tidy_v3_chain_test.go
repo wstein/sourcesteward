@@ -324,6 +324,7 @@ func TestTidyV3ChainRejectsForgedSiblings(t *testing.T) {
 		"unknown plan":                         {unknown},
 		"the plan itself":                      {w.plans[1].PlanID},
 		"malformed":                            {"../escape"},
+		"more than the bound":                  make([]string, v3ChainLimit+1),
 	}
 	for name, ids := range cases {
 		t.Run(name, func(t *testing.T) {
