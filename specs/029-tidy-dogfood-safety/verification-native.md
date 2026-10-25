@@ -279,6 +279,12 @@ may return a nonnull session with an error: inspect `outcome()` for confirmed
 preparation and uncertain locks/effects. A lost commit response never implies
 no mutation or rollback. Abort and close/reap are bounded by the original
 context; uncertain locks remain for manual inspection, never blind removal.
+Close/reap also waits for the sandbox descendants of the owned process (under
+bubblewrap, Git is a grandchild that can outlive it): end of file on the
+command's stderr means every holder of it is gone. If a holder remains after
+5 seconds, the result joins `errGitRefDescendants` and the outcome is uncertain,
+so a lock the caller finds afterwards is never treated as abandoned. Descendants
+that close stderr are not detected.
 Successful aborts preserve actors' changed targets and unrelated/recovery refs.
 Native cooperating writers are locked out; raw filesystem/ABA races after
 sampling retain the existing disclosed limitation.
