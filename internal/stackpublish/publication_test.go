@@ -47,7 +47,7 @@ func TestClassifyPathsFollowsTheProseAllowList(t *testing.T) {
 		}
 	}
 	for _, p := range []string{"internal/x.go", "specs/016-x/contracts/a.md", "specs/016-x/examples/a.md", "specs/016-x/tasks/a.md", "docs/sub/a.md", "docs/a.json", "docs/index.html", "scripts/x.py",
-		".github/workflows/ci.yml", "README.MD", "a.md.go", "go.mod", "../README.md", "/README.md", "./README.md", "docs//a.md", "a\\b.md", "docs/a\x00.md", "", "specs/a.md", "docs/.md"} {
+		".github/workflows/ci.yml", "README.MD", "a.md.go", "go.mod", "../README.md", "/README.md", "./README.md", "docs//a.md", "a\\b.md", "docs/a\x00.md", "docs/a\x7f.md", "specs/../x.md", "specs/./x.md", "", "specs/a.md", "docs/.md"} {
 		if ClassifyPaths([]string{p}, true) != ClassCode {
 			t.Errorf("%q must be code", p)
 		}
@@ -171,16 +171,17 @@ func TestPureRebaseNeedsEveryRowEqual(t *testing.T) {
 		d    RangeDiff
 		want bool
 	}{
-		"all equal":        {RangeDiff{Complete: true, OldCount: 3, NewCount: 3, Rows: []string{"=", "=", "="}}, true},
-		"one changed":      {RangeDiff{Complete: true, OldCount: 3, NewCount: 3, Rows: []string{"=", "!", "="}}, false},
-		"unknown symbol":   {RangeDiff{Complete: true, OldCount: 2, NewCount: 2, Rows: []string{"=", "?"}}, false},
-		"added commit":     {RangeDiff{Complete: true, OldCount: 2, NewCount: 3, Rows: []string{"=", "=", ">"}}, false},
-		"dropped commit":   {RangeDiff{Complete: true, OldCount: 3, NewCount: 2, Rows: []string{"=", "="}}, false},
-		"missing row":      {RangeDiff{Complete: true, OldCount: 3, NewCount: 3, Rows: []string{"=", "="}}, false},
-		"extra row":        {RangeDiff{Complete: true, OldCount: 2, NewCount: 2, Rows: []string{"=", "=", "="}}, false},
-		"incomplete":       {RangeDiff{Complete: false, OldCount: 2, NewCount: 2, Rows: []string{"=", "="}}, false},
-		"empty":            {RangeDiff{Complete: true}, false},
-		"empty string row": {RangeDiff{Complete: true, OldCount: 1, NewCount: 1, Rows: []string{""}}, false},
+		"all equal":                  {RangeDiff{Complete: true, OldCount: 3, NewCount: 3, Rows: []string{"=", "=", "="}}, true},
+		"one changed":                {RangeDiff{Complete: true, OldCount: 3, NewCount: 3, Rows: []string{"=", "!", "="}}, false},
+		"unknown symbol":             {RangeDiff{Complete: true, OldCount: 2, NewCount: 2, Rows: []string{"=", "?"}}, false},
+		"added commit":               {RangeDiff{Complete: true, OldCount: 2, NewCount: 3, Rows: []string{"=", "=", ">"}}, false},
+		"dropped commit":             {RangeDiff{Complete: true, OldCount: 3, NewCount: 2, Rows: []string{"=", "="}}, false},
+		"added commit without a row": {RangeDiff{Complete: true, OldCount: 2, NewCount: 3, Rows: []string{"=", "="}}, false},
+		"missing row":                {RangeDiff{Complete: true, OldCount: 3, NewCount: 3, Rows: []string{"=", "="}}, false},
+		"extra row":                  {RangeDiff{Complete: true, OldCount: 2, NewCount: 2, Rows: []string{"=", "=", "="}}, false},
+		"incomplete":                 {RangeDiff{Complete: false, OldCount: 2, NewCount: 2, Rows: []string{"=", "="}}, false},
+		"empty":                      {RangeDiff{Complete: true}, false},
+		"empty string row":           {RangeDiff{Complete: true, OldCount: 1, NewCount: 1, Rows: []string{""}}, false},
 	} {
 		in := codePublication()
 		in.RangeDiff = &RangeDiff{Complete: c.d.Complete, OldCount: c.d.OldCount, NewCount: c.d.NewCount, Rows: c.d.Rows}
@@ -231,6 +232,7 @@ func TestRangeAndIdentityGates(t *testing.T) {
 		"foreign author in the parent":   {func(in *PublicationInput) { in.Range.Commits[0].Author = foreign }, []string{"identity-mismatch/foreign-identity"}},
 		"foreign committer in the child": {func(in *PublicationInput) { in.Range.Commits[1].Committer = foreign }, []string{"identity-mismatch/foreign-identity"}},
 		"owner name differs by case":     {func(in *PublicationInput) { in.Range.Commits[1].Author.Name = strings.ToUpper(owner().Name) }, []string{"identity-mismatch/foreign-identity"}},
+		"owner email missing":            {func(in *PublicationInput) { in.Policy.Owner.Email = "" }, []string{"identity-mismatch/owner-missing"}},
 		"owner email differs":            {func(in *PublicationInput) { in.Range.Commits[1].Author.Email = "x" + owner().Email }, []string{"identity-mismatch/foreign-identity"}},
 		"empty identity":                 {func(in *PublicationInput) { in.Range.Commits[0].Committer = Identity{} }, []string{"identity-mismatch/foreign-identity"}},
 		"co-author does not count": {func(in *PublicationInput) {
@@ -345,5 +347,15 @@ func TestPublicationWithAHelperReSignedChainNeedsTheReviewOfTheFinalSignedHead(t
 	in.Review.SubjectSHA = sha('3') // the review covered the unsigned candidate
 	if got := pubBlockers(EvaluatePublication(in)); !reflect.DeepEqual(got, []string{"review-missing/review-wrong-head"}) {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestAnAbsentOrInvalidMovedScopeNeverGetsTheCheapReviewRow(t *testing.T) {
+	in := codePublication()
+	in.Moved = nil // class is code from the range, but the rewrite receipt is missing
+	in.Review.ReviewerID = "sonnet-reviewer"
+	r := EvaluatePublication(in)
+	if r.MinTier != TierStrongest || !r.ClassUnknown || !reflect.DeepEqual(pubBlockers(r), []string{"identity-mismatch/moved-scope-absent", "review-missing/review-tier-too-low"}) {
+		t.Fatalf("%+v", r)
 	}
 }
