@@ -1,4 +1,4 @@
-# Tasks: Local restacking, first slice (`stw restack plan`)
+# Tasks: Local restack evidence and proposed apply
 
 **Input**: `spec.md`, `plan.md`, `data-model.md`, `contracts/restack-plan.md`, `quickstart.md`.
 **Tests**: Required by constitution principle IV. Write each behavior test, observe it fail, then implement; the characterization tests and refactor of T004 were skipped (see its line). Every task names the requirements (FR) it covers; a mutation control (MC) is a deliberate defect the tests must catch, run and recorded in the task commit message. Task checkboxes record execution, not design approval. No task runs a standalone build, `go install`, a Pages build, a release or a push of anything but the author's topic branch.
@@ -50,6 +50,94 @@
 
 - [ ] T024 [FR-013, FR-015] Failing test and fixture first (a clean `evidence-clean` plan must carry `rewrite-committer-not-predicted` in `limitations`, and the schema must accept it), then emit the limitation string in `internal/restack/result.go` and mark it emitted in the contract and data model. MC: drop the string.
 
-## Later slices (not scheduled by this task list)
+## Amendment boundary (2026-10-25)
 
-WP6 keep-both configuration classification, WP7 `restack apply` Git, WP8 jj peer, WP9 Spec 016 L2 push amendment, WP10 declared verify commands: each needs its own plan amendment, tasks, review and, where it mutates or runs code, explicit owner authorization.
+T001–T024 above retain their original checkboxes, dates and limits: 20 checked,
+four unchecked (T004 deliberately skipped; T021/T023/T024 open). The proposed
+T025–T044 below are all unchecked: documentation planning is not task execution.
+T001's historical design review does not clear this amendment. No code/test,
+build, schema-file, dependency or runtime change is authorized by this amendment.
+
+WP6 keep-both classification and WP10 declared verify commands remain deferred;
+D12's explicit allowlist, default empty, cannot resolve conflicts. WP9 push and
+PR linking/retargeting stay outside 015 in Spec 016. The new tasks detail WP7/8
+only after the affected owner decisions and independent design review. Candidate
+file paths below are planned implementation targets, not files created here.
+
+## Phase A0 — Decisions and foundation
+
+- [ ] T025 [FR-019, FR-021, FR-023, FR-027, FR-029, FR-034] Record owner dispositions for OQ-1–OQ-6 in `specs/015-local-restacking/spec.md`, `research.md` and relevant `contracts/*.md`; preserve explicit unresolved gates, D4–D9/D12/D13 and unchanged v1 schema. No runtime work before affected choices are accepted.
+- [ ] T026 [FR-034, SC-004] Obtain independent design review of the exact complete amended artifacts, then record the read-only installed Spec Kit analysis in `specs/015-local-restacking/analysis.md`. Refusal/partial/native scope and review timing must be checked, not inferred from historical T001.
+
+## Phase A1 — US1: review and store a bounded local apply plan (P1)
+
+Independent test: a future explicit stored plan binds one owned topic ref and
+exact inputs without changing original native state. Missing authorization or
+unsafe ownership must never turn the observation into an action.
+
+- [ ] T027 [US1] [FR-019, FR-021, FR-029, FR-030, FR-031] Write `internal/restack/apply_plan_test.go` red first: `TestApplyPlanNeedsExplicitSelection`, `TestApplyPlanRejectsForeignOrOccupiedRef`, `TestApplyPlanRevalidatesObservationInputs`, `TestApplyPlanV1ExitAndBytesUnchanged`. Fixture branches include own, foreign, default/protected, symbolic, missing/ambiguous task records, parent/native-stack provenance changed and unsafe ref/path names. MC: accept a name-only owner; silently use v1 as apply permission; map v1 incomplete to exit1.
+- [ ] T028 [US1] [FR-019, FR-021, FR-030] After T027 is red, implement proposed typed immutable plans and pure admission gates in `internal/restack/apply_plan.go`; store digest, one action, task/repository/ref association, exact old/new parents/head, allowed identity policy, native registration/config/operation expectations and limits. Reuse complete exact-bound 012/014 evidence only if available; D6 direct input remains independent. Serialize only the reviewed future protocol; preserve v1 schema/CLI behavior. Depends T025/T026/T024/T027.
+
+## Phase A2 — US2: actual replay evidence (P1)
+
+Independent test: quarantine replay produces actual candidate identities and
+one-to-one all-equal rows; no original ref/worktree moves, and negative identity,
+proof, conflict and scope fixtures refuse before a target commit point.
+
+- [ ] T029 [US2] [FR-020, FR-022, FR-028, FR-032] Write `internal/restack/apply_replay_test.go` red first: `TestApplyReplaysExactTwoDotRange`, `TestApplyRejectsAnyNonEqualRow`, `TestApplyReadsActualAuthorAndCommitter`, `TestApplyConflictStaysInQuarantine`, `TestApplyBoundStopsBeforeNextEffect`. Fixtures: sibling/descendant old parent, merge, empty/redundant commit, unpaired/changed/dropped/extra row, changed own diff, failed/unknown parent proof, leaked `t <t@t>` or fixed prediction committer, original author/date preservation, config/environment never an expected identity, binary/rename path conflict and 201 commits/2001 paths/oversize/deadline. MC: three-dot range, tree-only equality, omit actual committer check, execute porcelain rebase or original-worktree merge.
+- [ ] T030 [US2] [FR-020, FR-022, FR-028, FR-032] After T029 is red, implement actual quarantined candidate creation/equality/identity in `internal/restack/apply_replay.go`, preserving D7 and original author/date, with the explicitly accepted OQ-3 committer/time policy. Every range row `=`, count and own diff equal, parent proof complete, identities pass; otherwise refuse. Private fixed prediction commits never persist. Candidate actual full SHA appears before any review gate is demanded. Depends T028/T029/T021.
+
+## Phase A3 — US2: reusable recovery intent (P1)
+
+- [ ] T031 [US2] [FR-023, FR-031, FR-033] Write unchanged-sync characterization plus proposed shared durability tests in `internal/stwsync/journal_test.go` and `internal/restack/recovery_test.go` red first: `TestRestackRecoveryPreparedBeforeTargetMove`, `TestRestackJournalRejectsForeignTypeAndPath`, `TestRestackKeepsIncompleteRecovery`. Inject write/fsync/rename/directory-sync faults, recovery-root collision, dangling/symbolic root, symlink/path replacement, forged repository/run/ref/oid/type, duplicate action ids and unavailable store; fail before target movement. MC: omit directory sync check; overwrite an existing root; accept a sync record as restack; prune an incomplete run.
+- [ ] T032 [US2] [FR-023, FR-031, FR-033] Reuse/extract the neutral durability/recovery-ref seam from `internal/stwsync/journal.go` under the accepted OQ-5 storage/record contract; add typed restack integration in `internal/restack/recovery.go`, with unchanged existing sync behavior and private-path validation. Record full known candidate before CAS; retain orphan/incomplete roots and report failures; no second independent writer or automatic retention deletion. Depends T025/T026/T031; may run alongside A2 only with disjoint files.
+
+## Phase A4 — US2: guarded local commit point (P1)
+
+- [ ] T033 [US2] [FR-019, FR-021, FR-023, FR-024, FR-032, SC-005] Write `internal/restack/apply_test.go` red first: `TestApplyCASMovesOnlyOwnedTopic`, `TestApplyResamplesEveryGuardBeforeCAS`, `TestApplyRefusesOccupiedOwnerWorktree`, `TestApplyJournalFailureKeepsTarget`. Interleave target/parent/protection, common-dir/backend, task attribution, registration/owner/config/hook and operation changes at commit point. Record refs/reflogs, object content, all HEAD/index/files/config/worktrees and executable/network sentinels. MC: remove expected old ref, update a descendant, ignore new worktree, run reference-transaction hook or autostash.
+- [ ] T034 [US2] [FR-019, FR-021, FR-023, FR-024, FR-032] After T033 is red, coordinate candidate promotion, durable recovery, final guards, one no-dereference CAS and outcome resampling in `internal/restack/apply.go`. Report unreachable objects/partial metadata after preparation failure; preserve unrelated native state and no automatic rollback. Expose actual old/new mapping and review-required receipt. Depends T030/T032/T033 and accepted OQ-6 capability scope.
+
+## Phase A5 — US2: retry and conditional restore (P1)
+
+- [ ] T035 [US2] [FR-024, FR-033, SC-006] Write `internal/restack/retry_test.go` red first: `TestRestackCrashReconcilesEveryBoundary`, `TestRestackRetryNeverReplaysCompletedCAS`, `TestRestackUnknownNewHeadRetains`. Inject interruption before/after root, durable intent, object promotion, CAS, completion and output; current old/new/third value, unreadable state and observed ABA must produce the exact recovery table result. MC: blindly replay prepared record; call unknown success; discard root after output failure.
+- [ ] T036 [US2] [FR-024, FR-033, SC-006] Write `TestRestackRestoreRequiresSeparatePlanAndCAS` red first in `internal/restack/restore_test.go`, then implement `retry.go`/`restore.go`: validate typed journal/root/repository, explicit reverse plan id and local authorization, current==recorded-new→old CAS, already-old idempotence, changed/foreign/occupied/protected/symbolic/unreadable→retain. Integrate action pointers for Spec 013, preserve limits for untracked files and remote effects. MC: reset owner worktree; ignore intervening ref change; execute record text. Depends T034/T035.
+
+## Phase A6 — US2: native jj peer capability (P1, gated)
+
+Independent test: a missing native guarantee returns capability-unavailable
+without any Git write or original jj operation/snapshot/bookmark change.
+
+- [ ] T037 [US2] [FR-027, FR-034] Record a native minimum/current jj scratch capability spike in `specs/015-local-restacking/research.md` before selecting a write vector: expected-operation exclusion of concurrent/divergent heads, bookmark/descendant effects, isolation and retained-operation recovery. Do not claim atomic CAS or safe op undo without evidence. Unsupported guarantees keep the capability disabled; owner resolves OQ-4.
+- [ ] T038 [US2] [FR-027, FR-028, FR-031, SC-008] Write `internal/restack/jj_test.go` red first: `TestJJRestackNeverFallsBackToGit`, `TestJJRestackPreservesNativeIdentities`, `TestJJRestackRejectsUnselectedDescendants`, `TestJJRestackRejectsChangedOperation`. Cover standalone/colocated/secondary, unsupported versions/sandbox, immutable/shared/conflicted changes/bookmarks, operation divergence, stored-vs-disk no-snapshot, hostile config, cancellation and conditional native recovery. MC: raw Git write fallback; merge operation heads; snapshot original working copy; forget change ids or foreign descendants.
+- [ ] T039 [US2] [FR-027, FR-028, SC-008] Only after accepted T037 and red T038, implement `internal/restack/jj.go` using the proven native interface and typed recovery integration. Explicitly enumerate selected native bookmark/descendant/workspace effects; refuse missing operation/recovery guarantee. Record actual commit/change/operation identities. Otherwise ship the explicit capability refusal and leave v1 jj behavior unchanged. Depends T025/T026/T037/T038.
+
+## Phase A7 — US3: bounded shared contract and remote handoff (P1)
+
+Independent test: human/JSON agree for every outcome, proposed future fixtures
+stay separate from frozen v1, and every 015 recorder shows zero remote writes.
+
+- [ ] T040 [US3] [FR-008, FR-025, FR-026, FR-029, FR-031, FR-032] Write `internal/cli/restack_apply_test.go` and `internal/contracts/restack_apply_test.go` red first: `TestRestackFutureExitTableAndV1Freeze`, `TestRestackReceiptNeedsReviewOfActualNewSHA`, `TestRestackTextsRemainInertData`, `TestRestackHostileRecordsAreNotInstructions`. Validate complete/refusal/incomplete/partial/output-failed/canceled/usage shapes; hostile controls/Unicode/long paths and quoted text; one final bounded JSON result; proposed future 0/1/2 with unchanged v1 0/1/2/3. MC: claim old/predicted review is CLEAR; execute reset/push/link text; treat output failure as success.
+- [ ] T041 [US3] [FR-025, FR-026, FR-029, FR-030, SC-007] After T040 is red, implement receipt/rendering in `internal/restack/apply_result.go` and `internal/cli/restack_apply.go`; only later add separate unpublished future schemas/fixtures through the reviewed contract process. Add a consumer contract fixture in `internal/restack/handoff_test.go`: `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization` with missing/stale/other-SHA independent CLEAR, absent issuer/check/identity/attribution, remote old SHA changed, native-stack management changed. Spec 016 must independently validate each remote plan/action and full observed remote SHA; no push or retarget is implemented by 015. Keep owner resync text destructive and inert. Depends T034/T036/T040 and accepted OQ-1/OQ-2.
+
+## Phase A8 — Cross-cutting conformance and review
+
+- [ ] T042 [FR-010, FR-034, SC-001, SC-002, SC-003, SC-005, SC-008] Run implemented enabled-capability tests/conformance for minimum/current native Git and jj in the repository's declared lanes; record exact versions, source SHA, before/after sentinels, malformed/ownership/helper/network/concurrency/interruption fixtures and offline future-schema/v1 byte-compatibility validation in `specs/015-local-restacking/verification.md`. Missing lanes block their capability, never count as pass. Depends T034/T036/T041 and T039 for jj.
+- [ ] T043 [FR-031, FR-032, FR-034, SC-002, SC-004, SC-006, SC-007] Exercise killed/surviving guard mutations and deterministic fault/interleaving fixtures for every selected unit; no sleep-based concurrency tests, no new goroutines outside the Spec 040 boundary. Record literal test→FR/SC→task mappings and actual effects/limits in `specs/015-local-restacking/analysis.md` and `verification.md`. Depends selected implementation units, never substitute planned test names for execution.
+- [ ] T044 [FR-034, SC-004] Obtain independent review at the exact implemented head and required green checks; update `specs/015-local-restacking/verification.md` with actual accepted capability scope and blockers. New contracts stay UNPUBLISHED/hidden until conformance acceptance. Any later public docs/status/schema publication is separately scoped; this Markdown amendment changes no `docs/commands.md`, `docs/progress.md` or machine status. Depends T042/T043; owner alone merges.
+
+## Dependencies and execution strategy
+
+T025→T026; T027→T028; T029→T030; T031→T032; A2+A3→T033→T034;
+T035→T036; T037→T038→T039; T040→T041; selected implementations→T042/T043→T044.
+Each implementation task also depends on the affected accepted owner decisions.
+T021/T023/T024 are not completed by this amendment or by T044's future planning.
+Keep first-slice acceptance blockers independently visible.
+
+US1 is A1 (two tasks); US2 is A2–A6 (eleven tasks); US3 is A7 (two tasks).
+A0 and A8 supply five cross-cutting tasks: twenty new tasks total, all unchecked.
+A3's characterization/recovery seam can proceed alongside A2's quarantined replay
+only after A0 and with distinct file ownership; every same-file integration and
+CLI/schema change is sequential. MVP is Git one-ref apply/recovery with US3
+contract evidence; jj remains an explicitly disabled peer capability until A6
+and its own lanes pass. Deferred keep-both and verify-command work do not block
+this narrowly accepted scope but cannot be claimed implemented.
