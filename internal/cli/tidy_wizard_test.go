@@ -554,8 +554,12 @@ func TestEscFullDoesNotCutOrdinaryMessages(t *testing.T) {
 // The escaped message is bounded as a whole, so an enormous error cannot flood the terminal.
 func TestEscFullBoundsTheWholeMessage(t *testing.T) {
 	got := escFull(strings.Repeat("e", 100000))
-	if len(got) > maxEscapedMessage+8 || !strings.HasSuffix(got, "...") || !strings.HasPrefix(got, "eeee") {
+	// The bound is 4096 characters (the literal, not the constant under test).
+	if got != strings.Repeat("e", 4096)+"..." {
 		t.Errorf("%d bytes, tail %q", len(got), got[max(0, len(got)-8):])
+	}
+	if maxEscapedMessage != 4096 {
+		t.Errorf("maxEscapedMessage is %d", maxEscapedMessage)
 	}
 	hostile := escFull(strings.Repeat("\x1b", 100000))
 	if len(hostile) > maxEscapedMessage*4+8 {

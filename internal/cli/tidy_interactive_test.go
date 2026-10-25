@@ -8,11 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
+	"github.com/wstein/sourcesteward/internal/tidywizard/render"
 )
 
 // interactive captures what the wizard hands to the apply path and to the typed confirmation.
@@ -39,16 +42,35 @@ func newInteractive(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *
 	return i
 }
 
+// storedSets lists every regular file in the state directory: the fake planner writes none, so
+// any file is a stored plan set, whatever the directory of the store is called.
 func storedSets(t *testing.T, store string) []string {
 	t.Helper()
 	var out []string
-	_ = filepath.WalkDir(store, func(path string, d os.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && strings.Contains(path, "plansets") {
+	if err := filepath.WalkDir(store, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// The store keeps a lock file of its own; every other file is a stored record.
+		if !d.IsDir() && d.Name() != "lock" {
 			out = append(out, path)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	return out
+}
+
+// The helper itself sees a stored plan set (it is not vacuous).
+func TestInteractiveStoredSetsHelperSeesAStoredSet(t *testing.T) {
+	i := newInteractive(t, true, true)
+	if _, err := runTidy(t, "a\n\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedSets(t, i.prep.PlanStore); len(got) != 1 {
+		t.Errorf("stored files: %v", got)
+	}
 }
 
 // Bare `stw tidy` on a terminal shows the overview, asks which rows, stores the plan set of the
@@ -207,5 +229,156 @@ func TestBareTidyHelpAndArguments(t *testing.T) {
 	}
 	if _, err = runTidy(t, "", "stray"); !isUsage(err) {
 		t.Errorf("%v", err)
+	}
+}
+
+// numberOf is the number the prompt gives to a candidate.
+func numberOf(t *testing.T, i *interactive, id string) int {
+	t.Helper()
+	for _, n := range render.Numbered(render.Build(render.Input{Result: i.res, Repos: i.prep.Meta})) {
+		if n.Candidate.ID == id {
+			return n.Number
+		}
+	}
+	t.Fatalf("%s is not numbered", id)
+	return 0
+}
+
+func addCandidate(i *interactive, c tidywizard.Candidate) {
+	i.res.Candidates = append(i.res.Candidates, c)
+}
+
+// An own decision row chosen and confirmed ("y") is planned with the confirmation; the lock is named
+// (stw:<task>, the path), escaped, in the question.
+func TestInteractiveDecisionRowNamesTheLockAndNeedsItsConfirmation(t *testing.T) {
+	i := newInteractive(t, true, true)
+	dec := wcand("a", tidywizard.KindWorktree, "lock1", tidywizard.VerdictDecision, "claude", owner.SourceTaskRecord, owner.ScopeOwn)
+	dec.Reason, dec.Evidence, dec.Task = "locked-stw", "stw lock whose creation record does not match", "t9\x1b"
+	dec.Path = "/w/lock1\x1b[2J"
+	dec.Proof, dec.Effects = tidywizard.ProofAncestor, []string{"remove-registration", "remove-files"}
+	addCandidate(i, dec)
+	n := numberOf(t, i, dec.ID)
+	out, err := runTidy(t, strconv.Itoa(n)+"\ny\nn\n")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, want := range []string{"decision row", "stw lock whose creation record does not match", `stw:t9\x1b`, `/w/lock1\x1b[2J`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing from the confirmation:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Errorf("raw escape in the output")
+	}
+	if got := storedSets(t, i.prep.PlanStore); len(got) != 1 {
+		t.Errorf("the confirmed decision row was not planned: %v", got)
+	}
+	// Declined: nothing is stored.
+	i = newInteractive(t, true, true)
+	addCandidate(i, dec)
+	if _, err = runTidy(t, strconv.Itoa(n)+"\nn\n"); err != nil || len(storedSets(t, i.prep.PlanStore)) != 0 {
+		t.Errorf("%v %v", err, storedSets(t, i.prep.PlanStore))
+	}
+}
+
+// Owner labels are outside text: the owner questions show them escaped.
+func TestInteractiveOwnerLabelsAreEscaped(t *testing.T) {
+	i := newInteractive(t, true, true)
+	o := wcand("a", tidywizard.KindWorktree, "hostile", tidywizard.VerdictSafe, "co\x1b[31mdex\n", owner.SourcePathConvention, owner.ScopeOther)
+	addCandidate(i, o)
+	out, err := runTidy(t, "o\nn\nn\nn\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `co\x1b[31mdex\n`) || strings.Contains(out, "\x1b") {
+		t.Errorf("%q", out)
+	}
+}
+
+// Declining the plan set does not hide incomplete evidence: the overview's exit rules still apply.
+func TestInteractiveDecliningKeepsTheExitRules(t *testing.T) {
+	i := newInteractive(t, true, true)
+	i.res.Repositories[1] = tidywizard.RepoResult{Name: "b", State: "error", Reason: "boom", Notices: []string{}}
+	for _, in := range []string{"n\n", "\n", "a\nn\n"} {
+		_, err := runTidy(t, in)
+		var failure runtimeFailure
+		if !errors.As(err, &failure) {
+			t.Errorf("%q: %v", in, err)
+		}
+	}
+}
+
+// Three invalid answers at the apply question: exit 1, and the message says that the plan set is
+// stored and that nothing was applied.
+func TestInteractiveInvalidAnswersAtTheApplyQuestion(t *testing.T) {
+	i := newInteractive(t, true, true)
+	_, err := runTidy(t, "a\nx\nx\nx\n")
+	var failure runtimeFailure
+	files := storedSets(t, i.prep.PlanStore)
+	if !errors.As(err, &failure) || len(files) != 1 || len(i.applied) != 0 {
+		t.Fatalf("%v %v", err, files)
+	}
+	id := strings.TrimSuffix(filepath.Base(files[0]), ".json")
+	if !strings.Contains(err.Error(), id) || !strings.Contains(err.Error(), "stored") || !strings.Contains(err.Error(), "nothing was applied") || strings.Contains(err.Error(), "nothing was chosen") {
+		t.Errorf("%v", err)
+	}
+}
+
+// A plan set that cannot be stored is an error, never a silent "stored".
+func TestInteractiveStoreFailureIsReported(t *testing.T) {
+	i := newInteractive(t, true, true)
+	if err := os.Chmod(i.prep.PlanStore, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runTidy(t, "a\ny\n")
+	var failure runtimeFailure
+	if !errors.As(err, &failure) || strings.Contains(out, "Stored plan set") || len(i.applied) != 0 {
+		t.Errorf("%v\n%s", err, out)
+	}
+}
+
+// An interrupt at a prompt is exit 1 naming the interruption, never the raw context error.
+type cancelOnRead struct {
+	r      *strings.Reader
+	cancel func()
+	after  int
+	reads  int
+}
+
+func (c *cancelOnRead) Read(p []byte) (int, error) {
+	c.reads++
+	if c.reads > c.after {
+		c.cancel()
+	}
+	return c.r.Read(p)
+}
+
+func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		after int
+		want  string
+	}{
+		{"during the first question", "a\n", 0, "interrupted; nothing was changed"},
+		{"at the apply question", "a\ny\n", 1, "the plan set"},
+	} {
+		i := newInteractive(t, true, true)
+		ctx, cancel := context.WithCancel(context.Background())
+		in := &cancelOnRead{r: strings.NewReader(tc.input), cancel: cancel, after: tc.after}
+		cmd := tidyCommand()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetIn(in)
+		cmd.SetArgs(nil)
+		err := cmd.ExecuteContext(ctx)
+		var failure runtimeFailure
+		if !errors.As(err, &failure) || !strings.Contains(err.Error(), "interrupted") || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), "context canceled") || len(i.applied) != 0 {
+			t.Errorf("%s: %v (applied %d)", tc.name, err, len(i.applied))
+		}
+		if tc.after == 1 && !strings.Contains(err.Error(), "nothing was applied") {
+			t.Errorf("%s: %v", tc.name, err)
+		}
 	}
 }
