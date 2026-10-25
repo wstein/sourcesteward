@@ -33,10 +33,14 @@ command naming alone cannot establish read-only effects.
 records the reviewer's Git 2.56.0 observation that original-worktree untracked
 union attributes can turn a conflict into a clean merge-tree result despite
 H/N check-attr checks. This is review evidence, not an experiment executed here.
-The hidden Spec 015 restack-plan runner shares that gap; its separate code fix
-is tracked in [issue 241](https://github.com/wstein/sourcesteward/issues/241).
-This Markdown amendment changes no hidden-v1 code or schema and does not claim
-that implementation is fixed or safe to reuse before the separate fix/conformance.
+The hidden Spec 015 restack-plan runner shared that gap. It is fixed for that
+runner by [issue 241](https://github.com/wstein/sourcesteward/issues/241) and
+[PR 279](https://github.com/wstein/sourcesteward/pull/279): its prediction and
+evidence commands run with an empty attribute source (see
+[Spec 015 verification](../015-local-restacking/verification.md#attribute-source-of-the-replay-issue-241-2026-10-25)),
+while its dirty check stays unpinned. The full-H attribute pin profile of this
+specification is a different profile and is not implemented, and the Git 2.46
+lane has not run. This Markdown amendment changes no hidden-v1 code or schema.
 
 The [Git option documentation](https://git-scm.com/docs/git) defines an immutable
 tree attribute source through --attr-source (or GIT_ATTR_SOURCE). The proposed
