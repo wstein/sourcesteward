@@ -553,3 +553,45 @@ func TestJSONKeepsTheAnalysisOrder(t *testing.T) {
 		}
 	}
 }
+
+// The label is escaped and cut alone; the scope suffix is appended afterwards, so a long label
+// cannot cut it off and a label cannot fake it.
+func TestOwnerHeadingKeepsTheScopeSuffix(t *testing.T) {
+	in := input()
+	in.Result.Candidates = nil
+	long := cand("bundledock", tidywizard.KindBranch, "a", tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	long.Owner = strings.Repeat("L", 200)
+	fake := cand("bundledock", tidywizard.KindBranch, "b", tidywizard.VerdictSafe, "", owner.ScopeOther)
+	fake.Owner = "mallory (own)"
+	in.Result.Candidates = append(in.Result.Candidates, long, fake)
+	var headings []string
+	for _, l := range strings.Split(Text(Build(in), TextOptions{}), "\n") {
+		if strings.HasPrefix(l, "owner ") {
+			headings = append(headings, l)
+		}
+	}
+	if len(headings) != 2 || !strings.HasSuffix(headings[0], "... (own)") || len(headings[0]) > 140 {
+		t.Fatalf("own heading: %q", headings)
+	}
+	if headings[1] != "owner mallory (own) (other)" {
+		t.Errorf("a label with scope text keeps its real scope last: %q", headings[1])
+	}
+}
+
+// Other owners are sorted by label, not by first appearance; the same label in two scopes gives
+// two groups, the own scope first.
+func TestOwnerGroupOrderIsByLabelAndScope(t *testing.T) {
+	in := input()
+	in.Result.Candidates = nil
+	for _, l := range []string{"zeta", "mid", "alpha"} {
+		c := cand("bundledock", tidywizard.KindBranch, l+"/x", tidywizard.VerdictRetain, "unmerged", owner.ScopeOther)
+		c.Owner = l
+		in.Result.Candidates = append(in.Result.Candidates, c)
+	}
+	same := cand("bundledock", tidywizard.KindBranch, "own/x", tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn)
+	same.Owner = "mid"
+	in.Result.Candidates = append(in.Result.Candidates, same)
+	if got := headings(Text(Build(in), TextOptions{})); got != "owner mid (own)|owner alpha (other)|owner mid (other)|owner zeta (other)" {
+		t.Errorf("%s", got)
+	}
+}
