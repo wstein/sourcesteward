@@ -30,7 +30,7 @@ Add `stw stack show` and `stw stack plan`: one shared, read-only operation that 
 
 ## Constitution Check
 
-Author design assessment: aligned with constitution 1.2.0; no implementation or independent acceptance is claimed. Historical analysis clearance applies only to its recorded old revisions. The two current owner questions are explicit in spec.md.
+Author design assessment: aligned with constitution 1.2.0; no implementation or independent acceptance is claimed. Historical analysis clearance applies only to its recorded old revisions. The current network scope/naming, output/timeout vocabulary and exit-migration owner questions are explicit in spec.md; affected surfaces require those decisions before implementation.
 
 - **I. Shared contract**: one typed result renders text and versioned JSON; no prompt, editor or pager; exit 0, 1, 2 with a stated mapping.
 - **II. Evidence before actions**: findings carry confidence and evidence; the plan is explicit about targets, reasons, expected commit ids and effects, is advisory, and authorizes nothing; later apply must revalidate (Spec 015). The plan never proposes a rewrite that GitHub performs.
@@ -110,12 +110,14 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 
 1. **Diffs and changed-file queries**: withdrawn from 012 (Disposition table). Recommendation: keep withdrawn; GitHub and Git or jj already provide stored diffs, Spec 009 covers live files.
 2. **How the later `link` effect writes**: Recommendation: Spec 016 specifies it as a REST write through the bounded transport after the endpoints are measured in a disposable repository with your approval; until then 012 only prints `gh stack link`.
-3. **Network opt-in flag** `--pull-requests`: settled on 2026-10-17. OQ-NET in spec.md asks only whether the new literal no-network wording intends to amend that approval; recommendation: retain offline default and explicit uncached GET mode.
+3. **Network opt-in scope and flag**: open since the 2026-10-17 draft, which recommended keeping opt-in but recorded no owner answer. OQ-NET recommends an offline default with explicit uncached GET mode named shared `--online`, optionally retaining `--pull-requests` as an alias; the current draft examples use only `--pull-requests`. Do not implement the remote surface until the owner chooses scope and spelling.
 4. **A strict exit status for CI gating on drift**: recommendation: defer; findings stay separate from completion status. OQ-EXIT separately concerns future migration of the implemented Spec 015 incomplete exit 3; this 012 design keeps its existing 0/1/2 mapping and changes no runtime contract.
 5. **Explicit `--tip`**: Recommendation: keep explicit in v1; revisit a default for Git only after use.
 6. **Fork pull requests**: Recommendation: unsupported and disclosed in v1; measure before supporting.
 7. **Layer cap 32**: GitHub's maximum stack size is unverified. Recommendation: confirm the documented maximum and set LIM-2 to it.
 8. **`stack-link-missing` severity `action`**: Recommendation: keep; with GitHub native stacks the unlinked chain is the main drift of a rebase-merge workflow (it loses GitHub's server-side restacking).
+
+9. **Shared output and timeout flags**: OQ-FLAGS recommends explicit `--human` and a timeout that can only shorten LIM-1, aligning with Specs 041/043; neither is accepted in this draft. `--state-dir` is inapplicable to an operation with no store. Owner selection precedes flag implementation.
 
 ## Risks
 

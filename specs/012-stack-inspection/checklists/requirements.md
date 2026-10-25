@@ -38,7 +38,8 @@ The author review is not independent analysis. Independent cross-artifact analys
 - [x] `stack-too-deep` is advisory at >2, with independent hard cap 32; `restack-needed`, stale child base and closed-unmerged parent evidence have explicit rules and future tests.
 - [x] Pure decision functions and Spec 040 bounded indexed fan-out are specified, with no background polling.
 - [x] Every FR and SC is individually mapped to task ids and a literal test idea in analysis.md; this is design traceability, not executed acceptance.
-- [x] OQ-NET and OQ-EXIT are labelled Needs owner decision, with recommended defaults and deterministic current contracts; no owner answer is invented.
+- [x] OQ-NET, OQ-FLAGS and OQ-EXIT are labelled Needs owner decision, with recommended defaults and deterministic current contracts; no owner answer is invented.
+- [x] Network opt-in was an open recommendation, not an owner-approved decision; shared online/output/timeout naming remains explicitly gated before implementation.
 - [ ] Independent review is CLEAR for this refresh's exact final head and required publication checks are green (coordinator records separately).
 - [ ] Implementation/native backend/schema conformance is executed and accepted (future source task, not this Markdown scope).
 
