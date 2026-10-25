@@ -1,5 +1,10 @@
 # Research: Conflict diagnosis and isolated replay evidence
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Date**: 2026-10-25. Source/documentation inspection only. No new native
 experiment, backend acceptance, build, product network request or product test was run.
 
@@ -115,18 +120,16 @@ Spec 040 requires pure derivation with concurrency only at the reviewed edge.
 
 **Alternatives considered:** observation implies apply, local apply implies push,
 or clean prediction supplies publication/Ready evidence. None is valid.
-At this feature's base, [Spec 012 plan](../012-stack-inspection/plan.md) open
-question 3 asks about online-by-default versus explicit `--pull-requests` opt-in
-reads. The separately proposed [Spec 012 refresh in PR 237](https://github.com/wstein/sourcesteward/pull/237)
-labels that choice OQ-NET; this reference does not assume the refresh is on main.
-Retaining explicit opt-in is a recommendation, not recorded owner approval.
-This feature does not resolve or amend that choice.
+The dated [Spec 012 OQ-NET decision](../012-stack-inspection/spec.md#owner-decisions-2026-10-25)
+selects default offline and only explicit `--online`, with no old alias.
 014 performs no network; supplied remote context is external sampled data without
-a refresh.
+a refresh. The merged 012 `restack-advised` finding remains distinct from the
+published 035 `restack-needed` event; neither grants mutation authority.
 
-## Unresolved research
+## Adopted research and remaining measurements
 
-The OQs in [spec.md](spec.md#needs-owner-decision) retain real unsettled
-semantic/topology, native jj conflict evolution, hunk, scratch, flag and exit choices with recommendations. There are
-no invented owner answers or new approval flows. Their affected implementation
-units cannot start until their decisions and measurements are recorded.
+All seven stable OQ IDs are [owner decisions](spec.md#owner-decisions-2026-10-25)
+dated 2026-10-25. Their semantic/topology/hunk/scratch/jj recommendations are
+adopted as concrete measure-and-refuse gates, not proof of an algorithm or native
+conformance. Affected capabilities remain unavailable until the named measurements,
+red-first implementation tasks and acceptance evidence are complete.

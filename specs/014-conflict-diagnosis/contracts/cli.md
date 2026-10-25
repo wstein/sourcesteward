@@ -1,15 +1,20 @@
 # CLI and result contract
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **UNPUBLISHED Markdown proposal.** No command below is implemented by this
 artifact set; no JSON/schema file is added or changed. Implementation and native
-conformance must precede publication. Hidden restack-plan v1 stays unchanged.
+conformance must precede publication. Existing result schema1 bytes stay unchanged; target exit-contract revision 2 changes hidden restack incomplete to 1 after the new 015 code task.
 
 ## Explicit operation selection
 
 ```text
 stw conflict
-stw conflict diagnose [PATH] [--revision FULL_NATIVE_COMMIT_ID] [--json]
-stw conflict preflight [PATH] --semantics merge|rebase|restack --source REV --destination REV [--old-parent REV] [--json]
+stw conflict diagnose [PATH] [--revision FULL_NATIVE_COMMIT_ID] [--json | --human] [--timeout DURATION]
+stw conflict preflight [PATH] --semantics merge|rebase|restack --source REV --destination REV [--old-parent REV] [--json | --human] [--timeout DURATION]
 ```
 
 The group prints help and performs no observation, prompt or scratch write.
@@ -30,39 +35,25 @@ locally: never fetch, lazy-fetch a promisor object or contact credentials.
 
 No strategy/default inferred from repository configuration. The accepted native
 semantic profile and its options are recorded; OQ-SEM/TOPO/SCRATCH gate profiles
-before replay. This proposal does not silently select an owner answer. No
+before replay. The owner adopted measure-and-refuse recommendations; no native proof is inferred. No
 `--apply`, `--authorize`, `--yes`, provider or arbitrary-command pass-through flag.
 No `gh jj` entry point is proposed by this feature.
 
 A future accepted hunk capability may add repeatable exact-byte-safe selected
-path input and an explicit context switch. The final selector/encoding syntax
-belongs to OQ-HUNK; no placeholder CLI flag is advertised as accepted. Default
+path input and an explicit context switch. The adopted OQ-HUNK exact-selection/privacy direction still needs concrete measured selector/encoding implementation; no placeholder flag is advertised as implemented. Default
 output has paths/types/participant identities only. An unrequested body is never
 read solely for rendering. Source reads required by replay do not imply permission
 to emit those bodies.
 
 ## Shared flag vocabulary and noninteractive use
 
-Text output is the draft default; `--json` selects structured output. Neither
-mode requires a TTY, reads stdin or introduces a prompt. Relative to the shared
-vocabulary in Specs 041/043, `--human` and `--timeout` are not proposed accepted
-flags here pending [OQ-FLAGS](../spec.md#needs-owner-decision); the current draft instead has fixed
-60-second operation and 10-second native-process bounds. If an explicit text or
-timeout selector is later adopted, recommend those shared names rather than
-new aliases; that recommendation is not an owner decision or an accepted flag.
-
-`--state-dir` is not applicable: diagnosis/preflight creates no saved plan,
-checkpoint or evidence store. Disclosed private scratch is disposable execution
-state, not a plan store. `--online` is not applicable and is refused: this feature
-is offline and never refreshes supplied remote evidence. Specs 033/037 use
-`--offline` for their existing online-default commands; those commands remain
-unchanged. Since 014 is already offline, `--offline` is not proposed as an accepted
-flag here either; any future interface choice needs explicit alignment rather
-than an invented owner answer. OQ-FLAGS records recommendations and the unchanged
-current proposal; it grants no flag admission. Under the current draft, all five unproposed or
-inapplicable flags are usage errors (exit 2) before native reads or scratch effects,
-including when no TTY is present. A later accepted flag alignment requires contract
-and test updates rather than implicit inheritance.
+Owner decision 2026-10-25 adopts --human exclusive with --json and a positive
+--timeout that only shortens the 60-second whole-operation cap and any earlier
+deadline; the 10-second native-process cap remains. Neither format needs a TTY,
+stdin, prompt, helper or editor. --state-dir is inapplicable because diagnosis/
+preflight saves no plan; private scratch is not a plan/payload store. --online
+and redundant --offline are usage 2 before effects. Existing 033/037 online-default
+polarity is unchanged. Native profile semantics still require measured admission.
 
 ## Outcomes and exit status
 

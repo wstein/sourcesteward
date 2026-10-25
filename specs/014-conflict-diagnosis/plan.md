@@ -1,5 +1,10 @@
 # Implementation Plan: Conflict diagnosis and isolated integration preflight
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Branch**: `codex/spec-014-stack-toolbelt` | **Date**: 2026-10-25 | **Spec**: [spec.md](spec.md)
 
 ## Summary and status
@@ -10,7 +15,8 @@ plumbing/quarantine, never porcelain rebase. Native merge and jj capabilities
 remain gated by the owner decisions and measurements in [research](research.md).
 No code, schema file, dependency, build, test execution or runtime operation is
 part of this amendment. New JSON proposals are UNPUBLISHED until implemented and
-conformant; frozen hidden restack-plan v1 is preserved, including incomplete exit 3.
+conformant; hidden restack-plan JSON/schema bytes are preserved. CURRENT incomplete exit 3
+changes to target exit 1 only through the explicit 015 revision-2 root/CLI task.
 
 ## Technical context
 
@@ -75,7 +81,7 @@ stop-first suffix or parallelize effects/resampling across native dependencies.
 1. Parse explicit mode and semantics; no leaf means help and no observation.
 2. Admit canonical layout and native ownership; capture backend/version and native
    state, full participants and resolved references. Reject unsafe/missing history,
-   undecided semantic profiles and unsupported native capabilities before replay.
+   unmeasured semantic profiles and unsupported native capabilities before replay.
 3. Diagnosis runs with the binding sanitized runner/configuration controls in
    [preflight isolation](contracts/preflight.md#binding-execution-isolation-and-hazard-refusal)
    and enforced original-write/network denial. Git uses `ls-files -u -z`,
@@ -132,7 +138,7 @@ independently unless an actual code dependency later justifies a stack.
 | Scratch jj shares operation log/object store | Native isolated-store measurement, no workspace-add in original, refuse unavailable capability |
 | Optional hunk leaks secrets or hostile instructions | Default no bodies, selected exact paths, omission reason and finite bounds; content is DATA, never executed |
 | Partial replay appears clean | Git first-conflict coverage/not-evaluated suffix; native jj complete graph and accepted aggregate semantics, unknown on missing evidence |
-| Shared 015 refactor changes hidden v1 | Characterization and unchanged frozen file/fixture digests before extraction; retain exit 3 |
+| Shared 015 refactor changes hidden v1 | Characterize CURRENT exit 3 and preserve frozen JSON file/fixture digests; the explicit 015 revision-2 task changes incomplete to target 1 |
 | Clean prediction treated as merge approval | Fixed notice in all result modes; no authorization/review/check field asserting readiness |
 | Cancellation leaves scratch | Owned cleanup after reaping children, residue handle and incomplete status; never clean arbitrary supplied path |
 

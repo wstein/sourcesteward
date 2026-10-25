@@ -1,5 +1,10 @@
 # Feature Specification: Conflict Diagnosis and Integration Preflight
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Feature Branch**: `codex/spec-014-stack-toolbelt` (specification only)
 **Created**: 2026-10-15
 **Status**: Draft artifact refresh, 2026-10-25 — specification/design only; implementation, independent exact-head review and native conformance pending. New contracts are UNPUBLISHED Markdown proposals. Existing published and hidden JSON files remain unchanged.
@@ -23,10 +28,10 @@ the human `git rebase --onto` form describes semantics, never an executable
 implementation choice. No porcelain rebase is introduced here.
 
 All command/field names and bounds below are proposals for this unimplemented
-feature. The explicit unresolved choices in [Needs owner decision](#needs-owner-decision)
-block only their affected capabilities. A documentation artifact is not a runtime
-authorization. The existing hidden Spec 015 v1 behavior, including incomplete
-exit 3, remains frozen.
+feature. The dated owner decisions adopt the recommendations; remaining native/implementation gates block only affected capabilities. A documentation artifact is not a runtime
+authorization. Existing JSON schema/result bytes remain frozen. CURRENT hidden Spec 015 code
+still returns incomplete exit 3; its owner-decided CLI exit-contract revision 2
+tasks change that mapping to 1 without a legacy selector or JSON shape change.
 
 ## User Scenarios & Testing
 
@@ -122,12 +127,12 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - **FR-014**: Enforce the binding Spec 015 runner environment/pins and execution-hazard refusal minimum in contracts/preflight.md for diagnosis and preflight, with native jj user-configuration isolation and no Git status/index refresh during diagnosis. Suppress repository-controlled execution and network. On cancellation, partial failure or unavailable isolation, report failure/unknown with remaining scratch ownership, without unsandboxed/original-workspace fallback.
 
 - **FR-015**: Default to none: the command group shows help without reads, writes or prompts until diagnosis or preflight is explicitly selected. No automatic preflight, resolver, fetch, authentication, script, model or network access is permitted; cached/supplied stack or PR context stays labelled external sampled evidence and never triggers a refresh.
-- **FR-016**: Require explicit integration semantics and full resolved source/destination identities. Restack/rebase replay additionally requires an explicit old-parent and ordered moved range; merge requires explicit native participants/base interpretation. Never infer boundaries from branch names or silently substitute merge, replay, mainline or conflict strategies. Unsupported or undecided semantics/topologies refuse before scratch replay.
+- **FR-016**: Require explicit integration semantics and full resolved source/destination identities. Restack/rebase replay additionally requires an explicit old-parent and ordered moved range; merge requires explicit native participants/base interpretation. Never infer boundaries from branch names or silently substitute merge, replay, mainline or conflict strategies. Unsupported or unmeasured semantics/topologies refuse before scratch replay.
 - **FR-017**: For supported Git linear replay, preserve Spec 015 D7: replay exactly old-parent..source-head onto new-parent oldest first using plumbing in a private object store; no original ref or object write, worktree attachment or porcelain operation. Bind and enforce source-head H as the immutable attribute source of every actual merge-tree invocation in private Git admin/worktree/index state, with native-version proof and no original attribute overrides; missing enforcement refuses. Stop at the first conflict and mark the suffix not-evaluated; a prediction is not an apply candidate or range-diff/identity verification receipt.
 - **FR-018**: Bind each admitted observation to repository/layout identity, backend/version/capability, full native commit identities, distinct jj change/operation identities where applicable, resolved refs, ordered range, actual-invocation attribute-source receipt for Git replay and explicit semantics/options; failed admission or unavailable identities remain explicit null/unknown rather than invented. Resample relevant refs, ownership and native operation state; observed changes produce incomplete/unknown. Disclose residual concurrency/ABA limits; a later consumer revalidates independently.
 - **FR-019**: Default to paths/types and minimal participant metadata, without blob bodies, environment/config dumps or credential fields. Optional hunks require explicit selected paths and an accepted privacy capability; disclose stored/disk/scratch origin, range and byte/line bounds. Omit binary/unknown/sensitive context with a reason; never claim secret detection is complete or marker disappearance proves resolution.
 - **FR-020**: Enforce the documented finite bounds before allocating or emitting unbounded data; report per-source completeness, unknown fields, Git first-conflict replay coverage, separately accepted native jj graph coverage and cleanup outcome in human and structured output. A conflicted complete observation may succeed, but cancellation, limit exhaustion, changed inputs or scratch residue never yields complete/predicted-clean success.
-- **FR-021**: Enable native jj diagnosis or preflight only for separately measured version/capability and enforced no-snapshot/no-original-write behavior. Preserve commit/change/operation identities and declared descendant/parent semantics; unsettled native conflict-aggregate semantics (OQ-JJCONF), unsupported native scratch replay or hunk extraction returns capability-unavailable, including in colocated jj, without raw Git fallback.
+- **FR-021**: Enable native jj diagnosis or preflight only for separately measured version/capability and enforced no-snapshot/no-original-write behavior. Preserve commit/change/operation identities and declared descendant/parent semantics; unmeasured native conflict-aggregate semantics under adopted OQ-JJCONF, unsupported native scratch replay or hunk extraction returns capability-unavailable, including in colocated jj, without raw Git fallback.
 - **FR-022**: Share typed isolated replay evidence with Spec 015 only when backend, exact inputs, semantics/options and completeness match; reuse a reviewed neutral seam with existing hidden-v1 characterization first. Scratch objects are disposable and never imported or retained by this command. Specs 013/015/016 must obtain fresh own-scope evidence and their applicable recovery/authorization; Spec 016 owns publication and Ready gates; preflight evidence satisfies none of them. No checkpoint, journal, recovery root, mutation or remote action is created by preflight.
 
 ### Key Entities
@@ -154,20 +159,29 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - **SC-007**: Default output contains zero file-body bytes and secret/environment sentinels; explicitly selected hunk fixtures obey every bound, preserve unusual path identity, label origin and escape terminal controls without exposing unselected bodies.
 - **SC-008**: Every admitted observation with resolved participants binds full sampled identities and semantics, marks races/limits/cancellation unknown or incomplete, and contains the fixed prediction limitation; no fixture converts predicted-clean or supplied PR context into readiness, verification or mutation/remote authorization.
 
+## Owner decisions (2026-10-25)
+
+All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
+choices adopt the source recommendations; implementation/native measurement and
+review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
+distinguish saved-plan metadata, external capture payloads, trusted policy,
+optional host-only signing and CLI exit-contract revision 2.
+
+| Decision ID | Dated disposition | Remaining implementation/verification gate |
+| --- | --- | --- |
+| OQ-SEM | DECIDED: adopt initial single-parent linear replay and refuse empty/redundant commits; merge variants require separately measured explicit profile. | Accepted direction does not prove any native strategy; unmeasured variants unavailable. |
+| OQ-TOPO | DECIDED: use explicit measured topology allowlist and refuse every unmeasured Git/jj shape. | Native topology/rename/mode/gitlink conformance before enablement. |
+| OQ-HUNK | DECIDED: paths/types default; bounded hunks require exact selected paths and accepted measured privacy capability. | Optional context stays disabled without privacy/conformance evidence; no complete secret detector claim. |
+| OQ-SCRATCH | DECIDED: require measured read-only original and isolated native scratch, no shared writable original store/fallback. | Platform/native isolation conformance; no helper execution. |
+| OQ-JJCONF | DECIDED: adopt measure-before-classification recommendation for per-revision/aggregate native conflict evolution. | Algorithm/native graph semantics remain unmeasured; clean tip/Git stop-first cannot prove jj aggregate. |
+| OQ-FLAGS | DECIDED: --human exclusive with --json and positive shortening --timeout; --online/--offline/--state-dir remain inapplicable. | CLI/timeout tests before wiring; fixed maximum process bound stays. |
+| OQ-EXIT | DECIDED: target unified 0/1/2 CLI revision 2, including 015 incomplete=1 after its code task. | Current 015 implementation still 3; no schema byte edit in these docs. |
+
 ## Needs owner decision
 
-These are unresolved capabilities, not requests to reopen settled Spec 015 D4–D9,
-D12–D13 or the no-original-write boundary. Recommendations are not owner decisions.
-
-| ID | Unsettled choice | Recommendation and current gate |
-| --- | --- | --- |
-| OQ-SEM | Which native merge strategies, base/mainline interpretation and replay treatments for empty/redundant commits are supported? | Begin with explicit single-parent linear replay; propose refusal for empty/redundant commits. Accept a separately measured two-head, single-merge-base merge contract before enabling merge; never infer recursive/octopus/mainline behavior. Affected variants stay capability-unavailable. |
-| OQ-TOPO | Which merge commits, rename thresholds, file-mode/submodule cases, multiple merge bases and jj multi-parent/descendant shapes should prediction cover? | Keep an explicit allowlist from native measurements; refuse unmeasured shapes rather than equate Git and jj or claim topology parity. |
-| OQ-HUNK | May selected hunk contents, locations or path names reveal sensitive work, and what omission policy can callers choose? | Paths/types only by default, no content auto-detection guarantee; require explicit selected paths for bounded context and decide whether a metadata-only privacy mode is needed. Hunk capability stays disabled pending policy and conformance. |
-| OQ-SCRATCH | Which platforms/native jj interfaces can enforce a read-only original store and isolated replay without snapshots, shared-store/oplog effects or helpers? | Measure minimum/current versions on supported Linux/macOS enforcement; no preview on an unproven backend/platform. Shared object-store/workspace attachment is insufficient isolation. |
-| OQ-JJCONF | How should native jj per-revision conflict evolution and the aggregate prediction describe inherited or later-resolved conflicts across rewritten descendants? | Recommend measuring parent/result native conflict terms and complete bounded descendant scope before choosing introduced/inherited/resolved/clean classifications and whether any conflicted retained revision controls the aggregate. A clean final tip and Git stop-first semantics are insufficient. Native jj preflight stays capability-unavailable until accepted; no owner answer or proof is inferred. |
-| OQ-FLAGS | Should 014 adopt shared --human/--timeout admission or an explicit --offline alias, consistent with the proposed Spec 012 OQ-FLAGS in [PR 237](https://github.com/wstein/sourcesteward/pull/237) and Spec 013 OQ-5 in [PR 240](https://github.com/wstein/sourcesteward/pull/240), without assuming those refreshes are on main? | Recommend an explicit --human alias exclusive with --json and a positive --timeout that can only shorten the 60-second operation bound, preserving the 10-second native-process cap. Keep --state-dir inapplicable and --online refused; recommend leaving --offline unsupported because 014 already defaults offline, unless the owner chooses a no-op alias. These are recommendations only: the current draft accepts none of these flags and uses text default plus --json and fixed bounds. Resolve before changing the affected CLI surface. |
-| OQ-EXIT | Should the future toolbelt protocol use 0/1/2 despite hidden Spec 015 v1 incomplete exit 3? | Propose 0 complete, 1 refused/incomplete/error, 2 usage for new 014 only; preserve v1 exit 3 and require an explicit versioned migration decision before shared CLI adoption. |
+Compatibility anchor only: the IDs above are settled owner decisions, not open
+questions. Remaining unavailable capabilities require implementation/measurement
+evidence, not an invented additional owner answer.
 
 ## Assumptions
 
