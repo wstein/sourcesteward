@@ -32,11 +32,21 @@ type Hints struct {
 type Subject struct {
 	Ref       *string
 	PRHeadRef *string
+	HeadRepo  *RepoRef
+	BaseRepo  *RepoRef
+}
+
+// RepoRef is the identity of a repository as the forge reports it.
+type RepoRef struct {
+	Host  string
+	Owner string
+	Name  string
 }
 
 // OwnershipInput is everything the ownership guards are computed from.
 type OwnershipInput struct {
 	PlanTask string
+	PlanRepo RepoRef
 	Kind     ActionKind
 	Subject  Subject
 	Task     TaskEvidence

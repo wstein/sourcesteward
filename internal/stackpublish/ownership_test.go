@@ -240,3 +240,31 @@ func TestModeSummaryKeepsMarkerNamesOnly(t *testing.T) {
 		t.Fatalf("the derived summary must validate: %v", err)
 	}
 }
+
+func repoRef(owner, name string) *RepoRef {
+	return &RepoRef{Host: "github.com", Owner: owner, Name: name}
+}
+
+func prInput(kind ActionKind, head, base *RepoRef) OwnershipInput {
+	return OwnershipInput{PlanTask: "spec016-slice1", Kind: kind, Task: ownTask(), Current: human(), PlanRepo: RepoRef{Host: "github.com", Owner: "owner", Name: "project"},
+		Subject: Subject{PRHeadRef: str("refs/heads/feat/own"), HeadRepo: head, BaseRepo: base}}
+}
+
+func TestAForkPRWithTheSameBranchNameIsNotOwned(t *testing.T) {
+	own := repoRef("owner", "project")
+	for _, kind := range []ActionKind{KindEditBody, KindRetarget, KindReady} {
+		want(t, OwnershipGuards(prInput(kind, own, own)), GuardOwnership, GuardPass, "")
+		// Same branch name, but the head lives in someone else's fork.
+		want(t, OwnershipGuards(prInput(kind, repoRef("mallory", "project"), own)), GuardOwnership, GuardFail, ReasonNotOwned)
+		want(t, OwnershipGuards(prInput(kind, repoRef("owner", "project-fork"), own)), GuardOwnership, GuardFail, ReasonNotOwned)
+		want(t, OwnershipGuards(prInput(kind, &RepoRef{Host: "ghe.example.org", Owner: "owner", Name: "project"}, own)), GuardOwnership, GuardFail, ReasonNotOwned)
+		// A cross-repository base is not the plan repository either.
+		want(t, OwnershipGuards(prInput(kind, own, repoRef("elsewhere", "project"))), GuardOwnership, GuardFail, ReasonNotOwned)
+		// Unknown head or base repository evidence refuses as unknown, never passes.
+		want(t, OwnershipGuards(prInput(kind, nil, own)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+		want(t, OwnershipGuards(prInput(kind, own, nil)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+		want(t, OwnershipGuards(prInput(kind, &RepoRef{}, own)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+	}
+	// GitHub owner and repository names compare case-insensitively.
+	want(t, OwnershipGuards(prInput(KindReady, repoRef("OWNER", "Project"), repoRef("Owner", "PROJECT"))), GuardOwnership, GuardPass, "")
+}
