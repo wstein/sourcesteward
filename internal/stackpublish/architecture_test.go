@@ -92,6 +92,15 @@ func TestSeamMutationProbesAreCaught(t *testing.T) {
 		"dot time":             "package p\nimport . \"time\"\nvar _ = Now()\n",
 		"context timeout":      "package p\nimport \"context\"\nvar _, _ = context.WithTimeout(context.Background(), 1)\n",
 		"time Local":           "package p\nimport \"time\"\nvar _ = time.Local\n",
+		"init Println":         "package p\nimport \"fmt\"\nfunc init() { fmt.Println(1) }\n",
+		"plain init":           "package p\nfunc init() {}\n",
+		"fmt Print":            "package p\nimport \"fmt\"\nfunc f() { fmt.Print(1) }\n",
+		"fmt Fprintln":         "package p\nimport \"fmt\"\nfunc f() { fmt.Fprintln(nil, 1) }\n",
+		"fmt Scan":             "package p\nimport \"fmt\"\nfunc f() { var s string; fmt.Scan(&s) }\n",
+		"aliased Println":      "package p\nimport f \"fmt\"\nfunc g() { f.Println(1) }\n",
+		"Local method":         "package p\nimport \"time\"\nvar _ = time.Time{}.Local()\n",
+		"In method":            "package p\nimport \"time\"\nfunc f(t time.Time) { _ = t.In(nil) }\n",
+		"blank fmt":            "package p\nimport _ \"fmt\"\n",
 	}
 	for name, source := range probes {
 		if len(seamViolations("probe.go", source)) == 0 {

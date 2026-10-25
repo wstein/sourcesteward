@@ -270,3 +270,50 @@ func TestAForkPRWithTheSameBranchNameIsNotOwned(t *testing.T) {
 	// GitHub owner and repository names compare case-insensitively.
 	want(t, OwnershipGuards(prInput(KindReady, repoRef("OWNER", "Project"), repoRef("Owner", "PROJECT"))), GuardOwnership, GuardPass, "")
 }
+
+func planWithRepo(t *testing.T, owner, name string) Plan {
+	t.Helper()
+	in := fixtureInput()
+	r := *in.Repository
+	r.Owner, r.Name = owner, name
+	in.Repository = &r
+	return mustPlan(t, in)
+}
+
+// Review D2: the compared repository is the validated plan's, and names fold in ASCII only.
+func TestThePlanRepositoryComesFromThePlanNotFromTheCaller(t *testing.T) {
+	plan := planWithRepo(t, "owner", "project")
+	fork := repoRef("mallory", "project")
+	for _, kind := range []ActionKind{KindEditBody, KindRetarget, KindReady} {
+		in := prInput(kind, fork, fork)
+		in.Plan = plan
+		in.PlanRepo = *fork // a caller-supplied fork must not become the reference
+		in.PlanTask = plan.Task().TaskID
+		in.Task.TaskID = plan.Task().TaskID
+		want(t, OwnershipGuards(in), GuardOwnership, GuardFail, ReasonNotOwned)
+	}
+	// A zero Plan has no repository and no task: nothing is owned.
+	in := prInput(KindReady, repoRef("owner", "project"), repoRef("owner", "project"))
+	in.Plan = Plan{}
+	in.PlanTask = in.Task.TaskID
+	if g, _ := byName(OwnershipGuards(in), GuardOwnership); g.Result == GuardPass {
+		t.Error("ownership passed without a plan")
+	}
+}
+
+func TestRepositoryNamesAreValidatedAndFoldedInASCIIOnly(t *testing.T) {
+	plan := planWithRepo(t, "owner", "prokject")
+	kelvin := "pro\u212aject" // KELVIN SIGN folds to k under Unicode folding
+	for _, head := range []*RepoRef{repoRef("owner", kelvin), repoRef("ow\u212aner", "prokject"), repoRef("owner", "proj ect"), repoRef("owner", "a/b"), repoRef("owner", ""), {Host: "GITHUB.COM", Owner: "owner", Name: "pro\x00ject"}} {
+		in := prInput(KindReady, head, head)
+		in.Plan = plan
+		in.Task.TaskID = plan.Task().TaskID
+		if g, _ := byName(OwnershipGuards(in), GuardOwnership); g.Result == GuardPass {
+			t.Errorf("%+v passed ownership", *head)
+		}
+	}
+	ok := prInput(KindReady, &RepoRef{Host: "GitHub.com", Owner: "OWNER", Name: "ProKject"}, repoRef("Owner", "PROKJECT"))
+	ok.Plan = plan
+	ok.Task.TaskID = plan.Task().TaskID
+	want(t, OwnershipGuards(ok), GuardOwnership, GuardPass, "")
+}
