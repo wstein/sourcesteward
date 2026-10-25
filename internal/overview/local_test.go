@@ -92,16 +92,16 @@ func TestLocalRules(t *testing.T) {
 			r.Gitlink = &stwsync.Gitlink{State: "drift", Relation: sp("ahead")}
 		}, "gitlink-ahead:r:libs/sub", Blue, GitlinkAhead, KindGitlink, "git -C /ws add libs/sub", Owner},
 		{"23 branches unmerged", func(r *stwsync.RepoStatus) { r.Branches.NotIntegrated = ip(3) },
-			"branches-unmerged:r:branches", Blue, BranchesUnmerged, KindFact, "stw tidy plan r", Read},
+			"branches-unmerged:r:branches", Blue, BranchesUnmerged, KindFact, "stw tidy", Read},
 		{"24 worktree prunable", func(r *stwsync.RepoStatus) {
 			r.Worktrees.List = []stwsync.WorktreeInfo{{Path: "/wt/b", Prunable: true}}
-		}, "worktree-stale:r:/wt/b", Blue, WorktreeStale, KindWorktree, "stw tidy plan r", Read},
+		}, "worktree-stale:r:/wt/b", Blue, WorktreeStale, KindWorktree, "stw tidy", Read},
 		{"24 worktree missing", func(r *stwsync.RepoStatus) {
 			r.Worktrees.List = []stwsync.WorktreeInfo{{Path: "/wt/b", Missing: true}}
-		}, "worktree-stale:r:/wt/b", Blue, WorktreeStale, KindWorktree, "stw tidy plan r", Read},
+		}, "worktree-stale:r:/wt/b", Blue, WorktreeStale, KindWorktree, "stw tidy", Read},
 		{"24 worktree locked", func(r *stwsync.RepoStatus) {
 			r.Worktrees.List = []stwsync.WorktreeInfo{{Path: "/wt/b", Locked: sp("")}}
-		}, "worktree-stale:r:/wt/b", Blue, WorktreeStale, KindWorktree, "stw tidy plan r", Read},
+		}, "worktree-stale:r:/wt/b", Blue, WorktreeStale, KindWorktree, "stw tidy", Read},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

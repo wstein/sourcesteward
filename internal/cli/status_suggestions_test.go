@@ -119,7 +119,7 @@ func reviewedForeignCommand(command string) bool {
 
 func TestSuggestedCommandsAreCheckedAgainstTheTree(t *testing.T) {
 	root, _ := newRoot("dev", io.Discard, io.Discard)
-	for _, command := range []string{"stw status --offline core", "stw sync --plan core", "stw tidy plan core", "stw pulls --repo acme/core --bots-only"} {
+	for _, command := range []string{"stw status --offline core", "stw sync --plan core", "stw tidy", "stw pulls --repo acme/core --bots-only"} {
 		target, rest, err := root.Find(strings.Fields(command)[1:])
 		if err != nil || target == root || target.ParseFlags(rest) != nil {
 			t.Errorf("%q must resolve", command)
