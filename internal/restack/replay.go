@@ -59,6 +59,9 @@ func (p *planner) replay(ctx context.Context) (replayOutcome, error) {
 // mergeTree merges side b onto side a with the given merge base; a non-nil conflict means the
 // merge stopped with conflicts (exit status 1).
 func (p *planner) mergeTree(ctx context.Context, base, a, b string) (string, *mergeConflict, error) {
+	// The runner pins the attribute source to the empty tree (issue 241): no .gitattributes of the
+	// worktree or index applies, and the hazard gate has refused every merge, diff or filter
+	// attribute of the sampled trees on a moved path, so nothing is lost by ignoring them here.
 	o, err := p.git.run(ctx, "merge-tree", "--write-tree", "--name-only", "-z", "--merge-base="+base, a, b)
 	if err != nil {
 		return "", nil, err

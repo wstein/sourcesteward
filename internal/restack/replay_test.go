@@ -209,3 +209,22 @@ func TestUntrackedDiffAttributesDoNotChangeTheEvidence(t *testing.T) {
 		t.Fatalf("want %+v got %+v", want, got)
 	}
 }
+
+func TestEveryCommandStartsWithTheEmptyAttributeSourceAndALaterEntryWins(t *testing.T) {
+	g := &gitRunner{home: os.DevNull}
+	last := func(env []string) string {
+		v := ""
+		for _, kv := range env {
+			if n, rest, _ := strings.Cut(kv, "="); n == "GIT_ATTR_SOURCE" {
+				v = rest
+			}
+		}
+		return v
+	}
+	if got := last(g.environment(nil)); got != emptyTree {
+		t.Fatalf("default attribute source %q", got)
+	}
+	if got := last(g.environment([]string{"GIT_ATTR_SOURCE=abc"})); got != "abc" {
+		t.Fatalf("an explicit source must win, got %q", got)
+	}
+}
