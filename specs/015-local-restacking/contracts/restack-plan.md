@@ -1,6 +1,6 @@
 # Contract: `stw restack plan`
 
-Status: proposed first-slice contract, subordinate to the [specification](../spec.md). It is published as `schemas/v1/restack-plan.schema.json` only with accepted implementation; no existing schema, fixture or command changes.
+Status: first-slice contract implemented in source on 2026-10-21, hidden and UNPUBLISHED, subordinate to the [specification](../spec.md). `schemas/v1/restack-plan.schema.json` exists and is frozen by digest; publication awaits acceptance (T021/T023). The 2026-10-25 Markdown amendment changes no schema, fixture or command. Proposed local apply is a separate [future contract](restack-apply.md), never authority derived from this observation.
 
 ## Command
 
@@ -123,3 +123,19 @@ Overlap risk: 2 paths changed by the new parent and by the branch (src/a.go, src
 Limitation: semantic breaks are not detected; build and test the result.
 Lease push (not run): git push --force-with-lease='refs/heads/feat/x:<old sha>' origin "${NEW_FULL_SHA:?set to the full new commit id}:refs/heads/feat/x"
 ```
+
+
+## 2026-10-25 compatibility and handoff boundary
+
+Implemented v1 remains exactly 0/1/2/3 with `incomplete` exit3 and unchanged
+schema bytes. A common future 0/1/2 convention is an OQ-1 migration proposal,
+not an additive v1 wording change. The `rewrite-committer-not-predicted`
+limitation stays reserved pending T024; documents do not claim it is emitted.
+
+`texts.lease_push.observed_old_sha` is the local observed branch head, not a fresh
+remote advertisement. A consumer cannot use it as Spec 016's remote lease proof.
+The existing text is inert human output only. A future 016 action must separately
+observe the full remote SHA, bind the exact actual new SHA, verify independent
+review/check/identity/attribution and require its own plan id plus authorization.
+Owner reset/resync text is never executed. This observation never authorizes the
+[proposed apply/recovery](restack-apply.md) or any remote action.
