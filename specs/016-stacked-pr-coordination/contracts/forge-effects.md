@@ -17,8 +17,9 @@ stw stack publish apply PATH --plan ID --state-dir DIR --online
     [--timeout DURATION] [--json | --human]
 ```
 
-The first line shows help only, with no repository/authentication/read/write or
-prompt. These names are OQ-SURFACE proposals; `FILE` is bounded input data, never
+The first line shows CLI help only and emits no JSON/data result object, with
+no repository/authentication/read/write or prompt. These names are OQ-SURFACE
+proposals; `FILE` is bounded input data, never
 commands. Validate producer/command, kind, schema_version and exact input
 bindings before accepting an observation or receipt; event/diagnostic names alone
 never choose a decoder. The published 035 restack-needed event is not the 012
@@ -213,7 +214,18 @@ An illustrative UNPUBLISHED empty-selection result (not an executable schema):
   "operation": "plan",
   "plan_id": null,
   "saved": false,
-  "repository": null,
+  "repository": {
+    "backend": "git",
+    "layout_identity": "fixture-layout-1",
+    "forge": "github",
+    "host": "github.com",
+    "owner": "owner",
+    "name": "project",
+    "selection_provenance": "explicit-repo-flag",
+    "default_ref": "refs/heads/main",
+    "default_commit_id": "1111111111111111111111111111111111111111",
+    "default_source": "local-remote-tracking-ref"
+  },
   "actions": [],
   "blockers": [],
   "boundary": {"network_requested": false, "network_attempted": false, "complete": true},
@@ -221,6 +233,10 @@ An illustrative UNPUBLISHED empty-selection result (not an executable schema):
 }
 ```
 
-This help/empty-selection shape has no resolved repository and no stored plan id;
-nonempty persisted plans require their full binding. Valid/invalid future fixtures
-must cover both forms without weakening nonempty-action invariants.
+This is an unsaved empty-selection **plan**, with one resolved fixture repository
+and fixed full fixture commit identity, not bare help. Its local tracking-source
+label does not claim a fresh remote observation or push permission. Every complete
+plan, including empty selection, retains its one-repository binding; empty means
+no selected action, not no repository. Bare group help emits no result object.
+Future fixtures must reject a complete plan with null repository and distinguish
+that CLI help from a resolved empty plan without weakening action invariants.
