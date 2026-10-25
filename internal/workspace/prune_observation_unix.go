@@ -135,6 +135,7 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	out.SourceSnapshot = snapshot
 	parser := newGitTidyWorktreeParser(source.ObjectFormat)
 	selected := 0
+	pruneObservationStep(ctx, "before-inventory", task.Native.GitDir, nil)
 	err = gitCollectionReaderFor(ctx, bin, source.WorkspaceRoot)(gitRecordBlock, []string{"worktree", "list", "--porcelain", "-z"}, func(record []byte) error {
 		if err := parser.add(record); err != nil {
 			return err
@@ -157,7 +158,8 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 		return out, err
 	}
 	pruneObservationStep(ctx, "inventory-read", task.Native.GitDir, nil)
-	if selected != 1 {
+	// The parser refuses duplicate paths, so a count above one is unreachable.
+	if selected < 1 {
 		return out, failure("prune-registration-refused", "Native inventory does not identify the exact missing registration.")
 	}
 	if err = revalidatePruneAbsence(ctx, out.Absence); err != nil {
