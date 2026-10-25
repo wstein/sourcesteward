@@ -74,7 +74,7 @@ plan time and freshly at each pre-effect validation boundary:
    are refusals, never missing evidence. The registered `<destination>/.git` backlink
    is absent; no live backlink is removed or followed.
 3. The immediate parent's path/device/inode equals `DestinationParent` in the
-   original completed creation plan (`internal/workspace/result.go:85`). Bind current
+   original completed creation plan (`internal/workspace/result.go:84`). Bind current
    filesystem/mount identity and availability for that parent, the common directory
    and ancestor chain, including mount points. Recheck stable mount identity and
    descriptor/path correspondence before effects. Missing original parent identity,
