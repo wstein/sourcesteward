@@ -25,7 +25,7 @@ stw restack apply --plan PLAN_ID --state-dir DIR --authorize [--json]
 `--contract 2`, `--save`, `--committer`, `--task`, `--owner`, `--state-dir` and
 `--authorize` are **proposed**, not current restack flags. Plain v1 planning
 keeps its existing options and never stores an executable plan. The future
-local apply JSON selector remains an unimplemented serialization design; decided exit revision2 is independent and needs no --contract gate. Unlike historical v1 D9 prediction
+local apply JSON selector remains an unimplemented serialization design; decided exit revision 2 is independent and needs no --contract gate. Unlike historical v1 D9 prediction
 flags, actual-apply `--identity`/`--committer` are assertions that must match the
 trusted owner identity (OQ-2/OQ-3); repeatable caller values cannot widen it. Omitting an apply plan id or local
 authorization produces a usage error; no prompt or effect is substituted.
@@ -239,5 +239,5 @@ the owner's separately invoked landing tool, not an agent executor here.
 
 CLI exit-contract revision 2 is adopted: 0 complete, 1 incomplete/refusal/error/
 partial/cancelled/output failure, 2 usage. It changes current hidden CLI/root
-incomplete mapping only after T045/T046; no legacy3 selector. JSON schema1 and
+incomplete mapping only after T045/T046; no legacy 3 selector. JSON schema 1 and
 its frozen bytes remain unchanged by this exit-only version domain.

@@ -26,11 +26,11 @@ stw restack plan PATH --branch refs/heads/child --old-parent OLD_PARENT_FULL_SHA
 ```
 
 This is a syntax sketch with inert placeholders, not a pasteable shell command.
-Complete clean evidence exits0, including all `=` pairing, qualified parent proof
+Complete clean evidence exits 0, including all `=` pairing, qualified parent proof
 and identity pass only with the explicit flag. An overlapping-path indicator is
 risk evidence, never correctness. No identity flag gives unknown; conflict
-prediction is a complete observation (exit0), refusal exit1, syntax exit2,
-incomplete/bound/cancellation exit3. No ref/index/worktree/config/object-content
+prediction is a complete observation (exit 0), refusal exit 1, syntax exit 2,
+incomplete/bound/cancellation exit 3. No ref/index/worktree/config/object-content
 change, hook, helper or network occurs; the documented existing-object mtime
 caveat remains. The prediction committer never predicts an actual persisted
 rewritten committer; T024's reserved limitation is not yet emitted.

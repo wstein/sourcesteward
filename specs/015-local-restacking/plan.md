@@ -117,7 +117,7 @@ feature selection and no persistence; existing templates/history are not reset.
 
 | Constitution gate | Proposed disposition |
 | --- | --- |
-| I shared contract/noninteractive | One typed human/JSON result, no prompt without an explicitly selected step; decided0/1/2 target revision2; CURRENT code 3 until implementation |
+| I shared contract/noninteractive | One typed human/JSON result, no prompt without an explicitly selected step; decided 0/1/2 target revision 2; CURRENT code 3 until implementation |
 | II evidence and expected state | Immutable one-action plan, exact old/new parent/head, post-replay equality and identity, CAS; missing proof refuses |
 | III ownership and recovery | Own unoccupied topic refs only under adopted OQ-6; private task binding and pre-action durable journal/root; reverse action separately authorized |
 | IV test first and truthful evidence | New work starts only after design decisions/review; named red tests, native lanes, sentinels and mutations; no product tests run in this amendment |
@@ -126,15 +126,15 @@ feature selection and no persistence; existing templates/history are not reset.
 
 All eight former OQ IDs are dated decisions, not unanswered policy. Trusted
 workspace policy, unoccupied-ref scope and typed durability are adopted direction;
-native/helper/source implementation gates remain.012 uses --online only,015 is
-offline. Target exit-contract revision2 changes incomplete to1 without a legacy
+native/helper/source implementation gates remain. 012 uses --online only, 015 is
+offline. Target exit-contract revision 2 changes incomplete to 1 without a legacy
 selector; CURRENT code 3 is preserved as fact until its task, schema 1 bytes frozen.
 Default signature refusal and optional separately authorized HOST re-sign follow
 the shared profile, no stw keys. This is not runtime acceptance.
 
 ### Architecture and integration
 
-1. Preserve Plan/result/schema1 bytes; update only decided process-exit tests/mapping in T045/T046. A future opt-in
+1. Preserve Plan/result/schema 1 bytes; update only decided process-exit tests/mapping in T045/T046. A future opt-in
    plan protocol builds a stored local apply plan; an adapter may consume 012
    `expected` evidence but direct D6 inputs remain sufficient. No authentication
    or 012/014 implementation dependency enters the existing plan slice.

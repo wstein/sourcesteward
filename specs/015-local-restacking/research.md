@@ -55,10 +55,10 @@ and occupied-worktree scope are adopted OQ-3/OQ-6 owner decisions; native effect
 explicit --no-gpg-sign and neutralized repository signing config. Default refuse
 source-signature loss/unmet/unknown policy. Optional separately authorized
 actual re-sign uses ONLY the measured fixed trusted HOST helper/verifier profile,
-no stw keys and no unsigned fallback; absent helper disables it. The015adapter
-owns this code once,016only consumes final verified receipt. Build signed parents
+no stw keys and no unsigned fallback; absent helper disables it. The 015 adapter
+owns this code once, 016 only consumes final verified receipt. Build signed parents
 bottom-up, record old→unsigned→signed/loss/replacement, verify final chain and
-compute final actual head BEFORE CAS/review.013/014/D9prediction stay helper-free.
+compute final actual head BEFORE CAS/review. 013/014/D9 prediction stay helper-free.
 No helper call or native acceptance was performed by this documentation.
 
 ## R3: reuse recovery architecture
@@ -126,9 +126,9 @@ design proposal and source audit, not an independent review or acceptance run.
 
 ## Dated exit/signing decision implementation boundary
 
-Owner2026-10-25 chooses target CLI revision2 0/1/2 with no legacy3 selector, not
+Owner 2026-10-25 chooses target CLI revision 2 0/1/2 with no legacy 3 selector, not
 a new --contract flag prerequisite or JSON schema change. CURRENT root.go still
-maps restackIncomplete to3; T045/T046 own red tests/implementation. Optional
+maps restackIncomplete to 3; T045/T046 own red tests/implementation. Optional
 actual re-sign is 015-owned T047/T048 using fixed trusted HOST helper/verifier,
 no stw keys and no unsigned fallback. D9 predictions and 013/014 stay unsigned/
 helper-free. Actual signed parents are rebuilt bottom-up and verified final SHA

@@ -57,11 +57,11 @@ amendment exit/signing tasks. Historical design CLEAR does not review this amend
 - Installed Spec Kit plan setup selected the existing feature and preserved
   `plan.md`; task setup resolved the installed template without replacing the
   historical task list. Both used explicit `SPECIFY_FEATURE_DIRECTORY` and
-  `SPECIFY_FEATURE_NO_PERSIST=1`, returned exit0, and created no feature-state file.
+  `SPECIFY_FEATURE_NO_PERSIST=1`, returned exit 0, and created no feature-state file.
 - Inspected installed skills and prerequisite/helper scripts before use; no
   extension hooks, presets or template overrides are configured at this base.
   Final read-only analysis prerequisite command with `--json --require-spec
-  --require-tasks --include-tasks` returned exit0 and listed research, data model,
+  --require-tasks --include-tasks` returned exit 0 and listed research, data model,
   contracts, quickstart and tasks for this existing feature.
 - Markdown coverage bookkeeping (isolated Python, no imports from repository
   code) found 34 FRs + 8 SCs = 42 unique individual analysis rows, each with valid
@@ -74,8 +74,8 @@ amendment exit/signing tasks. Historical design CLEAR does not review this amend
 - Initial scoped `typos specs/015-local-restacking` found the historical abbreviated
   commit id as a false spelling hit. Expanded that reference to its already
   recorded full historical SHA; no review fact or date changed.
-- Final `python3 -I -B scripts/check-docs.py`: exit0, 356 authored documents.
-  `git diff --check`: exit0. Scoped `typos specs/015-local-restacking`: exit0
+- Final `python3 -I -B scripts/check-docs.py`: exit 0, 356 authored documents.
+  `git diff --check`: exit 0. Scoped `typos specs/015-local-restacking`: exit 0
   after removing the same historical abbreviated-id spelling hit from this
   explanatory entry. Final exact-head check results are also in the author handoff.
 - Existing v1 restack schema digest inspected unchanged:
@@ -94,9 +94,9 @@ future implementation/source checks. Nothing absent is reported as passing.
 New test names in tasks/analysis are proposals only, not files or measured runs.
 
 All eight former [owner-choice IDs](spec.md#owner-decisions-2026-10-25) are
-settled on2026-10-25. The current profile adopts trusted workspace policy,
-validated .work plan metadata, external capture bytes, target exit revision2 and
-optional015host-only re-sign; each native/source/helper capability remains
+settled on 2026-10-25. The current profile adopts trusted workspace policy,
+validated .work plan metadata, external capture bytes, target exit revision 2 and
+optional 015 host-only re-sign; each native/source/helper capability remains
 unimplemented or separately measured. This does not change recorded first-slice
 execution or permit network/local apply here. Independent exact-head document
 review and required PR CI are the coordinator's publication/readiness gates,
@@ -114,10 +114,10 @@ records each correction, fixture idea and remaining gate. No historical commit
 was rewritten, no original task checkbox/date changed, and the author did not
 push, edit the PR or run CI; root coordinates those separate actions.
 
-Corrected-doc checks actually run: `python3 -I -B scripts/check-docs.py` exit0
-(356 authored documents), scoped `typos specs/015-local-restacking` exit0 and
-`git diff --check` over the appended correction range exit0. Installed Spec Kit
-read-only prerequisite resolution again returned exit0 with this existing
+Corrected-doc checks actually run: `python3 -I -B scripts/check-docs.py` exit 0
+(356 authored documents), scoped `typos specs/015-local-restacking` exit 0 and
+`git diff --check` over the appended correction range exit 0. Installed Spec Kit
+read-only prerequisite resolution again returned exit 0 with this existing
 feature selected and no-persist; no extension hooks/presets/overrides exist.
 Isolated Markdown bookkeeping found 42 unique FR/SC rows, 44 unique task ids and
 157 symmetric row/tag edges; historical 20 checked/24 unchecked remain intact.
@@ -133,9 +133,9 @@ review and green required CI gates remain with the coordinator before Ready.
 ## Owner-decision amendment status (2026-10-25)
 
 All earlier source execution and original 20/24 checkboxes remain historical
-facts. They do not implement decided exit revision2 or host-only optional actual
-re-sign. CURRENT root dispatch still returns3 incomplete; T045/T046 are red-first
-work to target1 with schema1 bytes preserved. T047/T049/T048 own optional signing tests, separately authorized measurement and implementation;
+facts. They do not implement decided exit revision 2 or host-only optional actual
+re-sign. CURRENT root dispatch still returns 3 incomplete; T045/T046 are red-first
+work to target 1 with schema 1 bytes preserved. T047/T049/T048 own optional signing tests, separately authorized measurement and implementation;
 no helper was run or key accessed in this documentation follow-up.
 
 ### Future T049 evidence destination (not executed)

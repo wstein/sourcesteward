@@ -113,6 +113,6 @@ verification, each old→unsigned→signed commit and signed-parent mapping, ori
 signature presence/loss/replacement, final verified head/tree and complete actual
 range/identity evidence. No key/helper secret is serialized. The final signed
 SHA, never prediction or unsigned head, is the review/push subject. Existing
-restack-plan JSON schema1 is unchanged; optional apply/signing shape admission
+restack-plan JSON schema 1 is unchanged; optional apply/signing shape admission
 requires future conformance. Plan metadata uses workspace .work profile; no
 selected worktree bytes or private keys enter it.
