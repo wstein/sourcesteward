@@ -110,7 +110,7 @@ func Build(in Input) Document {
 	}
 	late := 0
 	for _, c := range in.Result.Candidates {
-		if c.Reason == "evidence-incomplete" && c.Evidence == "deadline-exceeded" {
+		if c.Reason == "evidence-incomplete" && (c.Evidence == "deadline-exceeded" || c.Evidence == "proof-budget-exhausted") {
 			late++
 		}
 		// The summary counts every analysed candidate, before any cut; `truncated` says that the
@@ -134,8 +134,9 @@ func Build(in Input) Document {
 	}
 	if late > 0 {
 		// A fixed text with counts only. The items stay retained (evidence-incomplete); the hint
-		// names the flag that widens the observation window.
-		n := fmt.Sprintf("%d of %d not judged (deadline); retry with a larger window, for example --timeout 15m", late, len(in.Result.Candidates))
+		// names the flag that widens the observation window. The exhausted proof budget counts too:
+		// the phase budget is the rest of that window, and the reason does not tell the phase from the tip budget.
+		n := fmt.Sprintf("%d of %d not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m", late, len(in.Result.Candidates))
 		d.Notices = append(d.Notices, n)
 		d.runNotices = append(d.runNotices, n)
 	}
