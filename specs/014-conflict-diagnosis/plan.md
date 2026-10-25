@@ -84,7 +84,10 @@ stop-first suffix or parallelize effects/resampling across native dependencies.
    pinned stored conflict evidence, without resolving, staging or snapshotting.
 4. Preflight allocates private scratch only after admission, installs write/network
    confinement and sanitized execution, then performs the declared native kernel.
-   For Git linear replay, source range is exactly old-parent..source-head, oldest first;
+   For Git linear replay, every actual merge-tree call binds --attr-source to full
+   source-head H in guarded private Git admin/worktree/index state. Unsupported
+   native enforcement refuses; T033 red regression precedes T016. Source range
+   is exactly old-parent..source-head, oldest first;
    first conflict stops and suffix remains not-evaluated. For merge, no replay
    substitution is allowed; an accepted native strategy/topology is mandatory.
    Native jj preview additionally waits for accepted OQ-JJCONF graph/aggregate
@@ -109,7 +112,7 @@ review and CI waits are additional. Each implementation unit follows red/green/r
 | A1 isolation/value foundation | T005–T006 | L | A0; private scratch and pure result/binding model, no CLI exposure |
 | A2 diagnosis MVP | T007–T010 | L | A1; independent Git and native jj metadata diagnosis |
 | A3 resolver context | T011–T014 | M | A2 and OQ-HUNK; default body-free handoff plus separately accepted hunk capability |
-| A4 Git preflight | T015–T022 | L | A1/OQ-SEM/TOPO/SCRATCH; exact linear replay, merge only measured profile, races and cleanup |
+| A4 Git preflight | T015–T022, T033 | L | A1/OQ-SEM/TOPO/SCRATCH; exact linear replay, merge only measured profile, races and cleanup |
 | A5 native jj preflight | T023–T024 | L | A0/A1/native spike; capability refusal until isolation/semantics proven |
 | A6 output/compatibility | T025–T028 | M | Selected story units; default-none, bounded render/exit, frozen-v1 regression |
 | A7 conformance/handoff | T029–T032 | M | Selected capabilities; truthful acceptance and independent exact-head review |
@@ -124,6 +127,7 @@ independently unless an actual code dependency later justifies a stack.
 
 | Risk | Required control |
 | --- | --- |
+| Worktree/index attributes falsely clean a conflict | Bound full-H --attr-source on every real merge-tree call, private empty override context, repeated guards/actual receipt and T033 regression; H/N check-attr alone is insufficient |
 | Git plumbing writes original objects or invokes merge drivers | Private writable object store + read-only source alternate, hazard admission, sandbox deny, write/network recorder and sentinels |
 | Scratch jj shares operation log/object store | Native isolated-store measurement, no workspace-add in original, refuse unavailable capability |
 | Optional hunk leaks secrets or hostile instructions | Default no bodies, selected exact paths, omission reason and finite bounds; content is DATA, never executed |

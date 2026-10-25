@@ -69,7 +69,11 @@ snapshots, helpers/hooks, prompts and network requests must be absent. Record
 filesystem metadata limitations separately; content equality alone does not prove
 sandbox enforcement. Only private owned scratch/probe writes are permitted.
 
-Inject cancellation at each replay boundary, changed ref/operation during reads,
+Inject cancellation at each replay boundary and changed refs/operations during
+reads. Add untracked, modified and index-only .gitattributes with f merge=union; the
+original-worktree attribute cannot make the immutable-input conflict clean. Verify
+the actual full-H pin/private-context receipt, repeat guards and removed-pin mutant;
+unavailable native --attr-source enforcement must refuse. Also inject
 quota/output/deadline exhaustion, unavailable confinement, scratch replacement and
 cleanup failure. Expect incomplete/unknown or typed refusal with exit 1; no prefix
 becomes a clean full prediction. Residue is reported with a bounded handle.

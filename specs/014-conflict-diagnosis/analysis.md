@@ -48,11 +48,11 @@ future implementation can execute in disposable fixtures.
 | FR-011 | Yes | T005–T006, T015–T016, T021–T024 | Attempt a clean and conflicting replay while recording original tree/index/ref/object/oplog writes; assert only owned private scratch writes and denied source writes. |
 | FR-012 | Yes | T009–T010, T021–T024 | Start from dirty jj disk and Git interrupted merge; assert no original snapshot/merge/abort, replace scratch handle before cleanup and assert replacement is retained. |
 | FR-013 | Yes | T017–T018, T025–T027 | Move source ref after sampling a clean replay; assert unknown/incomplete and exact old/new samples; unchanged result carries fixed no-semantic/no-future-success notice. |
-| FR-014 | Yes | T005–T006, T021–T024 | Set merge/filter/LFS/textconv/external-diff/hooks/fsmonitor config or attributes on either source tree, move .gitattributes and supply hostile jj user config; assert repository-hazard plus mandatory scrub/pins/refusal and no helpers or git status/index refresh in diagnosis. Remove confinement or fail cleanup and assert typed refusal/residue without fallback. |
+| FR-014 | Yes | T005–T006, T021–T024, T033 | Set merge/filter/LFS/textconv/external-diff/hooks/fsmonitor config or attributes on either source tree, move .gitattributes and supply hostile jj user config; assert repository-hazard plus mandatory scrub/pins/refusal and no helpers or git status/index refresh in diagnosis. Remove confinement or fail cleanup and assert typed refusal/residue without fallback. |
 | FR-015 | Yes | T011–T012, T025–T026 | Invoke the group with no leaf in an authenticated environment; assert help, zero native reads/scratch/auth/network calls and no prompt or implicit context refresh. |
 | FR-016 | Yes | T015–T020, T023 | Omit old-parent from replay and supply an unaccepted multi-base merge; assert usage 2 for missing selector and capability refusal for topology, never guessed mainline/replay substitution; shared Git refusals use the 015 codes in the diagnostic mapping table. |
-| FR-017 | Yes | T015–T016, T021 | Replay P..H containing two commits onto N with conflict in the first; assert original-parent merge base, first-conflict path and second commit not-evaluated, zero porcelain and source object writes. |
-| FR-018 | Yes | T017–T018, T023 | Change strategy/options, selected ref target or jj operation between identical-looking requests; assert binding mismatch/unknown and distinct full commit/change/operation ids. |
+| FR-017 | Yes | T015–T016, T021, T033 | Replay P..H containing two commits onto N with conflict in the first; assert original-parent merge base, first-conflict path and second commit not-evaluated, zero porcelain and source object writes. In separate untracked, modified and index-only .gitattributes fixtures with f merge=union, assert the real conflict persists under actual full-H attribute pin/private context; remove the pin and require the mutant to fail. |
+| FR-018 | Yes | T017–T018, T023, T033 | Change strategy/options, selected ref target or jj operation between identical-looking requests; assert binding mismatch/unknown and distinct full commit/change/operation ids; each actual Git merge invocation records matching full-H attribute-source pin/private guards, with unavailable enforcement refusing. |
 | FR-019 | Yes | T011–T014 | Default handoff includes a secret-bearing unselected file; assert no body. Accepted selected hunk returns exact origin/span/limits; binary/sensitive-policy/unknown terms carry omission reasons. |
 | FR-020 | Yes | T005–T006, T021–T022, T025–T028 | Supply 201 commits, 2,001 paths, 33 hunks and failed cleanup in separate fixtures; assert named bound/incomplete/residue, never silent complete truncation or predicted-clean success. |
 | FR-021 | Yes | T003–T004, T009–T010, T023–T024 | Try jj preview with source and scratch sharing an operation store; assert capability-unavailable before replay and unchanged stored working copy/oplog, including colocation; also require unavailable native aggregate semantics to refuse without fake Git suffix or tip-only clean proof. |
@@ -61,8 +61,8 @@ future implementation can execute in disposable fixtures.
 | SC-002 | Yes | T021–T022, T029–T030 | Inject native failure, cancellation and race while recorders watch hooks/helpers/network/source writes; assert zero undeclared effects and truthful incomplete/partial outcome. |
 | SC-003 | Yes | T027–T029 | Validate future complete/incomplete/error JSON offline; compare all existing published/hidden schema/fixture digests and exercise hidden restack-plan incomplete exit 3 unchanged. |
 | SC-004 | Yes | T001–T002, T031–T032 | Enumerate 22 FR plus 8 SC and require a task plus literal test idea per id; delete one mapping or native execution record and assert coverage/acceptance audit reports the gap. |
-| SC-005 | Yes | T015–T016, T019–T020, T029 | Build clean and first-conflict two-commit Git replay plus accepted/unaccepted merge fixtures; assert exact failing commit/path/suffix and no unaccepted strategy fallback. |
-| SC-006 | Yes | T005–T006, T021–T024, T029–T030 | Snapshot original tree/index/HEAD/refs/config/objects/jj state before clean/conflicted/cancelled runs and assert zero source writes plus confined scratch and visible cleanup failures. |
+| SC-005 | Yes | T015–T016, T019–T020, T029, T033 | Build clean and first-conflict two-commit Git replay plus accepted/unaccepted merge fixtures; assert exact failing commit/path/suffix and no unaccepted strategy fallback. |
+| SC-006 | Yes | T005–T006, T021–T024, T029–T030, T033 | Snapshot original tree/index/HEAD/refs/config/objects/jj state before clean/conflicted/cancelled runs and assert zero source writes plus confined scratch and visible cleanup failures; original worktree/index/info attributes never alter actual merge invocation semantics, and missing/unsupported pin enforcement refuses. |
 | SC-007 | Yes | T011–T014, T027, T030 | Place distinct sentinels in environment, default body and unselected blob; assert none appear; accepted selected hunks obey every byte/count cap and escaped display preserves path identity. |
 | SC-008 | Yes | T017–T018, T025–T027, T030 | Feed predicted-clean with stale PR context, changed ref, truncated output and cancellation into separate cases; assert fixed limitation, exact binding/unknown outcome and no Ready/verified/mutation permission. |
 
@@ -70,13 +70,16 @@ future implementation can execute in disposable fixtures.
 
 T001/T002 resolve decisions/design for all stories; T003–T006 establish capability,
 pure typed limits and effect enforcement. T007–T010 cover US1 (FR-001/002/004/006/021).
-T011–T014 cover US2 (FR-003/005/015/019). T015–T024 cover US4
+T011–T014 cover US2 (FR-003/005/015/019). T015–T024 and T033 cover US4
 (FR-010–014/016–018/020–022). T025–T028 cover US3
 (FR-007/008/015/020 and compatibility). T029–T032 cover FR-009 and SC-001–008.
 No task is unmapped. Ranges here summarize tasks only; requirement coverage is
 individually enumerated above, never hidden behind a grouped FR/SC row.
 
-Every behavior has a red-test-before-implementation pair; native measurements
+T033 is the explicit red attribute-source regression gate before T016, including
+untracked/modified/index-only union attributes, a removed-pin mutant and
+unsupported-version/missing-enforcement refusal. Every behavior has a
+red-test-before-implementation pair; native measurements
 precede profile enablement. Shared scratch/CLI/neutral replay extraction serialize.
 Independent Git/jj metadata tests can run in disjoint files; independent runtime
 reads use only Spec 040 fanout with bounded indexed results. Git replay remains
@@ -96,7 +99,7 @@ No exception/amendment proposed; OQ gates preserve these requirements.
 ## Metrics and current verification
 
 - Requirements: 22 FR + 8 SC = 30 individually mapped; coverage 30/30 (100% design mapping).
-- Tasks: 32, all unchecked; setup 2, foundation 4, US1 4, US2 4, US4 10, US3 4, final 4.
+- Tasks: 33, all unchecked; setup 2, foundation 4, US1 4, US2 4, US4 11, US3 4, final 4.
 - Unmapped requirements/tasks: 0/0. Duplication findings: 0. Critical findings: 0.
 - Retained decisions: 7 (5 HIGH capability/privacy/native-semantics findings, 1 MEDIUM compatibility finding, 1 LOW flag-alignment finding).
 - Independent review: pending exact-current-head review; this report is author analysis only.

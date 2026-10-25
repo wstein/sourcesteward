@@ -50,7 +50,8 @@ predict their declared native semantics without original writes; unsupported
 profiles refuse and cleanup/race/cancellation remains visible.
 
 - [ ] T015 [US4] Write failing Git linear replay tests in internal/conflict/replay_git_test.go for explicit old-parent..source-head onto destination, two-commit clean replay, first conflict with not-evaluated suffix, missing objects, empty/redundant/merge commits and malicious merge attributes, LFS/filter attributes, moved .gitattributes and missing source-tree attribute evidence; assert binding 015 environment/config pins and hazard refusals before replay, no porcelain or original object/ref write.
-- [ ] T016 [US4] Implement the accepted plumbing/quarantine replay kernel in internal/conflict/replay_git.go, reusing a characterized neutral seam with internal/restack/replay.go only through a separately reviewed behavior-preserving extraction; preserve hidden-v1 outputs and never retain/import candidate objects.
+- [ ] T033 [US4] Before T016 implementation, write and observe failing sampled-attribute regression/conformance tests in internal/conflict/attribute_source_test.go for untracked, modified and index-only .gitattributes containing f merge=union that would falsely clean a real conflict; require actual full-H --attr-source pin, private admin/worktree/index isolation, H/N checks and repeated guards/receipt binding, kill a removed-pin mutant, and refuse unsupported version or missing enforcement.
+- [ ] T016 [US4] Implement the accepted plumbing/quarantine replay kernel in internal/conflict/replay_git.go, reusing a characterized neutral seam with internal/restack/replay.go only through a separately reviewed behavior-preserving extraction; preserve hidden-v1 outputs and never retain/import candidate objects. Depends on red T033; enforce the bound full-H --attr-source on every actual merge-tree call in guarded private admin/worktree/index state, with no mixed original attributes or unsupported-version fallback.
 - [ ] T017 [US4] Write failing exact binding/resample tests in internal/conflict/binding_test.go for full native ids, ref targets, ordered range, strategy/options/version, layout/ownership and operation changes; a clean preview or supplied PR/stack context never authorizes a consumer action.
 - [ ] T018 [US4] Implement pure binding comparison and changed-input derivation in internal/conflict/binding.go plus operation-edge sampling in internal/conflict/preflight.go; expose sampled/ABA limits, reject mismatches and require every 013/015/016 consumer to revalidate its own gates.
 - [ ] T019 [US4] After OQ-SEM/TOPO acceptance, write failing native merge-profile tests in internal/conflict/merge_git_test.go for explicit two-head/base interpretation, accepted text/binary/rename/mode/gitlink cases, multiple-base/octopus/unsupported refusal and no replay substitution; absent profile remains unavailable.
@@ -83,7 +84,8 @@ T001–T004 gate affected capabilities; T005 red precedes T006. US1 follows the
 foundation; T007→T008 and T009→T010 can proceed in disjoint native files after
 shared values stabilize. US2 requires US1 and its own T011→T012 and gated
 T013→T014; hunk enablement can wait without blocking default handoff.
-US4 uses foundation plus its profile decisions; each red task precedes its paired
+US4 uses foundation plus its profile decisions; T033 must fail before T016 and
+pass with the enforced actual attribute-source implementation. Each red task precedes its paired
 implementation. T017→T018 binding is required before a preview is exposed;
 T021→T022 lifecycle is required before any preview acceptance. Native jj
 T023→T024 can run beside Git replay on disjoint files, but shared runners,
@@ -101,6 +103,8 @@ individually accepted. Deliver isolated replay as the next increment and preserv
 no-original-write semantics at every step. Test red first, implement, refactor,
 review the exact head, then meet publication gates. No automatic runtime activation.
 
-32 tasks: setup 2, foundation 4, US1 4, US2 4, US4 10, US3 4, final 4.
+33 tasks: setup 2, foundation 4, US1 4, US2 4, US4 11, US3 4, final 4.
+T033 retains a newly appended stable id but executes as the red attribute gate
+before T016; existing task ids are not renumbered.
 [P] marks T007/T009 and T023 as disjoint opportunities, not permission to ignore
 shared prerequisites. Every task has a path and every new checkbox is unchecked.

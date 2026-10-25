@@ -43,6 +43,14 @@ never replace immutable ids. Before/after samples cover layout/ownership,
 selected references and native operation state; failures/changes qualify the result.
 No serialized absolute path, timestamp or hash alone confers ownership/authorization.
 
+For initial Git linear replay, binding.attribute_source records policy source-head,
+full commit_id H, native capability/version and enforced argv mechanism. Each
+actual merge-tree receipt records that full-H --attr-source pin and private
+admin/worktree/index guard outcome. Every receipt must match the semantic binding;
+a missing receipt/pin or mixed original attribute source cannot satisfy complete
+prediction. H/N tree attribute checks and moved-.gitattributes refusal remain
+separate admission evidence, not substitutes for the actual invocation pin.
+
 ## Conflict observation and path
 
 Each observation has origin (existing-native or predicted-scratch), native kind,
