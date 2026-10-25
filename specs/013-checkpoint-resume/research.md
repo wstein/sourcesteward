@@ -1,7 +1,7 @@
 # Research: Checkpoint, Resume and Selective Undo
 
-**Date**: 2026-10-25. Repository-source research only; no runtime experiment,
-network request or native acceptance execution was performed for this amendment.
+**Date**: 2026-10-25. Design research uses repository source and cited official
+documentation; no native runtime experiment or product acceptance was executed.
 Recommendations below are proposals, not owner decisions.
 
 ## Source facts and design choices
@@ -63,10 +63,10 @@ unmeasured here (OQ-1/OQ-2), including conflicts, binaries and index extensions.
 
 ### R4 — Adjacent evidence never delegates authority
 
-Frozen Spec 012 stack observation supplies optional sampled identities; its
-existing proposed opt-in `--pull-requests` reads remain outside 013. Spec 012
-question 3 is open; only its `--after-fetch` acceptance is recorded. 013 makes
-no network request and does not settle that online contract. Spec 014 isolated integration preflight/replay creates no
+Spec 012 stack observation supplies optional sampled identities; its proposed
+opt-in `--pull-requests` reads remain outside 013. [Spec 012 OQ-NET](../012-stack-inspection/spec.md)
+keeps online scope and flag naming open; 013
+makes no network request and does not settle that contract. Spec 014 isolated integration preflight/replay creates no
 checkpoint root or reusable candidate store; predicted-clean grants no apply.
 Spec 015's proposed recovery adapter remains operation-specific, with plumbing/
 CAS replay (D7) unchanged and publication handed to 016 (D8). Specs 020/022/025/030

@@ -13,9 +13,9 @@ Existing-feature resolution used `SPECIFY_FEATURE_DIRECTORY=specs/013-checkpoint
 and `SPECIFY_FEATURE_NO_PERSIST=1`; no new feature or persistent config was created.
 Installed plan/task setup and the analysis prerequisite check resolved this
 feature successfully. No `.specify/extensions.yml` exists, so no extension hook
-was registered or run. Source facts were checked against baseline
-`3d4c867a451217a2942564a7dcb4736d45a09b70`; frozen adjacent 012/015 worktrees were
-read for vocabulary only, not represented as merged main behavior.
+was registered or run. Source facts are backed by the named `internal/stwsync`
+and `internal/workspace` files. Adjacent 012/015 designs supply vocabulary and
+operation boundaries, not evidence that their proposals or 013 are implemented.
 
 The proposed artifacts cover all 14 FRs and 4 SCs individually. Five explicit
 owner decisions remain; they block affected implementation, not this artifact
@@ -87,9 +87,9 @@ successful captures. It protects incomplete prepared records. None of its
 retention or main-worktree behavior enables 013 deletion/reset.
 
 012 stack observation, 014 isolated integration preflight/replay and 015 local
-restack can supply optional sampled evidence with consumer revalidation. 012's
-question 3 about optional online reads stays open; 013's offline boundary does
-not silently settle it. Preserve 015 D7 plumbing/CAS, D8 forge handoff and hidden
+restack can supply optional sampled evidence with consumer revalidation.
+[Spec 012 OQ-NET](../012-stack-inspection/spec.md) keeps online scope/flag naming
+open; 013's offline boundary does not silently settle it. Preserve 015 D7 plumbing/CAS, D8 forge handoff and hidden
 v1 exit 3. 013 proposes 0/1/2 only for its new protocol. 016 forge effects and
 043 human-only landing remain separate; local undo cannot reverse publication.
 041 mode evidence is an accident guard; 042 attribution is independent from
@@ -110,7 +110,7 @@ concurrency rule if needed. No hooks/helpers/network are introduced here.
 | Author-detected constitutional conflicts / critical findings | 0 / 0 |
 | Independent review / native product acceptance | pending / not executed |
 
-Next action: independent documentation review of the exact frozen head, resolve
+Next action: independent documentation review, resolve
 OQ-1 through OQ-5 with measured capability evidence, then execute only approved
 slices red-first. Artifact completeness is reviewable; affected implementation
 is not ready until its decisions are resolved. Publication and PR readiness are
