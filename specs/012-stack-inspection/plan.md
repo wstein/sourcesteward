@@ -1,10 +1,12 @@
 # Implementation Plan: Stack inspection and plan (v2)
 
-**Branch**: `codex/012-stack-inspection-v2` | **Date**: 2026-10-17 | **Spec**: [spec.md](spec.md)
+**Branch**: `codex/spec-012-stack-toolbelt` | **Date**: 2026-10-25 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Add `stw stack show` and `stw stack plan`: one shared, read-only operation that resolves an explicit base and tip through the native Git or jj adapter, derives the linear layers between them, produces drift findings through a pure, table-driven function, and, only with `--pull-requests`, reads the pull requests and native stacks of the layers through the Spec 022 bounded transport. `plan` adds an advisory, print-only list of steps. The result is one typed value rendered as text or as the new `stack` JSON schema. No existing contract changes; nothing is written, fetched, pushed, linked or executed. The optional effects the owner wants later (link, push, sync, unstack, merge, local apply) are catalogued in [contracts/later-effects.md](contracts/later-effects.md) and belong to Specs 015 and 016.
+Add `stw stack show` and `stw stack plan`: one shared, read-only operation that resolves an explicit base and tip through the native Git or jj adapter, derives the linear layers between them, produces drift findings through a pure, table-driven function, and, only with `--pull-requests`, reads the pull requests and native stacks of the layers through the Spec 022 bounded transport. `plan` adds an advisory, print-only list of steps. The result is one typed value rendered as text or as the new `stack` JSON schema. No existing contract changes; nothing is written, fetched, pushed, linked or executed. The optional later effects are catalogued in [contracts/later-effects.md](contracts/later-effects.md): local apply belongs to Spec 015, selected forge effects to Spec 016; historical native-stack merge remains unscheduled, and Spec 043 landing is a separate human-only operation.
+
+**Delivery status**: design refresh only. `stack show|plan` and their schema are unimplemented; Spec 015's hidden Git `restack plan` v1 is separate implemented source, not evidence for this feature. New JSON shapes here and in the contract are UNPUBLISHED Markdown proposals. No JSON file is changed by this refresh.
 
 ## Technical Context
 
@@ -12,7 +14,7 @@ Add `stw stack show` and `stw stack plan`: one shared, read-only operation that 
 
 **Primary Dependencies**: Existing Cobra v1.10.2, `github.com/cli/go-gh/v2` v2.16.2 (Spec 022), the standard library and the existing JSON Schema test dependency. No new dependency. `gh stack` is never started.
 
-**Storage**: None.
+**Storage**: No stack store or HTTP cache. Offline evidence is limited to existing native objects and remote-tracking refs, with sampled freshness. Explicit `--pull-requests` reads are bounded and uncached.
 
 **Testing**: Go table tests for the pure derivation and plan builder; real temporary Git and jj repositories for the local adapters (ordinary, linked worktree, colocated, secondary workspace); in-process fake HTTP through a `StackWithTransport`-style seam for remote evidence; schema fixtures; effect sentinels; a smoke extension; existing architecture and documentation checks.
 
@@ -28,13 +30,13 @@ Add `stw stack show` and `stw stack plan`: one shared, read-only operation that 
 
 ## Constitution Check
 
-Pre-research assessment: PASS. Post-design assessment: PASS.
+Author design assessment: aligned with constitution 1.2.0; no implementation or independent acceptance is claimed. Historical analysis clearance applies only to its recorded old revisions. The two current owner questions are explicit in spec.md.
 
 - **I. Shared contract**: one typed result renders text and versioned JSON; no prompt, editor or pager; exit 0, 1, 2 with a stated mapping.
 - **II. Evidence before actions**: findings carry confidence and evidence; the plan is explicit about targets, reasons, expected commit ids and effects, is advisory, and authorizes nothing; later apply must revalidate (Spec 015). The plan never proposes a rewrite that GitHub performs.
-- **III. Ownership and recovery**: read-only; native ownership is verified before any explicit-`--git-dir` call (Git skips its own check then); linked worktrees are respected (`layer-checked-out-elsewhere` blocks the plan); no recovery claim is needed because nothing changes.
+- **III. Ownership and recovery**: read-only; native ownership is verified before any explicit-`--git-dir` call (Git skips its own check then); linked worktrees are respected (`layer-checked-out-elsewhere` blocks the plan); no recovery claim is needed because target repository state does not change. Private sandbox setup outside the target remains the existing disclosed adapter effect.
 - **IV. Specify and verify**: failing tests first; real temporary Git and jj repositories; hostile names, text and limits; moved references and concurrent changes (resample); effect sentinels including jj working-copy and operation-log checks and a loose-object check; no live network in acceptance.
-- **V. Tier 1 peers**: the same operation on both backends; the one capability gap (patch equivalence on jj) is stated in the contract and in every result, and closed by pull request evidence rather than by a different mechanism; no raw Git for jj.
+- **V. Tier 1 peers**: the same operation on both backends; the documented jj gaps (patch equivalence and detecting deleted landed-layer bookmarks) remain explicit; requested PR/native-stack evidence can strengthen the observation without claiming it closes the unguarded plain-chain limitation; no raw Git for jj.
 - **Scope**: network reads are opt-in and disclosed; push, merge, link and other remote effects remain later specifications. No amendment or exception is required. The Scope sentence "push/merge/release automation ... require later specifications" is respected: a printed `gh stack link` line is text.
 
 ## Project Structure
@@ -91,19 +93,24 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 13. **No polling, no retry.** Server-side rebases by GitHub are eventually consistent (unverified); the result is a sample and `observe` tells the caller to run again.
 14. **Conformance.** Local conformance on real native Git (ordinary and linked worktree) and jj (standalone, colocated, secondary) with before/after sentinels on the minimum and current lanes; remote conformance by fake HTTP in the same fixtures; a binary smoke for local cases. A lane that is unavailable is not a pass.
 
-## Edits to other specifications and documents (minimal, listed for review)
+## Toolbelt reconciliation and delivery boundaries
 
-- `specs/015-local-restacking/spec.md`, Assumptions: add "Spec 012 (reworked 2026-10-17) supplies the stack observation and an advisory, print-only plan; this spec owns executing a local rewrite and its recovery evidence and must revalidate the 012 `expected` ids. A rewrite that GitHub performs on a native stack is not restacked here."
-- `specs/016-stacked-pr-coordination/spec.md`, Assumptions: add "Spec 012 (reworked 2026-10-17) reads pull requests and native stack membership and prints advisory steps; this spec owns every remote effect of the catalog in `specs/012-stack-inspection/contracts/later-effects.md` (push, link, unstack, sync, merge), through GitHub native stack semantics and the bounded transport. FR-006 is unchanged for the first slice (L2 with a lease and L5 need its amendment). User Story 1 is re-scoped: the read-only mapping of a local stack to pull requests and native stacks is delivered by Spec 012; this spec consumes it and keeps the publication stories."
-- `docs/roadmap.md`: the row and the list entry for Spec 012 get the new title and one-line summary.
-- `docs/feature-status.json`: the `012-stack-inspection` object already exists with status `planned` and no evidence; it is unchanged (the spec path is unchanged).
+- Spec 012 supplies stack observation and inert human reference commands. Spec 015 first-slice owner D6 independently selects old parent/new parent/branch; optional later observation consumption revalidates expected ids. Owner D7 plumbing/quarantine/compare-and-swap remains binding. Never parse or execute 012 `argv` as an apply plan, and never turn an advisory `git rebase --onto` into a porcelain executor.
+- Spec 014 owns isolated integration preflight/replay evidence; observation never runs a simulation in the original repository. Spec 013 owns checkpoint/restore/selective undo and reuses Spec 032 durability/recovery conventions; 012 captures no checkpoint and promises no undo.
+- Spec 016 owns separately authorized forge effects and exact lease evidence. After actual Spec 015 local apply, the actual new head/outcome must be checked and independently reviewed before a separately selected Spec 016 lease push. A predicted fixed-committer quarantine SHA or earlier review is not the actual reviewed publishable head. Owner resync text is inert, names its destructive limits and is never run by an agent.
+- Spec 041 ownership/mode and Spec 042 attribution are effect-owner gates, not inferred from PR names, config identity or stack membership. Spec 043 is a separate human-only landing invocation; no 012/015/016 path invokes it or pushes the default branch.
+- This documentation change edits only the ten existing `specs/012-stack-inspection/**/*.md` artifacts. It edits no other spec, source, executable schema, generated docs, progress or command status. It targets main independently; a conceptual handoff is not a code dependency and does not justify a text-only PR stack.
+
+15. **Advisory depth and stale-parent signal.** Implement `stack-too-deep` only as the spec's notice at depth >2; keep the 32-layer observation cap. `restack-needed` uses qualified parent/patch evidence and explicitly labels unchecked native status. Closed-unmerged parents never become landed; stale child bases use `base-mismatch`. These findings never override the six plan groups or confer effect authority.
+16. **Pure core and bounded fan-out.** `deriveFindings` and `buildPlan` take immutable values; all I/O, clocks, cancellation and resampling stay in adapters. Default reads remain sequential. Any parallel independent reads use Spec 040 `internal/fanout` with fixed bounded width, shared request/deadline budgets, indexed output and no ad hoc `go` statements, shared-map append or completion-order results. A skipped read remains incomplete, never an empty success.
+17. **Qualified proof.** `cherry BASE TIP` is used only to classify linear-layer patch content; merge omissions and squash/conflict-resolution patch mismatches are disclosed. It is never proof for cleanup, identity, review, semantic validity or lease publication. Exact old/new boundaries are data for optional later plans, not trusted instructions.
 
 ## Open questions for the owner (recommendations)
 
 1. **Diffs and changed-file queries**: withdrawn from 012 (Disposition table). Recommendation: keep withdrawn; GitHub and Git or jj already provide stored diffs, Spec 009 covers live files.
 2. **How the later `link` effect writes**: Recommendation: Spec 016 specifies it as a REST write through the bounded transport after the endpoints are measured in a disposable repository with your approval; until then 012 only prints `gh stack link`.
-3. **Network opt-in flag** `--pull-requests`: Recommendation: keep opt-in.
-4. **A strict exit status for CI gating on drift**: Recommendation: defer; not needed for the read-only slice.
+3. **Network opt-in flag** `--pull-requests`: settled on 2026-10-17. OQ-NET in spec.md asks only whether the new literal no-network wording intends to amend that approval; recommendation: retain offline default and explicit uncached GET mode.
+4. **A strict exit status for CI gating on drift**: recommendation: defer; findings stay separate from completion status. OQ-EXIT separately concerns future migration of the implemented Spec 015 incomplete exit 3; this 012 design keeps its existing 0/1/2 mapping and changes no runtime contract.
 5. **Explicit `--tip`**: Recommendation: keep explicit in v1; revisit a default for Git only after use.
 6. **Fork pull requests**: Recommendation: unsupported and disclosed in v1; measure before supporting.
 7. **Layer cap 32**: GitHub's maximum stack size is unverified. Recommendation: confirm the documented maximum and set LIM-2 to it.
@@ -118,3 +125,7 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 - **R5** Server-side rebases lag the merge (unverified): a fresh observation can show the child unrewritten; the plan then prints `observe` `native-rewrite-pending` (GitHub's head equals or is behind the local tip), never a competing `rebase`.
 - **R6** Rebase risk with the in-flight Spec 021 work-item branches that touch `pins_run.go`: the adapter uses a wrapper and does not edit those files.
 - **R7** `gh stack` is v0.2.1 and changing; the printed `link` line was checked against its `--help` only.
+
+## Documentation verification for this refresh
+
+Run only `python3 -I -B scripts/check-docs.py` and `git diff --check`, plus typos if configured. Use the installed existing-feature Spec Kit specify → plan → tasks → read-only analyze flow with `SPECIFY_FEATURE_DIRECTORY=specs/012-stack-inspection` and `SPECIFY_FEATURE_NO_PERSIST=1`; inspect extensions first and never blindly run imported hooks or overwrite existing templates. No extensions are configured at the base. The resulting report may be recorded in analysis.md by the separately authorized documentation workflow after read-only analysis ends. No Go/build/make/native/live-network test is authorized for this Markdown-only refresh; missing implementation acceptance remains pending.
