@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -55,6 +57,20 @@ func TestNativeSandboxHelper(t *testing.T) {
 			}
 		case "output":
 			fmt.Print(strings.Repeat("x", 70000))
+		case "spawn":
+			// A parent that starts a descendant sharing its stderr, tells the test and
+			// then waits for its own death. The descendant outlives it.
+			child := exec.Command(os.Args[0], "-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", "hold")
+			child.Stderr = os.Stderr
+			child.ExtraFiles = []*os.File{os.NewFile(3, "control"), os.NewFile(4, "alive")}
+			if e := child.Start(); e != nil {
+				os.Exit(48)
+			}
+			fmt.Print("ready\n")
+			io.Copy(io.Discard, os.Stdin)
+		case "hold":
+			// The descendant lives until the test closes the control pipe.
+			io.Copy(io.Discard, os.NewFile(3, "control"))
 		case "wait":
 			time.Sleep(time.Minute)
 		case "env":
