@@ -57,3 +57,19 @@ Focused native layout fixtures live in `internal/workspace/git_layout_test.go` a
 `git_layout_lifecycle_test.go`; the common proof is consumed without separate tidy or
 retirement admission shortcuts. Exact-source review and the fresh CLI layout matrix
 remain T404 gates; the new source checkmarks do not mark overall release acceptance.
+
+## Narrow missing-directory registration prune (T012b)
+
+New future work for FR-013–FR-015 and the
+[narrow prune contract](contracts/narrow-registration-prune.md). Existing checkmarks remain
+historical; none verifies this amendment. Source work starts only after this spec PR is
+independently CLEAR and owner-merged. Every red test must fail on its intended assertion.
+
+- [ ] T501 Resolve with the owner the exact frozen-schema/version/selector/restore interface and stored-plan compatibility policy, plus supported deletion/mount witnesses; independently analyze the complete contract. Keep unsupported witness cases fail-closed. Depends on the merged spec PR.
+- [ ] T502 Write failing planner/validation tests for one exact owned locked missing registration and every refusal, original record/HEAD/index/lock binding, moved/unmounted lookalikes and unsupported witnesses, locked missing entries without native prunable markers, narrowly scoped existing inventory guards, native/platform limits and unchanged protected state. Depends on T501.
+- [ ] T503 Implement only the narrow planner and approved strict records/interface; preserve all existing plan modes and schemas under the selected compatibility policy. Depends on T502 observed red.
+- [ ] T504 Write failing apply/payload tests for complete binary metadata, bounds/private modes/durable failures, fresh revalidation at each boundary, replacement races, partial removal/cancellation and verified replay; assert no broad prune/unlock, user files or unrelated refs change. Depends on T503.
+- [ ] T505 Implement payload preparation, history pin, confined removal and durable exact outcomes; run minimum/current native Git and platform confinement fixtures. Depends on T504 observed red.
+- [ ] T506 Write failing recovery tests for separate authorization, exact raw restoration, name/path collision, corrupt/missing payload/pin, changed ancestors/mounts, interruption, native verification failure and safe refusal without no-replace capability. Depends on T505.
+- [ ] T507 Implement the approved inspect/restore path and honest partial/limit reporting; independently review the exact head and record native acceptance, schema regressions and no-Git-fallback jj/colocated sentinels. Depends on T506 observed red. Owner merge of the expert implementation precedes wizard source work.
+- [ ] T508 Complete Spec 041 T012b's new test/implementation pairs, fixture-derived documentation and exact-head acceptance in its final PR; only that accepted final PR may update completion state. Depends on accepted T507 and the Spec 041 dependencies.
