@@ -41,6 +41,27 @@ exact integrated SHA, which differs from the reviewed fold tips), T047 (candidat
 install, which needs separate owner approval) and T048/T049 (fresh real-repository acceptance).
 Windows and Darwin remain unverified here.
 
+## Stack toolbelt design: Specs 012–016 (planned)
+
+The refreshed designs keep explicit operation boundaries: [012 stack observation](../specs/012-stack-inspection/spec.md),
+[014 isolated integration preflight/replay](../specs/014-conflict-diagnosis/spec.md),
+[015 local restack plan/apply](../specs/015-local-restacking/spec.md),
+[013 checkpoint/restore/selective undo](../specs/013-checkpoint-resume/spec.md) using Spec 032 journal/recovery conventions,
+and [016 selected forge effect plan/apply](../specs/016-stacked-pr-coordination/spec.md).
+Each design has a proposed plan, research, model, Markdown contracts, validation guide, future tasks and author analysis;
+new sibling artifacts remain subject to their own review/publication and are not new runtime evidence.
+These features stay planned. Only the hidden Git 015 v1 planner has the source implementation described below;
+checkpoint/undo, integration preflight, local restack apply/jj and forge writes remain future work.
+
+Observation grants no local mutation; local apply grants no remote write. Default selection is none and local observation is offline.
+012 online scope/`--pull-requests` naming and shared human/timeout surface choices remain open owner questions;
+no recommendation is approval. Each proposed remote action needs its own plan-bound authorization, current ownership and exact-state guards.
+016 specifies full observed-SHA topic leases, separate docs/code before-push review tiers, trusted full-default-range owner identities,
+explicit signing policy, and exact-current-head CLEAR/required-green-CI/true-rebaseability/scope gates for Ready.
+Native stack and jj publication capabilities remain separately measured/gated; [043 landing](../specs/043-stw-land/spec.md)
+is the human owner's separate invocation with conditional retarget/deletion order and unmeasured-shape refusal.
+No new JSON/schema contract is published by these Markdown designs, and hidden 015 v1 incomplete exit 3 is unchanged.
+
 ## Active work: Spec 015 local restacking, first slice (source implemented, verification pending)
 
 The read-only `stw restack plan` for native Git is implemented in source on `feat/015-restack-plan` (hidden command, unpublished
@@ -50,7 +71,8 @@ conflicts, the overlap risk indicator, effects, and the inert lease push and res
 reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [tasks](../specs/015-local-restacking/tasks.md)
 (20 of 24 done) and [verification](../specs/015-local-restacking/verification.md). Open:
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
-stays `planned`; `restack apply`, jj and the push are later slices.
+stays `planned`; `restack apply` and jj are later proposed local slices, while push belongs to Spec 016.
+The 015 refresh adds 20 unchecked future tasks; none is claimed implemented, and the original 20/24 history remains intact.
 
 ## Spec 041 stw tidy wizard (specification proposed, 2026-10-23)
 
@@ -369,19 +391,17 @@ or independent acceptance is claimed. Planning/tasks/analysis remain pending.
 
 Stack Inspection and Plan: reworked on 2026-10-17 for GitHub native stacked pull requests (read-only `stack show` and `stack plan`, opt-in pull request evidence, advisory plan; diffs withdrawn); full artifact set and author checks written.
 Documentation links and whitespace checks passed before PR handoff. No runtime capability
-or independent acceptance is claimed. Independent analysis and implementation remain pending.
+or independent acceptance is claimed. Independent exact-head review and implementation acceptance remain pending.
 
 ### 013-checkpoint-resume — Toolbelt use-case specification update
 
-Checkpoint, Resume and Selective Undo: draft scenarios, requirements and author quality checks updated.
-Documentation links and whitespace checks passed before PR handoff. No runtime capability
-or independent acceptance is claimed. Planning/tasks/analysis remain pending.
+Checkpoint, Resume and Selective Undo: proposed specification, plan, research, model, Markdown contracts, validation guide, tasks and author analysis refreshed.
+Native capture/undo, selected-payload storage, ownership and typed journal decisions remain open; no implementation or native acceptance is claimed.
 
 ### 014-conflict-diagnosis — Toolbelt use-case specification update
 
-Conflict Diagnosis and Integration Preflight: draft scenarios, requirements and author quality checks updated.
-Documentation links and whitespace checks passed before PR handoff. No runtime capability
-or independent acceptance is claimed. Planning/tasks/analysis remain pending.
+Conflict Diagnosis and Integration Preflight: proposed specification, plan, research, model, Markdown contracts, validation guide, tasks and author analysis refreshed.
+Diagnosis remains read-only and prediction stays isolated; supported semantics/topology/hunk/native isolation choices remain open. No implementation or native acceptance is claimed.
 
 ### 017-work-transfer — Toolbelt use-case specification update
 
