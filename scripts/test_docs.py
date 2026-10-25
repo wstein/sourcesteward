@@ -178,7 +178,7 @@ class DocumentationTests(unittest.TestCase):
 
     def test_unpublished_schemas_stay_out_of_the_bundle_without_weakening_the_check(self):
         package = load('package_unpublished', 'package-pages.py')
-        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/restack-plan.schema.json', 'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v1/sync.schema.json', 'v1/status.schema.json', 'v2/status.schema.json', 'v2/tidy-overview.schema.json', 'v1/pulls.schema.json', 'v1/issues.schema.json', 'v1/watch-event.schema.json', 'v3/tidy.schema.json', 'v3/tidy-report.schema.json', 'v3/tidy-decisions.schema.json', 'v3/tidy-restore.schema.json', 'v3/tidy-history.schema.json'})
+        self.assertEqual(package.UNPUBLISHED_SCHEMAS, {'v1/restack-plan.schema.json', 'v1/release-config.schema.json', 'v1/release-check.schema.json', 'v1/release-record.schema.json', 'v1/release-build-manifest.schema.json', 'v1/release-oci-result.schema.json', 'v1/release-plan.schema.json', 'v1/release-verify.schema.json', 'v1/release-record-result.schema.json', 'v1/release-build.schema.json', 'v1/release-dispatch.schema.json', 'v1/sync.schema.json', 'v1/status.schema.json', 'v2/status.schema.json', 'v2/tidy-overview.schema.json', 'v1/pulls.schema.json', 'v1/issues.schema.json', 'v1/watch-event.schema.json', 'v3/tidy.schema.json', 'v3/tidy-report.schema.json', 'v3/tidy-decisions.schema.json', 'v3/tidy-restore.schema.json', 'v3/tidy-history.schema.json', 'v4/registration-prune.schema.json'})
         self.assertFalse(package.UNPUBLISHED_SCHEMAS & package.SCHEMA_PATHS)
         self.assertNotIn('v3', package.SCHEMAS)
         self.assertNotIn('v3/tidy.schema.json', package.SCHEMA_PATHS)
@@ -196,6 +196,7 @@ class DocumentationTests(unittest.TestCase):
             copied = {p.relative_to(destination / 'schemas').as_posix() for p in (destination / 'schemas').rglob('*') if p.is_file()}
             self.assertEqual(copied, package.SCHEMA_PATHS)
             self.assertFalse((destination / 'schemas/v3').exists())
+            self.assertFalse((destination / 'schemas/v4').exists())
             shutil.rmtree(destination)
             # Only the exact hidden v3 sources are admitted. Validate each
             # source's bytes and reject aliases before creating any exports.
