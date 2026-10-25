@@ -24,7 +24,7 @@ stw workspace retire-plan /path/to/task --state-dir /path/to/private-state --jso
 `${XDG_STATE_HOME:-~/.local/state}/stw/workspace`, created with mode 0700 and refused
 (`state-dir-unsafe`) unless it is user-owned, a real directory with mode exactly 0700,
 free of symlink components and outside every repository. An explicit `--state-dir` is
-used as given.
+used as given. `stw tidy` reads the creation records of this same shared default store (and any repeatable `--state-dir`, `$STW_STATE_DIR`), so a workspace created without `--state-dir` can later be found and retired by the [tidy wizard](tidy.md#the-tidy-wizard); an explicit custom store must be passed to `stw tidy --state-dir` once.
 
 Use a supported literal native base selector; jj revset programs are not accepted.
 Read the returned plan, native base identities, effects and recovery limits before apply.
