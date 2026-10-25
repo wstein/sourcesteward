@@ -32,11 +32,17 @@ stw stack publish plan FIXTURE --repo owner/project --observation OBSERVATION_FI
 ```
 
 Expect help to perform zero reads/effects and a plan with no selected actions.
+Without proposed `--save`, rendering is unsaved (`saved: false`, null plan id),
+with zero plan/store writes and no directory creation/repair. For a nonempty
+selection, add proposed `--save --state-dir EXISTING_PRIVATE_DIR` to persist into
+that explicitly selected validated directory; no default store is accepted.
+`--save` without the directory is usage 2; empty selection never persists.
+Apply an unsaved result or missing id and verify refusal, with no implicit save.
 Supply valid 012 relationship evidence, then vary PR head SHA, head/base repository,
 ambiguous matches and stale local identities. Names alone never verify linkage.
 Default offline consumes bounded evidence without auth/HTTP/fetch/cache. A remote
 guard stays unknown/blocked. Verify no refs/files/index/objects/jj log changed
-except an explicitly selected private plan write.
+except an explicitly selected `--save` private plan write.
 
 Online syntax remains an OQ-SURFACE proposal. 012's online inclusion and
 `--pull-requests`/`--online` naming are open, not owner-approved. The accepted
