@@ -19,7 +19,12 @@ stw stack publish apply PATH --plan ID --state-dir DIR --online
 
 The first line shows help only, with no repository/authentication/read/write or
 prompt. These names are OQ-SURFACE proposals; `FILE` is bounded input data, never
-commands. A typed 015 actual receipt can be supplied instead of 012 observation
+commands. Validate producer/command, kind, schema_version and exact input
+bindings before accepting an observation or receipt; event/diagnostic names alone
+never choose a decoder. The published 035 restack-needed event is not a 012
+finding or 015 receipt, and its merge-commit new-parent cannot become a trunk or
+apply/push target without fresh explicit boundary validation.
+A typed 015 actual receipt can be supplied instead of 012 observation
 through a surface to be accepted under the same OQ; no hard 012 dependency is
 introduced. Actions are identified by typed kind+target in supplied intent;
 `--select` chooses exact displayed ids. Unknown/duplicate ids or inconsistent
@@ -35,7 +40,10 @@ errors. Local `--authorize`, an old receipt or a generic `--yes` is insufficient
 No flag widens agent ownership. Standalone comments cannot be authorized by this first surface; they are deferred original-draft scope, not an initial action. No interactive confirmation/editor/pager is used.
 
 Human is default, `--human` forces it, and it excludes `--json`. `--timeout` must
-be positive and at most 60 s, only shortening operation limits. `--state-dir` is
+be positive and at most 60 s, only shortening operation limits. Unlike online-default 033/037, this proposal has no
+`--offline` flag because offline is already default; unknown `--offline` is usage
+2 until OQ-SURFACE accepts any explicit alias. Do not inherit opposite-polarity
+flags or network defaults from another command. `--state-dir` is
 one validated private store for plans/action records, outside every repository,
 user-owned, real, mode 0700, no symlink component; unsafe/unreadable store refuses.
 Exact defaults/provenance are OQ-SURFACE/OQ-STORE; no state-path environment dump.
