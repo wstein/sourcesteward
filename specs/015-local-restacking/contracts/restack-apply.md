@@ -14,17 +14,20 @@ Proposed syntax, shown as data rather than runnable examples:
 stw restack plan [PATH] --contract 2 --branch REF --old-parent OID --new-parent OID
   --expect-head OID --identity "NAME <EMAIL>" --committer "NAME <EMAIL>"
   --task TASK --owner OWNER --state-dir DIR --save [--json]
-stw restack apply --plan PLAN_ID --state-dir DIR --authorize-local [--json]
+stw restack apply --plan PLAN_ID --state-dir DIR --authorize [--json]
 ```
 
 `--contract 2`, `--save`, `--committer`, `--task`, `--owner`, `--state-dir` and
-`--authorize-local` are **proposed**, not current restack flags. Plain v1 planning
+`--authorize` are **proposed**, not current restack flags. Plain v1 planning
 keeps its existing options and never stores an executable plan. The future
 selector is not chosen until OQ-1 is settled. Unlike historical v1 D9 prediction
 flags, actual-apply `--identity`/`--committer` are assertions that must match the
 trusted owner identity (OQ-2/OQ-3); repeatable caller values cannot widen it. Omitting an apply plan id or local
 authorization produces a usage error; no prompt or effect is substituted.
 A complete plan is evidence; authorization names only that plan's local effects.
+`--authorize` deliberately reuses Specs 011/029/041 vocabulary with
+`--plan ID --state-dir DIR`; the selected plan supplies the local effect scope,
+while Spec 016 owns its separate remote plan/action authorization.
 
 The private store must be caller-owned, nonsymlinked and protected against path
 replacement; validate native file identity and complete task origin under Specs
