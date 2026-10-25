@@ -137,25 +137,34 @@ func TestAbsentBelowCanonicalParent(t *testing.T) {
 
 // The stale registration is part of the bound native evidence: one that appears, or goes
 // away, after planning is a change and refuses the apply without touching the target.
-func TestTidyV3StaleRegistrationAppearingAfterPlanningRefusesApply(t *testing.T) {
-	o, _ := tidyV3LegacyFixture(t, false)
-	o.StateDir = privateDir(t)
-	c := defaultTidyV3RetirementCoordinator()
-	planned := c.plan(context.Background(), o)
-	if planned.Plan == nil {
-		t.Fatal(planned.Diagnostics)
-	}
-	p := *planned.Plan
-	staleRegistration(t, o.Path, gitTempDir(t), "late", false)
-	applied := c.apply(context.Background(), V3ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, CompletedWorktree: o.CompletedWorktree, Owner: o.Owner, ProtectWorktrees: o.ProtectWorktrees})
-	if applied.Status == "ok" {
-		t.Fatal("a registration added after planning was not detected")
-	}
-	if len(applied.Diagnostics) == 0 || applied.Diagnostics[0].Code != "evidence-changed" {
-		t.Fatalf("wrong refusal: %+v", applied.Diagnostics)
-	}
-	if _, err := os.Lstat(o.CompletedWorktree); err != nil {
-		t.Fatalf("target changed despite the refusal: %v", err)
+func TestTidyV3StaleRegistrationChangingAfterPlanningRefusesApply(t *testing.T) {
+	for _, appears := range []bool{true, false} {
+		o, _ := tidyV3LegacyFixture(t, false)
+		o.StateDir = privateDir(t)
+		if !appears {
+			staleRegistration(t, o.Path, gitTempDir(t), "early", false)
+		}
+		c := defaultTidyV3RetirementCoordinator()
+		planned := c.plan(context.Background(), o)
+		if planned.Plan == nil {
+			t.Fatal(planned.Diagnostics)
+		}
+		p := *planned.Plan
+		if appears {
+			staleRegistration(t, o.Path, gitTempDir(t), "late", false)
+		} else {
+			gitFixture(t, o.Path, "worktree", "prune")
+		}
+		applied := c.apply(context.Background(), V3ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, CompletedWorktree: o.CompletedWorktree, Owner: o.Owner, ProtectWorktrees: o.ProtectWorktrees})
+		if applied.Status == "ok" {
+			t.Fatalf("appears=%v: the registration change was not detected", appears)
+		}
+		if len(applied.Diagnostics) == 0 || applied.Diagnostics[0].Code != "evidence-changed" {
+			t.Fatalf("appears=%v: wrong refusal: %+v", appears, applied.Diagnostics)
+		}
+		if _, err := os.Lstat(o.CompletedWorktree); err != nil {
+			t.Fatalf("appears=%v: target changed despite the refusal: %v", appears, err)
+		}
 	}
 }
 
