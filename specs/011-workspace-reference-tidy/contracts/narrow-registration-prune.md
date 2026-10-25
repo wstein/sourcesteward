@@ -124,10 +124,32 @@ payload of the admitted registration gitdir: relative entry names/types, raw fil
 original mode/identity facts and digests, raw gitdir/commondir pointers, lock reason and HEAD,
 index bytes or explicit absence, and admitted reflog/config metadata when present. Preserve
 binary bytes; never convert index or raw metadata through UTF-8 text. Unknown or omitted
-entries cannot be called complete recovery. Apply an initial proposed bound of 64 KiB per
-native metadata file, 1 MiB total raw payload and 1,024 entries; encoded storage must also
-fit its approved record bound, or use digest-bound private sidecars. Overflow refuses
-before removal, never truncates. The final storage encoding belongs to the schema decision.
+entries cannot be called complete recovery. Admit at most 64 MiB per regular metadata
+file, 256 MiB total raw payload and 1,024 manifest entries (files plus directories).
+Index and reflog bytes are mandatory, not regenerable substitutes or truncated histories.
+Use digest-bound private binary sidecars for raw contents, streamed and hashed in at most
+64 KiB buffers; the manifest binds exact byte lengths and SHA-256 digests. Sidecars obey
+the same per-file/total quotas and durable private-store rules. Insufficient storage,
+overflow, short/extra bytes or cancellation refuses before removal; never truncate or
+silently omit entries. The enclosing schema/record representation still needs the frozen
+contract decision, without relaxing these byte-preservation requirements.
+
+The bounds derive from a read-only 2026-10-25 measurement of all 201 regular registration
+directories below this live repository's native common-dir/worktrees. The walk used
+`lstat`, did not follow symlinks and read sizes only, not file contents. Sizes are bytes:
+
+| Class | Files | Minimum | Median | 95th percentile | Maximum |
+| --- | --- | --- | --- | --- | --- |
+| index | 201 | 75,628 | 133,435 | 165,018 | 169,564 |
+| logs/* | 201 | 108 | 1,675 | 14,348 | 64,931 |
+| other regular metadata | 1,167 | 6 | 41 | 527 | 2,630 |
+
+Median total regular-file payload per registration was 140,404 bytes; maximum 214,958.
+The earlier 64 KiB per-file bound rejected every measured index. The chosen 64 MiB
+per-file ceiling is over 390 times the largest measured index, and 256 MiB total is
+over 1,200 times the largest measured registration, permitting substantial growth
+without an unbounded recovery store. This snapshot is sizing evidence, not an admission
+exception: fresh measured content and all quotas still govern each future operation.
 
 Payload directories MUST be private 0700 and files 0600, outside every protected checkout,
 with no symlinks, hardlinks or special files. Use exclusive creation, durable file and parent
