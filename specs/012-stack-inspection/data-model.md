@@ -1,5 +1,7 @@
 # Data model: stack observation v1
 
+**UNPUBLISHED proposal (2026-10-25)**: field shapes are Markdown design only. No stack schema or implementation exists at the documentation base; no existing JSON file is edited. The separate implemented Spec 015 `restack-plan` v1 remains unchanged.
+
 Types live in `internal/inspection` (local observation, plan) and `internal/hosting` (remote evidence), and reuse the native identity and diagnostic types of Spec 005 and Spec 020. JSON names are snake_case. Arrays are non-null even when empty; absent optional values are `null`. All text is valid UTF-8, bounded as stated, and is data. The normative tables for commands, capabilities, findings, linkage, remote sources, plan rules, argument rules, limits and statuses are in [spec.md](spec.md); this file adds field shapes, invariants and summary templates and does not repeat those tables.
 
 ## StackResult (`schema_version: 1`, `kind: "stack"`)
@@ -96,6 +98,8 @@ Source `outcome` is `ok`, `denied`, `not-found`, `rate-limited`, `failed` or `sk
 
 | Code | `detail` keys |
 | --- | --- |
+| `stack-too-deep` | `depth` (integer, observed bounded layer count 3..32; cap exhaustion uses `stack-limit` and may omit this advice), `recommended_max` (constant 2) |
+| `restack-needed` | `layers` (integer[], immediate children of qualifying parents, unique, bottom first), `native_status` (`plain-chain` \| `unchecked`) |
 | `stack-behind-base` | `behind_by` (integer, capped at 10000, `capped` boolean) |
 | `layer-ref-multiple` | `refs` (string[]) |
 | `fork-point` | `refs` (string[], at most 20), `omitted` (integer) |
@@ -126,6 +130,8 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Code | Template |
 | --- | --- |
 | `stack-landed` | The tip is already contained in the base; there is nothing to stack. |
+| `stack-too-deep` | Stack depth {depth} exceeds the recommended maximum {recommended_max}; this is advice only. |
+| `restack-needed` | Layers {layers} retain old parent commits; local restack advice is conditional on native status: {native_status}. |
 | `stack-behind-base` | The stack is based {behind_by} commit(s) behind the base. |
 | `layer-ref-multiple` | Layer {layer} is named by more than one reference: {refs}. |
 | `fork-point` | Other local references contain layer {layer}: {refs}. |
@@ -175,7 +181,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `expected` | object | `rebase`: `{layer_tip, old_parent_tip, new_parent, new_parent_commit_id}` (commit ids; `new_parent` a name; `new_parent_commit_id` the sampled base commit for the first rebase step, `null` for later ones); `fetch`: `{remote}`; `link`: `{numbers}`; empty for `observe` |
 | `requires` | string[] | ids of earlier steps |
 
-Invariants: `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step.
+Invariants: `stack-too-deep` is not a `blocked.reason` and never changes `status` or exit. The `restack-needed` notice never overrides the existing plan groups. `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step.
 
 ## Boundary
 
@@ -184,3 +190,11 @@ Invariants: `rebase` steps are consecutive layers bottom up with each `requires`
 ## Schema notes
 
 `stack.schema.json` is self-contained (no cross-file reference); identity definitions are copies guarded by a drift test; per-code `detail` and the invariants above that JSON Schema can express (`reason` non-null iff `unknown`, `plan` null when mode is `show` or status is `error`, non-null otherwise, `argv` null iff `display` null) are expressed with `if/then`; the remaining invariants are enforced by Go tests over every fixture. `hosting.schema.json`, `inventory.schema.json` and all other schemas are compared byte for byte against the base.
+
+## Optional downstream evidence handoff
+
+The observation already carries the full sampled base commit, each layer tip, each fork/old-parent commit, linked PR head/base/merge commits and link quality. These values let a later caller explicitly choose the old parent, new parent and moved child head without parsing human output. They are observations, not a durable apply `plan_id`, a local apply receipt, or a remote lease.
+
+Spec 015's first slice can obtain those same explicit inputs independently (D6). Any later conversion re-resolves them through native ownership gates, recomputes replay evidence, and produces its own plan. Actual local apply yields actual old/new outcomes; exact-head checks and independent review bind that actual new head before Spec 016 may construct a separately selected lease-push plan. Predicted quarantine heads and committer identity never replace actual publication evidence. No new handoff JSON document, state file or session identifier is introduced by this model.
+
+`restack-needed` is suppressed for confirmed native-stack management and closed-unmerged parents. Stale or missing merged-parent objects use the existing fetch/stale-base notes; no positive landing proof is invented. A closed parent can still yield `base-mismatch` for its child, with no automatic retarget. Offline `unchecked` native status remains visible in the notice and boundary.
