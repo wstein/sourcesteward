@@ -42,7 +42,7 @@ Every FR and every SC has its own row. “Covered” means a proposed task and c
 | FR-017 | T033, T037 | Assert CLI contains only parsing/rendering, no new dependency or process/network edge, and the later authorized architecture check rejects a planted forbidden import or ad hoc go statement. |
 | FR-018 | T035 | Compare depths 2/3/32: only 3/32 get stack-too-deep, all layers remain, status/exit and plan blockers are unchanged; 33 independently yields stack-limit. |
 | FR-019 | T036, T038 | Rebase-merge a plain parent and assert qualified restack-needed with full sampled boundaries; closed-unmerged or stale merged-parent evidence never yields landed proof. Reject treating a predicted SHA, patch id or sampled upstream as an apply receipt/review/lease. |
-| FR-020 | T037 | Complete independent edge reads in reverse order under fanout, cancel before some start and exhaust the shared request budget; assert input-index output and explicit incompleteness, no background worker or shared append. |
+| FR-020 | T037 | Select independent Git/jj repositories with distinct base/tip and online choices, finish them in reverse order, refuse one owner gate, change only one sample, cancel before/during workers and exhaust the shared 30-second/50-GET/1-MiB budgets. Assert indexed per-entry native identities/statuses/sampling and explicit incomplete/not-started outcomes, zero inherited auth or backend fallback, at most four workers for 1..16 caller entries, and unchanged single-PATH CLI/schema with no discovery or implicit network. |
 | SC-001 | T021, T031 | Run all story scenarios on the declared native layouts/version lanes; hide one backend and assert the acceptance matrix cannot report a pass. |
 | SC-002 | T010, T021, T029, T038 | Replay merge-commit, rebase-merge and squash fixtures: no merge drift, exact plain-chain replay boundaries and native observe-only handling; jj patch-equivalence remains an explicit gap. |
 | SC-003 | T027, T028, T038 | Replay historical native-stack shapes with denied/malformed alternatives; assert name-only linkage never verifies and unreadable/closed-unmerged evidence never becomes absence or landing. |
@@ -62,6 +62,10 @@ Every FR and every SC has its own row. “Covered” means a proposed task and c
 - Critical issues: 0. High issues: 0. Open owner questions: 2. Duplicate requirements needing consolidation: 0.
 - Constitution alignment: no proposed exception. No prompt, implicit network, borrowed ownership, config-derived expected identity, original-workspace simulation, implicit remote action or agent landing is authorized.
 - Requirement and task paths are explicit; future implementation work outside this feature directory is a proposal, not an edit authorized by this documentation refresh.
+
+## Appended repository fan-out clarification
+
+Root documentation review identified that the generic edge-read wording did not explicitly cover the brief’s repository fan-out requirement. FR-020, plan decision 16, T037 and the contract now specify an explicit caller-selected repository list with independent native ownership/base/tip/status/sampling, indexed outcomes and shared budgets. The 1..16 repository and at-most-four-worker values cite the existing Spec 023 bounds; no discovery, multi-PATH CLI or aggregate JSON schema is inferred. This is an appended correction to the reviewed lineage, not a rewrite or inherited clearance. Coverage remains 20 FR + 8 SC and 38 unchecked future tasks. The added mixed Git/jj reverse-completion/cancellation assertions remain design ideas, not executed backend tests. Owner questions OQ-NET/OQ-EXIT are unchanged; no multi-repository CLI spelling is proposed or needed for this caller-only contract.
 
 ## Documentation verification and next action
 
