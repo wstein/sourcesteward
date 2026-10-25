@@ -305,9 +305,25 @@ gh jj ci 42 /path/to/jj-workspace --repo owner/project --json
 
 ## Planned features — not commands available today
 
-Stack inspection/plan (Spec 012), checkpoint/resume (013), conflict diagnosis/preflight
-(014), local restacking (015), stacked PR coordination/writes (016), work transfer
-(017), amend/fixup/split editing (018), upstream synchronization (019) and native
-GitButler integration remain planned. Current inventory, recovery evidence and
-read-only PR/CI do not implement those broader workflows. See the [roadmap](roadmap.md)
+| Planned operation | Boundary and current evidence |
+| --- | --- |
+| [Stack observation/plan, Spec 012](../specs/012-stack-inspection/spec.md) | Read-only local stack/PR comparison and advisory steps; online scope/flag naming remains an open owner question, no implicit fetch or effect |
+| [Checkpoint/resume/selective undo, Spec 013](../specs/013-checkpoint-resume/spec.md) | Explicit selected local recovery, proposed typed integration with 032; payload/native capabilities and owner decisions pending |
+| [Conflict diagnosis/integration preflight, Spec 014](../specs/014-conflict-diagnosis/spec.md) | Read-only diagnosis and isolated prediction/replay; no original-workspace mutation or safe-to-merge verdict |
+| [Local restack plan/apply, Spec 015](../specs/015-local-restacking/spec.md) | Hidden native Git `stw restack plan` implemented in source, unpublished v1 schema, 20/24 original tasks checked; T004 deliberately skipped, T021/T023/T024 open. Apply/jj plus 20 new unchecked future tasks remain proposed |
+| [Forge effect plan/apply, Spec 016](../specs/016-stacked-pr-coordination/spec.md) | Individually selected own-topic/own-PR writes, each explicitly authorized against a stored plan; full-SHA lease and independent policy gates; no write command implemented |
+
+New Markdown designs and JSON illustrations are UNPUBLISHED until implementation/conformance; existing contracts remain unchanged.
+The hidden 015 planner's incomplete exit is 3; proposed future 0/1/2 output does not migrate it. This source-only planner is not a claim
+that apply or publication is available in an installed release. Follow its specification/verification for the exact existing flags and limits.
+
+Observation authorizes no local mutation; local apply authorizes no remote write. Shared `--online`, `--human`, `--timeout` and `--state-dir`
+proposals are reconciled explicitly in each feature, not accepted aliases everywhere. Local actions retain plan-bound `--authorize`;
+016's proposed per-action remote flag remains an owner surface choice. Native jj capabilities are declared independently with no raw Git fallback.
+Ready separately requires independent CLEAR for the exact current head, required CI green, `rebaseable == true` and accepted PR scope.
+[Spec 043](../specs/043-stw-land/spec.md) is the human owner's separate landing operation; conditional retarget/deletion order and unmeasured-shape
+gates stay there. No agent landing/merge/default push/tag/release/settings action is introduced.
+
+Work transfer (017), amend/fixup/split editing (018), upstream synchronization (019) and native GitButler integration remain planned.
+Current inventory, local recovery evidence and read-only PR/CI do not implement those broader workflows. See the [roadmap](roadmap.md)
 and [feature status](feature-status.json) for scope and evidence.
