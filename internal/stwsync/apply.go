@@ -125,9 +125,8 @@ func (s *session) apply(ctx context.Context, e env, rp Repo, action, ref, upstre
 		stashOID = e.claimAutostash(ctx, stashBefore, oldOID)
 	}
 	if stashOID != "" {
-		if err := j.stash(i, stashOID); err != nil {
-			rp.Reason = ptr("the journal record lacks the stash OID: " + oneLine(err.Error()))
-		}
+		// a failed write is reported by finish below, which rewrites the same record (j.stash sets the field first)
+		_ = j.stash(i, stashOID)
 	}
 	if err := j.finish(i, stateCompleted, newOID, origHead, ""); err != nil {
 		rp.Reason = ptr("the journal record stays incomplete: " + oneLine(err.Error()))

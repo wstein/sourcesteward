@@ -194,7 +194,8 @@ func (j *journal) prepare(ctx context.Context, ref, worktree, oldOID, newOID str
 	return n - 1, nil
 }
 
-// stash records the autostash OID of entry i before the branch change.
+// stash records the OID of the autostash entry that git kept for entry i; it is called after the branch change and
+// before the record is completed.
 func (j *journal) stash(i int, oid string) error {
 	j.rec.Entries[i].StashOID = oid
 	return j.write()
