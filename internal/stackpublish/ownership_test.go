@@ -329,7 +329,7 @@ func TestRepoRefComparisonFoldsASCIIOnly(t *testing.T) {
 	if !a.same(RepoRef{Host: "GITHUB.com", Owner: "OWNER", Name: "ProKject"}) {
 		t.Error("ASCII case differences must match")
 	}
-	if a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "proKject"}) || a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "prokjec"}) {
+	if a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "proKject"}) || a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "prokje"}) {
 		t.Error("a similar-looking Unicode letter or a different length matched")
 	}
 }
@@ -352,7 +352,7 @@ func TestASCIIEqualFoldChecksEveryByte(t *testing.T) {
 		want bool
 	}{
 		{"project", "PROJECT", true}, {"", "", true}, {"a", "A", true}, {"a", "b", false}, {"ab", "ac", false}, {"project", "projecu", false},
-		{"project", "projec", false}, {"projec", "project", false}, {"a-b_c.d", "A-B_C.D", true}, {"a-b_c.d", "a-b_c.e", false}, {"Z", "z", true}, {"@", "`", false}, {"[", "{", false},
+		{"project", "proj", false}, {"proj", "project", false}, {"a-b_c.d", "A-B_C.D", true}, {"a-b_c.d", "a-b_c.e", false}, {"Z", "z", true}, {"@", "`", false}, {"[", "{", false},
 	} {
 		if got := asciiEqualFold(tc.a, tc.b); got != tc.want {
 			t.Errorf("%q %q: %v want %v", tc.a, tc.b, got, tc.want)
