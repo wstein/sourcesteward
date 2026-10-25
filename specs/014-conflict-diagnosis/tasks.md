@@ -13,7 +13,7 @@ remain explicitly unavailable while other accepted units proceed.
 
 ## Phase 1 — decisions and design gate
 
-- [ ] T001 Record owner decisions for OQ-SEM/TOPO/HUNK/SCRATCH/EXIT and their affected capabilities in specs/014-conflict-diagnosis/research.md; recommendations are not answers and Spec 015 D7/v1 exit 3 remain settled.
+- [ ] T001 Record owner decisions for OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/EXIT and their affected capabilities in specs/014-conflict-diagnosis/research.md; recommendations are not answers and Spec 015 D7/v1 exit 3 remain settled.
 - [ ] T002 Obtain independent complete-artifact exact-head design review and reconcile accepted contract/coverage findings in specs/014-conflict-diagnosis/analysis.md before implementation.
 
 ## Phase 2 — shared foundation
@@ -57,8 +57,8 @@ profiles refuse and cleanup/race/cancellation remains visible.
 - [ ] T020 [US4] Implement only accepted measured native merge prediction in internal/conflict/merge_git.go with explicit semantic profile/options, bounded affected paths and reliable optional hunk origin; refuse unmeasured shapes without fallback or submodule traversal.
 - [ ] T021 [US4] Write failing scratch lifecycle tests in internal/conflict/scratch_test.go for cancellation at every boundary, child reaping, quota/disk failure, deadline, object-store leak, scratch replacement and cleanup failure; sentinels cover original tree/index/HEAD/refs/config/objects and jj stored working-copy/oplog.
 - [ ] T022 [US4] Complete scratch-only lifecycle/refusal handling in internal/conflict/scratch.go with the binding runner/environment/config/attribute hazard policy, source write/network denial, owned-handle cleanup, residue reporting, incomplete status and zero automatic retry/import/recovery-root/journal creation.
-- [ ] T023 [P] [US4] Write failing native jj preview tests in internal/conflict/preflight_jj_test.go for independent scratch store/oplog, pinned commit/change/operation identity, explicit parent/descendant scope, original no-snapshot, accepted merge/replay limits and unsupported native isolation refusal.
-- [ ] T024 [US4] Implement only measured accepted native jj preview capability in internal/conflict/preflight_jj.go; keep unavailable profiles explicit and never simulate with raw Git in colocated jj or share writable original stores.
+- [ ] T023 [P] [US4] Write failing native jj preview tests in internal/conflict/preflight_jj_test.go for independent scratch store/oplog, pinned commit/change/operation identity, explicit parent/descendant scope, OQ-JJCONF inherited-conflict/later-resolution cases and missing-node aggregate refusal, original no-snapshot, accepted merge/replay limits and unsupported native isolation refusal.
+- [ ] T024 [US4] Implement only measured accepted OQ-JJCONF native jj graph/aggregate preview capability in internal/conflict/preflight_jj.go; keep unavailable profiles explicit and never simulate with raw Git in colocated jj or share writable original stores.
 
 ## Phase 6 — US3 bounded human/structured contract (P1)
 
@@ -72,7 +72,7 @@ before effects, all bounds fail honestly and hidden restack v1 stays unchanged.
 
 ## Phase 7 — conformance and review evidence
 
-- [ ] T029 Execute every selected-capability scenario from specs/014-conflict-diagnosis/quickstart.md in minimum/current native Git/jj Linux/macOS lanes, including ownership/concurrency/failure and first-conflict suffix; record unavailable/missing lanes as blockers in specs/014-conflict-diagnosis/verification.md.
+- [ ] T029 Execute every selected-capability scenario from specs/014-conflict-diagnosis/quickstart.md in minimum/current native Git/jj Linux/macOS lanes, including ownership/concurrency/failure, Git first-conflict suffix and accepted native jj complete descendant coverage; record unavailable/missing lanes as blockers in specs/014-conflict-diagnosis/verification.md.
 - [ ] T030 Run targeted mutation probes in internal/conflict/safety_mutation_test.go that remove quarantine/write denial, swap backend, allow helpers/network, drop suffix, weaken resampling, leak unselected content, hide cleanup failure or turn unknown into clean; record killed/surviving mutants in specs/014-conflict-diagnosis/verification.md.
 - [ ] T031 Update only real implementation/effect/contract evidence and per-FR/SC traceability in specs/014-conflict-diagnosis/analysis.md and specs/014-conflict-diagnosis/verification.md; never mark absent execution, old 015 measurements or self-review as accepted 014 evidence.
 - [ ] T032 Run change-appropriate source/format/test/conformance checks and obtain independent exact-current-head source review; record actual check names/outcomes and remaining owner/capability blockers in specs/014-conflict-diagnosis/verification.md before publication/Ready gates, without merge/deploy or runtime activation.

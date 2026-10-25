@@ -49,7 +49,7 @@ implementations; this plan is ready for design review, not unqualified implement
 - `internal/conflict/observe_git.go`, `observe_jj.go`: bounded native conflict
   metadata through reviewed runners; stored and disk observations never conflated.
 - `internal/conflict/scratch.go`, `replay_git.go`, `preflight_jj.go`: enforce
-  disposable ownership, capability admission and sequential replay. Source objects
+  disposable ownership, capability admission and the accepted native replay effects. Source objects
   are read-only alternates; writable objects/config/locks/temp files stay private.
 - `internal/conflict/context.go`: opt-in selected-path hunk extraction behind
   OQ-HUNK, never an arbitrary file reader or resolver.
@@ -58,8 +58,9 @@ implementations; this plan is ready for design review, not unqualified implement
 
 Independent metadata reads may use Spec 040 `internal/fanout` with a bounded width
 of at most four and input-indexed results. No new goroutine pool or shared append.
-Replay is dependent oldest-first work and remains sequential; do not parallelize
-scratch effects or resampling across their dependencies.
+Git replay is dependent oldest-first work and remains sequential. Native jj
+requires accepted graph/conflict semantics under OQ-JJCONF; do not impose a Git
+stop-first suffix or parallelize effects/resampling across native dependencies.
 
 ## Operation sequence
 
@@ -75,9 +76,11 @@ scratch effects or resampling across their dependencies.
    pinned stored conflict evidence, without resolving, staging or snapshotting.
 4. Preflight allocates private scratch only after admission, installs write/network
    confinement and sanitized execution, then performs the declared native kernel.
-   For linear replay, source range is exactly old-parent..source-head, oldest first;
+   For Git linear replay, source range is exactly old-parent..source-head, oldest first;
    first conflict stops and suffix remains not-evaluated. For merge, no replay
    substitution is allowed; an accepted native strategy/topology is mandatory.
+   Native jj preview additionally waits for accepted OQ-JJCONF graph/aggregate
+   evidence; a clean final tip cannot erase conflicted intermediate revisions.
 5. Derive bounded conflict paths/types and optional accepted hunk context. No
    automatic custom merge driver, textconv, filter, hook, fsmonitor or project script.
 6. Resample selected references, ownership/layout and operation state. Any change,
@@ -116,7 +119,7 @@ independently unless an actual code dependency later justifies a stack.
 | Git plumbing writes original objects or invokes merge drivers | Private writable object store + read-only source alternate, hazard admission, sandbox deny, write/network recorder and sentinels |
 | Scratch jj shares operation log/object store | Native isolated-store measurement, no workspace-add in original, refuse unavailable capability |
 | Optional hunk leaks secrets or hostile instructions | Default no bodies, selected exact paths, omission reason and finite bounds; content is DATA, never executed |
-| Partial replay appears clean | First-conflict coverage and not-evaluated suffix, unknown aggregate on missing evidence |
+| Partial replay appears clean | Git first-conflict coverage/not-evaluated suffix; native jj complete graph and accepted aggregate semantics, unknown on missing evidence |
 | Shared 015 refactor changes hidden v1 | Characterization and unchanged frozen file/fixture digests before extraction; retain exit 3 |
 | Clean prediction treated as merge approval | Fixed notice in all result modes; no authorization/review/check field asserting readiness |
 | Cancellation leaves scratch | Owned cleanup after reaping children, residue handle and incomplete status; never clean arbitrary supplied path |

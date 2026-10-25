@@ -1,7 +1,7 @@
 # Research: Conflict diagnosis and isolated replay evidence
 
 **Date**: 2026-10-25. Source/documentation inspection only. No new native
-experiment, backend acceptance, build, network request or product test was run.
+experiment, backend acceptance, build, product network request or product test was run.
 
 ## R1 — existing source is evidence of plumbing, not global support
 
@@ -54,6 +54,17 @@ parent heuristically, using native default strategy from repository config, or
 reporting predicted-clean from a truncated replay. OQ-SEM/TOPO block unaccepted
 variants, with an explicit capability-unavailable result.
 
+### Native jj conflict evolution remains an owner decision
+
+The [official jj conflict guide](https://www.jj-vcs.dev/latest/conflicts/)
+describes stored conflict commits and descendant rewrites. The
+[technical conflict model](https://github.com/jj-vcs/jj/blob/main/docs/technical/conflicts.md)
+explains term simplification, including cancellation that can remove a conflict.
+Those semantics differ from the Git stop-first kernel. OQ-JJCONF retains the
+choice of per-revision and aggregate evidence; native version/profile measurements
+must establish complete bounded graph coverage. No 014 native experiment proves
+that contract, and a clean final tip is insufficient evidence for every revision.
+
 ## R4 — resolver context is a privacy capability
 
 **Decision:** propose body-free paths/types by default and selected-path bounded
@@ -93,8 +104,8 @@ a refresh.
 
 ## Unresolved research and workflow
 
-The five OQs in [spec.md](spec.md#needs-owner-decision) retain real unsettled
-semantic/topology, hunk, scratch and exit choices with recommendations. There are
+The OQs in [spec.md](spec.md#needs-owner-decision) retain real unsettled
+semantic/topology, native jj conflict evolution, hunk, scratch and exit choices with recommendations. There are
 no invented owner answers or new approval flows. Their affected implementation
 units cannot start until their decisions and measurements are recorded.
 Installed Spec Kit workflows select this existing directory with
