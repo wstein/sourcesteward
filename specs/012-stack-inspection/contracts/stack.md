@@ -41,7 +41,7 @@ Layers (bottom first):
   3. s3  88da0eb  1 commit   landed: pending
 Findings:
   [action] [observed] layer-applied-in-base (layer 1): All 1 commits of layer 1 are already in the base as equivalent patches. (git-cherry)
-  [notice] [inferred] restack-needed: Layers 2 retain old parent commits; local restack advice is conditional on native status: unchecked. (git-cherry, git-range)
+  [notice] [inferred] restack-advised: Layers 2 retain old parent commits; local restack advice is conditional on native status: unchecked. (git-cherry, git-range)
   [notice] [observed] stack-behind-base: The stack is based 1 commit(s) behind the base. (git-range)
 Plan (advisory; nothing was executed, and a plan authorizes nothing; native stack status not checked):
   s1  git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2
@@ -177,7 +177,7 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
  ],
  "findings": [
   {
-   "code": "restack-needed",
+   "code": "restack-advised",
    "layer": null,
    "subject": null,
    "severity": "notice",
@@ -365,7 +365,7 @@ Every existing command, flag, schema and fixture is unchanged and byte-identical
 
 `depth` counts retained local layers, including proven-landed ones. Complete `open_depth` is the candidate upper bound after excluding only proven-landed layers under the landing predicates and stale-base precedence; unknown landing and closed-unmerged layers remain candidates, so this never asserts an exact open-PR count. Incomplete/error results have null `open_depth` and no depth notice. `stack-too-deep` is an inferred notice only when complete candidate open_depth >2; it neither fails completion nor blocks a plan. The example has depth 3 but one proven-applied parent, so open_depth 2 and no notice. All local layers up to 32 remain visible; the 33rd independently exhausts LIM-2.
 
-`restack-needed` uses the exact Findings rule and is conditional when native status is unchecked. Rebase-merge SHA inequality and branch-name matches alone are never landing proof. `git cherry`/patch ids qualify linear patch content; merge commits, squash mismatches and conflict resolutions limit that evidence. A parent that is closed but not merged is not landed; its child's stale base remains only `base-mismatch`. No observation authorizes a retarget, rewrite or publication.
+`restack-advised` uses the exact Findings rule and is conditional when native status is unchecked. Rebase-merge SHA inequality and branch-name matches alone are never landing proof. `git cherry`/patch ids qualify linear patch content; merge commits, squash mismatches and conflict resolutions limit that evidence. A parent that is closed but not merged is not landed; its child's stale base remains only `base-mismatch`. No observation authorizes a retarget, rewrite or publication.
 
 The displayed `git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto <new parent> <full old parent> <child>` is an inert human reference for the exact replay boundary. Spec 015 owner D7 requires plumbing/quarantine and compare-and-swap; its executor never runs this argv. The field-to-flag table in [data-model.md](../data-model.md#field-to-flag-mapping-for-the-implemented-spec-015-git-v1-plan) maps selected branches to validated `refs/heads/...`, old/new parents and expected child head to full ids, and never derives `--identity` from 012. Later null destinations require the actual predecessor apply outcome; the current 015 v1 accepts only native Git SHA-1, not 012’s jj or 64-hex Git observations. Diagnostics and exit mappings remain per-command namespaces. Actual Spec 015 apply must produce its own actual-head evidence and pass independent exact-head review before a separate Spec 016 lease-push plan/apply, with explicit action authorization and plan id. Neither a predicted head nor `Layer.upstream.commit_id` is a fresh publishable head/lease receipt.
 
@@ -389,4 +389,4 @@ The two fixed Git reference overrides disable config-driven automatic updates of
 
 ## Qualified finding and watch-event namespaces
 
-The nested 012 finding `StackResult(kind: "stack").findings[].code: "restack-needed"` has `detail.{layers,native_status}`; it does not have the [existing 035 watch-event](../../035-stw-watch/contracts/watch-events.md) payload. The watcher uses top-level `kind: "restack-needed"` after a forge merge, with reasons `child-of-merged-branch`/`contains-merged-commits` and `details.{old_parent,new_parent,new_parent_source,branch,argv}`. The watcher’s new parent is the merge commit (`new_parent_source: "merge_commit_sha"`), which may be null or behind the selected base; 012’s first destination is `base.commit_id` and later destinations await actual predecessor apply. Neither signal implies the other. Do not dispatch by the shared string/schema_version alone, coerce payloads into one schema, copy destinations implicitly, or execute the event’s argv as a plan. Re-observe local/native ownership and exact boundaries, choose a destination explicitly and create/revalidate the effect owner’s own plan. The existing watch schema and publication status remain unchanged; 012 stays an UNPUBLISHED proposal.
+The nested 012 finding `StackResult(kind: "stack").findings[].code: "restack-advised"` has `detail.{layers,native_status}`; it does not have the [existing 035 watch-event](../../035-stw-watch/contracts/watch-events.md) payload. The watcher uses top-level `kind: "restack-needed"` after a forge merge, with reasons `child-of-merged-branch`/`contains-merged-commits` and `details.{old_parent,new_parent,new_parent_source,branch,argv}`. The watcher’s new parent is the merge commit (`new_parent_source: "merge_commit_sha"`), which may be null or behind the selected base; 012’s first destination is `base.commit_id` and later destinations await actual predecessor apply. Neither signal implies the other. Do not dispatch by an unqualified signal name/schema_version alone, coerce payloads into one schema, copy destinations implicitly, or execute the event’s argv as a plan. Re-observe local/native ownership and exact boundaries, choose a destination explicitly and create/revalidate the effect owner’s own plan. The existing watch schema and publication status remain unchanged; 012 stays an UNPUBLISHED proposal.
