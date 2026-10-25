@@ -3,6 +3,9 @@ package stwsync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,7 +241,8 @@ func conflictBranch(t *testing.T, dir string) {
 }
 
 // An operation in progress makes the repository skipped-busy, in a plan and in a run, in the root and in a submodule:
-// the branch, the worktree and the Git directory are byte-identical afterwards and the exit status is 0.
+// the worktree files, all refs and the operation state of the Git directory (see gitDirState) are byte-identical
+// afterwards, and the exit status is 0.
 func TestSkippedBusyForEveryOperationInPlanAndRun(t *testing.T) {
 	for op, start := range busyStates {
 		for _, repo := range []string{".", "b"} {
@@ -249,6 +253,7 @@ func TestSkippedBusyForEveryOperationInPlanAndRun(t *testing.T) {
 					w.advance(t, repo, "main")
 					start(t, w.dir(repo))
 					before := snapshot(t, w, repo)
+					gitBefore := gitDirState(t, w.dir(repo))
 					head := w.oid(t, repo, "HEAD")
 					r := Sync(context.Background(), Options{Path: w.ws, Plan: plan})
 					if r.Error != nil {
@@ -261,6 +266,9 @@ func TestSkippedBusyForEveryOperationInPlanAndRun(t *testing.T) {
 					if snapshot(t, w, repo) != before || w.oid(t, repo, "HEAD") != head {
 						t.Error("the repository changed")
 					}
+					if after := gitDirState(t, w.dir(repo)); after != gitBefore {
+						t.Errorf("the Git directory changed:\nbefore:\n%s\nafter:\n%s", gitBefore, after)
+					}
 					if r.RunID != nil {
 						t.Errorf("a skipped repository was journaled: %v", *r.RunID)
 					}
@@ -268,4 +276,42 @@ func TestSkippedBusyForEveryOperationInPlanAndRun(t *testing.T) {
 			}
 		}
 	}
+}
+
+// gitDirState is what a repository in the middle of an operation must keep: every ref (heads, remotes, tags, stash, ...)
+// with its object, the HEAD file, and the content of the operation state in the Git directory: the index, ORIG_HEAD,
+// MERGE_*, CHERRY_PICK_HEAD, REVERT_HEAD, BISECT_*, AUTO_MERGE, and the files of rebase-merge/, rebase-apply/ and
+// sequencer/. Not compared: FETCH_HEAD, the reflogs, hooks, objects and packed files (volatile or irrelevant here).
+func gitDirState(t *testing.T, dir string) string {
+	t.Helper()
+	gitDir := runGit(t, dir, "rev-parse", "--absolute-git-dir")
+	var lines []string
+	lines = append(lines, "refs:\n"+runGit(t, dir, "for-each-ref", "--format=%(refname) %(objectname) %(symref)"))
+	add := func(path string) {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return
+		}
+		sum := sha256.Sum256(raw)
+		rel, _ := filepath.Rel(gitDir, path)
+		lines = append(lines, rel+" "+hex.EncodeToString(sum[:]))
+	}
+	entries, _ := os.ReadDir(gitDir)
+	for _, e := range entries {
+		name := e.Name()
+		switch {
+		case e.IsDir() && (name == "rebase-merge" || name == "rebase-apply" || name == "sequencer"):
+			_ = filepath.WalkDir(filepath.Join(gitDir, name), func(path string, d fs.DirEntry, err error) error {
+				if err == nil && !d.IsDir() {
+					add(path)
+				}
+				return nil
+			})
+			lines = append(lines, name+"/ present")
+		case !e.IsDir() && (name == "HEAD" || name == "index" || name == "ORIG_HEAD" || name == "AUTO_MERGE" || strings.HasPrefix(name, "MERGE_") || name == "CHERRY_PICK_HEAD" || name == "REVERT_HEAD" || strings.HasPrefix(name, "BISECT_")):
+			add(filepath.Join(gitDir, name))
+		}
+	}
+	sortStrings(lines[1:])
+	return strings.Join(lines, "\n")
 }
