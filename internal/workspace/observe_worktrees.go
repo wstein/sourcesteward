@@ -100,6 +100,9 @@ type worktreeObserver struct {
 	activity func(gitDir, root string, tracked []RetirementStoredFile) (time.Time, error)
 	// retire reads the stored files of one jj workspace; a field so a test can present another operation.
 	retire func(ctx context.Context, source, base, destination, name, repo string) (inspection.JJRetirementState, error)
+	// window is the observation deadline for a repository with n registrations; a field so a test can
+	// choose it (nil means observationWindow).
+	window func(ctx context.Context, registrations int) time.Duration
 }
 
 func defaultWorktreeObserver() worktreeObserver {
