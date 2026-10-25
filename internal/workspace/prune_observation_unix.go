@@ -72,11 +72,13 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	if err != nil {
 		return out, pruneOwnershipReadError(err)
 	}
+	pruneObservationStep(ctx, "ownership-read", "", &out.Task)
 	task := out.Task
 	if task.Backend != "git" || task.Native.RepositoryDir != source.RepositoryDir || out.Creation.Expected.Identity.RepositoryDir != source.RepositoryDir {
 		return out, failure("prune-repository-refused", "Creation ownership belongs to a different native repository.")
 	}
-	if task.Native.GitDir != filepath.Join(source.RepositoryDir, "worktrees", o.Registrations[0]) || task.Native.GitDir == source.GitDir || task.Native.GitDir == source.RepositoryDir {
+	// The exact worktrees/name mapping already excludes the common directory itself.
+	if task.Native.GitDir != filepath.Join(source.RepositoryDir, "worktrees", o.Registrations[0]) || task.Native.GitDir == source.GitDir {
 		return out, failure("prune-registration-refused", "Selector does not identify the exact owned linked registration.")
 	}
 	out.Absence, err = observePruneAbsence(ctx, task.Destination, out.Creation.DestinationParent)
@@ -91,6 +93,7 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	if err != nil {
 		return out, err
 	}
+	pruneObservationStep(ctx, "metadata-sampled", task.Native.GitDir, nil)
 	read := func(name string) ([]byte, error) {
 		data, _, _, err := gitLayoutFile(filepath.Join(task.Native.GitDir, name))
 		if err != nil {
@@ -119,6 +122,7 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	if commonPath != "../.." && commonPath != source.RepositoryDir {
 		return out, failure("prune-pointer-refused", "Registration common-directory pointer is not the admitted native mapping.")
 	}
+	pruneObservationStep(ctx, "metadata-bindings-read", task.Native.GitDir, nil)
 	bin, err := gitExecutable()
 	if err != nil {
 		return out, err
@@ -152,12 +156,14 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	if err != nil {
 		return out, err
 	}
+	pruneObservationStep(ctx, "inventory-read", task.Native.GitDir, nil)
 	if selected != 1 {
 		return out, failure("prune-registration-refused", "Native inventory does not identify the exact missing registration.")
 	}
 	if err = revalidatePruneAbsence(ctx, out.Absence); err != nil {
 		return out, err
 	}
+	pruneObservationStep(ctx, "before-metadata-recheck", task.Native.GitDir, nil)
 	fresh, size, err := observePruneMetadata(ctx, task.Native.GitDir, defaultPruneMetadataLimits())
 	if err != nil {
 		return out, err
@@ -165,6 +171,7 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	if size != out.MetadataBytes || !reflect.DeepEqual(fresh, out.Metadata) {
 		return out, failure("prune-metadata-refused", "Registration metadata changed during observation.")
 	}
+	pruneObservationStep(ctx, "before-ownership-recheck", "", nil)
 	creation, again, digest, err := readRetirementOwnership(state, o.Task, o.Owner)
 	if err != nil {
 		return out, pruneOwnershipReadError(err)
@@ -172,6 +179,7 @@ func observePruneRegistration(ctx context.Context, o pruneInspectionOptions) (pr
 	if !reflect.DeepEqual(creation, out.Creation) || !reflect.DeepEqual(again, out.Task) || digest != out.CreationJournalDigest {
 		return out, failure("changed-ownership", "Original creation evidence changed during observation.")
 	}
+	pruneObservationStep(ctx, "before-final-snapshot", source.WorkspaceRoot, nil)
 	final, err := (gitAdapter{}).Observe(ctx, source.WorkspaceRoot, source.CommitID)
 	if err != nil {
 		return out, err

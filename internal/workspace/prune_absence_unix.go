@@ -72,6 +72,7 @@ func observePruneAbsence(ctx context.Context, destination string, parent PathIde
 	if err = missing(); err != nil {
 		return witness, err
 	}
+	pruneObservationStep(ctx, "absence-first-missing", destination, nil)
 	for i, opened := range fds {
 		if err = ctx.Err(); err != nil {
 			return witness, err
@@ -90,6 +91,7 @@ func observePruneAbsence(ctx context.Context, destination string, parent PathIde
 			}
 		}
 	}
+	pruneObservationStep(ctx, "absence-before-final-missing", destination, nil)
 	if err = missing(); err != nil {
 		return witness, err
 	}
