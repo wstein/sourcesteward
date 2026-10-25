@@ -179,8 +179,20 @@ func ReadRegistrationPruneV4Plan(state, id string) (RegistrationPruneV4Plan, err
 		return p, e
 	}
 	defer child.Close()
-	if e = child.read("plans", id, &p); e != nil {
+	var raw json.RawMessage
+	if e = child.read("plans", id, &raw); e != nil {
 		return p, e
+	}
+	if !utf8.Valid(raw) || decodeStrict(raw, &p) != nil {
+		return RegistrationPruneV4Plan{}, failure("prune-plan-refused", "Contract-4 record contains incompatible JSON.")
+	}
+	// Decode with exact integers, then compare full canonical shapes. A typed
+	// decoder alone defaults a missing false/zero field and would accept a
+	// record whose digest still matches despite omitting a required field.
+	actual, aerr := pruneV4Canonical(raw, "")
+	complete, cerr := pruneV4Canonical(p, "")
+	if aerr != nil || cerr != nil || !bytes.Equal(actual, complete) {
+		return RegistrationPruneV4Plan{}, failure("prune-plan-refused", "Contract-4 record must contain every required field with its exact type.")
 	}
 	if e = validatePruneV4Plan(p, state, id); e != nil {
 		return RegistrationPruneV4Plan{}, e
