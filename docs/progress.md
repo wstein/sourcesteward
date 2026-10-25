@@ -391,7 +391,7 @@ or independent acceptance is claimed. Planning/tasks/analysis remain pending.
 
 Stack Inspection and Plan: reworked on 2026-10-17 for GitHub native stacked pull requests (read-only `stack show` and `stack plan`, opt-in pull request evidence, advisory plan; diffs withdrawn); full artifact set and author checks written.
 Documentation links and whitespace checks passed before PR handoff. No runtime capability
-or independent acceptance is claimed. Independent exact-head review and implementation acceptance remain pending.
+or independent acceptance is claimed. Documentation review is recorded per exact head in the PR evidence; implementation acceptance remains pending.
 
 ### 013-checkpoint-resume — Toolbelt use-case specification update
 
