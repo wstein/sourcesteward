@@ -59,7 +59,7 @@ guard stays unknown/blocked. Verify no refs/files/index/objects/jj log changed
 except an explicitly selected `--save` private plan write.
 
 Owner decision selects --online only, default offline; old --pull-requests is
-usage2 with no alias. The accepted
+usage 2 with no alias. The accepted
 `--after-fetch` hint is observation data and never fetches.
 
 ## 2. Selected own-topic lease push (US2)
@@ -80,7 +80,7 @@ code. Verify a predicted hidden-v1 SHA cannot count as actual review.
 Include an own child whose moved range has owner identities but whose open
 parent has a foreign committer. The full observed-remote-default..new-head gate
 must catch it. Leaked local/global user identity also refuses with bounded origin
-evidence and no config repair. Default signed-source/signature-required uncertainty blocks. Explicit local015
+evidence and no config repair. Default signed-source/signature-required uncertainty blocks. Explicit local 015
 re-sign needs trusted host helper/verifier and its own stored plan/authorization;
 remote flags never run it. Verify final signed parent chain, public signer/loss
 provenance and final SHA before review. No configured helper means unavailable;

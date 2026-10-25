@@ -26,7 +26,7 @@ operation. No stack merge or remote deletion is added here.
 | Dependencies | Existing pinned official go-gh/v2, native Git/jj adapters; no new dependency, provider SDK or extension installation |
 | Functional core | Proposed `internal/stackpublish` typed evidence, validation, planning, gate evaluation and outcomes; no I/O, clock or goroutines in derivation |
 | Imperative edges | Existing inspection/hosting/private-state seams, extended only by reviewed closed capabilities; native Git own-topic push, separately measured native jj publication |
-| Storage | Immutable plans and action intent/outcome records in validated workspace .work METADATA (captured013bytes remain external); typed integration with existing durability conventions, not reuse of sync JSON as though generic |
+| Storage | Immutable plans and action intent/outcome records in validated workspace .work METADATA (captured 013 bytes remain external); typed integration with existing durability conventions, not reuse of sync JSON as though generic |
 | Target | Existing supported Linux/macOS native enforcement lanes; exact minimum/current versions from backend policy, with explicit capability evidence |
 | Testing | Temporary repositories/bare remotes, fake HTTP/processes/clocks, effect sentinels, proposed offline contract fixtures; failing tests before behavior |
 | Performance/scope | One repository per plan, at most two open stack levels and 16 selected actions; fixed operation budgets in the contract |
@@ -148,11 +148,11 @@ needs explicit private modes, ignore/untracked export-risk and no-follow/race/
 quota/fsync guards with no auto-ignore/config/index edit. Captured 013 bytes
 and safety copies remain in explicit EXTERNAL --payload-dir, never .work.
 
-The target CLI exit-contract revision2 is unified 0/1/2, including 015 incomplete 1
-without a legacy3 selector; CURRENT hidden015code3 remains until its red-first
-mapping/help task. JSON schema1 bytes are a separate version domain and stay
+The target CLI exit-contract revision 2 is unified 0/1/2, including 015 incomplete 1
+without a legacy 3 selector; CURRENT hidden 015 code 3 remains until its red-first
+mapping/help task. JSON schema 1 bytes are a separate version domain and stay
 frozen. 013/014 remain helper/network-free. Optional re-sign is separately
-planned/authorized local015 work through a measured fixed HOST helper/verifier;
+planned/authorized local 015 work through a measured fixed HOST helper/verifier;
 no stw keys or implicit invocation under remote authorization. 016 validates
 the final signed chain/head before independent exact-SHA review/push. All native
 measurement/transport gates remain; adopted decisions are not conformance.

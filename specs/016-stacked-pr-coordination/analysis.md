@@ -3,19 +3,19 @@
 **Owner decisions: 2026-10-25. Author cross-artifact analysis only.** All former
 OQ IDs are settled and indexed in [the decision index](../016-stacked-pr-coordination/research.md#cross-spec-decision-index).
 The [concrete profiles](contracts/owner-decisions.md) distinguish workspace .work metadata from
-external capture payloads, trusted policy, host-only optional local015 re-sign
-and CLI exit-contract revision2. No new implementation/native/helper/forge test
+external capture payloads, trusted policy, host-only optional local 015 re-sign
+and CLI exit-contract revision 2. No new implementation/native/helper/forge test
 or independent CLEAR is claimed. Historical implementation evidence stays at
-its recorded revision; current hidden015code still returns3 until the new task.
+its recorded revision; current hidden 015 code still returns 3 until the new task.
 
 ## Current findings and gates
 
 | ID | Disposition | Remaining evidence |
 | --- | --- | --- |
-| D1 | All39 owner directions are DECIDED, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
+| D1 | All 39 dispositions are recorded as direct owner answers or adopted recommendations; cross-spec owner overrides are marked, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
 | D2 | Metadata and external selected-byte/safety stores are distinct roles with explicit modes/race/layout/quota/export-risk guards. | Red-first shared store and role-separation tasks; no auto-ignore edits/expiry. |
-| D3 | Optional actual re-sign belongs only to015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review;016 receipt validation only. |
-| D4 | Target CLI exit-contract revision2 is0/1/2, no legacy3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
+| D3 | Optional actual re-sign belongs only to 015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review; 016 receipt validation only. |
+| D4 | Target CLI exit-contract revision 2 is 0/1/2, no legacy 3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
 
 ## Individual requirement coverage and literal future tests
 
@@ -46,7 +46,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-020 | T022, T023 | Retarget child then change head; partial head-changed is reported and old Ready receipt is invalid. |
 | FR-021 | T002, T003, T020, T021 | Current GET mode rejects every proposed write; new admitted mode rejects arbitrary method/path/body/URL. |
 | FR-022 | T002, T006, T008, T025, T026, T039, T040 | Default render never creates/writes a store; explicit save requires validated directory; apply rejects unsaved ids; failed durable intent means zero remote writes and failed outcome persistence means unknown. |
-| FR-023 | T002, T033, T037 | Accept only decided per-command flags; reject --offline with usage 2 and no side effects, retain 033/037 polarity, and distinguish CURRENT hidden015code3 from unified revision-2 target incomplete1 with frozen JSON/schema bytes. |
+| FR-023 | T002, T033, T037 | Accept only decided per-command flags; reject --offline with usage 2 and no side effects, retain 033/037 polarity, and distinguish CURRENT hidden 015 code 3 from unified revision-2 target incomplete 1 with frozen JSON/schema bytes. |
 | FR-024 | T013, T014, T028, T037 | Reject unpinned/contaminated 014 attribute-source evidence and unaccepted jj aggregate semantics; 013 independent safety copies/no-head-CAS samples and local preflight/apply never authorize sync/push/link/Ready/authentication. |
 | FR-025 | T032, T037 | Render readable-off and on/unreadable owner orders; zero landing/default push/delete calls. |
 | FR-026 | T028, T032, T037 | Resync uses full old pushed SHA, actual new SHA and labelled destructive reset path; never executes. |
@@ -55,7 +55,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-029 | T015, T016 | Three open levels block 016 writes while 012 observation remains advisory; unrelated docs target main. |
 | FR-030 | T003, T020, T021, T033 | Hostile controls/body/URL/helper/session/token sentinels remain escaped/bounded/unexecuted and absent publicly. |
 | FR-031 | T039, T040, T043, T044 | Exercise default .work trusted-root/ignore/untracked/mode/race/fsync/quota guards and immutable intent/outcome chains, reserved effect outcome quota and separate maintenance pool for full-target completed-id cleanup; both pools full refuse, unresolved never expires and payload bytes never enter metadata. |
-| FR-032 | T041, T042 | Reject wrong signed parent/signer/final-SHA review or missing helper proof; accept only verified final015receipt and assert remote authorization executes zero local signing/key/helper code. |
+| FR-032 | T041, T042 | Reject wrong signed parent/signer/final-SHA review or missing helper proof; accept only verified final 015 receipt and assert remote authorization executes zero local signing/key/helper code. |
 | SC-001 | T001, T004, T005, T024, T034, T035, T038 | Run each accepted native/backend/version/platform fixture and leave one unavailable lane explicitly blocked. |
 | SC-002 | T003, T005, T006, T007, T009, T010, T011, T012, T013, T014, T015, T016, T017, T019, T020, T021, T022, T023, T024, T025, T026, T027, T028, T031, T032, T034, T035, T036, T039, T040, T041, T042, T043, T044 | Compare native/config/remote sentinels and recorder logs for forbidden writes/helpers/ownership bypass. |
 | SC-003 | T001, T008, T033, T034 | Validate complete/error/partial fixtures offline, reject invalid binding and compare frozen legacy bytes. |
@@ -72,7 +72,7 @@ checked tasks; 44 unchecked. Coverage 40/40 (100% design
 mapping), zero requirement orphans. No implementation checkbox is changed by
 owner answers or this analysis. All new exit/store/signing tasks are unchecked.
 Task dependencies remain red test → implementation → native/effect conformance
-→ exact-source independent review. Spec043 human-only landing remains separate.
+→ exact-source independent review. Spec 043 human-only landing remains separate.
 
 ## Compatibility and acceptance boundary
 

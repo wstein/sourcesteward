@@ -203,7 +203,7 @@ Stable proposed refusal reasons include `ownership-unknown`, `not-owned`,
 `scope-not-accepted`, `native-rewrite-pending`, `stack-too-deep`,
 `outcome-unknown`, `bound-exceeded`, `cancelled`, `journal-failed`.
 Codes are command-local namespaces, not undocumented aliases of 012/015 codes.
-CURRENT hidden 015 code still exits3 incomplete; decided exit-contract revision2 targets1 after its red-first task, with no legacy3 selector and unchanged schema1 bytes.
+CURRENT hidden 015 code still exits 3 incomplete; decided exit-contract revision 2 targets 1 after its red-first task, with no legacy 3 selector and unchanged schema 1 bytes.
 
 An illustrative UNPUBLISHED empty-selection result (not an executable schema):
 

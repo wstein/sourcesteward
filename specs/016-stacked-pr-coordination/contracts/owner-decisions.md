@@ -2,7 +2,7 @@
 
 **Owner decisions: 2026-10-25. Draft implementation design only.** The owner
 settled the 39 indexed OQ IDs; those IDs remain stable decision references.
-Unlisted choices adopt the source research recommendations. No decision is a
+IDs without an explicit answer adopt the source research recommendations. No decision is a
 native measurement, conformance pass, helper execution, remote authorization or
 implementation checkbox. The profile details below are concrete engineering
 proposals implementing that direction; numeric quotas are not attributed owner
@@ -204,7 +204,9 @@ commands' strict-findings/release exit semantics outside this toolbelt scope.
 
 ## Measure-before-enable and owner-only boundaries
 
-All former OQs are settled direction, not newly measured capability acceptance.
+All 39 indexed former OQs have direct or adopted direction, not newly measured
+capability acceptance. Separate 043 endpoint/ownership/constitution reconciliation
+remains OPEN; those proposed amendments are not owner-approved by these answers.
 Measure forge effects in separately authorized disposable fixtures, then review
 the small additive Spec 022 method/path/body allowlist; current GET modes stay
 read-only. Comments remain deferred; no arbitrary endpoint/GraphQL execution.
