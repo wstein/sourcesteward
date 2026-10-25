@@ -8,6 +8,8 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode"
@@ -377,5 +379,177 @@ func TestModeMarkersAreEscapedAndNeverNull(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"markers": []`) || !strings.Contains(string(b), `"by_owner": []`) {
 		t.Errorf("nil lists in the mode:\n%s", b)
+	}
+}
+
+// lineIndex is the index of the first line of out that contains sub, or -1.
+func lineIndex(out, sub string) int {
+	for i, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, sub) {
+			return i
+		}
+	}
+	return -1
+}
+
+// FR-006a, SC-010: candidates are listed under one heading per owner, own scope first, then the
+// other owners sorted by label, `unknown` last; inside a group, under a sub-heading per repository.
+func TestTextGroupsCandidatesByOwner(t *testing.T) {
+	out := Text(Build(input()), TextOptions{})
+	own, codex, unknown := lineIndex(out, "owner claude (own)"), lineIndex(out, "owner codex (other)"), lineIndex(out, "owner unknown")
+	if own < 0 || codex < 0 || unknown < 0 || !(own < codex && codex < unknown) {
+		t.Fatalf("group headings missing or out of order (%d %d %d):\n%s", own, codex, unknown, out)
+	}
+	for sub, heading := range map[string]int{"codex/old-1": own, "/tmp/wt-037": own, "/tmp/wt-041": own, "/tmp/whr010-a": codex, "/tmp/wt-dec": unknown, `\u202egnp.exe`: unknown} {
+		got := lineIndex(out, sub)
+		next := len(strings.Split(out, "\n"))
+		for _, h := range []int{own, codex, unknown} {
+			if h > heading && h < next {
+				next = h
+			}
+		}
+		if got < heading || got >= next {
+			t.Errorf("%q at line %d, want inside its group (%d..%d):\n%s", sub, got, heading, next, out)
+		}
+	}
+	// Repository sub-headings inside the own group, indented under the heading.
+	if !strings.Contains(out, "\n  bundledock\n") || !strings.Contains(out, "\n  sourcesteward\n") {
+		t.Errorf("repository sub-headings missing:\n%s", out)
+	}
+}
+
+// The per-repository lines (base, notices, skipped, error, no candidates) come in a block before
+// the owner groups, one entry per repository, so that coverage stays visible.
+func TestTextRepositoriesBlockPrecedesOwnerGroups(t *testing.T) {
+	out := Text(Build(input()), TextOptions{})
+	block := lineIndex(out, "Repositories:")
+	first := lineIndex(out, "owner claude (own)")
+	if block < 0 || first < 0 || block > first {
+		t.Fatalf("repositories block missing or after the groups:\n%s", out)
+	}
+	for _, want := range []string{"chartscribe   skipped: base-ambiguous", "sheetmill   error: boom", "  notice: tracking-requires-online"} {
+		i := lineIndex(out, want)
+		if i < block || i > first {
+			t.Errorf("%q at line %d, want between %d and %d:\n%s", want, i, block, first, out)
+		}
+	}
+}
+
+// The order does not depend on the order of the candidates (deterministic output).
+func TestTextOrderIsIndependentOfCandidateOrder(t *testing.T) {
+	in := input()
+	extra := cand("bundledock", tidywizard.KindBranch, "alpha/x", tidywizard.VerdictSafe, "", owner.ScopeOther)
+	extra.Owner = "alpha"
+	in.Result.Candidates = append(in.Result.Candidates, extra)
+	want := Text(Build(in), TextOptions{})
+	if a, c := lineIndex(want, "owner alpha (other)"), lineIndex(want, "owner codex (other)"); a < 0 || c < 0 || a > c {
+		t.Fatalf("other owners are not sorted by label:\n%s", want)
+	}
+	n := len(in.Result.Candidates)
+	for shift := 1; shift < n; shift++ {
+		p := tidywizardResultRotated(in, shift)
+		if got := Text(Build(p), TextOptions{}); got != want {
+			// Rotation keeps the relative order inside a repository only per rotation, so compare
+			// the group headings and the multiset of lines instead of the byte string.
+			if sortedLines(got) != sortedLines(want) {
+				t.Errorf("rotation %d changes the lines:\n%s", shift, got)
+			}
+			if headings(got) != headings(want) {
+				t.Errorf("rotation %d changes the headings: %q vs %q", shift, headings(got), headings(want))
+			}
+		}
+	}
+	if Text(Build(in), TextOptions{}) != want {
+		t.Error("two renders of the same input differ")
+	}
+}
+
+func tidywizardResultRotated(in Input, shift int) Input {
+	c := append([]tidywizard.Candidate{}, in.Result.Candidates...)
+	c = append(c[shift:], c[:shift]...)
+	in.Result.Candidates = c
+	return in
+}
+
+func sortedLines(s string) string {
+	l := strings.Split(s, "\n")
+	for i := range l {
+		l[i] = strings.TrimLeft(strings.Join(strings.Fields(l[i]), " "), "[0123456789-]")
+	}
+	sort.Strings(l)
+	return strings.Join(l, "\n")
+}
+
+func headings(s string) string {
+	var h []string
+	for _, l := range strings.Split(s, "\n") {
+		if strings.HasPrefix(l, "owner ") {
+			h = append(h, l)
+		}
+	}
+	return strings.Join(h, "|")
+}
+
+// The bound of 10 rows is per repository inside each owner group; the `and N more` line belongs
+// to that sub-heading.
+func TestTextBoundsRowsPerRepositoryInsideOwnerGroup(t *testing.T) {
+	in := input()
+	in.Result.Candidates = nil
+	for i := 0; i < 12; i++ {
+		in.Result.Candidates = append(in.Result.Candidates, cand("bundledock", tidywizard.KindBranch, "own"+string(rune('a'+i)), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn))
+		c := cand("sourcesteward", tidywizard.KindBranch, "own"+string(rune('a'+i)), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn)
+		in.Result.Candidates = append(in.Result.Candidates, c)
+		o := cand("bundledock", tidywizard.KindBranch, "oth"+string(rune('a'+i)), tidywizard.VerdictRetain, "unmerged", owner.ScopeOther)
+		o.Owner = "codex"
+		in.Result.Candidates = append(in.Result.Candidates, o)
+	}
+	out := Text(Build(in), TextOptions{})
+	if n := strings.Count(out, "unmerged"); n != 30 {
+		t.Errorf("%d rows shown, want 30 (10 for each of 3 repository groups)", n)
+	}
+	if n := strings.Count(out, "    and 2 more (use --json or details)"); n != 3 {
+		t.Errorf("%d more lines, want 3:\n%s", n, out)
+	}
+}
+
+// The numbers of the prompts (Numbered) are the numbers in the text, in the order of the text.
+func TestNumbersFollowTheTextOrder(t *testing.T) {
+	in := input()
+	extra := cand("bundledock", tidywizard.KindBranch, "alpha/x", tidywizard.VerdictSafe, "", owner.ScopeOther)
+	extra.Owner = "alpha"
+	late := cand("bundledock", tidywizard.KindBranch, "late-own", tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	in.Result.Candidates = append(in.Result.Candidates, extra, late)
+	doc := Build(in)
+	out := Text(doc, TextOptions{})
+	last := -1
+	for _, n := range Numbered(doc) {
+		tag := "[" + strconv.Itoa(n.Number) + "] "
+		line := lineIndex(out, tag)
+		if line < 0 || line <= last {
+			t.Fatalf("number %d at line %d after %d:\n%s", n.Number, line, last, out)
+		}
+		last = line
+		subject := n.Candidate.Path
+		if subject == "" {
+			subject = n.Candidate.Branch
+		}
+		if !strings.Contains(strings.Split(out, "\n")[line], subject) {
+			t.Errorf("number %d is not row %q:\n%s", n.Number, subject, out)
+		}
+	}
+	if lineIndex(out, "late-own") > lineIndex(out, "owner alpha (other)") {
+		t.Errorf("an own row after the other owners:\n%s", out)
+	}
+}
+
+// The JSON lists the candidates in the order of the analysis, not regrouped, whatever the text does.
+func TestJSONKeepsTheAnalysisOrder(t *testing.T) {
+	in := input()
+	doc := Build(in)
+	_ = Text(doc, TextOptions{})
+	for i, c := range in.Result.Candidates {
+		if doc.Candidates[i].ID != c.ID {
+			t.Errorf("candidate %d is %s, want %s", i, doc.Candidates[i].ID, c.ID)
+		}
 	}
 }
