@@ -10,7 +10,7 @@ block their affected capabilities.
 ```text
 stw stack publish
 stw stack publish plan PATH --repo OWNER/NAME --observation FILE
-    [--select ACTION_ID ...] [--online] [--state-dir DIR]
+    [--select ACTION_ID ...] [--online] [--save --state-dir DIR]
     [--timeout DURATION] [--json | --human]
 stw stack publish apply PATH --plan ID --state-dir DIR --online
     --authorize-remote ACTION_ID [--authorize-remote ACTION_ID ...]
@@ -37,6 +37,19 @@ requires explicit online mode, exact stored plan and each selected action's own
 `--authorize-remote ACTION_ID`; a missing authorization refuses that action before
 any write. Additional authorization ids outside the stored selection are usage
 errors. Local `--authorize`, an old receipt or a generic `--yes` is insufficient.
+The deterministic draft persistence rule is render-only by default: without
+`--save`, do not create/repair a store or write a plan, and emit `saved: false`,
+`plan_id: null`. A nonempty plan is persisted only with explicit `--save` AND
+`--state-dir DIR`, where DIR is an existing validated private directory. Missing
+DIR with `--save` is usage 2. No default directory is selected until OQ-SURFACE/
+OQ-STORE accepts one. A supplied `--state-dir` without `--save` may read existing
+task evidence only; it never creates/repairs the directory or persists the plan.
+Saving an empty selection returns nothing-selected with no store write and null
+plan id. A successful nonempty save reports `saved: true` and the immutable
+stored plan id; blocked actions can be saved as review data, never permission.
+Apply requires that exact existing saved id and explicit validated directory;
+an unsaved result, nonexistent id or unreadable record cannot be applied.
+
 No flag widens agent ownership. Standalone comments cannot be authorized by this first surface; they are deferred original-draft scope, not an initial action. No interactive confirmation/editor/pager is used.
 
 Human is default, `--human` forces it, and it excludes `--json`. `--timeout` must
@@ -46,8 +59,9 @@ be positive and at most 60 s, only shortening operation limits. Unlike online-de
 flags or network defaults from another command. `--state-dir` is
 one validated private store for plans/action records, outside every repository,
 user-owned, real, mode 0700, no symlink component; unsafe/unreadable store refuses.
-Exact defaults/provenance are OQ-SURFACE/OQ-STORE; no state-path environment dump.
-Plan persistence is a disclosed private-state write, never a repository mutation.
+There is no proposed implicit default or automatic store creation; future
+default/provenance changes remain OQ-SURFACE/OQ-STORE. No state-path environment
+dump. Explicit save is a disclosed private-state write, never a repository mutation.
 
 ## Capability/effect table
 
@@ -195,6 +209,7 @@ An illustrative UNPUBLISHED empty-selection result (not an executable schema):
   "kind": "forge-effect-plan",
   "operation": "plan",
   "plan_id": null,
+  "saved": false,
   "repository": null,
   "actions": [],
   "blockers": [],
