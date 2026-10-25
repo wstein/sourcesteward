@@ -16,31 +16,46 @@ import (
 
 const attributionImport = "github.com/wstein/sourcesteward/internal/attribution"
 
-var forbiddenImports = map[string]bool{
-	"os": true, "os/exec": true, "os/signal": true, "syscall": true, "plugin": true, "unsafe": true,
-	"io/ioutil": true, "io/fs": true, "net": true, "crypto/tls": true,
+// allowedImports is the complete allow list of the pure core. Extend it only in a reviewed change
+// that also extends scripts/check-architecture.py (STACKPUBLISH_ALLOWED_IMPORTS).
+var allowedImports = map[string]bool{
+	"crypto/sha256": true, "encoding/hex": true, "encoding/json": true, "fmt": true, "regexp": true, "sort": true,
+	"strconv": true, "strings": true, "sync": true, "time": true, "unicode/utf8": true, attributionImport: true,
 }
 
-var clockCalls = map[string]bool{
-	"Now": true, "Sleep": true, "After": true, "AfterFunc": true, "Tick": true,
-	"NewTimer": true, "NewTicker": true, "Since": true, "Until": true,
+// timeValueNames are the only members of package time the core may mention: plain values, no clock.
+var timeValueNames = map[string]bool{
+	"Time": true, "Duration": true, "Nanosecond": true, "Microsecond": true, "Millisecond": true, "Second": true,
+	"Minute": true, "Hour": true, "RFC3339": true, "RFC3339Nano": true,
 }
 
-// seamViolations reports every use that would let the pure core escape: a forbidden import, a
-// module import other than the attribution leaf, a clock read or a goroutine.
+// seamViolations reports every use that would let the pure core escape: an import outside the
+// allow list, a dot or blank import, a member of time (under any local name) that is not a plain
+// value, or a goroutine.
 func seamViolations(name, source string) []string {
 	file, err := parser.ParseFile(token.NewFileSet(), name, source, parser.SkipObjectResolution)
 	if err != nil {
 		return []string{err.Error()}
 	}
 	var out []string
+	timeName := ""
 	for _, spec := range file.Imports {
 		path, _ := strconv.Unquote(spec.Path.Value)
-		switch {
-		case forbiddenImports[path] || (strings.HasPrefix(path, "net/") && path != "net/url") || strings.HasPrefix(path, "golang.org/x/"):
-			out = append(out, "forbidden import "+path)
-		case strings.HasPrefix(path, "github.com/wstein/sourcesteward") && path != attributionImport:
-			out = append(out, "module import outside the attribution leaf: "+path)
+		if !allowedImports[path] {
+			out = append(out, "import outside the allow list: "+path)
+		}
+		local := ""
+		if spec.Name != nil {
+			local = spec.Name.Name
+		}
+		if local == "." || local == "_" {
+			out = append(out, "dot or blank import of "+path)
+		}
+		if path == "time" {
+			timeName = "time"
+			if local != "" {
+				timeName = local
+			}
 		}
 	}
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -48,8 +63,8 @@ func seamViolations(name, source string) []string {
 		case *ast.GoStmt:
 			out = append(out, "goroutine")
 		case *ast.SelectorExpr:
-			if id, ok := x.X.(*ast.Ident); ok && id.Name == "time" && clockCalls[x.Sel.Name] {
-				out = append(out, fmt.Sprintf("clock call time.%s", x.Sel.Name))
+			if id, ok := x.X.(*ast.Ident); ok && timeName != "" && id.Name == timeName && !timeValueNames[x.Sel.Name] {
+				out = append(out, fmt.Sprintf("%s.%s is not a plain time value", timeName, x.Sel.Name))
 			}
 		}
 		return true

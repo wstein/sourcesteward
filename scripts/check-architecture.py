@@ -97,22 +97,38 @@ def validate_restack_file(path, imported):
 
 # Spec 016: the stack publication core is pure. It starts no process, touches no file, reaches no
 # network, reads no clock and starts no goroutine; callers pass every observation and the clock in.
-# From the module it may import only the attribution leaf (the Spec 042 origin and D5 gate).
-STACKPUBLISH_MODULE_IMPORTS = (MODULE + 'internal/attribution',)
-STACKPUBLISH_FORBIDDEN_IMPORTS = ('os', 'os/signal', 'io/ioutil', 'io/fs', 'unsafe', 'syscall', 'plugin', 'os/exec')
-STACKPUBLISH_CLOCK_CALLS = re.compile(r'\btime\.(Now|Sleep|After|AfterFunc|Tick|NewTimer|NewTicker|Since|Until)\b')
+# This is an ALLOW list, not a deny list: only these imports are permitted, and of "time" only the
+# plain value names, so os/user, path/filepath, text/template, log, context, time.Now and
+# time.LoadLocation (aliased or not) cannot enter. Extend the list in a reviewed change only.
+STACKPUBLISH_ALLOWED_IMPORTS = ('crypto/sha256', 'encoding/hex', 'encoding/json', 'fmt', 'regexp', 'sort', 'strconv', 'strings', 'sync', 'time', 'unicode/utf8', MODULE + 'internal/attribution')
+STACKPUBLISH_TIME_NAMES = ('Time', 'Duration', 'Nanosecond', 'Microsecond', 'Millisecond', 'Second', 'Minute', 'Hour', 'RFC3339', 'RFC3339Nano')
 STACKPUBLISH_GO_STATEMENT = re.compile(r'(?:^|[;{}])\s*go\s+(?:func\b|[A-Za-z_(])', re.M)
+NAMED_IMPORT = re.compile(r'^\s*(?:import\s+)?(?:([A-Za-z_.][A-Za-z0-9_]*)\s+)?"([^"]+)"', re.M)
+
+
+def named_imports(text):
+    """(local name or None, path) of every import, so an alias, a dot or a blank import is seen."""
+    found = [(m.group(1), m.group(2)) for m in re.finditer(r'^import\s+(?:([A-Za-z_.][A-Za-z0-9_]*)\s+)?"([^"]+)"', text, re.M)]
+    for block in IMPORT_BLOCK.findall(text):
+        found += [(m.group(1), m.group(2)) for m in NAMED_IMPORT.finditer(block)]
+    return found
 
 
 def validate_stackpublish_file(path, text, imported):
     for dependency in imported:
-        if dependency in STACKPUBLISH_FORBIDDEN_IMPORTS or is_process_import(dependency):
-            raise ValueError('internal/stackpublish is pure and may not import ' + dependency + ': ' + path)
-        if dependency.startswith(MODULE) and dependency not in STACKPUBLISH_MODULE_IMPORTS:
-            raise ValueError('internal/stackpublish may import only the attribution leaf from the module: ' + path + ' imports ' + dependency)
+        if dependency not in STACKPUBLISH_ALLOWED_IMPORTS:
+            raise ValueError('internal/stackpublish is pure; ' + dependency + ' is not on its import allow list: ' + path)
     code = strip_comments(re.sub(r'"(?:\\.|[^"\\\n])*"|`[^`]*`', '""', text))
-    if STACKPUBLISH_CLOCK_CALLS.search(code):
-        raise ValueError('internal/stackpublish reads no clock and starts no timer; callers pass the clock in: ' + path)
+    for alias, dependency in named_imports(text):
+        if dependency not in STACKPUBLISH_ALLOWED_IMPORTS:
+            raise ValueError('internal/stackpublish is pure; ' + dependency + ' is not on its import allow list: ' + path)
+        if alias in ('.', '_'):
+            raise ValueError('internal/stackpublish allows no dot or blank import: ' + path)
+        if dependency == 'time':
+            name = alias or 'time'
+            for selector in re.findall(r'\b' + re.escape(name) + r'\.([A-Za-z_][A-Za-z0-9_]*)', code):
+                if selector not in STACKPUBLISH_TIME_NAMES:
+                    raise ValueError('internal/stackpublish uses only the plain time values, never ' + name + '.' + selector + '; callers pass the clock in: ' + path)
     if STACKPUBLISH_GO_STATEMENT.search(code):
         raise ValueError('internal/stackpublish starts no goroutine: ' + path)
 
