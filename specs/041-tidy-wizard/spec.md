@@ -1,6 +1,6 @@
 # Specification: `stw tidy`, a workspace-wide cleanup wizard
 
-**Created**: 2026-10-23 | **Status**: implemented, unpublished schema, T021 open (originally proposed; spec-light: this page, [plan.md](plan.md) and [tasks.md](tasks.md) are the whole
+**Created**: 2026-10-23 | **Status**: implemented, unpublished schema; T012b (narrow registration prune) open (originally proposed; spec-light: this page, [plan.md](plan.md) and [tasks.md](tasks.md) are the whole
 design; documentation only, no Go code, script or schema is changed by this specification; owner request of 2026-10-23). It builds
 on [Spec 011](../011-workspace-reference-tidy/spec.md) (evidence-based plans and apply), [Spec 029](../029-tidy-dogfood-safety/spec.md)
 (owned retirement, journals, recovery), [Spec 037](../037-stw-status-overview/spec.md) (workspace discovery, action vocabulary),
