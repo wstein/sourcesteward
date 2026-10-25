@@ -75,7 +75,7 @@ type integrationEngine struct {
 	now            func() time.Time
 	makeObjectDir  func() (string, error)
 	commandTimeout time.Duration
-	// phaseTimeout is the forge-free phase budget; zero means integrationPhaseTimeout (stub).
+	// phaseTimeout is the forge-free phase budget; zero means integrationPhaseTimeout.
 	phaseTimeout time.Duration
 	// trace, when set, sees the start of every class (tests assert the order).
 	trace func(class string)
@@ -83,6 +83,14 @@ type integrationEngine struct {
 
 func defaultIntegrationEngine() integrationEngine {
 	return integrationEngine{now: time.Now, commandTimeout: integrationCommandTimeout, makeObjectDir: func() (string, error) { return os.MkdirTemp("", "stw-proof-objects-") }}
+}
+
+// phaseLimit is the forge-free phase budget of the engine.
+func (e integrationEngine) phaseLimit() time.Duration {
+	if e.phaseTimeout > 0 {
+		return e.phaseTimeout
+	}
+	return integrationPhaseTimeout
 }
 
 // integrationRun is the state of one operation: the repository, the private
@@ -122,7 +130,7 @@ func (r *integrationRun) checkBudget(now time.Time) error {
 	if !r.phaseStarted || r.reporting {
 		return nil // no tip has started: nothing is budgeted yet
 	}
-	if now.Sub(r.phaseStart) >= integrationPhaseTimeout || now.Sub(r.tipStart) >= integrationTipTimeout {
+	if now.Sub(r.phaseStart) >= r.engine.phaseLimit() || now.Sub(r.tipStart) >= integrationTipTimeout {
 		return errIntegrationBudget
 	}
 	return nil

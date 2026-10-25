@@ -54,5 +54,7 @@ func (c worktreeObserver) windowFor(ctx context.Context, n int) time.Duration {
 	return observationWindow(ctx, n)
 }
 
-// proofPhaseTimeout is the budget of the proof phase given the rest of the window (stub).
-func proofPhaseTimeout(rest time.Duration) time.Duration { return integrationPhaseTimeout }
+// proofPhaseTimeout is the budget of the proof phase given the rest of the observation window
+// (the scaled window or --timeout minus the time the content phase used), never below the old 60 s.
+// The per-tip budget (20 s) and the per-command limit (10 s) are per call and do not scale.
+func proofPhaseTimeout(rest time.Duration) time.Duration { return max(rest, integrationPhaseTimeout) }
