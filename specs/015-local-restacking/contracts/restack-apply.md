@@ -91,7 +91,10 @@ the owner's workflow. A detached caller may inspect but is never switched.
 7. Emit actual identities/evidence/effects and `review_gate.state: pending-policy-check`
    bound to the actual new SHA, with `change_class` (`docs-only` or `code`) and
    `pure_rebase` (all rows `=` and unchanged moved count). Classify actual changed
-   paths; any code/test/script/generated or unclassified path means `code`.
+   paths in the actual moved commits; any code/test/script/generated or
+   unclassified path means `code`. Record the moved-range scope explicitly.
+   Before push, 016 recomputes the full publication-range class as below; this
+   local receipt cannot certify that an open parent contains only documents.
    Spec 016 applies the AGENTS.md gate table below after replay; old-head or
    predicted-head review never counts. This apply never pushes or changes PR state.
 
@@ -162,9 +165,19 @@ The receipt contains repository/backend identity, exact old/new head and parents
 selected ref, complete actual mapping/equality/identity evidence, ownership
 binding, journal/recovery pointers and a policy-gate input for the actual new
 SHA, including `change_class`, `pure_rebase` and their complete evidence. A remote plan must independently bind a full **observed remote** SHA; v1's
-observed local old head is not a remote advertisement. The agent rewrite policy is:
+observed local old head is not a remote advertisement. Before using the table,
+016 recomputes `publication_change_class` from the union of changed paths of
+**every commit** in `OBSERVED_REMOTE_DEFAULT_FULL_SHA..ACTUAL_NEW_HEAD_FULL_SHA`,
+including open-parent commits. A code/test/script/generated or unknown path in
+that full range means `code`; missing evidence means `code`. Use the more
+restrictive of this full-range class and the receipt's moved-range `change_class`
+as `effective_change_class`; only complete docs-only evidence in both scopes
+permits the docs-only gate. A net-tree diff that cancels a parent's code change,
+a caller assertion or a docs-only child receipt cannot weaken this check.
 
-| Change class and replay | Before push | Before marking Ready |
+The agent rewrite policy uses that effective class:
+
+| Effective change class and replay | Before push | Before marking Ready |
 | --- | --- | --- |
 | `docs-only`, pure rebase | Green local docs checks plus all `=` range-diff and same count; no review precedes push | Independent CLEAR for exact current head plus all required checks green |
 | `docs-only`, other rewrite | Green local docs checks; no pre-push review required | Independent CLEAR for exact current head plus all required checks green |
@@ -173,7 +186,8 @@ observed local old head is not a remote advertisement. The agent rewrite policy 
 
 `pure_rebase` is derived from every actual pairing row and exact old/new count;
 unknown is false, never a path to a weaker tier. `change_class` is derived from
-actual diffs, not a caller claim; unknown becomes `code`. OQ-2 leaves trusted
+actual moved-commit diffs, not a caller claim; unknown becomes `code`. The
+full-publication-range recomputation above can only strengthen that class. OQ-2 leaves trusted
 review issuer/format/freshness unresolved but cannot remove the established
 docs-only exemption or middle-tier pure-rebase allowance. Review-required code
 uses accepted independent CLEAR for the exact actual new SHA, never an old or

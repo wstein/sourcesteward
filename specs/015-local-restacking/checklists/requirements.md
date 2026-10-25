@@ -14,7 +14,7 @@ separate from proposed local apply/recovery/jj work.
 - [x] Exact two-dot `--onto` replay semantics preserve D7 plumbing/quarantine/CAS, no porcelain rebase or implicit descendants.
 - [x] Actual candidates explicitly disable signing/helper execution; per-commit signature loss is disclosed and OQ-8 gates signed/required-signature acceptance.
 - [x] Trusted owner-only actual and full push-range identity checks include open-parent commits, reject caller-widened identities and report config origins without writes.
-- [x] Actual new SHA/equality/author AND committer evidence precedes a class-dependent policy receipt; 016 preserves docs-only pre-push exemption, code exact-new-SHA review and equal-pure-rebase middle-tier allowance; Ready always needs independent exact-head CLEAR plus green checks.
+- [x] Actual new SHA/equality/author AND committer evidence precedes a class-dependent policy receipt; 016 preserves docs-only pre-push exemption, code exact-new-SHA review and equal-pure-rebase middle-tier allowance after conservative full-publication-range classification including open-parent code; Ready always needs independent exact-head CLEAR plus green checks.
 - [x] Owned unoccupied-ref first apply is an explicit recommendation pending OQ-6, with original worktree/index/config unchanged.
 - [x] Proposed typed recovery seam reuses Spec 032; no existing shared API, jj support or frozen sync-record compatibility is fabricated.
 - [x] Native jj operation/bookmark/change/commit identities and capability gaps are explicit; no Git fallback.

@@ -86,7 +86,9 @@ must be checked on the new commits, as required by the workspace policy.
 
 D8: Spec 016 owns separately selected push/link/retarget plans and authorization.
 Its agent pre-push gate follows the class-dependent table in the apply contract:
-docs-only checks/equality without pre-push review, code independent exact-new-SHA
+docs-only checks/equality without pre-push review only when the full observed
+remote-default..actual-new-head per-commit path union is also docs-only (open
+parent code or unknown means code); code independent exact-new-SHA
 CLEAR (middle tier allowed for equal pure rebase), plus applicable checks, fresh
 attribution/identity and full observed **remote** old SHA. The push identity
 check covers observed remote-default..actual-new-head including open-parent
