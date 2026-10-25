@@ -19,6 +19,7 @@ contracts are dependencies, not claims that exported APIs already exist.
 | A3 | Privacy policy retained | HIGH | spec.md OQ-HUNK; contracts/context.md | Hunk locations/content and even filenames can reveal sensitive work; no comprehensive secret guarantee exists. | Body-free default; optional exact-path context stays disabled until accepted policy/conformance (T011–T014). |
 | A4 | Isolation capability retained | HIGH | spec.md OQ-SCRATCH; plan.md | Native jj independent scratch store/oplog and platform write confinement need measured support. | No shared writable source store or raw Git fallback; unavailable enforcement refuses (T003–T006/T021–T024). |
 | A6 | Native semantics retained | HIGH | spec.md OQ-JJCONF; data-model.md | Git stop-first semantics cannot describe native jj descendant conflict evolution or later resolution. | Keep jj preflight unavailable until accepted per-revision/aggregate semantics and complete bounded native graph evidence (T001/T003/T023/T024). |
+| A7 | Flag alignment retained | LOW | spec.md OQ-FLAGS; contracts/cli.md | Shared human/timeout/offline flag admission is an unresolved interface choice. | Retain current text/JSON and fixed bounds; choose aliases/shortening override only after owner decision (T001/T025/T026). |
 | A5 | Compatibility decision retained | MEDIUM | spec.md OQ-EXIT; contracts/cli.md | New 014 proposes 0/1/2 while hidden 015 v1 already returns 3 for incomplete. | Preserve 015 unchanged; any shared migration needs an explicit versioned decision (T001/T004/T027/T028). |
 
 These are visible decision gates, not contradictions resolved by invention.
@@ -97,7 +98,7 @@ No exception/amendment proposed; OQ gates preserve these requirements.
 - Requirements: 22 FR + 8 SC = 30 individually mapped; coverage 30/30 (100% design mapping).
 - Tasks: 32, all unchecked; setup 2, foundation 4, US1 4, US2 4, US4 10, US3 4, final 4.
 - Unmapped requirements/tasks: 0/0. Duplication findings: 0. Critical findings: 0.
-- Retained decisions: 6 (5 HIGH capability/privacy/native-semantics findings, 1 MEDIUM compatibility finding).
+- Retained decisions: 7 (5 HIGH capability/privacy/native-semantics findings, 1 MEDIUM compatibility finding, 1 LOW flag-alignment finding).
 - Independent review: pending exact-current-head review; this report is author analysis only.
 - Product/conformance/mutation tests, builds and full make check: not run; not claimed passing.
 
