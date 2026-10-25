@@ -23,9 +23,9 @@ type Limits struct {
 	InputBytes         int `json:"input_bytes"`
 	DisplayBytes       int `json:"display_bytes"`
 	ErrorBytes         int `json:"error_bytes"`
-	OperationSeconds   int `json:"operation_seconds"`
-	RequestSeconds     int `json:"request_seconds"`
-	LocalReadSeconds   int `json:"local_read_seconds"`
+	OperationMillis    int `json:"operation_ms"`
+	RequestMillis      int `json:"request_ms"`
+	LocalReadMillis    int `json:"local_read_ms"`
 	ReadWorkers        int `json:"read_workers"`
 }
 
@@ -33,7 +33,7 @@ type Limits struct {
 func DefaultLimits() Limits {
 	return Limits{Actions: 16, OpenLevels: 2, IdentityCommits: 200, Requests: 50, PagesPerCollection: 10, Records: 1000,
 		ResponseBytes: 1 << 20, InputBytes: 64 << 10, DisplayBytes: 512, ErrorBytes: 2 << 10,
-		OperationSeconds: 60, RequestSeconds: 30, LocalReadSeconds: 5, ReadWorkers: 4}
+		OperationMillis: 60000, RequestMillis: 30000, LocalReadMillis: 5000, ReadWorkers: 4}
 }
 
 // Validate refuses a zero, negative or above-ceiling limit.
@@ -46,8 +46,8 @@ func (l Limits) Validate() error {
 		{"actions", l.Actions, c.Actions}, {"open_levels", l.OpenLevels, c.OpenLevels}, {"identity_commits", l.IdentityCommits, c.IdentityCommits},
 		{"requests", l.Requests, c.Requests}, {"pages_per_collection", l.PagesPerCollection, c.PagesPerCollection}, {"records", l.Records, c.Records},
 		{"response_bytes", l.ResponseBytes, c.ResponseBytes}, {"input_bytes", l.InputBytes, c.InputBytes}, {"display_bytes", l.DisplayBytes, c.DisplayBytes},
-		{"error_bytes", l.ErrorBytes, c.ErrorBytes}, {"operation_seconds", l.OperationSeconds, c.OperationSeconds},
-		{"request_seconds", l.RequestSeconds, c.RequestSeconds}, {"local_read_seconds", l.LocalReadSeconds, c.LocalReadSeconds}, {"read_workers", l.ReadWorkers, c.ReadWorkers},
+		{"error_bytes", l.ErrorBytes, c.ErrorBytes}, {"operation_ms", l.OperationMillis, c.OperationMillis},
+		{"request_ms", l.RequestMillis, c.RequestMillis}, {"local_read_ms", l.LocalReadMillis, c.LocalReadMillis}, {"read_workers", l.ReadWorkers, c.ReadWorkers},
 	} {
 		if f.got < 1 || f.got > f.limit {
 			return &ValidationError{Code: "limits-invalid", Field: "limits." + f.name}
@@ -59,11 +59,11 @@ func (l Limits) Validate() error {
 // WithTimeout shortens the operation bound. The duration must be a positive whole number of
 // seconds and at most the ceiling; it can never lengthen any bound.
 func (l Limits) WithTimeout(d time.Duration) (Limits, error) {
-	if d <= 0 || d%time.Second != 0 || d > time.Duration(DefaultLimits().OperationSeconds)*time.Second {
+	if d <= 0 || d%time.Second != 0 || d > time.Duration(DefaultLimits().OperationMillis)*time.Millisecond {
 		return l, &ValidationError{Code: "timeout-invalid", Field: "timeout", Usage: true}
 	}
-	if secs := int(d / time.Second); secs < l.OperationSeconds {
-		l.OperationSeconds = secs
+	if millis := int(d / time.Second * 1000); millis < l.OperationMillis {
+		l.OperationMillis = millis
 	}
 	return l, nil
 }
@@ -117,7 +117,7 @@ func NewBudget(l Limits, now Clock) *Budget {
 }
 
 func (b *Budget) remaining() time.Duration {
-	return time.Duration(b.limits.OperationSeconds)*time.Second - b.now().Sub(b.start)
+	return time.Duration(b.limits.OperationMillis)*time.Millisecond - b.now().Sub(b.start)
 }
 
 // errLocked reports cancellation or the elapsed operation deadline; the caller holds the lock.
@@ -126,7 +126,7 @@ func (b *Budget) errLocked() error {
 		return &BoundError{Reason: ReasonCancelled}
 	}
 	if b.remaining() <= 0 {
-		return bound("operation_seconds")
+		return bound("operation_ms")
 	}
 	return nil
 }
@@ -206,13 +206,13 @@ func (b *Budget) Bytes(kind ByteKind, n int) error {
 	return nil
 }
 
-func (b *Budget) timeout(seconds int) time.Duration {
+func (b *Budget) timeout(millis int) time.Duration {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.errLocked() != nil {
 		return 0
 	}
-	if own := time.Duration(seconds) * time.Second; own < b.remaining() {
+	if own := time.Duration(millis) * time.Millisecond; own < b.remaining() {
 		return own
 	}
 	return b.remaining()
@@ -220,10 +220,10 @@ func (b *Budget) timeout(seconds int) time.Duration {
 
 // RequestTimeout is the time one request or native push may take now: the per-request bound, or
 // the remaining operation time when that is shorter. An exhausted budget grants none.
-func (b *Budget) RequestTimeout() time.Duration { return b.timeout(b.limits.RequestSeconds) }
+func (b *Budget) RequestTimeout() time.Duration { return b.timeout(b.limits.RequestMillis) }
 
 // LocalReadTimeout is the time one local observation may take now, by the same rule.
-func (b *Budget) LocalReadTimeout() time.Duration { return b.timeout(b.limits.LocalReadSeconds) }
+func (b *Budget) LocalReadTimeout() time.Duration { return b.timeout(b.limits.LocalReadMillis) }
 
 // Requests is the number of requests counted so far.
 func (b *Budget) Requests() int {

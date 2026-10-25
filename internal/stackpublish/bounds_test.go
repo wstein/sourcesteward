@@ -25,7 +25,7 @@ func wantBound(t *testing.T, err error, reason Reason, bound string) {
 
 func TestDocumentedLimitsArePinned(t *testing.T) {
 	want := Limits{Actions: 16, OpenLevels: 2, IdentityCommits: 200, Requests: 50, PagesPerCollection: 10, Records: 1000, ResponseBytes: 1 << 20, InputBytes: 64 << 10,
-		DisplayBytes: 512, ErrorBytes: 2 << 10, OperationSeconds: 60, RequestSeconds: 30, LocalReadSeconds: 5, ReadWorkers: 4}
+		DisplayBytes: 512, ErrorBytes: 2 << 10, OperationMillis: 60000, RequestMillis: 30000, LocalReadMillis: 5000, ReadWorkers: 4}
 	if got := DefaultLimits(); got != want {
 		t.Fatalf("%+v", got)
 	}
@@ -41,10 +41,10 @@ func TestLimitsRefuseEveryZeroNegativeAndAboveCeilingValue(t *testing.T) {
 		"pages": func(l *Limits, v int) { l.PagesPerCollection = v }, "records": func(l *Limits, v int) { l.Records = v },
 		"response": func(l *Limits, v int) { l.ResponseBytes = v }, "input": func(l *Limits, v int) { l.InputBytes = v },
 		"display": func(l *Limits, v int) { l.DisplayBytes = v }, "error": func(l *Limits, v int) { l.ErrorBytes = v },
-		"operation": func(l *Limits, v int) { l.OperationSeconds = v }, "request": func(l *Limits, v int) { l.RequestSeconds = v },
-		"local": func(l *Limits, v int) { l.LocalReadSeconds = v }, "workers": func(l *Limits, v int) { l.ReadWorkers = v },
+		"operation": func(l *Limits, v int) { l.OperationMillis = v }, "request": func(l *Limits, v int) { l.RequestMillis = v },
+		"local": func(l *Limits, v int) { l.LocalReadMillis = v }, "workers": func(l *Limits, v int) { l.ReadWorkers = v },
 	}
-	ceilings := map[string]int{"actions": 16, "levels": 2, "commits": 200, "requests": 50, "pages": 10, "records": 1000, "response": 1 << 20, "input": 64 << 10, "display": 512, "error": 2 << 10, "operation": 60, "request": 30, "local": 5, "workers": 4}
+	ceilings := map[string]int{"actions": 16, "levels": 2, "commits": 200, "requests": 50, "pages": 10, "records": 1000, "response": 1 << 20, "input": 64 << 10, "display": 512, "error": 2 << 10, "operation": 60000, "request": 30000, "local": 5000, "workers": 4}
 	for name, set := range fields {
 		for _, v := range []int{0, -1, ceilings[name] + 1} {
 			l := DefaultLimits()
@@ -63,10 +63,10 @@ func TestLimitsRefuseEveryZeroNegativeAndAboveCeilingValue(t *testing.T) {
 
 func TestTimeoutOnlyShortensTheOperationBound(t *testing.T) {
 	l, err := DefaultLimits().WithTimeout(10 * time.Second)
-	if err != nil || l.OperationSeconds != 10 || l.RequestSeconds != 30 {
+	if err != nil || l.OperationMillis != 10000 || l.RequestMillis != 30000 {
 		t.Fatalf("%+v %v", l, err)
 	}
-	if l, err = DefaultLimits().WithTimeout(60 * time.Second); err != nil || l.OperationSeconds != 60 {
+	if l, err = DefaultLimits().WithTimeout(60 * time.Second); err != nil || l.OperationMillis != 60000 {
 		t.Fatalf("%+v %v", l, err)
 	}
 	for _, d := range []time.Duration{0, -time.Second, 61 * time.Second, time.Hour, 1500 * time.Millisecond} {
@@ -157,8 +157,8 @@ func TestOperationDeadlineUsesTheInjectedClockAndTheShorterWins(t *testing.T) {
 		t.Fatalf("still inside the operation bound: %v", err)
 	}
 	clock.now = fixtureNow.Add(60 * time.Second)
-	wantBound(t, b.Err(), ReasonBoundExceeded, "operation_seconds")
-	wantBound(t, b.Request(), ReasonBoundExceeded, "operation_seconds")
+	wantBound(t, b.Err(), ReasonBoundExceeded, "operation_ms")
+	wantBound(t, b.Request(), ReasonBoundExceeded, "operation_ms")
 	if b.RequestTimeout() != 0 || b.LocalReadTimeout() != 0 {
 		t.Error("an exhausted budget must grant no time")
 	}

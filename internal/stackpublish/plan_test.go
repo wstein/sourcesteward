@@ -107,7 +107,7 @@ func TestChangedEffectsGiveANewIDAndTheSameInputTheSameID(t *testing.T) {
 		"repository":    func(in *PlanInput) { r := *in.Repository; r.Name = "other"; in.Repository = &r },
 		"online":        func(in *PlanInput) { in.Options.Online = true },
 		"created at":    func(in *PlanInput) { in.CreatedAt = in.CreatedAt.Add(time.Second) },
-		"limits":        func(in *PlanInput) { in.Limits.OperationSeconds = 30 },
+		"limits":        func(in *PlanInput) { in.Limits.OperationMillis = 30000 },
 		"blocker added": func(in *PlanInput) { in.Blockers = []Blocker{{Reason: ReasonStackTooDeep}} },
 	} {
 		in := fixtureInput(pushAction("p1", "refs/heads/topic"))
