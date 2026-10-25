@@ -59,7 +59,6 @@ func TestSyncUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
 		{"--autostash", "--no-autostash"}, // contradictory
 		{"--prune", "--no-prune"},         // contradictory
 		{"--remote", "origin"},            // a repository fetches its own upstream remote
-		{"--submodules"},                  // submodules are always included
 		{"--apply"},                       // a sync is the apply
 		{"--bogus"},
 		{"--json=maybe"},
@@ -92,6 +91,7 @@ func TestSyncFlagsMapToOptions(t *testing.T) {
 		"--rebase":       func(o stwsync.Options) bool { return o.Rebase == stwsync.On },
 		"--ff-only":      func(o stwsync.Options) bool { return o.Rebase == stwsync.Off },
 		"--merge":        func(o stwsync.Options) bool { return o.Merge },
+		"--submodules":   func(o stwsync.Options) bool { return o.Submodules },
 		"--autostash":    func(o stwsync.Options) bool { return o.Autostash == stwsync.On },
 		"--no-autostash": func(o stwsync.Options) bool { return o.Autostash == stwsync.Off },
 		"--prune":        func(o stwsync.Options) bool { return o.Prune == stwsync.On },
@@ -305,7 +305,7 @@ func TestSyncRestoreCommandPassesPathAndRunAndMapsTheExitStatus(t *testing.T) {
 
 // Every sync option is refused by restore, so dropping one from the refusal list fails here.
 func TestSyncRestoreRefusesEverySyncOption(t *testing.T) {
-	for _, flag := range []string{"--plan", "--dry-run", "--rebase", "--ff-only", "--merge", "--autostash", "--no-autostash", "--prune", "--no-prune"} {
+	for _, flag := range []string{"--plan", "--dry-run", "--rebase", "--ff-only", "--merge", "--autostash", "--no-autostash", "--prune", "--no-prune", "--submodules"} {
 		called := false
 		cmd := syncCommandWith(nil, func(context.Context, stwsync.RestoreOptions) stwsync.Result {
 			called = true
