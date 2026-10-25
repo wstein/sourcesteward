@@ -354,18 +354,20 @@ This is a read-only slice: local topology plus opt-in GitHub evidence plus an ad
 
 ## Owner decisions (2026-10-25)
 
-All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
-choices adopt the source recommendations; implementation/native measurement and
+All listed former OQ IDs have a **dated disposition on 2026-10-25**.
+IDs without an explicit answer adopt the source research recommendations. The
+source column distinguishes direct owner answers, adopted recommendations and
+cross-spec owner-answer overrides; implementation/native measurement and
 review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
 distinguish saved-plan metadata, external capture payloads, trusted policy,
 optional host-only signing and CLI exit-contract revision 2.
 
-| Decision ID | Dated disposition | Remaining implementation/verification gate |
-| --- | --- | --- |
-| OQ-NET | DECIDED: default offline; `--online` is the ONLY opt-in; the old `--pull-requests` alias is rejected. | Remote GET admission still needs reviewed transport/native evidence. |
-| OQ-EXIT | DECIDED: unified CLI exit contract revision 2 targets 0/1/2 now, including 015 incomplete=1, no legacy-3 selector. | 015 code/test amendment is unimplemented; current hidden code still returns 3. |
-| OQ-FLAGS | DECIDED: adopt shared --human exclusive with --json and positive shortening --timeout; no redundant --offline or observation store. | CLI registration/output/bounds tests precede implementation. |
-| OQ-FANOUT | DECIDED: single-repository operation now; batch is deferred to its own later decision, with no approved caller entry. | No current batch API/CLI/helper or unused production orchestration; only deferred future invariants remain. |
+| Decision ID | Dated disposition | Source | Remaining implementation/verification gate |
+| --- | --- | --- | --- |
+| OQ-NET | DECIDED: default offline; `--online` is the ONLY opt-in; the old `--pull-requests` alias is rejected. | owner answer | Remote GET admission still needs reviewed transport/native evidence. |
+| OQ-EXIT | DECIDED: unified CLI exit contract revision 2 targets 0/1/2 now, including 015 incomplete=1, no legacy-3 selector. | adopted recommendation; owner-answer override: 016 OQ-EXIT | 015 code/test amendment is unimplemented; current hidden code still returns 3. |
+| OQ-FLAGS | DECIDED: adopt shared --human exclusive with --json and positive shortening --timeout; no redundant --offline or observation store. | adopted recommendation | CLI registration/output/bounds tests precede implementation. |
+| OQ-FANOUT | DECIDED: single-repository operation now; batch is deferred to its own later decision, with no approved caller entry. | owner answer | No current batch API/CLI/helper or unused production orchestration; only deferred future invariants remain. |
 
 ## Needs owner decision
 

@@ -27,16 +27,16 @@ stw stack plan [PATH] --base REF --tip REF [--online [--repo OWNER/NAME] [--host
 ## Shared flag vocabulary and decided target
 
 Owner decisions adopt --online as the ONLY network opt-in, default offline;
---pull-requests is usage2 with no alias. --human excludes --json; positive
+--pull-requests is usage 2 with no alias. --human excludes --json; positive
 --timeout only shortens the 30-second cap/earlier deadline. --state-dir and
-redundant --offline are inapplicable/usage2. No observation store or implicit
+redundant --offline are inapplicable/usage 2. No observation store or implicit
 network exists. These decided target flags still need CLI/conformance work.
 
 ## Exit status
 
 The statuses, diagnostics and exit codes are normative in [spec.md](../spec.md) (Status and exit table). Summary: 0 for `ok` (including results full of findings), 1 for `incomplete` and `error` (a concise `Error:` line on standard error and, with `--json`, the full observation on standard output), 2 for usage errors with no JSON. Findings never change the exit status; `plan` exits 0 when it prints steps or a `blocked` reason.
 
-012 uses 0/1/2 as designed. The implemented hidden Spec 015 `restack plan` v1 uses exit 3 for incomplete; this contract does not change it. Owner OQ-EXIT now adopts CLI revision2 incomplete 1; CURRENT hidden015code3 remains until its explicit root/CLI task, schema1 unchanged and no legacy3 selector.
+012 uses 0/1/2 as designed. The implemented hidden Spec 015 `restack plan` v1 uses exit 3 for incomplete; this contract does not change it. Owner OQ-EXIT now adopts CLI revision 2 incomplete 1; CURRENT hidden 015 code 3 remains until its explicit root/CLI task, schema 1 unchanged and no legacy 3 selector.
 
 ## Human output
 

@@ -31,7 +31,7 @@ Add `stw stack show` and `stw stack plan`: one shared, read-only operation that 
 
 **Constraints**: Read-only, no fetch, no process other than the allowlist below, no network without `--online`, fixed GET only, closed endpoint allowlist, hostile text, no executed or unprintable-unsafe command.
 
-**Scale/Scope**: Exactly one selected repository, base and tip, at most32local layers. OQ-FANOUT is decided single-repository now: no batch CLI/caller/API or unused helper; earlier many-repository invariants are deferred to a separate future decision.
+**Scale/Scope**: Exactly one selected repository, base and tip, at most 32 local layers. OQ-FANOUT is decided single-repository now: no batch CLI/caller/API or unused helper; earlier many-repository invariants are deferred to a separate future decision.
 
 ## Constitution Check
 
@@ -112,21 +112,21 @@ Not used: `status`, `diff`, `log`, `merge-tree`, `rebase`, `fetch`, `ls-remote`,
 
 ## Adopted owner recommendations and deferred work (2026-10-25)
 
-1. Diffs remain withdrawn; Git/jj/GitHub and Spec009 retain their existing roles.
-2. Native link writes belong to016 only after separately authorized measurements
-   and a reviewed bounded022allowlist;012 prints inert reference data only.
+1. Diffs remain withdrawn; Git/jj/GitHub and Spec 009 retain their existing roles.
+2. Native link writes belong to 016 only after separately authorized measurements
+   and a reviewed bounded 022 allowlist; 012 prints inert reference data only.
 3. Network opt-in is ONLY --online, default offline, no --pull-requests alias.
-4. Drift stays separate from completion; target exit revision2 is0/1/2 and015
-   incomplete becomes1 only after its code task (CURRENT code 3 still documented).
+4. Drift stays separate from completion; target exit revision 2 is 0/1/2 and 015
+   incomplete becomes 1 only after its code task (CURRENT code 3 still documented).
 5. Keep explicit --tip; no unselected derived branch/default is introduced.
 6. Fork pull requests remain unsupported/disclosed until native evidence.
-7. Keep current32-local-layer bound; measure GitHub capability before any later
+7. Keep current 32-local-layer bound; measure GitHub capability before any later
    reviewed bound amendment, never invent a native maximum here.
 8. Keep stack-link-missing severity action and its existing qualified evidence.
 9. Adopt --human exclusive with --json and shortening positive --timeout;
    no observation store or redundant --offline alias.
 10. Single repository now; batch deferred to its own later decision, no approved
-    caller/API or dead production helper. CurrentT037 rejects batch.
+    caller/API or dead production helper. Current T037 rejects batch.
 
 ## Risks
 
