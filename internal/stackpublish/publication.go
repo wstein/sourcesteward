@@ -329,7 +329,7 @@ func EvaluatePublication(in PublicationInput) PublicationReceipt {
 	if r.ReviewRequired {
 		r.Blockers = appendIf(r.Blockers, reviewRefusal(in.Policy, in.NewHead, in.AuthorID, in.Review, r.MinTier))
 	}
-	r.Blockers = append(r.Blockers, EvaluateSigning(in.Policy, in.Signing, in.NewHead)...)
+	r.Blockers = append(r.Blockers, EvaluateSigning(in.Policy, in.Signing, in.NewHead, nil)...)
 	return r
 }
 

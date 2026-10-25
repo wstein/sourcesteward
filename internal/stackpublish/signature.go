@@ -35,7 +35,7 @@ type SigningEvidence struct {
 // EvaluateSigning applies the signature policy to the actual candidate. It refuses a dropped source
 // signature, an unreadable or unmet policy, and an unavailable, unverified or inconsistent re-sign;
 // there is no unsigned fallback and no signer invocation. It returns every refusal found, in order.
-func EvaluateSigning(p WorkspacePolicy, ev *SigningEvidence, newHead string) []Refusal {
+func EvaluateSigning(p WorkspacePolicy, ev *SigningEvidence, newHead string, rangeIDs []string) []Refusal {
 	refuse := func(detail string) []Refusal { return []Refusal{{ReasonSignaturePolicyUnknown, detail}} }
 	switch {
 	case !p.Loaded:

@@ -33,7 +33,7 @@ func refusals(rs []Refusal) []string {
 }
 
 func TestUnsignedCandidateOfUnsignedSourceIsFineWhenNoSignatureIsRequired(t *testing.T) {
-	if got := EvaluateSigning(goodPolicy(), unsignedEvidence(), sha('f')); len(got) != 0 {
+	if got := EvaluateSigning(goodPolicy(), unsignedEvidence(), sha('f'), []string{sha('e'), sha('f')}); len(got) != 0 {
 		t.Fatalf("%v", refusals(got))
 	}
 }
@@ -69,6 +69,15 @@ func TestSigningRefusals(t *testing.T) {
 			e.Chain[1].SignedParent = e.Chain[0].Unsigned
 			return e
 		}, []string{"signature-policy-unknown/mapping-invalid"}},
+		"profile without helper id":   {func() WorkspacePolicy { p := helperPolicy(); p.Resign.HelperID = ""; return p }, signedEvidence, []string{"signature-policy-unknown/signing-capability-unavailable"}},
+		"profile without verifier id": {func() WorkspacePolicy { p := helperPolicy(); p.Resign.VerifierID = ""; return p }, signedEvidence, []string{"signature-policy-unknown/signing-capability-unavailable"}},
+		"chain longer than the commit bound": {helperPolicy, func() *SigningEvidence {
+			e := signedEvidence()
+			for i := 0; i < 200; i++ {
+				e.Chain = append(e.Chain, e.Chain[1])
+			}
+			return e
+		}, []string{"bound-exceeded/chain-too-long"}},
 		"signature unverified":           {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[1].Verified = false; return e }, []string{"signature-policy-unknown/signature-unverified"}},
 		"signer not allowed":             {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[0].Signer = "SHA256:other"; return e }, []string{"signature-policy-unknown/signer-not-allowed"}},
 		"child not on the signed parent": {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[1].SignedParent = sha('3'); return e }, []string{"signature-policy-unknown/parent-mismatch"}},
@@ -87,7 +96,7 @@ func TestSigningRefusals(t *testing.T) {
 		"last signed is not the final head": {helperPolicy, func() *SigningEvidence { e := signedEvidence(); e.Chain[1].Signed = sha('8'); return e }, []string{"signature-policy-unknown/final-head-mismatch"}},
 	}
 	for name, c := range cases {
-		got := refusals(EvaluateSigning(c.policy(), c.ev(), sha('f')))
+		got := refusals(EvaluateSigning(c.policy(), c.ev(), sha('f'), []string{sha('e'), sha('f')}))
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %v want %v", name, got, c.want)
 		}
@@ -95,19 +104,19 @@ func TestSigningRefusals(t *testing.T) {
 }
 
 func TestAValidFinalSignedChainPasses(t *testing.T) {
-	if got := EvaluateSigning(helperPolicy(), signedEvidence(), sha('f')); len(got) != 0 {
+	if got := EvaluateSigning(helperPolicy(), signedEvidence(), sha('f'), []string{sha('e'), sha('f')}); len(got) != 0 {
 		t.Fatalf("%v", refusals(got))
 	}
 	// A required remote signature is satisfied by the verified re-signed chain.
 	p := helperPolicy()
 	p.RemoteSignatures = TriYes
-	if got := EvaluateSigning(p, signedEvidence(), sha('f')); len(got) != 0 {
+	if got := EvaluateSigning(p, signedEvidence(), sha('f'), []string{sha('e'), sha('f')}); len(got) != 0 {
 		t.Fatalf("%v", refusals(got))
 	}
 	// Signed commits without any signed source commit (a new signed candidate) also verify.
 	e := signedEvidence()
 	e.SourceSigned = nil
-	if got := EvaluateSigning(helperPolicy(), e, sha('f')); len(got) != 0 {
+	if got := EvaluateSigning(helperPolicy(), e, sha('f'), []string{sha('e'), sha('f')}); len(got) != 0 {
 		t.Fatalf("%v", refusals(got))
 	}
 }
@@ -148,5 +157,31 @@ func TestRemoteAuthorizationNeverSelectsASigningStep(t *testing.T) {
 		if ev.In(i) == typ {
 			t.Fatal("EvaluateSigning takes an apply request")
 		}
+	}
+}
+
+func TestRequiredSignaturesCoverEveryCommitOfTheRange(t *testing.T) {
+	p := helperPolicy()
+	p.RemoteSignatures = TriYes
+	chain := []string{sha('e'), sha('f')}
+	if got := EvaluateSigning(p, signedEvidence(), sha('f'), chain); len(got) != 0 {
+		t.Fatalf("%v", refusals(got))
+	}
+	for name, ids := range map[string][]string{
+		"an open parent outside the re-signed chain": {sha('d'), sha('e'), sha('f')},
+		"range unknown":                    nil,
+		"range holds only the old commits": {sha('1'), sha('2')},
+	} {
+		want := []string{"signature-policy-unknown/required-signature-unmet"}
+		if name == "range unknown" {
+			want = []string{"signature-policy-unknown/range-unknown"}
+		}
+		if got := refusals(EvaluateSigning(p, signedEvidence(), sha('f'), ids)); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: %v want %v", name, got, want)
+		}
+	}
+	// Without a required remote signature the range list is not needed.
+	if got := EvaluateSigning(helperPolicy(), signedEvidence(), sha('f'), nil); len(got) != 0 {
+		t.Fatalf("%v", refusals(got))
 	}
 }

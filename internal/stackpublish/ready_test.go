@@ -10,6 +10,7 @@ import (
 
 func goodPolicy() WorkspacePolicy {
 	return WorkspacePolicy{Loaded: true, Owner: Identity{Name: "Werner Stein", Email: "werner@example.org"},
+		Authors:       []string{"claude-author", "codex-author"},
 		Reviewers:     []Reviewer{{ID: "opus-reviewer", Tier: TierStrongest}, {ID: "sonnet-reviewer", Tier: TierMiddle}, {ID: "haiku-helper", Tier: TierHelper}},
 		ReviewSources: []string{"pr-review"}, CheckSources: []string{"branch-protection+rulesets"}, ScopeSources: []string{"pr-body-scope"},
 		RestackReceipts:  []ReceiptSpec{{Producer: "stw", Command: "restack apply", Kind: "restack-apply", SchemaVersion: 2}},
@@ -20,7 +21,7 @@ func goodReady() ReadyInput {
 	return ReadyInput{Policy: goodPolicy(), Head: sha('a'), BaseSHA: sha('b'), AuthorID: "claude-author",
 		Guards: []Guard{{Name: GuardOwnership, Result: GuardPass}, {Name: GuardAttribution, Result: GuardPass}},
 		Review: &ReviewEvidence{Source: "pr-review", ReviewerID: "opus-reviewer", Verdict: VerdictClear, SubjectSHA: sha('a'), EvidenceDigest: strings.Repeat("e", 64), Locator: "pull/1#pullrequestreview-9"},
-		Checks: &ChecksEvidence{Source: "branch-protection+rulesets", Complete: true, Required: []string{"check", "suite"},
+		Checks: &ChecksEvidence{Source: "branch-protection+rulesets", ObservedBase: sha('b'), Complete: true, Required: []string{"check", "suite"},
 			Runs: []CheckRun{{"check", sha('a'), "success"}, {"suite", sha('a'), "success"}, {"optional", sha('a'), "failure"}}},
 		Rebase: &RebaseEvidence{Rebaseable: TriYes, EvaluatedHead: sha('a'), EvaluatedBase: sha('b')},
 		Scope:  &ScopeEvidence{Source: "pr-body-scope", Accepted: TriYes, OutOfScope: []string{"later wave"}}}
@@ -73,8 +74,25 @@ func TestEachUnknownFalseOrMovedSourceBlocksReady(t *testing.T) {
 			in.Review.ReviewerID = "claude-author"
 			in.Policy.Reviewers = append(in.Policy.Reviewers, Reviewer{ID: "claude-author", Tier: TierStrongest})
 		}, []string{"review-missing/review-not-independent"}},
-		"review digest malformed":    {func(in *ReadyInput) { in.Review.EvidenceDigest = "abc" }, []string{"review-missing/review-evidence-invalid"}},
-		"review locator empty":       {func(in *ReadyInput) { in.Review.Locator = "" }, []string{"review-missing/review-evidence-invalid"}},
+		"review digest malformed":              {func(in *ReadyInput) { in.Review.EvidenceDigest = "abc" }, []string{"review-missing/review-evidence-invalid"}},
+		"review locator empty":                 {func(in *ReadyInput) { in.Review.Locator = "" }, []string{"review-missing/review-evidence-invalid"}},
+		"checks observed against the old base": {func(in *ReadyInput) { in.Checks.ObservedBase = sha('9') }, []string{"checks-unknown/checks-stale-base"}},
+		"checks without an observed base":      {func(in *ReadyInput) { in.Checks.ObservedBase = "" }, []string{"checks-unknown/checks-stale-base"}},
+		"author not in the trusted policy":     {func(in *ReadyInput) { in.AuthorID = "someone-else" }, []string{"review-missing/review-not-independent"}},
+		"author id in the wrong case":          {func(in *ReadyInput) { in.AuthorID = "Claude-Author" }, []string{"review-missing/review-not-independent"}},
+		"reviewer id in the wrong case":        {func(in *ReadyInput) { in.Review.ReviewerID = "Opus-Reviewer" }, []string{"review-missing/review-untrusted"}},
+		"reviewer with an unrecognized tier":   {func(in *ReadyInput) { in.Policy.Reviewers = []Reviewer{{ID: "opus-reviewer", Tier: "bogus"}} }, []string{"review-missing/review-untrusted"}},
+		"reviewer without a tier":              {func(in *ReadyInput) { in.Policy.Reviewers = []Reviewer{{ID: "opus-reviewer"}} }, []string{"review-missing/review-untrusted"}},
+		"helper tier is below the Ready floor": {func(in *ReadyInput) { in.Review.ReviewerID = "haiku-helper" }, []string{"review-missing/review-tier-too-low"}},
+		"locator one byte too long":            {func(in *ReadyInput) { in.Review.Locator = strings.Repeat("l", 513) }, []string{"review-missing/review-evidence-invalid"}},
+		"empty required context": {func(in *ReadyInput) {
+			in.Checks.Required = append(in.Checks.Required, "")
+			in.Checks.Runs = append(in.Checks.Runs, CheckRun{"", sha('a'), "success"})
+		}, []string{"checks-unknown/checks-evidence-invalid"}},
+		"duplicate required context": {func(in *ReadyInput) { in.Checks.Required = append(in.Checks.Required, "check") }, []string{"checks-unknown/checks-evidence-invalid"}},
+		"run without a context":      {func(in *ReadyInput) { in.Checks.Runs = append(in.Checks.Runs, CheckRun{"", sha('a'), "success"}) }, []string{"checks-unknown/checks-evidence-invalid"}},
+		"too many required contexts": {func(in *ReadyInput) { in.Checks.Required = manyNames(1001) }, []string{"bound-exceeded/checks-too-many"}},
+		"too many runs":              {func(in *ReadyInput) { in.Checks.Runs = manyRuns(1001, sha('a')) }, []string{"bound-exceeded/checks-too-many"}},
 		"checks absent":              {func(in *ReadyInput) { in.Checks = nil }, []string{"checks-unknown/checks-absent"}},
 		"checks source not accepted": {func(in *ReadyInput) { in.Checks.Source = "ci-status-api" }, []string{"checks-unknown/checks-untrusted"}},
 		"checks sources incomplete":  {func(in *ReadyInput) { in.Checks.Complete = false }, []string{"checks-unknown/checks-incomplete"}},
@@ -143,12 +161,57 @@ func TestTheDocsOnlyPushExceptionNeverApplies(t *testing.T) {
 	}
 }
 
-func TestAnyAllowlistedIndependentReviewerTierCountsForReady(t *testing.T) {
-	for _, id := range []string{"opus-reviewer", "sonnet-reviewer", "haiku-helper"} {
+func manyNames(n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = "ctx-" + strings.Repeat("x", i%7) + string(rune('a'+i%26)) + strings.Repeat("y", i/26)
+	}
+	return out
+}
+
+func manyRuns(n int, head string) []CheckRun {
+	var out []CheckRun
+	for _, name := range manyNames(n) {
+		out = append(out, CheckRun{name, head, "success"})
+	}
+	return out
+}
+
+func TestStrongestAndMiddleReviewerTiersCountForReady(t *testing.T) {
+	for _, id := range []string{"opus-reviewer", "sonnet-reviewer"} {
 		in := goodReady()
 		in.Review.ReviewerID = id
 		if !EvaluateReady(in).Ready() {
-			t.Errorf("%s: an allowlisted independent reviewer's CLEAR counts for Ready", id)
+			t.Errorf("%s: the CLEAR of a strongest or middle tier reviewer counts for Ready", id)
+		}
+	}
+}
+
+// Review F1: a retarget changes the base; runs observed against the old base never pass again.
+func TestARetargetInvalidatesChecksObservedAgainstTheOldBase(t *testing.T) {
+	in := goodReady()
+	if !EvaluateReady(in).Ready() {
+		t.Fatal("precondition")
+	}
+	in.BaseSHA = sha('c') // the child now targets another base; the head is unchanged
+	in.Rebase.EvaluatedBase = sha('c')
+	if got := blockerList(EvaluateReady(in)); !reflect.DeepEqual(got, []string{"checks-unknown/checks-stale-base"}) {
+		t.Fatalf("%v", got)
+	}
+	in.Checks.ObservedBase = sha('c')
+	if !EvaluateReady(in).Ready() {
+		t.Fatal("evidence observed against the new base passes")
+	}
+}
+
+// Review F2: every tier value, including unrecognized ones, against the Ready floor (middle).
+func TestEveryTierValueAgainstTheReadyFloor(t *testing.T) {
+	for tier, want := range map[ReviewTier]string{TierStrongest: "", TierMiddle: "", TierHelper: "review-missing/review-tier-too-low", "bogus": "review-missing/review-untrusted", "": "review-missing/review-untrusted", "STRONGEST": "review-missing/review-untrusted"} {
+		in := goodReady()
+		in.Policy.Reviewers = []Reviewer{{ID: "opus-reviewer", Tier: tier}}
+		got := blockerList(EvaluateReady(in))
+		if want == "" && len(got) != 0 || want != "" && !reflect.DeepEqual(got, []string{want}) {
+			t.Errorf("tier %q: %v want %q", tier, got, want)
 		}
 	}
 }

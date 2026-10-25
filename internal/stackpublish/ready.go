@@ -32,10 +32,11 @@ type CheckRun struct {
 // ChecksEvidence is the required-check evidence: the union of the required contexts of every
 // source, whether all sources were read completely, and the runs reported for the head.
 type ChecksEvidence struct {
-	Source   string
-	Complete bool
-	Required []string
-	Runs     []CheckRun
+	Source       string
+	ObservedBase string // the full base the evidence was observed against
+	Complete     bool
+	Required     []string
+	Runs         []CheckRun
 }
 
 // RebaseEvidence is the repository merge-method fact `rebaseable`, with the head and base it was
