@@ -943,3 +943,63 @@ func TestLastActivityErrors(t *testing.T) {
 		t.Errorf("a deleted tracked file must contribute nothing: %v %v", got, err)
 	}
 }
+
+// An expired observation deadline must be reported as deadline-exceeded for every remaining
+// worktree, never as git-ownership-refused (issue 252); a real ownership refusal keeps its code.
+func TestObserveExpiredDeadlineIsNotAnOwnershipRefusal(t *testing.T) {
+	repo := observeRepo(t)
+	var paths []string
+	for _, n := range []string{"d1", "d2", "d3"} {
+		w := observeAdd(t, repo, n)
+		commitIn(t, w, "x", "x\n")
+		paths = append(paths, w)
+	}
+	bin, err := gitExecutable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	live, _, closeSession, err := withPlanningSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeSession()
+	id, err := gitNativeIdentity(live, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, cancel := context.WithDeadline(live, time.Unix(0, 1))
+	defer cancel()
+	for _, p := range paths {
+		e := WorktreeEvidence{Path: p, HeadOID: gitFixture(t, p, "rev-parse", "HEAD"), HeadRef: "refs/heads/" + filepath.Base(p)}
+		defaultWorktreeObserver().observeWorktreeContent(expired, bin, newCommitFacts(gitRead, bin, repo, id.CommitID), id.RepositoryDir, &e)
+		if e.Incomplete != "deadline-exceeded" {
+			t.Errorf("%s: incomplete %q, want deadline-exceeded", filepath.Base(p), e.Incomplete)
+		}
+		if e.Dirty || e.HasOwnCommit || e.Ahead != 0 || !e.LastActivity.IsZero() {
+			t.Errorf("%s: content kept after the incomplete observation: %+v", filepath.Base(p), e)
+		}
+	}
+}
+
+func TestObserveRealOwnershipRefusalKeepsItsReason(t *testing.T) {
+	repo := observeRepo(t)
+	plain := t.TempDir() // registered path that is no Git checkout
+	live, _, closeSession, err := withPlanningSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeSession()
+	bin, err := gitExecutable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := gitNativeIdentity(live, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := WorktreeEvidence{Path: plain, HeadOID: id.CommitID, HeadRef: "refs/heads/x"}
+	defaultWorktreeObserver().observeWorktreeContent(live, bin, newCommitFacts(gitRead, bin, repo, id.CommitID), id.RepositoryDir, &e)
+	if e.Incomplete != "git-ownership-refused" {
+		t.Errorf("incomplete %q, want git-ownership-refused", e.Incomplete)
+	}
+}
