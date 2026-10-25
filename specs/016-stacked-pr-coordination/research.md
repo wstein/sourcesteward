@@ -10,9 +10,9 @@ choices; no new live forge measurement or runtime implementation.
 | Repository AGENTS and containing workspace workflow | Own topic branches/PRs; full explicit leases; two-level code-dependent stacks; per-PR Ready; owner-only merge; commit/config identity and rewrite review tier |
 | Specs 020/022 | Native ownership and explicit repository resolution, bounded caller-owned auth, fixed HTTPS GET transport, redirect/body/time controls; current transport adds no generic write capability |
 | Specs 025/030 | Exact sampled PR head/base and lifecycle, unknown/denied sources; 025 explains waits without Ready/merge promise; 030 lookup can return zero/one/many and does not establish ownership |
-| Spec 012 | Local stack/PR comparison and advisory native stack steps; its proposed refresh adds evidence, not remote effects; online scope/name remains OPEN |
+| Spec 012 | Merged design uses nested restack-advised finding, separate from published 035 restack-needed; SC-009 caller fanout remains OQ-FANOUT-gated, online scope/name OPEN; no remote effects |
 | Spec 015 D4–D9/D12–D13 | Git-only first read-only plan, explicit boundaries independent of 012, plumbing/quarantine plus CAS, push owned here; historical v1 prediction has fixed committer and incomplete exit 3 |
-| Specs 013/014/032 | Checkpoint/undo, isolated preflight and local journal/recovery are distinct; existing sync record is not generic remote undo; preflight grants no actual-SHA review or publication permission |
+| Specs 013/014/032 | Merged 013 design has independent pre-action safety copies, invoker-inclusive jj working-copy-effect refusal and no operation-head CAS; 014 binds full-H attribute source/private context and gates jj conflict aggregation; sync is not generic remote undo |
 | Spec 040 | Indexed bounded independent reads at the edge; no new per-repository budget or competing writes |
 | Specs 041/042 | Mode accident guard; own scope from task evidence; real D5 attribution semantics, Codex session absent/unmeasured, public session ids forbidden |
 | Spec 043 decisions 6/9, FR-031/034 | Owner human landing only; readable-off measured post-land retarget sequence; on/unreadable pre-retarget/re-read order remains gated and unmeasured; unreadable shapes fail closed |
@@ -23,6 +23,34 @@ or the independent cause of the rewrite. `gh stack link` uses `GH_REPO` rather
 than unsupported `-R`; help distinguishes numeric PR arguments from branch
 arguments that push. Numeric-link write endpoints/effects are not measured here.
 No new API method, dependency execution or native jj publication is inferred.
+
+## Merged design qualifications
+
+The 012/013/014/015 design artifacts are present on main; this is documentation
+integration, not implementation/conformance acceptance. 012's current finding
+code is `restack-advised`; its earlier pending `restack-needed` spelling in 015
+is a historical snapshot, never a shared schema. The published 035 event remains
+unchanged. 012 SC-009 requires isolated indexed 1..16 repository observations
+with at most four workers/shared budgets, but OQ-FANOUT must select a reachable
+entry before production orchestration; 016 remains single-repository.
+
+013 safety copies are self-contained, have distinct safety ids/roots/payloads and
+survive checkpoint drop/completed restore; deletion needs their own separate
+plan/authorization. Its native jj restoration has no head CAS/exclusion or
+always-detect guarantee, may observe native integrated-away races, and initially
+refuses working-copy commit effects for every workspace including the invoker.
+Those limitations remain relevant evidence boundaries; no 016 rollback uses them.
+
+014 T033 is the red attribute-source regression gate before replay T016. The
+profile pins every actual merge-tree call to full source H using `--attr-source`,
+private admin/worktree/index without original attribute overrides, exact H/N and
+repeated guards/receipt binding. Missing native version/enforcement refuses.
+The related existing hidden-v1 code follow-up is tracked separately in
+[issue #241](https://github.com/wstein/sourcesteward/issues/241); a merged design
+neither fixes that implementation nor supplies new replay acceptance. 014
+OQ-JJCONF blocks native jj conflict-evolution/aggregate semantics: Git stop-first
+and a clean final tip cannot replace complete native graph evidence. OQ-SEM,
+TOPO, HUNK, SCRATCH, FLAGS and EXIT remain explicit, unapproved capabilities.
 
 ## Design decisions
 
@@ -83,7 +111,7 @@ private-state integration. Reconcile remote post-state before retry; unknown
 write completion blocks duplication. Return owner resync/landing data only.
 
 **Rationale**: A remote write can succeed before a lost response. Local checkpoint
-or CAS restore cannot reverse a pushed branch, base edit, comment or native link.
+or Git CAS restore cannot reverse a pushed branch, base edit, comment or native link.
 043 alone owns landing and deletion admission/order.
 
 **Alternatives considered**: Blind automatic retry, automatic inverse write and
