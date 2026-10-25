@@ -5,7 +5,6 @@
 > apply to their recorded revisions only. Current owner answers and target
 > contracts are in [the current analysis](analysis.md), not this archive.
 
-
 **2026-10-25 status**: author cross-artifact analysis complete; independent exact-head review of this refresh is pending. Historical round 9 READY below applies only to its recorded revision and never to this changed head. Spec 012 remains unimplemented; its current finding code is `restack-advised`, distinct from the existing 035 `restack-needed` event. No acceptance task is marked complete.
 
 ## Analysis method and provenance

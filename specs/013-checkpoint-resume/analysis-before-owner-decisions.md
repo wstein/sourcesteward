@@ -5,7 +5,6 @@
 > apply to their recorded revisions only. Current owner answers and target
 > contracts are in [the current analysis](analysis.md), not this archive.
 
-
 **Date**: 2026-10-25. Author consistency analysis of the spec, plan, research,
 model, three contracts, quickstart, tasks and checklist using the installed
 Spec Kit analyze workflow. This is not an independent review or runtime evidence.
