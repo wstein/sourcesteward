@@ -12,7 +12,7 @@ repository or pushes the default branch. Tests use temporary repositories only.
 - [x] T003 Implement the position rule, the Verify split and the reuse of the Spec 011 integration proofs by retirement (amendment: retirement reuses the Spec 011 integration proofs) (identity part plus fresh admission and stored fresh digest for retirement); no new plan field; T001, T001a and T002 green.
 - [x] T004 Stale tests: move HEAD, branch tip, base and the fresh safety digest between plan and apply, each refuses with the existing `evidence-changed` and changes nothing; old stored plans still apply.
 - [x] T004a Failing tests and implementation of the dependent branch leg: applied only after a successful retirement and re-observed; no leg when HEAD is attached to the base branch; changed tip OID, attached elsewhere, workspace ref and symbolic ref refuse; failed retirement skips the leg.
-- [ ] T005 Mutation probes of the plan table, recorded; `go test -race ./internal/workspace` once; independent review of the exact head.
+- [x] T005 Mutation probes of the plan table, recorded; `go test -race ./internal/workspace` once; independent review of the exact head. Evidence: [T005](evidence/T005.md) (PR #251). Caveat: walk-site test gap open (#254).
 
 ## WP-2 Derivation
 
@@ -69,7 +69,7 @@ repository or pushes the default branch. Tests use temporary repositories only.
 ## WP-6 Docs and acceptance
 
 - [ ] T020 Update `docs/tidy.md` (wizard first, lifecycle workspace -> work -> retirement, position rule, reason codes, derived defaults, plan set), `docs/commands.md`, `docs/json-contracts.md`, `docs/agent-guide.md` (agents plan and `--save`, never apply foreign items, no pty wrappers or `send-keys`), `docs/workspaces.md` (shared default state directory), `docs/status.md` and Spec 037 rows 23 and 24 (hint `stw tidy`, if OQ11 is accepted), `docs/progress.md`, `docs/README.md`, `docs/roadmap.md`, `docs/feature-status.json`; pointers from Specs 011 and 029.
-- [ ] T021 Plan-only dogfood dry run against a copy of the situation of 2026-10-23 (61 worktrees); record counts per verdict; the owner applies.
-- [ ] T022 Run `make check` and `scripts/check-docs.py`; record SC-001 to SC-016 evidence; independent review of the exact head; set the feature status with evidence only.
+- [x] T021 Plan-only dogfood dry run against a copy of the situation of 2026-10-23 (61 worktrees); record counts per verdict; the owner applies. Evidence: [T021](evidence/T021.md) (PR #251). Caveat: plan-only over the live workspace; about 520 of 999 not judgeable (#252, #253).
+- [x] T022 Run `make check` and `scripts/check-docs.py`; record SC-001 to SC-016 evidence; independent review of the exact head; set the feature status with evidence only. Evidence: [T022](evidence/T022.md) (PR #251). Caveat: deadline defect open (#252, #253), untracked-directory and symlink test gap open (#254), owner grouping open (#255); T012b stays deferred and T020 stays open.
 
 FR and SC traceability for these tasks is the table in [plan.md](plan.md#traceability).
