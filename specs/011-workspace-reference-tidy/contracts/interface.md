@@ -68,3 +68,11 @@ references. Core checks secure state disjointness against this complete bounded 
 selected candidate WorkspacePaths. This internal field does not alter published result/schema; before/
 after observation equality and aggregate limits include it. Missing registration paths retain/refuse
 rather than authorize a store overlapping another checkout.
+
+## Proposed registration-prune interface boundary
+
+Owner decision 2026-10-25 selects a separate contract/operation (option B).
+The [contract-4 proposal](registration-prune-v4.md) is pending exact-head review
+and explicit owner acceptance. No existing frozen interface, enum or reader is
+extended here. Future planner/apply/restore adapters require their own strict
+typed records and explicit dispatch; read-only admission is not a stored plan.
