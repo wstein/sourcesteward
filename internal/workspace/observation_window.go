@@ -20,3 +20,6 @@ func WithObservationTimeout(ctx context.Context, d time.Duration) context.Contex
 func observationWindow(ctx context.Context, registrations int) time.Duration {
 	return planObservationTimeout
 }
+
+// ObservationTimeout is the explicit --timeout carried by the context (stub).
+func ObservationTimeout(ctx context.Context) (time.Duration, bool) { return 0, false }

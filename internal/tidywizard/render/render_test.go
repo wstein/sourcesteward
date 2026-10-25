@@ -595,3 +595,36 @@ func TestOwnerGroupOrderIsByLabelAndScope(t *testing.T) {
 		t.Errorf("%s", got)
 	}
 }
+
+// Items that were not judged because of the deadline are stated once as a run notice, in the text
+// and in the existing `notices` of the JSON, with a retry hint; none, no notice.
+func TestDeadlineNoticeCountsTheItemsNotJudged(t *testing.T) {
+	in := input()
+	base := len(Build(in).Notices)
+	if strings.Contains(strings.Join(Build(in).Notices, "|"), "not judged") {
+		t.Fatal("a notice without a deadline")
+	}
+	for i := 0; i < 2; i++ {
+		c := cand("sourcesteward", tidywizard.KindWorktree, "/tmp/wt-late-"+string(rune('a'+i)), tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeUnknown)
+		c.Evidence = "deadline-exceeded"
+		in.Result.Candidates = append(in.Result.Candidates, c)
+	}
+	other := cand("sourcesteward", tidywizard.KindWorktree, "/tmp/wt-other", tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeUnknown)
+	other.Evidence = "registration-mismatch" // incomplete for another reason: not counted
+	in.Result.Candidates = append(in.Result.Candidates, other)
+	doc := Build(in)
+	want := "2 of 10 not judged (deadline); retry with a larger window, for example --timeout 15m"
+	if len(doc.Notices) != base+1 || doc.Notices[len(doc.Notices)-1] != want {
+		t.Fatalf("notices %q, want the last to be %q", doc.Notices, want)
+	}
+	if !strings.Contains(Text(doc, TextOptions{}), "notice: "+want+"\n") {
+		t.Errorf("text lacks the notice:\n%s", Text(doc, TextOptions{}))
+	}
+	b, _, _ := JSON(doc)
+	if !strings.Contains(string(b), want) {
+		t.Errorf("JSON lacks the notice")
+	}
+	if doc.Summary.Retain != 3+3 {
+		t.Errorf("the verdicts changed: %+v", doc.Summary)
+	}
+}

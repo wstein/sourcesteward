@@ -19,18 +19,20 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
 	"github.com/wstein/sourcesteward/internal/tidywizard/render"
+	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
 // wizardWorld replaces the analysis seams of the wizard-layer `tidy plan`.
 type wizardWorld struct {
-	prep     analysis.Prepared
-	prepErr  error
-	res      tidywizard.Result
-	gotOpt   analysis.Options
-	gotCfg   tidywizard.Config
-	hadDline bool
-	prepared int
-	planner  *spyPlanner
+	prep       analysis.Prepared
+	prepErr    error
+	res        tidywizard.Result
+	gotOpt     analysis.Options
+	gotCfg     tidywizard.Config
+	hadDline   bool
+	analyseCtx context.Context
+	prepared   int
+	planner    *spyPlanner
 }
 
 type spyPlanner struct {
@@ -109,7 +111,8 @@ func newWizardWorld(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *
 		w.prepared++
 		return w.prep, w.prepErr
 	}
-	tidyAnalyse = func(_ context.Context, _ analysis.Prepared, cfg tidywizard.Config) tidywizard.Result {
+	tidyAnalyse = func(ctx context.Context, _ analysis.Prepared, cfg tidywizard.Config) tidywizard.Result {
+		w.analyseCtx = ctx
 		w.gotCfg = cfg
 		return w.res
 	}
@@ -590,5 +593,31 @@ func TestWizardPlanSaveErrorAfterATimeoutKeepsTheCause(t *testing.T) {
 	_, err = runTidy(t, "", "plan", "--save")
 	if !errors.As(err, &failure) || strings.Contains(err.Error(), "--timeout") || !strings.Contains(err.Error(), "planner failed") {
 		t.Errorf("%v", err)
+	}
+}
+
+// --timeout is also the observation window of every repository (it may exceed the old fixed 60 s),
+// up to the documented maximum; without it the observation window is the scaled default.
+func TestWizardTimeoutIsTheObservationWindowUpToTheMaximum(t *testing.T) {
+	w := newWizardWorld(t, true, true)
+	if _, err := runTidy(t, "", "plan", "--timeout", "15m"); err != nil {
+		t.Fatal(err)
+	}
+	if d, ok := workspace.ObservationTimeout(w.analyseCtx); !ok || d != 15*time.Minute {
+		t.Errorf("observation window %v %v, want 15m", d, ok)
+	}
+	w = newWizardWorld(t, true, true)
+	if _, err := runTidy(t, "", "plan"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := workspace.ObservationTimeout(w.analyseCtx); ok {
+		t.Error("an observation window without --timeout")
+	}
+	w = newWizardWorld(t, true, true)
+	if _, err := runTidy(t, "", "plan", "--timeout", "1h"); err != nil {
+		t.Errorf("the maximum itself is allowed: %v", err)
+	}
+	if _, err := runTidy(t, "", "plan", "--timeout", "61m"); !isUsage(err) || !strings.Contains(err.Error(), "1h") {
+		t.Errorf("above the maximum is a usage error naming it: %v", err)
 	}
 }
