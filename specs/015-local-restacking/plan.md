@@ -1,6 +1,15 @@
-# Implementation Plan: Local restacking, first slice (`stw restack plan`)
+# Implementation Plan: Local restack evidence and proposed apply
 
 **Branch**: `docs/015-restack-plan-first-slice` (specification); implementation branches follow the work packages | **Date**: 2026-10-21 | **Spec**: [spec.md](spec.md)
+
+## Amendment boundary (2026-10-25)
+
+Historical sections below retain the 2026-10-21 first-slice design and measured
+experiment. Hidden plan source exists in `internal/restack` and
+`internal/cli/restack.go`; the v1 schema exists but remains UNPUBLISHED and frozen
+by digest. T001 is historical design CLEAR, T004 deliberately skipped, and
+T021/T023/T024 remain open. The new work packages at the end are proposals only;
+no implementation, schema-file, dependency or runtime action is added here.
 
 ## Summary
 
@@ -28,7 +37,7 @@ Add the read-only `stw restack plan` for native Git: one operation in a new `int
 
 1. **Resolve** (`internal/restack/input.go`): validate syntax (FR-011), resolve through the isolated runner to commit ids, observe `old_head`, compute both merge bases, collect the moved range with `rev-list --topo-order --reverse`; refuse per FR-014 before any evidence work.
 2. **Hazards** (`hazards.go`): apply the Spec 029/031 repository, config, attribute and hook safeguards (re-implemented by name in `hazards.go`); report only names. Any hazard on a path the replay touches refuses (`repository-hazard`), because `merge-tree` may run merge drivers.
-3. **Replay** (`replay.go`): for each moved commit, `merge-tree --write-tree --merge-base=<commit^> <tip> <commit>`; on a clean result `commit-tree` with the original author (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL` and `GIT_AUTHOR_DATE=@<unix> <zone>` of the moved commit, so `git range-diff` pairs it `=`) and a fixed constant committer given only through the environment (`GIT_COMMITTER_NAME=stw-restack-plan`, `GIT_COMMITTER_EMAIL=restack-plan@invalid`, `GIT_COMMITTER_DATE=1970-01-01T00:00:00Z`; process `HOME`, global and system configuration neutralized), so no repository-local or global `user.*` is ever read; the replay commits live only in the quarantine and are never pushed, so their committer identity is never evidence about the branch. The quarantine is a private object directory (`GIT_OBJECT_DIRECTORY` private, repository objects as alternates). The first conflict stops replay and is reported with its paths, kinds and allowlist class; later commits are `unpaired`. The quarantine is removed on every path and a sentinel test compares the object store.
+3. **Replay** (`replay.go`): for each moved commit, `merge-tree --write-tree --merge-base=<commit^> <tip> <commit>`; on a clean result `commit-tree` with the original author (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL` and `GIT_AUTHOR_DATE=@<unix> <zone>` of the moved commit, so `git range-diff` pairs it `=`) and a fixed constant committer given only through the environment (`GIT_COMMITTER_NAME=stw-restack-plan`, `GIT_COMMITTER_EMAIL=restack-plan@invalid`, `GIT_COMMITTER_DATE=1970-01-01T00:00:00Z`; process `HOME`, global and system configuration neutralized), so no repository-local or global `user.*` is ever read; the replay commits live only in the quarantine and are never pushed, so their committer identity is never evidence about the branch. The quarantine is a private object directory (`GIT_OBJECT_DIRECTORY` private, repository objects as alternates). The first conflict stops replay and is reported with its paths and kinds (no allowlist class in this slice); later commits are `unpaired`. The quarantine is removed on every path and a sentinel test compares the object store.
 4. **Evidence** (`evidence.go`): `git range-diff` and `git cherry` through the runner; tree equivalence of touched paths for `+` rows (own small helpers; the tidy patch-id code was not extracted, T004 skipped); own-diff patch-id equality; identity check; overlap indicator from `old_parent..new_parent` paths against moved paths.
 5. **Effects and texts** (`effects.go`, `texts.go`): affected refs and worktrees from `for-each-ref --contains` and `worktree list --porcelain`; hook names by file presence only; lease and resync texts with strict ref-name validation and quoting.
 6. **Result and CLI** (`result.go`, `internal/cli/restack.go`): one typed result, human rendering from it, `schemas/v1/restack-plan.schema.json`, exit mapping. The CLI imports only the reviewed `restack` operation (architecture check updated).
@@ -82,3 +91,111 @@ An independent reviewer measured with Git 2.56.0 in a scratch repository, global
 1. (Resolved by the review) No `user.*` configuration feeds the expected identity; repository-local `user.*` is reported as a hazard.
 2. (Resolved by the review) `--keep-both-config` moves to WP6; the first slice has no configuration input.
 3. Whether `range-diff` should also be available as post-check text after a by-hand rebase (printed in quickstart only).
+
+
+## Proposed next slices: design through tasks, not implementation authorization
+
+[Research](research.md) records source facts, decisions and unresolved choices.
+[Apply](contracts/restack-apply.md), [recovery](contracts/recovery.md) and
+[jj](contracts/jj-restack.md) are UNPUBLISHED Markdown contracts. Proposed fields,
+selectors and refusals must not be added to frozen v1 by documentation alone.
+
+### Technical context and gates
+
+Stay on the current Go/Cobra/native runner architecture and standard library;
+no new dependency is proposed. Keep decisions/evidence derivation pure and
+place filesystem/process/ref effects at a small reviewed operation boundary.
+If concurrency is needed, follow Spec 040 `internal/fanout` and deterministic
+indexed results; a one-branch apply needs no parallel mutation. No repository
+script, hook, model, config-selected verify command or network is permitted.
+The installed Spec Kit plan and task setup are used with explicit existing
+feature selection and no persistence; existing templates/history are not reset.
+
+| Constitution gate | Proposed disposition |
+| --- | --- |
+| I shared contract/noninteractive | One typed human/JSON result, no prompt without an explicitly selected step; bounded future 0/1/2 proposal, unchanged legacy exit3 |
+| II evidence and expected state | Immutable one-action plan, exact old/new parent/head, post-replay equality and identity, CAS; missing proof refuses |
+| III ownership and recovery | Own unoccupied topic refs only as an OQ-6 proposal; private task binding and pre-action durable journal/root; reverse action separately authorized |
+| IV test first and truthful evidence | New work starts only after design decisions/review; named red tests, native lanes, sentinels and mutations; no product tests run in this amendment |
+| V native peers | Git first under D4; jj enabled only after native operation/bookmark proof, no raw Git writes or false parity |
+| Publication boundary | D8: every remote step is a 016 plan/action with exact actual-new-SHA CLEAR and fresh checks; 043 remains the human owner's landing invocation |
+
+Open OQ-1 to OQ-6 block the affected implementations. OQ-7 preserves 012's
+explicit opt-in reads without adding network here. Recommendations are not
+settled policy. This plan is ready for independent documentation review, not
+blanket runtime implementation or product acceptance.
+
+### Architecture and integration
+
+1. Preserve `Plan` and v1 result/CLI/schema tests unchanged. A future opt-in
+   plan protocol builds a stored local apply plan; an adapter may consume 012
+   `expected` evidence but direct D6 inputs remain sufficient. No authentication
+   or 012/014 implementation dependency enters the existing plan slice.
+2. Proposed `internal/restack/apply_plan.go` validates immutable typed inputs,
+   owner/task/ref association, exact native layout and effect bounds. Proposed
+   `apply.go` coordinates quarantined candidate replay, evidence and the commit
+   point; pure gate functions accept values and return bounded typed reasons.
+3. Reuse 014 isolated integration preflight/replay semantics once accepted;
+   identical backend/input/semantics/completeness is necessary for reuse and
+   every mutation guard is still sampled fresh. Neither a clean 014 preflight
+   nor 012 observation is an authorization token. Native-stack-managed/unknown
+   evidence blocks automatic competition with GitHub; the direct-input path
+   needs explicit local/plain-chain provenance.
+4. D7 remains plumbing plus CAS. Candidate replay preserves original author/date,
+   uses the OQ-3 explicit actual committer policy, and exposes actual new SHA.
+   Verify one-to-one all `=` range-diff and actual identities before target CAS.
+   Initial apply refuses occupied refs; changing a caller's own attached
+   worktree is a separate future capability requiring OQ-6 resolution.
+5. Extract/reuse a reviewed neutral durability seam from
+   `internal/stwsync/journal.go` with unchanged characterization tests. Typed
+   restack records/root namespace extend the 032 recovery architecture; no
+   duplicate writer, cross-type interpretation or API availability claim.
+   Sync retention stays unchanged; restack roots stay retained pending OQ-5.
+   Spec 013 consumes action/native identities for checkpoint/restore/undo.
+6. Expose a local apply receipt and a review-required exact-new-SHA binding.
+   Independent review follows actual replay; 016 verifies that CLEAR and fresh
+   required checks immediately before an individually authorized remote action.
+   The observed remote SHA belongs to 016 and is never inferred from local old
+   head, upstream config or an inert v1 text. Retarget/link are separate effects.
+7. Native jj begins with a capability spike. No adapter may claim Git CAS,
+   automatic descendant scope safety, operation undo or snapshot suppression
+   for writes until measured. Unsupported capability remains explicit.
+
+### Dependency-ordered implementation units
+
+Sizing: S about half an author day, M about one day, L two to three days;
+these are planning estimates, not delivery promises. Each unit includes its
+own tests/format/source checks and independent exact-head review when built.
+Do not run those checks or builds for this Markdown-only amendment.
+
+| Unit | Proposed tasks | Size | Prerequisites and independently reviewable result |
+| --- | --- | --- | --- |
+| A0 unresolved decisions | T025–T026 | S | Owner resolves affected OQs; independent complete-artifact design review. Historical T001 is not CLEAR for this amendment |
+| A1 frozen v1 and apply-plan contract | T027–T028 | M | A0, T024 and unchanged v1 compatibility; US1 stored plan only, no apply |
+| A2 actual candidate evidence | T029–T030 | L | A1, T021; US2 quarantine replay, actual identity/equality and no original ref movement |
+| A3 shared durability seam | T031–T032 | M | A0, sync characterization and OQ-5; typed recovery intent with old/new roots, no target move |
+| A4 guarded local CAS | T033–T034 | M | A2+A3; own unoccupied topic ref only; partial outcomes and receipt |
+| A5 retry and reverse plan | T035–T036 | L | A4; US2 crash reconciliation and separately authorized conditional restore |
+| A6 native jj capability | T037–T039 | L | A0/OQ-4; US2 explicit unsupported gap until proven native semantics and conformance |
+| A7 human/JSON and remote handoff | T040–T041 | M | A4+A5, 016 consumer design, OQ-1/OQ-2; US3 exact actual SHA and independent-review requirement, zero remote writes |
+| A8 conformance/evidence | T042–T044 | M | Each selected unit; native minimum/current, sentinels/mutations, exact-head independent review and honest verification |
+
+MVP is A0–A5 plus A7 and Git acceptance in A8. A6 may be specified/tested
+separately but must stay disabled until its own evidence passes. A3 can be
+authored in parallel with A2 only with disjoint files and after its own gates;
+shared CLI, journal seam and schema wiring serialize. No text-only PR stacking
+is implied. Remote work is outside these units in 016; no merge, push, Ready,
+settings or deployment command is executed by this feature.
+
+### Risks and observable controls
+
+| Risk | Control and proposed evidence |
+| --- | --- |
+| Candidate changes source history or drops commits | T029 negative scope fixtures, T030 all `=`/count/mapping gates; never substitute a tree-only proof |
+| Identity leak reaches real commits | T030 reads actual authors/committers, explicit-only policy; fixed prediction committer is rejected |
+| CAS succeeds but journal/output fails | T035 fault injection at every boundary; report partial, reconcile exact old/new, never reset |
+| A worktree attaches after sampling | T033 resample registration and refuse observed changes; disclose residual ABA/native lock limit |
+| Malicious state file/record widens effects | T031/T040 symlink, replacement, cross-repository/type/id fixtures; bounded typed data and no shell |
+| Generic restore silently undoes later edits | T036 requires current==recorded-new and retained root==old, otherwise changed-since |
+| jj native rebase rewrites foreign descendants | T037 spike must enumerate effects and prove operation expectation; otherwise capability-unavailable |
+| Old review or local head reused for push | T041 exact actual-new-SHA binding and separate full observed remote SHA; 016 owns remote gate |
