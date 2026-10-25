@@ -231,7 +231,8 @@ class DocumentationTests(unittest.TestCase):
                     package.copy_schemas(root, destination)
                 self.assertFalse(destination.exists())
                 extra.unlink()
-                if extra.parent.name == 'v4': extra.parent.rmdir()
+                if extra.parent.name == 'v4' and not any(extra.parent.iterdir()):
+                    extra.parent.rmdir()
             # An unpublished schema must still be valid JSON and a regular file.
             (root / 'schemas/v1/release-check.schema.json').write_text('{')
             with self.assertRaises(ValueError): package.copy_schemas(root, destination)
