@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -239,7 +240,7 @@ func TestTheWriteGuardAdmitsExactlyOneFixedRequest(t *testing.T) {
 		"query":        func(r *http.Request) { r.URL.RawQuery = "a=b" },
 		"force query":  func(r *http.Request) { r.URL.ForceQuery = true },
 		"fragment":     func(r *http.Request) { r.URL.Fragment = "x" },
-		"userinfo":     func(r *http.Request) { r.URL.User = nil; r.URL.Host = "u@api.github.com" },
+		"userinfo":     func(r *http.Request) { r.URL.User = url.User("u") },
 		"raw path":     func(r *http.Request) { r.URL.RawPath = "/graph%71l" },
 		"content type": func(r *http.Request) { r.Header.Set("Content-Type", "text/plain") },
 		"no body":      func(r *http.Request) { r.Body = nil },
