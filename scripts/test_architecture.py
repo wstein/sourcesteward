@@ -400,3 +400,25 @@ class StackpublishAllowListTests(unittest.TestCase):
         self.assertEqual(sorted(architecture.STACKPUBLISH_ALLOWED_IMPORTS), sorted([
             'crypto/sha256', 'encoding/hex', 'encoding/json', 'fmt', 'regexp', 'sort', 'strconv', 'strings', 'sync', 'time', 'unicode/utf8',
             architecture.MODULE + 'internal/attribution']))
+
+    def test_value_formatting_only_no_print_scan_init_or_local_zone(self):
+        # Review D3: an allowed package must not become an I/O or clock channel.
+        for name, body in {
+            'init with Println': 'import "fmt"\n\nfunc init() { fmt.Println("x") }\n',
+            'plain init': 'func init() {}\n',
+            'init with a space': 'func  init ( ) {}\n',
+            'Print': 'import "fmt"\n\nfunc a() { fmt.Print("x") }\n',
+            'Fprintln': 'import "fmt"\n\nfunc a() { fmt.Fprintln(nil, "x") }\n',
+            'Scan': 'import "fmt"\n\nfunc a() { var s string; fmt.Scan(&s) }\n',
+            'Sscanf': 'import "fmt"\n\nfunc a() { var s string; fmt.Sscanf("x", "%s", &s) }\n',
+            'aliased fmt Println': 'import f "fmt"\n\nfunc a() { f.Println("x") }\n',
+            'time Local method': 'import "time"\n\nvar _ = time.Time{}.Local()\n',
+            'time In method': 'import "time"\n\nfunc a(t time.Time) { _ = t.In(nil) }\n',
+            'time with a space before the dot': 'import "time"\n\nvar _ = time .Now()\n',
+            'blank import of an allowed package': 'import _ "fmt"\n',
+        }.items():
+            with self.assertRaises(ValueError, msg=name):
+                architecture.validate_sources(self.probe(body))
+        architecture.validate_sources(self.probe('import "fmt"\n\nvar _ = fmt.Sprintf("%d", 1)\nvar _ = fmt.Errorf("x")\nvar _ = fmt.Sprint(1)\nvar _ = fmt.Sprintln(1)\n'))
+        # A function whose name merely contains init is fine, and so is a comment or string.
+        architecture.validate_sources(self.probe('// func init() {}\nvar s = "func init() {}"\nfunc initialize() {}\n'))

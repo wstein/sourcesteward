@@ -68,8 +68,8 @@ func TestSelectionOrderAndMarkerOrderDoNotChangeThePlanID(t *testing.T) {
 	}
 	m, n := fixtureInput(), fixtureInput()
 	m.Mode.Markers, n.Mode.Markers = []string{"CODEX_HOME", "CLAUDECODE"}, []string{"CLAUDECODE", "CODEX_HOME", "CLAUDECODE"}
-	pm, pn := mustPlan(t, m), mustPlan(t, n)
-	if pm.ID() != pn.ID() {
+	pm, pk := mustPlan(t, m), mustPlan(t, n)
+	if pm.ID() != pk.ID() {
 		t.Fatalf("marker order or repetition changed the id")
 	}
 }

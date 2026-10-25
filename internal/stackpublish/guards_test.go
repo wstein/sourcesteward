@@ -507,3 +507,30 @@ func TestARefusedStepEndsTheRunEvenIfTheCallerKeepsAsking(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+// Review D1: Finish seals the run.
+func TestFinishSealsTheRun(t *testing.T) {
+	p := savedPlan(t, twoPushes()...)
+	run, err := NewRun(p, applyRequest(p, "p1", "p2", "p3"), allCapabilities(), newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _, _ := run.Begin()
+	run.Complete(Fresh{Expected: cloneExpected(a.Expected), Permission: PermissionGranted, Guards: passing(a.Kind)}, true)
+	if err := run.Advance(StateCompleted); err != nil {
+		t.Fatal(err)
+	}
+	first := states(run.Finish())
+	if _, ok, err := run.Begin(); ok || err == nil {
+		t.Errorf("Begin after Finish: ok=%v err=%v", ok, err)
+	}
+	if d := run.Complete(Fresh{}, true); d.State == StatePrepared {
+		t.Error("Complete after Finish prepared an action")
+	}
+	if err := run.Advance(StateCompleted); err == nil {
+		t.Error("Advance after Finish accepted")
+	}
+	if second := states(run.Finish()); !reflect.DeepEqual(first, second) || !reflect.DeepEqual(first, []string{"completed", "not-started", "not-started"}) {
+		t.Fatalf("Finish is not stable: %v then %v", first, second)
+	}
+}

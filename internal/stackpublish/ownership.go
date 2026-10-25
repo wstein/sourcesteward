@@ -46,6 +46,7 @@ type RepoRef struct {
 
 // OwnershipInput is everything the ownership guards are computed from.
 type OwnershipInput struct {
+	Plan     Plan // the validated plan: its task and repository are the only ones compared
 	PlanTask string
 	PlanRepo RepoRef
 	Kind     ActionKind
