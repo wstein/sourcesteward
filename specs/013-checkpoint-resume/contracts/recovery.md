@@ -51,12 +51,14 @@ native restoration is implied. No restore command is run from stored text.
 
 ## Recovery-root ownership and namespace reservation
 
-Proposed OQ-5 reservation: 013 checkpoint/capture/restore actions use only
-`refs/stw/recovery/checkpoint/CHECKPOINT_ID/N`; selective-undo actions use only
-`refs/stw/recovery/undo/UNDO_ID/N`. Generated ids are validated opaque components,
+Proposed OQ-5 reservation: checkpoint/capture roots use only
+`refs/stw/recovery/checkpoint/CHECKPOINT_ID/N`; selective-undo action roots use
+only `refs/stw/recovery/undo/UNDO_ID/N`. Pre-action safety copies for any restore
+or undo use the distinct reserved `refs/stw/recovery/undo/safety/SAFETY_ID/N`
+subtree and a self-contained `safety-copy` record keyed by SAFETY_ID. Generated ids are validated opaque components,
 never a caller-provided path or a legacy tidy plan id; `N` is the positive action
-index. The fixed `checkpoint`/`undo` components are reserved for these typed 013
-records, not valid legacy plan-id aliases. Admission must detect any pre-existing
+index. The fixed `checkpoint`/`undo` components and `undo/safety` subtree are reserved for these typed 013
+records, not valid legacy plan-id aliases; `safety` is not an admitted UNDO_ID. Admission must detect any pre-existing
 namespace occupant/file-directory conflict and refuse without adoption.
 
 | Owner/spec | Existing or proposed Git recovery namespace |
@@ -65,7 +67,8 @@ namespace occupant/file-directory conflict and refuse without adoption.
 | Tidy v3, Specs 029/031; `internal/workspace/tidy_v3_result.go` | Existing `refs/stw/recovery/v3/PLAN_ID/HASH` |
 | Sync, Spec 032; `internal/stwsync/journal.go` | Existing `refs/stw/recovery/sync/RUN_ID/N` and common-dir `stw/sync` records |
 | Local restack, Spec 015 recovery proposal | Proposed `refs/stw/recovery/restack/RUN_ID/N`; not a 013-owned prefix |
-| Checkpoint/restore and selective undo, Spec 013 | Proposed reserved `checkpoint/CHECKPOINT_ID/N` and `undo/UNDO_ID/N` below `refs/stw/recovery/` |
+| Checkpoint capture and selective undo, Spec 013 | Proposed reserved `checkpoint/CHECKPOINT_ID/N` and `undo/UNDO_ID/N` below `refs/stw/recovery/` |
+| Pre-action safety copies for restore/undo, Spec 013 | Proposed reserved `refs/stw/recovery/undo/safety/SAFETY_ID/N`, independent safety-copy record/receipt/lifetime |
 
 Create roots only when absent, with the expected missing/zero value; reject
 symbolic roots. Any later update or explicit deletion requires its exact typed
@@ -89,6 +92,28 @@ Git-exportable name may be published by all/selected/tracked bookmark pushes;
 mechanism are explicitly accepted and tested. Git recovery refs are also not
 secret storage or proof against an explicit broad export; they retain committed
 objects only, never private selected-byte payloads.
+
+## Independent pre-action safety copies
+
+A restore may replace current work that was never in its source checkpoint.
+Before that effect, save the promised current bytes/native roots in a new
+self-contained safety-copy record and private payload receipt with its own
+SAFETY_ID, action/restore-plan binding and reserved safety roots. Its origin
+checkpoint id is provenance only: neither bytes, ownership nor restoration
+information depend on that checkpoint's continued existence. Explicit private
+modes, external-store proof and the total physical quota apply; each safety
+copy is bounded to 32 MiB selected bytes and an exceeded required capture refuses
+the replacing effect. Durable safety capture and prepared intent precede mutation.
+
+Safety copies have independent retention, including after successful completion;
+there is no automatic expiry or cleanup when a restore completes or a source
+checkpoint/plan is dropped. Checkpoint drop never selects safety-copy payloads,
+records or roots, even for completed restores. Their only deletion path is a
+separate plan that names the exact safety-copy id and requires its own explicit
+authorization and safety-id confirmation. Pending action/receipt dependencies
+refuse. See [explicit deletion](checkpoint.md#private-payload-storage-and-explicit-deletion).
+A partial restore/drop retains safety receipts and exact remaining byte/root
+availability; source-checkpoint deletion cannot remove that recovery evidence.
 
 ## Prepare, apply and reconcile
 

@@ -63,10 +63,21 @@ payload is at most 32 MiB; OQ-3 recommends a 1 GiB total physical-store quota th
 counts metadata, orphan/incomplete and in-flight staging bytes under a store lock.
 Quota admission is mandatory before writes; numeric total remains an owner choice.
 
-DropPlan binds one checkpoint id, selected exclusive payload/metadata/013 roots,
+SafetyCopy is a self-contained durable record with independent SAFETY_ID,
+origin action/restore-plan binding, provenance-only source checkpoint id, exact
+pre-action byte receipt/native ids, owned
+`refs/stw/recovery/undo/safety/SAFETY_ID/N` roots and independent retention.
+Each copy is at most 32 MiB selected bytes and counts against total physical
+quota; a required oversized safety capture refuses before replacement. Its
+payload/record survives completed restore and checkpoint drop. There is no
+implicit expiry/cleanup. SafetyDropPlan names SAFETY_ID, selected owned targets,
+expected file/OID values and separate safety-id confirmation; it shares the
+verified partial deletion protocol, with live action/receipt dependencies refused.
+
+DropPlan binds one checkpoint id, selected exclusive original-capture payload/metadata/checkpoint roots,
 complete dependencies, expected file identities/digests/OIDs, byte totals and
-confirmation id. Explicit plan plus authorization and exact checkpoint-id
-confirmation precede deletion. Pending mutation/dependency or unknown inventory
+confirmation id. It excludes every independent safety copy/root/record, even from completed restores. Explicit plan plus authorization and exact checkpoint-id
+confirmation precede deletion; safety-copy deletion requires its own SafetyDropPlan and safety-id confirmation. Pending mutation/dependency or unknown inventory
 refuses. DropOutcome records removed/remaining/uncertain files/roots/bytes;
 receipts survive until actual deletion is verified, followed by a bounded
 metadata-only tombstone. Partial deletion is inspectable/reconcilable, never
@@ -124,7 +135,7 @@ shared recovery architecture; no new independent writer is assumed.
 Root identity includes the exact operation-owned namespace, full native target
 and expected old value. Proposed Git roots are only
 `refs/stw/recovery/checkpoint/CHECKPOINT_ID/N` or
-`refs/stw/recovery/undo/UNDO_ID/N`, create-only when absent; reject collisions,
+`refs/stw/recovery/undo/UNDO_ID/N`, with independent safety roots under `refs/stw/recovery/undo/safety/SAFETY_ID/N`, create-only when absent; reject collisions,
 symbolic/unowned roots and cross-type ids. Never write sync records or any tidy,
 v3, sync or restack roots. The [recovery namespace inventory](contracts/recovery.md#recovery-root-ownership-and-namespace-reservation)
 owns prefix details. jj root receipts must name their native root kind and

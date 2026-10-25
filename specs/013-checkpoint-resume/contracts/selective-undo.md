@@ -120,7 +120,7 @@ is claimed by these artifacts.
 
 Reuse the reviewed typed recovery seam: create valid pre-action roots and any
 selected pre-action byte receipts, durably write prepared intent before each
-effect, then resample and record actual completion. Retain exact original/new
+effect, then resample and record actual completion. Pre-action safety bytes/roots use independently identified safety-copy records and retention, never the lifetime or drop selection of a source checkpoint; separate safety-id-confirmed deletion is required. Retain exact original/new
 native identities and mapping. A crash, failed payload/record write, conflict,
 timeout or cancellation stops further work with completed/not-started/unknown
 effects, retained recovery and precise missing guarantees. Never pretend to
