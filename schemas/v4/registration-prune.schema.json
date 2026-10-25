@@ -1,0 +1,917 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v4/registration-prune.schema.json",
+  "title": "Registration prune contract 4 planner and stored plan",
+  "$comment": "Source slice only: no apply, journal, restore, overview, or plan-set publication is implied. Existing v2/v3 files remain frozen.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Plan"
+    },
+    {
+      "$ref": "#/$defs/Result"
+    }
+  ],
+  "$defs": {
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "base_change": {
+          "const": "",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "base_commit": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "base_selector": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/NativeIdentity"
+        },
+        "reference_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "registration_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "safety_digest": {
+          "maxLength": 4096,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "base_selector",
+        "base_commit",
+        "base_change",
+        "reference_digest",
+        "registration_digest",
+        "safety_digest"
+      ],
+      "type": "object"
+    },
+    "NativeIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "const": "git",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "change_id": {
+          "const": "",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "commit_id": {
+          "maxLength": 4096,
+          "not": {
+            "enum": [
+              "0000000000000000000000000000000000000000",
+              "0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          },
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "git_dir": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "head_ref": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "object_format": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "operation_id": {
+          "const": "",
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "repository_dir": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "workspace_name": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "workspace_root": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "backend",
+        "repository_dir",
+        "workspace_root",
+        "workspace_name",
+        "git_dir",
+        "head_ref",
+        "commit_id",
+        "change_id",
+        "operation_id",
+        "object_format"
+      ],
+      "type": "object"
+    },
+    "PathIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "device",
+        "inode"
+      ],
+      "type": "object"
+    },
+    "V3PhysicalIdentity": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "regular"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "nlink": {
+                "const": 1
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "ctime_ns": {
+          "type": "integer"
+        },
+        "device": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "directory",
+            "regular"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "mode": {
+          "maximum": 4095,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mtime_ns": {
+          "type": "integer"
+        },
+        "nlink": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "owner_known": {
+          "const": true,
+          "type": "boolean"
+        },
+        "path": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timestamp_precision": {
+          "enum": [
+            "nanosecond",
+            "microsecond",
+            "second"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "uid": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "device",
+        "inode",
+        "uid",
+        "owner_known",
+        "kind",
+        "mode",
+        "nlink",
+        "size",
+        "mtime_ns",
+        "ctime_ns",
+        "timestamp_precision"
+      ],
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "ActionOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "complete",
+            "incomplete",
+            "refused",
+            "unknown"
+          ],
+          "maxLength": 4096,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "Mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "human",
+            "agent"
+          ]
+        },
+        "stdin_tty": {
+          "type": "boolean"
+        },
+        "stdout_tty": {
+          "type": "boolean"
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "mine": {
+          "type": "boolean"
+        },
+        "by_owner": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "caller": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "caller_source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "stdin_tty",
+        "stdout_tty",
+        "markers",
+        "mine",
+        "by_owner",
+        "caller",
+        "caller_source"
+      ]
+    },
+    "Registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "gitdir": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "owner_source": {
+          "const": "task-record"
+        },
+        "scope": {
+          "enum": [
+            "own",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "gitdir",
+        "destination",
+        "task",
+        "owner",
+        "owner_source",
+        "scope"
+      ]
+    },
+    "Directory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/PathIdentity"
+        },
+        "uid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mount": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "identity",
+        "uid",
+        "gid",
+        "mode",
+        "mount"
+      ]
+    },
+    "Absence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "destination": {
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/$defs/PathIdentity"
+        },
+        "ancestors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Directory"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "destination",
+        "parent",
+        "ancestors"
+      ]
+    },
+    "Metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "file",
+            "directory",
+            "absent"
+          ]
+        },
+        "digest": {
+          "type": "string"
+        },
+        "physical": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/V3PhysicalIdentity"
+            },
+            {
+              "const": {
+                "ctime_ns": 0,
+                "device": 0,
+                "inode": 0,
+                "kind": "",
+                "mode": 0,
+                "mtime_ns": 0,
+                "nlink": 0,
+                "owner_known": false,
+                "path": "",
+                "size": 0,
+                "timestamp_precision": "",
+                "uid": 0
+              }
+            }
+          ]
+        },
+        "identity": {
+          "$ref": "#/$defs/PathIdentity"
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 67108864
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "digest",
+        "physical",
+        "identity",
+        "mode",
+        "size"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "absent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "physical": {
+                "const": {
+                  "ctime_ns": 0,
+                  "device": 0,
+                  "inode": 0,
+                  "kind": "",
+                  "mode": 0,
+                  "mtime_ns": 0,
+                  "nlink": 0,
+                  "owner_known": false,
+                  "path": "",
+                  "size": 0,
+                  "timestamp_precision": "",
+                  "uid": 0
+                }
+              },
+              "size": {
+                "const": 0
+              },
+              "digest": {
+                "const": ""
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "physical": {
+                "$ref": "#/$defs/V3PhysicalIdentity"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Sibling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/PathIdentity"
+        }
+      },
+      "required": [
+        "name",
+        "identity"
+      ]
+    },
+    "Reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "oid": {
+          "type": "string"
+        },
+        "symbolic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "oid",
+        "symbolic"
+      ]
+    },
+    "NativeRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locked": {
+          "type": "boolean"
+        },
+        "bare": {
+          "type": "boolean"
+        },
+        "prunable": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "head_oid": {
+          "type": "string"
+        },
+        "head_ref": {
+          "type": "string"
+        },
+        "lock_reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "locked",
+        "bare",
+        "prunable",
+        "path",
+        "head_oid",
+        "head_ref",
+        "lock_reason"
+      ]
+    },
+    "Native": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protected_roots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Reference"
+          }
+        },
+        "registrations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NativeRegistration"
+          }
+        }
+      },
+      "required": [
+        "protected_roots",
+        "references",
+        "registrations"
+      ]
+    },
+    "Expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "creation_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "creation_journal_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "task_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_snapshot": {
+          "$ref": "#/$defs/Snapshot"
+        },
+        "native": {
+          "$ref": "#/$defs/Native"
+        },
+        "registration": {
+          "$ref": "#/$defs/PathIdentity"
+        },
+        "common_dir_mount": {
+          "$ref": "#/$defs/Directory"
+        },
+        "absence": {
+          "$ref": "#/$defs/Absence"
+        },
+        "metadata": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Metadata"
+          },
+          "minItems": 1,
+          "maxItems": 1024
+        },
+        "metadata_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 268435456
+        },
+        "protected_siblings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Sibling"
+          }
+        },
+        "resolved_head": {
+          "type": "string"
+        },
+        "head_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "creation_digest",
+        "creation_journal_digest",
+        "task_digest",
+        "source_snapshot",
+        "native",
+        "registration",
+        "common_dir_mount",
+        "absence",
+        "metadata",
+        "metadata_bytes",
+        "protected_siblings",
+        "resolved_head",
+        "head_ref"
+      ]
+    },
+    "Plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4
+        },
+        "operation": {
+          "const": "registration-prune"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "state_dir": {
+          "type": "string"
+        },
+        "backend": {
+          "const": "git"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "authorized_scopes": {
+          "type": "array",
+          "items": {
+            "const": "other"
+          },
+          "maxItems": 1
+        },
+        "registration": {
+          "$ref": "#/$defs/Registration"
+        },
+        "expected": {
+          "$ref": "#/$defs/Expected"
+        },
+        "payload_path": {
+          "type": "string"
+        },
+        "effects": {
+          "const": [
+            "remove-registration"
+          ]
+        },
+        "recovery_limits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "plan_id",
+        "digest",
+        "source_path",
+        "state_dir",
+        "backend",
+        "mode",
+        "authorized_scopes",
+        "registration",
+        "expected",
+        "payload_path",
+        "effects",
+        "recovery_limits"
+      ]
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4
+        },
+        "command": {
+          "const": "tidy-plan"
+        },
+        "operation": {
+          "const": "registration-prune"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "refused",
+            "error"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "git",
+            "unknown"
+          ]
+        },
+        "plan": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionOutcome"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "command",
+        "operation",
+        "status",
+        "backend",
+        "plan",
+        "actions",
+        "diagnostics",
+        "limitations"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "const": "git"
+              },
+              "plan": {
+                "$ref": "#/$defs/Plan"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "plan": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
