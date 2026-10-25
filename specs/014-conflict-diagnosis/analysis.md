@@ -1,26 +1,14 @@
 # Specification analysis report: Conflict diagnosis and integration preflight
 
-**Date**: 2026-10-25 | **Scope**: complete requested Markdown artifacts in this
-feature directory. Author-performed installed Spec Kit analysis, not independent
-CLEAR and not implementation/conformance evidence. Analysis itself is read-only;
-the author incorporates its report here under the approved artifact-writing task.
+**Date**: 2026-10-25 | **Scope**: complete feature artifacts. This is an author
+consistency report, not independent review or implementation/conformance evidence.
 
-## Context and method
-
-Used existing feature selection only:
-`SPECIFY_FEATURE_DIRECTORY=specs/014-conflict-diagnosis SPECIFY_FEATURE_NO_PERSIST=1`.
-The installed `check-prerequisites.sh --json --require-spec --require-tasks --include-tasks`
-passed and resolved this worktree's exact existing feature directory, with research,
-data-model, contracts and tasks available. No feature/config file was persisted,
-new feature created or arbitrary extension hook executed; no extensions are
-configured. Templates guided structure without replacing existing feature history.
+## Analysis scope
 
 Compared stories/FR/SC, design boundaries, semantic profiles, data fields, finite
 limits, TDD dependencies and task paths. Checked constitution I–V and surrounding
-Specs 011–016, 020, 022, 025, 030, 032, 040–043. Refreshed 012/015 texts were read
-in their separate worktrees for vocabulary alignment only; they are not asserted
-to be merged at this branch's base. Only existing spec paths are linked here;
-proposed neighboring seams/contracts are dependencies, not available exported APIs.
+Specs 011–016, 020, 022, 025, 030, 032, 040–043. Proposed neighboring seams and
+contracts are dependencies, not claims that exported APIs already exist.
 
 ## Findings and owner decisions
 
@@ -67,7 +55,7 @@ future implementation can execute in disposable fixtures.
 | FR-019 | Yes | T011–T014 | Default handoff includes a secret-bearing unselected file; assert no body. Accepted selected hunk returns exact origin/span/limits; binary/sensitive-policy/unknown terms carry omission reasons. |
 | FR-020 | Yes | T005–T006, T021–T022, T025–T028 | Supply 201 commits, 2,001 paths, 33 hunks and failed cleanup in separate fixtures; assert named bound/incomplete/residue, never silent complete truncation or predicted-clean success. |
 | FR-021 | Yes | T003–T004, T009–T010, T023–T024 | Try jj preview with source and scratch sharing an operation store; assert capability-unavailable before replay and unchanged stored working copy/oplog, including colocation; also require unavailable native aggregate semantics to refuse without fake Git suffix or tip-only clean proof. |
-| FR-022 | Yes | T004, T016–T018, T027 | Pass a preview with changed destination/profile to a fake consumer gate; assert rejection and no imported scratch object/recovery root/journal or apply/push/review authorization. Check that docs-only push uses docs checks plus pure-rebase equality, code push requires exact-actual-new-SHA review, and Ready always requires exact-current-head independent CLEAR, green CI and rebaseable. |
+| FR-022 | Yes | T004, T016–T018, T027 | Pass a preview with changed destination/profile to a fake consumer gate; assert rejection and no imported scratch object/recovery root/journal or apply/push/review authorization. |
 | SC-001 | Yes | T003–T004, T029 | Execute each declared scenario for every enabled minimum/current native lane; unsupported shape yields explicit capability reason and a missing mandatory lane blocks acceptance. |
 | SC-002 | Yes | T021–T022, T029–T030 | Inject native failure, cancellation and race while recorders watch hooks/helpers/network/source writes; assert zero undeclared effects and truthful incomplete/partial outcome. |
 | SC-003 | Yes | T027–T029 | Validate future complete/incomplete/error JSON offline; compare all existing published/hidden schema/fixture digests and exercise hidden restack-plan incomplete exit 3 unchanged. |
@@ -112,13 +100,11 @@ No exception/amendment proposed; OQ gates preserve these requirements.
 - Retained decisions: 6 (5 HIGH capability/privacy/native-semantics findings, 1 MEDIUM compatibility finding).
 - Independent review: pending exact-current-head review; this report is author analysis only.
 - Product/conformance/mutation tests, builds and full make check: not run; not claimed passing.
-- Documentation checks executed: `python3 -I -B scripts/check-docs.py` passed (361 authored documents), `typos specs/014-conflict-diagnosis` passed, and `git diff --check` passed. The explicit no-persist analysis prerequisite also passed. No native acceptance is inferred from these checks.
 
 ## Next actions
 
 Resolve the affected owner decisions and measure their native capabilities before
 implementation; obtain independent exact-head artifact review. Then execute the
 accepted unit's red-first tasks and record actual effects/conformance evidence.
-No permission question or new runtime action is implied: routine author corrections
-are already in scope, publication is controlled by the coordinator and merge/live
-operations retain their separate owner gates.
+Publication gates belong to Spec 016; this feature supplies evidence, not
+authorization or a publication-policy implementation.

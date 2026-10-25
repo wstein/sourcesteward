@@ -153,15 +153,6 @@ inputs, semantic profile/options and completeness. It must revalidate ownership,
 protections, worktrees, configuration, expected refs and all mutation guards;
 real apply candidate evidence and actual commit identity checks remain its own.
 Spec 013 creates its own checkpoint/recovery and reverse-action plan. Spec 016
-requires its separate action authorization, observed full remote SHA and applicable
-publication gates; preflight supplies none of them. For a documentation/specification-only
-topic push, the change-class policy requires the applicable documentation checks
-and, for a pure rebase, equal `git range-diff` proof; independent review before that
-push is not required. A branch changing code, tests, scripts or generated files
-requires independent review of the exact actual new SHA before push; a pure rebase
-with equal range-diff may use the middle-tier reviewer. Ready always requires
-independent CLEAR at the exact current head, green required CI, `rebaseable == true`
-and no remaining scope blocker, regardless of change class. A head change
-invalidates its exact-head review evidence. Spec 043 stays a separate human-only
-invocation. No evidence here authorizes apply, lease push, PR edit, Ready, merge,
-tag, release or settings.
+owns publication and Ready gates; preflight evidence satisfies none of them.
+Spec 043 stays a separate human-only invocation. No evidence here authorizes
+apply, lease push, PR edit, Ready, merge, tag, release or settings.

@@ -29,6 +29,5 @@ choices remain visible in [spec](../spec.md#needs-owner-decision); no arbitrary
 answer is invented to tick a checklist. Hunk/native merge/native jj preview
 capabilities stay disabled until their gates pass. No product code/tests/builds,
 full make check, schemas or progress/commands changes are part of this amendment.
-Installed Spec Kit guidance is applied to the existing directory with no-persist
-feature selection; no extension hooks are configured. Independent review and
-publication stay separate from document-author checks.
+Independent review and native implementation acceptance remain separate from
+this author document-quality checklist.
