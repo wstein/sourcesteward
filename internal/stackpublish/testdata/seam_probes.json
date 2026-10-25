@@ -1,0 +1,202 @@
+[
+ {
+  "name": "os import",
+  "source": "package p\nimport \"os\"\n",
+  "violation": true
+ },
+ {
+  "name": "exec import",
+  "source": "package p\nimport \"os/exec\"\n",
+  "violation": true
+ },
+ {
+  "name": "net import",
+  "source": "package p\nimport \"net/http\"\n",
+  "violation": true
+ },
+ {
+  "name": "x/sys import",
+  "source": "package p\nimport \"golang.org/x/sys/unix\"\n",
+  "violation": true
+ },
+ {
+  "name": "hosting import",
+  "source": "package p\nimport \"github.com/wstein/sourcesteward/internal/hosting\"\n",
+  "violation": true
+ },
+ {
+  "name": "workspace import",
+  "source": "package p\nimport \"github.com/wstein/sourcesteward/internal/workspace\"\n",
+  "violation": true
+ },
+ {
+  "name": "time.Now",
+  "source": "package p\nimport \"time\"\nvar _ = time.Now()\n",
+  "violation": true
+ },
+ {
+  "name": "time.Since",
+  "source": "package p\nimport \"time\"\nvar _ = time.Since(time.Time{})\n",
+  "violation": true
+ },
+ {
+  "name": "goroutine",
+  "source": "package p\nfunc f() { go f() }\n",
+  "violation": true
+ },
+ {
+  "name": "os/user",
+  "source": "package p\nimport \"os/user\"\nvar _, _ = user.Current()\n",
+  "violation": true
+ },
+ {
+  "name": "filepath glob",
+  "source": "package p\nimport \"path/filepath\"\nvar _, _ = filepath.Glob(\"/etc/*\")\n",
+  "violation": true
+ },
+ {
+  "name": "template files",
+  "source": "package p\nimport \"text/template\"\nvar _, _ = template.ParseFiles(\"/etc/passwd\")\n",
+  "violation": true
+ },
+ {
+  "name": "log",
+  "source": "package p\nimport \"log\"\nfunc f() { log.Print(1) }\n",
+  "violation": true
+ },
+ {
+  "name": "aliased time Now",
+  "source": "package p\nimport t \"time\"\nvar _ = t.Now()\n",
+  "violation": true
+ },
+ {
+  "name": "aliased LoadLocation",
+  "source": "package p\nimport t \"time\"\nvar _, _ = t.LoadLocation(\"UTC\")\n",
+  "violation": true
+ },
+ {
+  "name": "dot time",
+  "source": "package p\nimport . \"time\"\nvar _ = Now()\n",
+  "violation": true
+ },
+ {
+  "name": "context timeout",
+  "source": "package p\nimport \"context\"\nvar _, _ = context.WithTimeout(context.Background(), 1)\n",
+  "violation": true
+ },
+ {
+  "name": "time Local",
+  "source": "package p\nimport \"time\"\nvar _ = time.Local\n",
+  "violation": true
+ },
+ {
+  "name": "init Println",
+  "source": "package p\nimport \"fmt\"\nfunc init() { fmt.Println(1) }\n",
+  "violation": true
+ },
+ {
+  "name": "plain init",
+  "source": "package p\nfunc init() {}\n",
+  "violation": true
+ },
+ {
+  "name": "fmt Print",
+  "source": "package p\nimport \"fmt\"\nfunc f() { fmt.Print(1) }\n",
+  "violation": true
+ },
+ {
+  "name": "fmt Fprintln",
+  "source": "package p\nimport \"fmt\"\nfunc f() { fmt.Fprintln(nil, 1) }\n",
+  "violation": true
+ },
+ {
+  "name": "fmt Scan",
+  "source": "package p\nimport \"fmt\"\nfunc f() { var s string; fmt.Scan(&s) }\n",
+  "violation": true
+ },
+ {
+  "name": "aliased Println",
+  "source": "package p\nimport f \"fmt\"\nfunc g() { f.Println(1) }\n",
+  "violation": true
+ },
+ {
+  "name": "Local method",
+  "source": "package p\nimport \"time\"\nvar _ = time.Time{}.Local()\n",
+  "violation": true
+ },
+ {
+  "name": "In method",
+  "source": "package p\nimport \"time\"\nfunc f(t time.Time) { _ = t.In(nil) }\n",
+  "violation": true
+ },
+ {
+  "name": "blank fmt",
+  "source": "package p\nimport _ \"fmt\"\n",
+  "violation": true
+ },
+ {
+  "name": "method value In",
+  "source": "package p\nimport \"time\"\nfunc f(t time.Time) { g := t.In; _ = g }\n",
+  "violation": true
+ },
+ {
+  "name": "method expression Local",
+  "source": "package p\nimport \"time\"\nvar _ = time.Time.Local\n",
+  "violation": true
+ },
+ {
+  "name": "method value Local",
+  "source": "package p\nimport \"time\"\nfunc f(t time.Time) { g := t.Local; _ = g }\n",
+  "violation": true
+ },
+ {
+  "name": "spaced dot Now",
+  "source": "package p\nimport \"time\"\nvar _ = time .Now()\n",
+  "violation": true
+ },
+ {
+  "name": "spaced dot Println",
+  "source": "package p\nimport \"fmt\"\nfunc f() { fmt .Println(1) }\n",
+  "violation": true
+ },
+ {
+  "name": "LoadLocation",
+  "source": "package p\nimport \"time\"\nvar _, _ = time.LoadLocation(\"UTC\")\n",
+  "violation": true
+ },
+ {
+  "name": "time.Unix",
+  "source": "package p\nimport \"time\"\nvar _ = time.Unix(0, 0)\n",
+  "violation": true
+ },
+ {
+  "name": "fmt Sscanf",
+  "source": "package p\nimport \"fmt\"\nfunc f() { var s string; fmt.Sscanf(\"x\", \"%s\", &s) }\n",
+  "violation": true
+ },
+ {
+  "name": "allowed: listed imports and time values",
+  "source": "package p\nimport (\n\t\"fmt\"\n\ttm \"time\"\n\t\"github.com/wstein/sourcesteward/internal/attribution\"\n)\nvar _ tm.Duration = tm.Second\nvar _ = fmt.Sprint\n",
+  "violation": false
+ },
+ {
+  "name": "allowed: Errorf Sprintf Sprintln",
+  "source": "package p\nimport \"fmt\"\nvar _ = fmt.Errorf(\"x\")\nvar _ = fmt.Sprintf(\"%d\", 1)\nvar _ = fmt.Sprintln(1)\n",
+  "violation": false
+ },
+ {
+  "name": "allowed: time constants and RFC3339",
+  "source": "package p\nimport \"time\"\nvar _ time.Duration = 5 * time.Millisecond\nvar _ = time.RFC3339\nvar _ time.Time\n",
+  "violation": false
+ },
+ {
+  "name": "allowed: strings.Index is not the In method",
+  "source": "package p\nimport \"strings\"\nvar _ = strings.Index(\"a\", \"b\")\n",
+  "violation": false
+ },
+ {
+  "name": "allowed: initialize is not init",
+  "source": "package p\nfunc initialize() {}\n",
+  "violation": false
+ }
+]
