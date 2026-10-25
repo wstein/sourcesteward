@@ -51,6 +51,14 @@ implementations; this plan is ready for design review, not unqualified implement
 - `internal/conflict/scratch.go`, `replay_git.go`, `preflight_jj.go`: enforce
   disposable ownership, capability admission and the accepted native replay effects. Source objects
   are read-only alternates; writable objects/config/locks/temp files stay private.
+- `internal/conflict/preflight.go`: T018 operation shell coordinates admission,
+  native input samples, pure binding comparison and declared replay/lifecycle edges.
+- `internal/conflict/merge_git.go`: T020 accepted native merge-profile prediction;
+  no strategy fallback or enablement before owner/capability gates.
+- `internal/conflict/handoff.go`: T012 pure body-free handoff values and inert
+  explanations; content/privacy extraction remains at the separate context edge.
+- `internal/conflict/render.go`: T028 bounded typed serialization, shared by human
+  and structured output without importing native execution into CLI rendering.
 - `internal/conflict/context.go`: opt-in selected-path hunk extraction behind
   OQ-HUNK, never an arbitrary file reader or resolver.
 - `internal/cli/conflict.go`: no-subcommand help, explicit leaves, typed output
