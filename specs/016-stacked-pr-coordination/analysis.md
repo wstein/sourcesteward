@@ -30,7 +30,7 @@ Every tagged task is included here (bidirectional mapping); none is checked.
 
 | Requirement | Task ids | Literal future test idea |
 | --- | --- | --- |
-| FR-001 | T013, T014 | Same name with different head repository/SHA never verifies linkage; reject wrong producer/kind/version and 035 restack-needed event as 012 finding, never using its merge-commit parent as trunk/target. |
+| FR-001 | T013, T014 | Same name with different head repository/SHA never verifies linkage; reject wrong producer/kind/version and 035 restack-needed event as 012 restack-advised finding, never using its merge-commit parent as trunk/target. |
 | FR-002 | T013, T014 | Offline supplied PR URLs/evidence cause zero auth, HTTP, fetch and cache calls. |
 | FR-003 | T006, T008, T010, T016, T022 | Empty selection has zero actions; unsaved default has null id/zero plan writes; explicit nonempty --save needs validated directory, and each effect exposes exact target/blocker. |
 | FR-004 | T009, T010, T019, T031 | Move head/base or revoke permission before action two; action two refuses before its intent/write. |
@@ -53,7 +53,7 @@ Every tagged task is included here (bidirectional mapping); none is checked.
 | FR-021 | T002, T003, T020, T021 | Current GET mode rejects every proposed write; new admitted mode rejects arbitrary method/path/body/URL. |
 | FR-022 | T002, T006, T008, T025, T026 | Default render never creates/writes a store; explicit save requires validated directory; apply rejects unsaved ids; failed durable intent means zero remote writes and failed outcome persistence means unknown. |
 | FR-023 | T002, T033, T037 | Future shared flag fixtures reject unproposed --offline (usage 2), preserve 033/037 polarity and current surfaces/hidden 015 incomplete exit 3. |
-| FR-024 | T013, T014, T028, T037 | Local preflight/apply receipt alone cannot start sync/push/link/checkpoint/Ready or authenticate. |
+| FR-024 | T013, T014, T028, T037 | Reject unpinned/contaminated 014 attribute-source evidence and unaccepted jj aggregate semantics; 013 independent safety copies/no-head-CAS samples and local preflight/apply never authorize sync/push/link/Ready/authentication. |
 | FR-025 | T032, T037 | Render readable-off and on/unreadable owner orders; zero landing/default push/delete calls. |
 | FR-026 | T028, T032, T037 | Resync uses full old pushed SHA, actual new SHA and labelled destructive reset path; never executes. |
 | FR-027 | T003, T007, T014 | Reverse independent read completion; output remains input-index ordered under one shared budget. |
@@ -102,10 +102,31 @@ never new public or journal evidence; D5 no-session behavior is preserved.
 
 Future 016 0/1/2 does not migrate hidden 015 v1 exit 3. JSON blocks are unpublished
 illustrations; this artifact set adds no JSON/schema/code/generated file. 012's
-network scope/name and shared human/timeout admission remain open. 013/014/015
-new design files in sibling changes are not assumed present on main: cross-spec
-links here target existing specifications, while this feature's own files link
-within this self-contained set.
+network scope/name, shared human/timeout admission and SC-009 reachable fanout
+entry remain open. The 012/013/014/015 design artifacts are merged on main;
+this integration uses current 012 restack-advised, 013 independent safety-copy/
+invoker-working-copy/no-jj-CAS limits and 014 full-H attribute-source/T033 plus
+OQ-JJCONF qualifications. The hidden-v1 code follow-up issue #241 is separate;
+merged documentation does not repair or verify that implementation. Spec 015
+D7 plumbing/quarantine/CAS and D8 publication handoff stay unchanged.
+
+## Current toolbelt design inventory
+
+The current merged design files, plus this 016 design, give the following
+literal requirement/task counts. These count documentation coverage and preserve
+historical checkboxes; they do not claim that a new runtime capability is accepted.
+
+| Feature | FR | SC | Task ids | Checked historical tasks | Status boundary |
+| --- | --- | --- | --- | --- | --- |
+| 012 | 20 | 9 | 38 | 0 | Merged design; restack-advised finding, SC-009/OQ-FANOUT entry gate |
+| 013 | 14 | 4 | 40 | 0 | Merged design; independent safety-copy lifetime, native jj admission/concurrency limits |
+| 014 | 22 | 8 | 33 | 0 | Merged design; T033 attribute-source red gate, code follow-up #241 and native/profile OQs |
+| 015 | 34 | 8 | 44 | 20 | Merged design/source history; 20 of original 24 checked, T004 deliberately skipped and T021/T023/T024 open; 20 new future tasks unchecked |
+| 016 | 30 | 8 | 38 | 0 | Proposed publication design, seven owner-decision groups; no implementation |
+| Total | 120 | 37 | 193 | 20 | 157 individual FR/SC rows; 173 unchecked tasks, including historical/open items |
+
+Exact-head document review is recorded in the relevant PR evidence; this author
+report claims no independent review or runtime acceptance.
 
 ## Verification and next bounded step
 
