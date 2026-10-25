@@ -134,16 +134,16 @@ summary: 1 fast-forwarded, 1 diverged, 1 skipped detached
 Results per repository: `up-to-date`, `ahead`, `fast-forwarded`, `rebased`, `merged` (plan: `fast-forward`, `rebase`, `merge`),
 `diverged`, `skipped-dirty` (local changes the update would overwrite, or git refused), `skipped-detached`,
 `skipped-no-upstream` (also when the remote branch is gone), `skipped-busy` (rebase, merge, cherry-pick, revert or
-bisect in progress, or locked), `skipped-uninitialized`,
+bisect in progress), `skipped-uninitialized`, `updated` and `unreachable` (only with `--submodules`),
 `conflict` (a rebase stopped on a conflict and is left in progress, as git leaves it; git's own message is printed),
 `autostash-conflict` (the update is done, the stash is kept; its OID is reported as `stash_oid` and stored in the journal record) and `failed`. Exit status: 1 only when the run is
-refused (a jj-owned or non-Git path) or a repository ended `failed`, `conflict` or `autostash-conflict`; skipped
-repositories exit 0; usage errors exit 2 before any effect.
+refused (a jj-owned or non-Git path) or a repository ended `failed`, `conflict`, `autostash-conflict` or `unreachable`;
+skipped and `diverged` repositories exit 0; usage errors exit 2 before any effect.
 
 Before each branch change a `sync` journal record (`.git/stw/sync/RUN_ID.json` of that repository) and a recovery
 ref `refs/stw/recovery/sync/RUN_ID/N` are written and the record is completed afterwards; HEAD and `ORIG_HEAD` are
-checked around `git merge --ff-only NEW_OID` and `git rebase`. A submodule HEAD moved by the superproject is not
-touched. As its last step a run that completed a journaled branch change in a repository removes, in that repository,
+checked around `git merge --ff-only NEW_OID` and `git rebase`. A submodule HEAD is not moved when the superproject's own update changes its
+gitlink (`submodule.recurse` is overridden). As its last step a run that completed a journaled branch change in a repository removes, in that repository,
 the records and recovery refs of the runs older than the ten most recent completed runs (the current run is always
 kept and counts as one); a run with an incomplete record is kept, a recovery ref is deleted only inside its own run's
 namespace and while it still points at the journaled old OID, and no other ref is removed. A recovery ref that is
