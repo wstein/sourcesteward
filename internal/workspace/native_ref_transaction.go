@@ -18,8 +18,8 @@ var errGitRefTransaction = errors.New("prepared Git reference transaction refuse
 // (bwrap's git) may still run.
 var errGitRefDescendants = errors.New("sandbox descendants of the stopped Git process may still run")
 
-// gitRefDescendantWait bounds how long a finished transaction waits for its
-// descendants to release stderr.
+// gitRefDescendantWait bounds, together with the original context, how long a
+// finished transaction waits for its descendants to release stderr.
 var gitRefDescendantWait = 5 * time.Second
 
 type gitRefTransactionOutcome struct{ Prepared, CommitAttempted, Committed, Uncertain bool }
@@ -144,6 +144,9 @@ func startGitRefTransaction(ctx, runCtx context.Context, cancel context.CancelFu
 		_, e := io.CopyBuffer(&capture, &nativeCountReader{r: stderr, limit: nativeOutputLimit}, buffer[:])
 		if e != nil {
 			cancel()
+			// Keep draining to end of file: finish learns about sandbox descendants
+			// only from the end of stderr, whatever stopped the capture.
+			io.Copy(io.Discard, stderr)
 		}
 		t.stderrDone <- gitRefStderr{capture.data, e}
 	}()
@@ -229,12 +232,24 @@ func (t *gitRefTransaction) finish(kill bool) error {
 	wait := time.NewTimer(gitRefDescendantWait)
 	select {
 	case stderr = <-t.stderrDone:
-		wait.Stop()
 	case <-wait.C:
 		descendants = true
+	case <-t.ctx.Done():
+		// The original context bounds close and reap as well. A capture that
+		// ended at the same moment still counts as a clean end.
+		select {
+		case stderr = <-t.stderrDone:
+		default:
+			descendants = true
+		}
+	}
+	wait.Stop()
+	if descendants {
 		t.stderr.Close()
 		stderr = <-t.stderrDone
-		stderr.err = nil
+		if !errors.Is(stderr.err, errNativeStreamLimit) {
+			stderr.err = nil
+		}
 	}
 	waitErr := t.cmd.Wait()
 	t.stdout.Close()

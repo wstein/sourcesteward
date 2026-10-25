@@ -125,6 +125,11 @@ func TestRefTransactionStderrFloodDoesNotSkipTheDescendantWait(t *testing.T) {
 	gitRefDescendantWait = 100 * time.Millisecond
 	t.Cleanup(func() { gitRefDescendantWait = old })
 	tx, release, _ := refTransactionWithDescendant(t, "spawn-flood")
+	// The capture hitting its limit cancels the run, which closes stdout: wait for
+	// that, so that the flood is certainly over before finish is called.
+	if n, err := tx.output.Read(make([]byte, 1)); n != 0 || err == nil {
+		t.Fatalf("unexpected output after the flood: %d %v", n, err)
+	}
 	err := tx.finish(true)
 	if !errors.Is(err, errNativeOutputLimit) {
 		t.Fatalf("flood past the stderr limit was not reported: %v", err)
