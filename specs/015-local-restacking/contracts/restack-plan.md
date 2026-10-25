@@ -135,7 +135,10 @@ limitation stays reserved pending T024; documents do not claim it is emitted.
 `texts.lease_push.observed_old_sha` is the local observed branch head, not a fresh
 remote advertisement. A consumer cannot use it as Spec 016's remote lease proof.
 The existing text is inert human output only. A future 016 action must separately
-observe the full remote SHA, bind the exact actual new SHA, verify independent
-review/check/identity/attribution and require its own plan id plus authorization.
+observe the full remote SHA, bind the exact actual new SHA, apply the
+class-dependent [review policy](restack-apply.md#spec-016-handoff), check the full
+observed-default..actual-new-head identity range against the trusted owner only,
+report user-config origins, and require its own plan id plus authorization.
+The historical D9 prediction flag list is not a widened push identity allowlist.
 Owner reset/resync text is never executed. This observation never authorizes the
 [proposed apply/recovery](restack-apply.md) or any remote action.

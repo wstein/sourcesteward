@@ -20,7 +20,9 @@ stw restack apply --plan PLAN_ID --state-dir DIR --authorize-local [--json]
 `--contract 2`, `--save`, `--committer`, `--task`, `--owner`, `--state-dir` and
 `--authorize-local` are **proposed**, not current restack flags. Plain v1 planning
 keeps its existing options and never stores an executable plan. The future
-selector is not chosen until OQ-1 is settled. Omitting an apply plan id or local
+selector is not chosen until OQ-1 is settled. Unlike historical v1 D9 prediction
+flags, actual-apply `--identity`/`--committer` are assertions that must match the
+trusted owner identity (OQ-2/OQ-3); repeatable caller values cannot widen it. Omitting an apply plan id or local
 authorization produces a usage error; no prompt or effect is substituted.
 A complete plan is evidence; authorization names only that plan's local effects.
 
@@ -56,7 +58,8 @@ the owner's workflow. A detached caller may inspect but is never switched.
    dropped, added or empty commit, and equal own diffs. Require parent-integration
    proof from v1's qualified cherry/tree method; unsupported proof refuses.
    Read author AND committer from every actual candidate commit and compare with
-   the explicit allowed owner identities; unknown/fail refuses. Neither clean
+   exactly the trusted owner identity under OQ-2/OQ-3; unknown/fail or any
+   caller attempt to extend that set refuses. Neither clean
    replay nor equality proves semantic correctness or authorizes publication.
 5. Prepare the typed [journal and recovery root](recovery.md), storing the full
    known candidate SHA durably before the target move. Verified candidate objects
@@ -160,6 +163,18 @@ docs-only exemption or middle-tier pure-rebase allowance. Review-required code
 uses accepted independent CLEAR for the exact actual new SHA, never an old or
 predicted head. Spec 043 `--reviewed SHA` remains the separately invoked human
 owner's statement, not agent independent-review evidence or a policy override.
+
+Before every push, Spec 016 must inspect author AND committer fields across
+`OBSERVED_REMOTE_DEFAULT_FULL_SHA..ACTUAL_NEW_HEAD_FULL_SHA`, not merely
+`new_parent..candidate_head`. That range includes an open parent's commits when
+restacking a child onto its new head. The allowed identity is exactly the owner
+from a trusted policy source; caller-supplied repeatable `--identity` values
+cannot add another identity. Missing/foreign identities refuse. Also report
+bounded `git config --show-origin --get-regexp '^user\.'` evidence for all
+user configuration scopes, including local and global origins; any foreign
+`user.name`/`user.email` refuses. Read/report only, never write or repair config.
+The remote-default identity and native objects must be complete and freshly
+bound by the separate 016 plan; no implicit fetch occurs inside 015.
 
 Every selected push/link/retarget has its own authorization flag and remote plan
 id, with fresh attribution/identity and the checks required by its scope. A
