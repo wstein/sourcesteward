@@ -1,9 +1,14 @@
 # Contract: Selected Forge Effects
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **UNPUBLISHED proposal**. No command, API write or schema is implemented by this
 contract. Existing published JSON bytes and hidden Spec 015 v1 behavior stay
-unchanged. Pending owner choices in [research](../research.md#needs-owner-decision)
-block their affected capabilities.
+unchanged. Dated owner decisions in [research](../research.md#owner-decisions-2026-10-25)
+are settled; implementation/measurement gates still block unverified capabilities.
 
 ## Proposed command surface
 
@@ -12,7 +17,7 @@ stw stack publish
 stw stack publish plan PATH --repo OWNER/NAME --observation FILE
     [--select ACTION_ID ...] [--online] [--state-dir DIR] [--save]
     [--timeout DURATION] [--json | --human]
-stw stack publish apply PATH --plan ID --state-dir DIR --online
+stw stack publish apply PATH --plan ID [--state-dir DIR] --online
     --authorize-remote ACTION_ID [--authorize-remote ACTION_ID ...]
     [--timeout DURATION] [--json | --human]
 ```
@@ -38,31 +43,26 @@ requires explicit online mode, exact stored plan and each selected action's own
 `--authorize-remote ACTION_ID`; a missing authorization refuses that action before
 any write. Additional authorization ids outside the stored selection are usage
 errors. Local `--authorize`, an old receipt or a generic `--yes` is insufficient.
-The deterministic draft persistence rule is render-only by default: without
-`--save`, do not create/repair a store or write a plan, and emit `saved: false`,
-`plan_id: null`. A nonempty plan is persisted only with explicit `--save` AND
-`--state-dir DIR`, where DIR is an existing validated private directory. Missing
-DIR with `--save` is usage 2. No default directory is selected until OQ-SURFACE/
-OQ-STORE accepts one. A supplied `--state-dir` without `--save` may read existing
-task evidence only; it never creates/repairs the directory or persists the plan.
-Saving an empty selection returns nothing-selected with no store write and null
-plan id. A successful nonempty save reports `saved: true` and the immutable
-stored plan id; blocked actions can be saved as review data, never permission.
-Apply requires that exact existing saved id and explicit validated directory;
-an unsaved result, nonexistent id or unreadable record cannot be applied.
+The decided persistence rule stays unsaved rendering by default (saved:false,
+plan_id:null). Explicit --save uses the trusted workspace .work/stw/plans default
+or explicit --state-dir PLAN_DIR, under the owner profile's namespace, modes,
+no-follow/layout/race, ignore/untracked/export-risk, quota and fsync guards.
+No selection persists nothing. Only explicit save may create the validated plan namespace; separately
+authorized apply may create its declared validated action-journal namespace
+after durable admission. Read/preview never creates/repairs either. --state-dir alone
+reads existing metadata; it is not an external payload store. Successful save
+reports the immutable id; apply requires it plus each remote authorization.
+Unknown workspace, tracked/not-ignored store, quota-full or unsafe ownership
+refuses without changing ignore/config/index. Captured 013 bytes stay external.
 
 No flag widens agent ownership. Standalone comments cannot be authorized by this first surface; they are deferred original-draft scope, not an initial action. No interactive confirmation/editor/pager is used.
 
-Human is default, `--human` forces it, and it excludes `--json`. `--timeout` must
-be positive and at most 60 s, only shortening operation limits. Unlike online-default 033/037, this proposal has no
-`--offline` flag because offline is already default; unknown `--offline` is usage
-2 until OQ-SURFACE accepts any explicit alias. Do not inherit opposite-polarity
-flags or network defaults from another command. `--state-dir` is
-one validated private store for plans/action records, outside every repository,
-user-owned, real, mode 0700, no symlink component; unsafe/unreadable store refuses.
-There is no proposed implicit default or automatic store creation; future
-default/provenance changes remain OQ-SURFACE/OQ-STORE. No state-path environment
-dump. Explicit save is a disclosed private-state write, never a repository mutation.
+Human is default; --human excludes --json. Positive --timeout only shortens
+60 seconds/earlier deadlines; --offline is not accepted because default is
+offline. Only --online opts into bounded reads, never writes. --state-dir selects
+plan/action METADATA, default validated workspace .work per the owner profile.
+Explicit save is disclosed metadata writing; this unimplemented target grants no
+native acceptance and never auto-edits .gitignore or relocates payload bytes.
 
 ## Capability/effect table
 
@@ -203,7 +203,7 @@ Stable proposed refusal reasons include `ownership-unknown`, `not-owned`,
 `scope-not-accepted`, `native-rewrite-pending`, `stack-too-deep`,
 `outcome-unknown`, `bound-exceeded`, `cancelled`, `journal-failed`.
 Codes are command-local namespaces, not undocumented aliases of 012/015 codes.
-The historical hidden 015 v1 incomplete exit 3 remains unchanged (OQ-EXIT).
+CURRENT hidden 015 code still exits3 incomplete; decided exit-contract revision2 targets1 after its red-first task, with no legacy3 selector and unchanged schema1 bytes.
 
 An illustrative UNPUBLISHED empty-selection result (not an executable schema):
 

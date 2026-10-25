@@ -1,5 +1,10 @@
 # Feature Specification: Stacked PR Coordination
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **Feature Branch**: `codex/spec-016-stack-toolbelt` (specification only)
 **Created**: 2026-10-15 | **Updated**: 2026-10-25
 **Status**: Draft design; implementation, independent exact-head review and native conformance pending. All new contracts are UNPUBLISHED Markdown proposals.
@@ -35,7 +40,7 @@ These local safety requirements do not supply a publication receipt or authority
 No capability is implemented by this document. Spec 015 D4–D9 and D12–D13 remain
 binding: first Git-only plan, explicit old/new parent and branch without a hard
 012 dependency, plumbing/quarantine plus CAS rather than porcelain rebase, and
-push in 016 (D8). Hidden 015 v1 and its exit 3 stay unchanged.
+push in 016 (D8). JSON schema 1 bytes stay frozen; CURRENT hidden 015 code 3 becomes target1 only after the decided revision2 implementation task.
 
 Spec 043 owns the human owner's separate landing invocation, its conditional
 retarget order and deletion gates. An agent never invokes landing apply, merges,
@@ -47,7 +52,6 @@ The blanket remote-deletion exclusion is deliberate for this initial capability,
 even where the broader workspace policy permits an agent's own landed-branch
 cleanup. Spec 043 owner deletion gates and separately authorized cleanup workflows
 remain separate; 016 offers no remote-delete action.
-
 
 ## User Scenarios & Testing
 
@@ -195,18 +199,18 @@ and boundary fixtures for every declared backend/version/platform capability.
 - **FR-009**: Use one understandable human/versioned JSON result for success, refusal, incomplete and partial outcomes; preserve published contracts byte-for-byte. Require no prompt, editor or pager.
 - **FR-010**: Enforce finite documented request, action, byte, record and time bounds, cancellation and per-source completeness. Missing, truncated or failed evidence never becomes success or permission.
 - **FR-011**: Require failing-first safety/conformance tests, independent exact-source review and minimum/current supported Git/jj evidence for every declared capability; missing mandatory execution blocks acceptance.
-- **FR-012**: Default selections to none. Command groups show help without reads, writes or prompts; stored plan plus explicit remote authorization for EACH action is required to apply. An authorization for one action or an old plan never authorizes another.
+- **FR-012**: Default selections to none. Command groups show help without reads, writes or prompts; stored plan plus explicit remote authorization for EACH action is required to apply. An authorization for one action or an old plan never authorizes another. Explicit save uses the decided validated .work metadata default; rendering stays unsaved.
 - **FR-013**: Restrict agent writes to verified own task branches, own PRs and their explicitly selected own bodies. Standalone comments remain a deferred original-draft proposal under OQ-WRITES, not an enabled agent capability. Names, commit authorship hints, caller labels and visibility never establish ownership or widen scope.
 - **FR-014**: A topic push binds exactly one full destination ref, actual full new SHA and full remote old SHA observed online in this run; use only `--force-with-lease=REF:FULL_OLD_SHA` with `FULL_NEW_SHA:REF` for an existing owned topic. No plain force, bare lease, default branch or tags. Creation needs an explicitly absent-ref guard and separately measured capability; unknown absence refuses.
 - **FR-015**: Recompute `publication_range_change_class` from the UNION OF PER-COMMIT PATHS across `<observed remote default branch>..<actual new head>`, including every still-open parent commit; never classify from a net tree diff, child-only/moved range or caller path list. Adapt 015 `review_gate.change_class` into the 016-only `moved_scope_change_class` after validating accepted producer/command, kind/version, moved scope and exact actual-head binding; never read that alias as a field emitted by 015. Retain this moved-scope class separately; effective `change_class` is `code` if EITHER moved scope OR publication range contains code/tests/scripts/generated files or is unknown, and `docs-only` only when BOTH are completely proved docs-only. Compute `pure_rebase` from same-count all-`=` range-diff. Rewritten docs-only needs green local checks and, if pure rebase, equal range-diff before push; rewritten code/tests/scripts/generated requires independent review of the exact ACTUAL new SHA before push, with middle tier allowed for pure equal rebase. Create the candidate first, then review; predictions never satisfy this gate. The initial 016 capability explicitly excludes the broader workspace 2026-10-17 later-round wording-only review exception; such code-range pushes still require the code gate, without narrowing the owner's separate manual workflow.
 - **FR-016**: Before every push inspect actual author AND committer identities over `<observed remote default branch>..<new head>`, including open parent commits, against exactly the trusted owner identity; callers cannot extend the allowed set. Report bounded `user.*` origin evidence and refuse foreign `user.name`/`user.email`; never write Git configuration.
-- **FR-017**: Require explicit actual-candidate signing-policy evidence; never silently discard source signatures or invoke signing helpers. Respect pending Spec 015 signed-source/required-signature decisions and the separate Spec 043 OQ6; unresolved signed-history policy blocks publication.
+- **FR-017**: Require explicit actual-candidate signing-policy evidence; never silently discard source signatures or invoke signing helpers. The owner decided default refusal plus optional explicit local 015 host-helper re-sign; 016 validates only the final verified signed receipt, never invokes a helper under remote authorization. Missing helper/profile/signature proof refuses with no unsigned fallback; 043 lands only the exact final reviewed head.
 - **FR-018**: Ready is a separately selected remote write requiring fresh independent CLEAR for the exact CURRENT head, required CI green, `rebaseable == true`, accepted PR scope and no remaining in-scope blocker. Unknown fails closed. A docs-only push exception never weakens Ready; 025 observations are not a Ready verdict.
 - **FR-019**: Treat native stack membership/rewrites as sampled forge evidence; never compete with an observed or pending GitHub rewrite. Link/unstack execution stays capability-gated until endpoint/method/effects are measured and allowlisted. `gh stack link` is inert reference data using `GH_REPO`, validated numeric PRs bottom to top and explicit trunk base; no `-R`, branch auto-push, extension installation or generic dependency execution.
 - **FR-020**: Retarget only an explicitly selected owned child PR to the planned verified base (including default branch). Read state/head/base before and after, require head unchanged, report partial results, and invalidate old Ready evidence after any base edit. Remote permission uncertainty refuses.
 - **FR-021**: Reuse bounded hosting resolution/read evidence from Specs 020/022/025/030. Current 022 is GET-only; new writes require a reviewed additive closed method/path/body allowlist and conformance before enablement. Never accept arbitrary endpoints/methods, response URLs, generic `gh` forwarding or hidden native-stack API behavior.
 - **FR-022**: Bind immutable plans and durable action intent/outcome records to repository, task, plan/run/action ids and expected state before effects, using reviewed private-state durability conventions from Specs 010/011/032. Journal failure refuses; retry reconciles rather than blindly replays. Store no credentials or session ids in public output.
-- **FR-023**: Reconcile shared `--online`, `--human`/`--json`, shortening `--timeout` and `--state-dir` vocabulary explicitly. New command spellings are proposals pending owner decision; 012 network scope/`--pull-requests` naming remains OPEN, not owner-approved; preserve existing commands and hidden 015 v1 exits. Unlike online-default 033/037, this proposal defaults offline and proposes no --offline flag (unknown/usage 2); any alias needs OQ-SURFACE acceptance.
+- **FR-023**: Reconcile shared `--online`, `--human`/`--json`, shortening `--timeout` and `--state-dir` vocabulary explicitly. The owner chose --online only, shared human/shortening-timeout direction and .work saved-plan metadata; captured bytes remain external. Target exit-contract revision2 is 0/1/2; current hidden015code3 persists until T045/T046, with schema1 unchanged. Unlike online-default 033/037, this proposal defaults offline and proposes no --offline flag (unknown/usage 2); any alias needs OQ-SURFACE acceptance.
 - **FR-024**: Compose observation → optional preflight → separately authorized local restack → separately authorized forge plan/apply as explicit steps. No automatic sync, replay, checkpoint, resolver or child rewrite; each consumer obtains fresh own-scope evidence and recovery/authorization.
 - **FR-025**: Render both conditional Spec 043 owner landing handoffs as data only, preserving readable-off versus on/unreadable ordering and unmeasured-shape gates. 043 alone owns landing/deletion policy; 016 agents never invoke its apply.
 - **FR-026**: After a rewritten push report old pushed SHA, actual new SHA and inert owner resync commands: fetch/prune, then rebase onto remote from full old pushed SHA if local commits exist, otherwise switch/reset-hard labelled destructive. Never run those commands in the owner's checkout.
@@ -214,6 +218,9 @@ and boundary fixtures for every declared backend/version/platform capability.
 - **FR-028**: Reuse Spec 041 mode evidence and Spec 042 D5 exactly for every push/Ready. Mismatched recorded/current session refuses; recorded session with current absent refuses; human or task without recorded session is not gated by D5. Unreadable task record refuses an agent run. Codex session source stays unmeasured/absent, never guessed. Separate ownership guards still apply; no session id appears in commits, branches, PR text or output.
 - **FR-029**: Bound agent stacks to at most two open levels with a real code dependency and known bottom-to-top order; unrelated documentation PRs target default directly. Keep parallel authors' files disjoint and distinguish unknown dependency from established independence. This 016 write-policy gate is distinct from 012's advisory stack-too-deep notice, which does not block its bounded observation/plan.
 - **FR-030**: Treat repository/forge content as data, escape hostile text consistently in human/JSON output, limit body/context exposure and suppress undeclared hooks/helpers/shell/provider execution. Credentials remain only in the bounded caller-owned authentication route.
+
+- **FR-031**: Use the decided workspace .work saved-plan/action metadata profile: explicit save only, unique trusted workspace root/namespace, explicit 0700/0600 independent of umask, actor/no-follow/layout/race/fsync guards, untracked+ignored export-risk admission, no automatic ignore/config/index edits, finite quota/full refusal and no automatic unresolved expiry. Metadata-only manual cleanup has a separate exact-id plan/authorization/dependency/digest protocol; selected 013 bytes remain explicitly external.
+- **FR-032**: Consume only the final 015 host-re-sign receipt after explicit separately authorized local operation: trusted fixed host profile/verifier, old/new/signature-loss/replacement and bottom-up signed-parent provenance, final verified full SHA before independent review. No helper configured/measured disables the option; 016 never stores keys, runs local signing under remote authority or falls back unsigned. Revalidate signature policy/identity/class/current remote guards on that final SHA.
 
 ### Key Entities
 
@@ -239,7 +246,7 @@ specified in [data-model.md](data-model.md).
   needs review. GitHub operations are not a cross-action transaction and ABA may
   remain undetectable; disclose residual limits rather than infer safety.
 - Read-only stack/merge-state/PR evidence does not supply reviewer identity,
-  accepted scope or authorization. Trusted evidence sources remain an owner choice.
+  accepted scope or authorization. Trusted workspace policy supplies those sources; missing authority blocks.
 - Specs 012/013/014/015 have merged documentation designs. Their runtime
   capabilities remain planned except the hidden Git 015 v1 planner; merged
   documentation is neither native conformance nor permission to execute.
@@ -250,10 +257,9 @@ specified in [data-model.md](data-model.md).
 
 ## Needs owner decision
 
-Recommendations are not approvals. [Research](research.md#needs-owner-decision)
-records OQ-SURFACE (shared flags/network scope), OQ-POLICY (trusted review/scope/
-owner evidence), OQ-WRITES (write allowlist and endpoint measurements), OQ-NATIVE
-(native stack/jj publication capabilities), OQ-SIGN (signed history), OQ-STORE
-(typed journal integration/retention) and OQ-EXIT (future protocol compatibility).
-Affected write capabilities stay disabled until their decisions and conformance
-are accepted; deterministic offline consumption can proceed independently.
+Compatibility anchor only: all39 former OQ IDs are DECIDED by the owner on
+2026-10-25. [Research](research.md#cross-spec-decision-index) records every dated
+disposition; the shared profiles define .work metadata, external payloads,
+trusted policy, optional host-only015re-sign and exit revision2. Remaining
+source/native/helper/forge evidence gates are unimplemented acceptance work,
+not unanswered owner choices. No decision itself authorizes runtime effects.

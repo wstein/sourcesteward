@@ -1,5 +1,10 @@
 # Validation Guide: Stacked PR Coordination
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Default saved-plan metadata is .work; remote authority never runs local signing.
+> This is a documentation target, not implementation or native acceptance.
+
 **Future validation only**. No `stack publish` command is implemented by these
 artifacts. Do not run proposed writes against a real user repository. Use
 separately authorized disposable fixtures after owner decisions and implementation;
@@ -34,9 +39,10 @@ stw stack publish plan FIXTURE --repo owner/project --observation OBSERVATION_FI
 Expect help to perform zero reads/effects and a plan with no selected actions.
 Without proposed `--save`, rendering is unsaved (`saved: false`, null plan id),
 with zero plan/store writes and no directory creation/repair. For a nonempty
-selection, add proposed `--save --state-dir EXISTING_PRIVATE_DIR` to persist into
-that explicitly selected validated directory; no default store is accepted.
-`--save` without the directory is usage 2; empty selection never persists.
+selection, add --save to use the validated workspace .work metadata default, or --save
+--state-dir PLAN_DIR for an explicit admitted override. Validate unique workspace,
+ignore/untracked status, private modes/races/quota; never auto-edit ignore/config.
+Captured bytes remain external --payload-dir. Empty selection never persists.
 Apply an unsaved result or missing id and verify refusal, with no implicit save.
 Supply current 012 nested `restack-advised` evidence and separately a published
 035 `restack-needed` event: discriminate producer/kind/version and never use the
@@ -52,8 +58,8 @@ Default offline consumes bounded evidence without auth/HTTP/fetch/cache. A remot
 guard stays unknown/blocked. Verify no refs/files/index/objects/jj log changed
 except an explicitly selected `--save` private plan write.
 
-Online syntax remains an OQ-SURFACE proposal. 012's online inclusion and
-`--pull-requests`/`--online` naming are open, not owner-approved. The accepted
+Owner decision selects --online only, default offline; old --pull-requests is
+usage2 with no alias. The accepted
 `--after-fetch` hint is observation data and never fetches.
 
 ## 2. Selected own-topic lease push (US2)
@@ -74,8 +80,11 @@ code. Verify a predicted hidden-v1 SHA cannot count as actual review.
 Include an own child whose moved range has owner identities but whose open
 parent has a foreign committer. The full observed-remote-default..new-head gate
 must catch it. Leaked local/global user identity also refuses with bounded origin
-evidence and no config repair. Signed-source/signature-required uncertainty
-blocks; signing-helper and secret sentinels remain unexecuted/unexposed.
+evidence and no config repair. Default signed-source/signature-required uncertainty blocks. Explicit local015
+re-sign needs trusted host helper/verifier and its own stored plan/authorization;
+remote flags never run it. Verify final signed parent chain, public signer/loss
+provenance and final SHA before review. No configured helper means unavailable;
+no unsigned fallback or stw keys. Preflight/prediction sentinels stay unexecuted.
 
 ## 3. PR writes, retarget and native capability (US2)
 
