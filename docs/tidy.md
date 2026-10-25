@@ -26,10 +26,16 @@ expert layer described in the rest of this guide).
 ```text
 $ stw tidy
 Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
+
+Repositories:
 sourcesteward   base refs/heads/main (origin/HEAD)
-  [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
-  [2] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
-summary: 1 safe, 1 retain
+
+owner claude (own)
+  sourcesteward
+    [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
+    [-] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
+
+summary: 1 safe (1 own, 0 other), 1 retain
 
 Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner  [d]etails N  [n]one (default n): a
 Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
@@ -45,7 +51,7 @@ and base (the local branch of the remote's symbolic HEAD, else the remote-tracki
 (`${XDG_STATE_HOME:-~/.local/state}/stw/workspace` or `$STW_STATE_DIR`) and every `--state-dir`; the first valid store holds the plan set.
 
 **Modes.** Human mode needs a terminal on both stdin and stdout and no agent marker (`STW_AGENT`, `CLAUDECODE`, `CLAUDE_CODE_*`,
-`CODEX_*`, `AGY_*`). Every other run is agent mode, and `--mine` forces it. A human sees every owner, grouped, with the owner column;
+`CODEX_*`, `AGY_*`). Every other run is agent mode, and `--mine` forces it. A human sees every owner, grouped: one heading per owner (`owner NAME (own)`, `owner NAME (other)`, `owner unknown`; own first, other owners sorted, unknown last) with a sub-heading per repository, at most 10 rows per repository in a group, and the owner column;
 nothing owned by another owner or of unknown owner is preselected. An agent should narrow the view with `--mine`; in agent mode only
 items owned by a task record count as `own`. `--by-owner LABEL` narrows the view in any mode and never selects the mode. The mode is
 recorded in the plan set, the apply journal and `stw tidy history`.
