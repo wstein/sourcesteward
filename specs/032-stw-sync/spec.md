@@ -1,7 +1,7 @@
 # Feature Specification: `stw sync`, one reviewed command to bring local branches up to date
 
 **Branch**: `docs/spec-stw-sync` | **Created**: 2026-10-21
-**Status**: Draft specification; no runtime implementation. Requires an independent review of the exact head before tasks start.
+**Status**: Implemented in source (slices 1a to 5 merged, closing review 2026-10-25); see [Delivered contract and deliberate deltas](#delivered-contract-and-deliberate-deltas-closing-review-2026-10-25), which wins over any older wording below. Feature status stays `planned` until the owner accepts the run evidence.
 **Input**: Owner request: one convenient manual command that replaces the routine `git pull --rebase --prune` run in every repository (and the submodule sync/update step), with the same few options, applied to all checked-out worktrees of a repository.
 
 ## Scope and decisions
@@ -16,7 +16,7 @@ Decisions:
    Details of this decision (foreman, 2026-10-24): `pull.rebase=interactive` is a plain non-interactive rebase (stw never opens an editor); `pull.rebase=merges` is a rebase with `--rebase-merges`, as git does (a rebase, not a new merge); `pull.rebase=false` and `branch.NAME.rebase=false` are ignored, not an error, and never enable a merge; `--merge` overrides `pull.ff=only`; the autostash of a `--merge` run follows `merge.autoStash`. `--merge` is deliberately stricter than `git pull --no-rebase` in one more place with no data risk: a dirty file that only the local commits (not the upstream) touch is `skipped-dirty`, where git would merge, because the update check does not tell the two apart.
 3. **Unit and discovery.** The unit is the current branch of the main worktree of one repository. Repositories come from the gitlinks of each repository's index, recursively; an uninitialized submodule is reported (`not initialised`) and skipped, never cloned, and its own submodules are not visited. A detached HEAD (a pinned submodule) is only reported, with its short OID, never moved and never checked out to the superproject pin; a branch without an upstream is reported (`no upstream for branch X`). Each repository uses its own upstream remote and `branch.NAME.*` settings. A failure or conflict in one repository does not stop the others; the summary and the exit status reflect it. `stw sync` acts only on the main worktree; Git itself forbids one branch in two worktrees.
 4. **Output.** Human output is the default: one line per repository (name, branch, outcome) and a summary line, colour only when stdout is a terminal and `NO_COLOR` is unset; `--json` keeps the machine format.
-5. **Exit status.** 0 unless the run is refused or a repository ended `failed`, `conflict` or `autostash-conflict`; skips are not errors; 2 for usage errors.
+5. **Exit status.** 0 unless the run is refused or a repository ended `failed`, `conflict`, `autostash-conflict` or (`--submodules`) `unreachable`, or a restore ended `changed-since` or `journal-incomplete`; skips (`skipped-*`, `diverged`) are not errors; 2 for usage errors.
 6. **Git only.** A jj-owned path (including a colocated one) is refused with a clear message; jj has its own fetch and is a later spec.
 7. **Network.** One `git fetch --no-tags --no-write-fetch-head --no-recurse-submodules [--prune|--no-prune]` per repository for the upstream remote of its current branch is the only network effect, also with `--plan`; without `--prune`/`--no-prune` the configuration decides, as for `git pull`. Classification uses the refs the fetch just produced.
 8. **Configuration and hooks.** The owner's Git configuration and hooks apply as for plain Git. The only configuration stw overrides is what would make Git write beyond the journaled ref, in one fixed table:
@@ -36,16 +36,46 @@ Decisions:
 | --- | --- | --- |
 | `--prune` | `git fetch --prune` | removes stale `refs/remotes/REMOTE/*`; local branches are never deleted (that is `stw tidy`) |
 | `--merge` | `git pull --no-rebase` on a diverged branch only | owner decision 2026-10-24: the only way to a merge commit; excludes `--rebase`/`--ff-only`; fast-forward stays fast-forward |
-| `--rebase` | `git pull --rebase` (`git rebase UPSTREAM`) | only checked-out branches; abort on conflict |
+| `--rebase` | `git pull --rebase` (`git rebase UPSTREAM`) | a conflict is left in progress as git leaves it (foreman decision, see the delivered contract) |
 | (none) | `git pull --ff-only` (plus a rebase where `pull.rebase` asks for one) | `git merge --ff-only` for checked-out, ref update for the others |
-| `--autostash` | `git pull --autostash` | stash tracked changes, run, reapply by stash OID with `--index`; a failed reapply keeps the stash and is reported |
-| `--submodules` | `git submodule sync` then `git submodule update --no-fetch` (no `--init`) | see US5; no clone, no fetch |
-| `--remote NAME` | the remote argument of `git fetch` | one remote per run |
+| `--autostash` | `git pull --autostash` | git's own autostash; a failed reapply keeps the stash, which is reported as `stash_oid` (found by comparing `refs/stash` before and after) |
+| `--submodules` | `git submodule sync -- PATH` then `git submodule update --no-fetch --checkout -- PATH` (no `--init`) | pinned (detached) submodules only; see US5; no clone, no fetch |
+| ~~`--remote NAME`~~ | not delivered | each repository fetches its own upstream remote (decision 3) |
 | `--plan` / `--dry-run` | no direct equivalent (`git fetch` then inspect) | fetch only; no local change |
+
+## Delivered contract and deliberate deltas (closing review, 2026-10-25)
+
+This section records what the merged implementation does, and every deliberate difference from the older text of this spec, with the decision that caused it. Where it disagrees with the text above or below, this section wins.
+
+**Command.** `stw sync [PATH] [--plan|--dry-run] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--submodules] [--json]` and `stw sync restore [PATH] [--run ID] [--json]`. `--rebase`, `--ff-only` and `--merge` exclude each other. `restore` accepts no sync option (`--plan`, `--dry-run`, `--rebase`, `--ff-only`, `--merge`, `--autostash`, `--no-autostash`, `--prune`, `--no-prune`, `--submodules` are usage errors, exit 2), and `--run` is refused without `restore`. There is no `--remote`, `--no-rebase` or `--no-ff`. A jj-owned or non-Git path is refused before any effect.
+
+**Result model (replaces the output contract above).** One JSON object: `schema_version`, `command: "sync"`, `mode` (`plan`, `sync`, `restore`), `run_id` (null for a plan and for a run that changed no branch), `options` (`rebase`, `prune`, `autostash`: the requested override or null; `merge`, `submodules`: booleans), `note`, `repos[]`, `summary` (`total`, `by_result`) and `error`. Every repository of the workspace and, with `--submodules`, every pinned submodule is one `repos[]` entry (`name`, `path`, `kind`, `branch`, `remote`, `result`, `old_oid`, `new_oid`, `ahead`, `behind`, `pruned`, `reason`, `detail`, `stash_oid`); there is no `items[]`, no `submodules[]` array and no `fetch` object (foreman decision 2026-10-25). Results: plan `fast-forward`, `rebase`, `merge`; run `fast-forwarded`, `rebased`, `merged`, `conflict`, `autostash-conflict`, `failed`, `updated`, `unreachable`; both `up-to-date`, `ahead`, `diverged`, `skipped-dirty`, `skipped-detached`, `skipped-no-upstream` (also when the remote branch is gone; there is no `upstream-gone`), `skipped-busy`, `skipped-uninitialized`; restore `restored`, `already-restored`, `changed-since`, `journal-incomplete`, `failed`. The schema is `schemas/v1/sync.schema.json` (unpublished).
+
+**Exit status.** 1 when the run is refused or any repository ended `failed`, `conflict`, `autostash-conflict`, `unreachable`, `changed-since` or `journal-incomplete`; 0 otherwise. `skipped-dirty`, `skipped-busy` and `diverged` exit 0 in the implementation, as the plain sync always did; the older text of US5 (which listed `skipped-dirty` and `diverged` of a submodule as exit 1) is superseded by foreman decision 2026-10-25. 2 for usage errors with no JSON.
+
+**Deltas, each a deliberate decision:**
+
+| Older text | Delivered | Decision |
+| --- | --- | --- |
+| Linked worktrees, non-checked-out branches, `update-ref` for them, `skipped-busy` for other worktrees | Only the current branch of the main worktree of each repository, discovered from the gitlinks | owner 2026-10-21 (scope), already in decision 3 |
+| A merge as `git pull` would, from configuration | `merge` only with the explicit `--merge`; no Git setting enables it; a fast-forwardable branch always fast-forwards; `--merge` excludes `--rebase`/`--ff-only`, overrides `pull.rebase` and `pull.ff=only`, follows `merge.autoStash` | owner 2026-10-24 ([#222]) |
+| A rebase conflict aborts, then the autostash is reapplied | The rebase (or merge) is left in progress as git leaves it, git's message is printed, exit 1 | foreman 2026-10-24 (never stricter than `git pull`) |
+| Autostash stashed and reapplied by stw by OID with `--index`; D4 drop-by-OID | git's own `--autostash`/`--no-autostash`; stw never applies, drops or edits a stash. After a failed reapply the kept entry is recognised by comparing the `refs/stash` reflog before and after git's call: the one new entry with reflog subject `autostash` whose first parent is the old tip. It is journaled and reported as `stash_oid`; an entry of another worktree, an older lookalike, an unreadable list or an ambiguous pair is never claimed (`stash_oid` null, the item stays `autostash-conflict`). Staged changes return as `git pull --autostash` returns them | foreman 2026-10-24/25 ([#236]); reason: never stricter than `git pull` |
+| Journal "on the Spec 029/031 mechanism" | One file per run and repository, `<git-common-dir>/stw/sync/RUN_ID.json`, with its own `sync` record type (states `prepared`, `completed`, `failed`, `conflict`, `restored`), written durably before the change and completed after; recovery refs `refs/stw/recovery/sync/RUN_ID/N`. The 029/031 code is not reused. Run IDs are a UTC time stamp with microseconds and a random suffix (`YYYYMMDDTHHMMSSuuuuuuZ-xxxxxxxx`; IDs without microseconds are still read) and order by `runIDLess` | design 2026-10-24 ([#219], [#234]) |
+| Retention of the 10 most recent completed runs | Run by a real run, as its last step, in each repository where it completed a journaled change: the current run is always kept and counts as one of the ten; a run with a `prepared` record is kept; a recovery ref is deleted only under its exact name `refs/stw/recovery/sync/RUN_ID/N`, only while it is not symbolic and still points at the journaled old OID, otherwise it and its record stay; best effort and silent; repositories no run changes keep their old runs | review of [#219] |
+| `restore` as in US6 | Per repository the journaled branch moves back to its old tip only while it still points at the tip the run left: `git reset --keep` in the main worktree when the branch is checked out there, clean and idle, `git update-ref` with the expected value when no worktree holds it. Refused as `changed-since`: a branch an operation works on in any worktree (also with a detached HEAD), a worktree with local changes, a symbolic ref, a moved branch; `failed`: a missing old object or a bad record; `already-restored` is verified by the branch position; failed/conflict entries are classified by where the branch really is; an incomplete fast-forward record is restored, `already-restored` or `changed-since` by branch position, an incomplete rebase or merge record is `journal-incomplete`. The default run is the highest run ID, never a file time | review of [#220] |
+| `--submodules` as US5 with a `submodules[]` array and exit 1 for dirty/diverged | Reuses `repos[]`: for each initialized detached direct submodule whose recorded commit (the superproject index, stage 0) is present, which is clean and a fast-forward of HEAD: `git --literal-pathspecs submodule sync -- PATH` then `git --literal-pathspecs -c submodule.recurse=false submodule update --no-fetch --checkout -- PATH`, in that order, so a skipped submodule keeps its URL; never `--init`, `--remote`, `--recursive`, `--force`; no clone or fetch; the move is reported (`updated`, old and new OID), not journaled and not restored. `unreachable`: not initialised, recorded commit not present, or an absolute, `..`, option-like, control-character or symlinked path (never handed to Git); `skipped-dirty`, `diverged` (including HEAD ahead), `up-to-date`, `failed` otherwise. A URL rewritten by `submodule sync` is reported as `old -> new` for the submodule's remote and, when different, the superproject's `submodule.NAME.url`. The submodule's own hooks run as plain Git runs them and a failing hook fails only that item. `--plan --submodules` previews nothing, runs no sync and echoes `options.submodules: true`. A submodule on a branch is synced like `git pull` and is not touched by the flag | foreman 2026-10-25 ([#246]) |
+
+[#219]: https://github.com/wstein/sourcesteward/pull/219
+[#220]: https://github.com/wstein/sourcesteward/pull/220
+[#222]: https://github.com/wstein/sourcesteward/pull/222
+[#234]: https://github.com/wstein/sourcesteward/pull/234
+[#236]: https://github.com/wstein/sourcesteward/pull/236
+[#246]: https://github.com/wstein/sourcesteward/pull/246
 
 ## User scenarios and acceptance
 
-The scenarios below were written for the earlier all-branches scope. Read them for the current branch of each repository (the root and the submodules on a branch): branch lists, non-checked-out branches, worktree items and `skipped-busy` for other worktrees no longer exist, `--remote` and `--submodules` are replaced by the discovery of decision 3, and the options follow decision 1.
+The scenarios below were written for the earlier all-branches scope and are superseded where the delivered contract says so. Read them for the current branch of each repository (the root and the submodules on a branch): branch lists, non-checked-out branches, worktree items and `skipped-busy` for other worktrees no longer exist, `--remote` and `--submodules` are replaced by the discovery of decision 3, and the options follow decision 1.
 
 ### US1 — Fast-forward every tracking branch of one repository (P1, slice 1)
 
@@ -112,6 +142,8 @@ With `--submodules`, for the direct (non-recursive) submodules of the repository
 
 ## Output contract
 
+> Superseded by the delivered contract below for the model (`repos[]` instead of `items[]`/`submodules[]`/`fetch`), the results and the exit codes; kept for the design history.
+
 Human output: one line per item `BRANCH  WORKTREE  RESULT  OLD..NEW` plus a summary line (counts per result, fetch performed, refs pruned, submodules). `--json` prints exactly one final object with `schema_version`, `command: "sync"`, `mode` (`sync`, `plan` or `restore`), `run_id` (null for `plan`), `remote`, `options` (`rebase`, `prune`, `autostash`, `submodules`), `fetch` (`performed`, `pruned_refs[]` at most 256, `pruned_total`), `items[]` (`branch`, `worktree` or null, `result`, `old_oid`, `new_oid`, `reason`), `submodules[]` (`path`, `result`, `old_oid`, `new_oid`), `summary` (`total`, `by_result`, `untracked`), `error` (null, or `code` and `message` of a refused or failed run, with no items; for example a jj-owned path, an unknown remote, a failed fetch, `sync-refspec-unsafe`, more than 1024 branches) and explicit nulls instead of omitted keys. The JSON schema file is published with the implementation like the other stw schemas (task T004).
 
 Closed result lists (`untracked` is only a count and never an item):
@@ -153,9 +185,10 @@ Exit codes: 0 when no item needed the owner's attention (`fast-forwarded`, `reba
 
 1. **`stw workspace plan` fails on this repository.** `stw workspace plan` on the SourceSteward repository itself fails with `git-checkout-limit: base checkout exceeds 1024 leaf entries`, so the stw worktree helper cannot create isolated worktrees here. Addressed separately by the [creation refusals amendment](../010-isolated-task-workspaces/contracts/workspace.md#creation-refusals-amendment) (the leaf limit becomes 16,384); it is not part of this spec. Authors of this spec's slices use a throwaway `git clone --no-local` meanwhile.
 2. **Consequence for dogfooding.** Until item 1 is solved, `stw sync` itself cannot be developed through its own workspace flow on this repository, and a repository above the same inventory limits will make `stw sync` report a bounded partial result; slice 1 must use the existing bounded readers (Spec 027) rather than a new unbounded one.
+Closing review (2026-10-25): item 1 no longer blocks (the isolated worktrees of this feature were created with the stw worktree helper on this repository). Item 2: `stw sync` starts Git itself, because the fetch needs the network that the sandboxed `internal/workspace` readers deny, and bounds its work instead: at most 256 repositories per run and 4 MiB of output per Git call, with the Git timeout of the package; it does not use the Spec 027 readers. Item 3 is still deferred; item 4 is unchanged.
 3. Whether `stw sync` should later offer an all-repositories form like `stw repos PATH...` (up to 16 paths) is deferred until slice 1 is used.
 4. jj support (`jj git fetch` and bookmark moves) is a later spec.
-5. Owner decisions taken in this spec that the owner may change: `--submodules` never clones or fetches (an uninitialized or incompletely fetched submodule is `unreachable`); submodule moves are reported but not restorable; ten runs of recovery refs are retained.
+5. Owner decisions taken in this spec that the owner may change: `--submodules` never clones or fetches (an uninitialized or incompletely fetched submodule is `unreachable`); submodule moves are reported but not restorable; ten runs of recovery refs are retained; `--merge` is the only way to a merge commit.
 
 ## Success criteria
 

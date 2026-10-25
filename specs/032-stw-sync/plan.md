@@ -1,6 +1,6 @@
 # Implementation Plan: `stw sync`
 
-**Status**: Draft design, no runtime. **Spec**: [spec.md](spec.md)
+**Status**: Implemented; the design below is the original one and the spec's [delivered contract](spec.md#delivered-contract-and-deliberate-deltas-closing-review-2026-10-25) lists every deliberate deviation (D2 to D6 and slices 1b to 5 changed). **Spec**: [spec.md](spec.md)
 
 ## Approach
 
