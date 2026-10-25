@@ -139,36 +139,43 @@ func (s *store) validate() error {
 	return nil
 }
 func (s *store) read(kind, id string, value any) error {
+	b, e := s.readBytes(kind, id)
+	if e != nil {
+		return e
+	}
+	return decodeStrict(b, value)
+}
+func (s *store) readBytes(kind, id string) ([]byte, error) {
 	if !validID(id) || s.dirs[kind] == nil {
-		return failure("invalid-state", "Invalid state record identity.")
+		return nil, failure("invalid-state", "Invalid state record identity.")
 	}
 	if e := s.validate(); e != nil {
-		return e
+		return nil, e
 	}
 	before, e := s.dirs[kind].Lstat(id + ".json")
 	if e != nil {
-		return e
+		return nil, e
 	}
 	if !regularPrivate(before) || before.Size() > int64(v3RecordLimit) {
-		return failure("invalid-state", "Record must be a private bounded single-link regular file.")
+		return nil, failure("invalid-state", "Record must be a private bounded single-link regular file.")
 	}
 	f, e := s.dirs[kind].OpenFile(id+".json", os.O_RDONLY|noFollow, 0)
 	if e != nil {
-		return e
+		return nil, e
 	}
 	defer f.Close()
 	st, e := f.Stat()
 	if e != nil || !regularPrivate(st) || !os.SameFile(before, st) || st.Size() > int64(v3RecordLimit) {
-		return failure("invalid-state", "Record must be a private bounded single-link regular file.")
+		return nil, failure("invalid-state", "Record must be a private bounded single-link regular file.")
 	}
 	b, e := io.ReadAll(io.LimitReader(f, int64(v3RecordLimit)+1))
 	if e != nil {
-		return e
+		return nil, e
 	}
 	if len(b) > v3RecordLimit {
-		return failure("record-limit", "State record exceeds its bound.")
+		return nil, failure("record-limit", "State record exceeds its bound.")
 	}
-	return decodeStrict(b, value)
+	return b, nil
 }
 func decodeStrict(b []byte, value any) error {
 	d := json.NewDecoder(bytes.NewReader(b))

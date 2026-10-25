@@ -165,6 +165,11 @@ func pruneV4ValidDirectory(d PruneV4Directory) bool {
 // ReadRegistrationPruneV4Plan is a strict read-only operation. It never tries
 // another namespace/version, creates recovery state, or grants apply authority.
 func ReadRegistrationPruneV4Plan(state, id string) (RegistrationPruneV4Plan, error) {
+	return readRegistrationPruneV4Plan(state, id, nil)
+}
+
+// afterRead is a private race-injection seam; public reads always pass nil.
+func readRegistrationPruneV4Plan(state, id string, afterRead func()) (RegistrationPruneV4Plan, error) {
 	var p RegistrationPruneV4Plan
 	if !pruneV4ID(id, 32) {
 		return p, failure("prune-plan-refused", "Contract-4 plan ID must be 32 lowercase hex characters.")
@@ -179,8 +184,12 @@ func ReadRegistrationPruneV4Plan(state, id string) (RegistrationPruneV4Plan, err
 		return p, e
 	}
 	defer child.Close()
-	var raw json.RawMessage
-	if e = child.read("plans", id, &raw); e != nil {
+	raw, e := child.readBytes("plans", id)
+	if e != nil {
+		return p, e
+	}
+	var shape json.RawMessage
+	if e = decodeStrict(raw, &shape); e != nil {
 		return p, e
 	}
 	if !utf8.Valid(raw) || decodeStrict(raw, &p) != nil {
@@ -189,10 +198,16 @@ func ReadRegistrationPruneV4Plan(state, id string) (RegistrationPruneV4Plan, err
 	// Decode with exact integers, then compare full canonical shapes. A typed
 	// decoder alone defaults a missing false/zero field and would accept a
 	// record whose digest still matches despite omitting a required field.
-	actual, aerr := pruneV4Canonical(raw, "")
+	actual, aerr := pruneV4Canonical(json.RawMessage(raw), "")
 	complete, cerr := pruneV4Canonical(p, "")
 	if aerr != nil || cerr != nil || !bytes.Equal(actual, complete) {
 		return RegistrationPruneV4Plan{}, failure("prune-plan-refused", "Contract-4 record must contain every required field with its exact type.")
+	}
+	if !bytes.Equal(raw, append(complete, '\n')) {
+		return RegistrationPruneV4Plan{}, failure("prune-plan-refused", "Contract-4 record must use canonical JSON followed by one LF.")
+	}
+	if afterRead != nil {
+		afterRead()
 	}
 	if e = validatePruneV4Plan(p, state, id); e != nil {
 		return RegistrationPruneV4Plan{}, e
@@ -235,8 +250,8 @@ func validatePruneV4Plan(p RegistrationPruneV4Plan, state, id string) error {
 	if e.Metadata == nil || len(e.Metadata) == 0 || e.MetadataBytes < 0 || e.ProtectedSiblings == nil || e.Native.References == nil || e.Native.Registrations == nil || e.Native.ProtectedRoots == nil || p.PayloadPath != filepath.Join(state, pruneV4Namespace, "payloads", id) {
 		return bad()
 	}
-	for _, d := range e.Absence.Ancestors {
-		if !pruneV4ValidDirectory(d) {
+	for i, d := range e.Absence.Ancestors {
+		if !pruneV4ValidDirectory(d) || i == 0 && d.Identity.Path != "/" || i > 0 && (filepath.Dir(d.Identity.Path) != e.Absence.Ancestors[i-1].Identity.Path || d.Identity.Path == e.Absence.Ancestors[i-1].Identity.Path) {
 			return bad()
 		}
 	}
@@ -246,7 +261,10 @@ func validatePruneV4Plan(p RegistrationPruneV4Plan, state, id string) error {
 	sum := int64(0)
 	last := ""
 	for _, m := range e.Metadata {
-		if m.Path == "" || m.Path <= last || m.Size < 0 || m.Size > 64<<20 || m.Kind != "file" && m.Kind != "directory" && m.Kind != "absent" || m.Kind == "file" && !pruneV4ID(m.Digest, 64) {
+		if !validText(m.Path) || !filepath.IsLocal(m.Path) || m.Path <= last || m.Size < 0 || m.Size > 64<<20 || m.Kind != "file" && m.Kind != "directory" && m.Kind != "absent" || m.Kind == "file" && !pruneV4ID(m.Digest, 64) {
+			return bad()
+		}
+		if m.Kind == "absent" && (m.Digest != "" || m.Physical != (V3PhysicalIdentity{}) || m.Size != 0) {
 			return bad()
 		}
 		last = m.Path

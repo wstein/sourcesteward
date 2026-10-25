@@ -162,7 +162,7 @@ func TestPruneV4CLIStoresOnlyExactOwnedPlan(t *testing.T) {
 }
 
 func TestPruneV4CLIRefusesUnprovenOrChangedSelection(t *testing.T) {
-	for _, kind := range []string{"foreign-scope", "wrong-gitdir", "destination-present", "unlocked"} {
+	for _, kind := range []string{"foreign-scope", "wrong-gitdir", "destination-present", "unlocked", "native-backslash"} {
 		t.Run(kind, func(t *testing.T) {
 			r := pruneCLIRepository(t)
 			reason := ""
@@ -170,6 +170,10 @@ func TestPruneV4CLIRefusesUnprovenOrChangedSelection(t *testing.T) {
 			case "foreign-scope":
 				t.Setenv("STW_OWNER", "another-agent")
 				reason = "prune-scope-refused"
+			case "native-backslash":
+				r.name += `\native`
+				r.gitdir = filepath.Join(filepath.Dir(r.gitdir), r.name)
+				reason = "prune-lock-refused"
 			case "wrong-gitdir":
 				r.gitdir += "-other"
 				reason = "prune-selection-refused"
