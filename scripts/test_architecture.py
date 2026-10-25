@@ -151,6 +151,35 @@ class ArchitectureTests(unittest.TestCase):
             for leaked in ('net', 'net/http', 'crypto/tls', 'golang.org/x/net/http2'):
                 with self.assertRaises(ValueError, msg=package + leaked): architecture.validate_dependencies({prefix + 'internal/' + package: ['fmt', leaked]})
 
+    def test_stackpublish_is_a_pure_offline_core(self):
+        # Spec 016 T003: the plan/guard/ownership core has no process, file, network, clock or goroutine escape.
+        path = 'internal/stackpublish/plan.go'
+        architecture.validate_sources({path: 'package stackpublish\n\nimport (\n\t"fmt"\n\t"time"\n\t"net/url"\n\t"' + architecture.MODULE + 'internal/attribution"\n)\n\nvar _ time.Duration\n'})
+        architecture.validate_sources({'internal/stackpublish/x_test.go': 'package stackpublish\n\nimport "os/exec"\n'})
+        for imported in ('os', 'os/exec', 'os/signal', 'syscall', 'plugin', 'unsafe', 'io/ioutil', 'io/fs', 'net', 'net/http', 'crypto/tls', 'golang.org/x/sys/unix', 'golang.org/x/net/http2'):
+            with self.assertRaises(ValueError, msg=imported): architecture.validate_sources({path: 'package stackpublish\n\nimport "' + imported + '"\n'})
+            with self.assertRaises(ValueError, msg='aliased ' + imported): architecture.validate_sources({path: 'package stackpublish\n\nimport x "' + imported + '"\n'})
+        # Only the attribution leaf may be imported from the module: no hosting, workspace, inspection, restack or cli.
+        for other in ('internal/hosting', 'internal/workspace', 'internal/inspection', 'internal/restack', 'internal/cli', 'internal/release', 'internal/attribcmd', 'internal/attributionx', 'internal/hosting/sub'):
+            with self.assertRaises(ValueError, msg=other): architecture.validate_sources({path: 'package stackpublish\n\nimport "' + architecture.MODULE + other + '"\n'})
+        for call in ('time.Now()', 'time.Sleep(0)', 'time.After(0)', 'time.Tick(0)', 'time.NewTimer(0)', 'time.NewTicker(1)', 'time.AfterFunc(0, nil)', 'time.Since(time.Time{})', 'time.Until(time.Time{})'):
+            with self.assertRaises(ValueError, msg=call): architecture.validate_sources({path: 'package stackpublish\n\nimport "time"\n\nfunc f() {\n\t_ = ' + call + '\n}\n'})
+        for statement in ('go f()', 'go func() {}()'):
+            with self.assertRaises(ValueError, msg=statement): architecture.validate_sources({path: 'package stackpublish\n\nfunc f() {\n\t' + statement + '\n}\n'})
+        # Mentions in comments and strings are not escapes.
+        architecture.validate_sources({path: 'package stackpublish\n\n// calls time.Now() and go f() elsewhere\nvar s = "os/exec time.Now()"\n'})
+
+    def test_stackpublish_reaches_no_network_not_even_through_the_hosting_boundary(self):
+        prefix = architecture.MODULE
+        pkg, hosting, attribution = prefix + 'internal/stackpublish', prefix + 'internal/hosting', prefix + 'internal/attribution'
+        graph = {pkg: ['fmt', attribution], attribution: ['strings', 'time']}
+        architecture.validate_dependencies(graph)
+        for leaked in ('net', 'net/http', 'crypto/tls', 'golang.org/x/net/http2'):
+            with self.assertRaises(ValueError, msg=leaked): architecture.validate_dependencies({pkg: ['fmt', leaked]})
+        # Unlike release and workspace, stackpublish has no hosting boundary: reaching hosting reaches net.
+        with self.assertRaises(ValueError): architecture.validate_dependencies({pkg: [hosting], hosting: ['net/http']})
+        with self.assertRaises(ValueError): architecture.validate_dependencies({pkg: [attribution], attribution: [hosting], hosting: ['net/http']})
+
     def test_release_uses_hosting_boundary_without_network_bypass(self):
         prefix = architecture.MODULE
         release, hosting = prefix + 'internal/release', prefix + 'internal/hosting'
