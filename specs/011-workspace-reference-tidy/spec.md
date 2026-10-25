@@ -7,6 +7,8 @@
 
 **Issue #62 amendment (2026-10-18)**: Shared Git layout design candidate, independent analysis and implementation pending. The historical status above does not verify this amendment. Native Git worktrees and native jj bookmarks are essential v0.1.0 acceptance; existing native bookmark cleanup remains qualified as below.
 
+**Later work**: the workspace-wide `stw tidy` wizard and plan sets are specified and implemented by [Spec 041](../041-tidy-wizard/spec.md); this specification's plans remain its sub-plans and the expert layer.
+
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
 ## Delivery Work Items
