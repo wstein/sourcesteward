@@ -30,6 +30,7 @@ proposed neighboring seams/contracts are dependencies, not available exported AP
 | A2 | Capability scope retained | HIGH | spec.md OQ-TOPO; contracts/preflight.md | Rename/mode/gitlink, multiple-base, merge-commit and jj parent/descendant topologies are not globally proven. | Explicit measured capability allowlist; refuse every unaccepted shape (T003/T004/T015/T019/T023). |
 | A3 | Privacy policy retained | HIGH | spec.md OQ-HUNK; contracts/context.md | Hunk locations/content and even filenames can reveal sensitive work; no comprehensive secret guarantee exists. | Body-free default; optional exact-path context stays disabled until accepted policy/conformance (T011–T014). |
 | A4 | Isolation capability retained | HIGH | spec.md OQ-SCRATCH; plan.md | Native jj independent scratch store/oplog and platform write confinement need measured support. | No shared writable source store or raw Git fallback; unavailable enforcement refuses (T003–T006/T021–T024). |
+| A6 | Native semantics retained | HIGH | spec.md OQ-JJCONF; data-model.md | Git stop-first semantics cannot describe native jj descendant conflict evolution or later resolution. | Keep jj preflight unavailable until accepted per-revision/aggregate semantics and complete bounded native graph evidence (T001/T003/T023/T024). |
 | A5 | Compatibility decision retained | MEDIUM | spec.md OQ-EXIT; contracts/cli.md | New 014 proposes 0/1/2 while hidden 015 v1 already returns 3 for incomplete. | Preserve 015 unchanged; any shared migration needs an explicit versioned decision (T001/T004/T027/T028). |
 
 These are visible decision gates, not contradictions resolved by invention.
@@ -65,13 +66,13 @@ future implementation can execute in disposable fixtures.
 | FR-018 | Yes | T017–T018, T023 | Change strategy/options, selected ref target or jj operation between identical-looking requests; assert binding mismatch/unknown and distinct full commit/change/operation ids. |
 | FR-019 | Yes | T011–T014 | Default handoff includes a secret-bearing unselected file; assert no body. Accepted selected hunk returns exact origin/span/limits; binary/sensitive-policy/unknown terms carry omission reasons. |
 | FR-020 | Yes | T005–T006, T021–T022, T025–T028 | Supply 201 commits, 2,001 paths, 33 hunks and failed cleanup in separate fixtures; assert named bound/incomplete/residue, never silent complete truncation or predicted-clean success. |
-| FR-021 | Yes | T003–T004, T009–T010, T023–T024 | Try jj preview with source and scratch sharing an operation store; assert capability-unavailable before replay and unchanged stored working copy/oplog, including colocation. |
+| FR-021 | Yes | T003–T004, T009–T010, T023–T024 | Try jj preview with source and scratch sharing an operation store; assert capability-unavailable before replay and unchanged stored working copy/oplog, including colocation; also require unavailable native aggregate semantics to refuse without fake Git suffix or tip-only clean proof. |
 | FR-022 | Yes | T004, T016–T018, T027 | Pass a preview with changed destination/profile to a fake consumer gate; assert rejection and no imported scratch object/recovery root/journal or apply/push/review authorization. Check that docs-only push uses docs checks plus pure-rebase equality, code push requires exact-actual-new-SHA review, and Ready always requires exact-current-head independent CLEAR, green CI and rebaseable. |
 | SC-001 | Yes | T003–T004, T029 | Execute each declared scenario for every enabled minimum/current native lane; unsupported shape yields explicit capability reason and a missing mandatory lane blocks acceptance. |
 | SC-002 | Yes | T021–T022, T029–T030 | Inject native failure, cancellation and race while recorders watch hooks/helpers/network/source writes; assert zero undeclared effects and truthful incomplete/partial outcome. |
 | SC-003 | Yes | T027–T029 | Validate future complete/incomplete/error JSON offline; compare all existing published/hidden schema/fixture digests and exercise hidden restack-plan incomplete exit 3 unchanged. |
 | SC-004 | Yes | T001–T002, T031–T032 | Enumerate 22 FR plus 8 SC and require a task plus literal test idea per id; delete one mapping or native execution record and assert coverage/acceptance audit reports the gap. |
-| SC-005 | Yes | T015–T016, T019–T020, T029 | Build clean and first-conflict two-commit replay plus accepted/unaccepted merge fixtures; assert exact failing commit/path/suffix and no unaccepted strategy fallback. |
+| SC-005 | Yes | T015–T016, T019–T020, T029 | Build clean and first-conflict two-commit Git replay plus accepted/unaccepted merge fixtures; assert exact failing commit/path/suffix and no unaccepted strategy fallback. |
 | SC-006 | Yes | T005–T006, T021–T024, T029–T030 | Snapshot original tree/index/HEAD/refs/config/objects/jj state before clean/conflicted/cancelled runs and assert zero source writes plus confined scratch and visible cleanup failures. |
 | SC-007 | Yes | T011–T014, T027, T030 | Place distinct sentinels in environment, default body and unselected blob; assert none appear; accepted selected hunks obey every byte/count cap and escaped display preserves path identity. |
 | SC-008 | Yes | T017–T018, T025–T027, T030 | Feed predicted-clean with stale PR context, changed ref, truncated output and cancellation into separate cases; assert fixed limitation, exact binding/unknown outcome and no Ready/verified/mutation permission. |
@@ -89,8 +90,9 @@ individually enumerated above, never hidden behind a grouped FR/SC row.
 Every behavior has a red-test-before-implementation pair; native measurements
 precede profile enablement. Shared scratch/CLI/neutral replay extraction serialize.
 Independent Git/jj metadata tests can run in disjoint files; independent runtime
-reads use only Spec 040 fanout with bounded indexed results. Replay remains
-sequential and cleanup follows child reaping. Future schema creation/publication
+reads use only Spec 040 fanout with bounded indexed results. Git replay remains
+sequential, native jj graph effects remain OQ-JJCONF-gated, and cleanup follows
+child reaping. Future schema creation/publication
 is outside this Markdown amendment and cannot amend frozen v1 implicitly.
 
 ## Constitution alignment
@@ -107,7 +109,7 @@ No exception/amendment proposed; OQ gates preserve these requirements.
 - Requirements: 22 FR + 8 SC = 30 individually mapped; coverage 30/30 (100% design mapping).
 - Tasks: 32, all unchecked; setup 2, foundation 4, US1 4, US2 4, US4 10, US3 4, final 4.
 - Unmapped requirements/tasks: 0/0. Duplication findings: 0. Critical findings: 0.
-- Retained decisions: 5 (4 HIGH capability/privacy findings, 1 MEDIUM compatibility finding).
+- Retained decisions: 6 (5 HIGH capability/privacy/native-semantics findings, 1 MEDIUM compatibility finding).
 - Independent review: pending exact-current-head review; this report is author analysis only.
 - Product/conformance/mutation tests, builds and full make check: not run; not claimed passing.
 - Documentation checks executed: `python3 -I -B scripts/check-docs.py` passed (361 authored documents), `typos specs/014-conflict-diagnosis` passed, and `git diff --check` passed. The explicit no-persist analysis prerequisite also passed. No native acceptance is inferred from these checks.

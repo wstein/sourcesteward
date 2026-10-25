@@ -47,11 +47,14 @@ stw conflict preflight /absolute/disposable/git-fixture --semantics merge --sour
 ```
 
 Clean linear replay predicts predicted-clean with every moved commit covered,
-complete status/exit 0 and the fixed limitation. First-conflict replay identifies
+complete status/exit 0 and the fixed limitation. Git first-conflict replay identifies
 the moved commit/path and not-evaluated suffix, predicted-conflicted/exit 0 under
 the stop-first contract. A merge profile not accepted/measured refuses
 capability-unavailable/exit 1; it never substitutes replay. A native jj preview
-has the same capability honesty with distinct commit/change/operation semantics.
+stays capability-unavailable until OQ-JJCONF and native scratch gates pass.
+Future accepted jj fixtures must include inherited conflicts, later resolution
+and full bounded descendant coverage; a clean tip alone is insufficient and
+Git first-conflict/not-evaluated suffix semantics must not be substituted.
 
 No optional hunk flags are specified until OQ-HUNK settles selector/privacy
 syntax. Once accepted, add selected-path cases that prove body-free default,

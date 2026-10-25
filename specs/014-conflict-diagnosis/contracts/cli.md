@@ -69,7 +69,7 @@ and test updates rather than implicit inheritance.
 | --- | --- | --- |
 | complete | not-applicable | 0: diagnosis completed, including native unresolved conflicts |
 | complete | predicted-clean | 0: selected supported kernel completed with no predicted conflict; fixed limitation applies |
-| complete | predicted-conflicted | 0: first conflict or supported merge conflict observed; replay suffix explicitly not-evaluated |
+| complete | predicted-conflicted | 0: Git first conflict or supported merge conflict observed; Git replay suffix explicitly not-evaluated; native jj aggregate remains OQ-JJCONF-gated |
 | incomplete | unknown or qualified predicted-conflicted | 1: bound, cancellation, failed resample, missing optional selected evidence or scratch residue |
 | error | unknown or not-applicable | 1: admission/refusal/unsupported capability; no usable prediction |
 | usage | no result | 2: malformed selectors/flag combinations before reads/effects |

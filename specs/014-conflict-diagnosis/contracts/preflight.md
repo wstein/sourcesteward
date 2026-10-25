@@ -11,7 +11,7 @@ are binding safety constraints; owner choices remain in [spec](../spec.md#needs-
 | Native jj existing diagnosis | Stored conflicted commits at a pinned operation, no snapshot | Existing inspection isolation is a foundation; conflict parsing needs minimum/current measurement |
 | Git restack/rebase preview | Explicit old-parent..source-head onto destination, single-parent range, plumbing/quarantine | Historical 015 Git 2.56.0 experiment only; complete 014 gates/lanes pending |
 | Git merge preview | Explicit heads plus accepted native base/strategy interpretation | OQ-SEM/TOPO/SCRATCH; unavailable until measured and accepted |
-| Native jj preview | Native commit/change/operation binding, selected parent/descendant scope, private store | OQ-SEM/TOPO/SCRATCH; unavailable until measured and accepted |
+| Native jj preview | Native commit/change/operation binding, selected parent/descendant scope, private store | OQ-SEM/TOPO/SCRATCH/JJCONF; unavailable until measured and accepted |
 | Selected hunk extraction | Exact paths only, reliable native origin/ranges and finite context | OQ-HUNK; disabled until accepted and conformant |
 
 Git and jj are Tier 1 peers with explicit capability limits, not assumed feature
@@ -36,7 +36,7 @@ plumbing. Original author/date may be carried into disposable commits as 015 doe
 fixed scratch committer values are isolated inputs, never inferred owner identities.
 No configuration writes or real apply identity checks are performed here.
 
-Stop at first conflict. Emit native path/kind terms with the failing moved commit,
+For this Git linear kernel, stop at first conflict. Emit native path/kind terms with the failing moved commit,
 record the clean prefix and mark every suffix commit not-evaluated. Conflicted
 preview can be complete for this stop-first contract; it never predicts all later
 conflicts. Predicted-clean requires the entire declared range and successful
@@ -47,6 +47,12 @@ A merge request uses its own measured native strategy and accepted base selectio
 never reduce it to this replay profile or infer an ambiguous mainline. No custom
 merge driver, rerere, external diff/textconv/filter or repository-selected options.
 Gitlinks are identities only; no submodule traversal, initialization or fetch.
+
+Native jj preview must satisfy OQ-JJCONF in addition to scratch isolation: native
+rebase can retain committed conflicts and rewrite descendants, including revisions
+that later resolve them. Git stop-first/not-evaluated suffix rules do not apply.
+The [native coverage model](../data-model.md#replay-coverage-and-scratch-lifecycle)
+requires accepted complete graph/aggregate semantics before this capability opens.
 
 ## Binding execution isolation and hazard refusal
 

@@ -22,7 +22,7 @@ Complete means all required selected-capability reads/resamples finished unchang
 all requested coverage is accounted for and cleanup completed. Complete conflict
 evidence is possible. Incomplete results preserve usable facts with qualifications;
 unknown is not no-conflict. Prediction may retain predicted-conflicted for a
-proven first conflict on unchanged inputs even if later cleanup fails, but the
+proven Git first conflict on unchanged inputs even if later cleanup fails, but the
 result is incomplete; any changed binding invalidates prediction to unknown.
 
 ## Semantic binding and sample
@@ -70,11 +70,26 @@ privacy limitation, recorded even if no hunk content is returned.
 
 ## Replay coverage and scratch lifecycle
 
-Each replay entry names moved commit/parent, replay destination and outcome
-(clean, conflicted, not-evaluated). Stop on first conflict; suffix entries are
-not-evaluated, never implicitly clean. Partial failure without a proven conflict
-makes prediction unknown. Ephemeral candidate ids can be diagnostic metadata but
-are never retained-object promises, review heads or apply receipts.
+For the Git linear kernel, each replay entry names moved commit/parent,
+replay destination and outcome (clean, conflicted, not-evaluated). Stop on the
+first Git conflict; suffix entries are not-evaluated, never implicitly clean.
+Partial failure without a proven conflict makes prediction unknown. Ephemeral
+candidate ids are never retained-object promises, review heads or apply receipts.
+
+Native jj does not inherit this stop-first model. Conflicts can be stored in
+commits while native rebase continues rewriting descendants; a later revision
+can resolve or simplify an inherited conflict. A clean final tip alone therefore
+cannot establish that every affected revision is conflict-free. OQ-JJCONF must
+settle native per-revision evidence, introduced/inherited/resolved distinctions
+and aggregate scope. Consider introduces/inherits/resolves/clean observations only
+as a proposed classification requiring measured parent/result conflict terms,
+not as accepted fields or a proven algorithm. The accepted capability must account
+for the complete bounded selected descendant graph, its old/new commit/change ids
+and pinned operation. An omitted/unknown node prevents complete clean evidence;
+never label a jj suffix not-evaluated merely because the first node conflicted.
+Until that semantics and scratch capability are accepted, jj preflight refuses
+capability-unavailable with no fabricated replay entries or aggregate prediction.
+Native stored-conflict diagnosis remains a separate supported-capability question.
 
 Scratch progresses not-created → owned → replaying → removed, or residue after
 cleanup failure. Ownership uses a private create-only handle outside originals;
