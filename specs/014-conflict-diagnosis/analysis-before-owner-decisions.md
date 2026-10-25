@@ -5,7 +5,6 @@
 > apply to their recorded revisions only. Current owner answers and target
 > contracts are in [the current analysis](analysis.md), not this archive.
 
-
 **Date**: 2026-10-25 | **Scope**: complete feature artifacts. This is an author
 consistency report, not independent review or implementation/conformance evidence.
 

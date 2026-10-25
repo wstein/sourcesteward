@@ -91,7 +91,6 @@ No build, installation, helper run, schema-file edit or live write is claimed.
 
 Original T001–T024 retain 20 checked tasks: T004 deliberately skipped, T021/T023/T024 open. T018/verification recorded old exits 0/1/2/3 honestly; T045/T046 target revised mapping and do not rewrite that history.
 
-
 ## Historical evidence preservation
 
 The [complete pre-owner-answer analysis](analysis-before-owner-decisions.md) is

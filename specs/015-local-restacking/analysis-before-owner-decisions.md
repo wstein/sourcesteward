@@ -5,7 +5,6 @@
 > apply to their recorded revisions only. Current owner answers and target
 > contracts are in [the current analysis](analysis.md), not this archive.
 
-
 Historical T001 records the 2026-10-21 independent design review below and remains checked at its recorded SHA. The 2026-10-25 amendment analysis follows separately; historical CLEAR does not clear this changed specification or any proposed implementation.
 
 ## Reviews
