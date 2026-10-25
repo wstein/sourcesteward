@@ -172,16 +172,3 @@ eight explicit OQs, class-dependent pre-push versus independent Ready gates,
 trusted-owner full-range identity, explicit signature loss, and bounded local
 restore effects. Independent review of the exact corrected head is still pending;
 the author does not promote the original NOT CLEAR verdict to CLEAR.
-
-
-## First-pair terminology correction after 012 rename
-
-The [012 delta review](https://github.com/wstein/sourcesteward/pull/237#pullrequestreview-5640937608)
-of head `9d5c2465` identified stale current provenance in this spec's research
-and F5 disposition: the 012 proposal is now `restack-advised`, while published
-Spec 035 keeps the separate `restack-needed` event. Current wording above is
-corrected; the original F5 review and earlier 015 heads describe the pre-rename
-proposal historically. No 012 file, event envelope, schema or product behavior
-changes here. Prior [015 delta CLEAR](https://github.com/wstein/sourcesteward/pull/238#pullrequestreview-5640885230)
-applies only to `bba492d1aeac9fc486f2289830b3531f9b29a341`; the new corrected
-head requires its own coordinator review/CI gates.

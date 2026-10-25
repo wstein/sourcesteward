@@ -105,8 +105,9 @@ owner has local commits, or `switch` plus `reset --hard`
 when the owner chooses to discard local-only/uncommitted work (destructive).
 SourceSteward never executes these resync/reset commands. The plumbing replay
 never reads or writes the original `rr-cache` or moves another branch ref.
-Historical hidden-v1 printed text remains frozen; the human reference here
-and proposed future resync text use the current AGENTS.md overrides. Spec 043 landing is
+Historical hidden-v1 printed text remains frozen. The owner resync reference
+here adds the AGENTS.md agent-restack overrides as an optional stricter variant;
+they are not required by AGENTS.md for owner resync. Spec 043 landing is
 another human invocation; agents never merge, push default, tag/release or change
 settings through this local workflow.
 
