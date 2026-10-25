@@ -490,32 +490,38 @@ The plan id needs the ids of the sub-plans, and the sub-plans are ordinary store
 
 ```
 $ stw tidy
-Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
-Derived:   remote origin, base per repository (see below), state dirs ~/.local/state/stw/workspace (2 records), /s/wt (59 records), mode human (tty yes, no agent marker)
+Workspace: /ws
+Derived:   workspace /ws (discovery), remote:a origin (origin), remote:b origin (origin)
 Mode:      human (stdin tty, stdout tty, no agent marker)
 Analysed 2 repositories (0 skipped, 0 with errors)
 
 Repositories:
-bundledock   base refs/heads/main
-sourcesteward   base refs/heads/main
+a   base refs/heads/main
+b   base refs/heads/main
 
 owner claude (own)
-  bundledock
-    [1] safe     branch       codex/old-1  integrated (merge-noop)  effects delete-branch:codex/old-1
-  sourcesteward
-    [2] safe     worktree     /tmp/wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)  effects remove-registration, remove-files, delete-branch:codex/037-x
-    [-] retain   worktree     /tmp/wt-041  dirty: 3 modified files
+  a
+    [1] safe     worktree     /w/own1  task t1  integrated (ancestor)  effects remove-registration, remove-files
+    [2] safe     branch       claude/old  integrated (ancestor)  effects delete-branch:claude/old
+  b
+    [-] retain   worktree     /w/dirty
+    [3] safe     tracking-ref refs/remotes/origin/x  integrated (ancestor)  effects remove-registration, remove-files
 
 owner codex (other)
-  sourcesteward
-    [3] safe     worktree     /tmp/whr010-a  owner codex (path-convention) [other]  integrated (ancestor)  effects remove-registration, remove-files  not preselected
+  a
+    [4] safe     worktree     /w/whr1  owner codex (path-convention) [other]  integrated (ancestor)  effects remove-registration, remove-files  not preselected
 
-summary: 3 safe (2 own, 1 other), 1 retain
+owner unknown
+  b
+    [5] decision worktree     /w/dec  owner unknown (unknown) [unknown]
 
-Apply which? [a]ll own safe  [1,3 / 1-3]  [o]wner codex  [d]etails N  [n]one (default n): a
-Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
-Apply it now? Run:  stw tidy apply 3f9c2a7e41b8        (or answer y here) [y/N]: n
+summary: 4 safe (3 own, 1 other), 1 retain, 1 decision
+Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner  [d]etails N  [n]one (default n):
+Stored plan set 3f9c2a7e41b8 (5 effects in 2 repositories). Nothing has been changed.
+Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]:
 ```
+
+The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is random and shown as `3f9c2a7e41b8`).
 
 Rules: the default answer is always *none*/*no*; only `safe` and `decision` rows get a number that can be chosen (a `decision` row asks
 a second confirmation naming the lock); the answer is parsed strictly (anything else re-asks up to 3 times, then exits 1 with

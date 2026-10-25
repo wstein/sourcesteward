@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -394,6 +395,31 @@ func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
 		}
 		if tc.after == 1 && !strings.Contains(err.Error(), "nothing was applied") {
 			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+}
+
+// The sample session of docs/tidy.md and of the specification is the real output of the wizard on
+// this fixture (answers a and n); the random plan id is shown as 3f9c2a7e41b8.
+func TestTidyExampleMatchesTheDocs(t *testing.T) {
+	newInteractive(t, true, true)
+	out, err := runTidy(t, "a\nn\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = regexp.MustCompile(`[0-9a-f]{12}`).ReplaceAllString(out, "3f9c2a7e41b8")
+	lines := strings.Split(out, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	want := "$ stw tidy\n" + strings.Join(lines, "\n") + "\n```\n"
+	for _, p := range []string{"../../docs/tidy.md", "../../specs/041-tidy-wizard/spec.md"} {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%s does not contain the real sample session:\n%s", p, want)
 		}
 	}
 }
