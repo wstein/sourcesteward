@@ -521,7 +521,7 @@ Stored plan set 3f9c2a7e41b8 (5 effects in 2 repositories). Nothing has been cha
 Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]:
 ```
 
-The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is random and shown as `3f9c2a7e41b8`).
+The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is the first 12 hex characters of a SHA-256 over the plan content and is shown here as `3f9c2a7e41b8` so the sample stays stable).
 
 Rules: the default answer is always *none*/*no*; only `safe` and `decision` rows get a number that can be chosen (a `decision` row asks
 a second confirmation naming the lock); the answer is parsed strictly (anything else re-asks up to 3 times, then exits 1 with
