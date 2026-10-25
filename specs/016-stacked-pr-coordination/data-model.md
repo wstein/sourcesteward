@@ -41,6 +41,16 @@ Unprintable observations may be escaped, but cannot become command arguments.
 | `dependency` | Real code dependency evidence or `unknown`; open-depth count excludes landed layers; action publication blocks above two open levels |
 | `samples` | Relevant before/after identities and source statuses; sampled state is not a transaction/ABA proof |
 
+The input envelope binds producer/command, `kind`, `schema_version`, repository,
+backend and exact sampled inputs/options before typed decoding/consumption.
+A diagnostic/event string is not a schema discriminator. In particular, the
+published Spec 035 `restack-needed` watch event and the proposed 012 finding have
+different fields/semantics: 035 old/new parent may describe a merge commit and
+branch/argv, whereas 012 layer/native-status findings rely on the sampled base
+and explicit plan expectations. Neither payload implies the other. Never use a
+035 merge-commit `new_parent` as 012 trunk or 015/016 target without fresh explicit
+boundary validation. Unknown producer/kind/version or mismatched inputs refuses.
+
 Supplied 012 observations remain untrusted sampled data until the action consumer
 validates repository/backend/full identities and resamples its own scope. 012
 short display names never supply an actionable destination ref by themselves.
