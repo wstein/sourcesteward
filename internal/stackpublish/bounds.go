@@ -56,13 +56,15 @@ func (l Limits) Validate() error {
 	return nil
 }
 
-// WithTimeout shortens the operation bound. The duration must be a positive whole number of
-// seconds and at most the ceiling; it can never lengthen any bound.
+// WithTimeout shortens the operation bound like the shared --timeout flag: any positive duration
+// up to the maximum (60 s). It is rounded up to a whole millisecond and never lengthens a shorter
+// bound. A longer or non-positive duration is a usage error.
 func (l Limits) WithTimeout(d time.Duration) (Limits, error) {
-	if d <= 0 || d%time.Second != 0 || d > time.Duration(DefaultLimits().OperationMillis)*time.Millisecond {
+	if d <= 0 || d > time.Duration(DefaultLimits().OperationMillis)*time.Millisecond {
 		return l, &ValidationError{Code: "timeout-invalid", Field: "timeout", Usage: true}
 	}
-	if millis := int(d / time.Second * 1000); millis < l.OperationMillis {
+	millis := int((d + time.Millisecond - 1) / time.Millisecond)
+	if millis < l.OperationMillis {
 		l.OperationMillis = millis
 	}
 	return l, nil

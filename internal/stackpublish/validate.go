@@ -42,7 +42,7 @@ func absolutePath(s string) bool {
 // control byte, at most 200 bytes.
 func validRef(ref string) bool {
 	rest, ok := strings.CutPrefix(ref, "refs/heads/")
-	if !ok || len(ref) > maxRefBytes || rest == "" {
+	if !ok || len(ref) > maxRefBytes || rest == "" || strings.HasSuffix(ref, ".") {
 		return false
 	}
 	for _, c := range strings.Split(rest, "/") {
@@ -115,8 +115,8 @@ func validRepository(r *Repository, l Limits) error {
 	if !nameGrammar.MatchString(r.Name) {
 		return invalid("repository-invalid", "repository.name")
 	}
-	for field, v := range map[string]string{"layout_identity": r.LayoutIdentity, "selection_provenance": r.SelectionProvenance, "default_source": r.DefaultSource} {
-		if err := checkText("repository."+field, v, l.DisplayBytes); err != nil {
+	for _, f := range []struct{ name, value string }{{"layout_identity", r.LayoutIdentity}, {"selection_provenance", r.SelectionProvenance}, {"default_source", r.DefaultSource}} {
+		if err := checkText("repository."+f.name, f.value, l.DisplayBytes); err != nil {
 			return err
 		}
 	}
@@ -268,6 +268,9 @@ func validGuard(g Guard, f string) error {
 }
 
 func validPlan(d planDoc, caps CapabilitySet) error {
+	if d.CreatedAt == "" {
+		return invalid("created-at-invalid", "created_at")
+	}
 	if err := d.Limits.Validate(); err != nil {
 		return err
 	}
@@ -359,8 +362,8 @@ func validBoundary(d planDoc, ids map[string]bool) error {
 		if !validReason(d.Error.Code) {
 			return invalid("error-invalid", "error.code")
 		}
-		if len(d.Error.Message) > d.Limits.ErrorBytes {
-			return invalid("bound-exceeded", "error.message")
+		if err := checkText("error.message", d.Error.Message, d.Limits.ErrorBytes); err != nil {
+			return err
 		}
 	}
 	return nil

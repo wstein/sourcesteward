@@ -280,8 +280,8 @@ type planDoc struct {
 // NewPlan validates the input and returns an immutable, unsaved plan (saved=false, plan_id=null).
 // Every slice and pointer is copied, so later changes to the input cannot reach the plan.
 func NewPlan(in PlanInput) (Plan, error) {
-	d := planDoc{SchemaVersion: SchemaVersion, Kind: KindForgeEffectPlan, Operation: OperationPlan, CreatedAt: in.CreatedAt.UTC().Format(time.RFC3339),
-		Task: in.Task, Mode: cloneMode(in.Mode), Limits: in.Limits, Options: PlanOptions{Online: in.Options.Online, Selected: cloneStrings(in.Options.Selected)},
+	d := planDoc{SchemaVersion: SchemaVersion, Kind: KindForgeEffectPlan, Operation: OperationPlan, CreatedAt: createdAt(in.CreatedAt),
+		Task: in.Task, Mode: canonicalMode(in.Mode), Limits: in.Limits, Options: PlanOptions{Online: in.Options.Online, Selected: sortedStrings(in.Options.Selected)},
 		Blockers: cloneBlockers(in.Blockers), Boundary: in.Boundary, Error: cloneFailure(in.Error)}
 	for _, a := range in.Actions {
 		d.Actions = append(d.Actions, cloneAction(a))
@@ -297,6 +297,14 @@ func NewPlan(in PlanInput) (Plan, error) {
 		return Plan{}, err
 	}
 	return Plan{doc: d}, nil
+}
+
+// createdAt renders the creation time, empty for the zero time (which NewPlan refuses).
+func createdAt(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // ID is the content identity of the canonical plan: the SHA-256 of its JSON with plan_id null,
@@ -420,6 +428,9 @@ func (p Plan) AdmitSave(req SaveRequest) (SaveAdmission, error) {
 	if !req.Save {
 		return SaveAdmission{}, nil
 	}
+	if !p.doc.finished() {
+		return SaveAdmission{}, &ValidationError{Code: "plan-incomplete", Field: "boundary"}
+	}
 	if len(p.doc.Actions) == 0 {
 		return SaveAdmission{NothingSelected: true}, nil
 	}
@@ -442,6 +453,9 @@ func (p Plan) AdmitSave(req SaveRequest) (SaveAdmission, error) {
 // WithSaved returns the saved form of the plan (saved=true, plan_id=ID()) after an admitted save.
 // It records the one disclosed private-state write and leaves the original plan unchanged.
 func (p Plan) WithSaved(a SaveAdmission) (Plan, error) {
+	if !p.doc.finished() {
+		return Plan{}, &ValidationError{Code: "plan-incomplete", Field: "boundary"}
+	}
 	if !a.Persist || a.Target == TargetNone || len(p.doc.Actions) == 0 {
 		return Plan{}, &ValidationError{Code: "save-not-admitted", Field: "save"}
 	}
@@ -457,14 +471,23 @@ func (p Plan) WithSaved(a SaveAdmission) (Plan, error) {
 
 // AdmitApply refuses a plan that is unsaved or whose id is not exactly the one the caller named.
 func (p Plan) AdmitApply(planID string) error {
+	if !isLowerHex(planID, 64) {
+		return &ValidationError{Code: "plan-id-invalid", Field: "plan", Usage: true}
+	}
 	if !p.doc.Saved || p.doc.PlanID == nil {
 		return &ValidationError{Code: "plan-not-saved", Field: "plan"}
 	}
-	if !isLowerHex(planID, 64) {
-		return &ValidationError{Code: "plan-id-invalid", Field: "plan", Usage: true}
+	if !p.doc.finished() {
+		return &ValidationError{Code: "plan-incomplete", Field: "boundary"}
 	}
 	if planID != *p.doc.PlanID || planID != p.ID() {
 		return &ValidationError{Code: "plan-not-found", Field: "plan"}
 	}
 	return nil
+}
+
+// finished reports a plan whose evidence is complete: not truncated, not cancelled, no error. Only
+// such a plan may be saved or applied (FR-010: failed evidence never becomes permission).
+func (d planDoc) finished() bool {
+	return d.Boundary.Complete && !d.Boundary.Cancelled && d.Error == nil
 }
