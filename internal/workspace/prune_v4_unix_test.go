@@ -1,0 +1,236 @@
+// SPDX-License-Identifier: EUPL-1.2
+//go:build linux || darwin
+
+package workspace
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func fixturePruneV4(t *testing.T) (RegistrationPruneV4Options, RegistrationPruneV4Plan) {
+	t.Helper()
+	o, _, _, _ := fixturePruneObservation(t)
+	mode := V3RunMode{Mode: "agent", Markers: []string{}, ByOwner: []string{}, Caller: o.Owner, CallerSource: "explicit"}
+	opts := RegistrationPruneV4Options{Path: o.Source, StateDir: o.StateDir, Name: o.Registrations[0], GitDir: filepath.Join(o.Source, ".git", "worktrees", o.Registrations[0]), Mode: mode}
+	r := PlanRegistrationPruneV4(context.Background(), opts)
+	if r.Status != "ok" || r.Plan == nil {
+		t.Fatalf("fixture contract-4 plan: %+v", r)
+	}
+	return opts, *r.Plan
+}
+func pruneV4PlanPath(p RegistrationPruneV4Plan) string {
+	return filepath.Join(p.StateDir, pruneV4Namespace, "plans", p.PlanID+".json")
+}
+func clonePruneV4(t *testing.T, p RegistrationPruneV4Plan) RegistrationPruneV4Plan {
+	t.Helper()
+	b, e := json.Marshal(p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var q RegistrationPruneV4Plan
+	if e = json.Unmarshal(b, &q); e != nil {
+		t.Fatal(e)
+	}
+	return q
+}
+func savePruneV4Fixture(t *testing.T, p RegistrationPruneV4Plan) {
+	t.Helper()
+	var e error
+	p.Digest, e = pruneV4Digest("stw-registration-plan-v4", p, "digest")
+	if e != nil {
+		t.Fatal(e)
+	}
+	b, e := pruneV4Canonical(p, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(pruneV4PlanPath(p), append(b, '\n'), 0600); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestRegistrationPruneV4PlanRoundTrip(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	loaded, e := ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID)
+	if e != nil || !reflect.DeepEqual(p, loaded) {
+		t.Fatalf("roundtrip: %v", e)
+	}
+	raw, e := os.ReadFile(pruneV4PlanPath(p))
+	if e != nil {
+		t.Fatal(e)
+	}
+	canonical, e := pruneV4Canonical(p, "")
+	if e != nil || !bytes.Equal(raw, append(canonical, '\n')) {
+		t.Fatalf("stored canonical bytes: %v", e)
+	}
+	for path, mode := range map[string]os.FileMode{filepath.Join(p.StateDir, pruneV4Namespace): 0700, filepath.Join(p.StateDir, pruneV4Namespace, "plans"): 0700, pruneV4PlanPath(p): 0600} {
+		info, e := os.Lstat(path)
+		if e != nil || info.Mode().Perm() != mode {
+			t.Fatalf("private mode %s: %v %v", path, info, e)
+		}
+	}
+	if p.Expected.CommonDirMount.Mount == "" || p.Expected.CommonDirMount.Identity.Path != p.Expected.SourceSnapshot.Identity.RepositoryDir {
+		t.Fatal("common-directory mount witness missing")
+	}
+}
+
+func TestRegistrationPruneV4ReaderRequiresZeroValuedFields(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	raw, e := os.ReadFile(pruneV4PlanPath(p))
+	if e != nil {
+		t.Fatal(e)
+	}
+	var value map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if e = decoder.Decode(&value); e != nil {
+		t.Fatal(e)
+	}
+	// The original digest remains correct after decode when a required false field
+	// is absent. This must fail on required shape, not on an unrelated digest.
+	delete(value["mode"].(map[string]any), "stdin_tty")
+	b, e := json.Marshal(value)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(pruneV4PlanPath(p), append(b, '\n'), 0600); e != nil {
+		t.Fatal(e)
+	}
+	_, e = ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID)
+	assertPruneReason(t, e, "prune-plan-refused", "")
+}
+
+func TestRegistrationPruneV4CommonMountDetectsChangedObservation(t *testing.T) {
+	o, _, task, _ := fixturePruneObservation(t)
+	for _, kind := range []string{"mount", "descriptor", "mode"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := pruneHookContext(func(stage, path string, v any) {
+				if stage != "common-mount-observed" {
+					return
+				}
+				w := v.(*pruneDirectoryWitness)
+				switch kind {
+				case "mount":
+					w.Mount += "-changed"
+				case "descriptor":
+					w.Identity.Inode++
+				case "mode":
+					w.Mode ^= 0200
+				}
+			})
+			_, e := observePruneV4Common(ctx, task.Native.RepositoryDir)
+			assertPruneReason(t, e, "prune-mount-changed", "Common-directory mount or descriptor/path binding changed.")
+		})
+	}
+	if _, e := observePruneV4Common(context.Background(), filepath.Join(o.Source, ".git")); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestRegistrationPruneV4StrictReaderRefusesResignedInvalidPlans(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	cases := map[string]func(*RegistrationPruneV4Plan){
+		"old-version":     func(q *RegistrationPruneV4Plan) { q.SchemaVersion = 3 },
+		"wrong-operation": func(q *RegistrationPruneV4Plan) { q.Operation = "tidy-v3" },
+		"common-mount":    func(q *RegistrationPruneV4Plan) { q.Expected.CommonDirMount.Mount = "" },
+		"common-path":     func(q *RegistrationPruneV4Plan) { q.Expected.CommonDirMount.Identity.Path = q.SourcePath },
+		"scope":           func(q *RegistrationPruneV4Plan) { q.Registration.Scope = "other" },
+		"source":          func(q *RegistrationPruneV4Plan) { q.SourcePath += "-other" },
+		"gitdir":          func(q *RegistrationPruneV4Plan) { q.Registration.GitDir += "-other" },
+		"payload":         func(q *RegistrationPruneV4Plan) { q.PayloadPath = filepath.Dir(q.StateDir) },
+		"native-digest":   func(q *RegistrationPruneV4Plan) { q.Expected.Native.References = []V3Reference{} },
+		"nil-metadata":    func(q *RegistrationPruneV4Plan) { q.Expected.Metadata = nil },
+		"metadata-bytes":  func(q *RegistrationPruneV4Plan) { q.Expected.MetadataBytes++ },
+		"effect":          func(q *RegistrationPruneV4Plan) { q.Effects = []string{"remove-files"} },
+		"task-digest":     func(q *RegistrationPruneV4Plan) { q.Expected.TaskDigest = "short" },
+		"nil-ancestors":   func(q *RegistrationPruneV4Plan) { q.Expected.Absence.Ancestors = nil },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			q := clonePruneV4(t, p)
+			mutate(&q)
+			savePruneV4Fixture(t, q)
+			_, e := ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID)
+			assertPruneReason(t, e, "prune-plan-refused", "")
+		})
+	}
+}
+
+func TestRegistrationPruneV4ReaderNeverFallsBackOrCreates(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	raw, e := os.ReadFile(pruneV4PlanPath(p))
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, kind := range []string{"unknown-field", "duplicate-key", "trailing-data", "wrong-case", "invalid-utf8", "missing-file", "symlink", "wide-mode"} {
+		t.Run(kind, func(t *testing.T) {
+			path := pruneV4PlanPath(p)
+			_ = os.Remove(path)
+			b := append([]byte{}, raw...)
+			switch kind {
+			case "unknown-field":
+				b = append([]byte(`{"not_a_contract_field":true,`), raw[1:]...)
+			case "duplicate-key":
+				b = append([]byte(`{"schema_version":4,`), raw[1:]...)
+			case "trailing-data":
+				b = append(b, []byte("{}")...)
+			case "wrong-case":
+				b = bytes.Replace(b, []byte(`"schema_version"`), []byte(`"Schema_version"`), 1)
+			case "invalid-utf8":
+				b = bytes.Replace(b, []byte(`"registration-prune"`), []byte{'"', 0xff, '"'}, 1)
+			case "symlink":
+				outside := filepath.Join(t.TempDir(), "foreign")
+				if e = os.WriteFile(outside, raw, 0600); e != nil {
+					t.Fatal(e)
+				}
+				if e = os.Symlink(outside, path); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if kind != "symlink" && kind != "missing-file" {
+				if e = os.WriteFile(path, b, 0600); e != nil {
+					t.Fatal(e)
+				}
+				if kind == "wide-mode" {
+					if e = os.Chmod(path, 0644); e != nil {
+						t.Fatal(e)
+					}
+				}
+			}
+			if _, e = ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID); e == nil {
+				t.Fatal("incompatible or unsafe stored record accepted")
+			}
+			for _, name := range []string{"journals", "payloads", "restores"} {
+				if _, e = os.Lstat(filepath.Join(p.StateDir, pruneV4Namespace, name)); !os.IsNotExist(e) {
+					t.Fatalf("reader created %s: %v", name, e)
+				}
+			}
+		})
+	}
+}
+
+func TestRegistrationPruneV4DigestDomainsAndCanonicalKeys(t *testing.T) {
+	a := map[string]any{"b": "\x00\nλ", "a": json.Number("4")}
+	b := map[string]any{"a": json.Number("4"), "b": "\x00\nλ"}
+	x, e := pruneV4Canonical(a, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	y, e := pruneV4Canonical(b, "")
+	if e != nil || !bytes.Equal(x, y) {
+		t.Fatal("object order affected canonical encoding")
+	}
+	if pruneV4Hash("stw-registration-plan-v4", x) == pruneV4Hash("stw-registration-plan-file-v4", x) {
+		t.Fatal("digest domains collapsed")
+	}
+	if strings.ContainsRune(string(x), '\n') {
+		t.Fatal("canonical JSON has a raw LF")
+	}
+}
