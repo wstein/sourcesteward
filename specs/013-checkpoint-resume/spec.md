@@ -77,7 +77,7 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 
 ### Functional Requirements
 
-- **FR-001**: Reuse Spec 010 mutation/ownership contracts and Spec 032 recovery durability conventions through a reviewed typed integration. Checkpoint capture defaults to none; require explicit path/state selection and show included/excluded content. Untracked and ignored content require separate explicit selection and a supported capture capability; journal metadata is not a saved file payload.
+- **FR-001**: Reuse Spec 010 mutation/ownership contracts and Spec 032 recovery durability conventions through a reviewed typed integration. Checkpoint capture defaults to none; require explicit path/state selection and show included/excluded content. Untracked and ignored content require separate explicit selection and a supported capture capability; journal metadata is not a saved file payload. Bind new roots to reserved operation-specific 013 namespaces, never reuse another feature's roots/records or infer jj root durability from a visible bookmark.
 - **FR-002**: Preserve native semantics: Git index/worktree state and jj working-copy/change/operation state are not interchangeable.
 - **FR-003**: Record durable checkpoint identity, exact selected content and integrity evidence, exclusions, retention and recovery limits before acknowledging success. Partial capture is incomplete, never a restorable complete checkpoint; protect incomplete recovery records from automatic expiry.
 - **FR-004**: Make resume inspection read-only; restoration is a separate authorized plan that refuses changed relevant state and never silently discards current work.

@@ -23,7 +23,7 @@ alone is insufficient proof for these new mutations.
 **Storage**: existing sync records in `<git-common-dir>/stw/sync` and roots under
 `refs/stw/recovery/sync/RUN_ID/N` remain unchanged. Proposed typed recovery
 integration, private payload store, ownership binding and retention are OQ-3 to
-OQ-5. Payload bytes never live in sync journal fields or public results.
+OQ-5. Payload bytes never live in sync journal fields or public results. OQ-5 reserves distinct checkpoint/undo Git prefixes with exact typed ownership; a jj retained-root mechanism needs native proof and cannot silently use visible exportable bookmarks.
 
 **Testing**: red-first behavior tests in temporary repositories; pure decision
 and result tests plus native adapter conformance, crash injection and before/

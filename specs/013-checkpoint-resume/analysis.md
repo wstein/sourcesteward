@@ -45,7 +45,7 @@ mapping means planned coverage, never evidence that the test ran or passed.
 
 | Requirement | Tasks | Literal test idea |
 | --- | --- | --- |
-| FR-001 | T001–T003, T010, T011 | Plan with no selections: assert zero saved bytes/native/store effects; explicitly select one index path: assert only that pair. Reject a checkpoint reader presented with a `type: sync` record; preserve sync characterization after seam extraction. |
+| FR-001 | T001–T003, T010, T011 | Plan with no selections: assert zero saved bytes/native/store effects; explicitly select one index path: assert only that pair. Reject a checkpoint reader presented with a `type: sync` record; preserve sync characterization after seam extraction. Run sync retention with 013 checkpoint/undo roots and receipts present: assert all survive; collision/unowned-prefix mutations refuse. |
 | FR-002 | T007, T012–T014 | Give one Git path distinct staged and unstaged bytes and verify separate receipts; give jj distinct stored commit/change/op ids and unsnapshotted bytes and assert no identity substitution or implicit snapshot. |
 | FR-003 | T015, T016, T018 | Fail payload/file/directory/receipt durability before completion and assert checkpoint incomplete with retained evidence; delete a payload while retaining metadata and assert restore unavailable. |
 | FR-004 | T019–T022 | Resume a dirty owned checkpoint fixture and assert unchanged refs/index/disk/jj oplog/state store; authorize a separate restore then race selected disk bytes and assert refusal with no overwrite. |
@@ -57,7 +57,7 @@ mapping means planned coverage, never evidence that the test ran or passed.
 | FR-010 | T035, T040 | Remove one mandatory minimum/current native/backend/platform execution from the evidence matrix and assert acceptance remains blocked; include changed ownership, concurrency and interruption cases for each admitted capability. |
 | FR-011 | T029, T030 | Plan explicit native commit/merge/operation targets and verify immutable exact target/effect/recovery bindings; mutate the target after plan and assert fresh expected-state refusal. |
 | FR-012 | T031, T032 | Plan one target with inverse vs history restoration and assert distinct effects; omit or give a non-parent merge parent and assert refusal without first-parent guessing; unmet required signing refuses with zero signing-helper execution and explicit signature-loss limits. |
-| FR-013 | T022, T029, T030 | Introduce a foreign/shared/unknown target or unselected rewritten descendant and assert refusal; fail pre-action root/payload receipt and assert no target effect. |
+| FR-013 | T022, T029, T030 | Introduce a foreign/shared/unknown target or unselected rewritten descendant and assert refusal; fail pre-action root/payload receipt and assert no target effect; substitute another feature's root and assert no update/deletion. |
 | FR-014 | T033, T034 | Request selective jj undo where native operation restoration also affects an unselected bookmark/workspace: assert unsupported/refusal, no broad op undo and no Git fallback. |
 | SC-001 | T035, T036 | Execute each quickstart story row on every admitted native version/platform; unsupported cases produce typed limits, missing required execution remains an explicit blocker. |
 | SC-002 | T027, T028, T037 | Compare whole-fixture sentinels after each safety/failure/crash case and fail a mutant that writes an unselected path, runs a hook or sends a request; verify exact partial/unknown effects. |

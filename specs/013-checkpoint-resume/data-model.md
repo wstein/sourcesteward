@@ -86,6 +86,18 @@ repository/task binding, exact expected old/new native ids and file fingerprints
 root/payload receipt, allowed effects, outcome and diagnostic. It belongs to the
 shared recovery architecture; no new independent writer is assumed.
 
+Root identity includes the exact operation-owned namespace, full native target
+and expected old value. Proposed Git roots are only
+`refs/stw/recovery/checkpoint/CHECKPOINT_ID/N` or
+`refs/stw/recovery/undo/UNDO_ID/N`, create-only when absent; reject collisions,
+symbolic/unowned roots and cross-type ids. Never write sync records or any tidy,
+v3, sync or restack roots. The [recovery namespace inventory](contracts/recovery.md#recovery-root-ownership-and-namespace-reservation)
+owns prefix details. jj root receipts must name their native root kind and
+measured retention limits; the OQ-5 recommendation is native commit/op-log
+retention without a visible bookmark. Until proved durable, root-dependent
+recovery refuses. A visible bookmark is not private storage; exportable names
+can be pushed, while tidy's actual trailing `?` is its own export guard.
+
 `prepared` requires durable intent plus valid recovery roots and every required
 payload before an effect. After an effect, persist `completed`/`failed` with actual
 sampled state and per-effect result. An interrupted prepared action stays

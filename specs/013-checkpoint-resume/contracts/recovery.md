@@ -47,6 +47,47 @@ operations, changed layout/config or an incomplete checkpoint refuses apply.
 No merge, stashing, file deletion outside selected missing markers or broader
 native restoration is implied. No restore command is run from stored text.
 
+## Recovery-root ownership and namespace reservation
+
+Proposed OQ-5 reservation: 013 checkpoint/capture/restore actions use only
+`refs/stw/recovery/checkpoint/CHECKPOINT_ID/N`; selective-undo actions use only
+`refs/stw/recovery/undo/UNDO_ID/N`. Generated ids are validated opaque components,
+never a caller-provided path or a legacy tidy plan id; `N` is the positive action
+index. The fixed `checkpoint`/`undo` components are reserved for these typed 013
+records, not valid legacy plan-id aliases. Admission must detect any pre-existing
+namespace occupant/file-directory conflict and refuse without adoption.
+
+| Owner/spec | Existing or proposed Git recovery namespace |
+| --- | --- |
+| Tidy v1/v2, Spec 011; `internal/workspace/tidy_apply_result.go` | Existing `refs/stw/recovery/PLAN_ID/HASH`; per-plan legacy ids, not a generic consumer namespace |
+| Tidy v3, Specs 029/031; `internal/workspace/tidy_v3_result.go` | Existing `refs/stw/recovery/v3/PLAN_ID/HASH` |
+| Sync, Spec 032; `internal/stwsync/journal.go` | Existing `refs/stw/recovery/sync/RUN_ID/N` and common-dir `stw/sync` records |
+| Local restack, Spec 015 recovery proposal | Proposed `refs/stw/recovery/restack/RUN_ID/N`; not a 013-owned prefix |
+| Checkpoint/restore and selective undo, Spec 013 | Proposed reserved `checkpoint/CHECKPOINT_ID/N` and `undo/UNDO_ID/N` below `refs/stw/recovery/` |
+
+Create roots only when absent, with the expected missing/zero value; reject
+symbolic roots. Any later update or explicit deletion requires its exact typed
+013 receipt, full name and expected old OID. Never write into `stw/sync`, traverse
+another feature's records or mutate an unowned ref/file, even if its name looks
+like a recovery root. Sync retention reads only sync records and deletes only
+its exact sync-run namespace at expected values, so it cannot collect 013 roots
+or bytes. Conformance must keep 013 roots/receipts beside more than ten finished
+sync runs and prove they survive sync retention unchanged.
+
+jj root kind remains an explicit OQ-5 admission choice: recommend a retained
+native commit plus operation-log evidence without creating a visible bookmark,
+with measured native retention/GC limits. An operation id or hidden unpinned
+commit alone is not a durable root; refuse any promised root-dependent recovery
+until the mechanism is proved on admitted versions. Current tidy uses visible
+`stw-recovery-PLAN_ID-HASH?` bookmarks: source includes the trailing `?`, and Spec
+011's contract uses it to prevent Git auto-export. That version-qualified rule
+is not a generic hidden-root mechanism. An ordinary visible bookmark with a
+Git-exportable name may be published by all/selected/tracked bookmark pushes;
+013 refuses visible-bookmark roots until publication risk and a safe native
+mechanism are explicitly accepted and tested. Git recovery refs are also not
+secret storage or proof against an explicit broad export; they retain committed
+objects only, never private selected-byte payloads.
+
 ## Prepare, apply and reconcile
 
 The new typed integration must preserve 032 characterization while supporting
