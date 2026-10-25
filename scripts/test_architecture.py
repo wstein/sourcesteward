@@ -154,7 +154,7 @@ class ArchitectureTests(unittest.TestCase):
     def test_stackpublish_is_a_pure_offline_core(self):
         # Spec 016 T003: the plan/guard/ownership core has no process, file, network, clock or goroutine escape.
         path = 'internal/stackpublish/plan.go'
-        architecture.validate_sources({path: 'package stackpublish\n\nimport (\n\t"fmt"\n\t"time"\n\t"net/url"\n\t"' + architecture.MODULE + 'internal/attribution"\n)\n\nvar _ time.Duration\n'})
+        architecture.validate_sources({path: 'package stackpublish\n\nimport (\n\t"fmt"\n\t"time"\n\t"' + architecture.MODULE + 'internal/attribution"\n)\n\nvar _ time.Duration\n'})
         architecture.validate_sources({'internal/stackpublish/x_test.go': 'package stackpublish\n\nimport "os/exec"\n'})
         for imported in ('os', 'os/exec', 'os/signal', 'syscall', 'plugin', 'unsafe', 'io/ioutil', 'io/fs', 'net', 'net/http', 'crypto/tls', 'golang.org/x/sys/unix', 'golang.org/x/net/http2'):
             with self.assertRaises(ValueError, msg=imported): architecture.validate_sources({path: 'package stackpublish\n\nimport "' + imported + '"\n'})
