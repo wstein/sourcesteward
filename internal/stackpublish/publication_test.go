@@ -147,21 +147,28 @@ func TestCodeRewriteTierMatrix(t *testing.T) {
 	}
 }
 
-func TestNewNonRewrittenTopicNeedsAStrongestReviewOfTheExactHead(t *testing.T) {
+// Review F3: AGENTS.md "Push early": a new topic goes up as a Draft once the author's checks pass; the
+// review belongs to Ready. Only a REWRITE of a pushed branch needs its review before the push.
+func TestAFirstPushOfANewTopicNeedsNoReviewBeforeThePush(t *testing.T) {
 	for _, class := range []string{"docs", "code"} {
-		in := codePublication()
-		in.Rewrite, in.Moved, in.RangeDiff = false, nil, nil
+		in := codePublication() // this PR's own first push: a new topic with code
+		in.Rewrite, in.Moved, in.RangeDiff, in.Review = false, nil, nil, nil
 		if class == "docs" {
 			in.Range.Commits = []Commit{commitOf('f', "docs/a.md")}
 		}
-		in.Review.ReviewerID = "sonnet-reviewer"
 		r := EvaluatePublication(in)
-		if !r.ReviewRequired || r.MinTier != TierStrongest || !reflect.DeepEqual(pubBlockers(r), []string{"review-missing/review-tier-too-low"}) {
-			t.Errorf("%s: %+v", class, r)
+		if !r.Allowed() || r.ReviewRequired || r.MinTier != "" || r.MovedScopeClass != "" {
+			t.Errorf("%s: %+v %v", class, r, pubBlockers(r))
 		}
-		in.Review.ReviewerID = "opus-reviewer"
-		if r := EvaluatePublication(in); !r.Allowed() {
-			t.Errorf("%s: %v", class, pubBlockers(r))
+		// The other pre-push gates still apply to a new topic.
+		in.Checks = &LocalChecks{Known: true}
+		if got := pubBlockers(EvaluatePublication(in)); !reflect.DeepEqual(got, []string{"checks-not-green/local-checks-red"}) {
+			t.Errorf("%s: %v", class, got)
+		}
+		in.Checks = goodPublication().Checks
+		in.Range.Commits[0].Author = Identity{Name: "x", Email: "y"}
+		if got := pubBlockers(EvaluatePublication(in)); !reflect.DeepEqual(got, []string{"identity-mismatch/foreign-identity"}) {
+			t.Errorf("%s: %v", class, got)
 		}
 	}
 }
@@ -263,6 +270,48 @@ func TestRangeAndIdentityGates(t *testing.T) {
 			t.Errorf("%s: allowed=%v %v want %v", name, r.Allowed(), pubBlockers(r), c.want)
 		}
 	}
+}
+
+func TestEvidenceListsAreValidatedAndBounded(t *testing.T) {
+	cases := map[string]struct {
+		mutate func(*PublicationInput)
+		want   []string
+	}{
+		"duplicate commit id": {func(in *PublicationInput) {
+			in.Range.Commits = append([]Commit{in.Range.Commits[1]}, in.Range.Commits...)
+		}, []string{"identity-mismatch/range-commit-duplicate"}},
+		"too many paths in one commit": {func(in *PublicationInput) { in.Range.Commits[0].Paths = manyPaths(1001) }, []string{"bound-exceeded/paths-too-many"}},
+		"too many origins":             {func(in *PublicationInput) { in.Config.Origins = manyOrigins(1001) }, []string{"bound-exceeded/config-too-many"}},
+	}
+	for name, c := range cases {
+		in := goodPublication()
+		c.mutate(&in)
+		if got := pubBlockers(EvaluatePublication(in)); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %v want %v", name, got, c.want)
+		}
+	}
+	in := goodPublication()
+	in.Range.Commits[0].Paths = manyPaths(1000)
+	in.Config.Origins = manyOrigins(1000)
+	if r := EvaluatePublication(in); r.RangeClass != ClassDocsOnly || !r.Allowed() {
+		t.Errorf("the limits themselves are allowed: %v", pubBlockers(r))
+	}
+}
+
+func manyPaths(n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = "docs/p" + strings.Repeat("x", i%5) + string(rune('a'+i%26)) + ".md"
+	}
+	return out
+}
+
+func manyOrigins(n int) []ConfigOrigin {
+	out := make([]ConfigOrigin, n)
+	for i := range out {
+		out[i] = ConfigOrigin{"global", "user.name", owner().Name}
+	}
+	return out
 }
 
 func TestMoreThanTwoHundredCommitsAreRefused(t *testing.T) {

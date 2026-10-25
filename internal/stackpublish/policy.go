@@ -72,6 +72,7 @@ type WorkspacePolicy struct {
 	Loaded           bool
 	Owner            Identity
 	Reviewers        []Reviewer
+	Authors          []string // trusted author agent ids (from task evidence), never a forge login
 	ReviewSources    []string
 	CheckSources     []string
 	ScopeSources     []string
