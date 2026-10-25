@@ -21,8 +21,8 @@ The first line shows help only, with no repository/authentication/read/write or
 prompt. These names are OQ-SURFACE proposals; `FILE` is bounded input data, never
 commands. Validate producer/command, kind, schema_version and exact input
 bindings before accepting an observation or receipt; event/diagnostic names alone
-never choose a decoder. The published 035 restack-needed event is not a 012
-finding or 015 receipt, and its merge-commit new-parent cannot become a trunk or
+never choose a decoder. The published 035 restack-needed event is not the 012
+restack-advised finding or a 015 receipt, and its merge-commit new-parent cannot become a trunk or
 apply/push target without fresh explicit boundary validation.
 A typed 015 actual receipt can be supplied instead of 012 observation
 through a surface to be accepted under the same OQ; no hard 012 dependency is
@@ -94,7 +94,10 @@ an independently reviewed new closed capability union: exact generated method,
 path, accepted body fields/size and response validation. The table above is an
 effect description, not a fabricated endpoint allowlist. Until method/path/body
 and effects have accepted measurements/tests, that kind refuses
-`capability-unavailable` without a request. No arbitrary REST/GraphQL, redirects,
+`capability-unavailable` without a request. Supplied 014 evidence must retain accepted profile/full-H attribute-source and
+private-context guard binding; unsupported enforcement or missing binding refuses
+that evidence. 013 safety-copy/native operation records cannot be treated as a
+remote transaction, generic jj CAS or reversible publication. No arbitrary REST/GraphQL, redirects,
 response-selected URLs, repository SDK discovery or dependency extension launch.
 
 Native link reference data has this inert shape:
