@@ -16,6 +16,16 @@ prediction or hidden-v1 quarantine SHA never fills actual-new-head. 016 rechecks
 the candidate and every publication-specific guard; an apply receipt is not
 remote authorization or current remote/default/permission evidence.
 
+The merged 014 design's actual full-H attribute pin, private context and repeated
+H/N guards qualify any supplied preflight; an unpinned or contaminated preview
+cannot satisfy its profile. T033 gates its future replay implementation, while
+issue #241 remains a separate existing-code follow-up. Neither merged design nor
+predicted-clean evidence substitutes for actual 015 candidate verification.
+Native jj conflict evolution/aggregate policy remains separately capability-gated.
+013 independent safety-copy receipts and native operation samples preserve their
+own retention/concurrency limits, including no jj operation-head CAS and no
+first-slice invoker working-copy commit change; they never authorize remote undo.
+
 A candidate is created first and only then independently reviewed if required.
 Reviewing an old head or a prediction does not review the actual candidate.
 Record review subject SHA, independent reviewer type/tier, CLEAR/other verdict,
