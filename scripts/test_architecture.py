@@ -51,9 +51,9 @@ class ArchitectureTests(unittest.TestCase):
         # The classification types (tidywizard), the analysis and the renderer join the derivation,
         # owner and plan-set packages for the wizard layer of tidy plan (Spec 041 T019a).
         prefix = architecture.MODULE
-        for allowed in ('internal/tidywizard', 'internal/tidywizard/analysis', 'internal/tidywizard/render', 'internal/tidywizard/derive', 'internal/tidywizard/owner', 'internal/tidywizard/planset'):
+        for allowed in ('internal/tidywizard', 'internal/tidywizard/analysis', 'internal/tidywizard/render', 'internal/tidywizard/prompt', 'internal/tidywizard/derive', 'internal/tidywizard/owner', 'internal/tidywizard/planset'):
             architecture.validate([prefix + 'internal/cli ' + prefix + allowed])
-        for other in ('internal/tidywizardx', 'internal/tidywizard/derivex', 'internal/tidywizard/ownerx', 'internal/tidywizard/plansetx', 'internal/tidywizard/classify', 'internal/tidywizard/analysisx', 'internal/tidywizard/renderx', 'internal/tidywizard/prompt'):
+        for other in ('internal/tidywizardx', 'internal/tidywizard/derivex', 'internal/tidywizard/ownerx', 'internal/tidywizard/plansetx', 'internal/tidywizard/classify', 'internal/tidywizard/analysisx', 'internal/tidywizard/renderx', 'internal/tidywizard/promptx'):
             with self.assertRaises(ValueError, msg=other): architecture.validate([prefix + 'internal/cli ' + prefix + other])
 
     def test_restack_starts_processes_only_in_its_git_runner_and_stays_offline(self):
