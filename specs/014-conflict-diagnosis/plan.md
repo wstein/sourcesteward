@@ -67,8 +67,12 @@ scratch effects or resampling across their dependencies.
 2. Admit canonical layout and native ownership; capture backend/version and native
    state, full participants and resolved references. Reject unsafe/missing history,
    undecided semantic profiles and unsupported native capabilities before replay.
-3. Diagnosis observes existing Git unmerged index/operation metadata or pinned
-   stored jj conflict evidence, without resolving, staging or snapshotting.
+3. Diagnosis runs with the binding sanitized runner/configuration controls in
+   [preflight isolation](contracts/preflight.md#binding-execution-isolation-and-hazard-refusal)
+   and enforced original-write/network denial. Git uses `ls-files -u -z`,
+   `rev-parse` and bounded no-follow operation-file reads, never `git status`,
+   index refresh or fsmonitor. Native jj uses isolated HOME/XDG/JJ_CONFIG and
+   pinned stored conflict evidence, without resolving, staging or snapshotting.
 4. Preflight allocates private scratch only after admission, installs write/network
    confinement and sanitized execution, then performs the declared native kernel.
    For linear replay, source range is exactly old-parent..source-head, oldest first;

@@ -23,9 +23,11 @@ No shared original-store writes, raw Git fallback or unsandboxed fallback.
 
 Bind full old-parent P, source-head H and destination N. Require P ancestor of H,
 complete local history and a unique related-history interpretation. Enumerate
-exactly P..H oldest first; record every commit/parent. Recommend refusal of merge
-commits, empty/redundant commits, shallow history, replace/graft effects and
-attribute/config hazards before replay; OQ-SEM/TOPO records final accepted scope.
+exactly P..H oldest first; record every commit/parent. The initial linear profile
+refuses merge commits, shallow/replace/graft-affected history and every execution
+hazard below before replay. Empty/redundant commit treatment remains OQ-SEM;
+unaccepted variants refuse. OQ-TOPO governs future topology extensions, never
+an exception to isolation or hazard refusal.
 A recognized unsupported profile is error/capability-unavailable, never best effort.
 
 Replay each moved commit using its original parent as the three-way base and
@@ -45,6 +47,66 @@ A merge request uses its own measured native strategy and accepted base selectio
 never reduce it to this replay profile or infer an ambiguous mainline. No custom
 merge driver, rerere, external diff/textconv/filter or repository-selected options.
 Gitlinks are identities only; no submodule traversal, initialization or fetch.
+
+## Binding execution isolation and hazard refusal
+
+Both diagnosis and preflight MUST meet the minimum runner controls in
+`internal/restack/git.go` and `internal/restack/hazards.go`; their names alone
+are not a sandbox. Use fixed argv with no shell and a trusted native executable.
+Build the environment from scratch: no inherited `GIT_*`, loader/shell injection,
+trace, credential or helper variables. Set private HOME/XDG_CONFIG_HOME,
+`GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` to the null device,
+`GIT_CONFIG_NOSYSTEM=1`, `GIT_ATTR_NOSYSTEM=1`, `GIT_NO_LAZY_FETCH=1`,
+`GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, inert askpass/editor
+and pager settings. Replay additionally sets only its private object directory
+and read-only source alternates. Start with `--no-optional-locks`,
+`--no-replace-objects`, `--no-pager` and the following mandatory `-c` pins:
+
+| Pins | Required values |
+| --- | --- |
+| Helpers/worktree | core.hooksPath=null device; core.fsmonitor=false; core.autocrlf=false; core.quotePath=true; submodule.recurse=false |
+| Merge | merge.renormalize=false; merge.renames=true; merge.directoryRenames=conflict; merge.renameLimit=1000 |
+| Diff selection | diff.renames=false; diff.external=empty; diff.algorithm=myers; diff.indentHeuristic=true; diff.orderFile=null device; diff.relative=false; diff.ignoreSubmodules=none |
+| Diff format | diff.noprefix=false; diff.mnemonicPrefix=false; diff.context=3; diff.interHunkContext=0; diff.colorMoved=false; diff.wsErrorHighlight=none |
+| Maintenance/protocol | gc.auto=0; maintenance.auto=false; protocol.ext.allow=never |
+| Rendering | log.showSignature=false; log.decorate=no; log.mailmap=false; color.ui=never; i18n.logOutputEncoding=UTF-8 |
+
+Before any replay, list configuration with `config --list -z --no-includes`
+under the isolated environment, without adding the pins to that listing. Refuse
+unreadable config, includes/includeIf, extensions.*, core.hooksPath,
+core.fsmonitor, core.attributesFile, merge.* driver/name/recursive, filter.*
+clean/smudge/process/required, diff.* command/textconv/cachetextconv/binary and
+diff.external. Refuse grafts, shallow history, repository object alternates,
+nonempty info/attributes and replace refs, as the 015 hazard gate does. Report
+hazard names only. Local user.name/email is a disclosed non-refusing diagnostic,
+never an expected identity or replay identity source.
+
+For every touched path, run bounded NUL-delimited
+`check-attr --source=H -z --stdin merge diff filter` and the same check with
+`--source=N`. Refuse every value other than unspecified, including explicitly
+set/unset merge/diff/filter attributes and LFS filter attributes. Refuse any moved
+.gitattributes file before replay; unreadable attribute evidence also refuses.
+A future merge profile must provide equivalent accepted checks over every tree
+whose attributes can affect its selected paths, otherwise it remains unavailable.
+Pinned merge options can differ from the repository's configured merge behavior;
+state that limitation in every preflight result rather than claim parity.
+
+Diagnosis uses the same sanitized runner, helper suppression and enforced original
+write/network denial. Its Git observations are read-only plumbing such as
+`ls-files -u -z`, `rev-parse` and bounded no-follow reads of recognized operation
+files; never `git status`, index refresh, filters or fsmonitor. The 015 target-dirty
+and operation-in-progress apply refusals are not copied into diagnosis: an existing
+interrupted operation is the evidence it reads, not permission to continue it.
+
+Native jj diagnosis/preflight also MUST isolate user configuration: an allowlisted
+environment with private HOME/USERPROFILE/XDG config, cache, data and TMPDIR,
+`JJ_CONFIG=` suppression as supported by the measured native version, no inherited
+JJ_USER/JJ_EMAIL, tracing or helper variables, and fixed no-pager/color settings.
+Diagnosis pins `--ignore-working-copy --at-operation=FULL_OPERATION_ID` inside
+read-only/network-denied enforcement. Preview requires independently writable
+scratch store/config/oplog plus accepted native semantics. Unmeasured config
+suppression or enforcement refuses capability-unavailable; original/user settings
+must never silently supply merge tools, aliases or identity defaults.
 
 ## Scratch confinement and retirement
 
