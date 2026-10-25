@@ -31,7 +31,10 @@ The v1 observation cannot predict a real committer, so actual replay evidence
 and SHA appear only after candidate creation. The derived change class/purity
 feeds AGENTS.md: docs-only rewrite requires green local checks (and pure-rebase
 equality) without pre-push review; code requires exact-new-SHA independent review
-before push, middle tier allowed for equal pure rebase. Ready always requires
+before push, middle tier allowed for equal pure rebase. Push-time identity
+covers observed remote-default..actual-new-head, including open-parent commits,
+against the trusted owner alone, with local/global config-origin evidence and
+no caller-widened identity set or configuration write. Ready always requires
 independent exact-head CLEAR and green required checks. No review blocks the
 first local replay; Spec 043 human `--reviewed` remains its own owner statement.
 **Alternatives considered:** executing porcelain rebase, updating all descendants,

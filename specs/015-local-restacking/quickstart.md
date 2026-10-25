@@ -84,7 +84,11 @@ D8: Spec 016 owns separately selected push/link/retarget plans and authorization
 Its agent pre-push gate follows the class-dependent table in the apply contract:
 docs-only checks/equality without pre-push review, code independent exact-new-SHA
 CLEAR (middle tier allowed for equal pure rebase), plus applicable checks, fresh
-attribution/identity and full observed **remote** old SHA. Ready always requires
+attribution/identity and full observed **remote** old SHA. The push identity
+check covers observed remote-default..actual-new-head including open-parent
+commits, trusted owner only (no caller-widened identity flags), with local/global
+user-config origins reported and any foreign user identity refused; no config
+write occurs. Ready always requires
 independent exact-head CLEAR and all required checks green. Local old head
 and a v1 inert command do not supply that advertisement. A changed head requires
 new review; no local mutation authorizes a remote write.

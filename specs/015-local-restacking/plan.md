@@ -143,7 +143,8 @@ blanket runtime implementation or product acceptance.
    needs explicit local/plain-chain provenance.
 4. D7 remains plumbing plus CAS. Candidate replay preserves original author/date,
    uses the OQ-3 explicit actual committer policy, and exposes actual new SHA.
-   Verify one-to-one all `=` range-diff and actual identities before target CAS.
+   Verify one-to-one all `=` range-diff and actual identities against the trusted
+   owner only before target CAS; flags cannot extend that owner identity.
    Initial apply refuses occupied refs; changing a caller's own attached
    worktree is a separate future capability requiring OQ-6 resolution.
 5. Extract/reuse a reviewed neutral durability seam from
@@ -159,7 +160,9 @@ blanket runtime implementation or product acceptance.
    rebase allowed). Ready always needs independent exact-head CLEAR and green
    required checks. Spec 043 human `--reviewed` is a separate owner statement.
    The observed remote SHA belongs to 016 and is never inferred from local old
-   head, upstream config or an inert v1 text. Retarget/link are separate effects.
+   head, upstream config or an inert v1 text. Push-time identity covers the full
+   observed remote-default..new-head range, including open-parent commits, and
+   user-config origins/foreign values are reported without config writes. Retarget/link are separate effects.
 7. Native jj begins with a capability spike. No adapter may claim Git CAS,
    automatic descendant scope safety, operation undo or snapshot suppression
    for writes until measured. Unsupported capability remains explicit.
