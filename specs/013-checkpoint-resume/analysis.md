@@ -31,7 +31,7 @@ Independent exact-head review remains a separate handoff gate.
 | D2 | Semantics | HIGH | research.md OQ-2; selective-undo contract | Native inverse/history/operation undo, descendant and signature policies require a choice and measured effects. Keep unsupported until T001; no broad jj fallback. |
 | D3 | Retention | HIGH | research.md OQ-3; data model PayloadReceipt | Payload location/quota/retention are not settled. Keep automatic deletion disabled; sync's ten finished runs is not 013 cleanup authority. |
 | D4 | Ownership | HIGH | research.md OQ-4; all apply guards | Trusted actor/task/ref/change ownership and sharedness evidence need an approved source. Unknown evidence refuses, never inferred from configuration or offline absence. |
-| D5 | Integration | HIGH | research.md OQ-5; recovery contract | Sync's private v1 types are not a generic journal API. Characterize first and review a typed extraction with unchanged sync behavior; no duplicated writer. |
+| D5 | Integration | HIGH | research.md OQ-5; recovery contract | Sync's private v1 types are not a generic journal API. Characterize first and review a typed extraction with unchanged sync behavior; no duplicated writer. Stored restore-plan spelling and common flag admission also remain OQ-5 interface choices. |
 
 No unresolved choice is presented as an approved default. Proposed numeric bounds
 and deterministic privacy exclusions are design constraints pending implementation
@@ -52,7 +52,7 @@ mapping means planned coverage, never evidence that the test ran or passed.
 | FR-005 | T008, T009 | Select an excluded `.env`/credential/transcript input and assert refusal; pass inert malicious task text and assert no environment/transcript discovery, execution or payload disclosure. |
 | FR-006 | T017, T018, T021, T023, T024 | Crash after native effect before completion; inspect known/unknown actions and ensure no automatic rollback. Give only a jj operation id without saved disk bytes and assert no disk recovery promise. |
 | FR-007 | T004, T005, T014, T033, T034 | Run jj colocation with native jj unavailable and a usable Git present: assert explicit refusal and zero raw Git writes; ambiguous/GitButler/foreign ownership also refuses. |
-| FR-008 | T025, T026 | Render success and typed error in human/JSON with ANSI/bidirectional/non-UTF-8 path data; compare facts and reversible paths, assert no prompt/pager and proposed exits 0/1/2 while 015 v1 incomplete stays 3. |
+| FR-008 | T025, T026 | Render success and typed error in human/JSON with ANSI/bidirectional/non-UTF-8 path data; compare facts and reversible paths, assert no prompt/pager or TTY dependency, proposed exits 0/1/2 and unchanged 015 v1 incomplete exit 3. Verify exact admitted format/timeout/spelling choices, reject offline `--online`, and require authorization plus plan id for effects. |
 | FR-009 | T006, T007, T027, T028 | Exceed each count/byte/deadline cap and cancel between actions: assert incomplete/partial with completed effects retained and no next mutation; fake helpers/hooks/network record zero execution/requests. |
 | FR-010 | T035, T040 | Remove one mandatory minimum/current native/backend/platform execution from the evidence matrix and assert acceptance remains blocked; include changed ownership, concurrency and interruption cases for each admitted capability. |
 | FR-011 | T029, T030 | Plan explicit native commit/merge/operation targets and verify immutable exact target/effect/recovery bindings; mutate the target after plan and assert fresh expected-state refusal. |
