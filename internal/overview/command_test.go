@@ -159,7 +159,7 @@ func TestBuildCommandRefusesHostileTokens(t *testing.T) {
 	uses := map[Category][]string{
 		RepoError: {"Path"}, LocalOperation: {"Path"}, MainRed: {"Slug", "Branch"}, ReleaseRunFailed: {"Slug", "SHA"},
 		ReadError: {"Slug"}, LocalBehind: {"Path"}, PRReady: {"Slug"}, ReleaseDraft: {"Slug", "Tag"},
-		IssueSecurity: {"Slug"}, GitlinkAhead: {"Path", "Root"}, WorktreeDirty: {"Worktree"}, PRBot: {"Slug"}, BranchesUnmerged: {"Path"},
+		IssueSecurity: {"Slug"}, GitlinkAhead: {"Path", "Root"}, WorktreeDirty: {"Worktree"}, PRBot: {"Slug"},
 	}
 	for cat, fields := range uses {
 		for _, f := range fields {
@@ -214,5 +214,17 @@ func TestBuildCommandQuotesPath(t *testing.T) {
 	cmd, _ := buildCommand(LocalChanges, target{Path: "my repo/it's"})
 	if cmd != `git -C 'my repo/it'\''s' status` {
 		t.Fatal(cmd)
+	}
+}
+
+// Rows 23 and 24 suggest the workspace-wide wizard (Spec 037 OQ11): it takes no value from the target,
+// so a hostile path can neither reach the string nor suppress it.
+func TestTidyHintIgnoresTheTarget(t *testing.T) {
+	for _, c := range []Category{BranchesUnmerged, WorktreeStale} {
+		for _, path := range []string{"", "-x", "a;b", "$(x)", "x\ny"} {
+			if cmd, eff := buildCommand(c, target{Path: path}); cmd != "stw tidy" || eff != Read {
+				t.Errorf("%s Path=%q: %q (%q)", c, path, cmd, eff)
+			}
+		}
 	}
 }
