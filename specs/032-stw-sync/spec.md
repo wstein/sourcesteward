@@ -1,7 +1,7 @@
 # Feature Specification: `stw sync`, one reviewed command to bring local branches up to date
 
 **Branch**: `docs/spec-stw-sync` | **Created**: 2026-10-21
-**Status**: Implemented in source (slices 1a to 5 merged, closing review 2026-10-25); see [Delivered contract and deliberate deltas](#delivered-contract-and-deliberate-deltas-closing-review-2026-10-25), which wins over any older wording below. Feature status stays `planned` until the owner accepts the run evidence.
+**Status**: Implemented in source (slices 1a to 5 merged, closing review 2026-10-25); see [Delivered contract and deliberate deltas](#delivered-contract-and-deliberate-deltas-closing-review-2026-10-25), which wins over any older wording below. Run evidence: [verification](verification.md).
 **Input**: Owner request: one convenient manual command that replaces the routine `git pull --rebase --prune` run in every repository (and the submodule sync/update step), with the same few options, applied to all checked-out worktrees of a repository.
 
 ## Scope and decisions
