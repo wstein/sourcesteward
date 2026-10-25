@@ -27,6 +27,24 @@ symlink, hardlink, special file, unsafe/aliased path or unexpected metadata. Ref
 ambiguous repository/backend ownership, unreadable/truncated evidence and unsupported
 native/platform capabilities. A stale row has no human decision override for these checks.
 
+Layout/identity admission MUST additionally enforce this complete refusal matrix:
+
+| Observation | Required handling |
+| --- | --- |
+| Administrative entry is not the exact immediate `<common-dir>/worktrees/<name>` child, resolves outside that parent, or uses a prefix/alias selector | Refuse. Compare complete native names and confined canonical identities, never prefix matches; `w1` never selects `w1-other`. |
+| Raw `gitdir` pointer does not name exactly the recorded `<destination>/.git`, or the administrative `commondir` pointer resolves elsewhere | Refuse. Permit only the native terminal line ending, not arbitrary whitespace/path rewriting; bind raw bytes and the resolved identity. |
+| Bare common repository | Refuse this capability; no missing linked-checkout inference from a bare repository. |
+| Common directory is under a superproject's `.git/modules/...` | Admit an initialized submodule repository only through the existing reviewed Spec 011 FR-012 / Spec 010 native layout proof. Bind that submodule's own common-dir identity and its immediate worktrees child; a foreign/ambiguous modules layout refuses. No basename `.git` assumption. |
+| Lock bytes differ from the creation task's exact `stw:<task-id>` reason | Refuse, even if another `stw:` prefix or matching owner label is present. |
+| Any unrelated unlocked missing sibling has native `prunable` status | Retain the existing whole-inventory refusal: it blocks this plan too. The selected missing locked registration is the only new operation-specific exception; never broaden prune scope. |
+| Same registration name is removed/re-added or its entry changes between plan/apply checks | Refuse stale state on changed descriptor identity, pointers, record binding or raw metadata. A recreated identical name/HEAD is not authorization. |
+| Original name/path is occupied during restore or completed replay | Refuse; never overwrite or reinterpret the new registration as the saved one. |
+
+Bind every protected sibling by exact name/identity. Externally indistinguishable ABA
+replacement remains a sampled-evidence limitation, never an atomic native CAS claim.
+Git must meet the project's existing minimum and support `worktree repair` (Git 2.29
+or later); unsupported native versions refuse before any recovery/removal effect.
+
 The only destructive effect is removal of that selected administrative registration.
 No user-directory traversal/removal, branch deletion, checkout, index reset, existing-reference
 rewrite, remote effect, hook, helper, broad prune or garbage collection is authorized.
@@ -182,9 +200,11 @@ owner schema/interface decision; no existing command is claimed to implement it.
 
 Before writing, verify repository/common-dir and parent identities, all payload digests and
 bounds, intact HEAD pin, exact original registration name unoccupied, and destination still
-absent with the approved witness/ancestor/mount evidence. Refuse a reused name/path, moved
-or present destination, changed lock/ownership, foreign repository, missing/corrupt recovery,
-or ambiguous prior partial restore. Never overwrite, adopt or repair such state.
+absent under the defined ancestor/device/mount predicate. Refuse a reused registration
+name, a present entry at the original destination, changed lock/ownership, foreign
+repository, missing/corrupt recovery or ambiguous prior partial restore. Discovering the
+checkout at another path is NOT a restore refusal: do not inspect/modify that found path
+as part of administrative restoration. Never overwrite or adopt an occupied original slot.
 
 Stage the exact payload in private confined storage, preserve raw bytes including lock,
 HEAD and index, and publish only at the absent original registration entry with no-replace
@@ -195,6 +215,20 @@ hooks, restore file ownership/inodes/timestamps, or recover objects absent from 
 repository and pinned history. No byte-identical user checkout or universal native recovery
 is promised. If safe no-replace publication/native verification is unavailable, refuse and
 retain the payload for separately reviewed manual recovery; never emit a guessed transcript.
+
+If the owner finds a relocated checkout, first restore the saved administrative entry
+under the rules above, then report native `git worktree repair <found-path>` from an
+admitted source checkout as the separate owner-run reattachment step. Git 2.29 introduced
+this capability; test both the project's supported minimum and current Git. Repair
+updates the moved checkout's `.git` backlink and the administrative `gitdir` mapping,
+so it requires its own filesystem write authorization and is NOT executed by prune or
+administrative restore. Print the source and found path as bounded escaped argv data,
+never shell interpolation or an asserted successful transcript. After the owner repair,
+read-only native verification must confirm the same repository, registration, branch/HEAD
+and preserved original stw lock; this confirmation does not retroactively authorize a
+new prune. A restore fixture MUST move a locked checkout, prune its registration only,
+restore complete metadata, run the explicitly authorized native repair on the found path,
+and prove `git status` works with unchanged user files and staged/index bytes.
 
 ## Structured contracts: Needs owner decision
 
@@ -225,7 +259,7 @@ stale state, cancellation, operational/output failure or partial/unknown effect;
 usage. Human and structured outcomes must agree and expose recovery availability and known
 partial effects. Missing evidence is never success. These are future acceptance requirements.
 
-Acceptance MUST include Git 2.29 or later and current Git on Linux/macOS, successful
+Acceptance MUST include the project minimum (at least Git 2.29) and current Git on Linux/macOS, successful
 absence-predicate fixtures and unsupported-observation refusal, moved and unmounted
 lookalikes, all ownership/selection refusals,
 metadata corruption/overflow/binary bytes, private-storage failure, concurrent changes at every
