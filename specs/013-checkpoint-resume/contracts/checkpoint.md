@@ -118,8 +118,12 @@ stw checkpoint drop-plan --checkpoint CHECKPOINT_ID --state-dir PRIVATE_DIR [--j
 stw checkpoint drop --plan DROP_PLAN_ID --state-dir PRIVATE_DIR --authorize --confirm-checkpoint CHECKPOINT_ID [--json]
 ```
 
-Drop-plan selects one exact checkpoint and enumerates its owned payload files,
-metadata and 013 roots, dependencies, expected digests/OIDs and physical bytes.
+Drop-plan selects one exact checkpoint and enumerates only its original capture
+payload files, metadata and checkpoint roots, dependencies, expected digests/OIDs
+and physical bytes. It never selects pre-action safety-copy records, payloads or
+`undo/safety` roots, including those from completed restores. Safety copies have
+independent ids, receipts and retention; deleting the source checkpoint cannot
+delete or invalidate their recovery data.
 Apply requires that stored plan, `--authorize` and exact checkpoint-id confirmation;
 there is no prompt, wildcard/default selection or force bypass. Freshly verify
 ownership/modes/location, complete reference/dependency inventory and expected
@@ -139,6 +143,22 @@ payloads and exclusive roots are verified absent, with a bounded metadata-only
 tombstone. Unlinking is not secure erasure: backups, storage snapshots, retained
 native objects/history and prior external copies are outside this guarantee.
 No automatic expiry, GC or cross-feature cleanup is authorized.
+
+Proposed OQ-3/OQ-5 safety-copy deletion is a separate interface, not an alias for
+checkpoint drop or an implemented command:
+
+```text
+stw checkpoint drop-safety-plan --safety-copy SAFETY_ID --state-dir PRIVATE_DIR [--json]
+stw checkpoint drop-safety --plan SAFETY_DROP_PLAN_ID --state-dir PRIVATE_DIR --authorize --confirm-safety-copy SAFETY_ID [--json]
+```
+
+The caller must explicitly name the safety copy and separately confirm its id;
+checkpoint confirmation or completion never authorizes this deletion. Apply the
+same exclusive ownership, complete dependency inventory, expected-value root
+CAS, per-file verification, partial byte/root counts and tombstone rules. Keep
+records/receipts until their corresponding bytes/roots are verified absent.
+Unresolved action or live receipt dependencies refuse; no wildcard, implicit
+cleanup, automatic retention deletion or secure-erasure claim exists.
 
 ## Bounds
 
