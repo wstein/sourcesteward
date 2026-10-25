@@ -352,8 +352,8 @@ its command-specific exit meanings and the separately required build approval.
 `stw tidy plan --json` without a `PATH` and without an expert flag, and `stw tidy --json`, print one `tidy-overview` document
 (`schemas/v2/tidy-overview.schema.json`, `schema_version` 1, `additionalProperties` false). It is frozen in the source tree but listed in
 `UNPUBLISHED_SCHEMAS`, so no Pages URL exists yet and consumers must not rely on one. Required members: `command`, `workspace`,
-`derived[]` (value, source, overridden), `repositories[]` (state `analysed`, `skipped` or `error`, with a reason), `candidates[]`
-(verdict `safe`, `decision`, `retain` or `foreign`, owner, owner source, scope, proof, effects, evidence), `summary`, `mode` (the run
+`derived[]` (name, value, source, overridden), `repositories[]` (state `analysed`, `skipped` or `error`, with a reason), `candidates[]`
+(verdict `safe`, `decision` or `retain`; owner, owner source, scope `own`, `other` or `unknown`, proof, effects, evidence), `summary`, `mode` (the run
 mode evidence), `plan_id` (empty unless `--save` stored a plan set), `notices[]` and `truncated`. The document is bounded: 4096
 candidates, 512 bytes of evidence each and 4 MiB; beyond that `truncated` is true and the exit code is 1 (`output-limit`). The
 overview stores and changes nothing. The v1, v2 and v3 tidy schemas keep their meaning; see [tidy](tidy.md#the-tidy-wizard).
