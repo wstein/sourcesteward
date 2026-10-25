@@ -98,11 +98,15 @@ func observePruneAbsence(ctx context.Context, destination string, parent PathIde
 	return witness, nil
 }
 func pruneDirectoryFact(fd int, path string) (pruneDirectoryWitness, error) {
+	return pruneDirectoryFactWithMount(fd, path, pruneMountIdentity)
+}
+
+func pruneDirectoryFactWithMount(fd int, path string, mountReader func(int) (string, error)) (pruneDirectoryWitness, error) {
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil || st.Mode&unix.S_IFMT != unix.S_IFDIR || st.Mode&0444 == 0 || st.Mode&0111 == 0 {
 		return pruneDirectoryWitness{}, failure("prune-parent-unavailable", "Checkout ancestor must be an accessible real directory.")
 	}
-	mount, err := pruneMountIdentity(fd)
+	mount, err := mountReader(fd)
 	if err != nil {
 		return pruneDirectoryWitness{}, failure("prune-mount-unavailable", "Native mount identity is unavailable; absence is not proven.")
 	}
