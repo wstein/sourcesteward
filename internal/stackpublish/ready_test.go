@@ -231,3 +231,51 @@ func TestIdsOutsideTheLowerCaseGrammarAreNeverTrusted(t *testing.T) {
 		t.Fatalf("a reviewer id outside the grammar: %v", got)
 	}
 }
+
+// An empty PR (head equal to base) has nothing to publish: it is never Ready. The stable reason
+// scope-not-accepted is reused with the detail head-equals-base (foreman decision, no new code).
+func TestAnEmptyPullRequestIsNeverReady(t *testing.T) {
+	in := goodReady()
+	in.BaseSHA = in.Head
+	in.Checks.ObservedBase = in.Head
+	in.Rebase.EvaluatedBase = in.Head
+	if got := blockerList(EvaluateReady(in)); !reflect.DeepEqual(got, []string{"scope-not-accepted/head-equals-base"}) {
+		t.Fatalf("%v", got)
+	}
+	// The blocker holds with the policy absent as well, next to the policy blockers.
+	in.Policy.Loaded = false
+	want := []string{"review-missing/policy-missing", "checks-unknown/policy-missing", "scope-not-accepted/head-equals-base", "scope-not-accepted/policy-missing"}
+	if got := blockerList(EvaluateReady(in)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%v", got)
+	}
+}
+
+// Edge cases of the identity grammar next to head-equals-base: empty, short and upper-case SHAs are
+// head-invalid or base-invalid and never reach the equality test; equal invalid values stay invalid.
+func TestEmptyAndUpperCaseShasAreInvalidNotEqual(t *testing.T) {
+	cases := map[string]struct {
+		head, base string
+		want       []string
+	}{
+		"both empty":         {"", "", []string{"head-changed/head-invalid", "head-changed/base-invalid"}},
+		"head empty":         {"", sha('b'), []string{"head-changed/head-invalid"}},
+		"base empty":         {sha('a'), "", []string{"head-changed/base-invalid"}},
+		"equal upper case":   {strings.Repeat("A", 40), strings.Repeat("A", 40), []string{"head-changed/head-invalid", "head-changed/base-invalid"}},
+		"upper versus lower": {strings.Repeat("A", 40), strings.Repeat("a", 40), []string{"head-changed/head-invalid"}},
+		"equal short":        {"abc123", "abc123", []string{"head-changed/head-invalid", "head-changed/base-invalid"}},
+		"equal lower case":   {sha('a'), sha('a'), []string{"scope-not-accepted/head-equals-base"}},
+	}
+	for name, tc := range cases {
+		in := goodReady()
+		in.Head, in.BaseSHA = tc.head, tc.base
+		in.Review.SubjectSHA, in.Checks.ObservedBase = tc.head, tc.base
+		in.Rebase.EvaluatedHead, in.Rebase.EvaluatedBase = tc.head, tc.base
+		for i := range in.Checks.Runs {
+			in.Checks.Runs[i].HeadSHA = tc.head
+		}
+		got := blockerList(EvaluateReady(in))
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v want %v", name, got, tc.want)
+		}
+	}
+}
