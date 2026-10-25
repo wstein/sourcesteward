@@ -1,12 +1,13 @@
 # Measurement Plan: OQ-WRITES and OQ-NATIVE
 
-**Status**: PLAN MERGED (pull request 271, `f4558cfb`); the update that records
-the owner release of gate G3 is pull request 272 and is UNDER REVIEW; its
-reviewed head becomes the G1 head once it is merged. Document only. No
-measurement has been run and no request has been sent to any forge. This plan
-authorizes nothing by itself: section 2 lists the gates that must all be open
-before any run. Every GitHub behaviour below is a HYPOTHESIS to be tested,
-never a finding.
+**Status**: PLAN MERGED (pull request 271, `f4558cfb`; the G3 release is pull
+request 272, merged as `2b4ca5b4`). A first run, `20261025T170737Z`, executed
+P0, W1, W2 and W3a and stopped at W3b; its evidence is pull request 274. This
+amendment (section 13) covers the continuation and is UNDER REVIEW; its
+reviewed head becomes the G1 head of the continuation once it is merged.
+Document only. This plan authorizes nothing by itself: section 2 lists the
+gates that must all be open before any run. Every GitHub behaviour below is a
+HYPOTHESIS to be tested, never a finding.
 
 ## 1. Owner decisions this plan rests on (restated, dated 2026-10-25)
 
@@ -96,8 +97,13 @@ later reviewed write allowlist (`tasks.md` line 50), never a contract change.
 8. Before and after every write, read the observation set of section 5 for each
    affected PR and ref. After an unknown outcome (timeout, lost response) do
    not repeat the write: read, and record `unknown` or the proven outcome.
-9. Budget: at most 150 requests and 20 minutes. Read `gh api rate_limit` before
-   and after. The estimate in section 4 is a plan figure, not a measurement.
+9. Budget: at most 300 requests (owner decision of 2026-10-25, raised from
+   150; counted for the whole run including the first part) and 20 minutes
+   (for a continuation, section 13: 20 minutes from its own start; the first
+   part took about 4). Read `gh api rate_limit` before and after. The estimate
+   in section 4 is a plan figure, not a measurement. Experiments stop at about
+   260 counted requests; the rest of the cap is reserved for cleanup
+   (section 6).
 10. Trace and secret handling (no trace reaches the transcript or terminal):
     - `GH_DEBUG`, `GIT_TRACE`, `GIT_TRACE_CURL` and `GIT_CURL_VERBOSE` are
       unset in every command except those named below.
@@ -127,13 +133,28 @@ later reviewed write allowlist (`tasks.md` line 50), never a contract change.
 ## 4. Object inventory and request estimate
 
 Branches created (9), all by the W1-proven push path from a scratch clone:
-`w1`, `w2d`, `w2e`, `w2o`, `w4`, `w5`, `n1`, `n2`, `n3` (W1 also tries `w1b`, which must stay
-absent). PRs created (7, plus rejected attempts; `w2e` must create none and `w2o` creates one only if the unknown field is ignored): `w1` (Draft, W2a; reused by
-W3), `w2d` (created with `draft=false`, W2d, the non-Draft PR for W4b), `w4`
-(Draft), `w5` (Draft), `n1` (base `main`), `n2` (base `m016/RUN/n1`), `n3`
-(base `m016/RUN/n2`, created but only linked in N3). Estimated requests: P0 12,
-W1 15, W2 24, W3 14, W4 16, W5 12, N0 to N5 40: about 135, below the cap of 150.
-If the running count would pass 150, stop.
+`w1`, `w2d`, `w2e`, `w2o`, `w4`, `w5`, `n1`, `n2`, `n3` (W1 also tries `w1b`,
+which must stay absent). PRs created (7 in the plan as first written, plus
+rejected attempts; `w2e` must create none and `w2o` creates one only if the
+unknown field is ignored; the first part created PRs 1 to 3 for `w1`, `w2d`
+and `w2o`, and a continuation recreates `w1` and `w2d`, section 13): `w1`
+(Draft, W2a; used by W3), `w2d` (created with `draft=false`, W2d, the
+non-Draft PR for W4b), `w4` (Draft), `w5` (Draft), `n1` (base `main`), `n2`
+(base `m016/RUN/n1`), `n3` (base `m016/RUN/n2`, created but only linked in
+N3). Estimated requests: P0 12, W1 15, W2 24, W3 14, W4 16, W5 12, N0 to
+N5 40: about 135 when the plan was written. The first part of the run counted
+104 up to W3b (an upper bound, see the evidence), well above the plan figure
+for those steps. Remaining need for a continuation, an estimate only: the
+first part ran about 1.5 times the plan figure, so the rest is about 190 and
+104 + 190 is about 294 of 300. The cap is 300 for the whole run. Experiments
+stop at about 260 counted requests, which will probably cut N1 to N5; "N not
+run" is then an expected budget stop, not a failure. The remaining 40 are
+reserved for cleanup: up to seven closes at four requests each (API guard,
+read-back, `PATCH`, after-read), about 28, plus one unstack and the
+`rate_limit` reads, about 5. That fits only if the up-to-5 `mergeable` re-reads
+of section 5 are skipped during cleanup; they are skipped there. Cleanup halts
+at 300 and lists what it could not close. If the running count would pass 300,
+stop.
 
 ## 5. Observation set (recorded before and after each write)
 
@@ -163,8 +184,9 @@ write that may follow a stop, and only the steps below.
 
 Abort triggers: the API or Git guard fails; the fixture is not private or has
 rulesets or protection the preflight did not record; a response names another
-repository (fork, transfer, redirect); an unexpected 401 or 403; rate limit
-remaining below 100; the budget is spent; a trace scan hit.
+repository (fork, transfer, redirect); an unexpected 401, or a 403 other
+than the expected P0 reads of section 7; rate limit remaining below 100; the
+budget is spent; a trace scan hit.
 
 Cleanup after a stop, limited to objects whose names carry `m016/RUN/`:
 
@@ -172,7 +194,12 @@ Cleanup after a stop, limited to objects whose names carry `m016/RUN/`:
    number is recorded, `gh stack unstack STACK_NUMBER` (explicit number, never
    without an argument, never `--local`); this needs G3 (released, section 1)
    and is skipped if the number is unknown.
-2. Close the PRs the run opened (`PATCH state=closed`).
+2. Close the PRs the run opened (`PATCH state=closed`). Before each close,
+   read back that the PR number exists, is open and has a head ref that starts
+   with `m016/RUN/`; a mismatch skips that close and is listed (the first
+   part's cleanup once sent three closes to numbers that were not PRs).
+   Cleanup skips the `mergeable` re-reads of section 5 and halts at 300
+   counted requests, listing what it could not close.
 3. Leave the `m016/RUN/*` branches; list them and every open PR or stack that
    cleanup could not close in the evidence file for the owner.
 
@@ -193,8 +220,17 @@ without confirm or refute, with result `recorded`, and never stop the run.
 
 Run the rule 10 scan against a fresh read-only `GH_DEBUG=api` trace (verdict
 only). Record section 5 preflight data, `gh api user` login and the SHA of `main`.
-Confirms: repository private, empty rulesets and protection, `main` readable,
-write permission. Otherwise abort. The agent changes no setting.
+Confirms: repository private, `main` readable, write permission, `protected`
+false, and no rulesets or branch protection in force. For this fixture (a
+private repository on a free plan) the reads of the rulesets list
+(`repos/wstein/stw-forge-fixture/rulesets`), of the effective branch rules
+(`rules/branches/main`) and of branch protection (`branches/main/protection`)
+are EXPECTED to answer 403 with the text that the feature needs GitHub Pro or
+a public repository (owner decision of 2026-10-25, accepting the 403 seen in
+run `20261025T170737Z`); that answer is recorded as such, with the three paths
+and the message text, and counts as "no rules in force". For these three
+reads any status other than 403, including any 200, aborts. The agent changes
+no setting.
 
 ### W1 Ref creation and expected-absence lease
 
@@ -245,7 +281,10 @@ Hypothesis W3a: `PATCH pulls/N` with only `body` changes `body` and
 other field differs.
 Hypothesis W3b: REST has no compare-and-swap: a PATCH carrying a stale
 `If-Match` (the before-read ETag after a first edit) is applied. Confirm: 2xx
-and the body changed. Refute: 412 or 409 and the body unchanged. If confirmed,
+and the body changed. Refute: 412, 409 or 400 and the body unchanged (foreman
+decision of 2026-10-25 after run `20261025T170737Z` answered 400: the request
+is rejected and no conditional body write through `If-Match` exists; the
+status is recorded as observed). If confirmed,
 the digest guard of `contracts/forge-effects.md` line 73 is a client-side
 read-before-write with a residual race window.
 Observation O-W3: the status for a 65537-byte body on the `w1` PR (the plan
@@ -403,7 +442,8 @@ M1 to M3 are optional and are not needed for the OQ-WRITES allowlist.
 
 Evidence goes in `specs/016-stacked-pr-coordination/evidence/`, one file per
 run, `measurement-RUN.md`, committed by a separate evidence PR after the run
-and never edited later (a correction is a new file). Structure:
+and never edited later (a correction is a new file; a continuation of a run
+whose file exists has its own file, section 13). Structure:
 
 1. Header: run id, UTC start and end, fixture, operator agent type, the
    reviewed PR head SHA of this plan AND the `main` commit that contains the
@@ -460,3 +500,50 @@ Native jj publication and the Git push hook / credential-helper confinement
 - Whether results hold in another repository, with rulesets or protected
   branches (the fixture has none); every result is scoped to the recorded
   fixture shape.
+
+## 13. Continuation of run 20261025T170737Z
+
+Owner decisions of 2026-10-25 after the first part of the run: the P0 403 is
+accepted (section 7, P0) and the results of P0, W1, W2 and W3a stand; the
+request cap is 300 for the WHOLE run, including the 104 already counted
+(rule 9); W3b treats a 400 as a refute-class outcome
+(section 7). Evidence of the first part is pull request 274
+(`specs/016-stacked-pr-coordination/evidence/measurement-20261025T170737Z.md`).
+
+- Run id: the continuation keeps `20261025T170737Z`. The nine branches
+  `m016/20261025T170737Z/{w1,w2d,w2e,w2o,w4,w5,n1,n2,n3}` already exist and
+  are used as they are; none is pushed again. `w1b` must still be absent.
+- State left by the first part: pull requests 1 (`w1`, Draft), 2 (`w2d`) and 3
+  (`w2o`) are closed by the cleanup of section 6; no stack exists. Closed pull
+  requests are never reopened (no `state=open` write is measured or
+  authorized). W3b needs an open PR on `w1` and W4b one on `w2d`: the
+  continuation creates fresh PRs with the already measured create form of W2a
+  (`w1`, `draft=true`) and W2d (`w2d`, `draft=false`) on the existing branches
+  and base `main`. Every such create follows rules 2 and 8: the API guard
+  before it, the section 5 reads of the new PR and its ref before (the ref)
+  and after (both). They get new numbers; the closed PRs 1 to 3 are not
+  touched. PR 3 (`w2o`) is not recreated.
+- Order: W3b is repeated from a fresh read: read the new `w1` PR and its
+  ETag, make a first body edit, then send the second edit with the stale ETag as
+  `If-Match`; then O-W3, W4, W5, N0 to N5 as written. W1, W2 and W3a are not
+  repeated. W4a needs a PR for `w4` and W5 a PR for `w5`: they are created by
+  the W2 form on the existing branches (`w4` Draft, `w5` Draft); likewise the
+  PRs `n1`, `n2`, `n3` of section 4.
+- P0 is re-run first, read only, for the continuation: privacy and full name,
+  the three expected 403s, the rule 10 trace scan on a fresh read-only trace,
+  `gh api rate_limit`, the SHA of `main` (expected `0e17a3a7`), `git ls-remote`
+  of the nine branch SHAs, `w1b` still 404, PRs 1 to 3 closed and no open PR.
+  Aborting checks: privacy and full name, the three 403s (any other status),
+  the trace scan, rate limit remaining below 100, `w1b` present, a branch
+  missing, a PR open. Recorded only: the SHA of `main` if it changed (that
+  moves the base of the fresh PRs) and the nine branch SHAs (the first part's
+  evidence names them only in part).
+- Evidence: the file of the first part,
+  `measurement-20261025T170737Z.md`, is never edited. The continuation writes
+  `specs/016-stacked-pr-coordination/evidence/measurement-20261025T170737Z-continuation.md`
+  with the same structure (section 10), a header that links the first file, and
+  the cumulative request count.
+- Gates: G1 (an independent review of the exact head of this amendment,
+  recorded) and G2 (an owner go for the continuation) apply afresh; G3 and G4
+  as before. Guards, trace and secret rules are unchanged; abort and cleanup
+  are as amended in rule 9 and section 6.
