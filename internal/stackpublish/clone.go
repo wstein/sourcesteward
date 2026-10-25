@@ -2,7 +2,10 @@
 
 package stackpublish
 
-import "strconv"
+import (
+	"sort"
+	"strconv"
+)
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
@@ -63,4 +66,25 @@ func cloneAction(a Action) Action {
 		c.Blocker = &r
 	}
 	return c
+}
+
+func sortedStrings(in []string) []string {
+	out := cloneStrings(in)
+	sort.Strings(out)
+	return out
+}
+
+// canonicalMode copies the mode with its marker names sorted and unique, so one fact has one id.
+func canonicalMode(m ModeSummary) ModeSummary {
+	seen := map[string]bool{}
+	names := []string{}
+	for _, n := range m.Markers {
+		if !seen[n] {
+			seen[n] = true
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	m.Markers = names
+	return m
 }

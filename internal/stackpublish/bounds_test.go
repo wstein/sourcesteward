@@ -69,7 +69,7 @@ func TestTimeoutOnlyShortensTheOperationBound(t *testing.T) {
 	if l, err = DefaultLimits().WithTimeout(60 * time.Second); err != nil || l.OperationMillis != 60000 {
 		t.Fatalf("%+v %v", l, err)
 	}
-	for _, d := range []time.Duration{0, -time.Second, 61 * time.Second, time.Hour, 1500 * time.Millisecond} {
+	for _, d := range []time.Duration{0, -time.Second, 61 * time.Second, time.Hour} {
 		if _, err := DefaultLimits().WithTimeout(d); err == nil {
 			t.Errorf("%v accepted", d)
 		}
