@@ -119,7 +119,7 @@ Native jj operation plans additionally bind the complete repository-wide
 workspace working-copy map, sole expected operation head, desired restored view
 and its direct-parent relation, exact native semantics and expected resulting
 operation/parent. The OQ-2 first-slice recommendation excludes older-operation
-inverse application over later work and every other-workspace working-copy effect.
+inverse application over later work and every workspace working-copy commit change, including the invoking workspace. The full before/proposed-after working-copy map must match; stale/unknown relevant workspace evidence refuses. No implicit update-stale occurs; intentionally stale results or disk updates need a separate OQ-2 capability and pre-action byte safety capture.
 All reads/restore/undo calls explicitly suppress snapshots with
 `--ignore-working-copy` and use operation pinning. Divergent heads refuse without
 auto-merge; a post-effect divergence is partial. Missing/abandoned/GC'd required

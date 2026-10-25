@@ -24,7 +24,7 @@ accepted plan/apply command shape must preserve the same separate review,
 expected-state checks and explicit action authorization. Reuse of journal
 mechanisms does not require identical CLI spelling or amend 032's command.
 
-For jj, resume uses explicit `--ignore-working-copy --at-operation` reads with full-id pinning after initial discovery and read-only isolation; it neither snapshots disk state nor auto-merges divergent operation heads. Inventory all workspace identities; a missing/abandoned/GC'd saved operation is `unavailable`, and unknown/divergent current state cannot authorize restore. The [native operation guard](selective-undo.md#native-jj-operation-guard-oq-2-proposal) applies to any admitted operation restoration.
+For jj, resume uses explicit `--ignore-working-copy --at-operation` reads with full-id pinning after initial discovery and read-only isolation; it neither snapshots disk state nor auto-merges divergent operation heads. Inventory all workspace identities; a missing/abandoned/GC'd saved operation is `unavailable`, and unknown/divergent current state cannot authorize restore. The [native operation guard](selective-undo.md#native-jj-operation-guard-oq-2-proposal) applies to any admitted operation restoration: the first slice refuses any workspace working-copy commit change, invoking workspace included, rather than leave it stale under snapshot suppression or run implicit update-stale.
 
 Resume explicitly names a checkpoint, not an implicit latest entry. Read saved
 manifest/receipt, validate repository/native/task bindings and integrity, compare

@@ -63,14 +63,24 @@ operation id; never gain snapshot/update permission by omitting a flag. Any
 future explicit capture snapshot is a separate OQ-1 capability/effect.
 
 Recommend operation-restoration admission only when the desired saved view is
-the direct parent of one current head and no other workspace's working-copy
-commit or unselected state changes. Bind saved view, expected head, parent,
+the direct parent of one current head and **no workspace's working-copy commit changes**, including the invoking workspace; no unselected state may change. Bind saved view, expected head, parent,
 complete workspace effects and exact native semantics in the plan. Restoring
 an earlier view creates a new operation and can undo all later operations;
 reverse-applying a selected older operation atop later work has different
 semantics. Neither is time travel or an implicit selective inverse. The latter
 capability and version-specific `restore`/`revert`/older `undo` argv remain
 unadmitted until OQ-2/native conformance; these names are not interchangeable.
+
+With `--ignore-working-copy`, a changed invoking working-copy commit would not
+update disk and could leave that workspace stale. A later ordinary jj command
+may then require `jj workspace update-stale`, which can rewrite disk outside
+this plan's effects and receipts. The first slice therefore compares the full
+working-copy commit map before/proposed-after and refuses any workspace change,
+already stale relevant workspace or unknown freshness evidence with its concrete
+blocker. It never runs or implicitly authorizes update-stale. A future capability
+that intentionally leaves or updates a stale workspace requires separate OQ-2
+admission, explicit disclosure/selection and pre-action byte safety capture before
+any declared disk update; it is not hidden in operation restoration.
 
 Recheck sole current head immediately before the effect and verify the expected
 new operation/parent and all workspace deltas immediately afterward. Divergent

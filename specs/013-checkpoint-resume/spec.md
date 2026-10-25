@@ -70,7 +70,7 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 ### Edge Cases
 
 - Staged versus unstaged edits, untracked/ignored files, binary content, symlinks and deleted files.
-- Expired objects, divergent operations, changed workspace ownership and partial capture/restore failures.
+- Expired objects, divergent operations, changed workspace ownership and partial capture/restore failures. jj snapshot-suppressed restoration can leave an invoking workspace stale if its working-copy commit changes; the first slice refuses that case and never implicitly authorizes update-stale/disk replacement.
 
 - Published/shared history, merge parent ambiguity, expired operation/object retention and inverse changes that create conflicts.
 
@@ -92,7 +92,7 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - **FR-011**: Extend recovery beyond checkpoints with explicit local commit/merge/native-operation undo plans, reusing Spec 010 expected-state and authorization contracts.
 - **FR-012**: Separate creation of an inverse change from history/operation restoration; never choose between these semantics implicitly. Require an explicit mainline/parent when merge reversal is ambiguous.
 - **FR-013**: Enumerate affected files, index/disk state, references and rewritten descendants before apply; retain pre-action native identities and selected bytes needed by the declared recovery promise. Refuse shared/foreign-owned or changed relevant state, unknown ownership and unselected descendant effects; inverse-change destinations checked out/working-copy-used in any workspace or with dirty selected paths also refuse with their changed-since blocker; restoration is separately authorized and never an automatic rollback.
-- **FR-014**: Respect jj change/operation semantics and Git commit/merge semantics; report unsupported selective recovery and never use broad operation restoration as a substitute for an unrequested selective undo. jj operation scope spans all workspaces; distinguish restoring an earlier whole view from reversing one earlier operation atop later work. Require pinned snapshot-suppressed reads/operations, complete workspace/head guards, divergent-head refusal without auto-resolution and unavailable reporting for missing operation history.
+- **FR-014**: Respect jj change/operation semantics and Git commit/merge semantics; report unsupported selective recovery and never use broad operation restoration as a substitute for an unrequested selective undo. jj operation scope spans all workspaces; distinguish restoring an earlier whole view from reversing one earlier operation atop later work. Require pinned snapshot-suppressed reads/operations, complete workspace/head guards and first-slice refusal of every workspace working-copy commit change (including the invoker), divergent-head refusal without auto-resolution and unavailable reporting for missing operation history.
 
 ### Key Entities
 
