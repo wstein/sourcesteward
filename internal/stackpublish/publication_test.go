@@ -37,7 +37,7 @@ func pubBlockers(r PublicationReceipt) []string {
 }
 
 func TestClassifyPathsFollowsTheProseAllowList(t *testing.T) {
-	docs := []string{"README.md", "AGENTS.md", "docs/commands.md", "specs/016-stacked-pr-coordination/spec.md", "specs/016-x/checklists/requirements.md"}
+	docs := []string{"NOTES.md", "CHANGES.md", "docs/fixture-page.md", "specs/016-fixture/spec-text.md", "specs/016-x/checklists/fixture-list.md"}
 	if ClassifyPaths(docs, true) != ClassDocsOnly {
 		t.Fatal("prose paths are docs-only")
 	}
@@ -47,11 +47,11 @@ func TestClassifyPathsFollowsTheProseAllowList(t *testing.T) {
 		}
 	}
 	for _, p := range []string{"internal/x.go", "specs/016-x/contracts/a.md", "specs/016-x/examples/a.md", "specs/016-x/tasks/a.md", "docs/sub/a.md", "docs/a.json", "docs/index.html", "scripts/x.py",
-		".github/workflows/ci.yml", "README.MD", "a.md.go", "go.mod", "../README.md", "/README.md", "./README.md", "docs//a.md", "a\\b.md", "docs/a\x00.md", "docs/a\x7f.md", "specs/../x.md", "specs/./x.md", "", "specs/a.md", "docs/.md"} {
+		".github/workflows/ci.yml", "NOTES.MD", "a.md.go", "go.mod", "../NOTES.md", "/NOTES.md", "./NOTES.md", "docs//a.md", "a\\b.md", "docs/a\x00.md", "docs/a\x7f.md", "specs/../x.md", "specs/./x.md", "", "specs/a.md", "docs/.md"} {
 		if ClassifyPaths([]string{p}, true) != ClassCode {
 			t.Errorf("%q must be code", p)
 		}
-		if ClassifyPaths([]string{"README.md", p}, true) != ClassCode {
+		if ClassifyPaths([]string{"NOTES.md", p}, true) != ClassCode {
 			t.Errorf("a docs path plus %q must be code", p)
 		}
 	}
