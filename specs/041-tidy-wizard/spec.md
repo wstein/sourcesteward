@@ -494,14 +494,23 @@ Workspace: /workspaces/Anchorage   (source: discovery from the working directory
 Derived:   remote origin, base per repository (see below), state dirs ~/.local/state/stw/workspace (2 records), /s/wt (59 records), mode human (tty yes, no agent marker)
 Analysed 7 repositories in 6 s (offline; base last fetched 2 h ago in the oldest repository)
 
+Repositories:
 sourcesteward   base refs/heads/main (origin/HEAD)
-  [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
-  [2] safe      worktree  /tmp/.../wt-038  task spec038-x  branch codex/038-x  integrated (ancestor)   remove registration, files, branch
-  [3] retain    worktree  /tmp/.../wt-040  branch codex/040-x   unmerged: 2 commits ahead of origin/main
-  [4] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
-  [5] safe      worktree  /tmp/whr010-a    owner codex (path convention) [other: codex]  integrated (ancestor)  not preselected
 bundledock      base refs/heads/main (origin/HEAD)
-  [6] safe      branch    codex/old-1   integrated (merge-noop)   delete branch (recovery ref kept)
+
+owner claude (own)
+  sourcesteward
+    [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
+    [2] safe      worktree  /tmp/.../wt-038  task spec038-x  branch codex/038-x  integrated (ancestor)   remove registration, files, branch
+    [-] retain    worktree  /tmp/.../wt-040  branch codex/040-x   unmerged: 2 commits ahead of origin/main
+    [-] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
+  bundledock
+    [3] safe      branch    codex/old-1   integrated (merge-noop)   delete branch (recovery ref kept)
+
+owner codex (other)
+  sourcesteward
+    [4] safe      worktree  /tmp/whr010-a    owner codex (path convention) [other]  integrated (ancestor)  not preselected
+
 summary: 4 safe (3 own, 1 other), 2 retain   (13 other worktrees and branches kept; see --json)
 
 Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner codex  [d]etails N  [n]one (default n): a
@@ -653,6 +662,16 @@ Deliberate choices made while implementing WP-5 (pull requests #230, #232, #233 
   because it imports `owner`.
 - **Unpublished schema.** `schemas/v2/tidy-overview.schema.json` is frozen but listed in `UNPUBLISHED_SCHEMAS`, so it is not
   published to Pages yet.
+
+- **Grouping of the text overview (foreman decision 2026-10-25, #255).** FR-006a and SC-010 leave the layout open; the text
+  follows these six rules and the JSON is unchanged (candidates in the order of the analysis).
+  1. Nesting is owner, then repository: one heading per owner group, a sub-heading per repository inside it.
+  2. Group order: the own scope first (the caller label), then the other owners sorted by label, `unknown` last.
+  3. Headings: `owner LABEL (own)`, `owner LABEL (other)` and `owner unknown` (scope `unknown`, or an empty label).
+  4. The 10-row bound stays per repository inside each owner group; `and N more (use --json or details)` follows that sub-heading.
+  5. The numbers of the prompts follow the order of the text (one display order), so the prompt and the text agree.
+  6. The per-repository lines (base, notices, skipped, error, repositories without candidates) form a `Repositories:` block before
+     the owner groups, one entry per repository; candidates appear only under their owner group.
 
 ## Open questions
 
