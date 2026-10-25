@@ -110,7 +110,6 @@ Do not infer native jj aggregate conflict semantics from Git first-conflict
 behavior. Preserve 013 independent safety-copy retention and no operation-head
 CAS/invoker-working-copy-effect admission; no recovery receipt authorizes a write.
 
-
 Online plan explicitly reads only accepted GET shapes within the operation
 budget. Before apply, compare plan identity/action ids and all relevant fresh
 local/remote expectations. Validate own task/branch/PR/body, Spec 041 mode and
