@@ -4,6 +4,23 @@
 Backend admission/storage choices in [research](../research.md#needs-owner-decision)
 block affected implementation. These command forms illustrate a future interface.
 
+## Common interface vocabulary (proposed)
+
+All command spellings and flag admission below remain proposed under OQ-5 and
+interface acceptance; they are not newly settled owner decisions or implemented
+aliases. Reusing the `--authorize` spelling relates 013 to existing plan/apply
+conventions; it does not import Spec 041's wizard or Spec 043's human-only landing
+confirmation. 013 remains noninteractive even without a terminal.
+
+| Input/output | Proposed 013 meaning and compatibility boundary |
+| --- | --- |
+| `--state-dir PRIVATE_DIR` | Required explicit private artifact-store selection in these examples, subject to OQ-3's location/ownership decision. Store plans, typed records and selected-payload receipts there through the reviewed seam; never treat the path as capture selection or authority. Resume only reads an existing store and never creates or repairs it. |
+| `--plan PLAN_ID --authorize` | Both are required for the selected native capture/restore/undo effects; the id binds the exact reviewed plan, and authorization is explicit for that action. An authorization flag alone cannot select targets or advance a plan. Declared private planning writes remain the planning effect only. |
+| Default human text / `--json` | Proposed complete-result formats from one model, with no TTY requirement, prompt, editor or pager. `--json` selects one final versioned object; output format never changes authorization or native effects. |
+| `--online` | Inapplicable to this offline feature; the proposed parser rejects it as usage (exit 2), rather than broadening the operation. No network mode or implicit fetch is introduced. |
+| `--human` | Explicit human-format alias is an open OQ-5 interface recommendation for consistency with 041/043, not accepted syntax in these examples. If adopted, specify its exclusivity with `--json` and test both formats without a TTY before admission; otherwise reject the unknown flag as usage. |
+| `--timeout` | Caller deadline override is an open OQ-5 interface recommendation, not accepted syntax here. Until reviewed, the fixed whole-operation caps below govern and the unknown flag is usage. Any accepted override must be positive, bounded by those caps, and must not extend an inherited earlier deadline. |
+
 ## Selection and effects
 
 ```text
