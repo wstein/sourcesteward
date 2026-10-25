@@ -140,14 +140,14 @@ native jj semantics rather than Git ref/range-diff equivalence.
 - **FR-026**: Keep push with `--force-with-lease=<full ref>:<observed full remote SHA>` and PR linking/retargeting solely in separately authorized Spec 016. Print owner resync alternatives as bounded inert DATA only, marking `reset --hard` destructive; stw never runs an owner reset, switch or resync. Agent merge/default-branch push/tag/release/settings changes remain forbidden; Spec 043 landing is a separate human invocation.
 - **FR-027**: Specify native jj as a separate capability with commit/change/operation ids, explicit bookmark/descendant scope, immutable/shared/conflicted-state checks and operation-bound stale validation. No Git fallback in colocated or standalone jj. Enable apply only with measured native operation/bookmark semantics, isolation and minimum/current conformance; otherwise refuse `capability-unavailable` with no mutation.
 - **FR-028**: Keep any Git conflict or failed equality check in owned disposable replay state, never create an interrupted operation in an original worktree, and never resolve, continue/abort, auto-stash or silently discard work. jj stored conflicts remain native conflicts; this clean-only apply slice refuses them. Keep-both classification follows D12's explicit allowlist, default empty, and never resolves a conflict.
-- **FR-029**: Keep human/JSON results equivalent and bounded. Proposed apply/recovery uses 0 for complete selected success (including proven already-applied/restored), 1 for refusal, incomplete, partial, cancellation or operational failure and 2 for usage errors. Preserve schema bytes; owner-decided exit-contract revision 2 targets incomplete=1 without a legacy3 selector. Current code still returns 3 until T045/T046, never falsely reported changed.
+- **FR-029**: Keep human/JSON results equivalent and bounded. Proposed apply/recovery uses 0 for complete selected success (including proven already-applied/restored), 1 for refusal, incomplete, partial, cancellation or operational failure and 2 for usage errors. Preserve schema bytes; owner-decided exit-contract revision 2 targets incomplete=1 without a legacy 3 selector. Current code still returns 3 until T045/T046, never falsely reported changed.
 - **FR-030**: Bind optional Spec 012 observations and Spec 014 isolated preflight/replay evidence by exact inputs, backend, semantics, completeness and freshness; resample before apply. Preserve the D6 direct-input path without depending on either implementation. Native-stack-managed or unknown remote management never licenses racing GitHub's rewrite; require explicit provenance that this is a local/plain-chain action or refuse until observed separately.
 - **FR-031**: Treat plan/journal records, repository instructions, filenames and diagnostics as untrusted bounded data; no shell evaluation, config-driven helper, verify command, hook or network action; the only new helper exception is separately planned/authorized FR-036 fixed trusted host signing/verifier profile, never repository-selected. Reject symlink/replaced state paths, malformed refs/ids, unknown record types/versions, duplicate ids and forged cross-repository bindings. Implement only declared fixed native argument vectors; tests plant executable and credential sentinels.
 - **FR-032**: Bound each proposed local plan/apply/recovery invocation to one branch/bookmark action, 200 moved commits, 2,000 paths per list, 1 MiB rendered result and 60 seconds total including owned teardown/result preparation. On exhaustion stop before the next effect, retain durable partial evidence and report the bound. Never publish a truncated success; no sleeps for concurrency tests (Spec 040).
 - **FR-033**: Preserve committed-history recovery only within retained roots and journal evidence. It cannot restore untracked/ignored files, unsaved buffers, hooks/config side effects, arbitrary worktree files, expired roots or any remote effect; no automatic GC or recovery retention deletion in this slice. Integrate checkpoint/restore/selective undo through Spec 013 instead of duplicating it.
 - **FR-034**: Require reviewed spec/plan/tasks, failing behavior fixtures before implementation, effect sentinels and native minimum/current conformance for each enabled capability. New machine contracts remain Markdown proposals, UNPUBLISHED until implemented and conformance-accepted; no dependency, schema-file or published-contract change is authorized by this documentation amendment.
 
-- **FR-035**: Implement owner-decided CLI exit-contract revision 2 for hidden restack plan: root dispatch maps typed restackIncomplete to 1, errors 1, usage 2 and success 0, with no legacy3 selector. Keep existing JSON result/schema1 bytes unchanged and label prior exit3 evidence historical until the red-first code task lands.
+- **FR-035**: Implement owner-decided CLI exit-contract revision 2 for hidden restack plan: root dispatch maps typed restackIncomplete to 1, errors 1, usage 2 and success 0, with no legacy 3 selector. Keep existing JSON result/schema 1 bytes unchanged and label prior exit 3 evidence historical until the red-first code task lands.
 - **FR-036**: Offer optional explicit local re-sign only through the shared owner profile: trusted host-fixed helper/verifier, no stw keys, disabled without measured helper capability, default refuse dropped/unmet/unknown signatures. Bind plan/authorization, minimal env/confinement/bounds and old-signature-loss/new-signature provenance; sign actual chain bottom-up with rewritten parent SHAs, verify signer/commit identities and all own-diff/range checks, then expose final signed head before local CAS and any exact-SHA review. Predictions remain unsigned D9; remote authorization never runs this local helper.
 
 ### Key Entities
@@ -179,22 +179,24 @@ native jj semantics rather than Git ref/range-diff equivalence.
 
 ## Owner decisions (2026-10-25)
 
-All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
-choices adopt the source recommendations; implementation/native measurement and
+All listed former OQ IDs have a **dated disposition on 2026-10-25**.
+IDs without an explicit answer adopt the source research recommendations. The
+source column distinguishes direct owner answers, adopted recommendations and
+cross-spec owner-answer overrides; implementation/native measurement and
 review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
 distinguish saved-plan metadata, external capture payloads, trusted policy,
 optional host-only signing and CLI exit-contract revision 2.
 
-| Decision ID | Dated disposition | Remaining implementation/verification gate |
-| --- | --- | --- |
-| OQ-1 | DECIDED: unify target exits NOW at CLI exit-contract revision 2; incomplete=1, errors=1, usage=2, no legacy-3 selector. | Red root-dispatch/help/status tests then hidden restack CLI/root mapping change; result schema1 bytes stay frozen. |
-| OQ-2 | DECIDED: trusted workspace policy supplies owner, reviewer allowlist/check sources and task/ref/native association. | Missing source blocks push/Ready; human 043 statement remains separate. |
-| OQ-3 | DECIDED: actual committer matches trusted owner, preserve author/date, capture timestamp in plan; global identity corroborates only. | Actual candidate creation/identity implementation and conformance. |
-| OQ-4 | DECIDED: native jj stays capability-unavailable until measured exact operation/bookmark/descendant/recovery behavior. | No raw Git fallback or claimed Git CAS; independent native acceptance. |
-| OQ-5 | DECIDED: reuse typed fsync durability; preserve sync v1; incomplete/partial actions never auto-expire, no automatic pruning. | Bounded metadata profile/validated manual cleanup implementation. |
-| OQ-6 | DECIDED: first apply refuses ALL occupied branches including caller; no worktree update permission. | Any worktree-aware widening remains future separate design/measurement. |
-| OQ-7 | DECIDED: 015 stays offline; 012 remote reads use only explicit --online. | 015 consumes qualified supplied evidence; no implicit refresh. |
-| OQ-8 | DECIDED: default refuse dropped/unmet/unknown signatures; optional explicit re-sign only through fixed trusted HOST helper, no stw keys. | Signing/verifier profile must be implemented/measured; absent helper disables option; final signed chain SHA before review. |
+| Decision ID | Dated disposition | Source | Remaining implementation/verification gate |
+| --- | --- | --- | --- |
+| OQ-1 | DECIDED: unify target exits NOW at CLI exit-contract revision 2; incomplete=1, errors=1, usage=2, no legacy-3 selector. | adopted recommendation; owner-answer override: 016 OQ-EXIT | Red root-dispatch/help/status tests then hidden restack CLI/root mapping change; result schema 1 bytes stay frozen. |
+| OQ-2 | DECIDED: trusted workspace policy supplies owner, reviewer allowlist/check sources and task/ref/native association. | adopted recommendation; owner-answer override: 016 OQ-POLICY | Missing source blocks push/Ready; human 043 statement remains separate. |
+| OQ-3 | DECIDED: actual committer matches trusted owner, preserve author/date, capture timestamp in plan; global identity corroborates only. | adopted recommendation; owner-answer override: 016 OQ-POLICY | Actual candidate creation/identity implementation and conformance. |
+| OQ-4 | DECIDED: native jj stays capability-unavailable until measured exact operation/bookmark/descendant/recovery behavior. | adopted recommendation | No raw Git fallback or claimed Git CAS; independent native acceptance. |
+| OQ-5 | DECIDED: reuse typed fsync durability; preserve sync v1; incomplete/partial actions never auto-expire, no automatic pruning. | adopted recommendation; owner-answer override: 016 OQ-STORE | Bounded metadata profile/validated manual cleanup implementation. |
+| OQ-6 | DECIDED: first apply refuses ALL occupied branches including caller; no worktree update permission. | adopted recommendation | Any worktree-aware widening remains future separate design/measurement. |
+| OQ-7 | DECIDED: 015 stays offline; 012 remote reads use only explicit --online. | adopted recommendation; owner-answer override: 012 OQ-NET | 015 consumes qualified supplied evidence; no implicit refresh. |
+| OQ-8 | DECIDED: default refuse dropped/unmet/unknown signatures; optional explicit re-sign only through fixed trusted HOST helper, no stw keys. | adopted recommendation; owner-answer override: 016 OQ-SIGN | Signing/verifier profile must be implemented/measured; absent helper disables option; final signed chain SHA before review. |
 
 ## Needs owner decision
 

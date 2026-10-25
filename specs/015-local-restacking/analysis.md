@@ -3,19 +3,19 @@
 **Owner decisions: 2026-10-25. Author cross-artifact analysis only.** All former
 OQ IDs are settled and indexed in [the decision index](../016-stacked-pr-coordination/research.md#cross-spec-decision-index).
 The [concrete profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) distinguish workspace .work metadata from
-external capture payloads, trusted policy, host-only optional local015 re-sign
-and CLI exit-contract revision2. No new implementation/native/helper/forge test
+external capture payloads, trusted policy, host-only optional local 015 re-sign
+and CLI exit-contract revision 2. No new implementation/native/helper/forge test
 or independent CLEAR is claimed. Historical implementation evidence stays at
-its recorded revision; current hidden015code still returns3 until the new task.
+its recorded revision; current hidden 015 code still returns 3 until the new task.
 
 ## Current findings and gates
 
 | ID | Disposition | Remaining evidence |
 | --- | --- | --- |
-| D1 | All39 owner directions are DECIDED, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
+| D1 | All 39 dispositions are recorded as direct owner answers or adopted recommendations; cross-spec owner overrides are marked, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
 | D2 | Metadata and external selected-byte/safety stores are distinct roles with explicit modes/race/layout/quota/export-risk guards. | Red-first shared store and role-separation tasks; no auto-ignore edits/expiry. |
-| D3 | Optional actual re-sign belongs only to015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review;016 receipt validation only. |
-| D4 | Target CLI exit-contract revision2 is0/1/2, no legacy3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
+| D3 | Optional actual re-sign belongs only to 015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review; 016 receipt validation only. |
+| D4 | Target CLI exit-contract revision 2 is 0/1/2, no legacy 3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
 
 ## Individual requirement coverage and literal future tests
 
@@ -47,18 +47,18 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-021 | T025, T027, T028, T033, T034 | Proposed `TestApplyResamplesEveryGuardBeforeCAS`: inject new worktree, foreign attribution, backend/common-dir/config/protection/head change before write |
 | FR-022 | T025, T029, T030, T047, T048, T049 | Proposed `TestApplyRejectsAnyNonEqualRow` and `TestApplyReadsActualAuthorAndCommitter`: `!`, `<`, `>`, unpaired, unknown or leaked actual committer block target CAS; `TestApplyNeverRunsSigningHelper` and `TestApplyReportsDroppedSignatures` cover unsigned candidates and signature-policy refusal; actual-apply identity flags cannot widen the trusted owner; push fixture covers foreign open-parent commits in observed-default..new-head and local/global config origins T049 records separately authorized fixed-host helper/verifier, bounds/confinement and final signed-chain evidence; unavailable enforcement must leave the capability disabled before T048. |
 | FR-023 | T025, T031, T032, T033, T034 | Proposed `TestRestackRecoveryPreparedBeforeTargetMove`: crash/write/fsync/rename/root-collision faults stop before target move with retained evidence |
-| FR-024 | T033, T034, T035, T036 | Proposed `TestRestackCrashReconcilesEveryBoundary` and `TestRestackRestoreRequiresSeparatePlanAndCAS`: `restore --run` preview/optional save never moves refs; `--plan ID --authorize` selects the stored reverse plan; conflicting flags exit2; current third value remains untouched |
+| FR-024 | T033, T034, T035, T036 | Proposed `TestRestackCrashReconcilesEveryBoundary` and `TestRestackRestoreRequiresSeparatePlanAndCAS`: `restore --run` preview/optional save never moves refs; `--plan ID --authorize` selects the stored reverse plan; conflicting flags exit 2; current third value remains untouched |
 | FR-025 | T040, T041 | Proposed `TestRestackReceiptPreservesChangeClassReviewPolicy` and `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: docs-only checks/equality need no pre-push review; code pure rebase permits exact-new-SHA middle-tier CLEAR; 016 reclassifies the full publication-range per-commit path union so docs-only child receipts cannot hide code/unknown open-parent paths; old/predicted/other SHA cannot satisfy required review; Ready always exact-head CLEAR plus green checks |
 | FR-026 | T040, T041 | Proposed `TestRestackTextsRemainInertData`: recorder forbids reset/switch/push/link/retarget; consumer requires separate observed full remote SHA and plan/action auth |
 | FR-027 | T025, T037, T038, T039 | Proposed `TestJJRestackRejectsChangedOperation` and `TestJJRestackNeverFallsBackToGit`: missing capability/sandbox refuses with original native state unchanged |
 | FR-028 | T029, T030, T038, T039 | Proposed `TestApplyConflictStaysInQuarantine`: original Git operation sentinel absent; jj stored conflict remains and refuses without resolution/snapshot |
-| FR-029 | T025, T027, T040, T041, T045, T046 | Proposed `TestRestackFutureExitTableAndV1Freeze`: future success/refused/partial/incomplete/usage 0/1/2, actual v1 incomplete remains3 and byte-identical |
+| FR-029 | T025, T027, T040, T041, T045, T046 | Proposed `TestRestackFutureExitTableAndV1Freeze`: future success/refused/partial/incomplete/usage 0/1/2, actual v1 incomplete remains 3 and byte-identical |
 | FR-030 | T027, T028, T041 | Proposed `TestApplyPlanRevalidatesObservationInputs`: changed exact parent/head/backend/semantics, incomplete 014 result or unknown native-stack management refuses |
 | FR-031 | T027, T029, T030, T031, T032, T038, T040, T043, T047, T048, T049 | Proposed `TestRestackJournalRejectsForeignTypeAndPath` and `TestRestackHostileRecordsAreNotInstructions`: symlink/replacement/foreign-record/credential/helper/signing-program sentinels; `--no-gpg-sign` and per-source `signature-dropped` fixtures remain proposed T049 records separately authorized fixed-host helper/verifier, bounds/confinement and final signed-chain evidence; unavailable enforcement must leave the capability disabled before T048. |
-| FR-032 | T029, T030, T033, T034, T040, T043 | Proposed `TestApplyBoundStopsBeforeNextEffect`: 201 commits, 2001 paths, 1MiB+1 bytes, fake deadline/cancel retain partial state with exit1 |
+| FR-032 | T029, T030, T033, T034, T040, T043 | Proposed `TestApplyBoundStopsBeforeNextEffect`: 201 commits, 2001 paths, 1 MiB+1 bytes, fake deadline/cancel retain partial state with exit 1 |
 | FR-033 | T031, T032, T035, T036 | Proposed `TestRestackKeepsIncompleteRecovery` and `TestRestackUnknownNewHeadRetains`: no automatic pruning/reset, no untracked/remote restoration claim |
 | FR-034 | T025, T026, T037, T042, T043, T044, T049 | Proposed capability matrix fixture has missing minimum jj lane and must remain blocked; T044 requires exact-head independent review before publication T049 records separately authorized fixed-host helper/verifier, bounds/confinement and final signed-chain evidence; unavailable enforcement must leave the capability disabled before T048. |
-| FR-035 | T045, T046 | Force typed restackIncomplete through root dispatch: target1, ordinary errors1, usage2, complete0; restore3 mutant fails, no legacy selector and unchanged schema1/JSON/help cases. |
+| FR-035 | T045, T046 | Force typed restackIncomplete through root dispatch: target 1, ordinary errors 1, usage 2, complete 0; restore 3 mutant fails, no legacy selector and unchanged schema 1/JSON/help cases. |
 | FR-036 | T030, T047, T048, T049 | Without trusted measured host helper refuse; with explicitly authorized fixture sign each actual parent bottom-up, verify public signer/loss provenance and final head before review/CAS, no key reads or unsigned fallback. T049 records separately authorized fixed-host helper/verifier, bounds/confinement and final signed-chain evidence; unavailable enforcement must leave the capability disabled before T048. |
 | SC-001 | T021, T042, T049 | Native lane matrix executes every enabled acceptance fixture, marks minimum/current/backend omissions unverified, never pass T049 records separately authorized fixed-host helper/verifier, bounds/confinement and final signed-chain evidence; unavailable enforcement must leave the capability disabled before T048. |
 | SC-002 | T012, T022, T033, T040, T042, T043, T047, T048, T049 | Existing `TestAPlanWritesNothingToTheRepositoryOnAnyPath`; proposed sentinel comparison covers all declared/undeclared effects and unknown partial outcomes T049 records separately authorized fixed-host helper/verifier, bounds/confinement and final signed-chain evidence; unavailable enforcement must leave the capability disabled before T048. |
@@ -76,7 +76,7 @@ checked tasks; 29 unchecked. Coverage 44/44 (100% design
 mapping), zero requirement orphans. No implementation checkbox is changed by
 owner answers or this analysis. All new exit/store/signing tasks are unchecked.
 Task dependencies remain red test → implementation → native/effect conformance
-→ exact-source independent review. Spec043 human-only landing remains separate.
+→ exact-source independent review. Spec 043 human-only landing remains separate.
 
 ## Compatibility and acceptance boundary
 
@@ -89,7 +89,7 @@ helper. 043 identity authority is trusted workspace policy, global config only
 corroborates, with existing human confirmation/shape/retarget/deletion gates.
 No build, installation, helper run, schema-file edit or live write is claimed.
 
-Original T001–T024 retain 20 checked tasks: T004 deliberately skipped, T021/T023/T024 open. T018/verification recorded old exits0/1/2/3 honestly; T045/T046 target revised mapping and do not rewrite that history.
+Original T001–T024 retain 20 checked tasks: T004 deliberately skipped, T021/T023/T024 open. T018/verification recorded old exits 0/1/2/3 honestly; T045/T046 target revised mapping and do not rewrite that history.
 
 
 ## Historical evidence preservation

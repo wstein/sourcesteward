@@ -36,7 +36,7 @@ Allowed: fixed read-only Git plumbing through the reviewed isolated runner (`rev
 | `ok` | complete evidence, whatever it shows (clean, differing, predicted conflicts, unknown identity check) | 0 |
 | `error` | a refusal or a failure (diagnostics below); `evidence` is `null` | 1 |
 | (syntax) | malformed flags or refs | 2 |
-| `incomplete` | a bound, cancellation or a timeout stopped evidence collection (`range-too-large`, `bound-exceeded`, `canceled`, `timeout`); `evidence` is `null` and `boundary.reached` and the diagnostic name what stopped | target1; CURRENT code3 |
+| `incomplete` | a bound, cancellation or a timeout stopped evidence collection (`range-too-large`, `bound-exceeded`, `canceled`, `timeout`); `evidence` is `null` and `boundary.reached` and the diagnostic name what stopped | target 1; CURRENT code 3 |
 
 Success never means "safe to push" (FR-016). Standard error carries one concise `Error:` line for exit 1.
 
@@ -131,7 +131,7 @@ Lease push (not run): git push --force-with-lease='refs/heads/feat/x:<old sha>' 
 
 ## 2026-10-25 compatibility and handoff boundary
 
-CURRENT implemented code remains 0/1/2/3 with incomplete exit3 and unchanged
+CURRENT implemented code remains 0/1/2/3 with incomplete exit 3 and unchanged
 schema bytes. Owner-decided exit-contract revision 2 targets 0/1/2 with incomplete 1,
 not an additive v1 wording change. The `rewrite-committer-not-predicted`
 limitation stays reserved pending T024; documents do not claim it is emitted.
