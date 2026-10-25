@@ -534,3 +534,33 @@ func TestFinishSealsTheRun(t *testing.T) {
 		t.Fatalf("Finish is not stable: %v then %v", first, second)
 	}
 }
+
+func TestFinishWhileAnActionIsPreparedSealsItAsUnfinished(t *testing.T) {
+	p := savedPlan(t, twoPushes()[:2]...)
+	run, err := NewRun(p, applyRequest(p, "p1", "p2"), allCapabilities(), newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _, _ := run.Begin()
+	run.Complete(Fresh{Expected: cloneExpected(a.Expected), Permission: PermissionGranted, Guards: passing(a.Kind)}, true)
+	e := run.Finish()
+	if err := run.Advance(StateCompleted); err == nil {
+		t.Error("Advance after Finish accepted")
+	}
+	if e.Status() == StatusComplete || !reflect.DeepEqual(states(e), []string{"prepared", "not-started"}) {
+		t.Fatalf("%v %v", states(e), e.Status())
+	}
+}
+
+func TestCompleteAfterFinishIsRefusedEvenForABegunAction(t *testing.T) {
+	p := savedPlan(t, twoPushes()[:1]...)
+	run, err := NewRun(p, applyRequest(p, "p1"), allCapabilities(), newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _, _ := run.Begin()
+	run.Finish()
+	if d := run.Complete(Fresh{Expected: cloneExpected(a.Expected), Permission: PermissionGranted, Guards: passing(a.Kind)}, true); d.State == StatePrepared {
+		t.Fatal("a sealed run prepared an action")
+	}
+}

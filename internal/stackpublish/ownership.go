@@ -46,14 +46,12 @@ type RepoRef struct {
 
 // OwnershipInput is everything the ownership guards are computed from.
 type OwnershipInput struct {
-	Plan     Plan // the validated plan: its task and repository are the only ones compared
-	PlanTask string
-	PlanRepo RepoRef
-	Kind     ActionKind
-	Subject  Subject
-	Task     TaskEvidence
-	Current  attribution.Origin
-	Hints    Hints // deliberately unused: see Hints
+	Plan    Plan // the validated plan: its task and repository are the only ones compared
+	Kind    ActionKind
+	Subject Subject
+	Task    TaskEvidence
+	Current attribution.Origin
+	Hints   Hints // deliberately unused: see Hints
 }
 
 // OwnershipGuards returns the ownership guard and the Spec 042 D5 attribution guard of one action.
@@ -75,7 +73,7 @@ func ownershipGuard(in OwnershipInput) Guard {
 	switch {
 	case t.Unreadable:
 		return guard(GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
-	case !t.Found, t.TaskID == "", t.TaskID != in.PlanTask:
+	case !t.Found, t.TaskID == "", t.TaskID != in.Plan.Task().TaskID:
 		return guard(GuardOwnership, GuardFail, ReasonNotOwned)
 	case !t.Complete, t.HeadRef == "":
 		return guard(GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
@@ -88,10 +86,12 @@ func ownershipGuard(in OwnershipInput) Guard {
 		subject = in.Subject.PRHeadRef
 		// A PR is own only when its head and base live in the plan repository: the same branch
 		// name in a fork is somebody else's PR. Unreadable evidence is unknown, never a pass.
-		if in.Subject.HeadRepo == nil || in.Subject.BaseRepo == nil || !in.Subject.HeadRepo.known() || !in.Subject.BaseRepo.known() {
+		planRepo := in.Plan.Repository()
+		if planRepo == nil || in.Subject.HeadRepo == nil || in.Subject.BaseRepo == nil || !in.Subject.HeadRepo.known() || !in.Subject.BaseRepo.known() {
 			return guard(GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 		}
-		if !in.Subject.HeadRepo.same(in.PlanRepo) || !in.Subject.BaseRepo.same(in.PlanRepo) {
+		ref := RepoRef{Host: planRepo.Host, Owner: planRepo.Owner, Name: planRepo.Name}
+		if !in.Subject.HeadRepo.same(ref) || !in.Subject.BaseRepo.same(ref) {
 			return guard(GuardOwnership, GuardFail, ReasonNotOwned)
 		}
 	}
@@ -104,11 +104,36 @@ func ownershipGuard(in OwnershipInput) Guard {
 	return guard(GuardOwnership, GuardPass, "")
 }
 
-func (r RepoRef) known() bool { return r.Host != "" && r.Owner != "" && r.Name != "" }
+// known reports a repository identity that is complete and well formed: a lower-case host and
+// owner and repository names of the hosting grammar. Anything else is unreadable evidence.
+func (r RepoRef) known() bool {
+	return hostGrammar.MatchString(strings.ToLower(r.Host)) && validName(r.Owner) && validName(r.Name)
+}
 
-// same compares host, owner and name the way GitHub does: case-insensitively.
+// same compares host, owner and name the way GitHub does, but folds ASCII only: known() has
+// already restricted every field to ASCII, so Unicode look-alikes never reach the comparison.
 func (r RepoRef) same(o RepoRef) bool {
-	return strings.EqualFold(r.Host, o.Host) && strings.EqualFold(r.Owner, o.Owner) && strings.EqualFold(r.Name, o.Name)
+	return asciiEqualFold(r.Host, o.Host) && asciiEqualFold(r.Owner, o.Owner) && asciiEqualFold(r.Name, o.Name)
+}
+
+// asciiEqualFold is case-insensitive for ASCII letters only (no Unicode folding such as U+212A).
+func asciiEqualFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		x, y := a[i], b[i]
+		if 'A' <= x && x <= 'Z' {
+			x += 'a' - 'A'
+		}
+		if 'A' <= y && y <= 'Z' {
+			y += 'a' - 'A'
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }
 
 // attributionGuard is the Spec 042 D5 gate for a push or Ready. A human run is never gated; an

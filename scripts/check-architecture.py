@@ -102,6 +102,9 @@ def validate_restack_file(path, imported):
 # time.LoadLocation (aliased or not) cannot enter. Extend the list in a reviewed change only.
 STACKPUBLISH_ALLOWED_IMPORTS = ('crypto/sha256', 'encoding/hex', 'encoding/json', 'fmt', 'regexp', 'sort', 'strconv', 'strings', 'sync', 'time', 'unicode/utf8', MODULE + 'internal/attribution')
 STACKPUBLISH_TIME_NAMES = ('Time', 'Duration', 'Nanosecond', 'Microsecond', 'Millisecond', 'Second', 'Minute', 'Hour', 'RFC3339', 'RFC3339Nano')
+STACKPUBLISH_FMT_NAMES = ('Errorf', 'Sprintf', 'Sprint', 'Sprintln')
+STACKPUBLISH_INIT = re.compile(r'\bfunc\s+init\s*\(')
+STACKPUBLISH_LOCAL_ZONE = re.compile(r'\.\s*(?:Local|In)\s*\(')
 STACKPUBLISH_GO_STATEMENT = re.compile(r'(?:^|[;{}])\s*go\s+(?:func\b|[A-Za-z_(])', re.M)
 NAMED_IMPORT = re.compile(r'^\s*(?:import\s+)?(?:([A-Za-z_.][A-Za-z0-9_]*)\s+)?"([^"]+)"', re.M)
 
@@ -126,9 +129,18 @@ def validate_stackpublish_file(path, text, imported):
             raise ValueError('internal/stackpublish allows no dot or blank import: ' + path)
         if dependency == 'time':
             name = alias or 'time'
-            for selector in re.findall(r'\b' + re.escape(name) + r'\.([A-Za-z_][A-Za-z0-9_]*)', code):
+            for selector in re.findall(r'\b' + re.escape(name) + r'\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)', code):
                 if selector not in STACKPUBLISH_TIME_NAMES:
                     raise ValueError('internal/stackpublish uses only the plain time values, never ' + name + '.' + selector + '; callers pass the clock in: ' + path)
+        if dependency == 'fmt':
+            name = alias or 'fmt'
+            for selector in re.findall(r'\b' + re.escape(name) + r'\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)', code):
+                if selector not in STACKPUBLISH_FMT_NAMES:
+                    raise ValueError('internal/stackpublish uses fmt only for value formatting, never ' + name + '.' + selector + ': ' + path)
+    if STACKPUBLISH_INIT.search(code):
+        raise ValueError('internal/stackpublish has no init function: ' + path)
+    if STACKPUBLISH_LOCAL_ZONE.search(code):
+        raise ValueError('internal/stackpublish reads no local time zone (Local, In): ' + path)
     if STACKPUBLISH_GO_STATEMENT.search(code):
         raise ValueError('internal/stackpublish starts no goroutine: ' + path)
 

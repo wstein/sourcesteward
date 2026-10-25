@@ -65,3 +65,12 @@ func wantCode(t *testing.T, err error, code string, usage bool) {
 		t.Fatalf("want code %q usage %v, got %q usage %v (field %q)", code, usage, v.Code, v.Usage, v.Field)
 	}
 }
+
+// testPlan is the validated plan of the fixture task in the fixture repository (owner/project).
+func testPlan() Plan {
+	p, err := NewPlan(fixtureInput())
+	if err != nil {
+		panic(err)
+	}
+	return p
+}

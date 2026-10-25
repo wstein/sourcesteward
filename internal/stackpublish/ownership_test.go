@@ -23,7 +23,7 @@ func ownTask() TaskEvidence {
 }
 
 func pushInput(task TaskEvidence, current attribution.Origin) OwnershipInput {
-	return OwnershipInput{PlanTask: "spec016-slice1", Kind: KindPushTopic, Subject: Subject{Ref: str("refs/heads/feat/own")}, Task: task, Current: current}
+	return OwnershipInput{Plan: testPlan(), Kind: KindPushTopic, Subject: Subject{Ref: str("refs/heads/feat/own")}, Task: task, Current: current}
 }
 
 func byName(gs []Guard, name string) (Guard, bool) {
@@ -109,7 +109,6 @@ func TestEveryRealD5Row(t *testing.T) {
 			in := pushInput(tc.task, tc.current)
 			in.Kind = kind
 			if kind == KindReady {
-				in.PlanRepo = RepoRef{Host: "github.com", Owner: "owner", Name: "project"}
 				in.Subject = Subject{PRHeadRef: str("refs/heads/feat/own"), HeadRepo: repoRef("owner", "project"), BaseRepo: repoRef("owner", "project")}
 			}
 			gs := OwnershipGuards(in)
@@ -135,7 +134,7 @@ func withOrigin(o *attribution.Origin) TaskEvidence {
 func TestD5AppliesToPushAndReadyOnly(t *testing.T) {
 	recorded := withOrigin(&attribution.Origin{Kind: "claude", SessionID: sessionSentinel})
 	for _, kind := range []ActionKind{KindCreatePR, KindEditBody, KindRetarget, KindNativeLink, KindNativeUnstack} {
-		in := OwnershipInput{PlanTask: "spec016-slice1", Kind: kind, Task: recorded, Current: claude("other"),
+		in := OwnershipInput{Plan: testPlan(), Kind: kind, Task: recorded, Current: claude("other"),
 			Subject: Subject{Ref: str("refs/heads/feat/own"), PRHeadRef: str("refs/heads/feat/own")}}
 		want(t, OwnershipGuards(in), GuardAttribution, GuardNotApplicable, "")
 	}
@@ -153,10 +152,10 @@ func TestPullRequestActionsAreOwnedThroughTheirHeadRef(t *testing.T) {
 		in.Subject = Subject{Ref: str("refs/heads/feat/own"), HeadRepo: repoRef("owner", "project"), BaseRepo: repoRef("owner", "project")}
 		want(t, OwnershipGuards(in), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 	}
-	create := OwnershipInput{PlanTask: "spec016-slice1", Kind: KindCreatePR, Task: ownTask(), Current: human(), Subject: Subject{Ref: str("refs/heads/feat/own")}}
+	create := OwnershipInput{Plan: testPlan(), Kind: KindCreatePR, Task: ownTask(), Current: human(), Subject: Subject{Ref: str("refs/heads/feat/own")}}
 	want(t, OwnershipGuards(create), GuardOwnership, GuardPass, "")
 	// Native stack membership across several PRs is not established by one task record.
-	link := OwnershipInput{PlanTask: "spec016-slice1", Kind: KindNativeLink, Task: ownTask(), Current: human(), Subject: Subject{PRHeadRef: str("refs/heads/feat/own")}}
+	link := OwnershipInput{Plan: testPlan(), Kind: KindNativeLink, Task: ownTask(), Current: human(), Subject: Subject{PRHeadRef: str("refs/heads/feat/own")}}
 	want(t, OwnershipGuards(link), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 }
 
@@ -196,7 +195,7 @@ func TestGuardsFeedApplyEndToEnd(t *testing.T) {
 	run := func(task TaskEvidence, current attribution.Origin) []string {
 		var asked []string
 		e, err := drive(p, applyRequest(p, "p1"), allCapabilities(), newBudget(), matching(&asked, func(a Action, f *Fresh) {
-			f.Guards = OwnershipGuards(OwnershipInput{PlanTask: p.Task().TaskID, Kind: a.Kind, Subject: Subject{Ref: a.Target.Ref}, Task: task, Current: current})
+			f.Guards = OwnershipGuards(OwnershipInput{Plan: p, Kind: a.Kind, Subject: Subject{Ref: a.Target.Ref}, Task: task, Current: current})
 		}))
 		if err != nil {
 			t.Fatal(err)
@@ -247,7 +246,7 @@ func repoRef(owner, name string) *RepoRef {
 }
 
 func prInput(kind ActionKind, head, base *RepoRef) OwnershipInput {
-	return OwnershipInput{PlanTask: "spec016-slice1", Kind: kind, Task: ownTask(), Current: human(), PlanRepo: RepoRef{Host: "github.com", Owner: "owner", Name: "project"},
+	return OwnershipInput{Plan: testPlan(), Kind: kind, Task: ownTask(), Current: human(),
 		Subject: Subject{PRHeadRef: str("refs/heads/feat/own"), HeadRepo: head, BaseRepo: base}}
 }
 
@@ -287,15 +286,12 @@ func TestThePlanRepositoryComesFromThePlanNotFromTheCaller(t *testing.T) {
 	for _, kind := range []ActionKind{KindEditBody, KindRetarget, KindReady} {
 		in := prInput(kind, fork, fork)
 		in.Plan = plan
-		in.PlanRepo = *fork // a caller-supplied fork must not become the reference
-		in.PlanTask = plan.Task().TaskID
 		in.Task.TaskID = plan.Task().TaskID
 		want(t, OwnershipGuards(in), GuardOwnership, GuardFail, ReasonNotOwned)
 	}
 	// A zero Plan has no repository and no task: nothing is owned.
 	in := prInput(KindReady, repoRef("owner", "project"), repoRef("owner", "project"))
 	in.Plan = Plan{}
-	in.PlanTask = in.Task.TaskID
 	if g, _ := byName(OwnershipGuards(in), GuardOwnership); g.Result == GuardPass {
 		t.Error("ownership passed without a plan")
 	}
@@ -316,4 +312,35 @@ func TestRepositoryNamesAreValidatedAndFoldedInASCIIOnly(t *testing.T) {
 	ok.Plan = plan
 	ok.Task.TaskID = plan.Task().TaskID
 	want(t, OwnershipGuards(ok), GuardOwnership, GuardPass, "")
+}
+
+func TestMalformedRepositoryEvidenceIsUnknownNotAMismatch(t *testing.T) {
+	plan := planWithRepo(t, "owner", "prokject")
+	for _, bad := range []*RepoRef{repoRef("owKner", "prokject"), repoRef("owner", "proKject"), repoRef("owner", "."), repoRef("owner", ".."), repoRef("", "prokject"), repoRef("own er", "prokject"), {Owner: "owner", Name: "prokject"}} {
+		in := prInput(KindReady, bad, bad)
+		in.Plan = plan
+		in.Task.TaskID = plan.Task().TaskID
+		want(t, OwnershipGuards(in), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+	}
+}
+
+func TestRepoRefComparisonFoldsASCIIOnly(t *testing.T) {
+	a := RepoRef{Host: "github.com", Owner: "owner", Name: "prokject"}
+	if !a.same(RepoRef{Host: "GITHUB.com", Owner: "OWNER", Name: "ProKject"}) {
+		t.Error("ASCII case differences must match")
+	}
+	if a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "proKject"}) || a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "prokjec"}) {
+		t.Error("a Unicode look-alike or a different length matched")
+	}
+}
+
+func TestAPlanWithoutAResolvedRepositoryOwnsNoPullRequest(t *testing.T) {
+	in := fixtureInput()
+	in.Repository = nil
+	in.Boundary.Complete = false
+	in.Error = &Failure{Code: ReasonOwnershipUnknown, Message: "no repository"}
+	plan := mustPlan(t, in)
+	pr := prInput(KindReady, repoRef("owner", "project"), repoRef("owner", "project"))
+	pr.Plan = plan
+	want(t, OwnershipGuards(pr), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 }
