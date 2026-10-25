@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -161,6 +162,75 @@ func TestIntegrationPhaseBudgetFollowsTheEngine(t *testing.T) {
 		clock = t0.Add(2 * time.Minute)
 		if err := r.beginTip(); err != tc.want {
 			t.Errorf("%s: second tip after 2 min: %v, want %v", name, err, tc.want)
+		}
+	}
+}
+
+// The engine budget of the proof phase is the scaled one: a fake clock that moves 15 s on every
+// ancestry proof (one per distinct tip, inside the 20 s tip budget) would exhaust the old 60 s
+// phase at the fifth tip; with the window's rest no tip is exhausted.
+func TestObserveProofPhaseBudgetIsTheScaledOne(t *testing.T) {
+	repo := observeRepo(t)
+	for _, n := range []string{"p1", "p2", "p3", "p4", "p5", "p6"} {
+		commitIn(t, observeAdd(t, repo, n), n, n+"\n")
+	}
+	obs := defaultWorktreeObserver()
+	obs.window = func(_ context.Context, n int) time.Duration { return windowForTest(n) }
+	clock := time.Unix(1000, 0)
+	obs.refs.integration.now = func() time.Time { return clock }
+	ancestry := obs.refs.ancestry
+	obs.refs.ancestry = func(ctx context.Context, s Snapshot, target, base string) (bool, error) {
+		clock = clock.Add(15 * time.Second)
+		return ancestry(ctx, s, target, base)
+	}
+	o, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proved := 0
+	for _, w := range o.Worktrees {
+		if w.Incomplete == "proof-budget-exhausted" {
+			t.Errorf("%s: proof-budget-exhausted although the window leaves hours", filepath.Base(w.Path))
+		}
+		if !w.Primary && w.Incomplete == "" {
+			proved++
+		}
+	}
+	if proved < 6 {
+		t.Fatalf("only %d worktrees were judged", proved)
+	}
+}
+
+// The proof phase stays inside the caller's own deadline (--timeout): a window of 7 h under a
+// 30 minute parent leaves the content reads and the proof phase at most 30 minutes.
+func TestObserveWindowsStayInsideTheParentDeadline(t *testing.T) {
+	repo := observeRepo(t)
+	commitIn(t, observeAdd(t, repo, "q1"), "q", "q\n")
+	obs := defaultWorktreeObserver()
+	obs.window = func(_ context.Context, n int) time.Duration { return windowForTest(n) }
+	var left, proofLeft time.Duration
+	read := obs.read
+	obs.read = func(ctx context.Context, bin, dir string, args ...string) (string, error) {
+		if d, ok := ctx.Deadline(); ok && left == 0 {
+			left = time.Until(d)
+		}
+		return read(ctx, bin, dir, args...)
+	}
+	ancestry := obs.refs.ancestry
+	obs.refs.ancestry = func(ctx context.Context, s Snapshot, target, base string) (bool, error) {
+		if d, ok := ctx.Deadline(); ok && proofLeft == 0 {
+			proofLeft = time.Until(d)
+		}
+		return ancestry(ctx, s, target, base)
+	}
+	parent, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	if _, err := obs.observe(parent, ObserveOptions{Path: repo, Base: observeBase}); err != nil {
+		t.Fatal(err)
+	}
+	for name, d := range map[string]time.Duration{"content": left, "proof": proofLeft} {
+		if d <= 0 || d > 30*time.Minute {
+			t.Errorf("%s phase deadline %s, want within the 30 minute parent", name, d)
 		}
 	}
 }
