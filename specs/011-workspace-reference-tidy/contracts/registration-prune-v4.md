@@ -25,7 +25,8 @@ Do not confuse the frozen overview's directory v2 with its current JSON
 `schema_version: 1`. Existing schema files and their freeze digests stay intact.
 
 Default wizard/expert behavior stays on its current contract. Contract 4 is an
-explicit opt-in, not a new default. Old readers remain strict and unchanged. Future cross-artifact amendments in
+explicit opt-in, not a new default. Old readers remain strict and unchanged.
+Future cross-artifact amendments in
 Specs 029 and 041 must adopt these proposed interfaces only after acceptance;
 this PR neither changes their current commands nor enables T012b.
 
@@ -91,7 +92,10 @@ escaped argv data; it is never run by either prune or administrative restore.
 
 Every new record is strict: unknown/duplicate fields, missing required fields,
 wrong types, unknown versions/enums, trailing data, invalid UTF-8 and incomplete
-read refuse before writes. Arrays are present and non-null; genuinely absent
+read refuse before writes. New individual plan/journal JSON records retain the
+1-MiB encoded-record ceiling; overview/history results are capped at 4 MiB.
+Enforce these bounds before allocation/persistence, reporting refusal rather
+than truncating an executable plan. Arrays are present and non-null; genuinely absent
 optional values are explicit null. Native IDs remain full backend-specific IDs.
 
 | Field | Exact proposed spellings / rule |
