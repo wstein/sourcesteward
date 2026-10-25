@@ -1,8 +1,13 @@
 # Feature Specification: Checkpoint, Resume and Selective Undo
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **Feature Branch**: `codex/spec-013-stack-toolbelt` (specification only)
 **Created**: 2026-10-15
-**Status**: Draft — complete proposed design artifacts, 2026-10-25; owner decisions, independent review and implementation acceptance pending. No checkpoint/resume/undo command or JSON contract is published by this amendment.
+**Status**: Draft — complete proposed design artifacts, 2026-10-25; implementation measurements, independent review and implementation acceptance pending. No checkpoint/resume/undo command or JSON contract is published by this amendment.
 **Input**: Preserve progress with backend-specific recovery guarantees.
 **Priority rating**: 9/10 (user-selected product priority, not verification evidence)
 
@@ -94,6 +99,8 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - **FR-013**: Enumerate affected files, index/disk state, references and rewritten descendants before apply; retain pre-action native identities and selected bytes needed by the declared recovery promise. Refuse shared/foreign-owned or changed relevant state, unknown ownership and unselected descendant effects; inverse-change destinations checked out/working-copy-used in any workspace or with dirty selected paths also refuse with their changed-since blocker; restoration is separately authorized and never an automatic rollback.
 - **FR-014**: Respect jj change/operation semantics and Git commit/merge semantics; report unsupported selective recovery and never use broad operation restoration as a substitute for an unrequested selective undo. jj operation scope spans all workspaces; distinguish restoring an earlier whole view from reversing one earlier operation atop later work. Require snapshot-suppressed pinned reads, an explicitly reviewed mutation basis, complete workspace/head observations and first-slice refusal of any planned/observed workspace working-copy commit change (including the invoker). jj has no operation-head CAS: observed pre-effect races refuse, observed post-effect races or incomplete checks report partial, and samples can miss concurrent/ABA changes. Limit no-auto-merge to stw's own requested effects; disclose later native auto-integration risk and unavailable operation history.
 
+- **FR-015**: Separate default workspace .work saved-plan/action METADATA from explicitly external selected-byte/safety-copy PAYLOADS. Apply the shared trusted-root/private-mode/no-follow/actor/layout/race/ignore-untracked/quota/fsync profile to metadata, with no automatic ignore/config/index edits; require independently validated --payload-dir for selected bytes, never infer or relocate them into .work. Plan rendering is unsaved by default; explicit nonempty --save alone may persist the validated plan and return its id. Read-only resume creates neither store and no automatic unresolved expiry is allowed.
+
 ### Key Entities
 
 - Checkpoint: retained native identities, content scope, task context and recovery limits.
@@ -121,12 +128,11 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 
 ## Needs owner decision
 
-The OQ-1 through OQ-5 table in [research](research.md#needs-owner-decision)
-records recommendations for native capture, undo, payload storage/retention,
-trusted ownership and typed journal integration. These are deliberately unsettled;
-no affected mutation capability may be enabled until its choice and native
-evidence are accepted. Other design work and read-only comparison can proceed
-within already settled constraints.
+Compatibility anchor only: OQ-1 through OQ-5 are dated owner decisions in
+[research](research.md#owner-decisions-2026-10-25). Native capture/undo/isolation,
+payload/metadata role integration and durability still need implementation and
+conformance; all affected future tasks remain unchecked. No accepted direction
+is a native proof or capture/restore authorization.
 
 ## Design and implementation boundary (2026-10-25)
 
@@ -135,10 +141,7 @@ within already settled constraints.
 [tasks](tasks.md) and [analysis](analysis.md) complete the proposed artifact set.
 All new contracts are UNPUBLISHED until implementation and native conformance.
 The requirements describe supported capabilities, not a promise that every Git
-or jj state is already capturable or undoable. Backend capture/undo admission,
-payload storage/retention, trusted ownership and the journal integration remain
-explicit **Needs owner decision** items in research.md. No recommendation is
-owner approval; affected implementation tasks remain blocked and unchecked.
+or jj state is already capturable or undoable. Backend capture/undo admission, payload validation and typed journal integration remain implementation/measurement gates under the dated owner decisions in research.md. The owner adopted the recommendations on 2026-10-25; affected implementation tasks remain blocked on measured capability evidence and unchecked.
 
 Existing Spec 032 sync stores `sync` v1 records and committed-history recovery
 roots, not selected worktree/index payloads. Its ten-finished-run retention
@@ -151,5 +154,4 @@ effects; Spec 043 is the human owner's separate landing invocation.
 
 A future 013 result proposes exit 0 for complete success/observation, 1 for
 refusal/incomplete/partial/cancellation/operational failure, and 2 for usage.
-This does not change the hidden Spec 015 v1 planner's existing exit 3 for
-incomplete evidence; migration belongs to that contract's owner decision.
+The owner decided 015 CLI exit-contract revision2 targets incomplete 1 with unchanged JSON schema1; CURRENT code3 remains until its explicit implementation task.

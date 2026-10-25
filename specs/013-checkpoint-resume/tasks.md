@@ -1,5 +1,10 @@
 # Tasks: Checkpoint, Resume and Selective Undo
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **Input**: [spec](spec.md), [plan](plan.md), [research](research.md),
 [data model](data-model.md), [capture](contracts/checkpoint.md),
 [recovery](contracts/recovery.md), [undo](contracts/selective-undo.md).
@@ -9,7 +14,7 @@ Paths below are proposed source/test targets; none is created by this amendment.
 
 ## Phase 1: Setup and owner decisions
 
-- [ ] T001 Record owner choices OQ-1 through OQ-5, native admission matrix, approved storage/retention/ownership inputs, journal migration and CLI/common-flag admission in `specs/013-checkpoint-resume/research.md`; keep undecided capabilities disabled and preserve settled 015 D7/D8.
+- [ ] T001 Record the dated decisions OQ-1 through OQ-5, native admission matrix, approved storage/retention/ownership inputs, journal migration and CLI/common-flag admission in `specs/013-checkpoint-resume/research.md`; keep unmeasured capabilities disabled and preserve settled 015 D7/D8.
 
 ## Phase 2: Foundations — blocking every effect
 
@@ -57,7 +62,7 @@ restore only a selected unchanged case, then refuse concurrent or missing bytes.
 **Independent test**: validate complete success/error fixtures, compare human
 qualifications, and exercise malformed/unsupported/cancelled paths with sentinels.
 
-- [ ] T025 [P] [US3] Write failing human/JSON success/error/outcome/escaping/reversible-path and future 0/1/2 CLI contract tests in `internal/cli/checkpoint_test.go`, including no-TTY operation, exact admitted spellings/format flags, authorization plus plan id, offline `--online` and redundant `--offline` usage refusals (preserving 033/037 behavior) and the accepted/rejected `--human`/`--timeout` choices from OQ-5; preserve hidden 015 v1 exit 3 and published schema bytes (FR-008).
+- [ ] T025 [P] [US3] Write failing human/JSON success/error/outcome/escaping/reversible-path and future 0/1/2 CLI contract tests in `internal/cli/checkpoint_test.go`, including no-TTY operation, exact admitted spellings/format flags, authorization plus plan id, offline `--online` and redundant `--offline` usage refusals (preserving 033/037 behavior) and the accepted/rejected `--human`/`--timeout` choices from OQ-5; preserve schema1 bytes and record CURRENT 015 code 3 until target revision2 incomplete 1 is implemented and published schema bytes (FR-008).
 - [ ] T026 [US3] Implement thin noninteractive parsing/rendering in `internal/cli/checkpoint.go` and future unpublished schemas/fixtures in `internal/contracts/checkpoint_test.go` under approved registration; no schema publication before conformance (T025).
 - [ ] T027 [P] [US3] Write failing helper/hook/config/text execution, network, deadline, output-excess and cancellation effect sentinels in `internal/checkpoint/effects_test.go` and `internal/cli/checkpoint_bounds_test.go` (FR-009).
 - [ ] T028 [US3] Implement fixed native-runner/effect boundary and stop/reap/report behavior in `internal/checkpoint/runner.go`, with architecture allowlist checks in `scripts/check-architecture.py`; never enable an unadmitted backend/effect (T027).
@@ -116,3 +121,8 @@ and disabled. Deliver read-only resume next, then reviewed restore and undo
 increments; each increment needs its own exact-head review and conformance.
 Artifact readiness, source completion, PR readiness, release and live operations
 are separate. No checkbox is ticked by this documentation amendment.
+
+## Owner-decision role-separation tasks (all unchecked)
+
+- [ ] T041 [FR-001, FR-003, FR-005, FR-015, SC-002] Write red tests in internal/checkpoint/store_roles_test.go for default .work METADATA vs explicit EXTERNAL --payload-dir, unsaved rendering/no id/no store writes until explicit nonempty --save, state-dir alone never saves, apply rejects unsaved, no selected index/worktree/safety bytes or secrets auto-copied into repo-local plans, missing/inside/aliased/raced payload refusal, separate quotas/modes/receipts, resume creates neither store and independent safety-copy lifetime survives metadata cleanup.
+- [ ] T042 [FR-001, FR-003, FR-005, FR-015, SC-002] After T041 is red, integrate shared metadata profile from 016-owned internal/workspace/plan_store.go with external payload validation in internal/checkpoint/store_roles.go. Keep exact selected bytes/receipts in the external role, metadata only opaque binding/digest in .work; no relocation, auto-ignore edit, credential capture or automatic expiry.

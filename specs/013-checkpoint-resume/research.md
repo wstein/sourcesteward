@@ -1,8 +1,13 @@
 # Research: Checkpoint, Resume and Selective Undo
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **Date**: 2026-10-25. Design research uses repository source and cited official
 documentation; no native runtime experiment or product acceptance was executed.
-Recommendations below are proposals, not owner decisions.
+The owner adopted the recommendations on2026-10-25; concrete native capabilities remain unmeasured.
 
 ## Source facts and design choices
 
@@ -63,10 +68,10 @@ unmeasured here (OQ-1/OQ-2), including conflicts, binaries and index extensions.
 
 ### R4 — Adjacent evidence never delegates authority
 
-Spec 012 stack observation supplies optional sampled identities; its proposed
-opt-in `--pull-requests` reads remain outside 013. [Spec 012 OQ-NET](../012-stack-inspection/spec.md)
-keeps online scope and flag naming open; 013
-makes no network request and does not settle that contract. Spec 014 isolated integration preflight/replay creates no
+Spec 012 stack observation supplies optional sampled identities. Its dated
+[OQ-NET decision](../012-stack-inspection/spec.md#owner-decisions-2026-10-25)
+selects `--online` only, default offline with no alias. Those opt-in remote reads
+remain outside 013, which makes no network request. Spec 014 isolated integration preflight/replay creates no
 checkpoint root or reusable candidate store; predicted-clean grants no apply.
 Spec 015's proposed recovery adapter remains operation-specific, with plumbing/
 CAS replay (D7) unchanged and publication handed to 016 (D8). Specs 020/022/025/030
@@ -77,7 +82,7 @@ separate. Spec 011 recovery roots retain committed history within their limits.
 
 **Decision**: revalidate each consumer's inputs and permissions. No observation,
 checkpoint, local restore or undo authorizes remote writes or owner resync.
-Proposed 013 exits 0/1/2 leave implemented hidden 015 v1 exit 3 unchanged.
+013target exits0/1/2 align with decided CLI revision2; CURRENT 015 code 3 persists until its explicit incomplete 1 mapping task.
 
 ### R5 — jj operations span the repository and are version-dependent
 
@@ -118,18 +123,24 @@ before the post-sample; stw's no-auto-merge rule constrains its own requested
 effects only. These residual limits must be accepted with native conformance,
 and must appear in every jj mutation result; Git's one-ref CAS remains distinct.
 
+## Owner decisions (2026-10-25)
+
+All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
+choices adopt the source recommendations; implementation/native measurement and
+review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
+distinguish saved-plan metadata, external capture payloads, trusted policy,
+optional host-only signing and CLI exit-contract revision 2.
+
+| Decision ID | Dated disposition | Remaining implementation/verification gate |
+| --- | --- | --- |
+| OQ-1 | DECIDED: adopt measured capture matrix recommendation: explicit ordinary Git tracked index/disk paths first, jj independently measured without implicit snapshot. | Unmeasured/special/index/conflicted/ignored capabilities remain unavailable. |
+| OQ-2 | DECIDED: adopt narrow inverse/restore recommendations, occupied-destination refusal and native jj direct-parent/all-workspace/no-head-CAS limits. | Native semantics, signing and expected-state effects need conformance; no broad undo fallback or invoker working-copy change. |
+| OQ-3 | DECIDED: selected bytes and independent safety copies remain EXTERNAL, private, quota bounded and separately deleted; .work is saved-plan metadata only. | Payload-role validation/capture/drop implementation and evidence; no automatic expiry. |
+| OQ-4 | DECIDED: trusted workspace/task/native layout/actor policy supplies ownership; labels/config/session hints do not. | Missing/foreign/shared proof refuses affected local action. |
+| OQ-5 | DECIDED: adopt characterized typed durability/root seam, separate namespaces and explicit stored restore plan; shared human/shortening-timeout vocabulary. | Implementation/migration/conformance remains; metadata defaults to validated workspace .work while --payload-dir stays explicit/external. |
+
 ## Needs owner decision
 
-| Id | Choice and recommendation | What remains blocked |
-| --- | --- | --- |
-| OQ-1 | Approve an initial native capture matrix after capability spikes. Recommend Git explicit ordinary tracked index/disk paths first; independently prove jj selected disk payload plus native identity capture without implicit snapshots. Keep conflict/index-extension/special-file/ignored capture unsupported until measured; no false parity. | Backend capture enablement; exact commands, admitted versions and special-state rules |
-| OQ-2 | Choose undo capabilities and descendant policy. Recommend explicit inverse changes on owned local history first; for Git compute inverse commits by fixed plumbing in private object quarantine with reviewed promotion/CAS, never porcelain revert in a real worktree. Refuse a destination checked out/working-copy-used in any workspace (including the caller's) or with dirty selected paths, as changed-since with exact blocker; native jj needs its own proved mechanism; separately enable history/operation restoration only after proving exact target/descendant scope and expected-state checks. For jj recommend only the single current operation head's direct parent as the desired restored view, no workspace working-copy commit change including the invoker, explicit snapshot suppression and recommended unmeasured --at-operation=EXPECTED_HEAD mutation basis, immediate pre/post samples (no head CAS, exclusion or always-detect guarantee), observed divergent-head refusal/partial reporting without stw-initiated merge and missing/GC'd operation unavailable (R5); older-operation inverse application is a different, initially unsupported capability. Snapshot suppression can leave the invoking workspace stale if its working-copy commit changes; refuse that first-slice case. Any intentional stale result or separately selected update-stale/disk update needs separate admission and pre-action byte safety capture, never implicit update-stale. Broad `jj op undo` is never a selective fallback. Decide required-signature/source-signature handling for newly created inverse/history commits: disclose loss of signatures, refuse unmet signing policy, and run no signing helper. Spec 043 OQ6 is related context, not approval. | Undo mutation adapters, operation-restoration admission and signing capability |
-| OQ-3 | Choose payload location, quota and retention/deletion policy. Require explicit 0700 directories/0600 files independent of umask, current-actor ownership and fail-closed canonical/native/layout proof outside repositories/worktrees. Recommend a caller-selected external store, 32 MiB per-checkpoint payload and 1 GiB total physical-store quota counting all metadata/staging/orphan/incomplete bytes. Recommend exact-checkpoint drop-plan/drop with stored plan, authorization and checkpoint-id confirmation; independent pre-action safety-copy ids/records/retention survive completed restore and checkpoint drop, with a separate named/authorized/safety-id-confirmed deletion plan only; dependency/expected-value guards and partial receipts remain mandatory. No automatic expiry/eviction or secure-erasure claim. Journal metadata retention is not byte retention. | Durable selected-byte store, total quota and explicit drop interface; no adoption of sync's ten-run deletion policy |
-| OQ-4 | Select trusted ownership/authorization inputs for stored plans, payloads and affected refs/changes. Recommend Spec 010 task registration plus native layout/position evidence, explicit caller identity and current actor binding; missing/foreign/shared evidence refuses. Config/environment identity and session-name matches alone never prove ownership. | Apply admission and shared/published-history classification when offline proof is incomplete |
-| OQ-5 | Review the typed recovery seam, versioned record envelope, namespace/location and migration across 032/013/015, plus proposed 013 command spellings/stored-plan interface and common flag admission. Recommend extract durable-write/root/validation primitives under characterization tests; keep sync v1 and operation-specific restore/retention behavior unchanged. New writers require fail-closed durability evidence. Reserve distinct `refs/stw/recovery/checkpoint/CHECKPOINT_ID/N` and `refs/stw/recovery/undo/UNDO_ID/N` prefixes, plus the independent `refs/stw/recovery/undo/safety/SAFETY_ID/N` subtree and self-contained safety-copy records; checkpoint drop cannot enter that subtree. Never enter sync/tidy/v3/restack ownership. Recommend a proved native jj commit/op-log retention mechanism without visible bookmarks; root-dependent recovery stays disabled until that proof exists. Recommend a separately stored selected-byte restore plan; exact `restore-plan`/`restore` vs plan/apply spelling, explicit `--human` alias and bounded `--timeout` override remain interface choices, not approval. | Shared extraction, new checkpoint/restore/undo record writers and CLI/interface admission |
-
-The proposed numeric protocol bounds in the contract are conservative design
-limits, not measured throughput. Implementation review may narrow them; widening
-a bound or admitting a new effect requires contract/test review. These unresolved
-choices are recorded intentionally instead of inventing owner approval or
-reopening settled Spec 015 decisions.
+Compatibility anchor only: the IDs above are settled owner decisions, not open
+questions. Remaining unavailable capabilities require implementation/measurement
+evidence, not an invented additional owner answer.

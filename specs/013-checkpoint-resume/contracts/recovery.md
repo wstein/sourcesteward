@@ -1,15 +1,25 @@
 # Proposed Contract: Resume Comparison and Separately Authorized Restore
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **UNPUBLISHED — unimplemented**, 2026-10-25. Reuses the proposed typed recovery
 integration, not a second generic journal writer. See [research](../research.md),
 [model](../data-model.md) and [shared limits/output](checkpoint.md).
 
 ## Offline read-only comparison
 
+Rendering defaults to unsaved with no plan id or store writes. Add `--save`
+for an explicitly selected plan to use validated workspace `.work/` metadata
+or the admitted `--state-dir` override. Apply refuses an unsaved result;
+external payload selection never grants metadata or native mutation authority.
+
 ```text
-stw checkpoint resume --checkpoint CHECKPOINT_ID --path WORKSPACE --state-dir PRIVATE_DIR [--json]
-stw checkpoint restore-plan --checkpoint CHECKPOINT_ID --path WORKSPACE --state-dir PRIVATE_DIR --select-layer LAYER --select-path PATH [--json]
-stw checkpoint restore --plan RESTORE_PLAN_ID --state-dir PRIVATE_DIR --authorize [--json]
+stw checkpoint resume --checkpoint CHECKPOINT_ID --path WORKSPACE [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR [--json]
+stw checkpoint restore-plan --checkpoint CHECKPOINT_ID --path WORKSPACE [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --select-layer LAYER --select-path PATH [--save] [--json]
+stw checkpoint restore --plan RESTORE_PLAN_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --authorize [--json]
 ```
 
 The separate stored restore plan is proposed because 013 can replace explicitly

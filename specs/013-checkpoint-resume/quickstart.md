@@ -1,12 +1,17 @@
 # Quickstart Validation: Checkpoint, Resume and Selective Undo
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **Future validation guide, 2026-10-25.** All 013 command forms are proposed and
 unimplemented. No scenario below was executed for this documentation amendment;
 no product acceptance, build, live mutation or contract publication is claimed.
 
 ## Prerequisites and safe fixtures
 
-Resolve [owner decisions](research.md#needs-owner-decision), review the design,
+Apply the dated [owner decisions](research.md#owner-decisions-2026-10-25), review the design,
 implement red-first tasks, then use disposable temporary repositories/workspaces
 and a separate private state directory. Pin the minimum/current admitted Git/jj
 versions and required platforms in the acceptance record. Do not use an owner's
@@ -27,13 +32,13 @@ operation log; track private state writes separately from repository effects.
 | Scenario and proposed steps | Required observable outcome |
 | --- | --- |
 | US1.1: run `stw checkpoint plan` with explicit workspace/state directory but no path/layer selection | `nothing-selected`, zero capture/native/store mutation and no prompt |
-| US1.1–1.3: plan exact tracked index/disk pairs, then separately choose an untracked/ignored path only where admitted | Included/excluded paths/layers/types/sizes and limits shown; no unrelated bytes or task context harvested; plan private-write disclosure only |
+| US1.1–1.3: plan exact tracked index/disk pairs, then separately choose an untracked/ignored path only where admitted | Included/excluded paths/layers/types/sizes and limits shown; no unrelated bytes or task context harvested; unsaved render has no writes/id; explicit --save alone permits the disclosed validated private plan write |
 | US1.2: apply the exact stored plan with `--authorize` | Selected payload/receipts and typed evidence durable before complete success; index/disk/native effects match capability disclosure, unrelated sentinels preserved |
 | US1.3: point at a forbidden sensitive/control path or inject context instructions | Typed refusal; no credential/environment/transcript collection, no execution |
 | US1.4: use umask 0000; try a repository-local/linked-worktree, foreign or 0666 store; fill both quotas; then plan/authorize/confirm drop of one exact checkpoint and crash mid-drop | New state is 0700/0600; unsafe locations/modes/quota refuse. Drop touches only exclusive owned files/013 roots and reports remaining receipts/bytes; no payload content is logged or printed. |
 | US2.1: run `stw checkpoint resume --checkpoint ID` offline | Saved/current ids and Git staged/disk or jj stored/disk differences; zero record/refs/index/disk/jj snapshot/oplog mutation |
 | US2.2: create selected current edits, corrupt/miss a payload/root, or change ownership; plan and attempt selected restore | Explicit stale/unavailable/unsupported refusal, no overwrite and no implicit fetch/repair |
-| US2.2: plan an admitted unchanged selected restore, then authorize that restore plan separately | Only selected effects, pre-action recovery receipt before mutation, precise native limits; no inherited capture approval |
+| US2.2: plan an admitted unchanged selected restore, then --save and authorize that exact restore plan separately | Only selected effects, pre-action recovery receipt before mutation, precise native limits; no inherited capture approval |
 | US2.2: restore over uniquely edited current work, complete it, then drop the source checkpoint | Original capture may drop, but independent safety-copy bytes, records and undo/safety roots remain recoverable. Deletion requires a separate plan naming and confirming SAFETY_ID; no completion-triggered cleanup. |
 | US2.3: crash after payload/root/intent/native effect and before completion, then inspect/reconcile | Per-action completed/not-started/unknown truth; retained incomplete evidence; known desired state does not replay; unknown new head never resets |
 | US3.1: run complete observation/capture/error cases in human and JSON modes | Same native facts/outcome/limits, escaped terminal text and reversible path bytes; complete fixtures validate future unpublished contract |
@@ -65,6 +70,6 @@ helper/hook/network call or treats missing conformance as passed.
 Compare sentinel evidence after every success and refusal. Re-run capture and
 resume independently of undo, and undo from typed native fixtures independently
 of an existing user checkpoint. Confirm proposed 013 exits 0/1/2 while historical
-hidden 015 v1 incomplete exit 3 remains unchanged. Keep required unexecuted lanes
+CURRENT hidden015code3 persists until decided target revision2 incomplete 1 task. Keep required unexecuted lanes
 and unsupported capabilities visible. This guide grants no release, activation,
 real-workspace apply, remote write or Spec 043 landing authority.
