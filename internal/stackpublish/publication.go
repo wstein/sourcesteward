@@ -96,6 +96,7 @@ type PublicationReceipt struct {
 	MovedScopeClass ChangeClass // empty when no moved scope applies (a new, non-rewritten topic)
 	RangeClass      ChangeClass
 	Class           ChangeClass // effective: code unless both are proved docs-only
+	ClassUnknown    bool        // some evidence of the class was missing or unrecognized, so it counts as code
 	PureRebase      bool
 	ReviewRequired  bool
 	MinTier         ReviewTier
