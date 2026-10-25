@@ -300,7 +300,7 @@ func TestThePlanRepositoryComesFromThePlanNotFromTheCaller(t *testing.T) {
 func TestRepositoryNamesAreValidatedAndFoldedInASCIIOnly(t *testing.T) {
 	plan := planWithRepo(t, "owner", "prokject")
 	kelvin := "pro\u212aject" // KELVIN SIGN folds to k under Unicode folding
-	for _, head := range []*RepoRef{repoRef("owner", kelvin), repoRef("ow\u212aner", "prokject"), repoRef("owner", "proj ect"), repoRef("owner", "a/b"), repoRef("owner", ""), {Host: "GITHUB.COM", Owner: "owner", Name: "pro\x00ject"}} {
+	for _, head := range []*RepoRef{repoRef("owner", kelvin), repoRef("ow\u212aner", "prokject"), repoRef("owner", "proj\tx"), repoRef("owner", "a/b"), repoRef("owner", ""), {Host: "GITHUB.COM", Owner: "owner", Name: "pro\x00ject"}} {
 		in := prInput(KindReady, head, head)
 		in.Plan = plan
 		in.Task.TaskID = plan.Task().TaskID
