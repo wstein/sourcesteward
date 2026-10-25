@@ -159,7 +159,10 @@ blanket runtime implementation or product acceptance.
    Sync retention stays unchanged; restack roots stay retained pending OQ-5.
    Spec 013 consumes action/native identities for checkpoint/restore/undo.
 6. Expose actual new SHA plus derived `change_class`/`pure_rebase` policy input.
-   Spec 016 preserves AGENTS.md: docs-only rewrite needs green local checks and
+   Spec 016 recomputes a conservative class over every per-commit changed path
+   in observed remote-default..actual-new-head, including open-parent code; use
+   code if either moved or publication scope is code/unknown, never net-tree-only
+   classification. It preserves AGENTS.md: docs-only rewrite needs green local checks and
    equal range-diff for pure rebase without pre-push review; code rewrite needs
    independent exact-new-SHA review before push (middle tier for equal pure
    rebase allowed). Ready always needs independent exact-head CLEAR and green
