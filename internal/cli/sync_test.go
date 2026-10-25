@@ -321,3 +321,13 @@ func TestSyncRestoreRefusesEverySyncOption(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncAutostashConflictLineShowsTheStashOID(t *testing.T) {
+	rp := syncRepo(".", "root", "autostash-conflict")
+	rp.Reason = syncStr("your changes are kept in the stash")
+	rp.StashOID = syncStr("3333333333333333333333333333333333333333")
+	_, _, out, _ := runSync(syncCLIResult(rp))
+	if !strings.Contains(out, "stash 3333333") {
+		t.Fatalf("%q", out)
+	}
+}

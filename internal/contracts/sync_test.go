@@ -41,6 +41,11 @@ func TestSyncSchemaAcceptsBothRunIDForms(t *testing.T) {
 	}
 }
 
+// An autostash-conflict whose entry could not be identified without doubt has a null stash_oid.
+func TestSyncSchemaAcceptsAnUnidentifiedStash(t *testing.T) {
+	valid(t, schema(t, "sync"), mutateSync(t, "run", func(_ map[string]any, r []any) { syncRepoOf(r, "autostash-conflict")["stash_oid"] = nil }))
+}
+
 // mutateSync applies fn to a copy of a fixture and returns the JSON.
 func mutateSync(t *testing.T, fixture string, fn func(m map[string]any, repos []any)) []byte {
 	t.Helper()
@@ -99,9 +104,14 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"unknown summary result": {"plan", func(m map[string]any, _ []any) {
 			m["summary"].(map[string]any)["by_result"].(map[string]any)["bogus"] = 1
 		}},
-		"error without code":        {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
-		"missing merge option":      {"plan", func(m map[string]any, _ []any) { delete(m["options"].(map[string]any), "merge") }},
-		"string merge option":       {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["merge"] = "yes" }},
+		"error without code":   {"refused", func(m map[string]any, _ []any) { m["error"] = map[string]any{"message": "x"} }},
+		"missing merge option": {"plan", func(m map[string]any, _ []any) { delete(m["options"].(map[string]any), "merge") }},
+		"string merge option":  {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["merge"] = "yes" }},
+		"stash oid on a success": {"run", func(_ map[string]any, r []any) {
+			syncRepoOf(r, "fast-forwarded")["stash_oid"] = "3333333333333333333333333333333333333333"
+		}},
+		"short stash oid":           {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "autostash-conflict")["stash_oid"] = "abc" }},
+		"missing stash oid":         {"run", func(_ map[string]any, r []any) { delete(syncRepoOf(r, "autostash-conflict"), "stash_oid") }},
 		"string option":             {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
 		"sync result in a restore":  {"restore", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "fast-forwarded" }},
 		"restore result in a run":   {"run", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "restored" }},

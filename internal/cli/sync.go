@@ -201,7 +201,11 @@ func syncText(rp stwsync.Repo, plan bool) (text, class string) {
 	case stwsync.ResultConflict:
 		return "conflict: " + reason, "red"
 	case stwsync.ResultAutostashConflict:
-		return "autostash conflict: " + reason + " " + moved, "red"
+		stash := ""
+		if rp.StashOID != nil {
+			stash = " (stash " + reposAbbrevOID(rp.StashOID) + ")"
+		}
+		return "autostash conflict: " + reason + stash + " " + moved, "red"
 	}
 	return "failed: " + reason, "red"
 }
