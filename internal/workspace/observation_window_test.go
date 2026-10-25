@@ -67,8 +67,15 @@ func TestObserveAppliesTheWindowOfTheItemCount(t *testing.T) {
 	observeAdd(t, repo, "w2")
 	obs := defaultWorktreeObserver()
 	var asked []int
-	obs.window = func(_ context.Context, n int) time.Duration { asked = append(asked, n); return 7 * time.Hour }
-	var left time.Duration
+	obs.window = func(_ context.Context, n int) time.Duration { asked = append(asked, n); return windowForTest(n) }
+	var left, proofLeft time.Duration
+	ancestry := obs.refs.ancestry
+	obs.refs.ancestry = func(ctx context.Context, s Snapshot, target, base string) (bool, error) {
+		if d, ok := ctx.Deadline(); ok && proofLeft == 0 {
+			proofLeft = time.Until(d)
+		}
+		return ancestry(ctx, s, target, base)
+	}
 	obs.read = func(ctx context.Context, bin, dir string, args ...string) (string, error) {
 		if d, ok := ctx.Deadline(); ok && left == 0 {
 			left = time.Until(d)
@@ -86,6 +93,9 @@ func TestObserveAppliesTheWindowOfTheItemCount(t *testing.T) {
 	if left < 6*time.Hour {
 		t.Fatalf("content reads ran under %s, want the 7h window", left)
 	}
+	if proofLeft < 6*time.Hour {
+		t.Fatalf("the proof phase ran under %s, want the rest of the 7h window", proofLeft)
+	}
 }
 
 func TestObserveJJAppliesTheWindowOfTheItemCount(t *testing.T) {
@@ -93,7 +103,7 @@ func TestObserveJJAppliesTheWindowOfTheItemCount(t *testing.T) {
 	observeJJAdd(t, repo, "w1")
 	obs := defaultWorktreeObserver()
 	var asked []int
-	obs.window = func(_ context.Context, n int) time.Duration { asked = append(asked, n); return 7 * time.Hour }
+	obs.window = func(_ context.Context, n int) time.Duration { asked = append(asked, n); return windowForTest(n) }
 	var left time.Duration
 	real := obs.retire
 	obs.retire = func(ctx context.Context, source, base, destination, name, repo string) (inspection.JJRetirementState, error) {
@@ -109,5 +119,48 @@ func TestObserveJJAppliesTheWindowOfTheItemCount(t *testing.T) {
 	}
 	if len(asked) == 0 || asked[len(asked)-1] < 3 || left < 6*time.Hour {
 		t.Fatalf("asked %v, content deadline %s", asked, left)
+	}
+}
+
+// windowForTest is 1 h for the base read (no items yet) and 7 h once the items are counted, so a
+// context that keeps the base window cannot pass for the scaled one.
+func windowForTest(n int) time.Duration {
+	if n == 0 {
+		return time.Hour
+	}
+	return 7 * time.Hour
+}
+
+// The proof phase budget is the window's rest, never below the old 60 s.
+func TestProofPhaseTimeoutIsTheRestOfTheWindowWithAFloor(t *testing.T) {
+	for _, tc := range []struct{ rest, want time.Duration }{
+		{-time.Second, integrationPhaseTimeout}, {0, integrationPhaseTimeout}, {30 * time.Second, integrationPhaseTimeout},
+		{5 * time.Minute, 5 * time.Minute}, {7 * time.Hour, 7 * time.Hour},
+	} {
+		if got := proofPhaseTimeout(tc.rest); got != tc.want {
+			t.Errorf("rest %s: %s, want %s", tc.rest, got, tc.want)
+		}
+	}
+}
+
+// The forge-free phase budget of the engine is its phaseTimeout (60 s when unset): after two
+// minutes a new tip is exhausted by default and not with a scaled phase.
+func TestIntegrationPhaseBudgetFollowsTheEngine(t *testing.T) {
+	t0 := time.Unix(1000, 0)
+	clock := t0
+	for name, tc := range map[string]struct {
+		phase time.Duration
+		want  error
+	}{"default": {0, errIntegrationBudget}, "scaled": {time.Hour, nil}} {
+		clock = t0
+		e := integrationEngine{now: func() time.Time { return clock }, phaseTimeout: tc.phase}
+		r := &integrationRun{engine: e}
+		if err := r.beginTip(); err != nil {
+			t.Fatalf("%s: first tip: %v", name, err)
+		}
+		clock = t0.Add(2 * time.Minute)
+		if err := r.beginTip(); err != tc.want {
+			t.Errorf("%s: second tip after 2 min: %v, want %v", name, err, tc.want)
+		}
 	}
 }

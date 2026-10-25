@@ -75,6 +75,8 @@ type integrationEngine struct {
 	now            func() time.Time
 	makeObjectDir  func() (string, error)
 	commandTimeout time.Duration
+	// phaseTimeout is the forge-free phase budget; zero means integrationPhaseTimeout (stub).
+	phaseTimeout time.Duration
 	// trace, when set, sees the start of every class (tests assert the order).
 	trace func(class string)
 }
