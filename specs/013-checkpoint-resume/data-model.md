@@ -121,8 +121,16 @@ and its direct-parent relation, exact native semantics and expected resulting
 operation/parent. The OQ-2 first-slice recommendation excludes older-operation
 inverse application over later work and every workspace working-copy commit change, including the invoking workspace. The full before/proposed-after working-copy map must match; stale/unknown relevant workspace evidence refuses. No implicit update-stale occurs; intentionally stale results or disk updates need a separate OQ-2 capability and pre-action byte safety capture.
 All reads/restore/undo calls explicitly suppress snapshots with
-`--ignore-working-copy` and use operation pinning. Divergent heads refuse without
-auto-merge; a post-effect divergence is partial. Missing/abandoned/GC'd required
+`--ignore-working-copy`. Reads pin operations; OQ-2 recommends the unmeasured
+mutation basis `--at-operation=EXPECTED_HEAD`, recorded as sampled ancestry,
+never a CAS token. jj has no operation-head CAS: concurrent native writers can
+create sibling heads that later native commands integrate outside stw's control.
+Record sampled pre/post head sets and workspace maps, observed races and check
+completeness. Observed pre-effect divergence refuses; post-effect observed race
+or unknown check is partial, with no stw-initiated merge/rollback. Sampling may
+miss concurrent/ABA/integrated-away changes. Every jj mutation result retains
+the three [native concurrency limitations](contracts/selective-undo.md#native-jj-operation-guard-oq-2-proposal),
+including otherwise complete outcomes; none asserts prevention or always-detect. Missing/abandoned/GC'd required
 operation/object is unavailable, never a broader recovery fallback.
 
 ## RecoveryAction and transitions

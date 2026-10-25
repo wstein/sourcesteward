@@ -95,7 +95,7 @@ schema, dependencies, docs/commands.md or docs/progress.md changes belong here.
 4. Add common CLI/result/error/escaping/bounds coverage (US3) across all paths;
    these are foundational requirements despite their story ordering.
 5. Add explicit inverse-change vs history/operation-restoration plans (US4),
-   explicit merge parent, descendant scope and shared/foreign refusal. Proposed first-slice Git inverse candidates use private plumbing quarantine and reviewed promotion/CAS; every occupied or dirty/unknown inverse destination refuses, including the caller's clean workspace. Native jj operation restoration additionally needs complete repository-wide workspace/operation-head evidence, the approved single-head/direct-parent scope, unchanged working-copy commit map for every workspace including the invoker, and snapshot-suppressed pinned argv; stale/unknown relevant workspace evidence refuses, no implicit update-stale; divergent heads refuse and missing operation history is unavailable. Capability
+   explicit merge parent, descendant scope and shared/foreign refusal. Proposed first-slice Git inverse candidates use private plumbing quarantine and reviewed promotion/CAS; every occupied or dirty/unknown inverse destination refuses, including the caller's clean workspace. Native jj operation restoration additionally needs complete repository-wide workspace/operation-head evidence, the approved single-head/direct-parent scope, unchanged working-copy commit map for every workspace including the invoker, and snapshot-suppressed pinned reads and reviewed explicit mutation basis; stale/unknown relevant workspace evidence refuses, no implicit update-stale; observed pre-effect divergence refuses, observed post-effect races/incomplete checks are partial, and missing operation history is unavailable. jj has no head CAS; pinning is not exclusion, sampling can miss races and native processes can integrate heads outside stw's control; all jj mutation results disclose those limits. Capability
    selection requires owner decision and measured native semantics first.
 6. Complete each required native lane and failure suite, published-contract
    regressions, independent review and acceptance evidence before exposing the
@@ -111,7 +111,10 @@ mutation is needed. If bounded read fanout becomes necessary, reuse Spec 040
 ## Risks and limits
 
 Concurrent edits/ABA cannot be ruled out by sampling; refuse detected or unknown
-relevant state. Multi-path disk restoration is not an atomic transaction with
+relevant state before effects and report observed races/unknown checks afterward
+as partial. jj operation heads have no CAS, so a pinned mutation cannot prevent
+concurrent writers or external native head integration; no always-detect claim
+is made. Git's expected-value one-ref CAS remains a separate stronger primitive. Multi-path disk restoration is not an atomic transaction with
 native metadata. Crash outcomes distinguish known completed effects from unknown
 ones and retain incomplete records. Corrupt/missing/expired bytes block the
 promised restore instead of triggering a broader native rollback. No automatic
