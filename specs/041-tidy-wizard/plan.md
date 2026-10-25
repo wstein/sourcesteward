@@ -81,8 +81,10 @@ Remaining: T012b (deferred). T020 is done (the Spec 037 hint is `stw tidy`). T01
 ## T012b narrow registration extension
 
 Follow the [proposed amendment](spec.md#t012b-proposed-narrow-registration-amendment-2026-10-25)
-and Spec 011's narrow prune contract. Expert capability, owner schema/interface decision
-and supported absence witness precede T012b1–T012b4. Add distinct one-registration grouping,
+and Spec 011's narrow prune contract. Expert capability and the owner schema/interface
+decision precede T012b1–T012b4. The absence predicate is already defined, not an additional
+owner decision. Replace the real locked-missing `evidence-incomplete` / `!w.Prunable`
+classifier gate with that evidence. Add distinct one-registration grouping,
 strict identity hashing, explicit ordering and dispatch only after failing tests; no implicit
 branch leg or present-checkout retirement substitution. Preserve the current retained row
 until the final implementation PR and verify schema compatibility under the owner's choice.

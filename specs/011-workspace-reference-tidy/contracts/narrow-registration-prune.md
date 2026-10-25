@@ -13,13 +13,15 @@ not a wildcard, directory scan, branch name, inferred basename or implicit selec
 More than one or no name refuses. A plan set MAY contain separately selected sub-plans,
 but each carries its own evidence, recovery and outcome; no batched native prune runs.
 
-The registration MUST have the exact raw lock reason `stw:<task-id>` derived from the
+The registration MUST have the exact lock reason `stw:<task-id>` derived from the
 matching original completed
 Spec 010 creation plan, task and journal from one unambiguous private store. Bind those
 records by digest, original owner/task/repository/destination and native registration
 identity. A lock that merely resembles stw's format, or a copied/mismatched record,
 is insufficient. No legacy completion declaration, adoption or lock override applies.
-The original lock stays present through the final validation; no preliminary unlock.
+A single native terminal LF in the lock file is permitted; bind the complete raw bytes
+as well as the decoded exact reason. The original lock stays present through the final
+validation; no preliminary unlock.
 
 Refuse unnamed, multiple, unlocked, foreign-locked, unknown/ambiguous ownership,
 main/primary or current-worktree registrations, a present destination, changed mapping,
@@ -145,6 +147,10 @@ binary bytes; never convert index or raw metadata through UTF-8 text. Unknown or
 entries cannot be called complete recovery. Admit at most 64 MiB per regular metadata
 file, 256 MiB total raw payload and 1,024 manifest entries (files plus directories).
 Index and reflog bytes are mandatory, not regenerable substitutes or truncated histories.
+These are the new operation's sampling/payload limits: do not run its index through the
+legacy 64 KiB metadata reader or silently widen Spec 029 FR-030–FR-032 for other modes.
+Bound repeated content reads and cancellation under the caller's original deadline;
+exhaustion refuses, without promising every maximum-size payload will finish.
 Use digest-bound private binary sidecars for raw contents, streamed and hashed in at most
 64 KiB buffers; the manifest binds exact byte lengths and SHA-256 digests. Sidecars obey
 the same per-file/total quotas and durable private-store rules. Insufficient storage,

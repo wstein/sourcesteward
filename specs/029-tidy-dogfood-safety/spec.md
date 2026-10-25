@@ -178,5 +178,6 @@ Spec 011's [narrow prune contract](../011-workspace-reference-tidy/contracts/nar
 adds proposed future recovery of one named stw-locked missing-directory Git registration.
 Its raw private metadata payload is additional to committed-history pins; existing recovery
 limits and present-checkout retirement are unchanged. Broad prune stays excluded. Frozen
-unpublished schema changes and the absence-witness capability require owner decisions;
+unpublished schema/interface changes require the owner decision; the Spec 011 contract
+defines absence and moved-checkout recovery without another owner gate;
 no existing v3 plan/apply/restore capability is extended by this documentation amendment.

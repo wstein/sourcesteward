@@ -137,12 +137,14 @@ remains excluded. This proposed extension is separate from implemented WIs and p
 checkout retirement; no existing implementation or conformance claim covers it.
 
 - **FR-013**: Enforce the contract's exact selection, original ownership/lock binding,
-  absence-witness gate, immutable plan, fresh checks, confined effect and explicit backend refusals.
+  defined missing-path/device/mount predicate, immutable plan, fresh checks, confined effect and explicit backend refusals.
 - **FR-014**: Persist and verify bounded private raw registration recovery plus committed-history
   recovery before removal; report partial effects and require separate authorized restoration.
-- **FR-015**: Resolve the frozen-schema/interface and platform absence-witness decisions with
+- **FR-015**: Resolve the frozen-schema/interface decision with
   the owner before implementation; preserve published contracts and unified exit classes.
 
 Acceptance for FR-013–FR-015 is the new T501–T508 sequence in [tasks](tasks.md).
-A missing pathname alone is insufficient evidence of deletion rather than a move or unmount.
+The contract defines no-follow ENOENT plus accessible ancestors, same-device and stable
+mount evidence. It discloses same-filesystem moves and sampled mount/race limits; complete
+raw recovery plus separately authorized native repair bounds the moved-checkout risk.
 Until the decisions and implementation are accepted, the current wizard retains stale rows.

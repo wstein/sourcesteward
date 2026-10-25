@@ -222,7 +222,7 @@ The reason a tracking reference is retained with comes from a closed list, appli
 | Worktree of another owner or created by another tool (no stw registration), proven integrated, clean, unlocked, not recently active | `safe`, `scope` `other` or `unknown`, evidence `no-work` when it has no commit of its own | human mode: shown, never preselected, removable only by explicit choice; removal of an unregistered worktree uses the Spec 029 legacy completion (exact path, declared complete, cooperative); agent mode: not shown and not plannable |
 | The same, but dirty, unmerged or locked by another | `retain` | none |
 | Worktree of scope `other` or `unknown` whose `HEAD`, index or any tracked-file mtime is within the last 24 hours (a possibly running job, for example a fresh `/tmp/whr010-*` at the base commit is trivially an ancestor and clean) | `retain` `recently-active` | none; the window is OQ15 |
-| Worktree directory missing, registration present | `retain` (`stale-worktree`), reason `stale-registration-no-plan-kind` when stw-owned and the Git admin entry proves prunable (no existing plan kind removes it, T012b; not selectable by `--save` or `a`), else the reason of the failed check | none |
+| Worktree directory missing, registration present | `retain` (`stale-worktree`): a real stw-locked missing registration with a matching creation record reaches `evidence-incomplete` ("the Git administrative entry is not provably prunable"), because Git does not mark locked entries prunable. Earlier missing/mismatched record protections still win. `stale-registration-no-plan-kind` is the existing synthetic stw-owned + prunable fallback, not the real locked-missing case. T012b replaces that prunable gate with its new evidence; currently not selectable by `--save` or `a`. | none |
 | Branch integrated, not checked out anywhere | `safe` | delete branch with recovery ref (Spec 011 WI2) |
 | Branch integrated but checked out in a retained worktree | `retain` `branch-attached-elsewhere` | none |
 | The worktree of the current working directory | `retain` `current-worktree` | none |
@@ -731,16 +731,22 @@ mentioning. Specs 011 and 029 get a pointer to this spec; their text is not rewr
 
 The owner lifted the scope deferral for the
 [Spec 011 narrow prune contract](../011-workspace-reference-tidy/contracts/narrow-registration-prune.md).
-The current missing-directory row and `stale-registration-no-plan-kind` behavior above remain
-accurate until the expert implementation and final wizard PR are accepted. Historical T012a
-and T013 completion does not implement this extension.
+Current `classifyStale` retains a matching stw-owned locked missing registration as
+`stale-worktree` / `evidence-incomplete`, with "the Git administrative entry is not
+provably prunable" (`internal/tidywizard/classify.go:440`). Git does not emit native
+`prunable` for that locked entry. Earlier ownership/record checks still take precedence.
+`stale-registration-no-plan-kind` remains only the synthetic locked-plus-prunable
+fallback. T012b must replace the `!w.Prunable` gate with the new predicate, not wait
+for an unreachable native marker. Historical T012a/T013 completion does not implement
+this extension.
 
 Future behavior: a row becomes `safe` only with exact original stw ownership/lock,
-one named registration and the approved deletion/mount witness plus complete recovery
-feasibility. Its only effect is removal of that registration, in its own distinct sub-plan;
+one named registration and Spec 011's defined ENOENT/ancestor/device/mount predicate
+plus complete recovery feasibility. Its only effect is removal of that registration, in its own distinct sub-plan;
 no user files or dependent branch leg. Own-scope `--save` and "all" may select that safe row.
-Every refused or unsupported case stays retained without effects; missing path or native
-prunable status alone cannot prove deletion rather than movement/unmounting. Native jj
+Every refused or unsupported case stays retained without effects. The predicate does
+not prove historical deletion: a same-filesystem move is an explicit residual risk
+bounded by metadata restoration and separately authorized native repair. Native jj
 and colocated jj have no raw Git fallback.
 
 Plan-set identity, strict validation, explicit ordering, apply and recovery must cover the
