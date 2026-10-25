@@ -153,3 +153,59 @@ func TestTheQuarantineIsRemovedOnEveryPath(t *testing.T) {
 		t.Fatalf("temporary plan directories left behind: %v", names)
 	}
 }
+
+// attributeFlipScenario is a real content conflict on sub/shared.txt.
+func attributeFlipScenario(t *testing.T) *scenario {
+	t.Helper()
+	return rebaseMergedWith(t, func(r *repo) { r.commit("B1", map[string]string{"parent1.txt": "p1\n"}) },
+		func(r *repo) {
+			r.commit("C1", map[string]string{"sub/shared.txt": "line1\nchild\nline3\n", "sub/other.txt": "o\n"})
+		},
+		func(r *repo) { r.commit("M", map[string]string{"sub/shared.txt": "line1\nmain\nline3\n"}) })
+}
+
+// An untracked attribute file in the worktree is not part of any sampled commit; merge-tree must
+// not read it (issue 241: `merge=union` turned a real CONFLICT into a clean prediction).
+func TestUntrackedAttributesCannotFlipAPredictedConflict(t *testing.T) {
+	for _, tc := range []struct{ name, file, rules string }{
+		{"root union", ".gitattributes", "sub/shared.txt merge=union\n"},
+		{"nested union", "sub/.gitattributes", "shared.txt merge=union\n"},
+		{"binary", ".gitattributes", "*.txt -merge\n"},
+		{"macro binary", ".gitattributes", "*.txt binary\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := attributeFlipScenario(t)
+			if res := s.plan(t); res.Outcome != OutcomeConflicts {
+				t.Fatalf("control without attributes: %s %s %+v", res.Status, res.Outcome, res.Diagnostics)
+			}
+			s.write(tc.file, tc.rules)
+			res := s.plan(t)
+			if res.Status != StatusOK || res.Outcome != OutcomeConflicts || len(res.Evidence.Conflicts.Items) != 1 || res.Evidence.Conflicts.Items[0].Path != "sub/shared.txt" {
+				t.Fatalf("%s %s %+v %+v", res.Status, res.Outcome, res.Diagnostics, res.Evidence.Conflicts)
+			}
+		})
+	}
+}
+
+// The attributes of the sampled new-parent tree (not the worktree) govern the replay: a union
+// rule that exists in no sampled tree and an exclude-file rule are both ignored.
+func TestExcludeFileAndIgnoredAttributeFilesDoNotChangeTheReplay(t *testing.T) {
+	s := attributeFlipScenario(t)
+	s.write(".git/info/exclude", ".gitattributes\n")
+	s.write(".gitattributes", "sub/shared.txt merge=union\n")
+	if res := s.plan(t); res.Outcome != OutcomeConflicts {
+		t.Fatalf("%s %s %+v", res.Status, res.Outcome, res.Diagnostics)
+	}
+}
+
+// A clean replay must stay clean and keep its own-diff evidence when an untracked rule such as
+// `-diff` would turn the patch streams into binary patches.
+func TestUntrackedDiffAttributesDoNotChangeTheEvidence(t *testing.T) {
+	s := rebaseMerged(t)
+	want := s.plan(t).Evidence.OwnDiffEquality
+	s.write(".gitattributes", "*.txt -diff\n*.txt merge=union\n")
+	got := s.plan(t).Evidence.OwnDiffEquality
+	if !got.AllEqual || len(got.Rows) != len(want.Rows) || got.Rows[0].OldPatchID != want.Rows[0].OldPatchID || got.Rows[0].PredictedPatchID != want.Rows[0].PredictedPatchID {
+		t.Fatalf("want %+v got %+v", want, got)
+	}
+}
