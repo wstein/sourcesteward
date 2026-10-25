@@ -14,7 +14,7 @@ import (
 // refTransactionWithDescendant starts a fake owned writer: a parent process that
 // starts a descendant sharing its stderr, as bwrap's git does, and reports
 // ready. Closing release lets the descendant exit; alive reads EOF once it has.
-func refTransactionWithDescendant(t *testing.T, mode string) (tx *gitRefTransaction, release func(), alive *os.File) {
+func refTransactionWithDescendant(t *testing.T, mode string, descendantArgs ...string) (tx *gitRefTransaction, release func(), alive *os.File) {
 	t.Helper()
 	old := nativeUnsandboxed
 	nativeUnsandboxed = true
@@ -28,7 +28,7 @@ func refTransactionWithDescendant(t *testing.T, mode string) (tx *gitRefTransact
 	}
 	root := gitTempDir(t)
 	runCtx, cancel := context.WithCancel(context.Background())
-	cmd, err := prepareSandboxed(runCtx, bin, []string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", mode}, root, nil, nil)
+	cmd, err := prepareSandboxed(runCtx, bin, append([]string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", mode}, descendantArgs...), root, nil, nil)
 	if err != nil {
 		cancel()
 		t.Fatal(err)
@@ -164,5 +164,36 @@ func TestRefTransactionKillWaitsForDescendantThatIsGone(t *testing.T) {
 	}
 	if descendantAlive(t, alive) {
 		t.Fatal("finish returned while the descendant was still alive")
+	}
+}
+
+// The interleaving of issue 196: a fixture restores a lock once the transaction
+// reports its writer stopped, and the writer's descendant then unlinks that
+// lock path (git's rollback on stdin end of file). A transaction that reports a
+// clean stop must have no such descendant left; one that cannot say so must
+// not look clean, so the caller keeps its hands off the path.
+func TestRefTransactionCleanStopLeavesNoDescendantToUnlinkARestoredLock(t *testing.T) {
+	old := gitRefDescendantWait
+	gitRefDescendantWait = 100 * time.Millisecond
+	t.Cleanup(func() { gitRefDescendantWait = old })
+	lock := filepath.Join(t.TempDir(), "integrated.lock")
+	tx, release, alive := refTransactionWithDescendant(t, "spawn", lock)
+	err := tx.finish(true)
+	clean := !errors.Is(err, errGitRefDescendants)
+	if clean {
+		if err := os.WriteFile(lock, []byte("restored\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	} else if !tx.out.Uncertain {
+		t.Fatal("a stop with a possible descendant must be uncertain")
+	}
+	release()
+	if !descendantGone(t, alive) {
+		t.Fatal("descendant did not exit after release")
+	}
+	if clean {
+		if _, err := os.Lstat(lock); err != nil {
+			t.Fatal("a stop reported as clean let a descendant remove the restored lock:", err)
+		}
 	}
 }

@@ -83,6 +83,11 @@ func TestNativeSandboxHelper(t *testing.T) {
 		case "hold":
 			// The descendant lives until the test closes the control pipe.
 			io.Copy(io.Discard, os.NewFile(3, "control"))
+			if len(a) > 1 {
+				// Like git's stdin-EOF rollback: unlink the lock path on the way out.
+				// First, so that the end of alive below means the unlink has happened.
+				os.Remove(a[1])
+			}
 			// Closed before exiting, so that the test sees the end of alive no later
 			// than the end of stderr, which the exit closes.
 			os.NewFile(4, "alive").Close()
