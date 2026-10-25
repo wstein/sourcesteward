@@ -1,6 +1,6 @@
 # Data model: restack plan v1 (first slice)
 
-Types live in a new `internal/restack` package and reuse the native identity and diagnostic types of `internal/inspection`. JSON names are snake_case; arrays are non-null; optional objects are `null`; text is valid UTF-8, bounded and data. Object ids are 40-hex lowercase.
+Historical v1 types live in `internal/restack` (source implemented, hidden; schema UNPUBLISHED) and reuse the native identity and diagnostic types of `internal/inspection`. JSON names are snake_case; arrays are non-null; optional objects are `null`; text is valid UTF-8, bounded and data. Object ids are 40-hex lowercase.
 
 ## RestackPlanResult
 
@@ -59,3 +59,43 @@ State values never mean authorization; any `unknown` is reported with its reason
 ## Configuration
 
 None in the first slice. The keep-both path allowlist (`[restack] keep_both_paths`, default empty, exact paths or directory prefixes, no heuristic) and `--keep-both-config` belong to WP6.
+
+
+## Proposed local apply entities (UNPUBLISHED)
+
+These are Markdown-only additions for [the future contract](contracts/restack-apply.md).
+They do not add fields to `RestackPlanResult` or its frozen v1 schema.
+All ids are backend-qualified; native Git first apply remains SHA-1/full 40-hex.
+Unsupported object formats refuse rather than truncate or reinterpret an id.
+
+| Entity | Required fields and validation | Relationships |
+| --- | --- | --- |
+| LocalApplyPlan | version/kind, immutable plan id/digest, repository/common-directory identity, backend, one task/ref ownership binding, old parent/head, new parent, ordered moved ids, protected-ref/config/registration/operation expectations, explicit identity/committer policy, exact effects, bounds | Optional 012 observation and 014 preflight references are evidence only; equality of exact inputs/semantics/completeness required |
+| ActualCandidate | full new head/tree, ordered one-to-one `{old_commit,new_commit}` map, preserved author/date, actual committer/date, all `=` range rows, own-diff and parent-integration proof, actual identity rows | Built after replay, before target CAS; never reuse v1's unpublished prediction commit id or fixed committer as actual proof |
+| DurableRestackAction | type/version, plan/run/action ids, repository/task binding, exact target, old and planned/actual new ids, recovery-root id/value, stage/outcome and evidence digest | Typed reuse of 032 record architecture; each entry is bound to one selected action; foreign sync record never authorizes restack |
+| ApplyReceipt | plan/run/action, old/new identities, per-action effects/outcomes, complete actual evidence, review-required actual SHA, recovery pointer, limits/diagnostics | Supplies evidence to 016, never permission; `remote_authorized` is false |
+| ReviewGateInput | exact actual new head, independent issuer/verdict/evidence identity and freshness under owner-approved policy; required-check evidence also exact-head | 016 validates it before a remote step. Missing/old/predicted SHA is not CLEAR; 015 receipt initially says required |
+| RestorePlan | immutable reverse plan id, original run/action, root, old retained id, current expected new id, repository/task/registration/protection expectations, one declared reverse effect | Separate authorization; CAS only recorded-new→old, never blanket reset |
+| JJRestackPlan/Receipt | native commit/change/operation ids, selected bookmark and exact descendant/bookmark/workspace effects, expected operation and recovery operation | Proposed capability only; cannot reuse Git field meanings for native operation semantics |
+
+## Proposed state transitions
+
+`observed → stored-plan → candidate-prepared → recovery-prepared → ref-applied → completed`.
+Before recovery preparation, only owned scratch/private plan effects are allowed.
+Candidate objects may enter the repository only under recorded intent and explicit
+effects. `recovery-prepared` means old root plus known candidate id are durable,
+not that the target moved. Each boundary may yield refusal, failed, canceled or
+partial/unknown; reconcile from the journal and native old/new state using the
+[recovery table](contracts/recovery.md#reconciliation-and-retry).
+
+`completed → restore-plan → restored` requires a new authorization and unchanged
+expected new head/ownership. A later ref value gives `changed-since`. Repeated
+same action at recorded new/old identity gives proven already-applied/restored;
+missing or forged evidence gives `journal-incomplete`, never a guess. Objects,
+reflogs, private records and native refs do not form one atomic transaction.
+
+Proposed strings are open for future compatibility; an unknown version, action
+kind or gate state cannot grant mutation or be coerced to success. Valid unusual
+paths stay data; terminal controls are escaped; arrays are bounded and non-null,
+optional facts explicit null. Future schemas and validators are implementation
+work only after owner decisions and review; no JSON file is created here.
