@@ -95,7 +95,7 @@ schema, dependencies, docs/commands.md or docs/progress.md changes belong here.
 4. Add common CLI/result/error/escaping/bounds coverage (US3) across all paths;
    these are foundational requirements despite their story ordering.
 5. Add explicit inverse-change vs history/operation-restoration plans (US4),
-   explicit merge parent, descendant scope and shared/foreign refusal. Capability
+   explicit merge parent, descendant scope and shared/foreign refusal. Native jj operation restoration additionally needs complete repository-wide workspace/operation-head evidence, the approved single-head/direct-parent scope and snapshot-suppressed pinned argv; divergent heads refuse and missing operation history is unavailable. Capability
    selection requires owner decision and measured native semantics first.
 6. Complete each required native lane and failure suite, published-contract
    regressions, independent review and acceptance evidence before exposing the

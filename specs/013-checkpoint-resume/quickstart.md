@@ -42,6 +42,7 @@ operation log; track private state writes separately from repository effects.
 | US3.5: omit a required backend/version/platform execution | Evidence record says blocked/unrun; acceptance remains incomplete |
 | US4.1: plan the same target once as `inverse-change` and once as supported history/operation restoration | Distinct explicit native effects, full paths/layers/refs/descendants, original/new identities and recovery limits |
 | US4.2: omit/wrongly select merge parent; create shared/foreign/unknown target, unselected descendant or concurrent edits | Typed refusal; no first-parent guess, broad op undo, remote lookup or target rewrite |
+| US4.2: select a jj parent view with later work in another workspace, divergent heads or an abandoned/GC'd target, and race the operation head before/after apply | All-workspace evidence and pinned `--ignore-working-copy` reads/operations; only an admitted sole-head/direct-parent case can apply, other workspace effects refuse; missing operation is unavailable and a post-effect race is partial without auto-merge. |
 | US4.3: authorize an admitted undo, force conflict/crash after a selected effect, then inspect | Only selected effects; partial/unknown state recorded, no automatic reset/abort/rollback; separately planned recovery only |
 
 ## Evidence and mutation controls

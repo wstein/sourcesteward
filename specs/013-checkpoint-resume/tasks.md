@@ -44,8 +44,8 @@ layers/paths, inspect receipt, and prove excluded/untracked state unchanged.
 **Independent test**: resume a saved checkpoint with zero native/store writes;
 restore only a selected unchanged case, then refuse concurrent or missing bytes.
 
-- [ ] T019 [P] [US2] Write failing offline read-only saved/current comparisons, missing/corrupt/unsupported recovery and zero Git/jj snapshot/oplog write tests in `internal/checkpoint/resume_test.go` (FR-004).
-- [ ] T020 [US2] Implement read-only resume comparison and separate restore-plan creation in `internal/checkpoint/resume.go` and `internal/checkpoint/restore_plan.go`, no repair/fetch and no inherited capture authorization (T019).
+- [ ] T019 [P] [US2] Write failing offline read-only saved/current comparisons, missing/corrupt/unsupported recovery and zero Git/jj snapshot/oplog write tests with explicit ignore-working-copy/at-operation argv, all-workspace identities and missing saved operations in `internal/checkpoint/resume_test.go` (FR-004).
+- [ ] T020 [US2] Implement read-only resume comparison and separate restore-plan creation in `internal/checkpoint/resume.go` and `internal/checkpoint/restore_plan.go`, native jj snapshot-suppressed/full-operation-pinned reads and all-workspace evidence, no repair/fetch/auto-merge and no inherited capture authorization (T019).
 - [ ] T021 [P] [US2] Write failing restore guard, changed index/disk/ref/layout/ownership, active-workspace and missing-byte tests in `internal/checkpoint/restore_test.go`; no arbitrary reset or broad jj op restore (FR-004, FR-006).
 - [ ] T022 [US2] Implement only approved restore primitives in `internal/checkpoint/restore.go`, durably saving pre-action selected bytes/native roots before effects and recording actual per-effect completion (T021; OQ-1/OQ-2/OQ-4/OQ-5).
 - [ ] T023 [P] [US2] Write failing known-new/already-applied/changed-since/mixed/unknown-new-head retry and completion-write-failure tests in `internal/checkpoint/reconcile_test.go`, keeping prepared evidence protected (FR-006).
@@ -72,8 +72,8 @@ closure, shared/foreign refusal and interrupted outcomes in admitted Git/jj case
 - [ ] T030 [US4] Implement separate immutable undo plans and fresh per-action ownership/effect/recovery guards in `internal/checkpoint/undo_plan.go`, retaining exact pre-action roots and selected bytes (T029; OQ-2/OQ-4).
 - [ ] T031 [P] [US4] Write failing inverse-vs-history-restoration, explicit valid merge-parent, unsupported topology, conflict, path-narrowing, signature-loss disclosure and required-signing refusal tests in `internal/checkpoint/git_undo_test.go` (FR-012).
 - [ ] T032 [US4] Implement only approved Git undo semantics in `internal/checkpoint/git_undo.go`, no default parent, unselected descendant rewrite, shared/foreign target, signing-helper execution, silently dropped signature policy or automatic restore (T031; OQ-2).
-- [ ] T033 [P] [US4] Write failing native jj change/commit/operation distinctions, operation-id-without-bytes, broad-op-as-selective refusal and interrupted/partial recovery tests in `internal/checkpoint/jj_undo_test.go` (FR-014).
-- [ ] T034 [US4] Implement only approved native jj selective undo in `internal/checkpoint/jj_undo.go`, using the shared typed seam and explicit operation effect scope; no Git or broad-op fallback (T033; OQ-2).
+- [ ] T033 [P] [US4] Write failing native jj change/commit/operation distinctions, operation-id-without-bytes, broad-op-as-selective refusal, repository-wide workspace map, single-head/direct-parent admission, older-op restore-vs-inverse semantics, mandatory ignore-working-copy/at-operation argv, divergent/concurrent pre/post heads, missing abandoned/GC'd operation and interrupted/partial recovery tests in `internal/checkpoint/jj_undo_test.go` (FR-014).
+- [ ] T034 [US4] Implement only approved native jj selective undo in `internal/checkpoint/jj_undo.go`, using the shared typed seam, approved version-specific argv, mandatory snapshot suppression/pinning and complete all-workspace/sole-head/direct-parent pre/post guards; divergent heads refuse without auto-merge, missing operations are unavailable and post-effect races partial; no Git or broad-op fallback (T033; OQ-2).
 
 ## Phase 7: Conformance, evidence and handoff
 
