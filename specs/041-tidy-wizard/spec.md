@@ -757,3 +757,15 @@ no frozen bytes. Existing branch restore is not registration restoration. The fu
 recovery path uses the additional private raw payload, separate authorization and partial
 reporting in that contract. T012b1–T012b4 implement and verify the future behavior after
 Spec 011's accepted expert capability; until then the retain fallback remains.
+
+## Verification note: stale registrations do not block a repository (issue 284)
+
+The real-apply rehearsal of 2026-10-25 found that one prunable registration with a missing directory made
+`plan --save` fail for the whole repository with `unknown-workspace-path`, although the overview showed it as a
+retained row. The v3 plans now qualify such a registration by a narrower rule (`qualifyTidyV3Registrations`,
+`internal/workspace/tidy.go`): Git reports it `prunable`, it is not locked or bare, its leaf is absent and its
+parent is a canonical real directory; the state directory is still checked against its path. Every other
+unavailable root keeps the old refusal. The registration stays in the native state of the plan, so the
+snapshot, the digest and the apply-time re-check cover it, and nothing prunes it (T012b is unchanged).
+Tests: `TestTidyV3StaleRegistration*` and `TestAbsentBelowCanonicalParent` in
+`internal/workspace/tidy_v3_stale_registration_test.go`.
