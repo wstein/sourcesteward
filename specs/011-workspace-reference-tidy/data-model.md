@@ -48,7 +48,7 @@ Existing v1/v3 records and frozen overview v2 bytes stay unchanged.
 
 New operation `registration-prune` uses plan/result/journal schema version 4;
 restore uses its own `registration-restore` journal linked to the prune plan.
-One immutable plan binds one exact registration name/canonical gitdir, original
+One immutable plan binds one exact registration name/canonical gitdir, caller mode and derived scope, original
 completed task/lock, complete absence/metadata/sibling witness, payload location
 and recovery limits. A digest-only admission observation is not a stored plan
 or a recoverable payload. Existing read-only admission source does not complete
@@ -62,3 +62,17 @@ version-domain hash. Its closed dispatch preserves legacy readers and refuses
 incompatible versions before effects. New private plan/journal/payload/restore
 namespaces and native history roots are defined in the companion contract;
 restore/history never infer raw recovery from an old branch journal.
+
+The proposed manifest-2 apply interface is a distinct `tidy apply-set` command;
+legacy positional `tidy apply` keeps its 12-hex ID and confirmation rules.
+Expert contract-4 apply uses `--plan`, and restore mutation requires the paired
+`--apply --authorize` flags. History/listing retains the 256/1024 limit policy.
+Prune selection requires task-record ownership; agents are limited to own scope,
+while human other-scope selection requires the existing typed confirmation.
+
+`expected.common_dir_mount` is mandatory in the proposed plan. Its native
+observation/revalidation is still open after #273, and blocks T503/T505
+acceptance until supported-platform tests prove it; destination mount evidence
+is insufficient. Row, evidence, semantic plan, raw plan-file, payload and
+restore-journal digests use the explicitly separated encodings/domains in the
+companion contract. No old frozen digest is reinterpreted.
