@@ -65,4 +65,6 @@ satisfy live-checkout retirement by fabricated disk evidence. Reuse secure-store
 history-pin discipline only where valid; raw registration recovery needs an additional private
 payload and explicit restoration. The frozen plan/apply contract and strict readers remain
 unchanged pending owner schema/interface decision. Existing branch restore does not restore
-registrations. Absence/deletion witness support is a separate pre-implementation gate.
+registrations. The Spec 011 contract defines the no-follow ENOENT/ancestor/device/mount predicate and
+discloses moved-tree risk with complete payload restoration and separate native repair;
+no new deletion-witness owner gate applies.

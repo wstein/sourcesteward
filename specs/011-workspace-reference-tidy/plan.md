@@ -76,7 +76,8 @@ bounded private registration payload and a separately authorized restoration pat
 Do not reuse present-checkout retirement by inventing disk evidence or clear the stw lock.
 
 Deliver this specification PR first. Source work waits for independent CLEAR, owner merge,
-and owner resolution of the contract's schema/interface and absence-witness gates. Then
+and owner resolution of the contract's frozen-schema/interface choice. The defined
+absence predicate is not another owner gate. Then
 implement expert planning/apply/recovery test-first in a separate PR; only after its accepted
 capability exists, implement Spec 041 T012b classification/plan-set wiring in the final PR.
 No task/progress completion is asserted here. T501–T508 define the dependencies and evidence.
