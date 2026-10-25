@@ -62,7 +62,7 @@ func TestTidyFlagClasses(t *testing.T) {
 			t.Errorf("--%s must be shared", name)
 		}
 	}
-	for _, name := range []string{"base", "ref", "task", "owner", "remove-registration", "remove-files", "completed-worktree", "protect-worktree",
+	for _, name := range []string{"prune-registration", "registration-gitdir", "base", "ref", "task", "owner", "remove-registration", "remove-files", "completed-worktree", "protect-worktree",
 		"contract", "remote", "tracking-remote", "repo", "host", "pr", "integration-proof", "accept-whitespace-differences", "decisions",
 		"consolidation-range", "report-dir", "report-max-entries", "report-max-bytes", "report-max-diff-bytes", "report-max-files",
 		"report-max-lines", "report-max-commits", "plan", "authorize"} {
