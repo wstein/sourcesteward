@@ -127,6 +127,13 @@ Use [the proposed surface](contracts/forge-effects.md#proposed-command-surface)
 with shared `--online`, `--human`, `--json`, `--timeout`, `--state-dir`, stored
 `--plan ID` and a distinct per-action `--authorize-remote ACTION_ID`. Local actions
 retain established `--authorize`; that flag cannot authorize remote writes.
+Plans render unsaved by default (`saved: false`, null plan id) with no store
+creation/repair or plan write. Explicit `--save` requires an existing validated
+private `--state-dir DIR`; there is no accepted default. Empty selection never
+persists. Apply requires an existing saved id and explicit validated directory.
+A directory supplied without `--save` can read existing task evidence but cannot
+persist the plan. Surface/default changes remain OQ-SURFACE/OQ-STORE.
+
 These spellings remain OQ-SURFACE, not accepted current CLI flags. Spec 012's
 online scope and `--pull-requests` spelling remain an open owner question; its
 accepted `--after-fetch` observation hint never performs a fetch. Spec 014's
