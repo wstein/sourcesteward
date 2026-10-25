@@ -98,6 +98,11 @@ blocks; unknown publication/sharedness is not local-only proof. Every planned
 rewritten descendant must be selected and owned. No empty selector defaults to
 latest, current merge parent, entire operation or all descendants. If an inverse
 would conflict, planning reports predicted conflict/unknown; no broadened undo.
+Inverse destinations must be unoccupied across all worktrees/workspaces and have
+no dirty selected paths; unknown occupancy refuses as changed-since with a
+concrete blocker. Proposed first-slice Git candidates use private quarantine
+plumbing and guarded promotion/CAS, never real-worktree revert, index/disk
+updates or a held ref left stale. Native jj admission needs its own proof.
 
 Native jj operation plans additionally bind the complete repository-wide
 workspace working-copy map, sole expected operation head, desired restored view

@@ -29,6 +29,28 @@ unsupported topology cannot be silently flattened. Git commit/merge identity,
 jj commit/change identity and jj operation identity are not aliases. A jj
 operation id alone cannot restore uncaptured disk edits or external effects.
 
+## Inverse-change destination guard (first-slice proposal)
+
+Recommend Git inverse commits be computed by fixed plumbing in an owned private
+object quarantine, following 015 D7's effect discipline, then promoted only by
+the reviewed object/ref action with durable pre-action recovery and an exact
+expected-old/new CAS. Do not invoke porcelain `git revert` in a real worktree.
+Candidate computation cannot write the original object store, index or disk;
+conflicts/unknown results refuse before promotion. This is a proposed OQ-2 native
+capability, not approval to reuse an unreviewed command or a quarantine SHA as
+publication evidence.
+
+For every admitted backend, refuse an inverse destination checked out or used
+as the working-copy commit in **any** worktree/workspace, including the invoking
+owner's clean workspace. Also refuse dirty selected paths, unreadable state or
+unknown/incomplete occupancy inventory. Report `changed-since` with the concrete
+occupancy/dirty-state blocker, rechecking before each effect; preserve all index,
+disk and workspace state. Never move a held ref and leave its worktree stale,
+stash/reset edits, switch branches or silently refresh a working copy. A later
+occupied/dirty-destination capability needs explicit OQ-2 acceptance and tests.
+Native jj must prove an equivalent native mechanism without Git plumbing or
+implicit snapshot/update; unsupported capability refuses.
+
 ## Native jj operation guard (OQ-2 proposal)
 
 The operation log is shared by all workspaces of a repository. Inventory every
