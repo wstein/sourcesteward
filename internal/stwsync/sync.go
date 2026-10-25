@@ -40,7 +40,7 @@ func newResult(o Options) Result {
 	}
 	return Result{
 		SchemaVersion: 1, Command: "sync", Mode: mode,
-		Options: ResultOptions{Rebase: o.Rebase.json(), Prune: o.Prune.json(), Autostash: o.Autostash.json(), Merge: o.Merge},
+		Options: ResultOptions{Rebase: o.Rebase.json(), Prune: o.Prune.json(), Autostash: o.Autostash.json(), Merge: o.Merge, Submodules: o.Submodules},
 		Repos:   []Repo{}, Summary: Summary{ByResult: map[string]int{}},
 	}
 }
@@ -99,7 +99,7 @@ func Sync(ctx context.Context, o Options) Result {
 		return r.fail("sync-read-failed", "cannot create a run ID")
 	}
 	s := &session{opts: o, runID: runID}
-	if err := s.walk(ctx, root, ".", &r.Repos); err != nil {
+	if err := s.walk(ctx, root, ".", &r.Repos, nil, ""); err != nil {
 		return r.fail("sync-limit", err.Error())
 	}
 	if s.journaled {
@@ -145,17 +145,26 @@ func openWorkspace(ctx context.Context, path string) (root env, linked string, f
 
 // walk syncs the repository at e and then, depth-first, each of its submodules that is initialized. An
 // uninitialized submodule is reported and never cloned, and its own submodules are not visited.
-func (s *session) walk(ctx context.Context, e env, name string, out *[]Repo) error {
+func (s *session) walk(ctx context.Context, e env, name string, out *[]Repo, parent *env, sub string) error {
 	kind := "submodule"
 	if name == "." {
 		kind = "root"
 	}
+	acting := parent != nil && s.opts.Submodules && !s.opts.Plan
+	if acting && (!validSubmodulePath(sub) || symlinkedPath(parent.dir, sub)) {
+		*out = append(*out, unreachableSubmodule(e, name, "the submodule path is not a plain directory path; stw leaves it alone"))
+		return nil
+	}
 	rp := s.repo(ctx, e, name, kind)
+	descend := true
+	if acting {
+		rp, descend = s.submoduleStep(ctx, *parent, sub, e, rp)
+	}
 	*out = append(*out, rp)
 	if len(*out) > repoLimit {
 		return fmt.Errorf("the workspace has more than %d repositories", repoLimit)
 	}
-	if rp.Result == ResultSkippedUninitialized {
+	if rp.Result == ResultSkippedUninitialized || !descend {
 		return nil
 	}
 	subs, err := e.submodules(ctx)
@@ -169,7 +178,7 @@ func (s *session) walk(ctx context.Context, e env, name string, out *[]Repo) err
 		if name == "." {
 			child = p
 		}
-		if err := s.walk(ctx, e.withDir(filepath.Join(e.dir, filepath.FromSlash(p))), child, out); err != nil {
+		if err := s.walk(ctx, e.withDir(filepath.Join(e.dir, filepath.FromSlash(p))), child, out, &e, p); err != nil {
 			return err
 		}
 	}

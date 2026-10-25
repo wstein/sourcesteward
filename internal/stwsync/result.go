@@ -28,6 +28,8 @@ const (
 	ResultConflict             = "conflict"
 	ResultAutostashConflict    = "autostash-conflict"
 	ResultFailed               = "failed"
+	ResultUpdated              = "updated"     // --submodules: a pinned submodule moved to the recorded commit
+	ResultUnreachable          = "unreachable" // --submodules: not initialised, or the recorded commit is not present
 	// restore results
 	ResultRestored          = "restored"
 	ResultAlreadyRestored   = "already-restored"
@@ -65,14 +67,17 @@ type Options struct {
 	// Merge is --merge, the only way to get a merge commit (owner decision 2026-10-24): a diverged branch is merged. No Git
 	// configuration enables it, and a branch that can be fast-forwarded is still fast-forwarded. Exclusive with Rebase.
 	Merge bool
+	// Submodules is --submodules: detached (pinned) submodules are brought to the commit the superproject records.
+	Submodules bool
 }
 
 // ResultOptions echoes the requested options; null means the Git configuration decides.
 type ResultOptions struct {
-	Rebase    *bool `json:"rebase"`
-	Prune     *bool `json:"prune"`
-	Autostash *bool `json:"autostash"`
-	Merge     bool  `json:"merge"`
+	Rebase     *bool `json:"rebase"`
+	Prune      *bool `json:"prune"`
+	Autostash  *bool `json:"autostash"`
+	Merge      bool  `json:"merge"`
+	Submodules bool  `json:"submodules"`
 }
 
 // Repo is the root repository or one submodule. Branch, Remote, OldOID and NewOID are nil when unknown.
@@ -129,7 +134,7 @@ func (r Result) ExitCode() int {
 	}
 	for _, it := range r.Repos {
 		switch it.Result {
-		case ResultFailed, ResultConflict, ResultAutostashConflict, ResultChangedSince, ResultJournalIncomplete:
+		case ResultFailed, ResultConflict, ResultAutostashConflict, ResultChangedSince, ResultJournalIncomplete, ResultUnreachable:
 			return 1
 		}
 	}
