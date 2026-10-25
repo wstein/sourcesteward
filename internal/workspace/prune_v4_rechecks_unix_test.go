@@ -5,6 +5,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,10 +65,10 @@ func TestRegistrationPruneV4StateInsideSourceOrCommon(t *testing.T) {
 			if kind == "common" {
 				sourceStore = filepath.Join(p.Expected.SourceSnapshot.Identity.RepositoryDir, "private-state")
 			}
-			pruneMust(t, os.Rename(o.StateDir, sourceStore))
-			o.StateDir = sourceStore
-			r := PlanRegistrationPruneV4(context.Background(), o)
-			assertPruneV4ResultReason(t, r, "state-overlap", "Private prune state overlaps protected source metadata or workspace.")
+			// Exercise qualification directly with a real observed baseline: moving
+			// an ownership store would instead fail its earlier store binding.
+			e := qualifyPruneV4Roots(context.Background(), sourceStore, p.Expected.SourceSnapshot.Identity, p.Registration.Destination, p.Expected.Native)
+			assertPruneReason(t, e, "state-overlap", "Private prune state overlaps protected source metadata or workspace.")
 		})
 	}
 }
@@ -132,5 +133,36 @@ func TestRegistrationPruneV4CrossObservationRechecks(t *testing.T) {
 				t.Fatalf("refused planner persisted %d plans, want original only", len(entries))
 			}
 		})
+	}
+}
+
+func TestRegistrationPruneV4CommonMountUnavailable(t *testing.T) {
+	for _, at := range []int{1, 2} {
+		t.Run(fmt.Sprintf("sample-%d", at), func(t *testing.T) {
+			o, p := fixturePruneV4(t)
+			calls := 0
+			ctx := context.WithValue(context.Background(), pruneV4MountReaderKey{}, func(fd int) (string, error) {
+				calls++
+				if calls == at {
+					return pruneMountIdentity(-1)
+				}
+				return pruneMountIdentity(fd)
+			})
+			r := PlanRegistrationPruneV4(ctx, o)
+			if calls != at {
+				t.Fatalf("mount call count=%d, want %d", calls, at)
+			}
+			assertPruneV4ResultReason(t, r, "prune-mount-unavailable", "Native mount identity is unavailable; absence is not proven.")
+			entries, e := os.ReadDir(filepath.Dir(pruneV4PlanPath(p)))
+			pruneMust(t, e)
+			if len(entries) != 1 {
+				t.Fatal("refusal stored another plan")
+			}
+		})
+	}
+	// The native call itself must fail; the injected reader above does not invent
+	// a product failure code or bypass the native error-mapping branch.
+	if _, e := pruneMountIdentity(-1); e == nil {
+		t.Fatal("invalid native descriptor unexpectedly had a mount")
 	}
 }

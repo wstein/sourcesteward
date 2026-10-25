@@ -21,7 +21,13 @@ func pruneV4Directory(w pruneDirectoryWitness) PruneV4Directory {
 
 // observePruneV4Common binds native mount identity AND descriptor/path identity.
 // This closes #273 F2 for the new planner without changing its admission-only API.
+type pruneV4MountReaderKey struct{}
+
 func observePruneV4Common(ctx context.Context, path string) (PruneV4Directory, error) {
+	mountReader := pruneMountIdentity
+	if reader, ok := ctx.Value(pruneV4MountReaderKey{}).(func(int) (string, error)); ok {
+		mountReader = reader
+	}
 	var zero PruneV4Directory
 	if e := ctx.Err(); e != nil {
 		return zero, e
@@ -36,12 +42,12 @@ func observePruneV4Common(ctx context.Context, path string) (PruneV4Directory, e
 		return zero, failure("prune-mount-unavailable", "Common-directory descriptor is unavailable.")
 	}
 	defer f.Close()
-	a, e := pruneDirectoryFact(int(f.Fd()), path)
+	a, e := pruneDirectoryFactWithMount(int(f.Fd()), path, mountReader)
 	if e != nil {
 		return zero, e
 	}
 	pruneObservationStep(ctx, "common-mount-observed", path, &a)
-	b, e := pruneDirectoryFact(int(f.Fd()), path)
+	b, e := pruneDirectoryFactWithMount(int(f.Fd()), path, mountReader)
 	if e != nil {
 		return zero, e
 	}
@@ -116,6 +122,7 @@ func observePruneV4(ctx context.Context, o RegistrationPruneV4Options, initial *
 	if e != nil {
 		return expected, reg, opts, e
 	}
+	pruneObservationStep(ctx, "v4-ownership-observed", o.GitDir, &opts)
 	if initial != nil && !reflect.DeepEqual(*initial, opts) {
 		return expected, reg, opts, failure("changed-ownership", "Original prune ownership changed.")
 	}
@@ -131,20 +138,8 @@ func observePruneV4(ctx context.Context, o RegistrationPruneV4Options, initial *
 	if e != nil {
 		return expected, reg, opts, e
 	}
-	// Reuse the shared native state/snapshot representation used by #284/#285.
-	// Only this exact absent registration has the new proven-absence exception.
-	for _, path := range v3NativeRoots(native.Native) {
-		if overlaps(o.StateDir, path) {
-			return expected, reg, opts, failure("state-overlap", "Private prune state overlaps a registered workspace.")
-		}
-		if path != admission.Task.Destination {
-			if e = qualifyTidyWorkspaceRoots(ctx, []string{path}, o.StateDir); e != nil {
-				return expected, reg, opts, e
-			}
-		}
-	}
-	if overlaps(o.StateDir, source.RepositoryDir) || overlaps(o.StateDir, source.WorkspaceRoot) || overlaps(o.StateDir, admission.Task.Destination) {
-		return expected, reg, opts, failure("state-overlap", "Private prune state overlaps protected source metadata or workspace.")
+	if e = qualifyPruneV4Roots(ctx, o.StateDir, source, admission.Task.Destination, native.Native); e != nil {
+		return expected, reg, opts, e
 	}
 	siblings, e := observePruneV4Siblings(ctx, source.RepositoryDir)
 	if e != nil {
@@ -154,6 +149,7 @@ func observePruneV4(ctx context.Context, o RegistrationPruneV4Options, initial *
 	if e != nil {
 		return expected, reg, opts, e
 	}
+	pruneObservationStep(ctx, "v4-common-reobserved", source.RepositoryDir, &after)
 	if common != after {
 		return expected, reg, opts, failure("prune-mount-changed", "Common-directory mount changed during prune planning.")
 	}
@@ -180,6 +176,8 @@ func observePruneV4(ctx context.Context, o RegistrationPruneV4Options, initial *
 	}
 	sort.Slice(metadata, func(i, j int) bool { return metadata[i].Path < metadata[j].Path })
 	expected = PruneV4Expected{CreationDigest: admission.Creation.Digest, CreationJournalDigest: admission.CreationJournalDigest, TaskDigest: taskDigest, SourceSnapshot: v3SnapshotWithState(native.Expected, native.Native), Native: native.Native, Registration: admission.Registration, CommonDirMount: common, Absence: PruneV4Absence{admission.Absence.Destination, admission.Absence.Parent, ancestors}, Metadata: metadata, MetadataBytes: admission.MetadataBytes, ProtectedSiblings: siblings, ResolvedHEAD: admission.ResolvedHEAD, HeadRef: admission.HeadRef}
+	pruneObservationStep(ctx, "v4-expected-observed", o.GitDir, &expected)
+	pruneObservationStep(ctx, "v4-registration-observed", o.GitDir, &reg)
 	return expected, reg, opts, nil
 }
 
@@ -269,4 +267,22 @@ func PlanRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Options) 
 	r.Actions = []ActionOutcome{{Name: "store-plan", Status: "complete", Detail: "Stored one contract-4 registration plan; no recovery or native effect executed."}}
 	r.Limitations = append([]string{}, p.RecoveryLimits...)
 	return r
+}
+
+// qualifyPruneV4Roots keeps the exact selected-absence exception local to v4.
+func qualifyPruneV4Roots(ctx context.Context, state string, source NativeIdentity, destination string, native V3NativeState) error {
+	if overlaps(state, source.RepositoryDir) || overlaps(state, source.WorkspaceRoot) || overlaps(state, destination) {
+		return failure("state-overlap", "Private prune state overlaps protected source metadata or workspace.")
+	}
+	for _, path := range v3NativeRoots(native) {
+		if overlaps(state, path) {
+			return failure("state-overlap", "Private prune state overlaps a registered workspace.")
+		}
+		if path != destination {
+			if e := qualifyTidyWorkspaceRoots(ctx, []string{path}, state); e != nil {
+				return e
+			}
+		}
+	}
+	return nil
 }
