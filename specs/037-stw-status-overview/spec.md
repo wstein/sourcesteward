@@ -159,6 +159,8 @@ risk to work in progress (`operation`, `conflicts`, `error`: `red`); `blue` is r
 | 24 | `worktree-stale` | worktree path | linked worktree prunable, missing or locked | blue | `stw tidy plan PATH` |
 | 25 | `pr-bot` | PR number | non-draft PR by a bot, whatever its group, including past the budget | violet | `stw pulls --repo OWNER/NAME --bots-only` |
 
+Note (Spec 041, 2026-10-25): rows 23 and 24 keep `stw tidy plan PATH`; the whole-workspace wizard `stw tidy` exists, and changing these hints to it is Spec 041 open question 11, not decided and not implemented.
+
 Every suggested command exists in the current CLI (`stw status`, `stw sync [PATH] --plan`, `stw tidy plan [PATH]` of the `tidy`
 family, `stw pulls --repo`, `--bots-only`) or is a plain `gh` or `git` command; `stw status --offline` exists once this spec is
 implemented. WP-E re-checks every string against `internal/cli` in a test.
