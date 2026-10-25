@@ -161,21 +161,23 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 
 ## Owner decisions (2026-10-25)
 
-All listed former OQ IDs are **DECIDED by the owner on 2026-10-25**. Unlisted
-choices adopt the source recommendations; implementation/native measurement and
+All listed former OQ IDs have a **dated disposition on 2026-10-25**.
+IDs without an explicit answer adopt the source research recommendations. The
+source column distinguishes direct owner answers, adopted recommendations and
+cross-spec owner-answer overrides; implementation/native measurement and
 review gates remain, never inferred as passing. The concrete [owner profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md)
 distinguish saved-plan metadata, external capture payloads, trusted policy,
 optional host-only signing and CLI exit-contract revision 2.
 
-| Decision ID | Dated disposition | Remaining implementation/verification gate |
-| --- | --- | --- |
-| OQ-SEM | DECIDED: adopt initial single-parent linear replay and refuse empty/redundant commits; merge variants require separately measured explicit profile. | Accepted direction does not prove any native strategy; unmeasured variants unavailable. |
-| OQ-TOPO | DECIDED: use explicit measured topology allowlist and refuse every unmeasured Git/jj shape. | Native topology/rename/mode/gitlink conformance before enablement. |
-| OQ-HUNK | DECIDED: paths/types default; bounded hunks require exact selected paths and accepted measured privacy capability. | Optional context stays disabled without privacy/conformance evidence; no complete secret detector claim. |
-| OQ-SCRATCH | DECIDED: require measured read-only original and isolated native scratch, no shared writable original store/fallback. | Platform/native isolation conformance; no helper execution. |
-| OQ-JJCONF | DECIDED: adopt measure-before-classification recommendation for per-revision/aggregate native conflict evolution. | Algorithm/native graph semantics remain unmeasured; clean tip/Git stop-first cannot prove jj aggregate. |
-| OQ-FLAGS | DECIDED: --human exclusive with --json and positive shortening --timeout; --online/--offline/--state-dir remain inapplicable. | CLI/timeout tests before wiring; fixed maximum process bound stays. |
-| OQ-EXIT | DECIDED: target unified 0/1/2 CLI revision 2, including 015 incomplete=1 after its code task. | Current 015 implementation still 3; no schema byte edit in these docs. |
+| Decision ID | Dated disposition | Source | Remaining implementation/verification gate |
+| --- | --- | --- | --- |
+| OQ-SEM | DECIDED: adopt initial single-parent linear replay and refuse empty/redundant commits; merge variants require separately measured explicit profile. | adopted recommendation | Accepted direction does not prove any native strategy; unmeasured variants unavailable. |
+| OQ-TOPO | DECIDED: use explicit measured topology allowlist and refuse every unmeasured Git/jj shape. | adopted recommendation | Native topology/rename/mode/gitlink conformance before enablement. |
+| OQ-HUNK | DECIDED: paths/types default; bounded hunks require exact selected paths and accepted measured privacy capability. | adopted recommendation | Optional context stays disabled without privacy/conformance evidence; no complete secret detector claim. |
+| OQ-SCRATCH | DECIDED: require measured read-only original and isolated native scratch, no shared writable original store/fallback. | adopted recommendation | Platform/native isolation conformance; no helper execution. |
+| OQ-JJCONF | DECIDED: adopt measure-before-classification recommendation for per-revision/aggregate native conflict evolution. | adopted recommendation | Algorithm/native graph semantics remain unmeasured; clean tip/Git stop-first cannot prove jj aggregate. |
+| OQ-FLAGS | DECIDED: --human exclusive with --json and positive shortening --timeout; --online/--offline/--state-dir remain inapplicable. | adopted recommendation | CLI/timeout tests before wiring; fixed maximum process bound stays. |
+| OQ-EXIT | DECIDED: target unified 0/1/2 CLI revision 2, including 015 incomplete=1 after its code task. | adopted recommendation; owner-answer override: 016 OQ-EXIT | Current 015 implementation still 3; no schema byte edit in these docs. |
 
 ## Needs owner decision
 

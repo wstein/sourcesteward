@@ -7,7 +7,7 @@
 
 **UNPUBLISHED Markdown proposal.** No command below is implemented by this
 artifact set; no JSON/schema file is added or changed. Implementation and native
-conformance must precede publication. Existing result schema1 bytes stay unchanged; target exit-contract revision 2 changes hidden restack incomplete to 1 after the new 015 code task.
+conformance must precede publication. Existing result schema 1 bytes stay unchanged; target exit-contract revision 2 changes hidden restack incomplete to 1 after the new 015 code task.
 
 ## Explicit operation selection
 
