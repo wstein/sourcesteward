@@ -112,9 +112,10 @@ func buildCommand(c Category, t target) (string, Effect) {
 	case LocalStash:
 		return with(path, func(p string) string { return "git -C " + p + " stash list" }, Read)
 	case BranchesUnmerged, WorktreeStale:
-		// The workspace-wide wizard (Spec 037 OQ11, accepted 2026-10-25). It takes no path: it discovers the
-		// workspace itself, and analysing changes nothing until the person answers y.
-		return "stw tidy", Read
+		// The workspace-wide wizard (Spec 041 OQ11, accepted 2026-10-25). It takes no path: it discovers the
+		// workspace itself. The effect is Owner: run at a terminal it can store and apply a plan set after
+		// the person's own answers, so it does not meet the definition of Read.
+		return "stw tidy", Owner
 	case WorktreeDirty:
 		return with(func() (string, bool) { return shellWord(t.Worktree) }, func(w string) string { return "git -C " + w + " status" }, Read)
 	case GitlinkAhead:
