@@ -116,6 +116,10 @@ func TestEveryRealD5Row(t *testing.T) {
 			want(t, gs, GuardOwnership, GuardPass, "")
 		}
 	}
+	// An absent record is never gated by D5, even if a stale origin value is attached to it.
+	absent := pushInput(TaskEvidence{Origin: recorded}, claude("other"))
+	want(t, OwnershipGuards(absent), GuardAttribution, GuardPass, "")
+	want(t, OwnershipGuards(absent), GuardOwnership, GuardFail, ReasonNotOwned)
 	// An unreadable record refuses an agent run but never gates a human by D5.
 	want(t, OwnershipGuards(pushInput(TaskEvidence{Unreadable: true}, claude("x"))), GuardAttribution, GuardFail, ReasonAttributionUnknown)
 	want(t, OwnershipGuards(pushInput(TaskEvidence{Unreadable: true}, human())), GuardAttribution, GuardPass, "")
@@ -225,6 +229,9 @@ func TestModeSummaryKeepsMarkerNamesOnly(t *testing.T) {
 	raw, _ := json.Marshal(m)
 	if strings.Contains(string(raw), "SENTINEL") || strings.Contains(string(raw), "abc") {
 		t.Fatalf("a marker value leaked: %s", raw)
+	}
+	if a := NewModeSummary(nil, false, false, false); a.Derived != "agent" {
+		t.Fatalf("%+v", a)
 	}
 	if h := NewModeSummary(nil, true, true, true); h.Derived != "human" || h.Markers == nil || len(h.Markers) != 0 {
 		t.Fatalf("%+v", h)
