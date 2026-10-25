@@ -475,7 +475,8 @@ func TestAFailedOrUnknownEffectStopsTheRunAndKeepsTheTruth(t *testing.T) {
 			t.Errorf("%s: a next action began after an effect that did not complete", outcome)
 		}
 		e := run.Finish()
-		if got := states(e); !reflect.DeepEqual(got, []string{string(outcome), "not-started", "not-started"}) || e.Status() == StatusComplete {
+		wantStatus := map[ActionState]Status{StateFailed: StatusFailed, StateUnknown: StatusUnknown}[outcome]
+		if got := states(e); !reflect.DeepEqual(got, []string{string(outcome), "not-started", "not-started"}) || e.Status() != wantStatus {
 			t.Errorf("%s: %v %v", outcome, got, e.Status())
 		}
 	}
@@ -483,6 +484,26 @@ func TestAFailedOrUnknownEffectStopsTheRunAndKeepsTheTruth(t *testing.T) {
 
 func TestAnEmptyEvaluationIsNotAComplete(t *testing.T) {
 	if got := (Evaluation{}).Status(); got != StatusUnknown {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestARefusedStepEndsTheRunEvenIfTheCallerKeepsAsking(t *testing.T) {
+	p := savedPlan(t, twoPushes()...)
+	run, err := NewRun(p, applyRequest(p, "p1", "p2", "p3"), allCapabilities(), newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _, _ := run.Begin()
+	if d := run.Complete(Fresh{Expected: cloneExpected(a.Expected), Permission: PermissionUnknown, Guards: passing(a.Kind)}, true); d.State != StateRefused {
+		t.Fatalf("%+v", d)
+	}
+	for i := 0; i < 3; i++ {
+		if _, ok, _ := run.Begin(); ok {
+			t.Fatal("an action began after a refusal")
+		}
+	}
+	if got := states(run.Finish()); !reflect.DeepEqual(got, []string{"refused:permission-unknown", "not-started", "not-started"}) {
 		t.Fatalf("%v", got)
 	}
 }

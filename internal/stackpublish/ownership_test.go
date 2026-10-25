@@ -265,6 +265,7 @@ func TestAForkPRWithTheSameBranchNameIsNotOwned(t *testing.T) {
 		want(t, OwnershipGuards(prInput(kind, nil, own)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 		want(t, OwnershipGuards(prInput(kind, own, nil)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 		want(t, OwnershipGuards(prInput(kind, &RepoRef{}, own)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+		want(t, OwnershipGuards(prInput(kind, &RepoRef{Owner: "owner", Name: "project"}, own)), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 	}
 	// GitHub owner and repository names compare case-insensitively.
 	want(t, OwnershipGuards(prInput(KindReady, repoRef("OWNER", "Project"), repoRef("Owner", "PROJECT"))), GuardOwnership, GuardPass, "")
