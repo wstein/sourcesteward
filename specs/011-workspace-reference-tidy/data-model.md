@@ -39,3 +39,26 @@ State: planned → prepared durable journal → recovery-root-recorded → per-a
 any post-prepared error/cancel/persistence failure is incomplete/partial with known effects retained.
 No blind rerun/adoption after interruption; completed retry must verify exact postconditions, otherwise
 retain and require inspection. Failed recovery persistence means no destructive action.
+
+## Proposed registration-prune contract 4 (FR-015)
+
+Owner decision 2026-10-25 selects separate versioning, option B. Exact model
+acceptance remains pending: see [the proposed contract and impact table](contracts/registration-prune-v4.md).
+Existing v1/v3 records and frozen overview v2 bytes stay unchanged.
+
+New operation `registration-prune` uses plan/result/journal schema version 4;
+restore uses its own `registration-restore` journal linked to the prune plan.
+One immutable plan binds one exact registration name/canonical gitdir, original
+completed task/lock, complete absence/metadata/sibling witness, payload location
+and recovery limits. A digest-only admission observation is not a stored plan
+or a recoverable payload. Existing read-only admission source does not complete
+T503 or enable removal.
+
+The proposed new overview keeps legacy candidates and a separate typed
+`registration_prunes` array; new rows prove `owned-missing-registration`,
+not native integration. Manifest version 2 binds explicit operation/contract,
+stored-plan digest, selected ownership/effects and canonical ordering in its
+version-domain hash. Its closed dispatch preserves legacy readers and refuses
+incompatible versions before effects. New private plan/journal/payload/restore
+namespaces and native history roots are defined in the companion contract;
+restore/history never infer raw recovery from an old branch journal.
