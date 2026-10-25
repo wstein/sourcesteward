@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: EUPL-1.2
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 spec = importlib.util.spec_from_file_location('architecture', Path(__file__).with_name('check-architecture.py'))
@@ -422,3 +423,34 @@ class StackpublishAllowListTests(unittest.TestCase):
         architecture.validate_sources(self.probe('import "fmt"\n\nvar _ = fmt.Sprintf("%d", 1)\nvar _ = fmt.Errorf("x")\nvar _ = fmt.Sprint(1)\nvar _ = fmt.Sprintln(1)\n'))
         # A function whose name merely contains init is fine, and so is a comment or string.
         architecture.validate_sources(self.probe('// func init() {}\nvar s = "func init() {}"\nfunc initialize() {}\n'))
+
+    def test_the_python_and_go_checks_agree_on_the_shared_probe_table(self):
+        # Review N1: both checks must give the same verdict on the same sources.
+        table = json.loads((Path(__file__).resolve().parents[1] / 'internal/stackpublish/testdata/seam_probes.json').read_text())
+        self.assertGreaterEqual(len(table), 30)
+        for row in table:
+            try:
+                architecture.validate_sources({self.PATH: row['source']})
+                refused = False
+            except ValueError:
+                refused = True
+            self.assertEqual(refused, row['violation'], row['name'])
+
+    def test_method_values_and_expressions_of_the_local_zone_are_refused(self):
+        for name, body in {
+            'method value In': 'import "time"\n\nfunc f(t time.Time) { g := t.In; _ = g }\n',
+            'method expression Local': 'import "time"\n\nvar _ = time.Time.Local\n',
+            'method value Local': 'import "time"\n\nfunc f(t time.Time) { g := t.Local; _ = g }\n',
+        }.items():
+            with self.assertRaises(ValueError, msg=name):
+                architecture.validate_sources(self.probe(body))
+        architecture.validate_sources(self.probe('import "strings"\n\nvar _ = strings.Index("a", "b")\nvar Interval, Locality int\n'))
+
+    def test_the_pure_core_has_no_assembly_or_other_foreign_sources(self):
+        prefix = architecture.MODULE + 'internal/stackpublish'
+        architecture.validate_stackpublish_packages([{'ImportPath': prefix, 'GoFiles': ['a.go']}])
+        for key in ('SFiles', 'CgoFiles', 'CFiles', 'CXXFiles', 'HFiles', 'MFiles', 'FFiles', 'SwigFiles', 'SysoFiles'):
+            with self.assertRaises(ValueError, msg=key):
+                architecture.validate_stackpublish_packages([{'ImportPath': prefix, 'GoFiles': ['a.go'], key: ['x']}])
+        # Other packages are outside this rule.
+        architecture.validate_stackpublish_packages([{'ImportPath': architecture.MODULE + 'internal/other', 'SFiles': ['x.s']}])

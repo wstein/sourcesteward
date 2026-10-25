@@ -344,3 +344,27 @@ func TestAPlanWithoutAResolvedRepositoryOwnsNoPullRequest(t *testing.T) {
 	pr.Plan = plan
 	want(t, OwnershipGuards(pr), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
 }
+
+// Review N3: the comparison looks at every byte, including the last, and at the length.
+func TestASCIIEqualFoldChecksEveryByte(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"project", "PROJECT", true}, {"", "", true}, {"a", "A", true}, {"a", "b", false}, {"ab", "ac", false}, {"project", "projecu", false},
+		{"project", "projec", false}, {"projec", "project", false}, {"a-b_c.d", "A-B_C.D", true}, {"a-b_c.d", "a-b_c.e", false}, {"Z", "z", true}, {"@", "`", false}, {"[", "{", false},
+	} {
+		if got := asciiEqualFold(tc.a, tc.b); got != tc.want {
+			t.Errorf("%q %q: %v want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+// A Kelvin-sign host must not become a valid host through Unicode lower-casing.
+func TestAKelvinSignHostIsUnknown(t *testing.T) {
+	plan := planWithRepo(t, "owner", "project")
+	head := &RepoRef{Host: "gith\u212a.com", Owner: "owner", Name: "project"}
+	in := prInput(KindReady, head, head)
+	in.Plan = plan
+	want(t, OwnershipGuards(in), GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+}
