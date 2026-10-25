@@ -131,9 +131,10 @@ func startGitRefTransaction(ctx, runCtx context.Context, cancel context.CancelFu
 	go func() {
 		select {
 		case <-runCtx.Done():
+			// stderr stays open: its end of file is how finish learns that no
+			// sandbox descendant still holds the command's descriptors.
 			input.Close()
 			stdout.Close()
-			stderr.Close()
 		case <-t.done:
 		}
 	}()
@@ -220,7 +221,21 @@ func (t *gitRefTransaction) finish(kill bool) error {
 			t.cancel()
 		}
 	}
-	stderr := <-t.stderrDone
+	// A sandbox descendant (bwrap's git) inherits stderr and can outlive the
+	// process we own. End of file on stderr means every holder is gone; a holder
+	// that is still there after the bound makes the result honest instead.
+	var stderr gitRefStderr
+	descendants := false
+	wait := time.NewTimer(gitRefDescendantWait)
+	select {
+	case stderr = <-t.stderrDone:
+		wait.Stop()
+	case <-wait.C:
+		descendants = true
+		t.stderr.Close()
+		stderr = <-t.stderrDone
+		stderr.err = nil
+	}
 	waitErr := t.cmd.Wait()
 	t.stdout.Close()
 	t.stderr.Close()
@@ -229,6 +244,10 @@ func (t *gitRefTransaction) finish(kill bool) error {
 	t.stopped = true
 	code, exitErr := nativeExitResult(waitErr, stderr.data)
 	e := errors.Join(tailErr, exitErr)
+	if descendants {
+		t.out.Uncertain = true
+		e = errors.Join(e, errGitRefDescendants)
+	}
 	if !kill && code != 0 {
 		e = errors.Join(e, errGitRefTransaction)
 	}
