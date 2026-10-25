@@ -108,7 +108,11 @@ func Build(in Input) Document {
 			d.Notices = append(d.Notices, r.Name+": "+n)
 		}
 	}
+	late := 0
 	for _, c := range in.Result.Candidates {
+		if c.Reason == "evidence-incomplete" && c.Evidence == "deadline-exceeded" {
+			late++
+		}
 		// The summary counts every analysed candidate, before any cut; `truncated` says that the
 		// candidates list is partial.
 		switch c.Verdict {
@@ -127,6 +131,13 @@ func Build(in Input) Document {
 			c.Effects = []string{}
 		}
 		d.Candidates = append(d.Candidates, c)
+	}
+	if late > 0 {
+		// A fixed text with counts only. The items stay retained (evidence-incomplete); the hint
+		// names the flag that widens the observation window.
+		n := fmt.Sprintf("%d of %d not judged (deadline); retry with a larger window, for example --timeout 15m", late, len(in.Result.Candidates))
+		d.Notices = append(d.Notices, n)
+		d.runNotices = append(d.runNotices, n)
 	}
 	return d
 }

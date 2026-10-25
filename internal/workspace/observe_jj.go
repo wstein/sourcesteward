@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
@@ -18,7 +19,10 @@ import (
 // safe direction). jj has no worktree lock, no branch attached to a workspace and no tracking
 // evidence here: HeadRef is empty, nothing is Locked and TrackingSkipped says so.
 func (c worktreeObserver) observeJJ(ctx context.Context, o ObserveOptions) (WorktreeObservation, error) {
-	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
+	// The registrations are read under the base window; the window of the rest of the observation
+	// is then set from their count, counted from the same start.
+	parent, start := ctx, time.Now()
+	ctx, cancel := context.WithDeadline(parent, start.Add(c.windowFor(parent, 0)))
 	defer cancel()
 	tidy, err := inspection.ObserveJJTidy(ctx, o.Path, o.Base)
 	if err != nil {
@@ -28,6 +32,8 @@ func (c worktreeObserver) observeJJ(ctx context.Context, o ObserveOptions) (Work
 	if err != nil {
 		return WorktreeObservation{}, err
 	}
+	ctx, cancelScaled := context.WithDeadline(parent, start.Add(c.windowFor(parent, len(reg.Workspaces))))
+	defer cancelScaled()
 	if !reflect.DeepEqual(tidy.Expected, reg.Expected) {
 		return WorktreeObservation{}, failure("evidence-changed", "The jj operation changed during observation.")
 	}

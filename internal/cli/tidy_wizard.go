@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
 	"github.com/wstein/sourcesteward/internal/tidywizard/render"
 	"github.com/wstein/sourcesteward/internal/untrusted"
+	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
 // The seams of the wizard-layer `tidy plan`; tests replace them.
@@ -78,6 +79,9 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	if cmd.Flags().Changed("timeout") && timeout <= 0 {
 		return nil, fmt.Errorf("--timeout must be a positive duration")
 	}
+	if timeout > workspace.ObservationTimeoutMax {
+		return nil, fmt.Errorf("--timeout must not exceed %s", workspace.ObservationTimeoutMax)
+	}
 	stdinTTY, stdoutTTY := tidyTerminalFacts(cmd.InOrStdin(), cmd.OutOrStdout())
 	environ := tidyEnviron()
 	mode := owner.Detect(owner.Env{StdinTTY: stdinTTY, StdoutTTY: stdoutTTY, Environ: environ, OSUser: planset.Getenv("USER"), Mine: w.mine, ByOwner: w.byOwner})
@@ -92,6 +96,8 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	r := &wizardRun{ctx: cmd.Context(), cancel: func() {}, mode: mode, timeoutSet: cmd.Flags().Changed("timeout"), timeout: timeout}
 	if r.timeoutSet {
 		r.ctx, r.cancel = context.WithTimeout(r.ctx, timeout)
+		// The same value is the observation window of every repository (it replaces the scaled default).
+		r.ctx = workspace.WithObservationTimeout(r.ctx, timeout)
 	}
 	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: cmd.Flags().Changed("online")})
 	if err != nil {

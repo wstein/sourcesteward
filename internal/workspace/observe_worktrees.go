@@ -145,12 +145,17 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 		return WorktreeObservation{}, err
 	}
 	defer closeSession()
-	obsCtx, cancel := context.WithTimeout(ctx, planObservationTimeout)
+	// The registrations are read under the base window; the window of the rest of the observation
+	// is then set from their count, counted from the same start.
+	start := time.Now()
+	obsCtx, cancel := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, 0)))
 	defer cancel()
 	observed, err := c.refs.observe(obsCtx, o.Path, o.Base)
 	if err != nil {
 		return WorktreeObservation{}, err
 	}
+	obsCtx, cancelScaled := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, len(observed.Native.Registrations))))
+	defer cancelScaled()
 	bin, err := gitExecutable()
 	if err != nil {
 		return WorktreeObservation{}, err
