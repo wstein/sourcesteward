@@ -98,7 +98,7 @@ and effects have accepted measurements/tests, that kind refuses
 `capability-unavailable` without a request. Supplied 014 evidence must retain accepted profile/full-H attribute-source and
 private-context guard binding; unsupported enforcement or missing binding refuses
 that evidence. 013 safety-copy/native operation records cannot be treated as a
-remote transaction, generic jj CAS or reversible publication. No arbitrary REST/GraphQL, redirects,
+remote transaction, generic jj CAS or reversible publication. No arbitrary REST/GraphQL (sole exception, owner decision 2026-10-25: one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), only if W5a confirms that REST cannot set Ready; see `measurement-plan.md` section 1; fixture evidence: W5b trace), redirects,
 response-selected URLs, repository SDK discovery or dependency extension launch.
 
 Native link reference data has this inert shape:
