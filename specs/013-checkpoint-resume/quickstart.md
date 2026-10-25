@@ -70,6 +70,6 @@ helper/hook/network call or treats missing conformance as passed.
 Compare sentinel evidence after every success and refusal. Re-run capture and
 resume independently of undo, and undo from typed native fixtures independently
 of an existing user checkpoint. Confirm proposed 013 exits 0/1/2 while historical
-CURRENT hidden015code3 persists until decided target revision2 incomplete 1 task. Keep required unexecuted lanes
+CURRENT hidden 015 code 3 persists until decided target revision 2 incomplete 1 task. Keep required unexecuted lanes
 and unsupported capabilities visible. This guide grants no release, activation,
 real-workspace apply, remote write or Spec 043 landing authority.

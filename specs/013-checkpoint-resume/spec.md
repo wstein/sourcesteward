@@ -154,4 +154,4 @@ effects; Spec 043 is the human owner's separate landing invocation.
 
 A future 013 result proposes exit 0 for complete success/observation, 1 for
 refusal/incomplete/partial/cancellation/operational failure, and 2 for usage.
-The owner decided 015 CLI exit-contract revision2 targets incomplete 1 with unchanged JSON schema1; CURRENT code3 remains until its explicit implementation task.
+The owner decided 015 CLI exit-contract revision 2 targets incomplete 1 with unchanged JSON schema 1; CURRENT code 3 remains until its explicit implementation task.

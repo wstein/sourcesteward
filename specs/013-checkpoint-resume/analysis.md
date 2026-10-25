@@ -3,19 +3,19 @@
 **Owner decisions: 2026-10-25. Author cross-artifact analysis only.** All former
 OQ IDs are settled and indexed in [the decision index](../016-stacked-pr-coordination/research.md#cross-spec-decision-index).
 The [concrete profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) distinguish workspace .work metadata from
-external capture payloads, trusted policy, host-only optional local015 re-sign
-and CLI exit-contract revision2. No new implementation/native/helper/forge test
+external capture payloads, trusted policy, host-only optional local 015 re-sign
+and CLI exit-contract revision 2. No new implementation/native/helper/forge test
 or independent CLEAR is claimed. Historical implementation evidence stays at
-its recorded revision; current hidden015code still returns3 until the new task.
+its recorded revision; current hidden 015 code still returns 3 until the new task.
 
 ## Current findings and gates
 
 | ID | Disposition | Remaining evidence |
 | --- | --- | --- |
-| D1 | All39 owner directions are DECIDED, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
+| D1 | All 39 dispositions are recorded as direct owner answers or adopted recommendations; cross-spec owner overrides are marked, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
 | D2 | Metadata and external selected-byte/safety stores are distinct roles with explicit modes/race/layout/quota/export-risk guards. | Red-first shared store and role-separation tasks; no auto-ignore edits/expiry. |
-| D3 | Optional actual re-sign belongs only to015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review;016 receipt validation only. |
-| D4 | Target CLI exit-contract revision2 is0/1/2, no legacy3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
+| D3 | Optional actual re-sign belongs only to 015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review; 016 receipt validation only. |
+| D4 | Target CLI exit-contract revision 2 is 0/1/2, no legacy 3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
 
 ## Individual requirement coverage and literal future tests
 
@@ -31,7 +31,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-005 | T008, T041, T042 | Select an excluded `.env`/credential/transcript input and assert refusal; pass inert malicious task text and assert no environment/transcript discovery, execution or payload disclosure. |
 | FR-006 | T017, T021, T023 | Crash after native effect before completion; inspect known/unknown actions and ensure no automatic rollback. Give only a jj operation id without saved disk bytes and assert no disk recovery promise. |
 | FR-007 | T004 | Run jj colocation with native jj unavailable and a usable Git present: assert explicit refusal and zero raw Git writes; ambiguous/GitButler/foreign ownership also refuses. |
-| FR-008 | T025 | Render success and typed error in human/JSON with ANSI/bidirectional/non-UTF-8 path data; compare facts and reversible paths, assert no prompt/pager or TTY dependency, proposed exits 0/1/2 and CURRENT 015 code 3 recorded separately from decided revision2 incomplete 1. Verify exact admitted format/timeout/spelling choices, reject `--online` and redundant `--offline` as proposed 013 usage errors without changing 033/037, and require authorization plus plan id for effects. |
+| FR-008 | T025 | Render success and typed error in human/JSON with ANSI/bidirectional/non-UTF-8 path data; compare facts and reversible paths, assert no prompt/pager or TTY dependency, proposed exits 0/1/2 and CURRENT 015 code 3 recorded separately from decided revision 2 incomplete 1. Verify exact admitted format/timeout/spelling choices, reject `--online` and redundant `--offline` as proposed 013 usage errors without changing 033/037, and require authorization plus plan id for effects. |
 | FR-009 | T006, T027 | Exceed each count/byte/deadline cap and cancel between actions: assert incomplete/partial with completed effects retained and no next mutation; fake helpers/hooks/network record zero execution/requests. |
 | FR-010 | T035 | Remove one mandatory minimum/current native/backend/platform execution from the evidence matrix and assert acceptance remains blocked; include changed ownership, concurrency and interruption cases for each admitted capability. |
 | FR-011 | T029 | Plan explicit native commit/merge/operation targets and verify immutable exact target/effect/recovery bindings; mutate the target after plan and assert fresh expected-state refusal. |
@@ -51,7 +51,7 @@ checked tasks; 42 unchecked. Coverage 19/19 (100% design
 mapping), zero requirement orphans. No implementation checkbox is changed by
 owner answers or this analysis. All new exit/store/signing tasks are unchecked.
 Task dependencies remain red test → implementation → native/effect conformance
-→ exact-source independent review. Spec043 human-only landing remains separate.
+→ exact-source independent review. Spec 043 human-only landing remains separate.
 
 ## Compatibility and acceptance boundary
 

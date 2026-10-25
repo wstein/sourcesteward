@@ -66,7 +66,7 @@ outside every encountered repository and inventoried worktree; unknown discovery
 or containment refuses. No captured content enters logs or output. Per-checkpoint
 payload is at most 32 MiB; Adopted OQ-3 sets the design profile to a 1 GiB total physical-store quota that
 counts metadata, orphan/incomplete and in-flight staging bytes under a store lock.
-Quota admission is mandatory before writes; adopted design total is1GiB, not measured throughput.
+Quota admission is mandatory before writes; adopted design total is 1 GiB, not measured throughput.
 
 SafetyCopy is a self-contained durable record with independent SAFETY_ID,
 origin action/restore-plan binding, provenance-only source checkpoint id, exact
