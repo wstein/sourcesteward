@@ -1,6 +1,77 @@
 # Cross-artifact analysis: Stack inspection and plan (v2)
 
-**Status**: READY after round 9 (0 high, 0 medium); the round 9 low and info wording findings were fixed by the author without a further review round, by owner decision. Round 0 is the author draft (a28d23e).
+**2026-10-25 status**: author cross-artifact analysis complete; independent exact-head review of this refresh is pending. Historical round 9 READY below applies only to its recorded revision and never to this changed head. Spec 012 remains unimplemented; no acceptance task is marked complete.
+
+## Read-only Spec Kit analysis provenance
+
+The installed existing-feature specify → plan → tasks workflow updated the existing ten Markdown artifacts without replacing templates or creating another feature. `setup-plan.sh --json` found the existing plan and skipped template copy. The analysis phase ran `.specify/scripts/bash/check-prerequisites.sh --json --require-spec --require-tasks --include-tasks` with `SPECIFY_FEATURE_DIRECTORY=specs/012-stack-inspection` and `SPECIFY_FEATURE_NO_PERSIST=1`; it resolved the owned worktree's existing feature and found research, data model, contracts, quickstart and tasks. `.specify/extensions.yml` is absent, so no before/after hooks ran. No feature-state file was persisted.
+
+The analysis itself made no writes. After that read-only phase ended, this report was recorded by the separately authorized documentation workflow, together with routine task-path/coverage wording corrections. This author report does not impersonate independent review. Its inputs were spec.md, plan.md, tasks.md, model/contracts, constitution 1.2.0 and the adjacent/reference specs named in the source reconciliation. The base was `3d4c867a451217a2942564a7dcb4736d45a09b70`.
+
+## Findings and owner questions
+
+| ID | Category | Severity | Location | Result and next action |
+| --- | --- | --- | --- | --- |
+| OQ-NET | Scope question | Medium | spec.md, Needs owner decision; FR-005/FR-007 | Literal no-network wording could contradict the approved explicit `--pull-requests` mode. Recommendation: retain offline default plus bounded uncached opt-in GETs. Current contract preserves the approved mode; changing it needs an explicit owner amendment. |
+| OQ-EXIT | Compatibility question | Medium | spec.md, Needs owner decision; contracts/stack.md, Exit status | A future shared 0/1/2 convention differs from implemented hidden Spec 015 v1 incomplete exit 3. Recommendation: preserve v1 and require a versioned migration decision. Current unimplemented 012 stays 0/1/2 and changes no runtime/schema file. |
+
+These are explicit owner questions, not silently chosen answers or contradictory current execution rules. No critical/high defect or zero-coverage requirement remains in the current documentation design. They do not prevent review of this Markdown scope; future work changing either contract must wait for its decision. External/native measurements U1–U10 remain unverified and are future implementation gates.
+
+## Individual requirement coverage and literal test ideas
+
+Every FR and every SC has its own row. “Covered” means a proposed task and concrete future assertion exist, not that it was executed or passed.
+
+| Requirement | Task IDs | Literal future test idea |
+| --- | --- | --- |
+| FR-001 | T020, T036 | Invoke show and plan with the same base/tip and compare observations; invoke the bare group and assert help with zero observation calls, prompts or mutation. |
+| FR-002 | T008, T016 | Omit tip, supply an ambiguous ref and supply a remote tip; assert usage/ref refusal, then resolve explicit valid base/tip to exact native ids. |
+| FR-003 | T002, T016, T017, T021 | Run a colocated and secondary jj fixture and assert the Git adapter call count is zero; unavailable jj refuses and declared gaps remain visible. |
+| FR-004 | T008, T009, T011, T016 | Build a three-layer linear range, then add a merge or divergent jj change; assert ordered partitioned layers for the first and explicit topology refusal for the second. |
+| FR-005 | T013, T018, T025 | Run without pull-requests in a fixture with remotes/credentials available and assert zero HTTP/auth calls and unchanged cached refs/objects. |
+| FR-006 | T004, T005, T009, T010, T017, T028, T038 | Iterate every Findings row, including both new notices; assert fixed summary/detail, deterministic order, evidence fields and no unknown-as-absence result after a denied source. |
+| FR-007 | T023, T024, T025, T026, T028 | Enable pull-requests with fake HTTP and assert only the two exact GET shapes; redirect, extra query or malformed body must fail without another request. |
+| FR-008 | T004, T023, T027, T038 | Return one name-matched PR with a different head SHA; assert link=name-matched, never verified, and no inferred authority. |
+| FR-009 | T027, T029, T032, T036 | Return a native parent rebase-merge and rewritten child head; assert observe-only reconciliation and no local rebase, remote write or owner-landing invocation. |
+| FR-010 | T002, T006, T010, T011, T017, T029, T036, T038 | Inspect a plain-chain rebase plan and assert bottom-up full old-tip boundaries; replace one linked worktree owner or use a stale base and assert blocked/observe precedence with no command started. |
+| FR-011 | T005, T015, T019, T026 | Supply commit 501, layer 33, finding 401 or a response/result over 1 MiB; assert named stack-limit/incomplete rather than truncated success. |
+| FR-012 | T015, T019, T025 | Move a ref, jj operation or PR head between initial read and resample; assert stack-changed and boundary.complete=false. |
+| FR-013 | T003, T005, T020 | Validate proposed ok/incomplete/error fixture JSON offline after future schema implementation; assert human values agree and usage exit 2 emits no JSON, with all existing schema bytes unchanged. |
+| FR-014 | T006, T014, T019, T020, T030 | Supply a ref with a control byte, bidi text and an unsafe command name; assert escaped bounded output and no unsafe argv/request or credential-bearing diagnostic. |
+| FR-015 | T007, T013, T014, T018, T032 | Plant hook/filter/textconv/credential-helper markers and compare refs, index, files, objects, jj working copy and operation log before/after; assert no marker execution or target write. |
+| FR-016 | T007, T012, T021, T022, T031, T033, T034 | Execute the future native minimum/current Git/jj matrix with fake HTTP and sentinels, then remove a required lane; assert it is recorded not-run and blocks acceptance. |
+| FR-017 | T033, T037 | Assert CLI contains only parsing/rendering, no new dependency or process/network edge, and the later authorized architecture check rejects a planted forbidden import or ad hoc go statement. |
+| FR-018 | T035 | Compare depths 2/3/32: only 3/32 get stack-too-deep, all layers remain, status/exit and plan blockers are unchanged; 33 independently yields stack-limit. |
+| FR-019 | T036, T038 | Rebase-merge a plain parent and assert qualified restack-needed with full sampled boundaries; closed-unmerged or stale merged-parent evidence never yields landed proof. Reject treating a predicted SHA, patch id or sampled upstream as an apply receipt/review/lease. |
+| FR-020 | T037 | Complete independent edge reads in reverse order under fanout, cancel before some start and exhaust the shared request budget; assert input-index output and explicit incompleteness, no background worker or shared append. |
+| SC-001 | T021, T031 | Run all story scenarios on the declared native layouts/version lanes; hide one backend and assert the acceptance matrix cannot report a pass. |
+| SC-002 | T010, T021, T029, T038 | Replay merge-commit, rebase-merge and squash fixtures: no merge drift, exact plain-chain replay boundaries and native observe-only handling; jj patch-equivalence remains an explicit gap. |
+| SC-003 | T027, T028, T038 | Replay historical native-stack shapes with denied/malformed alternatives; assert name-only linkage never verifies and unreadable/closed-unmerged evidence never becomes absence or landing. |
+| SC-004 | T013, T018, T021, T024, T030, T031, T036 | Surround every fixture with target-state/process/HTTP sentinels; assert no printed command runs, offline has no network and online records only allowlisted GETs. |
+| SC-005 | T003, T020 | Validate each complete/incomplete/error proposed stack fixture after the future schema exists; byte-compare every pre-existing schema and fixture to the base. |
+| SC-006 | T006, T030, T037 | Combine hostile ref text, moved references, cancellation and exhausted bounds; assert fixed statuses, validated printable argv and deterministic indexed outcomes. |
+| SC-007 | T001, T033, T034 | Enumerate FR/SC ids and require this individual task/test row for each; inject a missing task or skipped native lane and assert traceability/acceptance refuses completion. |
+| SC-008 | T035 | Assert 2-layer no notice, 3/32-layer advisory notice with usable bounded plan and unchanged exit, then 33-layer hard-limit incomplete independently. |
+
+## Coverage audit
+
+- Functional requirements: 20/20 have individual task and literal test-idea coverage.
+- Success criteria: 8/8 have individual task and literal test-idea coverage.
+- Combined design coverage: 28/28 (100%); zero untraceable grouped requirements.
+- Tasks: 38, all unchecked. Story labels: US1 6, US2 6, US3 7, US4 10, US5 2; setup/foundation/final evidence tasks 7. The retained work-item structure reflects existing reviewed dependencies rather than manufacturing a documentation PR stack.
+- Unmapped tasks: none; T001 gates SC-007 traceability, T034 records actual acceptance, and the remaining tasks map directly through their story/FR/SC entries.
+- Critical issues: 0. High issues: 0. Open owner questions: 2. Duplicate requirements needing consolidation: 0.
+- Constitution alignment: no proposed exception. No prompt, implicit network, borrowed ownership, config-derived expected identity, original-workspace simulation, implicit remote action or agent landing is authorized.
+- Requirement and task paths are explicit; future implementation work outside this feature directory is a proposal, not an edit authorized by this documentation refresh.
+
+## Documentation verification and next action
+
+`python3 -I -B scripts/check-docs.py` passed on the baseline and the refreshed artifacts: 352 authored documents. `git diff --check` passed. No repository typos configuration was found; a coordinator-requested targeted `/opt/bundledock/toolbox/bin/typos specs/012-stack-inspection` run passed after spelling out the old final-PR placeholder as `P_N` (the first run flagged that notation as a word). Go tests, make targets, builds, native conformance, live GitHub calls and executable JSON/schema tests were not run for this Markdown-only task and are not reported as passing.
+
+Next: coordinator independent documentation review on the exact committed final head, then its one authorized publication round and required CI. Pending independent review/CI are named publication/readiness blockers; historical READY never clears them. No author push, PR creation, CI action, merge or owner-checkout resync is performed. Implementation remains gated by its own source task, tests and acceptance evidence. Routine remediation of the documentation scope was already owner-authorized; this report grants no new scope.
+
+# Historical 2026-10-17 independent analysis rounds
+
+**Historical status only**: READY after round 9 (0 high, 0 medium); the round 9 low and info wording findings were fixed by the author without a further review round, by owner decision. Round 0 is the author draft (a28d23e).
 
 Rounds are recorded below as: reviewer, reviewed revision, verdict (`READY` or `NOT READY`), a table of findings with severity, artifact and section, resolution, and a marker for any earlier resolution that a later round supersedes. The coverage map of [tasks.md](tasks.md) is the starting point for the requirement and success-criterion coverage check.
 
