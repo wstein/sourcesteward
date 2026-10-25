@@ -46,7 +46,7 @@ to emit those bodies.
 Text output is the draft default; `--json` selects structured output. Neither
 mode requires a TTY, reads stdin or introduces a prompt. Relative to the shared
 vocabulary in Specs 041/043, `--human` and `--timeout` are not proposed accepted
-flags here pending explicit CLI alignment; the current draft instead has fixed
+flags here pending [OQ-FLAGS](../spec.md#needs-owner-decision); the current draft instead has fixed
 60-second operation and 10-second native-process bounds. If an explicit text or
 timeout selector is later adopted, recommend those shared names rather than
 new aliases; that recommendation is not an owner decision or an accepted flag.
@@ -58,7 +58,8 @@ is offline and never refreshes supplied remote evidence. Specs 033/037 use
 `--offline` for their existing online-default commands; those commands remain
 unchanged. Since 014 is already offline, `--offline` is not proposed as an accepted
 flag here either; any future interface choice needs explicit alignment rather
-than an invented owner answer. Under the current draft, all five unproposed or
+than an invented owner answer. OQ-FLAGS records recommendations and the unchanged
+current proposal; it grants no flag admission. Under the current draft, all five unproposed or
 inapplicable flags are usage errors (exit 2) before native reads or scratch effects,
 including when no TTY is present. A later accepted flag alignment requires contract
 and test updates rather than implicit inheritance.

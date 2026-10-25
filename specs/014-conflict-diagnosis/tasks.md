@@ -13,7 +13,7 @@ remain explicitly unavailable while other accepted units proceed.
 
 ## Phase 1 — decisions and design gate
 
-- [ ] T001 Record owner decisions for OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/EXIT and their affected capabilities in specs/014-conflict-diagnosis/research.md; recommendations are not answers and Spec 015 D7/v1 exit 3 remain settled.
+- [ ] T001 Record owner decisions for OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/FLAGS/EXIT and their affected capabilities in specs/014-conflict-diagnosis/research.md; recommendations are not answers and Spec 015 D7/v1 exit 3 remain settled.
 - [ ] T002 Obtain independent complete-artifact exact-head design review and reconcile accepted contract/coverage findings in specs/014-conflict-diagnosis/analysis.md before implementation.
 
 ## Phase 2 — shared foundation
@@ -65,7 +65,7 @@ profiles refuse and cleanup/race/cancellation remains visible.
 **Independent test:** both output modes share facts/status, malformed usage acts
 before effects, all bounds fail honestly and hidden restack v1 stays unchanged.
 
-- [ ] T025 [US3] Write failing CLI tests in internal/cli/conflict_test.go for group default-none/help, explicit leaves/selectors, text-default/--json parity with no TTY or stdin/editor/pager, fixed 60-second/10-second bounds, current-draft --human/--timeout/--state-dir/--online/--offline usage refusal before effects, unsupported capability, 0 complete conflict, 1 incomplete/refusal/cancel and 2 usage; fixed notice appears in every admitted result.
+- [ ] T025 [US3] Write failing CLI tests in internal/cli/conflict_test.go for group default-none/help, explicit leaves/selectors, text-default/--json parity with no TTY or stdin/editor/pager, fixed 60-second/10-second bounds, current-draft --human/--timeout/--state-dir/--online/--offline usage refusal before effects and OQ-FLAGS admission changes only after an owner decision, unsupported capability, 0 complete conflict, 1 incomplete/refusal/cancel and 2 usage; fixed notice appears in every admitted result.
 - [ ] T026 [US3] Wire parsing/rendering in internal/cli/conflict.go through the reviewed operation only, preserve architectural import limits and escape terminal text; enforce single final object and output-write failure without a second JSON document.
 - [ ] T027 [US3] Write failing contract/compatibility tests in internal/conflict/contract_test.go for complete/incomplete/error fixtures, all finite bounds, byte-path round-trip, shared 015 diagnostic mapping and operation-specific status distinctions, no readiness/authorization fields, no network and unchanged published/frozen JSON files plus hidden restack incomplete exit 3.
 - [ ] T028 [US3] Only after accepted implementation/conformance design, add a separate self-contained proposed conflict-evidence schema and fixtures under schemas/v1/ with additive publication wiring; preserve every existing schema/fixture/digest and implement bounded typed serialization in internal/conflict/render.go.

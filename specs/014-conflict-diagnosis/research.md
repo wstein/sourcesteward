@@ -105,6 +105,6 @@ a refresh.
 ## Unresolved research
 
 The OQs in [spec.md](spec.md#needs-owner-decision) retain real unsettled
-semantic/topology, native jj conflict evolution, hunk, scratch and exit choices with recommendations. There are
+semantic/topology, native jj conflict evolution, hunk, scratch, flag and exit choices with recommendations. There are
 no invented owner answers or new approval flows. Their affected implementation
 units cannot start until their decisions and measurements are recorded.

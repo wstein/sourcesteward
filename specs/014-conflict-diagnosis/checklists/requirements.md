@@ -18,7 +18,7 @@
 
 ## Outstanding gates
 
-- [ ] Owner choices for affected OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/EXIT capabilities are recorded as decisions rather than recommendations.
+- [ ] Owner choices for affected OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/FLAGS/EXIT capabilities are recorded as decisions rather than recommendations.
 - [ ] Independent complete-artifact review is CLEAR at the exact current head.
 - [ ] Future implementation and minimum/current native conformance/effect evidence exist for enabled capabilities.
 
