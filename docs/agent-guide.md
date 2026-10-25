@@ -187,7 +187,7 @@ stw tidy apply PLAN-ID --yes --json  # only when the owner gave you this id to a
 In agent mode only items owned by a task record count as `own`; `other` and `unknown` items are listed but never preselected, and an
 agent-mode apply of a plan containing them is refused with `scope-not-authorized`. Never apply foreign items, and never use `--yes`
 on a plan you just made unless the owner authorized that id: the explicit plan id is the authorization. Bare `stw tidy` refuses
-`--yes` and `--save`. `stw status` suggests `stw tidy` for unmerged branches and stale worktrees with effect `owner`; an agent treats it as the owner's command and runs `stw tidy plan --mine` instead. The overview schema is unpublished. See [tidy](tidy.md#the-tidy-wizard).
+`--yes` and `--save`. `stw status` suggests `stw tidy` for unmerged branches and stale worktrees with effect `owner`; an agent treats it as the owner's command and runs `stw tidy plan --mine --json` instead (with `$STW_OWNER` set; `--mine` exits 2 without it, so otherwise use `stw tidy plan --by-owner NAME --json` or plain `stw tidy plan --json`). The overview schema is unpublished. See [tidy](tidy.md#the-tidy-wizard).
 
 ## Owned retirement results
 
