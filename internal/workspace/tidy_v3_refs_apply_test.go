@@ -169,6 +169,11 @@ func testTidyV3UncertainCancellation(t *testing.T, state string) {
 			default:
 				t.Fatal("native transaction lifecycle remains active")
 			}
+			// The fixture touches the lock path below. That is sound only when the stop
+			// is clean: git, a grandchild of bwrap, must be gone (issue 196).
+			if errors.Is(native.terminalErr, errGitRefDescendants) {
+				t.Fatal("native cancellation left a sandbox descendant that can still unlink the lock")
+			}
 			if state == "native" {
 				return
 			}
