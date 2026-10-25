@@ -101,8 +101,7 @@ the worktree (the `stw:<task>` lock, the gitdir backlink, the worktrees parent, 
 upstream written by `git push -u` no longer blocks it, while a hook or key added between plan and apply refuses with
 `evidence-changed`. Integration is proved on the real HEAD with the same forge-free proofs as local references (ancestor, `patch-id`,
 `merge-noop`, `no-net-change`). The proof-policy flags `--integration-proof` and `--accept-whitespace-differences` belong to the expert
-layer (`stw tidy plan PATH`), not to the wizard. In the overview a head the proofs do not cover is `retain` `unmerged`; if such an item is
-chosen anyway, the retirement plan retains it with `integration-not-proven` and building the plan set fails with that reason. The plan binds HEAD reference, commit id, branch tip and base, so any change refuses with
+layer (`stw tidy plan PATH`), not to the wizard. In the overview a head the proofs do not cover is `retain` `unmerged`, and a `retain` row cannot be chosen. If a row that was `safe` when observed is no longer proven when the retirement plan re-proves the head, the plan retains it with `integration-not-proven` and building the plan set fails with that reason. The plan binds HEAD reference, commit id, branch tip and base, so any change refuses with
 `evidence-changed`. A worktree whose HEAD is attached to the base branch itself never gets a branch deletion.
 
 When the owner chose `delete-branch:NAME` for a retired worktree, the **dependent branch leg** runs right after, and only after, that
@@ -154,7 +153,7 @@ references are planned only with `--online`), `tracking-ref-unmappable` (not a r
 legacy completion needs one plain owner label, not an unknown owner or an author hint), `stale-registration-no-plan-kind`, and the reason
 of the creation-record lookup (for example `registration-record-missing`). When the existing plan kind itself retains a chosen item,
 that plan's own reason is reported (for example `integration-not-proven`; otherwise `retirement-not-eligible`, `no-candidate` or
-`retained`). A planning failure carries the diagnostic code of the failed plan.
+`retained`). A planning failure carries the diagnostic code of the failed plan. Before any sub-plan is made, choosing a `retain` row, a `decision` row without its second confirmation, an unknown id, or an item that is not plannable in the current mode (for example an `other` or `unknown` item in agent mode) fails with the untyped error `item cannot be planned: ...` (`planset/planset.go:344-364`).
 
 **Why an apply is refused** (status `refused`, nothing changed, exit 1; `internal/tidywizard/planset/apply.go`):
 `mode-evidence-invalid` (the mode evidence cannot be recorded, for example an overlong `STW_OWNER`), `plan-set-not-found`,
