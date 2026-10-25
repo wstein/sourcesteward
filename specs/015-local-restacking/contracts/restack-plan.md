@@ -80,7 +80,7 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 | --- | --- | --- |
 | 1 | `status` is `incomplete` or `error` | `none` |
 | 2 | `replay.state` is `conflict` | `conflicts-predicted` |
-| target1; CURRENT code3 | every one of the following holds (`no other worktree or ref holds the branch` means: `effects.affected_refs` is empty and no worktree has state `holds-branch`; the latter is refused earlier): `replay.state` is `clean`; `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
+| 3 | every one of the following holds (`no other worktree or ref holds the branch` means: `effects.affected_refs` is empty and no worktree has state `holds-branch`; the latter is refused earlier): `replay.state` is `clean`; `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
 | 4 | otherwise (any other state or value, known or future) | `needs-attention` |
 
 `evidence-clean` is the positive list of row 3 only; any state the table does not name falls to row 4. `evidence-clean` never means safe: the notice and `limitations` still apply. Examples (abridged):
@@ -96,7 +96,7 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 
 ## Stability
 
-The schema is versioned by `schema_version`. Within version 1 only additive changes are allowed: new optional fields, new enum values for `diagnostics[].code` and `evidence.*.state` where consumers must treat unknown values as `unknown`, and new `limitations` strings. Removing or renaming a field, changing a type or a meaning, or changing an exit code requires `schema_version: 2` as an explicit opt-in. Arrays are non-null; absent optional objects are `null`; all strings are valid UTF-8, bounded, and data.
+The schema is versioned by `schema_version`. Within version 1 only additive changes are allowed: new optional fields, new enum values for `diagnostics[].code` and `evidence.*.state` where consumers must treat unknown values as `unknown`, and new `limitations` strings. Removing or renaming a JSON field or changing its type or meaning requires `schema_version: 2` as an explicit opt-in. Process exit codes are versioned separately by the CLI exit-contract revision (FR-035), not by `schema_version`; the dated revision-2 amendment below supersedes the former rule coupling exit changes to JSON version 2. Arrays are non-null; absent optional objects are `null`; all strings are valid UTF-8, bounded, and data.
 
 ## Printed command texts
 
@@ -148,6 +148,11 @@ Owner reset/resync text is never executed. This observation never authorizes the
 [proposed apply/recovery](restack-apply.md) or any remote action.
 
 Target process-exit contract revision 2 is independent of JSON schema_version 1.
+The command is hidden and its contract remains UNPUBLISHED: no supported public
+exit-3 consumer contract has been published. Private callers must adopt the
+decided incomplete=1 mapping when T045/T046 land; there is no legacy selector.
+Historical T018 execution records the earlier 0/1/2/3 behavior and is not evidence
+that the target mapping is implemented. JSON payload/schema bytes stay frozen.
 No legacy-exit-3 selector is retained; T045/T046 must change typed root dispatch
 and help/status cases before runtime adoption is claimed. Existing code has not
 changed in this Markdown draft.
