@@ -425,3 +425,22 @@ func TestRegistrationPruneV4HumanOtherScopeNeedsConfirmation(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistrationPruneV4ReaderRechecksParentAfterRead(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	moved := p.StateDir + "-moved"
+	_, e := readRegistrationPruneV4Plan(p.StateDir, p.PlanID, func() {
+		pruneMust(t, os.Rename(p.StateDir, moved))
+		pruneMust(t, os.Mkdir(p.StateDir, 0700))
+		t.Cleanup(func() { _ = os.Remove(p.StateDir); _ = os.Rename(moved, p.StateDir) })
+	})
+	assertPruneReason(t, e, "changed-state", "State directory identity changed.")
+}
+
+func TestRegistrationPruneV4NativeNameMatchesCLI(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	o := RegistrationPruneV4Options{Path: p.SourcePath, StateDir: p.StateDir, Name: `native\name`, GitDir: filepath.Join(p.Expected.SourceSnapshot.Identity.RepositoryDir, "worktrees", `native\name`), Mode: p.Mode}
+	if e := validatePruneV4Options(o); e != nil {
+		t.Fatalf("native backslash name refused: %v", e)
+	}
+}
