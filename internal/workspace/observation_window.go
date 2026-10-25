@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	// observationPerWorktree is added to the base window for every registered worktree or
-	// workspace of the repository (Spec 041, decision of 2026-10-25).
-	observationPerWorktree = time.Second
+	// observationPerItem is added to the base window for every observed worktree, workspace
+	// or local branch of the repository (Spec 041, decision of 2026-10-25).
+	observationPerItem = time.Second
 	// observationWindowMax caps the scaled default window.
 	observationWindowMax = 10 * time.Minute
 	// ObservationTimeoutMax is the largest explicit --timeout of the wizard analysis.
@@ -35,17 +35,18 @@ func ObservationTimeout(ctx context.Context) (time.Duration, bool) {
 }
 
 // observationWindow is the deadline of the observation of one repository with the given number of
-// registered worktrees: the explicit --timeout when there is one, otherwise the base window plus
-// observationPerWorktree for each registration, at most observationWindowMax. It scales only the
-// analysis; the per-call limits and the plan, apply and restore deadlines are not derived from it.
-func observationWindow(ctx context.Context, registrations int) time.Duration {
+// observed items (worktrees, workspaces and local branches): the explicit --timeout when there is
+// one, otherwise the base window plus observationPerItem for each item, at most observationWindowMax.
+// It scales only the analysis; the per-call limits and the plan, apply and restore deadlines are
+// not derived from it.
+func observationWindow(ctx context.Context, items int) time.Duration {
 	if d, ok := ObservationTimeout(ctx); ok {
 		return d
 	}
-	return min(planObservationTimeout+time.Duration(max(registrations, 0))*observationPerWorktree, observationWindowMax)
+	return min(planObservationTimeout+time.Duration(max(items, 0))*observationPerItem, observationWindowMax)
 }
 
-// window is the observation window of the observer for n registrations.
+// windowFor is the observation window of the observer for n observed items.
 func (c worktreeObserver) windowFor(ctx context.Context, n int) time.Duration {
 	if c.window != nil {
 		return c.window(ctx, n)

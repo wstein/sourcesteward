@@ -145,8 +145,9 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 		return WorktreeObservation{}, err
 	}
 	defer closeSession()
-	// The registrations are read under the base window; the window of the rest of the observation
-	// is then set from their count, counted from the same start.
+	// The registrations and references are read under the base window; the window of the rest of
+	// the observation is then set from the count of worktrees and local branches (every one of them
+	// is observed), counted from the same start.
 	start := time.Now()
 	obsCtx, cancel := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, 0)))
 	defer cancel()
@@ -154,7 +155,13 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	if err != nil {
 		return WorktreeObservation{}, err
 	}
-	obsCtx, cancelScaled := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, len(observed.Native.Registrations))))
+	items := len(observed.Native.Registrations)
+	for _, r := range observed.Native.References {
+		if strings.HasPrefix(r.Name, "refs/heads/") {
+			items++
+		}
+	}
+	obsCtx, cancelScaled := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, items)))
 	defer cancelScaled()
 	bin, err := gitExecutable()
 	if err != nil {

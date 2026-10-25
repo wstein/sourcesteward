@@ -19,8 +19,8 @@ import (
 // safe direction). jj has no worktree lock, no branch attached to a workspace and no tracking
 // evidence here: HeadRef is empty, nothing is Locked and TrackingSkipped says so.
 func (c worktreeObserver) observeJJ(ctx context.Context, o ObserveOptions) (WorktreeObservation, error) {
-	// The registrations are read under the base window; the window of the rest of the observation
-	// is then set from their count, counted from the same start.
+	// The registrations and bookmarks are read under the base window; the window of the rest of
+	// the observation is then set from the count of workspaces and bookmarks, counted from the same start.
 	parent, start := ctx, time.Now()
 	ctx, cancel := context.WithDeadline(parent, start.Add(c.windowFor(parent, 0)))
 	defer cancel()
@@ -32,7 +32,7 @@ func (c worktreeObserver) observeJJ(ctx context.Context, o ObserveOptions) (Work
 	if err != nil {
 		return WorktreeObservation{}, err
 	}
-	ctx, cancelScaled := context.WithDeadline(parent, start.Add(c.windowFor(parent, len(reg.Workspaces))))
+	ctx, cancelScaled := context.WithDeadline(parent, start.Add(c.windowFor(parent, len(reg.Workspaces)+len(tidy.Candidates))))
 	defer cancelScaled()
 	if !reflect.DeepEqual(tidy.Expected, reg.Expected) {
 		return WorktreeObservation{}, failure("evidence-changed", "The jj operation changed during observation.")
