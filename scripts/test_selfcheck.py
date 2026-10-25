@@ -509,15 +509,58 @@ class Gaps(Repo):
         self.assertIn('FAIL glued: docs/a.md:1', out)
 
     def test_a_failing_git_command_is_exit_two(self):
-        cfg = Path(self.tmp.name) / 'bad.gitconfig'
-        cfg.write_text('[core]\n\twhitespace = trailing-space,tab-in-indent,blank-at-eol,bogus=\n')
         self.docs('fine\n')
-        self.write('docs/a.md', 'x \n')
+        blob = self.git('rev-parse', 'HEAD:docs/a.md').strip()
+        obj = self.dir / '.git/objects' / blob[:2] / blob[2:]
+        obj.chmod(0o644)
+        obj.write_bytes(b'corrupt')
+        code, out, err = self.check()
+        self.assertEqual(code, 2, out + err)
+        self.assertIn('selfcheck: git diff -U0 failed', err)
+        self.assertNotIn('selfcheck: ok', out)
+
+    def diverge(self, main_msg_trailer, side_files):
+        """origin/main and 'side' both descend from an ancestor holding docs/w.md; main deletes it."""
+        self.write('docs/w.md', 'trailing \n')
         self.commit()
-        code, out, err = self.check(env={'GIT_CONFIG_GLOBAL': str(cfg)})
-        self.assertIn(code, (1, 2), out + err)
-        if code == 2:
-            self.assertIn('selfcheck:', err)
+        self.git('switch', '-q', '-c', 'side')
+        for name in side_files:
+            self.write(name, 'fine\n')
+        self.commit()
+        self.git('switch', '-q', 'main')
+        (self.dir / 'docs/w.md').unlink()
+        self.commit('docs: drop', trailer=main_msg_trailer)
+        self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+
+    def test_diff_check_uses_the_merge_base(self):
+        self.diverge(True, ['docs/ok.md'])
+        code, out, _ = self.check('refs/remotes/origin/main', '--head', 'side')
+        self.assertEqual(code, 0, out)
+
+    def test_commit_range_is_base_to_the_given_head_only(self):
+        self.diverge(False, ['docs/ok.md'])
+        self.git('switch', '-q', '-c', 'other', 'refs/remotes/origin/main')
+        self.write('docs/o.md', 'x\n')
+        self.commit(trailer=False)
+        code, out, _ = self.check('refs/remotes/origin/main', '--head', 'side', '--require-trailer')
+        self.assertEqual(code, 0, out)
+
+    def test_trailer_key_case_and_position(self):
+        self.write('docs/a.md', 'fine\n')
+        self.commit('docs: x\n\nSigned-off-by: A <a@example.org>\nco-authored-by: B <b@example.org>',
+                    trailer=False)
+        code, out, _ = self.check('--require-trailer')
+        self.assertEqual(code, 0, out)
+
+    def test_urls_are_ignored(self):
+        self.docs('See https://example.org/hidden015planner and http://e.org/exit0 now.\n')
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+
+    def test_shortest_hex_token_is_accepted(self):
+        self.docs('commit abc1def and abc1de0f1.\n')
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
 
 
 class Usage(Repo):
