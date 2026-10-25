@@ -162,3 +162,7 @@ No new API/library recommendation or current GitHub claim is made here; recorded
 ### Needs owner decision
 
 See OQ-NET, OQ-FLAGS and OQ-EXIT in [spec.md](spec.md). Recommendation: keep an offline default with explicitly opted-in reads using shared `--online` and, if selected by the owner, a `--pull-requests` alias; align output/timeout flags through OQ-FLAGS, and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. No artifact records owner acceptance of the old network recommendation. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.
+
+### Native-link trunk qualification from review
+
+The independent PR #237 review reported that installed `gh stack link` v0.2.1 help documents `--base` defaulting to the repository default branch. This review evidence is not a new live-write measurement. The proposed group 6 advisory now always passes a known validated `base.trunk_ref` explicitly, blocks an unknown/unsafe trunk and records it in step `expected`; no missing trunk is silently mapped to GitHub’s default. M3 remains measured with head deletion enabled only; no behavior with head deletion disabled is inferred as measured.

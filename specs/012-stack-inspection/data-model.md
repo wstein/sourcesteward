@@ -153,7 +153,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `stack-split` | Layers belong to different native stacks: {stacks}. |
 | `stack-member-not-local` | Native stack {stack} lists pull requests with no local layer: {numbers}. |
 | `stack-order-differs` | The native stack {stack} orders layers {layers} differently from the local stack. |
-| `native-stack-managed` | Layer {layer} is in native stack {stack} at position {position} of {size}; GitHub manages retargeting and rebasing. |
+| `native-stack-managed` | Layer {layer} is in native stack {stack} at position {position} of {size}; retargeting and rebasing were measured only with head deletion enabled. |
 | `parent-merged-child-stale` | Pull request {parent} was merged ({parent_merge}) and layer {layer} still contains its old commits. |
 | `parent-merge-not-local` | Pull request {number} is merged but its merge commit is not in this repository; fetch first. |
 
@@ -162,7 +162,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Field | Type | Notes |
 | --- | --- | --- |
 | `advisory` | boolean | constant `true` |
-| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name` |
+| `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name`; group 6 may also block layer 1 with `trunk-ref-unknown` instead of guessing GitHub’s default trunk |
 | `native_checked` | boolean | `true` only under the exact condition of the Plan rules (remote section present and the pull request and native stack sources `ok`); `false` otherwise, including `--pull-requests` with a failed remote read (the boundary then carries the native-stack limitation) |
 | `steps` | Step[] | at most 64, ordered |
 
@@ -180,10 +180,10 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `argv` | string[] or `null` | the program and arguments; `null` for `observe` and for an unprintable step |
 | `display` | string or `null` | `argv` with each element single-quoted where needed, at most 1024 bytes; `null` when `argv` is `null` |
 | `environment` | `{name, value}`[] | only `link`: `GH_REPO` |
-| `expected` | object | `rebase`: `{layer_tip, old_parent_tip, new_parent, new_parent_commit_id}` (commit ids; `new_parent` a name; `new_parent_commit_id` the sampled base commit for the first rebase step, `null` for later ones); `fetch`: `{remote}`; `link`: `{numbers}`; empty for `observe` |
+| `expected` | object | `rebase`: `{layer_tip, old_parent_tip, new_parent, new_parent_commit_id}` (commit ids; `new_parent` a name; `new_parent_commit_id` the sampled base commit for the first rebase step, `null` for later ones); `fetch`: `{remote}`; `link`: `{numbers, trunk_ref}` with trunk_ref exactly the known validated `base.trunk_ref`; unknown/unsafe trunk blocks instead of printing link; empty for `observe` |
 | `requires` | string[] | ids of earlier steps |
 
-Invariants: `depth == len(layers)`; complete candidate `open_depth` excludes only proven-landed layers and is never a verified PR count, while incomplete/error has null `open_depth`. `stack-too-deep` requires complete evidence and candidate `open_depth > 2`, is inferred, is not a `blocked.reason` and never changes `status` or exit. The `restack-needed` notice never overrides the existing plan groups. `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step.
+Invariants: `depth == len(layers)`; complete candidate `open_depth` excludes only proven-landed layers and is never a verified PR count, while incomplete/error has null `open_depth`. `stack-too-deep` requires complete evidence and candidate `open_depth > 2`, is inferred, is not a `blocked.reason` and never changes `status` or exit. The `restack-needed` notice never overrides the existing plan groups. `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step. Every link argv includes `--base` and the known validated `base.trunk_ref`; no unknown trunk falls back to the repository default.
 
 ## Boundary
 

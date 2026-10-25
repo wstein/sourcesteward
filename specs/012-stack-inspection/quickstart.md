@@ -50,7 +50,7 @@ stw stack show --base origin/main --tip BRANCH --pull-requests
 
 The caller first creates/updates the disposable fixture explicitly; existing local objects and remote-tracking refs are the offline cache and may be stale. OQ-NET in spec.md asks whether to provide opt-in reads and under which flag name; no owner answer is recorded. These examples use the proposed `--pull-requests` spelling, not an approved or implemented surface.
 
-Expected: per layer `PR #N (open, stack K position P of S, verified)` for a native stack, `native-stack-managed`, and no `rebase` step after a merge of a native stack member (at most `fetch` and `observe` while an object is missing, otherwise one `observe` describing GitHub's rewrite); `stack-link-missing` and a printed `gh stack link` line for a plain chain.
+Expected: per layer `PR #N (open, stack K position P of S, verified)` for a native stack, `native-stack-managed`, and no `rebase` step after a merge of a native stack member (at most `fetch` and `observe` while an object is missing, otherwise one `observe` describing GitHub's rewrite); `stack-link-missing` and a printed `gh stack link --base main <PR numbers bottom first>` line for a plain chain with validated `base.trunk_ref: main`. A different known trunk is passed explicitly; an unknown/unsafe trunk blocks link instead of silently using the repository default.
 
 ## Checks to run on any output
 
