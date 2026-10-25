@@ -483,7 +483,7 @@ derived values, the selected items, `authorized_scopes` and the mode evidence. P
 (wizard) or passes `--save`.
 The plan id needs the ids of the sub-plans, and the sub-plans are ordinary stored plans, so they are written to the private store before the plan set is stored. When a typed confirmation is required (a foreign item) and the answer is wrong, the sub-plans stay as stored plans that no plan set references and nothing applies; with no terminal available the build refuses before any sub-plan is made. The plan set itself is stored only after the confirmation.
 
-- `stw tidy apply <plan-id>` loads the set, verifies the store (mode, owner), re-runs each sub-plan's stale checks, and applies the
+- `stw tidy apply <plan-id>` loads the set, verifies the store (mode, owner), re-runs each sub-plan's stale checks (the journaled effects of the set's other sub-plans of the same repository are not a change), and applies the
   sub-plans **one at a time in a fixed order** (worktree retirements, then branch/bookmark deletions, then tracking refs), each with its own
   recorded journal and recovery manifest. Authorization is explicit: on a TTY the prompt names the plan id and the effect counts; with
   `--yes` the explicit plan id is the authorization (never inferred, never accepted without an id, never from a plan produced in the

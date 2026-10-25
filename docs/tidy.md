@@ -96,6 +96,17 @@ no-op. In an agent run, an `other` or `unknown` item is refused with `scope-not-
 not drive the wizard through a pty wrapper or `send-keys`. The wizard's own `Apply it now?` question accepts only an explicit `y`, which
 runs the same apply code for that plan id.
 
+**Several sub-plans of one repository.** Every sub-plan stores the whole repository as it was when the set was planned, so the first
+retirement of a repository would make the next one look changed (a registration is gone, a recovery reference exists). Apply therefore
+explains exactly those effects: before it compares a sub-plan with the repository, it adds the effects recorded in the journal of every
+other sub-plan of the same repository and state directory whose journal is complete, and those of the branch deletions this run applied,
+to the stored baseline. Three owned worktrees of one repository retire in one run; retirement and branch sub-plans of a repository
+explain one another. Nothing else is tolerated: a new commit, branch, worktree or reference and a new entry beside a target or its
+registration directory still end the later sub-plan as `stale` with `evidence-changed`, a dirty or changed target is refused as before,
+and a sub-plan that failed or was skipped, or whose journal is not complete, explains nothing. Limit: the branch deletions of an earlier run are not known to a later run, so after a
+run that stopped between two retirements with branch deletions, the remaining retirements of that repository report `stale` and need
+a new plan.
+
 **Non-interactive use.**
 
 ```sh
