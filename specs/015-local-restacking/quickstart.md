@@ -1,52 +1,99 @@
-# Quickstart: `stw restack plan` (first slice)
+# Quickstart: restack evidence and proposed local apply
 
-Acceptance never needs the network: tests use real temporary Git repositories. Nothing here runs `rebase`, `push` or any write.
+**2026-10-25 scope:** hidden v1 plan exists in source; its schema is UNPUBLISHED
+and minimum/current Git plus exact-head acceptance remain pending. Local apply,
+restore and jj below are proposals, not available commands. This amendment runs
+no product command/test/build. Use temporary repositories for later acceptance,
+never a real owner's checkout as a destructive test.
 
-## Scenario: owner rebase-merged the parent
+## Existing hidden Git plan: validation scenario
 
-```sh
-work=$(mktemp -d) && cd "$work" && git init -q -b main repo && cd repo
-# main: A; parent branch P: B1 B2; child C on P: C1 C2
-# the owner rebase-merges P into main: main gets B1' B2' (new SHAs)
-stw restack plan \
-  --branch refs/heads/child \
-  --old-parent "$(git rev-parse refs/heads/parent)" \
-  --new-parent refs/heads/main \
+The existing test `TestRestackPlanEndToEnd` and
+`TestTheMotivatingScenarioIsEvidenceClean` supply temporary fixtures. Arrange
+main=A, parent=B1 B2, child=C1 C2; make the new parent contain equivalent B1/B2
+under rewritten SHAs. Capture the exact old parent and child head first. With an
+already authorized source binary, the existing invocation shape is:
+
+```text
+stw restack plan PATH --branch refs/heads/child --old-parent OLD_PARENT_FULL_SHA
+  --new-parent NEW_PARENT_FULL_SHA --expect-head OLD_CHILD_FULL_SHA
   --identity "Owner Name <owner@example.org>" --json
 ```
 
-Expected: `status: ok`, `evidence.parent_dropped.all_dropped: true` (cherry rows `-`), `evidence.range_pairing.all_equal: true` for `C1 C2`, `evidence.identity.state: pass`, `texts.lease_push` printing the observed child tip and a `${NEW_FULL_SHA:?...}` variable the owner sets, and `limitations` containing `semantic-breaks-not-detected`.
+This is a syntax sketch with inert placeholders, not a pasteable shell command.
+Complete clean evidence exits0, including all `=` pairing, qualified parent proof
+and identity pass only with the explicit flag. An overlapping-path indicator is
+risk evidence, never correctness. No identity flag gives unknown; conflict
+prediction is a complete observation (exit0), refusal exit1, syntax exit2,
+incomplete/bound/cancellation exit3. No ref/index/worktree/config/object-content
+change, hook, helper or network occurs; the documented existing-object mtime
+caveat remains. The prediction committer never predicts an actual persisted
+rewritten committer; T024's reserved limitation is not yet emitted.
 
-## By hand, to compare with the plan
+Later validation must cover dirty/occupied/unsupported/merge/unrelated and wrong
+ancestor fixtures, conflict paths, empty replay commits, hostile names/config,
+201-commit/2001-path/result-byte/deadline edges and cancellation. Compare content
+sentinels over every native/worktree/neighbour boundary, not object mtimes.
 
-```sh
-git rebase --onto <new parent> <old parent> child
-git range-diff <old parent>..<old head> <new parent>..child      # all =
-git cherry <new parent> <old parent>                             # all -
+## Human reference semantics (data only)
+
+The manual reference sequence below explains the exact replay/proof intent; stw
+uses D7 plumbing/quarantine/CAS and never invokes porcelain rebase:
+
+```text
+git rebase --onto NEW_PARENT_FULL_SHA OLD_PARENT_FULL_SHA BRANCH
+git range-diff OLD_PARENT_FULL_SHA..OLD_HEAD_FULL_SHA NEW_PARENT_FULL_SHA..NEW_HEAD_FULL_SHA
+git cherry NEW_PARENT_FULL_SHA OLD_PARENT_FULL_SHA
 ```
 
-## Conflict, refusal and overlap cases
+For a supported pure replay, every range row must be `=`, own diffs equal and
+parent proof qualified. Clean replay can still break tests/semantics; equality
+and an old identity pass never mean safe to push. Actual author/committer fields
+must be checked on the new commits, as required by the workspace policy.
 
-- A parent change that touches the same lines as `C1`: `outcome: conflicts-predicted`, `conflicts.items[].path`, exit 0.
-- Dirty target, branch checked out in another worktree, a merge commit in the range, unrelated histories: `status: error`, the diagnostic code of the contract, exit 1, no `evidence`.
-- No `--identity` flag, or a placeholder identity only in the environment: `identity.state: unknown`, `outcome: needs-attention`.
-- A branch whose head is not a descendant of `--old-parent`: `old-parent-not-ancestor`, exit 1.
-- A moved commit whose change the new parent already contains: listed in `empty_after_replay`, `needs-attention`.
-- A parent change to `a.go` that `C1` also edits cleanly: `overlap.indicator: some`, a risk indicator only.
-- A parent that changed a signature the branch calls in another file: replay is clean, `overlap` is `none`, and the plan cannot see the break: build and test after restacking.
+## Proposed local apply/recovery walkthrough (not runnable)
 
-Branch names in the texts are the full ref without `refs/heads/` (`refs/heads/a/b` gives `a/b`); author dates are preserved by the replay.
+1. Resolve [owner choices](spec.md#needs-owner-decision), review the complete
+   [apply contract](contracts/restack-apply.md), then implement and accept its
+   red-first/native tasks. `--contract 2` and authorization spellings are proposed.
+2. Choose exactly one owned topic ref, exact old parent/head/new parent, explicit
+   actual committer/allowed identities and declared effects. The recommended
+   first capability requires an unoccupied ref; an attached author worktree is
+   explicitly OQ-6, not silently updated. Default is no mutation and no prompt.
+3. Store/review the immutable future apply plan. Apply only with that id and
+   explicit local authorization. Replay stays quarantined, computes the actual
+   candidate, validates one-to-one all `=` rows and actual author/committer ids,
+   prepares durable journal/root, revalidates and CAS-updates only the target.
+4. Inspect the receipt's actual new SHA/mapping, partial effects, recovery pointer
+   and review-required state. Request independent review/checks of this actual
+   head before any separate remote plan; prediction or prior-head CLEAR is stale.
+5. Inject crash/write/ref races in temporary fixtures at each boundary. Retry
+   compares old/new/third value; a third value is changed-since, never reset.
+   A separate [restore plan](contracts/recovery.md) authorizes only new→old with
+   fresh guards. Recovery does not restore untracked work or remote effects.
+6. Exercise [native jj capability refusals](contracts/jj-restack.md) until the
+   operation/bookmark/recovery spike and both native versions pass. No raw Git
+   fallback or original working-copy snapshot is allowed.
 
-## Before any push of the restacked branch
+## Remote handoff and owner resync
 
-The identity check covers only the existing commits. A by-hand rebase sets the committer of the rewritten commits from the rebaser's configuration or environment (a leaked placeholder such as `t <t@t>`), which the plan cannot predict, so run the AGENTS.md check on the new branch and push only if it shows the owner alone:
+D8: Spec 016 owns separately selected push/link/retarget plans and authorization.
+It needs independent CLEAR for the exact actual new SHA, green required checks,
+fresh attribution/identity and full observed **remote** old SHA. Local old head
+and a v1 inert command do not supply that advertisement. A changed head requires
+new review; no local mutation authorizes a remote write.
 
-```sh
-git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD
-```
+Owner resync alternatives are output DATA only: fetch/prune, a named old-SHA
+`rebase --onto` if the owner has local commits, or `switch` plus `reset --hard`
+when the owner chooses to discard local-only/uncommitted work (destructive).
+SourceSteward never executes these resync/reset commands. Spec 043 landing is
+another human invocation; agents never merge, push default, tag/release or change
+settings through this local workflow.
 
-## Offline checks
+## Checks for this documentation amendment
 
-```sh
-go test ./internal/restack ./internal/cli ./internal/contracts -run 'Restack' -count=1
-```
+Run only `python3 -I -B scripts/check-docs.py` and `git diff --check`, plus typos
+if configured. Do not use the old Go test sketch as evidence that source tests
+ran on this documentation revision. Actual new product/native fixtures,
+minimum/current lanes, builds and runtime acceptance remain unexecuted here;
+[verification](verification.md) preserves the historical results separately.
