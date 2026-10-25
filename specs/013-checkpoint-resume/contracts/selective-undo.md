@@ -48,7 +48,7 @@ occupancy/dirty-state blocker, rechecking before each effect; preserve all index
 disk and workspace state. Never move a held ref and leave its worktree stale,
 stash/reset edits, switch branches or silently refresh a working copy. A later
 occupied/dirty-destination capability needs explicit OQ-2 acceptance and tests.
-Native jj must prove an equivalent native mechanism without Git plumbing or
+Native jj must prove its own native mechanism within the no-head-CAS limits below, without Git plumbing or
 implicit snapshot/update; unsupported capability refuses.
 
 ## Native jj operation guard (OQ-2 proposal)
@@ -57,9 +57,12 @@ The operation log is shared by all workspaces of a repository. Inventory every
 workspace working-copy commit and the complete operation-head set; the invoking
 workspace alone cannot establish safe scope. Every jj repository read uses
 `--ignore-working-copy` and explicit `--at-operation` (initial `@` discovery,
-then full pinned ids) under enforced read-only isolation. Every restore/undo
-invocation also uses `--ignore-working-copy` and the expected current full
-operation id; never gain snapshot/update permission by omitting a flag. Any
+then full pinned ids) under enforced read-only isolation. Restore/undo
+invocations require `--ignore-working-copy`. OQ-2 recommends explicitly passing
+`--at-operation=EXPECTED_HEAD` for a mutation's sampled basis; that exact argv is
+unmeasured and not admitted until version-specific conformance. It creates a new
+operation based on that id, not an expected-head CAS or an exclusive write lock;
+never gain snapshot/update permission by omitting a flag. Any
 future explicit capture snapshot is a separate OQ-1 capability/effect.
 
 Recommend operation-restoration admission only when the desired saved view is
@@ -82,12 +85,26 @@ that intentionally leaves or updates a stale workspace requires separate OQ-2
 admission, explicit disclosure/selection and pre-action byte safety capture before
 any declared disk update; it is not hidden in operation restoration.
 
-Recheck sole current head immediately before the effect and verify the expected
-new operation/parent and all workspace deltas immediately afterward. Divergent
-heads or changed parent/workspace evidence before apply refuse `changed-since`
-without automatic reconciliation/merge. An unexpected/divergent head after an
-effect is partial/changed-since with retained evidence, not success or an
-automatic rollback. If op abandonment/GC has removed a required operation or
+Sample the sole current head immediately before the effect and resample the
+resulting operation/parent, head set and all workspace deltas afterward. Observed
+divergence or changed parent/workspace evidence before apply refuses
+`changed-since`; stw does not initiate reconciliation/merge. An observed race,
+unexpected/divergent head or incomplete post-check after the effect reports
+`partial`/`changed-since` with retained evidence and no stw-initiated rollback or
+merge. Sampling can miss concurrent, ABA or already-integrated changes; matching
+samples never establish exclusive access or that no other operation occurred.
+
+| Native concurrency limitation | Required qualification |
+| --- | --- |
+| Git reference promotion | The admitted expected-old-value CAS guards that one ref move; it is not a transaction with disk/private records and does not lock native writers globally. |
+| jj operation heads | There is no operation-head CAS. A pinned mutation can create a sibling of an operation written after the pre-check. Stw can report an observed race as partial/changed-since; it cannot prevent native writers or promise detection of every race. |
+| Later native commands | A later owner/other-workspace/native command can automatically integrate divergent heads outside stw's control, including before a post-sample. No-merge means stw requests no such effect; it is not a promise about other processes or future native commands. |
+
+Every jj mutation result carries `jj-operation-heads-have-no-cas`,
+`sampling-may-miss-concurrent-or-ABA-changes` and
+`external-native-commands-may-merge-heads` limitations, including otherwise
+complete outcomes. OQ-2 must accept that residual limit after native evidence;
+there is no prevention or always-detect guarantee. If op abandonment/GC has removed a required operation or
 object, report `unavailable`, refuse mutation and show the lost guarantee;
 never invoke abandon, GC, repair, snapshot or another native operation to hide it.
 
