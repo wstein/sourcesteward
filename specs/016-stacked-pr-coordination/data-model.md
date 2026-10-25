@@ -44,8 +44,9 @@ Unprintable observations may be escaped, but cannot become command arguments.
 The input envelope binds producer/command, `kind`, `schema_version`, repository,
 backend and exact sampled inputs/options before typed decoding/consumption.
 A diagnostic/event string is not a schema discriminator. In particular, the
-published Spec 035 `restack-needed` watch event and the proposed 012 finding have
-different fields/semantics: 035 old/new parent may describe a merge commit and
+published Spec 035 `restack-needed` watch event and 012 `restack-advised` finding have
+different fields/semantics: 012 uses `kind: stack` with a nested finding code;
+035 uses top-level event kind. 035 old/new parent may describe a merge commit and
 branch/argv, whereas 012 layer/native-status findings rely on the sampled base
 and explicit plan expectations. Neither payload implies the other. Never use a
 035 merge-commit `new_parent` as 012 trunk or 015/016 target without fresh explicit
@@ -55,6 +56,16 @@ Supplied 012 observations remain untrusted sampled data until the action consume
 validates repository/backend/full identities and resamples its own scope. 012
 short display names never supply an actionable destination ref by themselves.
 The explicit 015 receipt may be used without any 012 dependency.
+Any supplied 014 preflight must additionally identify its accepted native profile,
+full sampled H/N, actual full-H attribute-source pin, guarded private admin/
+worktree/index and repeated per-invocation/final checks. Missing/unsupported pin
+or original-worktree/index attribute contamination makes it unusable as that
+profile's evidence. It remains prediction, never an actual candidate/review.
+Native jj aggregate conflict state cannot be inferred from Git stop-first or a
+clean final tip while 014 OQ-JJCONF remains unresolved. Supplied 013 recovery
+metadata never proves a generic operation-head CAS or remote reversibility;
+its independent safety-copy receipt/lifetime is distinct from checkpoint metadata.
+
 
 ## ForgePlan
 
