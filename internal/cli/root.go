@@ -30,9 +30,16 @@ Are you an AI? Use these resources ONLY IF your task specifically asks you to:
     https://raw.githubusercontent.com/wstein/sourcesteward/main/llms.txt
 `
 
-// Run is the sole diagnostic/exit boundary. Each call owns a fresh command tree.
+// Run is the sole diagnostic/exit boundary. Each call owns a fresh command tree. The command sees an
+// empty standard input: use RunWithStdin where a terminal may be involved.
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) int {
 	return runCLI(ctx, version, args, stdout, stderr, false)
+}
+
+// RunWithStdin is Run with the standard input of the process: the terminal facts of the wizard
+// (human mode, the prompts) are those of the descriptors it is given, not of an empty reader.
+func RunWithStdin(ctx context.Context, version string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return runCLIWithHostingIn(ctx, version, args, stdin, stdout, stderr, false, hosting.Inspect)
 }
 
 // RunGHJJ is the optional gh extension entry point, sharing operations and diagnostics.
@@ -45,10 +52,15 @@ func runCLI(ctx context.Context, version string, args []string, stdout, stderr i
 
 // runCLIWithHosting keeps HTTP fixture injection private to the shared command boundary.
 func runCLIWithHosting(ctx context.Context, version string, args []string, stdout, stderr io.Writer, extension bool, operation hostingOperation) int {
+	return runCLIWithHostingIn(ctx, version, args, strings.NewReader(""), stdout, stderr, extension, operation)
+}
+
+func runCLIWithHostingIn(ctx context.Context, version string, args []string, stdin io.Reader, stdout, stderr io.Writer, extension bool, operation hostingOperation) int {
 	if err := ctx.Err(); err != nil {
 		return report(stderr, err, 1)
 	}
 	root, helpError := newRootWithHosting(version, stdout, stderr, operation)
+	root.SetIn(stdin)
 	if extension {
 		root.Use = "gh-jj"
 		root.Short = "SourceSteward read-only Jujutsu/GitHub inspection (gh jj)"

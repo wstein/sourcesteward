@@ -66,7 +66,14 @@ func TestApplyPromptsOnARealTerminalThroughRunWithStdin(t *testing.T) {
 		}
 		var diag bytes.Buffer
 		code := RunWithStdin(context.Background(), "test", []string{"tidy", "apply", setID, "--state-dir", "/s"}, tty, tty, &diag)
-		if len(calls) != 1 || calls[0].Authorize != tc.want || calls[0].Mode.Mode != owner.ModeHuman || !calls[0].Mode.StdinTTY || !calls[0].Mode.StdoutTTY {
+		if !tc.want {
+			// Declining stops before the apply path: exit 1, nothing applied.
+			if len(calls) != 0 || code != 1 {
+				t.Errorf("typed %q: code %d, calls %+v, stderr %q", tc.typed, code, calls, diag.String())
+			}
+			continue
+		}
+		if len(calls) != 1 || !calls[0].Authorize || calls[0].Mode.Mode != owner.ModeHuman || !calls[0].Mode.StdinTTY || !calls[0].Mode.StdoutTTY || code != 0 {
 			t.Errorf("typed %q: code %d, calls %+v, stderr %q", tc.typed, code, calls, diag.String())
 		}
 	}
