@@ -74,7 +74,7 @@ writes and their dependent observations are sequential.
 2. **Foundations** (T006–T012): fail first for immutable typed plans, bounds,
    escaping, safe store and mode/ownership/attribution. Core logic must be tested
    without network. Independent test fixtures use no live credentials.
-3. **US1** (T013–T016): consume verified relationships and derive an empty-default
+3. **US1** (T013–T016): consume producer-bound verified relationships and derive an empty-default
    plan, with native rewrite/depth/dependency blockers. This offline MVP has no
    write endpoint dependency and can ship alone after its own acceptance.
 4. **US2** (T017–T024): tests before narrowly selected native push, PR effects,
@@ -100,6 +100,16 @@ Resolve backend/layout and selected repository locally first. Reject ambiguity,
 GitButler and unsupported native capabilities. Admit supplied evidence as bounded
 untrusted data; do not authenticate or refresh merely because it has a PR URL.
 Offline dependent remote guards remain unknown and actions blocked.
+Consume current 012 `restack-advised` as a nested stack finding, never as the
+published 035 event. Its SC-009 fanout is gated by OQ-FANOUT entry approval and
+is not a new 016 batch surface. When supplied, validate 014's actual full-H
+attribute-source/private-context profile binding; missing enforcement refuses
+that evidence. The hidden-v1 replay implementation's separate attribute-source
+code follow-up is tracked in issue #241, not repaired or verified by this design.
+Do not infer native jj aggregate conflict semantics from Git first-conflict
+behavior. Preserve 013 independent safety-copy retention and no operation-head
+CAS/invoker-working-copy-effect admission; no recovery receipt authorizes a write.
+
 
 Online plan explicitly reads only accepted GET shapes within the operation
 budget. Before apply, compare plan identity/action ids and all relevant fresh
@@ -137,7 +147,7 @@ persist the plan. Surface/default changes remain OQ-SURFACE/OQ-STORE.
 These spellings remain OQ-SURFACE, not accepted current CLI flags. Spec 012's
 online scope and `--pull-requests` spelling remain an open owner question; its
 accepted `--after-fetch` observation hint never performs a fetch. Spec 014's
-shortening timeout/human/JSON proposals and Spec 013's checkpoint/resume/undo
+OQ-FLAGS human/shortening-timeout proposals and Spec 013's checkpoint/resume/undo
 contracts grant no implicit network. 013 deliberately separates checkpoint/resume/undo planning and apply; its
 `--human`/`--timeout` spelling recommendations remain open, and `--online` is
 inapplicable/rejected. The 015 proposed restore leaf uses explicit plan/save/apply
