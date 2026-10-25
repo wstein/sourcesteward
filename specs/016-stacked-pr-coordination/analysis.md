@@ -30,7 +30,7 @@ Every tagged task is included here (bidirectional mapping); none is checked.
 
 | Requirement | Task ids | Literal future test idea |
 | --- | --- | --- |
-| FR-001 | T013, T014 | Same branch name with different head repository/SHA never verifies a PR relationship. |
+| FR-001 | T013, T014 | Same name with different head repository/SHA never verifies linkage; reject wrong producer/kind/version and 035 restack-needed event as 012 finding, never using its merge-commit parent as trunk/target. |
 | FR-002 | T013, T014 | Offline supplied PR URLs/evidence cause zero auth, HTTP, fetch and cache calls. |
 | FR-003 | T006, T008, T010, T016, T022 | Empty selection has zero actions; each selected effect exposes exact target and blocker. |
 | FR-004 | T009, T010, T019, T031 | Move head/base or revoke permission before action two; action two refuses before its intent/write. |
@@ -52,7 +52,7 @@ Every tagged task is included here (bidirectional mapping); none is checked.
 | FR-020 | T022, T023 | Retarget child then change head; partial head-changed is reported and old Ready receipt is invalid. |
 | FR-021 | T002, T003, T020, T021 | Current GET mode rejects every proposed write; new admitted mode rejects arbitrary method/path/body/URL. |
 | FR-022 | T002, T006, T008, T025, T026 | Fail durable intent before remote write; zero writes; fail outcome persistence after success yields unknown. |
-| FR-023 | T002, T033, T037 | Accepted future shared flag fixtures preserve current surfaces and hidden 015 incomplete exit 3. |
+| FR-023 | T002, T033, T037 | Future shared flag fixtures reject unproposed --offline (usage 2), preserve 033/037 polarity and current surfaces/hidden 015 incomplete exit 3. |
 | FR-024 | T013, T014, T028, T037 | Local preflight/apply receipt alone cannot start sync/push/link/checkpoint/Ready or authenticate. |
 | FR-025 | T032, T037 | Render readable-off and on/unreadable owner orders; zero landing/default push/delete calls. |
 | FR-026 | T028, T032, T037 | Resync uses full old pushed SHA, actual new SHA and labelled destructive reset path; never executes. |
