@@ -133,7 +133,7 @@ Results per repository: `up-to-date`, `ahead`, `fast-forwarded`, `rebased`, `mer
 `skipped-no-upstream` (also when the remote branch is gone), `skipped-busy` (rebase, merge, cherry-pick, revert or
 bisect in progress, or locked), `skipped-uninitialized`,
 `conflict` (a rebase stopped on a conflict and is left in progress, as git leaves it; git's own message is printed),
-`autostash-conflict` (the update is done, the stash is kept) and `failed`. Exit status: 1 only when the run is
+`autostash-conflict` (the update is done, the stash is kept; its OID is reported as `stash_oid` and stored in the journal record) and `failed`. Exit status: 1 only when the run is
 refused (a jj-owned or non-Git path) or a repository ended `failed`, `conflict` or `autostash-conflict`; skipped
 repositories exit 0; usage errors exit 2 before any effect.
 
@@ -148,6 +148,10 @@ symbolic, has another name or a bad old OID is kept with its record. Retention i
 leaves the older runs in place. Repositories that no run changes keep their old runs until their next change. Run IDs
 carry microseconds from this release on (older IDs have second resolution), and runs are ordered by their ID.
 See the
+The kept autostash entry is found by comparing `refs/stash` before and after git's own update: only a new entry with the reflog
+subject `autostash` whose first parent is the old tip counts. The stash list is shared by all worktrees, so an entry another
+worktree pushed, one that predates the run, or an ambiguous pair is never claimed (`stash_oid` is then null); stw never
+drops, applies or edits a stash entry itself.
 [JSON contract](json-contracts.md#sync-schema-v1-unpublished).
 
 `stw sync restore [PATH] [--run ID] [--json]` undoes a run (default: the latest run, the one with the highest run ID;
