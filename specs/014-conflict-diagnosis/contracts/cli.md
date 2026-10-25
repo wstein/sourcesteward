@@ -79,12 +79,36 @@ JSON document. Do not emit a second competing JSON error object. Existing hidden
 Spec 015 `restack plan` incomplete exit 3 is implemented historical behavior, not
 changed by this new 0/1/2 proposal (OQ-EXIT).
 
-Stable proposed diagnostic families: `ambiguous-backend`, `unsupported-backend`,
-`capability-unavailable`, `conflict-topology-unsupported`, `conflict-input-invalid`,
-`conflict-object-missing`, `conflict-hazard`, `conflict-isolation-unavailable`,
-`conflict-changed`, `conflict-limit`, `conflict-canceled`, `conflict-native-failed`,
-`conflict-context-omitted`, `conflict-cleanup-failed`. Existing ownership/admission
-codes keep their established meaning; new names are proposals, not frozen ABI.
+### Shared diagnostic vocabulary
+
+Reuse Spec 015's implemented diagnostic names for the same shared replay facts;
+do not create conflict-prefixed synonyms. Codes identify facts, while this
+operation's outcome table controls complete/incomplete/error and prediction.
+A refusal before a usable observation is error; an observed head change during
+final resampling is incomplete/unknown even though the code is head-changed.
+Existing ownership/admission codes also retain their meanings.
+
+| Diagnostic | 014 fact and disposition; relation to 015 |
+| --- | --- |
+| repository-hazard | Mandatory configuration/metadata/attribute refusal; replaces proposed conflict-hazard. Same shared safety fact and no helper execution. |
+| object-missing | Required local native object or history is missing/unreadable; replaces proposed conflict-object-missing. No fetch or invented identity. |
+| head-changed | Expected Git head or selected ref target differs, including a resample; use this shared fact instead of conflict-changed for a head/ref move. |
+| replay-failed | Shared Git plumbing cannot predict or create a scratch replay object; replaces proposed conflict-native-failed for that Git replay fact. |
+| merge-commit-in-range | Initial Git linear replay contains an unsupported merge commit; no guessed mainline. |
+| empty-moved-range | Git source-head equals old-parent, leaving no selected moved commits; no fabricated replay. |
+| old-parent-not-ancestor | Git old-parent is not an ancestor of source-head; never widen the range. |
+| unrelated-histories | Shared Git replay cannot establish the required common history; no invented base. |
+| operation-in-progress | Reuse only if a selected capability explicitly refuses the observed operation state. Unlike the 015 target gate, diagnosis reads supported interrupted operations as normal evidence, not an automatic refusal. |
+| symlink-hazard | Original repository/admin path or required metadata violates canonical/no-follow admission; no fallback path traversal. |
+
+New 014-only facts use proposed names: conflict-topology-unsupported for a shape
+outside an accepted native profile, conflict-input-invalid for a resolved
+semantic inconsistency not covered above, conflict-isolation-unavailable,
+conflict-limit, conflict-canceled, conflict-context-omitted and
+conflict-cleanup-failed. Conflict-changed is reserved for layout/ownership/native
+operation changes, never a duplicate head/ref-move code. Conflict-native-failed
+is reserved for non-shared native observation/jj failures, never a synonym for
+Git replay-failed. These names are UNPUBLISHED proposals, not a frozen ABI.
 A refused capability names backend/version and a bounded actionable reason,
 never a suggested fallback write or an instruction to disable confinement.
 
