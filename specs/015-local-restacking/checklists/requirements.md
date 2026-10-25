@@ -26,7 +26,7 @@ separate from proposed local apply/recovery/jj work.
 
 ## Gates still open
 
-- [ ] Owner dispositions for affected OQ-1–OQ-6 and OQ-8; OQ-7 wording clarification remains explicit.
+- [ ] Owner dispositions for affected OQ-1–OQ-6 and OQ-8; OQ-7 preserves the genuinely open 012 network-policy choice with a recommendation, not a false approval claim.
 - [ ] Independent complete-artifact review of this exact documentation head.
 - [ ] First-slice T021 minimum/current Git and T023 exact implementation-head acceptance; T024 actual limitation emission.
 - [ ] Implementation, failing/passing fixture evidence and enabled native Git/jj conformance for proposed apply/recovery.
