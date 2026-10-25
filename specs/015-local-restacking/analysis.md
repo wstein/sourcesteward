@@ -82,22 +82,22 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | FR-009 | T016, T029, T040 | Existing `TestAResultOverTheByteBoundIsIncomplete`; proposed `TestApplyBoundStopsBeforeNextEffect` retains partial actions | Source/history; future pending |
 | FR-010 | T021, T042 | Run the existing `TestAPlanWritesNothingToTheRepositoryOnAnyPath` and enabled apply fixtures on named minimum/current lanes; missing lane is a blocker | T021 open; future pending |
 | FR-011 | T002, T003 | Existing `TestValidateOptionsRefusesNonExplicitRevisions` and `TestOldParentMustBeAnAncestorOfTheBranch` reject HEAD/expressions and wrong range | Source/history |
-| FR-012 | T011, T012 | Existing `TestAPlanWritesNothingToTheRepositoryOnAnyPath` and `TestTheSentinelNoticesAnObjectWrite` prove content sentinels/control | Source/history; native gaps retained |
-| FR-013 | T006, T007, T008, T009, T010, T013, T014, T015, T024 | Existing `TestRangePairingMarksEqualChangedAndUnpairedCommits`; fixture bundle additionally covers cherry/own diffs/identity/conflicts/overlap/effects/texts; future clean-plan limitation emission fixture from T024 | Source/history; T024 pending |
-| FR-014 | T003, T005 | Existing `TestPlanRefusals`, `TestAttributeHazardsOnTouchedPathsAreRefused`, `TestBranchCheckedOutElsewhereIsReportedAndRefused` | Source/history |
+| FR-012 | T011, T012, T019 | Existing `TestAPlanWritesNothingToTheRepositoryOnAnyPath` and `TestTheSentinelNoticesAnObjectWrite` prove content sentinels/control | Source/history; native gaps retained |
+| FR-013 | T006, T007, T008, T009, T010, T011, T013, T014, T015, T024 | Existing `TestRangePairingMarksEqualChangedAndUnpairedCommits`; fixture bundle additionally covers cherry/own diffs/identity/conflicts/overlap/effects/texts; future clean-plan limitation emission fixture from T024 | Source/history; T024 pending |
+| FR-014 | T002, T003, T004, T005, T013 | Existing `TestPlanRefusals`, `TestAttributeHazardsOnTouchedPathsAreRefused`, `TestBranchCheckedOutElsewhereIsReportedAndRefused`; T004 remains the optional characterization/extraction skip, not executed evidence | Source/history |
 | FR-015 | T009, T011, T024, T030 | Existing `TestIdentityComesOnlyFromTheFlag`, `TestAPlaceholderIdentityIsAMismatchNotExpected`; future actual author/committer fixture never borrows prediction pass | Source/history; T024/future pending |
 | FR-016 | T010, T018 | Existing `TestSemanticBreaksAreNeverReported` and `TestOutcomeTableOverTheFullCartesianProduct` keep clean replay from asserting safety | Source/history |
 | FR-017 | T017, T018, T020, T040 | Existing `TestRestackPlanFixturesValidate`, `TestRestackExitStatuses`; proposed `TestRestackFutureExitTableAndV1Freeze` keeps schema bytes and exit3 | Source/history; future pending |
 | FR-018 | T016, T029 | Existing `TestRangeTooLargeIsIncomplete`, `TestMoreThanMaxPathsIsIncompleteNeverTruncated`, `TestACancelledPlanIsIncompleteAndDeadlineExpiryToo`; future same numeric bound edges | Source/history; future pending |
-| FR-019 | T027, T028, T033, T034 | Proposed `TestApplyPlanNeedsExplicitSelection`: missing saved plan/id/local flag yields no effect/prompt; unrelated or modified plan refuses | Future pending |
+| FR-019 | T025, T027, T028, T033, T034 | Proposed `TestApplyPlanNeedsExplicitSelection`: missing saved plan/id/local flag yields no effect/prompt; unrelated or modified plan refuses | Future pending |
 | FR-020 | T029, T030 | Proposed `TestApplyReplaysExactTwoDotRange`: three-layer fixture replays only exact old-parent-exclusive range onto full new parent, never porcelain/original rr-cache/another ref; reference commands pin `rebase.updateRefs=false` and `rerere.enabled=false` | Future pending |
-| FR-021 | T027, T028, T033, T034 | Proposed `TestApplyResamplesEveryGuardBeforeCAS`: inject new worktree, foreign attribution, backend/common-dir/config/protection/head change before write | Future pending |
+| FR-021 | T025, T027, T028, T033, T034 | Proposed `TestApplyResamplesEveryGuardBeforeCAS`: inject new worktree, foreign attribution, backend/common-dir/config/protection/head change before write | Future pending |
 | FR-022 | T029, T030 | Proposed `TestApplyRejectsAnyNonEqualRow` and `TestApplyReadsActualAuthorAndCommitter`: `!`, `<`, `>`, unpaired, unknown or leaked actual committer block target CAS; `TestApplyNeverRunsSigningHelper` and `TestApplyReportsDroppedSignatures` cover unsigned candidates and signature-policy refusal; actual-apply identity flags cannot widen the trusted owner; push fixture covers foreign open-parent commits in observed-default..new-head and local/global config origins | Future pending |
-| FR-023 | T031, T032, T033, T034 | Proposed `TestRestackRecoveryPreparedBeforeTargetMove`: crash/write/fsync/rename/root-collision faults stop before target move with retained evidence | Future pending |
+| FR-023 | T025, T031, T032, T033, T034 | Proposed `TestRestackRecoveryPreparedBeforeTargetMove`: crash/write/fsync/rename/root-collision faults stop before target move with retained evidence | Future pending |
 | FR-024 | T033, T034, T035, T036 | Proposed `TestRestackCrashReconcilesEveryBoundary` and `TestRestackRestoreRequiresSeparatePlanAndCAS`: `restore --run` preview/optional save never moves refs; `--plan ID --authorize` selects the stored reverse plan; conflicting flags exit2; current third value remains untouched | Future pending |
 | FR-025 | T040, T041 | Proposed `TestRestackReceiptPreservesChangeClassReviewPolicy` and `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: docs-only checks/equality need no pre-push review; code pure rebase permits exact-new-SHA middle-tier CLEAR; old/predicted/other SHA cannot satisfy required review; Ready always exact-head CLEAR plus green checks | Future pending; 016 consumer gate |
 | FR-026 | T040, T041 | Proposed `TestRestackTextsRemainInertData`: recorder forbids reset/switch/push/link/retarget; consumer requires separate observed full remote SHA and plan/action auth | Future pending; 016 actions outside 015 |
-| FR-027 | T037, T038, T039 | Proposed `TestJJRestackRejectsChangedOperation` and `TestJJRestackNeverFallsBackToGit`: missing capability/sandbox refuses with original native state unchanged | Future pending; OQ-4 |
+| FR-027 | T025, T037, T038, T039 | Proposed `TestJJRestackRejectsChangedOperation` and `TestJJRestackNeverFallsBackToGit`: missing capability/sandbox refuses with original native state unchanged | Future pending; OQ-4 |
 | FR-028 | T029, T030, T038, T039 | Proposed `TestApplyConflictStaysInQuarantine`: original Git operation sentinel absent; jj stored conflict remains and refuses without resolution/snapshot | Future pending |
 | FR-029 | T025, T027, T040, T041 | Proposed `TestRestackFutureExitTableAndV1Freeze`: future success/refused/partial/incomplete/usage 0/1/2, actual v1 incomplete remains3 and byte-identical | Future pending; OQ-1 |
 | FR-030 | T027, T028, T041 | Proposed `TestApplyPlanRevalidatesObservationInputs`: changed exact parent/head/backend/semantics, incomplete 014 result or unknown native-stack management refuses | Future pending |
@@ -106,7 +106,7 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | FR-033 | T031, T032, T035, T036 | Proposed `TestRestackKeepsIncompleteRecovery` and `TestRestackUnknownNewHeadRetains`: no automatic pruning/reset, no untracked/remote restoration claim | Future pending |
 | FR-034 | T025, T026, T037, T042, T043, T044 | Proposed capability matrix fixture has missing minimum jj lane and must remain blocked; T044 requires exact-head independent review before publication | Future pending; documentation only |
 | SC-001 | T021, T042 | Native lane matrix executes every enabled acceptance fixture, marks minimum/current/backend omissions unverified, never pass | T021 open; future pending |
-| SC-002 | T012, T033, T040, T042, T043 | Existing `TestAPlanWritesNothingToTheRepositoryOnAnyPath`; proposed sentinel comparison covers all declared/undeclared effects and unknown partial outcomes | Source/history; future pending |
+| SC-002 | T012, T022, T033, T040, T042, T043 | Existing `TestAPlanWritesNothingToTheRepositoryOnAnyPath`; proposed sentinel comparison covers all declared/undeclared effects and unknown partial outcomes | Source/history; future pending |
 | SC-003 | T017, T020, T040, T042 | Existing `TestRestackPlanInvariants`; proposed future fixture validation plus byte comparison of every existing schema/fixture | Source/history; future pending |
 | SC-004 | T022, T026, T043, T044 | Literal audit: extract every FR/SC id and require one trace row naming an existing task plus a test/fixture idea; missing T021 execution never becomes accepted | This trace mapping; execution pending |
 | SC-005 | T029, T030, T033, T034, T042 | Proposed `TestApplyCASMovesOnlyOwnedTopic` plus negative equality/actual-identity fixtures prove only one named ref moves with all rows equal | Future pending |
@@ -115,7 +115,9 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | SC-008 | T037, T038, T039, T042 | Proposed `TestJJRestackPreservesNativeIdentities` with operation/bookmark/conflict/native sentinel matrix on both versions; disabled capability returns explicit refusal | Future pending; OQ-4 |
 
 Coverage audit: **34/34 FRs and 8/8 SCs** individually mapped (42 rows), each
-with task ids and a literal test or fixture idea. There are **44 task ids**, 20
+with task ids and a literal test or fixture idea. Every task-tag→requirement
+and requirement-row→task edge agrees in both directions; historical checkbox
+states/dates are unchanged and T004 remains an unexecuted optional extraction. There are **44 task ids**, 20
 historically checked and 24 unchecked: four historical plus twenty proposed.
 The current amendment runs no product tests and proves no capability acceptance.
 
