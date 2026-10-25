@@ -104,6 +104,10 @@ func EvaluateReady(in ReadyInput) ReadyReceipt {
 		r.Blockers = appendIf(r.Blockers, checksRefusal(in.Policy, in.Head, in.BaseSHA, in.Checks))
 	}
 	r.Blockers = appendIf(r.Blockers, rebaseRefusal(in.Head, in.BaseSHA, in.Rebase))
+	if in.Head == in.BaseSHA {
+		// An empty PR has nothing to publish. The stable reason scope-not-accepted is reused (no new code).
+		r.Blockers = append(r.Blockers, Refusal{ReasonScopeNotAccepted, "head-equals-base"})
+	}
 	if !in.Policy.Loaded {
 		r.Blockers = append(r.Blockers, Refusal{ReasonScopeNotAccepted, "policy-missing"})
 	} else {
