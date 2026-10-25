@@ -37,3 +37,64 @@ Status: implemented in source on `feat/015-restack-plan`, hidden command, unpubl
 - `git range-diff` output is parsed by its line grammar; a Git version that prints another form yields `unknown` marks, never `=`.
 - The prediction is not a rebase: renames beyond merge-ort defaults, rerere, whitespace options and commit encodings can differ (`prediction-is-not-apply`).
 - No build, release, tag, install, push of anything but the topic branch or network use happened.
+
+
+## Documentation amendment 2026-10-25
+
+**Status:** proposed design only; no apply/recovery/jj implementation or native
+acceptance. Original 2026-10-21 commands/results above are preserved as historical
+evidence and were not rerun. Base source inspected:
+`3d4c867a451217a2942564a7dcb4736d45a09b70`. Historical T001 remains checked;
+T004 deliberately skipped and T021/T023/T024 remain open. New T025–T044 are
+unchecked planning work. Historical design CLEAR does not review this amendment.
+
+### Checks actually performed for the Markdown amendment
+
+- Installed Spec Kit plan setup selected the existing feature and preserved
+  `plan.md`; task setup resolved the installed template without replacing the
+  historical task list. Both used explicit `SPECIFY_FEATURE_DIRECTORY` and
+  `SPECIFY_FEATURE_NO_PERSIST=1`, returned exit0, and created no feature-state file.
+- Inspected installed skills and prerequisite/helper scripts before use; no
+  extension hooks, presets or template overrides are configured at this base.
+  Final read-only analysis prerequisite command with `--json --require-spec
+  --require-tasks --include-tasks` returned exit0 and listed research, data model,
+  contracts, quickstart and tasks for this existing feature.
+- Markdown coverage bookkeeping (isolated Python, no imports from repository
+  code) found 34 FRs + 8 SCs = 42 unique individual analysis rows, each with valid
+  task ids and a literal test/fixture idea. All 44 task ids are unique; 20 retain
+  historical checked state, 24 remain unchecked. This is traceability, not test
+  execution or acceptance.
+- Initial offline documentation check failed because the new analysis pointed
+  to this verification section before it was written; that link is now present.
+  Initial whitespace check found an added final blank line in tasks; removed.
+- Initial scoped `typos specs/015-local-restacking` found the historical abbreviated
+  commit id as a false spelling hit. Expanded that reference to its already
+  recorded full historical SHA; no review fact or date changed.
+- Final `python3 -I -B scripts/check-docs.py`: exit0, 356 authored documents.
+  `git diff --check`: exit0. Scoped `typos specs/015-local-restacking`: exit0
+  after removing the same historical abbreviated-id spelling hit from this
+  explanatory entry. Final exact-head check results are also in the author handoff.
+- Existing v1 restack schema digest inspected unchanged:
+  `da0bdc60273a30a0f2e39482f534cb80f15f619451f2167ad0780cc44a2b5b48`.
+  The amendment changes only the listed Spec 015 Markdown artifacts, with no
+  code, tests, dependency, JSON/schema file, command guide/progress or machine
+  status update.
+
+### Evidence limits and remaining gates
+
+No Go tests, formatting, vet, race check, module check, `make check`, build,
+install, native Git/jj fixture, new mutation control, real-host/browser test,
+live API call, push, PR or CI action was run for this amendment. Offline docs
+checks are deliberately the authorized check scope, not substitutes for required
+future implementation/source checks. Nothing absent is reported as passing.
+New test names in tasks/analysis are proposals only, not files or measured runs.
+
+Seven [owner choices](spec.md#needs-owner-decision) retain recommendations and
+specific affected blockers: legacy exit migration, trusted ownership/review
+inputs, actual committer/date, native jj operation guarantees, typed shared
+recovery retention/index, attached-worktree capability and strict no-network
+wording versus 012 opt-in reads. The first six gate affected implementation;
+the wording issue grants no network effect here. Independent exact-head document
+review and required PR CI are the coordinator's publication/readiness gates,
+not acceptance of local apply. The first-slice T021/T023/T024 and each future
+capability's minimum/current conformance remain separate product gates.
