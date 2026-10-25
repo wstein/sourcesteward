@@ -207,10 +207,19 @@ commands' strict-findings/release exit semantics outside this toolbelt scope.
 All 39 indexed former OQs have direct or adopted direction, not newly measured
 capability acceptance. Separate 043 endpoint/ownership/constitution reconciliation
 remains OPEN; those proposed amendments are not owner-approved by these answers.
-Measure forge effects in separately authorized disposable fixtures, then review
-the small additive Spec 022 method/path/body allowlist; current GET modes stay
-read-only. Comments remain deferred; no arbitrary endpoint/GraphQL execution, except, by the owner decision of 2026-10-25, one fixed `markPullRequestReadyForReview` mutation (pull request node id as the only variable, fixed query string, own effect class, validated), only if W5a confirms that REST cannot set Ready; see `measurement-plan.md` section 1; fixture evidence: W5b trace.
-Native link/unstack is measured separately; Git publication comes first; jj stays
+Forge effects were measured in the separately authorized disposable fixture
+(run `20261025T170737Z`, [summary](../research.md#measured-forge-effects)); the
+small additive Spec 022 method/path/body allowlist still needs its review, and
+current GET modes stay read-only. Comments remain deferred; no arbitrary
+endpoint/GraphQL execution, except, by the owner decision of 2026-10-25, one fixed
+`markPullRequestReadyForReview` mutation (pull request node id as the only
+variable, fixed query string, own effect class, validated). W5a has confirmed
+that REST cannot set Ready (`PATCH` with `draft=false` answered 200 and left the
+PR Draft; [evidence](../evidence/measurement-20261025T170737Z-continuation.md)
+W5a), so the exception applies; see `measurement-plan.md` section 1; fixture
+evidence: W5b trace.
+Native link/unstack was measured separately (N1 to N3; unstack only observed
+in cleanup; N4, N5 and O-N5 not run); Git publication comes first; jj stays
 capability-unavailable without raw Git fallback. 014 native semantic/topology/
 hunk/scratch/jj aggregate recommendations are adopted as measure-and-refuse gates,
 not an invented algorithm or native proof. 012 uses only `--online`, default

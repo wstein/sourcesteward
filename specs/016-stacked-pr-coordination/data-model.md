@@ -108,13 +108,16 @@ immutable plan may describe a blocked effect without holding credentials.
 | `state` | `planned`, `blocked`, `prepared`, `completed`, `refused`, `failed`, `unknown`, `not-started` |
 
 Push expected state is one exact full ref, full observed remote old SHA and full
-actual new SHA. Ref creation uses an explicit absence guard only after separate
-capability measurement; currently blocked. Retarget binds before/after head/base
+actual new SHA. Ref creation uses an explicit absence guard; its lease push is measured
+(W1) but it stays blocked until the allowlist and hook/credential boundary are
+accepted. Retarget binds before/after head/base
 and planned base. Body edits bind body digest and own-body provenance; the original draft's standalone comments remain deferred. Any future comment
 capability must bind bounded selected text/action digest and accepted unique
 completion proof, never a coincidental text match.
 
-Native link/unstack retain `capability-unavailable` until measured. Inert link
+Native link/unstack retain `capability-unavailable` until the reviewed
+allowlist accepts the endpoints observed for them (unstack only in cleanup).
+Inert link
 reference data includes selected `GH_REPO`, validated numeric PRs bottom to top
 and explicit trunk base; it is not an executable extension command.
 
