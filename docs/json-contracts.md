@@ -6,7 +6,8 @@ Use `stw version --json`, `stw inspect [PATH] --json` or `stw inventory [PATH] -
 | Command | Authoritative schema | Stable publication URL |
 | --- | --- | --- |
 | `stw tidy plan/apply --json` (owned retirement) | [tidy.schema.json](../schemas/v2/tidy.schema.json) | [Retirement schema 2](https://wstein.github.io/sourcesteward/schemas/v2/tidy.schema.json) |
-| `stw tidy plan --json` | [tidy.schema.json](../schemas/v1/tidy.schema.json) | [Tidy schema 1](https://wstein.github.io/sourcesteward/schemas/v1/tidy.schema.json) |
+| `stw tidy plan --json` and `stw tidy --json` (workspace overview, no expert flag) | [tidy-overview.schema.json](../schemas/v2/tidy-overview.schema.json) | Unpublished source schema, not on Pages |
+| `stw tidy plan [PATH] --base REF --json` (reference plan) | [tidy.schema.json](../schemas/v1/tidy.schema.json) | [Tidy schema 1](https://wstein.github.io/sourcesteward/schemas/v1/tidy.schema.json) |
 | `stw version --json` | [version.schema.json](../schemas/v1/version.schema.json) | [Version schema 1](https://wstein.github.io/sourcesteward/schemas/v1/version.schema.json) |
 | `stw inspect --json` (Git and unselected/ambiguous ownership) | [inspect.schema.json](../schemas/v1/inspect.schema.json) | [Inspection schema 1](https://wstein.github.io/sourcesteward/schemas/v1/inspect.schema.json) |
 | `stw inspect --json` (selected native jj) | [inspect.schema.json](../schemas/v2/inspect.schema.json) | [Native jj inspection schema 2](https://wstein.github.io/sourcesteward/schemas/v2/inspect.schema.json) |
@@ -345,6 +346,17 @@ and `approval` fields describe plan/apply effects; no-apply performs no POST.
 not be retried on the assumption that nothing started. The
 [dispatch contract](../specs/026-release-process/contracts/dispatch.md) defines
 its command-specific exit meanings and the separately required build approval.
+
+## Tidy overview (wizard layer, unpublished schema)
+
+`stw tidy plan --json` without a `PATH` and without an expert flag, and `stw tidy --json`, print one `tidy-overview` document
+(`schemas/v2/tidy-overview.schema.json`, `schema_version` 1, `additionalProperties` false). It is frozen in the source tree but listed in
+`UNPUBLISHED_SCHEMAS`, so no Pages URL exists yet and consumers must not rely on one. Required members: `command`, `workspace`,
+`derived[]` (value, source, overridden), `repositories[]` (state `analysed`, `skipped` or `error`, with a reason), `candidates[]`
+(verdict `safe`, `decision`, `retain` or `foreign`, owner, owner source, scope, proof, effects, evidence), `summary`, `mode` (the run
+mode evidence), `plan_id` (empty unless `--save` stored a plan set), `notices[]` and `truncated`. The document is bounded: 4096
+candidates, 512 bytes of evidence each and 4 MiB; beyond that `truncated` is true and the exit code is 1 (`output-limit`). The
+overview stores and changes nothing. The v1, v2 and v3 tidy schemas keep their meaning; see [tidy](tidy.md#the-tidy-wizard).
 
 ## Explicit tidy source contract 3
 
