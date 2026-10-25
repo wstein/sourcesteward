@@ -73,14 +73,17 @@ plan time and freshly at each pre-effect validation boundary:
    symlink. EACCES, EPERM, ENOTDIR, EIO, ESTALE, cancellation and all other failures
    are refusals, never missing evidence. The registered `<destination>/.git` backlink
    is absent; no live backlink is removed or followed.
-3. The immediate parent's device equals the admitted repository common directory's
-   device. Bind filesystem/mount identity and availability for the common directory
+3. The immediate parent's path/device/inode equals `DestinationParent` in the
+   original completed creation plan (`internal/workspace/result.go:85`). Bind current
+   filesystem/mount identity and availability for that parent, the common directory
    and ancestor chain, including mount points. Recheck stable mount identity and
-   descriptor/path correspondence before effects. Changed devices, mount replacement,
-   unavailable/stale mounts or incomplete observation refuse. Cross-device destinations
-   are unsupported in this capability. Each supported Linux/macOS adapter MUST prove
-   its mount/identity observation in native fixtures; lack of that capability refuses,
-   without requiring a platform deletion event or a new owner answer.
+   descriptor/path correspondence before effects. Missing original parent identity,
+   changed devices/inodes, mount replacement, unavailable/stale mounts or incomplete
+   observation refuse. Do not require the parent to share the common directory's
+   device: real stw checkouts under `/tmp` can live on another filesystem, and the
+   existing creation record supplies their parent identity. Each supported Linux/macOS
+   adapter MUST prove its mount/identity observation in native fixtures; lack of that
+   capability refuses without a deletion event or a new owner answer.
 4. Exact registration pointers/lock/original creation records remain bound, and the
    complete private recovery payload and history pin can be durably preserved before
    removal. Git's native `prunable` marker is neither required nor deletion proof:

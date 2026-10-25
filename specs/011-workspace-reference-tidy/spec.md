@@ -144,7 +144,7 @@ checkout retirement; no existing implementation or conformance claim covers it.
   the owner before implementation; preserve published contracts and unified exit classes.
 
 Acceptance for FR-013–FR-015 is the new T501–T508 sequence in [tasks](tasks.md).
-The contract defines no-follow ENOENT plus accessible ancestors, same-device and stable
+The contract defines no-follow ENOENT plus accessible ancestors, original-parent identity and stable
 mount evidence. It discloses same-filesystem moves and sampled mount/race limits; complete
 raw recovery plus separately authorized native repair bounds the moved-checkout risk.
 Until the decisions and implementation are accepted, the current wizard retains stale rows.
