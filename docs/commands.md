@@ -160,15 +160,16 @@ drops, applies or edits a stash entry itself.
 
 `--submodules` also acts on the pinned (detached) submodules, which a plain `stw sync` only reports as
 `skipped-detached`; submodules that sit on a branch are synced like `git pull` as before. For each initialized detached
-direct submodule of a repository of the workspace it runs `git submodule sync -- PATH` and, when the commit the
-superproject index records is present in the submodule, clean, and a fast-forward of its HEAD,
-`git -c submodule.recurse=false submodule update --no-fetch --checkout -- PATH`; it never passes `--init`, `--remote`,
+direct submodule of a repository of the workspace, when the commit the superproject index records is present in the
+submodule, the submodule is clean and that commit is a fast-forward of its HEAD, it runs `git submodule sync -- PATH` and
+`git -c submodule.recurse=false submodule update --no-fetch --checkout -- PATH` (so a skipped submodule keeps its URL);
+all with `--literal-pathspecs`, so a glob character in a submodule path never reaches a sibling. It never passes `--init`, `--remote`,
 `--recursive` or `--force`, never clones or fetches (the one fetch per branch repository is unchanged), never changes a
 gitlink and does not journal or restore the move. The submodule's own hooks (for example `post-checkout`) run as plain Git
 runs them, and a failing hook fails only that item. Results in `repos[]`: `updated` (old and new commit), `up-to-date`,
 `skipped-dirty`, `diverged` (the recorded commit is not a fast-forward of HEAD, including HEAD ahead of it),
 `unreachable` (not initialized, or the recorded commit is not in the submodule; fetch or init it with plain Git) and
-`failed`; `unreachable` and `failed` exit 1. `git submodule sync` rewrites the submodule's remote URL from `.gitmodules`;
+`failed`; `unreachable` and `failed` exit 1. `git submodule sync` rewrites the submodule's remote URL and the superproject's `submodule.NAME.url` from `.gitmodules`;
 a change is shown in the item's reason as `old -> new`. Paths from the index are untrusted: an absolute, `..`, option-like
 or symlinked path is `unreachable` and never handed to Git. `--plan --submodules` previews nothing and runs no sync.
 
