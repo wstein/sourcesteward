@@ -65,7 +65,7 @@ repository or pushes the default branch. Tests use temporary repositories only.
 - [x] T019d Escape the repository notices (`RepoResult.Notices`: the observation's `TrackingSkipped` and `Limitations`) on render: they pass control bytes unescaped, so the overview applies `esc` and the 120-character bound to them (with T017).
 - [x] T019 Implement the command layer, flags, prompts and rendering; exit codes 0/1/2; wizard applies only after a typed `y` for the plan id through the same apply code.
 - [x] T019e The wizard flag set on bare `stw tidy` per the [CLI surface](spec.md#cli-surface) flag tables: `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only` and the shared `--state-dir` (repeatable), `--online`, `--timeout`, `--json`, `--human`; bare `stw tidy` refuses `--yes` and `--save` (see the implementation decisions in the spec). Acceptance: the flag table and the mode-selection tests of T015 hold for bare `stw tidy`, and `stw tidy --state-dir S` works as the spec's example. Done in #245. T019 is ticked together with it.
-- [ ] T019f Scale the observation window with the observed worktrees and local branches (60 s + 1 s each, at most 10 minutes), let `--timeout` replace it up to 1 hour, and state `N of M not judged (deadline)` with a retry hint as a run notice (text and the existing JSON `notices`); decision of 2026-10-25, issue #253.
+- [ ] T019f Scale the observation window with the observed worktrees and local branches (60 s + 1 s each, at most 10 minutes), let `--timeout` replace it up to 1 hour, and state `N of M not judged (deadline or proof budget)` with a retry hint as a run notice (text and the existing JSON `notices`); decision of 2026-10-25, issue #253.
 
 ## WP-6 Docs and acceptance
 
