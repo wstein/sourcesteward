@@ -43,8 +43,26 @@ range code, even if the final tree diff cancels it. Missing/unreadable parent
 commits or paths make the publication-range class code (and preserve any separate
 incomplete-evidence refusal); never infer docs-only from missing evidence.
 
-Keep validated 015 `moved_scope_change_class` separate from this recomputed
-publication-range class. Effective `change_class` is `code` if EITHER class is
+The 015-to-016 adapter reads source `review_gate.change_class`, defined by
+[015 ReviewGateInput](../../015-local-restacking/data-model.md#proposed-local-apply-entities-unpublished)
+and the [015 apply receipt contract](../../015-local-restacking/contracts/restack-apply.md#proposed-result-shape-and-exit-status).
+It assigns that source value to the **016-only** `moved_scope_change_class`:
+`moved_scope_change_class := source.review_gate.change_class`. 015 emits no field
+named `moved_scope_change_class`, and its source `change_class` is never accepted
+as 016's effective class.
+
+Before that assignment, validate the accepted 015 producer/command, actual-apply
+kind and schema version (the current UNPUBLISHED sketch proposes `restack-apply`
+version 2, pending 015 OQ-1), repository/backend/task, complete actual moved-range
+scope and matching parent/head identities. In particular `review_gate.head_sha`,
+`target.new_head` and the selected actual candidate must be the same full SHA.
+Require the source's accepted class value and completeness; missing/malformed or
+unrecognized provenance cannot establish docs-only and remains unknown/code with
+any separate input refusal. A top-level class, fabricated source alias, hidden-v1
+prediction or wrong-head receipt cannot substitute. Source serialization/admission
+is still OQ-POLICY; this mapping neither publishes a schema nor accepts a version.
+Keep this validated moved-scope alias separate from the recomputed publication-
+range class. Effective `change_class` is `code` if EITHER class is
 code or unknown; it is `docs-only` only when BOTH are completely proved docs-only.
 `docs-only` means only specification/documentation prose, no code, tests, scripts
 or generated files. Thus a docs-only child above a still-open code parent needs
@@ -60,6 +78,17 @@ rather than claiming tree equality alone is a pure rebase.
 | Rewritten code/tests/scripts/generated, pure equal rebase | Green applicable checks, equal range-diff and independent CLEAR at exact actual new SHA before push; middle reviewer tier allowed |
 | Rewritten code/tests/scripts/generated, other rewrite or unknown class | Green applicable checks and independent CLEAR at exact actual new SHA before push under governing independent review policy |
 | New non-rewritten topic publication | Applicable local checks and governing independent review policy; no rewrite exception invented |
+
+The workspace's 2026-10-17 exception permits a later-round wording-only code-branch
+fix after exact-SHA CLEAR to use the project's documented docs/lint check plus
+`git diff --check`, only when no rule, behavior or contract changes. It excludes
+first review, rebase and restack; no documented check means no exception. The
+**initial 016 capability does not admit this exception**: every effective-code
+push still follows the code row above, including a later wording-only fix. This
+is an explicit stricter capability choice because this first receipt protocol
+has no admitted proof of that narrow wording-only predicate. It does not change
+the broader owner manual-workflow authorization; any future receipt kind needs
+separate OQ-POLICY acceptance and those exclusions.
 
 The docs-only rule is solely a before-push exception. Ready always requires its
 own exact-current-head independent CLEAR and green required CI. No prediction,
