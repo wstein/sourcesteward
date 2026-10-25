@@ -60,6 +60,8 @@ The sample is the real output of the wizard on the fixture of `TestTidyExampleMa
 
 **Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json` and `--human`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
+**Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per registered worktree of that repository, at most 10 minutes. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace) and the plan, apply and restore deadlines of the expert layer are not scaled. When items are not judged because the deadline ran out, the overview ends with a notice `N of M not judged (deadline); retry with a larger window, for example --timeout 15m` (text line `notice: ...`, and the `notices` array of `--json`); those items are retained as `evidence-incomplete`.
+
 **Flow.** Analysis is read only and offline unless `--online`. Each repository gets a derived remote (`origin`, else the single remote)
 and base (the local branch of the remote's symbolic HEAD, else the remote-tracking reference); override a base with
 `--member-base NAME=REF`. A repository whose remote or base cannot be derived is shown as skipped (`remote-ambiguous`, `base-ambiguous`,

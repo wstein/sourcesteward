@@ -9,7 +9,7 @@ import (
 const (
 	// observationPerWorktree is added to the base window for every registered worktree or
 	// workspace of the repository (Spec 041, decision of 2026-10-25).
-	observationPerWorktree = 500 * time.Millisecond
+	observationPerWorktree = time.Second
 	// observationWindowMax caps the scaled default window.
 	observationWindowMax = 10 * time.Minute
 	// ObservationTimeoutMax is the largest explicit --timeout of the wizard analysis.
