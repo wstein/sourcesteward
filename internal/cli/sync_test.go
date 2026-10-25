@@ -331,3 +331,23 @@ func TestSyncAutostashConflictLineShowsTheStashOID(t *testing.T) {
 		t.Fatalf("%q", out)
 	}
 }
+
+// The help text states the delivered exit statuses and results exactly (Spec 032 closing review).
+func TestSyncHelpStatesTheExitStatusesAndRestoreRefusals(t *testing.T) {
+	var out, diagnostic bytes.Buffer
+	if code := Run(context.Background(), "dev", []string{"sync", "--help"}, &out, &diagnostic); code != 0 {
+		t.Fatalf("%d %s", code, diagnostic.String())
+	}
+	for _, want := range []string{
+		"Exit statuses: 1 when the run is refused or a repository ended failed, conflict, autostash-conflict or unreachable",
+		"skipped repositories (skipped-dirty, skipped-busy, diverged, ...) exit 0",
+		"restore also exits 1 for changed-since and journal-incomplete",
+		"usage errors, including any sync option given to restore (--submodules too), exit 2",
+		"conflict is left in progress",
+		"The default run is the highest run ID",
+	} {
+		if !strings.Contains(strings.Join(strings.Fields(out.String()), " "), want) {
+			t.Errorf("help lacks %q", want)
+		}
+	}
+}
