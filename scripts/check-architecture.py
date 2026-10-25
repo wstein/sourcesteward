@@ -104,7 +104,7 @@ STACKPUBLISH_ALLOWED_IMPORTS = ('crypto/sha256', 'encoding/hex', 'encoding/json'
 STACKPUBLISH_TIME_NAMES = ('Time', 'Duration', 'Nanosecond', 'Microsecond', 'Millisecond', 'Second', 'Minute', 'Hour', 'RFC3339', 'RFC3339Nano')
 STACKPUBLISH_FMT_NAMES = ('Errorf', 'Sprintf', 'Sprint', 'Sprintln')
 STACKPUBLISH_INIT = re.compile(r'\bfunc\s+init\s*\(')
-STACKPUBLISH_LOCAL_ZONE = re.compile(r'\.\s*(?:Local|In)\s*\(')
+STACKPUBLISH_LOCAL_ZONE = re.compile(r'\.\s*(?:Local|In)\b')
 STACKPUBLISH_GO_STATEMENT = re.compile(r'(?:^|[;{}])\s*go\s+(?:func\b|[A-Za-z_(])', re.M)
 NAMED_IMPORT = re.compile(r'^\s*(?:import\s+)?(?:([A-Za-z_.][A-Za-z0-9_]*)\s+)?"([^"]+)"', re.M)
 
@@ -115,6 +115,20 @@ def named_imports(text):
     for block in IMPORT_BLOCK.findall(text):
         found += [(m.group(1), m.group(2)) for m in NAMED_IMPORT.finditer(block)]
     return found
+
+
+STACKPUBLISH_PREFIX = MODULE + 'internal/stackpublish'
+
+
+def validate_stackpublish_packages(packages):
+    """`go list -json` of internal/stackpublish/...: no assembly, cgo or other foreign sources."""
+    for package in packages:
+        path = package['ImportPath']
+        if path != STACKPUBLISH_PREFIX and not path.startswith(STACKPUBLISH_PREFIX + '/'):
+            continue
+        for key in FOREIGN_FILE_LISTS:
+            if package.get(key):
+                raise ValueError(path + ' has ' + key + ' ' + ', '.join(package[key]) + '; internal/stackpublish is pure Go')
 
 
 def validate_stackpublish_file(path, text, imported):
@@ -311,6 +325,19 @@ def validate_release_graph(graph):
             raise ValueError(package + ' imports os/exec; only internal/release (reviewed files) and internal/inspection may')
 
 
+def go_stackpublish_packages():
+    result = subprocess.run(['go', 'list', '-json', './internal/stackpublish/...'], cwd=ROOT, text=True, capture_output=True, check=True)
+    decoder, text, packages, index = json.JSONDecoder(), result.stdout, [], 0
+    while index < len(text):
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text):
+            break
+        package, index = decoder.raw_decode(text, index)
+        packages.append(package)
+    return packages
+
+
 def go_release_packages():
     result = subprocess.run(['go', 'list', '-json', './internal/release/...'], cwd=ROOT, text=True, capture_output=True, check=True)
     decoder, text, packages, index = json.JSONDecoder(), result.stdout, [], 0
@@ -347,6 +374,7 @@ if __name__ == '__main__':
     validate_sources(sources, go_file_imports(sources))
     validate_dependencies(go_dependencies())
     validate_release_packages(go_release_packages())
+    validate_stackpublish_packages(go_stackpublish_packages())
     validate_release_graph(go_release_graph())
     run_release_ast_check()
     result = subprocess.run(['go', 'list', '-f', '{{.ImportPath}} {{join .Imports " "}}', './...'], cwd=ROOT, text=True, capture_output=True, check=True)
