@@ -94,13 +94,17 @@ Restored registration remains missing and locked; finding a moved checkout is no
 refusal. Native `git worktree repair` stays a separately authorized owner step, printed as
 escaped argv data; it is never run by either prune or administrative restore.
 
-History follows contract 3: default limit 256 journals, explicit `--limit` in
+History's count-limit policy follows contract 3: default 256 journals, `--limit` in
 1..1024, newest first. Zero, negative, repeated, malformed and over-ceiling
 limits are usage exit 2. `restore --contract 4 --list --state-dir DIR
 [--limit N] [--json]` provides the same read-only listing; `--list` excludes
 `--plan`, `--apply` and `--authorize`. Outside `--list`, restore rejects `--limit`.
-A declared limit or output bound sets explicit `truncated: true` and exit 1 when
-more matching records exist; it is never a complete recovery inventory.
+Like contract 3, reaching a declared entry/scan limit or the listing output
+bound is a successful bounded read: `status: ok`, exit 0 and explicit
+`truncated: true` when more matching records exist. Emit only complete entries
+and a bounded truncation summary; never imply a complete recovery inventory.
+An operational failure, invalid record or inability to emit a valid bounded
+result remains exit 1. Truncation never authorizes unseen records or effects.
 
 ## Prune scope and authorization
 
@@ -289,8 +293,10 @@ replay rules remain those of the narrow contract: 64 MiB/file, 256 MiB total,
 legacy tidy expiry or silent plan migration. No automatic expiry/deletion is
 introduced; unavailable recovery refuses, and partial evidence is retained.
 History returns bounded summaries/pointers and recovery availability, never raw
-payload. Its total JSON output is capped at 4 MiB; reaching the bound reports
-incomplete evidence and exit 1, never a misleading complete list.
+payload. Its total JSON output is capped at 4 MiB. As in the history/list rule
+above, a listing shortened to fit reports `status: ok`, exit 0 and explicit
+truncation; inability to emit a valid bounded result is an output error, exit 1.
+A truncated listing never claims a complete inventory or authorizes effects.
 
 ## Manifest 2: canonical hashing, ordering and closed dispatch
 
@@ -363,8 +369,9 @@ Prune/restore safety tests retain the existing entire narrow-contract matrix.
 Exit classes are unchanged: 0 complete plan/inspection or confirmed apply/
 restore/replay; 1 refusal, unsupported/incomplete/stale evidence, operational
 error, cancellation or partial/unknown outcome; 2 invalid usage. A complete
-read-only overview with retained rows may succeed; a refused expert selector
-cannot. Escape untrusted names, paths and diagnostics in human/JSON output;
+read-only overview with retained rows and an explicitly truncated bounded
+history listing may succeed; a refused expert selector cannot. Escape
+untrusted names, paths and diagnostics in human/JSON output;
 never log raw payload or credential-bearing data. No network or new dependency.
 
 Needs owner acceptance: the exact contract-4 interfaces, schema names/version
