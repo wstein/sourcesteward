@@ -726,3 +726,28 @@ mentioning. Specs 011 and 029 get a pointer to this spec; their text is not rewr
 - A batch prompt makes "all" tempting: mitigated by default none, a summary with effect counts, `decision` rows never included in `a`.
 - Derived state directory may collide with the user's existing store: if a plan store is present it is reused; unsafe modes refuse.
 - Wizard analysing many repositories may be slow: bounded by width 4, `--timeout`, and per-repository results kept on expiry.
+
+## T012b proposed narrow registration amendment (2026-10-25)
+
+The owner lifted the scope deferral for the
+[Spec 011 narrow prune contract](../011-workspace-reference-tidy/contracts/narrow-registration-prune.md).
+The current missing-directory row and `stale-registration-no-plan-kind` behavior above remain
+accurate until the expert implementation and final wizard PR are accepted. Historical T012a
+and T013 completion does not implement this extension.
+
+Future behavior: a row becomes `safe` only with exact original stw ownership/lock,
+one named registration and the approved deletion/mount witness plus complete recovery
+feasibility. Its only effect is removal of that registration, in its own distinct sub-plan;
+no user files or dependent branch leg. Own-scope `--save` and "all" may select that safe row.
+Every refused or unsupported case stays retained without effects; missing path or native
+prunable status alone cannot prove deletion rather than movement/unmounting. Native jj
+and colocated jj have no raw Git fallback.
+
+Plan-set identity, strict validation, explicit ordering, apply and recovery must cover the
+new operation without treating it as present-checkout retirement. The exact kind spelling,
+proof/reason representation, selector and restore interface need owner decision under the
+contract's frozen-schema options; this amendment reserves no enum or version and changes
+no frozen bytes. Existing branch restore is not registration restoration. The future
+recovery path uses the additional private raw payload, separate authorization and partial
+reporting in that contract. T012b1–T012b4 implement and verify the future behavior after
+Spec 011's accepted expert capability; until then the retain fallback remains.
