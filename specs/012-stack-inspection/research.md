@@ -169,7 +169,7 @@ No new API/library recommendation or current GitHub claim is made here; recorded
 OQ-NET chooses --online only, default offline, no old alias. OQ-FLAGS adopts
 --human/--json exclusivity and shortening --timeout, no store/offline alias.
 OQ-FANOUT chooses single repository now; a batch command is deferred to its own
-later decision, not an approved caller API. OQ-EXIT adopts target CLI revision2
+later decision, not an approved caller API. OQ-EXIT adopts target CLI revision 2
 0/1/2 (015 incomplete 1 after its code task; CURRENT code 3 until then). Historical
 U1–U10 measurements remain unverified capability gates, never invented evidence.
 

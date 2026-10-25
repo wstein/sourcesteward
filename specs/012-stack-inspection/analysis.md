@@ -3,19 +3,19 @@
 **Owner decisions: 2026-10-25. Author cross-artifact analysis only.** All former
 OQ IDs are settled and indexed in [the decision index](../016-stacked-pr-coordination/research.md#cross-spec-decision-index).
 The [concrete profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) distinguish workspace .work metadata from
-external capture payloads, trusted policy, host-only optional local015 re-sign
-and CLI exit-contract revision2. No new implementation/native/helper/forge test
+external capture payloads, trusted policy, host-only optional local 015 re-sign
+and CLI exit-contract revision 2. No new implementation/native/helper/forge test
 or independent CLEAR is claimed. Historical implementation evidence stays at
-its recorded revision; current hidden015code still returns3 until the new task.
+its recorded revision; current hidden 015 code still returns 3 until the new task.
 
 ## Current findings and gates
 
 | ID | Disposition | Remaining evidence |
 | --- | --- | --- |
-| D1 | All39 owner directions are DECIDED, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
+| D1 | All 39 dispositions are recorded as direct owner answers or adopted recommendations; cross-spec owner overrides are marked, including --online-only/single-repo and default .work saved-plan metadata. | Exact current artifact review and source/native conformance; no invented native acceptance. |
 | D2 | Metadata and external selected-byte/safety stores are distinct roles with explicit modes/race/layout/quota/export-risk guards. | Red-first shared store and role-separation tasks; no auto-ignore edits/expiry. |
-| D3 | Optional actual re-sign belongs only to015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review;016 receipt validation only. |
-| D4 | Target CLI exit-contract revision2 is0/1/2, no legacy3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
+| D3 | Optional actual re-sign belongs only to 015 fixed trusted HOST helper/verifier; no stw keys, no helper means unavailable. | Measured profile/external-agent trust limits, bottom-up signed parents and final verified SHA before review; 016 receipt validation only. |
+| D4 | Target CLI exit-contract revision 2 is 0/1/2, no legacy 3 selector; JSON schema 1 frozen independently. | Red dispatch/help/JSON cases and root.go/restack.go mapping task; CURRENT code 3 not misreported changed. |
 
 ## Individual requirement coverage and literal future tests
 
@@ -42,7 +42,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | FR-016 | T007, T012, T021, T022, T031, T033, T034 | Execute the future native minimum/current Git/jj matrix with fake HTTP and sentinels, then remove a required lane; assert it is recorded not-run and blocks acceptance. |
 | FR-017 | T033, T037 | Assert CLI contains only parsing/rendering, no new dependency or process/network edge, and the later authorized architecture check rejects a planted forbidden import or ad hoc go statement. |
 | FR-018 | T035 | Compare complete candidate open depths 2/3/32 and local depth 3 with one proven landed: only candidate >2 gets inferred advice, so 3 local/2 candidate gives none. Unknown landing stays a qualified upper bound, incomplete/error open_depth is null, closed-unmerged stays a candidate, and 33 local layers independently yields stack-limit without advice changing status/exit/blocking. |
-| FR-019 | T036, T038 | Resolve child indices to Layer fork/tip and sampled base, map to fully qualified `--branch` plus exact old/new/expected-head flags, and require an actual predecessor apply before a later null destination can form a new plan. Reject jj/64-hex ids for Git SHA-1-only 015 v1; never derive `--identity` from 012. Closed-unmerged/stale parents never prove landing, and predicted heads, patch ids or sampled upstreams never become receipts/review/leases; the diagnostic table preserves stack-limit exit 1 versus bound-exceeded target exit1 (CURRENT 015 code 3 until implementation), error exits 1 and usage exits 2 in their actual command namespaces. Assert a blocked 016 plan may render before clearance, docs-only pre-push gates require documented checks/diff plus equal pure-rebase range-diff, code/test/script/generated rewrites need independent exact-new-SHA review before lease push (middle-tier permitted for an equal pure rebase), and Ready always requires exact-head independent CLEAR, required green CI and rebaseability. The unchanged 035 restack-needed event never aliases the proposed 012 restack-advised finding or silently replaces selected base.commit_id with its merge-commit new_parent, and its argv is never executed as a plan. |
+| FR-019 | T036, T038 | Resolve child indices to Layer fork/tip and sampled base, map to fully qualified `--branch` plus exact old/new/expected-head flags, and require an actual predecessor apply before a later null destination can form a new plan. Reject jj/64-hex ids for Git SHA-1-only 015 v1; never derive `--identity` from 012. Closed-unmerged/stale parents never prove landing, and predicted heads, patch ids or sampled upstreams never become receipts/review/leases; the diagnostic table preserves stack-limit exit 1 versus bound-exceeded target exit 1 (CURRENT 015 code 3 until implementation), error exits 1 and usage exits 2 in their actual command namespaces. Assert a blocked 016 plan may render before clearance, docs-only pre-push gates require documented checks/diff plus equal pure-rebase range-diff, code/test/script/generated rewrites need independent exact-new-SHA review before lease push (middle-tier permitted for an equal pure rebase), and Ready always requires exact-head independent CLEAR, required green CI and rebaseability. The unchanged 035 restack-needed event never aliases the proposed 012 restack-advised finding or silently replaces selected base.commit_id with its merge-commit new_parent, and its argv is never executed as a plan. |
 | FR-020 | T037 | Admit exactly one repository and reject batch/discovery before workers/auth/network; no unused helper/API exists. |
 | SC-001 | T021, T031 | Run all story scenarios on the declared native layouts/version lanes; hide one backend and assert the acceptance matrix cannot report a pass. |
 | SC-002 | T010, T021, T029, T038 | Replay merge-commit, rebase-merge and squash fixtures: no merge drift, exact plain-chain replay boundaries and native observe-only handling; jj patch-equivalence remains an explicit gap. |
@@ -52,7 +52,7 @@ Coverage is planned design mapping; unchecked tasks are not execution evidence.
 | SC-006 | T006, T030, T037 | Combine hostile ref text, moved references, cancellation and exhausted bounds; assert fixed statuses, validated printable argv and deterministic indexed outcomes. |
 | SC-007 | T001, T012, T033, T034 | Enumerate FR/SC ids and require this individual task/test row for each; inject a missing task or skipped native lane and assert traceability/acceptance refuses completion. |
 | SC-008 | T035 | Assert all-pending candidate depths 2/3/32 yield no notice/notice/notice, 3 local minus 1 proven-landed yields open_depth 2 and no notice, unknown landing never becomes an exact open-PR count, incomplete/error yields null, and 33 local layers hits the separate hard cap. |
-| SC-009 | T037 | Request multiple repositories/batch in each target form; usage2 with zero workers/network/auth, no current 1..16 capability. |
+| SC-009 | T037 | Request multiple repositories/batch in each target form; usage 2 with zero workers/network/auth, no current 1..16 capability. |
 
 ## Metrics and task state
 
@@ -61,7 +61,7 @@ checked tasks; 38 unchecked. Coverage 29/29 (100% design
 mapping), zero requirement orphans. No implementation checkbox is changed by
 owner answers or this analysis. All new exit/store/signing tasks are unchecked.
 Task dependencies remain red test → implementation → native/effect conformance
-→ exact-source independent review. Spec043 human-only landing remains separate.
+→ exact-source independent review. Spec 043 human-only landing remains separate.
 
 ## Compatibility and acceptance boundary
 
