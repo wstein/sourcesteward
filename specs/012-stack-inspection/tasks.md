@@ -9,7 +9,7 @@
 
 ## Phase 1: Analysis and measurement
 
-- [ ] T001 Record independent cross-artifact analysis in `specs/012-stack-inspection/analysis.md`, resolve every critical, high and medium finding in the artifacts before any code, and preserve review provenance. Resolve OQ-NET/OQ-FLAGS before implementing the affected online or shared-flag surface; an author recommendation is not an owner answer.
+- [ ] T001 Record independent cross-artifact analysis in `specs/012-stack-inspection/analysis.md`, resolve every critical, high and medium finding in the artifacts before any code, and preserve review provenance. Resolve OQ-NET/OQ-FLAGS before implementing the affected online or shared-flag surface; an author recommendation is not an owner answer. Coverage: SC-007.
 - [ ] T002 Measure on the pinned jj versions 0.45.1 and 0.46.0 in scratch repositories (ordinary, colocated, secondary workspace) and append the commands, outputs and versions to `research.md`: bookmark and range reads on one pinned operation with `--ignore-working-copy`; the template keywords for conflict, immutability and divergence; tracked remote bookmark state; `jj rebase -s C -o N` moving descendants and the working-copy commit; the facts the round 2 reviewer measured (M13: `-o`/`-d`, quoted literals, keywords, no operation added by `--ignore-working-copy` reads, empty commit for an already applied layer) are re-run by the task's own scripts on both versions and recorded. Any change to the Capability table or the jj plan rule is made in `spec.md` before WI3 starts. Without this task, WI3 does not start. Coverage: FR-003, FR-004, FR-010, U1.
 
 ## WI1 — Result, schema and pure derivation (no I/O)
@@ -48,10 +48,10 @@
 
 - [ ] T023 [US3] Measure with read-only calls and record in `research.md` before any decoder is written: the `head=O:REF` filter and refs containing `/`; whether filtered list items carry `stack`; an open native stack (`open: true`, member base refs while open, positions after a middle merge); `stacks` pagination and `per_page`; `merge_commit_sha` for a multi-commit rebase merge and a squash merge; a fork pull request; the documented stack size limit. The owner creates any open stack or pull request needed; no write is made by this task. Coverage: FR-007, FR-008, U3, U4, U5, U6, U8, U10.
 - [ ] T024 [US3] Add failing tests then extend the closed allowlist in `internal/hosting/transport.go` by exactly the two shapes of the Remote sources table; refusal tests for everything the guard can tell apart (non-GET, extra or reordered query, `per_page` other than 5, `state` other than `all`, a second `stacks` path segment, `RawPath`, userinfo, fragment, redirect, other host) before credentials are attached; update `specs/022-bounded-go-gh/contracts/transport.md` and the Spec 020 endpoint table in the same change. If Spec 025 WI1 has landed, reuse its typed failure classes; otherwise map every non-success status to `failed`. Coverage: FR-007, SC-004.
-- [ ] T025 [US3] Add failing tests then implement `ExplainStack` and `ExplainStackWithTransport` in `internal/hosting/stack_remote.go`: local phase first, hosting resolution before any request, no request without `--pull-requests`, remote failure keeping the local result (`incomplete`), request order and budget (2 x 20 + 8 within 50) with a counting wrapper that rechecks the allowlist, resample of the pull request reads, cancellation giving `stack-canceled`. Coverage: FR-005, FR-007, US3.
+- [ ] T025 [US3] Add failing tests then implement `ExplainStack` and `ExplainStackWithTransport` in `internal/hosting/stack_remote.go`: local phase first, hosting resolution before any request, no request without `--pull-requests`, remote failure keeping the local result (`incomplete`), request order and budget (2 x 20 + 8 within 50) with a counting wrapper that rechecks the allowlist, resample of the pull request reads, cancellation giving `stack-canceled`. Coverage: FR-005, FR-007, FR-012, US3.
 - [ ] T026 [US3] Add failing tests then implement the decoders for `pull-requests-by-head` and `native-stack`: malformed-shape table (missing and mistyped fields, `stack` absent versus `null` versus malformed, non-hex SHAs, invalid UTF-8, duplicate numbers, `head.repo` null, `merged_at` null with `state: closed`), a full page of five, oversized bodies, `stacks/K` members beyond 32. Coverage: FR-007, FR-011, US3.
 - [ ] T027 [US3] Add failing tests then implement the Linkage rule and the remote findings against fixtures replaying M3 to M5 (closed three-member stack, the `stack` object, a plain chain without the key), including `stack-link-missing`, `stack-split`, `stack-member-not-local`, `stack-order-differs`, `native-stack-managed`, `parent-merged-child-stale` for each `parent_merge` and for native and plain chains, `parent-merge-not-local`, and the assertion that no fixture is `verified` without a head commit match, and a summary assertion preserving M3’s head-deletion-enabled-only qualification rather than claiming the behavior was measured with that setting off. Coverage: FR-008, FR-009, US3, SC-003.
-- [ ] T028 [US3] Add failing permission-matrix tests: each source `denied`, `not-found`, `rate-limited`, `failed` and oversized; unauthenticated; repository selection failure; the Enterprise-style `404` on `stacks/K` (modelled, unverified); assert local layers and findings are retained, remote findings are `unknown` with the reason, the status is `incomplete`, and no fixture yields an absence claim. Coverage: FR-006, SC-003, US3. Paths: `internal/hosting/stack_remote_test.go`.
+- [ ] T028 [US3] Add failing permission-matrix tests: each source `denied`, `not-found`, `rate-limited`, `failed` and oversized; unauthenticated; repository selection failure; the Enterprise-style `404` on `stacks/K` (modelled, unverified); assert local layers and findings are retained, remote findings are `unknown` with the reason, the status is `incomplete`, and no fixture yields an absence claim. Coverage: FR-006, FR-007, SC-003, US3. Paths: `internal/hosting/stack_remote_test.go`.
 - [ ] T029 [US2] Add failing scenario tests that run the three merge shapes of the spike end to end with fake HTTP and real repositories on Git and jj, including the acceptance scenarios 6 to 10 of User Story 2 (multi-commit squash, stale base for each merge kind, fetch-first versus reconcile and termination, merged-layer-not-bottom, offline and failed-remote `native_checked`, link versus rebase), the native-stack rebase merge (all objects local: a single `observe` `take-upstream` or `native-rewrite-pending`, never `rebase`; with a missing object: `fetch` and `observe`, then `object-unreachable` under `--after-fetch`) using an open-pull-request head fixture, plus a merged pull request whose deleted-branch head (the spike's `6e019b0`) is never required and the plain-chain rebase merge (the `rebase` chain; a `link` step only in a plan without `rebase`, so a later run after the rewrite and push), plus scenario 8b on Git (`fetch --prune` with a `gone` upstream on an applied layer) and the group 5 guard on Git and jj: a native stack whose merged member's `head.sha` is in the range and `stack-behind-base` the only trigger gives `landed-undetectable` (not the group 4 note, since the merged member is not a local layer; Git case: squash- and rebase-merge with the local `s1` deleted after `fetch --prune`, where a rebase-merge or one-commit squash may instead block as `layer-partially-applied`), plus the limitation on every jj result; one observe per affected layer when several merged heads land in different layers (a fixture-only case that needs fake HTTP); a merged member whose head is outside the range changes nothing; a plain-chain case that stays unguarded and prints the moved-base step with the disclosure (jj: the limitation and the empty or conflicted outcomes; Git with the local `s1` deleted and `--pull-requests`: the printed `git rebase --onto` drops the commits already upstream or halts on an add/add conflict, asserted by executing the argv in a scratch copy), a collaborator's commit and an 'Update branch' merge commit on a layer upstream (`diverged-undecided` with counts), and a jj tracked bookmark moved locally and rewritten by the remote (refusal). Coverage: FR-009, FR-010, SC-002, US2, US3.
 - [ ] T030 [US4] Add failing hostile remote tests: titles, refs and logins with control bytes, ANSI and bidirectional controls and long text; a head repository URL pretending to be an endpoint; response bombs, compressed bodies and redirects; a credential-bearing error body; every recorded request is an allowlisted `GET`; no body or token reaches a diagnostic. Coverage: FR-014, SC-004, SC-006, US4. Paths: `internal/hosting/stack_remote_test.go`.
 - [ ] T031 [US3] Add remote conformance: fake HTTP with real Git (ordinary, linked worktree) and jj (standalone, colocated, secondary) repositories, request recorder, sentinels around the run, and the existing schemas and hosting fixtures byte-identical. Coverage: FR-016, SC-001, SC-004. Paths: `internal/contracts/stack_test.go`.
@@ -59,14 +59,14 @@
 ## WI6 — Documentation and acceptance evidence
 
 - [ ] T032 [US5] Add `docs/stack.md` (commands, findings, confidence, native-stack handling, plan, what the output does not prove, the later-effects catalog link) and update `docs/json-contracts.md`, `docs/agent-guide.md`, `docs/commands.md` (generated reference through `cmd/stw-docs` and the existing documentation tests), `ARCHITECTURE.md`, `docs/README.md`, `docs/hosting.md` (allowlist), `llms.txt` and `docs/progress.md`; `python3 scripts/check-docs.py` passes. Do not run a site build without approval. Coverage: FR-009, FR-015.
-- [ ] T033 Run `make check`, `go test -count=1 -race ./...`, `go mod verify`, `python3 scripts/check-architecture.py`, `git diff --check` and the smoke script on the existing lanes; record exact versions, platforms and outcomes in `specs/012-stack-inspection/verification.md`, labelling arm64 and darwin results as local evidence and listing everything not run, including every unverified item of `research.md` that stayed unverified. Coverage: FR-016, SC-007.
+- [ ] T033 Run `make check`, `go test -count=1 -race ./...`, `go mod verify`, `python3 scripts/check-architecture.py`, `git diff --check` and the smoke script on the existing lanes; record exact versions, platforms and outcomes in `specs/012-stack-inspection/verification.md`, labelling arm64 and darwin results as local evidence and listing everything not run, including every unverified item of `research.md` that stayed unverified. Coverage: FR-016, FR-017, SC-007.
 - [ ] T034 Update `docs/feature-status.json` (`planned` to `implemented`, evidence link) with the actual evidence; leave release, tag, publication, live-network acceptance and every item of `contracts/later-effects.md` out of this feature. Coverage: FR-016, SC-007.
 
 ## Toolbelt refresh acceptance tasks (proposed, not executed)
 
 - [ ] T035 [US1] In `internal/inspection/stack_findings_test.go` add failing fixtures for complete all-pending candidate open depths 2, 3 and 32, total local depth 3 with one proven-landed parent, unknown jj/offline landing, closed-unmerged parents, non-prefix landing, incomplete/error evidence and 33 local layers; then implement FR-018 in `internal/inspection/stack_findings.go`. Assert `depth == len(layers)`, candidate `open_depth` excludes only proven-landed layers with stale-base precedence, and null open_depth for incomplete/error. Notice is inferred only for complete candidate open_depth >2, with detail `{depth, open_depth, recommended_max: 2}`; depth 3/open_depth 2 has no notice, no fixture treats candidate bounds as verified open-PR counts, and 33 gives independent stack-limit. Retain all bounded local layers with unchanged status/exit/plan blocking caused by advice alone. Extend future contract fixtures in `internal/contracts/stack_test.go` for both result fields and qualified notice shape/summary. Coverage: FR-018, SC-008.
 - [ ] T036 [US5] In `internal/cli/stack_test.go` and `specs/012-stack-inspection/contracts/later-effects.md`, assert no-subcommand help starts no observation/prompt; show/plan never invoke 013/014/015/016/043, run a printed argv, write a store or perform owner resync. Verify the data-model field-to-flag mapping: selected short Git branch becomes a validated `refs/heads/...`; old parent/new first base/child tip map to `--old-parent`/`--new-parent`/`--expect-head`; later null destinations require the preceding actual apply outcome and a fresh plan. Reject missing predecessor receipts, jj/64-hex input to Git SHA-1-only v1 and identity derived from any 012/config/environment field. Assert explicit caller-only `--identity` and per-command diagnostic/exit namespaces. Boundaries remain sampled ids, not an apply plan id, receipt or lease. Keep actual-head independent review before any separate 016 lease push in the handoff documentation; inherited observation/local apply never supplies remote authorization. Coverage: FR-001, FR-009, FR-010, FR-019, SC-004.
-- [ ] T037 [US4] In `internal/inspection/stack_test.go`, `internal/hosting/stack_remote_test.go` and `internal/hosting/stack_batch_test.go`, add failing caller-orchestration tests over an explicit mixed Git/jj repository list, including reverse completion, a per-entry ownership refusal, distinct bases/tips, no inherited online/auth selection, independent resamples, cancellation before start/during reads and shared request/output/deadline exhaustion. Implement `internal/hosting/stack_batch.go` only at the caller edge with Spec 040 `internal/fanout`, 1..16 selected entries and at most four workers (reuse `specs/023-multi-repo-inventory/contracts/repos.md` bounds), preallocated input-index outcomes and a single shared 30-second/50-GET/1-MiB allowance rather than multiplied worker allowances. Preserve each started entry’s native status, identities, findings and sample time; canceled/not-started or output-limited entries remain explicit incomplete caller outcomes and never silently disappear or become success. Assert the single-PATH CLI, per-repository caps and published schemas are unchanged, with no new flag, discovery, aggregate JSON, implicit network, ad hoc `go`, polling or shared-map append. Keep `stack_findings.go` and `stack_plan.go` pure; run the repository architecture rule in the later authorized source change. Coverage: FR-017, FR-020, SC-006.
+- [ ] T037 [US4] In `internal/inspection/stack_test.go`, `internal/hosting/stack_remote_test.go` and `internal/hosting/stack_batch_test.go`, add failing caller-orchestration tests over an explicit mixed Git/jj repository list, including reverse completion, a per-entry ownership refusal, distinct bases/tips, no inherited online/auth selection, independent resamples, cancellation before start/during reads and shared request/output/deadline exhaustion. Implement `internal/hosting/stack_batch.go` only at the caller edge with Spec 040 `internal/fanout`, 1..16 selected entries and at most four workers (reuse `specs/023-multi-repo-inventory/contracts/repos.md` bounds), preallocated input-index outcomes and a single shared 30-second/50-GET/1-MiB allowance rather than multiplied worker allowances. Preserve each started entry’s native status, identities, findings and sample time; canceled/not-started or output-limited entries remain explicit incomplete caller outcomes and never silently disappear or become success. Assert caller aggregate exit 1 for any incomplete/refused/error/canceled/not-started/output-limited member, exit 0 only for all-complete observations (never readiness), and usage exit 2 for invalid selection before workers start. Assert the single-PATH CLI, per-repository caps and published schemas are unchanged, with no new flag, discovery, aggregate JSON, implicit network, ad hoc `go`, polling or shared-map append. Keep `stack_findings.go` and `stack_plan.go` pure; run the repository architecture rule in the later authorized source change. Coverage: FR-017, FR-020, SC-006.
 - [ ] T038 [US2] In `internal/inspection/stack_findings_test.go` and `internal/hosting/stack_remote_test.go`, add failing `restack-needed` cases: offline Git rebase-merge with child indices pointing to `Layer.fork_commit_id`/tip and sampled base (not ids invented inside the finding), plan `expected` for the first destination and later null destinations awaiting actual predecessor apply, and `native_status: unchecked`; confirmed plain chain; confirmed native stack suppressed; parent merge object absent or outside base suppressed; closed-unmerged parent never landed. A child based on a merged/closed parent reports `base-mismatch` without retarget. Test merge-commit omission, multi-commit squash and conflict-resolution patch-id mismatch as qualified uncertainty, never cleanup/identity/review/lease proof. Implement only the Findings table rule and preserve six-group precedence; extend `internal/contracts/stack_test.go` for the new notice's model. Coverage: FR-006, FR-008, FR-010, FR-019, SC-002, SC-003.
 
 ## Deferred (not scheduled; each needs its own specification amendment, analysis and authorization)
@@ -79,7 +79,7 @@ T001 gates all code; T035 and T038 extend the WI1 pure derivation before adapter
 
 ## Coverage map
 
-| Requirement or criterion | Tasks |
+| Requirement, criterion or story | Tasks |
 | --- | --- |
 | FR-001 | T020, T036 |
 | FR-002 | T008, T016 |
@@ -92,11 +92,11 @@ T001 gates all code; T035 and T038 extend the WI1 pure derivation before adapter
 | FR-009 | T027, T029, T032, T036 |
 | FR-010 | T002, T006, T010, T011, T017, T029, T036, T038 |
 | FR-011 | T005, T015, T019, T026 |
-| FR-012 | T015, T019 |
+| FR-012 | T015, T019, T025 |
 | FR-013 | T003, T005, T020 |
 | FR-014 | T006, T014, T019, T020, T030 |
 | FR-015 | T007, T013, T014, T018, T032 |
-| FR-016 | T007, T012, T021, T022, T031, T033 |
+| FR-016 | T007, T012, T021, T022, T031, T033, T034 |
 | FR-017 | T033, T037 |
 | FR-018 | T035 |
 | FR-019 | T036, T038 |
@@ -107,13 +107,13 @@ T001 gates all code; T035 and T038 extend the WI1 pure derivation before adapter
 | SC-004 | T013, T018, T021, T024, T030, T031, T036 |
 | SC-005 | T003, T020 |
 | SC-006 | T006, T030, T037 |
-| SC-007 | T001, T033 and the individual FR/SC literal-test map in analysis.md |
+| SC-007 | T001, T012, T033, T034 |
 | SC-008 | T035 |
-| US1 | T008, T009, T016, T021 |
-| US2 | T004, T006, T010, T011, T017, T029 |
-| US3 | T004, T025, T027, T028, T029 |
-| US4 | T014, T015, T019, T020, T030 |
-| US5 | T006, T013, T032, T034 |
+| US1 | T004, T008, T009, T012, T016, T021, T035 |
+| US2 | T004, T006, T010, T011, T017, T029, T038 |
+| US3 | T004, T023, T024, T025, T026, T027, T028, T029, T031 |
+| US4 | T013, T014, T015, T018, T019, T020, T021, T022, T030, T037 |
+| US5 | T032, T036 |
 
 ## FR-to-scenario map (SC-007 traceability)
 
@@ -141,6 +141,51 @@ Scenarios are those of [spec.md](spec.md); `USn.k` is acceptance scenario k of U
 | FR-018 | US1.6, T035 |
 | FR-019 | US2.12, US5.1, T036, T038 |
 | FR-020 | US4.3, US4.4, T037 |
+
+## Reverse task coverage
+
+These are the same edges as the forward table, derived from each task’s explicit Coverage plus US label; shared foundation/evidence tasks have no story label. A task may cover several stories, so story coverage overlaps rather than changing the 38-task count.
+
+| Task | FR/SC coverage | Story coverage |
+| --- | --- | --- |
+| T001 | SC-007 | Shared foundation/evidence |
+| T002 | FR-003, FR-004, FR-010 | Shared foundation/evidence |
+| T003 | FR-013, SC-005 | Shared foundation/evidence |
+| T004 | FR-006, FR-008 | US1, US2, US3 |
+| T005 | FR-006, FR-011, FR-013 | Shared foundation/evidence |
+| T006 | FR-010, FR-014, SC-006 | US2 |
+| T007 | FR-015, FR-016 | Shared foundation/evidence |
+| T008 | FR-002, FR-004 | US1 |
+| T009 | FR-004, FR-006 | US1 |
+| T010 | FR-006, FR-010, SC-002 | US2 |
+| T011 | FR-004, FR-010 | US2 |
+| T012 | FR-016, SC-007 | US1 |
+| T013 | FR-005, FR-015, SC-004 | US4 |
+| T014 | FR-014, FR-015 | US4 |
+| T015 | FR-011, FR-012 | US4 |
+| T016 | FR-002, FR-003, FR-004 | US1 |
+| T017 | FR-003, FR-006, FR-010 | US2 |
+| T018 | FR-005, FR-015, SC-004 | US4 |
+| T019 | FR-011, FR-012, FR-014 | US4 |
+| T020 | FR-001, FR-013, FR-014, SC-005 | US4 |
+| T021 | FR-003, FR-016, SC-001, SC-002, SC-004 | US1, US4 |
+| T022 | FR-016 | US4 |
+| T023 | FR-007, FR-008 | US3 |
+| T024 | FR-007, SC-004 | US3 |
+| T025 | FR-005, FR-007, FR-012 | US3 |
+| T026 | FR-007, FR-011 | US3 |
+| T027 | FR-008, FR-009, SC-003 | US3 |
+| T028 | FR-006, FR-007, SC-003 | US3 |
+| T029 | FR-009, FR-010, SC-002 | US2, US3 |
+| T030 | FR-014, SC-004, SC-006 | US4 |
+| T031 | FR-016, SC-001, SC-004 | US3 |
+| T032 | FR-009, FR-015 | US5 |
+| T033 | FR-016, FR-017, SC-007 | Shared foundation/evidence |
+| T034 | FR-016, SC-007 | Shared foundation/evidence |
+| T035 | FR-018, SC-008 | US1 |
+| T036 | FR-001, FR-009, FR-010, FR-019, SC-004 | US5 |
+| T037 | FR-017, FR-020, SC-006 | US4 |
+| T038 | FR-006, FR-008, FR-010, FR-019, SC-002, SC-003 | US2 |
 
 ## Story acceptance and parallel opportunities
 
