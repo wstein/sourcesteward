@@ -49,7 +49,7 @@ Status: implemented in source on `feat/015-restack-plan`, hidden command, unpubl
 acceptance. Original 2026-10-21 commands/results above are preserved as historical
 evidence and were not rerun. Base source inspected:
 `3d4c867a451217a2942564a7dcb4736d45a09b70`. Historical T001 remains checked;
-T004 deliberately skipped and T021/T023/T024 remain open. New T025–T048 are unchecked planning work, including the later dated owner
+T004 deliberately skipped and T021/T023/T024 remain open. New T025–T049 are unchecked planning work, including the later dated owner
 amendment exit/signing tasks. Historical design CLEAR does not review this amendment.
 
 ### Checks actually performed for the Markdown amendment
@@ -135,5 +135,13 @@ review and green required CI gates remain with the coordinator before Ready.
 All earlier source execution and original 20/24 checkboxes remain historical
 facts. They do not implement decided exit revision2 or host-only optional actual
 re-sign. CURRENT root dispatch still returns3 incomplete; T045/T046 are red-first
-work to target1 with schema1 bytes preserved. T047/T048 own optional signing;
+work to target1 with schema1 bytes preserved. T047/T049/T048 own optional signing tests, separately authorized measurement and implementation;
 no helper was run or key accessed in this documentation follow-up.
+
+### Future T049 evidence destination (not executed)
+
+Record the separately authorized host-helper measurement plan, exact executable/
+verifier identities and versions, disposable fixture/signer policy, observed
+I/O/environment/confinement/bound/cancellation effects, external-agent limits and
+bottom-up final signed-chain verification here before enabling T048. Missing or
+refused measurements stay explicit blockers; no helper was executed by this fix.

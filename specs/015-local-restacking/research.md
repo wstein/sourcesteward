@@ -22,8 +22,10 @@ committer lives only in quarantine; the actual limitation
 CLEAR at its recorded historical SHA, not this amendment's review. T004 was
 skipped deliberately; T021 minimum/current and T023 exact-head review are open.
 **Alternatives considered:** silently replacing v1 with a generic 0/1/2 apply
-schema or marking conformance passed would erase known behavior/evidence. OQ-1
-requires an explicit future selector/migration decision; no v1 change is made.
+schema or marking conformance passed would erase known behavior/evidence. The owner has now settled OQ-1 through the global exit answer: CLI exit-contract
+revision 2 maps incomplete to 1 without a selector or JSON schema change.
+CURRENT source still returns 3 until T045/T046 implement and verify that amendment;
+this document changes no code.
 
 ## R2: exact replay semantics with plumbing
 
@@ -132,3 +134,11 @@ no stw keys and no unsigned fallback. D9 predictions and 013/014 stay unsigned/
 helper-free. Actual signed parents are rebuilt bottom-up and verified final SHA
 exists before CAS/review; 016 consumes receipts only. Adopted directions are not
 native/helper acceptance.
+
+## Optional host-helper measurement gate (T049)
+
+T049 records the separately authorized disposable capability measurement before
+T048 may enable signing. The host/verifier profile, confinement and bounds,
+external-agent trust limits, final signed-chain mapping and public verification
+must all have observed evidence; an unmeasured lane remains unavailable. This
+section is a task destination, not a measurement result or authorization.
