@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -261,7 +262,7 @@ func (e env) submodules(ctx context.Context) ([]string, error) {
 		}
 	}
 	sort.Strings(paths)
-	return paths, nil
+	return slices.Compact(paths), nil // a conflicted gitlink has several index entries
 }
 
 var remoteName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)

@@ -44,7 +44,7 @@ func symlinkedPath(dir, sub string) bool {
 
 // recordedCommit is the commit the superproject index records for the submodule path.
 func (e env) recordedCommit(ctx context.Context, sub string) string {
-	out, err := e.g(ctx, "ls-files", "--stage", "-z", "--", sub)
+	out, err := e.g(ctx, "--literal-pathspecs", "ls-files", "--stage", "-z", "--", sub)
 	if err != nil || out.Code != 0 {
 		return ""
 	}
@@ -87,16 +87,9 @@ func (s *session) submoduleStep(ctx context.Context, parent env, sub string, e e
 		}
 		rp.Reason = nil
 		if reason != "" {
-			rp.Reason = ptr(oneLine(reason))
+			rp.Reason = ptr(clip(oneLine(reason), 300))
 		}
 		return rp, true
-	}
-	oldURL := e.config(ctx, "remote.origin.url")
-	if out, err := parent.g(ctx, "submodule", "sync", "--", sub); err != nil || out.Code != 0 {
-		return finish(ResultFailed, "git submodule sync failed: "+firstLine(out.Diagnostic+"\n"+out.Out))
-	}
-	if newURL := e.config(ctx, "remote.origin.url"); newURL != oldURL {
-		note = "remote URL changed by git submodule sync: " + oneLine(oldURL) + " -> " + oneLine(newURL)
 	}
 	recorded := parent.recordedCommit(ctx, sub)
 	if recorded == "" {
@@ -104,9 +97,6 @@ func (s *session) submoduleStep(ctx context.Context, parent env, sub string, e e
 	}
 	if out, err := e.g(ctx, "cat-file", "-e", recorded+"^{commit}"); err != nil || out.Code != 0 {
 		return finish(ResultUnreachable, "the recorded commit "+recorded[:7]+" is not in the submodule; fetch it with plain git, stw never fetches")
-	}
-	if reason, _ := e.operation(ctx, e.dir); reason != "" {
-		return finish(ResultSkippedBusy, reason)
 	}
 	if hasTrackedChanges(ctx, e, e.dir) {
 		return finish(ResultSkippedDirty, "the submodule has local changes")
@@ -117,7 +107,22 @@ func (s *session) submoduleStep(ctx context.Context, parent env, sub string, e e
 	if out, err := e.g(ctx, "merge-base", "--is-ancestor", head, recorded); err != nil || out.Code != 0 {
 		return finish(ResultDiverged, "the recorded commit "+recorded[:7]+" is not a fast-forward of HEAD")
 	}
-	out, err := parent.g(ctx, "-c", "submodule.recurse=false", "submodule", "update", "--no-fetch", "--checkout", "--", sub)
+	// the submodule is going to be updated: only now does git submodule sync rewrite its URLs, which are then reported.
+	// Every path goes to Git after --literal-pathspecs: a glob in a submodule path must not reach a sibling.
+	name := parent.submoduleName(ctx, sub)
+	ownOld, superOld := e.config(ctx, "remote.origin.url"), ""
+	if name != "" {
+		superOld = parent.config(ctx, "submodule."+name+".url")
+	}
+	if out, err := parent.g(ctx, "--literal-pathspecs", "submodule", "sync", "--", sub); err != nil || out.Code != 0 {
+		return finish(ResultFailed, "git submodule sync failed: "+firstLine(out.Diagnostic+"\n"+out.Out))
+	}
+	ownNew, superNew := e.config(ctx, "remote.origin.url"), ""
+	if name != "" {
+		superNew = parent.config(ctx, "submodule."+name+".url")
+	}
+	note = urlNote(ownOld, ownNew, name, superOld, superNew)
+	out, err := parent.g(ctx, "--literal-pathspecs", "-c", "submodule.recurse=false", "submodule", "update", "--no-fetch", "--checkout", "--", sub)
 	if submoduleAfterHook != nil {
 		submoduleAfterHook(e.dir)
 	}
@@ -129,4 +134,46 @@ func (s *session) submoduleStep(ctx context.Context, parent env, sub string, e e
 	}
 	rp.NewOID = ptr(recorded)
 	return finish(ResultUpdated, "")
+}
+
+// clip bounds a report to n bytes (oneLine alone caps at 200, which two URLs can exceed).
+func clip(s string, n int) string {
+	if len(s) > n {
+		s = strings.ToValidUTF8(s[:n], "") + "..."
+	}
+	return s
+}
+
+// urlNote reports the URL writes of git submodule sync: the submodule's own remote and the superproject's
+// submodule.NAME.url, once when both changed the same way.
+func urlNote(ownOld, ownNew, name, superOld, superNew string) string {
+	var parts []string
+	ownChanged, superChanged := ownNew != ownOld, name != "" && superNew != superOld
+	switch {
+	case ownChanged && superChanged && ownOld == superOld && ownNew == superNew:
+		parts = append(parts, "URL rewritten by git submodule sync: "+oneLine(ownOld)+" -> "+oneLine(ownNew))
+	default:
+		if ownChanged {
+			parts = append(parts, "URL rewritten by git submodule sync: "+oneLine(ownOld)+" -> "+oneLine(ownNew))
+		}
+		if superChanged {
+			parts = append(parts, "submodule."+oneLine(name)+".url rewritten: "+oneLine(superOld)+" -> "+oneLine(superNew))
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// submoduleName is the name .gitmodules gives the submodule at sub (usually the path itself).
+func (e env) submoduleName(ctx context.Context, sub string) string {
+	out, err := e.g(ctx, "config", "-f", ".gitmodules", "-z", "--get-regexp", `^submodule\..+\.path$`)
+	if err != nil || out.Code != 0 {
+		return ""
+	}
+	for _, rec := range strings.Split(out.Out, "\x00") {
+		key, value, ok := strings.Cut(rec, "\n")
+		if ok && value == sub && strings.HasPrefix(key, "submodule.") && strings.HasSuffix(key, ".path") {
+			return strings.TrimSuffix(strings.TrimPrefix(key, "submodule."), ".path")
+		}
+	}
+	return ""
 }

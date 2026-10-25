@@ -147,7 +147,7 @@ func TestSubmodulesFlagUninitializedIsUnreachableAndNeverCloned(t *testing.T) {
 }
 
 // git submodule sync rewrites the remote URL from .gitmodules: the change is reported, never fetched.
-func TestSubmodulesFlagReportsAChangedRemoteURL(t *testing.T) {
+func TestSubmodulesURLChange(t *testing.T) {
 	w := newWorkspace(t)
 	head, recorded := pinAhead(t, w, "c")
 	oldURL := runGit(t, w.dir("c"), "config", "remote.origin.url")
@@ -346,5 +346,104 @@ func TestSubmodulesFlagRefusesAnOptionLikeIndexPath(t *testing.T) {
 	g := repoByName(t, r)["-evil"]
 	if g.Result != ResultUnreachable || g.Reason == nil || !strings.Contains(*g.Reason, "plain directory path") {
 		t.Fatalf("%+v %v", g, deref(g.Reason))
+	}
+}
+
+// addGlobSubmodule adds a detached submodule whose path contains pathspec glob characters and makes it behind
+// the commit the superproject records.
+func addGlobSubmodule(t *testing.T, w *workspace, path string) (head, recorded string) {
+	t.Helper()
+	runGit(t, w.ws, "-c", "protocol.file.allow=always", "--literal-pathspecs", "submodule", "add", "-q", w.bare["b"], path)
+	runGit(t, w.dir(path), "checkout", "-q", "--detach")
+	w.advance(t, "b", "main")
+	runGit(t, w.dir(path), "fetch", "-q", "origin")
+	recorded = runGit(t, w.dir(path), "rev-parse", "origin/main")
+	head = runGit(t, w.dir(path), "rev-parse", "HEAD")
+	runGit(t, w.ws, "update-index", "--cacheinfo", "160000,"+recorded+","+path)
+	return head, recorded
+}
+
+// A submodule path is a literal path, never a pathspec: a glob in its name must not reach a sibling.
+func TestSubmodulesFlagTreatsPathsAsLiteral(t *testing.T) {
+	for _, path := range []string{"[c]", "?", "*"} {
+		w := newWorkspace(t)
+		head, recorded := addGlobSubmodule(t, w, path)
+		// the sibling c is diverged: a local commit the recorded commit lacks. A pathspec match would check it out.
+		commit(t, w.dir("c"), "local.txt", "l\n")
+		local := w.oid(t, "c", "HEAD")
+		runGit(t, w.dir("c"), "checkout", "-q", "--detach")
+		// and its URL in .gitmodules changed: a sync reaching c through the glob would rewrite it
+		ownURL := runGit(t, w.dir("c"), "config", "remote.origin.url")
+		runGit(t, w.ws, "config", "-f", ".gitmodules", "submodule.c.url", w.bare["a"])
+		by := repoByName(t, subs(t, w, Options{}))
+		if runGit(t, w.dir("c"), "config", "remote.origin.url") != ownURL {
+			t.Fatalf("%q: git submodule sync reached the sibling c", path)
+		}
+		if g := by[path]; g.Result != ResultUpdated || w.oid(t, path, "HEAD") != recorded || *g.OldOID != head {
+			t.Fatalf("%q: %+v", path, g)
+		}
+		if g := by["c"]; g.Result != ResultDiverged || w.oid(t, "c", "HEAD") != local {
+			t.Fatalf("%q: the sibling c was reached: %+v (head %s, local %s)", path, g, w.oid(t, "c", "HEAD"), local)
+		}
+	}
+}
+
+// Only a stage 0 gitlink is the recorded commit: a conflicted index entry records none.
+func TestSubmodulesFlagIgnoresConflictedGitlinkStages(t *testing.T) {
+	w := newWorkspace(t)
+	_, recorded := pinAhead(t, w, "c")
+	head := w.oid(t, "c", "HEAD")
+	runGit(t, w.ws, "update-index", "--force-remove", "c")
+	index := "160000 " + head + " 1\tc\n160000 " + recorded + " 2\tc\n160000 " + recorded + " 3\tc\n"
+	cmd := gitCmd(w.ws, "update-index", "--index-info")
+	cmd.Stdin = strings.NewReader(index)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	c := repoByName(t, subs(t, w, Options{}))["c"]
+	if c.Result != ResultFailed || w.oid(t, "c", "HEAD") != head {
+		t.Fatalf("%+v %v", c, deref(c.Reason))
+	}
+}
+
+// git submodule sync runs only for a submodule that is going to be updated: a skipped one keeps its URL, both
+// in its own configuration and in the superproject's.
+func TestSubmodulesFlagSkippedSubmoduleKeepsItsURL(t *testing.T) {
+	for name, setup := range map[string]func(t *testing.T, w *workspace){
+		"dirty":    func(t *testing.T, w *workspace) { write(t, filepath.Join(w.dir("c"), "c.txt"), "dirty\n") },
+		"diverged": func(t *testing.T, w *workspace) { commit(t, w.dir("c"), "local.txt", "l\n") },
+	} {
+		w := newWorkspace(t)
+		pinAhead(t, w, "c")
+		setup(t, w)
+		own := runGit(t, w.dir("c"), "config", "remote.origin.url")
+		super := runGit(t, w.ws, "config", "submodule.c.url")
+		runGit(t, w.ws, "config", "-f", ".gitmodules", "submodule.c.url", w.bare["b"])
+		c := repoByName(t, subs(t, w, Options{}))["c"]
+		if c.Result == ResultUpdated || runGit(t, w.dir("c"), "config", "remote.origin.url") != own || runGit(t, w.ws, "config", "submodule.c.url") != super {
+			t.Fatalf("%s: %+v own %s super %s", name, c, runGit(t, w.dir("c"), "config", "remote.origin.url"), runGit(t, w.ws, "config", "submodule.c.url"))
+		}
+	}
+}
+
+// Both URL writes of git submodule sync are reported: the submodule's remote and the superproject's submodule.NAME.url.
+func TestSubmodulesURLWrites(t *testing.T) {
+	w := newWorkspace(t)
+	pinAhead(t, w, "c")
+	oldSuper := runGit(t, w.ws, "config", "submodule.c.url")
+	newURL := w.bare["b"]
+	runGit(t, w.ws, "config", "-f", ".gitmodules", "submodule.c.url", newURL)
+	c := repoByName(t, subs(t, w, Options{}))["c"]
+	if c.Reason == nil || !strings.Contains(*c.Reason, oldSuper) || !strings.Contains(*c.Reason, newURL) || runGit(t, w.ws, "config", "submodule.c.url") != newURL {
+		t.Fatalf("%v", deref(c.Reason))
+	}
+	// a rewrite that differs between the two configurations is reported twice
+	w = newWorkspace(t)
+	pinAhead(t, w, "c")
+	runGit(t, w.dir("c"), "remote", "set-url", "origin", w.bare["a"])
+	runGit(t, w.ws, "config", "-f", ".gitmodules", "submodule.c.url", w.bare["b"])
+	c = repoByName(t, subs(t, w, Options{}))["c"]
+	if c.Reason == nil || !strings.Contains(*c.Reason, w.bare["a"]) || !strings.Contains(*c.Reason, "submodule.c.url") {
+		t.Fatalf("%v", deref(c.Reason))
 	}
 }
