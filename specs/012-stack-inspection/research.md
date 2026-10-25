@@ -1,6 +1,8 @@
 # Research: Stack inspection and plan (v2)
 
-Evidence gathered on 2026-10-17. Environment: Git 2.56.0 (`/usr/local/bin/git`) and Git 2.47.3 (`/usr/bin/git`) on linux/arm64; `gh` 2.102.0 with the extension `gh stack` v0.2.1 (`github/gh-stack`); **no jj binary** in this environment (only a throwaway fake under another session's scratch directory), so every jj statement below is design, not measurement. Git experiments ran in scratch repositories under the session scratchpad (`exp/`). GitHub facts come from the owner's spike in `wstein/stack-spike-20261017` (a private repository that allows merge, squash and rebase merges; PRs merged by the owner in the web UI) and from read-only `GET` calls against that repository made while writing this document. No write call was made.
+Historical evidence gathered on 2026-10-17; preserved during the Markdown-only refresh of 2026-10-25. No experiment, command or live read in this document was rerun for that refresh. The original author environment and later reviewer measurements are distinct: M13–M16 record the reviewers’ installed jj versions, despite no jj binary in the original author environment.
+
+Evidence gathered on 2026-10-17. Environment: Git 2.56.0 (`/usr/local/bin/git`) and Git 2.47.3 (`/usr/bin/git`) on linux/arm64; `gh` 2.102.0 with the extension `gh stack` v0.2.1 (`github/gh-stack`); **no jj binary** in this environment (only a throwaway fake under another session's scratch directory), so that original author made no jj measurement; later reviewer measurements are explicitly attributed in M13–M16. Git experiments ran in scratch repositories under the session scratchpad (`exp/`). GitHub facts come from the owner's spike in `wstein/stack-spike-20261017` (a private repository that allows merge, squash and rebase merges; PRs merged by the owner in the web UI) and from read-only `GET` calls against that repository made while writing this document. No write call was made.
 
 ## Measurements
 
@@ -88,7 +90,7 @@ The pinned versions are 0.45.1 (minimum) and 0.46.0 (current) (`scripts/backend-
 
 ### M14. A gone upstream, cherry and merge commits, and a jj landed layer (round 4 and 5 reviewers, Git 2.56.0, jj 0.46.0 and 0.45.1)
 
-After a server rebase-merge with the head branch deleted, `git fetch --prune` leaves the local `s1` with `%(upstream:track)` `[gone]` and `s1@{upstream}` no longer resolving; the layer is `applied` by patch equivalence, so the `gone` relation is outside the advice groups. `git cherry` omits merge commits entirely: with a collaborator's "Update branch" merge commit adding a file `x` on the upstream and the maintainer's rebase of `s1`, `git cherry s1 origin/s1` printed a single `-` although a lease-protected push would have dropped the merge and `x`; therefore no advice relies on `cherry`, and a diverged upstream is described by counts only. On jj the same remote merge and head deletion makes `jj git fetch` remove both `s1` and `s1@origin`; no allowed read records it (`jj op diff` does, and is not allowlisted), the landed commit sits unbookmarked inside layer 2, and a printed `jj rebase -s <old s1 change> -o '"main"'` would move it (an empty commit inside PR s2); hence the stated gap `jj-landed-layer-undetectable`.
+After a server rebase-merge with the head branch deleted, `git fetch --prune` leaves the local `s1` with `%(upstream:track)` `[gone]` and `s1@{upstream}` no longer resolving; the layer is `applied` by patch equivalence, so the `gone` relation is outside the advice groups. `git cherry` omits merge commits entirely: with a collaborator's "Update branch" merge commit adding a file `x` on the upstream and the maintainer's rebase of `s1`, `git cherry s1 origin/s1` printed a single `-` although a lease-protected push would have dropped the merge and `x`; therefore no publication or discard advice relies on `cherry`, and a diverged upstream is described by counts only. On jj the same remote merge and head deletion makes `jj git fetch` remove both `s1` and `s1@origin`; no allowed read records it (`jj op diff` does, and is not allowlisted), the landed commit sits unbookmarked inside layer 2, and a printed `jj rebase -s <old s1 change> -o '"main"'` would move it (an empty commit inside PR s2); hence the stated gap `jj-landed-layer-undetectable`.
 
 ### M15. Round 6 measurements (reviewer, jj 0.46.0 and 0.45.1 identical, Git 2.56.0 files ref backend)
 
@@ -146,3 +148,17 @@ Native stack `s1` (two commits), `s2`, `s3`; GitHub squash-merges `s1`, deletes 
 | U8 | Fork pull requests (`head.repo` other than the base repository) and deleted head repositories | fixtures only until measured | T023 |
 | U9 | `git cherry` with binary files, huge patches, textconv drivers and `merge` attributes | hostile-input tests | T014 |
 | U10 | `Link`/pagination headers of the `pulls` list at 100 items are those of other collections | transport tests with fixtures; the design reads at most 5 records per request, so no paging is needed | T023 |
+
+## 2026-10-25 source reconciliation (read-only inspection)
+
+The fresh documentation base is `origin/main` at `3d4c867a451217a2942564a7dcb4736d45a09b70`, not the owner's older local checkout. `internal/restack` and `schemas/v1/restack-plan.schema.json` exist for the separate hidden Spec 015 Git plan. No `internal/inspection/stack*.go` or `schemas/v1/stack.schema.json` exists at this base; 012 remains unimplemented. This is a path/content inspection, not runtime verification.
+
+Settled constraints from [Spec 015](../015-local-restacking/spec.md): D6 replaces the first-slice hard dependency on 012 with explicit old parent, new parent and branch; D7 requires plumbing replay in quarantine plus compare-and-swap for later apply; D8 leaves push to Spec 016; D9 supplies expected identities only by explicit flag. A printed `--onto` command states replay boundaries, and cannot override these decisions. Predictions with a fixed quarantine committer are not actual rewritten-head identity or exact-head review evidence.
+
+`git cherry`/patch ids qualify patch content on linear layers. The merge-commit omission in M14 forbids using them to prove that remote-only work can be dropped. Squash and conflict-resolution mismatches remain uncertain; scoped touched-path tree equality is not general history equivalence. Native stack reconciliation still follows the measured versus unmeasured boundaries of M1–M16 and U1–U10.
+
+No new API/library recommendation or current GitHub claim is made here; recorded versions and GitHub behavior are historical, and future implementation must re-measure declared support before acceptance. Spec 040 owns bounded `internal/fanout` and pure-core concurrency discipline; Spec 041/042 own effect-side mode, ownership and attribution; Spec 043 human landing remains separately gated. Spec 032's network-fetching sync plan is a different contract and is never invoked by 012 observation.
+
+### Needs owner decision
+
+See OQ-NET and OQ-EXIT in [spec.md](spec.md). Recommendation: retain the approved explicit online read mode and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.
