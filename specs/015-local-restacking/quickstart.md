@@ -74,7 +74,9 @@ must be checked on the new commits, as required by the workspace policy.
    required checks. Prediction or prior-head CLEAR never covers a new head.
 5. Inject crash/write/ref races in temporary fixtures at each boundary. Retry
    compares old/new/third value; a third value is changed-since, never reset.
-   A separate [restore plan](contracts/recovery.md) authorizes only new→old with
+   The proposed single `restore` command uses `--run` for preview and optional
+   `--save`, then `--plan ID --state-dir DIR --authorize` for a separate
+   [restore plan](contracts/recovery.md) authorizing only new→old with
    fresh guards. Recovery does not restore untracked work or remote effects.
 6. Exercise [native jj capability refusals](contracts/jj-restack.md) until the
    operation/bookmark/recovery spike and both native versions pass. No raw Git

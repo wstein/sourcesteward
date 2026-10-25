@@ -66,9 +66,19 @@ runs; that number is not silently adopted as restack deletion authority.
 Proposed syntax, not an implemented command:
 
 ```text
-stw restack restore-plan --run RUN_ID --state-dir DIR [--json]
-stw restack restore --plan RESTORE_PLAN_ID --state-dir DIR --authorize-local [--json]
+stw restack restore --run RUN_ID --state-dir DIR [--save] [--json]
+stw restack restore --plan RESTORE_PLAN_ID --state-dir DIR --authorize [--json]
 ```
+
+Use the single `restore` leaf and `--run` selection vocabulary of Spec 032,
+not a separate `restore-plan` command. Unlike sync's direct restore, consequential
+restack reversal requires a reviewed stored reverse plan: `--run` only previews,
+`--save` stores that preview and returns its immutable reverse-plan id, and
+`--plan ID --authorize` alone permits the stored reverse effect after fresh
+checks. Mixing run selection/save with apply flags is a usage error; no prompt
+or implicit movement is substituted. This proposed two-stage difference retains
+015's explicit plan/authorization contract and is included in OQ-1's future
+interface decision; it does not change any existing sync command.
 
 The restore plan names one exact action/root, repository, current expected new
 head, retained old head, ownership and only the reverse ref movement. Revalidate
