@@ -448,7 +448,7 @@ func TestObserveWritesNothing(t *testing.T) {
 // TestObserveSixtyOneRealisticWorktrees is the budget fixture of Spec 041 FR-052: a primary checkout
 // and sixty linked worktrees of 2,000 tracked files each, thirty with a patch-id tip, thirty with unmerged
 // work, with a shared object store. Nothing may be Incomplete and the run must fit the 60 s
-// observation plus the 60 s proof phase; the measured time is logged.
+// base observation window plus the 60 s minimum of the proof phase; the measured time is logged.
 func TestObserveSixtyOneRealisticWorktrees(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds 61 checkouts")

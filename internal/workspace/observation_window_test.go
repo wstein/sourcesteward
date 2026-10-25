@@ -21,7 +21,7 @@ func TestObservationWindowScalesWithTheItems(t *testing.T) {
 		{61, 121 * time.Second},
 		{191, 251 * time.Second},
 		{540, 10 * time.Minute},  // exactly the cap
-		{1024, 10 * time.Minute}, // the observation limit of registrations
+		{1024, 10 * time.Minute}, // the observation limit of worktrees
 	} {
 		got := observationWindow(ctx, tc.n)
 		if got != tc.want {
@@ -60,7 +60,7 @@ func TestExplicitTimeoutReplacesTheScaledWindow(t *testing.T) {
 	}
 }
 
-// The window the observer applies to the content reads is the one for the count of registrations.
+// The window the observer applies to the content reads is the one for the count of observed items (worktrees plus local branches).
 func TestObserveAppliesTheWindowOfTheItemCount(t *testing.T) {
 	repo := observeRepo(t)
 	observeAdd(t, repo, "w1")
