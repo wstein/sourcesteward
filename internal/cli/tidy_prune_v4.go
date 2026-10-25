@@ -4,12 +4,12 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/pflag"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
 	"github.com/wstein/sourcesteward/internal/workspace"
@@ -49,7 +49,7 @@ func runPruneV4Plan(cmd *cobra.Command, args []string, contract string, p pruneV
 	if p.name == "" || p.gitdir == "" || cmd.Flag("state-dir").Value.String() == "" {
 		return fmt.Errorf("--prune-registration, --registration-gitdir and --state-dir are required")
 	}
-	if len(p.name) > 4096 || strings.ContainsAny(p.name, "/\\\x00") || p.name == "." || p.name == ".." {
+	if len(p.name) > 4096 || strings.ContainsAny(p.name, "/\x00") || p.name == "." || p.name == ".." {
 		return fmt.Errorf("--prune-registration needs one exact bounded native registration name")
 	}
 	state := cmd.Flag("state-dir").Value.String()

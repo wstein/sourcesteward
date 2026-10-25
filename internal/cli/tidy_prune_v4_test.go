@@ -187,6 +187,9 @@ func TestPruneV4CLIRefusesUnprovenOrChangedSelection(t *testing.T) {
 			before := pruneNativeBytes(t, r.source)
 			code, value, diag := pruneV4Invoke(t, r)
 			encoded, _ := json.Marshal(value)
+			if kind == "foreign-scope" && !strings.Contains(string(encoded), "Agent prune planning requires own task-record ownership.") {
+				t.Fatalf("wrong ownership refusal: %s", encoded)
+			}
 			if code != 1 || value["schema_version"] != float64(4) || value["status"] != "refused" || !strings.Contains(string(encoded), reason) {
 				t.Fatalf("%s: code=%d result=%v diagnostic=%s; want exact %s refusal", kind, code, value, diag, reason)
 			}

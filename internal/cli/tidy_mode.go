@@ -32,6 +32,7 @@ var tidyFlagClasses = map[string]flagClass{
 	// shared (--human forces text, which is also what the expert layer prints without --json)
 	"state-dir": flagShared, "online": flagShared, "timeout": flagShared, "json": flagShared, "human": flagShared,
 	// expert
+	"prune-registration": flagExpert, "registration-gitdir": flagExpert,
 	"base": flagExpert, "ref": flagExpert, "task": flagExpert, "owner": flagExpert, "remove-registration": flagExpert,
 	"remove-files": flagExpert, "completed-worktree": flagExpert, "protect-worktree": flagExpert, "contract": flagExpert,
 	"remote": flagExpert, "tracking-remote": flagExpert, "repo": flagExpert, "host": flagExpert, "pr": flagExpert,
