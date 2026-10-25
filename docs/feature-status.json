@@ -189,9 +189,9 @@
     },
     {
       "id": "032-stw-sync",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/032-stw-sync/spec.md",
-      "evidence": null
+      "evidence": "../specs/032-stw-sync/verification.md"
     },
     {
       "id": "033-stw-status",
