@@ -44,7 +44,7 @@ Every tagged task is included here (bidirectional mapping); none is checked.
 | FR-012 | T006, T008, T009, T010 | Authorize one action with wrong plan or local authorization only; no remote write occurs. |
 | FR-013 | T011, T012, T022, T023 | Foreign task with matching branch prefix/author or raced body ownership refuses own-PR/body action. |
 | FR-014 | T017, T019 | Race remote old SHA after sampling; full ref/full old/full actual new lease rejects without retry widening. |
-| FR-015 | T017, T018, T036 | Docs/code/unknown and equal/non-equal range fixtures enforce each tier; predicted SHA never reviewed. |
+| FR-015 | T017, T018, T036 | Docs-only child above open code parent, parent add/remove code cancellation in net tree diff, and unknown parent/path fixtures all yield effective code from the per-commit publication path union OR validated moved-scope class; equal/non-equal tier matrix and actual-SHA review still apply. |
 | FR-016 | T017, T018, T036 | Owner-only child above foreign-committer open parent fails full default..new-head identity gate. |
 | FR-017 | T002, T017, T018, T036 | Signed source has equal range-diff but signature-dropped; unresolved/required-signature policy blocks. |
 | FR-018 | T029, T030, T031, T036 | Remove each current-head CLEAR/required-green/true-rebaseable/accepted-scope fact; Ready refuses. |
