@@ -66,6 +66,8 @@ func TestBareTidyUsageErrors(t *testing.T) {
 		"as":                 {"--as", "x"},
 		"yes needs an id":    {"--yes"},
 		"save is plan only":  {"--save"},
+		"yes false":          {"--yes=false"},
+		"save false":         {"--save=false"},
 	} {
 		w := newInteractive(t, true, true)
 		_, err := runTidy(t, "a\ny\n", args...)
