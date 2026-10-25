@@ -173,6 +173,22 @@ without authorization it refuses. Apply revalidates every action and records dur
 before deletion. Incomplete effects require review before retry. Read [tidy](tidy.md) before
 interpreting proof, state effects, bounds and failure output.
 
+## Workspace tidy (wizard layer)
+
+Agents never drive the interactive `stw tidy`: do not wrap it in a pty or script it with `send-keys`; with a marker such as
+`STW_AGENT` or `CLAUDECODE` it prompts nothing anyway. Use the non-interactive forms and narrow the view to your own work:
+
+```sh
+stw tidy plan --mine --json          # the overview of items owned by your label ($STW_OWNER)
+stw tidy plan --mine --save --json   # also store the plan set of the safe own items; prints plan_id
+stw tidy apply PLAN-ID --yes --json  # only when the owner gave you this id to apply
+```
+
+In agent mode only items owned by a task record count as `own`; `other` and `unknown` items are listed but never preselected, and an
+agent-mode apply of a plan containing them is refused with `scope-not-authorized`. Never apply foreign items, and never use `--yes`
+on a plan you just made unless the owner authorized that id: the explicit plan id is the authorization. Bare `stw tidy` refuses
+`--yes` and `--save`. The overview schema is unpublished. See [tidy](tidy.md#the-tidy-wizard).
+
 ## Owned retirement results
 
 `stw tidy plan --task ID --owner OWNER --remove-registration --state-dir DIR --base REF`
