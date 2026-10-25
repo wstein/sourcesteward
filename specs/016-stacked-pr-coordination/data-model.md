@@ -58,7 +58,14 @@ The explicit 015 receipt may be used without any 012 dependency.
 
 ## ForgePlan
 
-`plan_id` is the content identity of a canonical immutable plan; `schema_version`
+Unsaved rendering is the default and has `saved: false`, `plan_id: null`; it
+writes no plan and creates/repairs no store. Explicit `--save --state-dir DIR`
+may persist a nonempty plan only into that existing validated private directory,
+then returns `saved: true`. Empty selection never persists, even with `--save`.
+There is no implicit directory default pending OQ-SURFACE/OQ-STORE. Apply accepts
+only the exact existing saved id and explicit validated directory.
+
+For a saved plan, `plan_id` is the content identity of a canonical immutable plan; `schema_version`
 is 1 and `kind` is `forge-effect-plan`. `created_at`, repository, task binding,
 mode summary, limits/options, source statuses, `relationships[]`, `actions[]`,
 blockers and boundary are present. `actions` is empty by default; selecting an
