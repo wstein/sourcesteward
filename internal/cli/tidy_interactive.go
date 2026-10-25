@@ -46,6 +46,10 @@ func runTidyInteractive(cmd *cobra.Command) error {
 	in := bufio.NewReader(cmd.InOrStdin())
 	items := promptItems(doc)
 	choice, err := prompt.Select(in, out, items, prompt.Options{Interactive: true})
+	// An interrupt that arrived at a prompt is reported as one, whatever the answer was.
+	if cause := interruptedWizard(run, ""); cause != nil {
+		return runtimeFailure{cause}
+	}
 	if err != nil {
 		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
@@ -55,6 +59,9 @@ func runTidyInteractive(cmd *cobra.Command) error {
 	}
 	set, err := planset.Build(run.ctx, planset.Request{Candidates: res.Candidates, Chosen: choice.Chosen, Derived: prep.Derived, Mode: mode, DecisionConfirmed: choice.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
 	if err != nil {
+		if cause := interruptedWizard(run, ""); cause != nil {
+			return runtimeFailure{cause}
+		}
 		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
 	if prep.PlanStore == "" {
@@ -65,11 +72,19 @@ func runTidyInteractive(cmd *cobra.Command) error {
 	}
 	fmt.Fprintf(out, "\nStored plan set %s (%s). Nothing has been changed.\n", set.PlanID, summarize(set, res.Candidates))
 	yes, err := prompt.YesNo(in, out, fmt.Sprintf("Apply it now? Run: stw tidy apply %s (or answer y here)", set.PlanID), true)
+	if cause := interruptedWizard(run, set.PlanID); cause != nil {
+		return runtimeFailure{cause}
+	}
 	switch {
 	case errors.Is(err, prompt.ErrEndOfInput):
 		return exit()
 	case err != nil:
-		return runtimeFailure{errors.New(escFull(err.Error()))}
+		// The plan set is stored; say so, and that nothing was applied.
+		reason := escFull(err.Error())
+		if errors.Is(err, prompt.ErrTooManyInvalid) {
+			reason = "too many invalid answers at the apply question"
+		}
+		return runtimeFailure{fmt.Errorf("%s; the plan set %s is stored and nothing was applied", reason, set.PlanID)}
 	case !yes:
 		return exit()
 	}
@@ -78,17 +93,35 @@ func runTidyInteractive(cmd *cobra.Command) error {
 	return runTidyApplyPlanSet(cmd, set.PlanID, prep.PlanStore, true, false)
 }
 
+// interruptedWizard reports an interrupt or a deadline as such (never the raw context error). With a
+// plan id the plan set is already stored: the message says so and that nothing was applied.
+func interruptedWizard(run *wizardRun, planID string) error {
+	cause := interruption(run.ctx, run.timeoutSet, run.timeout)
+	if cause == nil || planID == "" {
+		return cause
+	}
+	return fmt.Errorf("interrupted; the plan set %s is stored and nothing was applied", planID)
+}
+
 // promptItems builds the choosable rows of the prompt from the overview. The detail is escaped text:
 // the reason and the evidence, which for a decision row carries the lock.
 func promptItems(doc render.Document) []prompt.Item {
 	var items []prompt.Item
 	for _, n := range render.Numbered(doc) {
 		c := n.Candidate
-		detail := c.Reason
+		detail := escFull(c.Reason)
 		if c.Evidence != "" {
-			detail += ": " + c.Evidence
+			detail += ": " + escFull(c.Evidence)
 		}
-		items = append(items, prompt.Item{Number: n.Number, ID: c.ID, Verdict: string(c.Verdict), Scope: c.Scope, Owner: escFull(c.Owner), Detail: escFull(detail)})
+		if c.Verdict == tidywizard.VerdictDecision {
+			// The confirmation names the lock and the worktree it is about.
+			lock := ""
+			if c.Task != "" {
+				lock = "lock stw:" + escFull(c.Task) + "; "
+			}
+			detail += " [" + lock + "path " + escFull(c.Path) + "]"
+		}
+		items = append(items, prompt.Item{Number: n.Number, ID: c.ID, Verdict: string(c.Verdict), Scope: c.Scope, Owner: escFull(c.Owner), Detail: detail})
 	}
 	return items
 }
