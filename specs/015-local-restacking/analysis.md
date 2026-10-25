@@ -139,3 +139,36 @@ coordinates publication/review and required CI; neither is run by this author.
 Only offline documentation checks are authorized for this amendment. Runtime
 implementation requires the affected owner decisions, reviewed complete design
 and the red-first/native evidence tasks. Historical acceptance remains separate.
+
+
+## PR 238 independent review and author corrections (2026-10-25)
+
+Independent Foreman Opus reviewed exact head
+`98908cb293b6f6a90ace9a4bbc3ab60ae2b40a94` and returned **NOT CLEAR: seven open
+findings** on [PR #238](https://github.com/wstein/sourcesteward/pull/238).
+That verdict is retained; author corrections below are not independent CLEAR for
+the new head. Corrections are appended focused commits, never a rewrite of the
+reviewed history. Root owns the one correction push and subsequent review/CI.
+
+| Finding | Author correction | Literal proposed fixture / remaining gate |
+| --- | --- | --- |
+| F1 medium: rewrite review tiering and human 043 statement | Derived moved `change_class`/`pure_rebase`, conservative 016 reclassification over every commit's paths in observed-default..actual-new-head (including open-parent code; unknown→code), docs-only local-check/equality exemption, code exact-new-SHA review with equal-pure-rebase middle-tier allowance; Ready always independent exact-head CLEAR + green required checks; 043 human `--reviewed` is separate | `TestRestackReceiptPreservesChangeClassReviewPolicy`: docs-only push without pre-push review, code pure-rebase middle tier, docs-only child with code/unknown open parent, net-tree cancellation and stale SHA; no product execution |
+| F2 medium: trusted-owner full push range | Actual owner identity cannot be widened by flags; 016 checks every author/committer in observed-default..actual-new-head including parent commits. Config evidence renders origins/keys and only policy-needed name/email values; other user values omitted/redacted, no writes | `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: foreign parent, repeated foreign identity flag, local/global origin, unrelated user-option secret sentinel; trusted source remains OQ-2/OQ-3 |
+| F3 medium: signature loss/helper effects | Explicit unsigned `--no-gpg-sign`, neutralized signing program/config/environment, per-commit `signature-dropped` even for `=`; OQ-8 refusal/disclosure choice linked to separate 043 OQ6 | `TestApplyNeverRunsSigningHelper`, `TestApplyReportsDroppedSignatures`; signed/required/unknown-policy scope unavailable pending owner decision; reviewer's native measurement attributed, not rerun |
+| F4 low: reference command overrides | Human commands pin rebase.updateRefs=false/rerere.enabled=false; plumbing never reads/writes original rr-cache or moves other refs; v1 rendered text stays historical/frozen | `TestApplyReplaysExactTwoDotRange` with rr-cache and other-ref sentinels; no porcelain invocation |
+| F5 low: finding provenance | `restack-needed` attributed to main Spec 035 watch event and pending 012 PR #237, not stable-main 012 finding | Source/Markdown provenance only; pending 012 vocabulary is not acceptance |
+| F6 low: authorization/restore vocabulary | `--plan ID --state-dir DIR --authorize` and one `restore` leaf; `--run` previews, optional save stores reverse plan, separate explicit authorization applies it; rationale versus direct 032 restore recorded under OQ-1 | `TestRestackRestoreRequiresSeparatePlanAndCAS`: preview/save has no ref effect; mixed selection/apply flags exit2 |
+| F7 low: task/analysis edges | Every task-tag/requirement-row edge is symmetric, including foundational FR-001–FR-005/FR-007 and signing-policy ownership; checkbox/dates unchanged | Markdown-only extraction audit: 42 rows, 44 tasks, 157 matching edges, historical 20 checked/24 unchecked; not native test evidence |
+
+The shared brief's mistaken “owner-approved/settled 012 online reads” provenance
+was also corrected. Main 012 plan question 3 still recommends keep-opt-in and is
+open; recorded `--after-fetch` acceptance is separate. OQ-7 preserves a genuine
+recommendation and the pending owner choice. It authorizes no 015 network effect.
+
+Read-only installed Spec Kit analysis prerequisites passed again after corrected
+tasks, with explicit existing feature/no-persist and no hooks/presets/overrides.
+Cross-artifact audit preserves 34 FRs/8 SCs and the unchanged v1 schema/source,
+eight explicit OQs, class-dependent pre-push versus independent Ready gates,
+trusted-owner full-range identity, explicit signature loss, and bounded local
+restore effects. Independent review of the exact corrected head is still pending;
+the author does not promote the original NOT CLEAR verdict to CLEAR.
