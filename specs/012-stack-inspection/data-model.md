@@ -1,5 +1,10 @@
 # Data model: stack observation v1
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Only --online opts into reads; single repository now, batch deferred.
+> This is a documentation target, not implementation or native acceptance.
+
 **UNPUBLISHED proposal (2026-10-25)**: field shapes are Markdown design only. No stack schema or implementation exists at the documentation base; no existing JSON file is edited. The separate implemented Spec 015 `restack-plan` v1 remains unchanged.
 
 Types live in `internal/inspection` (local observation, plan) and `internal/hosting` (remote evidence), and reuse the native identity and diagnostic types of Spec 005 and Spec 020. JSON names are snake_case. Arrays are non-null even when empty; absent optional values are `null`. All text is valid UTF-8, bounded as stated, and is data. The normative tables for commands, capabilities, findings, linkage, remote sources, plan rules, argument rules, limits and statuses are in [spec.md](spec.md); this file adds field shapes, invariants and summary templates and does not repeat those tables.
@@ -23,7 +28,7 @@ Types live in `internal/inspection` (local observation, plan) and `internal/host
 | `open_depth` | integer 0..depth or `null` | candidate upper bound excluding only proven-landed layers under the spec landing predicates/stale-base precedence; unknown landing and closed-unmerged layers stay candidates. Not a verified open-PR count. Null unless status is ok/complete; a non-prefix landed set still independently blocks the plan |
 | `findings` | Finding[] | at most 400, order of the spec table, then layer, then subject |
 | `plan` | Plan or `null` | non-null if and only if `mode` is `plan` and `status` is not `error` |
-| `remote` | Remote or `null` | non-null if and only if `--pull-requests` was given and repository selection succeeded |
+| `remote` | Remote or `null` | non-null if and only if `--online` was given and repository selection succeeded |
 | `diagnostics` | `{code, message}`[] | empty for `ok`; codes from the status table (plus existing `hosting-*`); messages are fixed text without repository or response data |
 | `boundary` | Boundary | |
 | `notice` | string | constant: "Sampled advisory evidence; stw ran none of the printed commands and a plan authorizes nothing." |
@@ -48,7 +53,7 @@ Types live in `internal/inspection` (local observation, plan) and `internal/host
 | `landed` | `pending` \| `applied` \| `partial` \| `unknown` | `applied` and `partial` only from patch equivalence (Git); `unknown` on jj and when not computed |
 | `checked_out_in` | string[] | Git linked worktree paths other than the inspected one, at most 8; empty on jj |
 | `jj` | `{conflicted, immutable}` or `null` | `null` on Git |
-| `pull_request` | PullRequestRef or `null` | `null` without `--pull-requests` or when no pull request is linked |
+| `pull_request` | PullRequestRef or `null` | `null` without `--online` or when no pull request is linked |
 
 Invariants: `landed` `applied` implies every commit is patch-equivalent; layers partition the range (sum of `commit_count` equals the range size); `primary_ref` is in `refs`; `fork_commit_id` of layer k+1 equals `tip_commit_id` of layer k.
 
@@ -163,7 +168,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | --- | --- | --- |
 | `advisory` | boolean | constant `true` |
 | `blocked` | `{layer, reason}` or `null` | `reason` is `layer-checked-out-elsewhere`, `layer-partially-applied`, `layer-conflicted`, `layer-immutable`, `pull-request-ambiguous`, `merged-layer-not-bottom` (layer: the lowest landed layer above a not-landed one) or `unsafe-name`; group 6 may also block layer 1 with `trunk-ref-unknown` instead of guessing GitHub’s default trunk |
-| `native_checked` | boolean | `true` only under the exact condition of the Plan rules (remote section present and the pull request and native stack sources `ok`); `false` otherwise, including `--pull-requests` with a failed remote read (the boundary then carries the native-stack limitation) |
+| `native_checked` | boolean | `true` only under the exact condition of the Plan rules (remote section present and the pull request and native stack sources `ok`); `false` otherwise, including `--online` with a failed remote read (the boundary then carries the native-stack limitation) |
 | `steps` | Step[] | at most 64, ordered |
 
 ### Step
@@ -208,23 +213,24 @@ The caller selects a target explicitly and revalidates native ownership and ever
 | First replay step `expected.new_parent_commit_id` (`base.commit_id`) | `--new-parent <full sampled base SHA>` | Re-resolve and require the destination to remain the explicitly selected sampled commit. The printed short `expected.new_parent` name is only display context. |
 | Later replay step `expected.new_parent_commit_id: null`, with `requires` naming the predecessor | `--new-parent <actual new head of the preceding applied layer>` | No later destination exists in 012 yet. Wait for the preceding separately authorized actual 015 apply outcome, verify its full resulting SHA and current ref, then create/revalidate a new 015 plan. Never fill null with a predicted quarantine head, the old `Layer.tip_commit_id`, or a newly resolved name without the actual predecessor evidence. |
 | Replay step `expected.layer_tip` (selected child’s `Layer.tip_commit_id`) | `--expect-head <full sampled child SHA>` | The selected child must still resolve to this original tip when its own plan is made; changed evidence refuses. |
-| No 012 field | Repeatable `--identity "NAME <EMAIL>"` | Expected identities come only from the caller’s explicit identity flags. Never derive them from commits, stack/PR text, backend output, configuration, environment or predicted replay identity. Omission remains 015 `unknown`, never pass. |
+| No 012 field | Repeatable `--identity "NAME <EMAIL>"` | CURRENT v1 prediction only: expected identities come from the caller’s explicit identity flags. Actual apply/publication instead requires the trusted workspace-policy owner identity; this prediction selector cannot widen it. Never derive them from commits, stack/PR text, backend output, configuration, environment or predicted replay identity. Omission remains 015 `unknown`, never pass. |
 | `identity` workspace/repository evidence | Positional PATH | Revalidate that the selected path belongs to that native repository and an allowed owned workspace; do not borrow another checkout or transfer ownership. |
 
 ### Diagnostic reconciliation with implemented Spec 015 v1
 
 These are comparable per-command categories, not an automatic translation or a shared enum. Read each command’s own result and status; a 012 observation is not a 015 verdict.
 
-| Spec 012 code | Spec 015 v1 code | Meaning | Exit: 012 / actual 015 v1 |
-| --- | --- | --- | --- |
-| `stack-limit` | `bound-exceeded` (or a bound-specific code such as `range-too-large`) | Evidence collection exhausted a declared bound; incomplete rather than success | 1 / 3 |
-| `stack-ref-invalid` | `ref-not-found` | A selected reference cannot be found after that command’s accepted syntax checks | 1 / 1 |
-| `stack-ref-invalid` | `ref-not-commit` | A selected object/reference does not resolve to a supported commit | 1 / 1 |
-| `stack-ref-ambiguous` | `ref-ambiguous` | Reference/object naming is not unique under the command’s selector rules | 1 / 1 |
-| Usage error (no result JSON) | Usage error (no result JSON) | Invalid flag combinations or selector syntax, including a short 015 branch selector | 2 / 2 |
+| Spec 012 code | Spec 015 v1 code | Meaning | 012 target exit | 015 CURRENT code exit | 015 DECIDED revision-2 exit |
+| --- | --- | --- | --- | --- | --- |
+| `stack-limit` | `bound-exceeded` (or a bound-specific code such as `range-too-large`) | Evidence collection exhausted a declared bound; incomplete rather than success | 1 | 3 | 1 |
+| `stack-ref-invalid` | `ref-not-found` | A selected reference cannot be found after that command's accepted syntax checks | 1 | 1 | 1 |
+| `stack-ref-invalid` | `ref-not-commit` | A selected object/reference does not resolve to a supported commit | 1 | 1 | 1 |
+| `stack-ref-ambiguous` | `ref-ambiguous` | Reference/object naming is not unique under the command's selector rules | 1 | 1 | 1 |
+| Usage error (no result JSON) | Usage error (no result JSON) | Invalid flag combinations or selector syntax, including a short 015 branch selector | 2 | 2 | 2 |
 
-The 015 incomplete exit remains 3 until the separate migration decision OQ-EXIT; this table changes no implemented code or published contract.
-
+The owner settled OQ-EXIT on 2026-10-25. CURRENT 015 code remains incomplete=3
+until T045/T046 implement revision 2 incomplete=1; no further owner decision or
+legacy selector is required. This Markdown table changes no code or JSON bytes.
 
 Spec 015's first slice can obtain those same explicit inputs independently (D6). Any later conversion re-resolves them through native ownership gates, recomputes replay evidence, and produces its own plan. Actual local apply yields actual old/new outcomes; Spec 016 may render a separately selected blocked lease-push plan before publication gates pass. Before any push, Spec 016 independently applies the workspace's actual-head/change-class policy: a specification/documentation-only rewrite requires green documented local checks and diff checking, plus equal `git range-diff` proof for a pure rebase, with no independent pre-push review requirement; a rewrite changing code, tests, scripts or generated files requires checks and independent review of the exact new SHA before the lease push (a pure rebase with equal range-diff may use the middle-tier reviewer). Ready always requires independent exact-head CLEAR, required green CI and `rebaseable == true`. Predicted quarantine heads, predicted committer identity and an old review never replace the applicable actual-head publication evidence. No new handoff JSON document, state file or session identifier is introduced by this model.
 

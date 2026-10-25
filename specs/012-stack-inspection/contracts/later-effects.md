@@ -1,5 +1,10 @@
 # Catalog: later stack effects (not part of this feature)
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Only --online opts into reads; single repository now, batch deferred.
+> This is a documentation target, not implementation or native acceptance.
+
 **Refreshed 2026-10-25; proposals only.** Nothing in this catalog is implemented, authorized or accepted by Spec 012. The historical 2026-10-17 catalog and native-stack spike motivated separate optional effects; it is not permission to execute them. The separate hidden Spec 015 Git `restack plan` v1 exists in source; local apply, jj and forge effects remain proposed and require their own acceptance. No JSON contract is published by this Markdown catalog.
 
 ## Common rules
