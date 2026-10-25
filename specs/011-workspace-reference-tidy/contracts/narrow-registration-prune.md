@@ -2,8 +2,9 @@
 
 Status: proposed future contract under the owner-approved scope of 2026-10-25.
 Implementation and conformance are pending. This amendment does not enable cleanup;
-the current wizard retains stale registrations. Only the frozen-schema/interface decision
-below requires owner resolution before source work; the absence predicate is defined here. Broad Git worktree prune stays excluded.
+the current wizard retains stale registrations. The owner selected separate versioning (option B) on 2026-10-25. Exact interface
+details are proposed in the companion contract and still require owner acceptance
+before planner/stored-plan source work; the absence predicate is defined here. Broad Git worktree prune stays excluded.
 
 ## Selection, ownership and effects
 
@@ -240,26 +241,21 @@ new prune. A restore fixture MUST move a locked checkout, prune its registration
 restore complete metadata, run the explicitly authorized native repair on the found path,
 and prove `git status` works with unchanged user files and staged/index bytes.
 
-## Structured contracts: Needs owner decision
+## Structured contracts: option B decided; exact proposal pending
 
-No frozen schema, enum, version, persisted record or sample output changes in this PR.
-The implementation must inventory and review these impacts before choosing a representation:
+**DECIDED (owner, 2026-10-25): option B**, a separately versioned contract and
+operation with explicit dispatch. Existing frozen tidy-overview v2 and tidy v3
+bytes and published contracts remain unchanged. There is no silent migration;
+unknown or old incompatible plans refuse.
 
-| Surface | Required impact assessment |
-| --- | --- |
-| Frozen `schemas/v2/tidy-overview.schema.json` | Existing stale-worktree kind, safe verdict and remove-registration effect may represent the row; prove this against the frozen schema and validators. No invented integration-proof word; safe must carry registration/absence proof honestly. New public witness/reason fields would require a decision. |
-| Frozen `schemas/v3/tidy.schema.json`, strict plans and apply journals | A distinct narrow action needs registration/absence binding, payload reference and recovery outcomes. Present-checkout retirement and branch candidates cannot be relabelled to bypass their required evidence. |
-| Plan-set manifest, hashing, ordering and apply dispatch | Distinct sub-plan kind and one-registration grouping need strict validation, identity binding and explicit ordering. Reject unknown/old incompatible plans; no silent migration. |
-| Restore/history documents and journal readers | Expose bounded recovery location/status and partial evidence without raw payload; branch-only restore cannot claim this capability. |
-
-Options: (A) owner-approved extension of the unpublished frozen contracts with regenerated
-freeze evidence and an explicit stored-plan compatibility policy; (B) a separately versioned
-contract/operation and explicit dispatch, preserving existing frozen bytes; (C) retain the
-current capability until that choice is made. Recommend B for a distinct recovery-bearing
-operation, with C as the implementation gate meanwhile. The owner must choose the exact
-version, enum spellings, expert selector and restore interface; none is reserved here.
-Published contracts remain unchanged under every option. Schema/interface resolution precedes implementation; accepting this design does not
-choose a frozen representation. The absence predicate above is already defined.
+The [contract-4 proposal](registration-prune-v4.md) specifies exact versions,
+enums, expert selection, restore/history, overview and plan-set representation,
+hashing, ordering and reader dispatch. These details are **PROPOSED**, not an
+inferred owner decision. T501 remains open until the exact proposal has an
+independent CLEAR and explicit owner acceptance. Read-only admission already
+merged under FR-013 does not implement this new public operation or stored plan.
+The defined absence predicate, ownership, recovery quotas and limits above are
+unchanged. Published contracts are not modified or republished by this proposal.
 
 ## Outcomes and acceptance
 
