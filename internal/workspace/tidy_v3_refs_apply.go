@@ -23,6 +23,8 @@ type tidyV3RefsApplyCoordinator struct {
 	openStore func(string, bool, []string, []string) (*v3Store, error)
 	pin       func(context.Context, string, NativeIdentity, TidyRecovery, []string) (bool, error)
 	prepare   func(context.Context, string, NativeIdentity, string, string, []string, []string) (tidyV3ApplyRefTransaction, error)
+	// chain holds the journaled effects of the other plans of the plan set; nil when none.
+	chain *v3Chain
 }
 
 func defaultTidyV3RefsApplyCoordinator() tidyV3RefsApplyCoordinator {
@@ -129,6 +131,9 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	}
 	p, initial, prior, err := readTidyV3ApplyRecords(o)
 	if err != nil {
+		return failTidyV3(r, err)
+	}
+	if c.chain, err = loadV3Chain(o.StateDir, p, initial, o.SiblingPlans); err != nil {
 		return failTidyV3(r, err)
 	}
 	// The stored plan is read before the deadline exists because the deadline
@@ -371,6 +376,7 @@ func (c tidyV3RefsApplyCoordinator) observeCurrent(ctx context.Context, p V3Plan
 	if err != nil {
 		return out, err
 	}
+	expected, native = c.chain.apply(expected, native)
 	if out.Expected != expected || !reflect.DeepEqual(out.Native, native) {
 		return out, failure("evidence-changed", "Native source, base, references, registrations or safety differ from the exact allowed state.")
 	}

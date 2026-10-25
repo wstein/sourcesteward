@@ -20,6 +20,8 @@ type tidyV3RetirementCoordinator struct {
 	remove      func(context.Context, string, []string, string, []string, []string) (string, int, error)
 	ownedRemove func(context.Context, string, string, string, []string, []string) (string, int, error)
 	refs        tidyV3RefsCoordinator
+	// chain holds the journaled effects of the other plans of the plan set; nil when none.
+	chain *v3Chain
 }
 
 func defaultTidyV3RetirementCoordinator() tidyV3RetirementCoordinator {
@@ -188,6 +190,7 @@ func (c tidyV3RetirementCoordinator) observeCurrent(ctx context.Context, o V3Pla
 			return out, failure("evidence-changed", "Selected native provider configuration changed.")
 		}
 	}
+	expected, native = c.chain.apply(expected, native)
 	if out.Native.Expected != expected || !reflect.DeepEqual(out.Native.Native, native) {
 		return out, failure("evidence-changed", "Source/native state differs from the exact permitted operation delta.")
 	}

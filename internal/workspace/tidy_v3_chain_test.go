@@ -22,27 +22,43 @@ type chainWork struct {
 	plans  []V3Plan
 	c      tidyV3RetirementCoordinator
 	keep   string
+	// branchGone is set when a branch leg deleted the branches of the retired worktrees.
+	branchGone bool
 }
 
 func newChainWork(t *testing.T, state string, n int, sharedParent bool) *chainWork {
 	t.Helper()
-	w := &chainWork{t: t, source: fixtureGit(t), state: state, c: defaultTidyV3RetirementCoordinator()}
+	dests := []string{}
 	parent := gitTempDir(t)
 	for i := 1; i <= n; i++ {
 		if !sharedParent {
 			parent = gitTempDir(t)
 		}
-		dest := filepath.Join(parent, fmt.Sprintf("t%d", i))
-		gitFixture(t, w.source, "worktree", "add", "-q", "-b", fmt.Sprintf("t%d", i), dest, "HEAD")
-		w.dests = append(w.dests, dest)
+		dests = append(dests, filepath.Join(parent, fmt.Sprintf("t%d", i)))
+	}
+	return newChainWorkAt(t, state, dests, false)
+}
+
+// newChainWorkAt creates the worktrees t1..tn at the given destinations. With sameTip they all
+// stay at one commit; otherwise each has a commit of its own that the base contains.
+func newChainWorkAt(t *testing.T, state string, dests []string, sameTip bool) *chainWork {
+	t.Helper()
+	w := &chainWork{t: t, source: fixtureGit(t), state: state, c: defaultTidyV3RetirementCoordinator(), dests: dests}
+	for i, dest := range dests {
+		if e := os.MkdirAll(filepath.Dir(dest), 0700); e != nil {
+			t.Fatal(e)
+		}
+		gitFixture(t, w.source, "worktree", "add", "-q", "-b", fmt.Sprintf("t%d", i+1), dest, "HEAD")
 	}
 	w.keep = filepath.Join(gitTempDir(t), "keep")
 	gitFixture(t, w.source, "worktree", "add", "-q", "-b", "keep", w.keep, "HEAD")
-	// Every retirable worktree has a commit of its own that the base contains, so no branch
-	// shares a tip with another worktree.
-	for i, dest := range w.dests {
-		gitFixture(t, dest, "commit", "--allow-empty", "-qm", fmt.Sprintf("work of t%d", i+1))
-		gitFixture(t, w.source, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("merge t%d", i+1), fmt.Sprintf("t%d", i+1))
+	if !sameTip {
+		// Every retirable worktree has a commit of its own that the base contains, so no
+		// branch shares a tip with another worktree.
+		for i, dest := range w.dests {
+			gitFixture(t, dest, "commit", "--allow-empty", "-qm", fmt.Sprintf("work of t%d", i+1))
+			gitFixture(t, w.source, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("merge t%d", i+1), fmt.Sprintf("t%d", i+1))
+		}
 	}
 	gitFixture(t, w.source, "branch", "old", "HEAD")
 	gitFixture(t, w.source, "commit", "--allow-empty", "-qm", "later chosen base")
@@ -98,8 +114,10 @@ func (w *chainWork) requireRetired(i int) {
 	if got := gitFixture(w.t, w.source, "rev-parse", recovery.Name); got != recovery.CommitID {
 		w.t.Fatalf("t%d: recovery %s missing", i+1, recovery.Name)
 	}
-	if got := gitFixture(w.t, w.source, "rev-parse", p.Retirement.Target.HeadRef); got != p.Retirement.Target.CommitID {
-		w.t.Fatalf("t%d: branch changed", i+1)
+	if !w.branchGone {
+		if got := gitFixture(w.t, w.source, "rev-parse", p.Retirement.Target.HeadRef); got != p.Retirement.Target.CommitID {
+			w.t.Fatalf("t%d: branch changed", i+1)
+		}
 	}
 }
 
@@ -174,6 +192,7 @@ func TestTidyV3ChainAppliesRowsInAnyOrder(t *testing.T) {
 // journaled effects explain the repository for the next row as the retirement's do.
 func TestTidyV3ChainAppliesRetirementsWithTheirBranchLegs(t *testing.T) {
 	w := newChainWork(t, privateDir(t), 3, true)
+	w.branchGone = true
 	var legs []string
 	for i := range w.plans {
 		r := w.mustApply(i, w.others(i, legs...))
@@ -213,7 +232,7 @@ func TestTidyV3ChainRefusesWhatNoJournalExplains(t *testing.T) {
 			gitFixture(t, w.source, "branch", "unrelated", "HEAD")
 		},
 		"moved branch": func(w *chainWork) {
-			gitFixture(t, w.source, "branch", "-f", "old", "HEAD~1")
+			gitFixture(t, w.source, "branch", "-f", "old", "HEAD~2")
 		},
 		"target dirty": func(w *chainWork) {
 			if e := os.WriteFile(filepath.Join(w.dests[1], "dirty"), []byte("x"), 0600); e != nil {
@@ -419,5 +438,74 @@ func TestTidyV3ChainMixedRetirementAndReferencePlans(t *testing.T) {
 				t.Fatal("the reference plan did not delete its branch")
 			}
 		})
+	}
+}
+
+// Worktrees at one commit list one another as workspaces of the integration proof.
+func TestTidyV3ChainWorktreesAtOneCommitDoNotListTheRetiredOnes(t *testing.T) {
+	parent := gitTempDir(t)
+	w := newChainWorkAt(t, privateDir(t), []string{filepath.Join(parent, "t1"), filepath.Join(parent, "t2"), filepath.Join(parent, "t3")}, true)
+	if got := w.plans[1].Retirement.Integration.WorkspacePaths; len(got) < 3 {
+		t.Fatalf("the fixture must make the proof list the other worktrees: %v", got)
+	}
+	for i := range w.plans {
+		w.mustApply(i, w.others(i))
+		w.requireRetired(i)
+	}
+	w.requireKeep()
+}
+
+// A removal in a directory that is itself a sibling of a later target changes that sibling's
+// timestamps and nothing else.
+func TestTidyV3ChainNestedTargetChangesASiblingDirectory(t *testing.T) {
+	parent := gitTempDir(t)
+	w := newChainWorkAt(t, privateDir(t), []string{filepath.Join(parent, "nested", "t1"), filepath.Join(parent, "t2")}, false)
+	w.mustApply(0, w.others(0))
+	w.mustApply(1, w.others(1))
+	w.requireRetired(0)
+	w.requireRetired(1)
+	w.requireKeep()
+}
+
+// The branch leg of an applied row is a sibling too; without it its effects are unexplained.
+func TestTidyV3ChainUnnamedBranchLegStaysStrict(t *testing.T) {
+	w := newChainWork(t, privateDir(t), 2, true)
+	r := w.mustApply(0, w.others(0))
+	leg, _ := TidyV3BranchLeg(w.plans[0])
+	if lr := ApplyTidyV3BranchLeg(context.Background(), leg, r); lr.Status != "ok" {
+		t.Fatalf("leg: %+v", lr.Diagnostics)
+	}
+	requireEvidenceChanged(t, w.apply(1, w.others(1)))
+	w.requireUntouched(1)
+}
+
+func TestTidyV3ChainStepRequiresTheStateAnEffectCameFrom(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	other := strings.Repeat("b", 40)
+	p := V3Plan{PlanID: "plan", Candidates: []V3Candidate{{ActionID: "act", Name: "refs/heads/x", OID: oid, Decision: "delete"}}}
+	recovery := v3RecoveryFor(p, "act", oid).Name
+	with := V3NativeState{References: []V3Reference{{Name: "refs/heads/x", OID: oid}}, Registrations: []V3Registration{}}
+	without := V3NativeState{References: []V3Reference{}, Registrations: []V3Registration{}}
+	moved := V3NativeState{References: []V3Reference{{Name: "refs/heads/x", OID: other}}, Registrations: []V3Registration{}}
+	recovered := V3NativeState{References: []V3Reference{{Name: recovery, OID: oid}}, Registrations: []V3Registration{}}
+	for _, c := range []struct {
+		name  string
+		state V3NativeState
+		kind  string
+		id    string
+		ok    bool
+	}{
+		{"recovery from a state without it", with, "recovery-created", "act", true},
+		{"recovery that already exists", recovered, "recovery-created", "act", false},
+		{"deletion of the planned reference", with, "reference-deleted", "act", true},
+		{"deletion of an absent reference", without, "reference-deleted", "act", false},
+		{"deletion of a moved reference", moved, "reference-deleted", "act", false},
+		{"unknown action", with, "reference-deleted", "other", false},
+		{"unknown kind", with, "branch-created", "act", false},
+		{"registration without a retirement", with, "registration-removed", "act", false},
+	} {
+		if _, ok := v3ChainStep(p, c.state, c.kind, c.id); ok != c.ok {
+			t.Errorf("%s: got %t", c.name, ok)
+		}
 	}
 }
