@@ -61,8 +61,9 @@ func nonTestGoFiles(t *testing.T, dir string) []string {
 }
 
 // TestHostingNonGetMethodsAreConfinedToTheReleaseDispatchEdge pins the closed write surface of the
-// current hosting package: GET everywhere, and one fixed POST in dispatch.go for the release
-// workflow. A new stack write file would change this set and need its own reviewed allowlist.
+// current hosting package: GET everywhere, one fixed POST in dispatch.go for the release workflow,
+// and one fixed POST in stack_write.go for the Spec 016 Ready mutation (the reviewed allowlist entry
+// of T021). A further write file would change this set and need its own reviewed allowlist.
 func TestHostingNonGetMethodsAreConfinedToTheReleaseDispatchEdge(t *testing.T) {
 	writers := map[string][]string{}
 	for _, path := range nonTestGoFiles(t, "internal/hosting") {
@@ -82,12 +83,14 @@ func TestHostingNonGetMethodsAreConfinedToTheReleaseDispatchEdge(t *testing.T) {
 			return true
 		})
 	}
-	if len(writers) != 1 || len(writers["dispatch.go"]) == 0 {
-		t.Fatalf("non-GET methods outside the fixed release dispatch edge: %v", writers)
+	if len(writers) != 2 || len(writers["dispatch.go"]) == 0 || len(writers["stack_write.go"]) == 0 {
+		t.Fatalf("non-GET methods outside the fixed release dispatch and Ready write edges: %v", writers)
 	}
-	for _, m := range writers["dispatch.go"] {
-		if m != "MethodPost" {
-			t.Errorf("dispatch.go uses %s; only the fixed POST is characterized", m)
+	for _, file := range []string{"dispatch.go", "stack_write.go"} {
+		for _, m := range writers[file] {
+			if m != "MethodPost" {
+				t.Errorf("%s uses %s; only the fixed POST is characterized", file, m)
+			}
 		}
 	}
 }
