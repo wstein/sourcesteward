@@ -60,7 +60,7 @@ func TestNativeSandboxHelper(t *testing.T) {
 		case "spawn", "spawn-exit", "spawn-flood":
 			// A parent that starts a descendant sharing its stderr and tells the test.
 			// spawn and spawn-flood then live until killed; spawn-exit ends when its
-			// stdin does. spawn-flood first writes more stderr than the limit.
+			// stdin does. spawn-flood writes more stderr than the limit after reporting.
 			child := exec.Command(os.Args[0], append([]string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", "hold"}, a[1:]...)...)
 			child.Stderr = os.Stderr
 			control, alive := os.NewFile(3, "control"), os.NewFile(4, "alive")
@@ -71,10 +71,10 @@ func TestNativeSandboxHelper(t *testing.T) {
 			// Only the descendant keeps the test's pipes.
 			control.Close()
 			alive.Close()
+			fmt.Print("ready\n")
 			if a[0] == "spawn-flood" {
 				fmt.Fprint(os.Stderr, strings.Repeat("x", 70000))
 			}
-			fmt.Print("ready\n")
 			if a[0] == "spawn-exit" {
 				io.Copy(io.Discard, os.Stdin)
 			} else {
