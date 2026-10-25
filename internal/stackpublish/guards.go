@@ -7,6 +7,7 @@ package stackpublish
 const (
 	GuardOwnership   = "ownership"
 	GuardAttribution = "attribution"
+	GuardReady       = "ready"
 )
 
 // ApplyRequest is what the caller asked apply to do. LocalAuthorize is the established local
