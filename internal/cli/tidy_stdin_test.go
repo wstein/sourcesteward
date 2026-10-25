@@ -6,7 +6,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-
 )
 
 type markerReader struct{ strings.Reader }

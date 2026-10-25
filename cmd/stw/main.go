@@ -25,5 +25,5 @@ func run() int {
 	if handled, status := cli.RunPrivateRoute(ctx); handled {
 		return status
 	}
-	return cli.Run(ctx, version, os.Args[1:], os.Stdout, os.Stderr)
+	return cli.RunWithStdin(ctx, version, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 }
