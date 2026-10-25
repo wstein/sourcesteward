@@ -186,7 +186,7 @@ func (p *planner) checkTarget(ctx context.Context) error {
 			return refuse("operation-in-progress", "The target checkout is in the middle of a Git operation.", map[string]any{"state": name})
 		}
 	}
-	status, err := p.git.run(ctx, "status", "--porcelain=v2", "--untracked-files=no", "--no-renames", "-z")
+	status, err := p.git.runInWorktree(ctx, "status", "--porcelain=v2", "--untracked-files=no", "--no-renames", "-z")
 	if err != nil {
 		return err
 	}
