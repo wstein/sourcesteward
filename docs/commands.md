@@ -302,9 +302,9 @@ gh jj ci 42 /path/to/jj-workspace --repo owner/project --json
 
 | Planned operation | Boundary and current evidence |
 | --- | --- |
-| [Stack observation/plan, Spec 012](../specs/012-stack-inspection/spec.md) | Read-only local stack/PR comparison and advisory steps; online scope/flag naming remains an open owner question, no implicit fetch or effect |
-| [Checkpoint/resume/selective undo, Spec 013](../specs/013-checkpoint-resume/spec.md) | Explicit selected local recovery, proposed typed integration with 032; payload/native capabilities and owner decisions pending |
-| [Conflict diagnosis/integration preflight, Spec 014](../specs/014-conflict-diagnosis/spec.md) | Read-only diagnosis and isolated prediction/replay; no original-workspace mutation or safe-to-merge verdict |
+| [Stack observation/plan, Spec 012](../specs/012-stack-inspection/spec.md) | Merged design for read-only stack/PR comparison and nested restack-advised finding; published 035 event stays separate. Online flags and SC-009 reachable fanout entry remain owner choices; no implicit fetch/effect |
+| [Checkpoint/resume/selective undo, Spec 013](../specs/013-checkpoint-resume/spec.md) | Merged local recovery design with independent pre-action safety-copy lifetimes; native jj has no head CAS and initially no invoker/other-workspace working-copy effect; payload/native choices pending |
+| [Conflict diagnosis/integration preflight, Spec 014](../specs/014-conflict-diagnosis/spec.md) | Merged read-only diagnosis/isolated replay design; full-H attribute pin/private context required, red T033 before implementation and separate code issue #241; jj aggregate semantics still gated, no safe-to-merge verdict |
 | [Local restack plan/apply, Spec 015](../specs/015-local-restacking/spec.md) | Hidden native Git `stw restack plan` implemented in source, unpublished v1 schema, 20/24 original tasks checked; T004 deliberately skipped, T021/T023/T024 open. Apply/jj plus 20 new unchecked future tasks remain proposed |
 | [Forge effect plan/apply, Spec 016](../specs/016-stacked-pr-coordination/spec.md) | Individually selected own-topic/own-PR writes, each explicitly authorized against a stored plan; full-SHA lease and independent policy gates; no write command implemented |
 
