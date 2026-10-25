@@ -16,10 +16,11 @@ func TestObservationWindowScalesWithTheRegistrations(t *testing.T) {
 		want time.Duration
 	}{
 		{0, 60 * time.Second},
-		{1, 60*time.Second + 500*time.Millisecond},
-		{61, 90*time.Second + 500*time.Millisecond},
-		{999, 559*time.Second + 500*time.Millisecond},
-		{1024, 572 * time.Second}, // the observation limit of registrations
+		{1, 61 * time.Second},
+		{61, 121 * time.Second},
+		{191, 251 * time.Second},
+		{540, 10 * time.Minute},  // exactly the cap
+		{1024, 10 * time.Minute}, // the observation limit of registrations
 	} {
 		got := observationWindow(ctx, tc.n)
 		if got != tc.want {
@@ -53,7 +54,7 @@ func TestExplicitTimeoutReplacesTheScaledWindow(t *testing.T) {
 		t.Errorf("%s", got)
 	}
 	// Zero or negative means no override.
-	if got := observationWindow(WithObservationTimeout(context.Background(), 0), 61); got != 90*time.Second+500*time.Millisecond {
+	if got := observationWindow(WithObservationTimeout(context.Background(), 0), 61); got != 121*time.Second {
 		t.Errorf("%s", got)
 	}
 }
