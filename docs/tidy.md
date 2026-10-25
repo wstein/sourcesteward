@@ -77,6 +77,7 @@ recorded in the plan set, the apply journal and `stw tidy history`.
 **Verdicts.** `safe` (every proof holds), `decision` (for example a `locked-stw` worktree whose lock does not match), `retain`
 (a reason such as `unmerged`, `dirty`, `recently-active`, `registration-record-missing`, `evidence-incomplete`,
 `stale-registration-no-plan-kind`) rows never carry an effect; items of another or an unknown owner are shown with their `scope` and are never preselected. Only `safe` and `decision` rows get a number.
+A worktree whose directory is missing is shown as a `retain` row and is not pruned. Such a registration does not stop `plan --save`: the plan for the other items of the same repository is stored, and the stale registration stays untouched and bound into the stored native evidence (one that appears or disappears before the apply refuses with `evidence-changed`). Only a registration that Git marks `prunable`, that is not locked and whose directory is absent below a real parent directory is accepted this way; a locked, replaced or aliased one still refuses the repository with `unknown-workspace-path`.
 Text shows at most 10 rows per repository inside each owner group (`and N more`); `--json` lists all candidates.
 
 **Prompts.** The answer is parsed strictly and the default is none. `a` chooses all safe rows of scope own (never `decision` rows and
