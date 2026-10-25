@@ -1,14 +1,24 @@
 # Proposed Contract: Explicit Selective Local Undo
 
-**UNPUBLISHED — unimplemented**, 2026-10-25. The admitted native capability set is
-**Needs owner decision** OQ-2; these examples select semantics, not implementation.
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
+**UNPUBLISHED — unimplemented**, 2026-10-25. The dated OQ-2 decision adopts the narrow native capability recommendation;
+measurement still gates admission. These examples select semantics, not implementation.
 Shared [bounds/output](checkpoint.md) and [recovery guards](recovery.md) apply.
 
+Rendering defaults to unsaved with no plan id or store writes. Add `--save`
+for an explicitly selected plan to use validated workspace `.work/` metadata
+or the admitted `--state-dir` override. Apply refuses an unsaved result;
+external payload selection never grants metadata or native mutation authority.
+
 ```text
-stw undo plan --path WORKSPACE --state-dir PRIVATE_DIR --target NATIVE_ID --semantics inverse-change [--parent FULL_PARENT_ID] [--select-path PATH] [--json]
-stw undo plan --path WORKSPACE --state-dir PRIVATE_DIR --target NATIVE_ID --semantics history-restoration --select-ref FULL_REF [--select-descendant FULL_ID] [--json]
-stw undo plan --path WORKSPACE --state-dir PRIVATE_DIR --target NATIVE_OPERATION_ID --semantics operation-restoration [--select-descendant FULL_ID] [--json]
-stw undo apply --plan UNDO_PLAN_ID --state-dir PRIVATE_DIR --authorize [--json]
+stw undo plan --path WORKSPACE [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --target NATIVE_ID --semantics inverse-change [--parent FULL_PARENT_ID] [--select-path PATH] [--save] [--json]
+stw undo plan --path WORKSPACE [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --target NATIVE_ID --semantics history-restoration --select-ref FULL_REF [--select-descendant FULL_ID] [--save] [--json]
+stw undo plan --path WORKSPACE [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --target NATIVE_OPERATION_ID --semantics operation-restoration [--select-descendant FULL_ID] [--save] [--json]
+stw undo apply --plan UNDO_PLAN_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --authorize [--json]
 ```
 
 ## Caller-selected meaning
@@ -72,7 +82,7 @@ an earlier view creates a new operation and can undo all later operations;
 reverse-applying a selected older operation atop later work has different
 semantics. Neither is time travel or an implicit selective inverse. The latter
 capability and version-specific `restore`/`revert`/older `undo` argv remain
-unadmitted until OQ-2/native conformance; these names are not interchangeable.
+unadmitted until native conformance under decided OQ-2; these names are not interchangeable.
 
 With `--ignore-working-copy`, a changed invoking working-copy commit would not
 update disk and could leave that workspace stale. A later ordinary jj command
@@ -139,7 +149,7 @@ explicitly reviewed with OQ-2/OQ-4; repository config never invents the actor.
 New inverse or rewritten commits cannot silently inherit signature validity.
 Disclose source signature/header loss and required-signing capability separately
 from patch/range equivalence. Execute no signing helper; refuse an unmet signing
-requirement or an undecided signature policy instead of silently signing or
+requirement or unknown/unmet signature evidence under the decided default-refusal policy instead of silently signing or
 stripping a signature. OQ-2 gates that capability. No runtime signature experiment
 is claimed by these artifacts.
 

@@ -1,37 +1,43 @@
 # Proposed Contract: Explicit Checkpoint Capture
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **UNPUBLISHED — unimplemented**, 2026-10-25. No schema file or command is added.
 Backend admission/storage choices in [research](../research.md#needs-owner-decision)
-block affected implementation. These command forms illustrate a future interface.
+are settled owner decisions; implementation/measurement gates remain. These command forms illustrate a future interface.
 
 ## Common interface vocabulary (proposed)
 
-All command spellings and flag admission below remain proposed under OQ-5 and
-interface acceptance; they are not newly settled owner decisions or implemented
-aliases. Reusing the `--authorize` spelling relates 013 to existing plan/apply
+Owner OQ-5 adopts the shared interface direction. Concrete payload-role spelling
+remains unimplemented engineering design; no native admission is inferred. Reusing the `--authorize` spelling relates 013 to existing plan/apply
 conventions; it does not import Spec 041's wizard or Spec 043's human-only landing
 confirmation. 013 remains noninteractive even without a terminal.
 
 | Input/output | Proposed 013 meaning and compatibility boundary |
 | --- | --- |
-| `--state-dir PRIVATE_DIR` | Required explicit private artifact-store selection outside every admitted or encountered repository/worktree, subject to OQ-3's location/quota decision and the mandatory containment/mode rules below. Store plans, typed records and selected-payload receipts there through the reviewed seam; never treat the path as capture selection or authority. Resume only reads an existing store and never creates or repairs it. |
+| `--payload-dir EXTERNAL_DIR` | Proposed explicit external selected-byte/safety-copy role, never inferred from --state-dir or workspace .work. Required for byte capture/restore; validated receipts bind it without copying bytes into metadata. |
+| `--save` | Explicitly persist the nonempty selected plan in the validated metadata store. Rendering defaults to unsaved with no plan id/store writes; state-dir alone does not save. |
+| `--state-dir PLAN_DIR` | Saved-plan/action metadata role; defaults to validated workspace .work/stw per the owner profile. Never stores selected bytes. Explicit override has the same role; read-only resume creates nothing. |
 | `--plan PLAN_ID --authorize` | Both are required for the selected native capture/restore/undo effects; the id binds the exact reviewed plan, and authorization is explicit for that action. An authorization flag alone cannot select targets or advance a plan. Declared private planning writes remain the planning effect only. |
 | Default human text / `--json` | Proposed complete-result formats from one model, with no TTY requirement, prompt, editor or pager. `--json` selects one final versioned object; output format never changes authorization or native effects. |
 | `--online` | Inapplicable to this offline feature; the proposed parser rejects it as usage (exit 2), rather than broadening the operation. No network mode or implicit fetch is introduced. |
-| `--human` | Explicit human-format alias is an open OQ-5 interface recommendation for consistency with 041/043, not accepted syntax in these examples. If adopted, specify its exclusivity with `--json` and test both formats without a TTY before admission; otherwise reject the unknown flag as usage. |
-| `--timeout` | Caller deadline override is an open OQ-5 interface recommendation, not accepted syntax here. Until reviewed, the fixed whole-operation caps below govern and the unknown flag is usage. Any accepted override must be positive, bounded by those caps, and must not extend an inherited earlier deadline. |
+| `--human` | Decided human-output alias, exclusive with --json, no TTY/prompt requirement. |
+| `--timeout` | Decided positive shortening override; never extends the existing operation cap or earlier deadline. |
 
 Specs 033/037 use `--offline` to opt out of their default online behavior;
 those existing commands are unchanged. 013 is already offline: this proposal
 does not accept a redundant `--offline` flag, and its proposed parser reports
-that unknown flag as usage (exit 2). Any later admission remains an OQ-5
-interface choice, not an accepted alias or a change to 033/037.
+that unknown flag as usage (exit 2). The owner adopted no redundant offline alias; 033/037 remain unchanged.
+
 
 ## Selection and effects
 
 ```text
-stw checkpoint plan --path WORKSPACE --state-dir PRIVATE_DIR [--select-layer LAYER --select-path PATH] [--include-untracked-path PATH] [--include-ignored-path PATH] [--task-text TEXT] [--json]
-stw checkpoint apply --plan PLAN_ID --state-dir PRIVATE_DIR --authorize [--json]
+stw checkpoint plan --path WORKSPACE [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR [--select-layer LAYER --select-path PATH] [--include-untracked-path PATH] [--include-ignored-path PATH] [--task-text TEXT] [--save] [--json]
+stw checkpoint apply --plan PLAN_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --authorize [--json]
 ```
 
 No explicit selection means none: return a complete `nothing-selected` result,
@@ -52,7 +58,8 @@ byte-exact and case-sensitive; platform aliases that defeat it refuse. This is a
 bounded exclusion policy, not a proof that other explicitly selected source
 bytes contain no secrets. Expanding capture beyond it requires contract review.
 
-Plan may write its disclosed private plan record only for an explicit selection;
+Rendering is unsaved by default. Only an explicit nonempty selection plus
+`--save` may write the disclosed private plan record and return its immutable id;
 it does not snapshot native jj, stage Git content, stash, move refs, rewrite files
 or retain bytes. Show selected type/mode/size/layers, exclusions, native ids,
 expected state, storage policy, exact allowed apply effects and recovery limits.
@@ -65,7 +72,7 @@ capability/version and bounds before the first and each subsequent effect.
 The new selected-byte store is distinct from journal metadata. Save exact admitted
 index/disk bytes and type/mode/deletion metadata for each selected layer; retain
 native committed roots where the capability requires them. Native jj may need a
-disclosed selected snapshot effect only if OQ-1 approves and conformance proves
+disclosed selected snapshot effect only under the adopted OQ-1 measure-before-enable decision after conformance proves
 it; otherwise it refuses. Never substitute Git for jj. An operation id alone
 cannot establish saved disk state. No implicit snapshot is hidden in planning.
 
@@ -93,7 +100,7 @@ mode `0666`; do not silently chmod, adopt or follow it. Use no-follow handles an
 revalidate ownership/path identity before every write, rename, read or deletion.
 Never include captured content in logs, diagnostics, human output or JSON.
 
-`--state-dir` must be outside every repository/worktree relevant to its location
+`--payload-dir` must be outside every repository/worktree relevant to its location
 proof, including native metadata and the target's linked-workspace inventory.
 Resolve canonical existing ancestors securely, run native Git/jj discovery at
 those ancestors and use complete native linked-workspace/layout evidence;
@@ -104,18 +111,18 @@ native/layout proof, not a claim to discover every repository on the filesystem.
 No private state is written until the external-location proof succeeds.
 
 Retain the 32 MiB payload cap per checkpoint across every selected layer and
-invocation, not just per command. OQ-3 recommends a 1 GiB total physical-store
+invocation, not just per command. Adopted OQ-3 sets the design profile to a 1 GiB total physical-store
 quota including metadata, staging, incomplete/orphan payloads and retained records;
 reserve/count in-flight bytes under the reviewed store lock and refuse before
 any write would exceed it. Count all physical files, not deduplicated logical
-receipts. The exact quota remains an owner choice before store admission; no
-unbounded store or automatic eviction is admitted in the meantime.
+receipts. This concrete quota is adopted design direction; implementation/conformance is
+required, with no unbounded store or automatic eviction.
 
 Proposed OQ-3/OQ-5 interface, not an implemented or approved command:
 
 ```text
-stw checkpoint drop-plan --checkpoint CHECKPOINT_ID --state-dir PRIVATE_DIR [--json]
-stw checkpoint drop --plan DROP_PLAN_ID --state-dir PRIVATE_DIR --authorize --confirm-checkpoint CHECKPOINT_ID [--json]
+stw checkpoint drop-plan --checkpoint CHECKPOINT_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR [--save] [--json]
+stw checkpoint drop --plan DROP_PLAN_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --authorize --confirm-checkpoint CHECKPOINT_ID [--json]
 ```
 
 Drop-plan selects one exact checkpoint and enumerates only its original capture
@@ -148,8 +155,8 @@ Proposed OQ-3/OQ-5 safety-copy deletion is a separate interface, not an alias fo
 checkpoint drop or an implemented command:
 
 ```text
-stw checkpoint drop-safety-plan --safety-copy SAFETY_ID --state-dir PRIVATE_DIR [--json]
-stw checkpoint drop-safety --plan SAFETY_DROP_PLAN_ID --state-dir PRIVATE_DIR --authorize --confirm-safety-copy SAFETY_ID [--json]
+stw checkpoint drop-safety-plan --safety-copy SAFETY_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR [--save] [--json]
+stw checkpoint drop-safety --plan SAFETY_DROP_PLAN_ID [--state-dir PLAN_DIR] --payload-dir EXTERNAL_DIR --authorize --confirm-safety-copy SAFETY_ID [--json]
 ```
 
 The caller must explicitly name the safety copy and separately confirm its id;
@@ -200,7 +207,8 @@ config-selected execution refuses rather than bypassing repository policy.
 | 1 | Refusal, unsupported requested action, stale evidence, incomplete/partial, cancellation, deadline, output/storage/native failure |
 | 2 | Invalid syntax, incompatible selectors or missing required explicit arguments |
 
-Future restore and undo use this envelope with their own action fields. Preserve
-published contract bytes and existing hidden Spec 015 v1 incomplete exit 3;
-013's proposed 0/1/2 scheme is no migration authority. JSON remains UNPUBLISHED
+Future restore and undo use this envelope with their own action fields. Preserve published contract and JSON schema bytes. CURRENT hidden Spec 015 code
+still returns incomplete exit 3; the dated owner decision requires exit-contract
+revision 2 to map it to 1 through its explicit unchecked root/CLI tasks. This
+013 design follows the same target 0/1/2 policy and does not claim code changed. JSON remains UNPUBLISHED
 until schemas, valid/invalid fixtures and native conformance are implemented.

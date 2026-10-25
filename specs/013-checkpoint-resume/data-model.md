@@ -1,5 +1,10 @@
 # Data Model: Checkpoint, Resume and Selective Undo
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status**: proposed and UNPUBLISHED, 2026-10-25. Fields describe logical
 records/results, not a published JSON schema or implemented storage format.
 
@@ -56,12 +61,12 @@ files. Metadata and selected-byte availability/retention are reported separately
 Payloads may contain secrets: every private directory is explicitly `0700` and
 every file `0600`, verified with current-actor ownership independently of umask
 `0000`; existing foreign/group/world-accessible state refuses rather than being
-adopted. A no-follow canonical/native/layout proof must establish state-dir is
+adopted. A no-follow canonical/native/layout proof must establish payload-dir is
 outside every encountered repository and inventoried worktree; unknown discovery
 or containment refuses. No captured content enters logs or output. Per-checkpoint
-payload is at most 32 MiB; OQ-3 recommends a 1 GiB total physical-store quota that
+payload is at most 32 MiB; Adopted OQ-3 sets the design profile to a 1 GiB total physical-store quota that
 counts metadata, orphan/incomplete and in-flight staging bytes under a store lock.
-Quota admission is mandatory before writes; numeric total remains an owner choice.
+Quota admission is mandatory before writes; adopted design total is1GiB, not measured throughput.
 
 SafetyCopy is a self-contained durable record with independent SAFETY_ID,
 origin action/restore-plan binding, provenance-only source checkpoint id, exact

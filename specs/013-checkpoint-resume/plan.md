@@ -1,5 +1,10 @@
 # Implementation Plan: Checkpoint, Resume and Selective Undo
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Saved-plan metadata defaults to .work; selected bytes/safety copies remain external.
+> This is a documentation target, not implementation or native acceptance.
+
 **Branch**: `codex/spec-013-stack-toolbelt` | **Date**: 2026-10-25 | **Spec**: [spec.md](spec.md)
 **Status**: proposed design only; no implementation, schema publication or runtime authorization.
 
@@ -96,7 +101,7 @@ schema, dependencies, docs/commands.md or docs/progress.md changes belong here.
    these are foundational requirements despite their story ordering.
 5. Add explicit inverse-change vs history/operation-restoration plans (US4),
    explicit merge parent, descendant scope and shared/foreign refusal. Proposed first-slice Git inverse candidates use private plumbing quarantine and reviewed promotion/CAS; every occupied or dirty/unknown inverse destination refuses, including the caller's clean workspace. Native jj operation restoration additionally needs complete repository-wide workspace/operation-head evidence, the approved single-head/direct-parent scope, unchanged working-copy commit map for every workspace including the invoker, and snapshot-suppressed pinned reads and reviewed explicit mutation basis; stale/unknown relevant workspace evidence refuses, no implicit update-stale; observed pre-effect divergence refuses, observed post-effect races/incomplete checks are partial, and missing operation history is unavailable. jj has no head CAS; pinning is not exclusion, sampling can miss races and native processes can integrate heads outside stw's control; all jj mutation results disclose those limits. Capability
-   selection requires owner decision and measured native semantics first.
+   selection follows the dated owner decision and requires measured native semantics first.
 6. Complete each required native lane and failure suite, published-contract
    regressions, independent review and acceptance evidence before exposing the
    capability. Source implementation, release, activation and remote effects
@@ -119,4 +124,4 @@ native metadata. Crash outcomes distinguish known completed effects from unknown
 ones and retain incomplete records. Corrupt/missing/expired bytes block the
 promised restore instead of triggering a broader native rollback. No automatic
 retention deletion or broad jj operation restore is permitted by this plan.
-The [research decisions](research.md#needs-owner-decision) gate unresolved policy.
+The [dated decisions](research.md#owner-decisions-2026-10-25) are settled direction; implementation/native evidence still gates enablement.
