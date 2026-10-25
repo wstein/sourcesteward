@@ -57,17 +57,29 @@ func TestNativeSandboxHelper(t *testing.T) {
 			}
 		case "output":
 			fmt.Print(strings.Repeat("x", 70000))
-		case "spawn":
-			// A parent that starts a descendant sharing its stderr, tells the test and
-			// then waits for its own death. The descendant outlives it.
-			child := exec.Command(os.Args[0], "-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", "hold")
+		case "spawn", "spawn-exit", "spawn-flood":
+			// A parent that starts a descendant sharing its stderr and tells the test.
+			// spawn and spawn-flood then live until killed; spawn-exit ends when its
+			// stdin does. spawn-flood first writes more stderr than the limit.
+			child := exec.Command(os.Args[0], append([]string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", "hold"}, a[1:]...)...)
 			child.Stderr = os.Stderr
-			child.ExtraFiles = []*os.File{os.NewFile(3, "control"), os.NewFile(4, "alive")}
+			control, alive := os.NewFile(3, "control"), os.NewFile(4, "alive")
+			child.ExtraFiles = []*os.File{control, alive}
 			if e := child.Start(); e != nil {
 				os.Exit(48)
 			}
+			// Only the descendant keeps the test's pipes.
+			control.Close()
+			alive.Close()
+			if a[0] == "spawn-flood" {
+				fmt.Fprint(os.Stderr, strings.Repeat("x", 70000))
+			}
 			fmt.Print("ready\n")
-			io.Copy(io.Discard, os.Stdin)
+			if a[0] == "spawn-exit" {
+				io.Copy(io.Discard, os.Stdin)
+			} else {
+				time.Sleep(time.Minute)
+			}
 		case "hold":
 			// The descendant lives until the test closes the control pipe.
 			io.Copy(io.Discard, os.NewFile(3, "control"))

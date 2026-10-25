@@ -14,7 +14,7 @@ import (
 // refTransactionWithDescendant starts a fake owned writer: a parent process that
 // starts a descendant sharing its stderr, as bwrap's git does, and reports
 // ready. Closing release lets the descendant exit; alive reads EOF once it has.
-func refTransactionWithDescendant(t *testing.T) (tx *gitRefTransaction, release func(), alive *os.File) {
+func refTransactionWithDescendant(t *testing.T, mode string) (tx *gitRefTransaction, release func(), alive *os.File) {
 	t.Helper()
 	old := nativeUnsandboxed
 	nativeUnsandboxed = true
@@ -28,7 +28,7 @@ func refTransactionWithDescendant(t *testing.T) (tx *gitRefTransaction, release 
 	}
 	root := gitTempDir(t)
 	runCtx, cancel := context.WithCancel(context.Background())
-	cmd, err := prepareSandboxed(runCtx, bin, []string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", "spawn"}, root, nil, nil)
+	cmd, err := prepareSandboxed(runCtx, bin, []string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", mode}, root, nil, nil)
 	if err != nil {
 		cancel()
 		t.Fatal(err)
@@ -62,6 +62,19 @@ func refTransactionWithDescendant(t *testing.T) (tx *gitRefTransaction, release 
 	return tx, release, aliveRead
 }
 
+// descendantAlive checks without waiting for the descendant: it closes alive
+// before it exits, so end of file is already there when finish waited. The
+// short deadline only matters when the descendant is alive (an expired
+// deadline would fail even a readable pipe).
+func descendantAlive(t *testing.T, alive *os.File) bool {
+	t.Helper()
+	if err := alive.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	_, err := alive.Read(make([]byte, 1))
+	return !errors.Is(err, io.EOF)
+}
+
 func descendantGone(t *testing.T, alive *os.File) bool {
 	t.Helper()
 	if err := alive.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
@@ -75,7 +88,7 @@ func TestRefTransactionKillReportsSurvivingDescendantHonestly(t *testing.T) {
 	old := gitRefDescendantWait
 	gitRefDescendantWait = 100 * time.Millisecond
 	t.Cleanup(func() { gitRefDescendantWait = old })
-	tx, release, alive := refTransactionWithDescendant(t)
+	tx, release, alive := refTransactionWithDescendant(t, "spawn")
 	err := tx.finish(true)
 	if !errors.Is(err, errGitRefDescendants) {
 		t.Fatalf("killed writer reported as fully stopped while its descendant runs: %v", err)
@@ -95,14 +108,56 @@ func TestRefTransactionKillReportsSurvivingDescendantHonestly(t *testing.T) {
 	}
 }
 
+func TestRefTransactionCleanStopReportsSurvivingDescendantHonestly(t *testing.T) {
+	old := gitRefDescendantWait
+	gitRefDescendantWait = 100 * time.Millisecond
+	t.Cleanup(func() { gitRefDescendantWait = old })
+	tx, release, _ := refTransactionWithDescendant(t, "spawn-exit")
+	err := tx.finish(false)
+	if !errors.Is(err, errGitRefDescendants) || !tx.out.Uncertain {
+		t.Fatalf("clean finish hid a surviving descendant: %v uncertain=%v", err, tx.out.Uncertain)
+	}
+	release()
+}
+
+func TestRefTransactionStderrFloodDoesNotSkipTheDescendantWait(t *testing.T) {
+	old := gitRefDescendantWait
+	gitRefDescendantWait = 100 * time.Millisecond
+	t.Cleanup(func() { gitRefDescendantWait = old })
+	tx, release, _ := refTransactionWithDescendant(t, "spawn-flood")
+	err := tx.finish(true)
+	if !errors.Is(err, errNativeOutputLimit) {
+		t.Fatalf("flood past the stderr limit was not reported: %v", err)
+	}
+	if !errors.Is(err, errGitRefDescendants) || !tx.out.Uncertain {
+		t.Fatalf("stderr limit skipped the descendant wait: %v", err)
+	}
+	release()
+}
+
+func TestRefTransactionDescendantWaitEndsWithTheContext(t *testing.T) {
+	old := gitRefDescendantWait
+	gitRefDescendantWait = time.Minute
+	t.Cleanup(func() { gitRefDescendantWait = old })
+	tx, release, _ := refTransactionWithDescendant(t, "spawn")
+	ctx, cancel := context.WithCancel(context.Background())
+	tx.ctx = ctx
+	cancel()
+	err := tx.finish(true)
+	if !errors.Is(err, errGitRefDescendants) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled context did not end the descendant wait honestly: %v", err)
+	}
+	release()
+}
+
 func TestRefTransactionKillWaitsForDescendantThatIsGone(t *testing.T) {
-	tx, release, alive := refTransactionWithDescendant(t)
+	tx, release, alive := refTransactionWithDescendant(t, "spawn")
 	release()
 	err := tx.finish(true)
 	if errors.Is(err, errGitRefDescendants) {
 		t.Fatalf("exited descendant reported as running: %v", err)
 	}
-	if !descendantGone(t, alive) {
+	if descendantAlive(t, alive) {
 		t.Fatal("finish returned while the descendant was still alive")
 	}
 }
