@@ -59,24 +59,33 @@ func seamViolations(name, source string) []string {
 
 func TestSeamMutationProbesAreCaught(t *testing.T) {
 	probes := map[string]string{
-		"os import":        "package p\nimport \"os\"\n",
-		"exec import":      "package p\nimport \"os/exec\"\n",
-		"net import":       "package p\nimport \"net/http\"\n",
-		"x/sys import":     "package p\nimport \"golang.org/x/sys/unix\"\n",
-		"hosting import":   "package p\nimport \"github.com/wstein/sourcesteward/internal/hosting\"\n",
-		"workspace import": "package p\nimport \"github.com/wstein/sourcesteward/internal/workspace\"\n",
-		"time.Now":         "package p\nimport \"time\"\nvar _ = time.Now()\n",
-		"time.Since":       "package p\nimport \"time\"\nvar _ = time.Since(time.Time{})\n",
-		"goroutine":        "package p\nfunc f() { go f() }\n",
+		"os import":            "package p\nimport \"os\"\n",
+		"exec import":          "package p\nimport \"os/exec\"\n",
+		"net import":           "package p\nimport \"net/http\"\n",
+		"x/sys import":         "package p\nimport \"golang.org/x/sys/unix\"\n",
+		"hosting import":       "package p\nimport \"github.com/wstein/sourcesteward/internal/hosting\"\n",
+		"workspace import":     "package p\nimport \"github.com/wstein/sourcesteward/internal/workspace\"\n",
+		"time.Now":             "package p\nimport \"time\"\nvar _ = time.Now()\n",
+		"time.Since":           "package p\nimport \"time\"\nvar _ = time.Since(time.Time{})\n",
+		"goroutine":            "package p\nfunc f() { go f() }\n",
+		"os/user":              "package p\nimport \"os/user\"\nvar _, _ = user.Current()\n",
+		"filepath glob":        "package p\nimport \"path/filepath\"\nvar _, _ = filepath.Glob(\"/etc/*\")\n",
+		"template files":       "package p\nimport \"text/template\"\nvar _, _ = template.ParseFiles(\"/etc/passwd\")\n",
+		"log":                  "package p\nimport \"log\"\nfunc f() { log.Print(1) }\n",
+		"aliased time Now":     "package p\nimport t \"time\"\nvar _ = t.Now()\n",
+		"aliased LoadLocation": "package p\nimport t \"time\"\nvar _, _ = t.LoadLocation(\"UTC\")\n",
+		"dot time":             "package p\nimport . \"time\"\nvar _ = Now()\n",
+		"context timeout":      "package p\nimport \"context\"\nvar _, _ = context.WithTimeout(context.Background(), 1)\n",
+		"time Local":           "package p\nimport \"time\"\nvar _ = time.Local\n",
 	}
 	for name, source := range probes {
 		if len(seamViolations("probe.go", source)) == 0 {
 			t.Errorf("%s: the seam check did not catch the escape", name)
 		}
 	}
-	allowed := "package p\nimport (\n\t\"time\"\n\t\"net/url\"\n\t\"" + attributionImport + "\"\n)\nvar _ time.Duration\nvar _ url.URL\n"
+	allowed := "package p\nimport (\n\t\"fmt\"\n\ttm \"time\"\n\t\"" + attributionImport + "\"\n)\nvar _ tm.Duration = tm.Second\nvar _ = fmt.Sprint\n"
 	if v := seamViolations("ok.go", allowed); len(v) != 0 {
-		t.Errorf("types, net/url and the attribution leaf are allowed: %v", v)
+		t.Errorf("listed std imports, time values and the attribution leaf are allowed: %v", v)
 	}
 }
 
