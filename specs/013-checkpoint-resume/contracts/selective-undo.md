@@ -1,0 +1,87 @@
+# Proposed Contract: Explicit Selective Local Undo
+
+**UNPUBLISHED — unimplemented**, 2026-10-25. The admitted native capability set is
+**Needs owner decision** OQ-2; these examples select semantics, not implementation.
+Shared [bounds/output](checkpoint.md) and [recovery guards](recovery.md) apply.
+
+```text
+stw undo plan --path WORKSPACE --state-dir PRIVATE_DIR --target NATIVE_ID --semantics inverse-change [--parent FULL_PARENT_ID] [--select-path PATH] [--json]
+stw undo plan --path WORKSPACE --state-dir PRIVATE_DIR --target NATIVE_ID --semantics history-restoration --select-ref FULL_REF [--select-descendant FULL_ID] [--json]
+stw undo plan --path WORKSPACE --state-dir PRIVATE_DIR --target NATIVE_OPERATION_ID --semantics operation-restoration [--select-descendant FULL_ID] [--json]
+stw undo apply --plan UNDO_PLAN_ID --state-dir PRIVATE_DIR --authorize [--json]
+```
+
+## Caller-selected meaning
+
+| Semantics | Exact intended effect and refusal boundary |
+| --- | --- |
+| `inverse-change` | Make a new supported native inverse change for the selected commit/change delta, optionally narrowed to admitted paths. Original history remains. Bind target, destination baseline and explicit merge parent; conflicts are reported, not resolved or widened automatically. |
+| `history-restoration` | Restore selected owned local native refs/history to a retained explicit state with expected-current guards. Plan every rewritten descendant and affected ref/workspace. No implicit ref deletion, default-branch reset, owner-checkout resync or rewrite of shared/foreign work. |
+| `operation-restoration` | Native jj-only admitted operation restoration with complete effects/descendants known and selected; refuse if the native operation would affect unselected state. A broad operation undo is never substituted for selective inverse/history undo. |
+
+Without an explicit target and semantics, no undo is selected. An explicit
+`inverse-change` target selects its admitted delta; optional path selection can
+only narrow that delta. No missing selector defaults to latest commit/operation,
+current branch, first merge parent, all descendants or unrelated file layers. Require a full explicit
+parent that is actually one of the target merge's parents whenever a merge delta
+is reversed; show its native identity and exact delta. Multiple parents or an
+unsupported topology cannot be silently flattened. Git commit/merge identity,
+jj commit/change identity and jj operation identity are not aliases. A jj
+operation id alone cannot restore uncaptured disk edits or external effects.
+
+## Reviewable plan and fresh guards
+
+Resolve explicit target/destination and selected scope offline. Present complete
+selected/excluded files, index/disk layers, refs/bookmarks, native identities,
+rewritten descendants, operation-log/snapshot effects, expected current values,
+recoverable pre-action roots/selected bytes, conflicts, limitations and bounded
+evidence. An unsupported selector, omitted required parent or incomplete effect
+set refuses instead of producing an applicable plan. Default action is none.
+
+Require current task/actor ownership and native layout proof from OQ-4's approved
+source; commit author/config values or a name match do not prove ownership.
+Reject shared/published history, foreign/unknown ownership, protected/default
+refs, another workspace's active/checked-out target and unselected descendants.
+An inverse change is also refused on shared/foreign targets in this slice; it
+cannot become a loophole for modifying another owner's workspace. Offline
+absence of a remote-tracking ref cannot prove unpublished history; if trusted
+local evidence cannot establish required scope, report `ownership-unknown` or
+`sharedness-unknown`. Do not fetch or consult credentials to make the proof.
+
+Apply requires explicit local authorization plus the exact stored plan id and
+revalidates all relevant current paths/layers/native ids, target parents,
+descendant closure, protections, linked workspaces, ownership, capability,
+configuration/hook hazards and recovery availability before each effect. A plan
+or checkpoint is not transferable authorization; stale/unreadable state refuses.
+Use only the native reviewed adapter; jj colocation still uses jj. No raw Git
+fallback, hook/helper execution, prompt, network, stash, automatic reset/abort,
+push, PR edit, merge, tag or release occurs. New commit identity/attribution is
+explicitly reviewed with OQ-2/OQ-4; repository config never invents the actor.
+New inverse or rewritten commits cannot silently inherit signature validity.
+Disclose source signature/header loss and required-signing capability separately
+from patch/range equivalence. Execute no signing helper; refuse an unmet signing
+requirement or an undecided signature policy instead of silently signing or
+stripping a signature. OQ-2 gates that capability. No runtime signature experiment
+is claimed by these artifacts.
+
+## Partial results and retry
+
+Reuse the reviewed typed recovery seam: create valid pre-action roots and any
+selected pre-action byte receipts, durably write prepared intent before each
+effect, then resample and record actual completion. Retain exact original/new
+native identities and mapping. A crash, failed payload/record write, conflict,
+timeout or cancellation stops further work with completed/not-started/unknown
+effects, retained recovery and precise missing guarantees. Never pretend to
+atomically undo multiple refs, descendant rewrites and disk/index writes.
+
+Retry verifies the same action identity and expected state; known desired state
+means already-applied, changed state refuses, unknown new head means
+journal-incomplete. No blanket native operation undo or reset repairs a partial
+run. A recovery restore is a new selected, authorized plan; it cannot reverse
+publication, external helpers/hooks, uncaptured buffers/files or expired payloads.
+
+Conformance must separately prove native inverse commit/change behavior, explicit
+merge-parent reversal, path narrowing, descendant completeness, shared/foreign
+refusal, conflicts, cancellation and crash reconciliation. Unsupported capability
+is a typed limit, never a passed mutation test. Publication stays in Spec 016;
+Spec 043 remains the human owner's separate landing invocation.
