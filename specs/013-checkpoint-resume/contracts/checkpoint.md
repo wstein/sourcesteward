@@ -21,6 +21,12 @@ confirmation. 013 remains noninteractive even without a terminal.
 | `--human` | Explicit human-format alias is an open OQ-5 interface recommendation for consistency with 041/043, not accepted syntax in these examples. If adopted, specify its exclusivity with `--json` and test both formats without a TTY before admission; otherwise reject the unknown flag as usage. |
 | `--timeout` | Caller deadline override is an open OQ-5 interface recommendation, not accepted syntax here. Until reviewed, the fixed whole-operation caps below govern and the unknown flag is usage. Any accepted override must be positive, bounded by those caps, and must not extend an inherited earlier deadline. |
 
+Specs 033/037 use `--offline` to opt out of their default online behavior;
+those existing commands are unchanged. 013 is already offline: this proposal
+does not accept a redundant `--offline` flag, and its proposed parser reports
+that unknown flag as usage (exit 2). Any later admission remains an OQ-5
+interface choice, not an accepted alias or a change to 033/037.
+
 ## Selection and effects
 
 ```text
