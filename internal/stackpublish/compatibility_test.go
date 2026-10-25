@@ -13,6 +13,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -258,5 +259,26 @@ func TestPublishedSchemasAreUntouchedAndNoForgeEffectSchemaExists(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// TestTheNodeIdGrammarsOfTheActionAndTheWriteEdgeAreEqual ties the two copies of the pull request
+// node id grammar: both literals are extracted and compared once the anchors are normalized.
+func TestTheNodeIdGrammarsOfTheActionAndTheWriteEdgeAreEqual(t *testing.T) {
+	re := regexp.MustCompile("nodeIDGrammar\\s*=\\s*regexp\\.MustCompile\\(`([^`]+)`\\)")
+	grammar := func(path string) string {
+		raw, err := os.ReadFile(repoFile(t, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := re.FindStringSubmatch(string(raw))
+		if m == nil {
+			t.Fatalf("no nodeIDGrammar literal in %s", path)
+		}
+		return strings.NewReplacer(`^`, "", `$`, "", `\A`, "", `\z`, "").Replace(m[1])
+	}
+	a, b := grammar("internal/stackpublish/ready_action.go"), grammar("internal/hosting/stack_write.go")
+	if a != b || a != "[A-Za-z0-9_=-]{4,128}" {
+		t.Fatalf("grammars differ: %q %q", a, b)
 	}
 }

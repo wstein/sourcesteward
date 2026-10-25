@@ -20,6 +20,8 @@ type fakeEdge struct {
 	evErr     error
 	intentErr error
 	markErr   error
+	notSent   bool
+	unavail   bool
 	intents   []ReadyIntent
 	marked    []string
 	onMark    func(*fakeEdge)
@@ -60,13 +62,18 @@ func (f *fakeEdge) RecordIntent(in ReadyIntent) error {
 	return f.intentErr
 }
 
-func (f *fakeEdge) MarkReady(nodeID string) error {
+func (f *fakeEdge) WriteAvailable() bool {
+	f.log = append(f.log, "available")
+	return !f.unavail
+}
+
+func (f *fakeEdge) MarkReady(nodeID string) (bool, error) {
 	f.log = append(f.log, "mark")
 	f.marked = append(f.marked, nodeID)
 	if f.onMark != nil {
 		f.onMark(f)
 	}
-	return f.markErr
+	return !f.notSent, f.markErr
 }
 
 const goodNodeID = "PR_kwDOABCD1234"
@@ -102,7 +109,7 @@ func wantRefused(t *testing.T, r ReadyResult, reason Reason, detail string) {
 func TestTheReadySequenceIsD5ReadEvaluateIntentMutationReread(t *testing.T) {
 	e := newEdge()
 	r := ExecuteReady(e, readyRequest())
-	want := []string{"d5", "read", "evidence", "intent", "mark", "read"}
+	want := []string{"d5", "read", "evidence", "available", "intent", "mark", "read"}
 	if !reflect.DeepEqual(e.log, want) {
 		t.Fatalf("order %v want %v", e.log, want)
 	}
@@ -380,5 +387,27 @@ func TestADifferentExecutorDoesNotChangeTheRequest(t *testing.T) {
 	ExecuteReady(e2, req)
 	if !reflect.DeepEqual(e.intents, e2.intents) {
 		t.Fatal("intents differ")
+	}
+}
+
+// F1: a write that cannot be sent is a refusal, never unknown. The capability is asked before the
+// intent, so no durable intent exists for a write that cannot be sent.
+func TestAnUnavailableWriteCapabilityRefusesBeforeTheIntent(t *testing.T) {
+	e := newEdge()
+	e.unavail = true
+	wantRefused(t, ExecuteReady(e, readyRequest()), ReasonCapabilityUnavailable, "write-unavailable")
+	if len(e.intents) != 0 || len(e.marked) != 0 || e.log[len(e.log)-1] != "available" {
+		t.Fatal(e.log)
+	}
+}
+
+// A request refused at send time (after the check) is also a refusal with no attempt and no re-read.
+func TestAWriteRefusedBeforeSendingIsARefusalNotUnknown(t *testing.T) {
+	e := newEdge()
+	e.notSent = true
+	e.markErr = errors.New("capability off")
+	wantRefused(t, ExecuteReady(e, readyRequest()), ReasonCapabilityUnavailable, "write-not-sent")
+	if e.log[len(e.log)-1] != "mark" {
+		t.Fatalf("no re-read after a request that was never sent: %v", e.log)
 	}
 }

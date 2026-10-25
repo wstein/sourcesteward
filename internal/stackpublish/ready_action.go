@@ -47,9 +47,15 @@ type ReadyEdge interface {
 	Evidence(PullRequestState) (ReadyInput, error)
 	// RecordIntent makes the intent durable. An error means it is not durable: no write follows.
 	RecordIntent(ReadyIntent) error
-	// MarkReady sends the one Ready write for the node id. A nil error means the forge accepted
-	// it; any error means the outcome is unknown (the reply may have been lost after the write).
-	MarkReady(nodeID string) error
+	// WriteAvailable reports whether the Ready write capability is enabled and its credentials are
+	// usable. It is asked before the intent, so no durable intent exists for a write that cannot be
+	// sent. It must send nothing.
+	WriteAvailable() bool
+	// MarkReady sends the one Ready write for the node id. sent is false only when nothing was
+	// sent (capability off, authentication, invalid id): that is a refusal. Once sent is true, a nil
+	// error means the forge accepted it and any error means the outcome is unknown (the reply may
+	// have been lost after the write).
+	MarkReady(nodeID string) (sent bool, err error)
 }
 
 // ReadyRequest is the Ready action asked for: the PR, and the receipt of the earlier gate whose
@@ -175,10 +181,18 @@ func ExecuteReady(edge ReadyEdge, req ReadyRequest) ReadyResult {
 	if !nodeIDGrammar.MatchString(pr.NodeID) {
 		return refusedReady(ReasonCapabilityUnavailable, "node-id-invalid")
 	}
+	if !edge.WriteAvailable() {
+		return refusedReady(ReasonCapabilityUnavailable, "write-unavailable")
+	}
 	if edge.RecordIntent(ReadyIntent{Repository: req.Repository, Number: req.Number, HeadSHA: pr.HeadSHA, BaseSHA: pr.BaseSHA}) != nil {
 		return refusedReady(ReasonJournalFailed, "intent-not-durable")
 	}
-	writeErr := edge.MarkReady(pr.NodeID)
+	sent, writeErr := edge.MarkReady(pr.NodeID)
+	if !sent {
+		// Nothing left the process: a refusal, not an unknown outcome. The intent stays recorded
+		// and the caller's journal closes it as not executed.
+		return refusedReady(ReasonCapabilityUnavailable, "write-not-sent")
+	}
 	res := ReadyResult{State: StateUnknown, Reason: reasonRef(ReasonOutcomeUnknown), Attempted: true}
 	again, readErr := edge.ReadPullRequest()
 	if readErr != nil {
