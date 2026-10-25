@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf16"
@@ -178,14 +179,77 @@ func Numbered(d Document) []NumberedCandidate {
 	return out
 }
 
-// displayOrder is the candidates grouped by the repositories in the order of the document.
-func displayOrder(d Document) []tidywizard.Candidate {
-	out := []tidywizard.Candidate{}
+// ownerGroup is the candidates of one owner heading, split by repository in the order of the document.
+type ownerGroup struct {
+	heading string
+	repos   []repoRows
+}
+
+type repoRows struct {
+	name       string
+	candidates []tidywizard.Candidate
+}
+
+// ownerKey orders and names the owner group of a candidate (FR-006a): own scope first, then the
+// other owners sorted by label, `unknown` last.
+func ownerKey(c tidywizard.Candidate) (rank int, label, heading string) {
+	switch {
+	case c.Scope == owner.ScopeOwn && c.Owner != "":
+		return 0, c.Owner, "owner " + c.Owner + " (own)"
+	case c.Scope == owner.ScopeOther && c.Owner != "":
+		return 1, c.Owner, "owner " + c.Owner + " (other)"
+	}
+	return 2, "", "owner unknown"
+}
+
+// ownerGroups groups the candidates of the repositories of the document by owner. The order does
+// not depend on the order of the candidates: groups by rank and label, repositories by the
+// document, rows by the order of the analysis.
+func ownerGroups(d Document) []ownerGroup {
+	type key struct {
+		rank  int
+		label string
+	}
+	byKey := map[key]*ownerGroup{}
+	var keys []key
 	for _, r := range d.Repositories {
 		for _, c := range d.Candidates {
-			if c.Repo == r.Name {
-				out = append(out, c)
+			if c.Repo != r.Name {
+				continue
 			}
+			rank, label, heading := ownerKey(c)
+			k := key{rank, label}
+			g := byKey[k]
+			if g == nil {
+				g = &ownerGroup{heading: heading}
+				byKey[k] = g
+				keys = append(keys, k)
+			}
+			if n := len(g.repos); n == 0 || g.repos[n-1].name != r.Name {
+				g.repos = append(g.repos, repoRows{name: r.Name})
+			}
+			g.repos[len(g.repos)-1].candidates = append(g.repos[len(g.repos)-1].candidates, c)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].rank != keys[j].rank {
+			return keys[i].rank < keys[j].rank
+		}
+		return keys[i].label < keys[j].label
+	})
+	out := make([]ownerGroup, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, *byKey[k])
+	}
+	return out
+}
+
+// displayOrder is the candidates in the order of the text: by owner group, then repository.
+func displayOrder(d Document) []tidywizard.Candidate {
+	out := []tidywizard.Candidate{}
+	for _, g := range ownerGroups(d) {
+		for _, r := range g.repos {
+			out = append(out, r.candidates...)
 		}
 	}
 	return out
@@ -221,8 +285,8 @@ func Text(d Document, _ TextOptions) string {
 	for _, n := range Numbered(d) {
 		numbers[n.Candidate.ID] = n.Number
 	}
+	b.WriteString("\nRepositories:\n")
 	for _, r := range d.Repositories {
-		b.WriteString("\n")
 		switch r.State {
 		case "skipped":
 			fmt.Fprintf(&b, "%s   skipped: %s\n", e(r.Name), e(r.Reason))
@@ -234,20 +298,18 @@ func Text(d Document, _ TextOptions) string {
 		for _, n := range d.repoNotices[r.Name] {
 			fmt.Fprintf(&b, "  notice: %s\n", n)
 		}
-		shown, more := 0, 0
-		for _, c := range d.Candidates {
-			if c.Repo != r.Name {
-				continue
+	}
+	for _, g := range ownerGroups(d) {
+		fmt.Fprintf(&b, "\n%s\n", e(g.heading))
+		for _, r := range g.repos {
+			fmt.Fprintf(&b, "  %s\n", e(r.name))
+			for i, c := range r.candidates {
+				if i == MaxRowsPerRepository {
+					fmt.Fprintf(&b, "    and %d more (use --json or details)\n", len(r.candidates)-i)
+					break
+				}
+				b.WriteString("  " + row(c, numbers[c.ID], e))
 			}
-			if shown == MaxRowsPerRepository {
-				more++
-				continue
-			}
-			shown++
-			b.WriteString(row(c, numbers[c.ID], e))
-		}
-		if more > 0 {
-			fmt.Fprintf(&b, "  and %d more (use --json or details)\n", more)
 		}
 	}
 	own, other := 0, 0

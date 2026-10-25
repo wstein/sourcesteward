@@ -3,22 +3,31 @@ Derived:   remote origin (default), state-dirs /s (2 records)\x1b[0m (--state-di
 Mode:      human (stdin tty, stdout tty, no agent marker)
 Analysed 4 repositories (1 skipped, 1 with errors)
 
+Repositories:
 bundledock   base refs/heads/main
   notice: tracking-requires-online
   notice: limit \x1b[31mreached\r\nnow\u202e äääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääää...
-  [1] safe     branch       codex/old-1  integrated (merge-noop)  effects delete-branch:codex/old-1
-  [-] retain   worktree     /tmp/\x1b[2Jevil\r\x00\u202egnp.exe  task ta\u200bsk  branch br\x1b]0;title\x07anch  owner ow\x1bner\n (commit-author) [unknown]  dirty: ev\x1b[31mid\nence eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee...
-  [-] retain   branch       nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn...  unmerged
-
 chartscribe   skipped: base-ambiguous
-
 sheetmill   error: boom\x1b[0m\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...
-
 sourcesteward   base refs/heads/main\x1b[0m
-  [2] safe     worktree     /tmp/wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)  effects remove-registration, remove-files, delete-branch:codex/037-x
-  [3] safe     worktree     /tmp/whr010-a  owner codex (path-convention) [other]  integrated (ancestor): unregistered: no-work  effects remove-registration, remove-files  not preselected
-  [4] decision worktree     /tmp/wt-dec  owner claude (task-record) [unknown]  locked-stw: stw lock whose creation record does not match  effects remove-registration, remove-files
-  [-] retain   worktree     /tmp/wt-041  dirty: uncommitted changes
+
+owner claude (own)
+  bundledock
+    [1] safe     branch       codex/old-1  integrated (merge-noop)  effects delete-branch:codex/old-1
+    [-] retain   branch       nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn...  unmerged
+  sourcesteward
+    [2] safe     worktree     /tmp/wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)  effects remove-registration, remove-files, delete-branch:codex/037-x
+    [-] retain   worktree     /tmp/wt-041  dirty: uncommitted changes
+
+owner codex (other)
+  sourcesteward
+    [3] safe     worktree     /tmp/whr010-a  owner codex (path-convention) [other]  integrated (ancestor): unregistered: no-work  effects remove-registration, remove-files  not preselected
+
+owner unknown
+  bundledock
+    [-] retain   worktree     /tmp/\x1b[2Jevil\r\x00\u202egnp.exe  task ta\u200bsk  branch br\x1b]0;title\x07anch  owner ow\x1bner\n (commit-author) [unknown]  dirty: ev\x1b[31mid\nence eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee...
+  sourcesteward
+    [4] decision worktree     /tmp/wt-dec  owner claude (task-record) [unknown]  locked-stw: stw lock whose creation record does not match  effects remove-registration, remove-files
 
 summary: 3 safe (2 own, 1 other), 3 retain, 1 decision
 notice: run notice \x1b[1mbold\x1b[0m
