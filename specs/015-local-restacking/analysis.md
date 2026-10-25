@@ -92,7 +92,7 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | FR-019 | T027, T028, T033, T034 | Proposed `TestApplyPlanNeedsExplicitSelection`: missing saved plan/id/local flag yields no effect/prompt; unrelated or modified plan refuses | Future pending |
 | FR-020 | T029, T030 | Proposed `TestApplyReplaysExactTwoDotRange`: three-layer fixture replays only exact old-parent-exclusive range onto full new parent, never porcelain | Future pending |
 | FR-021 | T027, T028, T033, T034 | Proposed `TestApplyResamplesEveryGuardBeforeCAS`: inject new worktree, foreign attribution, backend/common-dir/config/protection/head change before write | Future pending |
-| FR-022 | T029, T030 | Proposed `TestApplyRejectsAnyNonEqualRow` and `TestApplyReadsActualAuthorAndCommitter`: `!`, `<`, `>`, unpaired, unknown or leaked actual committer block target CAS; actual-apply identity flags cannot widen the trusted owner; push fixture covers foreign open-parent commits in observed-default..new-head and local/global config origins | Future pending |
+| FR-022 | T029, T030 | Proposed `TestApplyRejectsAnyNonEqualRow` and `TestApplyReadsActualAuthorAndCommitter`: `!`, `<`, `>`, unpaired, unknown or leaked actual committer block target CAS; `TestApplyNeverRunsSigningHelper` and `TestApplyReportsDroppedSignatures` cover unsigned candidates and signature-policy refusal; actual-apply identity flags cannot widen the trusted owner; push fixture covers foreign open-parent commits in observed-default..new-head and local/global config origins | Future pending |
 | FR-023 | T031, T032, T033, T034 | Proposed `TestRestackRecoveryPreparedBeforeTargetMove`: crash/write/fsync/rename/root-collision faults stop before target move with retained evidence | Future pending |
 | FR-024 | T033, T034, T035, T036 | Proposed `TestRestackCrashReconcilesEveryBoundary` and `TestRestackRestoreRequiresSeparatePlanAndCAS`: current third value remains untouched | Future pending |
 | FR-025 | T040, T041 | Proposed `TestRestackReceiptPreservesChangeClassReviewPolicy` and `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: docs-only checks/equality need no pre-push review; code pure rebase permits exact-new-SHA middle-tier CLEAR; old/predicted/other SHA cannot satisfy required review; Ready always exact-head CLEAR plus green checks | Future pending; 016 consumer gate |
@@ -101,7 +101,7 @@ qualified in verification.md. No row inherits coverage through a grouped range.
 | FR-028 | T029, T030, T038, T039 | Proposed `TestApplyConflictStaysInQuarantine`: original Git operation sentinel absent; jj stored conflict remains and refuses without resolution/snapshot | Future pending |
 | FR-029 | T025, T027, T040, T041 | Proposed `TestRestackFutureExitTableAndV1Freeze`: future success/refused/partial/incomplete/usage 0/1/2, actual v1 incomplete remains3 and byte-identical | Future pending; OQ-1 |
 | FR-030 | T027, T028, T041 | Proposed `TestApplyPlanRevalidatesObservationInputs`: changed exact parent/head/backend/semantics, incomplete 014 result or unknown native-stack management refuses | Future pending |
-| FR-031 | T027, T031, T032, T038, T040, T043 | Proposed `TestRestackJournalRejectsForeignTypeAndPath` and `TestRestackHostileRecordsAreNotInstructions`: symlink/replacement/foreign-record/credential/helper sentinels | Future pending |
+| FR-031 | T027, T031, T032, T038, T040, T043 | Proposed `TestRestackJournalRejectsForeignTypeAndPath` and `TestRestackHostileRecordsAreNotInstructions`: symlink/replacement/foreign-record/credential/helper/signing-program sentinels; `--no-gpg-sign` and per-source `signature-dropped` fixtures remain proposed | Future pending |
 | FR-032 | T029, T030, T033, T034, T040, T043 | Proposed `TestApplyBoundStopsBeforeNextEffect`: 201 commits, 2001 paths, 1MiB+1 bytes, fake deadline/cancel retain partial state with exit1 | Future pending |
 | FR-033 | T031, T032, T035, T036 | Proposed `TestRestackKeepsIncompleteRecovery` and `TestRestackUnknownNewHeadRetains`: no automatic pruning/reset, no untracked/remote restoration claim | Future pending |
 | FR-034 | T025, T026, T037, T042, T043, T044 | Proposed capability matrix fixture has missing minimum jj lane and must remain blocked; T044 requires exact-head independent review before publication | Future pending; documentation only |
@@ -125,7 +125,7 @@ No task is orphaned from requirement coverage: T001/T023/T026/T044 are review
 and analysis gates; T004 is the preserved optional extraction skip; T019 is the
 historical architecture guard; remaining implementation tasks map above. Future
 ownership/review-policy inputs, occupied-worktree scope, committer policy and
-jj native writes remain deliberately blocked by OQ-1–OQ-6. No unselected verify
+jj native writes remain deliberately blocked by OQ-1–OQ-6 and OQ-8. No unselected verify
 command, keep-both resolution, descendant or remote effect is smuggled into the
 implementation units. T025 records decisions rather than fabricating them.
 

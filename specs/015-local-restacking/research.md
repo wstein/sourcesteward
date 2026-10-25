@@ -42,6 +42,21 @@ using aggregate patch ids or treating `evidence-clean` as push permission are
 excluded by D7, ownership or the semantic-break limitation. Actual committer/date
 and occupied-worktree scope remain OQ-3/OQ-6 proposals, not new owner decisions.
 
+## R2a: actual-candidate signatures (review F3)
+
+**Decision:** proposed actual candidates are unsigned, with explicit
+`--no-gpg-sign` and signing-program/config/environment neutralization. Never run
+a signing helper. Report each source `gpgsig`/`gpgsig-sha256` as
+`signature-dropped` when the actual candidate has no signature, even for `=` rows.
+**Rationale:** PR #238's independent reviewer reported a Git 2.56.0 scratch
+measurement: `commit-tree` with `commit.gpgSign=true` did not sign. The author
+has not rerun that product experiment; this is attributed review evidence,
+not new verification. Patch equality does not preserve cryptographic signatures.
+**Alternatives considered:** silently dropping signatures or executing a signing
+program would hide an effect. OQ-8 recommends refusing signed/required-signature
+scope pending an explicit refusal/disclosure policy; signing is not added. See
+Spec 043 OQ6 for its separate human landing question.
+
 ## R3: reuse recovery architecture
 
 **Decision:** propose a typed restack extension through the Spec 032 durability

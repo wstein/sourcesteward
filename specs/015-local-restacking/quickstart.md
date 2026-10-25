@@ -62,7 +62,9 @@ must be checked on the new commits, as required by the workspace policy.
    explicitly OQ-6, not silently updated. Default is no mutation and no prompt.
 3. Store/review the immutable future apply plan. Apply only with that id and
    explicit local authorization. Replay stays quarantined, computes the actual
-   candidate, validates one-to-one all `=` rows and actual author/committer ids,
+   candidate, validates one-to-one all `=` rows and actual author/committer ids. Candidates are explicitly unsigned, signing
+   helpers neutralized, and signed sources get per-commit `signature-dropped`
+   even for equal rows; OQ-8 gates signed/required-signature scope. The apply
    prepares durable journal/root, revalidates and CAS-updates only the target.
 4. Inspect the receipt's actual new SHA/mapping, partial effects, recovery pointer
    and derived change-class/pure-rebase policy input. Before push, docs-only
