@@ -486,8 +486,7 @@ func (p Plan) AdmitApply(planID string) error {
 	return nil
 }
 
-// finished reports a plan whose evidence is complete: not truncated, not cancelled, no error. Only
-// such a plan may be saved or applied (FR-010: failed evidence never becomes permission).
-func (d planDoc) finished() bool {
-	return d.Boundary.Complete && !d.Boundary.Cancelled && d.Error == nil
-}
+// finished reports a plan whose evidence is complete. validBoundary ties cancellation and an error
+// to an incomplete boundary, so complete alone means not truncated, not cancelled and error-free.
+// Only such a plan may be saved or applied (FR-010: failed evidence never becomes permission).
+func (d planDoc) finished() bool { return d.Boundary.Complete }

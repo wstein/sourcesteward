@@ -4,6 +4,7 @@ package stackpublish
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -261,5 +262,21 @@ func TestDisplayEscapesHostileTextAndShortensWithoutSplitting(t *testing.T) {
 	}
 	if got, trunc = Display("anything", 0); got != "" || !trunc {
 		t.Fatalf("%q %v", got, trunc)
+	}
+}
+
+// Review F5b: every escaped character class, one by one, and neighbours that stay as they are.
+func TestEveryHostileCodePointIsEscapedAndNeighboursAreNot(t *testing.T) {
+	escaped := []rune{0x80, 0x85, 0x9f, 0x061c, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff}
+	for _, r := range escaped {
+		got, _ := Display("a"+string(r)+"b", 512)
+		if want := "a" + fmt.Sprintf(`\u%04x`, r) + "b"; got != want {
+			t.Errorf("U+%04X: %q want %q", r, got, want)
+		}
+	}
+	for _, r := range []rune{0x20, 0x7e, 0xa0, 0xa1, 0x061b, 0x200d, 0x2010, 0x2027, 0x202f, 0x2065, 0x206a, 0xfefe, 0x65e5, 'é'} {
+		if got, _ := Display("a"+string(r)+"b", 512); got != "a"+string(r)+"b" {
+			t.Errorf("U+%04X must not be escaped: %q", r, got)
+		}
 	}
 }
