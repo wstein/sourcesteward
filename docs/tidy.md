@@ -59,7 +59,7 @@ row N, and Enter or `n` chooses nothing. Anything else asks again; after three i
 A `decision` row asks a second confirmation that names its lock and path. A foreign item needs the typed confirmation read from
 `/dev/tty` (the owner label, or `unknown`, followed by the first six characters of the plan id) while the plan set is built
 and again when it is applied; `y`, standard input and `--yes` never replace it. With no terminal, in agent mode or when nothing is
-choosable, the wizard prints the overview, stores nothing, never reads stdin and exits 0 unless the evidence is incomplete (a repository error or a skipped repository), which exits 1 as for `plan`.
+choosable, the wizard prints the overview, stores nothing, never reads stdin and exits 0 unless the evidence is incomplete, which exits 1 as for `plan`: a repository that could not be analysed, a repository skipped as `base-ambiguous`, `base-missing` or `remote-ambiguous`, a state directory skipped as unsafe, or an overview cut at its bounds (`output-limit`).
 
 **Plan and apply.** The chosen rows become one stored plan set with a content-addressed id; its sub-plans are the existing
 reference, tracking and retirement plans. Storing changes nothing. `stw tidy apply PLAN-ID` applies the sub-plans in a fixed order with
@@ -78,7 +78,7 @@ stw tidy apply PLAN-ID --yes --json    # explicit id authorizes; refused without
 ```
 
 **Exit codes.** 0 analysis complete (also with retained or other-owner candidates, and the no-terminal degradation when the evidence is complete) or apply fully
-completed. 1 refusal, incomplete evidence, a repository `error` or skipped repository, stale or failed sub-plan, cancellation
+completed. 1 refusal, incomplete evidence, a repository `error`, a repository skipped as `base-ambiguous`, `base-missing` or `remote-ambiguous`, an unsafe state directory, stale or failed sub-plan, cancellation
 (`--timeout`, interrupt), a store problem, or output cut at its bounds (`output-limit`); the overview is printed first. 2 invalid usage:
 mixed layers, `--yes` without an id, `--plan` with a positional id, unknown `--only`, `--mine` without `$STW_OWNER`, a missing workspace.
 

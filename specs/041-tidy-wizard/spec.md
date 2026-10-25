@@ -84,7 +84,7 @@ stw tidy                                   # interactive: overview, then "Apply 
 stw tidy plan                              # overview in text, stores nothing, exit 0
 stw tidy plan --json                       # one document, stores nothing
 stw tidy plan --save --json                # also stores the plan set; prints "plan_id"
-stw tidy apply 3f9c2a7e41b8                # asks "Apply plan 3f9c2a7e41b8 (7 removals)? [y/N]" on a TTY
+stw tidy apply 3f9c2a7e41b8                # asks "Apply plan 3f9c2a7e41b8 (N sub-plans, M items)? [y/N]" on a TTY
 stw tidy apply 3f9c2a7e41b8 --yes --json   # non-interactive; the explicit plan id is the authorization
 stw tidy plan --member sourcesteward --only retire,branches   # narrow the analysis
 stw tidy plan --member-base sourcesteward=refs/heads/trunk    # override one derived base
