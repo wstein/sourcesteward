@@ -41,7 +41,7 @@ this PR neither changes their current commands nor enables T012b.
 | Hashing and identities | Version/domain-bound SHA-256 for the complete manifest content, selected rows, mode/scopes, derived values, sub-plan locators/versions/digests and ordered effects. New full 64-hex manifest IDs; no old 12-hex ID reinterpretation. Exact canonicalization is defined below. |
 | Ordering and grouping | One prune sub-plan per repository plus exact registration; multiple selected registrations become independent sub-plans. Version-2 ordering: retire, registration-prune, branches, tracking. No automatic branch leg follows prune; same-target retire/prune overlap refuses. |
 | Apply dispatch | Explicit version-2 manifest reader and closed `(kind, contract_version, operation)` dispatch. Validate every sub-plan before any effects. New prune requires `(registration-prune, 4, registration-prune)` and the version-4 plan reader. No speculative fallback through v3 readers. |
-| Restore reader and effects | Explicit `tidy restore --contract 4` reads only version-4 prune history/payload. Inspection is read-only; `--authorize` separately permits administrative restore, with its own version-4 restore journal and fresh checks. Existing branch restore is unchanged and never used for this capability. |
+| Restore reader and effects | Explicit `tidy restore --contract 4` reads only version-4 prune history/payload. Inspection is read-only; `--apply --authorize` separately permits administrative restore, with its own version-4 restore journal and fresh checks. Existing branch restore is unchanged and never used for this capability. |
 | History reader | Explicit `tidy history --contract 4` enumerates only the new namespace, validates version/operation and emits version-4 recovery summaries. Old history does not reinterpret or ignore incompatible files inside its own namespace. New history does not scan raw payload bytes. |
 
 ## Expert selector and interfaces
@@ -50,9 +50,9 @@ These are proposed command grammars, not sample output or claims of implemented
 commands. Existing human/JSON rendering, escaping and output-error rules apply.
 
 - `stw tidy plan [PATH] --contract 4 --prune-registration NAME --registration-gitdir ABS_PATH --state-dir DIR [--json]`
-- `stw tidy apply PLAN_ID --contract 4 --state-dir DIR --authorize [--json]`
-- `stw tidy restore --contract 4 --plan PLAN_ID --state-dir DIR [--authorize] [--json]`
-- `stw tidy history [PATH] --contract 4 --state-dir DIR [--json]`
+- `stw tidy apply --plan PLAN_ID --contract 4 --state-dir DIR --authorize [--json]`
+- `stw tidy restore --contract 4 --plan PLAN_ID --state-dir DIR [--apply --authorize] [--json]`
+- `stw tidy history [PATH] --contract 4 --state-dir DIR [--limit N] [--json]`
 
 `NAME` and `ABS_PATH` are each required exactly once. The former is the exact
 native immediate registration name, the latter its canonical immediate gitdir
@@ -79,14 +79,73 @@ including `--base`, `--ref`, `--task`, `--owner`, `--remove-registration`, `--re
 completion/adoption override. Unknown flags refuse, not silently ignore.
 No prompt, editor, pager, network or native mutation runs during planning.
 
+Prune apply uses the named `--plan` expert path, never a positional ID. The
+existing `tidy apply <12-hex-id>` path remains manifest 1, with its current
+`--yes`/prompt authorization and rejection of `--plan`, `--authorize` and
+`--contract`. A positional 32- or 64-hex ID still refuses on that old path.
+No ID length or file sniffing silently selects a new operation.
+
 Prune apply requires the matching stored plan and explicit authorization. Restore
-without authorization inspects eligibility and reports the proposed effects;
-it writes no journal or recovery file. Authorized restore revalidates and writes
-its separate intent before changing metadata. `--as` and branch-ref selectors
+without both mutation flags inspects eligibility and writes no journal or
+recovery file. Matching contract-3 conventions, both `--apply` and `--authorize`
+are required together for mutation; either flag alone is usage exit 2. Authorized
+restore revalidates and writes its separate intent before changing metadata. `--as` and branch-ref selectors
 are invalid for registration restore. Restored registration remains missing
 and locked; finding a moved checkout is not itself a refusal. Native
 `git worktree repair` stays a separately authorized owner step, printed as
 escaped argv data; it is never run by either prune or administrative restore.
+
+History follows contract 3: default limit 256 journals, explicit `--limit` in
+1..1024, newest first. Zero, negative, repeated, malformed and over-ceiling
+limits are usage exit 2. `restore --contract 4 --list --state-dir DIR
+[--limit N] [--json]` provides the same read-only listing; `--list` excludes
+`--plan`, `--apply` and `--authorize`. Outside `--list`, restore rejects `--limit`.
+A declared limit or output bound sets explicit `truncated: true` and exit 1 when
+more matching records exist; it is never a complete recovery inventory.
+
+## Prune scope and authorization
+
+Every prune overview row, selected manifest item and expert plan registration
+binding contains `scope`: `own`, `other` or `unknown`. Use the existing
+`owner.Resolve` rule with the verified completed creation record's owner and
+the recorded `mode.caller`: an exact nonempty caller-label match is own, a
+verified different owner is other, and missing/unproven ownership is unknown.
+A label is not authentication; private-store access plus the complete original
+creation/lock proof remains mandatory. Path/author hints cannot grant prune.
+
+Agent mode may plan, save and apply only safe own prune items whose
+`owner_source` is `task-record`. Viewing another owner does not authorize that
+owner's items. Reject other/unknown agent items even with `--yes`, `--authorize`
+or edited `authorized_scopes`. Human mode may select proven own or other items;
+unknown ownership is never selectable for this operation and cannot be
+confirmed away. Re-derive scope and mode at apply, compare the saved evidence
+and refuse incompatible actor/mode changes before any effect.
+
+For own items, `authorized_scopes` stays empty unless other selected legacy
+items require it. An explicit manifest ID plus `--yes` can confirm only a set
+of own items, under existing mode rules. Without `--yes`, the human path asks
+for confirmation; no terminal or declined confirmation refuses. Every prompt
+must first show the exact repository, registration name/gitdir, missing
+destination, task/owner, scope, plan ID, metadata-only effect, recovery location,
+no-expiry payload retention and moved-checkout/restore limitation, escaped and
+bounded. Nothing is selected by default.
+
+For a human's other-owned prune item, persist `other` in `authorized_scopes`
+only after typed terminal confirmation under the existing `owner.Confirm`
+rule: owner word
+plus the first six manifest-ID characters, once per confirmation word. A label
+that is not one word uses the existing literal `unknown` confirmation word;
+that spelling does not admit an unknown-ownership item. `--yes` never replaces
+this confirmation. Construct the proposed scope set in memory, bind it and mode before computing
+the manifest ID, then confirm that ID. Persist only after confirmation. Recheck
+the same owner/scope authorization and typed confirmation at apply; never
+insert scopes after hashing or treat a saved scope as effect authorization.
+The expert single-plan path applies the same ownership rules: `--authorize`
+consents to the declared effect but cannot grant another owner's scope.
+Human other-scope expert planning therefore needs the same typed confirmation,
+using the expert plan ID, before storing that scope authorization. Expert
+apply must obtain that typed confirmation again as well as `--authorize`;
+the saved scope alone never authorizes effects.
 
 ## Closed record vocabulary
 
@@ -111,16 +170,17 @@ optional values are explicit null. Native IDs remain full backend-specific IDs.
 | Prune journal `phase` | `prepared`, `recovery-confirmed`, `removing`, `complete`, `partial`. |
 | Restore journal `phase` | `prepared`, `restoring`, `complete`, `partial`. |
 | Per-effect `outcome` | `planned`, `observed`, `refused`, `unknown`; only observed confirms that exact effect. |
+| Row/item/registration `scope` | `own`, `other`, `unknown`; selection and authorization follow the scope section. |
 | New row `owner_source` | `task-record`, `unknown`; only the former may authorize selection after full ownership proof. |
 | Recovery `status` | `not-prepared`, `available`, `unavailable`, `restored`, `unknown`. Available means verified payload and history pin, not merely recorded pointers. |
 
 Each new overview row contains `id`, `kind`, `repo`, `name`, `gitdir`,
-`destination`, `owner`, `owner_source`, `task`, `verdict`, `reason`, `proof`,
+`destination`, `owner`, `owner_source`, `scope`, `task`, `verdict`, `reason`, `proof`,
 `effects`, `evidence_digest` and `limitations`. Only matched Spec 010 ownership
 has `owner_source: task-record`; other ownership remains unproven. A row has
 no private payload, raw metadata, lock/config bytes or credential-bearing text.
-Its ID is the full SHA-256 of canonical `[operation, repo, name, gitdir]`, with
-the domain prefix `stw-registration-row-v4\n`. Revalidate evidence before
+Its ID uses the row encoding and domain in the digest table below.
+Revalidate evidence before
 persisting a plan; a stable row ID is not freshness or permission.
 
 The new overview preserves the 4-MiB renderer bound and 4096 combined candidate
@@ -133,27 +193,94 @@ wizard starts with no selection. Later T012b `all`/`--save` may select only safe
 rows through the new manifest; an old-contract stale row never becomes safe
 merely because this proposal exists.
 
+## Digest encodings and domains
+
+Define `C(value)` as UTF-8 compact JSON with recursively sorted object keys in
+UTF-8 byte order, integer numeric fields, Go encoding/json Marshal string
+escaping (including HTML and U+2028/U+2029), and no insignificant whitespace,
+BOM, trailing LF, duplicate keys or omitted fields. Present arrays never become
+null. Do not normalize Unicode, case, paths or native IDs while encoding them;
+admission must already have established the exact bound spelling/identity.
+Array normalization is explicit below; never sort an ordered effect sequence
+or the root-to-parent ancestor chain as if it were a set.
+
+`H(domain, bytes)` means lowercase 64-hex SHA-256 of the literal ASCII domain,
+then exactly one LF byte, then exactly `bytes`. Domains below have no implicit
+NUL, length prefix or other separator. A digest field encodes that hex string,
+not binary digest bytes. Existing native/creation-record digests retain their
+own original contracts; these domains do not reinterpret or migrate them.
+
+| Value | Exact domain and bytes before hashing |
+| --- | --- |
+| New row `id` | `H("stw-registration-row-v4", C(["registration-prune", repo, name, gitdir]))`; array order exactly as written. |
+| `evidence_digest` | `H("stw-registration-evidence-v4", C({schema_version: 4, operation: "registration-prune", registration: registration, expected: expected}))`. This is a field-shape definition, not program output. Include every registration and expected-state field; omit no witness or original-record binding. |
+| Plan `digest`, also the prune/restore journal's `plan_digest` | `H("stw-registration-plan-v4", C(plan without only its root digest field))`. Include plan ID, schema/operation, paths, mode/scopes, expected state, payload location and all declared effects/limits. |
+| `payload_digest` | `H("stw-registration-payload-v4", C(payload_manifest))`. Manifest fields are schema_version 4, operation registration-prune, plan_id, plan_digest and entries. It has no self-referential payload_digest field. |
+| Manifest-2 sub-plan `plan_digest` for prune | `H("stw-registration-plan-file-v4", exact stored-plan file bytes)`. Verify before decoding; separately verify the internal plan.digest above. |
+| Manifest-2 sub-plan `plan_digest` for legacy v3 | `H("stw-tidy-plan-file-v3", exact existing stored-plan file bytes)`. Preserve those bytes and validate with the unchanged v3 reader/internal digest rules. |
+| Restore journal's `prune_journal_digest` | `H("stw-registration-journal-file-v4", exact original prune-journal file bytes)`, sampled and revalidated before restore effects; restore never edits that original journal. |
+| Manifest-2 `plan_id` | `H("stw-tidy-plan-set-v2", C(manifest without only its root plan_id))`, with manifest array normalization below. |
+
+Payload entries are sorted by exact relative UTF-8 path, with duplicates refused.
+Each entry binds `path`, `kind` (`file`, `directory`, `absent`), original `mode`,
+`size` and `content_sha256`. Mode is the observed uint32 file-mode value,
+encoded as a decimal JSON integer; size is a nonnegative decimal integer.
+For a file, content_sha256 is ordinary SHA-256 over
+all raw content bytes, without decoding, prefix, LF conversion or truncation;
+size is the exact byte length. For a directory, size is zero and content hash
+is null. For explicit optional absence, mode/hash are null and size is zero.
+This is a logical manifest of bounded private sidecars, not a JSON conversion
+of binary metadata. The outer payload domain binds kind/path/mode/length/hash
+and its plan; a file hash alone is never complete recovery proof.
+
+Within expected state, metadata entries sort by relative path, protected
+siblings by native registration name then canonical gitdir, references by full
+native name, and original-record bindings by document role then immutable ID.
+Compare UTF-8 bytes and reject duplicate logical keys before sorting. Preserve
+ancestor-chain order from root to immediate parent, and declared mutation-step
+order. Sort mode marker/owner-filter sets, authorized_scopes and other explicitly
+set-valued names lexicographically, rejecting duplicates. No independent array
+order guess is allowed. These rules apply to both the evidence and plan digest.
+New plan/journal files are `C(full record)` plus one terminal LF; file-domain
+hashes include that LF. Raw sidecar bytes remain exact. Test LF/NUL/binary bytes,
+field and domain substitution, array permutations, missing witnesses, duplicate
+keys and all digest mismatches before any effect.
+
 ## Immutable records, storage and recovery
 
 Proposed store namespace: `tidy-registration-v4/`, separate from every legacy
 plan/journal namespace. Children are `plans/<plan-id>.json`,
 `journals/<plan-id>.json`, `payloads/<plan-id>/`, and
 `restores/<restore-id>.json`. Plan/restore IDs are independently generated
-32-character lowercase hexadecimal random IDs; stored content has its own full
-SHA-256 digest. Directories 0700/files 0600 are set explicitly; no umask reliance,
+32-character lowercase hexadecimal random IDs; stored content uses the
+explicit digest encodings above. Directories 0700/files 0600 are set explicitly; no umask reliance,
 symlink/hardlink traversal or overwrite of an existing ID. A missing/unrecognized
 namespace is not a cue to initialize it during history/restore inspection.
 
 A version-4 plan contains `schema_version`, `operation`, `plan_id`, `digest`,
-`source_path`, `state_dir`, `backend`, `registration`, `expected`, `payload_path`,
+`source_path`, `state_dir`, `backend`, `mode`, `authorized_scopes`,
+`registration`, `expected`, `payload_path`,
 `effects`, `recovery_limits`. The registration is exactly one name/gitdir/
 destination/task/owner binding. Expected state includes the complete witnesses
-from the narrow contract; digests alone are not raw metadata recovery.
+from the narrow contract, including mandatory `expected.common_dir_mount`.
+Digests alone are not raw metadata recovery.
+
+**Open implementation gate (#273 F2):** the merged admission slice observes
+destination-ancestor mount identities but does not yet bind the common
+directory mount. Before T503 planner/stored-plan acceptance and T505 apply
+acceptance, implement predicate 3 for that common directory: bind its native
+mount identity/availability and open-descriptor/path correspondence alongside
+device/inode/type/owner/mode, and revalidate them before every effect. Supported
+Linux/macOS native fixtures must prove this witness and refusal on its change,
+absence or unsupported observation. Destination witnesses or common-directory
+device/inode alone are not substitutes. This is mandatory missing source/test
+work, not another owner question or a completed guarantee. See the
+[admission evidence](../evidence/narrow-prune-admission-20261025.md).
 
 A journal contains `schema_version`, `operation`, `plan_id`, `plan_digest`,
 `phase`, `payload_digest`, `history_ref`, `history_oid`, `effects`, `remaining`,
 `diagnostics`. A restore journal additionally contains `restore_id` and the
-original prune journal digest. Per-effect entries bind action, exact target,
+original `prune_journal_digest`. Per-effect entries bind action, exact target,
 intent and observed outcome; an unknown outcome remains partial. The native
 history pin is `refs/stw/recovery/registration-prune/<plan-id>/head`, created
 only at an absent name and verified before removal. It preserves committed
@@ -175,27 +302,22 @@ manifest-1 storage and readers remain unchanged. No automatic conversion.
 Manifest fields are `schema_version`, `plan_id`, `sub_plans`, `derived`, `items`,
 `authorized_scopes`, `mode`. Sub-plans have required `id`, `state_dir`, `repo`,
 `kind`, `worktree`, `items`, `contract_version`, `operation`, `plan_digest`;
-`plan_digest` is SHA-256 of the exact immutable stored-plan file bytes, verified
-before decoding; the dispatched reader also verifies its existing internal
+`plan_digest` uses the version-specific file domain in the digest table,
+verified before decoding; the dispatched reader also verifies its internal
 digest and semantics. This rule does not alter old plan files.
 For prune, `worktree` is the exact registered missing destination, never a
 filesystem-delete instruction. Selected items additionally bind the registration
-name/gitdir and evidence digest; changing a label, effect or witness changes
+name/gitdir, scope and evidence digest; changing a label, effect or witness changes
 the manifest ID. All legacy item fields remain bound too.
 
-Canonical bytes use UTF-8 compact JSON: recursively sort object keys by UTF-8
-byte order; integer values only in numeric fields; strings use Go encoding/json
-Marshal escaping (including HTML and U+2028/U+2029); no insignificant whitespace,
-no omitted fields, no duplicate keys, no BOM or trailing LF. Before hashing,
-remove only the root `plan_id`; retain schema_version and every nested field.
-Normalize array order explicitly: sub-plans by the order below; each item-ID,
-authorized-scope and effect set lexicographically with duplicates refused;
-selected items by ID; derived entries by their complete canonical bytes.
-Preserve semantically ordered sequences inside expected-state records.
-The ID is full lowercase hex SHA-256 over `stw-tidy-plan-set-v2\n` followed by
-those canonical bytes. Prefixes denote literal ASCII plus one LF. Old hashing
-is neither changed nor accepted as a new ID. Test permutation invariance,
-field/version tampering, duplicate rejection and cross-version substitution.
+Use `C` and the manifest-ID domain from the digest table; remove only root
+`plan_id` and retain schema_version and every nested field. Normalize manifest
+arrays explicitly: sub-plans by the order below; each item-ID, authorized-scope
+and effect set lexicographically with duplicates refused; selected items by ID;
+derived entries by their complete canonical bytes. Preserve semantically
+ordered sequences inside expected-state records. Old hashing is unchanged and
+is never accepted as a new ID. Test permutation invariance, every bound-field
+mutation, domain/version substitution and duplicate refusal.
 
 | Sub-plan kind | Contract / operation | Apply order and reader |
 | --- | --- | --- |
@@ -214,12 +336,23 @@ own fresh independent proof. A later per-sub-plan refusal cannot imply that
 earlier successful effects were undone; retain explicit per-sub-plan outcomes.
 
 Contract-4 wizard save/apply uses manifest 2 even for a legacy-only selection.
-Apply must explicitly select manifest 2 (proposed `stw tidy apply PLAN_SET_ID
---plan-set-contract 2 --state-dir DIR --authorize`); reject simultaneous `--contract` and
-`--plan-set-contract`. The 64-hex ID does not itself select a reader. Legacy
-manifest dispatch is unchanged; no new plan kind is routed through it. Reject
-unknown/old incompatible records before effects, with no retry under another
-version, extension sniffing, best-effort field dropping or silent upgrade.
+The proposed distinct subcommand is `stw tidy apply-set PLAN_SET_ID
+--plan-set-contract 2 --state-dir DIR [--yes] [--json]`. It accepts exactly one
+full 64-hex manifest ID and the explicit version selector; it rejects `--plan`,
+`--authorize` and `--contract`. This avoids changing today's positional
+`tidy apply` reader, parser or authorization. Existing manifest-1 commands,
+12-hex IDs and flags remain unchanged; neither path accepts the other's IDs.
+The new path retains existing wizard mode, `--yes` and terminal-confirmation
+semantics, including typed confirmation for other scopes; it does not invent
+an expert `--authorize` bypass for plan sets.
+
+A contract-4 wizard that applies a new selection directly invokes the same
+manifest-2 validator/dispatcher and authorization, never the old positional
+reader. The selected manifest version, not an ID-length guess, controls its
+internal route. Validate the closed version/operation tuple and every stored
+sub-plan before effects. Reject unknown/old incompatible records, with no
+retry under another version, extension sniffing, best-effort field dropping
+or silent upgrade.
 
 ## Acceptance and owner gate
 
