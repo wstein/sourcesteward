@@ -199,3 +199,27 @@ func TestPruneV4CLIRefusesUnprovenOrChangedSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestPruneV4CLIRejectsAmbiguousAndLegacyGrammar(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		flags  []string
+		reason string
+	}{
+		{"implicit-contract", []string{"--prune-registration=x"}, "explicit --contract 4"},
+		{"missing-selector", []string{"--contract=4"}, "are required"},
+		{"duplicate-name", []string{"--contract=4", "--prune-registration=x", "--prune-registration=x"}, "must occur exactly once"},
+		{"duplicate-contract", []string{"--contract=4", "--contract=4"}, "must occur exactly once"},
+		{"old-task", []string{"--contract=4", "--task=old"}, "not valid for contract-4"},
+		{"old-retirement", []string{"--contract=4", "--retire-worktree=old"}, "unknown flag: --retire-worktree"},
+		{"online", []string{"--contract=4", "--online"}, "not valid for contract-4"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			code := Run(context.Background(), "dev", append([]string{"tidy", "plan"}, tc.flags...), &out, &stderr)
+			if code != 2 || !strings.Contains(stderr.String(), tc.reason) {
+				t.Fatalf("exit=%d stdout=%q stderr=%q; want usage refusal %q", code, out.String(), stderr.String(), tc.reason)
+			}
+		})
+	}
+}

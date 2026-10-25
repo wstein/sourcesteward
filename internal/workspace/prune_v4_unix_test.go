@@ -234,3 +234,38 @@ func TestRegistrationPruneV4DigestDomainsAndCanonicalKeys(t *testing.T) {
 		t.Fatal("canonical JSON has a raw LF")
 	}
 }
+
+func TestRegistrationPruneV4HumanOtherScopeNeedsConfirmation(t *testing.T) {
+	for _, accept := range []bool{false, true} {
+		t.Run(map[bool]string{false: "refused", true: "accepted"}[accept], func(t *testing.T) {
+			opts, original := fixturePruneV4(t)
+			opts.Mode.Mode, opts.Mode.Caller = "human", "different-owner"
+			calls := 0
+			opts.Confirm = func(word, id string) error {
+				calls++
+				if word != original.Registration.Owner || !pruneV4ID(id, 32) {
+					t.Fatalf("confirmation binding: %q %q", word, id)
+				}
+				if !accept {
+					return context.Canceled
+				}
+				return nil
+			}
+			result := PlanRegistrationPruneV4(context.Background(), opts)
+			if calls != 1 {
+				t.Fatalf("confirmation calls=%d", calls)
+			}
+			entries, err := os.ReadDir(filepath.Dir(pruneV4PlanPath(original)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !accept {
+				if result.Status != "refused" || len(result.Diagnostics) != 1 || result.Diagnostics[0].Code != "prune-scope-refused" || result.Diagnostics[0].Message != "Typed owner and plan confirmation was refused." || len(entries) != 1 {
+					t.Fatalf("refused confirmation persisted or wrong reason: %+v, plans=%d", result, len(entries))
+				}
+			} else if result.Status != "ok" || result.Plan == nil || result.Plan.Registration.Scope != "other" || !reflect.DeepEqual(result.Plan.AuthorizedScopes, []string{"other"}) || len(entries) != 2 {
+				t.Fatalf("accepted confirmation/scope: %+v, plans=%d", result, len(entries))
+			}
+		})
+	}
+}
