@@ -675,7 +675,7 @@ Each has a recommended default; the foreman decides.
 14. **Removing an unregistered foreign worktree.** Recommended: via the Spec 029 legacy completion path (exact path, declared complete by the human's explicit choice, same proofs). Alternative: refuse until adopted into a registration (safer, slower).
 15. **Recently-active window and bare `stw tidy`.** **Decided (foreman):** 24 hours; bare `stw tidy` becomes the wizard, `stw tidy --help` stays help. Original recommendation: 24 hours for `other`/`unknown` scope, and bare `stw tidy` becomes the wizard (it printed help; `--help` stays). Alternative: 4 hours; bare `stw tidy` stays help and the wizard is `stw tidy wizard`.
 16. **Workspace config list of state dirs.** **Decided (foreman):** later (flags, `$STW_STATE_DIR` and the shared default first). Original recommendation: ship flags and `$STW_STATE_DIR` first, the config key with OQ3. Alternative: ship both together.
-11. **`stw status` hint.** Recommended: the `branches-unmerged` and `worktree-stale` items (Spec 037 rows 23, 24) change their suggested command to `stw tidy` once this ships.
+11. **`stw status` hint.** **Decided (owner, 2026-10-25): accepted; implemented.** Original recommendation: the `branches-unmerged` and `worktree-stale` items (Spec 037 rows 23, 24) change their suggested command to `stw tidy` once this ships.
 
 ## Docs impact
 
