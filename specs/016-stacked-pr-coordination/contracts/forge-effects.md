@@ -10,7 +10,7 @@ block their affected capabilities.
 ```text
 stw stack publish
 stw stack publish plan PATH --repo OWNER/NAME --observation FILE
-    [--select ACTION_ID ...] [--online] [--save --state-dir DIR]
+    [--select ACTION_ID ...] [--online] [--state-dir DIR] [--save]
     [--timeout DURATION] [--json | --human]
 stw stack publish apply PATH --plan ID --state-dir DIR --online
     --authorize-remote ACTION_ID [--authorize-remote ACTION_ID ...]
