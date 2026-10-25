@@ -13,6 +13,10 @@ CLEAR, implementation acceptance or live forge evidence.
 | A3 | Safety / addressed | receipts, T017–T019/T029–T031 | Separate docs/code before-push matrix from unconditional exact-current-head Ready gates; compute class/full parent-inclusive identity range and use actual candidate SHA. Signing remains gated. |
 | A4 | Cross-spec / addressed | spec boundary, research, receipts | 012 observation is advisory, 014 is isolated prediction, 015 is local plumbing/CAS, 013/032 local recovery, 016 selected forge effects, 043 separate human landing/deletion. Native rewrites and conditional 043 order remain qualified. |
 | A5 | Traceability / addressed | tables below and tasks | Each FR/SC has individual task tags and a literal test idea. All tasks are future unchecked work, not executable acceptance evidence. |
+| A6 | Adapter / addressed | spec FR-015, receipts, model, T017/T018 | The 016-only moved-scope alias maps exactly from validated 015 review_gate.change_class; source class never substitutes for recomputed effective publication class. |
+| A7 | Decision inventory / addressed | research Cross-spec decision index, progress | All 39 current source (spec, ID) pairs are indexed with unchanged recommendations/deferrals, blocked capability and related 016 group. |
+| A8 | Output binding / addressed | effect contract, model, T006/T008 | Bare help emits no data object; a complete empty-selection plan binds one resolved repository and stays unsaved. |
+| A9 | Policy scope / explicit narrowing | spec Scope/FR-015, receipts, T017 | Initial 016 excludes the narrow workspace later-round wording-only review exception and all remote deletion; broader owner/manual policies remain separate. |
 
 Standalone comment execution is deferred original-draft scope under OQ-WRITES;
 initial agent PR text writes are explicitly own-body edits only. 012 depth advice
@@ -32,19 +36,19 @@ Every tagged task is included here (bidirectional mapping); none is checked.
 | --- | --- | --- |
 | FR-001 | T013, T014 | Same name with different head repository/SHA never verifies linkage; reject wrong producer/kind/version and 035 restack-needed event as 012 restack-advised finding, never using its merge-commit parent as trunk/target. |
 | FR-002 | T013, T014 | Offline supplied PR URLs/evidence cause zero auth, HTTP, fetch and cache calls. |
-| FR-003 | T006, T008, T010, T016, T022 | Empty selection has zero actions; unsaved default has null id/zero plan writes; explicit nonempty --save needs validated directory, and each effect exposes exact target/blocker. |
+| FR-003 | T006, T008, T010, T016, T022 | Empty selection has zero actions; unsaved default has null id/zero plan writes but retains one resolved repository; bare help has no JSON object, and explicit nonempty --save needs validated directory, and each effect exposes exact target/blocker. |
 | FR-004 | T009, T010, T019, T031 | Move head/base or revoke permission before action two; action two refuses before its intent/write. |
 | FR-005 | T025, T026, T027 | Lose response after success; reconcile once without repeating or claiming local restore undoes it. |
 | FR-006 | T017, T019 | Try main, tags, delete, force, bare lease, merge and auto-merge; zero forbidden vectors/requests. |
 | FR-007 | T004, T005, T024, T034 | Native Git publication and native jj observation have distinct capability results; no forged parity. |
 | FR-008 | T004, T005, T024, T034 | Colocated jj publication refuses without Git push; commit/change/operation ids remain distinct. |
-| FR-009 | T008, T033 | Render identical typed refusal/partial evidence in human and JSON; freeze all legacy schema bytes. |
+| FR-009 | T006, T008, T033 | Render identical typed refusal/partial evidence in human and JSON; bare help has no object, complete empty plan binds one repository and null repository is rejected; freeze all legacy schema bytes. |
 | FR-010 | T007, T008, T027 | Exhaust each request/record/body/result/deadline cap and cancel; no complete-success or next effect. |
 | FR-011 | T001, T004, T035, T036, T038 | Omit one mandatory minimum/current native lane; acceptance remains blocked, not passed/skipped green. |
 | FR-012 | T006, T008, T009, T010 | Authorize one action with wrong plan or local authorization only; no remote write occurs. |
 | FR-013 | T011, T012, T022, T023 | Foreign task with matching branch prefix/author or raced body ownership refuses own-PR/body action. |
 | FR-014 | T017, T019 | Race remote old SHA after sampling; full ref/full old/full actual new lease rejects without retry widening. |
-| FR-015 | T017, T018, T036 | Docs-only child above open code parent, parent add/remove code cancellation in net tree diff, and unknown parent/path fixtures all yield effective code from the per-commit publication path union OR validated moved-scope class; equal/non-equal tier matrix and actual-SHA review still apply. |
+| FR-015 | T017, T018, T036 | Docs-only child above open code parent, parent add/remove code cancellation in net tree diff, and unknown parent/path fixtures all yield effective code from the per-commit publication path union OR validated moved-scope class; map only producer/version/head-validated 015 review_gate.change_class into the 016 alias, reject field/provenance confusion, and require actual-SHA code review even for the explicitly unsupported later wording-only exception. |
 | FR-016 | T017, T018, T036 | Owner-only child above foreign-committer open parent fails full default..new-head identity gate. |
 | FR-017 | T002, T017, T018, T036 | Signed source has equal range-diff but signature-dropped; unresolved/required-signature policy blocks. |
 | FR-018 | T029, T030, T031, T036 | Remove each current-head CLEAR/required-green/true-rebaseable/accepted-scope fact; Ready refuses. |
