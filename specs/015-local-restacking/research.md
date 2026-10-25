@@ -95,9 +95,11 @@ reads, 025/030 bind PR/CI evidence without Ready/merge inference, 042 separates
 attribution from authentication, and 043 is the human owner's distinct landing
 invocation. D6 preserves direct explicit parent/head input without a hard 012
 or 014 implementation dependency. Spec 012 at the inspected main has `parent-merged-child-stale` and
-`base-mismatch` findings. `restack-needed` is a [Spec 035 watch event](../035-stw-watch/contracts/watch-events.md)
-and is proposed as a 012 finding in pending [PR #237](https://github.com/wstein/sourcesteward/pull/237);
-that pending vocabulary is not a stable-main 012 contract. All are observations,
+`base-mismatch` findings. `restack-needed` is the published [Spec 035 watch event](../035-stw-watch/contracts/watch-events.md).
+The current 012 proposal in pending [PR #237](https://github.com/wstein/sourcesteward/pull/237)
+uses the distinct finding code `restack-advised` (renamed in that PR after this
+015 research record was first written). It is not a stable-main 012 contract,
+and the 035 event code is unchanged. All are observations,
 not local or remote authorization. Native-stack management must not be raced.
 **Alternatives considered:** local mutation authorizes lease push; a local old
 head is treated as observed remote head; name matching or a closed PR proves

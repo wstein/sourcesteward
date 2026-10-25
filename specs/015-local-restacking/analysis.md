@@ -156,7 +156,7 @@ reviewed history. Root owns the one correction push and subsequent review/CI.
 | F2 medium: trusted-owner full push range | Actual owner identity cannot be widened by flags; 016 checks every author/committer in observed-default..actual-new-head including parent commits. Config evidence renders origins/keys and only policy-needed name/email values; other user values omitted/redacted, no writes | `TestRemoteHandoffRejectsOtherSHAOrMissingAuthorization`: foreign parent, repeated foreign identity flag, local/global origin, unrelated user-option secret sentinel; trusted source remains OQ-2/OQ-3 |
 | F3 medium: signature loss/helper effects | Explicit unsigned `--no-gpg-sign`, neutralized signing program/config/environment, per-commit `signature-dropped` even for `=`; OQ-8 refusal/disclosure choice linked to separate 043 OQ6 | `TestApplyNeverRunsSigningHelper`, `TestApplyReportsDroppedSignatures`; signed/required/unknown-policy scope unavailable pending owner decision; reviewer's native measurement attributed, not rerun |
 | F4 low: reference command overrides | Human commands pin rebase.updateRefs=false/rerere.enabled=false; plumbing never reads/writes original rr-cache or moves other refs; v1 rendered text stays historical/frozen | `TestApplyReplaysExactTwoDotRange` with rr-cache and other-ref sentinels; no porcelain invocation |
-| F5 low: finding provenance | `restack-needed` attributed to main Spec 035 watch event and pending 012 PR #237, not stable-main 012 finding | Source/Markdown provenance only; pending 012 vocabulary is not acceptance |
+| F5 low: finding provenance | Published `restack-needed` belongs to the main Spec 035 watch event; the current pending 012 PR #237 proposal is the distinct `restack-advised` finding. Earlier 015 heads used the pre-rename proposal name; neither name establishes stable-main 012 acceptance | Source/Markdown provenance only; pending 012 vocabulary is not acceptance; event code unchanged |
 | F6 low: authorization/restore vocabulary | `--plan ID --state-dir DIR --authorize` and one `restore` leaf; `--run` previews, optional save stores reverse plan, separate explicit authorization applies it; rationale versus direct 032 restore recorded under OQ-1 | `TestRestackRestoreRequiresSeparatePlanAndCAS`: preview/save has no ref effect; mixed selection/apply flags exit2 |
 | F7 low: task/analysis edges | Every task-tag/requirement-row edge is symmetric, including foundational FR-001–FR-005/FR-007 and signing-policy ownership; checkbox/dates unchanged | Markdown-only extraction audit: 42 rows, 44 tasks, 157 matching edges, historical 20 checked/24 unchecked; not native test evidence |
 
@@ -172,3 +172,16 @@ eight explicit OQs, class-dependent pre-push versus independent Ready gates,
 trusted-owner full-range identity, explicit signature loss, and bounded local
 restore effects. Independent review of the exact corrected head is still pending;
 the author does not promote the original NOT CLEAR verdict to CLEAR.
+
+
+## First-pair terminology correction after 012 rename
+
+The [012 delta review](https://github.com/wstein/sourcesteward/pull/237#pullrequestreview-5640937608)
+of head `9d5c2465` identified stale current provenance in this spec's research
+and F5 disposition: the 012 proposal is now `restack-advised`, while published
+Spec 035 keeps the separate `restack-needed` event. Current wording above is
+corrected; the original F5 review and earlier 015 heads describe the pre-rename
+proposal historically. No 012 file, event envelope, schema or product behavior
+changes here. Prior [015 delta CLEAR](https://github.com/wstein/sourcesteward/pull/238#pullrequestreview-5640885230)
+applies only to `bba492d1aeac9fc486f2289830b3531f9b29a341`; the new corrected
+head requires its own coordinator review/CI gates.
