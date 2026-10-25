@@ -120,7 +120,7 @@ feature selection and no persistence; existing templates/history are not reset.
 | V native peers | Git first under D4; jj enabled only after native operation/bookmark proof, no raw Git writes or false parity |
 | Publication boundary | D8: every remote step is a 016 plan/action with exact actual-new-SHA CLEAR and fresh checks; 043 remains the human owner's landing invocation |
 
-Open OQ-1 to OQ-6 block the affected implementations. OQ-7 preserves 012's
+Open OQ-1 to OQ-6 and OQ-8 block the affected implementations. OQ-7 preserves 012's
 explicit opt-in reads without adding network here. Recommendations are not
 settled policy. This plan is ready for independent documentation review, not
 blanket runtime implementation or product acceptance.
@@ -145,7 +145,10 @@ blanket runtime implementation or product acceptance.
    uses the OQ-3 explicit actual committer policy, and exposes actual new SHA.
    Verify one-to-one all `=` range-diff and actual identities against the trusted
    owner only before target CAS; flags cannot extend that owner identity.
-   Initial apply refuses occupied refs; changing a caller's own attached
+   Candidates use explicit `--no-gpg-sign` and signing-program neutralization;
+   per-source-signature `signature-dropped` is reported even for `=` rows. OQ-8
+   blocks signed/required-signature scope until refusal/disclosure policy is
+   accepted; no signing helper or implicit loss. Initial apply refuses occupied refs; changing a caller's own attached
    worktree is a separate future capability requiring OQ-6 resolution.
 5. Extract/reuse a reviewed neutral durability seam from
    `internal/stwsync/journal.go` with unchanged characterization tests. Typed

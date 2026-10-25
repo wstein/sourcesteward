@@ -12,6 +12,7 @@ separate from proposed local apply/recovery/jj work.
 - [x] T001 historical CLEAR is distinguished from this amendment's unreviewed head; T004/T021/T023/T024 remain unchecked.
 - [x] User outcomes and acceptance scenarios cover explicit local scope, stale state, native effects, partial outcomes and contract failure.
 - [x] Exact two-dot `--onto` replay semantics preserve D7 plumbing/quarantine/CAS, no porcelain rebase or implicit descendants.
+- [x] Actual candidates explicitly disable signing/helper execution; per-commit signature loss is disclosed and OQ-8 gates signed/required-signature acceptance.
 - [x] Trusted owner-only actual and full push-range identity checks include open-parent commits, reject caller-widened identities and report config origins without writes.
 - [x] Actual new SHA/equality/author AND committer evidence precedes a class-dependent policy receipt; 016 preserves docs-only pre-push exemption, code exact-new-SHA review and equal-pure-rebase middle-tier allowance; Ready always needs independent exact-head CLEAR plus green checks.
 - [x] Owned unoccupied-ref first apply is an explicit recommendation pending OQ-6, with original worktree/index/config unchanged.
@@ -25,7 +26,7 @@ separate from proposed local apply/recovery/jj work.
 
 ## Gates still open
 
-- [ ] Owner dispositions for affected OQ-1–OQ-6; OQ-7 wording clarification remains explicit.
+- [ ] Owner dispositions for affected OQ-1–OQ-6 and OQ-8; OQ-7 wording clarification remains explicit.
 - [ ] Independent complete-artifact review of this exact documentation head.
 - [ ] First-slice T021 minimum/current Git and T023 exact implementation-head acceptance; T024 actual limitation emission.
 - [ ] Implementation, failing/passing fixture evidence and enabled native Git/jj conformance for proposed apply/recovery.

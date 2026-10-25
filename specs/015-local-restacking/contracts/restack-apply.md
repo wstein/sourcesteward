@@ -51,7 +51,17 @@ the owner's workflow. A detached caller may inspect but is never switched.
 3. Materialize actual candidate commits with the proposed explicit committer
    policy of OQ-3, keeping each original author name/email/date. The fixed
    `stw-restack-plan <restack-plan@invalid>` committer of v1 predictions is never
-   persisted as the actual rewritten history. Record the actual candidate head,
+   persisted as the actual rewritten history. Candidates are never signed:
+   pass explicit `--no-gpg-sign`, neutralize signing-program/config/environment
+   paths and reject any attempt to invoke a signing executable. Detect source
+   `gpgsig`/`gpgsig-sha256` headers as bounded metadata only, and report per-commit
+   `signature-dropped` with old/new ids whenever a signed source becomes unsigned,
+   even when range-diff pairs `=`. This is disclosed loss, not signature validity
+   proof. OQ-8 must decide refusal versus disclosed loss for signed input or a
+   destination requiring signatures; until accepted, that affected capability
+   refuses rather than silently dropping or auto-signing. Unknown required-
+   signature policy cannot authorize publication. Spec 043 OQ6 remains separate.
+   Record the actual candidate head,
    tree and one-to-one old/new mapping. These ids are now meaningful identities.
 4. Require complete range-diff for `old_parent..old_head` against
    `new_parent..candidate_head`, every row `=`, exact moved count, no unpaired,
@@ -97,7 +107,8 @@ No atomicity across journal, object promotion and native ref storage is claimed.
 Proposed stable refusal codes: `plan-invalid`, `plan-version-unsupported`,
 `plan-stale`, `ownership-unproven`, `attribution-mismatch`, `attribution-unknown`,
 `protected-ref`, `branch-in-use`, `repository-hazard`, `operation-in-progress`,
-`replay-conflict`, `range-diff-not-equal`, `identity-mismatch`,
+`replay-conflict`, `range-diff-not-equal`, `signature-policy-unresolved`,
+`signature-required`, `identity-mismatch`,
 `identity-unproven`, `parent-integration-unproven`, `journal-unavailable`,
 `recovery-unavailable`, `ref-changed`, `capability-unavailable`, `bound-exceeded`,
 `canceled`, `output-failed`. This future set does not rename implemented v1 codes.
