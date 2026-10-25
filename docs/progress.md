@@ -48,8 +48,9 @@ The refreshed designs keep explicit operation boundaries: [012 stack observation
 [015 local restack plan/apply](../specs/015-local-restacking/spec.md),
 [013 checkpoint/restore/selective undo](../specs/013-checkpoint-resume/spec.md) using Spec 032 journal/recovery conventions,
 and [016 selected forge effect plan/apply](../specs/016-stacked-pr-coordination/spec.md).
-Each design has a proposed plan, research, model, Markdown contracts, validation guide, future tasks and author analysis;
-new sibling artifacts remain subject to their own review/publication and are not new runtime evidence.
+Specs 012–015 have merged design artifacts: plan, research, model, Markdown contracts, validation guide, future tasks and author analysis.
+Spec 016 completes the forge design and shared status reconciliation. Documentation review is recorded per exact head in PR evidence;
+merged documents are not runtime or native-conformance evidence.
 These features stay planned. Only the hidden Git 015 v1 planner has the source implementation described below;
 checkpoint/undo, integration preflight, local restack apply/jj and forge writes remain future work.
 
@@ -61,6 +62,11 @@ explicit signing policy, and exact-current-head CLEAR/required-green-CI/true-reb
 Native stack and jj publication capabilities remain separately measured/gated; [043 landing](../specs/043-stw-land/spec.md)
 is the human owner's separate invocation with conditional retarget/deletion order and unmeasured-shape refusal.
 No new JSON/schema contract is published by these Markdown designs, and hidden 015 v1 incomplete exit 3 is unchanged.
+012 now calls its nested finding `restack-advised`, distinct from the published 035 `restack-needed` event; SC-009 fanout remains
+blocked on OQ-FANOUT's concrete reachable entry decision. 013 safety copies retain independent payload/root lifetimes after checkpoint drop;
+jj restore has no operation-head CAS and initially refuses every workspace working-copy commit effect, the invoker included.
+014 requires actual full-H attribute-source/private-context pinning with red T033 before replay implementation; the existing-code
+follow-up [issue #241](https://github.com/wstein/sourcesteward/issues/241) remains separate. Native jj conflict aggregation stays OQ-JJCONF-gated.
 
 ## Active work: Spec 015 local restacking, first slice (source implemented, verification pending)
 
