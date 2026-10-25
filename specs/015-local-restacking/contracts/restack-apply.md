@@ -45,9 +45,11 @@ the owner's workflow. A detached caller may inspect but is never switched.
    registrations, operation state and selected refs. No fetch or derived base.
 2. Replay exactly the ordered nonempty `old_parent..old_head` onto `new_parent`
    in an owned object quarantine using D7 `merge-tree`/`commit-tree` plumbing.
-   The inert human reference `git rebase --onto NEW_PARENT OLD_PARENT BRANCH`
+   The inert human reference `git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto NEW_PARENT OLD_PARENT BRANCH`
    describes semantics only; stw never invokes it. No three-dot range, update of
-   other refs, implicit descendant replay, hook, helper or config write.
+   other refs, implicit descendant replay, hook, helper or config write. Plumbing
+   never reads/writes the original `rr-cache` and never moves any other ref, the
+   equivalents of disabling rerere and rebase.updateRefs in the human reference.
 3. Materialize actual candidate commits with the proposed explicit committer
    policy of OQ-3, keeping each original author name/email/date. The fixed
    `stw-restack-plan <restack-plan@invalid>` committer of v1 predictions is never
