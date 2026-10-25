@@ -73,6 +73,7 @@ func TestHooksViaCoreHooksPathRunInARealRun(t *testing.T) {
 	runGit(t, w.dir("b"), "config", "pull.rebase", "true")
 	gitHooks := []string{filepath.Join(w.ws, ".git", "hooks"), filepath.Join(w.ws, ".git", "modules", "b", "hooks")}
 	before := treeDigest(t, append([]string{dir}, gitHooks...)...)
+	_ = os.Remove(marker) // hooks of the fixture setup (commits) are not the run's
 	r := run(t, w, Options{})
 	got := repoByName(t, r)
 	if got["."].Result != ResultFastForwarded || got["b"].Result != ResultRebased || r.Error != nil {
@@ -98,6 +99,7 @@ func TestHooksRunInThePlansFetch(t *testing.T) {
 	runGit(t, w.ws, "config", "core.hooksPath", dir)
 	w.advance(t, ".", "main")
 	before := treeDigest(t, dir)
+	_ = os.Remove(marker)
 	r := run(t, w, Options{Plan: true})
 	if repoByName(t, r)["."].Result != ResultFastForward {
 		t.Fatalf("%+v", repoByName(t, r)["."])
@@ -127,5 +129,50 @@ func TestFailingHookViaCoreHooksPathFailsOnlyThatItem(t *testing.T) {
 	got := repoByName(t, r)
 	if got["a"].Result != ResultFailed || w.oid(t, "a", "HEAD") != oldA || got["b"].Result != ResultFastForwarded || r.ExitCode() != 1 {
 		t.Fatalf("%+v %+v", got["a"], got["b"])
+	}
+}
+
+// A hook file that Git cannot run is not a stw problem: a non-executable hook and a hook that is a directory are ignored
+// by Git, the item is still processed, and a symlink to an executable hook runs.
+func TestUnrunnableAndLinkedHooksViaCoreHooksPath(t *testing.T) {
+	w := newWorkspace(t)
+	marker := filepath.Join(w.root, "markers")
+	dir := hooksDir(t, w.root, "hooks", marker, nil)
+	// post-merge: not executable; post-rewrite: a directory; reference-transaction: a symlink to the real script
+	if err := os.Chmod(filepath.Join(dir, "post-merge"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "post-rewrite")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "post-rewrite"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(w.root, "real-reference-transaction")
+	if err := os.Rename(filepath.Join(dir, "reference-transaction"), real); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(dir, "reference-transaction")); err != nil {
+		t.Fatal(err)
+	}
+	for _, repo := range []string{".", "b"} {
+		runGit(t, w.dir(repo), "config", "core.hooksPath", dir)
+	}
+	runGit(t, w.dir("b"), "config", "pull.rebase", "true")
+	w.advance(t, ".", "main")
+	w.advance(t, "b", "main")
+	commit(t, w.dir("b"), "local.txt", "l\n")
+	_ = os.Remove(marker)
+	r := run(t, w, Options{})
+	got := repoByName(t, r)
+	if got["."].Result != ResultFastForwarded || got["b"].Result != ResultRebased || r.Error != nil {
+		t.Fatalf("%+v %+v", got["."], got["b"])
+	}
+	m := readMarker(t, marker)
+	if !strings.Contains(m, "reference-transaction prepared") {
+		t.Errorf("the symlinked hook did not run:\n%s", m)
+	}
+	if strings.Contains(m, "post-merge") || strings.Contains(m, "post-rewrite") {
+		t.Errorf("a hook Git cannot run was run:\n%s", m)
 	}
 }
