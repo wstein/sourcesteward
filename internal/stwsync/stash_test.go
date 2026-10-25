@@ -2,6 +2,7 @@
 package stwsync
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -178,5 +179,33 @@ func TestStashOIDIgnoresANewLookalikeOnAnotherTip(t *testing.T) {
 	}
 	if p := runGit(t, w.ws, "rev-parse", *g.StashOID+"^"); p != old {
 		t.Fatalf("claimed an entry on another tip: parent %s, old tip %s", p, old)
+	}
+}
+
+// An unreadable stash list before the update means nothing can be told apart: no OID is claimed, although the
+// entry is readable afterwards. The user's older stash object disappears when the run starts and comes back
+// during the update.
+func TestStashOIDIsNotClaimedWhenTheStashListWasUnreadableBefore(t *testing.T) {
+	defer func() { applyHook = nil }()
+	w := conflictWorkspace(t)
+	write(t, filepath.Join(w.ws, "g.txt"), "user stash\n")
+	runGit(t, w.ws, "add", "g.txt")
+	runGit(t, w.ws, "stash", "push", "-q", "-m", "user entry", "g.txt")
+	write(t, filepath.Join(w.ws, "ws.txt"), "local edit conflicting with the update\n")
+	user := runGit(t, w.ws, "rev-parse", "refs/stash")
+	object := filepath.Join(w.ws, ".git", "objects", user[:2], user[2:])
+	hidden := object + ".hidden"
+	applyHook = func(dir string) {
+		if err := os.Rename(object, hidden); err != nil {
+			t.Error(err)
+		}
+	}
+	hookScript(t, filepath.Join(w.ws, ".git"), "reference-transaction", "[ \"$1\" = prepared ] || exit 0\n[ -e '"+hidden+"' ] && mv '"+hidden+"' '"+object+"'\nexit 0\n")
+	g := repoByName(t, run(t, w, Options{Autostash: On}))["."]
+	if g.Result != ResultAutostashConflict || g.StashOID != nil || journaledStash(t, w) != "" {
+		t.Fatalf("%+v journal %q", g, journaledStash(t, w))
+	}
+	if len(stashOIDs(t, w)) != 2 {
+		t.Fatalf("entries %v", stashOIDs(t, w))
 	}
 }
