@@ -492,28 +492,27 @@ The plan id needs the ids of the sub-plans, and the sub-plans are ordinary store
 $ stw tidy
 Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
 Derived:   remote origin, base per repository (see below), state dirs ~/.local/state/stw/workspace (2 records), /s/wt (59 records), mode human (tty yes, no agent marker)
-Analysed 7 repositories in 6 s (offline; base last fetched 2 h ago in the oldest repository)
+Mode:      human (stdin tty, stdout tty, no agent marker)
+Analysed 2 repositories (0 skipped, 0 with errors)
 
 Repositories:
-sourcesteward   base refs/heads/main (origin/HEAD)
-bundledock      base refs/heads/main (origin/HEAD)
+bundledock   base refs/heads/main
+sourcesteward   base refs/heads/main
 
 owner claude (own)
-  sourcesteward
-    [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
-    [2] safe      worktree  /tmp/.../wt-038  task spec038-x  branch codex/038-x  integrated (ancestor)   remove registration, files, branch
-    [-] retain    worktree  /tmp/.../wt-040  branch codex/040-x   unmerged: 2 commits ahead of origin/main
-    [-] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
   bundledock
-    [3] safe      branch    codex/old-1   integrated (merge-noop)   delete branch (recovery ref kept)
+    [1] safe     branch       codex/old-1  integrated (merge-noop)  effects delete-branch:codex/old-1
+  sourcesteward
+    [2] safe     worktree     /tmp/wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)  effects remove-registration, remove-files, delete-branch:codex/037-x
+    [-] retain   worktree     /tmp/wt-041  dirty: 3 modified files
 
 owner codex (other)
   sourcesteward
-    [4] safe      worktree  /tmp/whr010-a    owner codex (path convention) [other]  integrated (ancestor)  not preselected
+    [3] safe     worktree     /tmp/whr010-a  owner codex (path-convention) [other]  integrated (ancestor)  effects remove-registration, remove-files  not preselected
 
-summary: 4 safe (3 own, 1 other), 2 retain   (13 other worktrees and branches kept; see --json)
+summary: 3 safe (2 own, 1 other), 1 retain
 
-Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner codex  [d]etails N  [n]one (default n): a
+Apply which? [a]ll own safe  [1,3 / 1-3]  [o]wner codex  [d]etails N  [n]one (default n): a
 Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
 Apply it now? Run:  stw tidy apply 3f9c2a7e41b8        (or answer y here) [y/N]: n
 ```
@@ -522,7 +521,7 @@ Rules: the default answer is always *none*/*no*; only `safe` and `decision` rows
 a second confirmation naming the lock); the answer is parsed strictly (anything else re-asks up to 3 times, then exits 1 with
 nothing stored); on EOF or no TTY the wizard behaves as `plan` without `--save` (US7). Applying inside the wizard is allowed only after
 the explicit `y` on that plan id and runs the very same `apply` code path (no separate implementation). All text passes the shared
-`esc` and the 120-character bound; the overview shows at most 10 rows per repository in text with `and N more (use --json or
+`esc` and the 120-character bound; the overview shows at most 10 rows per repository inside each owner group in text with `and N more (use --json or
 details)`, and JSON lists every candidate.
 
 ## JSON
