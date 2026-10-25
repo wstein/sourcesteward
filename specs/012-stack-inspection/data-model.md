@@ -211,10 +211,27 @@ The caller selects a target explicitly and revalidates native ownership and ever
 | No 012 field | Repeatable `--identity "NAME <EMAIL>"` | Expected identities come only from the caller’s explicit identity flags. Never derive them from commits, stack/PR text, backend output, configuration, environment or predicted replay identity. Omission remains 015 `unknown`, never pass. |
 | `identity` workspace/repository evidence | Positional PATH | Revalidate that the selected path belongs to that native repository and an allowed owned workspace; do not borrow another checkout or transfer ownership. |
 
-Diagnostic codes remain per-command namespaces, not a translated universal error enum: 012 `stack-limit` and `stack-ref-invalid`/`stack-ref-ambiguous` are not renamed to 015 `bound-exceeded`, `ref-not-found` or `ref-ambiguous`. 015 may also reject syntax with exit 2 before an observation; its incomplete exit remains 3. The consumer must read that command’s status, diagnostic and exit contract rather than treating a 012 result as a 015 verdict.
+### Diagnostic reconciliation with implemented Spec 015 v1
+
+These are comparable per-command categories, not an automatic translation or a shared enum. Read each command’s own result and status; a 012 observation is not a 015 verdict.
+
+| Spec 012 code | Spec 015 v1 code | Meaning | Exit: 012 / actual 015 v1 |
+| --- | --- | --- | --- |
+| `stack-limit` | `bound-exceeded` (or a bound-specific code such as `range-too-large`) | Evidence collection exhausted a declared bound; incomplete rather than success | 1 / 3 |
+| `stack-ref-invalid` | `ref-not-found` | A selected reference cannot be found after that command’s accepted syntax checks | 1 / 1 |
+| `stack-ref-invalid` | `ref-not-commit` | A selected object/reference does not resolve to a supported commit | 1 / 1 |
+| `stack-ref-ambiguous` | `ref-ambiguous` | Reference/object naming is not unique under the command’s selector rules | 1 / 1 |
+| Usage error (no result JSON) | Usage error (no result JSON) | Invalid flag combinations or selector syntax, including a short 015 branch selector | 2 / 2 |
+
+The 015 incomplete exit remains 3 until the separate migration decision OQ-EXIT; this table changes no implemented code or published contract.
+
 
 Spec 015's first slice can obtain those same explicit inputs independently (D6). Any later conversion re-resolves them through native ownership gates, recomputes replay evidence, and produces its own plan. Actual local apply yields actual old/new outcomes; exact-head checks and independent review bind that actual new head before Spec 016 may construct a separately selected lease-push plan. Predicted quarantine heads and committer identity never replace actual publication evidence. No new handoff JSON document, state file or session identifier is introduced by this model.
 
 `restack-needed` is suppressed for confirmed native-stack management and closed-unmerged parents. Stale or missing merged-parent objects use the existing fetch/stale-base notes; no positive landing proof is invented. A closed parent can still yield `base-mismatch` for its child, with no automatic retarget. Offline `unchecked` native status remains visible in the notice and boundary.
 
 The `restack-needed` finding carries child indices in `detail.layers` and `detail.native_status`, not commit ids. Follow those indices to `Layer.fork_commit_id`/`tip_commit_id` and the sampled `base.commit_id`; when a plan exists, its replay step `expected` fields expose the applicable first destination. Later `new_parent_commit_id: null` deliberately waits for an actual predecessor apply and makes no promise of an already sampled future boundary.
+
+## Existing watcher event is a separate input contract
+
+012’s `kind: "stack"` result contains finding `code: "restack-needed"` with child indices and native-status detail. The existing [035 watch-event v1](../035-stw-watch/contracts/watch-events.md) instead uses top-level `kind: "restack-needed"`, merge-triggered reasons and explicit event `details` including `old_parent`, `new_parent`, `branch` and `argv`. Its `new_parent_source: "merge_commit_sha"` can identify an older merge commit than 012’s selected `base.commit_id`; these destinations are not interchangeable. Neither payload implies that the other observation exists, and a consumer never validates or coerces them as one schema. Existing watch-event schema bytes/publication status are untouched. Event argv is advisory data, not an executable 012/015 plan: re-observe ownership and selected boundaries, choose the destination explicitly and create the effect owner’s own plan before any separately authorized action.

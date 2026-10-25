@@ -38,9 +38,11 @@ The author review is not independent analysis. Independent cross-artifact analys
 - [x] `stack-too-deep` is inferred advice at complete candidate open_depth >2, excludes proven-landed layers and keeps incomplete/error open depth null, with independent hard cap 32 local layers; `restack-needed`, stale child base and closed-unmerged parent evidence have explicit rules and future tests.
 - [x] Pure decision functions and Spec 040 bounded indexed fan-out are specified, with no background polling.
 - [x] Every FR and SC is individually mapped to task ids and a literal test idea in analysis.md; this is design traceability, not executed acceptance.
-- [x] OQ-NET, OQ-FLAGS and OQ-EXIT are labelled Needs owner decision, with recommended defaults and deterministic current contracts; no owner answer is invented.
+- [x] OQ-NET, OQ-FLAGS, OQ-EXIT and OQ-FANOUT are labelled Needs owner decision, with recommended defaults and deterministic current contracts; no owner answer is invented.
 - [x] Network opt-in was an open recommendation, not an owner-approved decision; shared online/output/timeout naming remains explicitly gated before implementation.
 - [x] Every current printed Git replay form includes fixed rebase.updateRefs=false and rerere.enabled=false overrides, with future scratch assertions; 015 D7 plumbing/CAS remains unchanged.
+- [x] Existing Spec 035 watch-event and proposed nested 012 finding namespaces/payloads/destinations remain distinct; event argv is never a trusted effect plan.
+- [x] Offline flag polarity and actual v1 diagnostic exits are explicit; production fan-out is blocked until a concrete reachable caller is owner-selected.
 - [ ] Independent review is CLEAR for this refresh's exact final head and required publication checks are green (coordinator records separately).
 - [ ] Implementation/native backend/schema conformance is executed and accepted (future source task, not this Markdown scope).
 
