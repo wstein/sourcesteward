@@ -257,20 +257,33 @@ use a fake `gh` through `GH`, with `CI_WAIT_SLEEP` and `CI_WAIT_NOW` replacing `
 ## Pre-push self-check
 
 Run `python3 scripts/selfcheck.py [BASE]` inside the worktree before every push, including a push
-of review fixes. `BASE` defaults to `refs/remotes/origin/main`; if that ref is missing the tool
-stops with exit status 2 and says how to fetch it. `--head REF` checks another commit and
-`--owner NAME` (default `Werner Stein`) sets the expected author and committer.
+of review fixes. `BASE` defaults to `refs/remotes/origin/main`; `--head REF` checks another commit.
+The tool is read-only, uses only the Python standard library and is covered by
+`scripts/test_selfcheck.py`, which `make check` runs with the other script tests.
 
-It reads only the lines added by `BASE...HEAD` and fails (exit status 1) on: words glued to
-numbers (`hidden015planner`; code spans, fenced blocks, link targets and URLs are ignored), an
-added blank line right after another one in Markdown, a second `Source:` line in a
-`chartroom/notes/` note, `git diff --check` errors, a commit without a `Co-Authored-By` trailer,
-an author or committer other than the owner, and a claude.ai link or `Claude-Session` trailer in
-a commit message.
+| Exit | Meaning |
+| --- | --- |
+| 0 | no FAIL (INFO lines may still need your attention) |
+| 1 | at least one FAIL |
+| 2 | usage or environment error: not a git repository, unknown base or head ref, no merge base (for example a shallow clone: fetch more history), a failing git command |
+
+It reads only the lines added by `BASE...HEAD` (file names and hunks are read with explicit git
+options, so host diff settings, spaces and non-ASCII characters in paths do not change the result)
+and fails on: words glued to numbers (`hidden015planner`, `Exit0`; code spans, fenced blocks, link
+targets, reference definitions and URLs are ignored, and a code span silences a false positive;
+hex tokens of seven or more characters, `sha256sum`, `base64url` and similar are accepted), an
+added blank line right after another one in Markdown, more than one `Source:` line outside fences
+in a `chartroom/notes/*.md` note, `git diff --check` errors, a claude.ai link or `Claude-Session`
+trailer in a commit message, and an author or committer that differs from the expected identity.
+
+The expected identity is `--owner 'NAME <EMAIL>'`, or else the current git identity
+(`user.name` and `user.email`, read only; the tool never writes git configuration). With neither,
+the identity check is skipped with an `INFO identity` line. A containing workspace may also
+require a `Co-Authored-By` trailer: `--require-trailer` fails any commit without one in its
+trailer block.
 
 `INFO` lines never fail the run. `claims` lists each added doc line that names a `file:line`, an
 exit status or a `--flag`; `tick` flags an "N/M done" statement that differs from the ticked
-tasks in a changed `tasks.md`. Verify every INFO line against the code and tests yourself (the
-tool cannot) and say so in the PR body. The tool is read-only, uses only the Python standard
-library and is covered by `scripts/test_selfcheck.py`, which `make check` runs with the other
-script tests.
+tasks in a changed `tasks.md`; `encoding` names a file that is not valid UTF-8. Verify every
+`claims` and `tick` line against the code and tests yourself (the tool cannot) and say so in the
+PR body.
