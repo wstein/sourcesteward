@@ -7,9 +7,10 @@ Run it inside the worktree you are about to push. It checks the lines added by B
 (default BASE refs/remotes/origin/main, default HEAD the checked-out commit) for defect
 classes that reviews keep finding:
 
-  glued         words glued to numbers ("hidden015planner", "Exit0", "schema_version1"); code
+  glued         lowercase words glued to numbers ("hidden015planner", "Exit0", "schema_version1");
+                identifiers (CamelCase, snake_case, ALL_CAPS, base64-like) never match; code
                 spans, fenced blocks, link targets, reference definitions and URLs are ignored
-                (.md and .json files). Accepted patterns: pure hex tokens of 7+ characters,
+                (.md files only). Accepted patterns: pure hex tokens of 7+ characters,
                 sha<N>sum, md5sum, base<N>[url], keyword spellings such as "row2" or "code128"
   blank         an added blank line directly after another blank line in markdown
   source        more than one "Source:" line (outside fences) in a chartroom/notes/*.md note
@@ -17,7 +18,9 @@ classes that reviews keep finding:
   identity      author or committer not equal to the owner, compared as the whole
                 "NAME <EMAIL>" string; the owner is --owner or else the current git identity
                 (read with `git config --get user.name` and `user.email`, never written);
-                without either the check is skipped with an INFO line
+                without either the check is skipped with an INFO line; an identity taken from
+                git config is always printed, and FAILs when it looks like a placeholder
+                (name of 2 characters or fewer, or an email without a dotted domain)
   session-link  a claude.ai link or Claude-Session trailer in a commit message
   trailer       (only with --require-trailer) a commit without a Co-Authored-By trailer in its
                 trailer block
@@ -40,8 +43,10 @@ GIT = ["git", "-c", "core.quotepath=off", "-c", "diff.noprefix=false", "-c", "co
 DIFF = ["--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--inter-hunk-context=0"]
 
 # Glued-word patterns. Digits directly between letters, or a keyword directly followed by digits.
-BETWEEN = re.compile(r"\b[a-z]{3,}[0-9]+[a-z]{3,}\b", re.I)
-KEYWORD = re.compile(r"\b(?:schema_version|exit|revision|rows|codes|version)[0-9]+\b", re.I)
+# Case-aware on purpose: only lowercase prose words (optionally capitalised) count, so identifiers
+# (CamelCase, snake_case, ALL_CAPS, base64-like tokens) never match.
+BETWEEN = re.compile(r"\b[A-Za-z]?[a-z]{2,}[0-9]+[a-z]{3,}\b")
+KEYWORD = re.compile(r"\b(?:schema_version|[Ee]xit|[Rr]evision|[Rr]ows|[Cc]odes|[Vv]ersion)[0-9]+\b")
 ACCEPT = re.compile(r"^(?:sha[0-9]+sum|md5sum|base[0-9]+(?:url)?|[0-9a-f]{7,})$", re.I)
 CLAIM = re.compile(r"(\b\w+\.\w+:\d+|exit (?:status |code )?\d|`--[a-z-]+`)")
 OPEN_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
@@ -155,11 +160,12 @@ def run(a, base, head):
         raise Fatal(f"no merge base between {base} and {head} (shallow clone or unrelated history? "
                     "fetch more history, for example `git fetch --unshallow`, or pass another BASE)")
 
-    owner = a.owner
+    owner, from_config, name, email = a.owner, False, "", ""
     if not owner:
         name = decode(git("config", "--get", "user.name")[1]).strip()
         email = decode(git("config", "--get", "user.email")[1]).strip()
         owner = f"{name} <{email}>" if name and email else None
+        from_config = owner is not None
 
     failed = False
 
@@ -182,21 +188,19 @@ def run(a, base, head):
             info("encoding", f, "not valid UTF-8; read with replacement characters")
 
     for f in names:
-        if not f.endswith((".md", ".json")) or raw_of[f] is None:
+        if not f.endswith(".md") or raw_of[f] is None:
             continue
-        md = f.endswith(".md")
         full = lines_of(raw_of[f])
-        skip = fenced(full) if md else set()
+        skip = fenced(full)
         for n, t in rows_of[f]:
             if n in skip:
                 continue
             for word in glued(strip_code(t)):
                 fail("glued", f"{f}:{n}", f"'{word}'")
-            if md:
-                if t.strip() == "" and n >= 2 and full[n - 2].strip() == "":
-                    fail("blank", f"{f}:{n}", "two consecutive blank lines")
-                if CLAIM.search(t) and not t.startswith("|"):
-                    info("claims", f"{f}:{n}", t.strip()[:110])
+            if t.strip() == "" and n >= 2 and full[n - 2].strip() == "":
+                fail("blank", f"{f}:{n}", "two consecutive blank lines")
+            if CLAIM.search(t) and not t.startswith("|"):
+                info("claims", f"{f}:{n}", t.strip()[:110])
 
     for tf in [f for f in names if f.endswith("tasks.md") and raw_of[f] is not None]:
         lines = lines_of(raw_of[tf])
@@ -225,6 +229,11 @@ def run(a, base, head):
 
     if owner is None:
         info("identity", "-", "skipped: pass --owner 'NAME <EMAIL>' or set user.name and user.email")
+    elif from_config:
+        info("identity", "-", f"owner identity taken from git config: {owner}; pass --owner to pin it")
+        if len(name) <= 2 or not re.search(r"@[^@\s.]+(\.[^@\s.]+)+$", email):
+            fail("identity", "-", f"the git config identity {owner} looks like a placeholder (leaked "
+                 "throwaway identity?); fix it or pass --owner")
     for h in decode(must("log", "--format=%H", f"{base}..{head}")).split():
         rec = decode(must("log", "-1", "--format=%an <%ae>%x00%cn <%ce>%x00%B", h)).split("\0", 2)
         an, cn, body = rec[0], rec[1], rec[2]
