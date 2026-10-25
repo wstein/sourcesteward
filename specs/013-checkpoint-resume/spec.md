@@ -21,6 +21,7 @@ A task owner preserves local progress before a handoff or risky operation.
 1. **Given** an owned workspace with local changes, **When** checkpoint is planned, **Then** included/excluded files, snapshot effects and recovery limits are shown.
 2. **Given** an authorized unchanged plan, **When** checkpoint is applied, **Then** a durable checkpoint identifies exactly what was saved without disturbing unrelated work.
 3. **Given** untracked files or possible secrets outside selected scope, **When** checkpoint is requested, **Then** no unselected content is silently captured.
+4. **Given** a checkpoint whose selected bytes must be removed, **When** its exact deletion plan is authorized and confirmed, **Then** only its exclusive owned payloads/roots are removed, remaining dependencies refuse and partial outcomes retain accurate receipts and byte counts.
 
 ### User Story 2 — Resume safely (Priority: P1)
 
@@ -79,7 +80,7 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 
 - **FR-001**: Reuse Spec 010 mutation/ownership contracts and Spec 032 recovery durability conventions through a reviewed typed integration. Checkpoint capture defaults to none; require explicit path/state selection and show included/excluded content. Untracked and ignored content require separate explicit selection and a supported capture capability; journal metadata is not a saved file payload. Bind new roots to reserved operation-specific 013 namespaces, never reuse another feature's roots/records or infer jj root durability from a visible bookmark.
 - **FR-002**: Preserve native semantics: Git index/worktree state and jj working-copy/change/operation state are not interchangeable.
-- **FR-003**: Record durable checkpoint identity, exact selected content and integrity evidence, exclusions, retention and recovery limits before acknowledging success. Partial capture is incomplete, never a restorable complete checkpoint; protect incomplete recovery records from automatic expiry.
+- **FR-003**: Record durable checkpoint identity, exact selected content and integrity evidence, exclusions, retention and recovery limits before acknowledging success. Partial capture is incomplete, never a restorable complete checkpoint; protect incomplete recovery records from automatic expiry. Keep possibly sensitive selected bytes in an owner-only external store with explicit private modes, per-checkpoint and total-store quotas, zero content logging/output and separately planned, authorized exact-checkpoint deletion with truthful partial outcomes.
 - **FR-004**: Make resume inspection read-only; restoration is a separate authorized plan that refuses changed relevant state and never silently discards current work.
 - **FR-005**: Keep task context bounded and caller-provided; never execute stored text or automatically capture credentials, environment dumps or agent transcripts.
 - **FR-006**: Report partial outcomes and backend-specific unsupported recovery; a jj operation ID alone does not promise restoration of disk edits or external effects.
