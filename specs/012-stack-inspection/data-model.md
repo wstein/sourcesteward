@@ -19,6 +19,8 @@ Types live in `internal/inspection` (local observation, plan) and `internal/host
 | `tip` | Ref or `null` | |
 | `fork_commit_id` | commit id or `null` | the commit the lowest layer is based on; `null` with no layer |
 | `layers` | Layer[] | at most 32, bottom first, `index` 1.. |
+| `depth` | integer 0..32 | count of retained local layers, including proven-landed ones; incomplete/error counts describe only retained evidence, never complete topology |
+| `open_depth` | integer 0..depth or `null` | candidate upper bound excluding only proven-landed layers under the spec landing predicates/stale-base precedence; unknown landing and closed-unmerged layers stay candidates. Not a verified open-PR count. Null unless status is ok/complete; a non-prefix landed set still independently blocks the plan |
 | `findings` | Finding[] | at most 400, order of the spec table, then layer, then subject |
 | `plan` | Plan or `null` | non-null if and only if `mode` is `plan` and `status` is not `error` |
 | `remote` | Remote or `null` | non-null if and only if `--pull-requests` was given and repository selection succeeded |
@@ -98,7 +100,7 @@ Source `outcome` is `ok`, `denied`, `not-found`, `rate-limited`, `failed` or `sk
 
 | Code | `detail` keys |
 | --- | --- |
-| `stack-too-deep` | `depth` (integer, observed bounded layer count 3..32; cap exhaustion uses `stack-limit` and may omit this advice), `recommended_max` (constant 2) |
+| `stack-too-deep` | `depth` (integer 3..32, retained local layers), `open_depth` (candidate upper bound, integer 3..depth), `recommended_max` (constant 2); emitted only for complete evidence, confidence inferred |
 | `restack-needed` | `layers` (integer[], immediate children of qualifying parents, unique, bottom first), `native_status` (`plain-chain` \| `unchecked`) |
 | `stack-behind-base` | `behind_by` (integer, capped at 10000, `capped` boolean) |
 | `layer-ref-multiple` | `refs` (string[]) |
@@ -130,7 +132,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | Code | Template |
 | --- | --- |
 | `stack-landed` | The tip is already contained in the base; there is nothing to stack. |
-| `stack-too-deep` | Stack depth {depth} exceeds the recommended maximum {recommended_max}; this is advice only. |
+| `stack-too-deep` | Candidate open depth bound {open_depth} across {depth} local layers exceeds the recommended maximum {recommended_max}; this is advice only. |
 | `restack-needed` | Layers {layers} retain old parent commits; local restack advice is conditional on native status: {native_status}. |
 | `stack-behind-base` | The stack is based {behind_by} commit(s) behind the base. |
 | `layer-ref-multiple` | Layer {layer} is named by more than one reference: {refs}. |
@@ -181,7 +183,7 @@ Each `summary` is exactly its template with `{…}` filled by escaped, bounded v
 | `expected` | object | `rebase`: `{layer_tip, old_parent_tip, new_parent, new_parent_commit_id}` (commit ids; `new_parent` a name; `new_parent_commit_id` the sampled base commit for the first rebase step, `null` for later ones); `fetch`: `{remote}`; `link`: `{numbers}`; empty for `observe` |
 | `requires` | string[] | ids of earlier steps |
 
-Invariants: `stack-too-deep` is not a `blocked.reason` and never changes `status` or exit. The `restack-needed` notice never overrides the existing plan groups. `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step.
+Invariants: `depth == len(layers)`; complete candidate `open_depth` excludes only proven-landed layers and is never a verified PR count, while incomplete/error has null `open_depth`. `stack-too-deep` requires complete evidence and candidate `open_depth > 2`, is inferred, is not a `blocked.reason` and never changes `status` or exit. The `restack-needed` notice never overrides the existing plan groups. `rebase` steps are consecutive layers bottom up with each `requires` the previous one; `old_parent_tip` is the sampled `fork_commit_id` of that layer; no step has `effect` other than the table's; a `blocked` plan has no step for the blocked layer or above; an unsafe name gives `blocked`, never a partially quoted step.
 
 ## Boundary
 

@@ -35,7 +35,7 @@ The author review is not independent analysis. Independent cross-artifact analys
 - [x] Historical spike measurements, unverified items and old review provenance are preserved and clearly historical.
 - [x] Current stack command/schema implementation is not claimed; all Spec 012 implementation task boxes remain unchecked.
 - [x] Observation, optional local restack input and separate forge effects are distinct; Spec 015 D6/D7/D8/D9 remain settled.
-- [x] `stack-too-deep` is advisory at >2, with independent hard cap 32; `restack-needed`, stale child base and closed-unmerged parent evidence have explicit rules and future tests.
+- [x] `stack-too-deep` is inferred advice at complete candidate open_depth >2, excludes proven-landed layers and keeps incomplete/error open depth null, with independent hard cap 32 local layers; `restack-needed`, stale child base and closed-unmerged parent evidence have explicit rules and future tests.
 - [x] Pure decision functions and Spec 040 bounded indexed fan-out are specified, with no background polling.
 - [x] Every FR and SC is individually mapped to task ids and a literal test idea in analysis.md; this is design traceability, not executed acceptance.
 - [x] OQ-NET, OQ-FLAGS and OQ-EXIT are labelled Needs owner decision, with recommended defaults and deterministic current contracts; no owner answer is invented.

@@ -34,14 +34,13 @@ The statuses, diagnostics and exit codes are normative in [spec.md](../spec.md) 
 Rendered from the same result, bounded, with every control character escaped. Only the fixed lines and the finding summaries of the data model (normative) appear:
 
 ```text
-Stack: base main (adcdcf6) .. tip s3 (88da0eb), 3 layers, backend git
+Stack: base main (adcdcf6) .. tip s3 (88da0eb), 3 local layers, candidate open depth <=2, backend git
 Layers (bottom first):
   1. s1  5758b57  1 commit   landed: applied
   2. s2  eceac4e  1 commit   landed: pending
   3. s3  88da0eb  1 commit   landed: pending
 Findings:
   [action] [observed] layer-applied-in-base (layer 1): All 1 commits of layer 1 are already in the base as equivalent patches. (git-cherry)
-  [notice] [observed] stack-too-deep: Stack depth 3 exceeds the recommended maximum 2; this is advice only. (git-refs)
   [notice] [inferred] restack-needed: Layers 2 retain old parent commits; local restack advice is conditional on native status: unchecked. (git-cherry, git-range)
   [notice] [observed] stack-behind-base: The stack is based 1 commit(s) behind the base. (git-range)
 Plan (advisory; nothing was executed, and a plan authorizes nothing; native stack status not checked):
@@ -177,27 +176,6 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
   }
  ],
  "findings": [
-  {
-   "code": "stack-too-deep",
-   "layer": null,
-   "subject": null,
-   "severity": "notice",
-   "confidence": "observed",
-   "reason": null,
-   "summary": "Stack depth 3 exceeds the recommended maximum 2; this is advice only.",
-   "detail": {
-    "depth": 3,
-    "recommended_max": 2
-   },
-   "evidence": [
-    {
-     "source": "git-refs",
-     "fields": [
-      "layers"
-     ]
-    }
-   ]
-  },
   {
    "code": "restack-needed",
    "layer": null,
@@ -358,7 +336,9 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
   }
  },
  "notice": "Sampled advisory evidence; stw ran none of the printed commands and a plan authorizes nothing.",
- "observed_at": "2026-10-17T12:00:00Z"
+ "observed_at": "2026-10-17T12:00:00Z",
+ "depth": 3,
+ "open_depth": 2
 }
 ```
 
@@ -375,7 +355,7 @@ Every existing command, flag, schema and fixture is unchanged and byte-identical
 
 ## Toolbelt handoff and advisory findings
 
-`stack-too-deep` is a notice at more than two layers; it neither changes completion status nor blocks a plan. All layers up to the hard cap 32 remain visible. The 33rd layer exhausts LIM-2 and yields incomplete, independently of the notice.
+`depth` counts retained local layers, including proven-landed ones. Complete `open_depth` is the candidate upper bound after excluding only proven-landed layers under the landing predicates and stale-base precedence; unknown landing and closed-unmerged layers remain candidates, so this never asserts an exact open-PR count. Incomplete/error results have null `open_depth` and no depth notice. `stack-too-deep` is an inferred notice only when complete candidate open_depth >2; it neither fails completion nor blocks a plan. The example has depth 3 but one proven-applied parent, so open_depth 2 and no notice. All local layers up to 32 remain visible; the 33rd independently exhausts LIM-2.
 
 `restack-needed` uses the exact Findings rule and is conditional when native status is unchecked. Rebase-merge SHA inequality and branch-name matches alone are never landing proof. `git cherry`/patch ids qualify linear patch content; merge commits, squash mismatches and conflict resolutions limit that evidence. A parent that is closed but not merged is not landed; its child's stale base remains only `base-mismatch`. No observation authorizes a retarget, rewrite or publication.
 
