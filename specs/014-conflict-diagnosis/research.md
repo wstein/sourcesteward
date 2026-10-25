@@ -115,9 +115,12 @@ Spec 040 requires pure derivation with concurrency only at the reviewed edge.
 
 **Alternatives considered:** observation implies apply, local apply implies push,
 or clean prediction supplies publication/Ready evidence. None is valid.
-[Spec 012](../012-stack-inspection/spec.md) OQ-NET remains open on online-by-default versus explicit
-`--pull-requests` opt-in reads; retaining explicit opt-in is its recommendation,
-not a recorded owner approval. This feature does not resolve or amend that choice.
+At this feature's base, [Spec 012 plan](../012-stack-inspection/plan.md) open
+question 3 asks about online-by-default versus explicit `--pull-requests` opt-in
+reads. The separately proposed [Spec 012 refresh in PR 237](https://github.com/wstein/sourcesteward/pull/237)
+labels that choice OQ-NET; this reference does not assume the refresh is on main.
+Retaining explicit opt-in is a recommendation, not recorded owner approval.
+This feature does not resolve or amend that choice.
 014 performs no network; supplied remote context is external sampled data without
 a refresh.
 
