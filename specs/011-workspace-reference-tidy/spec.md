@@ -127,3 +127,22 @@ Legacy completion is independent provenance, never a creation journal or inferre
 The new Git-v3-only user-content policy and shared complete metadata channel limits are
 specified in Spec 029 FR-017–FR-032. Source implementation and global/native acceptance remain
 separate; no server writes, fetch/prune, automatic adoption or cleanup fallback is added.
+
+## Narrow registration prune amendment (2026-10-25)
+
+Owner-approved scope: exactly one named stw-locked Git registration with a missing
+directory and durable registration recovery evidence, as specified in the
+[narrow prune contract](contracts/narrow-registration-prune.md). Broad worktree prune
+remains excluded. This proposed extension is separate from implemented WIs and present
+checkout retirement; no existing implementation or conformance claim covers it.
+
+- **FR-013**: Enforce the contract's exact selection, original ownership/lock binding,
+  absence-witness gate, immutable plan, fresh checks, confined effect and explicit backend refusals.
+- **FR-014**: Persist and verify bounded private raw registration recovery plus committed-history
+  recovery before removal; report partial effects and require separate authorized restoration.
+- **FR-015**: Resolve the frozen-schema/interface and platform absence-witness decisions with
+  the owner before implementation; preserve published contracts and unified exit classes.
+
+Acceptance for FR-013–FR-015 is the new T501–T508 sequence in [tasks](tasks.md).
+A missing pathname alone is insufficient evidence of deletion rather than a move or unmount.
+Until the decisions and implementation are accepted, the current wizard retains stale rows.

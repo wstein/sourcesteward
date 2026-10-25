@@ -66,3 +66,17 @@ fallback, bookmark abandonment or remote deletion. Existing native jj bookmark c
 is a mandatory regression gate, not a new behavior to implement.
 The [follow-up tasks](tasks.md#issue-62-shared-layout-consumers) gate exact-source review and
 minimum/current conformance. Public schemas and legacy strict record decoding stay unchanged.
+
+## Narrow prune amendment delivery
+
+The [narrow prune contract](contracts/narrow-registration-prune.md) proposes a distinct
+Git-only operation over one named missing-directory registration. Reuse private-store,
+original creation ownership and native recovery mechanisms where valid; add a complete
+bounded private registration payload and a separately authorized restoration path.
+Do not reuse present-checkout retirement by inventing disk evidence or clear the stw lock.
+
+Deliver this specification PR first. Source work waits for independent CLEAR, owner merge,
+and owner resolution of the contract's schema/interface and absence-witness gates. Then
+implement expert planning/apply/recovery test-first in a separate PR; only after its accepted
+capability exists, implement Spec 041 T012b classification/plan-set wiring in the final PR.
+No task/progress completion is asserted here. T501–T508 define the dependencies and evidence.
