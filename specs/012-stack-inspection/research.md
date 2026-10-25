@@ -1,5 +1,10 @@
 # Research: Stack inspection and plan (v2)
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Only --online opts into reads; single repository now, batch deferred.
+> This is a documentation target, not implementation or native acceptance.
+
 Historical evidence gathered on 2026-10-17; preserved during the Markdown-only refresh of 2026-10-25. No experiment, command or live read in this document was rerun for that refresh. The original author environment and later reviewer measurements are distinct: M13–M16 record the reviewers’ installed jj versions, despite no jj binary in the original author environment.
 
 Evidence gathered on 2026-10-17. Environment: Git 2.56.0 (`/usr/local/bin/git`) and Git 2.47.3 (`/usr/bin/git`) on linux/arm64; `gh` 2.102.0 with the extension `gh stack` v0.2.1 (`github/gh-stack`); **no jj binary** in this environment (only a throwaway fake under another session's scratch directory), so that original author made no jj measurement; later reviewer measurements are explicitly attributed in M13–M16. Git experiments ran in scratch repositories under the session scratchpad (`exp/`). GitHub facts come from the owner's spike in `wstein/stack-spike-20261017` (a private repository that allows merge, squash and rebase merges; PRs merged by the owner in the web UI) and from read-only `GET` calls against that repository made while writing this document. No write call was made.
@@ -100,7 +105,7 @@ After a server rebase-merge with the head branch deleted, `git fetch --prune` le
 
 ### M16. Git measurements behind the backend-independent guard (round 8 and 9 reviewers, Git 2.56.0)
 
-Native stack `s1` (two commits), `s2`, `s3`; GitHub squash-merges `s1`, deletes its head branch and has not yet rewritten `s2`/`s3`; the user runs `git fetch --prune` and deletes the local `s1`. The `s1` commits sit in layer 1 (`s2`); `git cherry` marks them all `+`, so the layer is `pending`; `s2`'s upstream is `same`; `stack-behind-base` is the only trigger; the merged member's `head.sha` is one commit of `origin/main..s3` (count 1), so the exact test works on Git. A printed `git rebase --onto origin/main <fork> s2` would drop `s1a` and `s1b` as already upstream (or conflict on the same lines) and compete with GitHub's rewrite. With a rebase-merge or one-commit squash and the local `s1` deleted, `git cherry` gives `- - +` for the range, so layer `s2` is `layer-partially-applied` and group 1 blocks. For a Git plain chain with the local `s1` deleted and `--pull-requests`, `native_checked` is true and no limitation is printed; the printed rebase either drops commits whose patch contents are already upstream or halts on an add/add conflict (measured, not harmful).
+Native stack `s1` (two commits), `s2`, `s3`; GitHub squash-merges `s1`, deletes its head branch and has not yet rewritten `s2`/`s3`; the user runs `git fetch --prune` and deletes the local `s1`. The `s1` commits sit in layer 1 (`s2`); `git cherry` marks them all `+`, so the layer is `pending`; `s2`'s upstream is `same`; `stack-behind-base` is the only trigger; the merged member's `head.sha` is one commit of `origin/main..s3` (count 1), so the exact test works on Git. A printed `git rebase --onto origin/main <fork> s2` would drop `s1a` and `s1b` as already upstream (or conflict on the same lines) and compete with GitHub's rewrite. With a rebase-merge or one-commit squash and the local `s1` deleted, `git cherry` gives `- - +` for the range, so layer `s2` is `layer-partially-applied` and group 1 blocks. For a Git plain chain with the local `s1` deleted and `--online`, `native_checked` is true and no limitation is printed; the printed rebase either drops commits whose patch contents are already upstream or halts on an add/add conflict (measured, not harmful).
 
 ## Decisions and rejected alternatives
 
@@ -116,7 +121,7 @@ Native stack `s1` (two commits), `s2`, `s3`; GitHub squash-merges `s1`, deletes 
 
 **D6. Explicit `--base` and `--tip`.** No default tip from HEAD: a jj workspace has no current branch, and peers should behave the same. Rejected: discover the stack from all local branches (ambiguity, FR-004).
 
-**D7. Proposed opt-in design (owner question remains open).** `--pull-requests` makes the network effect visible in the command line (constitution: network calls are effects a contract must disclose; Spec 016 FR-002). Rejected: always read when a remote exists (surprise authentication and rate use).
+**D7. Owner decision 2026-10-25: --online only.** `--online` makes the network effect visible in the command line (constitution: network calls are effects a contract must disclose; Spec 016 FR-002). Rejected: always read when a remote exists (surprise authentication and rate use).
 
 **D8. Delegation, not reimplementation, for native stacks.** M6 shows `gh stack link` is the supported path for jj-style workflows. For the later link effect the owner wants the bounded transport, not a subprocess; the write endpoints are unmeasured (writes need explicit authorization), so the effect catalog ([contracts/later-effects.md](contracts/later-effects.md)) lists the measurement as a precondition and keeps the printed `gh stack link` line as the only 012 output.
 
@@ -132,7 +137,7 @@ Native stack `s1` (two commits), `s2`, `s3`; GitHub squash-merges `s1`, deletes 
 | squash merge, one-commit layer | the squashed patch equals the layer's patch | `layer-applied-in-base` (patch equivalence, measured by the round 2 reviewer: `git cherry` gives `-`) | `rebase --onto` per remaining layer (group 5) |
 | squash merge, multi-commit layer | old commits in range, no patch equivalent | `parent-merged-child-stale` (`rewritten`, remote evidence only), inferred | `rebase --onto` per remaining layer (group 5) when `merge_commit_sha` is in `--base`; conflicts possible and found by the real rebase (unverified here) |
 | merge commit not contained in `--base` (stale base) | the merged layer's commits stay in range because `--base` was not updated | `parent-merged-child-stale` (`merge`) | `observe` note `stale-base` (group 3); no rebase onto the stale base |
-| any shape, offline (no `--pull-requests`) | native status unknown | local findings only | rebase steps with the boundary limitation `native_checked: false`; upstream `behind`/`diverged` switches to a describing `observe` (group 4) |
+| any shape, offline (no `--online`) | native status unknown | local findings only | rebase steps with the boundary limitation `native_checked: false`; upstream `behind`/`diverged` switches to a describing `observe` (group 4) |
 
 ## Unverified (each needs measurement before or during the named task)
 
@@ -159,9 +164,14 @@ Settled constraints from [Spec 015](../015-local-restacking/spec.md): D6 replace
 
 No new API/library recommendation or current GitHub claim is made here; recorded versions and GitHub behavior are historical, and future implementation must re-measure declared support before acceptance. Spec 040 owns bounded `internal/fanout` and pure-core concurrency discipline; Spec 041/042 own effect-side mode, ownership and attribution; Spec 043 human landing remains separately gated. Spec 032's network-fetching sync plan is a different contract and is never invoked by 012 observation.
 
-### Needs owner decision
+### Owner decisions (2026-10-25)
 
-See OQ-NET, OQ-FLAGS, OQ-EXIT and OQ-FANOUT in [spec.md](spec.md). Recommendation: keep an offline default with explicitly opted-in reads using shared `--online` and, if selected by the owner, a `--pull-requests` alias; align output/timeout flags through OQ-FLAGS, and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. No artifact records owner acceptance of the old network recommendation. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.
+OQ-NET chooses --online only, default offline, no old alias. OQ-FLAGS adopts
+--human/--json exclusivity and shortening --timeout, no store/offline alias.
+OQ-FANOUT chooses single repository now; a batch command is deferred to its own
+later decision, not an approved caller API. OQ-EXIT adopts target CLI revision2
+0/1/2 (015 incomplete 1 after its code task; CURRENT code 3 until then). Historical
+U1–U10 measurements remain unverified capability gates, never invented evidence.
 
 ### Native-link trunk qualification from review
 
@@ -175,6 +185,6 @@ M2/M9/M16 command quotes and the D9 shorthand preserve their historical measured
 
 [Spec 035](../035-stw-watch/spec.md#restack-needed-rules) already defines the checked-in byte-frozen watch-event v1 restack-needed kind. Its merge-triggered payload is separate from the proposed nested 012 restack-advised finding: event new_parent_source is merge_commit_sha, whereas 012’s first destination is the explicitly selected base.commit_id and later destinations need actual apply evidence. No schema bytes or publication status are changed here. The unpublished 012 code is now restack-advised, leaving the existing 035 restack-needed event unchanged; neither the historical shared spelling nor the related purpose establishes interchangeable payloads, equivalent destinations or execution authority; independent consumer re-observation and effect planning remain necessary.
 
-OQ-FANOUT now explicitly asks which real entry will reach repository orchestration. The recommendation is a named existing higher-level caller; a new multi-repository CLI is an alternative needing owner selection. Production T037 and any candidate stack_batch.go stay blocked until that concrete reachable entry/contract is approved, rather than adding an unused helper. OQ-FLAGS also accounts for offline polarity: Spec 037’s online default uses --offline for Spec 033’s local view; 012 already defaults offline and currently rejects that flag, with any no-op alias requiring an owner choice.
+OQ-FANOUT is decided single-repository now; no batch entry is approved. Earlier caller alternatives below are dated deferred design. No caller/API or stack_batch.go is approved now; current T037 proves batch rejection. OQ-FLAGS also accounts for offline polarity: Spec 037’s online default uses --offline for Spec 033’s local view; 012 already defaults offline and currently rejects that flag, and the owner adopted no redundant alias.
 
 The earlier pending 012 finding spelling was restack-needed; the current unpublished spelling is restack-advised. Spec 015’s note about the pending 012 vocabulary records that earlier snapshot, not a shared stable schema or owner naming decision. No change to Spec 015 or the existing 035 event is needed for this engineering namespace correction.
