@@ -1,5 +1,10 @@
 # Verification: `stw restack plan` (first slice)
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 Status: implemented in source on `feat/015-restack-plan`, hidden command, unpublished schema. This file records evidence; it does not accept the feature. Acceptance needs T021 (minimum and current Git lanes) and T023 (independent review of the exact head).
 
 ## What ran (2026-10-21, Git 2.56.0, Linux arm64)
@@ -38,15 +43,14 @@ Status: implemented in source on `feat/015-restack-plan`, hidden command, unpubl
 - The prediction is not a rebase: renames beyond merge-ort defaults, rerere, whitespace options and commit encodings can differ (`prediction-is-not-apply`).
 - No build, release, tag, install, push of anything but the topic branch or network use happened.
 
-
 ## Documentation amendment 2026-10-25
 
 **Status:** proposed design only; no apply/recovery/jj implementation or native
 acceptance. Original 2026-10-21 commands/results above are preserved as historical
 evidence and were not rerun. Base source inspected:
 `3d4c867a451217a2942564a7dcb4736d45a09b70`. Historical T001 remains checked;
-T004 deliberately skipped and T021/T023/T024 remain open. New T025–T044 are
-unchecked planning work. Historical design CLEAR does not review this amendment.
+T004 deliberately skipped and T021/T023/T024 remain open. New T025–T048 are unchecked planning work, including the later dated owner
+amendment exit/signing tasks. Historical design CLEAR does not review this amendment.
 
 ### Checks actually performed for the Markdown amendment
 
@@ -89,19 +93,15 @@ checks are deliberately the authorized check scope, not substitutes for required
 future implementation/source checks. Nothing absent is reported as passing.
 New test names in tasks/analysis are proposals only, not files or measured runs.
 
-Eight [owner choices](spec.md#needs-owner-decision) retain recommendations and
-specific affected blockers: legacy exit migration, trusted ownership/review
-inputs, actual committer/date, native jj operation guarantees, typed shared
-recovery retention/index, attached-worktree capability and strict no-network
-wording versus 012 proposed opt-in reads, and signed-input/signature-required
-refusal versus disclosed unsigned candidates (OQ-8). OQ-1–OQ-6 and OQ-8 gate
-affected implementation; OQ-7 is the genuine unresolved 012 network-policy
-question (only --after-fetch was separately accepted), not owner-approved online
-reads. No network effect is granted here. Independent exact-head document
+All eight former [owner-choice IDs](spec.md#owner-decisions-2026-10-25) are
+settled on2026-10-25. The current profile adopts trusted workspace policy,
+validated .work plan metadata, external capture bytes, target exit revision2 and
+optional015host-only re-sign; each native/source/helper capability remains
+unimplemented or separately measured. This does not change recorded first-slice
+execution or permit network/local apply here. Independent exact-head document
 review and required PR CI are the coordinator's publication/readiness gates,
 not acceptance of local apply. The first-slice T021/T023/T024 and each future
 capability's minimum/current conformance remain separate product gates.
-
 
 ### PR 238 correction round (2026-10-25)
 
@@ -109,7 +109,7 @@ Foreman Opus returned NOT CLEAR with F1–F7 on exact original amendment head
 `98908cb293b6f6a90ace9a4bbc3ab60ae2b40a94`. The author appended focused commits
 for all seven findings, the corrected open 012-network decision provenance,
 conservative full-publication-range change classification and minimal config
-evidence disclosure. [Analysis](analysis.md#pr-238-independent-review-and-author-corrections-2026-10-25)
+evidence disclosure. [Analysis](analysis.md#historical-evidence-preservation)
 records each correction, fixture idea and remaining gate. No historical commit
 was rewritten, no original task checkbox/date changed, and the author did not
 push, edit the PR or run CI; root coordinates those separate actions.
@@ -129,3 +129,11 @@ New fixture names and policy fields remain UNPUBLISHED Markdown proposals. V1
 schema bytes and source behavior, D4–D9/D12/D13 and T004/T021/T023/T024 limits
 remain unchanged. The exact corrected head has no independent CLEAR yet; the
 review and green required CI gates remain with the coordinator before Ready.
+
+## Owner-decision amendment status (2026-10-25)
+
+All earlier source execution and original 20/24 checkboxes remain historical
+facts. They do not implement decided exit revision2 or host-only optional actual
+re-sign. CURRENT root dispatch still returns3 incomplete; T045/T046 are red-first
+work to target1 with schema1 bytes preserved. T047/T048 own optional signing;
+no helper was run or key accessed in this documentation follow-up.

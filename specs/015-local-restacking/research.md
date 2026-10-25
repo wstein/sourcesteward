@@ -1,5 +1,10 @@
 # Research: local restack evidence, apply and recovery
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 **Created**: 2026-10-25. Documentation/source inspection only; no new product
 experiment, native conformance, build or remote operation was executed. Historical
 measurements retain their original dates and limits in [verification](verification.md).
@@ -40,22 +45,19 @@ first local replay; Spec 043 human `--reviewed` remains its own owner statement.
 **Alternatives considered:** executing porcelain rebase, updating all descendants,
 using aggregate patch ids or treating `evidence-clean` as push permission are
 excluded by D7, ownership or the semantic-break limitation. Actual committer/date
-and occupied-worktree scope remain OQ-3/OQ-6 proposals, not new owner decisions.
+and occupied-worktree scope are adopted OQ-3/OQ-6 owner decisions; native effects still need proof.
 
 ## R2a: actual-candidate signatures (review F3)
 
-**Decision:** proposed actual candidates are unsigned, with explicit
-`--no-gpg-sign` and signing-program/config/environment neutralization. Never run
-a signing helper. Report each source `gpgsig`/`gpgsig-sha256` as
-`signature-dropped` when the actual candidate has no signature, even for `=` rows.
-**Rationale:** PR #238's independent reviewer reported a Git 2.56.0 scratch
-measurement: `commit-tree` with `commit.gpgSign=true` did not sign. The author
-has not rerun that product experiment; this is attributed review evidence,
-not new verification. Patch equality does not preserve cryptographic signatures.
-**Alternatives considered:** silently dropping signatures or executing a signing
-program would hide an effect. OQ-8 recommends refusing signed/required-signature
-scope pending an explicit refusal/disclosure policy; signing is not added. See
-Spec 043 OQ6 for its separate human landing question.
+**Owner decision 2026-10-25:** default actual candidates remain unsigned with
+explicit --no-gpg-sign and neutralized repository signing config. Default refuse
+source-signature loss/unmet/unknown policy. Optional separately authorized
+actual re-sign uses ONLY the measured fixed trusted HOST helper/verifier profile,
+no stw keys and no unsigned fallback; absent helper disables it. The015adapter
+owns this code once,016only consumes final verified receipt. Build signed parents
+bottom-up, record old→unsigned→signed/loss/replacement, verify final chain and
+compute final actual head BEFORE CAS/review.013/014/D9prediction stay helper-free.
+No helper call or native acceptance was performed by this documentation.
 
 ## R3: reuse recovery architecture
 
@@ -80,7 +82,7 @@ native operation/bookmark capability before enabling jj apply.
 functional-core design, Spec 041 ownership-as-view and Spec 042 attribution do
 not prove exclusive operation publication or bounded jj descendant rewrites.
 Commit, change and operation ids must stay distinct. A native spike must establish
-the write and recovery interfaces; OQ-4 is unresolved.
+the write and recovery interfaces; OQ-4 is adopted measure-before-enable direction.
 **Alternatives considered:** Git fallback in colocated jj; borrowing Git ref CAS;
 calling generic `jj op undo` as safe selective recovery. None establishes native
 scope/recovery safety, so unsupported remains explicit.
@@ -96,29 +98,37 @@ attribution from authentication, and 043 is the human owner's distinct landing
 invocation. D6 preserves direct explicit parent/head input without a hard 012
 or 014 implementation dependency. Spec 012 at the inspected main has `parent-merged-child-stale` and
 `base-mismatch` findings. `restack-needed` is the published [Spec 035 watch event](../035-stw-watch/contracts/watch-events.md).
-The current 012 proposal in pending [PR #237](https://github.com/wstein/sourcesteward/pull/237)
-uses the distinct finding code `restack-advised` (renamed in that PR after this
-015 research record was first written). It is not a stable-main 012 contract,
-and the 035 event code is unchanged. All are observations,
+The merged 012 design uses the distinct nested finding code `restack-advised`;
+the published 035 event code is unchanged. Consumers validate producer, kind,
+version and exact inputs rather than diagnostic names. All are observations,
 not local or remote authorization. Native-stack management must not be raced.
 **Alternatives considered:** local mutation authorizes lease push; a local old
 head is treated as observed remote head; name matching or a closed PR proves
 integration; 015 executes owner resync/retarget/landing. All violate the boundary.
-OQ-7 recommends retaining 012's offline default and explicit bounded
-`--pull-requests` proposal alongside qualified cached evidence, but that is not
-an owner-approved/settled network contract. [Spec 012 plan question 3](../012-stack-inspection/plan.md#open-questions-for-the-owner-recommendations)
-still recommends keep-opt-in and remains open. The recorded owner acceptance of
-`--after-fetch` in 012's analysis is a separate decision, not network approval.
-The brief's strict no-network wording and that proposal require an explicit
-owner resolution in 012; 015 remains offline with supplied qualified evidence only.
+Owner decisions adopt 012's offline default and only explicit bounded `--online`
+reads, with no old alias. `--after-fetch` remains separately selected local cache
+observation. 015 remains offline with supplied qualified evidence only.
 
-## Remaining research and decisions
+## Adopted research and remaining measurements
 
-[Needs owner decision](spec.md#needs-owner-decision) lists OQ-1 to OQ-7 with
-recommendations and affected blockers. No missing authorization, identity source,
-review issuer, freshness lifetime, retention policy or native API is invented.
+All eight stable OQ IDs are [owner decisions](spec.md#owner-decisions-2026-10-25)
+dated 2026-10-25. The recommendations are adopted with trusted workspace identity/
+review policy, immutable private action metadata and measured native capability
+gates. Optional host-only signing and the exit revision have explicit new tasks;
+none of these directions is implementation or native acceptance.
 The installed Spec Kit specify/plan/tasks structure is applied to this existing
 feature with explicit feature selection and no persistence. No extension hooks,
 presets or template overrides are configured at the inspected base. Plan and task
 setup preserve existing files; final analysis is read-only. This record is a
 design proposal and source audit, not an independent review or acceptance run.
+
+## Dated exit/signing decision implementation boundary
+
+Owner2026-10-25 chooses target CLI revision2 0/1/2 with no legacy3 selector, not
+a new --contract flag prerequisite or JSON schema change. CURRENT root.go still
+maps restackIncomplete to3; T045/T046 own red tests/implementation. Optional
+actual re-sign is 015-owned T047/T048 using fixed trusted HOST helper/verifier,
+no stw keys and no unsigned fallback. D9 predictions and 013/014 stay unsigned/
+helper-free. Actual signed parents are rebuilt bottom-up and verified final SHA
+exists before CAS/review; 016 consumes receipts only. Adopted directions are not
+native/helper acceptance.

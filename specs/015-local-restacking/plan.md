@@ -1,5 +1,10 @@
 # Implementation Plan: Local restack evidence and proposed apply
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 **Branch**: `docs/015-restack-plan-first-slice` (specification); implementation branches follow the work packages | **Date**: 2026-10-21 | **Spec**: [spec.md](spec.md)
 
 ## Amendment boundary (2026-10-25)
@@ -92,7 +97,6 @@ An independent reviewer measured with Git 2.56.0 in a scratch repository, global
 2. (Resolved by the review) `--keep-both-config` moves to WP6; the first slice has no configuration input.
 3. Whether `range-diff` should also be available as post-check text after a by-hand rebase (printed in quickstart only).
 
-
 ## Proposed next slices: design through tasks, not implementation authorization
 
 [Research](research.md) records source facts, decisions and unresolved choices.
@@ -113,23 +117,24 @@ feature selection and no persistence; existing templates/history are not reset.
 
 | Constitution gate | Proposed disposition |
 | --- | --- |
-| I shared contract/noninteractive | One typed human/JSON result, no prompt without an explicitly selected step; bounded future 0/1/2 proposal, unchanged legacy exit3 |
+| I shared contract/noninteractive | One typed human/JSON result, no prompt without an explicitly selected step; decided0/1/2 target revision2; CURRENT code 3 until implementation |
 | II evidence and expected state | Immutable one-action plan, exact old/new parent/head, post-replay equality and identity, CAS; missing proof refuses |
-| III ownership and recovery | Own unoccupied topic refs only as an OQ-6 proposal; private task binding and pre-action durable journal/root; reverse action separately authorized |
+| III ownership and recovery | Own unoccupied topic refs only under adopted OQ-6; private task binding and pre-action durable journal/root; reverse action separately authorized |
 | IV test first and truthful evidence | New work starts only after design decisions/review; named red tests, native lanes, sentinels and mutations; no product tests run in this amendment |
 | V native peers | Git first under D4; jj enabled only after native operation/bookmark proof, no raw Git writes or false parity |
 | Publication boundary | D8: every remote step is a 016 plan/action with exact actual-new-SHA CLEAR and fresh checks; 043 remains the human owner's landing invocation |
 
-Open OQ-1 to OQ-6 and OQ-8 block the affected implementations. OQ-7 recommends
-retaining 012's proposed explicit opt-in reads, pending the still-open owner
-question 3 in its plan; only `--after-fetch` has recorded separate acceptance.
-Strict no-network wording versus that proposal is unresolved; no network is added here. Recommendations are not
-settled policy. This plan is ready for independent documentation review, not
-blanket runtime implementation or product acceptance.
+All eight former OQ IDs are dated decisions, not unanswered policy. Trusted
+workspace policy, unoccupied-ref scope and typed durability are adopted direction;
+native/helper/source implementation gates remain.012 uses --online only,015 is
+offline. Target exit-contract revision2 changes incomplete to1 without a legacy
+selector; CURRENT code 3 is preserved as fact until its task, schema 1 bytes frozen.
+Default signature refusal and optional separately authorized HOST re-sign follow
+the shared profile, no stw keys. This is not runtime acceptance.
 
 ### Architecture and integration
 
-1. Preserve `Plan` and v1 result/CLI/schema tests unchanged. A future opt-in
+1. Preserve Plan/result/schema1 bytes; update only decided process-exit tests/mapping in T045/T046. A future opt-in
    plan protocol builds a stored local apply plan; an adapter may consume 012
    `expected` evidence but direct D6 inputs remain sufficient. No authentication
    or 012/014 implementation dependency enters the existing plan slice.

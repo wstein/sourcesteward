@@ -1,5 +1,10 @@
 # Contract: `stw restack plan`
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 Status: first-slice contract implemented in source on 2026-10-21, hidden and UNPUBLISHED, subordinate to the [specification](../spec.md). `schemas/v1/restack-plan.schema.json` exists and is frozen by digest; publication awaits acceptance (T021/T023). The 2026-10-25 Markdown amendment changes no schema, fixture or command. Proposed local apply is a separate [future contract](restack-apply.md), never authority derived from this observation.
 
 ## Command
@@ -31,13 +36,13 @@ Allowed: fixed read-only Git plumbing through the reviewed isolated runner (`rev
 | `ok` | complete evidence, whatever it shows (clean, differing, predicted conflicts, unknown identity check) | 0 |
 | `error` | a refusal or a failure (diagnostics below); `evidence` is `null` | 1 |
 | (syntax) | malformed flags or refs | 2 |
-| `incomplete` | a bound, cancellation or a timeout stopped evidence collection (`range-too-large`, `bound-exceeded`, `canceled`, `timeout`); `evidence` is `null` and `boundary.reached` and the diagnostic name what stopped | 3 |
+| `incomplete` | a bound, cancellation or a timeout stopped evidence collection (`range-too-large`, `bound-exceeded`, `canceled`, `timeout`); `evidence` is `null` and `boundary.reached` and the diagnostic name what stopped | target1; CURRENT code3 |
 
 Success never means "safe to push" (FR-016). Standard error carries one concise `Error:` line for exit 1.
 
 ## Refusals and diagnostics (stable codes)
 
-`unsupported-backend`, `ambiguous-ownership`, `path-not-canonical`, `symlink-hazard`, `repository-hazard` (`core.hooksPath`, `core.fsmonitor`, `include`/`includeIf`, `extensions.*`, `replace` refs or grafts, shallow history, `merge.*.driver`, filter drivers or non-default `.gitattributes` merge/diff attributes on any touched path, reported with `hazard` names, none executed), `target-dirty`, `operation-in-progress` (rebase, merge, cherry-pick, bisect, sequencer state), `branch-checked-out-elsewhere` (reported with the worktree path, never touched), `ref-not-found`, `ref-ambiguous`, `ref-not-commit`, `object-missing`, `head-changed`, `empty-moved-range` (`old_head` equals `old_parent`: nothing to restack; evidence over an empty set is never a pass, exit 1), `old-parent-not-ancestor` (`merge-base --is-ancestor <old parent> <old head>` failed: the parent's own commits would be moved), `unrelated-histories` (no merge base between old parent and new parent), `merge-commit-in-range`, `git-unsupported` (below the minimum Git version of the existing runner); the bound and interruption codes `range-too-large`, `bound-exceeded`, `canceled` and `timeout` are `incomplete` results (exit 3), not refusals.
+`unsupported-backend`, `ambiguous-ownership`, `path-not-canonical`, `symlink-hazard`, `repository-hazard` (`core.hooksPath`, `core.fsmonitor`, `include`/`includeIf`, `extensions.*`, `replace` refs or grafts, shallow history, `merge.*.driver`, filter drivers or non-default `.gitattributes` merge/diff attributes on any touched path, reported with `hazard` names, none executed), `target-dirty`, `operation-in-progress` (rebase, merge, cherry-pick, bisect, sequencer state), `branch-checked-out-elsewhere` (reported with the worktree path, never touched), `ref-not-found`, `ref-ambiguous`, `ref-not-commit`, `object-missing`, `head-changed`, `empty-moved-range` (`old_head` equals `old_parent`: nothing to restack; evidence over an empty set is never a pass, exit 1), `old-parent-not-ancestor` (`merge-base --is-ancestor <old parent> <old head>` failed: the parent's own commits would be moved), `unrelated-histories` (no merge base between old parent and new parent), `merge-commit-in-range`, `git-unsupported` (below the minimum Git version of the existing runner); the bound and interruption codes `range-too-large`, `bound-exceeded`, `canceled` and `timeout` are `incomplete` results (target exit-contract revision 2: exit 1; CURRENT code: exit 3), not refusals.
 
 Codes added by the implementation (additive): `not-repository`, `inspection-failed`, `bare-repository`, `object-format-unsupported` (only SHA-1 repositories), `plan-environment-unavailable`, `replay-failed`, `worktree-list-failed`, `git-failed` (a read-only command failed; the diagnostic carries no repository text) and, as a non-refusing diagnostic, `text-omitted` (a branch or remote name has characters outside `[A-Za-z0-9._/@+=,%-]`, so the command texts are not printed). `repository-hazard` details list `hazards` by name: `core.hooksPath`, `core.fsmonitor`, `core.attributesFile`, `include`, `extensions`, `merge-driver`, `filter-driver`, `diff-driver`, `replace-refs`, `grafts`, `shallow`, `alternates`, `info-attributes`, `attributes-changed` (a moved `.gitattributes`), `attribute-merge`, `attribute-diff`, `attribute-filter` (a non-default attribute on a moved path in the branch tip tree or the new parent tree), `config-unreadable` and `attributes-unreadable`. More than 200 moved commits is `incomplete` with `range-too-large` (`details.bound` `max_commits`); more than 2,000 paths in a list, a command output over its limit or a result over 1 MiB is `incomplete` with `bound-exceeded`; an incomplete result carries `evidence: null` and names what was reached in `boundary.reached`.
 
@@ -75,7 +80,7 @@ Normative field tables are in the [data model](../data-model.md). Top-level fiel
 | --- | --- | --- |
 | 1 | `status` is `incomplete` or `error` | `none` |
 | 2 | `replay.state` is `conflict` | `conflicts-predicted` |
-| 3 | every one of the following holds (`no other worktree or ref holds the branch` means: `effects.affected_refs` is empty and no worktree has state `holds-branch`; the latter is refused earlier): `replay.state` is `clean`; `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
+| target1; CURRENT code3 | every one of the following holds (`no other worktree or ref holds the branch` means: `effects.affected_refs` is empty and no worktree has state `holds-branch`; the latter is refused earlier): `replay.state` is `clean`; `moved.count` is at least 1; every `range_pairing` mark is `=`; every `own_diff_equality` row is `equal`; `parent_dropped.all_dropped` is `true` (non-empty set, every row `dropped` or `patch-equivalent-tree`); `empty_after_replay` is empty; `identity.state` is `pass` with `source` `flag`; `overlap.indicator` is `none`; no other worktree or ref holds the branch | `evidence-clean` |
 | 4 | otherwise (any other state or value, known or future) | `needs-attention` |
 
 `evidence-clean` is the positive list of row 3 only; any state the table does not name falls to row 4. `evidence-clean` never means safe: the notice and `limitations` still apply. Examples (abridged):
@@ -124,11 +129,10 @@ Limitation: semantic breaks are not detected; build and test the result.
 Lease push (not run): git push --force-with-lease='refs/heads/feat/x:<old sha>' origin "${NEW_FULL_SHA:?set to the full new commit id}:refs/heads/feat/x"
 ```
 
-
 ## 2026-10-25 compatibility and handoff boundary
 
-Implemented v1 remains exactly 0/1/2/3 with `incomplete` exit3 and unchanged
-schema bytes. A common future 0/1/2 convention is an OQ-1 migration proposal,
+CURRENT implemented code remains 0/1/2/3 with incomplete exit3 and unchanged
+schema bytes. Owner-decided exit-contract revision 2 targets 0/1/2 with incomplete 1,
 not an additive v1 wording change. The `rewrite-committer-not-predicted`
 limitation stays reserved pending T024; documents do not claim it is emitted.
 
@@ -142,3 +146,8 @@ report user-config origins, and require its own plan id plus authorization.
 The historical D9 prediction flag list is not a widened push identity allowlist.
 Owner reset/resync text is never executed. This observation never authorizes the
 [proposed apply/recovery](restack-apply.md) or any remote action.
+
+Target process-exit contract revision 2 is independent of JSON schema_version 1.
+No legacy-exit-3 selector is retained; T045/T046 must change typed root dispatch
+and help/status cases before runtime adoption is claimed. Existing code has not
+changed in this Markdown draft.
