@@ -112,7 +112,9 @@ func buildCommand(c Category, t target) (string, Effect) {
 	case LocalStash:
 		return with(path, func(p string) string { return "git -C " + p + " stash list" }, Read)
 	case BranchesUnmerged, WorktreeStale:
-		return with(path, func(p string) string { return "stw tidy plan " + p }, Read)
+		// The workspace-wide wizard (Spec 037 OQ11, accepted 2026-10-25). It takes no path: it discovers the
+		// workspace itself, and analysing changes nothing until the person answers y.
+		return "stw tidy", Read
 	case WorktreeDirty:
 		return with(func() (string, bool) { return shellWord(t.Worktree) }, func(w string) string { return "git -C " + w + " status" }, Read)
 	case GitlinkAhead:
