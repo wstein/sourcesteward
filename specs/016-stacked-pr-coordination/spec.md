@@ -20,6 +20,18 @@ The proposed first publication capability is native Git, same-repository GitHub,
 owned topic branches and owned PRs only. Native jj observation remains a peer
 capability; native jj publication must be measured separately and remains
 `capability-unavailable`, including colocated jj, without raw Git fallback.
+Spec 012's current nested finding is `restack-advised`; the published 035
+`restack-needed` event stays a different producer/envelope/destination contract.
+012 SC-009 defines proposed bounded caller-orchestration invariants, but OQ-FANOUT
+still gates a concrete reachable caller; 016 single-repository action plans do
+not enable an otherwise unused batch helper. Spec 013's pre-action safety copies
+are independent of the source checkpoint and survive its drop; jj restoration
+has no operation-head CAS and its first slice refuses any workspace working-copy
+commit effect, invoking workspace included. Spec 014's evidence for any admitted profile
+must bind actual full-H attribute-source pin and private context on each Git
+merge invocation; native jj aggregate conflict semantics remain OQ-JJCONF-gated.
+These local safety requirements do not supply a publication receipt or authority.
+
 No capability is implemented by this document. Spec 015 D4–D9 and D12–D13 remain
 binding: first Git-only plan, explicit old/new parent and branch without a hard
 012 dependency, plumbing/quarantine plus CAS rather than porcelain rebase, and
@@ -167,7 +179,7 @@ and boundary fixtures for every declared backend/version/platform capability.
 
 ### Functional Requirements
 
-- **FR-001**: Consume explicit forge/repository selection and verified local-stack/PR head/base identities; never infer linkage from names alone. Resample supplied evidence in the selected scope before using it for a remote action. Bind producer/command, kind, schema version and exact inputs; diagnostic names alone never identify a payload contract. A published 035 restack-needed event is not a 012 finding, and its merge-commit new-parent is not an unvalidated trunk/apply target.
+- **FR-001**: Consume explicit forge/repository selection and verified local-stack/PR head/base identities; never infer linkage from names alone. Resample supplied evidence in the selected scope before using it for a remote action. Bind producer/command, kind, schema version and exact inputs; diagnostic names alone never identify a payload contract. The published 035 restack-needed event is not the 012 restack-advised finding, and its merge-commit new-parent is not an unvalidated trunk/apply target.
 - **FR-002**: Keep local inspection/plan consumption independent of authentication. Default network off; disclose explicitly selected bounded reads, with no implicit fetch, authentication, refresh or HTTP cache.
 - **FR-003**: Preview dependency order, PR bases and every individually selected effect, expected state, permissions and blocker. Local mutation authorization never authorizes a push, PR write or comment.
 - **FR-004**: Revalidate relevant local/remote evidence, ownership, permissions, capability and action-specific authorization immediately before each write; stale or unknown evidence refuses with a typed reason.
@@ -223,8 +235,9 @@ specified in [data-model.md](data-model.md).
   remain undetectable; disclose residual limits rather than infer safety.
 - Read-only stack/merge-state/PR evidence does not supply reviewer identity,
   accepted scope or authorization. Trusted evidence sources remain an owner choice.
-- The proposed 012 refresh and the 013/014/015 designs are separate documentation
-  changes; their new files/capabilities are not assumed merged or implemented.
+- Specs 012/013/014/015 have merged documentation designs. Their runtime
+  capabilities remain planned except the hidden Git 015 v1 planner; merged
+  documentation is neither native conformance nor permission to execute.
 - [Plan](plan.md), [research](research.md), [contract](contracts/forge-effects.md),
   [quickstart](quickstart.md), [tasks](tasks.md) and [analysis](analysis.md) describe
   future implementation only. No constitution amendment or runtime authorization
