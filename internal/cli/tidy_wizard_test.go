@@ -621,3 +621,11 @@ func TestWizardTimeoutIsTheObservationWindowUpToTheMaximum(t *testing.T) {
 		t.Errorf("above the maximum is a usage error naming it: %v", err)
 	}
 }
+
+func TestWizardTimeoutHelpNamesTheWindowAndTheMaximum(t *testing.T) {
+	newWizardWorld(t, true, true)
+	out, _ := runTidy(t, "", "--help")
+	if !strings.Contains(out, "observation window") || !strings.Contains(out, "at most 1h") {
+		t.Errorf("--timeout help:\n%s", out)
+	}
+}
