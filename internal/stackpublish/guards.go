@@ -232,3 +232,26 @@ func guardReason(k ActionKind, gs []Guard) (Reason, bool) {
 	}
 	return "", false
 }
+
+// Run is the step API of apply. The caller drives it one action at a time: Begin names the next
+// action, the caller fetches that action's fresh evidence (after every earlier effect was
+// performed and recorded), Complete evaluates it, the caller performs the effect and Advance
+// records its outcome. The pure package never fetches and never performs anything.
+type Run struct{}
+
+// NewRun admits the stored plan and the authorizations; usage errors return before any step.
+func NewRun(plan Plan, req ApplyRequest, caps CapabilitySet, budget *Budget) (*Run, error) {
+	return &Run{}, nil
+}
+
+// Begin returns the next action that needs fresh evidence. ok is false when the run is over.
+func (r *Run) Begin() (Action, bool, error) { return Action{}, false, nil }
+
+// Complete evaluates the begun action with the evidence the caller fetched for it.
+func (r *Run) Complete(fresh Fresh, ok bool) Decision { return Decision{} }
+
+// Advance records the outcome of the prepared action's effect: completed, failed or unknown.
+func (r *Run) Advance(outcome ActionState) error { return nil }
+
+// Finish returns the ordered result; actions never reached are not-started.
+func (r *Run) Finish() Evaluation { return Evaluation{} }

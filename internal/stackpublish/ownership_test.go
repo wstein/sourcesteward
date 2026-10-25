@@ -194,7 +194,7 @@ func TestGuardsFeedApplyEndToEnd(t *testing.T) {
 	p := savedPlan(t, pushAction("p1", "refs/heads/feat/own"))
 	run := func(task TaskEvidence, current attribution.Origin) []string {
 		var asked []string
-		e, err := EvaluateApply(p, applyRequest(p, "p1"), allCapabilities(), newBudget(), matching(&asked, func(a Action, f *Fresh) {
+		e, err := drive(p, applyRequest(p, "p1"), allCapabilities(), newBudget(), matching(&asked, func(a Action, f *Fresh) {
 			f.Guards = OwnershipGuards(OwnershipInput{PlanTask: p.Task().TaskID, Kind: a.Kind, Subject: Subject{Ref: a.Target.Ref}, Task: task, Current: current})
 		}))
 		if err != nil {
@@ -204,7 +204,7 @@ func TestGuardsFeedApplyEndToEnd(t *testing.T) {
 	}
 	task := ownTask()
 	task.TaskID = p.Task().TaskID
-	if got := run(task, claude(sessionSentinel)); !reflect.DeepEqual(got, []string{"prepared"}) {
+	if got := run(task, claude(sessionSentinel)); !reflect.DeepEqual(got, []string{"completed"}) {
 		t.Fatalf("own task, same session: %v", got)
 	}
 	if got := run(task, claude("other")); !reflect.DeepEqual(got, []string{"refused:attribution-mismatch"}) {
