@@ -284,7 +284,7 @@ repository as a whole (not a repository, base missing) is the returned `error`: 
 
 The walk stops at the first finding in path order, so when `IgnoredExtras` is reported `Dirty` is not determined, and when `Dirty` comes from the index `IgnoredExtras` is not; both retain. The other content facts (last activity, ahead, author) are kept for a
 dirty worktree. The shared proof budget (`tidyV3ProofBudget`) allows only three observations per operation, which would run out after about three worktrees, so each worktree gets its own content budget (a fresh `newTidyV3ProofBudget`,
-bounded by the same per-worktree limits as one retirement plan); the repository-level cap stays the 60 s observation deadline and the worktree limit, and a worktree that exceeds its budget is `Incomplete`.
+bounded by the same per-worktree limits as one retirement plan); the repository-level cap stays the observation deadline (scaled, see the Bounds decision of 2026-10-25) and the worktree limit, and a worktree that exceeds its budget is `Incomplete`.
 
 **Git without `git status`.** Every Git command runs under `runSandboxed` with no write roots and the planning policy of `git_planning.go`
 (`planningPolicyFactory`: `planningGitOptions`, `planningConfigArgs`, `planningEnvironment`: no global or system configuration, no hooks, no filters, no
@@ -320,7 +320,7 @@ the existing inspection already makes (`bookmark list`, `workspace list`, `log`,
   complete is `Incomplete` (its failure code or a closed word). `Proof` is `ancestor` for an integrated working-copy commit, `empty-working-copy-integrated-parent` for an empty working copy on an integrated parent (the empty
   working-copy retirement of Spec 011, SI7, OQ9) and `none` otherwise; `HasOwnCommit` is `Ahead > 0` except for the empty working copy. `LastActivity` is the newest modification time of `.jj/working_copy/tree_state`,
   `.jj/working_copy/checkout` and every stored file.
-- **Bounds.** At most 1,024 files and directories per workspace (the contract 2 manifest bound, `retirement-file-limit`: more is `Incomplete`), 10 s per workspace (`jjTimeout`), 60 s for the whole observation, and the shared
+- **Bounds.** At most 1,024 files and directories per workspace (the contract 2 manifest bound, `retirement-file-limit`: more is `Incomplete`), 10 s per workspace (`jjTimeout`), the scaled observation window for the whole observation (60 s plus 0.5 s per registered workspace, at most 10 minutes; see the decision of 2026-10-25 under the Git bounds), and the shared
   1,024 registration bound. History (ahead count and author) is read for at most 256 commits, the workspace commits first and then the bookmark commits in order; a commit beyond that is absent and its item is `Incomplete`
   `history-unavailable` (about 12 ms a commit measured). The existing bookmark read has its own output bound: 200 bookmarks on distinct commits take about 2.5 s, and about 400 exceed the output limit, which fails the whole repository as an
   `error` (fail closed, no partial observation). Each workspace reads its stored files with one jj process per file, so the number of workspaces a run can finish is bounded by that time; measured: a primary and 20 secondary workspaces
@@ -352,11 +352,20 @@ the mutation probes of the pull request check, while a command that writes despi
 hosting test double covers the tracking path. For jj the snapshot covers the repository (operation log, operation heads, the Git refs of a colocated store), every workspace's files and times and its working-copy state, with a plain `jj status` as the sensitivity check; the jj session proves a read-only sandbox before its first query and refuses to run without it, so the run cannot be repeated without the sandbox.
 
 **Bounds (stated numbers; the 61-worktree fixture of the tests confirms them and this section is amended if it cannot).** At most 1024 worktrees and 1024
-branches per repository (`observationLimit`), the surplus sorted by path or name is `Incomplete`. One observation deadline of 60 s (`planObservationTimeout`) and
+branches per repository (`observationLimit`), the surplus sorted by path or name is `Incomplete`. One observation window (60 s base, `planObservationTimeout`, scaled by the registered worktrees, see the decision below) and
 one integration proof phase of 60 s for the repository (`integrationPhaseTimeout`, Spec 029 FR-008), with the existing per-command timeout of 10 s
 (`integrationCommandTimeout`) and per-tip timeout of 20 s (`integrationTipTimeout`); the proof of a commit is computed once per distinct HEAD or tip OID. When the phase is
 exhausted, the remaining items are `Incomplete` (`proof-budget-exhausted`), never `none`. With 61 worktrees the phase leaves about 1 s per tip on average, which suffices for the
 ancestor and merge-noop proofs. The 61-worktree fixture (`TestObserveSixtyOneRealisticWorktrees`) uses realistic checkouts (2,000 tracked files each, generated at test time, shared object store), sixty distinct tips of which thirty need the patch-id evaluation against a base that moved on, and measured about 10 s in total (observation and proofs) on the development machine, far inside the 60 s and 60 s windows. Native command output is bounded by the existing stream limits.
+
+**Decision 2026-10-25 (owner, issue #253, task T019f): the observation window scales.** The fixed 60 s window was exhausted on the live workspace (999 candidates), and every
+item after the deadline was `Incomplete` `deadline-exceeded`. The per-repository observation window of the wizard analysis (Git and jj) is now 60 s plus 0.5 s per registered
+worktree or workspace of that repository, at most 10 minutes (`observationWindow`; the factor is the measured one recorded in the PR of T019f). The registrations are read first under the
+base window, then the window is set from their count. `--timeout` keeps meaning the deadline over the whole analysis: when it is given, it replaces the scaled window and may be larger than
+the old fixed 60 s, up to a documented maximum of 1 hour (`ObservationTimeoutMax`; more is a usage error, exit 2). Not scaled, on purpose: the per-call limits (10 s per jj workspace, per command and per tip), the 60 s integration proof phase, and the plan, apply and restore
+deadlines of the expert layer, which have their own rules and are not part of the analysis defect. **Notice.** When any candidate is not judged because of a deadline (reason
+`evidence-incomplete`, evidence `deadline-exceeded`), the overview states `N of M not judged (deadline); retry with a larger window, for example --timeout 15m` as a run notice. It is
+the existing `notices` array of the `tidy-overview` document (text line `notice: ...`); the frozen schema needs no change. Such items stay retained and fail closed.
 
 **Adapter to the classifier (T011a3).** `tidywizard.Adapter` is the `Source` of the classifier over the observers. It maps `Incomplete` to a fact on `Worktree`, `Branch` and `TrackingRef` that the classifier
 retains as `evidence-incomplete` for every owner scope (never selectable, no effect, and never a delete-branch effect of a safe worktree). A lock is stw's only in the exact `stw:<task>` form; the creation
