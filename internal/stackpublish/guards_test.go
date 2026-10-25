@@ -53,6 +53,9 @@ func applyRequest(p Plan, ids ...string) ApplyRequest {
 
 func newBudget() *Budget { return NewBudget(DefaultLimits(), newClock().read) }
 
+// FreshSource stands in for the caller that fetches one action's evidence.
+type FreshSource func(Action) (fresh Fresh, ok bool)
+
 func first(s []string) string {
 	if len(s) == 0 {
 		return "<none>"

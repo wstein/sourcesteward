@@ -36,10 +36,6 @@ type Fresh struct {
 	Guards     []Guard
 }
 
-// FreshSource reads the fresh evidence of one action. ok is false when it cannot be read. It is
-// called lazily and strictly in plan order, so evidence is as fresh as the write it precedes.
-type FreshSource func(Action) (fresh Fresh, ok bool)
-
 // Decision is the verdict on one action. Prepared means every guard passed and the durable
 // intent may be recorded next; nothing here has written anything.
 type Decision struct {
@@ -55,7 +51,7 @@ type Evaluation struct {
 	bounded   bool
 }
 
-// Status classifies the evaluation: complete only when every action is prepared.
+// Status classifies the evaluation: complete only when every action's effect completed.
 func (e Evaluation) Status() Status {
 	switch {
 	case e.cancelled:
@@ -66,45 +62,19 @@ func (e Evaluation) Status() Status {
 		return StatusUnknown
 	}
 	for _, d := range e.Decisions {
-		if d.State == StateRefused {
+		switch d.State {
+		case StateRefused:
 			return StatusRefused
-		}
-		if d.State != StatePrepared {
+		case StateFailed:
+			return StatusFailed
+		case StateUnknown:
+			return StatusUnknown
+		case StateCompleted:
+		default:
 			return StatusUnknown
 		}
 	}
 	return StatusComplete
-}
-
-// EvaluateApply admits the stored plan and evaluates its actions strictly one after another.
-// Usage errors (offline, wrong plan, extra or duplicate authorization ids) return an error before
-// anything is evaluated. The first action that is not prepared stops the run: the rest are
-// not-started. A cancelled or exhausted budget starts nothing further. It writes nothing and
-// reads nothing itself: fresh evidence comes only from the lazily called source.
-func EvaluateApply(plan Plan, req ApplyRequest, caps CapabilitySet, budget *Budget, fresh FreshSource) (Evaluation, error) {
-	if !req.Online {
-		return Evaluation{}, &ValidationError{Code: "online-required", Field: "online", Usage: true}
-	}
-	if err := plan.AdmitApply(req.PlanID); err != nil {
-		return Evaluation{}, err
-	}
-	if budget == nil || fresh == nil {
-		return Evaluation{}, &ValidationError{Code: "apply-incomplete", Field: "budget"}
-	}
-	actions := plan.Actions()
-	authorized, err := authorizedSet(actions, req.AuthorizeRemote)
-	if err != nil {
-		return Evaluation{}, err
-	}
-	var ev Evaluation
-	for _, a := range actions {
-		if len(ev.Decisions) > 0 && ev.Decisions[len(ev.Decisions)-1].State != StatePrepared {
-			ev.Decisions = append(ev.Decisions, Decision{ActionID: a.ID, State: StateNotStarted})
-			continue
-		}
-		ev.Decisions = append(ev.Decisions, ev.decide(a, authorized, caps, budget, fresh))
-	}
-	return ev, nil
 }
 
 // authorizedSet turns the remote authorizations into a set. An authorization names an action of
@@ -131,68 +101,166 @@ func refused(a Action, r Reason) Decision {
 	return Decision{ActionID: a.ID, State: StateRefused, Reason: &r}
 }
 
-// decide runs the guards of one action, in a fixed order, and stops at the first that does not pass.
-func (e *Evaluation) decide(a Action, authorized map[string]bool, caps CapabilitySet, budget *Budget, fresh FreshSource) Decision {
-	notStarted := Decision{ActionID: a.ID, State: StateNotStarted}
-	if e.stoppedBy(budget) {
-		return notStarted
-	}
-	switch {
-	case a.State == StateBlocked && a.Blocker != nil:
-		return refused(a, *a.Blocker)
-	case !caps.Has(a.Kind):
-		return refused(a, ReasonCapabilityUnavailable)
-	case !authorized[a.ID]:
-		return refused(a, ReasonAuthorizationMissing)
-	}
-	f, ok := fresh(a)
-	if e.stoppedBy(budget) {
-		return notStarted
-	}
-	if !ok {
-		return refused(a, ReasonPlanStale)
-	}
-	if r, stale := staleReason(a.Expected, f.Expected); stale {
-		return refused(a, r)
-	}
-	if f.Permission != PermissionGranted {
-		return refused(a, ReasonPermissionUnknown)
-	}
-	if r, bad := guardReason(a.Kind, f.Guards); bad {
-		return refused(a, r)
-	}
-	return Decision{ActionID: a.ID, State: StatePrepared}
+// Run is the step API of apply. The caller drives it one action at a time: Begin names the next
+// action, the caller fetches that action's fresh evidence (after every earlier effect was
+// performed and recorded), Complete evaluates it, the caller performs the effect and Advance
+// records its outcome. The pure package never fetches and never performs anything.
+type Run struct {
+	actions    []Action
+	authorized map[string]bool
+	caps       CapabilitySet
+	budget     *Budget
+	next       int
+	current    *Action // begun, awaiting Complete
+	prepared   bool    // completed as prepared, awaiting Advance
+	stopped    bool
+	eval       Evaluation
 }
 
-// stoppedBy records a cancelled or exhausted budget; nothing further may start.
-func (e *Evaluation) stoppedBy(b *Budget) bool {
-	err := b.Err()
+// NewRun admits the stored plan and the authorizations; usage errors return before any step.
+func NewRun(plan Plan, req ApplyRequest, caps CapabilitySet, budget *Budget) (*Run, error) {
+	if !req.Online {
+		return nil, &ValidationError{Code: "online-required", Field: "online", Usage: true}
+	}
+	if err := plan.AdmitApply(req.PlanID); err != nil {
+		return nil, err
+	}
+	if budget == nil {
+		return nil, &ValidationError{Code: "apply-incomplete", Field: "budget"}
+	}
+	actions := plan.Actions()
+	authorized, err := authorizedSet(actions, req.AuthorizeRemote)
+	if err != nil {
+		return nil, err
+	}
+	return &Run{actions: actions, authorized: authorized, caps: caps, budget: budget}, nil
+}
+
+func (r *Run) record(d Decision) Decision {
+	r.eval.Decisions = append(r.eval.Decisions, d)
+	if d.State != StatePrepared {
+		r.stopped = true
+	}
+	return d
+}
+
+// stoppedByBudget records a cancelled or exhausted budget; nothing further may start.
+func (r *Run) stoppedByBudget() bool {
+	err := r.budget.Err()
 	if err == nil {
 		return false
 	}
 	if be, ok := err.(*BoundError); ok && be.Reason == ReasonCancelled {
-		e.cancelled = true
+		r.eval.cancelled = true
 	} else {
-		e.bounded = true
+		r.eval.bounded = true
 	}
+	r.stopped = true
 	return true
+}
+
+// Begin returns the next action that needs fresh evidence. ok is false when the run is over,
+// including when the next action was refused without evidence (blocked, capability, authorization)
+// or the budget stopped it. It is an error to begin while an action awaits Complete or Advance:
+// the previous effect must be recorded first.
+func (r *Run) Begin() (Action, bool, error) {
+	if r.current != nil || r.prepared {
+		return Action{}, false, &ValidationError{Code: "step-out-of-order", Field: "begin"}
+	}
+	if r.stopped || r.next >= len(r.actions) {
+		return Action{}, false, nil
+	}
+	a := r.actions[r.next]
+	r.next++
+	if r.stoppedByBudget() {
+		r.eval.Decisions = append(r.eval.Decisions, Decision{ActionID: a.ID, State: StateNotStarted})
+		return Action{}, false, nil
+	}
+	switch {
+	case a.State == StateBlocked && a.Blocker != nil:
+		r.record(refused(a, *a.Blocker))
+		return Action{}, false, nil
+	case !r.caps.Has(a.Kind):
+		r.record(refused(a, ReasonCapabilityUnavailable))
+		return Action{}, false, nil
+	case !r.authorized[a.ID]:
+		r.record(refused(a, ReasonAuthorizationMissing))
+		return Action{}, false, nil
+	}
+	r.current = &a
+	return cloneAction(a), true, nil
+}
+
+// Complete evaluates the begun action with the evidence the caller fetched for it. An action
+// that cannot be evaluated (no begun action) is never prepared.
+func (r *Run) Complete(f Fresh, ok bool) Decision {
+	if r.current == nil {
+		return Decision{State: StateRefused, Reason: reasonRef(ReasonPlanStale)}
+	}
+	a := *r.current
+	r.current = nil
+	if r.stoppedByBudget() {
+		return r.record(Decision{ActionID: a.ID, State: StateNotStarted})
+	}
+	switch {
+	case !ok:
+		return r.record(refused(a, ReasonPlanStale))
+	case staleCheck(a.Expected, f.Expected) != "":
+		return r.record(refused(a, staleCheck(a.Expected, f.Expected)))
+	case f.Permission != PermissionGranted:
+		return r.record(refused(a, ReasonPermissionUnknown))
+	}
+	if reason, bad := guardReason(a.Kind, f.Guards); bad {
+		return r.record(refused(a, reason))
+	}
+	r.prepared = true
+	return r.record(Decision{ActionID: a.ID, State: StatePrepared})
+}
+
+// Advance records the outcome of the prepared action's effect: completed, failed or unknown. Any
+// outcome but completed stops the run; the truth of the outcome is kept, never upgraded.
+func (r *Run) Advance(outcome ActionState) error {
+	if !r.prepared {
+		return &ValidationError{Code: "step-out-of-order", Field: "advance"}
+	}
+	switch outcome {
+	case StateCompleted:
+	case StateFailed, StateUnknown:
+		r.stopped = true
+	default:
+		return &ValidationError{Code: "outcome-invalid", Field: "advance"}
+	}
+	r.prepared = false
+	r.eval.Decisions[len(r.eval.Decisions)-1].State = outcome
+	return nil
+}
+
+// Finish returns the ordered result; actions never reached are not-started.
+func (r *Run) Finish() Evaluation {
+	out := Evaluation{cancelled: r.eval.cancelled, bounded: r.eval.bounded, Decisions: append([]Decision{}, r.eval.Decisions...)}
+	for i := len(out.Decisions); i < len(r.actions); i++ {
+		out.Decisions = append(out.Decisions, Decision{ActionID: r.actions[i].ID, State: StateNotStarted})
+	}
+	return out
 }
 
 func samePtr(a, b *string) bool { return (a == nil) == (b == nil) && (a == nil || *a == *b) }
 
-// staleReason compares the fresh state with the planned one. A moved remote value or PR head has
+// staleCheck compares the fresh state with the planned one. A moved remote value or PR head has
 // its own typed reason; any other difference means the plan no longer describes the world.
-func staleReason(planned, now Expected) (Reason, bool) {
+func staleCheck(planned, now Expected) Reason {
 	switch {
 	case !samePtr(planned.OldSHA, now.OldSHA):
-		return ReasonRemoteChanged, true
+		return ReasonRemoteChanged
 	case !samePtr(planned.HeadSHA, now.HeadSHA):
-		return ReasonHeadChanged, true
+		return ReasonHeadChanged
 	case !samePtr(planned.NewSHA, now.NewSHA), !samePtr(planned.BaseRef, now.BaseRef), !samePtr(planned.PlannedBase, now.PlannedBase), !samePtr(planned.BodyDigest, now.BodyDigest):
-		return ReasonPlanStale, true
+		return ReasonPlanStale
 	}
-	return "", false
+	return ""
 }
+
+func reasonRef(r Reason) *Reason { return &r }
 
 // requiredGuards are the guards that must be present and passing for every kind.
 func requiredGuards(k ActionKind) []struct {
@@ -232,26 +300,3 @@ func guardReason(k ActionKind, gs []Guard) (Reason, bool) {
 	}
 	return "", false
 }
-
-// Run is the step API of apply. The caller drives it one action at a time: Begin names the next
-// action, the caller fetches that action's fresh evidence (after every earlier effect was
-// performed and recorded), Complete evaluates it, the caller performs the effect and Advance
-// records its outcome. The pure package never fetches and never performs anything.
-type Run struct{}
-
-// NewRun admits the stored plan and the authorizations; usage errors return before any step.
-func NewRun(plan Plan, req ApplyRequest, caps CapabilitySet, budget *Budget) (*Run, error) {
-	return &Run{}, nil
-}
-
-// Begin returns the next action that needs fresh evidence. ok is false when the run is over.
-func (r *Run) Begin() (Action, bool, error) { return Action{}, false, nil }
-
-// Complete evaluates the begun action with the evidence the caller fetched for it.
-func (r *Run) Complete(fresh Fresh, ok bool) Decision { return Decision{} }
-
-// Advance records the outcome of the prepared action's effect: completed, failed or unknown.
-func (r *Run) Advance(outcome ActionState) error { return nil }
-
-// Finish returns the ordered result; actions never reached are not-started.
-func (r *Run) Finish() Evaluation { return Evaluation{} }
