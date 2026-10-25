@@ -28,16 +28,23 @@ $ stw tidy
 Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
 
 Repositories:
-sourcesteward   base refs/heads/main (origin/HEAD)
+bundledock   base refs/heads/main
+sourcesteward   base refs/heads/main
 
 owner claude (own)
+  bundledock
+    [1] safe     branch       codex/old-1  integrated (merge-noop)  effects delete-branch:codex/old-1
   sourcesteward
-    [1] safe      worktree  /tmp/.../wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)   remove registration, files, branch
-    [-] retain    worktree  /tmp/.../wt-041  dirty: 3 modified files
+    [2] safe     worktree     /tmp/wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)  effects remove-registration, remove-files, delete-branch:codex/037-x
+    [-] retain   worktree     /tmp/wt-041  dirty: 3 modified files
 
-summary: 1 safe (1 own, 0 other), 1 retain
+owner codex (other)
+  sourcesteward
+    [3] safe     worktree     /tmp/whr010-a  owner codex (path-convention) [other]  integrated (ancestor)  effects remove-registration, remove-files  not preselected
 
-Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner  [d]etails N  [n]one (default n): a
+summary: 3 safe (2 own, 1 other), 1 retain
+
+Apply which? [a]ll own safe  [1,3 / 1-3]  [o]wner  [d]etails N  [n]one (default n): a
 Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
 Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]: n
 ```
@@ -59,7 +66,7 @@ recorded in the plan set, the apply journal and `stw tidy history`.
 **Verdicts.** `safe` (every proof holds), `decision` (for example a `locked-stw` worktree whose lock does not match), `retain`
 (a reason such as `unmerged`, `dirty`, `recently-active`, `registration-record-missing`, `evidence-incomplete`,
 `stale-registration-no-plan-kind`) rows never carry an effect; items of another or an unknown owner are shown with their `scope` and are never preselected. Only `safe` and `decision` rows get a number.
-Text shows at most 10 rows per repository (`and N more`); `--json` lists all candidates.
+Text shows at most 10 rows per repository inside each owner group (`and N more`); `--json` lists all candidates.
 
 **Prompts.** The answer is parsed strictly and the default is none. `a` chooses all safe rows of scope own (never `decision` rows and
 never rows of other or unknown owners), numbers and ranges (`1,2,6`, `1-3`) choose rows, `o` asks per owner, `d N` shows the details of
