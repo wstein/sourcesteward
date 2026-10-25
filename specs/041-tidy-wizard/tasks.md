@@ -63,7 +63,8 @@ repository or pushes the default branch. Tests use temporary repositories only.
 - [x] T019b Mode evidence reaches the plan, the journal and `history` (with T013b). Done with T013b.
 - [x] T019c Bound and allowlist the tracking-reference reason the adapter passes on (`remote-source-present`, a protection such as `workspace-used`): it becomes the reason code of a retained tracking reference, so it needs a closed list and a length bound, with a failing test first.
 - [x] T019d Escape the repository notices (`RepoResult.Notices`: the observation's `TrackingSkipped` and `Limitations`) on render: they pass control bytes unescaped, so the overview applies `esc` and the 120-character bound to them (with T017).
-- [x] T019 Implement the command layer, flags, prompts and rendering; exit codes 0/1/2; wizard applies only after a typed `y` for the plan id through the same apply code.
+- [ ] T019 Implement the command layer, flags, prompts and rendering; exit codes 0/1/2; wizard applies only after a typed `y` for the plan id through the same apply code.
+- [ ] T019e The wizard flag set on bare `stw tidy` per the [CLI surface](spec.md#cli-surface) flag tables: `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, `--save`, `--yes` and the shared `--state-dir` (repeatable), `--online`, `--timeout`, `--json`, `--human` (today only `stw tidy plan` and `stw tidy apply` take them; bare `stw tidy` takes none and discovers the workspace from the working directory). Acceptance: the flag table and the mode-selection tests of T015 hold for bare `stw tidy`, and `stw tidy --state-dir S` works as the spec's example. T019 is ticked together with it.
 
 ## WP-6 Docs and acceptance
 
