@@ -17,9 +17,10 @@ The owner rebase-merges a parent pull request. GitHub rewrites the commits, so e
 5. `git push --force-with-lease=<ref>:<observed old full SHA> origin <full new SHA>:refs/heads/<ref>`.
 6. Resync text for the owner: `git fetch --prune`, then `git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto origin/<branch> <old SHA> <branch>` if the owner has local commits, otherwise `git switch <branch> && git reset --hard origin/<branch>` (destructive for local-only work and uncommitted changes).
 
-These human reference commands use the current AGENTS.md overrides; hidden v1
-printed resync text remains frozen as implemented and is not silently changed
-by this amendment. Future texts use the bounded overrides below.
+The agent restack reference uses the AGENTS.md restack overrides. The owner
+resync reference adds those overrides as an optional stricter variant; AGENTS.md
+does not require them for owner resync. Hidden v1 printed resync text remains
+frozen as implemented and is not silently changed by this amendment.
 
 The first slice makes steps 1 to 4 and the texts of steps 5 and 6 a read-only, offline, reviewable `stw restack plan` for native Git. Later slices add `stw restack apply` (Git), a jj peer with a stated capability gap, and, outside this spec, the push (Spec 016). The owner decisions of 2026-10-21 that bind this slice:
 
