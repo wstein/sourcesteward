@@ -56,7 +56,9 @@ checkpoint/undo, integration preflight, local restack apply/jj and forge writes 
 
 Observation grants no local mutation; local apply grants no remote write. Default selection is none and local observation is offline.
 012 online scope/`--pull-requests` naming and shared human/timeout surface choices remain open owner questions;
-no recommendation is approval. Each proposed remote action needs its own plan-bound authorization, current ownership and exact-state guards.
+no recommendation is approval. The [complete decision index](../specs/016-stacked-pr-coordination/research.md#cross-spec-decision-index)
+lists all 39 current IDs across Specs 012/013/014/015/043/016 with source recommendations/deferrals, affected capability and related 016 gate.
+Each proposed remote action needs its own plan-bound authorization, current ownership and exact-state guards.
 016 specifies full observed-SHA topic leases, separate docs/code before-push review tiers, trusted full-default-range owner identities,
 explicit signing policy, and exact-current-head CLEAR/required-green-CI/true-rebaseability/scope gates for Ready.
 Native stack and jj publication capabilities remain separately measured/gated; [043 landing](../specs/043-stw-land/spec.md)
