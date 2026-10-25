@@ -47,8 +47,9 @@ cannot prevent unselected effects, report `capability-unavailable` with reason
 `jj-restack-capability-gap` and leave original native state unchanged.
 
 After successful local publication expose actual new commit/change/operation
-identities and `review_gate.state: required` bound to the actual new commit
-identity. A native jj rewrite has its own completeness/equality evidence; do not
+identities and `review_gate.state: pending-policy-check` bound to the actual new
+commit identity, with derived change class; unavailable Git-equivalent purity
+evidence means `pure_rebase: false` and never lowers the review tier. A native jj rewrite has its own completeness/equality evidence; do not
 fabricate Git range-diff `=` rows. A later GitHub push capability needs explicit
 native bookmark export semantics, exact remote advertisement, review/check and
 attribution evidence under Spec 016, otherwise it remains unavailable. Never use

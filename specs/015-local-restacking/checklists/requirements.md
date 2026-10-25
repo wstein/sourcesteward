@@ -12,7 +12,7 @@ separate from proposed local apply/recovery/jj work.
 - [x] T001 historical CLEAR is distinguished from this amendment's unreviewed head; T004/T021/T023/T024 remain unchecked.
 - [x] User outcomes and acceptance scenarios cover explicit local scope, stale state, native effects, partial outcomes and contract failure.
 - [x] Exact two-dot `--onto` replay semantics preserve D7 plumbing/quarantine/CAS, no porcelain rebase or implicit descendants.
-- [x] Actual new SHA/equality/author AND committer evidence precedes a review-required receipt; 016 requires independent exact-new-SHA CLEAR before push.
+- [x] Actual new SHA/equality/author AND committer evidence precedes a class-dependent policy receipt; 016 preserves docs-only pre-push exemption, code exact-new-SHA review and equal-pure-rebase middle-tier allowance; Ready always needs independent exact-head CLEAR plus green checks.
 - [x] Owned unoccupied-ref first apply is an explicit recommendation pending OQ-6, with original worktree/index/config unchanged.
 - [x] Proposed typed recovery seam reuses Spec 032; no existing shared API, jj support or frozen sync-record compatibility is fabricated.
 - [x] Native jj operation/bookmark/change/commit identities and capability gaps are explicit; no Git fallback.

@@ -65,8 +65,11 @@ must be checked on the new commits, as required by the workspace policy.
    candidate, validates one-to-one all `=` rows and actual author/committer ids,
    prepares durable journal/root, revalidates and CAS-updates only the target.
 4. Inspect the receipt's actual new SHA/mapping, partial effects, recovery pointer
-   and review-required state. Request independent review/checks of this actual
-   head before any separate remote plan; prediction or prior-head CLEAR is stale.
+   and derived change-class/pure-rebase policy input. Before push, docs-only
+   rewrites require green local checks and pure-rebase equality without review;
+   code requires independent exact-new-SHA review (middle tier allowed for equal
+   pure rebase). Ready always requires independent exact-head CLEAR and green
+   required checks. Prediction or prior-head CLEAR never covers a new head.
 5. Inject crash/write/ref races in temporary fixtures at each boundary. Retry
    compares old/new/third value; a third value is changed-since, never reset.
    A separate [restore plan](contracts/recovery.md) authorizes only new→old with
@@ -78,8 +81,11 @@ must be checked on the new commits, as required by the workspace policy.
 ## Remote handoff and owner resync
 
 D8: Spec 016 owns separately selected push/link/retarget plans and authorization.
-It needs independent CLEAR for the exact actual new SHA, green required checks,
-fresh attribution/identity and full observed **remote** old SHA. Local old head
+Its agent pre-push gate follows the class-dependent table in the apply contract:
+docs-only checks/equality without pre-push review, code independent exact-new-SHA
+CLEAR (middle tier allowed for equal pure rebase), plus applicable checks, fresh
+attribution/identity and full observed **remote** old SHA. Ready always requires
+independent exact-head CLEAR and all required checks green. Local old head
 and a v1 inert command do not supply that advertisement. A changed head requires
 new review; no local mutation authorizes a remote write.
 

@@ -152,9 +152,12 @@ blanket runtime implementation or product acceptance.
    duplicate writer, cross-type interpretation or API availability claim.
    Sync retention stays unchanged; restack roots stay retained pending OQ-5.
    Spec 013 consumes action/native identities for checkpoint/restore/undo.
-6. Expose a local apply receipt and a review-required exact-new-SHA binding.
-   Independent review follows actual replay; 016 verifies that CLEAR and fresh
-   required checks immediately before an individually authorized remote action.
+6. Expose actual new SHA plus derived `change_class`/`pure_rebase` policy input.
+   Spec 016 preserves AGENTS.md: docs-only rewrite needs green local checks and
+   equal range-diff for pure rebase without pre-push review; code rewrite needs
+   independent exact-new-SHA review before push (middle tier for equal pure
+   rebase allowed). Ready always needs independent exact-head CLEAR and green
+   required checks. Spec 043 human `--reviewed` is a separate owner statement.
    The observed remote SHA belongs to 016 and is never inferred from local old
    head, upstream config or an inert v1 text. Retarget/link are separate effects.
 7. Native jj begins with a capability spike. No adapter may claim Git CAS,
@@ -177,7 +180,7 @@ Do not run those checks or builds for this Markdown-only amendment.
 | A4 guarded local CAS | T033–T034 | M | A2+A3; own unoccupied topic ref only; partial outcomes and receipt |
 | A5 retry and reverse plan | T035–T036 | L | A4; US2 crash reconciliation and separately authorized conditional restore |
 | A6 native jj capability | T037–T039 | L | A0/OQ-4; US2 explicit unsupported gap until proven native semantics and conformance |
-| A7 human/JSON and remote handoff | T040–T041 | M | A4+A5, 016 consumer design, OQ-1/OQ-2; US3 exact actual SHA and independent-review requirement, zero remote writes |
+| A7 human/JSON and remote handoff | T040–T041 | M | A4+A5, 016 consumer design, OQ-1/OQ-2; US3 actual SHA and class-dependent pre-push/Ready gates, zero remote writes |
 | A8 conformance/evidence | T042–T044 | M | Each selected unit; native minimum/current, sentinels/mutations, exact-head independent review and honest verification |
 
 MVP is A0–A5 plus A7 and Git acceptance in A8. A6 may be specified/tested
