@@ -25,29 +25,38 @@ expert layer described in the rest of this guide).
 
 ```text
 $ stw tidy
-Workspace: /workspaces/Anchorage   (source: discovery from the working directory)
+Workspace: /ws
+Derived:   workspace /ws (discovery), remote:a origin (origin), remote:b origin (origin)
+Mode:      human (stdin tty, stdout tty, no agent marker)
+Analysed 2 repositories (0 skipped, 0 with errors)
 
 Repositories:
-bundledock   base refs/heads/main
-sourcesteward   base refs/heads/main
+a   base refs/heads/main
+b   base refs/heads/main
 
 owner claude (own)
-  bundledock
-    [1] safe     branch       codex/old-1  integrated (merge-noop)  effects delete-branch:codex/old-1
-  sourcesteward
-    [2] safe     worktree     /tmp/wt-037  task spec037-x  branch codex/037-x  integrated (patch-id)  effects remove-registration, remove-files, delete-branch:codex/037-x
-    [-] retain   worktree     /tmp/wt-041  dirty: 3 modified files
+  a
+    [1] safe     worktree     /w/own1  task t1  integrated (ancestor)  effects remove-registration, remove-files
+    [2] safe     branch       claude/old  integrated (ancestor)  effects delete-branch:claude/old
+  b
+    [-] retain   worktree     /w/dirty
+    [3] safe     tracking-ref refs/remotes/origin/x  integrated (ancestor)  effects remove-registration, remove-files
 
 owner codex (other)
-  sourcesteward
-    [3] safe     worktree     /tmp/whr010-a  owner codex (path-convention) [other]  integrated (ancestor)  effects remove-registration, remove-files  not preselected
+  a
+    [4] safe     worktree     /w/whr1  owner codex (path-convention) [other]  integrated (ancestor)  effects remove-registration, remove-files  not preselected
 
-summary: 3 safe (2 own, 1 other), 1 retain
+owner unknown
+  b
+    [5] decision worktree     /w/dec  owner unknown (unknown) [unknown]
 
-Apply which? [a]ll own safe  [1,3 / 1-3]  [o]wner  [d]etails N  [n]one (default n): a
-Stored plan set 3f9c2a7e41b8 (3 effects in 2 repositories). Nothing has been changed.
-Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]: n
+summary: 4 safe (3 own, 1 other), 1 retain, 1 decision
+Apply which? [a]ll own safe  [1,2,6 / 1-2,6]  [o]wner  [d]etails N  [n]one (default n):
+Stored plan set 3f9c2a7e41b8 (5 effects in 2 repositories). Nothing has been changed.
+Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]:
 ```
+
+The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is random and shown as `3f9c2a7e41b8`).
 
 **Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json` and `--human`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
