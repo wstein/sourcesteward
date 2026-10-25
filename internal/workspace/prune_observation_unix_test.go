@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"golang.org/x/sys/unix"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -153,7 +155,7 @@ func fixturePruneObservation(t *testing.T) (pruneInspectionOptions, MutationPlan
 	if err := os.Rename(task.Destination, moved); err != nil {
 		t.Fatal(err)
 	}
-	return pruneInspectionOptions{Source: source, StateDir: creation.StateDir, Task: task.TaskID, Owner: task.Owner, Registration: filepath.Base(task.Native.GitDir)}, creation, task, moved
+	return pruneInspectionOptions{Source: source, StateDir: creation.StateDir, Task: task.TaskID, Owner: task.Owner, Registrations: []string{filepath.Base(task.Native.GitDir)}}, creation, task, moved
 }
 func TestPruneObservationReadsExactMissingLockedRegistration(t *testing.T) {
 	opts, creation, task, moved := fixturePruneObservation(t)
@@ -200,13 +202,13 @@ func TestPruneObservationRefusalReasons(t *testing.T) {
 			var err error
 			switch kind {
 			case "unnamed":
-				opts.Registration = ""
+				opts.Registrations = nil
 				code = "prune-selection-refused"
 			case "two_names":
-				opts.Registration += ",other"
+				opts.Registrations = append(opts.Registrations, "other")
 				code = "prune-selection-refused"
 			case "prefix":
-				opts.Registration = opts.Registration[:len(opts.Registration)-1]
+				opts.Registrations[0] = opts.Registrations[0][:len(opts.Registrations[0])-1]
 			case "foreign_lock":
 				err = os.WriteFile(filepath.Join(task.Native.GitDir, "locked"), []byte("stw:other\n"), 0600)
 				code = "prune-lock-refused"
@@ -226,9 +228,15 @@ func TestPruneObservationRefusalReasons(t *testing.T) {
 				err = os.WriteFile(filepath.Join(task.Native.GitDir, "unknown"), []byte("retain"), 0600)
 				code = "prune-metadata-refused"
 			case "metadata_symlink":
+				if err = os.Remove(filepath.Join(task.Native.GitDir, "ORIG_HEAD")); err != nil && !os.IsNotExist(err) {
+					t.Fatal(err)
+				}
 				err = os.Symlink("HEAD", filepath.Join(task.Native.GitDir, "ORIG_HEAD"))
 				code = "prune-metadata-refused"
 			case "metadata_hardlink":
+				if err = os.Remove(filepath.Join(task.Native.GitDir, "ORIG_HEAD")); err != nil && !os.IsNotExist(err) {
+					t.Fatal(err)
+				}
 				err = os.Link(filepath.Join(task.Native.GitDir, "HEAD"), filepath.Join(task.Native.GitDir, "ORIG_HEAD"))
 				code = "prune-metadata-refused"
 			case "wrong_owner":
@@ -249,5 +257,15 @@ func TestPruneObservationRefusalReasons(t *testing.T) {
 			_, err = observePruneRegistration(context.Background(), opts)
 			assertPruneFailure(t, err, code)
 		})
+	}
+}
+
+func TestPruneAbsenceRequiresExactENOENT(t *testing.T) {
+	if err := pruneMissingLeafError(unix.ENOENT); err != nil {
+		t.Fatal(err)
+	}
+	assertPruneFailure(t, pruneMissingLeafError(nil), "prune-destination-present")
+	for _, err := range []error{unix.EACCES, unix.EPERM, unix.ENOTDIR, unix.EIO, unix.ESTALE, context.Canceled, fmt.Errorf("unexpected wrapped error: %w", unix.ENOENT)} {
+		assertPruneFailure(t, pruneMissingLeafError(err), "prune-absence-unavailable")
 	}
 }
