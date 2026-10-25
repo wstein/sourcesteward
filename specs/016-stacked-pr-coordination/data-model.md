@@ -118,7 +118,14 @@ and explicit trunk base; it is not an executable extension command.
 
 See [receipts](contracts/receipts.md) for the normative gate matrix.
 `PublicationReceipt` binds actual old/new heads and complete affected ranges,
-`change_class` (`docs-only` or `code`; unknown becomes code), `pure_rebase` (same
+validated 015 `moved_scope_change_class`, and independently recomputed
+`publication_range_change_class`: the UNION OF PER-COMMIT PATHS across observed
+remote-default..actual-new-head, including every still-open parent commit.
+No net tree diff, child-only range or supplied path list replaces that union;
+add/remove cancellation still counts code paths, and unknown parent/path evidence
+becomes code. Effective `change_class` is code if EITHER scope is code/unknown,
+and docs-only only when BOTH scopes are completely proved docs-only. It also
+binds `pure_rebase` (same
 count and every range-diff row `=`), local checks, exact-actual-SHA independent
 review/tier where needed, trusted owner identity and full default..new range,
 config origins, signature policy and native capability.
