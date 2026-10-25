@@ -79,12 +79,41 @@ separate. Spec 011 recovery roots retain committed history within their limits.
 checkpoint, local restore or undo authorizes remote writes or owner resync.
 Proposed 013 exits 0/1/2 leave implemented hidden 015 v1 exit 3 unchanged.
 
+### R5 — jj operations span the repository and are version-dependent
+
+The [official operation-log design](https://github.com/jj-vcs/jj/blob/main/docs/operation-log.md)
+describes a repository-wide view, including each workspace's working-copy
+commit; concurrent writers can leave divergent operation heads. A current view
+is therefore not private to the invoking workspace. The [official CLI reference](https://docs.jj-vcs.dev/latest/cli-reference/)
+distinguishes creating a new operation restoring an earlier view (undoing all
+later operations) from reversing one earlier operation on top of current state.
+These are not interchangeable selective undo semantics. Abandoned operation
+history and unreachable objects may later be garbage-collected.
+
+The same CLI reference documents snapshot suppression and recommends
+`--at-op=@ --ignore-working-copy` for nonmutating operation-log inspection.
+The existing `internal/inspection/jj.go` query path explicitly combines
+`--ignore-working-copy` with `--at-operation`, first discovering then pinning
+full ids. 013 requires both protections and a read-only sandbox for reads;
+restore/undo invocations also suppress implicit working-copy snapshots/updates.
+Missing target operations/objects are `unavailable`, never reconstructed by
+fetch, auto-merge or a different operation. No abandon/GC runs here.
+
+**Unmeasured**: no native operation experiment was performed for 013. Latest
+upstream documentation is design context, not admitted argv or version evidence;
+`op restore`, `op revert` and older `op undo` spellings/semantics need exact
+minimum/current version conformance under OQ-2. Recommend the narrow first
+operation-restoration slice only for the direct parent of one current operation
+head, no other workspace working-copy effect, immediate pre/post head checks,
+and divergent-head refusal without automatic resolution. Reversing an older
+operation over later work stays unsupported until a separate accepted capability.
+
 ## Needs owner decision
 
 | Id | Choice and recommendation | What remains blocked |
 | --- | --- | --- |
 | OQ-1 | Approve an initial native capture matrix after capability spikes. Recommend Git explicit ordinary tracked index/disk paths first; independently prove jj selected disk payload plus native identity capture without implicit snapshots. Keep conflict/index-extension/special-file/ignored capture unsupported until measured; no false parity. | Backend capture enablement; exact commands, admitted versions and special-state rules |
-| OQ-2 | Choose undo capabilities and descendant policy. Recommend explicit inverse changes on owned local history first; separately enable history/operation restoration only after proving exact target/descendant scope and expected-state checks. Broad `jj op undo` is never a selective fallback. Decide required-signature/source-signature handling for newly created inverse/history commits: disclose loss of signatures, refuse unmet signing policy, and run no signing helper. Spec 043 OQ6 is related context, not approval. | Undo mutation adapters, operation-restoration admission and signing capability |
+| OQ-2 | Choose undo capabilities and descendant policy. Recommend explicit inverse changes on owned local history first; separately enable history/operation restoration only after proving exact target/descendant scope and expected-state checks. For jj recommend only the single current operation head's direct parent as the desired restored view, no other workspace working-copy effect, explicit pinned/snapshot-suppressed invocation, immediate pre/post head checks, divergent-head refusal and missing/GC'd operation unavailable (R5); older-operation inverse application is a different, initially unsupported capability. Broad `jj op undo` is never a selective fallback. Decide required-signature/source-signature handling for newly created inverse/history commits: disclose loss of signatures, refuse unmet signing policy, and run no signing helper. Spec 043 OQ6 is related context, not approval. | Undo mutation adapters, operation-restoration admission and signing capability |
 | OQ-3 | Choose payload location, quota and retention/deletion policy. Require explicit 0700 directories/0600 files independent of umask, current-actor ownership and fail-closed canonical/native/layout proof outside repositories/worktrees. Recommend a caller-selected external store, 32 MiB per-checkpoint payload and 1 GiB total physical-store quota counting all metadata/staging/orphan/incomplete bytes. Recommend exact-checkpoint drop-plan/drop with stored plan, authorization and checkpoint-id confirmation; dependency/expected-value guards and partial receipts remain mandatory. No automatic expiry/eviction or secure-erasure claim. Journal metadata retention is not byte retention. | Durable selected-byte store, total quota and explicit drop interface; no adoption of sync's ten-run deletion policy |
 | OQ-4 | Select trusted ownership/authorization inputs for stored plans, payloads and affected refs/changes. Recommend Spec 010 task registration plus native layout/position evidence, explicit caller identity and current actor binding; missing/foreign/shared evidence refuses. Config/environment identity and session-name matches alone never prove ownership. | Apply admission and shared/published-history classification when offline proof is incomplete |
 | OQ-5 | Review the typed recovery seam, versioned record envelope, namespace/location and migration across 032/013/015, plus proposed 013 command spellings/stored-plan interface and common flag admission. Recommend extract durable-write/root/validation primitives under characterization tests; keep sync v1 and operation-specific restore/retention behavior unchanged. New writers require fail-closed durability evidence. Reserve distinct `refs/stw/recovery/checkpoint/CHECKPOINT_ID/N` and `refs/stw/recovery/undo/UNDO_ID/N` prefixes; never enter sync/tidy/v3/restack ownership. Recommend a proved native jj commit/op-log retention mechanism without visible bookmarks; root-dependent recovery stays disabled until that proof exists. Recommend a separately stored selected-byte restore plan; exact `restore-plan`/`restore` vs plan/apply spelling, explicit `--human` alias and bounded `--timeout` override remain interface choices, not approval. | Shared extraction, new checkpoint/restore/undo record writers and CLI/interface admission |

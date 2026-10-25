@@ -29,6 +29,36 @@ unsupported topology cannot be silently flattened. Git commit/merge identity,
 jj commit/change identity and jj operation identity are not aliases. A jj
 operation id alone cannot restore uncaptured disk edits or external effects.
 
+## Native jj operation guard (OQ-2 proposal)
+
+The operation log is shared by all workspaces of a repository. Inventory every
+workspace working-copy commit and the complete operation-head set; the invoking
+workspace alone cannot establish safe scope. Every jj repository read uses
+`--ignore-working-copy` and explicit `--at-operation` (initial `@` discovery,
+then full pinned ids) under enforced read-only isolation. Every restore/undo
+invocation also uses `--ignore-working-copy` and the expected current full
+operation id; never gain snapshot/update permission by omitting a flag. Any
+future explicit capture snapshot is a separate OQ-1 capability/effect.
+
+Recommend operation-restoration admission only when the desired saved view is
+the direct parent of one current head and no other workspace's working-copy
+commit or unselected state changes. Bind saved view, expected head, parent,
+complete workspace effects and exact native semantics in the plan. Restoring
+an earlier view creates a new operation and can undo all later operations;
+reverse-applying a selected older operation atop later work has different
+semantics. Neither is time travel or an implicit selective inverse. The latter
+capability and version-specific `restore`/`revert`/older `undo` argv remain
+unadmitted until OQ-2/native conformance; these names are not interchangeable.
+
+Recheck sole current head immediately before the effect and verify the expected
+new operation/parent and all workspace deltas immediately afterward. Divergent
+heads or changed parent/workspace evidence before apply refuse `changed-since`
+without automatic reconciliation/merge. An unexpected/divergent head after an
+effect is partial/changed-since with retained evidence, not success or an
+automatic rollback. If op abandonment/GC has removed a required operation or
+object, report `unavailable`, refuse mutation and show the lost guarantee;
+never invoke abandon, GC, repair, snapshot or another native operation to hide it.
+
 ## Reviewable plan and fresh guards
 
 Resolve explicit target/destination and selected scope offline. Present complete

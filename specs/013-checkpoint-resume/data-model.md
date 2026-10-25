@@ -99,6 +99,16 @@ rewritten descendant must be selected and owned. No empty selector defaults to
 latest, current merge parent, entire operation or all descendants. If an inverse
 would conflict, planning reports predicted conflict/unknown; no broadened undo.
 
+Native jj operation plans additionally bind the complete repository-wide
+workspace working-copy map, sole expected operation head, desired restored view
+and its direct-parent relation, exact native semantics and expected resulting
+operation/parent. The OQ-2 first-slice recommendation excludes older-operation
+inverse application over later work and every other-workspace working-copy effect.
+All reads/restore/undo calls explicitly suppress snapshots with
+`--ignore-working-copy` and use operation pinning. Divergent heads refuse without
+auto-merge; a post-effect divergence is partial. Missing/abandoned/GC'd required
+operation/object is unavailable, never a broader recovery fallback.
+
 ## RecoveryAction and transitions
 
 A proposed typed RecoveryAction records operation kind, plan/run/action ids,
