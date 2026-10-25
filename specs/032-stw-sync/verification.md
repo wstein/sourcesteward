@@ -23,10 +23,10 @@ what the assertions of the script check, nothing more:
 | `S.unsupported-path` | a directory with only `.jj` is refused: exit 1, `error.code` `sync-unsupported-backend`, no `repos` |
 | `S.quoted-path` | the paths in a plan, a run with `--submodules` and a busy run equal the fixture paths byte for byte (space, `ü`, quote) |
 | `S.missing-binary` | a missing binary is a failure, not a skip |
-| `S.rebase` | `--rebase` and a global `pull.rebase=true` each end with `rebased`, no merge commit, the local commit on top of the upstream tip |
+| `S.rebase` | `--rebase` and a global `pull.rebase=true` each end with `rebased`, no merge commit, the local commit directly on top of the upstream tip, and both the local and the upstream file present |
 | `S.rebase-merged-upstream` | the branch was rebase-merged upstream (same change, new commit id, the remote branch deleted): without a flag `diverged`; with `--rebase` `rebased`, HEAD equals the upstream tip, the file is kept and no merge commit exists |
 | `S.prune` | without `--prune` a stale remote-tracking ref stays and `pruned` is 0; with `--prune` it is removed, `pruned` is 1, and the local branches `main` and one created from the stale ref are still there |
-| `S.autostash` | with a dirty tree `--rebase` is `skipped-dirty` and nothing changes; `--rebase --autostash` ends with `rebased`, an empty stash list and the edit restored |
+| `S.autostash` | with a dirty tree `--rebase` is `skipped-dirty`, the local refs (except the remote-tracking ones), HEAD, status and working files are unchanged and no stash exists; `--rebase --autostash` ends with `rebased`, an empty stash list and the edit restored |
 | `S.autostash-conflict` | `--autostash` with a conflicting edit exits 1 with `autostash-conflict`, `stash_oid` equal to `refs/stash`, HEAD at the upstream tip and one stash entry |
 | `S.rebase-conflict` | `--rebase` on a conflicting change exits 1 with `conflict`, a reason naming `git rebase --continue`, and the rebase left in progress; `git rebase --abort` of the fixture returns to the old tip |
 
