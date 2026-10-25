@@ -5,6 +5,8 @@
 **Status**: Stacked-integration amendment awaiting exact specification/plan re-review; prior specification `99539328` and plan `5272dc1e` were independently CLEAR. No implementation acceptance.
 **Input**: User request: "this fix findings, then rerun tidy and analyze result again". The selected findings are rewritten PR integration, completed legacy attached worktrees, the base-tree metadata limit, and stale local remote-tracking references.
 
+**Later work**: owned retirement is reused by the workspace-wide `stw tidy` wizard of [Spec 041](../041-tidy-wizard/spec.md), which also relaxes the ownership binding after a branch switch (issue #174).
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Recognize exactly merged work after history rewriting (Priority: P1)
