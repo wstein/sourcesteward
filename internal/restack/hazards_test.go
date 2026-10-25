@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 func hazardsOf(r Result) []string {
@@ -225,5 +227,59 @@ func TestSHA256RepositoriesAreRefused(t *testing.T) {
 	res := Plan(context.Background(), Options{Path: dir, Branch: "refs/heads/main", OldParent: "refs/heads/a", NewParent: "refs/heads/b", Remote: "origin"})
 	if res.Status != StatusError || firstCode(res) != "object-format-unsupported" {
 		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
+	}
+}
+
+// touchAll gives every tracked file a new mtime so that `git status` compares content (with the
+// attributes of the real worktree) instead of trusting the index stat data.
+func touchAll(t *testing.T, s *scenario, names ...string) {
+	t.Helper()
+	future := time.Now().Add(time.Hour)
+	for _, n := range names {
+		if err := os.Chtimes(filepath.Join(s.dir, n), future, future); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The dirty check must see the real worktree, so it must apply the committed text and eol rules:
+// a clean CRLF checkout of an `eol=crlf` file is not dirty (issue 241 review F1).
+func TestStatusAppliesCommittedEolAttributesSoACleanCheckoutIsNotDirty(t *testing.T) {
+	s := rebaseMergedWith(t, func(r *repo) {
+		r.commit("B0", map[string]string{".gitattributes": "*.dat text eol=crlf\n"})
+		r.commit("B1", map[string]string{"x.dat": "one\ntwo\n"})
+	}, func(r *repo) {
+		r.commit("C1", map[string]string{"child1.txt": "c1\n"})
+	}, func(r *repo) {
+		r.commit("M", map[string]string{"main.txt": "m\n"})
+	})
+	if b, err := os.ReadFile(filepath.Join(s.dir, "x.dat")); err != nil || !strings.Contains(string(b), "\r\n") {
+		t.Fatalf("fixture: x.dat is not checked out with CRLF: %q %v", b, err)
+	}
+	touchAll(t, s, "x.dat")
+	if res := s.plan(t); res.Status != StatusOK {
+		t.Fatalf("a clean checkout reported dirty: %s %+v", res.Status, res.Diagnostics)
+	}
+}
+
+// The other direction: a committed `text` rule over a CRLF blob makes the checkout differ.
+func TestStatusAppliesCommittedTextAttributesSoARealChangeIsDirty(t *testing.T) {
+	s := rebaseMergedWith(t, func(r *repo) {
+		r.commit("B1", map[string]string{"parent1.txt": "p1\n"})
+	}, func(r *repo) {
+		r.commit("C1", map[string]string{"child1.txt": "c1\n"})
+	}, func(r *repo) {
+		r.commit("M0", map[string]string{"x.txt": "one\r\ntwo\r\n"})
+		// add only the attribute file: `add -A` would renormalize the CRLF blob under the new rule
+		r.write(".gitattributes", "*.txt eol=lf\n")
+		r.git("add", ".gitattributes")
+		r.git("commit", "-q", "-m", "M1")
+	})
+	touchAll(t, s, "x.txt")
+	if out, _ := s.gitCode("status", "--porcelain", "--untracked-files=no"); !strings.Contains(out, "x.txt") {
+		t.Fatalf("fixture: default Git does not report x.txt as modified: %q", out)
+	}
+	if res := s.plan(t); firstCode(res) != "target-dirty" {
+		t.Fatalf("expected target-dirty: %s %+v", res.Status, res.Diagnostics)
 	}
 }
