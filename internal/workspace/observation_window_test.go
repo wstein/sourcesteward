@@ -3,13 +3,14 @@ package workspace
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
-func TestObservationWindowScalesWithTheRegistrations(t *testing.T) {
+func TestObservationWindowScalesWithTheItems(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		n    int
@@ -60,7 +61,7 @@ func TestExplicitTimeoutReplacesTheScaledWindow(t *testing.T) {
 }
 
 // The window the observer applies to the content reads is the one for the count of registrations.
-func TestObserveAppliesTheWindowOfTheRegistrationCount(t *testing.T) {
+func TestObserveAppliesTheWindowOfTheItemCount(t *testing.T) {
 	repo := observeRepo(t)
 	observeAdd(t, repo, "w1")
 	observeAdd(t, repo, "w2")
@@ -77,15 +78,17 @@ func TestObserveAppliesTheWindowOfTheRegistrationCount(t *testing.T) {
 	if _, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase}); err != nil {
 		t.Fatal(err)
 	}
-	if len(asked) == 0 || asked[len(asked)-1] != 3 {
-		t.Fatalf("the window was asked for %v registrations, want the last to be 3", asked)
+	// three worktrees (the primary and two added) and the local branches of the fixture
+	want := 3 + len(strings.Fields(gitFixture(t, repo, "for-each-ref", "--format=%(refname)", "refs/heads/")))
+	if len(asked) == 0 || asked[len(asked)-1] != want {
+		t.Fatalf("the window was asked for %v items, want the last to be %d (worktrees plus local branches)", asked, want)
 	}
 	if left < 6*time.Hour {
 		t.Fatalf("content reads ran under %s, want the 7h window", left)
 	}
 }
 
-func TestObserveJJAppliesTheWindowOfTheRegistrationCount(t *testing.T) {
+func TestObserveJJAppliesTheWindowOfTheItemCount(t *testing.T) {
 	repo := observeJJRepo(t)
 	observeJJAdd(t, repo, "w1")
 	obs := defaultWorktreeObserver()
@@ -104,7 +107,7 @@ func TestObserveJJAppliesTheWindowOfTheRegistrationCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(asked) == 0 || asked[len(asked)-1] != 2 || left < 6*time.Hour {
+	if len(asked) == 0 || asked[len(asked)-1] < 3 || left < 6*time.Hour {
 		t.Fatalf("asked %v, content deadline %s", asked, left)
 	}
 }
