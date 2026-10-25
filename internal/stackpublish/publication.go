@@ -65,7 +65,9 @@ func ClassifyPaths(paths []string, known bool) ChangeClass {
 	return ClassDocsOnly
 }
 
-// Commit is one commit of the publication range with its actual identities and changed paths.
+// Commit is one commit of the publication range with its actual identities and changed paths. Paths
+// are the final paths of the commit: resolving renames (both sides) and symlink or mode changes is
+// the caller's job (T019); this package only classifies what it is given.
 type Commit struct {
 	ID         string
 	Author     Identity
@@ -204,9 +206,17 @@ func rangeRefusal(in PublicationInput) *Refusal {
 	case len(rg.Commits) > DefaultLimits().IdentityCommits:
 		return refuse(ReasonBoundExceeded, "identity-range-too-long")
 	}
+	seen := map[string]bool{}
 	for _, c := range rg.Commits {
 		if !isLowerHex(c.ID, 40) {
 			return refuse(ReasonIdentityMismatch, "range-commit-invalid")
+		}
+		if seen[c.ID] {
+			return refuse(ReasonIdentityMismatch, "range-commit-duplicate")
+		}
+		seen[c.ID] = true
+		if len(c.Paths) > DefaultLimits().Records {
+			return refuse(ReasonBoundExceeded, "paths-too-many")
 		}
 	}
 	if rg.Commits[len(rg.Commits)-1].ID != in.NewHead {
@@ -234,6 +244,9 @@ func identityRefusal(owner Identity, commits []Commit) *Refusal {
 func configRefusal(owner Identity, cfg *ConfigEvidence) *Refusal {
 	if cfg == nil || !cfg.Complete {
 		return &Refusal{ReasonIdentityConfigForeign, "config-origin-unknown"}
+	}
+	if len(cfg.Origins) > DefaultLimits().Records {
+		return &Refusal{ReasonBoundExceeded, "config-too-many"}
 	}
 	for _, o := range cfg.Origins {
 		var want string
@@ -311,9 +324,10 @@ func EvaluatePublication(in PublicationInput) PublicationReceipt {
 	}
 	r.PureRebase = in.Rewrite && pureRebase(in.RangeDiff)
 
+	// Review before the push is required only for a rewrite of an already pushed branch (AGENTS.md).
+	// A new topic goes up as a Draft once its checks pass; its review belongs to Ready.
 	switch {
 	case !in.Rewrite:
-		r.ReviewRequired, r.MinTier = true, TierStrongest
 	case r.Class == ClassCode && r.PureRebase && !r.ClassUnknown:
 		r.ReviewRequired, r.MinTier = true, TierMiddle
 	case r.Class == ClassCode:
@@ -329,7 +343,7 @@ func EvaluatePublication(in PublicationInput) PublicationReceipt {
 	if r.ReviewRequired {
 		r.Blockers = appendIf(r.Blockers, reviewRefusal(in.Policy, in.NewHead, in.AuthorID, in.Review, r.MinTier))
 	}
-	r.Blockers = append(r.Blockers, EvaluateSigning(in.Policy, in.Signing, in.NewHead, nil)...)
+	r.Blockers = append(r.Blockers, EvaluateSigning(in.Policy, in.Signing, in.NewHead, rangeIDs(in.Range))...)
 	return r
 }
 
@@ -342,4 +356,12 @@ func (r PublicationReceipt) Status() Status {
 		return StatusComplete
 	}
 	return StatusRefused
+}
+
+func rangeIDs(rg *RangeEvidence) []string {
+	var ids []string
+	for _, c := range rg.Commits {
+		ids = append(ids, c.ID)
+	}
+	return ids
 }

@@ -3,6 +3,7 @@
 package stackpublish
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -183,5 +184,35 @@ func TestRequiredSignaturesCoverEveryCommitOfTheRange(t *testing.T) {
 	// Without a required remote signature the range list is not needed.
 	if got := EvaluateSigning(helperPolicy(), signedEvidence(), sha('f'), nil); len(got) != 0 {
 		t.Fatalf("%v", refusals(got))
+	}
+}
+
+func longChain(n int) *SigningEvidence {
+	e := &SigningEvidence{Mode: SigningSigned, SourceKnown: true}
+	parent := sha('0')
+	for i := 0; i < n; i++ {
+		l := SignedLink{Old: fmt.Sprintf("1%039x", i), Unsigned: fmt.Sprintf("2%039x", i), Signed: fmt.Sprintf("3%039x", i), SignedParent: parent, Signer: "SHA256:allowed", Verified: true}
+		parent = l.Signed
+		e.Chain = append(e.Chain, l)
+	}
+	e.FinalHead = parent
+	return e
+}
+
+func TestChainAndSourceListBounds(t *testing.T) {
+	ok := longChain(200)
+	if got := EvaluateSigning(helperPolicy(), ok, ok.FinalHead, nil); len(got) != 0 {
+		t.Fatalf("200 links are within the bound: %v", refusals(got))
+	}
+	long := longChain(201)
+	if got := refusals(EvaluateSigning(helperPolicy(), long, long.FinalHead, nil)); !reflect.DeepEqual(got, []string{"bound-exceeded/chain-too-long"}) {
+		t.Fatalf("%v", got)
+	}
+	src := longChain(2)
+	for i := 0; i < 201; i++ {
+		src.SourceSigned = append(src.SourceSigned, fmt.Sprintf("4%039x", i))
+	}
+	if got := refusals(EvaluateSigning(helperPolicy(), src, src.FinalHead, nil)); !reflect.DeepEqual(got, []string{"bound-exceeded/chain-too-long"}) {
+		t.Fatalf("%v", got)
 	}
 }

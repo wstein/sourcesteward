@@ -100,8 +100,8 @@ func EvaluateReady(in ReadyInput) ReadyReceipt {
 	if !in.Policy.Loaded {
 		r.Blockers = append(r.Blockers, Refusal{ReasonReviewMissing, "policy-missing"}, Refusal{ReasonChecksUnknown, "policy-missing"})
 	} else {
-		r.Blockers = appendIf(r.Blockers, reviewRefusal(in.Policy, in.Head, in.AuthorID, in.Review, ""))
-		r.Blockers = appendIf(r.Blockers, checksRefusal(in.Policy, in.Head, in.Checks))
+		r.Blockers = appendIf(r.Blockers, reviewRefusal(in.Policy, in.Head, in.AuthorID, in.Review, TierMiddle))
+		r.Blockers = appendIf(r.Blockers, checksRefusal(in.Policy, in.Head, in.BaseSHA, in.Checks))
 	}
 	r.Blockers = appendIf(r.Blockers, rebaseRefusal(in.Head, in.BaseSHA, in.Rebase))
 	if !in.Policy.Loaded {
@@ -152,7 +152,7 @@ func reviewRefusal(p WorkspacePolicy, subject, author string, rv *ReviewEvidence
 		return refuse("review-absent")
 	}
 	reviewer, ok := p.reviewer(rv.ReviewerID)
-	if !ok || !contains(p.ReviewSources, rv.Source) {
+	if !ok || !contains(p.ReviewSources, rv.Source) || reviewer.Tier.rank() == 0 {
 		return refuse("review-untrusted")
 	}
 	if reviewer.Tier.rank() < min.rank() {
@@ -161,7 +161,10 @@ func reviewRefusal(p WorkspacePolicy, subject, author string, rv *ReviewEvidence
 	if !isLowerHex(rv.EvidenceDigest, 64) || rv.Locator == "" || len(rv.Locator) > 512 {
 		return refuse("review-evidence-invalid")
 	}
-	if author == "" || rv.ReviewerID == author {
+	// Independence: the author id comes from the trusted policy (task evidence), never from a forge
+	// login (all agents may share one account); reviewer and author ids are exact, equal means not
+	// independent, and an author the policy does not know cannot be shown independent.
+	if !validID(author) || !contains(p.Authors, author) || rv.ReviewerID == author {
 		return refuse("review-not-independent")
 	}
 	if rv.SubjectSHA != subject {
@@ -173,37 +176,61 @@ func reviewRefusal(p WorkspacePolicy, subject, author string, rv *ReviewEvidence
 	return nil
 }
 
-func checksRefusal(p WorkspacePolicy, head string, c *ChecksEvidence) *Refusal {
+func checksRefusal(p WorkspacePolicy, head, base string, c *ChecksEvidence) *Refusal {
 	unknown := func(detail string) *Refusal { return &Refusal{ReasonChecksUnknown, detail} }
 	switch {
 	case c == nil:
 		return unknown("checks-absent")
+	case len(c.Required) > DefaultLimits().Records || len(c.Runs) > DefaultLimits().Records:
+		return &Refusal{ReasonBoundExceeded, "checks-too-many"}
 	case !contains(p.CheckSources, c.Source):
 		return unknown("checks-untrusted")
 	case !c.Complete:
 		return unknown("checks-incomplete")
 	case len(c.Required) == 0:
 		return unknown("checks-no-required")
+	case c.ObservedBase != base:
+		// A base edit invalidates old-base evidence: it is never reused (forge-effects.md, retarget).
+		return unknown("checks-stale-base")
 	}
-	red := false
-	missing, stale := false, false
+	required := map[string]bool{}
 	for _, ctx := range c.Required {
-		atHead, elsewhere := 0, 0
-		for _, run := range c.Runs {
-			switch {
-			case run.Context != ctx:
-			case run.HeadSHA != head:
-				elsewhere++
-			case run.Conclusion == "success":
-				atHead++
-			default:
-				atHead++
+		if ctx == "" || required[ctx] {
+			return unknown("checks-evidence-invalid")
+		}
+		required[ctx] = true
+	}
+	type tally struct{ atHead, elsewhere int }
+	seen := map[string]*tally{}
+	red := false
+	for _, run := range c.Runs {
+		if run.Context == "" {
+			return unknown("checks-evidence-invalid")
+		}
+		t := seen[run.Context]
+		if t == nil {
+			t = &tally{}
+			seen[run.Context] = t
+		}
+		switch {
+		case run.HeadSHA != head:
+			t.elsewhere++
+		case run.Conclusion == "success":
+			t.atHead++
+		default:
+			t.atHead++
+			if required[run.Context] {
 				red = true
 			}
 		}
-		if atHead == 0 && elsewhere == 0 {
+	}
+	missing, stale := false, false
+	for _, ctx := range c.Required {
+		t := seen[ctx]
+		switch {
+		case t == nil:
 			missing = true
-		} else if atHead == 0 {
+		case t.atHead == 0:
 			stale = true
 		}
 	}

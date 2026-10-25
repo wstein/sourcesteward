@@ -99,11 +99,19 @@ func contains(list []string, v string) bool {
 	return false
 }
 
+// validID is the grammar of reviewer and author ids: lower-case, so an exact comparison is also the
+// only comparison and a different case is simply a different, untrusted id.
+func validID(id string) bool { return actionIDGrammar.MatchString(id) }
+
 func (p WorkspacePolicy) reviewer(id string) (Reviewer, bool) {
 	for _, r := range p.Reviewers {
-		if r.ID == id && id != "" {
+		if r.ID == id && validID(id) {
 			return r, true
 		}
 	}
 	return Reviewer{}, false
 }
+
+// usable reports a re-sign helper profile with both fixed ids; the one predicate behind both the
+// handoff and the chain check, so a half-configured profile is unavailable everywhere.
+func (h *HelperProfile) usable() bool { return h != nil && h.HelperID != "" && h.VerifierID != "" }
