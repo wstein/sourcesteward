@@ -359,7 +359,7 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 	if out.Expected != expected || !reflect.DeepEqual(out.Native, native) {
 		return failure("evidence-changed", "Native post-state differs from exact recovery/registration delta; branches remain protected.")
 	}
-	if e = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(out.Native), p.StateDir); e != nil {
+	if e = qualifyTidyV3Registrations(ctx, out.Native, nil, p.StateDir); e != nil {
 		return e
 	}
 	if e = retirementV3NoOperation(ctx, out.Expected.Identity); e != nil {

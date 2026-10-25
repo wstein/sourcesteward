@@ -200,7 +200,7 @@ func (c tidyV3LegacyObserver) observeWithOwnership(ctx context.Context, o V3Plan
 	before.Expected = v3SnapshotWithState(before.Expected, before.Native)
 	out.Native = before
 	roots := v3NativeRoots(before.Native)
-	if e = qualifyTidyWorkspaceRoots(ctx, append(append([]string{}, roots...), o.ProtectWorktrees...), o.StateDir); e != nil {
+	if e = qualifyTidyV3Registrations(ctx, before.Native, o.ProtectWorktrees, o.StateDir); e != nil {
 		return out, e
 	}
 	sourceIdentity, e := retirementV3Directory(o.Path)

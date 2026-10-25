@@ -333,8 +333,8 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 			t.Fatal("provider discovery attempted for a workspace-protected head")
 		}
 	}
-	// A newly missing registered path is not an executable prefix of the full
-	// observation. Its native registration continues to protect its head/ref.
+	// A registration whose directory went missing (prunable, unlocked, real parent) no longer blocks
+	// the plan (issue 284): its native registration keeps protecting its head and ref.
 	if err := os.RemoveAll(detached); err != nil {
 		t.Fatal(err)
 	}
@@ -344,10 +344,25 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 		return s, nil
 	}
 	r = c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
+	if r.Plan == nil || r.Status != "ok" || calls != 1 {
+		t.Fatalf("stale registration blocked the plan %+v calls=%d", r, calls)
+	}
+	for _, candidate := range r.Plan.Candidates {
+		if candidate.OID == rows[0].HeadOID && (candidate.Decision != "retain" || !containsString(candidate.WorkspacePaths, detached)) {
+			t.Fatalf("stale registration lost its protection %+v", candidate)
+		}
+	}
+	// A registered root that is replaced by an alias is an unavailable root: no auth, no plan.
+	if err := os.Symlink(dir, detached); err != nil {
+		t.Fatal(err)
+	}
+	calls = 0
+	r = c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Plan != nil || r.Status == "ok" || calls != 0 {
-		t.Fatalf("missing workspace observation reached auth/plan %+v calls=%d", r, calls)
+		t.Fatalf("aliased workspace observation reached auth/plan %+v calls=%d", r, calls)
 	}
 }
+
 func TestTidyV3OfflineAndUnsafePreflightHaveNoHostingCalls(t *testing.T) {
 	for _, kind := range []string{"offline", "cancelled", "rewrite", "duplicate-url", "wrong-override", "helper", "state-overlap"} {
 		t.Run(kind, func(t *testing.T) {

@@ -250,7 +250,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 	if err != nil {
 		return failTidyV3Tracking(r, err)
 	}
-	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(observed.Native), o.StateDir); err != nil {
+	if err = qualifyTidyV3Registrations(ctx, observed.Native, nil, o.StateDir); err != nil {
 		return failTidyV3Tracking(r, err)
 	}
 	p, session, advertisement, err := c.trackingCandidates(ctx, o, source, observed)
@@ -281,7 +281,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 	if !sameTidyV3Observation(observed, fresh) {
 		return failTidyV3Tracking(r, failure("evidence-changed", "Native configuration, references or protections changed during tracking planning."))
 	}
-	if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(fresh.Native), o.StateDir); err != nil {
+	if err = qualifyTidyV3Registrations(ctx, fresh.Native, nil, o.StateDir); err != nil {
 		return failTidyV3Tracking(r, err)
 	}
 	if p.StateDir != "" {
@@ -300,7 +300,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 		if !sameTidyV3Observation(observed, fresh) {
 			return failTidyV3Tracking(r, failure("evidence-changed", "Native tracking evidence changed under the private plan lock."))
 		}
-		if err = qualifyTidyWorkspaceRoots(ctx, v3NativeRoots(fresh.Native), o.StateDir); err != nil {
+		if err = qualifyTidyV3Registrations(ctx, fresh.Native, nil, o.StateDir); err != nil {
 			return failTidyV3Tracking(r, err)
 		}
 		if err = ctx.Err(); err != nil {
