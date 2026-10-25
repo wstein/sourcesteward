@@ -71,6 +71,11 @@ type V3ApplyOptions struct {
 	Timeout time.Duration
 	// RunMode is the mode evidence recorded in the journal (Spec 041); nil records none.
 	RunMode *V3RunMode
+	// SiblingPlans names the other plans of the same plan set and repository, in the same state
+	// directory (Spec 041 FR-031). Only a sibling whose journal is complete contributes: its
+	// journaled effects explain the live repository, so a plan stored before they happened
+	// does not turn stale because of them. Anything else stays strictly compared.
+	SiblingPlans []string
 }
 
 func validateV3PlanOptions(o V3PlanOptions) error {
