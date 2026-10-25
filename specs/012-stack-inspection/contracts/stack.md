@@ -1,5 +1,7 @@
 # Contract: `stw stack show` and `stw stack plan`
 
+**UNPUBLISHED Markdown contract**: refreshed 2026-10-25; `stw stack` and `schemas/v1/stack.schema.json` remain unimplemented. Examples are proposed results, not measured CLI output. Published JSON files, including the implemented hidden Spec 015 v1 contract, remain unchanged.
+
 ## Commands
 
 ```text
@@ -7,7 +9,7 @@ stw stack show [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] 
 stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] [--host HOST] [--remote NAME]] [--after-fetch] [--json]
 ```
 
-`PATH` defaults to the current directory. `--base` and `--tip` are required and each names one reference; `--tip` is a local branch or jj bookmark, `--base` may also be a remote-tracking branch or a tracked remote bookmark. `--repo`, `--host` and `--remote` are valid only with `--pull-requests` and follow Spec 020 (host default `github.com`, remote text never selects a credential host, `--repo` never overrides ownership, `--repo` and `--remote` must agree). The commands accept no other flags, never prompt, open an editor or pager, or read input. No `gh jj` entry point exists for them.
+`PATH` defaults to the current directory. `--base` and `--tip` are required and each names one reference; `--tip` is a local branch or jj bookmark, `--base` may also be a remote-tracking branch or a tracked remote bookmark. `--repo`, `--host` and `--remote` are valid only with `--pull-requests` and follow Spec 020 (host default `github.com`, remote text never selects a credential host, `--repo` never overrides ownership, `--repo` and `--remote` must agree). Without an explicit `show` or `plan` subcommand the group shows help and performs no observation, prompt or mutation. The commands accept no other flags, never prompt, open an editor or pager, or read input. No `gh jj` entry point exists for them.
 
 | Flag | Meaning |
 | --- | --- |
@@ -21,6 +23,8 @@ stw stack plan [PATH] --base REF --tip REF [--pull-requests [--repo OWNER/NAME] 
 
 The statuses, diagnostics and exit codes are normative in [spec.md](../spec.md) (Status and exit table). Summary: 0 for `ok` (including results full of findings), 1 for `incomplete` and `error` (a concise `Error:` line on standard error and, with `--json`, the full observation on standard output), 2 for usage errors with no JSON. Findings never change the exit status; `plan` exits 0 when it prints steps or a `blocked` reason.
 
+012 uses 0/1/2 as designed. The implemented hidden Spec 015 `restack plan` v1 uses exit 3 for incomplete; this contract does not change it. Future shared normalization requires the owner migration decision OQ-EXIT, not a silent interpretation of 3 as a usage error.
+
 ## Human output
 
 Rendered from the same result, bounded, with every control character escaped. Only the fixed lines and the finding summaries of the data model (normative) appear:
@@ -33,6 +37,8 @@ Layers (bottom first):
   3. s3  88da0eb  1 commit   landed: pending
 Findings:
   [action] [observed] layer-applied-in-base (layer 1): All 1 commits of layer 1 are already in the base as equivalent patches. (git-cherry)
+  [notice] [observed] stack-too-deep: Stack depth 3 exceeds the recommended maximum 2; this is advice only. (git-refs)
+  [notice] [inferred] restack-needed: Layers 2 retain old parent commits; local restack advice is conditional on native status: unchecked. (git-cherry, git-range)
   [notice] [observed] stack-behind-base: The stack is based 1 commit(s) behind the base. (git-range)
 Plan (advisory; nothing was executed, and a plan authorizes nothing; native stack status not checked):
   s1  git rebase --onto main 5758b572620f6940ef3b8292408c97f91ece4f8b s2
@@ -167,6 +173,57 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
   }
  ],
  "findings": [
+  {
+   "code": "stack-too-deep",
+   "layer": null,
+   "subject": null,
+   "severity": "notice",
+   "confidence": "observed",
+   "reason": null,
+   "summary": "Stack depth 3 exceeds the recommended maximum 2; this is advice only.",
+   "detail": {
+    "depth": 3,
+    "recommended_max": 2
+   },
+   "evidence": [
+    {
+     "source": "git-refs",
+     "fields": [
+      "layers"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "restack-needed",
+   "layer": null,
+   "subject": null,
+   "severity": "notice",
+   "confidence": "inferred",
+   "reason": null,
+   "summary": "Layers 2 retain old parent commits; local restack advice is conditional on native status: unchecked.",
+   "detail": {
+    "layers": [
+     2
+    ],
+    "native_status": "unchecked"
+   },
+   "evidence": [
+    {
+     "source": "git-cherry",
+     "fields": [
+      "marks"
+     ]
+    },
+    {
+     "source": "git-range",
+     "fields": [
+      "fork_commit_id",
+      "base_commit_id"
+     ]
+    }
+   ]
+  },
   {
    "code": "stack-behind-base",
    "layer": null,
@@ -303,11 +360,21 @@ One `StackResult` per invocation, validated by `schemas/v1/stack.schema.json`, s
 
 ## Effects
 
-- Without `--pull-requests`: local reads only, by the isolated Git runner (explicit `--git-dir`/`--work-tree` after the ownership check, the isolation prefix and process allowlist of [plan.md](../plan.md)) or the jj session pinned to one operation (`--ignore-working-copy`). No network, no authentication, no fetch.
+- Without `--pull-requests`: local cached objects/remote-tracking refs only, with sampled freshness and no persistent HTTP cache; local reads only, by the isolated Git runner (explicit `--git-dir`/`--work-tree` after the ownership check, the isolation prefix and process allowlist of [plan.md](../plan.md)) or the jj session pinned to one operation (`--ignore-working-copy`). No network, no authentication, no fetch.
 - With `--pull-requests`: additionally the fixed `GET` requests of the Remote sources table with the caller's selected-host credentials (Spec 022 token lookup), at most 50, none that writes.
 - Never: a write to any ref, file, index, object database (loose objects included), remote, pull request, stack or setting; a jj snapshot or operation-log change; a hook, filter, textconv, external diff, alias, editor, pager or prompt; a started printed command.
 - Reading a pull request or stack can cause GitHub to compute server-side state; that is GitHub's cache, not a repository change.
 
 ## Compatibility
 
-Every existing command, flag, schema and fixture is unchanged and byte-identical (a test compares them to the base). `stack.schema.json` is new and self-contained. The first-draft contract for diff and changed-file output is not provided (withdrawn; see the Disposition table in [spec.md](../spec.md)).
+Every existing command, flag, schema and fixture is unchanged and byte-identical (a test compares them to the base). `stack.schema.json` is a proposed new self-contained schema; publication waits for implementation and conformance. The first-draft contract for diff and changed-file output is not provided (withdrawn; see the Disposition table in [spec.md](../spec.md)).
+
+## Toolbelt handoff and advisory findings
+
+`stack-too-deep` is a notice at more than two layers; it neither changes completion status nor blocks a plan. All layers up to the hard cap 32 remain visible. The 33rd layer exhausts LIM-2 and yields incomplete, independently of the notice.
+
+`restack-needed` uses the exact Findings rule and is conditional when native status is unchecked. Rebase-merge SHA inequality and branch-name matches alone are never landing proof. `git cherry`/patch ids qualify linear patch content; merge commits, squash mismatches and conflict resolutions limit that evidence. A parent that is closed but not merged is not landed; its child's stale base remains only `base-mismatch`. No observation authorizes a retarget, rewrite or publication.
+
+The displayed `git rebase --onto <new parent> <full old parent> <child>` is an inert human reference for the exact replay boundary. Spec 015 owner D7 requires plumbing/quarantine and compare-and-swap; its executor never runs this argv. Actual Spec 015 apply must produce its own actual-head evidence and pass independent exact-head review before a separate Spec 016 lease-push plan/apply, with explicit action authorization and plan id. Neither a predicted head nor `Layer.upstream.commit_id` is a fresh publishable head/lease receipt.
+
+The owner performs Spec 043 landing separately. 012 never starts 015/016/043, fetches, prompts, or resyncs an owner's checkout. OQ-NET retains approved `--pull-requests` semantics pending any explicit owner amendment of the literal no-network wording.
