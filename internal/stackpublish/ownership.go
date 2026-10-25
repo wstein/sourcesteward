@@ -4,6 +4,7 @@ package stackpublish
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/wstein/sourcesteward/internal/attribution"
 )
@@ -84,6 +85,14 @@ func ownershipGuard(in OwnershipInput) Guard {
 		subject = in.Subject.Ref
 	case KindEditBody, KindRetarget, KindReady:
 		subject = in.Subject.PRHeadRef
+		// A PR is own only when its head and base live in the plan repository: the same branch
+		// name in a fork is somebody else's PR. Unreadable evidence is unknown, never a pass.
+		if in.Subject.HeadRepo == nil || in.Subject.BaseRepo == nil || !in.Subject.HeadRepo.known() || !in.Subject.BaseRepo.known() {
+			return guard(GuardOwnership, GuardUnknown, ReasonOwnershipUnknown)
+		}
+		if !in.Subject.HeadRepo.same(in.PlanRepo) || !in.Subject.BaseRepo.same(in.PlanRepo) {
+			return guard(GuardOwnership, GuardFail, ReasonNotOwned)
+		}
 	}
 	switch {
 	case subject == nil:
@@ -92,6 +101,13 @@ func ownershipGuard(in OwnershipInput) Guard {
 		return guard(GuardOwnership, GuardFail, ReasonNotOwned)
 	}
 	return guard(GuardOwnership, GuardPass, "")
+}
+
+func (r RepoRef) known() bool { return r.Host != "" && r.Owner != "" && r.Name != "" }
+
+// same compares host, owner and name the way GitHub does: case-insensitively.
+func (r RepoRef) same(o RepoRef) bool {
+	return strings.EqualFold(r.Host, o.Host) && strings.EqualFold(r.Owner, o.Owner) && strings.EqualFold(r.Name, o.Name)
 }
 
 // attributionGuard is the Spec 042 D5 gate for a push or Ready. A human run is never gated; an
