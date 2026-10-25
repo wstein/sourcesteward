@@ -1,5 +1,10 @@
 # Proposed contract: native jj local restacking
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status (2026-10-25): UNPUBLISHED, unimplemented, capability gated.** D4 keeps
 hidden v1 restack Git-only (`unsupported-backend` for jj, no Git fallback).
 This future peer contract does not imply parity of implementation or semantics.
@@ -69,5 +74,5 @@ metadata, files and neighbours. Missing native lanes block the capability.
 
 Schema fields remain Markdown proposals until reviewed native semantics,
 implementation and offline conformance fixtures exist. Future exits follow the
-0/1/2 apply proposal; hidden v1's unsupported-backend and incomplete exit3 remain
-unchanged. No network, editor, prompt, hook or repository-supplied command runs.
+unified 0/1/2 target; hidden v1 JSON/schema bytes remain frozen. CURRENT code
+still returns incomplete 3 until the explicit 015 revision-2 task; native jj remains capability-unavailable until its measured admission. No network, editor, prompt, hook or repository-supplied command runs.

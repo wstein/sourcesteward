@@ -1,5 +1,10 @@
 # Quickstart: restack evidence and proposed local apply
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 **2026-10-25 scope:** hidden v1 plan exists in source; its schema is UNPUBLISHED
 and minimum/current Git plus exact-head acceptance remain pending. Local apply,
 restore and jj below are proposals, not available commands. This amendment runs
@@ -53,7 +58,7 @@ must be checked on the new commits, as required by the workspace policy.
 
 ## Proposed local apply/recovery walkthrough (not runnable)
 
-1. Resolve [owner choices](spec.md#needs-owner-decision), review the complete
+1. Verify the dated [owner decisions](spec.md#needs-owner-decision), review the complete
    [apply contract](contracts/restack-apply.md), then implement and accept its
    red-first/native tasks. `--contract 2` and authorization spellings are proposed.
 2. Choose exactly one owned topic ref, exact old parent/head/new parent, explicit

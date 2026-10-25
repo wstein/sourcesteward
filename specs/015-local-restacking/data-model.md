@@ -1,5 +1,10 @@
 # Data model: restack plan v1 (first slice)
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 Historical v1 types live in `internal/restack` (source implemented, hidden; schema UNPUBLISHED) and reuse the native identity and diagnostic types of `internal/inspection`. JSON names are snake_case; arrays are non-null; optional objects are `null`; text is valid UTF-8, bounded and data. Object ids are 40-hex lowercase.
 
 ## RestackPlanResult
@@ -60,7 +65,6 @@ State values never mean authorization; any `unknown` is reported with its reason
 
 None in the first slice. The keep-both path allowlist (`[restack] keep_both_paths`, default empty, exact paths or directory prefixes, no heuristic) and `--keep-both-config` belong to WP6.
 
-
 ## Proposed local apply entities (UNPUBLISHED)
 
 These are Markdown-only additions for [the future contract](contracts/restack-apply.md).
@@ -71,7 +75,7 @@ Unsupported object formats refuse rather than truncate or reinterpret an id.
 | Entity | Required fields and validation | Relationships |
 | --- | --- | --- |
 | LocalApplyPlan | version/kind, immutable plan id/digest, repository/common-directory identity, backend, one task/ref ownership binding, old parent/head, new parent, ordered moved ids, protected-ref/config/registration/operation expectations, trusted owner-identity binding, explicit assertions/committer policy (caller cannot widen), exact effects, bounds | Optional 012 observation and 014 preflight references are evidence only; equality of exact inputs/semantics/completeness required |
-| ActualCandidate | full new head/tree, ordered one-to-one `{old_commit,new_commit}` map, preserved author/date, actual committer/date, all `=` range rows, own-diff and parent-integration proof, actual identity rows against trusted owner only, unsigned candidate policy, per-commit `{old_commit,new_commit,source_signed,signature-dropped}` when source was signed | Built after replay, before target CAS; never reuse v1's unpublished prediction commit id or fixed committer as actual proof |
+| ActualCandidate | full new head/tree, ordered one-to-one `{old_commit,new_commit}` map, preserved author/date, actual committer/date, all `=` range rows, own-diff and parent-integration proof, actual identity rows against trusted owner only, default unsigned/explicit host-only re-sign policy, per-commit `{old_commit,new_commit,source_signed,signature-dropped}` when source was signed | Built after replay, before target CAS; never reuse v1's unpublished prediction commit id or fixed committer as actual proof |
 | DurableRestackAction | type/version, plan/run/action ids, repository/task binding, exact target, old and planned/actual new ids, recovery-root id/value, stage/outcome and evidence digest | Typed reuse of 032 record architecture; each entry is bound to one selected action; foreign sync record never authorizes restack |
 | ApplyReceipt | plan/run/action, old/new identities, per-action effects/outcomes, complete actual evidence, actual-SHA policy gate with derived moved-range `change_class`/scope and `pure_rebase`, recovery pointer, limits/diagnostics | Supplies evidence to 016, never permission; `remote_authorized` is false |
 | ReviewGateInput | exact actual new head, derived `change_class` (`docs-only` or `code`; unknown→`code`), `pure_rebase` (all rows `=` and same count; unknown→false), moved-range scope, 016-recomputed full-publication-range class (union of per-commit paths from observed remote default to actual new head, including open parents; effective class can only strengthen to code), local check/equality evidence, independent issuer/verdict/freshness where pre-push policy requires it; required-check evidence exact-head, full observed remote-default-to-new-head identity range (including open-parent commits), trusted owner binding and local/global user-config origin/key evidence (only policy-needed name/email values rendered; other user values omitted/redacted) | 016 applies the AGENTS.md gate table: docs-only checks/equality without pre-push review, code exact-new-SHA review (middle tier allowed for pure rebase). Ready always independent exact-head CLEAR + green required checks; 043 human `--reviewed` remains a separate owner statement |
@@ -99,3 +103,16 @@ kind or gate state cannot grant mutation or be coerced to success. Valid unusual
 paths stay data; terminal controls are escaped; arrays are bounded and non-null,
 optional facts explicit null. Future schemas and validators are implementation
 work only after owner decisions and review; no JSON file is created here.
+
+## Owner-decided actual signing receipt
+
+ActualCandidate/ApplyReceipt add proposed typed signing evidence only through a
+reviewed additive future result contract: default unsigned or explicit re-sign
+selection, trusted helper/verifier profile identity, allowed signer/public
+verification, each old→unsigned→signed commit and signed-parent mapping, original
+signature presence/loss/replacement, final verified head/tree and complete actual
+range/identity evidence. No key/helper secret is serialized. The final signed
+SHA, never prediction or unsigned head, is the review/push subject. Existing
+restack-plan JSON schema1 is unchanged; optional apply/signing shape admission
+requires future conformance. Plan metadata uses workspace .work profile; no
+selected worktree bytes or private keys enter it.

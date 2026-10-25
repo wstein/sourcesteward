@@ -1,5 +1,10 @@
 # Proposed contract: restack journal and recovery
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status (2026-10-25): UNPUBLISHED, unimplemented.** Reuse
 [Spec 032 journal conventions](../../032-stw-sync/spec.md#journal-and-restore)
 and Spec 013 checkpoint/restore semantics. This is a proposed typed integration,

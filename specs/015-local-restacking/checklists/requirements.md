@@ -1,39 +1,18 @@
-# Specification quality checklist: local restacking
+# Owner-Decision Quality Checklist: Spec 015
 
-**Created**: 2026-10-15; **amended**: 2026-10-25.
-**Feature**: [spec.md](../spec.md). Author document review, not implementation or
-independent acceptance. Historical first-slice implementation/evidence remains
-separate from proposed local apply/recovery/jj work.
+**Owner decisions recorded 2026-10-25. Author document review only.**
+See [spec](../spec.md), [analysis](../analysis.md) and [profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md).
 
-## Author completeness review
+- [x] Former OQ IDs are dated DECISIONS, with all39 source pairs indexed and no native measurement invented.
+- [x] Current owner direction is distinguished from historical implementation evidence and unchecked future work.
+- [x] All 44 current FR/SC definitions have real task IDs and literal future tests in analysis.md.
+- [x] .work saved-plan metadata and external selected-byte/safety payload roles remain distinct with honest export risk.
+- [x] Trusted workspace policy, missing-source refusal, native capability gaps and separate local/remote authority remain explicit.
+- [x] Default signature refusal and optional015 HOST helper/no-stw-key/final-signed-SHA boundary are explicit;013/014 remain helper-free.
+- [x] Target CLI exit revision2 0/1/2 is distinct from frozen JSON schema 1 and CURRENT 015 code 3; no legacy3 selector.
+- [ ] Independent review of this exact amended head is CLEAR.
+- [ ] Required implementation/source/native/helper/forge measurements are executed and accepted for enabled capabilities.
+- [ ] New structured output conformance/publication and separately authorized live-operation gates are satisfied.
 
-- [x] Existing hidden v1 source, UNPUBLISHED frozen schema, actual exit3 and T024 limitation gap are stated accurately.
-- [x] D4–D9/D12/D13 and original dates/historical review evidence are preserved.
-- [x] T001 historical CLEAR is distinguished from this amendment's unreviewed head; T004/T021/T023/T024 remain unchecked.
-- [x] User outcomes and acceptance scenarios cover explicit local scope, stale state, native effects, partial outcomes and contract failure.
-- [x] Exact two-dot `--onto` replay semantics preserve D7 plumbing/quarantine/CAS, no porcelain rebase or implicit descendants.
-- [x] Actual candidates explicitly disable signing/helper execution; per-commit signature loss is disclosed and OQ-8 gates signed/required-signature acceptance.
-- [x] Trusted owner-only actual and full push-range identity checks include open-parent commits, reject caller-widened identities and report config origins without writes.
-- [x] Actual new SHA/equality/author AND committer evidence precedes a class-dependent policy receipt; 016 preserves docs-only pre-push exemption, code exact-new-SHA review and equal-pure-rebase middle-tier allowance after conservative full-publication-range classification including open-parent code; Ready always needs independent exact-head CLEAR plus green checks.
-- [x] Owned unoccupied-ref first apply is an explicit recommendation pending OQ-6, with original worktree/index/config unchanged.
-- [x] Proposed typed recovery seam reuses Spec 032; no existing shared API, jj support or frozen sync-record compatibility is fabricated.
-- [x] Native jj operation/bookmark/change/commit identities and capability gaps are explicit; no Git fallback.
-- [x] D8 remote push/retarget belongs to separately authorized 016; owner resync/reset remains inert destructive-marked data and 043 landing separate.
-- [x] All 34 FRs and 8 SCs have an individual task plus literal test/fixture row in [analysis](../analysis.md).
-- [x] Research, plan, data model, contracts, quickstart, tasks and verification use the same proposed/implemented boundary.
-- [x] New JSON examples exist only in Markdown and are clearly UNPUBLISHED fragments, not production schemas.
-- [x] Every new implementation unit has dependencies, bounded scope and red-first security/effects/failure fixture ideas.
-
-## Gates still open
-
-- [ ] Owner dispositions for affected OQ-1–OQ-6 and OQ-8; OQ-7 preserves the genuinely open 012 network-policy choice with a recommendation, not a false approval claim.
-- [ ] Independent complete-artifact review of this exact documentation head.
-- [ ] First-slice T021 minimum/current Git and T023 exact implementation-head acceptance; T024 actual limitation emission.
-- [ ] Implementation, failing/passing fixture evidence and enabled native Git/jj conformance for proposed apply/recovery.
-- [ ] Accepted future machine protocol/version/migration, fixture validation and publication.
-
-The specification intentionally contains settled replay/ownership compatibility
-constraints and unresolved owner choices; no blanket “no implementation details”
-or “all ambiguities resolved” box is asserted. Documentation checks can validate
-links/whitespace and coverage bookkeeping only; absent native or independent
-review evidence never counts as passed acceptance.
+No implementation task is ticked by this checklist. Numeric profile limits are
+concrete engineering design, not invented owner quotations or throughput proof.

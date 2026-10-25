@@ -1,8 +1,13 @@
 # Proposed contract: local restack apply
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Target exit revision 2 is 0/1/2; current code still 3. Optional actual re-sign is separately gated.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status (2026-10-25): UNPUBLISHED, unimplemented.** All spellings, fields and JSON
-examples in this document are proposals requiring owner decisions OQ-1 to OQ-3
-and OQ-6 in [the spec](../spec.md#needs-owner-decision). This is a separate future
+examples in this document are unimplemented proposals following dated decisions
+OQ-1 to OQ-3 and OQ-6 in [the spec](../spec.md#owner-decisions-2026-10-25). This is a separate future
 protocol; [hidden plan v1](restack-plan.md) and its frozen schema stay unchanged.
 No JSON file or dependency is added by this amendment.
 
@@ -20,7 +25,7 @@ stw restack apply --plan PLAN_ID --state-dir DIR --authorize [--json]
 `--contract 2`, `--save`, `--committer`, `--task`, `--owner`, `--state-dir` and
 `--authorize` are **proposed**, not current restack flags. Plain v1 planning
 keeps its existing options and never stores an executable plan. The future
-selector is not chosen until OQ-1 is settled. Unlike historical v1 D9 prediction
+local apply JSON selector remains an unimplemented serialization design; decided exit revision2 is independent and needs no --contract gate. Unlike historical v1 D9 prediction
 flags, actual-apply `--identity`/`--committer` are assertions that must match the
 trusted owner identity (OQ-2/OQ-3); repeatable caller values cannot widen it. Omitting an apply plan id or local
 authorization produces a usage error; no prompt or effect is substituted.
@@ -39,7 +44,7 @@ the trusted ref-to-task association. Agent scope is only its own topic refs;
 
 The proposed first apply capability is one unoccupied branch. A checked-out
 branch anywhere, even the author's task worktree, refuses `branch-in-use`.
-That restriction is an OQ-6 recommendation, not a settled permission to change
+That restriction is adopted OQ-6; it grants no permission to change
 the owner's workflow. A detached caller may inspect but is never switched.
 
 1. Load and validate the immutable plan, digest, repository binding, exact
@@ -56,18 +61,27 @@ the owner's workflow. A detached caller may inspect but is never switched.
 3. Materialize actual candidate commits with the proposed explicit committer
    policy of OQ-3, keeping each original author name/email/date. The fixed
    `stw-restack-plan <restack-plan@invalid>` committer of v1 predictions is never
-   persisted as the actual rewritten history. Candidates are never signed:
+   persisted as the actual rewritten history. Initial default candidate objects are unsigned:
    pass explicit `--no-gpg-sign`, neutralize signing-program/config/environment
    paths and reject any attempt to invoke a signing executable. Detect source
    `gpgsig`/`gpgsig-sha256` headers as bounded metadata only, and report per-commit
    `signature-dropped` with old/new ids whenever a signed source becomes unsigned,
    even when range-diff pairs `=`. This is disclosed loss, not signature validity
-   proof. OQ-8 must decide refusal versus disclosed loss for signed input or a
-   destination requiring signatures; until accepted, that affected capability
+   proof. OQ-8 is decided default refusal plus separately selected host-only re-sign for signed input or a
+   destination requiring signatures; without admitted helper/profile evidence, that affected capability
    refuses rather than silently dropping or auto-signing. Unknown required-
    signature policy cannot authorize publication. Spec 043 OQ6 remains separate.
    Record the actual candidate head,
    tree and one-to-one old/new mapping. These ids are now meaningful identities.
+   Optional re-sign is a distinct stored local-plan selection (--re-sign) under FR-036,
+   never enabled by --authorize-remote. After unsigned candidate preparation and
+   before range/identity checks or CAS, the one shared 015 signing adapter uses
+   the host-fixed trusted helper/verifier profile. Build the actual signed chain
+   bottom-up, each child referencing its signed parent SHA; record old→unsigned→
+   signed mappings and old signature loss/replacement. Refuse missing helper,
+   unmeasured profile, malformed/oversized result, timeout or invalid/untrusted
+   signature with no unsigned fallback. Final verified signed SHA exists before
+   any independent review; D9 quarantine predictions remain unsigned/helper-free.
 4. Require complete range-diff for `old_parent..old_head` against
    `new_parent..candidate_head`, every row `=`, exact moved count, no unpaired,
    dropped, added or empty commit, and equal own diffs. Require parent-integration
@@ -151,8 +165,9 @@ Future protocol proposal: 0 only complete selected success or proven
 operational failure; 2 invalid usage. Every operational result includes
 completeness, reached bound, diagnostics and per-action effects. A lost output
 write after the CAS returns failure but does not undo the ref; the journal is
-how a retry discovers the completed effect. Hidden v1 plan keeps exit 3 for
-incomplete until a separate explicit migration decision and compatibility tests.
+how a retry discovers the completed effect. CURRENT hidden plan code still returns incomplete exit 3. The owner has decided
+CLI exit-contract revision 2: T045/T046 must map incomplete to 1, with no legacy
+selector and unchanged JSON/schema bytes; this contract does not claim execution.
 
 Bounds: one selected ref, 200 moved commits, 2,000 paths per list, 1 MiB final
 result, 60 seconds total including owned teardown/result preparation. Exhaustion
@@ -187,8 +202,8 @@ The agent rewrite policy uses that effective class:
 `pure_rebase` is derived from every actual pairing row and exact old/new count;
 unknown is false, never a path to a weaker tier. `change_class` is derived from
 actual moved-commit diffs, not a caller claim; unknown becomes `code`. The
-full-publication-range recomputation above can only strengthen that class. OQ-2 leaves trusted
-review issuer/format/freshness unresolved but cannot remove the established
+full-publication-range recomputation above can only strengthen that class. Adopted OQ-2 requires trusted workspace
+reviewer/check policy with admitted format/freshness evidence but cannot remove the established
 docs-only exemption or middle-tier pure-rebase allowance. Review-required code
 uses accepted independent CLEAR for the exact actual new SHA, never an old or
 predicted head. Spec 043 `--reviewed SHA` remains the separately invoked human
@@ -219,3 +234,10 @@ lease push uses only `--force-with-lease=REF:OBSERVED_FULL_REMOTE_SHA` and expli
 `FULL_NEW_SHA:REF`; no `--force`, bare lease, default-branch push or borrowed task.
 Agent landing/merge/tag/release/settings actions remain prohibited. Spec 043 is
 the owner's separately invoked landing tool, not an agent executor here.
+
+## Decided process-exit amendment
+
+CLI exit-contract revision 2 is adopted: 0 complete, 1 incomplete/refusal/error/
+partial/cancelled/output failure, 2 usage. It changes current hidden CLI/root
+incomplete mapping only after T045/T046; no legacy3 selector. JSON schema1 and
+its frozen bytes remain unchanged by this exit-only version domain.
