@@ -159,8 +159,6 @@ type tidyBareOptions struct {
 	tidyWizardOptions
 	json    bool
 	timeout time.Duration
-	// save and yes are registered hidden only to refuse them with a usage message.
-	save, yes bool
 }
 
 func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
@@ -176,18 +174,19 @@ func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
 	f.DurationVar(&o.timeout, "timeout", 0, "Deadline over the whole analysis")
 	f.BoolVar(&o.json, "json", false, "Print the overview as one document; asks nothing, stores nothing")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
-	f.BoolVar(&o.save, "save", false, "")
-	f.BoolVar(&o.yes, "yes", false, "")
+	// save and yes are registered hidden, unbound, only to refuse them whatever their value.
+	f.Bool("save", false, "")
+	f.Bool("yes", false, "")
 	_ = f.MarkHidden("save")
 	_ = f.MarkHidden("yes")
 }
 
 // runTidyBare is bare `stw tidy`. The flag values are validated before anything is analysed.
 func runTidyBare(cmd *cobra.Command, o *tidyBareOptions) error {
-	if o.yes {
+	if cmd.Flags().Changed("yes") {
 		return fmt.Errorf("--yes belongs to `stw tidy apply PLAN-ID` and requires an explicit plan id")
 	}
-	if o.save {
+	if cmd.Flags().Changed("save") {
 		return fmt.Errorf("--save belongs to `stw tidy plan`; bare `stw tidy` stores the plan set you choose")
 	}
 	if cmd.Flags().Changed("json") && cmd.Flags().Changed("human") {
@@ -195,9 +194,6 @@ func runTidyBare(cmd *cobra.Command, o *tidyBareOptions) error {
 	}
 	if err := validateTidyWizardValues(cmd, &o.tidyWizardOptions); err != nil {
 		return err
-	}
-	if cmd.Flags().Changed("timeout") && o.timeout <= 0 {
-		return fmt.Errorf("--timeout must be a positive duration")
 	}
 	if o.json {
 		return runTidyWizardPlan(cmd, &o.tidyWizardOptions, true, o.timeout)
