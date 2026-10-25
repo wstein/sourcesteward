@@ -201,8 +201,11 @@ restacking a child onto its new head. The allowed identity is exactly the owner
 from a trusted policy source; caller-supplied repeatable `--identity` values
 cannot add another identity. Missing/foreign identities refuse. Also report
 bounded `git config --show-origin --get-regexp '^user\.'` evidence for all
-user configuration scopes, including local and global origins; any foreign
-`user.name`/`user.email` refuses. Read/report only, never write or repair config.
+user configuration scopes, including local and global origins. Render origins
+and keys plus only policy-needed `user.name`/`user.email` values, with untrusted
+text escaped/bounded; other `user.*` values are omitted/redacted and no raw
+configuration dump is exposed. Any foreign `user.name`/`user.email` refuses.
+Read/report only, never write or repair config.
 The remote-default identity and native objects must be complete and freshly
 bound by the separate 016 plan; no implicit fetch occurs inside 015.
 
