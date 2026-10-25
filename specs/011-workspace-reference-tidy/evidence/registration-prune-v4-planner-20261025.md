@@ -59,10 +59,10 @@ interfaces.
 
 ## Red-first and mutation evidence
 
-The test-only commit `0f833967` records the original CLI behavioral RED before
-contract-4 dispatch existed. Commit `82dc749c` records the missing required-field
-RED. Commit `27c1c822` records the native schema-conformance RED before the new
-schema existed. Commit `dc636e2e` records the unpublished-allowlist RED.
+The test-only commit `73facde1` records the original CLI behavioral RED before
+contract-4 dispatch existed. Commit `76583374` records the missing required-field
+RED. Commit `94b39a8d` records the native schema-conformance RED before the new
+schema existed. Commit `d4af76c5` records the unpublished-allowlist RED.
 Other added native reader, witness and consent cases characterize the existing
 planner behavior; they are not claimed as previously failing acceptance tests.
 
