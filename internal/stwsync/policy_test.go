@@ -69,57 +69,91 @@ func TestFixedArgumentVectors(t *testing.T) {
 	cfg := map[string]string{"submodule.recurse": "true", "rebase.updateRefs": "true", "rebase.autoStash": "true", "merge.autoStash": "true", "fetch.prune": "true"}
 	cases := []struct {
 		name  string
+		repo  string // the repository under test: "." (default) or a submodule path
 		extra map[string]string
 		opts  Options
 		setup func(t *testing.T, w *workspace)
 		verb  string
 		want  func(w *workspace) []string
 	}{
-		{"fast-forward with autostash from the configuration", nil, Options{}, func(t *testing.T, w *workspace) {}, "merge",
+		{"fast-forward with autostash from the configuration", "", nil, Options{}, func(t *testing.T, w *workspace) {}, "merge",
 			func(w *workspace) []string {
 				return []string{"-c", "submodule.recurse=false", "merge", "--ff-only", "--autostash", remoteTip(t, w, "ws")}
 			}},
-		{"fast-forward with --no-autostash", nil, Options{Autostash: Off}, func(t *testing.T, w *workspace) {}, "merge",
+		{"fast-forward with --no-autostash", "", nil, Options{Autostash: Off}, func(t *testing.T, w *workspace) {}, "merge",
 			func(w *workspace) []string {
 				return []string{"-c", "submodule.recurse=false", "merge", "--ff-only", "--no-autostash", remoteTip(t, w, "ws")}
 			}},
-		{"rebase", map[string]string{"pull.rebase": "true"}, Options{}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "rebase",
+		{"rebase", "", map[string]string{"pull.rebase": "true"}, Options{}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "rebase",
 			func(w *workspace) []string {
 				return []string{"-c", "submodule.recurse=false", "-c", "rebase.updateRefs=false", "rebase", "--no-update-refs", "--autostash", "--fork-point", "refs/remotes/origin/main"}
 			}},
-		{"rebase with --no-autostash (a dirty tree would be skipped, so the tree is clean)", map[string]string{"pull.rebase": "true"}, Options{Autostash: Off}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "rebase",
+		{"rebase with --no-autostash (a dirty tree would be skipped, so the tree is clean)", "", map[string]string{"pull.rebase": "true"}, Options{Autostash: Off}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "rebase",
 			func(w *workspace) []string {
 				return []string{"-c", "submodule.recurse=false", "-c", "rebase.updateRefs=false", "rebase", "--no-update-refs", "--no-autostash", "--fork-point", "refs/remotes/origin/main"}
 			}},
-		{"merge", nil, Options{Merge: true}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "merge",
+		{"merge", "", nil, Options{Merge: true}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "merge",
 			func(w *workspace) []string {
 				return []string{"-c", "submodule.recurse=false", "merge", "--no-edit", "--ff", "--autostash", remoteTip(t, w, "ws")}
 			}},
-		{"fetch from the configuration", nil, Options{}, func(t *testing.T, w *workspace) {}, "fetch",
+		{"fetch from the configuration", "", nil, Options{}, func(t *testing.T, w *workspace) {}, "fetch",
 			func(w *workspace) []string {
 				return []string{"fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "origin"}
 			}},
-		{"fetch --prune", nil, Options{Prune: On}, func(t *testing.T, w *workspace) {}, "fetch",
+		{"fetch --prune", "", nil, Options{Prune: On}, func(t *testing.T, w *workspace) {}, "fetch",
 			func(w *workspace) []string {
 				return []string{"fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--prune", "--", "origin"}
 			}},
-		{"fetch --no-prune", nil, Options{Prune: Off}, func(t *testing.T, w *workspace) {}, "fetch",
+		{"fetch --no-prune", "", nil, Options{Prune: Off}, func(t *testing.T, w *workspace) {}, "fetch",
 			func(w *workspace) []string {
 				return []string{"fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--no-prune", "--", "origin"}
+			}},
+		{"fast-forward with autostash off in the configuration", "", map[string]string{"merge.autoStash": "false"}, Options{}, func(t *testing.T, w *workspace) {}, "merge",
+			func(w *workspace) []string {
+				return []string{"-c", "submodule.recurse=false", "merge", "--ff-only", "--no-autostash", remoteTip(t, w, "ws")}
+			}},
+		{"rebase with autostash off in the configuration (clean tree)", "", map[string]string{"pull.rebase": "true", "rebase.autoStash": "false"}, Options{}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "rebase",
+			func(w *workspace) []string {
+				return []string{"-c", "submodule.recurse=false", "-c", "rebase.updateRefs=false", "rebase", "--no-update-refs", "--no-autostash", "--fork-point", "refs/remotes/origin/main"}
+			}},
+		{"rebase keeping local merges (pull.rebase=merges)", "", map[string]string{"pull.rebase": "merges"}, Options{}, func(t *testing.T, w *workspace) { commit(t, w.ws, "local.txt", "l\n") }, "rebase",
+			func(w *workspace) []string {
+				return []string{"-c", "submodule.recurse=false", "-c", "rebase.updateRefs=false", "rebase", "--no-update-refs", "--autostash", "--fork-point", "--rebase-merges", "refs/remotes/origin/main"}
+			}},
+		{"submodule: fast-forward with its own autostash setting", "b", map[string]string{"merge.autoStash": "true"}, Options{}, func(t *testing.T, w *workspace) {}, "merge",
+			func(w *workspace) []string {
+				return []string{"-c", "submodule.recurse=false", "merge", "--ff-only", "--autostash", remoteTip(t, w, "b")}
+			}},
+		{"submodule: fast-forward without an autostash setting", "b", nil, Options{}, func(t *testing.T, w *workspace) {}, "merge",
+			func(w *workspace) []string {
+				return []string{"-c", "submodule.recurse=false", "merge", "--ff-only", "--no-autostash", remoteTip(t, w, "b")}
+			}},
+		{"submodule: rebase", "b", map[string]string{"pull.rebase": "true", "rebase.autoStash": "true"}, Options{}, func(t *testing.T, w *workspace) { commit(t, w.dir("b"), "local.txt", "l\n") }, "rebase",
+			func(w *workspace) []string {
+				return []string{"-c", "submodule.recurse=false", "-c", "rebase.updateRefs=false", "rebase", "--no-update-refs", "--autostash", "--fork-point", "refs/remotes/origin/main"}
+			}},
+		{"submodule: fetch", "b", nil, Options{}, func(t *testing.T, w *workspace) {}, "fetch",
+			func(w *workspace) []string {
+				return []string{"fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "origin"}
 			}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorkspace(t)
+			repo := tc.repo
+			if repo == "" {
+				repo = "."
+			}
+			dir := w.dir(repo)
 			for k, v := range cfg {
 				runGit(t, w.ws, "config", k, v)
 			}
 			for k, v := range tc.extra {
-				runGit(t, w.ws, "config", k, v)
+				runGit(t, dir, "config", k, v)
 			}
 			tc.setup(t, w)
-			w.advance(t, ".", "main")
-			if !strings.Contains(tc.name, "tree is clean") {
+			w.advance(t, repo, "main")
+			if !strings.Contains(tc.name, "tree is clean") && !strings.Contains(tc.name, "clean tree") && repo == "." {
 				write(t, filepath.Join(w.ws, "ws.txt"), "local edit\n") // a tracked edit: the autostash settings matter
 			}
 			var r Result
@@ -129,7 +163,7 @@ func TestFixedArgumentVectors(t *testing.T) {
 			if r.Error != nil {
 				t.Fatal(r.Error)
 			}
-			got := commandsIn(calls, w.ws, tc.verb)
+			got := commandsIn(calls, dir, tc.verb)
 			want := tc.want(w)
 			if len(got) != 1 || !reflect.DeepEqual(got[0], want) {
 				t.Fatalf("argument vectors %q, want exactly %q", got, want)
