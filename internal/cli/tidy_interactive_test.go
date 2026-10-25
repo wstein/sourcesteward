@@ -400,14 +400,14 @@ func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
 }
 
 // The sample session of docs/tidy.md and of the specification is the real output of the wizard on
-// this fixture (answers a and n); the random plan id is shown as 3f9c2a7e41b8.
+// this fixture (answers a and n); the plan id (12 hex characters of a SHA-256 over the plan content) is normalized to 3f9c2a7e41b8 so the sample stays stable.
 func TestTidyExampleMatchesTheDocs(t *testing.T) {
 	newInteractive(t, true, true)
 	out, err := runTidy(t, "a\nn\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	out = regexp.MustCompile(`[0-9a-f]{12}`).ReplaceAllString(out, "3f9c2a7e41b8")
+	out = regexp.MustCompile(`\b[0-9a-f]{12}\b`).ReplaceAllString(out, "3f9c2a7e41b8")
 	lines := strings.Split(out, "\n")
 	for i := range lines {
 		lines[i] = strings.TrimRight(lines[i], " ")

@@ -56,7 +56,7 @@ Stored plan set 3f9c2a7e41b8 (5 effects in 2 repositories). Nothing has been cha
 Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]:
 ```
 
-The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is random and shown as `3f9c2a7e41b8`).
+The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is the first 12 hex characters of a SHA-256 over the plan content and is shown here as `3f9c2a7e41b8` so the sample stays stable).
 
 **Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json` and `--human`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
