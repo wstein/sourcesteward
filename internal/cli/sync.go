@@ -17,10 +17,10 @@ func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Sync, stwsync
 
 func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result, restore func(context.Context, stwsync.RestoreOptions) stwsync.Result) *cobra.Command {
 	var runID string
-	var jsonOutput, planOnly, dryRun, rebase, ffOnly, merge, autostash, noAutostash, prune, noPrune bool
+	var jsonOutput, planOnly, dryRun, rebase, ffOnly, merge, submodules, autostash, noAutostash, prune, noPrune bool
 	var options stwsync.Options
 	command := &cobra.Command{
-		Use:   "sync [restore] [PATH] [--run ID] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--json]",
+		Use:   "sync [restore] [PATH] [--run ID] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--submodules] [--json]",
 		Short: "Bring the workspace root and its submodules up to date, like git pull",
 		Long: "Do what git pull would do in every repository of the workspace, from any directory inside it: the top-level\n" +
 			"superproject and, depth-first, each initialized submodule (nested ones too; uninitialized ones are reported, never cloned).\n" +
@@ -37,6 +37,9 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			"A branch without an upstream, an operation in\n" +
 			"progress, and local changes the update would overwrite are reported and skipped; a failure in one repository does not\n" +
 			"stop the others. --plan fetches the remote-tracking refs, the one change it makes, and prints what a run would do.\n" +
+			"--submodules also brings each initialized detached (pinned) submodule to the commit the superproject records, when that is a\n" +
+			"fast-forward of its HEAD (git submodule sync and update --no-fetch --checkout; never a clone, fetch or init; the move is reported\n" +
+			"with old and new commit, not journaled and not restored); an uninitialized one or a missing commit is unreachable.\n" +
 			"Each branch change is journaled with a recovery ref under refs/stw/recovery/sync/RUN_ID. Git only: a jj-owned path is refused.\n" +
 			"stw sync restore [PATH] [--run ID] moves each branch the run changed back to its journaled old tip, only where the branch\n" +
 			"still points at the tip the run left and a checked-out worktree is clean (git reset --keep); other branches are reported\n" +
@@ -46,7 +49,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 && args[0] == "restore" {
-				for _, name := range []string{"plan", "dry-run", "rebase", "ff-only", "merge", "autostash", "no-autostash", "prune", "no-prune"} {
+				for _, name := range []string{"plan", "dry-run", "rebase", "ff-only", "merge", "autostash", "no-autostash", "prune", "no-prune", "submodules"} {
 					if cmd.Flags().Changed(name) {
 						return fmt.Errorf("--%s does not apply to stw sync restore", name)
 					}
@@ -64,6 +67,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			options.Plan = planOnly || dryRun
 			options.Rebase = triFlag(rebase, ffOnly)
 			options.Merge = merge
+			options.Submodules = submodules
 			options.Autostash = triFlag(autostash, noAutostash)
 			options.Prune = triFlag(prune, noPrune)
 			if err := stwsync.ValidateOptions(options); err != nil {
@@ -83,6 +87,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 	flags.BoolVar(&prune, "prune", false, "Fetch with --prune (overrides fetch.prune)")
 	flags.BoolVar(&noPrune, "no-prune", false, "Fetch without pruning")
 	flags.StringVar(&runID, "run", "", "With restore: the run ID to undo (default: the latest run)")
+	flags.BoolVar(&submodules, "submodules", false, "Also bring pinned (detached) submodules to the commit the superproject records, when that is a fast-forward: git submodule sync and update --no-fetch, never a clone, fetch or init")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
 	command.MarkFlagsMutuallyExclusive("rebase", "ff-only", "merge")
 	command.MarkFlagsMutuallyExclusive("autostash", "no-autostash")
@@ -130,7 +135,7 @@ func syncAttention(r stwsync.Result) int {
 	n := 0
 	for _, it := range r.Repos {
 		switch it.Result {
-		case stwsync.ResultFailed, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete:
+		case stwsync.ResultFailed, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultUnreachable:
 			n++
 		}
 	}
@@ -190,6 +195,10 @@ func syncText(rp stwsync.Repo, plan bool) (text, class string) {
 		return skipped("busy")
 	case stwsync.ResultSkippedUninitialized:
 		return "skipped: " + reason, "yellow"
+	case stwsync.ResultUpdated:
+		return "submodule updated to the recorded commit " + moved, "green"
+	case stwsync.ResultUnreachable:
+		return "unreachable: " + reason, "red"
 	case stwsync.ResultRestored:
 		return "restored " + moved, "green"
 	case stwsync.ResultAlreadyRestored:
@@ -255,7 +264,7 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 		}
 	}
 	var counts []string
-	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultRestored, stwsync.ResultAlreadyRestored, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultFailed}
+	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultUpdated, stwsync.ResultUnreachable, stwsync.ResultRestored, stwsync.ResultAlreadyRestored, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultFailed}
 	for _, name := range order {
 		if n := r.Summary.ByResult[name]; n > 0 {
 			counts = append(counts, fmt.Sprintf("%d %s", n, strings.ReplaceAll(name, "-", " ")))
