@@ -93,6 +93,7 @@ func observePruneMetadata(ctx context.Context, path string, limits pruneMetadata
 		if before.Size() > limits.File || before.Size() > limits.Total-total {
 			return failure("prune-metadata-limit", "Registration metadata byte limit exceeded.")
 		}
+		pruneObservationStep(ctx, "metadata-before-open", filepath.Join(path, name), nil)
 		file, err := root.OpenFile(name, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 		if err != nil {
 			return refuse()
@@ -100,11 +101,13 @@ func observePruneMetadata(ctx context.Context, path string, limits pruneMetadata
 		opened, err := file.Stat()
 		if err != nil || !os.SameFile(before, opened) {
 			file.Close()
-			return refuse()
+			return failure("prune-metadata-refused", "Registration metadata identity changed before reading.")
 		}
+		pruneObservationStep(ctx, "metadata-before-read", filepath.Join(path, name), nil)
 		hash := sha256.New()
 		buffer := make([]byte, 64<<10)
 		n, readErr := io.CopyBuffer(hash, io.LimitReader(pruneContextReader{ctx, file}, limits.File+1), buffer)
+		pruneObservationStep(ctx, "metadata-after-read", filepath.Join(path, name), nil)
 		after, statErr := file.Stat()
 		file.Close()
 		if readErr != nil {
@@ -114,11 +117,11 @@ func observePruneMetadata(ctx context.Context, path string, limits pruneMetadata
 			return refuse()
 		}
 		if statErr != nil || n != before.Size() {
-			return refuse()
+			return failure("prune-metadata-refused", "Registration metadata size changed while reading.")
 		}
 		fresh, err := retirementV3Physical(physical.Path, after)
 		if err != nil || !reflect.DeepEqual(fresh, physical) {
-			return refuse()
+			return failure("prune-metadata-refused", "Registration metadata physical facts changed while reading.")
 		}
 		if n > limits.File || n > limits.Total-total {
 			return failure("prune-metadata-limit", "Registration metadata byte limit exceeded.")
