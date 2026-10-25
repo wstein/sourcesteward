@@ -1,5 +1,10 @@
 # Conflict diagnosis and resolver context contract
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status**: UNPUBLISHED Markdown proposal; hunk policy/capability remains OQ-HUNK.
 
 Diagnosis never resolves or stages paths, snapshots a jj working copy, rewrites

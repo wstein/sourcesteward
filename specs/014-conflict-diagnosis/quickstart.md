@@ -1,5 +1,10 @@
 # Quickstart validation: conflict evidence
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status**: future acceptance guide, 2026-10-25. Commands are proposed and were
 not executed for this Markdown-only amendment. Do not run them in an owner's
 checkout or report their expected outcomes as observed evidence.
@@ -51,12 +56,12 @@ complete status/exit 0 and the fixed limitation. Git first-conflict replay ident
 the moved commit/path and not-evaluated suffix, predicted-conflicted/exit 0 under
 the stop-first contract. A merge profile not accepted/measured refuses
 capability-unavailable/exit 1; it never substitutes replay. A native jj preview
-stays capability-unavailable until OQ-JJCONF and native scratch gates pass.
+stays capability-unavailable until the adopted OQ-JJCONF native semantics and scratch measurements pass.
 Future accepted jj fixtures must include inherited conflicts, later resolution
 and full bounded descendant coverage; a clean tip alone is insufficient and
 Git first-conflict/not-evaluated suffix semantics must not be substituted.
 
-No optional hunk flags are specified until OQ-HUNK settles selector/privacy
+Optional hunk selectors remain disabled until the adopted OQ-HUNK privacy/selector design has measured
 syntax. Once accepted, add selected-path cases that prove body-free default,
 explicit context bounds, reliable origin/ranges and unselected-content absence.
 
@@ -82,7 +87,7 @@ lane is an acceptance gap, never a skipped pass.
 
 Once implemented, validate complete/incomplete/error JSON fixtures offline against
 the new separate contract and confirm every existing schema/fixture and hidden
-restack-plan behavior is unchanged, including incomplete exit 3. Record real
+restack-plan JSON schema1 bytes are unchanged; CURRENT code3 becomes target1 only after the decided exit task. Record real
 native acceptance and independent exact-head review in a future verification
 artifact. Run the source/format/test/conformance gates applicable to that code;
 none was run or implied by this documentation amendment.

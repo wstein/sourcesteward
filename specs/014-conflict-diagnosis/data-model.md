@@ -1,5 +1,10 @@
 # Data model: Conflict observation and integration preflight
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status**: UNPUBLISHED Markdown proposal, 2026-10-25. No schema or state-store
 file is created. Names are prospective typed values, not an implemented API.
 

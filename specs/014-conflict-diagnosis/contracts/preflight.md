@@ -1,7 +1,12 @@
 # Isolated preflight and replay contract
 
+> **Owner-decision amendment — 2026-10-25:** all former OQ IDs are decided;
+> [current profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
+> Shared human/shortening-timeout flags adopted; preflight remains offline/helper-free.
+> This is a documentation target, not implementation or native acceptance.
+
 **Status**: UNPUBLISHED design proposal. Original-write denial and Spec 015 D7
-are binding safety constraints; owner choices remain in [spec](../spec.md#needs-owner-decision).
+are binding safety constraints; dated owner decisions and measurement gates are in [spec](../spec.md#needs-owner-decision).
 
 ## Admission and capability matrix
 

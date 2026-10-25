@@ -1,33 +1,18 @@
-# Specification quality checklist: Conflict diagnosis and integration preflight
+# Owner-Decision Quality Checklist: Spec 014
 
-**Date**: 2026-10-25 | **Feature**: [spec.md](../spec.md)
-**Purpose**: author document-quality review, not independent review or acceptance.
+**Owner decisions recorded 2026-10-25. Author document review only.**
+See [spec](../spec.md), [analysis](../analysis.md) and [profiles](../../016-stacked-pr-coordination/contracts/owner-decisions.md).
 
-## Content and bounded scope
+- [x] Former OQ IDs are dated DECISIONS, with all39 source pairs indexed and no native measurement invented.
+- [x] Current owner direction is distinguished from historical implementation evidence and unchecked future work.
+- [x] All 30 current FR/SC definitions have real task IDs and literal future tests in analysis.md.
+- [x] .work saved-plan metadata and external selected-byte/safety payload roles remain distinct with honest export risk.
+- [x] Trusted workspace policy, missing-source refusal, native capability gaps and separate local/remote authority remain explicit.
+- [x] Default signature refusal and optional015 HOST helper/no-stw-key/final-signed-SHA boundary are explicit;013/014 remain helper-free.
+- [x] Target CLI exit revision2 0/1/2 is distinct from frozen JSON schema 1 and CURRENT 015 code 3; no legacy3 selector.
+- [ ] Independent review of this exact amended head is CLEAR.
+- [ ] Required implementation/source/native/helper/forge measurements are executed and accepted for enabled capabilities.
+- [ ] New structured output conformance/publication and separately authorized live-operation gates are satisfied.
 
-- [x] User stories distinguish existing diagnosis, resolver handoff, agent contract and isolated prediction.
-- [x] Requirements describe observable behavior; backend names/identity and isolation effects are necessary compatibility constraints.
-- [x] No original tree/index/ref/object/config or jj working-copy/oplog writes are authorized.
-- [x] Spec 015 D7 plumbing/quarantine and D8 remote separation remain settled; no porcelain replay is proposed.
-- [x] Native Git/jj capabilities and measurement gaps are explicit; no fallback or false parity.
-- [x] Default-none, offline operation, untrusted data and secret-minimal bounded output are explicit.
-- [x] Every FR and SC has an individual task and literal test idea in [analysis.md](../analysis.md).
-- [x] New JSON exists only as UNPUBLISHED Markdown proposals; existing schema files stay frozen.
-- [x] All future implementation tasks are unchecked and red-test-first behavior pairs are explicit.
-- [x] Edge cases include topology, first-conflict suffix, concurrency, hostile paths, hunk privacy and scratch residue.
-
-## Outstanding gates
-
-- [ ] Owner choices for affected OQ-SEM/TOPO/HUNK/SCRATCH/JJCONF/FLAGS/EXIT capabilities are recorded as decisions rather than recommendations.
-- [ ] Independent complete-artifact review is CLEAR at the exact current head.
-- [ ] Future implementation and minimum/current native conformance/effect evidence exist for enabled capabilities.
-
-## Qualification
-
-Artifact completeness and traceability are assessed by this author only. Open
-choices remain visible in [spec](../spec.md#needs-owner-decision); no arbitrary
-answer is invented to tick a checklist. Hunk/native merge/native jj preview
-capabilities stay disabled until their gates pass. No product code/tests/builds,
-full make check, schemas or progress/commands changes are part of this amendment.
-Independent review and native implementation acceptance remain separate from
-this author document-quality checklist.
+No implementation task is ticked by this checklist. Numeric profile limits are
+concrete engineering design, not invented owner quotations or throughput proof.
