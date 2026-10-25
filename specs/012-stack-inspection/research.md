@@ -161,7 +161,7 @@ No new API/library recommendation or current GitHub claim is made here; recorded
 
 ### Needs owner decision
 
-See OQ-NET, OQ-FLAGS and OQ-EXIT in [spec.md](spec.md). Recommendation: keep an offline default with explicitly opted-in reads using shared `--online` and, if selected by the owner, a `--pull-requests` alias; align output/timeout flags through OQ-FLAGS, and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. No artifact records owner acceptance of the old network recommendation. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.
+See OQ-NET, OQ-FLAGS, OQ-EXIT and OQ-FANOUT in [spec.md](spec.md). Recommendation: keep an offline default with explicitly opted-in reads using shared `--online` and, if selected by the owner, a `--pull-requests` alias; align output/timeout flags through OQ-FLAGS, and preserve implemented Spec 015 v1 incomplete exit 3 until an explicit migration. No artifact records owner acceptance of the old network recommendation. These recommendations do not record owner answers. Unverified endpoint/version measurements U1–U10 remain unverified and do not block completing this documentation-only scope.
 
 ### Native-link trunk qualification from review
 
@@ -170,3 +170,9 @@ The independent PR #237 review reported that installed `gh stack link` v0.2.1 he
 ### Current inert Git reference guardrails
 
 M2/M9/M16 command quotes and the D9 shorthand preserve their historical measured forms; they were not rerun or silently rewritten. The current proposed print-only Git replay form is `git -c rebase.updateRefs=false -c rerere.enabled=false rebase --onto <new parent> <full old parent> <child>`. The fixed overrides disable config-driven automatic ref updates and rerere recording for that reference form, without authorizing execution or claiming arbitrary hooks are safe. Future T006/T010 assert argv/display and unrelated-ref/rr-cache preservation in disposable copies. Spec 015 D7 remains native plumbing/quarantine/CAS and never executes this porcelain argv.
+
+### Existing watcher signal and reachable fan-out entry
+
+[Spec 035](../035-stw-watch/spec.md#restack-needed-rules) already defines the checked-in byte-frozen watch-event v1 restack-needed kind. Its merge-triggered payload is separate from the proposed nested 012 finding: event new_parent_source is merge_commit_sha, whereas 012’s first destination is the explicitly selected base.commit_id and later destinations need actual apply evidence. No schema bytes or publication status are changed here. The same spelling does not establish interchangeable payloads, equivalent destinations or execution authority; independent consumer re-observation and effect planning remain necessary.
+
+OQ-FANOUT now explicitly asks which real entry will reach repository orchestration. The recommendation is a named existing higher-level caller; a new multi-repository CLI is an alternative needing owner selection. Production T037 and any candidate stack_batch.go stay blocked until that concrete reachable entry/contract is approved, rather than adding an unused helper. OQ-FLAGS also accounts for offline polarity: Spec 037’s online default uses --offline for Spec 033’s local view; 012 already defaults offline and currently rejects that flag, with any no-op alias requiring an owner choice.
