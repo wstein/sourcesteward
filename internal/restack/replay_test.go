@@ -210,7 +210,7 @@ func TestUntrackedDiffAttributesDoNotChangeTheEvidence(t *testing.T) {
 	}
 }
 
-func TestEveryCommandStartsWithTheEmptyAttributeSourceAndALaterEntryWins(t *testing.T) {
+func TestEveryPredictionCommandStartsWithTheEmptyAttributeSourceAndALaterEntryWins(t *testing.T) {
 	g := &gitRunner{home: os.DevNull}
 	last := func(env []string) string {
 		v := ""

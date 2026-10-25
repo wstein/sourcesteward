@@ -68,10 +68,11 @@ const (
 )
 
 // emptyTree is the id of the empty tree of a SHA-1 repository. Git knows it without an object in
-// the store. It is the default attribute source of every prediction and evidence command (issue 241): none
-// reads a .gitattributes file of the worktree, the index or the repository, which belong to the
-// owner and are in no sampled commit. A command that needs attributes names the sampled tree
-// itself; only the dirty check (runInWorktree) reads the real worktree, because it reports its state.
+// the store. It is the default attribute source of every prediction and evidence command
+// (issue 241): none reads a .gitattributes file of the worktree, the index or the repository,
+// which belong to the owner and are in no sampled commit. A command that needs attributes names
+// the sampled tree itself; only the dirty check (runInWorktree) reads the real worktree,
+// because it reports its state.
 const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 type gitRunner struct {
