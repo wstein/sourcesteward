@@ -38,7 +38,7 @@ PROCESS_IMPORTS = ('os/exec', 'syscall', 'plugin')
 OPEN_FILES = re.compile(r'^internal/release/openfile_[a-z0-9_]+\.go$')
 SYSCALL_OPEN_FLAGS = re.compile(r'\bsyscall\.(?!O_[A-Z]+\b)[A-Za-z_]+')
 LINKNAME = re.compile(r'^\s*//go:linkname\b', re.M)
-NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace', 'internal/restack', 'internal/untrusted', 'internal/overview', 'internal/tidywizard/derive', 'internal/tidywizard/planset', 'internal/tidywizard/render', 'internal/tidywizard/analysis')
+NETWORK_FREE_PACKAGES = ('internal/release', 'internal/inspection', 'internal/workspace', 'internal/restack', 'internal/untrusted', 'internal/overview', 'internal/stackpublish', 'internal/tidywizard/derive', 'internal/tidywizard/planset', 'internal/tidywizard/render', 'internal/tidywizard/analysis')
 
 
 def is_network_import(path):
@@ -77,6 +77,8 @@ def validate_sources(sources, imports=None):
             validate_release_file(path, text, imported)
         if path.startswith('internal/restack/'):
             validate_restack_file(path, imported)
+        if path.startswith('internal/stackpublish/'):
+            validate_stackpublish_file(path, text, imported)
 
 
 # Spec 015: the read-only restack plan starts Git only in its one reviewed runner and may import
@@ -91,6 +93,28 @@ def validate_restack_file(path, imported):
             raise ValueError('internal/restack starts Git only in ' + RESTACK_PROCESS_FILE + ': ' + path + ' imports ' + dependency)
         if dependency.startswith(MODULE) and dependency not in RESTACK_MODULE_IMPORTS:
             raise ValueError('internal/restack may import only the read-only inspection from the module: ' + path + ' imports ' + dependency)
+
+
+# Spec 016: the stack publication core is pure. It starts no process, touches no file, reaches no
+# network, reads no clock and starts no goroutine; callers pass every observation and the clock in.
+# From the module it may import only the attribution leaf (the Spec 042 origin and D5 gate).
+STACKPUBLISH_MODULE_IMPORTS = (MODULE + 'internal/attribution',)
+STACKPUBLISH_FORBIDDEN_IMPORTS = ('os', 'os/signal', 'io/ioutil', 'io/fs', 'unsafe', 'syscall', 'plugin', 'os/exec')
+STACKPUBLISH_CLOCK_CALLS = re.compile(r'\btime\.(Now|Sleep|After|AfterFunc|Tick|NewTimer|NewTicker|Since|Until)\b')
+STACKPUBLISH_GO_STATEMENT = re.compile(r'(?:^|[;{}])\s*go\s+(?:func\b|[A-Za-z_(])', re.M)
+
+
+def validate_stackpublish_file(path, text, imported):
+    for dependency in imported:
+        if dependency in STACKPUBLISH_FORBIDDEN_IMPORTS or is_process_import(dependency):
+            raise ValueError('internal/stackpublish is pure and may not import ' + dependency + ': ' + path)
+        if dependency.startswith(MODULE) and dependency not in STACKPUBLISH_MODULE_IMPORTS:
+            raise ValueError('internal/stackpublish may import only the attribution leaf from the module: ' + path + ' imports ' + dependency)
+    code = strip_comments(re.sub(r'"(?:\\.|[^"\\\n])*"|`[^`]*`', '""', text))
+    if STACKPUBLISH_CLOCK_CALLS.search(code):
+        raise ValueError('internal/stackpublish reads no clock and starts no timer; callers pass the clock in: ' + path)
+    if STACKPUBLISH_GO_STATEMENT.search(code):
+        raise ValueError('internal/stackpublish starts no goroutine: ' + path)
 
 
 @lru_cache(maxsize=1)
