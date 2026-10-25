@@ -946,7 +946,9 @@ func TestLastActivityErrors(t *testing.T) {
 
 // An expired observation deadline must be reported as deadline-exceeded for every remaining
 // worktree, never as git-ownership-refused (issue 252); a real ownership refusal keeps its code.
-func TestObserveExpiredDeadlineIsNotAnOwnershipRefusal(t *testing.T) {
+// A cancelled analysis is no verdict (Spec 041); its worktrees read as the jj path reads them,
+// observation-failed, and also not as an ownership refusal.
+func TestObserveDoneContextIsNotAnOwnershipRefusal(t *testing.T) {
 	repo := observeRepo(t)
 	var paths []string
 	for _, n := range []string{"d1", "d2", "d3"} {
@@ -967,16 +969,25 @@ func TestObserveExpiredDeadlineIsNotAnOwnershipRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expired, cancel := context.WithDeadline(live, time.Unix(0, 1))
-	defer cancel()
-	for _, p := range paths {
-		e := WorktreeEvidence{Path: p, HeadOID: gitFixture(t, p, "rev-parse", "HEAD"), HeadRef: "refs/heads/" + filepath.Base(p)}
-		defaultWorktreeObserver().observeWorktreeContent(expired, bin, newCommitFacts(gitRead, bin, repo, id.CommitID), id.RepositoryDir, &e)
-		if e.Incomplete != "deadline-exceeded" {
-			t.Errorf("%s: incomplete %q, want deadline-exceeded", filepath.Base(p), e.Incomplete)
-		}
-		if e.Dirty || e.HasOwnCommit || e.Ahead != 0 || !e.LastActivity.IsZero() {
-			t.Errorf("%s: content kept after the incomplete observation: %+v", filepath.Base(p), e)
+	expired, cancelExpired := context.WithDeadline(live, time.Unix(0, 1))
+	defer cancelExpired()
+	cancelled, cancelNow := context.WithCancel(live)
+	cancelNow()
+	for name, tc := range map[string]struct {
+		ctx  context.Context
+		want string
+	}{"deadline": {expired, "deadline-exceeded"}, "cancelled": {cancelled, "observation-failed"}} {
+		for _, p := range paths {
+			// Content that was read before the context ended must not survive the incomplete mark.
+			e := WorktreeEvidence{Path: p, HeadOID: gitFixture(t, p, "rev-parse", "HEAD"), HeadRef: "refs/heads/" + filepath.Base(p),
+				Dirty: true, IgnoredExtras: true, Ahead: 3, HasOwnCommit: true, AuthorHint: "a", Proof: "ancestor", LastActivity: time.Unix(5, 0)}
+			defaultWorktreeObserver().observeWorktreeContent(tc.ctx, bin, newCommitFacts(gitRead, bin, repo, id.CommitID), id.RepositoryDir, &e)
+			if e.Incomplete != tc.want {
+				t.Errorf("%s %s: incomplete %q, want %s", name, filepath.Base(p), e.Incomplete, tc.want)
+			}
+			if e.Dirty || e.IgnoredExtras || e.HasOwnCommit || e.Ahead != 0 || e.AuthorHint != "" || e.Proof != "" || !e.LastActivity.IsZero() {
+				t.Errorf("%s %s: content kept after the incomplete observation: %+v", name, filepath.Base(p), e)
+			}
 		}
 	}
 }
