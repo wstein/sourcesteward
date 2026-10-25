@@ -110,8 +110,15 @@ func TestSyncSchemaRejectsBrokenResults(t *testing.T) {
 		"stash oid on a success": {"run", func(_ map[string]any, r []any) {
 			syncRepoOf(r, "fast-forwarded")["stash_oid"] = "3333333333333333333333333333333333333333"
 		}},
-		"short stash oid":           {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "autostash-conflict")["stash_oid"] = "abc" }},
-		"missing stash oid":         {"run", func(_ map[string]any, r []any) { delete(syncRepoOf(r, "autostash-conflict"), "stash_oid") }},
+		"short stash oid":            {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "autostash-conflict")["stash_oid"] = "abc" }},
+		"missing stash oid":          {"run", func(_ map[string]any, r []any) { delete(syncRepoOf(r, "autostash-conflict"), "stash_oid") }},
+		"updated without new":        {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "updated")["new_oid"] = nil }},
+		"unreachable without reason": {"run", func(_ map[string]any, r []any) { syncRepoOf(r, "unreachable")["reason"] = nil }},
+		"unreachable with new oid": {"run", func(_ map[string]any, r []any) {
+			syncRepoOf(r, "unreachable")["new_oid"] = "1111111111111111111111111111111111111111"
+		}},
+		"updated in a plan":         {"plan", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "updated" }},
+		"missing submodules option": {"plan", func(m map[string]any, _ []any) { delete(m["options"].(map[string]any), "submodules") }},
 		"string option":             {"plan", func(m map[string]any, _ []any) { m["options"].(map[string]any)["prune"] = "yes" }},
 		"sync result in a restore":  {"restore", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "fast-forwarded" }},
 		"restore result in a run":   {"run", func(_ map[string]any, r []any) { r[0].(map[string]any)["result"] = "restored" }},
@@ -237,5 +244,9 @@ func TestSyncRealOutputValidates(t *testing.T) {
 	}
 	run(2, "--rebase", "--ff-only", ws)
 	run(2, "restore", "--rebase", ws)
+	if v = run(0, "--submodules", "--json", ws); v["options"].(map[string]any)["submodules"] != true {
+		t.Fatalf("%v", v)
+	}
+	run(2, "restore", "--submodules", ws)
 	run(2, "--bogus", ws)
 }
