@@ -109,8 +109,11 @@ Consume current 012 `restack-advised` as a nested stack finding, never as the
 published 035 event. Its SC-009 fanout is gated by OQ-FANOUT entry approval and
 is not a new 016 batch surface. When supplied, validate 014's actual full-H
 attribute-source/private-context profile binding; missing enforcement refuses
-that evidence. The hidden-v1 replay implementation's separate attribute-source
-code follow-up is tracked in issue #241, not repaired or verified by this design.
+that evidence. The hidden-v1 replay implementation's attribute-source gap
+(issue #241) is fixed for the hidden restack runner by PR #279 with an empty
+attribute source (see `specs/015-local-restacking/verification.md`, section on
+the attribute source of the replay); this is not the 014 full-H profile, which
+stays unimplemented, and the Git 2.46 lane has not run.
 Do not infer native jj aggregate conflict semantics from Git first-conflict
 behavior. Preserve 013 independent safety-copy retention and no operation-head
 CAS/invoker-working-copy-effect admission; no recovery receipt authorizes a write.

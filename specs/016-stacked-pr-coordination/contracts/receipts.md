@@ -23,8 +23,10 @@ remote authorization or current remote/default/permission evidence.
 
 The merged 014 design's actual full-H attribute pin, private context and repeated
 H/N guards qualify any supplied preflight; an unpinned or contaminated preview
-cannot satisfy its profile. T033 gates its future replay implementation, while
-issue #241 remains a separate existing-code follow-up. Neither merged design nor
+cannot satisfy its profile. T033 gates its future replay implementation. Issue #241
+is fixed for the hidden restack runner by PR #279 with an empty attribute source
+(`specs/015-local-restacking/verification.md`), which is not the 014 full-H
+profile (unimplemented; Git 2.46 lane not run). Neither merged design nor
 predicted-clean evidence substitutes for actual 015 candidate verification.
 Native jj conflict evolution/aggregate policy remains separately capability-gated.
 013 independent safety-copy receipts and native operation samples preserve their

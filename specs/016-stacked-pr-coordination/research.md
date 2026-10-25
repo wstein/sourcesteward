@@ -54,9 +54,11 @@ Those limitations remain relevant evidence boundaries; no 016 rollback uses them
 profile pins every actual merge-tree call to full source H using `--attr-source`,
 private admin/worktree/index without original attribute overrides, exact H/N and
 repeated guards/receipt binding. Missing native version/enforcement refuses.
-The related existing hidden-v1 code follow-up is tracked separately in
-[issue #241](https://github.com/wstein/sourcesteward/issues/241); a merged design
-neither fixes that implementation nor supplies new replay acceptance. 014
+The related hidden-v1 runner gap, [issue #241](https://github.com/wstein/sourcesteward/issues/241),
+is fixed for the hidden restack runner by PR #279 with an empty attribute source
+(see the Spec 015 verification section on the attribute source of the replay, `../015-local-restacking/verification.md`);
+that is not the 014 full-H profile, which stays unimplemented, and the Git 2.46
+lane has not run. A merged design supplies no new replay acceptance. 014
 OQ-JJCONF blocks native jj conflict-evolution/aggregate semantics: Git stop-first
 and a clean final tip cannot replace complete native graph evidence. OQ-SEM,
 TOPO, HUNK, SCRATCH, FLAGS and EXIT remain explicit, unapproved capabilities.
