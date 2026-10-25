@@ -41,34 +41,38 @@ exact integrated SHA, which differs from the reviewed fold tips), T047 (candidat
 install, which needs separate owner approval) and T048/T049 (fresh real-repository acceptance).
 Windows and Darwin remain unverified here.
 
-## Stack toolbelt design: Specs 012–016 (planned)
+## Stack toolbelt owner decisions (2026-10-25; implementation planned)
 
-The refreshed designs keep explicit operation boundaries: [012 stack observation](../specs/012-stack-inspection/spec.md),
-[014 isolated integration preflight/replay](../specs/014-conflict-diagnosis/spec.md),
-[015 local restack plan/apply](../specs/015-local-restacking/spec.md),
-[013 checkpoint/restore/selective undo](../specs/013-checkpoint-resume/spec.md) using Spec 032 journal/recovery conventions,
-and [016 selected forge effect plan/apply](../specs/016-stacked-pr-coordination/spec.md).
-Specs 012–015 have merged design artifacts: plan, research, model, Markdown contracts, validation guide, future tasks and author analysis.
-Spec 016 completes the forge design and shared status reconciliation. Documentation review is recorded per exact head in PR evidence;
-merged documents are not runtime or native-conformance evidence.
-These features stay planned. Only the hidden Git 015 v1 planner has the source implementation described below;
-checkpoint/undo, integration preflight, local restack apply/jj and forge writes remain future work.
+The owner settled all **39 former OQ IDs** across Specs 012/013/014/015/016/043;
+unlisted choices adopt the source research recommendations. The [dated decision
+index](../specs/016-stacked-pr-coordination/research.md#cross-spec-decision-index)
+and [concrete profiles](../specs/016-stacked-pr-coordination/contracts/owner-decisions.md)
+record direction separately from unimplemented/native-measurement gates.
 
-Observation grants no local mutation; local apply grants no remote write. Default selection is none and local observation is offline.
-012 online scope/`--pull-requests` naming and shared human/timeout surface choices remain open owner questions;
-no recommendation is approval. The [complete decision index](../specs/016-stacked-pr-coordination/research.md#cross-spec-decision-index)
-lists all 39 current IDs across Specs 012/013/014/015/043/016 with source recommendations/deferrals, affected capability and related 016 gate.
-Each proposed remote action needs its own plan-bound authorization, current ownership and exact-state guards.
-016 specifies full observed-SHA topic leases, separate docs/code before-push review tiers, trusted full-default-range owner identities,
-explicit signing policy, and exact-current-head CLEAR/required-green-CI/true-rebaseability/scope gates for Ready.
-Native stack and jj publication capabilities remain separately measured/gated; [043 landing](../specs/043-stw-land/spec.md)
-is the human owner's separate invocation with conditional retarget/deletion order and unmeasured-shape refusal.
-No new JSON/schema contract is published by these Markdown designs, and hidden 015 v1 incomplete exit 3 is unchanged.
-012 now calls its nested finding `restack-advised`, distinct from the published 035 `restack-needed` event; SC-009 fanout remains
-blocked on OQ-FANOUT's concrete reachable entry decision. 013 safety copies retain independent payload/root lifetimes after checkpoint drop;
-jj restore has no operation-head CAS and initially refuses every workspace working-copy commit effect, the invoker included.
-014 requires actual full-H attribute-source/private-context pinning with red T033 before replay implementation; the existing-code
-follow-up [issue #241](https://github.com/wstein/sourcesteward/issues/241) remains separate. Native jj conflict aggregation stays OQ-JJCONF-gated.
+012 uses only `--online`, default offline, with no old alias; single repository
+now, batch later under its own decision. Shared human/JSON and shortening-timeout
+interfaces are adopted target direction. Explicit saved plans default to trusted
+workspace `.work/` METADATA, with private modes, no-follow/layout/actor/race/fsync,
+ignore/untracked/export-risk and bounded quota/full refusal. No automatic ignore,
+config or index edits and no unresolved-record expiry. 013 captured bytes and
+independent safety copies stay in an explicitly selected EXTERNAL payload store.
+
+Trusted workspace policy supplies owner identity, reviewer allowlist/check
+sources; global Git identity corroborates only and missing authority blocks
+push/Ready. Default signature policy refuses loss/unmet/unknown requirements.
+Optional re-sign is separately planned/authorized local015 work through a fixed
+trusted HOST helper/verifier, no stw keys, unavailable without measured helper.
+Signed chain parents are rebuilt bottom-up and final verified SHA exists before
+review;016 validates receipts and never runs signing under remote authorization.
+
+The owner chose target CLI exit-contract revision2 **0/1/2 now**: incomplete1,
+no legacy3 selector. CURRENT hidden015code still returns3 until red-first T045/
+T046 change `restackIncomplete` root dispatch/help; frozen JSONschema1 bytes are
+a separate version domain. Original20/24 history remains; no task is ticked by
+this amendment. Native jj/forge effects require measurements and reviewed closed
+allowlists. 014 stays helper-free;043 stays human-only with existing typed
+confirmation, conditional retarget/deletion and unmeasured-shape refusal.
+No build, schema-file change, helper execution or live operation is implied.
 
 ## Active work: Spec 015 local restacking, first slice (source implemented, verification pending)
 
@@ -80,7 +84,7 @@ reads as safe. See [the specification](../specs/015-local-restacking/spec.md), [
 (20 of 24 done) and [verification](../specs/015-local-restacking/verification.md). Open:
 the minimum/current Git lanes (T021), the independent review of the exact head (T023) and the reserved limitation (T024); T004 was not done by design. Status
 stays `planned`; `restack apply` and jj are later proposed local slices, while push belongs to Spec 016.
-The 015 refresh adds 20 unchecked future tasks; none is claimed implemented, and the original 20/24 history remains intact.
+The 015 follow-up now has 24 unchecked future tasks, including explicit exit-revision and optional host-signing work; none is claimed implemented, and the original20/24 history remains intact.
 
 ## Spec 041 stw tidy wizard (implemented, unpublished schema, T021 open, 2026-10-25)
 
@@ -406,12 +410,12 @@ or independent acceptance is claimed. Documentation review is recorded per exact
 ### 013-checkpoint-resume — Toolbelt use-case specification update
 
 Checkpoint, Resume and Selective Undo: proposed specification, plan, research, model, Markdown contracts, validation guide, tasks and author analysis refreshed.
-Native capture/undo, selected-payload storage, ownership and typed journal decisions remain open; no implementation or native acceptance is claimed.
+Owner decisions dated 2026-10-25 adopt measured native capture/undo gates, external selected-byte payload storage, trusted workspace policy and immutable typed journals. Implementation and native acceptance remain pending.
 
 ### 014-conflict-diagnosis — Toolbelt use-case specification update
 
 Conflict Diagnosis and Integration Preflight: proposed specification, plan, research, model, Markdown contracts, validation guide, tasks and author analysis refreshed.
-Diagnosis remains read-only and prediction stays isolated; supported semantics/topology/hunk/native isolation choices remain open. No implementation or native acceptance is claimed.
+Diagnosis remains read-only and prediction stays isolated. Owner decisions dated 2026-10-25 adopt the semantics/topology/hunk/native-isolation recommendations with measurement gates; no implementation or native acceptance is claimed.
 
 ### 017-work-transfer — Toolbelt use-case specification update
 
