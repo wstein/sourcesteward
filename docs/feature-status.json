@@ -201,9 +201,9 @@
     },
     {
       "id": "034-bootstrap-release",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/034-bootstrap-release/spec.md",
-      "evidence": null
+      "evidence": "../specs/034-bootstrap-release/verification.md"
     },
     {
       "id": "035-stw-watch",
