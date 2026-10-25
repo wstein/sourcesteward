@@ -330,7 +330,7 @@ func TestRepoRefComparisonFoldsASCIIOnly(t *testing.T) {
 		t.Error("ASCII case differences must match")
 	}
 	if a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "proKject"}) || a.same(RepoRef{Host: "github.com", Owner: "owner", Name: "prokjec"}) {
-		t.Error("a Unicode look-alike or a different length matched")
+		t.Error("a similar-looking Unicode letter or a different length matched")
 	}
 }
 

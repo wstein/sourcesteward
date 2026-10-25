@@ -111,7 +111,7 @@ func (r RepoRef) known() bool {
 }
 
 // same compares host, owner and name the way GitHub does, but folds ASCII only: known() has
-// already restricted every field to ASCII, so Unicode look-alikes never reach the comparison.
+// already restricted every field to ASCII, so similar-looking Unicode letters never reach the comparison.
 func (r RepoRef) same(o RepoRef) bool {
 	return asciiEqualFold(r.Host, o.Host) && asciiEqualFold(r.Owner, o.Owner) && asciiEqualFold(r.Name, o.Name)
 }
