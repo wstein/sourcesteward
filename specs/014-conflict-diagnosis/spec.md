@@ -1,10 +1,32 @@
 # Feature Specification: Conflict Diagnosis and Integration Preflight
 
-**Feature Branch**: `codex/014-integration-preflight-spec` (specification only)
+**Feature Branch**: `codex/spec-014-stack-toolbelt` (specification only)
 **Created**: 2026-10-15
-**Status**: Draft — specification only; planning, tasks, cross-artifact analysis and implementation pending
+**Status**: Draft artifact refresh, 2026-10-25 — specification/design only; implementation, independent exact-head review and native conformance pending. New contracts are UNPUBLISHED Markdown proposals. Existing published and hidden JSON files remain unchanged.
 **Input**: Provide useful evidence to any agent or human.
 **Priority rating**: 9/10 (user-selected product priority, not verification evidence)
+
+## Toolbelt boundary
+
+This feature supplies **isolated integration preflight/replay evidence** alongside
+read-only diagnosis. Spec 012 supplies stack observation; Spec 015 owns local
+restack plan/apply; Spec 013 owns checkpoint/restore/selective undo with Spec 032
+journal/recovery conventions; Spec 016 owns separately authorized forge effect
+plan/apply; Spec 043 is a separate human-only landing invocation. Observation
+and prediction grant no local mutation, remote write, readiness or merge authority.
+
+Diagnosis reads existing native conflict metadata without target writes. Preflight
+may write only disclosed private disposable state outside every original
+repository/workspace. It never starts a merge/rebase then aborts it in an original
+workspace. The settled Spec 015 D7 plumbing/quarantine replay remains binding;
+the human `git rebase --onto` form describes semantics, never an executable
+implementation choice. No porcelain rebase is introduced here.
+
+All command/field names and bounds below are proposals for this unimplemented
+feature. The explicit unresolved choices in [Needs owner decision](#needs-owner-decision)
+block only their affected capabilities. A documentation artifact is not a runtime
+authorization. The existing hidden Spec 015 v1 behavior, including incomplete
+exit 3, remains frozen.
 
 ## User Scenarios & Testing
 
@@ -31,7 +53,7 @@ A human or agent receives bounded conflict context.
 
 **Acceptance Scenarios**:
 
-1. **Given** conflicted text or binary files, **When** a handoff is requested, **Then** bounded evidence distinguishes stored versus disk state and labels repository content as data.
+1. **Given** conflicted text or binary files, **When** a handoff is requested, **Then** bounded evidence distinguishes stored versus disk state and labels repository content as data; paths/types are the default and unselected file content is absent.
 2. **Given** hostile instructions inside repository files, **When** diagnosis runs, **Then** no instruction, helper, model, editor or network action is executed.
 3. **Given** concurrent changes, **When** diagnosis completes, **Then** observations disclose uncertainty and never certify the conflict as resolved.
 
@@ -61,9 +83,13 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 
 **Acceptance Scenarios**:
 
-1. **Given** explicit source, destination and integration semantics, **When** preflight is requested, **Then** the isolated preview reports predicted clean/conflicted/unknown state and affected paths tied to exact sampled identities.
+1. **Given** explicit source, destination and integration semantics, **When** preflight is requested, **Then** the isolated preview reports predicted-clean/predicted-conflicted/unknown state and affected paths tied to exact sampled identities; supported optional hunk context names its content origin and limitations.
 2. **Given** dirty original workspaces or repository helpers, **When** preflight runs, **Then** the originals remain untouched and no helpers, hooks or snapshots run there.
-3. **Given** unsupported topology, cancellation or changed inputs, **When** preflight stops, **Then** unknown/incomplete evidence is explicit, temporary state is safely retired and no safe-to-merge promise is made.
+3. **Given** unsupported topology, cancellation or changed inputs, **When** preflight stops, **Then** unknown/incomplete evidence is explicit, only owned temporary state is retired, cleanup failure is reported with a bounded ownership handle, and no safe-to-merge promise is made.
+
+4. **Given** explicit old-parent/source-head/new-parent and restack or rebase intent, **When** supported replay is selected, **Then** exactly the selected range is replayed oldest first in private scratch state; the first conflict is reported and later commits remain not-evaluated.
+5. **Given** explicit merge intent, **When** the selected native merge topology/strategy lacks accepted capability evidence, **Then** preflight refuses `capability-unavailable` and never substitutes replay or guesses a mainline.
+6. **Given** a predicted-clean result, **When** a consumer requests apply, push or Ready, **Then** the result grants no permission and does not count as independent review, semantic verification or future merge success.
 
 ### Edge Cases
 
@@ -71,6 +97,9 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - Missing participants, edited conflict markers, divergent operations and large/sensitive file contents.
 
 - Dirty caller workspaces, custom merge drivers, copied configuration, unsupported merge topology and scratch cleanup failure.
+- Non-UTF-8 Git path bytes, control/bidi characters, symlinks, binary blobs and misleading conflict markers.
+- Missing/shallow/promisor objects, replace/graft history, multiple merge bases, empty/redundant commits, conflicted jj ancestors and mutable bookmark ambiguity.
+- Ref/operation changes between samples, interrupted scratch replay, malicious scratch replacement, disk exhaustion and unavailable write confinement.
 
 ## Requirements
 
@@ -89,8 +118,17 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - **FR-010**: Add integration preflight for explicit source/destination identities and chosen merge/replay semantics; distinguish existing conflict diagnosis from predicted conflicts.
 - **FR-011**: Perform any simulation in caller-disclosed, privately owned disposable state isolated from the source repository/workspaces; no original files, references, objects, index or operation log may change.
 - **FR-012**: Never snapshot original jj workspaces or perform-and-abort a real merge in an original Git worktree; declare any temporary writes and remove only owned scratch state.
-- **FR-013**: Bind predictions to sampled inputs and integration semantics; report predicted clean/conflicted/unknown, limitations and bounded affected paths. Clean preflight is not proof of tests passing or future integration success.
+- **FR-013**: Bind predictions to sampled inputs and integration semantics; report predicted-clean/predicted-conflicted/unknown, limitations and bounded affected paths. Clean preflight is not proof of tests passing or future integration success.
 - **FR-014**: Suppress repository-controlled execution and network in preflight. On cancellation, partial failure or unavailable isolation, report failure/unknown with remaining scratch ownership, without unsandboxed/original-workspace fallback.
+
+- **FR-015**: Default to none: the command group shows help without reads, writes or prompts until diagnosis or preflight is explicitly selected. No automatic preflight, resolver, fetch, authentication, script, model or network access is permitted; cached/supplied stack or PR context stays labelled external sampled evidence and never triggers a refresh.
+- **FR-016**: Require explicit integration semantics and full resolved source/destination identities. Restack/rebase replay additionally requires an explicit old-parent and ordered moved range; merge requires explicit native participants/base interpretation. Never infer boundaries from branch names or silently substitute merge, replay, mainline or conflict strategies. Unsupported or undecided semantics/topologies refuse before scratch replay.
+- **FR-017**: For supported Git linear replay, preserve Spec 015 D7: replay exactly old-parent..source-head onto new-parent oldest first using plumbing in a private object store; no original ref or object write, worktree attachment or porcelain operation. Stop at the first conflict and mark the suffix not-evaluated; a prediction is not an apply candidate or range-diff/identity verification receipt.
+- **FR-018**: Bind each admitted observation to repository/layout identity, backend/version/capability, full native commit identities, distinct jj change/operation identities where applicable, resolved refs, ordered range and explicit semantics/options; failed admission or unavailable identities remain explicit null/unknown rather than invented. Resample relevant refs, ownership and native operation state; observed changes produce incomplete/unknown. Disclose residual concurrency/ABA limits; a later consumer revalidates independently.
+- **FR-019**: Default to paths/types and minimal participant metadata, without blob bodies, environment/config dumps or credential fields. Optional hunks require explicit selected paths and an accepted privacy capability; disclose stored/disk/scratch origin, range and byte/line bounds. Omit binary/unknown/sensitive context with a reason; never claim secret detection is complete or marker disappearance proves resolution.
+- **FR-020**: Enforce the documented finite bounds before allocating or emitting unbounded data; report per-source completeness, unknown fields, first-conflict replay coverage and cleanup outcome in human and structured output. A conflicted complete observation may succeed, but cancellation, limit exhaustion, changed inputs or scratch residue never yields complete/predicted-clean success.
+- **FR-021**: Enable native jj diagnosis or preflight only for separately measured version/capability and enforced no-snapshot/no-original-write behavior. Preserve commit/change/operation identities and declared descendant/parent semantics; unsupported native scratch replay or hunk extraction returns capability-unavailable, including in colocated jj, without raw Git fallback.
+- **FR-022**: Share typed isolated replay evidence with Spec 015 only when backend, exact inputs, semantics/options and completeness match; reuse a reviewed neutral seam with existing hidden-v1 characterization first. Scratch objects are disposable and never imported or retained by this command. Specs 013/015/016 must obtain fresh own-scope evidence and their applicable recovery/authorization; Spec 016 additionally owns exact-actual-head review and remote gates. No checkpoint, journal, recovery root, mutation or remote action is created by preflight.
 
 ### Key Entities
 
@@ -99,6 +137,8 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 
 - Preflight observation: source/destination identities, semantics, predicted conflicts, completeness and limits.
 - Disposable preview state: disclosed private ownership, allowed writes and cleanup outcome.
+- Semantic binding: backend/capability, explicit operation, participants/range/options and before/after samples.
+- Conflict context: path identity, native type, participant/blob identities and optional bounded hunk locations/content with origin and omission reasons.
 
 ## Success Criteria
 
@@ -109,11 +149,29 @@ A human or agent needs an explicit, bounded outcome without disturbing unrelated
 - **SC-003**: Every complete structured success/error fixture validates against its documented contract; all existing published-contract regression fixtures remain valid.
 - **SC-004**: Every functional requirement has a traceable acceptance case before implementation handoff; no missing mandatory execution is counted as verified.
 
+- **SC-005**: Temporary-repository restack/rebase fixtures predict the first conflicting commit/path and not-evaluated suffix exactly; supported merge fixtures match their declared topology/strategy, while every unsupported shape refuses without strategy fallback.
+- **SC-006**: Before/after sentinels for original trees, indexes, HEADs, refs, object-store content, configuration and jj stored-working-copy/operation log show no writes by diagnosis or preflight; all scratch writes remain confined and every cleanup failure is visible.
+- **SC-007**: Default output contains zero file-body bytes and secret/environment sentinels; explicitly selected hunk fixtures obey every bound, preserve unusual path identity, label origin and escape terminal controls without exposing unselected bodies.
+- **SC-008**: Every admitted observation with resolved participants binds full sampled identities and semantics, marks races/limits/cancellation unknown or incomplete, and contains the fixed prediction limitation; no fixture converts predicted-clean or supplied PR context into readiness, verification or mutation/remote authorization.
+
+## Needs owner decision
+
+These are unresolved capabilities, not requests to reopen settled Spec 015 D4–D9,
+D12–D13 or the no-original-write boundary. Recommendations are not owner decisions.
+
+| ID | Unsettled choice | Recommendation and current gate |
+| --- | --- | --- |
+| OQ-SEM | Which native merge strategies, base/mainline interpretation and replay treatments for empty/redundant commits are supported? | Begin with explicit single-parent linear replay; propose refusal for empty/redundant commits. Accept a separately measured two-head, single-merge-base merge contract before enabling merge; never infer recursive/octopus/mainline behavior. Affected variants stay capability-unavailable. |
+| OQ-TOPO | Which merge commits, rename thresholds, file-mode/submodule cases, multiple merge bases and jj multi-parent/descendant shapes should prediction cover? | Keep an explicit allowlist from native measurements; refuse unmeasured shapes rather than equate Git and jj or claim topology parity. |
+| OQ-HUNK | May selected hunk contents, locations or path names reveal sensitive work, and what omission policy can callers choose? | Paths/types only by default, no content auto-detection guarantee; require explicit selected paths for bounded context and decide whether a metadata-only privacy mode is needed. Hunk capability stays disabled pending policy and conformance. |
+| OQ-SCRATCH | Which platforms/native jj interfaces can enforce a read-only original store and isolated replay without snapshots, shared-store/oplog effects or helpers? | Measure minimum/current versions on supported Linux/macOS enforcement; no preview on an unproven backend/platform. Shared object-store/workspace attachment is insufficient isolation. |
+| OQ-EXIT | Should the future toolbelt protocol use 0/1/2 despite hidden Spec 015 v1 incomplete exit 3? | Propose 0 complete, 1 refused/incomplete/error, 2 usage for new 014 only; preserve v1 exit 3 and require an explicit versioned migration decision before shared CLI adoption. |
+
 ## Assumptions
 
-- Depends on Specs 008 and 009; Spec 012 may supply optional history context.
+- Depends on Specs 008 and 009 for native identity/inventory; Spec 012 may supply optional stack observation. Specs 011/020/022/025/030/032/040/041/042/043 define surrounding ownership, hosting, recovery, concurrency, mode/attribution and landing limits without granting extra effects here.
 - Conflict resolution and restore/continue actions require later mutation specifications; no correctness claim based solely on marker removal.
-- This draft does not amend the constitution or authorize execution. Owner review, plan, tasks and consistency analysis precede implementation; later mutation/forge scope must be reconciled with constitutional constraints during planning.
+- This draft does not amend the constitution or authorize execution. Owner decisions for affected capabilities, independent artifact review and implementation/conformance tasks remain necessary before enabling them. No constitution amendment is proposed.
 - Sampled state cannot promise a transaction or detect every concurrent/ABA change; limitations must remain explicit and uncertainty never becomes cleanup proof.
 
 - Depends on Spec 012 for optional stack scope. Preflight permits disclosed isolated temporary writes; ordinary diagnosis remains read-only. No integration apply, conflict resolution or publication is added.
