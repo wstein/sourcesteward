@@ -22,6 +22,25 @@ worktree are excluded by D7 and FR-011/FR-012. D7 is settled, not an owner quest
 A raw `merge-tree --write-tree` without quarantine can write original objects;
 command naming alone cannot establish read-only effects.
 
+### Shared attribute-source gap is not fixed by this specification
+
+[PR 239 delta review](https://github.com/wstein/sourcesteward/pull/239#pullrequestreview-5641104119)
+records the reviewer's Git 2.56.0 observation that original-worktree untracked
+union attributes can turn a conflict into a clean merge-tree result despite
+H/N check-attr checks. This is review evidence, not an experiment executed here.
+The hidden Spec 015 restack-plan runner shares that gap; its separate code fix
+is tracked in [issue 241](https://github.com/wstein/sourcesteward/issues/241).
+This Markdown amendment changes no hidden-v1 code or schema and does not claim
+that implementation is fixed or safe to reuse before the separate fix/conformance.
+
+The [Git option documentation](https://git-scm.com/docs/git) defines an immutable
+tree attribute source through --attr-source (or GIT_ATTR_SOURCE). The proposed
+014 initial linear profile requires the actual full-H argv pin, private override
+context and receipts, in addition to H/N checks and hazard refusals. T033 starts
+with failing untracked/modified/index-only regression fixtures and precedes T016.
+Minimum/current native enforcement remains unmeasured and must be proven before
+capability enablement; an unavailable pin never permits fallback.
+
 ## R2 — diagnosis and scratch preflight are separate effects
 
 **Decision:** diagnosis reads existing native conflict state; preview discloses

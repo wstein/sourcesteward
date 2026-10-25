@@ -64,8 +64,8 @@ trace, credential or helper variables. Set private HOME/XDG_CONFIG_HOME,
 `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` to the null device,
 `GIT_CONFIG_NOSYSTEM=1`, `GIT_ATTR_NOSYSTEM=1`, `GIT_NO_LAZY_FETCH=1`,
 `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, inert askpass/editor
-and pager settings. Replay additionally sets only its private object directory
-and read-only source alternates. Start with `--no-optional-locks`,
+and pager settings. Replay additionally sets only internally selected private Git admin/worktree/index
+and object paths, its bound attribute source and read-only source alternates. Start with `--no-optional-locks`,
 `--no-replace-objects`, `--no-pager` and the following mandatory `-c` pins:
 
 | Pins | Required values |
@@ -94,6 +94,38 @@ set/unset merge/diff/filter attributes and LFS filter attributes. Refuse any mov
 .gitattributes file before replay; unreadable attribute evidence also refuses.
 A future merge profile must provide equivalent accepted checks over every tree
 whose attributes can affect its selected paths, otherwise it remains unavailable.
+The actual merge invocation MUST use the same immutable attribute policy, not
+merely perform source-tree checks beforehand. For the initial Git linear profile,
+set `attribute_source.policy=source-head` and `attribute_source.commit_id=H`, where
+H is the full sampled source-head commit id. Every `merge-tree` invocation MUST
+include the global `--attr-source=FULL_H` argument before the subcommand. Never
+accept an inherited GIT_ATTR_SOURCE or silently omit the argument. The official
+[Git option contract](https://git-scm.com/docs/git) documents the equivalent
+GIT_ATTR_SOURCE mechanism; this profile selects the explicit argv spelling.
+Capability evidence must prove that exact native version honors it during actual
+merge-tree execution, not just accepts a flag or returns check-attr output.
+
+Run that replay in a create-owned private Git administrative/worktree/index
+context of the matching object format, with only the original object store as a
+read-only alternate. Do not copy original config, index or info/attributes into
+that context. Keep private info/attributes empty/absent and private worktree/index
+free of attribute overrides. This prevents original untracked, modified or
+index-only .gitattributes, and original info/attributes, from becoming an additional
+attribute source. The original info/attributes refusal and global/system/config
+isolation above still apply; --attr-source alone does not suppress that override.
+
+Immediately before every merge-tree call, revalidate the private context's
+ownership/no-follow identity, empty attribute-override locations, bound H and N
+object identities, full-H argv pin and accepted native capability. Verify the
+same context and attribute binding again before the final result. Capture the
+actual invocation's effective policy/full commit pin in the result binding and
+per-call receipt; declared intent without the enforced invocation is insufficient.
+Changed guards yield incomplete/unknown; missing pin, unsupported/unmeasured
+native enforcement or inability to exclude mixed attributes refuses
+capability-unavailable before replay. No original-worktree/index or unpinned
+fallback. Native merge profiles require their own explicit immutable attribute
+source with equivalent guards before enablement.
+
 Pinned merge options can differ from the repository's configured merge behavior;
 state that limitation in every preflight result rather than claim parity.
 
