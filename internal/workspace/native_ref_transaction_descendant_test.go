@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: EUPL-1.2
+package workspace
+
+import (
+	"context"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+// refTransactionWithDescendant starts a fake owned writer: a parent process that
+// starts a descendant sharing its stderr, as bwrap's git does, and reports
+// ready. Closing release lets the descendant exit; alive reads EOF once it has.
+func refTransactionWithDescendant(t *testing.T) (tx *gitRefTransaction, release func(), alive *os.File) {
+	t.Helper()
+	old := nativeUnsandboxed
+	nativeUnsandboxed = true
+	t.Cleanup(func() { nativeUnsandboxed = old })
+	bin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bin, err = filepath.EvalSymlinks(bin); err != nil {
+		t.Fatal(err)
+	}
+	root := gitTempDir(t)
+	runCtx, cancel := context.WithCancel(context.Background())
+	cmd, err := prepareSandboxed(runCtx, bin, []string{"-test.run=^TestNativeSandboxHelper$", "--", "stw-sandbox-helper", "spawn"}, root, nil, nil)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	controlRead, controlWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliveRead, aliveWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.ExtraFiles = []*os.File{controlRead, aliveWrite}
+	tx, err = startGitRefTransaction(context.Background(), runCtx, cancel, cmd, bin, NativeIdentity{}, "refs/heads/x", "")
+	controlRead.Close()
+	aliveWrite.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var once bool
+	release = func() {
+		if !once {
+			once = true
+			controlWrite.Close()
+		}
+	}
+	t.Cleanup(func() { release(); aliveRead.Close(); tx.cancel() })
+	if err := tx.ack("ready\n"); err != nil {
+		t.Fatal("fake writer did not start its descendant:", err)
+	}
+	return tx, release, aliveRead
+}
+
+func descendantGone(t *testing.T, alive *os.File) bool {
+	t.Helper()
+	if err := alive.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, err := alive.Read(make([]byte, 1))
+	return errors.Is(err, io.EOF)
+}
+
+func TestRefTransactionKillReportsSurvivingDescendantHonestly(t *testing.T) {
+	old := gitRefDescendantWait
+	gitRefDescendantWait = 100 * time.Millisecond
+	t.Cleanup(func() { gitRefDescendantWait = old })
+	tx, release, alive := refTransactionWithDescendant(t)
+	err := tx.finish(true)
+	if !errors.Is(err, errGitRefDescendants) {
+		t.Fatalf("killed writer reported as fully stopped while its descendant runs: %v", err)
+	}
+	if !tx.out.Uncertain {
+		t.Fatal("surviving descendant did not make the outcome uncertain")
+	}
+	if !tx.stopped || tx.cmd.ProcessState == nil {
+		t.Fatal("owned process was not reaped")
+	}
+	if again := tx.finish(true); !errors.Is(again, errGitRefDescendants) {
+		t.Fatalf("repeated finish lost the descendant result: %v", again)
+	}
+	release()
+	if !descendantGone(t, alive) {
+		t.Fatal("descendant did not exit after release")
+	}
+}
+
+func TestRefTransactionKillWaitsForDescendantThatIsGone(t *testing.T) {
+	tx, release, alive := refTransactionWithDescendant(t)
+	release()
+	err := tx.finish(true)
+	if errors.Is(err, errGitRefDescendants) {
+		t.Fatalf("exited descendant reported as running: %v", err)
+	}
+	if !descendantGone(t, alive) {
+		t.Fatal("finish returned while the descendant was still alive")
+	}
+}

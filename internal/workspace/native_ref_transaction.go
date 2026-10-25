@@ -8,9 +8,19 @@ import (
 	"os/exec"
 	"reflect"
 	"strings"
+	"time"
 )
 
 var errGitRefTransaction = errors.New("prepared Git reference transaction refused")
+
+// errGitRefDescendants is joined into the terminal result when the owned
+// process is gone but something still holds its stderr: a sandbox descendant
+// (bwrap's git) may still run.
+var errGitRefDescendants = errors.New("sandbox descendants of the stopped Git process may still run")
+
+// gitRefDescendantWait bounds how long a finished transaction waits for its
+// descendants to release stderr.
+var gitRefDescendantWait = 5 * time.Second
 
 type gitRefTransactionOutcome struct{ Prepared, CommitAttempted, Committed, Uncertain bool }
 type gitRefStderr struct {
@@ -63,6 +73,34 @@ func prepareGitRefDeletion(ctx context.Context, bin string, id NativeIdentity, r
 		cancel()
 		return nil, e
 	}
+	t, e := startGitRefTransaction(ctx, runCtx, cancel, cmd, bin, id, ref, oldOID)
+	if e != nil {
+		return nil, e
+	}
+	if e = t.write("start\x00"); e == nil {
+		e = t.ack("start: ok\n")
+	}
+	if e == nil {
+		e = t.write(gitRefDeleteCommand(ref, oldOID))
+	}
+	if e == nil {
+		e = t.ack("prepare: ok\n")
+	}
+	if e != nil {
+		t.out.Uncertain = true
+		return t, errors.Join(e, t.finish(true))
+	}
+	t.out.Prepared = true
+	if e = t.readback(ctx); e != nil {
+		return t, t.abortFor(e)
+	}
+	return t, nil
+}
+
+// startGitRefTransaction wires the pipes of an already prepared sandboxed
+// command, starts it and arms the cancel watcher and the stderr capture. It
+// cancels runCtx itself when it fails.
+func startGitRefTransaction(ctx, runCtx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, bin string, id NativeIdentity, ref, oldOID string) (*gitRefTransaction, error) {
 	input, e := cmd.StdinPipe()
 	if e != nil {
 		cancel()
@@ -108,23 +146,6 @@ func prepareGitRefDeletion(ctx context.Context, bin string, id NativeIdentity, r
 		}
 		t.stderrDone <- gitRefStderr{capture.data, e}
 	}()
-	if e = t.write("start\x00"); e == nil {
-		e = t.ack("start: ok\n")
-	}
-	if e == nil {
-		e = t.write(gitRefDeleteCommand(ref, oldOID))
-	}
-	if e == nil {
-		e = t.ack("prepare: ok\n")
-	}
-	if e != nil {
-		t.out.Uncertain = true
-		return t, errors.Join(e, t.finish(true))
-	}
-	t.out.Prepared = true
-	if e = t.readback(ctx); e != nil {
-		return t, t.abortFor(e)
-	}
 	return t, nil
 }
 
