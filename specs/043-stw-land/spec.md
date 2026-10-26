@@ -8,7 +8,7 @@
 > **Owner-decision amendment — 2026-10-26 (stack landing):** `stw land --stack` lands a whole linear chain of reviewed pull
 > requests with **one** fast-forward push of the tip; see [Stack landing](#stack-landing---stack-owner-decision-2026-10-26).
 > Dependent parts are by default ONE pull request with a commit series (workspace `AGENTS.md`), which the single-PR landing
-> already covers; `--stack` is for the separate stacked PRs that remain. First feature after v0.2.0; first measured in the spike
+> already covers; `--stack` is for the separate stacked PRs that remain. First feature after v0.2.0; first to be measured in the spike
 > repository `wstein/stw-release-spike` (research.md, "Stack landing: spike observations and what is still to be measured").
 
 **Branch**: `docs/spec-043-stw-land` | **Created**: 2026-10-24
@@ -326,10 +326,12 @@ one.
   does not detect a tip: every head currently reports the heavy lane. An ancestor-aware tip detection that would let lower heads skip it
   is a follow-up CI change, not a precondition of `stw land`. The required contexts are read from the rules; no shard is named.
   A head with an **empty check rollup** is distinct from `checks-not-green`: if the events show a head change **made by GitHub** (event
-  `head_ref_force_pushed` or `automatic_base_change_succeeded` whose actor is not the owner's login nor the head repository's pushing
-  account that opened the pull request; an owner force-push has the owner's login and is not this state), the state is
+  `head_ref_force_pushed` or `automatic_base_change_succeeded` whose actor is not the owner's login; an owner force-push has the owner's
+  login and is not this state), the state is
   `head-changed-no-checks` (spike observation S-C); if the rollup is empty and **no** such event exists, the state is `checks-missing`
-  (the run has not started or was never triggered). Both refuse. The refusal text offers the owner's way out as text only: `gh pr close N
+  (the run has not started or was never triggered). The actor test is **unmeasured** (GitHub may name the merging owner as the actor of an
+  automatic restack; the spike recorded events, not their actors, to be recorded in E1): both outcomes refuse, and only the hint text depends
+  on the measurement. The refusal text offers the owner's way out as text only: `gh pr close N
   && gh pr reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike); stw never runs it (FR-033).
 - **FR-065 Bottom fast-forwards the default branch.** The remote default tip read by `git ls-remote` in this run is an ancestor of the
   bottom head (equivalently, the merge base of the bottom and the default tip equals the default tip). If the default branch moved,
@@ -523,7 +525,7 @@ optional host-only signing and CLI exit-contract revision 2.
 | OQ6 | DECIDED: refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | adopted recommendation; owner-answer override: 016 OQ-SIGN | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
 | OQ7 | DECIDED: forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | adopted recommendation | No native or forge fallback. |
 | OQ8 | DECIDED: use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | adopted recommendation; owner-answer override: 016 OQ-STORE | Journal integration/conformance before owner apply; sync v1 unchanged. |
-| ST1 (2026-10-26) | DECIDED "A yes": `stw land --stack` lands a linear chain with one push of the tip (FR-060 to FR-083); first feature after v0.2.0; first measured in `wstein/stw-release-spike` with a second stack. | direct owner answer 2026-10-26 | Measurements E0 to E4 recorded (research.md); apply stays gated by E1 to E3 and the security review before code; stays `land-unmeasured` until recorded. |
+| ST1 (2026-10-26) | DECIDED "A yes": `stw land --stack` lands a linear chain with one push of the tip (FR-060 to FR-083); first feature after v0.2.0; first measured in `wstein/stw-release-spike` with a second stack. | direct owner answer 2026-10-26 | Measurements E0 to E4 are to be recorded (T021, none exists yet); apply stays gated by E1 to E3 and the security review before code; stays `land-unmeasured` until recorded. |
 | ST2 (2026-10-26) | DECIDED "B yes": dependent parts are by default one PR with a commit series; separate stacked PRs only when parts must merge independently (depth at most two). | direct owner answer 2026-10-26 | Workspace `AGENTS.md` (anchorage-workspace PR); no change to this command. |
 
 ## Open questions (not decided here)
