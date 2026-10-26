@@ -60,9 +60,50 @@ The sample is the real output of the wizard on the fixture of `TestTidyExampleMa
 
 **Reading the summary.** `summary: N safe (A own, B other)` splits the safe rows by scope: `A` counts scope `own`, and `B` counts every other safe row, so `B` includes the rows of scope `unknown` as well as those of scope `other`; the sample above has one `other` and no `unknown` safe row. In agent mode only an item owned by a task record is `own`: a branch or worktree that merely follows the naming convention, such as `claude/*`, shows `owner claude (path-convention) [unknown]` even when the caller is `claude`, appears under `owner unknown`, is counted in `B`, is refused for an agent apply (`scope-not-authorized`) and needs the typed confirmation of a human at a terminal. The summary does not number `unknown` rows separately; they are listed under the heading `owner unknown`, and `--json` gives each candidate's `scope`.
 
-**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json` and `--human`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
+**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json`, `--human`, `--verbose`, `--quiet`, `--progress` and `--trace`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
 **Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per worktree (jj: workspace) and per local branch (jj: bookmark) of that repository, at most 10 minutes; the Git proof phase gets the rest of that window, at least 60 s, so without `--timeout` it can run up to 60 s past the window; with `--timeout` the given deadline bounds everything. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace, 10 s per proof command, 20 s per tip) and the plan, apply and restore deadlines of the expert layer are not scaled. When candidates are retained as `evidence-incomplete` with the evidence `deadline-exceeded` or `proof-budget-exhausted`, the overview ends with a notice `N of M not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m`: N is the number of those candidates (`--timeout` widens the window, the content reads and the proof phase, but not the 20 s per-tip proof budget nor the per-worktree content budget, which also end as `proof-budget-exhausted` and are counted too, so the hint can fail for those items) and M the number of all candidates of the overview, counted after the view is narrowed (`--only`, `--mine`, `--by-owner`) and before the output is cut at the candidate bound. The notice is the text line `notice: ...` and an entry of the `notices` array of `--json`.
+
+### Long runs: progress, `--verbose`, `--trace` and agent markers
+
+A large workspace takes minutes: the analysis reads every worktree and proves every distinct branch tip. The repositories are analysed four at a time, and inside one repository four worktrees, four branches and four tips at a time, so at most sixteen items are read at once.
+
+**Progress.** When stderr is a terminal and the run is not `--json`, one line on stderr is rewritten as the analysis proceeds. It names the repository (position in the sorted list), the phase, the items done and the elapsed time of the whole analysis; once a phase is 5 percent and 3 seconds in, it adds a cautious estimate of the time left in that phase (an average over the phase, smoothed, rounded up to 5 seconds, prefixed `~`; it is not an estimate for the whole run):
+
+```text
+[3/7] sourcesteward: observing worktrees 412/1,098 (38s, ~1m05s left)
+```
+
+The line uses a carriage return and blanks, never an escape sequence, and is erased when the analysis ends, so nothing of it stays in the terminal; stdout is unchanged byte for byte. `--quiet` turns the line off. Without a terminal on stderr nothing is printed; `--progress` (or `--verbose`) then writes an ordinary line every 10 seconds instead. `--json` never prints progress.
+
+**`--verbose`** (on `stw tidy` and `stw tidy plan`) prints a report to stderr after the analysis: time per repository and phase with counts, the number and summed duration of the Git processes per repository (summed over concurrent processes, so it can exceed the wall time), the ten slowest items, and each repository and phase where the observation window ended. A sample:
+
+```text
+Timings: total 1m03s
+  discovery and references: 1.2s
+  [1/1] sourcesteward: analysed in 1m03s
+    observing worktrees 40/40: 21s
+    reading branch history 12/12: 2.0s
+    proving integration 30/30: 40s
+    git processes: 880, 1m01s in total
+  slowest 3 items:
+    4.2s  sourcesteward proving integration: refs/heads/codex/wide
+    1.8s  sourcesteward observing worktrees: /tmp/wt-037
+    150ms  sourcesteward reading branch history: refs/heads/codex/old-1
+  observation window reached: sourcesteward (proofs); raise --timeout or narrow the run with --member or --only
+```
+
+`--trace FILE` writes one JSON line per Git process to a new file (`repo`, `argv` without the fixed safety options and without URL credentials, `ms`, `exit`); an existing file is refused, and the file stops at 8 MiB with a `{"truncated":true}` line. For a long run, widen the window with `--timeout` (up to 1h) or narrow the work with `--member NAME`, `--only` and `--workspace`.
+
+**Colors.** The human text is colored only when stdout is a terminal and `NO_COLOR` is unset or empty (`safe` green, `retain` and owner and reason text dim, `decision` yellow, repository errors red, repository headings and effects bold). The colors wrap text that has already been escaped, so a name with an escape sequence stays visible as an escape, and without color the bytes are the plain text; `--json` is never colored and the prompts stay plain.
+
+**Agent markers.** `stw tidy` treats the variables `STW_AGENT`, `CLAUDECODE` and every variable that starts with `CLAUDE_CODE_`, `CODEX_` or `AGY_` as agent markers (`internal/tidywizard/owner/mode.go`). With a marker in the environment the run is in agent mode even on a terminal, so it never prompts. The integrated terminal of an agent IDE extension inherits such a variable (for example `CLAUDE_CODE_SSE_PORT` in VS Code), and the overview says so on its `Mode:` line:
+
+```text
+Mode:      agent (stdin tty, stdout tty, agent marker CLAUDE_CODE_SSE_PORT)
+```
+
+List the markers of your shell with `env | grep -E '^(CLAUDECODE|CLAUDE_CODE_|CODEX_|AGY_|STW_AGENT)'`. To run as a person, use a terminal without them, or remove the variable for one command: `env -u CLAUDE_CODE_SSE_PORT stw tidy`. There is deliberately no option that declares a run human. The marker rule is an accident guard against a careless agent run (Spec 041 FR-006g), not a security boundary: an evasive process can unset the variable too. The protection is the typed confirmation of foreign and unknown rows, which is read from `/dev/tty` and never from stdin.
 
 **Flow.** Analysis is read only and offline unless `--online`. Each repository gets a derived remote (`origin`, else the single remote)
 and base (the local branch of the remote's symbolic HEAD, else the remote-tracking reference); override a base with
