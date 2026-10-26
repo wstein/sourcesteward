@@ -1,7 +1,7 @@
 name: Git/jj conformance
 
-# Reusable conformance suite for one pinned backend lane. Called by ci.yml (pushes to main,
-# PRs against the default branch, PRs labelled ci-full) and by ci-full.yml (label event).
+# Reusable conformance suite for one pinned backend lane. Called by ci.yml (pushes to main and
+# every pull request, stacked or not) and by ci-full.yml (label event).
 on:
   workflow_call:
     inputs:

@@ -10,12 +10,6 @@ on:
 permissions:
   contents: read
 
-env:
-  # True when the conformance shards run for this event (same expression as the conformance
-  # job's if:); the check job then leaves internal/workspace to the shards. When false, check
-  # tests it plain (no -race).
-  CONFORMANCE_TIER: ${{ github.event_name != 'pull_request' || github.event.pull_request.base.ref == github.event.repository.default_branch || contains(github.event.pull_request.labels.*.name, 'ci-full') }}
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   # A newer push to a pull request supersedes its running checks; runs on main always finish.
@@ -122,15 +116,14 @@ jobs:
           if [ "$AFFECTED_REASON" = packages ] && [ -n "$AFFECTED" ]; then
             packages="$AFFECTED"
           fi
-          if [ "$CONFORMANCE_TIER" = true ]; then
-            # internal/workspace runs in the conformance shards (the current lane on pull requests).
-            if [ "$packages" = './...' ]; then
-              packages="$(python3 -B scripts/ci_shards.py packages)"
-              set -- $packages
-              test "$#" -gt 1
-            else
-              packages="$(python3 -B scripts/ci_shards.py packages --within "$packages")"
-            fi
+          # internal/workspace runs in the conformance shards on every event (a plain run of it
+          # exceeds the 40 minute timeout), including pull requests stacked on another branch.
+          if [ "$packages" = './...' ]; then
+            packages="$(python3 -B scripts/ci_shards.py packages)"
+            set -- $packages
+            test "$#" -gt 1
+          else
+            packages="$(python3 -B scripts/ci_shards.py packages --within "$packages")"
           fi
           set -- $packages
           if [ "$#" -eq 0 ]; then
@@ -154,14 +147,14 @@ jobs:
         with:
           path: /tmp/sourcesteward-pages
 
-  # Tiered: main pushes and PRs against the default branch run it; a PR stacked on another
-  # PR branch runs it only with the ci-full label (applied later, ci-full.yml runs it). A
-  # skipped job is neutral. Pull requests run only the current lane, unless they carry the
-  # ci-full label (both lanes on every push); the minimum lane also gates main after the merge
+  # Runs on every event, also for a PR stacked on another PR branch: check leaves
+  # internal/workspace to the shards, so skipping them would leave it untested or make check
+  # time out. Documentation-only PRs skip the shards inside the called workflow. Pull
+  # requests run only the current lane, unless they carry the ci-full label (both lanes on every
+  # push, also applied later via ci-full.yml); the minimum lane also gates main after the merge
   # and runs in the race schedule.
   conformance:
     name: Git/jj conformance (${{ matrix.lane }})
-    if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == github.event.repository.default_branch || contains(github.event.pull_request.labels.*.name, 'ci-full')
     strategy:
       fail-fast: false
       matrix:

@@ -128,39 +128,48 @@ class GoTestsStepExecutionTests(unittest.TestCase):
         body = text.split('- name: Go tests\n', 1)[1].split('\n      - name:', 1)[0]
         return body.split('        run: |\n', 1)[1]
 
-    def run_step(self, reason, affected, tier):
+    def run_step(self, reason, affected):
         real_go = shutil.which('go')
         with tempfile.TemporaryDirectory() as tmp:
             stub = Path(tmp, 'go')
             stub.write_text('#!/bin/sh\nif [ "$1" = test ]; then echo "GOTEST $*"; exit 0; fi\nexec %s "$@"\n' % real_go)
             stub.chmod(0o755)
             env = dict(os.environ, PATH=tmp + os.pathsep + os.environ['PATH'], AFFECTED=affected,
-                       AFFECTED_REASON=reason, CONFORMANCE_TIER=tier, GITHUB_STEP_SUMMARY=os.devnull)
+                       AFFECTED_REASON=reason, GITHUB_STEP_SUMMARY=os.devnull)
             out = subprocess.run(['bash', '-e', '-c', self.step()], cwd=ROOT, env=env, capture_output=True, text=True)
         self.assertEqual(out.returncode, 0, out.stderr)
         return [line for line in out.stdout.splitlines() if line.startswith('GOTEST')]
 
-    def test_an_empty_or_unknown_reason_tests_everything(self):
-        for reason in ('', 'all', 'bogus'):
-            self.assertEqual(self.run_step(reason, 'm/internal/a', 'false'), ['GOTEST test -timeout 40m ./...'], reason)
-
-    def test_packages_with_an_empty_list_tests_everything(self):
-        self.assertEqual(self.run_step('packages', '', 'false'), ['GOTEST test -timeout 40m ./...'])
-
-    def test_docs_only_runs_no_go_test(self):
-        self.assertEqual(self.run_step('docs-only', '', 'false'), [])
-
-    def test_packages_run_exactly_the_affected_list(self):
-        self.assertEqual(self.run_step('packages', 'm/a m/b', 'false'), ['GOTEST test -timeout 40m m/a m/b'])
+    def everything(self, reason, affected):
+        # Everything means the shard package list: all packages except internal/workspace.
+        lines = self.run_step(reason, affected)
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn(' ./...', lines[0])
+        self.assertGreater(len(lines[0].split()), 5)
+        return lines[0]
 
     @unittest.skipUnless(shutil.which('go'), 'needs go')
-    def test_the_workspace_package_is_left_to_the_shards_only_when_they_run(self):
+    def test_an_empty_or_unknown_reason_tests_everything(self):
+        for reason in ('', 'all', 'bogus'):
+            self.everything(reason, 'm/internal/a')
+
+    @unittest.skipUnless(shutil.which('go'), 'needs go')
+    def test_packages_with_an_empty_list_tests_everything(self):
+        self.everything('packages', '')
+
+    def test_docs_only_runs_no_go_test(self):
+        self.assertEqual(self.run_step('docs-only', ''), [])
+
+    def test_packages_run_exactly_the_affected_list(self):
+        self.assertEqual(self.run_step('packages', 'm/a m/b'), ['GOTEST test -timeout 40m m/a m/b'])
+
+    @unittest.skipUnless(shutil.which('go'), 'needs go')
+    def test_the_workspace_package_is_always_left_to_the_shards(self):
         module = subprocess.run(['go', 'list', '-m'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
         ws, other = module + '/internal/workspace', module + '/internal/cli'
-        self.assertEqual(self.run_step('packages', ws + ' ' + other, 'false'), ['GOTEST test -timeout 40m %s %s' % (ws, other)])
-        self.assertEqual(self.run_step('packages', ws + ' ' + other, 'true'), ['GOTEST test -timeout 40m ' + other])
-        self.assertEqual(self.run_step('packages', ws, 'true'), [])
-        everything = self.run_step('all', '', 'true')[0]
+        self.assertEqual(self.run_step('packages', ws + ' ' + other), ['GOTEST test -timeout 40m ' + other])
+        self.assertEqual(self.run_step('packages', ws), [])
+        everything = self.run_step('all', '')[0]
         self.assertNotIn(ws + ' ', everything + ' ')
         self.assertIn(other, everything)
 
@@ -199,13 +208,9 @@ class CacheTests(unittest.TestCase):
 
 
 class TieringTests(unittest.TestCase):
-    CONDITION = ("github.event_name != 'pull_request' || "
-                 "github.event.pull_request.base.ref == github.event.repository.default_branch || "
-                 "contains(github.event.pull_request.labels.*.name, 'ci-full')")
-
-    def test_ci_conformance_is_tiered_by_base_branch_or_ci_full_label(self):
+    def test_ci_conformance_runs_on_every_event_including_stacked_pull_requests(self):
         text = job_text('conformance')
-        self.assertIn('if: ' + self.CONDITION + '\n', text)
+        self.assertNotRegex(text, r'(?m)^    if:')
         self.assertIn('uses: ./.github/workflows/conformance.yml', text)
         self.assertIn(self.LANES, text)
         self.assertNotIn('lane: [minimum, current]', text)
@@ -310,36 +315,16 @@ class ShardedConformanceTests(unittest.TestCase):
 
 
 class LongPoleTests(unittest.TestCase):
-    def evaluate(self, expression, name, base=None, labels=()):
-        python = expression.replace('||', ' or ')
-        python = re.sub(r"contains\(github\.event\.pull_request\.labels\.\*\.name, '([^']+)'\)", r"('\1' in labels)", python)
-        python = python.replace('github.event.pull_request.base.ref', 'base')
-        python = python.replace('github.event.repository.default_branch', "'main'")
-        python = python.replace('github.event_name', 'event')
-        return eval(python, {}, {'event': name, 'base': base, 'labels': list(labels)})
+    def test_no_workflow_level_tier_switch_is_left(self):
+        self.assertNotIn('CONFORMANCE_TIER', WORKFLOW)
+        self.assertNotRegex(WORKFLOW, r'github\.event\.pull_request\.base\.ref')
 
-    def tier(self):
-        return re.search(r'(?m)^  CONFORMANCE_TIER: \$\{\{ (.+) \}\}$', WORKFLOW).group(1)
-
-    def test_tier_expression_is_the_conformance_condition(self):
-        self.assertEqual(self.tier(), TieringTests.CONDITION)
-        self.assertIn('if: ' + self.tier() + '\n', job_text('conformance'))
-
-    def test_tier_per_event(self):
-        tier = self.tier()
-        self.assertTrue(self.evaluate(tier, 'push', None))
-        self.assertTrue(self.evaluate(tier, 'pull_request', 'main'))
-        self.assertFalse(self.evaluate(tier, 'pull_request', 'codex/parent'))
-        self.assertTrue(self.evaluate(tier, 'pull_request', 'codex/parent', ['ci-full']))
-        self.assertFalse(self.evaluate(tier, 'pull_request', 'codex/parent', ['other']))
-
-    def test_check_skips_the_workspace_package_only_in_the_tier(self):
+    def test_check_always_leaves_the_workspace_package_to_the_shards(self):
         text = job_text('check')
-        self.assertIn('if [ "$CONFORMANCE_TIER" = true ]; then', text)
-        tier = text.split('if [ "$CONFORMANCE_TIER" = true ]; then', 1)[1].split('\n          fi\n', 1)[0]
-        self.assertIn('ci_shards.py packages)', tier)
-        self.assertIn('ci_shards.py packages --within', tier)
-        self.assertLess(text.index('if [ "$CONFORMANCE_TIER" = true ]; then'), text.index('go test -timeout 40m'))
+        self.assertNotIn('CONFORMANCE_TIER', text)
+        self.assertIn('ci_shards.py packages)', text)
+        self.assertIn('ci_shards.py packages --within', text)
+        self.assertLess(text.index('ci_shards.py packages)'), text.index('go test -timeout 40m'))
 
 
 class DocsOnlyClassifierTests(unittest.TestCase):
@@ -460,7 +445,7 @@ class DocsOnlyWorkflowTests(unittest.TestCase):
         text = job_text('conformance')
         self.assertIn('needs: [changes]', text)
         self.assertIn('docs_only: ${{ needs.changes.outputs.docs_only }}', text)
-        self.assertNotIn('docs_only', text.split('\n    if:', 1)[1].split('\n', 1)[0])
+        self.assertNotRegex(text, r'(?m)^    if:')
 
     def test_check_job_never_depends_on_docs_only_and_still_runs_every_static_check(self):
         text = job_text('check')
