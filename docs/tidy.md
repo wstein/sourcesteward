@@ -68,13 +68,29 @@ The sample is the real output of the wizard on the fixture of `TestTidyExampleMa
 
 A large workspace takes minutes: the analysis reads every worktree and proves every distinct branch tip. The repositories are analyzed four at a time, and inside one repository four worktrees, four branches and four tips at a time, so at most sixteen items are read at once.
 
-**Progress.** When stderr is a terminal and the run is not `--json`, one line on stderr is rewritten as the analysis proceeds. It names the repository (position in the sorted list), the phase, the items done and the elapsed time of the whole analysis; once a phase is 5 percent and 3 seconds in, it adds a cautious estimate of the time left in that phase (an average over the phase, smoothed, rounded up to 5 seconds, prefixed `~`; it is not an estimate for the whole run):
+**Progress.** When stderr is a terminal and the run is not `--json` or `--quiet`, a block of lines on stderr is redrawn in place as the analysis proceeds, at most five times a second. The first line is the whole run (repositories finished of all, elapsed time of the analysis, and the slowest repository so far once two have started); then comes one line per repository in the sorted order of the analysis: a mark (`·` waiting, `▸` running, `✓` analyzed, `!` finished with another state such as `error` or `skipped`, or stopped by a deadline or an interrupt), the name, the phase (`discovery`, `observing worktrees`, `observing branches`, `proofs`, `tracking`), a bar with the items done of the phase, the time of that repository and, once a phase is 5 percent and 3 seconds in, a cautious estimate of the time left in that phase (an average over the phase, smoothed, rounded up to 5 seconds, prefixed `~`; it is not an estimate for the whole run). A finished repository shows its total time. The repositories are analyzed four at a time, so up to four lines run at once. A sample in the middle of a run of five repositories on a terminal 100 columns wide:
 
 ```text
-[3/7] sourcesteward: observing worktrees 412/1,098 (38s, ~1m05s left)
+stw tidy: 2/5 repos, 38s, slowest sheetmill 38s
+✓ chartscribe   analysed            9.0s
+✓ crewbook      analysed            14s
+▸ sheetmill     tracking            [#-------] 2/9 38s
+▸ sourcesteward observing worktrees [###-----] 412/1,098 38s ~1m05s left
+▸ workharbor    observing worktrees [--------] 0/469 24s
 ```
 
-The line uses a carriage return and blanks, never an escape sequence, and is erased when the analysis ends, so nothing of it stays in the terminal; stdout is unchanged byte for byte. `--quiet` turns the line off. Without a terminal on stderr nothing is printed; `--progress` (or `--verbose`) then writes an ordinary line at the start of each repository and otherwise at most every 10 seconds instead. `--json` never prints progress.
+The block is drawn with cursor-up, erase-line and erase-below sequences only (no alternate screen), so the terminal keeps its scroll-back. When the analysis ends, on success, error, deadline or Ctrl-C, the final block stays on the screen and the cursor is left at the start of the line below it, so that the output and the prompts that follow start on a clean line; a repository that did not finish is marked `!` and `stopped`, one that never started `not started`. This is the final block of the same run:
+
+```text
+stw tidy: 5/5 repos, 1m16s, slowest sourcesteward 1m06s
+✓ chartscribe   analysed            9.0s
+✓ crewbook      analysed            14s
+✓ sheetmill     analysed            46s
+✓ sourcesteward analysed            1m06s
+✓ workharbor    analysed            1m02s
+```
+
+The size of the terminal is read from the terminal at every redraw (80 columns by 24 rows when it cannot be read), so a resized window is followed at the next redraw. A line longer than the width is cut to it with `…`, counting wide characters as two columns and never wrapping; the bar is dropped first. When the block would not fit in the height of the terminal minus 3 lines, the finished repositories collapse into one line such as `✓ 5 repos done (largest: workharbor 61s)`, and if running and waiting repositories still do not fit, a last line says how many are not shown. Names and paths pass the same escaping as everywhere else, so a repository name with an escape, carriage return or bidirectional character shows as an escape, never as a sequence. The marks and the header are colored (`✓` green, running and header bold, waiting dim) only when stderr is a terminal and `NO_COLOR` is unset or empty; stdout is unchanged byte for byte. `--quiet` turns the block off. Without a terminal on stderr nothing is printed; `--progress` (or `--verbose`) then writes an ordinary line at the start of each repository and otherwise at most every 10 seconds instead (`[3/7] sourcesteward: observing worktrees 412/1,098 (38s, ~1m05s left)`). `--json` never prints progress.
 
 **`--verbose`** (on `stw tidy` and `stw tidy plan`) prints a report to stderr after the analysis: time per repository and phase with counts, the number and summed duration of the Git processes per repository, and those of the discovery on the line of the discovery (summed over concurrent processes, so it can exceed the wall time), the ten slowest items, and each repository and phase where the observation window ended. A sample from a real run on a small repository with two linked worktrees (the progress clock of the test moves one second per report, so the phase times are round; the Git counts, the times of the Git processes and the slowest items depend on the machine):
 
@@ -101,7 +117,7 @@ Timings: total 17s
 
 `--trace FILE` writes one JSON line per Git process of the analysis of the repositories to a new file (the processes of the discovery of the workspace are counted by `--verbose` but not written; the file is created after the discovery) (`repo`, `argv` without the fixed safety options and without URL credentials, `ms`, `exit`); an existing file is refused, a path inside the workspace or one of its repositories is refused with `trace-inside-repository` (exit 2: a new file there is an untracked file and would turn a safe worktree into a retained one; a path inside another linked worktree has the same effect on that worktree, so choose a path outside every worktree), and the file stops at 8 MiB with a `{"truncated":true}` line. For a long run, widen the window with `--timeout` (up to 1h) or narrow the work with `--member NAME`, `--only` and `--workspace`.
 
-A terminal that stops accepting output holds up the worker that writes the progress line (the others drop their frames), and the end of the run waits for that write, so a stuck terminal can delay the end of a run past `--timeout`; `--quiet` avoids it.
+A terminal that stops accepting output holds up the worker that writes the progress block (the others drop their frames), and the end of the run waits for that write, so a stuck terminal can delay the end of a run past `--timeout`; `--quiet` avoids it.
 
 **Colors.** The human text is colored only when stdout is a terminal and `NO_COLOR` is unset or empty (`safe` green, `retain` and owner and reason text dim, `decision` yellow, repository errors red, repository headings and effects bold). The colors wrap text that has already been escaped, so a name with an escape sequence stays visible as an escape, and without color the bytes are the plain text; `--json` is never colored and the prompts stay plain.
 
