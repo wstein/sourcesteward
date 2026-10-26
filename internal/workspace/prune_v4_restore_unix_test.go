@@ -86,6 +86,7 @@ func TestRegistrationPruneV4RestoreRefusalReasons(t *testing.T) {
 				code = "authorization-required"
 			case "occupied-name":
 				pruneMust(t, os.Mkdir(p.Registration.GitDir, 0700))
+				code = "prune-registration-occupied"
 			case "occupied-destination":
 				pruneMust(t, os.Mkdir(p.Registration.Destination, 0700))
 				code = "prune-destination-present"
@@ -124,7 +125,7 @@ func TestRegistrationPruneV4RestorePublicationDoesNotReplace(t *testing.T) {
 	if !fired {
 		t.Fatal("publication seam did not run")
 	}
-	pruneV4GuardReason(t, r, "partial", "prune-restore-refused")
+	pruneV4GuardReason(t, r, "partial", "prune-registration-occupied")
 	b, e := os.ReadFile(filepath.Join(p.Registration.GitDir, "foreign"))
 	if e != nil || string(b) != "preserve" {
 		t.Fatal("occupied registration overwritten", e)
