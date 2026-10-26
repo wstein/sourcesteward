@@ -82,8 +82,8 @@ Spike findings (the foreman's `spike-release-notes.md`, items 1 to 14 and S1 to 
 | **1b** | Retrofitting real projects, target **v0.2.1**: `stw` needs Spec 026 WI8 (T035 to T039: `release-build.yml`, `release-publish.yml`, `release-repro.yml`, the workflow rule tests) and T047 (the self-hosting switch: the `v0.1.0` record and deleting the bootstrap workflow, which would otherwise **also build on the wizard's tag push**); `whr` needs a `.stw/release.toml` and the two workflows (a Spec 026 wave 2 polyglot project; today it has only a tag-first `release.yml` that triggers on `v*` tags, `workharbor/.github/workflows/release.yml:10`) | WI8, T047, a `whr` contract |
 | 2 | Polish: the expert `tag` command if the owner wants it (D2), more products per screen, release notes assistance; support for `oci-image` artifacts and for the tag-first flow if a project still needs them | |
 
-**What v0.2.0 of `stw` and `whr` use:** the tag-first flow they have (the owner hand-sets an annotated tag on `main`; the bootstrap workflow of Spec 034 builds, attests and drafts;
-the owner publishes the draft). **What only comes with the wizard (v0.2.1 and later):** one flagless walk-through, the journal, the record and verification by the dispatch flow, and the
+**What v0.2.0 of `stw` and `whr` use:** the tag-first flow they have (the owner hand-sets an annotated tag on `main`; the bootstrap workflow of Spec 034 builds, attests and creates the release, as a **draft only when the repository variable `STW_RELEASE_DRAFT` is true** (`.github/workflows/release.yml:301`, `workharbor/.github/workflows/release.yml:306`);
+the owner then publishes the draft). **What only comes with the wizard (v0.2.1 and later):** one flagless walk-through, the journal, the record and verification by the dispatch flow, and the
 self-hosted build.
 
 ## The wizard
@@ -144,17 +144,25 @@ bound runs make `runs = several`.
 
 **Epochs, and failed runs.** The latest `dispatching` line opens an **epoch**; only runs created in the current epoch (not earlier than 5 minutes before that line) count as bound. A run of an
 earlier epoch that **concluded** `failure`, `cancelled` or `timed_out` is history: it is listed, excluded from `several` and from the binding, so a same-version retry (D13: no tag, no release,
-no draft, every earlier bound run concluded unsuccessfully) is not stopped by its own failed run. An earlier-epoch run that is still **queued or in progress** is not history: the state is
-`conflict` ("an earlier dispatch is still active; cancel it in the Actions page") because it could still create a draft. With a missing or corrupt journal there are no epochs: every run of
+no draft, every earlier bound run concluded unsuccessfully) is not stopped by its own failed run. An earlier-epoch run that is still **queued or in progress**, or that **succeeded** (a late run after a wrong `no-run`; its draft would belong to no bound run), is not history: the state is
+`conflict` ("an earlier dispatch is still active or finished; cancel it, or check its draft, in the Actions page") because it could create or have created a draft. With a missing or corrupt journal there are no epochs: every run of
 the version counts, and a failed run plus a retry is a `conflict` the owner resolves by hand.
 
-**A tag that existed once.** The tag is `vanished`, and the version blocked for good, if the tag is absent now and any of these shows it existed: (1) a journal `tag-created-local` or
-`tag-pushed` line; (2) a release or draft whose `tag_name` is the tag (GitHub keeps `tag_name` after the tag is deleted); (3) a workflow run of the publish workflow whose `head_branch` is the
-tag name (a `push` run of a tag push keeps the tag as its ref after deletion; read with the bounded runs list); (4) a record `docs/releases/V.json` on `main`, which names the version
-(Spec 026 FR-003); (5) the repository activity or events read, if GitHub exposes tag deletions there (to be measured in the spike, T016b; not relied on). **Residual risk if GitHub offers none
-of these:** a tag deleted before any run, release, record or journal line leaves no evidence the wizard can read, so the version could be tagged again; Spec 026 already states this limit ("a
-tag deleted without a release is invisible to the monotonic check; only the tag ruleset prevents re-creation", `contracts/workflow.md:73`), and the ruleset (restrict deletion) is the
-protection.
+**A tag that existed once.** A tag that is absent now is `vanished`, and its version blocked for good, only if a signal shows the tag was **pushed**. Only signals that cannot exist before the tag
+push count; the ordinary pre-tag evidence of a normal release (a draft whose `tag_name` is V, the record `docs/releases/V.json` on `main`, a successful build run) is **not** such a signal,
+because states 6 to 10 contain all of it with `T none`. The signals, each valid while `T` is `none`:
+
+| # | Signal | Why it cannot exist before the push |
+| --- | --- | --- |
+| V1 | the journal has `tag-pushing` or `tag-pushed` for the version (`tag-pushing` is written **before** the push, so a push whose answer was lost still counts) | the wizard writes it at the push |
+| V2 | a run of the publish workflow with event `push` and `head_branch` equal to the tag name (the run of a tag push keeps the tag as its ref after the tag is deleted; bounded runs read) | the publish workflow triggers on the tag push; a `workflow_dispatch` run has `head_branch` `main` |
+| V3 | a **published** (non-draft) release whose `tag_name` is the tag | publication happens only after the tag (a published release without a tag is also rule 1) |
+| V4 | a `DeleteEvent` with `ref_type` tag and `ref` equal to the tag name in the bounded repository events read (at most 3 pages; GitHub keeps about 90 days; to be measured, T016b) | a deletion needs a tag |
+
+Local-only tags deleted before a push (`tag-created-local` without `tag-pushing`) are not signals: nothing irreversible happened. **Residual risk:** a pushed tag deleted without any of V1 to V4
+(no journal, no publish run, no published release, an event older than the window or unreadable) leaves no evidence the wizard can read, so the version could be tagged again. Spec 026 states
+this limit itself ("A tag deleted without a release is invisible to the monotonic check; only the tag ruleset prevents re-creation", `contracts/workflow.md:75`), and the ruleset (restrict
+deletion) is the protection.
 
 ### The states
 
@@ -162,7 +170,7 @@ protection.
 | --- | --- | --- |
 | 0 | `nothing` | `T none`, `R none`, `U none`, `M none`, no journal effect line |
 | 1 | `ready` | state 0 and `plan <C> --version V --online` has verdict `pass` (recomputed, not durable) |
-| 2 | `dispatch-unseen` | `U none`, `T none`, `R none`, and the journal has `dispatching` (with or without `dispatched`): a POST may have started a run that is not visible yet |
+| 2 | `dispatch-unseen` | `U none`, `T none`, `R none`, and the latest epoch has a `dispatching` line **not followed by `dispatch-released` or `abandoned`** (with or without `dispatched`): a POST may have started a run that is not visible yet. The exits are in the decision table (wait, `no-run VERSION`, abandon) |
 | 3 | `build-queued` | one bound run `queued` |
 | 4 | `build-running` | one bound run `running` |
 | 5 | `build-failed` | one bound run `failure`, and no draft with assets; with a draft: `conflict` |
@@ -185,11 +193,11 @@ State 1 is not durable. States 2, 8 and the `dispatching` line exist because of 
 2. `T lightweight`, `elsewhere` or `vanished`: `conflict` (a tag is never moved or re-created; a vanished tag blocks the version for good).
 3. `R drafts`, or `U several`, or `M on-main-different`: `conflict`.
 4. `T at-D`: `R draft` gives 11 or 12 by the publish run; a publish run `failure` gives 14; `R none` (no draft left) gives `conflict`.
-5. `U none`, `R none`, `T none`, `M none`: 2 if the journal has `dispatching`, else 0 or 1.
+5. `U none`, `R none`, `T none`, `M none`: 2 if the latest epoch's `dispatching` is not followed by `dispatch-released` or `abandoned`; 14 if `abandoned`; otherwise 0 or 1 (so after `no-run VERSION` the version is `ready` again and a retry writes a new `dispatching` line, a new epoch).
 6. `T none` or `local-only`: `U success` and no draft gives `conflict`; `U failure` with a draft gives `conflict`; otherwise by `U`/`R`/`M`/`A` as the table above (3, 4, 5, 6 to 10).
 7. Any other vector: `conflict`.
 
-**The journal only restricts.** A journal line never advances a step. The effect lines (`dispatching`, `dispatched`, `tag-created-local`, `tag-pushed`) **block repeating**
+**The journal only restricts.** A journal line never advances a step. The effect lines (`dispatching`, `dispatched`, `tag-pushing`, `tag-pushed`) **block repeating**
 that effect for this version: after `dispatching` the wizard offers no second dispatch until a bound run is visible (then it waits), or until the owner has checked
 by hand that no run exists and types `no-run VERSION` (journal `dispatch-released`); after a tag line the version can never be tagged again by the wizard. A line the
 evidence contradicts keeps its restriction and prints a notice; it never produces an effect.
@@ -223,7 +231,7 @@ verified artifacts are).
   `internal/tidywizard/derive/state.go:71-112`); the repo key is the SHA-256 of the resolved `host/owner/name`. Directories are created with an explicit
   `chmod 0700`, so a process umask of `0000` (spike item 13) cannot leave them open.
 - **Content:** one JSON object per line: `seq`, `at` (UTC), `event` (closed set: `planned`, `approval-observed-build`, `dispatching` (written **before** the POST),
-  `dispatched`, `dispatch-released`, `artifacts-verified`, `record-written`, `approval-observed-tag`, `tag-created-local`, `tag-pushed`, `abandoned`, `restarted-as`), the facts of that
+  `dispatched`, `dispatch-released`, `artifacts-verified`, `record-written`, `approval-observed-tag`, `tag-created-local`, `tag-pushing` (written **before** the push), `tag-pushed`, `abandoned`, `restarted-as`), the facts of that
   event (commit, version, `plan_id`, digests, the artifact directory path, the run URL) and `prev` (the SHA-256 of the previous line). The names, never the values, of the
   agent markers are recorded. **No token, no secret, no approval word.** The `approval-observed-*` events say that a typed line was accepted at that time; they are facts,
   they grant nothing and are never read as an approval.
@@ -303,7 +311,7 @@ re-created, a failed release uses the next version") and the ruleset check, and 
   **effective push URL** (`remote.origin.pushurl` and `url.*.pushInsteadOf` included) after the check above; it runs with the owner's own git configuration because the
   credential helper lives there, and it is the one git write outside the read-only sandbox: T004 reviews exactly this;
 - the wizard verifies through the API that `refs/tags/V` is an annotated tag whose peeled target is **exactly D** (not a descendant), and writes the journal lines
-  `tag-created-local` (after the object exists) and `tag-pushed`.
+  `tag-created-local` (after the object exists), `tag-pushing` (immediately before the push) and `tag-pushed` (after the remote verification).
 
 **Tag message** (data, never trusted for the version, Spec 026 edge case):
 
@@ -413,6 +421,9 @@ Specs 026 and 034, `docs/release.md`, `docs/releasing.md`, `docs/agent-guide.md`
 | Text | Today | New wording |
 | --- | --- | --- |
 | Spec 026 D1 (`spec.md:14`) "The single build is never repeated per release" | one build per release | Unchanged for a published release. A build that failed or was canceled, with no tag, release or draft, may be repeated as a new run of the same version only under D13; a published release is built once |
+| Spec 026 D1 (`spec.md:14`) "...the owner pushes an **annotated** tag on D" | the owner pushes the tag | By hand or with the wizard's tag step (same act), as `docs/release.md:161` |
+| Spec 026 D7 (`spec.md:20`) "`stw` cannot release itself before it exists ... it self-hosts from the next release" | the release after `v0.1.0` is the first self-hosted one | By D14, `v0.2.0` is released by hand with the tag-first flow; **self-hosting starts with `v0.2.1`**, when phase 1b (WI8, T047) is done |
+| Spec 026 bootstrap contract, "Self-hosting switch" (`contracts/bootstrap.md:21-23`, T047) "From the release after `v0.1.0`: `stw` is released with `release-build.yml` and `release-publish.yml`" | the switch comes with the next release | The switch moves to `v0.2.1`; the bootstrap workflow is deleted in the change that adds the first self-hosted tag path, as T047 says; until then it also stays the workflow of `v0.2.0` |
 | Spec 026 D4 (`spec.md:17`) | "Every tag and release needs the owner's explicit approval each time." | Unchanged in substance. Added: the owner's typed approval in the wizard's tag step, or a manual `git tag -a` and push, is that approval; both are the same human act |
 | Spec 026 FR-012 (`spec.md:156`) | "the owner's tag push ... need explicit authorization in their task context" | "the owner's tag push, by hand or by the wizard's tag step (typed line on `/dev/tty`)" |
 | Spec 026 `plan.md:26` (constitution III row) | "the only local mutation is one new file"; "no ... publication by `stw`" | "the only local mutations are the record file, and, from the wizard only, the journal, the private asset directory and one local tag object; `stw` still publishes nothing" |
@@ -606,8 +617,8 @@ Release steps need a person at a terminal; nothing was changed.
 - **FR-012** The wizard supports the dispatch flow and `file` artifacts; a contract naming a tag-triggered workflow or an `oci-image` target gets `flow-unsupported` or
   `artifact-kind-unsupported` with the manual route of Spec 034 (D1).
 - **FR-013** The ruleset rule of "The tag ruleset at the tag step": `partial` and `absent` refuse; `unknown` needs the typed `ruleset ok` at every attempt, never stored.
-- **FR-015** After taking the lock and before any step, the wizard re-derives the state and re-reads the journal; if either changed since the screen was drawn, it redraws instead of acting.
 - **FR-014** `ci-run-pending` is waiting, not a failure of the wizard's flow; `ci-run-absent` and every other `fail` stop.
+- **FR-015** After taking the lock and before any step, the wizard re-derives the state and re-reads the journal; if either changed since the screen was drawn, it redraws instead of acting.
 
 ### Success criteria
 
@@ -615,7 +626,7 @@ Each is testable with temporary repositories and a fake hosting transport; the e
 
 - **SC-001** State table test: one fixture per state 0 to 15 and one per `conflict` rule (lightweight tag, tag elsewhere, vanished tag, two drafts, two bound runs, successful run with
   no draft, failed run with a draft, published without a tag, record on main different) yields the stated state and next step; **a journal line never moves a state forward**
-  (mutation: a journal-only `artifacts-verified` or `tag-pushed` line with no evidence changes nothing).
+  (mutation: a journal-only `artifacts-verified` or `record-written` line with no evidence changes nothing forward; a journal-only `tag-pushing` or `tag-pushed` line with no remote tag can only make the state `conflict`).
 - **SC-002** Interruption table test: each row of the interruption table is replayed (kill at that point) and the next call reaches the stated state with **no second effect**, in
   particular: kill after `dispatching` and after the POST error, a run invisible for 2 minutes then visible, a tag pushed then deleted.
 - **SC-003** Agent mode and no terminal: no wizard effect is possible (the hosting double fails on any write method, the git push is refused); status prints; exit codes as stated.
@@ -635,7 +646,7 @@ Each is testable with temporary repositories and a fake hosting transport; the e
 - **SC-011** Hostile names (ESC, CR, NUL, bidi) in tags, runs, releases and files reach no terminal byte unescaped.
 - **SC-012** End to end on the spike repository (phase 1a): states 0 to 13 are walked once with the real approvals (including the first observation of the dispatch plan on the
   spike's `release-build.yml`); the same run is interrupted after the dispatch and after the tag and resumed; a deliberately failed build moves to the next version without
-  re-creating a tag. Evidence goes into the pull request body.
+  re-creating a tag. The walk is also compared with the release protocol of D14 (T029) on the **shared steps** (commit and version choice, the gates, the tag with its checks, verification of the published release); the protocol records the tag-first flow, so the dispatch-specific steps (build before tag, draft, record, publish workflow) are proven by this run, not by the protocol. Evidence goes into the pull request body.
 - **SC-013** `make check` runs `stw release check` over the repository's own contract (G1).
 - **SC-014** `check` reports `release-workflow-not-dispatchable` and `release-workflow-missing-input` for the bootstrap `release.yml` and accepts a conforming `release-build.yml` (G2).
 - **SC-015** A project contract with the contract argv and `SHA256SUMS` plus `build-manifest.json` passes; the sidecar-only format is rejected for new projects (G4).
@@ -646,7 +657,7 @@ Each is testable with temporary repositories and a fake hosting transport; the e
 - **SC-020** With a captured real rulesets response the advisory is `present` or `partial` or `absent` as the response says; `unknown` only when the read fails (G9).
 - **SC-021** `verify` of an unresolved tag prints the code once (G11).
 - **SC-023** Two wizards: the second, started between the first's typed line and its journal write, finds the lock held and is read-only; a wizard that waited for the lock redraws when state or journal changed (FR-015).
-- **SC-024** Retry: a failed or canceled run of an earlier epoch does not make `several` and does not block a same-version retry; an earlier queued run is `conflict`; a pushed-then-deleted tag is `vanished` with the journal missing or corrupt when a release, draft, publish run or record names it.
+- **SC-024** Retry and vanished tags. Negative (must **not** stop): a **normal pre-tag release** in states 6 to 10, each with a draft named V, the record on `main` and `T none`, is never `vanished` or `conflict` for those reasons; a failed or canceled run of an earlier epoch does not make `several` and does not block a same-version retry. Positive (must stop as `conflict`): an earlier-epoch run still queued or in progress, an earlier-epoch run that succeeded, a tag absent now with the journal showing `tag-pushing` or `tag-pushed`, with the journal missing or corrupt a publish-workflow `push` run whose `head_branch` is V, a published release named V, or a `DeleteEvent` for V; a `tag-pushing` line with no remote tag is `conflict` and only `abandoned` leaves it.
 - **SC-022** The ruleset rule: `partial` and `absent` refuse the tag step; `unknown` requires `ruleset ok` at every attempt; the word is never stored or journaled.
 
 ## Edge cases
@@ -691,7 +702,7 @@ D14 and D15 are decided (see [Decided by the owner](#decided-by-the-owner)); D1 
 
 | # | Question | Recommendation | Consequence of the recommendation | Consequence of the alternative |
 | --- | --- | --- | --- | --- |
-| D1 | Phase 1 drives only the dispatch flow, not the tag-first flow of Spec 034 | Yes | `stw` v0.2.0 can be the first self-hosted release only after phase 1b; other repositories adopt the dispatch flow with their own contracts | Driving the tag-first flow too means a second flow in the wizard and a second set of states to test |
+| D1 | Phase 1 drives only the dispatch flow, not the tag-first flow of Spec 034 | Yes | `stw` can be released self-hosted from v0.2.1, after phase 1b (v0.2.0 is by hand, D14); other repositories adopt the dispatch flow with their own contracts | Driving the tag-first flow too means a second flow in the wizard and a second set of states to test |
 | D2 | A separate expert command `stw release tag`. The owner accepted the idea earlier in the same thread (owner-decision log); this specification recommends keeping the tag step inside the wizard | Keep it in the wizard only in phase 1; offer `stw release tag` in phase 2 if wanted | One approval surface to review; a manual `git tag -a` stays possible | An expert command is callable by scripts and agents (refused in agent mode), a second surface to secure and test |
 | D3 | The wizard writes the record file on a topic branch but never commits, pushes or opens the pull request | Yes | The wizard's write set stays small; commit and PR follow the usual rules | The wizard would need git write authority and PR creation |
 | D4 | The wizard downloads the draft's assets itself (a new bounded read) | Yes | The verified state can be shown and re-derived | The owner downloads by hand and the verified-artifacts state cannot be derived |

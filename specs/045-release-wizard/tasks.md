@@ -39,8 +39,9 @@ request is the specification only.
 - [ ] T009 Failing tests (SC-003, SC-004) and implementation of bare `stw release`: human mode starts the wizard, agent mode or no terminal prints the offline status and refuses wizard effects; mode detection reused from Spec 041; answers and typed lines from `/dev/tty` only.
 - [ ] T010 Failing tests and implementation of steps 1 to 3 (product, commit and version with explained gates, plan and approval) and the dispatch (SC-005): `dispatching` before the POST, exactly one POST, POST error goes to state 2, `plan-stale` refusal.
 - [ ] T010a Failing tests and implementation of waiting on `ci-run-pending` and the `ci-run-absent` stop (SC-019; spike items 8, 12, 14).
+- [ ] T010b Failing tests and implementation of FR-015: after taking the `flock`, the wizard re-derives the state and re-reads the journal before any step and redraws on change (SC-023).
 - [ ] T011 Failing tests and implementation of step 4 (wait up to 30 minutes), state 2 with `no-run VERSION`, and the decision table including next version, higher version, `flow-unsupported` and `artifact-kind-unsupported` (FR-012).
-- [ ] T012a Failing tests and implementation of the state-2 exits (wait longer, `no-run VERSION`, abandon), the binding epochs, the exclusion of concluded failed runs, the `conflict` on an active earlier run and the vanished-tag evidence sources (SC-024).
+- [ ] T012a Failing tests and implementation of the state-2 exits (wait longer, `no-run VERSION` leaving state 2 for `ready`, abandon), the binding epochs, the exclusion of concluded failed runs, the `conflict` on an active or successful earlier-epoch run and the vanished-tag signals V1 to V4 with the negative cases of SC-024 (a normal pre-tag release never stops).
 - [ ] T012 Failing interruption tests (SC-002) for every row of the interruption table and the journal repairs.
 
 ### R5 assets and record
@@ -52,7 +53,7 @@ request is the specification only.
 
 - [ ] T015 Failing tests (SC-006) and implementation of step 7 (prospective publish gates) and step 8: fresh checks before the word and before the tag, the unsigned hook-free tag object for the commit id, the owner's tagger identity (refuse if absent), the push URL check, one non-forced `git push --no-verify` of `<tag-object-id>:refs/tags/V`, API verification that the tag peels to exactly D, local-only resume, journal lines.
 - [ ] T016 Failing tests (SC-022) and implementation of the ruleset rule (`partial` and `absent` refuse; `unknown` needs `ruleset ok` at every attempt, never stored) and of the abandoned-version rule (D13).
-- [ ] T016b Measure whether the repository activity or events API exposes tag deletions (spike); the result decides whether source (5) of the vanished-tag evidence is used.
+- [ ] T016b Measure whether the repository activity or events API exposes tag deletions (spike); the result decides whether signal V4 of the vanished-tag evidence is used.
 - [ ] T016a Capture the real rulesets response of the spike repository and find why `RulesetsKnown` is false with an admin token (`internal/hosting/release.go:208`); failing test from the captured response; fix or explain; the advisory reaches `present` (SC-020).
 - [ ] T017 Mutation probes of the typed-line comparison, the journal-only-restricts rule, the `dispatching`-before-POST order, the fresh re-verification, the push URL check, the no-force push and the agent-mode refusal; each fails a test.
 
@@ -60,14 +61,13 @@ request is the specification only.
 
 - [ ] T018 `docs/release.md`, `docs/releasing.md`, `docs/commands.md`, `docs/json-contracts.md`, `docs/agent-guide.md`, `docs/workspaces.md`, pointers in Specs 026 and 034, `docs/roadmap.md`, `docs/feature-status.json`; `python3 scripts/check-docs.py` clean; unhide the group when the owner agrees (D11; SC-018).
 - [ ] T018a Write the spike's workflows from the Spec 026 workflow contract: `release-build.yml`, `release-publish.yml` and its CI workflow. Test infrastructure for the spike only: the workflows obtain the `stw` gate tool by building it from a **pinned full commit SHA** of `wstein/sourcesteward` (`fetch-depth: 1`, pinned Go version, never from the commit being released and never from a moving branch), as the Spec 026 workflow contract does for `stw`'s own repository; real projects use a released, checksum-pinned and attestation-verified `stw` once one exists.
-- [ ] T010b Failing tests and implementation of FR-015: after taking the `flock`, the wizard re-derives the state and re-reads the journal before any step and redraws on change (SC-023).
 - [ ] T019 Round 1 on `wstein/stw-release-spike` (the spike has its own `release-build.yml` and `release-publish.yml`): states 0 to 13 walked once with the real approvals, the dispatch plan observed, interrupted after dispatch and after the tag and resumed; evidence in the pull request body (SC-012).
 - [ ] T020 Round 2: a failing build reaches state 5 and the next version; no tag is re-created.
 - [ ] T021 Round 3: a second product; independent review of the exact head.
 
 ## Real releases now (D14) and phase 1b (retrofit, target v0.2.1)
 
-- [ ] T029 Write the **release protocol** as part of the real v0.2.0 releases of `stw` and `whr` (by hand, tag-first flow, a hand-set annotated tag): `specs/045-release-wizard/protocol/v0.2.0-stw.md` and `v0.2.0-whr.md`, each step with the exact command, its result and what was checked; it is the test case the wizard reproduces (SC-012 compares the wizard's walk against it).
+- [ ] T029 Write the **release protocol** as part of the real v0.2.0 releases of `stw` and `whr` (by hand, tag-first flow, a hand-set annotated tag): `specs/045-release-wizard/protocol/v0.2.0-stw.md` and `v0.2.0-whr.md`, each step with the exact command, its result and what was checked; it is the test case for the **shared steps** of the wizard: a mapping table in the protocol names, for each hand step (choose commit and version, the gates, tag, verify the published release), the wizard step it corresponds to, and marks the steps that differ (the tag-first order: tag, then build, then draft; the dispatch flow: build, draft, record, then tag, then publish workflow). SC-012 compares the wizard's walk against the protocol on the shared steps only; the dispatch-specific steps are proven by the spike rounds.
 
 - [ ] T024 `stw`: Spec 026 WI8 (T035 to T039) implemented and reviewed: `release-build.yml`, `release-publish.yml`, `release-repro.yml`, workflow rule tests, with the Spec 045 inputs and run name.
 - [ ] T025 `stw`: Spec 026 T047, the self-hosting switch (the `v0.1.0` record, the bootstrap workflow removed in the same change as the first dispatch-flow tag path).
