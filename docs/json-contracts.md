@@ -356,7 +356,7 @@ its command-specific exit meanings and the separately required build approval.
 (verdict `safe`, `decision` or `retain`; owner, owner source, scope `own`, `other` or `unknown`, proof, effects, evidence), `summary`, `mode` (the run
 mode evidence), `plan_id` (empty unless `--save` stored a plan set), `notices[]` and `truncated`. The document is bounded: 4096
 candidates, 512 bytes of evidence each and 4 MiB; beyond that `truncated` is true and the exit code is 1 (`output-limit`). The
-overview stores and changes nothing. The v1, v2 and v3 tidy schemas keep their meaning; see [tidy](tidy.md#the-tidy-wizard).
+overview stores and changes nothing. Spec 044 adds optional members, present when the command knows the time of the run: per candidate `risk`, `risk_reasons[]`, `group` and `pr`, and `summary.risk` with the counts per level (see [tidy](tidy.md#the-grouped-overview-and-the-retain-table)); nothing existing changes. The v1, v2 and v3 tidy schemas keep their meaning; see [tidy](tidy.md#the-tidy-wizard).
 
 ## Explicit tidy source contract 3
 
