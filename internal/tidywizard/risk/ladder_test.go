@@ -26,6 +26,8 @@ func TestLadder(t *testing.T) {
 		{"patch id", func(f *Facts) { f.Proof = "patch-id" }, Yellow, []string{"proof-equivalent"}},
 		{"merge noop", func(f *Facts) { f.Proof = "merge-noop" }, Yellow, []string{"proof-equivalent"}},
 		{"gone changes no level", func(f *Facts) { f.Kind = "branch"; f.Proof = "patch-id"; f.UpstreamGone = true }, Yellow, []string{"proof-equivalent", "upstream-gone"}},
+		{"gone keeps strong green", func(f *Facts) { f.Kind = "branch"; f.UpstreamGone = true }, Green, []string{"proof-ancestor", "upstream-gone"}},
+		{"gone is branch only", func(f *Facts) { f.UpstreamGone = true }, Green, []string{"proof-ancestor"}},
 		{"gone cannot prove", func(f *Facts) { f.Kind = "branch"; f.Verdict = "retain"; f.Proof = "none"; f.UpstreamGone = true }, Red, []string{"not-integrated", "upstream-gone"}},
 		{"R1 strong", func(f *Facts) { f.Scope = owner.ScopeOther; f.LastActivity = now.Add(-48 * time.Hour) }, Yellow, []string{"proof-ancestor", "recent-activity"}},
 		{"R1 equivalent", func(f *Facts) {
