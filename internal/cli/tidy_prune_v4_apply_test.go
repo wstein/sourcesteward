@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -52,6 +53,23 @@ func TestTidyPruneV4ApplyRejectsMixedGrammar(t *testing.T) {
 		code := Run(context.Background(), "dev", args, &out, &err)
 		if code != 2 || err.Len() == 0 {
 			t.Fatalf("usage refusal %v: %d %s %s", extra, code, out.String(), err.String())
+		}
+	}
+}
+
+func TestTidyPruneV4ApplyContractHelp(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		code int
+		want string
+	}{
+		{[]string{"tidy", "apply", "--help"}, 0, "contract 4 registration prune plan"},
+		{[]string{"tidy", "apply", "--contract", "5"}, 2, "--contract accepts exactly 3 or 4"},
+	} {
+		var out, err bytes.Buffer
+		code := Run(context.Background(), "dev", tc.args, &out, &err)
+		if code != tc.code || !strings.Contains(out.String()+err.String(), tc.want) {
+			t.Fatalf("contract help: args=%v code=%d out=%s err=%s", tc.args, code, &out, &err)
 		}
 	}
 }
