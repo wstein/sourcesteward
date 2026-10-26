@@ -18,8 +18,8 @@ import (
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
-// The cadence of the progress output: a terminal line is rewritten at most this often, a plain
-// line (verbose output that is not a terminal) is written at most this often.
+// The cadence of the progress output: the terminal block is redrawn at most this often, a plain
+// line (verbose output that is not a terminal, a dumb or very low terminal) is written at most this often.
 const (
 	tidyProgressLiveEvery  = 200 * time.Millisecond
 	tidyProgressPlainEvery = 10 * time.Second
@@ -38,23 +38,24 @@ const (
 )
 
 // tidyProgress follows the observation events of the analysis (Spec 041 progress): it writes the
-// live progress line to stderr and keeps the per-repository, per-phase timings for --verbose.
+// live progress block (or plain lines) to stderr and keeps the per-repository, per-phase timings for --verbose.
 // Nothing it writes goes to stdout. Its methods may be called from the workers of the analysis at
 // the same time.
 type tidyProgress struct {
 	mu sync.Mutex // the state below
-	// wmu is held while a frame is written to w; lineLen belongs to it.
+	// wmu is held while a frame is written to w; drawnW belongs to it.
 	wmu  sync.Mutex
 	w    io.Writer
 	mode tidyProgressMode
 	now  func() time.Time
-	// color paints the live block (a terminal without NO_COLOR); size reports the columns and rows
-	// of the terminal at the moment of each redraw (0, 0: unknown). Both are set before the run.
-	color bool
-	size  func() (cols, rows int)
-	// drawn is the number of lines of the block on the screen and belongs to wmu; finished (under mu)
-	// ends the live output once the final block was written.
-	drawn    int
+	// color paints the live block (a terminal without NO_COLOR); ascii uses ASCII marks (a locale that
+	// is not UTF-8); size reports the columns and rows of the terminal at the moment of each redraw
+	// (0, 0: unknown). All three are set before the run.
+	color, ascii bool
+	size         func() (cols, rows int)
+	// drawnW is the display width of each line of the block on the screen and belongs to wmu;
+	// finished (under mu) ends the live output once the final block was written.
+	drawnW   []int
 	finished bool
 	// queue is the sorted list of the repositories of the run, if it is known.
 	queue    []string
@@ -126,14 +127,20 @@ func (p *tidyProgress) Event(e workspace.ObserveEvent) {
 	p.mu.Unlock()
 	// The write happens outside the state lock, and a worker that finds the terminal busy drops its
 	// frame: a stuck terminal holds up one writer, never the bookkeeping of the others.
-	if frame != "" && p.wmu.TryLock() {
+	if (frame.block != nil || frame.line != "") && p.wmu.TryLock() {
 		defer p.wmu.Unlock()
 		p.write(frame)
 	}
 }
 
-// event records an event and returns the frame to show, or "". The caller holds the lock.
-func (p *tidyProgress) event(e workspace.ObserveEvent) string {
+// tidyFrame is what to show: a block to redraw, or one plain line, or nothing.
+type tidyFrame struct {
+	block *renderedBlock
+	line  string
+}
+
+// event records an event and returns the frame to show, if any. The caller holds the lock.
+func (p *tidyProgress) event(e workspace.ObserveEvent) tidyFrame {
 	now := p.now()
 	r := p.repos[e.Repo]
 	if r == nil {
@@ -248,7 +255,7 @@ func (p *tidyProgress) closePhase(r *tidyRepoProgress, now time.Time) {
 	}
 }
 
-// phaseLabel is the words of a phase on the progress line.
+// phaseLabel is the words of a phase on a plain progress line and in the --verbose report.
 func phaseLabel(ph workspace.ObservePhase) string {
 	switch ph {
 	case workspace.ObservePhaseRefs:
@@ -269,35 +276,41 @@ func phaseLabel(ph workspace.ObservePhase) string {
 	return string(ph)
 }
 
-// frame is the progress line for an event when the cadence allows it, or "". A repository that
-// starts is always shown in plain mode. The caller holds the lock.
-func (p *tidyProgress) frame(e workspace.ObserveEvent, now time.Time) string {
+// frame is the frame for an event when the cadence allows it. A repository that starts is always
+// shown as a plain line. On a terminal too low for the block (fewer than tidyBlockMinRows rows) the
+// plain lines are written instead. The caller holds the lock.
+func (p *tidyProgress) frame(e workspace.ObserveEvent, now time.Time) tidyFrame {
 	if p.mode == tidyProgressOff || p.finished || e.Phase == workspace.ObservePhaseWindow {
-		return ""
+		return tidyFrame{}
 	}
-	every := tidyProgressLiveEvery
-	if p.mode == tidyProgressPlain {
-		every = tidyProgressPlainEvery
+	block := false
+	if p.mode == tidyProgressLive {
+		_, rows := p.dims()
+		block = rows >= tidyBlockMinRows
 	}
-	forced := e.Phase == workspace.ObservePhaseStart && p.mode == tidyProgressPlain
+	every := tidyProgressPlainEvery
+	if block {
+		every = tidyProgressLiveEvery
+	}
+	forced := e.Phase == workspace.ObservePhaseStart && !block
 	if !forced && !p.last.IsZero() && now.Sub(p.last) < every {
-		return ""
+		return tidyFrame{}
 	}
 	p.last = now
-	if p.mode == tidyProgressLive {
-		return strings.Join(p.render(now, false), "\n")
+	if block {
+		b := p.render(now, false)
+		return tidyFrame{block: &b}
 	}
-	return p.line(e, now)
+	return tidyFrame{line: p.line(e, now)}
 }
 
-// write shows a frame: a whole line in plain mode, the redrawn block otherwise. The caller holds
-// the write lock.
-func (p *tidyProgress) write(frame string) {
-	if p.mode == tidyProgressPlain {
-		fmt.Fprintln(p.w, frame)
+// write shows a frame: a whole line, or the redrawn block. The caller holds the write lock.
+func (p *tidyProgress) write(f tidyFrame) {
+	if f.block != nil {
+		p.writeBlock(*f.block)
 		return
 	}
-	p.writeBlock(strings.Split(frame, "\n"))
+	fmt.Fprintln(p.w, f.line)
 }
 
 // line is `[3/7] name: observing worktrees 12/40 (38s)`; the elapsed time is that of the whole
@@ -338,11 +351,11 @@ func (p *tidyProgress) Finish() {
 		return
 	}
 	p.finished = true
-	if p.drawn == 0 && len(p.begunNames()) == 0 {
+	if _, rows := p.dims(); rows < tidyBlockMinRows || (len(p.drawnW) == 0 && len(p.begunNames()) == 0) {
 		return
 	}
 	p.writeBlock(p.render(p.now(), true))
-	p.drawn = 0
+	p.drawnW = nil
 }
 
 // begunNames lists the repositories that reported an event. The caller holds the lock.

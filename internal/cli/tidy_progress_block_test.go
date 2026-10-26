@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/tidywizard"
+	"github.com/wstein/sourcesteward/internal/tidywizard/analysis"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
@@ -320,7 +323,7 @@ func TestTidyBlockTruncationCutsWholeRunes(t *testing.T) {
 		"ab":       "ab",
 		"e\u0301e": "e\u0301e", // a combining accent takes no column
 	} {
-		if got := truncateWidth(in, 4); got != want {
+		if got := truncateWith(in, 4, "…"); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
 		}
 	}
@@ -508,5 +511,331 @@ func TestTidyBlockConcurrentWorkersAreSafe(t *testing.T) {
 		if !strings.HasPrefix(l, "✓ ") {
 			t.Fatalf("%q", got)
 		}
+	}
+}
+
+// progressWorldEnv is progressWorld on a terminal with the given environment (TERM, locale).
+func progressWorldEnv(t *testing.T, env ...string) {
+	t.Helper()
+	progressWorld(t, true, false, false)
+	tidyEnviron = func() []string { return env }
+}
+
+func TestTidyBlockDumbTerminalGetsPlainLinesWithoutEscapes(t *testing.T) {
+	for _, env := range [][]string{{"TERM=dumb", "LANG=C.UTF-8"}, {"LANG=C.UTF-8"}, {"TERM=", "LANG=C.UTF-8"}} {
+		progressWorldEnv(t, env...)
+		_, errText, err := runTidyErr(t, "plan")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.ContainsAny(errText, "\x1b\r") || !strings.Contains(errText, "[1/2] a: starting (") || !strings.Contains(errText, "[2/2] b: starting (") {
+			t.Fatalf("%q: %q", env, errText)
+		}
+	}
+}
+
+func TestTidyBlockNonUTF8LocaleGetsASCIIMarks(t *testing.T) {
+	for _, env := range [][]string{{"TERM=xterm", "LANG=C"}, {"TERM=xterm"}, {"TERM=xterm", "LC_ALL=C", "LANG=C.UTF-8"}, {"TERM=xterm", "LC_ALL=POSIX", "LC_CTYPE=en_US.UTF-8"}} {
+		progressWorldEnv(t, env...)
+		_, errText, err := runTidyErr(t, "plan")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range errText {
+			if r > 0x7e {
+				t.Fatalf("%q: non-ASCII %q in %q", env, r, errText)
+			}
+		}
+		screen := newFakeScreen(80, 24)
+		screen.feed(errText)
+		if got := screen.lines(); len(got) != 3 || !strings.HasPrefix(got[1], "v a analysed") || !strings.HasPrefix(got[2], "v b analysed") {
+			t.Fatalf("%q: %q", env, got)
+		}
+	}
+	// The same terminal with a UTF-8 locale gets the Unicode marks.
+	for _, env := range [][]string{{"TERM=xterm", "LANG=en_US.UTF-8"}, {"TERM=xterm", "LC_ALL=de_DE.utf8", "LANG=C"}} {
+		progressWorldEnv(t, env...)
+		_, errText, err := runTidyErr(t, "plan")
+		if err != nil || !strings.Contains(errText, "✓ a analysed") {
+			t.Fatalf("%q: %v %q", env, err, errText)
+		}
+	}
+}
+
+func TestTidyBlockASCIIMarksAndEllipsis(t *testing.T) {
+	p, screen, clk := liveSink(30, 24)
+	p.ascii = true
+	p.SetRepos([]string{"averyveryverylongrepositoryname", "b", "c"})
+	p.Event(ev("averyveryverylongrepositoryname", 1, 3, workspace.ObservePhaseWorktrees, 1, 2))
+	clk.advance(tidyProgressLiveEvery)
+	p.Event(ev("b", 2, 3, workspace.ObservePhaseStart, 0, 0))
+	p.Event(done("b", 2, 3))
+	clk.advance(tidyProgressLiveEvery)
+	p.Finish()
+	raw := screen.raw.String()
+	for _, r := range raw {
+		if r > 0x7e {
+			t.Fatalf("non-ASCII %q in %q", r, raw)
+		}
+	}
+	want := []string{"stw tidy: 1/3 repos, 400ms...", "! averyveryverylongrepo......", "v b                       ...", ". c                       ..."}
+	if got := screen.lines(); !equalLines(got, want) {
+		t.Fatalf("%q", got)
+	}
+}
+
+// The estimate needs 5 percent of the items and 3 seconds of the phase.
+func TestTidyBlockEstimateNeedsFivePercentAndThreeSeconds(t *testing.T) {
+	run := func(wait time.Duration, done int) string {
+		p, screen, clk := liveSink(120, 24)
+		p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 0, 100))
+		clk.advance(wait)
+		p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, done, 100))
+		return strings.Join(screen.lines(), "\n")
+	}
+	if s := run(10*time.Second, 4); strings.Contains(s, "left") {
+		t.Fatalf("estimate at 4 percent: %s", s)
+	}
+	if s := run(2900*time.Millisecond, 50); strings.Contains(s, "left") {
+		t.Fatalf("estimate before 3 seconds: %s", s)
+	}
+	if s := run(10*time.Second, 5); !strings.Contains(s, "~3m10s left") {
+		t.Fatalf("no estimate at 5 percent after 10 s: %s", s)
+	}
+	if s := run(3*time.Second, 50); !strings.Contains(s, "~5.0s left") {
+		t.Fatalf("no estimate at 3 s: %s", s)
+	}
+	if s := run(20*time.Second, 100); strings.Contains(s, "left") {
+		t.Fatalf("estimate for a finished phase: %s", s)
+	}
+	// A repository that was stopped shows no estimate in the final block.
+	p, screen, clk := liveSink(120, 24)
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 0, 100))
+	clk.advance(10 * time.Second)
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 20, 100))
+	if !strings.Contains(strings.Join(screen.lines(), "\n"), "left") {
+		t.Fatalf("no estimate while running: %q", screen.lines())
+	}
+	p.Finish()
+	if s := strings.Join(screen.lines(), "\n"); strings.Contains(s, "left") || !strings.Contains(s, "stopped") {
+		t.Fatalf("final block: %s", s)
+	}
+}
+
+// A terminal that rewraps its lines when it gets narrower shows an old line of width w in
+// ceil(w/cols) rows: the cursor goes up over all of them, and never over more than the screen.
+func TestTidyBlockShrinkingTerminalMovesUpOverTheRewrappedRows(t *testing.T) {
+	p, screen, clk := liveSink(100, 24)
+	cols := 100
+	p.size = func() (int, int) { return cols, 24 }
+	p.SetRepos([]string{"sourcesteward", "workharbor"})
+	p.Event(ev("sourcesteward", 1, 2, workspace.ObservePhaseWorktrees, 1, 2))
+	widths := append([]int{}, p.drawnW...)
+	if len(widths) != 3 || widths[1] < 41 || widths[1] > 99 {
+		t.Fatalf("widths %v", widths)
+	}
+	cols = 20
+	clk.advance(tidyProgressLiveEvery)
+	p.Event(ev("sourcesteward", 1, 2, workspace.ObservePhaseWorktrees, 2, 2))
+	up := 0
+	for _, w := range widths {
+		up += max(1, (w+19)/20)
+	}
+	if !strings.Contains(screen.raw.String(), fmt.Sprintf("\x1b[%dA", up)) || up <= 3 {
+		t.Fatalf("expected %d rows up in %q", up, screen.raw.String())
+	}
+	// The way up never exceeds the screen height minus one.
+	before := screen.raw.Len()
+	p.drawnW = []int{90, 90, 90, 90}
+	p.wmu.Lock()
+	p.writeBlock(renderedBlock{lines: []string{"x"}, widths: []int{1}, cols: 10, rows: 6})
+	p.wmu.Unlock()
+	if got := screen.raw.String()[before:]; !strings.HasPrefix(got, "\x1b[5A") {
+		t.Fatalf("not clamped: %q", got)
+	}
+	// Where nothing changed, a line of width cols-1 is one row.
+	p2, s2, c2 := liveSink(40, 24)
+	p2.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 1, 2))
+	c2.advance(tidyProgressLiveEvery)
+	p2.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 2, 2))
+	if !strings.Contains(s2.raw.String(), "\x1b[2A") {
+		t.Fatalf("%q", s2.raw.String())
+	}
+}
+
+// Below five rows the block and its cursor line would not fit and every frame would leave a stale
+// header behind: the plain lines are written instead, and nothing at the end.
+func TestTidyBlockLowTerminalGetsPlainLines(t *testing.T) {
+	for _, rows := range []int{1, 3, 4} {
+		p, screen, clk := liveSink(80, rows)
+		p.SetRepos([]string{"a", "b"})
+		p.Event(ev("a", 1, 2, workspace.ObservePhaseStart, 0, 0))
+		for i := 1; i <= 30; i++ {
+			clk.advance(time.Second)
+			p.Event(ev("a", 1, 2, workspace.ObservePhaseWorktrees, i, 30))
+		}
+		p.Finish()
+		raw := screen.raw.String()
+		if strings.ContainsAny(raw, "\x1b\r") || !strings.HasPrefix(raw, "[1/2] a: starting (0ms)\n") || strings.Count(raw, "\n") != 4 {
+			t.Fatalf("rows %d: %q", rows, raw)
+		}
+	}
+	// Five rows: the block, at most four lines, one line less than the screen.
+	p, screen, _ := liveSink(80, 5)
+	names := []string{"r1", "r2", "r3", "r4", "r5", "r6", "r7"}
+	p.SetRepos(names)
+	p.Event(ev("r1", 1, 7, workspace.ObservePhaseStart, 0, 0))
+	if n := len(screen.lines()); n != 4 {
+		t.Fatalf("%d lines on 5 rows: %q", n, screen.lines())
+	}
+}
+
+func TestTidyBlockWidthOfEmojiAndAmbiguousRunes(t *testing.T) {
+	for in, want := range map[string]int{"❤": 1, "❤\ufe0f": 2, "a❤\ufe0fb": 4, "·": 1, "…": 1, "😀": 2, "e\u0301": 1, "日本": 4, "\u200b": 0, "\u0301": 0} {
+		if got := textWidth(in); got != want {
+			t.Errorf("%q: %d, want %d", in, got, want)
+		}
+	}
+	// The emoji form is kept whole or cut whole, and the result fits.
+	for max := 1; max < 8; max++ {
+		got := truncateWith("a❤\ufe0f❤\ufe0fb❤\ufe0f", max, "...")
+		if textWidth(got) > max && max >= 3 {
+			t.Errorf("max %d: %q is %d wide", max, got, textWidth(got))
+		}
+		if strings.HasPrefix(got, "\ufe0f") || strings.Contains(strings.TrimSuffix(got, "..."), "❤.") {
+			t.Errorf("max %d: %q", max, got)
+		}
+	}
+	if got := truncateWith("a❤\ufe0fbcdef", 6, "..."); got != "a❤\ufe0f..." {
+		t.Errorf("%q", got)
+	}
+}
+
+// A repository that the analysis reports without SetRepos (the extra path) is escaped too, and so is
+// the state of a finished one.
+func TestTidyBlockEscapesNamesWithoutAQueueAndStates(t *testing.T) {
+	p, screen, _ := liveSink(120, 24)
+	p.Event(ev("evil\x1b]0;x\x07\rname", 1, 1, workspace.ObservePhaseWorktrees, 1, 2))
+	p.Event(workspace.ObserveEvent{Repo: "evil\x1b]0;x\x07\rname", Index: 1, Count: 1, Phase: workspace.ObservePhaseDone, Note: "bad\x1b[2Jstate\u202e"})
+	p.Finish()
+	raw := screen.raw.String()
+	if len(screen.unknown) != 0 || strings.Contains(raw, "\x1b]") || strings.Contains(raw, "\x07") || strings.Contains(raw, "\u202e") || strings.Contains(raw, "\x1b[2J") || strings.Contains(raw, "\rname") {
+		t.Fatalf("unknown %q raw %q", screen.unknown, raw)
+	}
+	if !strings.Contains(strings.Join(screen.lines(), "\n"), `bad`) {
+		t.Fatalf("%q", screen.lines())
+	}
+}
+
+func TestTidyBlockCombiningMarksTakeNoColumn(t *testing.T) {
+	if textWidth("e\u0301e\u0301e\u0301") != 3 || runeWidth(0x0301) != 0 || runeWidth(0x20DD) != 0 {
+		t.Fatal("a combining mark takes a column")
+	}
+}
+
+// The wizard hands the repositories of the run to the sink: the ones the analysis never reached
+// show as not started, and the header counts all of them.
+func TestTidyPlanShowsTheRepositoriesThatNeverStarted(t *testing.T) {
+	progressWorld(t, true, false, false)
+	tidyAnalyse = func(ctx context.Context, _ analysis.Prepared, _ tidywizard.Config) tidywizard.Result {
+		rc := workspace.WithObserveRepo(ctx, "a", 1, 2)
+		workspace.ReportObserve(rc, workspace.ObserveEvent{Phase: workspace.ObservePhaseStart})
+		return tidywizard.Result{}
+	}
+	_, errText, err := runTidyErr(t, "plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	screen := newFakeScreen(80, 24)
+	screen.feed(errText)
+	got := screen.lines()
+	if len(got) != 3 || !strings.HasPrefix(got[0], "stw tidy: 0/2 repos") || !strings.HasPrefix(got[1], "! a stopped starting") || got[2] != "· b not started" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestTidyBlockDroppsTheBarBeforeCuttingTheLine(t *testing.T) {
+	p, screen, _ := liveSink(60, 24)
+	p.Event(ev("sourcesteward", 1, 1, workspace.ObservePhaseWorktrees, 412, 1098))
+	line := screen.lines()[1]
+	if strings.Contains(line, "[") || !strings.Contains(line, "412/1,098") || strings.Contains(line, "…") {
+		t.Fatalf("%q", line)
+	}
+	p, screen, _ = liveSink(100, 24)
+	p.Event(ev("sourcesteward", 1, 1, workspace.ObservePhaseWorktrees, 412, 1098))
+	if line := screen.lines()[1]; !strings.Contains(line, "[###-----] 412/1,098") {
+		t.Fatalf("%q", line)
+	}
+}
+
+func TestTidyBlockEventsAfterTheEndWriteNothingEvenWhenTheCadenceAllows(t *testing.T) {
+	p, screen, clk := liveSink(100, 24)
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseStart, 0, 0))
+	p.Finish()
+	n := screen.raw.Len()
+	clk.advance(time.Minute)
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 1, 2))
+	p.Finish()
+	if screen.raw.Len() != n {
+		t.Fatalf("%q", screen.raw.String()[n:])
+	}
+}
+
+func TestTidyBlockDefaultSizeIs80ByTwentyFour(t *testing.T) {
+	p, screen, clk := liveSink(100, 24)
+	p.size = func() (int, int) { return 0, 0 }
+	var names []string
+	for i := 1; i <= 40; i++ {
+		names = append(names, fmt.Sprintf("r%02d", i))
+	}
+	p.SetRepos(names)
+	p.Event(ev("r01", 1, 40, workspace.ObservePhaseStart, 0, 0))
+	clk.advance(time.Second)
+	p.Event(workspace.ObserveEvent{Repo: "r01", Index: 1, Count: 40, Phase: workspace.ObservePhaseDone, Note: strings.Repeat("x", 200)})
+	lines := screen.lines()
+	if len(lines) != 21 {
+		t.Fatalf("%d lines, want 24-3", len(lines))
+	}
+	wide := 0
+	for _, l := range lines {
+		wide = max(wide, textWidth(l))
+	}
+	if wide != 79 {
+		t.Fatalf("widest line %d, want 79", wide)
+	}
+}
+
+func TestTidyBlockLongNamesAreCappedAndColumnsAlign(t *testing.T) {
+	p, screen, _ := liveSink(200, 24)
+	long := strings.Repeat("n", 40)
+	p.SetRepos([]string{"a", long})
+	p.Event(ev("a", 1, 2, workspace.ObservePhaseStart, 0, 0))
+	lines := screen.lines()
+	// The name column is 24 wide: the long name is cut with an ellipsis, the short one is padded.
+	if lines[1] != "▸ a                        starting            0ms" || lines[2] != "· "+strings.Repeat("n", 23)+"… waiting" {
+		t.Fatalf("%q", lines)
+	}
+}
+
+func TestTidyBlockSummaryNameIsCutAndSetReposDedupes(t *testing.T) {
+	p, screen, clk := liveSink(200, 6)
+	long := strings.Repeat("n", 40)
+	p.SetRepos([]string{long, long, "z", "z", "y"})
+	p.Event(ev(long, 1, 3, workspace.ObservePhaseStart, 0, 0))
+	clk.advance(time.Second)
+	p.Event(done(long, 1, 3))
+	p.Finish()
+	got := screen.lines()
+	if len(got) != 4 || got[0] != "stw tidy: 1/3 repos, 1.0s" || !strings.HasPrefix(got[2], "· y ") || !strings.HasPrefix(got[3], "· z ") {
+		t.Fatalf("%q", got)
+	}
+	// 3 rows of repositories do not fit in 6 rows (3 lines of block): the summary names the cut name.
+	p, screen, clk = liveSink(200, 6)
+	p.SetRepos([]string{long, "w", "y", "z"})
+	p.Event(ev(long, 1, 4, workspace.ObservePhaseStart, 0, 0))
+	clk.advance(time.Second)
+	p.Event(done(long, 1, 4))
+	if got := screen.lines(); len(got) != 4 || got[1] != "✓ 1 repo done (largest: "+strings.Repeat("n", 23)+"… 1.0s)" {
+		t.Fatalf("%q", got)
 	}
 }

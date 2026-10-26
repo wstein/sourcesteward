@@ -7,7 +7,7 @@ import (
 )
 
 // ObservePhase names a phase of the observation of one repository (Spec 041 progress). The words
-// are the ones the progress line and the verbose summary of `stw tidy` print.
+// are the ones the progress output and the verbose summary of `stw tidy` print.
 type ObservePhase string
 
 // The phases, in the order the observation runs them. ObservePhaseStart and ObservePhaseDone are

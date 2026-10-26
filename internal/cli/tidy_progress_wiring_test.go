@@ -26,6 +26,10 @@ func progressWorld(t *testing.T, stderrTTY bool, stdinTTY, stdoutTTY bool) *wiza
 	t.Cleanup(func() { tidyProgressNow, tidyStderrIsTerminal, tidyAnalyse = oldNow, oldTTY, oldAnalyse })
 	tidyProgressNow = clk.now
 	tidyStderrIsTerminal = func(any) bool { return stderrTTY }
+	// An ordinary terminal: it takes escape sequences and the locale is UTF-8.
+	oldEnv := tidyEnviron
+	t.Cleanup(func() { tidyEnviron = oldEnv })
+	tidyEnviron = func() []string { return append(oldEnv(), "TERM=xterm-256color", "LANG=C.UTF-8") }
 	tidyAnalyse = func(ctx context.Context, _ analysis.Prepared, _ tidywizard.Config) tidywizard.Result {
 		for i, name := range []string{"a", "b"} {
 			rc := workspace.WithObserveRepo(ctx, name, i+1, 2)

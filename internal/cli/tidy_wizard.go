@@ -107,20 +107,24 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 		// The same value is the observation window of every repository (it replaces the scaled default).
 		r.ctx = workspace.WithObservationTimeout(r.ctx, timeout)
 	}
-	// Progress goes to stderr only: a live line on a terminal, plain lines for a verbose run that is
-	// not on one, nothing at all with --json. The summary of --verbose follows the analysis.
+	// Progress goes to stderr only: a live block on a terminal that takes cursor movement, plain
+	// lines for a verbose run that is not on one (and on a dumb terminal), nothing at all with --json. The summary of --verbose follows the analysis.
 	stderr := cmd.ErrOrStderr()
 	progressMode := tidyProgressOff
 	switch {
 	case w.structured || w.quiet:
-	case tidyStderrIsTerminal(stderr):
+	case tidyStderrIsTerminal(stderr) && !tidyDumbTerminal(environ):
 		progressMode = tidyProgressLive
+	case tidyStderrIsTerminal(stderr):
+		// TERM unset or dumb: no cursor movement, the plain lines come every few seconds.
+		progressMode = tidyProgressPlain
 	case w.verbose || w.progress:
 		progressMode = tidyProgressPlain
 	}
 	prog := newTidyProgress(stderr, progressMode, tidyProgressNow)
 	if progressMode == tidyProgressLive {
 		prog.color = stwsync.ColorEnabled(stderr)
+		prog.ascii = !tidyUTF8Locale(environ)
 		prog.size = func() (int, int) { return stwsync.TerminalSize(stderr) }
 	}
 	r.ctx = workspace.WithObserveProgress(r.ctx, prog.Event)
@@ -251,6 +255,24 @@ func escFull(s string) string {
 		b.WriteString("...")
 	}
 	return b.String()
+}
+
+// tidyDumbTerminal reports whether TERM is unset, empty or dumb: such a terminal gets no escape
+// sequences (the rule of internal/statuscmd/terminal.go).
+func tidyDumbTerminal(environ []string) bool {
+	t := environValue(environ, "TERM")
+	return t == "" || t == "dumb"
+}
+
+// tidyUTF8Locale reports whether the first of LC_ALL, LC_CTYPE and LANG that is set names UTF-8.
+func tidyUTF8Locale(environ []string) bool {
+	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
+		if v := environValue(environ, name); v != "" {
+			v = strings.ToLower(v)
+			return strings.Contains(v, "utf-8") || strings.Contains(v, "utf8")
+		}
+	}
+	return false
 }
 
 func environValue(environ []string, name string) string {
