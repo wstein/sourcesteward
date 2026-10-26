@@ -78,6 +78,7 @@ type PruneV4Expected struct {
 	SourceSnapshot        Snapshot          `json:"source_snapshot"`
 	Native                V3NativeState     `json:"native"`
 	Registration          PathIdentity      `json:"registration"`
+	RegistrationParent    PathIdentity      `json:"registration_parent"`
 	CommonDirMount        PruneV4Directory  `json:"common_dir_mount"`
 	Absence               PruneV4Absence    `json:"absence"`
 	Metadata              []PruneV4Metadata `json:"metadata"`
@@ -251,7 +252,7 @@ func validatePruneV4Plan(p RegistrationPruneV4Plan, state, id string) error {
 	if scope == "own" && len(p.AuthorizedScopes) != 0 {
 		return bad()
 	}
-	if !pruneV4ID(e.CreationDigest, 64) || !pruneV4ID(e.CreationJournalDigest, 64) || !pruneV4ID(e.TaskDigest, 64) || !pruneV4ValidDirectory(e.CommonDirMount) || e.CommonDirMount.Identity.Path != e.SourceSnapshot.Identity.RepositoryDir || e.Absence.Destination != r.Destination || e.Absence.Parent.Path != filepath.Dir(r.Destination) || len(e.Absence.Ancestors) == 0 {
+	if e.RegistrationParent.Path != filepath.Dir(r.GitDir) || e.RegistrationParent.Inode == 0 || !pruneV4ID(e.CreationDigest, 64) || !pruneV4ID(e.CreationJournalDigest, 64) || !pruneV4ID(e.TaskDigest, 64) || !pruneV4ValidDirectory(e.CommonDirMount) || e.CommonDirMount.Identity.Path != e.SourceSnapshot.Identity.RepositoryDir || e.Absence.Destination != r.Destination || e.Absence.Parent.Path != filepath.Dir(r.Destination) || len(e.Absence.Ancestors) == 0 {
 		return bad()
 	}
 	if e.Metadata == nil || len(e.Metadata) == 0 || e.MetadataBytes < 0 || e.ProtectedSiblings == nil || e.Native.References == nil || e.Native.Registrations == nil || e.Native.ProtectedRoots == nil || p.PayloadPath != filepath.Join(state, pruneV4Namespace, "payloads", id) {

@@ -4,7 +4,9 @@
 package workspace
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -27,5 +29,26 @@ func TestRegistrationPruneV4FinalRmdirBindsHeldRegistration(t *testing.T) {
 		if _, e := os.Stat(path); e != nil {
 			t.Fatalf("unbound directory removed: %s %v", path, e)
 		}
+	}
+}
+
+func TestRegistrationPruneV4HeldParentMatchesPlan(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	parent, e := openStoreKinds(p.StateDir, true, []string{pruneV4Namespace})
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer parent.Close()
+	s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), true, []string{"plans", "journals", "payloads"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	expected := p.Expected
+	expected.RegistrationParent.Inode++
+	e = removePruneV4Metadata(context.Background(), p, expected, &pruneV4Journal{}, s, parent)
+	assertPruneReason(t, e, "prune-evidence-changed", "Administrative parent identity changed before removal.")
+	if _, e := os.Stat(p.Registration.GitDir); e != nil {
+		t.Fatal("registration changed", e)
 	}
 }

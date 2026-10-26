@@ -730,6 +730,9 @@
         },
         "head_ref": {
           "type": "string"
+        },
+        "registration_parent": {
+          "$ref": "#/$defs/PathIdentity"
         }
       },
       "required": [
@@ -745,7 +748,8 @@
         "metadata_bytes",
         "protected_siblings",
         "resolved_head",
-        "head_ref"
+        "head_ref",
+        "registration_parent"
       ]
     },
     "Plan": {

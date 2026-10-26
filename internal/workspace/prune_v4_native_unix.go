@@ -175,7 +175,11 @@ func observePruneV4(ctx context.Context, o RegistrationPruneV4Options, initial *
 		metadata = append(metadata, PruneV4Metadata{m.Path, kind, m.Digest, m.Physical, m.Identity, m.Mode, m.Size})
 	}
 	sort.Slice(metadata, func(i, j int) bool { return metadata[i].Path < metadata[j].Path })
-	expected = PruneV4Expected{CreationDigest: admission.Creation.Digest, CreationJournalDigest: admission.CreationJournalDigest, TaskDigest: taskDigest, SourceSnapshot: v3SnapshotWithState(native.Expected, native.Native), Native: native.Native, Registration: admission.Registration, CommonDirMount: common, Absence: PruneV4Absence{admission.Absence.Destination, admission.Absence.Parent, ancestors}, Metadata: metadata, MetadataBytes: admission.MetadataBytes, ProtectedSiblings: siblings, ResolvedHEAD: admission.ResolvedHEAD, HeadRef: admission.HeadRef}
+	registrationParent, e := currentIdentity(filepath.Dir(o.GitDir))
+	if e != nil {
+		return expected, reg, opts, e
+	}
+	expected = PruneV4Expected{RegistrationParent: registrationParent, CreationDigest: admission.Creation.Digest, CreationJournalDigest: admission.CreationJournalDigest, TaskDigest: taskDigest, SourceSnapshot: v3SnapshotWithState(native.Expected, native.Native), Native: native.Native, Registration: admission.Registration, CommonDirMount: common, Absence: PruneV4Absence{admission.Absence.Destination, admission.Absence.Parent, ancestors}, Metadata: metadata, MetadataBytes: admission.MetadataBytes, ProtectedSiblings: siblings, ResolvedHEAD: admission.ResolvedHEAD, HeadRef: admission.HeadRef}
 	pruneObservationStep(ctx, "v4-expected-observed", o.GitDir, &expected)
 	pruneObservationStep(ctx, "v4-registration-observed", o.GitDir, &reg)
 	return expected, reg, opts, nil
