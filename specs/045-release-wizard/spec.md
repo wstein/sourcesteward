@@ -205,7 +205,7 @@ latest-epoch `dispatching` line not followed by `dispatch-released` or `abandone
 | Rule | Condition | Outcome |
 | --- | --- | --- |
 | 1 | `R published` and `T at-D` | **13** (verification result shown) |
-| 1a | the journal's latest line for the version is `abandoned` | **14**, whatever else the evidence shows |
+| 1a | the journal has **any** `abandoned` line for the version (`abandoned` is terminal: no later line, repair or append undoes it; later lines can only restrict) | **14**, whatever else the evidence shows (rule 1 first: a published release with its tag is shown as it is) |
 | 1b | `R published` otherwise (no tag, another commit) | conflict `published-without-tag` |
 | 2a | `T differs` (lightweight, or another commit) | conflict `tag-differs` |
 | 2b | remote tag absent and (V1 or V2 or V4) | conflict `tag-vanished` |
@@ -231,10 +231,18 @@ When several conflict rules apply to one vector, the **first in this table** nam
 `tag-push-unknown`, `earlier-run`, `drafts`, `several-runs`, `record-different`, then the rest); the evidence table of the conflict screen still lists every fact. Every combination of evidence and
 journal flags maps to exactly one outcome, and the catch-all (rule 7) is itself the conflict kind `inconsistent`, so there is no gap.
 
-**Model check.** A throwaway script encodes this table, enumerates 442,368 combinations of tag, release, run, earlier-run, record, publish-run, signal and journal flags, and checks: one outcome
-per vector; every conflict kind and the `abandon` action reach a defined state; the normal path 0 to 13 never conflicts, with the journal intact, lost, or missing its last line (the two moments
-where a crash legitimately shows state 2 or `tag-push-unknown` are the documented crash states); state 10 is never offered where a tag exists, existed (V1 to V4) or a push is open; `no-tag`,
-`no-run` and `abandon` act as stated. Its output is in the pull request that introduced it; it is not part of the repository (T012d makes the implementation's rule table agree with it on every vector).
+**Model check (design evidence).** A throwaway script (kept in the pull request, not in the repository) encodes the table above as an ordered rule list, derives the journal flags from journal **lines**,
+enumerates every combination of the evidence axes and flag sets (294,912 combinations of 18,432 evidence vectors and 16 journal flag sets), and checks it with 9 checks: a hand-written golden table
+of 51 cases, no gap, the precedence of the conflict kinds against a second formulation, `abandoned` terminal under any following journal lines (up to three, from the whole line vocabulary),
+`abandon` ending the release from every vector, the normal path 0 to 13 never conflicting (journal intact, lost, or missing its last line; the two crash moments show state 2 and
+`tag-push-unknown`), state 10 never offered where a tag exists, existed (V1, V2, V4) or a push is open, the owner actions (`no-run`, `no-tag`, `abandon`, a push that had succeeded), and the exit
+graph. It then **mutation-tests the table**: of 54 mutants (every rule deleted, every adjacent pair swapped, 13 hand-made condition changes, one edge removal) 47 are killed, 7 are equivalent
+(swaps of mutually exclusive rules, identical on every vector) and **none survives**; all 9 checks kill at least one mutant.
+
+**What the model does not cover:** the real behavior of GitHub (draft visibility, run discovery, the events API, rate limits), timing and concurrency (the `flock`, two machines), the journal's hash
+chain and bounds, the typed-line binding, the git mechanics of the tag step, the plan verdict behind state 1, evidence axes it abstracts (the attestation read, individual gate codes, several
+products), and the wording of the screens. The script is **not** the oracle for the implementation: the oracle is a Go table test with the golden cases, the property checks and the mutation list,
+committed with the implementation (T012d, SC-026).
 
 **The journal only restricts.** A journal line never advances a step. The effect lines (`dispatching`, `dispatched`, `tag-pushing`, `tag-pushed`) **block repeating**
 that effect for this version: after `dispatching` the wizard offers no second dispatch until a bound run is visible (then it waits), or until the owner has checked
@@ -276,8 +284,7 @@ state again. **In agent mode or without a terminal** the conflict screen is show
 | `published-without-tag` | a published release for V without the matching tag | **`abandon PRODUCT VERSION`** (rule 1a); the release itself is the owner's to inspect, `stw` never edits it |
 | `drafts`, `several-runs`, `record-different`, `tag-without-draft`, `draft-without-run`, `run-success-without-draft`, `failed-run-with-draft`, `inconsistent` | printed as an evidence table | the table, the exact **read-only** commands the owner can run to look (`gh run list`, `gh release list`, `git ls-remote --tags origin V`, `git log origin/main -- docs/releases/V.json`), and **`abandon PRODUCT VERSION`** |
 
-`abandoned` is terminal for the version: the wizard offers the next version and never re-creates or moves a tag. Mapping rule 1a needs only that the **latest** journal line is `abandoned`; it
-lets the abandon take effect even where the evidence still shows the conflict (a published release with its tag, rule 1, is shown as it is).
+`abandoned` is terminal for the version: the wizard offers the next version and never re-creates or moves a tag. Mapping rule 1a needs only that **any** journal line for the version is `abandoned`, whatever lines follow; it lets the abandon take effect even where the evidence still shows the conflict (a published release with its tag, rule 1, is shown as it is). Journal repairs and appends never remove it.
 
 ## The journal
 
@@ -717,7 +724,7 @@ Each is testable with temporary repositories and a fake hosting transport; the e
 - **SC-021** `verify` of an unresolved tag prints the code once (G11).
 - **SC-023** Two wizards: the second, started between the first's typed line and its journal write, finds the lock held and is read-only; a wizard that waited for the lock redraws when state or journal changed (FR-015).
 - **SC-024** Retry and vanished tags. Negative (must **not** stop): a **normal pre-tag release** in states 6 to 10, each with a draft named V, the record on `main` and `T none`, is never `vanished` or `conflict` for those reasons; a failed or canceled run of an earlier epoch does not make `several` and does not block a same-version retry. Positive (must stop as `conflict`): an earlier-epoch run still queued or in progress, an earlier-epoch run that succeeded, a tag absent now with the journal showing `tag-pushing` or `tag-pushed`, with the journal missing or corrupt a publish-workflow `push` run whose `head_branch` is V, a published release named V, or a `DeleteEvent` for V; a `tag-pushing` line with no remote tag is `conflict` kind `tag-push-unknown`.
-- **SC-026** The implementation's rule table gives the same outcome as the mapping-rules table above on every combination of the model check (a generated table test; the throwaway model's enumeration is the oracle).
+- **SC-026** A Go table test committed with the implementation (T012d) enumerates the evidence vectors and journal flag sets of the model, asserts the golden cases and the property checks (no gap, precedence, `abandoned` terminal, normal path, state 10 safety, owner actions), and runs the mutation list against the implementation's rule table: every mutant is killed or proven equivalent. The Python script in the pull request is design evidence only, not the oracle.
 - **SC-025** Leaving `conflict`: the crashed tag push in both outcomes (the push had succeeded: the next call is state 11 with a repaired journal and no second push; the push had not happened: `tag-push-unknown`, then `no-tag PRODUCT VERSION` returns to state 10 and `abandon PRODUCT VERSION` reaches state 14 and offers the next version); `tag-differs` and `tag-vanished` offer only `abandon PRODUCT VERSION`; the unknown kinds print the evidence table and the read-only commands and offer `abandon PRODUCT VERSION`; mapping rule 1a lets an `abandoned` line win over a conflicting evidence vector; a wrong or missing typed verb changes nothing.
 - **SC-022** The ruleset rule: `partial` and `absent` refuse the tag step; `unknown` requires `ruleset ok` at every attempt; the word is never stored or journaled.
 
