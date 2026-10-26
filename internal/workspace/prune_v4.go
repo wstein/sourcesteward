@@ -26,6 +26,13 @@ type RegistrationPruneV4Options struct {
 	Confirm                      func(word, planID string) error
 }
 
+type RegistrationPruneV4ApplyOptions struct {
+	StateDir, PlanID string
+	Authorize        bool
+	Mode             V3RunMode
+	Confirm          func(word, planID string) error
+	SiblingPlans     []string
+}
 type PruneV4Registration struct {
 	Name        string `json:"name"`
 	GitDir      string `json:"gitdir"`

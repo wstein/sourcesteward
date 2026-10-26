@@ -111,6 +111,9 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 			return runTidyApplyPlanSet(cmd, args[0], applyOptions.StateDir, applyYes, applyStructured)
 		}
 		if cmd.Flags().Changed("contract") {
+			if applyContract == "4" {
+				return runPruneV4Apply(cmd, applyOptions.PlanID, applyOptions.StateDir, applyOptions.Authorize, applyStructured)
+			}
 			if applyContract != "3" {
 				return fmt.Errorf("--contract accepts exactly 3")
 			}
