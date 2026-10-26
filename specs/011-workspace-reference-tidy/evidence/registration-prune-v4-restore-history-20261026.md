@@ -199,3 +199,26 @@ still expected the former generic refusal code. Its assertion now checks
 test passed in 3.265 s. All other affected tests passed in that run. The complete
 affected suite was not rerun after this test-only assertion correction; native
 CI remains the full current-head verification.
+
+## Native-CI fixture correction
+
+[Conformance shard 1](https://github.com/wstein/sourcesteward/actions/runs/40279688621/job/121430109045)
+failed the replaced-parent subcase on 7161fb23; the other five shards passed.
+The fixture removed and immediately recreated the empty parent, permitting
+inode reuse instead of reliably constructing a different directory identity.
+It now holds the original directory descriptor across native prune and asserts
+that the replacement is a different file identity. No product check or parent
+identity rule is relaxed. Both real-Git subcases passed eight repetitions
+(71.008 s); affected-package vet passed. This is a fixture-only correction, not
+an implementation of automatic parent recreation. The later request to permit
+that behavior needs an explicit amendment of the accepted parent-identity rule.
+
+The requested full `go test -timeout 40m ./...` then passed: workspace
+1687.387 s, CLI 42.657 s, with all packages successful (some cached). It ran
+the published 7161fb23 Go source; the only later Go change is the fixture-only
+inode-retention correction above, separately tested eight times. No additional
+product behavior changed. Darwin arm64 compilation of the corrected fixture
+also passed; native macOS execution is not claimed. The final script run had
+399 tests and the sole missing-Hugo error (7.157 s). Documentation, architecture,
+changed-file spelling, vet and whitespace checks passed. Exact new-head native
+CI and independent review remain pending.
