@@ -66,7 +66,7 @@ func runPruneV4Plan(cmd *cobra.Command, args []string, contract string, p pruneV
 		}
 	} else {
 		if r.Plan != nil {
-			if _, e := fmt.Fprintf(cmd.OutOrStdout(), "Registration prune plan %q: %q at %q. Native state is unchanged; apply is unavailable in this slice.\n", r.Plan.PlanID, r.Plan.Registration.Name, r.Plan.Registration.GitDir); e != nil {
+			if _, e := fmt.Fprintf(cmd.OutOrStdout(), "Registration prune plan %q: %q at %q. Native state is unchanged; apply requires explicit --contract 4, --plan, --state-dir and --authorize.\n", r.Plan.PlanID, r.Plan.Registration.Name, r.Plan.Registration.GitDir); e != nil {
 				return runtimeFailure{e}
 			}
 		}
