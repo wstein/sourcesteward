@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -224,6 +225,47 @@ func readPruneV4Payload(ctx context.Context, p RegistrationPruneV4Plan) (pruneV4
 		return zero, "", pruneV4PayloadError()
 	}
 	defer files.Close()
+	// Reject extra files, directories and aliases, including a substituted
+	// files root. Recovery is the exact logical manifest, not a matching subset.
+	listing, e := dst.Open(".")
+	if e != nil {
+		return zero, "", pruneV4PayloadError()
+	}
+	names, e := listing.ReadDir(4)
+	listing.Close()
+	if e != nil || len(names) != 2 {
+		return zero, "", pruneV4PayloadError()
+	}
+	for _, name := range names {
+		if name.Name() != "files" && name.Name() != "manifest.json" {
+			return zero, "", pruneV4PayloadError()
+		}
+	}
+	before, e := dst.Lstat("files")
+	opened, se := files.Stat(".")
+	if e != nil || se != nil || !before.IsDir() || !os.SameFile(before, opened) {
+		return zero, "", pruneV4PayloadError()
+	}
+	allowed := map[string]bool{}
+	for _, m := range want.Entries {
+		if m.Kind != "absent" {
+			allowed[m.Path] = true
+		}
+	}
+	count := 0
+	e = fs.WalkDir(files.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
+		if e := ctx.Err(); e != nil {
+			return e
+		}
+		count++
+		if walkErr != nil || count > pruneMetadataEntryLimit || !allowed[name] || entry.Type()&os.ModeSymlink != 0 {
+			return pruneV4PayloadError()
+		}
+		return nil
+	})
+	if e != nil {
+		return zero, "", e
+	}
 	for _, m := range want.Entries {
 		if e = ctx.Err(); e != nil {
 			return zero, "", e
