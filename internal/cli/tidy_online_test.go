@@ -212,3 +212,14 @@ func TestFallbackSaysSoOnceAndKeepsTheExitCode(t *testing.T) {
 		t.Errorf("%v %q", err, errOut)
 	}
 }
+
+// The expert layer of contract 4 refuses --offline with the wizard-flag message, not by accident.
+func TestOfflineIsRefusedByNameInTheContract4Layer(t *testing.T) {
+	newInteractive(t, true, true)
+	for _, args := range [][]string{{"plan", "--offline", "--contract", "4"}, {"plan", "--offline", "--prune-registration", "x"}} {
+		_, _, err := runTidyBoth(t, "", args...)
+		if !isUsage(err) || err == nil || !strings.Contains(err.Error(), "--offline is a wizard flag and cannot be used with the expert layer") {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}

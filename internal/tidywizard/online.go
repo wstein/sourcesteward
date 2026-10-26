@@ -367,9 +367,13 @@ func FetchPREvidence(ctx context.Context, members []OnlineMember, cands []Candid
 	})
 	for i, m := range list {
 		if results[i].State == "" {
-			// Never started: the run's context ended first.
+			// Never started: the run's context ended first (a stop of the run, if there was one, is the cause).
 			sel := selectTips(m.Name, cands, o.MaxTips)
-			results[i] = MemberOutcome{Name: m.Name, State: MemberOffline, Reason: ReasonTimeout, Eligible: sel.Eligible, NotChecked: sel.Eligible}
+			reason := ReasonTimeout
+			if r := stopReason(budget.Stopped()); r != "" {
+				reason = r
+			}
+			results[i] = MemberOutcome{Name: m.Name, State: MemberOffline, Reason: reason, Eligible: sel.Eligible, NotChecked: sel.Eligible}
 		}
 		for tip, f := range facts[i] {
 			out.Facts[TipKey{Repo: m.Name, Tip: tip}] = f

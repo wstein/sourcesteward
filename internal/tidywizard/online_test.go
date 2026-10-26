@@ -548,3 +548,61 @@ func TestFormatOnlineNotice(t *testing.T) {
 		}
 	}
 }
+
+// When the run stopped and the context ended too, the stop is the reason (the cause comes first);
+// after a stop no later repository opens a session at all.
+func TestFetchAStopOfTheRunComesBeforeTheTimeoutAndOpensNothingMore(t *testing.T) {
+	members, cands := twoMembers()
+	g := newDouble(t)
+	g.status["a"], g.after["a"] = 429, 0
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	opened := 0
+	good := openFake(g, 2, mergedRow)
+	open := func(c context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
+		opened++
+		s, err := good(c, path, remote, rt)
+		if err != nil {
+			return nil, err
+		}
+		return &cancelAfter{PRSession: s, cancel: cancel}, nil
+	}
+	out := FetchPREvidence(ctx, members, cands, OnlineOptions{Open: open, Transport: g, Width: 1})
+	for _, m := range out.Members {
+		if m.State != MemberOffline || m.Reason != ReasonRateLimit {
+			t.Errorf("%+v", m)
+		}
+	}
+	if opened != 1 || out.Stopped != hosting.TidyStopRateLimit {
+		t.Errorf("opened %d stopped %q", opened, out.Stopped)
+	}
+}
+
+// cancelAfter ends the run's context once the session has made its reads.
+type cancelAfter struct {
+	PRSession
+	cancel context.CancelFunc
+}
+
+func (c *cancelAfter) DiscoverPullRequests(ctx context.Context, targets []string, hints map[string]int) ([]hosting.TidyHeadEvidence, error) {
+	rows, err := c.PRSession.DiscoverPullRequests(ctx, targets, hints)
+	c.cancel()
+	return rows, err
+}
+
+// After a 429 no later repository opens a session or sends a request.
+func TestFetchAfterAStopNoSessionIsOpened(t *testing.T) {
+	members, cands := twoMembers()
+	g := newDouble(t)
+	g.status["a"], g.after["a"] = 429, 0
+	opened := 0
+	good := openFake(g, 2, mergedRow)
+	open := func(c context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
+		opened++
+		return good(c, path, remote, rt)
+	}
+	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: open, Transport: g, Width: 1})
+	if opened != 1 || g.gets != 1 || out.Requests != 1 || out.Notice() != "GitHub: checked 0 of 3 repositories; the others are judged offline (GitHub rate limit reached)" {
+		t.Errorf("opened %d gets %d requests %d %q", opened, g.gets, out.Requests, out.Notice())
+	}
+}
