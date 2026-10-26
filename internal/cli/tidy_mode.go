@@ -183,12 +183,15 @@ func selectTidyPlanLayer(cmd *cobra.Command, args []string, o *tidyWizardOptions
 // flags and the shared ones (the state directories are repeatable here).
 type tidyBareOptions struct {
 	tidyWizardOptions
-	json    bool
-	timeout time.Duration
+	json     bool
+	contract string
+	timeout  time.Duration
 }
 
 func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
 	f := cmd.Flags()
+	f.StringVar(&o.contract, "contract", "", "Explicit read-only overview contract (4); no selection, saving or apply")
+	f.Lookup("contract").Value = &tidyV3CountedFlag{value: f.Lookup("contract").Value}
 	f.StringVar(&o.workspace, "workspace", "", "Workspace to use (default: discovery from the working directory)")
 	f.BoolVar(&o.mine, "mine", false, "Only items owned by the caller's owner label; selects agent mode (no prompt)")
 	f.StringArrayVar(&o.byOwner, "by-owner", nil, "Only items of this owner label (repeatable); narrows the view, never selects the run mode")
@@ -225,6 +228,15 @@ func runTidyBare(cmd *cobra.Command, o *tidyBareOptions) error {
 		return err
 	}
 	o.structured = o.json
+	if cmd.Flags().Changed("contract") {
+		if cmd.Flags().Lookup("contract").Value.(*tidyV3CountedFlag).count != 1 {
+			return fmt.Errorf("--contract must occur exactly once")
+		}
+		if o.contract != "4" {
+			return fmt.Errorf("--contract must be 4 for the explicit bare overview")
+		}
+		return runTidyOverviewV4(cmd, o)
+	}
 	if o.json {
 		return runTidyWizardPlan(cmd, &o.tidyWizardOptions, true, o.timeout)
 	}
