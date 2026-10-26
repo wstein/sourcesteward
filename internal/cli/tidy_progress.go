@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,18 +42,23 @@ const (
 // Nothing it writes goes to stdout. Its methods may be called from the workers of the analysis at
 // the same time.
 type tidyProgress struct {
-	mu        sync.Mutex
-	w         io.Writer
-	mode      tidyProgressMode
-	now       func() time.Time
-	start     time.Time
-	last      time.Time
-	lineLen   int
-	prepared  time.Duration
-	preparedK bool
-	repos     map[string]*tidyRepoProgress
-	order     []string
-	slow      []tidySlowItem
+	mu sync.Mutex // the state below
+	// wmu is held while a frame is written to w; lineLen belongs to it.
+	wmu      sync.Mutex
+	w        io.Writer
+	mode     tidyProgressMode
+	now      func() time.Time
+	start    time.Time
+	last     time.Time
+	lineLen  int
+	prepared time.Duration
+	// discoveryCalls and discoveryTime count the Git processes that belong to no repository.
+	discoveryCalls int
+	discoveryTime  time.Duration
+	preparedK      bool
+	repos          map[string]*tidyRepoProgress
+	order          []string
+	slow           []tidySlowItem
 	// trace receives one JSON line per Git process (--trace); traceBytes bounds it.
 	trace      io.Writer
 	traceBytes int
@@ -82,7 +88,6 @@ type tidyRepoProgress struct {
 	windows      []string
 	gitCalls     int
 	gitTime      time.Duration
-	caches       []string
 }
 
 type tidyPhaseProgress struct {
@@ -107,7 +112,18 @@ func (p *tidyProgress) Prepared(d time.Duration) {
 // Event is the sink of the observation events.
 func (p *tidyProgress) Event(e workspace.ObserveEvent) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	frame := p.event(e)
+	p.mu.Unlock()
+	// The write happens outside the state lock, and a worker that finds the terminal busy drops its
+	// frame: a stuck terminal holds up one writer, never the bookkeeping of the others.
+	if frame != "" && p.wmu.TryLock() {
+		defer p.wmu.Unlock()
+		p.write(frame)
+	}
+}
+
+// event records an event and returns the frame to show, or "". The caller holds the lock.
+func (p *tidyProgress) event(e workspace.ObserveEvent) string {
 	now := p.now()
 	r := p.repos[e.Repo]
 	if r == nil {
@@ -124,8 +140,6 @@ func (p *tidyProgress) Event(e workspace.ObserveEvent) {
 		p.closePhase(r, now)
 	case workspace.ObservePhaseWindow:
 		r.windows = append(r.windows, e.Note)
-	case workspace.ObservePhaseCache:
-		r.caches = append(r.caches, fmt.Sprintf("%s: %s reused, %s computed", e.Note, groupDigits(e.Done), groupDigits(e.Total)))
 	default:
 		cur := (*tidyPhaseProgress)(nil)
 		if n := len(r.phases); n > 0 {
@@ -136,13 +150,15 @@ func (p *tidyProgress) Event(e workspace.ObserveEvent) {
 			cur = &tidyPhaseProgress{phase: e.Phase, started: now}
 			r.phases = append(r.phases, cur)
 		}
-		cur.done, cur.total = e.Done, e.Total
+		// The workers count before they report, so reports can arrive out of order: the count
+		// never goes backwards.
+		cur.done, cur.total = max(cur.done, e.Done), e.Total
 		if e.Item != "" {
 			p.addSlow(tidySlowItem{repo: e.Repo, phase: e.Phase, item: e.Item, took: e.Took})
 		}
 		p.estimate(cur, now)
 	}
-	p.draw(e, now)
+	return p.frame(e, now)
 }
 
 // addSlow keeps the tidySlowest slowest items.
@@ -174,6 +190,13 @@ func (p *tidyProgress) estimate(ph *tidyPhaseProgress, now time.Time) {
 func (p *tidyProgress) Git(c workspace.GitCall) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if c.Repo == "" {
+		// The calls of the discovery and of the reading of the references belong to no repository.
+		p.discoveryCalls++
+		p.discoveryTime += c.Duration
+		p.writeTrace(c)
+		return
+	}
 	r := p.repos[c.Repo]
 	if r == nil {
 		r = &tidyRepoProgress{started: p.now()}
@@ -182,6 +205,11 @@ func (p *tidyProgress) Git(c workspace.GitCall) {
 	}
 	r.gitCalls++
 	r.gitTime += c.Duration
+	p.writeTrace(c)
+}
+
+// writeTrace writes the --trace line of a Git process. The caller holds the lock.
+func (p *tidyProgress) writeTrace(c workspace.GitCall) {
 	if p.trace == nil || p.traceCut {
 		return
 	}
@@ -230,11 +258,11 @@ func phaseLabel(ph workspace.ObservePhase) string {
 	return string(ph)
 }
 
-// draw writes the progress line for an event when the cadence allows it. A repository that starts
-// or ends is always shown. The caller holds the lock.
-func (p *tidyProgress) draw(e workspace.ObserveEvent, now time.Time) {
+// frame is the progress line for an event when the cadence allows it, or "". A repository that
+// starts is always shown in plain mode. The caller holds the lock.
+func (p *tidyProgress) frame(e workspace.ObserveEvent, now time.Time) string {
 	if p.mode == tidyProgressOff || e.Phase == workspace.ObservePhaseWindow {
-		return
+		return ""
 	}
 	every := tidyProgressLiveEvery
 	if p.mode == tidyProgressPlain {
@@ -242,10 +270,15 @@ func (p *tidyProgress) draw(e workspace.ObserveEvent, now time.Time) {
 	}
 	forced := e.Phase == workspace.ObservePhaseStart && p.mode == tidyProgressPlain
 	if !forced && !p.last.IsZero() && now.Sub(p.last) < every {
-		return
+		return ""
 	}
 	p.last = now
-	line := p.line(e, now)
+	return p.line(e, now)
+}
+
+// write shows a frame: a whole line in plain mode, the rewritten terminal line otherwise. The
+// caller holds the write lock.
+func (p *tidyProgress) write(line string) {
 	if p.mode == tidyProgressPlain {
 		fmt.Fprintln(p.w, line)
 		return
@@ -286,8 +319,8 @@ func (p *tidyProgress) line(e workspace.ObserveEvent, now time.Time) string {
 // Finish ends the live line (a terminal line is blanked), so that the output that follows starts
 // at the left edge of a clean line.
 func (p *tidyProgress) Finish() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.wmu.Lock()
+	defer p.wmu.Unlock()
 	if p.mode == tidyProgressLive && p.lineLen > 0 {
 		fmt.Fprint(p.w, "\r"+strings.Repeat(" ", p.lineLen)+"\r")
 		p.lineLen = 0
@@ -302,7 +335,11 @@ func (p *tidyProgress) Summary() {
 	now := p.now()
 	fmt.Fprintf(p.w, "Timings: total %s\n", shortDuration(now.Sub(p.start)))
 	if p.preparedK {
-		fmt.Fprintf(p.w, "  discovery and references: %s\n", shortDuration(p.prepared))
+		extra := ""
+		if p.discoveryCalls > 0 {
+			extra = fmt.Sprintf(" (git processes: %s, %s in total)", groupDigits(p.discoveryCalls), shortDuration(p.discoveryTime))
+		}
+		fmt.Fprintf(p.w, "  discovery and references: %s%s\n", shortDuration(p.prepared), extra)
 	}
 	repos := make([]string, len(p.order))
 	copy(repos, p.order)
@@ -332,9 +369,6 @@ func (p *tidyProgress) Summary() {
 		}
 		if r.gitCalls > 0 {
 			fmt.Fprintf(p.w, "    git processes: %s, %s in total\n", groupDigits(r.gitCalls), shortDuration(r.gitTime))
-		}
-		for _, c := range r.caches {
-			fmt.Fprintf(p.w, "    cache %s\n", untrusted.Esc(c))
 		}
 		for _, w := range r.windows {
 			windows = append(windows, untrusted.Esc(name)+" ("+untrusted.Esc(w)+")")
@@ -410,4 +444,31 @@ func shortDuration(d time.Duration) string {
 // does not use the text renderer); a buffer or a pipe gets the plain bytes.
 func tidyTextOptions(out io.Writer) render.TextOptions {
 	return render.TextOptions{Color: stwsync.ColorEnabled(out)}
+}
+
+// tracePathInside reports whether the file of --trace lies inside one of the roots (the workspace
+// and its repositories), after relative parts and symbolic links of its directory are resolved.
+func tracePathInside(cwd, trace string, roots []string) (string, bool) {
+	resolve := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
+	abs := trace
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(cwd, abs)
+	}
+	abs = filepath.Clean(abs)
+	file := filepath.Join(resolve(filepath.Dir(abs)), filepath.Base(abs))
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		rel, err := filepath.Rel(resolve(filepath.Clean(root)), file)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return root, true
+		}
+	}
+	return "", false
 }

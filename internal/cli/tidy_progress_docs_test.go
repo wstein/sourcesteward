@@ -23,40 +23,23 @@ func docsProgressLine() string {
 	return lines[len(lines)-1]
 }
 
-// docsVerboseSummary is the --verbose report of the long-run section of docs/tidy.md.
-func docsVerboseSummary() string {
-	clk := newClock()
-	var out bytes.Buffer
-	p := newTidyProgress(&out, tidyProgressOff, clk.now)
-	p.Prepared(1200 * time.Millisecond)
-	p.Event(ev("sourcesteward", 1, 1, workspace.ObservePhaseStart, 0, 0))
-	p.Event(ev("sourcesteward", 1, 1, workspace.ObservePhaseWorktrees, 0, 40))
-	clk.advance(21 * time.Second)
-	p.Event(workspace.ObserveEvent{Repo: "sourcesteward", Index: 1, Count: 1, Phase: workspace.ObservePhaseWorktrees, Done: 40, Total: 40, Item: "/tmp/wt-037", Took: 1800 * time.Millisecond})
-	p.Event(ev("sourcesteward", 1, 1, workspace.ObservePhaseBranches, 0, 12))
-	clk.advance(2 * time.Second)
-	p.Event(workspace.ObserveEvent{Repo: "sourcesteward", Index: 1, Count: 1, Phase: workspace.ObservePhaseBranches, Done: 12, Total: 12, Item: "refs/heads/codex/old-1", Took: 150 * time.Millisecond})
-	p.Event(ev("sourcesteward", 1, 1, workspace.ObservePhaseProofs, 0, 30))
-	clk.advance(40 * time.Second)
-	p.Event(workspace.ObserveEvent{Repo: "sourcesteward", Index: 1, Count: 1, Phase: workspace.ObservePhaseProofs, Done: 30, Total: 30, Item: "refs/heads/codex/wide", Took: 4200 * time.Millisecond})
-	p.Event(workspace.ObserveEvent{Repo: "sourcesteward", Index: 1, Count: 1, Phase: workspace.ObservePhaseWindow, Note: "proofs"})
-	p.Event(workspace.ObserveEvent{Repo: "sourcesteward", Index: 1, Count: 1, Phase: workspace.ObservePhaseDone, Note: "analysed"})
-	for i := 0; i < 880; i++ {
-		p.Git(workspace.GitCall{Repo: "sourcesteward", Argv: []string{"rev-list"}, Duration: 70 * time.Millisecond})
-	}
-	p.Summary()
-	return out.String()
-}
-
 func TestTidyLongRunExamplesMatchTheDocs(t *testing.T) {
 	b, err := os.ReadFile("../../docs/tidy.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{docsProgressLine(), docsVerboseSummary()} {
-		if !strings.Contains(string(b), want) {
-			t.Errorf("docs/tidy.md does not contain the real sample:\n%s", want)
-		}
+	if want := docsProgressLine(); !strings.Contains(string(b), want) {
+		t.Errorf("docs/tidy.md does not contain the real sample:\n%s", want)
+	}
+	// The verbose sample is the report of a real analysis; what depends on the machine is hidden.
+	doc := string(b)
+	i := strings.Index(doc, "Timings: total")
+	j := strings.Index(doc[i:], "```")
+	if i < 0 || j < 0 {
+		t.Fatal("no verbose sample in docs/tidy.md")
+	}
+	if got, want := normalizeVerbose(doc[i:i+j]), normalizeVerbose(realVerboseSummary(t)); got != want {
+		t.Errorf("the verbose sample of docs/tidy.md differs from a real report:\n--- docs\n%s\n--- real\n%s", got, want)
 	}
 }
 
