@@ -15,7 +15,9 @@ local inspection and workspace/tidy workflows do not require a cloud account.
 
 Specs 012–019 cover stack inspection/plan, checkpoint/resume, conflict diagnosis and
 integration preflight, restacking, stacked PR coordination/writes, work transfer,
-change editing and upstream synchronization. Native GitButler integration is also
+change editing and upstream synchronization. Spec 043 plans `stw land`, the owner's fast-forward landing
+of a reviewed pull request and, with `--stack`, of a whole linear chain by one push of its tip
+(first feature after v0.2.0; dependent parts are by default one pull request with a commit series). Native GitButler integration is also
 planned. Current inventory, bounded recovery evidence and PR/CI reads do not implement
 those broader features. The following design directions retain those distinctions.
 
