@@ -7,6 +7,8 @@ Transport mechanism and bounds are superseded by [Spec 022](../022-bounded-go-gh
 **Status**: Draft for analyzed implementation  
 **Input**: Implement `gh jj` as a SourceSteward entry point sharing Go operations. Start with repository resolution and read-only PR/CI inspection.
 
+> **Status note (2026-10-26):** `gh jj` and `stw hosting` are implemented and verified locally (see verification.md); hosted CI is green on `main`.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Resolve an explicit hosting context (Priority: P1)

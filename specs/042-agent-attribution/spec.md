@@ -3,6 +3,8 @@
 **Created**: 2026-10-24 | **Status**: Draft (owner decision 2026-10-24). Needs an independent review of the exact head before the
 tasks start. The code in the first pull request is the test-first realisation of D1 to D6 and is reviewed together with this text.
 
+> **Status note (2026-10-26):** T001 to T003 are merged (PR 203) and T004 to T006 are open, so the feature stays `planned`.
+
 ## Problem
 
 Several agent sessions work in one workspace under one OS user. A task record (`stw workspace plan` and `apply`) names an owner label

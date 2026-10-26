@@ -6,6 +6,8 @@
 which refers here. Spec 037 is merged: the action model, priorities, grouping, exit rules and guard mode `status`
 used below are defined there.
 
+> **Status note (2026-10-26):** `stw issues` and the status integration are merged and visible (PRs 154, 160, 164, 169); a dogfood run is recorded in docs/progress.md, but there is no independent review or acceptance record, so the feature is `implemented`, not `verified`.
+
 `stw pulls` answers "which pull requests are open"; nothing answers "which issues are open" across the workspace. GitHub's issue
 inbox lists only what is assigned to, mentions or was created by the owner. `stw issues` prints a **snapshot of every open issue**
 (pull requests excluded) of the workspace repositories, each issue with one deterministic priority, and opt-in (`--owner`) of the

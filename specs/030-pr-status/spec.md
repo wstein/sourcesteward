@@ -4,6 +4,8 @@
 **Status**: Re-scoped on 2026-10-21 into slice 1 (one-shot v2 plus head lookup; awaiting independent design review of the exact head) and a deferred watch slice (the three NOT CLEAR rounds and pending round 4 stay attached to it). Runtime implementation not started.
 **Input**: Extend existing PR inspection with merged/closed evidence, compact human output, stable versioned JSON, expected-head validation and head-SHA-to-PR lookup. Explicit bounded watching is deferred to a later slice.
 
+> **Status note (2026-10-26):** slice 1 (`stw hosting pr` schema 2 and the head lookup) is merged (PR 114); the watch and arbiter slices are deferred and T011 is open, so the feature stays `planned`.
+
 ## Owner decisions (2026-10-21)
 
 1. Split Spec 030: ship the one-shot v2 observation now; move `--watch` (injected-clock watcher, final-delivery arbiter) to a later slice.

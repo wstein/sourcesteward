@@ -6,6 +6,8 @@
 **Input**: A read-only `stw pins` command that reports, for a Git superproject, what each submodule pin records, what is checked out, and whether the recorded commit is published to a remote the local repository knows.  
 **Priority rating**: 10/10 (user-selected product priority, not verification evidence)
 
+> **Status note (2026-10-26):** WI1 to WI3 are merged (PRs 45, 47, 50, 52) and `stw pins` exists but is hidden; T019 to T022 (smoke, verification, unhide) are open, so the feature stays `planned`.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Find a pin that is not published (Priority: P1)

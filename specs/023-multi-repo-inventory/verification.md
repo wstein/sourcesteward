@@ -2,6 +2,8 @@
 
 **Status: implemented in source, recorded as `planned` in docs/feature-status.json, not verified.** Source checks and the Git lane of the acceptance script passed locally. The jj lane, the foreign-owner case, the hosted minimum and current lanes and an independent re-review of the round-5 fixes have not run, so nothing here is acceptance (SC-002 and SC-005 stay open) and no release, tag or publication is implied. The maintainer decision on the usefulness assessment is also open (analysis.md).
 
+> **Status note (2026-10-26):** the hosted lanes and the jj lane now run `scripts/smoke-repos.py` green on `main` (`.github/workflows/conformance.yml`, shard 5) and Spec 027 is merged (PR 55); the feature stays `planned` for the missing independent re-review of the round-5 fixes and the open maintainer decision.
+
 Source revision checked: `29f7b1c` (branch `codex/023-multi-repo-inventory`, PR #49); the documentation, tasks, analysis and this file were committed after it and change no code.
 
 ## Before the status can change

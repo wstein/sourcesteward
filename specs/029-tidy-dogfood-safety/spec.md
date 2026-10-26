@@ -5,6 +5,8 @@
 **Status**: Stacked-integration amendment awaiting exact specification/plan re-review; prior specification `99539328` and plan `5272dc1e` were independently CLEAR. No implementation acceptance.
 **Input**: User request: "this fix findings, then rerun tidy and analyze result again". The selected findings are rewritten PR integration, completed legacy attached worktrees, the base-tree metadata limit, and stale local remote-tracking references.
 
+> **Status note (2026-10-26):** the tidy v3 behavior is implemented in source on `main`; the feature stays `planned` for the open gates T043 to T049 (see docs/progress.md).
+
 **Later work**: owned retirement is reused by the workspace-wide `stw tidy` wizard of [Spec 041](../041-tidy-wizard/spec.md), which also relaxes the ownership binding after a branch switch (issue #174).
 
 ## User Scenarios & Testing

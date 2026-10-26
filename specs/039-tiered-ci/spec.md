@@ -5,6 +5,8 @@
 **amends** the CI tier design recorded in [development](../../docs/development.md) (the `CONFORMANCE_TIER` expression and the
 `ci-full` label) and keeps the shard design of `scripts/ci_shards.py`.
 
+> **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
+
 ## Problem (owner, 2026-10-22)
 
 Every pull request runs the full matrix (race tests of all packages and 12 Git/jj conformance shards). A run takes 15 to 30 minutes,
