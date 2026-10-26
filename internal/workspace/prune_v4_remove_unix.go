@@ -62,7 +62,7 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 			return pruneV4PayloadError()
 		}
 		j.Phase = "removing"
-		j.Effects = append(j.Effects, pruneV4Effect{"remove-metadata", m.Path, "unlink-exact", "pending"})
+		j.Effects = append(j.Effects, pruneV4Effect{"remove-metadata", m.Path, "unlink-exact", "unknown"})
 		if e = writePruneV4Record(s.dirs["journals"], p.PlanID+".json", *j, false); e != nil {
 			return e
 		}
@@ -80,7 +80,7 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 			return failure("prune-removal-incomplete", "Exact administrative metadata removal failed; recovery and partial evidence are retained.")
 		}
 		removed[m.Path] = true
-		j.Effects[len(j.Effects)-1].Outcome = "complete"
+		j.Effects[len(j.Effects)-1].Outcome = "observed"
 		if m.Path != "." {
 			if e = syncDirectory(root); e != nil {
 				return failure("prune-removal-incomplete", "Administrative removal durability is unconfirmed.")
@@ -123,7 +123,7 @@ func validatePruneV4RemovalBoundary(ctx context.Context, p RegistrationPruneV4Pl
 	creation, task, journalDigest, e := readRetirementOwnership(ownership, p.Registration.Task, p.Registration.Owner)
 	ownership.Close()
 	if e != nil {
-		return pruneOwnershipReadError(e)
+		return failure("prune-ownership-refused", "Original creation records are unavailable or unsafe before an administrative effect.")
 	}
 	digest, e := v3RecordDigest(task)
 	if e != nil {
