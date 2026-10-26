@@ -170,7 +170,7 @@ func newRootWithHosting(version string, stdout, stderr io.Writer, operation host
 			if jsonOutput {
 				err = json.NewEncoder(cmd.OutOrStdout()).Encode(info)
 			} else {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", info.Name, info.Version)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s%s\n", info.Name, info.Version, vcsSuffix())
 			}
 			if err != nil {
 				return runtimeFailure{err}
