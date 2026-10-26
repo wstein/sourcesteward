@@ -4,7 +4,7 @@
 implement. A box is ticked only by the pull request that implements the task, with its evidence in the pull request body or a per-package file (never `tasks.md` or `docs/progress.md`; those are set by the last pull request of a wave). Nothing here builds, releases, tags, applies a plan to a real repository or pushes the default branch. All boxes are open:
 this pull request is the specification only.
 
-**Gate**: no task starts before the independent review of this specification is CLEAR. Owner decisions D1 to D15 are made (2026-10-26); D16 (read the store and apply answers from `/dev/tty`) is open; D12 (one typed word per run) additionally needs T012c before any code of T013a.
+**Gate**: no task starts before the independent review of this specification is CLEAR. All owner decisions D1 to D16 are made (2026-10-26); D12 (one typed word per run) additionally needs T012c before any code of T013a.
 
 ## Phase 1 (v0.2.0)
 
@@ -33,7 +33,7 @@ this pull request is the specification only.
 - [ ] T012 Failing transcript tests and implementation of the group steps: keys, defaults by level, `l`, `r`, `q`, three invalid answers, EOF is nothing chosen.
 - [ ] T012c **Independent security review before code** of the D12 design (receipt, binding to the plan id, single use, other runs, agent path; the questions in the spec) and, after T013a, of the exact code head.
 - [ ] T013a Failing tests (SC-014) and implementation of the confirmation receipt (opaque type created only in `planset.Build`, consumed when apply starts, one parameter on `runTidyApplyPlanSet`, `stw tidy apply` passes none); the separate apply and the agent path are byte-identical to Spec 041.
-- [ ] T013b Only if the owner confirms D16: failing test (SC-015) and implementation reading the store, apply and separate-apply answers from `/dev/tty` in human mode, refusing with exit 1 when there is no controlling terminal.
+- [ ] T013b (D16, decided) Failing test (SC-015) and implementation reading the store, apply and separate-apply answers from `/dev/tty` in human mode, refusing with exit 1 when there is no controlling terminal.
 - [ ] T013 Failing tests (SC-008) and implementation of the final summary, whose last line states the directories deleted for good and the branches, directly before the unchanged typed prompt (and in the apply question); sorted typed words; the prompt text byte-equal; wrong word, bare `y`, stdin input and no terminal refuse and store nothing.
 - [ ] T014 Failing tests (SC-009) for hostile names in every screen, group key and example row; narrow terminal, no terminal, all red, nothing to clean, interrupt (edge-case table).
 
