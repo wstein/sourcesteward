@@ -3,16 +3,16 @@ Derived:   workspace /workspaces/Anchorage (discovery), remote:. origin (origin)
 Mode:      agent (stdin no tty, stdout no tty, no agent marker)
 
 Can be cleaned (165 of 1,129 candidates in 15 groups)                                   risk
-   1  40 directories  /tmp/whr*          files deleted, codex                           yellow  (2 green, 38 yellow)
-   2  24 branches     in sourcesteward   reversible, 3 owners                           yellow
-   3  15 directories  /tmp/whr*          files deleted, branch too, codex               yellow  (1 green, 14 yellow)
-   4  9 branches      in bundledock      reversible, hint Werner Stein and claude       yellow
-   5  5 branches      in crewbook        reversible, hint Werner Stein                  yellow
-   6  51 directories  /tmp/workharbor*   files deleted, hint Werner Stein               orange  (1 green, 50 orange)
-   7  7 directories   agent scratchpads  files deleted, hint Werner Stein               orange
-   8  4 directories   other in /tmp      files deleted, hint Werner Stein               orange
-   9  3 directories   /tmp/crewbook*     files deleted, branch too, hint Werner Stein   orange
-  10  6 more groups   7 rows in all      the smallest groups; their keys are in --json  orange  (2 green, 3 yellow, 2 orange)
+   1  2 branches      in .                reversible, hint Werner Stein                 green
+   2  40 directories  /tmp/whr*           files deleted, codex                          yellow  (2 green, 38 yellow)
+   3  24 branches     in sourcesteward    reversible, 3 owners                          yellow
+   4  15 directories  /tmp/whr*           files deleted, branch too, codex              yellow  (1 green, 14 yellow)
+   5  9 branches      in bundledock       reversible, hint Werner Stein and claude      yellow
+   6  8 branches      + 4 smaller groups  reversible, hint Werner Stein                 yellow
+   7  51 directories  /tmp/workharbor*    files deleted, hint Werner Stein              orange  (1 green, 50 orange)
+   8  7 directories   agent scratchpads   files deleted, hint Werner Stein              orange
+   9  5 directories   + 2 smaller groups  files deleted, hint Werner Stein              orange
+  10  4 directories   + 2 smaller groups  files deleted, branch too, hint Werner Stein  orange
 Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
       PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
 

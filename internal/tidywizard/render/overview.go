@@ -33,6 +33,10 @@ type OverviewGroup struct {
 	Level      risk.Level
 	Counts     risk.Counts
 	owners     []ownerCount
+	// merged is the number of smaller groups of one effect class that this line stands for (0 for a
+	// single group); repos names the repositories of merged branch or tracking groups.
+	merged int
+	repos  []string
 }
 
 type ownerCount struct {
@@ -85,6 +89,14 @@ func ownerLabel(c tidywizard.Candidate) string {
 	return c.Owner
 }
 
+func escAll(in []string) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = untrusted.Esc(s)
+	}
+	return out
+}
+
 // Label is the escaped name of the group, as the first screen shows it (count and place).
 func (g OverviewGroup) Label() string { return g.noun() + " " + g.place() }
 
@@ -109,6 +121,12 @@ func plural(one bool, s, p string) string {
 
 func (g OverviewGroup) place() string {
 	e := untrusted.Esc
+	if g.merged > 0 {
+		if names := strings.Join(escAll(g.repos), ", "); len(g.repos) == g.merged && len(g.repos) <= 3 && len(names) <= 40 {
+			return names
+		}
+		return fmt.Sprintf("+ %d smaller groups", g.merged)
+	}
 	switch g.Kind {
 	case tidywizard.KindBranch, tidywizard.KindTrackingRef:
 		return "in " + e(g.Repo)
@@ -280,10 +298,106 @@ func Overview(d Document, opts OverviewOptions) string {
 	return b.String()
 }
 
-// maxGroupLines is how many group lines the first screen shows; the smallest groups beyond that
-// are folded into one last line so the screen stays short (Spec 044 SC-012). The JSON keeps every
-// group key.
+// maxGroupLines is how many group lines the first screen shows at most (Spec 044 SC-012).
 const maxGroupLines = 10
+
+// effectClass is what a group does: its kind and whether a directory also deletes its branch.
+func (g OverviewGroup) effectClass() string { return fmt.Sprintf("%s/%t", g.Kind, g.WithBranch) }
+
+// foldGroups reduces the groups to at most max lines. A group that is green is never folded, and
+// only groups of one effect class are folded together, smallest first, so a line still says what
+// happens to its rows ("3 branches ... reversible"); the groups of other classes keep their lines.
+// When nothing more can be folded the list stays longer than max. The JSON keeps every group key.
+func foldGroups(groups []OverviewGroup, max int) []OverviewGroup {
+	out := append([]OverviewGroup(nil), groups...)
+	for len(out) > max {
+		best, bi, bj, bcost := "", -1, -1, 0
+		byClass := map[string][]int{}
+		for i, g := range out {
+			if g.Level != risk.Green {
+				byClass[g.effectClass()] = append(byClass[g.effectClass()], i)
+			}
+		}
+		classes := make([]string, 0, len(byClass))
+		for c := range byClass {
+			classes = append(classes, c)
+		}
+		sort.Strings(classes)
+		for _, c := range classes {
+			idx := byClass[c]
+			if len(idx) < 2 {
+				continue
+			}
+			sort.SliceStable(idx, func(x, y int) bool { return len(out[idx[x]].Rows) < len(out[idx[y]].Rows) })
+			cost := len(out[idx[0]].Rows) + len(out[idx[1]].Rows)
+			if best == "" || cost < bcost {
+				best, bi, bj, bcost = c, idx[0], idx[1], cost
+			}
+		}
+		if best == "" {
+			break
+		}
+		merged := mergeGroups(out[bi], out[bj])
+		if bi > bj {
+			bi, bj = bj, bi
+		}
+		out = append(append(append(out[:bi:bi], merged), out[bi+1:bj]...), out[bj+1:]...)
+		sort.SliceStable(out, func(x, y int) bool {
+			if out[x].Level != out[y].Level {
+				return rankOf(out[x].Level) < rankOf(out[y].Level)
+			}
+			return len(out[x].Rows) > len(out[y].Rows)
+		})
+	}
+	return out
+}
+
+func rankOf(l risk.Level) int {
+	switch l {
+	case risk.Green:
+		return 0
+	case risk.Yellow:
+		return 1
+	}
+	return 2
+}
+
+// mergeGroups is the line of two groups of one effect class.
+func mergeGroups(a, b OverviewGroup) OverviewGroup {
+	m := OverviewGroup{Kind: a.Kind, WithBranch: a.WithBranch, Level: a.Level}
+	m.Rows = append(append([]risk.Row(nil), a.Rows...), b.Rows...)
+	m.Counts = risk.Counts{Green: a.Counts.Green + b.Counts.Green, Yellow: a.Counts.Yellow + b.Counts.Yellow, Orange: a.Counts.Orange + b.Counts.Orange}
+	if rankOf(b.Level) > rankOf(m.Level) {
+		m.Level = b.Level
+	}
+	for _, g := range []OverviewGroup{a, b} {
+		m.merged += max(g.merged, 1)
+		if g.Kind == tidywizard.KindBranch || g.Kind == tidywizard.KindTrackingRef {
+			if g.merged > 0 {
+				m.repos = append(m.repos, g.repos...)
+			} else {
+				m.repos = append(m.repos, g.Repo)
+			}
+		}
+	}
+	sort.Strings(m.repos)
+	counts := map[string]int{}
+	for _, g := range []OverviewGroup{a, b} {
+		for _, o := range g.owners {
+			counts[o.label] += o.n
+		}
+	}
+	for l, n := range counts {
+		m.owners = append(m.owners, ownerCount{l, n})
+	}
+	sort.Slice(m.owners, func(x, y int) bool {
+		if m.owners[x].n != m.owners[y].n {
+			return m.owners[x].n > m.owners[y].n
+		}
+		return m.owners[x].label < m.owners[y].label
+	})
+	return m
+}
 
 func writeGroups(b *strings.Builder, groups []OverviewGroup, choosable, total int, paint func(style, s string) string) {
 	type line struct {
@@ -303,53 +417,10 @@ func writeGroups(b *strings.Builder, groups []OverviewGroup, choosable, total in
 			undo = true
 		}
 	}
-	// The smallest groups (the later one of equal size first) are folded; the others keep their order.
-	shown, folded := groups, []OverviewGroup(nil)
-	if len(groups) > maxGroupLines {
-		order := make([]int, len(groups))
-		for i := range order {
-			order[i] = i
-		}
-		sort.SliceStable(order, func(a, b int) bool {
-			if len(groups[order[a]].Rows) != len(groups[order[b]].Rows) {
-				return len(groups[order[a]].Rows) < len(groups[order[b]].Rows)
-			}
-			return order[a] > order[b]
-		})
-		fold := map[int]bool{}
-		for _, i := range order[:len(groups)-(maxGroupLines-1)] {
-			fold[i] = true
-		}
-		shown = nil
-		for i, g := range groups {
-			if fold[i] {
-				folded = append(folded, g)
-			} else {
-				shown = append(shown, g)
-			}
-		}
-	}
+	shown := foldGroups(groups, maxGroupLines)
 	for i, g := range shown {
 		word, detail := g.levels()
 		rows = append(rows, line{num: fmt.Sprint(i + 1), what: g.noun(), place: g.place(), effect: g.consequence() + ", " + g.ownerText(), word: word, detail: detail, level: g.Level})
-	}
-	if len(folded) > 0 {
-		f := OverviewGroup{Level: risk.Green}
-		n := 0
-		for _, g := range folded {
-			n += len(g.Rows)
-			f.Counts.Green += g.Counts.Green
-			f.Counts.Yellow += g.Counts.Yellow
-			f.Counts.Orange += g.Counts.Orange
-		}
-		switch {
-		case f.Counts.Orange > 0:
-			f.Level = risk.Orange
-		case f.Counts.Yellow > 0:
-			f.Level = risk.Yellow
-		}
-		word, detail := f.levels()
-		rows = append(rows, line{num: fmt.Sprint(len(shown) + 1), what: fmt.Sprintf("%d more groups", len(folded)), place: fmt.Sprintf("%d %s in all", n, plural(n == 1, "row", "rows")), effect: "the smallest groups; their keys are in --json", word: word, detail: detail, level: f.Level})
 	}
 	for _, l := range rows {
 		longest(&w.num, l.num)
@@ -435,9 +506,6 @@ type retainRow struct {
 // fact (not integrated) overrides the structural reason the classifier found first.
 var selfRed = map[string]bool{"unmerged": true, "dirty": true, "ignored-extras": true, "evidence-incomplete": true}
 
-// notChecked lists the reasons of kept worktree rows whose uncommitted files the view does not claim to know.
-var notChecked = map[string]bool{"registration-record-missing": true, "locked-foreign": true, "recently-active": true}
-
 // redActions are the actions of a red row whose classifier reason is structural.
 var redActions = map[string]string{
 	"registration-record-missing":   "do not delete; find the right --state-dir and judge it",
@@ -469,10 +537,6 @@ func retainRows(d Document) []retainRow {
 		s := Sentence{Why: "kept without a stated reason", Action: "see stw tidy --rows"}
 		if k.reason != "" {
 			s = reasonSentenceOrFallback(k.reason)
-		}
-		if k.level == risk.Kept && notChecked[k.reason] {
-			// The dirt of an integrated row kept for a structural reason is not necessarily known here.
-			s.Why += "; integrated, not checked for uncommitted files"
 		}
 		if k.stale {
 			s = Sentence{Why: "worktree entry whose directory is gone", Action: "no stw action yet"}

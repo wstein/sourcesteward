@@ -120,16 +120,16 @@ Derived:   workspace /workspaces/Anchorage (discovery), remote:. origin (origin)
 Mode:      agent (stdin no tty, stdout no tty, no agent marker)
 
 Can be cleaned (165 of 1,129 candidates in 15 groups)                                   risk
-   1  40 directories  /tmp/whr*          files deleted, codex                           yellow  (2 green, 38 yellow)
-   2  24 branches     in sourcesteward   reversible, 3 owners                           yellow
-   3  15 directories  /tmp/whr*          files deleted, branch too, codex               yellow  (1 green, 14 yellow)
-   4  9 branches      in bundledock      reversible, hint Werner Stein and claude       yellow
-   5  5 branches      in crewbook        reversible, hint Werner Stein                  yellow
-   6  51 directories  /tmp/workharbor*   files deleted, hint Werner Stein               orange  (1 green, 50 orange)
-   7  7 directories   agent scratchpads  files deleted, hint Werner Stein               orange
-   8  4 directories   other in /tmp      files deleted, hint Werner Stein               orange
-   9  3 directories   /tmp/crewbook*     files deleted, branch too, hint Werner Stein   orange
-  10  6 more groups   7 rows in all      the smallest groups; their keys are in --json  orange  (2 green, 3 yellow, 2 orange)
+   1  2 branches      in .                reversible, hint Werner Stein                 green
+   2  40 directories  /tmp/whr*           files deleted, codex                          yellow  (2 green, 38 yellow)
+   3  24 branches     in sourcesteward    reversible, 3 owners                          yellow
+   4  15 directories  /tmp/whr*           files deleted, branch too, codex              yellow  (1 green, 14 yellow)
+   5  9 branches      in bundledock       reversible, hint Werner Stein and claude      yellow
+   6  8 branches      + 4 smaller groups  reversible, hint Werner Stein                 yellow
+   7  51 directories  /tmp/workharbor*    files deleted, hint Werner Stein              orange  (1 green, 50 orange)
+   8  7 directories   agent scratchpads   files deleted, hint Werner Stein              orange
+   9  5 directories   + 2 smaller groups  files deleted, hint Werner Stein              orange
+  10  4 directories   + 2 smaller groups  files deleted, branch too, hint Werner Stein  orange
 Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
       PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
 
@@ -143,17 +143,17 @@ The rows with their codes: stw tidy --rows (10 per repository and owner)   Every
 
 ```text
 Kept: 964 candidates. Nothing here is offered for deletion.
-  count  level  why                                                                              what to do
-    316  kept   created by stw, record not found; integrated, not checked for uncommitted files  re-run with the --state-dir that created it
-    301  RED    not merged: it has commits the base lacks                                        nothing is deleted; review: stw tidy plan REPO --contract 3 --report-dir DIR
-    217  kept   branch is checked out in a kept worktree                                         decide on that worktree first, then run again
-     47  RED    created by stw, record not found; its commits are not on the base branch         do not delete; find the right --state-dir and judge it
-     27  kept   changed within the last 24 hours; integrated, not checked for uncommitted files  wait, then run again
-     23  RED    untracked or ignored files                                                       look inside; remove them yourself if junk
-     17  RED    not judged (for example a deadline or Git refused)                               assume unique work; after a deadline run again with --timeout 15m
-      7  kept   main checkout of a repository                                                    never offered
-      6  RED    uncommitted changes                                                              commit or discard them yourself
-      3  kept   worktree entry whose directory is gone                                           no stw action yet
+  count  level  why                                                                       what to do
+    316  kept   created by stw, record not found                                          re-run with the --state-dir that created it
+    301  RED    not merged: it has commits the base lacks                                 nothing is deleted; review: stw tidy plan REPO --contract 3 --base BASE --report-dir DIR
+    217  kept   branch is checked out in a kept worktree                                  decide on that worktree first, then run again
+     47  RED    created by stw, record not found; its commits are not on the base branch  do not delete; find the right --state-dir and judge it
+     27  kept   changed within the last 24 hours                                          wait, then run again
+     23  RED    untracked or ignored files                                                look inside; remove them yourself if junk
+     17  RED    not judged (for example a deadline or Git refused)                        assume unique work; after a deadline run again with --timeout 15m
+      7  kept   main checkout of a repository                                             never offered
+      6  RED    uncommitted changes                                                       commit or discard them yourself
+      3  kept   worktree entry whose directory is gone                                    no stw action yet
 Rows with their codes: stw tidy --rows (10 per repository and owner); every row: stw tidy --json
 ```
 
@@ -161,8 +161,9 @@ Rows with their codes: stw tidy --rows (10 per repository and owner); every row:
 one repository, the worktree directories, and the worktree directories that also delete their branch (a group of their own, `files deleted,
 branch too`). Directories are grouped by place: agent scratchpads (a path component named `scratchpad`), a `/tmp` family (the leading lowercase
 ASCII letters of the first component below `/tmp`, needing three distinct directories in all effect classes together), `other in /tmp`, and any
-other parent directory. The recording has 15 groups (7 branch and 8 directory groups). The first screen shows at most 10 group lines: when
-there are more groups, the smallest ones are folded into the last line (`6 more groups`) and keep their keys in `--json`. Lines are ordered by
+other parent directory. The recording has 15 groups (7 branch and 8 directory groups). The first screen shows at most 10 group lines: when there are more groups, the smallest groups of one effect class that are not green are
+folded together into one line (`+ 4 smaller groups`), which still says what happens to its rows; a green group is never folded, and the keys of
+every group stay in `--json`. Lines are ordered by
 their level, green first, then by size. The level of a group is the level of its worst row, and a group with several levels lists how many rows
 each has. The owner is information only: one owner is named, two are named together, more are counted, and a commit-author hint is shown as
 `hint NAME`.
@@ -181,7 +182,7 @@ the same recording has 2 green, 45 yellow and 118 orange rows instead of 6, 93 a
 
 **The retain table** has one line per reason and level of the kept rows: the count, `RED` (may hold unique work) or `kept`, a sentence and what to do,
 largest first. The counts add up to the retained rows (here 964: 394 red and 570 kept). A reason that this version does not describe is
-named, escaped, instead of being left out. The rows themselves are shown on request: `stw tidy --rows` (10 per repository and owner, with the codes) or `stw tidy --json` (every row). A kept worktree row says `integrated, not checked for uncommitted files` where the view does not claim to know its dirt; a worktree whose uncommitted or extra files were observed is red even when it is kept for another reason first.
+named, escaped, instead of being left out. The rows themselves are shown on request: `stw tidy --rows` (10 per repository and owner, with the codes) or `stw tidy --json` (every row). A worktree whose uncommitted or extra files were observed is red even when the classifier kept it for another reason first (record missing, locked).
 
 **`--rows`** prints the row view of Spec 041, byte for byte as before (one line per candidate with the codes, grouped by owner, at most 10 rows per
 repository in each owner group; `--json` lists every candidate). It is a wizard-layer flag (not accepted with a `PATH` or an expert flag, exit 2) and

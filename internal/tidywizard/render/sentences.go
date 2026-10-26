@@ -15,7 +15,7 @@ type Sentence struct{ Why, Action string }
 
 // reasonSentences covers every code of tidywizard.AllReasons (a test fails for a missing one).
 var reasonSentences = map[string]Sentence{
-	"unmerged":                        {"not merged: it has commits the base lacks", "nothing is deleted; review: stw tidy plan REPO --contract 3 --report-dir DIR"},
+	"unmerged":                        {"not merged: it has commits the base lacks", "nothing is deleted; review: stw tidy plan REPO --contract 3 --base BASE --report-dir DIR"},
 	"dirty":                           {"uncommitted changes", "commit or discard them yourself"},
 	"ignored-extras":                  {"untracked or ignored files", "look inside; remove them yourself if junk"},
 	"evidence-incomplete":             {"not judged (for example a deadline or Git refused)", "assume unique work; after a deadline run again with --timeout 15m"},

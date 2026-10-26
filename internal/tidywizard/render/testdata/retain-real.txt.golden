@@ -1,13 +1,13 @@
 Kept: 964 candidates. Nothing here is offered for deletion.
-  count  level  why                                                                              what to do
-    316  kept   created by stw, record not found; integrated, not checked for uncommitted files  re-run with the --state-dir that created it
-    301  RED    not merged: it has commits the base lacks                                        nothing is deleted; review: stw tidy plan REPO --contract 3 --report-dir DIR
-    217  kept   branch is checked out in a kept worktree                                         decide on that worktree first, then run again
-     47  RED    created by stw, record not found; its commits are not on the base branch         do not delete; find the right --state-dir and judge it
-     27  kept   changed within the last 24 hours; integrated, not checked for uncommitted files  wait, then run again
-     23  RED    untracked or ignored files                                                       look inside; remove them yourself if junk
-     17  RED    not judged (for example a deadline or Git refused)                               assume unique work; after a deadline run again with --timeout 15m
-      7  kept   main checkout of a repository                                                    never offered
-      6  RED    uncommitted changes                                                              commit or discard them yourself
-      3  kept   worktree entry whose directory is gone                                           no stw action yet
+  count  level  why                                                                       what to do
+    316  kept   created by stw, record not found                                          re-run with the --state-dir that created it
+    301  RED    not merged: it has commits the base lacks                                 nothing is deleted; review: stw tidy plan REPO --contract 3 --base BASE --report-dir DIR
+    217  kept   branch is checked out in a kept worktree                                  decide on that worktree first, then run again
+     47  RED    created by stw, record not found; its commits are not on the base branch  do not delete; find the right --state-dir and judge it
+     27  kept   changed within the last 24 hours                                          wait, then run again
+     23  RED    untracked or ignored files                                                look inside; remove them yourself if junk
+     17  RED    not judged (for example a deadline or Git refused)                        assume unique work; after a deadline run again with --timeout 15m
+      7  kept   main checkout of a repository                                             never offered
+      6  RED    uncommitted changes                                                       commit or discard them yourself
+      3  kept   worktree entry whose directory is gone                                    no stw action yet
 Rows with their codes: stw tidy --rows (10 per repository and owner); every row: stw tidy --json
