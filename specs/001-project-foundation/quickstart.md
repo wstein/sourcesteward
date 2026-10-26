@@ -8,7 +8,7 @@ go run ./cmd/stw --help
 go run ./cmd/stw version
 go run ./cmd/stw version --json
 ```
-Expect help, SourceSteward dev, and a single JSON object with schema_version 1 respectively.
+Expect help, `SourceSteward dev` (followed by ` (REVISION)` when the binary was built from a Git checkout), and a single JSON object with schema_version 1 respectively.
 Unknown commands/flags/extra arguments fail; the Go command contract tests verify the actual
 CLI exit classifications independently of go run's process wrapper.
 

@@ -618,7 +618,7 @@ writes nothing.
 
 Tidy deletes only the branch reference (`git update-ref -d`); it does not remove the `branch.NAME.remote` and `branch.NAME.merge` keys of `.git/config`, so a deleted branch leaves them behind (a branch with both keys leaves two) until `git config --remove-section branch.NAME` removes them. The journal records them before the deletion, and the restore plan therefore reports each key still present as `skip-already-set`: nothing is written and the restored branch picks the existing keys up again. They are written back (`reapply`) only when the keys are gone. A leftover section of a branch that is never restored is harmless and is not touched by tidy.
 
-`stw tidy history` and `stw tidy restore --list` (same reader, read-only, both with the required `--contract 3 --state-dir DIR` and the optional `--limit`, default 256, at most 1,024; `PATH`, default `.`, is the clone) list the stored journals newest first by journal time: plan
+`stw tidy history` and `stw tidy restore --list` (same reader, read-only, both with the required `--contract 3 --state-dir DIR` and the optional `--limit`, default 256, at most 1,024; the optional `PATH` is the clone: omitted it is the current directory, an explicit one must be an absolute canonical path and an explicit `.` is refused with exit 2) list the stored journals newest first by journal time: plan
 ID, time, mode, numbers deleted, retained and restorable, whether the recovery refs are `present`,
 `partial` or `absent`, the number of `human` and `ai` decisions and the journal status `complete`,
 `incomplete` or `unreadable` (an unreadable journal is listed with its ID, never skipped). Journals of

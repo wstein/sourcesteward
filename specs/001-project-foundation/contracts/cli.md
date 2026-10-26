@@ -6,7 +6,7 @@ Commands below are implemented by this milestone; all roadmap operations remain 
 | Invocation | stdout | stderr | Exit |
 | --- | --- | --- | --- |
 | no arguments / --help / help | human help | empty | 0 |
-| version | SourceSteward dev followed by newline | empty | 0 |
+| version | `SourceSteward dev`, then ` (REVISION)` or ` (REVISION, modified)` when built from a Git checkout, then newline | empty | 0 |
 | version --json | version object followed by newline | empty | 0 |
 | unknown command/flag/extra args | empty | one Error: diagnostic line | 2 |
 | output failure or cancelled context | no success promise | one Error: diagnostic line, if writable | 1 |
