@@ -4,6 +4,7 @@ package cli
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,66 +12,22 @@ import (
 )
 
 // fakeClock is a clock the test moves by hand.
-type fakeClock struct{ t time.Time }
+type fakeClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
 
-func (c *fakeClock) now() time.Time          { return c.t }
-func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
+func (c *fakeClock) now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
+func (c *fakeClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(d)
+}
 
 func newClock() *fakeClock { return &fakeClock{t: time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)} }
 
 func ev(repo string, idx, count int, ph workspace.ObservePhase, done, total int) workspace.ObserveEvent {
 	return workspace.ObserveEvent{Repo: repo, Index: idx, Count: count, Phase: ph, Done: done, Total: total}
-}
-
-func TestTidyProgressLiveLineOverwritesOneLine(t *testing.T) {
-	clk := newClock()
-	var out bytes.Buffer
-	p := newTidyProgress(&out, tidyProgressLive, clk.now)
-	clk.advance(38 * time.Second)
-	p.Event(ev("sourcesteward", 3, 7, workspace.ObservePhaseWorktrees, 412, 1098))
-	want := "\r[3/7] sourcesteward: observing worktrees 412/1,098 (38s)"
-	if got := out.String(); got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-	// A shorter line blanks what the longer one left; no escape sequence, no newline.
-	clk.advance(time.Second)
-	p.Event(ev("a", 1, 7, workspace.ObservePhaseRefs, 0, 0))
-	s := out.String()
-	if strings.ContainsRune(s, 0x1b) || strings.Contains(s, "\n") {
-		t.Fatalf("escape or newline in %q", s)
-	}
-	short := "\r[1/7] a: reading references (39s)"
-	if !strings.Contains(s, short+strings.Repeat(" ", len(want)-len(short))) {
-		t.Fatalf("the longer line is not blanked: %q", s)
-	}
-	out.Reset()
-	p.Finish()
-	if got := out.String(); !strings.HasPrefix(got, "\r ") || !strings.HasSuffix(got, "\r") || strings.TrimSpace(got) != "" {
-		t.Fatalf("finish %q", got)
-	}
-	out.Reset()
-	p.Finish()
-	if out.Len() != 0 {
-		t.Fatalf("a second finish wrote %q", out.String())
-	}
-}
-
-func TestTidyProgressLiveLineIsThrottled(t *testing.T) {
-	clk := newClock()
-	var out bytes.Buffer
-	p := newTidyProgress(&out, tidyProgressLive, clk.now)
-	for i := 1; i <= 100; i++ {
-		clk.advance(time.Millisecond)
-		p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, i, 100))
-	}
-	if n := strings.Count(out.String(), "\r"); n != 1 {
-		t.Fatalf("%d redraws within 100 ms", n)
-	}
-	clk.advance(tidyProgressLiveEvery)
-	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 101, 101))
-	if n := strings.Count(out.String(), "\r"); n != 2 {
-		t.Fatalf("%d redraws after the interval", n)
-	}
 }
 
 func TestTidyProgressOffWritesNothing(t *testing.T) {

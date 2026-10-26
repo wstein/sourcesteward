@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/analysis"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -118,6 +119,10 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 		progressMode = tidyProgressPlain
 	}
 	prog := newTidyProgress(stderr, progressMode, tidyProgressNow)
+	if progressMode == tidyProgressLive {
+		prog.color = stwsync.ColorEnabled(stderr)
+		prog.size = func() (int, int) { return stwsync.TerminalSize(stderr) }
+	}
 	r.ctx = workspace.WithObserveProgress(r.ctx, prog.Event)
 	if w.verbose || w.trace != "" {
 		r.ctx = workspace.WithGitTrace(r.ctx, prog.Git)
@@ -158,6 +163,7 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 		return nil, runtimeFailure{safe}
 	}
 	r.prep = prep
+	prog.SetRepos(prep.Names)
 	r.res = tidyAnalyse(r.ctx, prep, tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()})
 	prog.Finish()
 	if w.verbose {

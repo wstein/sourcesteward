@@ -31,7 +31,7 @@ type tidyProgressMode int
 const (
 	// tidyProgressOff writes nothing live.
 	tidyProgressOff tidyProgressMode = iota
-	// tidyProgressLive rewrites one terminal line (carriage return and blanks, no escape sequence).
+	// tidyProgressLive redraws a block of lines on a terminal, one per repository.
 	tidyProgressLive
 	// tidyProgressPlain writes an ordinary line now and then.
 	tidyProgressPlain
@@ -44,13 +44,22 @@ const (
 type tidyProgress struct {
 	mu sync.Mutex // the state below
 	// wmu is held while a frame is written to w; lineLen belongs to it.
-	wmu      sync.Mutex
-	w        io.Writer
-	mode     tidyProgressMode
-	now      func() time.Time
+	wmu  sync.Mutex
+	w    io.Writer
+	mode tidyProgressMode
+	now  func() time.Time
+	// color paints the live block (a terminal without NO_COLOR); size reports the columns and rows
+	// of the terminal at the moment of each redraw (0, 0: unknown). Both are set before the run.
+	color bool
+	size  func() (cols, rows int)
+	// drawn is the number of lines of the block on the screen and belongs to wmu; finished (under mu)
+	// ends the live output once the final block was written.
+	drawn    int
+	finished bool
+	// queue is the sorted list of the repositories of the run, if it is known.
+	queue    []string
 	start    time.Time
 	last     time.Time
-	lineLen  int
 	prepared time.Duration
 	// discoveryCalls and discoveryTime count the Git processes that belong to no repository.
 	discoveryCalls int
@@ -80,6 +89,7 @@ const tidyTraceLimit = 8 << 20
 const tidySlowest = 10
 
 type tidyRepoProgress struct {
+	seen         bool // the repository reported an event
 	index, count int
 	started      time.Time
 	ended        time.Time
@@ -132,6 +142,7 @@ func (p *tidyProgress) event(e workspace.ObserveEvent) string {
 		p.order = append(p.order, e.Repo)
 	}
 	r.index, r.count = e.Index, e.Count
+	r.seen = true
 	switch e.Phase {
 	case workspace.ObservePhaseStart:
 		r.started = now
@@ -261,7 +272,7 @@ func phaseLabel(ph workspace.ObservePhase) string {
 // frame is the progress line for an event when the cadence allows it, or "". A repository that
 // starts is always shown in plain mode. The caller holds the lock.
 func (p *tidyProgress) frame(e workspace.ObserveEvent, now time.Time) string {
-	if p.mode == tidyProgressOff || e.Phase == workspace.ObservePhaseWindow {
+	if p.mode == tidyProgressOff || p.finished || e.Phase == workspace.ObservePhaseWindow {
 		return ""
 	}
 	every := tidyProgressLiveEvery
@@ -273,22 +284,20 @@ func (p *tidyProgress) frame(e workspace.ObserveEvent, now time.Time) string {
 		return ""
 	}
 	p.last = now
+	if p.mode == tidyProgressLive {
+		return strings.Join(p.render(now, false), "\n")
+	}
 	return p.line(e, now)
 }
 
-// write shows a frame: a whole line in plain mode, the rewritten terminal line otherwise. The
-// caller holds the write lock.
-func (p *tidyProgress) write(line string) {
+// write shows a frame: a whole line in plain mode, the redrawn block otherwise. The caller holds
+// the write lock.
+func (p *tidyProgress) write(frame string) {
 	if p.mode == tidyProgressPlain {
-		fmt.Fprintln(p.w, line)
+		fmt.Fprintln(p.w, frame)
 		return
 	}
-	pad := ""
-	if n := p.lineLen - len(line); n > 0 {
-		pad = strings.Repeat(" ", n)
-	}
-	fmt.Fprint(p.w, "\r"+line+pad)
-	p.lineLen = len(line)
+	p.writeBlock(strings.Split(frame, "\n"))
 }
 
 // line is `[3/7] name: observing worktrees 12/40 (38s)`; the elapsed time is that of the whole
@@ -316,15 +325,35 @@ func (p *tidyProgress) line(e workspace.ObserveEvent, now time.Time) string {
 	return b.String()
 }
 
-// Finish ends the live line (a terminal line is blanked), so that the output that follows starts
-// at the left edge of a clean line.
+// Finish ends the live output. On a terminal the final block stays on the screen (every repository
+// as it stands, an unfinished one marked as stopped) and the cursor is left at the start of the
+// line below it, so that the output that follows starts on a clean line. A run that reported
+// nothing leaves nothing.
 func (p *tidyProgress) Finish() {
 	p.wmu.Lock()
 	defer p.wmu.Unlock()
-	if p.mode == tidyProgressLive && p.lineLen > 0 {
-		fmt.Fprint(p.w, "\r"+strings.Repeat(" ", p.lineLen)+"\r")
-		p.lineLen = 0
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.mode != tidyProgressLive || p.finished {
+		return
 	}
+	p.finished = true
+	if p.drawn == 0 && len(p.begunNames()) == 0 {
+		return
+	}
+	p.writeBlock(p.render(p.now(), true))
+	p.drawn = 0
+}
+
+// begunNames lists the repositories that reported an event. The caller holds the lock.
+func (p *tidyProgress) begunNames() []string {
+	var out []string
+	for _, n := range p.order {
+		if p.begun(n) != nil {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // Summary writes the --verbose report: the timings and counts per repository and phase, and the
