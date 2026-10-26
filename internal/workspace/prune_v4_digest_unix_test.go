@@ -15,6 +15,9 @@ func TestRegistrationPruneV4RecoveryLimitTextIsDigestBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := validatePruneV4Plan(p, p.StateDir, p.PlanID); err != nil {
+		t.Fatalf("unmodified control plan is invalid: %v", err)
+	}
 	old := clonePruneV4(t, p)
 	// Exact historical wording, before the apply-capability correction in #290.
 	old.RecoveryLimits[0] = "Planning stores evidence only; apply, recovery and restore are unavailable in this source slice."
