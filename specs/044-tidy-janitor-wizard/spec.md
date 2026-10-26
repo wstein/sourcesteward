@@ -56,7 +56,7 @@ Owner answers, verbatim (D16: "Ja, D16 ist in Ordnung, macht es so, ja"): "D1j D
 | D4 yes | Owner `unknown` is choosable with the typed word `unknown` | As in Spec 041 `ConfirmWord` |
 | D5 yes | Group defaults follow the risk (green takes, yellow and orange skip) | Replaces Spec 041 "default none" for group steps only |
 | Phases | Phase 1 = v0.2.0, phase 2 = v0.3.0 | [Scope and phases](#scope-and-phases) |
-| D6 72 hours | R1 (recent activity) looks at worktrees changed more than 24 hours and at most 72 hours ago (the owner's own value; this spec had proposed 7 days) | Risk ladder R1; it only raises a level, never blocks |
+| D6 72 hours | R1 (recent activity) looks at worktrees whose activity is at least 24 hours and at most 72 hours old (the owner's 72-hour window; this spec had proposed 7 days. The 24-hour lower boundary is the existing classifier's retain window, rows younger than 24 hours are retained; the inclusive wording is a foreman clarification, F-2, not a change of the window) | Risk ladder R1; it only raises a level, never blocks |
 | D7 no label | No `you` label; keep "hint: NAME" | Owner as information |
 | D8 not in phase 1 | A merged pull request head does not become a deletion proof in phase 1 | Online evidence only lifts to green (C2); the `proof` enum is unchanged |
 | D9 read-only | `stw watch` and `stw pulls` stay read-only; no automatic done marking | Phase 2 `done` is explicit only |
@@ -76,11 +76,11 @@ Found by the independent review of the P1 code (`stw` #308) as gaps or ambiguiti
 | # | Decision | Where |
 | --- | --- | --- |
 | F-1 | Group key = (effect class, family); the group carries its effect class; the live data gives 15 groups; the mockups show them | [Overview first](#overview-first), Screens 1 to 3 |
-| F-2 | R1 is inclusive at both ends (24 h and 72 h); an unknown, zero or future activity time counts as R1; a scope other than `own` (including an empty or unrecognized value) applies R1, and R2 treats it as `unknown`; the classifier's `recently-active` (under 24 h) stays a retain | [ladder](#the-ladder-exact-all-inputs-are-existing-evidence-unless-marked) step 3 |
+| F-2 | R1 is inclusive at both ends (at least 24 hours and at most 72 hours); the pure ladder treats an unknown, zero or future activity time as R1 even though the classifier retains such rows today (zero as `evidence-incomplete`, future as `recently-active`), because P2 supplies the time and the rule must stay testable; R1 applies to every scope other than `own` (an empty or unrecognized scope value included) and R2 treats such a value as `unknown`; the classifier's `recently-active` (under 24 hours) stays a retain | [ladder](#the-ladder-exact-all-inputs-are-existing-evidence-unless-marked) step 3 |
 | F-3 | An unknown kind or proof word is red (`not-judged`) | [Levels](#levels) |
 | F-4 | Stale row with incomplete evidence, primary checkout with observed dirt, tracking reference with proof `none` and a reason other than `unmerged`: red; the jj proof word is yellow; unknown levels count as red in group counts | [Levels](#levels) |
 | F-5 | `proof-github-branch-absent` is a risk reason word; the words are an exported enumerable set | [Reasons](#reasons-why-orange) |
-| F-6 | Group keys use `[a-z]` of the lexically cleaned path only; `no-work` never cancels a red cause of a retained row; a merged-head fact carries the pull request number | [Overview first](#overview-first), [Levels](#levels) |
+| F-6 | Group keys use `[a-z]` of the lexically cleaned path only; `no-work` never cancels a red cause of a retained row | [Overview first](#overview-first), [Levels](#levels) |
 
 ## Why
 
@@ -215,7 +215,7 @@ proof word is not one the ladder knows is **red** (`not-judged`), before any str
 (b) a stale-worktree row with incomplete evidence is **red** (not judged), a stale row without it stays kept; (c) a primary checkout with
 observed dirt is **red**; (d) a tracking reference with proof `none` and a reason other than `unmerged` is **red**; (e) the jj proof
 `empty-working-copy-integrated-parent` is **equivalent** (yellow), never strong; (f) `no-work` evidence only lifts strength on a safe row:
-it never cancels a red cause of a retained row (a record-missing row with proof `none` stays red).
+it never cancels a red cause of a retained row (a record-missing row with proof `none` stays red); (g) a level the code does not know counts as **red** when group counts and the worst level are computed.
 
 ### The ladder (exact, all inputs are existing evidence unless marked)
 
@@ -320,7 +320,7 @@ same candidates the JSON carries; `--json` is unchanged except the additive fiel
 **Groups.** The group key is (**effect class**, **family**). Effect classes: `branch` (delete-branch only), `directory` (remove registration and
 files) and `directory-with-branch` (the directory and its branch leg); tracking references form their own class (online only). The family of
 a **branch** group is its repository (the undo command is per repository); the family of a directory is its place and name family below.
-On the live data this gives **15 groups** (a hand count of the same rule; Screen 1), not the 7 of the first mockup: the 55 `whr-*` directories are
+On the live data this gives **15 groups** (7 branch groups and 8 directory groups, computed from `overview.json` with this rule; Screen 1), not the 7 of the first mockup: the 55 `whr-*` directories are
 two groups (40 without and 15 with a branch), the 43 branches are seven repository groups, and `crewbook-*` is two groups. A group carries its
 effect class so the renderer can tell groups of one family apart. Details of the places:
 
@@ -343,7 +343,7 @@ Groups are ordered by worst risk (green first), then by size. Each line says wha
 only in `--json`, `--verbose`, `--rows` and `d N` details. A table in `internal/tidywizard/render` maps every reason, proof and risk word
 to a sentence and an action, and a test fails when a code has none (SC-010).
 
-**Owner as information.** The owner is a column of the group step and a count line ("owner: 51 hint Werner Stein, 55 codex"); the label is
+**Owner as information.** The owner is a column of the group step and a count line (for the whole overview "owner: 101 hint Werner Stein, 57 codex, 7 claude"; in a group step, for example, "owner: codex 40"); the label is
 the derived one (`codex`, `claude`, `author:NAME` shown as "hint: NAME", `unknown`). There is no `you` label: agents commit under the
 owner's Git identity, so a match with that identity would show foreign agent work as the owner's (D7).
 
