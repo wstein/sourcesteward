@@ -5,8 +5,10 @@ package workspace
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -85,5 +87,51 @@ func TestRegistrationPruneV4SchemaMatchesNativePlan(t *testing.T) {
 				t.Fatal("schema admitted incompatible plan", kind)
 			}
 		})
+	}
+}
+
+func TestRegistrationPruneV4SchemaMatchesApplyRecords(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	r := ApplyRegistrationPruneV4(context.Background(), RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
+	if r.Status != "ok" {
+		t.Fatal(r)
+	}
+	raw, e := os.ReadFile("../../schemas/v4/registration-prune.schema.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if e != nil {
+		t.Fatal(e)
+	}
+	compiler := jsonschema.NewCompiler()
+	if e = compiler.AddResource("contract4", doc); e != nil {
+		t.Fatal(e)
+	}
+	schema, e := compiler.Compile("contract4")
+	if e != nil {
+		t.Fatal(e)
+	}
+	paths := []string{filepath.Join(p.StateDir, pruneV4Namespace, "journals", p.PlanID+".json"), filepath.Join(p.PayloadPath, "manifest.json")}
+	encoded, e := json.Marshal(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	documents := [][]byte{encoded}
+	for _, path := range paths {
+		b, e := os.ReadFile(path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		documents = append(documents, b)
+	}
+	for i, raw := range documents {
+		v, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = schema.Validate(v); e != nil {
+			t.Fatalf("record %d: %v", i, e)
+		}
 	}
 }
