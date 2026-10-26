@@ -53,7 +53,14 @@ private isolation/probe files outside the target.
 
 Root invocations `stw`, `stw --help`, `stw -h` and `stw help` print help and the conditional
 AI-resource notice. Subcommand help (`stw version --help` or `stw help version`) describes
-only that command. `stw version` prints a human-readable name and version.
+only that command. `stw version` prints a human-readable name and version. A binary built
+from a Git checkout with `go build` (for example `make build`) also carries the checkout's
+revision, so the line reads `SourceSteward dev (5c1c1bebff1e)`: the first 12 characters of
+`vcs.revision` from the Go build information, and `, modified` inside the parentheses when
+the checkout had uncommitted changes (`vcs.modified`). Use it to prove which commit an
+installed binary was built from. A build without that information (`go run`, `-buildvcs=false`
+as in the release workflow) prints only name and version, and `stw version --json` never
+carries the revision.
 
 For machine consumption, use `stw version --json`. A development build produces one
 newline-terminated JSON object on standard output:
