@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Every unlink is relative to a held administrative directory descriptor. No
@@ -29,22 +30,39 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 	defer regParent.Close()
 	entries := pruneV4RemovalOrder(p)
 	removed := map[string]bool{}
+	budgetChecked := false
 	for _, m := range entries {
 		if m.Kind == "absent" {
 			continue
 		}
 		pruneObservationStep(ctx, "v4-before-unlink", m.Path, nil)
+		verificationStarted := time.Now()
 		if e = validatePruneV4RemovalBoundary(ctx, p, expected, removed, s, parent); e != nil {
 			return e
 		}
 		if _, digest, e := readPruneV4Payload(ctx, p); e != nil || digest != j.PayloadDigest {
 			return pruneV4PayloadError()
 		}
+		if !budgetChecked {
+			cost := time.Since(verificationStarted)
+			pruneObservationStep(ctx, "v4-removal-budget", m.Path, &cost)
+			count := 0
+			for _, entry := range entries {
+				if entry.Kind != "absent" {
+					count++
+				}
+			}
+			if e = pruneV4RemovalBudget(ctx, cost, count); e != nil {
+				return e
+			}
+			budgetChecked = true
+		}
 		j.Phase = "removing"
 		j.Effects = append(j.Effects, pruneV4Effect{"remove-metadata", m.Path, "unlink-exact", "unknown"})
 		if e = writePruneV4Record(s.dirs["journals"], p.PlanID+".json", *j, false); e != nil {
 			return e
 		}
+		pruneObservationStep(ctx, "v4-after-unlink-intent", m.Path, nil)
 		// Recheck again after intent persistence, so an injected or external change
 		// during the journal write never gains removal authority.
 		if e = validatePruneV4RemovalBoundary(ctx, p, expected, removed, s, parent); e != nil {
@@ -210,4 +228,23 @@ func pruneV4RemovalOrder(p RegistrationPruneV4Plan) []PruneV4Metadata {
 		return entries[i].Path > entries[k].Path
 	})
 	return entries
+}
+
+// Each entry performs two complete source checks and one payload check. Reserve
+// twice that measured cost per remaining entry plus time for durable records.
+// This is conservative admission, not a promise against a later disk stall.
+func pruneV4RemovalBudget(ctx context.Context, cost time.Duration, entries int) error {
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return failure("prune-metadata-limit", "Removal requires a bounded verification deadline.")
+	}
+	remaining := time.Until(deadline)
+	factor := int64(entries)*6 + 1
+	if entries < 1 || entries > defaultPruneMetadataLimits().Entries || cost < 0 || remaining <= time.Second || int64(cost) > int64((remaining-time.Second)/time.Duration(factor)) {
+		return failure("prune-metadata-limit", "Remaining deadline cannot cover measured full registration verification before removal; no metadata was unlinked.")
+	}
+	return nil
 }
