@@ -2,9 +2,12 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -142,5 +145,39 @@ func TestTidyOverviewV4SharesContextAndCallerAndReportsIncomplete(t *testing.T) 
 	d := overviewDocument(t, out)
 	if d.SchemaVersion != 4 || !strings.Contains(out, "registration-prune-inventory-incomplete") {
 		t.Fatalf("missing partial evidence: %s", out)
+	}
+}
+
+// Even a terminal in human mode must not ask for input in this read-only slice.
+func TestTidyOverviewV4NeverReadsInputAndReportsWriterFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		writer io.Writer
+		want   error
+	}{
+		{"complete", &bytes.Buffer{}, nil},
+		{"short", shortWriter{0}, io.ErrShortWrite},
+		{"closed", closedPipeWriter{}, io.ErrClosedPipe},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			newInteractive(t, true, true, "STW_OWNER=codex")
+			overviewSource(t, tidywizard.RegistrationPruneResult{Rows: []tidywizard.RegistrationPrune{overviewPrune(0, "codex", owner.ScopeOwn)}})
+			cmd := tidyCommand()
+			cmd.SetOut(tc.writer)
+			cmd.SetErr(io.Discard)
+			cmd.SetIn(neverRead{t})
+			cmd.SetArgs([]string{"--contract", "4", "--json"})
+			err := cmd.Execute()
+			if tc.want == nil {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				var failure runtimeFailure
+				if !errors.As(err, &failure) || !errors.Is(failure.error, tc.want) {
+					t.Fatalf("writer failure: %v want %v", err, tc.want)
+				}
+			}
+		})
 	}
 }
