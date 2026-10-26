@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/analysis"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -35,6 +36,8 @@ type wizardWorld struct {
 	planner    *spyPlanner
 	// The online pull request evidence seam (Spec 044 D13): every call is recorded, the outcome is set by the test.
 	fetches      int
+	fetchBudget  *hosting.TidyRunBudget
+	prepBudget   *hosting.TidyRunBudget
 	fetchMembers []tidywizard.OnlineMember
 	online       tidywizard.OnlineOutcome
 }
@@ -109,13 +112,15 @@ func newWizardWorld(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *
 	t.Cleanup(func() {
 		tidyPrepare, tidyAnalyse, tidyGetwd, tidyNow, tidyPlannerFor, tidyTerminalFacts, tidyEnviron, tidyOnlineFetch = oldP, oldA, oldW, oldN, oldPl, oldT, oldE, oldF
 	})
-	tidyOnlineFetch = func(_ context.Context, members []tidywizard.OnlineMember, _ []tidywizard.Candidate) tidywizard.OnlineOutcome {
+	tidyOnlineFetch = func(_ context.Context, members []tidywizard.OnlineMember, _ []tidywizard.Candidate, b *hosting.TidyRunBudget) tidywizard.OnlineOutcome {
 		w.fetches++
+		w.fetchBudget = b
 		w.fetchMembers = members
 		return w.online
 	}
 	tidyPrepare = func(ctx context.Context, o analysis.Options) (analysis.Prepared, error) {
 		w.gotOpt = o
+		w.prepBudget = hosting.TidyRunBudgetFrom(ctx)
 		_, w.hadDline = ctx.Deadline()
 		w.prepared++
 		return w.prep, w.prepErr

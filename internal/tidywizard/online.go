@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 
@@ -16,8 +15,8 @@ import (
 
 // The online pull request evidence of the human wizard (Spec 044 T005, D13). For the tips of the
 // worktree and branch rows that the local proofs leave open it asks GitHub, read only, through
-// the bounded Spec 031 discovery of internal/hosting (the closed collection of closed pull
-// requests, then one full read per candidate), one session per member repository. The answer is a
+// the bounded session of internal/hosting (one `commits/{tip}/pulls` read per tip, Spec 031
+// FR-013 as amended), one session per member repository. The answer is a
 // fact per tip that a later step (the risk ladder, the renderer) may consume; this file never
 // changes a candidate, never proves a deletion (D8) and never writes.
 
@@ -33,11 +32,11 @@ const (
 	// PRClosedUnmerged: no merged pull request, but a pull request of this head was closed
 	// without a merge.
 	PRClosedUnmerged PRState = "closed-unmerged"
-	// PRNone: the collection of closed pull requests was read to its authoritative end and holds
-	// no pull request of this head. An open pull request is not looked up.
+	// PRNone is reserved: the per-tip read of GitHub cannot prove that no pull request exists
+	// (an empty answer is PRUnknown), so no read produces it.
 	PRNone PRState = "none"
-	// PRUnknown: GitHub was asked and the answer is inconclusive (collection bound reached,
-	// request budget exhausted, several merged pull requests).
+	// PRUnknown: GitHub was asked and the answer proves neither: an empty answer, a pull request
+	// merged into another branch (a stacked child), a fork pull request, a commit GitHub does not know.
 	PRUnknown PRState = "unknown"
 )
 
@@ -69,18 +68,15 @@ func (f PREvidence) Note(c Candidate) string {
 	return ""
 }
 
-// prFact maps one row of the Spec 031 discovery to the fact. A merged head wins over a closed
-// unmerged pull request of the same head; absence counts only when the collection was complete.
-func prFact(row hosting.TidyHeadEvidence) PREvidence {
+// tipFact maps one answer of the per-tip read to the fact. The hosting read has already limited
+// a merge to a pull request of this repository whose head is the tip, merged into the default
+// branch.
+func tipFact(row hosting.TidyTipEvidence) PREvidence {
 	switch {
-	case row.Result == "github-merged-head" && row.PullRequest != nil && row.PullRequest.Number > 0:
-		return PREvidence{State: PRMerged, Number: row.PullRequest.Number}
-	case row.Result == "github-merged-head":
-		return PREvidence{State: PRUnknown}
-	case len(row.ClosedUnmerged) > 0 && row.Result != "ambiguous-needs-hint":
+	case row.State == hosting.TidyTipMerged && row.Number > 0:
+		return PREvidence{State: PRMerged, Number: row.Number}
+	case row.State == hosting.TidyTipClosedUnmerged:
 		return PREvidence{State: PRClosedUnmerged}
-	case row.Result == "no-merged-pr" && row.Coverage == "complete":
-		return PREvidence{State: PRNone}
 	}
 	return PREvidence{State: PRUnknown}
 }
@@ -97,6 +93,7 @@ const (
 	ReasonRunCap            = "run-cap"
 	ReasonTimeout           = "timeout"
 	ReasonMemberBudget      = "member-budget"
+	ReasonResponseTooLarge  = "response-too-large"
 	ReasonError             = "error"
 )
 
@@ -108,10 +105,11 @@ var reasonText = map[string]string{
 	ReasonRunCap:            "per-run request cap reached",
 	ReasonTimeout:           "timeout reached",
 	ReasonMemberBudget:      "a repository's request or time budget ran out",
+	ReasonResponseTooLarge:  "a GitHub response exceeded its size bound",
 	ReasonError:             "a GitHub read failed",
 }
 
-var reasonOrder = []string{ReasonNotAuthenticated, ReasonRemoteUnsupported, ReasonRateLimit, ReasonServer, ReasonRunCap, ReasonTimeout, ReasonMemberBudget, ReasonError}
+var reasonOrder = []string{ReasonNotAuthenticated, ReasonRemoteUnsupported, ReasonRateLimit, ReasonServer, ReasonRunCap, ReasonTimeout, ReasonMemberBudget, ReasonResponseTooLarge, ReasonError}
 
 // ReasonText is the human wording of a fallback reason; an unknown word reads as a failed read.
 func ReasonText(reason string) string {
@@ -127,7 +125,11 @@ func FormatOnlineNotice(checked, of int, reasons []string) string {
 	if of <= 0 {
 		return ""
 	}
-	line := fmt.Sprintf("GitHub: checked %d of %d repositories", checked, of)
+	noun := "repositories"
+	if of == 1 {
+		noun = "repository"
+	}
+	line := fmt.Sprintf("GitHub: checked %d of %d %s", checked, of, noun)
 	seen := map[string]bool{}
 	for _, r := range reasons {
 		if _, ok := reasonText[r]; !ok {
@@ -210,7 +212,7 @@ func (o OnlineOutcome) Notice() string {
 }
 
 // MaxOnlineTips is the number of distinct tips asked of one repository (Spec 044 D13).
-const MaxOnlineTips = 64
+const MaxOnlineTips = hosting.MaxTidyTips
 
 // OnlineMember is one repository whose tips may be asked: its path and the remote the observation
 // already selected.
@@ -218,17 +220,17 @@ type OnlineMember struct{ Name, Path, Remote string }
 
 // PRSession is the part of a hosting tidy session that the fetch uses; *hosting.TidySession is one.
 type PRSession interface {
-	DiscoverPullRequests(ctx context.Context, targets []string, hints map[string]int) ([]hosting.TidyHeadEvidence, error)
+	ReadTipPullRequests(ctx context.Context, tips []string) ([]hosting.TidyTipEvidence, error)
 	Close()
 }
 
 // PROpener opens the session of one repository. The transport rt is the run's shared budget and
 // must be the inner transport of the session.
-type PROpener func(ctx context.Context, path, remote string, rt http.RoundTripper) (PRSession, error)
+type PROpener func(ctx context.Context, path, remote string, rt hosting.TidyTransport) (PRSession, error)
 
 // DefaultPROpener opens the production session: native preflight, github.com only, the fixed
 // bounded transport, the stored gh credential.
-func DefaultPROpener(ctx context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
+func DefaultPROpener(ctx context.Context, path, remote string, rt hosting.TidyTransport) (PRSession, error) {
 	s, err := hosting.OpenTidySessionWithTransport(ctx, path, hosting.TidySessionOptions{Online: true, Remote: remote}, rt)
 	if err != nil {
 		return nil, err
@@ -239,8 +241,11 @@ func DefaultPROpener(ctx context.Context, path, remote string, rt http.RoundTrip
 // OnlineOptions are the seams and bounds of FetchPREvidence; the zero value is production.
 type OnlineOptions struct {
 	Open PROpener
-	// Transport is the transport below the shared run budget; nil is the production HTTPS one.
-	Transport http.RoundTripper
+	// Budget is the run budget shared with the tracking reads of the observation (the human wizard
+	// creates it before the analysis). Nil creates one for this call over Transport.
+	Budget *hosting.TidyRunBudget
+	// Transport is the transport below a budget created here; nil is the production HTTPS one.
+	Transport hosting.TidyTransport
 	// Width is the number of repositories read at the same time (default 4).
 	Width int
 	// RunCap is the request cap of the run (default and maximum hosting.TidyRunMaxRequests).
@@ -305,6 +310,9 @@ func selectTips(repo string, cands []Candidate, limit int) tipSelection {
 	return sel
 }
 
+// StopReason is the reason word of a stop of the run's online reads, or empty.
+func StopReason(r hosting.TidyStopReason) string { return stopReason(r) }
+
 // stopReason maps the stop reason of the run budget to the reason of a repository.
 func stopReason(r hosting.TidyStopReason) string {
 	switch r {
@@ -330,6 +338,8 @@ func failureReason(ctx context.Context, budget *hosting.TidyRunBudget, err error
 		return ReasonNotAuthenticated
 	case errors.Is(err, hosting.ErrTidyUnsupported):
 		return ReasonRemoteUnsupported
+	case errors.Is(err, hosting.ErrTidyResponseTooLarge):
+		return ReasonResponseTooLarge
 	case errors.Is(err, hosting.ErrTidyLimit), errors.Is(err, context.DeadlineExceeded):
 		return ReasonMemberBudget
 	}
@@ -338,9 +348,10 @@ func failureReason(ctx context.Context, budget *hosting.TidyRunBudget, err error
 
 // FetchPREvidence reads the pull request evidence of the open tips of the members (Spec 044
 // T005). The members are read through the existing fan-out, each with its own session and its
-// own 128-request, 32 MiB and 30-second budget; all sessions share one run budget (512 requests),
-// whose stop (rate limit, server error, cap) and the end of ctx judge every repository that has
-// not finished offline, nothing retried. A repository whose session fails is judged offline on
+// own 128-request, 32 MiB and 30-second budget; all sessions share the run budget (512 requests,
+// shared with the tracking reads of the observation when the caller passes it in Budget), whose
+// stop (rate limit, server error, cap) and the end of ctx judge every repository that has not
+// finished offline, nothing retried. A repository whose session fails is judged offline on
 // its own. The candidates are only read.
 func FetchPREvidence(ctx context.Context, members []OnlineMember, cands []Candidate, o OnlineOptions) OnlineOutcome {
 	if o.Open == nil {
@@ -358,8 +369,11 @@ func FetchPREvidence(ctx context.Context, members []OnlineMember, cands []Candid
 	list := append([]OnlineMember{}, members...)
 	sort.SliceStable(list, func(i, j int) bool { return list[i].Name < list[j].Name })
 	out := OnlineOutcome{Facts: map[TipKey]PREvidence{}, Members: []MemberOutcome{}}
-	budget := hosting.NewTidyRunBudget(o.Transport, o.RunCap)
-	defer budget.Close()
+	budget := o.Budget
+	if budget == nil {
+		budget = hosting.NewTidyRunBudget(o.Transport, o.RunCap)
+		defer budget.Close()
+	}
 	results := make([]MemberOutcome, len(list))
 	facts := make([]map[string]PREvidence, len(list))
 	_ = fanout.Do(ctx, len(list), o.Width, func(ctx context.Context, i int) {
@@ -405,7 +419,7 @@ func fetchMember(ctx context.Context, m OnlineMember, cands []Candidate, o Onlin
 		return offline(failureReason(ctx, budget, err))
 	}
 	defer session.Close()
-	rows, err := session.DiscoverPullRequests(ctx, sel.Tips, nil)
+	rows, err := session.ReadTipPullRequests(ctx, sel.Tips)
 	if err != nil {
 		return offline(failureReason(ctx, budget, err))
 	}
@@ -415,10 +429,10 @@ func fetchMember(ctx context.Context, m OnlineMember, cands []Candidate, o Onlin
 	}
 	got := map[string]PREvidence{}
 	for _, row := range rows {
-		if !asked[row.HeadOID] {
+		if !asked[row.Tip] {
 			return offline(ReasonError)
 		}
-		got[row.HeadOID] = prFact(row)
+		got[row.Tip] = tipFact(row)
 	}
 	if len(got) != len(sel.Tips) {
 		return offline(ReasonError)

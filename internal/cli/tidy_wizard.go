@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/analysis"
@@ -78,6 +79,9 @@ type wizardRun struct {
 	timeout    time.Duration
 	// online is the pull request evidence of the human wizard (empty when it ran offline).
 	online tidywizard.OnlineOutcome
+	// budget is the run budget of the online reads, shared by the tracking reads of the
+	// observation and the pull request reads (nil when the run is offline).
+	budget *hosting.TidyRunBudget
 }
 
 // readOnline reads the pull request evidence of the open tips when the human wizard is online,
@@ -90,7 +94,7 @@ func (r *wizardRun) readOnline(cmd *cobra.Command, choice tidyOnlineChoice) {
 		return
 	}
 	members := tidyOnlineMembers(r.prep, r.res)
-	out := tidyOnlineFetch(r.ctx, members, r.res.Candidates)
+	out := tidyOnlineFetch(r.ctx, members, r.res.Candidates, r.budget)
 	r.online = out
 	notice, entry := tidyOnlineSummary(choice, members, r.res, out)
 	r.prep.Derived = append(append([]derive.Derived{}, r.prep.Derived...), entry)
@@ -157,6 +161,14 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	r.ctx = workspace.WithObserveProgress(r.ctx, prog.Event)
 	if w.verbose || w.trace != "" {
 		r.ctx = workspace.WithGitTrace(r.ctx, prog.Git)
+	}
+	if humanWizard && online.On {
+		// One budget for the whole run: the tracking reads of the observation and the pull request
+		// reads count against the same 512 requests and stop together (Spec 044 D13).
+		r.budget = hosting.NewTidyRunBudget(nil, hosting.TidyRunMaxRequests)
+		r.ctx = hosting.WithTidyRunBudget(r.ctx, r.budget)
+		cancel := r.cancel
+		r.cancel = func() { cancel(); r.budget.Close() }
 	}
 	preparing := tidyProgressNow()
 	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: online.On, OnlineDefault: online.Value == tidyOnlineDefault})

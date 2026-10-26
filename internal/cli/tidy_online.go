@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/analysis"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -52,8 +53,8 @@ func resolveTidyOnline(online, offline, humanWizard bool) (tidyOnlineChoice, err
 }
 
 // tidyOnlineFetch reads the pull request evidence of the open tips; tests replace it.
-var tidyOnlineFetch = func(ctx context.Context, members []tidywizard.OnlineMember, cands []tidywizard.Candidate) tidywizard.OnlineOutcome {
-	return tidywizard.FetchPREvidence(ctx, members, cands, tidywizard.OnlineOptions{})
+var tidyOnlineFetch = func(ctx context.Context, members []tidywizard.OnlineMember, cands []tidywizard.Candidate, budget *hosting.TidyRunBudget) tidywizard.OnlineOutcome {
+	return tidywizard.FetchPREvidence(ctx, members, cands, tidywizard.OnlineOptions{Budget: budget})
 }
 
 // tidyOnlineMembers lists the analysed Git repositories that are read online.
@@ -104,7 +105,16 @@ func tidyOnlineSummary(choice tidyOnlineChoice, members []tidywizard.OnlineMembe
 	}
 	var words []string
 	seen := map[string]bool{}
+	all := make([]string, 0, len(reasons)+1)
 	for _, r := range reasons {
+		all = append(all, r)
+	}
+	// A stop of the run (a rate limit seen by the tracking reads, the cap) is the cause of the
+	// repositories that failed with it.
+	if stop := tidywizard.StopReason(out.Stopped); stop != "" && len(reasons) > 0 {
+		all = append(all, stop)
+	}
+	for _, r := range all {
 		if !seen[r] {
 			seen[r] = true
 			words = append(words, r)

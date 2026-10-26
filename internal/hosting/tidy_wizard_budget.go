@@ -2,6 +2,7 @@
 package hosting
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"sync"
@@ -114,4 +115,18 @@ func (b *TidyRunBudget) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 	return res, err
+}
+
+type tidyRunBudgetKey struct{}
+
+// WithTidyRunBudget returns a context that carries the run budget, so that every tidy session of
+// the run (the tracking reads of the observation and the pull request reads alike) shares it.
+func WithTidyRunBudget(ctx context.Context, b *TidyRunBudget) context.Context {
+	return context.WithValue(ctx, tidyRunBudgetKey{}, b)
+}
+
+// TidyRunBudgetFrom returns the run budget of the context, or nil.
+func TidyRunBudgetFrom(ctx context.Context) *TidyRunBudget {
+	b, _ := ctx.Value(tidyRunBudgetKey{}).(*TidyRunBudget)
+	return b
 }

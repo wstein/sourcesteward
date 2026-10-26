@@ -116,25 +116,25 @@ func TestTidyRunBudgetRefusesEveryWrite(t *testing.T) {
 	}
 }
 
-// Seven real member sessions of 64 tips each (closed collection of ten full pages, a candidate read
-// per tip) need 75 requests each: the shared run budget of 512 stops the seventh member, no
-// session exceeds its own 128, and every request is a GET (Spec 044 SC-005).
-func TestTidyRunBudgetBoundsSevenRealSessions(t *testing.T) {
+// Real member sessions of 64 tips each read one request per tip plus the revalidation, 65 requests
+// each after the open (Spec 044 SC-005): the shared run budget stops the session that crosses its cap,
+// no session exceeds its own 128 and every request is a GET.
+func TestTidyRunBudgetBoundsRealSessions(t *testing.T) {
 	var gets, others atomic.Int64
-	b := NewTidyRunBudget(nil, TidyRunMaxRequests)
+	b := NewTidyRunBudget(nil, 200)
 	defer b.Close()
 	finished, failed := 0, 0
 	for member := 0; member < 7; member++ {
-		c := &discoveryCollection{pages: 10, last: 1000, link: true, calls: map[string]int{}, t: t}
+		srv := &tipServer{t: t, lists: map[string]string{}}
 		b.next = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			if req.Method != http.MethodGet {
 				others.Add(1)
 			}
 			gets.Add(1)
-			return c.handle(req)
+			return srv.handle(req)
 		})
 		s := tidyFixtureSessionOver(t, b.RoundTrip)
-		rows, err := s.DiscoverPullRequests(context.Background(), discoveryTargets(64), nil)
+		rows, err := s.ReadTipPullRequests(context.Background(), discoveryTargets(64))
 		if s.Budget().Requests > 128 {
 			t.Fatalf("member %d: %d requests", member, s.Budget().Requests)
 		}
@@ -145,12 +145,13 @@ func TestTidyRunBudgetBoundsSevenRealSessions(t *testing.T) {
 			}
 			continue
 		}
-		if len(rows) != 64 || s.Budget().Requests != 75 || c.calls["pull"] != 64 || c.calls["page"] != 10 {
-			t.Fatalf("member %d: %d rows, %d requests, %+v", member, len(rows), s.Budget().Requests, c.calls)
+		if len(rows) != 64 || s.Budget().Requests != 65 {
+			t.Fatalf("member %d: %d rows, %d requests", member, len(rows), s.Budget().Requests)
 		}
 		finished++
 	}
-	if finished != 6 || failed != 1 || b.Requests() != TidyRunMaxRequests || gets.Load() != TidyRunMaxRequests || others.Load() != 0 {
+	// 3 x 65 = 195 requests; the fourth session is cut at 200; the rest never send.
+	if finished != 3 || failed != 4 || b.Requests() != 200 || gets.Load() != 200 || others.Load() != 0 {
 		t.Fatalf("finished %d failed %d requests %d sent %d writes %d", finished, failed, b.Requests(), gets.Load(), others.Load())
 	}
 }

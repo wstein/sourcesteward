@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 )
 
@@ -221,5 +222,54 @@ func TestOfflineIsRefusedByNameInTheContract4Layer(t *testing.T) {
 		if !isUsage(err) || err == nil || !strings.Contains(err.Error(), "--offline is a wizard flag and cannot be used with the expert layer") {
 			t.Errorf("%v: %v", args, err)
 		}
+	}
+}
+
+// Spec 044 D13: one run budget serves the whole human wizard run. The observation (which makes
+// the tracking reads) and the pull request reads get the same budget; a run that stays offline has none.
+func TestOneRunBudgetServesTheObservationAndThePullRequestReads(t *testing.T) {
+	w := newInteractive(t, true, true)
+	markOnline(w.wizardWorld)
+	if _, _, err := runTidyBoth(t, "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if w.prepBudget == nil || w.prepBudget != w.fetchBudget {
+		t.Fatalf("the observation and the fetch must share one budget: %p %p", w.prepBudget, w.fetchBudget)
+	}
+	for name, args := range map[string][]string{"offline": {"--offline"}, "json": {"--json"}} {
+		w = newInteractive(t, true, true)
+		if _, _, err := runTidyBoth(t, "\n", args...); err != nil || w.prepBudget != nil || w.fetchBudget != nil {
+			t.Errorf("%s: %v %p %p", name, err, w.prepBudget, w.fetchBudget)
+		}
+	}
+	pw := newWizardWorld(t, true, true)
+	if _, _, err := runTidyBoth(t, "", "plan", "--online"); err != nil || pw.prepBudget != nil {
+		t.Errorf("plan --online has no run budget: %v %p", err, pw.prepBudget)
+	}
+}
+
+// A stop of the run seen by an earlier read names the cause once on the notice line.
+func TestTheStopOfTheRunIsTheReasonOfTheFallback(t *testing.T) {
+	w := newInteractive(t, true, true)
+	markOnline(w.wizardWorld)
+	w.res.Repositories[0].OnlineFallback = tidywizard.ReasonError
+	w.online = tidywizard.OnlineOutcome{Stopped: hosting.TidyStopRateLimit, Members: []tidywizard.MemberOutcome{
+		{Name: "a", State: tidywizard.MemberChecked}, {Name: "b", State: tidywizard.MemberOffline, Reason: tidywizard.ReasonRateLimit}}}
+	_, errOut, err := runTidyBoth(t, "\n")
+	if err != nil || errOut != "GitHub: checked 0 of 2 repositories; the others are judged offline (GitHub rate limit reached)\n" {
+		t.Errorf("%v %q", err, errOut)
+	}
+}
+
+// A stop of the run replaces a generic failure as the named reason even when every pull request
+// read finished.
+func TestAStopOfTheRunReplacesAGenericFallbackReason(t *testing.T) {
+	w := newInteractive(t, true, true)
+	markOnline(w.wizardWorld)
+	w.res.Repositories[0].OnlineFallback = tidywizard.ReasonError
+	w.online = tidywizard.OnlineOutcome{Stopped: hosting.TidyStopRunCap, Members: []tidywizard.MemberOutcome{{Name: "a", State: tidywizard.MemberChecked}, {Name: "b", State: tidywizard.MemberChecked}}}
+	_, errOut, err := runTidyBoth(t, "\n")
+	if err != nil || errOut != "GitHub: checked 1 of 2 repositories; the others are judged offline (per-run request cap reached)\n" {
+		t.Errorf("%v %q", err, errOut)
 	}
 }
