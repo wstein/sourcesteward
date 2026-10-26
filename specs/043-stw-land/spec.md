@@ -274,13 +274,19 @@ The second form is the stack landing (FR-060 and following). `--stack`, `--pr` a
 
 Owner decision 2026-10-26, answer "A yes" (German source in the owner-decision record of the workspace): `stw land --stack` lands a
 whole stack with ONE fast-forward push of the TIP. Every pull request in the chain must be CLEAR, the chain linear, the CI on the tip
-green and the ruleset must allow the owner's direct push. GitHub marks every pull request whose head is in the default branch as
-merged. No rebase, no new SHAs, no restack, no retarget. This is the owner's way out of the bottom-up merge, whose rebase-merge
+green and the ruleset must allow the owner's direct push. GitHub is expected to mark every pull request whose head is in the default
+branch as merged (measured for one pull request, R1; for a chain **to be measured**, E1). No rebase, no new SHAs, no restack, no retarget. This is the owner's way out of the bottom-up merge, whose rebase-merge
 rewrites every SHA and forces a restack and a new CI run per pull request (spike observation D and E in research.md).
 
 Companion rule (answer "B yes"): dependent parts are by default ONE pull request with a commit series (a "virtual stack"; the rule is in the
 workspace `AGENTS.md`). Such a pull request needs no `--stack`: the single landing of FR-016 and FR-018 already pushes its whole range
 once. `--stack` serves the separate stacked pull requests that must be merged independently or were opened before the rule.
+
+**Accepted chain shape (foreman decision, owner may reverse).** Until E1 and E2 are measured, only chains whose pull requests **all
+target the default branch** are accepted (the shape of this workflow: children opened with base `main` that contain the parent's
+commits). The native `gh stack` shape (each base is the parent's branch) is refused with `land-unmeasured` and the detail
+`native-stack-shape`: pushing the tip may not mark the pull requests above the bottom as merged, and with `delete_branch_on_merge` on GitHub
+may then retarget or close them after the push (R3, N4). E1 and E2 recorded for the native shape lift that refusal.
 
 **Interface.** The explicit form is `stw land --stack 12,13,14 --reviewed 12:SHA --reviewed 13:SHA --reviewed 14:SHA` (bottom first). The
 explicit list is the owner's statement of the chain, so no discovery can add a pull request nobody named. A flagless wizard
@@ -294,7 +300,8 @@ Each is read fresh immediately before the effect and again before the push (FR-0
 one.
 
 - **FR-060 Named chain.** The list has 2 to 8 distinct pull requests (bound, default 8; a single number is a usage error: use
-  `--pr`). Each is open, from the same repository (not a fork), not merged, and the `--reviewed` set equals the list exactly (a missing,
+  `--pr`). Each is open (except in the replay of FR-074, which is classified before this rule), from the same repository (not a fork),
+  not merged, and the `--reviewed` set equals the list exactly (a missing,
   extra or duplicate entry is a usage error, exit 2).
 - **FR-061 Heads equal the recorded reviewed heads.** For each pull request the current head SHA equals the SHA in its `--reviewed
   NUMBER:SHA` (`head-changed` with the number). A head that GitHub changed itself (automatic rebase after a merge, events
@@ -309,16 +316,18 @@ one.
   `review_evidence` and its checks. What stw does not verify: that the independent review was CLEAR.
 - **FR-063 Chain is linear.** For every consecutive pair the lower head is an **ancestor** of the next head
   (`git merge-base --is-ancestor <head_i> <head_i+1>` exit 0, over local objects after the private fetch of FR-016) and the heads
-  differ; exit 1 is `chain-not-linear`, exit 128 is `object-missing`. Each pull request's GitHub base is the default branch or the head
-  ref of the previous pull request in the list; any other base is `base-not-in-chain`. Git decides, not the API (decision 4).
-- **FR-064 Checks on every head, distinct states.** Required contexts (FR-012, default branch union) are green on the **tip** head
-  (`checks-not-green` otherwise). No other pull request of the chain has a failing or missing required context on its own head
-  (a pending one is `checks-pending`); with Spec 039's tiered CI the non-tip heads run the light lane only, so the heavy shards are
-  required on the tip alone and the required contexts are read from the rules, not assumed. A head with an **empty check rollup after
-  a change made by GitHub** (an event `head_ref_force_pushed` or `automatic_base_change_succeeded` not caused by the owner's push, spike
-  observation E, gap S9) is a distinct state `head-changed-no-checks`, not `checks-not-green`. The refusal text offers the owner's way out
-  as text only: `gh pr close N && gh pr reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike);
-  stw never runs it (FR-033).
+  differ; exit 1 is `chain-not-linear`, exit 128 is `object-missing`. The GitHub base of **every** pull request is the default branch
+  (accepted shape above); a base that is the head ref of another listed pull request is the unmeasured native shape
+  (`land-unmeasured`, `native-stack-shape`), and any other base is `base-not-in-chain`. Git decides, not the API (decision 4).
+- **FR-064 Checks follow the tiered CI.** Under the tiered CI (Spec 039; owner decision 2026-10-26, answer C; the CI change is a separate
+  pull request) only the **tip** and pull requests on the default branch run the heavy shards, and a head below the tip runs the light lane only.
+  Therefore: the **tip head** has every required context of FR-012 green (`checks-not-green` for a missing or failing one,
+  `tip-checks-pending` for a pending one); every other head needs only the checks its lane reports, none failing or pending
+  (`checks-not-green`, `checks-pending`) and, when its lane reports none at all, `head-changed-no-checks` below. The required contexts are
+  read from the rules, no shard is named. A head with an **empty check rollup after a change made by GitHub** (an event
+  `head_ref_force_pushed` or `automatic_base_change_succeeded` not caused by the owner's push, spike observation S-C) is the distinct state
+  `head-changed-no-checks`, not `checks-not-green`. The refusal text offers the owner's way out as text only: `gh pr close N && gh pr
+  reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike); stw never runs it (FR-033).
 - **FR-065 Bottom fast-forwards the default branch.** The remote default tip read by `git ls-remote` in this run is an ancestor of the
   bottom head (equivalently, the merge base of the bottom and the default tip equals the default tip). If the default branch moved,
   the reason is `not-fast-forward` with the detail `rebase needed`: the owner restacks per Spec 015/016 and re-reviews; stw never
@@ -350,25 +359,27 @@ one.
 - **FR-071 Atomicity.** One ref update is atomic on the remote: either the whole chain lands, or nothing does (a rejection leaves the
   default branch untouched). The fast-forward compare-and-swap of FR-042 applies: a moved default branch is `base-moved`, exit 1, no retry.
   The marking of the pull requests as merged is GitHub's own, asynchronous step after the push and is not atomic (FR-073).
-- **FR-072 Typed approval.** After the table of FR-062 the owner types `land stack TIPNUMBER SHA8 COUNT` (the tip pull request number, the
+- **FR-072 Typed approval.** After the table of FR-062 (and FR-082) the owner types `land stack TIPNUMBER SHA8 COUNT` (the tip pull request number, the
   first 8 characters of the tip head and the number of pull requests; for example `land stack 14 3f9c2a41 3`) read from `/dev/tty`; three
   tries, then `confirmation-failed`; no terminal `confirmation-unavailable`; `--yes` is a usage error (FR-003). Never in agent mode.
 - **FR-073 Marking, bounded wait.** After the push the run waits (FR-022 bound) for **each** listed pull request to be reported `MERGED`
-  with `merge_commit_sha` equal to its own head (measured for a single pull request, R1; for a chain this is **to be measured in the spike**,
-  research.md E1). Per pull request outcomes are `landed`, `landed-not-marked` (the default branch contains its head, GitHub did not mark it
-  within the wait; exit 1, no retry, no repair), or `merged-other-sha`. The tip's own marking is checked as FR-022 does. Which
-  pull requests GitHub marks (all with an ancestor head, or only the tip) is unmeasured; until E1 is recorded, `--stack` stays
-  `land-unmeasured`.
-- **FR-074 Replay.** Idempotent as FR-041: if the default branch already contains the tip head, the push is skipped and the per pull request
+  with `merge_commit_sha` equal to its own head. This is measured for a single pull request (R1) and **to be measured** for a chain in the
+  spike (research.md E1); it is not assumed. Per pull request outcomes are `landed`, `landed-not-marked` (the default branch contains its
+  head, GitHub did not mark it within the wait; exit 1, no retry, no repair), or `merged-other-sha`. **End state if GitHub does not mark
+  them:** the commits are in the default branch with their original SHAs and the pull requests stay open. The owner's fallback is to close
+  each with a comment naming the landing commit. stw prints the exact commands (`gh pr close N --comment "Landed in <tip sha> (range
+  M..tip)"`) and **never closes a pull request itself** (decision: no; FR-076). Until E1 is recorded, `--stack` stays `land-unmeasured`.
+- **FR-074 Replay.** Evaluated before FR-060 to FR-068 (which need open pull requests). Idempotent as FR-041: if the default branch already contains the tip head, the push is skipped and the per pull request
   states are classified and reported (`already-landed` when all are `MERGED` with their own head). An interrupted run (signal, lost
   terminal) before the push changed nothing; after the push the rerun only observes (FR-044 applies: a running `git push` is waited on).
 - **FR-075 Branches.** stw deletes nothing unless `--delete-branch`: then, after all pull requests are `MERGED` and only for each landed
   pull request's own head ref (decision 7: same repository, name equals the PR head ref, `--force-with-lease=refs/heads/<ref>:<head>`),
   one push per branch so each outcome is its own. With `delete_branch_on_merge` on, GitHub may delete the heads itself after marking
   (then `already-absent`, FR-032); whether it does so for pull requests marked by a push and not by the merge button is **to be measured in
-  the spike** (E2). No child exists whose base is a landed branch (FR-066), so the closing of R3 cannot occur.
+  the spike** (E2). Side children are refused (FR-066) and, in the accepted shape, every base is the default branch, so no listed pull
+  request has a landed branch as its base; the native shape, where the closing of R3 may occur, is refused as unmeasured (FR-063).
 - **FR-076 Pull request bodies.** stw never edits bodies, titles, labels, comments or state of any pull request (FR-033), nor does it
-  close a pull request that GitHub left open (FR-073); it reports each state and the owner decides.
+  close a pull request that GitHub left open (FR-073); it reports each state, prints the fallback commands and the owner decides.
 - **FR-077 Failure semantics.** `push-refused` (FR-040), `base-moved` (FR-042), a precondition refusal and `confirmation-failed` leave the
   repository, the default branch and every pull request exactly as before. Cancellation before the push: nothing happened. Journal:
   one immutable intent fact before the push and one outcome fact after it (FR-043), plus one outcome fact per branch delete.
@@ -376,6 +387,21 @@ one.
   forward is the bottom-up landing of `stw land --pr` (one per run) or a restack (Spec 015/016), each with its own review rules.
 - **FR-079 JSON.** `--json` adds `chain`: an array in bottom-first order of `{number, head, base_ref, review_evidence, checks, state,
   outcome}` and the typed `reasons` of every failing precondition with the pull request number. The schema stays unpublished (FR-051).
+
+- **FR-080 New reads (Spec 022 transport, read-only, bounded).** Chain mode adds these reads to the single landing's: `GET
+  /repos/{o}/{r}/pulls/{n}` per listed pull request, `GET .../pulls/{n}/reviews` (FR-062), `GET .../issues/{n}/events` (FR-061, FR-064),
+  `GET .../rulesets/{id}` for bypass actors (FR-067), the check runs and statuses of each head, and the list of open pull requests
+  with their base refs (FR-066). Rules and protection reads are those of FR-012. No write endpoint is added (FR-070).
+- **FR-081 Commit-range invariant.** With `M` the remote default tip, the set `M..tip` must equal the union of the commit ranges of the
+  listed pull requests (each `head_i-1..head_i`, the bottom from `M`): a commit of `M..tip` in no listed range, or a listed head not in
+  `M..tip`, is `range-mismatch`. FR-017 and FR-018 apply to the whole `M..tip`.
+- **FR-082 What the typed word binds.** The word of FR-072 binds the repository, the default tip SHA `M`, the tip SHA, and the pull request
+  numbers with their head SHAs, shown in the table directly before the prompt. Apply re-reads all of it after the word is typed and
+  refuses (`head-changed`, `base-moved`) if any value differs from the table; the push then names the tip SHA from that table.
+- **FR-083 No undo.** A landed push cannot be undone by stw: it never force-pushes (FR-020) and the rulesets forbid rewriting the default
+  branch. Recovery is the owner's documented procedure: revert the landed range with a normal pull request (`git revert M..tip` on a topic
+  branch, reviewed and merged as any pull request); a rewrite of the default branch is a ruleset operation of the owner and is not
+  proposed here.
 
 ### Scenarios
 
@@ -387,7 +413,7 @@ one.
   exit 0.
 - **US8 (P2) Refusals change nothing.** Per FR-060 to FR-068 one test shows the typed reason, no push; among them `chain-not-linear`,
   `not-fast-forward` (default branch moved), `head-changed-no-checks` with the close-and-reopen text, `checks-not-green` on the tip,
-  `stack-side-child`, `ruleset-forbids-push`, `land-unmeasured`.
+  `stack-side-child`, `ruleset-forbids-push`, `land-unmeasured` (including `native-stack-shape`), `tip-checks-pending`, `range-mismatch`.
 - **US9 (P2) Replay.** After a push that was interrupted before the marking, a rerun skips the push and reports the per pull request states.
 
 ## Safety
@@ -396,7 +422,7 @@ SI1 only the owner in human mode with the typed `/dev/tty` confirmation applies;
 as a plain fast-forward push (no force mode); SI3 the default branch is never rewritten; SI4 no branch is deleted before the
 children are retargeted, and none that the PR did not own; SI5 the Git ancestry computation decides, not the API; SI6 untrusted text is
 escaped and bounded; SI7 credentials come only from the Spec 022 bounded lookup and are never printed; SI8 mode detection is an accident
-guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported verbatim and never worked around; SI10 `--stack` pushes exactly one ref update (the tip), edits no
+guard, not a boundary; SI9 an unmeasured forge behavior (rulesets) is reported verbatim and never worked around; SI10 `--stack` pushes exactly one ref update (the tip), edits no
 pull request and deletes no branch unless asked.
 
 ## Edge cases
@@ -408,9 +434,9 @@ pull request and deletes no branch unless asked.
 - A fast-forward whose commits are authored by a co-author trailer only: identity is author/committer fields only.
 - `--stack` with a head that GitHub force-pushed after a merge below it: `head-changed` plus `head-changed-no-checks` when the rollup is
   empty (FR-064); the owner closes and reopens that pull request or pushes, and re-reviews.
-- `--stack` where the pull requests all have base `main` but their heads are a linear chain (the repository convention before the
-  rule of one PR with a commit series): accepted, FR-063 allows both base shapes; the diff each PR shows then contains its parents'
-  commits, which changes nothing about the landing.
+- `--stack` where the pull requests all have base `main` and their heads are a linear chain (the shape of this workflow): the accepted shape;
+  the diff each pull request shows then contains its parents' commits, which changes nothing about the landing. A chain whose bases are
+  the parents' branches (native `gh stack`) is refused `land-unmeasured` until E1 and E2 are recorded.
 - `--stack` with one pull request left of the chain already `MERGED`: `already-merged-elsewhere` for that number; the owner names the rest.
 - Stack: child head is based on the bottom's head; after the bottom lands, the child is a fast-forward of the new default branch only if
   the bottom landed as exactly its head (always true for this command).
