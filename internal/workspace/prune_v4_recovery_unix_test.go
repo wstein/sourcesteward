@@ -300,3 +300,67 @@ func TestRegistrationPruneV4PayloadExactBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistrationPruneV4ReviewJournalRejectsUnknownVocabulary(t *testing.T) {
+	for _, field := range []string{"action", "intent", "target", "remaining"} {
+		t.Run(field, func(t *testing.T) {
+			_, p := fixturePruneV4(t)
+			o := RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode}
+			if r := ApplyRegistrationPruneV4(context.Background(), o); r.Status != "ok" {
+				t.Fatal(r)
+			}
+			path := filepath.Join(p.StateDir, pruneV4Namespace, "journals", p.PlanID+".json")
+			raw, e := os.ReadFile(path)
+			if e != nil {
+				t.Fatal(e)
+			}
+			var j pruneV4Journal
+			if e = json.Unmarshal(raw, &j); e != nil {
+				t.Fatal(e)
+			}
+			switch field {
+			case "action":
+				j.Effects[0].Action = "invented"
+			case "intent":
+				j.Effects[0].Intent = "invented"
+			case "target":
+				j.Effects[0].Target = "refs/heads/unrelated"
+			case "remaining":
+				j.Phase = "partial"
+				j.Remaining = []string{"invented"}
+			}
+			raw, e = pruneV4Canonical(j, "")
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = os.WriteFile(path, append(raw, '\n'), 0600); e != nil {
+				t.Fatal(e)
+			}
+			r2 := ApplyRegistrationPruneV4(context.Background(), o)
+			if r2.Status != "refused" || len(r2.Diagnostics) != 1 || r2.Diagnostics[0].Code != "prune-journal-refused" {
+				t.Fatalf("incompatible %s accepted: status=%s diagnostics=%+v", field, r2.Status, r2.Diagnostics)
+			}
+		})
+	}
+}
+func TestRegistrationPruneV4ReviewPartialExposesKnownEffectsAndRecovery(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	base, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	n := 0
+	ctx := context.WithValue(base, pruneObservationHookKey{}, pruneObservationHook(func(stage, path string, _ any) {
+		if stage == "v4-before-unlink" {
+			n++
+			if n == 2 {
+				cancel()
+			}
+		}
+	}))
+	r := ApplyRegistrationPruneV4(ctx, RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
+	if r.Status != "partial" || n != 2 {
+		t.Fatalf("probe failed to produce partial removal: %+v count=%d", r, n)
+	}
+	if len(r.Actions) == 0 {
+		t.Fatalf("partial output omits known removal and available recovery: actions=%+v payload=%s diagnostics=%+v", r.Actions, p.PayloadPath, r.Diagnostics)
+	}
+}
