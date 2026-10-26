@@ -53,7 +53,13 @@ func runGit(ctx context.Context, dir string, args ...string) (string, int, error
 	var out, errout capture
 	c.Stdout = &out
 	c.Stderr = &errout
+	end := traceRun(ctx, dir, args)
 	err := c.Run()
+	if c.ProcessState != nil {
+		end(c.ProcessState.ExitCode())
+	} else {
+		end(-1)
+	}
 	if ctx.Err() != nil {
 		return "", -1, ctx.Err()
 	}

@@ -170,6 +170,8 @@ func TestIntegrationPhaseBudgetFollowsTheEngine(t *testing.T) {
 // ancestry proof (one per distinct tip, inside the 20 s tip budget) would exhaust the old 60 s
 // phase at the fifth tip; with the window's rest no tip is exhausted.
 func TestObserveProofPhaseBudgetIsTheScaledOne(t *testing.T) {
+	// A synthetic clock and unsynchronized hooks: one item at a time keeps the test deterministic.
+	sequentialObserver(t)
 	repo := observeRepo(t)
 	for _, n := range []string{"p1", "p2", "p3", "p4", "p5", "p6"} {
 		commitIn(t, observeAdd(t, repo, n), n, n+"\n")
@@ -204,6 +206,8 @@ func TestObserveProofPhaseBudgetIsTheScaledOne(t *testing.T) {
 // The proof phase stays inside the caller's own deadline (--timeout): a window of 7 h under a
 // 30 minute parent leaves the content reads and the proof phase at most 30 minutes.
 func TestObserveWindowsStayInsideTheParentDeadline(t *testing.T) {
+	// A synthetic clock and unsynchronized hooks: one item at a time keeps the test deterministic.
+	sequentialObserver(t)
 	repo := observeRepo(t)
 	commitIn(t, observeAdd(t, repo, "q1"), "q", "q\n")
 	obs := defaultWorktreeObserver()
@@ -233,4 +237,12 @@ func TestObserveWindowsStayInsideTheParentDeadline(t *testing.T) {
 			t.Errorf("%s phase deadline %s, want within the 30 minute parent", name, d)
 		}
 	}
+}
+
+// sequentialObserver makes the observation read one item at a time for the rest of the test.
+func sequentialObserver(t *testing.T) {
+	t.Helper()
+	old := observerWidth
+	t.Cleanup(func() { observerWidth = old })
+	observerWidth = 1
 }

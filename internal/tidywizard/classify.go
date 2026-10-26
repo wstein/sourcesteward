@@ -20,6 +20,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/untrusted"
+	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
 // Bounds of the output (Spec 041 JSON section).
@@ -234,6 +235,11 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 	// cancelled context leaves the repositories that were never started to the loop below.
 	cancelled := fanout.Do(ctx, len(names), repoWidth, func(ctx context.Context, i int) {
 		name := names[i]
+		ctx = workspace.WithObserveRepo(ctx, name, i+1, len(names))
+		workspace.ReportObserve(ctx, workspace.ObserveEvent{Phase: workspace.ObservePhaseStart})
+		defer func() {
+			workspace.ReportObserve(ctx, workspace.ObserveEvent{Phase: workspace.ObservePhaseDone, Note: results[i].State})
+		}()
 		results[i] = RepoResult{Name: name, State: "analysed", Notices: []string{}}
 		if err := ctx.Err(); err != nil {
 			results[i] = RepoResult{Name: name, State: "error", Reason: bound(err.Error(), MaxEvidenceBytes), Notices: []string{}}
