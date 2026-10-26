@@ -21,10 +21,7 @@ const (
 	ObservePhaseProofs    ObservePhase = "proofs"
 	ObservePhaseTracking  ObservePhase = "tracking"
 	ObservePhaseWindow    ObservePhase = "window"
-	// ObservePhaseCache reports the reuse of a result inside the run: Note names it, Done the hits
-	// and Total the computations.
-	ObservePhaseCache ObservePhase = "cache"
-	ObservePhaseDone  ObservePhase = "done"
+	ObservePhaseDone      ObservePhase = "done"
 )
 
 // ObserveEvent is one progress report: Repo, Index (1-based) and Count come from the context
@@ -61,7 +58,7 @@ func WithObserveProgress(ctx context.Context, sink func(ObserveEvent)) context.C
 }
 
 // WithObserveRepo names the repository the events of the context belong to: its name, its
-// 1-based position and the number of repositories analysed.
+// 1-based position and the number of repositories analyzed.
 func WithObserveRepo(ctx context.Context, name string, index, count int) context.Context {
 	return context.WithValue(ctx, observeScopeKey{}, observeScope{name, index, count})
 }
