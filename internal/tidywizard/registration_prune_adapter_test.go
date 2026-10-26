@@ -93,6 +93,10 @@ func TestRegistrationPruneAdapterDeadlineAndInventoryFailure(t *testing.T) {
 }
 
 func TestRegistrationPruneAdapterAdmissionGates(t *testing.T) {
+	boundedRepos := make([]RepoSpec, MaxCandidates+1)
+	for i := range boundedRepos {
+		boundedRepos[i] = RepoSpec{Name: fmt.Sprint(i)}
+	}
 	cases := []struct {
 		name   string
 		repos  []RepoSpec
@@ -100,7 +104,7 @@ func TestRegistrationPruneAdapterAdmissionGates(t *testing.T) {
 		cfg    Config
 		calls  int
 	}{
-		{name: "repository-count", repos: make([]RepoSpec, MaxCandidates+1)},
+		{name: "repository-count", repos: boundedRepos},
 		{name: "store-count", repos: []RepoSpec{{Name: "r"}}, stores: make([]derive.Store, MaxCandidates+1)},
 		{name: "mode-disagreement", repos: []RepoSpec{{Name: "r"}}, cfg: Config{Caller: "codex"}},
 		{name: "duplicate-repository", repos: []RepoSpec{{Name: "r"}, {Name: "r"}}, calls: 1},
