@@ -161,6 +161,35 @@ func TestTidyTraceInsideARepositoryIsRefused(t *testing.T) {
 	}
 }
 
+// The directory of the trace file is resolved: a symbolic link that leads into a repository is
+// inside it, and a link that leads elsewhere is not.
+func TestTraceThroughASymbolicLinkIntoARepositoryIsRefused(t *testing.T) {
+	repo := realWorld(t)
+	links := t.TempDir()
+	into := filepath.Join(links, "into")
+	away := filepath.Join(links, "away")
+	if err := os.Symlink(repo, into); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), away); err != nil {
+		t.Fatal(err)
+	}
+	if _, inside := tracePathInside("/cwd", filepath.Join(into, "t.jsonl"), []string{repo}); !inside {
+		t.Error("a link into the repository is not seen")
+	}
+	if _, inside := tracePathInside("/cwd", filepath.Join(away, "t.jsonl"), []string{repo}); inside {
+		t.Error("a link away from the repository is refused")
+	}
+	// The whole command, with the link as a relative path from a directory beside it.
+	_, _, err := runTidyErr(t, "plan", "--json", "--trace", filepath.Join(into, "t.jsonl"))
+	if !isUsage(err) || !strings.Contains(err.Error(), "trace-inside-repository") {
+		t.Fatalf("%v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "t.jsonl")); statErr == nil {
+		t.Fatal("the trace file was created in the repository")
+	}
+}
+
 func TestTracePathInside(t *testing.T) {
 	roots := []string{"/ws/a", "/ws/b"}
 	for _, c := range []struct {

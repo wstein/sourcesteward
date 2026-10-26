@@ -66,6 +66,7 @@ func TestObserveAppliesTheWindowOfTheItemCount(t *testing.T) {
 	repo := observeRepo(t)
 	observeAdd(t, repo, "w1")
 	observeAdd(t, repo, "w2")
+	// The hooks below are not synchronized: one item at a time.
 	obs := defaultWorktreeObserver()
 	var asked []int
 	obs.window = func(_ context.Context, n int) time.Duration { asked = append(asked, n); return windowForTest(n) }
@@ -83,7 +84,7 @@ func TestObserveAppliesTheWindowOfTheItemCount(t *testing.T) {
 		}
 		return gitRead(ctx, bin, dir, args...)
 	}
-	if _, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase}); err != nil {
+	if _, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase, Width: 1}); err != nil {
 		t.Fatal(err)
 	}
 	// three worktrees (the primary and two added) and the local branches of the fixture
