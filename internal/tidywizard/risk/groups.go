@@ -22,12 +22,28 @@ type Row struct {
 // Key is an opaque stable ASCII-letter identity, not a path or a selector.
 // Family is the leading lowercase ASCII prefix; Parent is used only for the
 // workspace place. Repo is set for branch/tracking groups. Rows are sorted by ID.
+// Effects counts rows with each normalized effect once. Repositories counts rows
+// per repository; both slices are sorted and independent of caller storage.
 // Consumers must keep decision-row selection rules independently of this view.
 type Group struct {
 	Key, Kind, Place, Family, Parent, Repo string
 	Rows                                   []Row
 	Level                                  Level
 	Counts                                 Counts
+	Effects                                []EffectCount
+	Repositories                           []RepositoryCount
+}
+
+// EffectCount counts rows carrying an effect class (including dependent branches).
+type EffectCount struct {
+	Effect string
+	Count  int
+}
+
+// RepositoryCount counts rows per repository without losing raw repository identity.
+type RepositoryCount struct {
+	Repo  string
+	Count int
 }
 
 // Family returns leading ASCII lowercase letters of the first component below
@@ -110,7 +126,7 @@ func GroupRows(rows []Row) []Group {
 		for _, r := range members {
 			assessments = append(assessments, r.Risk)
 		}
-		out = append(out, Group{Key: groupKey(identity), Kind: identity.Kind, Place: identity.Place, Family: identity.Family, Parent: identity.Parent, Repo: identity.Repo, Rows: members, Level: Worst(assessments), Counts: Count(assessments)})
+		out = append(out, Group{Key: groupKey(identity), Kind: identity.Kind, Place: identity.Place, Family: identity.Family, Parent: identity.Parent, Repo: identity.Repo, Rows: members, Level: Worst(assessments), Counts: Count(assessments), Effects: countEffects(members), Repositories: countRepositories(members)})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
@@ -135,7 +151,8 @@ func scratchpad(p string) bool {
 	}
 	return false
 }
-func effectClass(in []string) string {
+func effectClass(in []string) string { return framed(effectClasses(in)...) }
+func effectClasses(in []string) []string {
 	seen := map[string]bool{}
 	for _, effect := range in {
 		if strings.HasPrefix(effect, "delete-branch:") {
@@ -151,7 +168,7 @@ func effectClass(in []string) string {
 		out = append(out, effect)
 	}
 	sort.Strings(out)
-	return framed(out...)
+	return out
 }
 func groupKey(identity groupIdentity) string {
 	b := framed(identity.Kind, identity.Effects, identity.Place, identity.Family, identity.Parent, identity.Repo)
@@ -178,4 +195,39 @@ func framed(parts ...string) string {
 		b = append(b, part...)
 	}
 	return string(b)
+}
+
+func countEffects(rows []Row) []EffectCount {
+	counts := map[string]int{}
+	for _, r := range rows {
+		for _, effect := range effectClasses(r.Effects) {
+			counts[effect]++
+		}
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]EffectCount, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, EffectCount{Effect: key, Count: counts[key]})
+	}
+	return out
+}
+func countRepositories(rows []Row) []RepositoryCount {
+	counts := map[string]int{}
+	for _, r := range rows {
+		counts[r.Repo]++
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]RepositoryCount, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, RepositoryCount{Repo: key, Count: counts[key]})
+	}
+	return out
 }
