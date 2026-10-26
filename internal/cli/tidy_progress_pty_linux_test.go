@@ -57,7 +57,7 @@ func TestTerminalSizeReadsThePty(t *testing.T) {
 // On a real pseudo-terminal the final screen of a run holds one line per repository, the lines fit
 // the width the terminal reports, and the cursor stands at the start of the line below the block.
 func TestTidyPlanOnARealTerminalLeavesOneLinePerRepository(t *testing.T) {
-	master, slave := ptyPair(t, 44, 20)
+	master, slave := ptyPair(t, 21, 20)
 	progressWorld(t, true, false, false)
 	tidyStderrIsTerminal = owner.IsTerminal
 	var (
@@ -96,13 +96,13 @@ func TestTidyPlanOnARealTerminalLeavesOneLinePerRepository(t *testing.T) {
 	mu.Lock()
 	text := got.String()
 	mu.Unlock()
-	screen := newFakeScreen(44, 20)
+	screen := newFakeScreen(21, 20)
 	screen.feed(text)
 	lines := screen.lines()
 	want := []string{
-		"stw tidy: 2/2 repos, 4.0s, slowest a 2.0s",
-		"✓ a analysed            2.0s",
-		"✓ b analysed            2.0s",
+		"stw tidy: 2/2 repos…",
+		"✓ a analysed       …",
+		"✓ b analysed       …",
 		"END-OF-RUN",
 	}
 	if !equalLines(lines, want) || len(screen.unknown) != 0 || screen.wraps != 0 {

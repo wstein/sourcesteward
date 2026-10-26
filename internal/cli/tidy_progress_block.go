@@ -24,9 +24,13 @@ const (
 	tidyBlockDefaultRows = 24
 	tidyBlockSpare       = 3
 	tidyBlockMinLines    = 4
-	tidyBlockNameMax     = 24
-	tidyBlockBar         = 8
-	tidyBlockPhaseWidth  = len("observing worktrees")
+	// tidyBlockMinRows is the least height of a terminal that gets the block; a lower one gets the
+	// plain lines, because a block and its cursor line would not fit and every frame would leave a
+	// stale line behind in the scrollback.
+	tidyBlockMinRows    = 5
+	tidyBlockNameMax    = 24
+	tidyBlockBar        = 8
+	tidyBlockPhaseWidth = len("observing worktrees")
 )
 
 type blockKind int
@@ -40,13 +44,40 @@ const (
 	blockSummary
 )
 
-// The words and marks of the block.
-const (
-	markQueued  = "·"
-	markRunning = "▸"
-	markDone    = "✓"
-	markRetain  = "!"
-)
+// mark is the glyph of a state: Unicode, or ASCII where the locale is not UTF-8.
+func (p *tidyProgress) mark(k blockKind) string {
+	if p.ascii {
+		switch k {
+		case blockQueued:
+			return "."
+		case blockRunning:
+			return ">"
+		case blockDone, blockSummary:
+			return "v"
+		}
+		return "!"
+	}
+	switch k {
+	case blockQueued:
+		return "·"
+	case blockRunning:
+		return "▸"
+	case blockDone, blockSummary:
+		return "✓"
+	}
+	return "!"
+}
+
+// ellipsis is the sign of a cut.
+func (p *tidyProgress) ellipsis() string {
+	if p.ascii {
+		return "..."
+	}
+	return "…"
+}
+
+// trunc cuts s to max columns with the ellipsis of the terminal.
+func (p *tidyProgress) trunc(s string, max int) string { return truncateWith(s, max, p.ellipsis()) }
 
 type blockLine struct {
 	text string
@@ -119,17 +150,31 @@ func (p *tidyProgress) begun(name string) *tidyRepoProgress {
 	return nil
 }
 
-// render is the block for now: the lines to show, within the size of the terminal. final marks the
-// block that stays on the screen at the end of the run. The caller holds the lock.
-func (p *tidyProgress) render(now time.Time, final bool) []string {
-	cols, rows := tidyBlockDefaultCols, tidyBlockDefaultRows
+// dims is the size of the terminal now, or the default when it cannot be read.
+func (p *tidyProgress) dims() (cols, rows int) {
+	cols, rows = tidyBlockDefaultCols, tidyBlockDefaultRows
 	if p.size != nil {
 		if c, r := p.size(); c > 0 && r > 0 {
 			cols, rows = c, r
 		}
 	}
+	return cols, rows
+}
+
+// renderedBlock is a block ready to write: its lines (with colors), the display width of each line
+// without them, and the size of the terminal it was made for.
+type renderedBlock struct {
+	lines      []string
+	widths     []int
+	cols, rows int
+}
+
+// render is the block for now: the lines to show, within the size of the terminal. final marks the
+// block that stays on the screen at the end of the run. The caller holds the lock.
+func (p *tidyProgress) render(now time.Time, final bool) renderedBlock {
+	cols, rows := p.dims()
 	entries := p.entries()
-	maxLines := max(rows-tidyBlockSpare, tidyBlockMinLines)
+	maxLines := min(max(rows-tidyBlockSpare, tidyBlockMinLines), rows-1)
 	nameW := 0
 	for _, e := range entries {
 		nameW = max(nameW, textWidth(e.name))
@@ -158,13 +203,15 @@ func (p *tidyProgress) render(now time.Time, final bool) []string {
 	total := len(entries)
 	head := fmt.Sprintf("stw tidy: %d/%d repos, %s", done, total, shortDuration(now.Sub(p.start)))
 	if started > 1 {
-		head += ", slowest " + truncateWidth(slowName, tidyBlockNameMax) + " " + shortDuration(slowFor)
+		head += ", slowest " + p.trunc(slowName, tidyBlockNameMax) + " " + shortDuration(slowFor)
 	}
 	out := []blockLine{{head, blockHeader}}
 	out = append(out, p.fit(entries, lines, maxLines-1)...)
-	res := make([]string, len(out))
-	for i, l := range out {
-		res[i] = p.paint(truncateWidth(l.text, cols-1), l.kind)
+	res := renderedBlock{cols: cols, rows: rows}
+	for _, l := range out {
+		text := p.trunc(l.text, cols-1)
+		res.lines = append(res.lines, p.paint(text, l.kind))
+		res.widths = append(res.widths, textWidth(text))
 	}
 	return res
 }
@@ -193,7 +240,7 @@ func (p *tidyProgress) fit(entries []blockEntry, lines []blockLine, budget int) 
 		if n == 1 {
 			noun = "repo"
 		}
-		summary = &blockLine{fmt.Sprintf("%s %d %s done (largest: %s %s)", markDone, n, noun, truncateWidth(largest, tidyBlockNameMax), shortDuration(largestFor)), blockSummary}
+		summary = &blockLine{fmt.Sprintf("%s %d %s done (largest: %s %s)", p.mark(blockDone), n, noun, p.trunc(largest, tidyBlockNameMax), shortDuration(largestFor)), blockSummary}
 		budget--
 	}
 	var more *blockLine
@@ -223,7 +270,7 @@ func (p *tidyProgress) fit(entries []blockEntry, lines []blockLine, budget int) 
 			}
 		}
 		keep = kept
-		more = &blockLine{fmt.Sprintf("%s ... %d more repos not shown", markQueued, hidden), blockQueued}
+		more = &blockLine{fmt.Sprintf("%s ... %d more repos not shown", p.mark(blockQueued), hidden), blockQueued}
 	}
 	var out []blockLine
 	if summary != nil {
@@ -240,14 +287,14 @@ func (p *tidyProgress) fit(entries []blockEntry, lines []blockLine, budget int) 
 
 // repoLine is the line of one repository. The caller holds the lock.
 func (p *tidyProgress) repoLine(e blockEntry, now time.Time, final bool, nameW, cols int, bar bool) blockLine {
-	name := padWidth(truncateWidth(e.name, tidyBlockNameMax), nameW)
+	name := padWidth(p.trunc(e.name, tidyBlockNameMax), nameW)
 	r := e.r
 	if r == nil {
 		word := "waiting"
 		if final {
 			word = "not started"
 		}
-		return blockLine{markQueued + " " + name + " " + word, blockQueued}
+		return blockLine{p.mark(blockQueued) + " " + name + " " + word, blockQueued}
 	}
 	phase, counts, left := "starting", "", ""
 	if n := len(r.phases); n > 0 {
@@ -267,13 +314,13 @@ func (p *tidyProgress) repoLine(e blockEntry, now time.Time, final bool, nameW, 
 	if !r.ended.IsZero() {
 		took := shortDuration(r.ended.Sub(r.started))
 		if r.state == "analysed" {
-			return blockLine{markDone + " " + name + " " + padWidth("analysed", tidyBlockPhaseWidth) + " " + took, blockDone}
+			return blockLine{p.mark(blockDone) + " " + name + " " + padWidth("analysed", tidyBlockPhaseWidth) + " " + took, blockDone}
 		}
 		state := untrusted.Esc(r.state)
 		if state == "" {
 			state = "stopped"
 		}
-		return blockLine{markRetain + " " + name + " " + padWidth(state, tidyBlockPhaseWidth) + " " + took, blockRetained}
+		return blockLine{p.mark(blockRetained) + " " + name + " " + padWidth(state, tidyBlockPhaseWidth) + " " + took, blockRetained}
 	}
 	took := shortDuration(now.Sub(r.started))
 	parts := []string{padWidth(phase, tidyBlockPhaseWidth)}
@@ -284,10 +331,10 @@ func (p *tidyProgress) repoLine(e blockEntry, now time.Time, final bool, nameW, 
 	if left != "" {
 		parts = append(parts, left)
 	}
-	mark, kind := markRunning, blockRunning
+	mark, kind := p.mark(blockRunning), blockRunning
 	if final {
 		// The run ended with this repository unfinished: a deadline or an interrupt.
-		mark, kind = markRetain, blockRetained
+		mark, kind = p.mark(blockRetained), blockRetained
 		parts = append([]string{"stopped"}, parts...)
 	}
 	text := mark + " " + name + " " + strings.Join(parts, " ")
@@ -309,8 +356,8 @@ func (p *tidyProgress) paint(s string, kind blockKind) string {
 	case blockQueued:
 		return "\x1b[2m" + s + reset
 	case blockDone, blockSummary:
-		if rest, ok := strings.CutPrefix(s, markDone); ok {
-			return "\x1b[32m" + markDone + reset + rest
+		if rest, ok := strings.CutPrefix(s, p.mark(kind)); ok {
+			return "\x1b[32m" + p.mark(kind) + reset + rest
 		}
 	}
 	return s
@@ -318,18 +365,25 @@ func (p *tidyProgress) paint(s string, kind blockKind) string {
 
 // writeBlock draws the block: the cursor goes up over the previous one, every line is rewritten
 // with the rest of the old line erased, and what is left below the new block is erased. The cursor
-// ends at the start of the line below. The caller holds the write lock.
-func (p *tidyProgress) writeBlock(lines []string) {
-	var b strings.Builder
-	if p.drawn > 0 {
-		fmt.Fprintf(&b, "\x1b[%dA", p.drawn)
+// ends at the start of the line below. A terminal that rewraps its lines when it gets narrower shows
+// an old line of width w in ceil(w/cols) rows, so the way up is counted in rows of the size of now,
+// and never more than the screen holds. The caller holds the write lock.
+func (p *tidyProgress) writeBlock(b renderedBlock) {
+	var out strings.Builder
+	up := 0
+	for _, w := range p.drawnW {
+		up += max(1, (w+b.cols-1)/b.cols)
 	}
-	for _, l := range lines {
-		b.WriteString("\r" + l + "\x1b[K\n")
+	up = min(up, b.rows-1)
+	if len(p.drawnW) > 0 && up > 0 {
+		fmt.Fprintf(&out, "\x1b[%dA", up)
 	}
-	b.WriteString("\x1b[J")
-	fmt.Fprint(p.w, b.String())
-	p.drawn = len(lines)
+	for _, l := range b.lines {
+		out.WriteString("\r" + l + "\x1b[K\n")
+	}
+	out.WriteString("\x1b[J")
+	fmt.Fprint(p.w, out.String())
+	p.drawnW = b.widths
 }
 
 // runeWidth is the number of terminal columns of r.
@@ -345,33 +399,61 @@ func runeWidth(r rune) int {
 	return 1
 }
 
+// cellWidths is the width of every rune of s. A variation selector 16 asks for the emoji form of the
+// rune before it, which takes two columns. East Asian ambiguous runes count one column; the lines
+// keep a column of slack (the block is cut at the width minus one).
+func cellWidths(s string) []int {
+	var out []int
+	for _, r := range s {
+		if r == 0xFE0F && len(out) > 0 && out[len(out)-1] == 1 {
+			out[len(out)-1] = 2
+			out = append(out, 0)
+			continue
+		}
+		out = append(out, runeWidth(r))
+	}
+	return out
+}
+
 func textWidth(s string) int {
 	n := 0
-	for _, r := range s {
-		n += runeWidth(r)
+	for _, w := range cellWidths(s) {
+		n += w
 	}
 	return n
 }
 
-// truncateWidth cuts s to at most max columns, ending in an ellipsis when it cut.
-func truncateWidth(s string, max int) string {
+// truncateWith cuts s to at most max columns, ending in ell when it cut.
+func truncateWith(s string, max int, ell string) string {
 	if max < 1 {
 		return ""
 	}
 	if textWidth(s) <= max {
 		return s
 	}
+	keep := max - textWidth(ell)
 	var b strings.Builder
 	w := 0
+	widths := cellWidths(s)
+	i := 0
 	for _, r := range s {
-		rw := runeWidth(r)
-		if w+rw > max-1 {
+		rw := 0
+		if i < len(widths) {
+			rw = widths[i]
+		}
+		i++
+		if r == 0xFE0F {
+			// Its width was added to the rune before it, which was written (or the loop ended).
+			b.WriteRune(r)
+			continue
+		}
+		if w+rw > keep {
 			break
 		}
 		b.WriteRune(r)
 		w += rw
 	}
-	return b.String() + "…"
+	return b.String() + ell
 }
 
 // padWidth pads s with blanks to n columns.

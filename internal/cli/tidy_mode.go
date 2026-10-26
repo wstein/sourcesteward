@@ -79,7 +79,7 @@ func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 
 // addTidyProgressFlags registers the flags that steer the progress output on stderr.
 func addTidyProgressFlags(f *pflag.FlagSet, o *tidyWizardOptions) {
-	f.BoolVar(&o.quiet, "quiet", false, "No live progress line on stderr (it is on by default when stderr is a terminal)")
+	f.BoolVar(&o.quiet, "quiet", false, "No progress output on stderr (the live block is on by default when stderr is a terminal)")
 	f.BoolVar(&o.progress, "progress", false, "Print progress lines to stderr every few seconds even when stderr is not a terminal")
 	f.StringVar(&o.trace, "trace", "", "Write one JSON line per Git process (arguments, duration, exit code) to this new file; stdout is unchanged")
 }
