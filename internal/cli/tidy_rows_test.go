@@ -4,6 +4,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 )
 
 // Spec 044: the text of `tidy plan` is the grouped overview and the retain table; --rows keeps the
@@ -14,7 +16,7 @@ func TestWizardPlanTextIsTheGroupedOverviewAndRowsKeepsTheRowView(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Workspace /ws", "Can be cleaned (4 of 6 candidates)", "risk", "Kept (2)", "stw tidy --rows"} {
+	for _, want := range []string{"Workspace /ws", "Derived:   workspace /ws (discovery)", "Mode:      human (stdin tty, stdout tty, no agent marker)", "Can be cleaned (4 of 6 candidates in 3 groups)", "risk", "Kept (2)", "stw tidy --rows"} {
 		if !strings.Contains(grouped, want) {
 			t.Errorf("%q missing:\n%s", want, grouped)
 		}
@@ -66,7 +68,7 @@ func TestRowsIsAWizardFlag(t *testing.T) {
 		}
 	}
 	if w.prepared != 0 {
-		t.Error("a usage error analysed the workspace")
+		t.Error("a usage error analyzed the workspace")
 	}
 	// The bare wizard takes it too.
 	newInteractive(t, false, false)
@@ -82,7 +84,7 @@ func TestBareTidyWithoutATerminalPrintsTheGroupedOverview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Can be cleaned (4 of 6 candidates)") || !strings.Contains(out, "No terminal (or an agent run)") || strings.Contains(out, "[1] safe") {
+	if !strings.Contains(out, "Can be cleaned (4 of 6 candidates in 3 groups)") || !strings.Contains(out, "No terminal (or an agent run)") || strings.Contains(out, "[1] safe") {
 		t.Errorf("%s", out)
 	}
 	if len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 {
@@ -104,5 +106,16 @@ func TestBareTidyOnATerminalKeepsTheNumberedRows(t *testing.T) {
 	}
 	if !strings.Contains(out, "[1] safe") || !strings.Contains(out, "Apply which?") {
 		t.Errorf("%s", out)
+	}
+}
+
+// A refused state directory is on the first screen of the default text, not only on stderr.
+func TestGroupedOverviewShowsARefusedStateDirectory(t *testing.T) {
+	w := newWizardWorld(t, true, true)
+	w.prep.Derived = append(w.prep.Derived, derive.Derived{Name: "state-dirs", Value: "/s (skipped: state-dir-unsafe)", Source: "--state-dir"})
+	w.prep.Stores = []derive.Store{{Path: "/s", Issue: &derive.Issue{Code: "state-dir-unsafe", Reason: "mode"}}}
+	out, err := runTidy(t, "", "plan")
+	if err == nil || !strings.Contains(out, "state-dirs /s (skipped: state-dir-unsafe) (--state-dir)") {
+		t.Errorf("%v\n%s", err, out)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
+	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 )
@@ -22,6 +23,7 @@ import (
 type realFixture struct {
 	Workspace    string                 `json:"workspace"`
 	Repositories []string               `json:"repositories"`
+	Derived      []derive.Derived       `json:"derived"`
 	Safe         []tidywizard.Candidate `json:"safe"`
 	Retained     []realRetained         `json:"retained"`
 	Total        int                    `json:"total"`
@@ -78,7 +80,7 @@ func realDocument(t *testing.T, activity time.Time) Document {
 	if len(cands) != f.Total {
 		t.Fatalf("%d candidates, want %d", len(cands), f.Total)
 	}
-	return Build(Input{Workspace: f.Workspace, Repos: meta, Result: tidywizard.Result{Repositories: repos, Candidates: cands}, Mode: owner.Evidence{Mode: owner.ModeAgent, Markers: []string{}, ByOwner: []string{}}, Now: runNow})
+	return Build(Input{Workspace: f.Workspace, Derived: f.Derived, Repos: meta, Result: tidywizard.Result{Repositories: repos, Candidates: cands}, Mode: owner.Evidence{Mode: owner.ModeAgent, Markers: []string{}, ByOwner: []string{}}, Now: runNow})
 }
 
 var longAgo = runNow.Add(-30 * 24 * time.Hour)
@@ -232,7 +234,7 @@ func TestOverviewEdgeCases(t *testing.T) {
 	}
 }
 
-func TestOverviewReportsRepositoriesThatWereNotAnalysed(t *testing.T) {
+func TestOverviewReportsRepositoriesThatWereNotAnalyzed(t *testing.T) {
 	out := Overview(Build(riskInput()), OverviewOptions{})
 	for _, want := range []string{"chartscribe", "sheetmill"} {
 		if !strings.Contains(out, want) {
@@ -283,38 +285,117 @@ func TestOverviewColorChangesNoByteOfThePlainText(t *testing.T) {
 	}
 }
 
-// The consequence of a group and the undo line are the facts of its effects, not guesses.
-func TestOverviewStatesTheConsequencesAndTheUndoLine(t *testing.T) {
-	out := Overview(realDocument(t, longAgo), OverviewOptions{})
-	for _, want := range []string{"files deleted", "reversible", "also delete their branch", "stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR"} {
+// The Derived block and the Mode line stay on the first screen (Spec 041 FR-010): a refused state
+// directory and an agent marker explain why a run exits 1 or asks nothing; both are escaped.
+func TestOverviewKeepsTheDerivedBlockAndTheModeLine(t *testing.T) {
+	in := riskInput()
+	in.Derived = append(in.Derived, derive.Derived{Name: "state-dirs", Value: "/s\x1b[2J (skipped: state-dir-unsafe)", Source: "--state-dir", Overridden: true})
+	in.Mode = owner.Evidence{Mode: owner.ModeAgent, StdinTTY: true, StdoutTTY: true, Markers: []string{"CLAUDE_CODE_SSE_PORT", "X\x1b[2J"}}
+	out := Overview(Build(in), OverviewOptions{})
+	for _, want := range []string{", state-dirs /s\\x1b[2J (skipped: state-dir-unsafe) (--state-dir)\n", "Mode:      agent (stdin tty, stdout tty, agent marker CLAUDE_CODE_SSE_PORT, X\\x1b[2J)\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q is missing:\n%s", want, out)
 		}
 	}
-	// No branch, no undo line.
-	in := riskInput()
-	in.Result.Candidates = []tidywizard.Candidate{func() tidywizard.Candidate {
-		c := cand("r", tidywizard.KindWorktree, "/tmp/x", tidywizard.VerdictSafe, "", owner.ScopeOwn)
-		c.Proof, c.Effects = tidywizard.ProofAncestor, []string{"remove-registration", "remove-files"}
-		return c
-	}()}
-	in.Result.Repositories = []tidywizard.RepoResult{{Name: "r", State: "analysed", Notices: []string{}}}
-	if out := Overview(Build(in), OverviewOptions{}); strings.Contains(out, "stw tidy restore") || strings.Contains(out, "reversible") {
-		t.Errorf("an undo line without a branch:\n%s", out)
+	in.Mode.Markers = []string{}
+	in.Derived = nil
+	out = Overview(Build(in), OverviewOptions{})
+	if !strings.Contains(out, "Mode:      agent (stdin tty, stdout tty, no agent marker)\n") || strings.Contains(out, "Derived:") {
+		t.Errorf("without a marker and derived values:\n%s", out)
+	}
+	// The line is the one of the row view, byte for byte.
+	rows := Text(Build(riskInput()), TextOptions{})
+	line := ""
+	for _, l := range strings.Split(rows, "\n") {
+		if strings.HasPrefix(l, "Derived:") {
+			line = l
+		}
+	}
+	if line == "" || !strings.Contains(Overview(Build(riskInput()), OverviewOptions{}), line+"\n") {
+		t.Errorf("the derived line differs from the row view: %q", line)
 	}
 }
 
-// An agent marker turns a terminal run into an agent run: the screen says so, escaped, and a run
-// without a marker has no mode line.
-func TestOverviewNamesTheAgentMarkers(t *testing.T) {
-	in := riskInput()
-	in.Mode = owner.Evidence{Mode: owner.ModeAgent, StdinTTY: true, StdoutTTY: true, Markers: []string{"CLAUDE_CODE_SSE_PORT", "X\x1b[2J"}}
-	out := Overview(Build(in), OverviewOptions{})
-	if !strings.Contains(out, "Mode:      agent (stdin tty, stdout tty, agent marker CLAUDE_CODE_SSE_PORT, X\\x1b[2J)\n") {
-		t.Errorf("mode line:\n%s", out)
+// The consequence line and the undo hint follow the effect classes: a branch group, and a directory
+// that also deletes its branch, have the undo hint; directories only and tracking references do not.
+func TestOverviewUndoHintFollowsTheEffectClass(t *testing.T) {
+	mk := func(kind tidywizard.Kind, subject string, effects ...string) tidywizard.Candidate {
+		c := cand("r", kind, subject, tidywizard.VerdictSafe, "", owner.ScopeOwn)
+		c.Proof, c.Effects = tidywizard.ProofAncestor, effects
+		return c
 	}
-	in.Mode.Markers = []string{}
-	if out := Overview(Build(in), OverviewOptions{}); strings.Contains(out, "Mode:") {
-		t.Errorf("mode line without a marker:\n%s", out)
+	run := func(c tidywizard.Candidate) string {
+		in := riskInput()
+		in.Result.Candidates = []tidywizard.Candidate{c}
+		in.Result.Repositories = []tidywizard.RepoResult{{Name: "r", State: "analysed", Notices: []string{}}}
+		return Overview(Build(in), OverviewOptions{})
+	}
+	undo := "stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize"
+	history := "stw tidy history --contract 3 --state-dir DIR"
+	for name, tc := range map[string]struct {
+		c           tidywizard.Candidate
+		undo        bool
+		consequence string
+	}{
+		"branch":                    {mk(tidywizard.KindBranch, "b", "delete-branch:b"), true, "reversible"},
+		"directory with its branch": {mk(tidywizard.KindWorktree, "/tmp/x", "remove-registration", "remove-files", "delete-branch:b"), true, "files deleted, branch too"},
+		"directory only":            {mk(tidywizard.KindWorktree, "/tmp/x", "remove-registration", "remove-files"), false, "files deleted"},
+		"tracking reference":        {mk(tidywizard.KindTrackingRef, "refs/remotes/origin/x", "delete-tracking-ref:refs/remotes/origin/x"), false, "reference deleted"},
+	} {
+		out := run(tc.c)
+		if strings.Contains(out, undo) != tc.undo || strings.Contains(out, history) != tc.undo || !strings.Contains(out, tc.consequence) {
+			t.Errorf("%s: undo %v, want consequence %q:\n%s", name, strings.Contains(out, undo), tc.consequence, out)
+		}
+	}
+}
+
+// Hostile text in the owner and the repository of a group reaches the screen escaped, also where the
+// group has one owner or one repository (the label is then named, not counted).
+func TestOverviewEscapesTheOwnerAndTheRepositoryOfASingleGroup(t *testing.T) {
+	in := riskInput()
+	b := cand("re\x1bpo", tidywizard.KindBranch, "x", tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	b.Owner, b.OwnerSource, b.Proof, b.Effects = "ow\x1bner", owner.SourceTaskRecord, tidywizard.ProofAncestor, []string{"delete-branch:x"}
+	w := cand("repo2", tidywizard.KindWorktree, "/tmp/y", tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	w.Owner, w.Proof, w.Effects = "o2\x1bx", tidywizard.ProofAncestor, []string{"remove-registration", "remove-files"}
+	w2 := w
+	w2.ID, w2.Path, w2.Owner = "worktree:repo2:/tmp/z", "/tmp/z", "o3\x1by"
+	in.Result.Candidates = []tidywizard.Candidate{b, w, w2}
+	in.Result.Repositories = []tidywizard.RepoResult{{Name: "re\x1bpo", State: "analysed", Notices: []string{}}, {Name: "repo2", State: "analysed", Notices: []string{}}}
+	out := Overview(Build(in), OverviewOptions{})
+	for _, want := range []string{"in re\\x1bpo", "ow\\x1bner", "o2\\x1bx and o3\\x1by"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q is missing:\n%s", want, out)
+		}
+	}
+	if strings.ContainsRune(out, 0x1b) {
+		t.Error("raw escape")
+	}
+}
+
+// Past the candidate cap the grouped text reads the whole result: owners and the kept counts are
+// not those of the cut list.
+func TestOverviewCountsTheWholeResultPastTheCandidateCap(t *testing.T) {
+	in := riskInput()
+	in.Result.Repositories = []tidywizard.RepoResult{{Name: "r", State: "analysed", Notices: []string{}}}
+	in.Result.Candidates = nil
+	for i := 0; i < tidywizard.MaxCandidates+10; i++ {
+		c := cand("r", tidywizard.KindBranch, fmt.Sprintf("b%05d", i), tidywizard.VerdictSafe, "", owner.ScopeOwn)
+		c.Owner, c.Proof, c.Effects = "claude", tidywizard.ProofAncestor, []string{"delete-branch:x"}
+		if i%2 == 1 {
+			c = cand("r", tidywizard.KindBranch, fmt.Sprintf("b%05d", i), tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn)
+		}
+		in.Result.Candidates = append(in.Result.Candidates, c)
+	}
+	d := Build(in)
+	if len(d.Candidates) != tidywizard.MaxCandidates {
+		t.Fatalf("the list is not cut: %d", len(d.Candidates))
+	}
+	out := Overview(d, OverviewOptions{})
+	want := (tidywizard.MaxCandidates + 10) / 2
+	if !strings.Contains(out, fmt.Sprintf("Kept (%s)", thousands(want))) || strings.Contains(out, "unknown") || !strings.Contains(out, "reversible, claude") {
+		t.Errorf("counts of the cut list:\n%s", out)
+	}
+	if rt := RetainTable(d, OverviewOptions{}); !strings.Contains(rt, fmt.Sprintf("Kept: %s candidates", thousands(want))) {
+		t.Errorf("retain table:\n%s", rt)
 	}
 }

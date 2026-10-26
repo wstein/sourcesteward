@@ -80,7 +80,7 @@ type tidyWizardOptions struct {
 }
 
 // rowsUsage is the help text of --rows.
-const rowsUsage = "Print one line per candidate with its codes, grouped by owner, instead of the grouped overview; text only, --json is unchanged"
+const rowsUsage = "Print the row view (one line per candidate with its codes, grouped by owner, 10 per repository and owner) instead of the grouped overview; text only, --json is unchanged"
 
 func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 	f := cmd.Flags()
