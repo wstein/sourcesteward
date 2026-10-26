@@ -399,3 +399,55 @@ func TestOverviewCountsTheWholeResultPastTheCandidateCap(t *testing.T) {
 		t.Errorf("retain table:\n%s", rt)
 	}
 }
+
+// Spec 044 SC-012 and "Overview first": a green group is never folded, only groups of one effect
+// class are folded together, and a folded line still says what happens to its rows.
+func TestFoldingKeepsGreenGroupsAndEffectClasses(t *testing.T) {
+	for _, at := range []time.Time{longAgo, {}} {
+		d := realDocument(t, at)
+		all := overviewGroups(d)
+		shown := foldGroups(all, maxGroupLines)
+		if len(shown) > maxGroupLines {
+			t.Fatalf("%d lines", len(shown))
+		}
+		rows, greens := 0, 0
+		for _, g := range shown {
+			rows += len(g.Rows)
+			if g.merged > 0 && g.Level == risk.Green {
+				t.Errorf("a green group was folded: %+v", g.Counts)
+			}
+			if g.merged > 0 {
+				for _, r := range g.Rows {
+					if tidywizard.Kind(r.Kind) != g.Kind {
+						t.Errorf("a folded line mixes kinds: %s in %s", r.Kind, g.Kind)
+					}
+				}
+			}
+		}
+		for _, g := range all {
+			if g.Level == risk.Green {
+				greens++
+			}
+		}
+		for _, g := range shown {
+			if g.Level == risk.Green && g.merged == 0 {
+				greens--
+			}
+		}
+		if rows != 165 || greens != 0 {
+			t.Errorf("rows %d, green groups not shown alone: %d", rows, greens)
+		}
+	}
+	out := Overview(realDocument(t, longAgo), OverviewOptions{})
+	if !strings.Contains(out, "2 branches      in .") || !strings.Contains(out, "+ 4 smaller groups  reversible") || !strings.Contains(out, "files deleted, branch too") {
+		t.Errorf("folded lines do not say what happens:\n%s", out)
+	}
+	// Nothing to fold: green groups stay, the list may be longer than the limit.
+	var many []OverviewGroup
+	for i := 0; i < 12; i++ {
+		many = append(many, OverviewGroup{Kind: tidywizard.KindBranch, Repo: fmt.Sprint("r", i), Level: risk.Green, Rows: make([]risk.Row, 1)})
+	}
+	if got := foldGroups(many, maxGroupLines); len(got) != 12 {
+		t.Errorf("green groups were folded: %d", len(got))
+	}
+}
