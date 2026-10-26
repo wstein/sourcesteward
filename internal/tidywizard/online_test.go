@@ -82,25 +82,19 @@ func TestSelectTipsOrderCapAndEligibility(t *testing.T) {
 	}
 }
 
-func TestPRFactOfARow(t *testing.T) {
-	merged := &hosting.TidyPullRequest{Number: 41}
+func TestTipFactOfAnAnswer(t *testing.T) {
 	for name, tc := range map[string]struct {
-		row  hosting.TidyHeadEvidence
+		row  hosting.TidyTipEvidence
 		want PREvidence
 	}{
-		"merged head":          {hosting.TidyHeadEvidence{Result: "github-merged-head", PullRequest: merged}, PREvidence{State: PRMerged, Number: 41}},
-		"merged wins":          {hosting.TidyHeadEvidence{Result: "github-merged-head", PullRequest: merged, ClosedUnmerged: []int{3}}, PREvidence{State: PRMerged, Number: 41}},
-		"closed unmerged":      {hosting.TidyHeadEvidence{Result: "no-merged-pr", ClosedUnmerged: []int{3, 8}}, PREvidence{State: PRClosedUnmerged}},
-		"closed unmerged part": {hosting.TidyHeadEvidence{Result: "discovery-incomplete", ClosedUnmerged: []int{3}}, PREvidence{State: PRClosedUnmerged}},
-		"none":                 {hosting.TidyHeadEvidence{Result: "no-merged-pr", Coverage: "complete"}, PREvidence{State: PRNone}},
-		"none incomplete":      {hosting.TidyHeadEvidence{Result: "no-merged-pr", Coverage: "incomplete"}, PREvidence{State: PRUnknown}},
-		"incomplete":           {hosting.TidyHeadEvidence{Result: "discovery-incomplete", Coverage: "incomplete"}, PREvidence{State: PRUnknown}},
-		"budget":               {hosting.TidyHeadEvidence{Result: "discovery-budget-exhausted"}, PREvidence{State: PRUnknown}},
-		"ambiguous":            {hosting.TidyHeadEvidence{Result: "ambiguous-needs-hint"}, PREvidence{State: PRUnknown}},
-		"merged without tuple": {hosting.TidyHeadEvidence{Result: "github-merged-head"}, PREvidence{State: PRUnknown}},
-		"unknown word":         {hosting.TidyHeadEvidence{Result: "something-new"}, PREvidence{State: PRUnknown}},
+		"merged head":           {hosting.TidyTipEvidence{State: hosting.TidyTipMerged, Number: 41}, PREvidence{State: PRMerged, Number: 41}},
+		"merged without number": {hosting.TidyTipEvidence{State: hosting.TidyTipMerged}, PREvidence{State: PRUnknown}},
+		"closed unmerged":       {hosting.TidyTipEvidence{State: hosting.TidyTipClosedUnmerged, Number: 3}, PREvidence{State: PRClosedUnmerged}},
+		"unknown":               {hosting.TidyTipEvidence{State: hosting.TidyTipUnknown}, PREvidence{State: PRUnknown}},
+		"unknown word":          {hosting.TidyTipEvidence{State: "something-new"}, PREvidence{State: PRUnknown}},
+		"empty":                 {hosting.TidyTipEvidence{}, PREvidence{State: PRUnknown}},
 	} {
-		if got := prFact(tc.row); got != tc.want {
+		if got := tipFact(tc.row); got != tc.want {
 			t.Errorf("%s: %+v, want %+v", name, got, tc.want)
 		}
 	}
@@ -133,7 +127,7 @@ func TestPREvidenceNoteAndNoProof(t *testing.T) {
 
 // fakeGitHub is a request-counting double of the hosting layer: it answers every GET and fails the
 // test on any other method. A member session of the double sends the requests the real discovery
-// would: one repository read, ten collection pages and one read per merged candidate.
+// would: one repository read and one read per tip.
 type fakeGitHub struct {
 	t      *testing.T
 	mu     sync.Mutex
@@ -173,8 +167,10 @@ func (g *fakeGitHub) RoundTrip(req *http.Request) (*http.Response, error) {
 type fakeSession struct {
 	rt    http.RoundTripper
 	repo  string
-	merge func(oid string) hosting.TidyHeadEvidence
-	pages int
+	merge func(oid string) hosting.TidyTipEvidence
+	// extra rows are appended to the answer (a row for a tip that was not asked), drop rows are left out.
+	extra []hosting.TidyTipEvidence
+	drop  int
 }
 
 func (s *fakeSession) get(ctx context.Context, path string) error {
@@ -189,35 +185,31 @@ func (s *fakeSession) get(ctx context.Context, path string) error {
 	return nil
 }
 
-func (s *fakeSession) DiscoverPullRequests(ctx context.Context, targets []string, _ map[string]int) ([]hosting.TidyHeadEvidence, error) {
+// ReadTipPullRequests sends what the real session sends: the repository read, the revalidation
+// and one read per tip.
+func (s *fakeSession) ReadTipPullRequests(ctx context.Context, targets []string) ([]hosting.TidyTipEvidence, error) {
 	if err := s.get(ctx, ""); err != nil {
 		return nil, err
 	}
-	for p := 1; p <= s.pages; p++ {
-		if err := s.get(ctx, "/pulls"); err != nil {
-			return nil, err
-		}
-	}
-	rows := []hosting.TidyHeadEvidence{}
+	rows := []hosting.TidyTipEvidence{}
 	sorted := append([]string{}, targets...)
 	sort.Strings(sorted)
 	for _, oid := range sorted {
-		row := s.merge(oid)
-		row.HeadOID = oid
-		if row.PullRequest != nil {
-			if err := s.get(ctx, "/pulls/1"); err != nil {
-				return nil, err
-			}
+		if err := s.get(ctx, "/commits/"+oid+"/pulls"); err != nil {
+			return nil, err
 		}
+		row := s.merge(oid)
+		row.Tip = oid
 		rows = append(rows, row)
 	}
-	return rows, nil
+	rows = rows[:len(rows)-min(s.drop, len(rows))]
+	return append(rows, s.extra...), nil
 }
 
 func (s *fakeSession) Close() {}
 
-func mergedRow(oid string) hosting.TidyHeadEvidence {
-	return hosting.TidyHeadEvidence{Result: "github-merged-head", Coverage: "complete", PullRequest: &hosting.TidyPullRequest{Number: 100 + int(oid[len(oid)-1])}}
+func mergedRow(oid string) hosting.TidyTipEvidence {
+	return hosting.TidyTipEvidence{State: hosting.TidyTipMerged, Number: 100 + int(oid[len(oid)-1])}
 }
 
 // workspaceDouble is the 7-member, 466-tip workspace of Spec 044 SC-005: 165 safe tips with an
@@ -247,9 +239,9 @@ func workspaceDouble() ([]OnlineMember, []Candidate, map[string]int) {
 	return members, cands, perRepo
 }
 
-func openFake(g *fakeGitHub, pages int, merge func(string) hosting.TidyHeadEvidence) PROpener {
+func openFake(g *fakeGitHub, merge func(string) hosting.TidyTipEvidence) PROpener {
 	return func(_ context.Context, path, _ string, rt http.RoundTripper) (PRSession, error) {
-		return &fakeSession{rt: rt, repo: "x/" + strings.TrimPrefix(path, "/ws/"), merge: merge, pages: pages}, nil
+		return &fakeSession{rt: rt, repo: "x/" + strings.TrimPrefix(path, "/ws/"), merge: merge}, nil
 	}
 }
 
@@ -264,9 +256,9 @@ func TestFetchSevenMembersAbout466TipsRespectsEveryBudget(t *testing.T) {
 	}
 	before := append([]Candidate{}, cands...)
 	g := newDouble(t)
-	// Every tip has a merged pull request: a member needs 1 + 10 + 64 = 75 requests, seven need 525.
-	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, 10, mergedRow), Transport: g, Width: 1})
-	if g.gets > hosting.TidyRunMaxRequests || out.Requests != g.gets || g.writes.Load() != 0 {
+	// A member with 64 tips needs 1 + 64 = 65 requests; with a run cap of 400 the seventh is cut.
+	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, mergedRow), Transport: g, Width: 1, RunCap: 400})
+	if g.gets > 400 || out.Requests != g.gets || g.writes.Load() != 0 {
 		t.Fatalf("requests %d counted %d writes %d", g.gets, out.Requests, g.writes.Load())
 	}
 	checked, capped := 0, 0
@@ -308,12 +300,12 @@ func TestFetchSevenMembersAbout466TipsRespectsEveryBudget(t *testing.T) {
 func TestFetchWithManyFewRequestsChecksEveryMember(t *testing.T) {
 	members, cands, _ := workspaceDouble()
 	g := newDouble(t)
-	// No merged pull request: one repository read and the collection pages only.
-	none := func(string) hosting.TidyHeadEvidence {
-		return hosting.TidyHeadEvidence{Result: "no-merged-pr", Coverage: "complete"}
+	// Closed unmerged everywhere: the repository read and one read per tip.
+	none := func(string) hosting.TidyTipEvidence {
+		return hosting.TidyTipEvidence{State: hosting.TidyTipClosedUnmerged}
 	}
-	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, 3, none), Transport: g})
-	if g.gets != 7*4 || out.Notice() != "GitHub: checked 7 of 7 repositories" {
+	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, none), Transport: g})
+	if g.gets != 7*65 || out.Notice() != "GitHub: checked 7 of 7 repositories" {
 		t.Fatalf("%d requests, %q", g.gets, out.Notice())
 	}
 	for _, m := range out.Members {
@@ -321,7 +313,7 @@ func TestFetchWithManyFewRequestsChecksEveryMember(t *testing.T) {
 			t.Errorf("%+v", m)
 		}
 	}
-	if f, ok := out.Lookup(cands[0]); !ok || f.State != PRNone {
+	if f, ok := out.Lookup(cands[0]); !ok || f.State != PRClosedUnmerged {
 		t.Errorf("%+v %v", f, ok)
 	}
 	// A tip beyond the cap of 64 is not checked: no fact (absent), which is not "none".
@@ -339,7 +331,7 @@ func twoMembers() ([]OnlineMember, []Candidate) {
 // repositories keep their own results unless the run itself stopped.
 func TestFetchFallbackReasons(t *testing.T) {
 	members, cands := twoMembers()
-	merged := func(oid string) hosting.TidyHeadEvidence { return mergedRow(oid) }
+	merged := mergedRow
 	for name, tc := range map[string]struct {
 		open       func(g *fakeGitHub) PROpener
 		prep       func(g *fakeGitHub)
@@ -368,7 +360,7 @@ func TestFetchFallbackReasons(t *testing.T) {
 		},
 		"one member's own budget ends only that member": {
 			open: func(g *fakeGitHub) PROpener {
-				good := openFake(g, 2, merged)
+				good := openFake(g, merged)
 				return func(ctx context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
 					if path == "/ws/a" {
 						return &failingSession{err: hosting.ErrTidyLimit}, nil
@@ -381,7 +373,7 @@ func TestFetchFallbackReasons(t *testing.T) {
 		},
 		"a plain error ends only that member": {
 			open: func(g *fakeGitHub) PROpener {
-				good := openFake(g, 2, merged)
+				good := openFake(g, merged)
 				return func(ctx context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
 					if path == "/ws/a" {
 						return &failingSession{err: errors.New("boom")}, nil
@@ -393,32 +385,32 @@ func TestFetchFallbackReasons(t *testing.T) {
 			wantNotice: "GitHub: checked 2 of 3 repositories; the others are judged offline (a GitHub read failed)",
 		},
 		"rate limit stops every unfinished member": {
-			open: func(g *fakeGitHub) PROpener { return openFake(g, 2, merged) },
+			open: func(g *fakeGitHub) PROpener { return openFake(g, merged) },
 			prep: func(g *fakeGitHub) { g.status["a"], g.after["a"] = 429, 0 },
 			// a is first in order and runs alone (Width 1): it hits the limit, b and c never send.
 			wantA: ReasonRateLimit, wantB: ReasonRateLimit,
 			wantNotice: "GitHub: checked 0 of 3 repositories; the others are judged offline (GitHub rate limit reached)",
 		},
 		"exhausted 403": {
-			open:  func(g *fakeGitHub) PROpener { return openFake(g, 2, merged) },
+			open:  func(g *fakeGitHub) PROpener { return openFake(g, merged) },
 			prep:  func(g *fakeGitHub) { g.status["a"], g.after["a"] = 403, 1; g.exhausted = true },
 			wantA: ReasonRateLimit, wantB: ReasonRateLimit,
 			wantNotice: "GitHub: checked 0 of 3 repositories; the others are judged offline (GitHub rate limit reached)",
 		},
 		"server error": {
-			open:  func(g *fakeGitHub) PROpener { return openFake(g, 2, merged) },
-			prep:  func(g *fakeGitHub) { g.status["a"], g.after["a"] = 502, 2 },
+			open:  func(g *fakeGitHub) PROpener { return openFake(g, merged) },
+			prep:  func(g *fakeGitHub) { g.status["a"], g.after["a"] = 502, 1 },
 			wantA: ReasonServer, wantB: ReasonServer,
 			wantNotice: "GitHub: checked 0 of 3 repositories; the others are judged offline (GitHub reported a server error)",
 		},
 		"a permission 403 is only that member": {
-			open:  func(g *fakeGitHub) PROpener { return openFake(g, 2, merged) },
+			open:  func(g *fakeGitHub) PROpener { return openFake(g, merged) },
 			prep:  func(g *fakeGitHub) { g.status["a"], g.after["a"] = 403, 1 },
 			wantA: ReasonError, wantB: "",
 			wantNotice: "GitHub: checked 2 of 3 repositories; the others are judged offline (a GitHub read failed)",
 		},
 		"timeout": {
-			open:   func(g *fakeGitHub) PROpener { return openFake(g, 2, merged) },
+			open:   func(g *fakeGitHub) PROpener { return openFake(g, merged) },
 			cancel: true,
 			wantA:  ReasonTimeout, wantB: ReasonTimeout,
 			wantNotice: "GitHub: checked 0 of 3 repositories; the others are judged offline (timeout reached)",
@@ -461,7 +453,7 @@ func TestFetchFallbackReasons(t *testing.T) {
 
 type failingSession struct{ err error }
 
-func (s *failingSession) DiscoverPullRequests(context.Context, []string, map[string]int) ([]hosting.TidyHeadEvidence, error) {
+func (s *failingSession) ReadTipPullRequests(context.Context, []string) ([]hosting.TidyTipEvidence, error) {
 	return nil, s.err
 }
 func (s *failingSession) Close() {}
@@ -474,7 +466,7 @@ func TestFetchWithoutTipsMakesNoRequest(t *testing.T) {
 	opened := 0
 	open := func(ctx context.Context, p, r string, rt http.RoundTripper) (PRSession, error) {
 		opened++
-		return openFake(g, 1, mergedRow)(ctx, p, r, rt)
+		return openFake(g, mergedRow)(ctx, p, r, rt)
 	}
 	strong := []Candidate{onlineCand("a", KindBranch, "s", VerdictSafe, ProofAncestor, "", oidOf(1)), onlineCand("b", KindBranch, "d", VerdictRetain, ProofNone, "dirty", oidOf(2))}
 	out := FetchPREvidence(context.Background(), members, strong, OnlineOptions{Open: open, Transport: g})
@@ -494,8 +486,8 @@ func TestFetchWithoutTipsMakesNoRequest(t *testing.T) {
 func TestFetchWidthFourKeepsTheRunCap(t *testing.T) {
 	members, cands, _ := workspaceDouble()
 	g := newDouble(t)
-	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, 10, mergedRow), Transport: g, Width: 4})
-	if g.gets > hosting.TidyRunMaxRequests || out.Requests > hosting.TidyRunMaxRequests || g.writes.Load() != 0 {
+	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, mergedRow), Transport: g, Width: 4, RunCap: 400})
+	if g.gets > 400 || out.Requests > 400 || g.writes.Load() != 0 {
 		t.Fatalf("%d requests", g.gets)
 	}
 	for _, m := range out.Members {
@@ -541,7 +533,8 @@ func TestFormatOnlineNotice(t *testing.T) {
 		"fixed order":     {0, 2, []string{ReasonTimeout, ReasonNotAuthenticated}, "GitHub: checked 0 of 2 repositories; the others are judged offline (gh is not authenticated; timeout reached)"},
 		"generic hidden":  {0, 2, []string{ReasonError, ReasonNotAuthenticated}, "GitHub: checked 0 of 2 repositories; the others are judged offline (gh is not authenticated)"},
 		"generic alone":   {0, 2, []string{ReasonError}, "GitHub: checked 0 of 2 repositories; the others are judged offline (a GitHub read failed)"},
-		"unknown word":    {0, 1, []string{"surprise"}, "GitHub: checked 0 of 1 repositories; the others are judged offline (a GitHub read failed)"},
+		"too large":       {0, 2, []string{ReasonResponseTooLarge, ReasonError}, "GitHub: checked 0 of 2 repositories; the others are judged offline (a GitHub response exceeded its size bound)"},
+		"unknown word":    {0, 1, []string{"surprise"}, "GitHub: checked 0 of 1 repository; the others are judged offline (a GitHub read failed)"},
 	} {
 		if got := FormatOnlineNotice(tc.checked, tc.of, tc.reasons); got != tc.want {
 			t.Errorf("%s: %q", name, got)
@@ -558,7 +551,7 @@ func TestFetchAStopOfTheRunComesBeforeTheTimeoutAndOpensNothingMore(t *testing.T
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	opened := 0
-	good := openFake(g, 2, mergedRow)
+	good := openFake(g, mergedRow)
 	open := func(c context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
 		opened++
 		s, err := good(c, path, remote, rt)
@@ -584,8 +577,8 @@ type cancelAfter struct {
 	cancel context.CancelFunc
 }
 
-func (c *cancelAfter) DiscoverPullRequests(ctx context.Context, targets []string, hints map[string]int) ([]hosting.TidyHeadEvidence, error) {
-	rows, err := c.PRSession.DiscoverPullRequests(ctx, targets, hints)
+func (c *cancelAfter) ReadTipPullRequests(ctx context.Context, targets []string) ([]hosting.TidyTipEvidence, error) {
+	rows, err := c.PRSession.ReadTipPullRequests(ctx, targets)
 	c.cancel()
 	return rows, err
 }
@@ -596,7 +589,7 @@ func TestFetchAfterAStopNoSessionIsOpened(t *testing.T) {
 	g := newDouble(t)
 	g.status["a"], g.after["a"] = 429, 0
 	opened := 0
-	good := openFake(g, 2, mergedRow)
+	good := openFake(g, mergedRow)
 	open := func(c context.Context, path, remote string, rt http.RoundTripper) (PRSession, error) {
 		opened++
 		return good(c, path, remote, rt)
@@ -604,5 +597,103 @@ func TestFetchAfterAStopNoSessionIsOpened(t *testing.T) {
 	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: open, Transport: g, Width: 1})
 	if opened != 1 || g.gets != 1 || out.Requests != 1 || out.Notice() != "GitHub: checked 0 of 3 repositories; the others are judged offline (GitHub rate limit reached)" {
 		t.Errorf("opened %d gets %d requests %d %q", opened, g.gets, out.Requests, out.Notice())
+	}
+}
+
+// A session that answers for a tip that was not asked, or leaves one out, judges only that
+// repository offline: a partial or foreign answer is never used.
+func TestFetchRefusesAForeignOrMissingRow(t *testing.T) {
+	members, cands := twoMembers()
+	for name, session := range map[string]func(*fakeSession){
+		"foreign row": func(s *fakeSession) {
+			s.extra = []hosting.TidyTipEvidence{{Tip: oidOf(99), State: hosting.TidyTipMerged, Number: 7}}
+		},
+		"missing row": func(s *fakeSession) { s.drop = 1 },
+		"swapped row": func(s *fakeSession) {
+			s.drop, s.extra = 1, []hosting.TidyTipEvidence{{Tip: oidOf(99), State: hosting.TidyTipMerged, Number: 7}}
+		},
+	} {
+		g := newDouble(t)
+		good := openFake(g, mergedRow)
+		open := func(c context.Context, path, remote string, rt hosting.TidyTransport) (PRSession, error) {
+			s, err := good(c, path, remote, rt)
+			if err == nil && path == "/ws/a" {
+				session(s.(*fakeSession))
+			}
+			return s, err
+		}
+		out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: open, Transport: g, Width: 1})
+		byName := map[string]MemberOutcome{}
+		for _, m := range out.Members {
+			byName[m.Name] = m
+		}
+		if m := byName["a"]; m.State != MemberOffline || m.Reason != ReasonError {
+			t.Errorf("%s: %+v", name, m)
+		}
+		if _, ok := out.Lookup(cands[0]); ok {
+			t.Errorf("%s: a fact of a rejected answer is used", name)
+		}
+		if _, ok := out.Facts[TipKey{Repo: "a", Tip: oidOf(99)}]; ok {
+			t.Errorf("%s: the foreign tip became a fact", name)
+		}
+		if byName["b"].State != MemberChecked || byName["c"].State != MemberChecked {
+			t.Errorf("%s: the others are unaffected: %+v", name, byName)
+		}
+	}
+}
+
+// A response over its size bound gets its own reason (not a generic failed read).
+func TestFetchNamesAnOversizedResponse(t *testing.T) {
+	members, cands := twoMembers()
+	g := newDouble(t)
+	open := func(context.Context, string, string, hosting.TidyTransport) (PRSession, error) {
+		return &failingSession{err: fmt.Errorf("wrapped: %w", hosting.ErrTidyResponseTooLarge)}, nil
+	}
+	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: open, Transport: g})
+	if out.Notice() != "GitHub: checked 0 of 3 repositories; the others are judged offline (a GitHub response exceeded its size bound)" {
+		t.Errorf("%q", out.Notice())
+	}
+}
+
+// The run budget is shared with whoever else reads in the run (the tracking reads of the
+// observation): a stop already seen means no session is opened and no request is sent, and
+// requests already counted leave less for the pull request reads.
+func TestFetchSharesTheRunBudgetWithEarlierReads(t *testing.T) {
+	members, cands := twoMembers()
+	g := newDouble(t)
+	g.status["tracking"], g.after["tracking"] = 429, 0
+	budget := hosting.NewTidyRunBudget(g, hosting.TidyRunMaxRequests)
+	req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/x/tracking", nil)
+	if res, err := budget.RoundTrip(req); err != nil || res.StatusCode != 429 {
+		t.Fatalf("%v", err)
+	}
+	opened := 0
+	good := openFake(g, mergedRow)
+	open := func(c context.Context, path, remote string, rt hosting.TidyTransport) (PRSession, error) {
+		opened++
+		return good(c, path, remote, rt)
+	}
+	out := FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: open, Budget: budget})
+	if opened != 0 || g.gets != 1 || out.Requests != 1 || out.Stopped != hosting.TidyStopRateLimit || len(out.Facts) != 0 {
+		t.Fatalf("opened %d gets %d requests %d stopped %q", opened, g.gets, out.Requests, out.Stopped)
+	}
+	if out.Notice() != "GitHub: checked 0 of 3 repositories; the others are judged offline (GitHub rate limit reached)" {
+		t.Errorf("%q", out.Notice())
+	}
+
+	// Requests of earlier reads count against the cap of 512 of the same run.
+	g = newDouble(t)
+	budget = hosting.NewTidyRunBudget(g, hosting.TidyRunMaxRequests)
+	for i := 0; i < hosting.TidyRunMaxRequests-3; i++ {
+		req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/x/tracking", nil)
+		if res, err := budget.RoundTrip(req); err != nil {
+			t.Fatal(err)
+		} else {
+			res.Body.Close()
+		}
+	}
+	out = FetchPREvidence(context.Background(), members, cands, OnlineOptions{Open: openFake(g, mergedRow), Budget: budget, Width: 1})
+	if g.gets != hosting.TidyRunMaxRequests || out.Requests != hosting.TidyRunMaxRequests || out.Stopped != hosting.TidyStopRunCap {
+		t.Fatalf("gets %d requests %d stopped %q", g.gets, out.Requests, out.Stopped)
 	}
 }

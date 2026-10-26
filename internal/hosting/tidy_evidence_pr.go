@@ -44,10 +44,6 @@ type TidyHeadEvidence struct {
 	// closed collection was read to an authoritative end.
 	Result   string `json:"result"`
 	Coverage string `json:"coverage"`
-	// ClosedUnmerged lists, in ascending order, the numbers of the pull requests of this head
-	// that were read in full and are closed without being merged (Spec 044 T005). It is empty
-	// unless there are such pull requests and never makes a proof.
-	ClosedUnmerged []int `json:"closed_unmerged,omitempty"`
 }
 
 type tidyPRRef struct {
@@ -354,9 +350,6 @@ func (s *TidySession) DiscoverPullRequests(parent context.Context, targets []str
 				matches = append(matches, p)
 			} else if item.Reason == "integration-not-proven" {
 				item.Reason = reason
-			}
-			if p.HeadOID == head && p.State == "closed" && !p.Merged {
-				item.ClosedUnmerged = append(item.ClosedUnmerged, p.Number)
 			}
 		}
 		switch {

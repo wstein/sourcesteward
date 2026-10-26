@@ -198,9 +198,19 @@ type tidyV3TrackingCoordinator struct {
 	openHosting func(context.Context, string, hosting.TidySessionOptions) (tidyV3TrackingHosting, error)
 }
 
+// openTrackingSession is the production session of the tracking reads; a variable so a test can
+// see the transport it is given.
+var openTrackingSession = hosting.OpenTidySessionWithTransport
+
 func defaultTidyV3TrackingCoordinator() tidyV3TrackingCoordinator {
 	return tidyV3TrackingCoordinator{refs: defaultTidyV3RefsCoordinator(), openHosting: func(ctx context.Context, path string, o hosting.TidySessionOptions) (tidyV3TrackingHosting, error) {
-		return hosting.OpenTidySession(ctx, path, o)
+		// A run that carries a run budget (the human wizard, Spec 044 D13) shares it with the
+		// pull request reads: its request cap and its rate-limit stop apply to these reads too.
+		var rt hosting.TidyTransport
+		if b := hosting.TidyRunBudgetFrom(ctx); b != nil {
+			rt = b
+		}
+		return openTrackingSession(ctx, path, o, rt)
 	}}
 }
 

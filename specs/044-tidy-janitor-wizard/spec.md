@@ -263,10 +263,15 @@ read-only GET requests, the Spec 031 closed endpoint set, the token never in out
 | The expert layer (a `PATH` or any expert flag) | Offline unless `--online`, as today; `--offline` is **not accepted** there (exit 2, like every wizard-only flag) |
 | An explicit `--online` | Behavior as today (the contract-3 failure rules); only the implicit default falls back, and it says so in its one notice line |
 
-**Phase 1 use of the reads.** Spec 031 discovery (FR-013 to FR-018) runs per explicitly resolved repository, closed endpoint set, up to 10
-pages of 100 closed pull requests, 128 requests, 32 MiB and one 30-second deadline per run, and targets unproven tips. The wizard extends
-it, read-only, to the `safe` tips whose proof is only `equivalent`, so that a merged head makes them green, and to `unmerged` tips for
-a hint. Positive evidence is usable whatever the coverage; absence is inconclusive (031 FR-017).
+**Phase 1 use of the reads.** (Amended 2026-10-26, foreman decision after the review of the P2 pull request, owner may reverse: the
+page-based read of the first draft failed on the live workspace, where one page of 100 closed pull requests is about 2 MB and the bound of
+one response is 1 MiB.) The wizard reads, read-only, per distinct tip of the `safe` rows whose proof is only `equivalent` and of the
+`unmerged` rows, one `GET repos/{owner}/{repo}/commits/{tip}/pulls?per_page=30&page=1`, keyed by the full object id (no branch name enters
+a URL), through the session of Spec 031 (128 requests, 32 MiB and one 30-second deadline per member; see the amendment of
+[Spec 031 FR-013](../031-tidy-integration-proofs/spec.md)). Only a pull request of the same repository (head and base repository equal)
+whose head is exactly the tip counts. A merged one counts only when it was merged into the default branch of the repository (so a stacked
+child merged into its parent branch proves nothing); a closed unmerged one is a text hint. An empty answer, a fork, a pull request into
+another branch and a commit GitHub does not know are `unknown`; the read never claims that no pull request exists.
 
 **Budget across the workspace (F6).** The live workspace has 7 members and about 466 distinct tips (165 safe plus 301 unmerged), more than
 one session can cover. The allocation:

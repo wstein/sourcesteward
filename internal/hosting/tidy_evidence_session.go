@@ -24,6 +24,10 @@ var (
 	ErrTidyLimit       = errors.New("tidy hosting operation exceeded its request, byte or deadline budget")
 	ErrTidyChanged     = errors.New("tidy hosting evidence changed; replan required")
 	ErrTidyUnsupported = errors.New("tidy hosting proof is unsupported")
+	// ErrTidyNotFound is a 404 or 422 answer; its text is the one every refused read always had.
+	ErrTidyNotFound = errors.New("tidy hosting read unavailable; check repository access and rate limits")
+	// ErrTidyResponseTooLarge is a response over the one MiB bound of a single read.
+	ErrTidyResponseTooLarge = errors.New("tidy hosting response exceeded its size bound")
 )
 
 // TidySessionOptions describes explicit online selection. Workspace must first
@@ -257,7 +261,7 @@ func (s *TidySession) get(ctx context.Context, endpoint string) ([]byte, http.He
 	if ctx.Err() != nil {
 		return nil, nil, ErrTidyLimit
 	}
-	if !tidyReadEndpoint(endpoint) && !tidyPRReadEndpoint(endpoint) {
+	if !tidyReadEndpoint(endpoint) && !tidyPRReadEndpoint(endpoint) && !tidyTipPullsEndpoint(endpoint) {
 		return nil, nil, errors.New("invalid typed tidy read")
 	}
 	u := url.URL{Scheme: "https", Host: "api.github.com", Path: "/" + strings.SplitN(endpoint, "?", 2)[0]}
@@ -270,15 +274,24 @@ func (s *TidySession) get(ctx context.Context, endpoint string) ([]byte, http.He
 	}
 	res, err := s.api.client.Do(req)
 	if err != nil {
+		if errors.Is(err, errBodyLimit) {
+			return nil, nil, ErrTidyResponseTooLarge
+		}
 		return nil, nil, s.readError(ctx)
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
-	if err != nil || len(raw) > maxBytes {
+	if errors.Is(err, errBodyLimit) || len(raw) > maxBytes {
+		return nil, nil, ErrTidyResponseTooLarge
+	}
+	if err != nil {
 		return nil, nil, s.readError(ctx)
 	}
 	if ctx.Err() != nil {
 		return nil, nil, ErrTidyLimit
+	}
+	if res.StatusCode == http.StatusNotFound || res.StatusCode == http.StatusUnprocessableEntity {
+		return nil, nil, ErrTidyNotFound
 	}
 	if res.StatusCode != http.StatusOK {
 		return nil, nil, errors.New("tidy hosting read unavailable; check repository access and rate limits")
