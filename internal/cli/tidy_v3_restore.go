@@ -29,11 +29,17 @@ type tidyRestoreFlags struct {
 func tidyRestoreCommand(restore func(context.Context, workspace.V3RestoreOptions) workspace.V3RestoreResult, history func(context.Context, workspace.V3HistoryOptions) workspace.V3HistoryResult) *cobra.Command {
 	var f tidyRestoreFlags
 	command := &cobra.Command{Use: "restore [PATH]", Short: "Plan or apply the restore of branches deleted by tidy, or list the stored journals", Long: "Restore deleted local branches from the recovery journal of a contract 3 tidy apply.\nThe default is a read-only plan. --apply with --authorize creates only the planned local branches\nby compare-and-swap and never overwrites, moves or deletes a reference. Only tips and their history\nare restored: configuration, reflogs and worktrees are not. --list shows the stored journals.", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if f.contract == "4" && !f.list {
+			return runPruneV4Restore(cmd, args, f)
+		}
 		if err := validateTidyRestoreCLI(cmd, args, f); err != nil {
 			return err
 		}
 		path := workspacePath(args)
 		if f.list {
+			if f.contract == "4" {
+				return runPruneV4History(cmd, args, f)
+			}
 			o := workspace.V3HistoryOptions{Path: path, StateDir: f.stateDir, Limit: f.limit, List: true}
 			return writeTidyHistoryResult(cmd, history(cmd.Context(), o), f.structured)
 		}
@@ -41,7 +47,7 @@ func tidyRestoreCommand(restore func(context.Context, workspace.V3RestoreOptions
 		return writeTidyRestoreResult(cmd, restore(cmd.Context(), o), f.structured)
 	}}
 	fl := command.Flags()
-	fl.StringVar(&f.contract, "contract", "", "Select exactly contract 3")
+	fl.StringVar(&f.contract, "contract", "", "Select exactly contract 3 or 4")
 	fl.StringVar(&f.plan, "plan", "", "Identity of the applied tidy plan whose journal is restored")
 	fl.StringVar(&f.stateDir, "state-dir", "", "Private state directory that holds the plan and the journal")
 	fl.StringArrayVar(&f.actions, "action", nil, "Restrict the restore to an action of the journal (repeatable)")
@@ -62,11 +68,14 @@ func tidyHistoryCommand(history func(context.Context, workspace.V3HistoryOptions
 		if err := validateTidyHistoryCLI(cmd, args, f); err != nil {
 			return err
 		}
+		if f.contract == "4" {
+			return runPruneV4History(cmd, args, f)
+		}
 		o := workspace.V3HistoryOptions{Path: workspacePath(args), StateDir: f.stateDir, Limit: f.limit}
 		return writeTidyHistoryResult(cmd, history(cmd.Context(), o), f.structured)
 	}}
 	fl := command.Flags()
-	fl.StringVar(&f.contract, "contract", "", "Select exactly contract 3")
+	fl.StringVar(&f.contract, "contract", "", "Select exactly contract 3 or 4")
 	fl.StringVar(&f.stateDir, "state-dir", "", "Private state directory that holds the journals")
 	fl.IntVar(&f.limit, "limit", 0, "Most journals listed (default 256, ceiling 1024)")
 	fl.BoolVar(&f.structured, "json", false, "Output one versioned result")
@@ -76,8 +85,8 @@ func tidyHistoryCommand(history func(context.Context, workspace.V3HistoryOptions
 
 // validateTidyRestoreCommon checks what restore and history share.
 func validateTidyRestoreCommon(cmd *cobra.Command, args []string, f tidyRestoreFlags) error {
-	if !cmd.Flags().Changed("contract") || f.contract != "3" {
-		return fmt.Errorf("--contract 3 is required")
+	if !cmd.Flags().Changed("contract") || f.contract != "3" && f.contract != "4" {
+		return fmt.Errorf("--contract 3 or 4 is required")
 	}
 	if err := validateTidyV3PresentFlags(cmd); err != nil {
 		return err
@@ -110,7 +119,7 @@ func validateTidyRestoreCLI(cmd *cobra.Command, args []string, f tidyRestoreFlag
 		if changed("timeout") {
 			return fmt.Errorf("--timeout does not apply to --list")
 		}
-		if changed("plan") || changed("action") || changed("as") || f.apply || f.authorize {
+		if changed("plan") || changed("action") || changed("as") || f.apply || f.authorize || f.contract == "4" && (changed("apply") || changed("authorize")) {
 			return fmt.Errorf("--list takes only --state-dir, --limit and --json")
 		}
 		return nil
