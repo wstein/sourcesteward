@@ -48,11 +48,30 @@ type WorktreeEvidence struct {
 	Incomplete                            string
 }
 
+// UpstreamState is the upstream-gone fact of a local branch (Spec 044 T004). It is read from the
+// local reference database only (no network, no write) and is text-only evidence: it changes no
+// verdict and no level, because a pull request closed unmerged, a manual delete and a prune
+// produce the same state as a merge.
+type UpstreamState string
+
+// The upstream states. UpstreamUnknown (the zero value) means the state could not be read, or the
+// observer does not read it (jj bookmarks): "not known", never "not gone".
+const (
+	UpstreamUnknown UpstreamState = ""
+	// UpstreamNotGone: no remote-tracking upstream is configured, or its reference exists.
+	UpstreamNotGone UpstreamState = "not-gone"
+	// UpstreamGone: the branch has a configured remote-tracking upstream whose reference no
+	// longer exists locally.
+	UpstreamGone UpstreamState = "gone"
+)
+
 // BranchEvidence holds the facts of one local branch (a full refs/heads name).
 type BranchEvidence struct {
 	Name, OID string
 	IsBase    bool
-	Proof     string
+	// Upstream is the upstream-gone fact; see UpstreamState.
+	Upstream UpstreamState
+	Proof    string
 	// Reason is why the observer keeps the branch whatever its proof says (jj: the keep reasons of the
 	// native tidy such as remote-counterpart, recovery-reference, selected-base, workspace-used);
 	// empty for Git, where the classifier decides.
@@ -207,11 +226,18 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	}
 	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseBranches, Total: len(branches)})
 	out.Branches = make([]BranchEvidence, len(branches))
+	gone, goneKnown := c.goneUpstreams(obsCtx, bin, root)
 	var branchesDone atomic.Int64
 	observeAll(obsCtx, len(branches), o.width(), func(i int) {
 		start := time.Now()
 		r := branches[i]
 		b := BranchEvidence{Name: r.Name, OID: r.OID, IsBase: isBaseBranch(r.Name, o.Base)}
+		if goneKnown {
+			b.Upstream = UpstreamNotGone
+			if gone[r.Name] {
+				b.Upstream = UpstreamGone
+			}
+		}
 		if i >= observerBranchLimit {
 			b.Incomplete = "branch-limit"
 		} else {
@@ -290,6 +316,26 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 		c.observeTracking(ctx, o, observed, &out)
 	}
 	return out, nil
+}
+
+// goneUpstreams reads, from the local reference database only, the local branches whose
+// configured remote-tracking upstream no longer exists (`git branch -vv` shows them as gone). One
+// read-only command names exactly those branches, so the output stays small for many branches. A
+// branch that tracks a local branch (remote ".") is not reported. The boolean is false when the
+// state could not be read: the fact is then not known for every branch.
+func (c worktreeObserver) goneUpstreams(ctx context.Context, bin, root string) (map[string]bool, bool) {
+	out, err := c.read(ctx, bin, root, "for-each-ref", "--format=%(if:equals=[gone])%(upstream:track)%(then)%(refname)%00%(upstream:remotename)%(end)", "refs/heads/")
+	if err != nil {
+		return nil, false
+	}
+	gone := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		name, remote, ok := strings.Cut(line, "\x00")
+		if ok && strings.HasPrefix(name, "refs/heads/") && remote != "" && remote != "." {
+			gone[name] = true
+		}
+	}
+	return gone, true
 }
 
 // defaultObserveWidth is the number of worktrees, and of branches, of one repository that are

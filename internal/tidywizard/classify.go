@@ -133,6 +133,8 @@ type Branch struct {
 	// Reason is a native reason to keep the branch whatever its proof says (jj: remote-counterpart,
 	// recovery-reference, selected-base, workspace-used); the branch is then retained with it.
 	Reason string
+	// Upstream is the upstream-gone fact read from the local reference database (Spec 044 T004).
+	Upstream workspace.UpstreamState
 }
 
 // TrackingRef holds the facts of one local remote-tracking reference.
@@ -188,6 +190,9 @@ type Candidate struct {
 	Proof       Proof        `json:"proof"`
 	Effects     []string     `json:"effects"`
 	Evidence    string       `json:"evidence"`
+	// Upstream is the upstream-gone fact of a branch candidate (Spec 044 T004). It is evidence
+	// text for the renderer, never a level and never part of the JSON document.
+	Upstream workspace.UpstreamState `json:"-"`
 }
 
 // RepoResult reports one repository: State is analysed, skipped or error.
@@ -453,7 +458,7 @@ func classifyStale(c Candidate, w Worktree, record Record) Candidate {
 
 func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate {
 	c := newCandidate(repo, KindBranch, b.Name)
-	c.Branch, c.Proof = b.Name, normalize(b.Proof)
+	c.Branch, c.Proof, c.Upstream = b.Name, normalize(b.Proof), b.Upstream
 	c = c.withOwner(owner.Resolve(owner.Item{Branch: b.Name, AuthorHint: b.AuthorHint}, cfg.Caller, cfg.Agent))
 	switch {
 	case b.Incomplete != "":

@@ -104,7 +104,7 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	}
 	for _, b := range obs.Branches {
 		proof, incomplete := proofFact(b.Proof, b.Incomplete, kindBranch)
-		f.Branches = append(f.Branches, Branch{Name: strings.TrimPrefix(b.Name, "refs/heads/"), IsBase: b.IsBase, Proof: proof, Ahead: b.Ahead, AuthorHint: b.AuthorHint, Incomplete: incomplete, Reason: b.Reason})
+		f.Branches = append(f.Branches, Branch{Name: strings.TrimPrefix(b.Name, "refs/heads/"), IsBase: b.IsBase, Proof: proof, Ahead: b.Ahead, AuthorHint: b.AuthorHint, Incomplete: incomplete, Reason: b.Reason, Upstream: b.Upstream})
 	}
 	for _, r := range obs.TrackingRefs {
 		proof, incomplete := proofFact(r.Proof, r.Incomplete, kindTracking)
