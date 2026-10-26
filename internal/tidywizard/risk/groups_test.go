@@ -15,7 +15,7 @@ func riskRow(id, repo, path string, level Level) Row {
 func TestFamily(t *testing.T) {
 	for _, tc := range []struct{ path, want string }{
 		{"/tmp/workharbor-baseline-x/checkout", "workharbor"}, {"/tmp/whr007-ci-binding", "whr"}, {"/tmp/whr-006-t030-apply", "whr"},
-		{"/tmp/crewbook-child/UPPER", "crewbook"}, {"/tmp/whr\x1b[2J-evil", "whr"}, {"/tmp/whr\r\x00\u202e", "whr"},
+		{"/tmp/whr with spaces/checkout", "whr"}, {"/tmp/crewbook-child/UPPER", "crewbook"}, {"/tmp/whr\x1b[2J-evil", "whr"}, {"/tmp/whr\r\x00\u202e", "whr"},
 		{"/tmp/WHR-baseline", ""}, {"/tmp/7whr", ""}, {"/tmp/évil", ""}, {"/tmp/", ""}, {"/tmp", ""},
 		{"/temporary/whr", ""}, {"/tmpish/whr", ""}, {"relative/tmp/whr", ""}, {"/tmp/-whr", ""},
 	} {
