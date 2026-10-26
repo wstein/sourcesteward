@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -219,7 +220,7 @@ func (r *integrationRun) basePatchIDs(ctx context.Context, baseTree, baseRange s
 // modes. It reports ok false when the stream cannot be attributed to the
 // commits exactly; nothing is stored here and an error is returned as is.
 func (r *integrationRun) computePatchEntries(ctx context.Context, baseTree string, commits []string) ([]patchMemoEntry, bool, error) {
-	args := append(append([]string{}, logPatchArgs("")[:8]...), "--no-walk=unsorted", "--stdin")
+	args := append(slices.Clone(patchStreamOptions), "--no-walk=unsorted", "--stdin")
 	seg := newPatchSegmenter(r.width, commits)
 	stable, verbatim, err := r.patchStreams(ctx, integrationCommand{attrTree: baseTree, args: args, stdin: bytes.NewReader(joinRecords(commits, '\n')), limit: r.patchBound()}, seg)
 	if err != nil {
@@ -229,6 +230,12 @@ func (r *integrationRun) computePatchEntries(ctx context.Context, baseTree strin
 	if !ok {
 		return nil, false, nil
 	}
+	return assignPatchRows(commits, sizes, stable, verbatim)
+}
+
+// assignPatchRows attributes the patch-id rows of a stream to its commits. It
+// reports ok false for a row that names an unexpected commit or names one twice.
+func assignPatchRows(commits []string, sizes []int64, stable, verbatim []patchIDRow) ([]patchMemoEntry, bool, error) {
 	index := make(map[string]int, len(commits))
 	out := make([]patchMemoEntry, len(commits))
 	for i, c := range commits {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -266,11 +265,7 @@ func TestPatchMemoByteCountsAddUpToTheRangeStream(t *testing.T) {
 		if _, _, err := run.basePatchIDs(ctx, baseTree, spec, count); err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command("git", append([]string{"-C", f.dir}, logPatchArgs(spec)...)...)
-		raw, err := cmd.Output()
-		if err != nil {
-			t.Fatal(err)
-		}
+		rawLen := f.streamBytes(ctx, run, baseTree, spec)
 		pin := strings.Join(run.session.attrSource(baseTree), "\x00")
 		var sum int64
 		for _, c := range strings.Fields(f.git("rev-list", "--no-merges", spec)) {
@@ -280,8 +275,8 @@ func TestPatchMemoByteCountsAddUpToTheRangeStream(t *testing.T) {
 			}
 			sum += e.bytes
 		}
-		if sum != int64(len(raw)) {
-			t.Fatalf("%s: commit segments add up to %d bytes, the range stream has %d", tip, sum, len(raw))
+		if sum != rawLen {
+			t.Fatalf("%s: commit segments add up to %d bytes, the range stream has %d", tip, sum, rawLen)
 		}
 	}
 }
@@ -299,11 +294,11 @@ func TestPatchMemoVerdictsAreIdentical(t *testing.T) {
 				_, memo := f.memoRun(true, nil)
 				for _, tip := range orderOf(tips, reverse) {
 					oid := f.rev(tip)
-					want, err := plain.evaluate(ctx, base, oid, allProofs)
+					want, err := plain.evaluate(ctx, base, oid, V3ProofPolicy{Version: 1, Kinds: allProofs.Kinds, AcceptWhitespaceDifferences: accept})
 					if err != nil {
 						t.Fatal(err)
 					}
-					got, err := memo.evaluate(ctx, base, oid, allProofs)
+					got, err := memo.evaluate(ctx, base, oid, V3ProofPolicy{Version: 1, Kinds: allProofs.Kinds, AcceptWhitespaceDifferences: accept})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -316,7 +311,6 @@ func TestPatchMemoVerdictsAreIdentical(t *testing.T) {
 					if err1 != nil || err2 != nil || !reflect.DeepEqual(gotRes, wantRes) {
 						t.Fatalf("%s: patchID with the memo %+v %v, without %+v %v", tip, gotRes, err2, wantRes, err1)
 					}
-					_ = accept
 				}
 			})
 		}
@@ -572,7 +566,7 @@ func TestPatchMemoStoresNothingWhenTheOperationIsCanceled(t *testing.T) {
 }
 
 // An expired phase budget stops a tip with the budget error, as before.
-func TestPatchMemoHonoursTheProofBudget(t *testing.T) {
+func TestPatchMemoHonorsTheProofBudget(t *testing.T) {
 	f := newProofFix(t)
 	f.memoHistory()
 	ctx, run := f.memoRun(true, nil)
@@ -600,12 +594,8 @@ func TestPatchMemoKeepsTheStreamBoundOfTheWholeRange(t *testing.T) {
 	ctx, plain := f.memoRun(false, nil)
 	_, memo := f.memoRun(true, nil)
 	size := func(tip string) int {
-		_, _, _, spec := f.rangeOf(ctx, plain, base, f.rev(tip))
-		raw, err := exec.Command("git", append([]string{"-C", f.dir}, logPatchArgs(spec)...)...).Output()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return len(raw)
+		_, _, baseTree, spec := f.rangeOf(ctx, plain, base, f.rev(tip))
+		return int(f.streamBytes(ctx, plain, baseTree, spec))
 	}
 	small, large := "t5", "t0"
 	if size(small) >= size(large) {
@@ -822,5 +812,75 @@ func TestObserveWorktreesShareTheMemoAcrossTips(t *testing.T) {
 			t.Fatalf("commit %s computed twice in one observation", c)
 		}
 		seen[c] = true
+	}
+}
+
+// countWriter counts the bytes of a stream.
+type countWriter struct{ n int64 }
+
+func (c *countWriter) Write(p []byte) (int, error) { c.n += int64(len(p)); return len(p), nil }
+
+// streamBytes is the size of the range stream under the production session,
+// environment and pinned attribute source.
+func (f *proofFix) streamBytes(ctx context.Context, run *integrationRun, baseTree, spec string) int64 {
+	f.t.Helper()
+	var n countWriter
+	if _, _, err := run.patchStreams(ctx, integrationCommand{attrTree: baseTree, args: logPatchArgs(spec), limit: 1 << 40}, &n); err != nil {
+		f.t.Fatal(err)
+	}
+	return n.n
+}
+
+// shortListGit is Git except that `rev-list` without --count loses its first line.
+func shortListGit(t *testing.T) string {
+	t.Helper()
+	real := realGit(t)
+	path := filepath.Join(gitTempDir(t), "git")
+	script := "#!/bin/sh\nlist=0; count=0\nfor a in \"$@\"; do [ \"$a\" = rev-list ] && list=1; [ \"$a\" = --count ] && count=1; done\nif [ $list = 1 ] && [ $count = 0 ]; then \"" + real + "\" \"$@\" | tail -n +2; exit 0; fi\nexec \"" + real + "\" \"$@\"\n"
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestAssignPatchRowsRefusesUnexpectedAndDuplicateRows(t *testing.T) {
+	a, b := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	p1, p2 := strings.Repeat("1", 40), strings.Repeat("2", 40)
+	row := func(p, c string) patchIDRow { return patchIDRow{patch: p, commit: c} }
+	if out, ok, _ := assignPatchRows([]string{a, b}, []int64{1, 2}, []patchIDRow{row(p1, a)}, []patchIDRow{row(p2, a)}); !ok || !out[0].hasStable || out[1].hasStable || out[1].bytes != 2 {
+		t.Fatalf("a good stream was refused: %+v %t", out, ok)
+	}
+	bad := map[string][2][]patchIDRow{
+		"duplicate stable":   {{row(p1, a), row(p1, a)}, nil},
+		"duplicate verbatim": {nil, {row(p1, b), row(p2, b)}},
+		"unknown stable":     {{row(p1, strings.Repeat("c", 40))}, nil},
+		"unknown verbatim":   {nil, {row(p1, strings.Repeat("c", 40))}},
+	}
+	for name, rows := range bad {
+		if _, ok, _ := assignPatchRows([]string{a, b}, []int64{1, 2}, rows[0], rows[1]); ok {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+// A range list that does not match the count falls back to the range stream
+// and stores nothing.
+func TestPatchMemoFallsBackWhenTheRangeListDisagreesWithTheCount(t *testing.T) {
+	f := newProofFix(t)
+	f.memoHistory()
+	f.bin = shortListGit(t)
+	ctx, run := f.memoRun(true, nil)
+	_, _, baseTree, spec := f.rangeOf(ctx, run, f.rev(f.main), f.rev("t0"))
+	count, err := run.count(ctx, "rev-list", "--count", "--no-merges", spec, "--")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, wantV, err := f.refRun().patchIDs(ctx, baseTree, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, gotV, err := run.basePatchIDs(ctx, baseTree, spec, count)
+	if err != nil || !reflect.DeepEqual(got, want) || !reflect.DeepEqual(gotV, wantV) || run.patchMemo.size() != 0 {
+		t.Fatalf("rows differ or the memo holds %d entries: %v", run.patchMemo.size(), err)
 	}
 }
