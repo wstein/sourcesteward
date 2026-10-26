@@ -22,6 +22,8 @@ type Row struct {
 // Key is an opaque stable ASCII-letter identity, not a path or a selector.
 // Family is the leading lowercase ASCII prefix; Parent is used only for the
 // workspace place. Repo is set for branch/tracking groups. Rows are sorted by ID.
+// EffectClass lists the sorted, distinct normalized effect names of this group;
+// ref-specific suffixes are omitted. It is independent of caller storage.
 // Effects counts rows with each normalized effect once. Repositories counts rows
 // per repository; both slices are sorted and independent of caller storage.
 // Consumers must keep decision-row selection rules independently of this view.
@@ -30,6 +32,7 @@ type Group struct {
 	Rows                                   []Row
 	Level                                  Level
 	Counts                                 Counts
+	EffectClass                            []string
 	Effects                                []EffectCount
 	Repositories                           []RepositoryCount
 }
@@ -126,7 +129,7 @@ func GroupRows(rows []Row) []Group {
 		for _, r := range members {
 			assessments = append(assessments, r.Risk)
 		}
-		out = append(out, Group{Key: groupKey(identity), Kind: identity.Kind, Place: identity.Place, Family: identity.Family, Parent: identity.Parent, Repo: identity.Repo, Rows: members, Level: Worst(assessments), Counts: Count(assessments), Effects: countEffects(members), Repositories: countRepositories(members)})
+		out = append(out, Group{Key: groupKey(identity), Kind: identity.Kind, Place: identity.Place, Family: identity.Family, Parent: identity.Parent, Repo: identity.Repo, Rows: members, Level: Worst(assessments), Counts: Count(assessments), EffectClass: effectClasses(members[0].Effects), Effects: countEffects(members), Repositories: countRepositories(members)})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
