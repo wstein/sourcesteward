@@ -19,7 +19,7 @@ the SPIKE release made with it.
 1. **A flagless wizard.** `stw release` in human mode (both streams on terminals, no agent marker) starts it. The existing
    subcommands (`check`, `plan`, `verify`, `record`, `build`, `dispatch`) stay as expert commands, unchanged. New: a read-only
    `stw release status [--json]`. In agent mode `stw release` prints the status and the **wizard** refuses every write (the expert
-   commands are a separate question, see [Security analysis](#security-analysis) and D15).
+   commands stay as they are, D15, see [Security analysis](#security-analysis)).
 2. **A state machine** (states 0 to 14 and a stop state `conflict`) derived from evidence: git (tags, ancestry, the record file), GitHub
    (workflow runs, drafts, releases, attestations; the existing bounded reads) and a small local **journal**. The journal may only
    **restrict**: it can block repeating an effect, never advance a step. Every combination of evidence maps to a state or to `conflict`,
@@ -32,17 +32,16 @@ the SPIKE release made with it.
    tag, the refusal in agent mode, and the tag ruleset **against other accounts** (an agent on the owner's own account is not stopped by it).
 5. **Gap fixes** and a [coverage table](#spike-coverage-every-gap-a-task-and-a-criterion-or-a-deferral) for every spike finding.
 
-**Phases (honest).** Phase **1a** = what the SPIKE needs: the wizard against the spike repository, where the three Spec 026 workflows are written
-for the spike. Phase **1b** = the dependencies for real projects: Spec 026 WI8 (the build and publish workflows, T035 to T039) and the
-self-hosting switch (T047) for `stw`, and a contract plus workflows for `whr`. Until 1b is done, the `stw` and `whr` v0.2.0 releases can use
-only today's tag-first flow with a hand-set tag; whether to wait for the wizard is [decision D14](#open-decisions-for-the-owner). Phase 2 = polish.
+**Phases (decided, D14).** **Now:** `stw` and `whr` v0.2.0 are released **by hand** with today's tag-first flow and a hand-set annotated tag, and the steps are documented as a
+**release protocol** (commands and results) that the wizard later reproduces as its test case. Phase **1a** = the wizard against the spike repository, where the Spec 026 workflows are
+written for the spike. Phase **1b** = retrofitting `stw` and `whr` (the wizard follows as **v0.2.1**): Spec 026 WI8 (T035 to T039) and the self-hosting switch (T047) for `stw`, a
+contract plus workflows for `whr`. Phase 2 = polish.
 
 **What does not change.** The wizard never builds, tags or publishes without the owner's typed words in an owner-run terminal; no
 auto-publish; no standing approval; no new GitHub write beyond the one fixed dispatch POST; the tag push is the only other remote write; tags are
 never moved or re-created; `stw` never changes repository settings.
 
-**Open decisions** ([all](#open-decisions-for-the-owner)), the two that decide the schedule: **D14 the v0.2.0 release path** (hand-set tag now, or wait
-for the wizard and its dependencies) and **D15 whether expert `dispatch --apply` refuses in agent mode**.
+**Open decisions** ([all](#open-decisions-for-the-owner)): D1 to D13. D14 (the v0.2.0 path) and D15 (expert `dispatch --apply` stays as it is) are decided.
 
 ## Decided by the owner
 
@@ -51,7 +50,9 @@ for the wizard and its dependencies) and **D15 whether expert `dispatch --apply`
 | 2026-10-26 | "Wenn ich STW-Release aufrufe, ja, dann würde ich mir wünschen, dass wieder ein Wizard, also ohne zusätzliche CLI-Flags, ... dass ein Wizard startet, der mit mir die Punkte durchgeht, in einem leicht verständlichen Ablauf und auch nach Möglichkeit, wenn das STW-Release aus mehreren Schritten besteht, also ich das nochmal aufrufen muss, dass dann mein Tool erkennt, wo wir jetzt sind und dann eben den Wizard entsprechend fortsetzt bzw. neu aufsetzt." Consequence: [State machine](#the-state-machine) and [Wizard](#the-wizard) |
 | 2026-10-26 | The wizard includes the tag step with a typed approval, never in agent mode (reasoning accepted by the owner: a manual `git tag -a` plus `git push` is the same human act as a `stw` command; the owner's explicit run is the approval, Spec 026 D4; the protection is the tag ruleset D11 and the refusal in agent mode). Tags are never re-created: a failed release uses the next version |
 | 2026-10-26 | The SPIKE release is done with the wizard, not by hand. The spike repository is `wstein/stw-release-spike` (public, throwaway); the owner merges its pull requests and runs the real approvals |
-| 2026-10-26 | Schedule as decided: first the spike with the existing flow (to find the gaps), then this specification and the wizard, then the v0.2.0 releases "with the wizard". This specification finds that last step depends on work that does not exist yet (phase 1b) and asks the owner again (D14) |
+| 2026-10-26 | Schedule as first decided: the spike with the existing flow, then this specification and the wizard, then the v0.2.0 releases "with the wizard". This specification found that last step depends on work that does not exist yet (phase 1b); see D14 |
+| 2026-10-26 ~20:10 UTC, **D14** | "Beides: jetzt von Hand, aber die Schritte so dokumentieren, dass der Wizard sie später nachbildet". `stw` and `whr` v0.2.0 are released now with today's bootstrap flow and a hand-set annotated tag; the steps are documented as a release protocol (commands, results) that is the test case the wizard later reproduces; the wizard follows as v0.2.1, first proven in the spike repository, then retrofitted for `stw` and `whr` (T029, phase 1b) |
+| 2026-10-26 ~20:10 UTC, **D15** | "Nein, so lassen": expert `stw release dispatch --apply` stays without an agent-mode refusal (no change of Spec 026 FR-012 or of the dispatch command). The owner's stated protection is the tag ruleset and that the build starts only from the owner's tag. For the dispatch flow of this specification the consequence is stated in the [security analysis](#security-analysis): a dispatch by anyone with the owner's token starts a build that creates only a draft; nothing is tagged or published without the owner's tag |
 | 2026-10-26, earlier in the same thread (owner-decision log) | The owner accepted the idea of a `stw release tag` command (an owner-run command is the approval; the tag ruleset D11 and the agent-mode refusal are the protection). See D2 |
 
 ## Why: what the spike found
@@ -76,13 +77,14 @@ Spike findings (the foreman's `spike-release-notes.md`, items 1 to 14 and S1 to 
 
 | Phase | Content | Needs |
 | --- | --- | --- |
-| **1a** | The wizard for the **dispatch flow** (Spec 026), run on the spike repository `wstein/stw-release-spike`: shell, journal, states, `status`, every step, the gap fixes G1 to G10 that the wizard needs. The spike gets its own `release-build.yml` and `release-publish.yml` from the Spec 026 workflow contract | the packages R1 to R6 |
-| **1b** | Making real projects releasable by the wizard: `stw` needs Spec 026 WI8 (T035 to T039: `release-build.yml`, `release-publish.yml`, `release-repro.yml`, the workflow rule tests) and T047 (the self-hosting switch: the `v0.1.0` record and deleting the bootstrap workflow, which would otherwise **also build on the wizard's tag push**); `whr` needs a `.stw/release.toml` and the two workflows (it is a Spec 026 wave 2 polyglot project; today it has only a tag-first `release.yml` that triggers on `v*` tags, `workharbor/.github/workflows/release.yml:10`) | WI8, T047, a `whr` contract |
+| **now (D14)** | `stw` and `whr` v0.2.0 by hand: today's tag-first flow, a hand-set annotated tag, the draft inspected and published by the owner. The steps are written down as a **release protocol** per project (each command, its result, what was checked), the test case the wizard later reproduces (T029) | nothing new |
+| **1a** | The wizard for the **dispatch flow** (Spec 026), run on the spike repository `wstein/stw-release-spike`: shell, journal, states, `status`, every step, the gap fixes G1 to G11 that the wizard needs. The spike gets its own `release-build.yml`, `release-publish.yml` and CI workflow (T018a) | the packages R1 to R6 |
+| **1b** | Retrofitting real projects, target **v0.2.1**: `stw` needs Spec 026 WI8 (T035 to T039: `release-build.yml`, `release-publish.yml`, `release-repro.yml`, the workflow rule tests) and T047 (the self-hosting switch: the `v0.1.0` record and deleting the bootstrap workflow, which would otherwise **also build on the wizard's tag push**); `whr` needs a `.stw/release.toml` and the two workflows (a Spec 026 wave 2 polyglot project; today it has only a tag-first `release.yml` that triggers on `v*` tags, `workharbor/.github/workflows/release.yml:10`) | WI8, T047, a `whr` contract |
 | 2 | Polish: the expert `tag` command if the owner wants it (D2), more products per screen, release notes assistance; support for `oci-image` artifacts and for the tag-first flow if a project still needs them | |
 
-**What v0.2.0 of `stw` and `whr` can use today:** the tag-first flow they have (the owner hand-sets an annotated tag on `main`; the bootstrap workflow of
-Spec 034 builds, attests and drafts; the owner publishes the draft). **What only comes with the wizard:** one flagless walk-through, the journal,
-the record and verification by the dispatch flow, and the self-hosted build. D14 asks which path v0.2.0 takes.
+**What v0.2.0 of `stw` and `whr` use:** the tag-first flow they have (the owner hand-sets an annotated tag on `main`; the bootstrap workflow of Spec 034 builds, attests and drafts;
+the owner publishes the draft). **What only comes with the wizard (v0.2.1 and later):** one flagless walk-through, the journal, the record and verification by the dispatch flow, and the
+self-hosted build.
 
 ## The wizard
 
@@ -128,7 +130,7 @@ and it can only **restrict** (below).
 
 | Axis | Values |
 | --- | --- |
-| Tag `T` | `none`; `local-only` (a local tag object, not on the remote); `lightweight` (remote, not annotated); `at-D` (remote annotated tag whose peeled target is the commit D approved or, before approval, the tip of `main` that holds the record); `elsewhere` (remote tag, another commit); `vanished` (the journal says it was pushed, the remote has none) |
+| Tag `T` | `none`; `local-only` (a local tag object, not on the remote); `lightweight` (remote, not annotated); `at-D` (remote annotated tag whose peeled target is the commit D approved or, before approval, the tip of `main` that holds the record); `elsewhere` (remote tag, another commit); `vanished` (the tag is absent now but **was seen before**, by any source in the next paragraph) |
 | Release `R` | `none`; `draft` (exactly one draft with the tag name); `drafts` (two or more drafts with that name); `published` |
 | Runs `U` | the runs of `ci.release_workflow` **bound to this release** (below): `none`; `queued`; `running`; `success`; `failure`; `several` (more than one bound run) |
 | Record `M` | `none`; `on-branch` (in the working tree of a topic branch); `on-main` and equal to the verified record; `on-main-different` |
@@ -139,6 +141,20 @@ and it can only **restrict** (below).
 triggering actor is the repository owner; its run name is `release-build PRODUCT VERSION COMMIT` (the build workflow sets `run-name` with exactly these inputs, G8); it was created
 no earlier than 5 minutes before the journal line `dispatching` (or, without a journal, it is still the only such run); and only the latest attempt counts. Two or more
 bound runs make `runs = several`.
+
+**Epochs, and failed runs.** The latest `dispatching` line opens an **epoch**; only runs created in the current epoch (not earlier than 5 minutes before that line) count as bound. A run of an
+earlier epoch that **concluded** `failure`, `cancelled` or `timed_out` is history: it is listed, excluded from `several` and from the binding, so a same-version retry (D13: no tag, no release,
+no draft, every earlier bound run concluded unsuccessfully) is not stopped by its own failed run. An earlier-epoch run that is still **queued or in progress** is not history: the state is
+`conflict` ("an earlier dispatch is still active; cancel it in the Actions page") because it could still create a draft. With a missing or corrupt journal there are no epochs: every run of
+the version counts, and a failed run plus a retry is a `conflict` the owner resolves by hand.
+
+**A tag that existed once.** The tag is `vanished`, and the version blocked for good, if the tag is absent now and any of these shows it existed: (1) a journal `tag-created-local` or
+`tag-pushed` line; (2) a release or draft whose `tag_name` is the tag (GitHub keeps `tag_name` after the tag is deleted); (3) a workflow run of the publish workflow whose `head_branch` is the
+tag name (a `push` run of a tag push keeps the tag as its ref after deletion; read with the bounded runs list); (4) a record `docs/releases/V.json` on `main`, which names the version
+(Spec 026 FR-003); (5) the repository activity or events read, if GitHub exposes tag deletions there (to be measured in the spike, T016b; not relied on). **Residual risk if GitHub offers none
+of these:** a tag deleted before any run, release, record or journal line leaves no evidence the wizard can read, so the version could be tagged again; Spec 026 already states this limit ("a
+tag deleted without a release is invisible to the monotonic check; only the tag ruleset prevents re-creation", `contracts/workflow.md:73`), and the ruleset (restrict deletion) is the
+protection.
 
 ### The states
 
@@ -183,7 +199,7 @@ evidence contradicts keeps its restriction and prints a notice; it never produce
 | State | The wizard offers |
 | --- | --- |
 | 0, 1 | Start at the product, commit and version screen |
-| 2 | Wait for the bound run for up to 30 minutes (queues are slow, spike item 12); after that show "no run is visible; check the Actions page" and offer `no-run VERSION` (a new dispatch needs it) or to wait longer. It never dispatches on its own |
+| 2 | Wait for the bound run for up to 30 minutes (queues are slow, spike item 12). After that the screen says "no run is visible; check the Actions page" and offers exactly three exits: **wait longer**; **`no-run VERSION`** (typed; you checked by hand that no run exists or that it was canceled): the journal gets `dispatch-released`, the restriction ends, and the version is `ready` again for a **retry of the same version** (a new dispatch needs its own typed `build` line and writes a new `dispatching` line, which starts a new binding epoch); **abandon** (journal `abandoned`): state 14, next version. It never dispatches on its own |
 | 3, 4 | Wait (never dispatch again) |
 | 5 | Show the failure (run URL, failed job), then **the next version** (the default, as Spec 026 quickstart: delete the draft by hand, use the next version). Retrying the same version is possible only if the owner accepted D13 and no tag, release or draft exists |
 | 6, 7 | Download and verify, then the record |
@@ -341,7 +357,7 @@ Every step is safe to run again: the wizard derives the state first.
 
 | Item | Status |
 | --- | --- |
-| `check`, `plan`, `verify`, `record`, `build`, `dispatch` | **unchanged** in flags, behavior, exit codes and JSON, except the additive items listed in [Gaps](#gaps-to-fix-so-the-wizard-can-work) (and D15 if the owner decides it) |
+| `check`, `plan`, `verify`, `record`, `build`, `dispatch` | **unchanged** in flags, behavior, exit codes and JSON, except the additive items listed in [Gaps](#gaps-to-fix-so-the-wizard-can-work) |
 | `stw release` bare | **changed**: help today (`internal/cli/release.go:35-37`), the wizard in human mode, offline status in agent mode |
 | `stw release status [--json]` | new, read-only, any mode |
 | the journal, the lock, the wizard shell | new (`internal/releasewizard`, importing `internal/release`; the CLI imports no `os` or network package, as the tidy wizard) |
@@ -396,6 +412,7 @@ Specs 026 and 034, `docs/release.md`, `docs/releasing.md`, `docs/agent-guide.md`
 
 | Text | Today | New wording |
 | --- | --- | --- |
+| Spec 026 D1 (`spec.md:14`) "The single build is never repeated per release" | one build per release | Unchanged for a published release. A build that failed or was canceled, with no tag, release or draft, may be repeated as a new run of the same version only under D13; a published release is built once |
 | Spec 026 D4 (`spec.md:17`) | "Every tag and release needs the owner's explicit approval each time." | Unchanged in substance. Added: the owner's typed approval in the wizard's tag step, or a manual `git tag -a` and push, is that approval; both are the same human act |
 | Spec 026 FR-012 (`spec.md:156`) | "the owner's tag push ... need explicit authorization in their task context" | "the owner's tag push, by hand or by the wizard's tag step (typed line on `/dev/tty`)" |
 | Spec 026 `plan.md:26` (constitution III row) | "the only local mutation is one new file"; "no ... publication by `stw`" | "the only local mutations are the record file, and, from the wizard only, the journal, the private asset directory and one local tag object; `stw` still publishes nothing" |
@@ -422,13 +439,13 @@ Specs 026 and 034, `docs/release.md`, `docs/releasing.md`, `docs/agent-guide.md`
 | Actor | Can | What stops the rest |
 | --- | --- | --- |
 | The owner at a terminal (human mode) | everything the wizard offers, each effect behind its typed line | the typed line, the fresh re-verification, `conflict` for every unclear case |
-| An agent, same OS user, agent mode | read the status; run the **expert commands** exactly as today: `check`, `plan`, `verify`, `record --write` (a local file), `dispatch` plan **and `dispatch --apply`** (no mode check, `internal/cli/release_dispatch.go:24-83`); `git tag` and `git push` by hand | for the wizard: its refusal in agent mode (an accident guard). For the expert commands and manual git: the harness permission system the agent runs under, the repository rules (AGENTS.md: agents never tag), and for tags the ruleset against **other accounts only** |
+| An agent, same OS user, agent mode | read the status; run the **expert commands** exactly as today: `check`, `plan`, `verify`, `record --write` (a local file), `dispatch` plan **and `dispatch --apply`** (no mode check, `internal/cli/release_dispatch.go:24-83`; unchanged, D15); `git tag` and `git push` by hand | for the wizard: its refusal in agent mode (an accident guard). For the expert commands and manual git: the harness permission system the agent runs under, the repository rules (AGENTS.md: agents never tag), and for tags the ruleset against **other accounts only** |
 | An agent that drives a pty or sets environment variables | what a human at that terminal could do, the wizard's typed lines included | nothing in `stw`: mode detection is an accident guard (Spec 041 FR-006g, 044); the typed line is read from `/dev/tty`, which a pty-driving agent can also write |
 | Any other GitHub account | nothing | the workflows require the repository owner as actor; the tag ruleset restricts tag creation to the owner |
 
 **Honest limits.** (1) The tag ruleset's bypass is the repository admin role (the spike's ruleset: bypass actor `RepositoryRole 5`), and an agent uses the same account as the
-owner, so the ruleset separates the owner's account from other accounts, not the owner from the owner's agent. (2) `dispatch --apply` is today reachable in agent mode; whether it
-should refuse there is the owner's decision D15. (3) With the owner's `gh` credentials and git access an agent can run `git tag -a` and `git push` by hand, with or without
+owner, so the ruleset separates the owner's account from other accounts, not the owner from the owner's agent. (2) `dispatch --apply` is reachable in agent mode and stays so (D15, decided): a dispatch starts only a build that creates a draft; it tags and publishes nothing, so the
+irreversible acts stay behind the owner's tag. (3) With the owner's `gh` credentials and git access an agent can run `git tag -a` and `git push` by hand, with or without
 `stw`; `stw` neither adds nor removes that power. The owner can narrow it by giving the agent a credential without `contents: write` on tags and without `actions: write` (a
 token decision outside `stw`). (4) What the wizard adds is: one place where the three irreversible acts happen only after a fresh, bound, typed approval, with an explicit stop
 whenever the evidence is unclear.
@@ -481,7 +498,7 @@ contract: .stw/release.toml (schema 1, scheme semver, 3 targets, 1 build)
 findings: none
 ```
 
-The screens 1 to 5 are **MOCKUPS**: the program cannot produce them yet. Product, repository and numbers are those of the spike target
+The screens 1 to 6 are **MOCKUPS**: the program cannot produce them yet. Product, repository and numbers are those of the spike target
 (`wstein/stw-release-spike`); hashes, ids and times are invented.
 
 ### Screen 1 (mockup): where are we
@@ -510,7 +527,7 @@ Can v0.2.0 be built from 9be4a1c?
   ok        v0.2.0 is greater than every existing version
   ok        no tag, release or draft exists for v0.2.0
   ok        the contract is valid
-  not seen  the tag ruleset (GitHub does not let stw read it): you must have set it, see docs/release.md
+  not seen  the tag ruleset (not readable with this token or setting): you must have set it, see docs/release.md
 Result: all checks that can be made here pass.
   [c] continue   [d] details and codes   [b] back   [q] quit
 ```
@@ -584,11 +601,12 @@ Release steps need a person at a terminal; nothing was changed.
 - **FR-008** The journal location, bounds, closed event set, hash chain, the `0700` directories and the `flock` as specified; no secret is ever written; a corrupt or over-limit journal
   degrades to evidence only with the stricter acknowledgements.
 - **FR-009** All repository and GitHub text is escaped (`esc`), bounded and treated as data; hostile tag, run, release and file names are shown escaped.
-- **FR-010** The existing subcommands keep their flags, exit codes and JSON; additions are the findings and flags of G2, G5, G8, G10, G11 only (and D15 if decided).
+- **FR-010** The existing subcommands keep their flags, exit codes and JSON; additions are the findings and flags of G2, G5, G8, G10, G11 only; `dispatch --apply` keeps its behavior (D15).
 - **FR-011** Progress goes to stderr, screens to stdout; `--json` of `status` is one schema-valid document.
 - **FR-012** The wizard supports the dispatch flow and `file` artifacts; a contract naming a tag-triggered workflow or an `oci-image` target gets `flow-unsupported` or
   `artifact-kind-unsupported` with the manual route of Spec 034 (D1).
 - **FR-013** The ruleset rule of "The tag ruleset at the tag step": `partial` and `absent` refuse; `unknown` needs the typed `ruleset ok` at every attempt, never stored.
+- **FR-015** After taking the lock and before any step, the wizard re-derives the state and re-reads the journal; if either changed since the screen was drawn, it redraws instead of acting.
 - **FR-014** `ci-run-pending` is waiting, not a failure of the wizard's flow; `ci-run-absent` and every other `fail` stop.
 
 ### Success criteria
@@ -627,6 +645,8 @@ Each is testable with temporary repositories and a fake hosting transport; the e
 - **SC-019** A pending CI run is shown as waiting and the wizard polls; `ci-run-absent` stops with its sentence; a queue delay of 30 minutes is tolerated (spike items 8, 12, 14).
 - **SC-020** With a captured real rulesets response the advisory is `present` or `partial` or `absent` as the response says; `unknown` only when the read fails (G9).
 - **SC-021** `verify` of an unresolved tag prints the code once (G11).
+- **SC-023** Two wizards: the second, started between the first's typed line and its journal write, finds the lock held and is read-only; a wizard that waited for the lock redraws when state or journal changed (FR-015).
+- **SC-024** Retry: a failed or canceled run of an earlier epoch does not make `several` and does not block a same-version retry; an earlier queued run is `conflict`; a pushed-then-deleted tag is `vanished` with the journal missing or corrupt when a release, draft, publish run or record names it.
 - **SC-022** The ruleset rule: `partial` and `absent` refuse the tag step; `unknown` requires `ruleset ok` at every attempt; the word is never stored or journaled.
 
 ## Edge cases
@@ -667,6 +687,8 @@ are never set in `stw` or `whr`. Unit and component tests use temporary reposito
 
 ## Open decisions for the owner
 
+D14 and D15 are decided (see [Decided by the owner](#decided-by-the-owner)); D1 to D13 are open with these recommendations.
+
 | # | Question | Recommendation | Consequence of the recommendation | Consequence of the alternative |
 | --- | --- | --- | --- | --- |
 | D1 | Phase 1 drives only the dispatch flow, not the tag-first flow of Spec 034 | Yes | `stw` v0.2.0 can be the first self-hosted release only after phase 1b; other repositories adopt the dispatch flow with their own contracts | Driving the tag-first flow too means a second flow in the wizard and a second set of states to test |
@@ -682,8 +704,6 @@ are never set in `stw` or `whr`. Unit and component tests use temporary reposito
 | D11 | Unhide the `release` group in root help | Yes, in the release that ships the wizard, after the spike round 1 | The feature is discoverable | Stays hidden; the wizard can only be found by name |
 | D12 | The ruleset rule: refuse on `partial` and `absent`; `ruleset ok` typed at every attempt only for `unknown`; fix the read (G9) | Yes | Consistent with Spec 026 D11; the prompt becomes rare once the read works | The weaker override of the first draft contradicts Spec 026 |
 | D13 | Same-version retry after a failed build (no tag, no release, no draft) | Allow only then; the default stays the next version | Version numbers are not burnt by failed builds | Never reuse a version: simpler, wastes numbers |
-| D14 | **The v0.2.0 release path of `stw` and `whr`.** (A) Release them by hand with the tag-first flow they have today (the owner sets an annotated tag; the bootstrap workflow builds and drafts; the owner publishes the draft); the wizard follows after the spike. (B) Wait for the wizard and phase 1b: `stw` needs Spec 026 WI8 (T035 to T039) and T047 (and the bootstrap workflow removed, because it would also build on the wizard's tag push), and `whr` needs a contract and two workflows | **(A)** for v0.2.0 of both; move `stw` to the dispatch flow with the first release after the spike rounds | v0.2.0 ships on a proven path soon; it is not self-hosted and has no `stw` record; the first self-hosted release (the first untested draft and publish path, Spec 026 "Risks") comes later and is rehearsed first | The releases wait for WI8, T047, a `whr` contract and the wizard; the first real release exercises an unrehearsed publish path |
-| D15 | Should expert `dispatch --apply` refuse in agent mode (a change of Spec 026 FR-010 and of "an authorized agent may dispatch") | Yes: the owner dispatches through the wizard or by hand; an agent keeps `plan` | The accident guard covers the build effect too | Agents with the owner's authorization may keep dispatching; the only protection stays the harness permissions |
 
 ## Docs impact
 
@@ -699,4 +719,4 @@ and 034 get a pointer to this specification.
 - The journal could mislead: mitigated by "the journal only restricts".
 - Two machines can still double-dispatch in a seconds-wide window: disclosed, bounded by the run binding and the release-exists gate once a run or draft appears.
 - Dependence on unverified GitHub behavior (draft visibility, run discovery, attestation action): the spike rounds are the measurement, and unmeasured shapes fail closed as Spec 026 states.
-- Phase 1b depends on work that does not exist yet (WI8, T047, a `whr` contract): D14 decides whether v0.2.0 waits for it.
+- Phase 1b depends on work that does not exist yet (WI8, T047, a `whr` contract); by D14 v0.2.0 does not wait for it.
