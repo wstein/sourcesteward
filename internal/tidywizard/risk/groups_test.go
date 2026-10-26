@@ -130,3 +130,21 @@ func TestGroupsSeparateKindsEffectsAndRepositories(t *testing.T) {
 		t.Fatal("missing branch group")
 	}
 }
+
+// Unix path bytes are not necessarily UTF-8. Distinct raw identities must not
+// collapse when a display/JSON encoder replaces invalid bytes with U+FFFD.
+func TestGroupKeysPreserveRawIdentityBytes(t *testing.T) {
+	rows := []Row{riskRow("one", "a", "/workspace/\xff/child", Green), riskRow("two", "a", "/workspace/\xfe/child", Green)}
+	groups := GroupRows(rows)
+	if len(groups) != 2 || groups[0].Key == groups[1].Key {
+		t.Fatalf("different raw parents share a key: %+v", groups)
+	}
+	a := riskRow("a", "a", "/workspace/child", Green)
+	a.Effects = []string{"effect:\xff"}
+	b := riskRow("b", "a", "/workspace/other", Green)
+	b.Effects = []string{"effect:\xfe"}
+	groups = GroupRows([]Row{a, b})
+	if len(groups) != 2 || groups[0].Key == groups[1].Key {
+		t.Fatalf("different raw effects share a group: %+v", groups)
+	}
+}
