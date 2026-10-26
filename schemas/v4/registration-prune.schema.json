@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v4/registration-prune.schema.json",
   "title": "Registration prune contract 4 plans, apply and recovery",
-  "$comment": "Unpublished source contract. Administrative restore, overview and plan-set support are not implemented. Existing v2/v3 files remain frozen.",
+  "$comment": "Unpublished source contract. Administrative restore and bounded history use their explicit version-4 shapes; overview and plan-set integration remain pending. Existing v2/v3 files remain frozen.",
   "oneOf": [
     {
       "$ref": "#/$defs/Plan"
@@ -15,6 +15,12 @@
     },
     {
       "$ref": "#/$defs/Payload"
+    },
+    {
+      "$ref": "#/$defs/RestoreJournal"
+    },
+    {
+      "$ref": "#/$defs/HistoryResult"
     }
   ],
   "$defs": {
@@ -839,11 +845,15 @@
           "type": "string",
           "enum": [
             "tidy-plan",
-            "tidy-apply"
+            "tidy-apply",
+            "tidy-restore"
           ]
         },
         "operation": {
-          "const": "registration-prune"
+          "enum": [
+            "registration-prune",
+            "registration-restore"
+          ]
         },
         "status": {
           "enum": [
@@ -925,6 +935,29 @@
             "properties": {
               "plan": {
                 "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "tidy-restore"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operation": {
+                "const": "registration-restore"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "operation": {
+                "const": "registration-prune"
               }
             }
           }
@@ -1191,6 +1224,300 @@
         "effects",
         "remaining",
         "diagnostics"
+      ]
+    },
+    "RestoreJournal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4
+        },
+        "operation": {
+          "const": "registration-restore"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "plan_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "restoring",
+            "complete",
+            "partial"
+          ]
+        },
+        "payload_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "history_ref": {
+          "type": "string",
+          "pattern": "^refs/stw/recovery/registration-prune/[0-9a-f]{32}/head$"
+        },
+        "history_oid": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RestoreEffect"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "remaining": {
+          "type": "array",
+          "items": {
+            "const": "restore-registration"
+          },
+          "maxItems": 1
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "maxItems": 1024
+        },
+        "restore_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "prune_journal_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "plan_id",
+        "plan_digest",
+        "phase",
+        "payload_digest",
+        "history_ref",
+        "history_oid",
+        "effects",
+        "remaining",
+        "diagnostics",
+        "restore_id",
+        "prune_journal_digest"
+      ]
+    },
+    "RestoreEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "restore-registration"
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "intent": {
+          "const": "create-absent"
+        },
+        "outcome": {
+          "enum": [
+            "planned",
+            "observed",
+            "refused",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "target",
+        "intent",
+        "outcome"
+      ]
+    },
+    "HistoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "recovery-confirmed",
+            "removing",
+            "complete",
+            "partial"
+          ]
+        },
+        "registration": {
+          "$ref": "#/$defs/Registration"
+        },
+        "payload_path": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "payload_digest": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "history_ref": {
+          "type": "string",
+          "pattern": "^refs/stw/recovery/registration-prune/[0-9a-f]{32}/head$"
+        },
+        "history_oid": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "recovery_status": {
+          "enum": [
+            "not-prepared",
+            "available",
+            "unavailable",
+            "restored",
+            "unknown"
+          ]
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "maxItems": 1025
+        },
+        "remaining": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "prepare-recovery",
+              "pin-history",
+              "remove-registration"
+            ]
+          },
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "plan_id",
+        "time",
+        "phase",
+        "registration",
+        "payload_path",
+        "payload_digest",
+        "history_ref",
+        "history_oid",
+        "recovery_status",
+        "effects",
+        "remaining"
+      ]
+    },
+    "HistoryTruncation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "shown": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "unit",
+        "shown",
+        "total"
+      ]
+    },
+    "HistoryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4
+        },
+        "command": {
+          "const": "tidy-history"
+        },
+        "operation": {
+          "const": "registration-prune"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "refused",
+            "error"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HistoryEntry"
+          },
+          "maxItems": 1024
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "truncation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HistoryTruncation"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "command",
+        "operation",
+        "status",
+        "entries",
+        "total",
+        "truncated",
+        "truncation",
+        "diagnostics",
+        "limitations"
       ]
     }
   }
