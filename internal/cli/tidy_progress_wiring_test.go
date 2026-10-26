@@ -61,10 +61,18 @@ func TestTidyPlanShowsLiveProgressOnAnErrorTerminalOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(errText, "\r[1/2] a: observing worktrees 1/2 (") || !strings.Contains(errText, "\r[2/2] b: ") {
-		t.Fatalf("no progress line: %q", errText)
+	screen := newFakeScreen(80, 24)
+	screen.feed(errText)
+	// The final block stays: one line per repository, the cursor on the clean line below it.
+	want := []string{
+		"stw tidy: 2/2 repos, 4.0s, slowest a 2.0s",
+		"✓ a analysed            2.0s",
+		"✓ b analysed            2.0s",
 	}
-	if strings.ContainsRune(errText, 0x1b) || !strings.HasSuffix(errText, "\r") || strings.Contains(errText, "Timings") {
+	if got := screen.lines(); !equalLines(got, want) || screen.col != 0 || screen.row != 3 {
+		t.Fatalf("screen %q, cursor %d,%d\nstderr %q", got, screen.row, screen.col, errText)
+	}
+	if strings.Contains(errText, "Timings") {
 		t.Fatalf("stderr %q", errText)
 	}
 	// The same run without a terminal on stderr prints the same stdout and nothing on stderr.
@@ -219,19 +227,25 @@ func TestTidyProgressGitSinkCountsAndBoundsTheTrace(t *testing.T) {
 	}
 }
 
-func TestTidyProgressShowsACautiousEstimate(t *testing.T) {
-	clk := newClock()
-	var out bytes.Buffer
-	p := newTidyProgress(&out, tidyProgressLive, clk.now)
-	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 0, 100))
-	clk.advance(10 * time.Second)
-	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 2, 100)) // 2 percent: no estimate yet
-	if strings.Contains(out.String(), "left") {
-		t.Fatalf("estimate before 5 percent: %q", out.String())
+// A run that is stopped (deadline or interrupt) while a repository is observed still leaves the
+// final block, with that repository marked as stopped, before the error is reported.
+func TestTidyPlanTimeoutLeavesTheFinalBlock(t *testing.T) {
+	progressWorld(t, true, false, false)
+	tidyAnalyse = func(ctx context.Context, _ analysis.Prepared, _ tidywizard.Config) tidywizard.Result {
+		rc := workspace.WithObserveRepo(ctx, "a", 1, 2)
+		workspace.ReportObserve(rc, workspace.ObserveEvent{Phase: workspace.ObservePhaseStart})
+		workspace.ReportObserve(rc, workspace.ObserveEvent{Phase: workspace.ObservePhaseWorktrees, Done: 3, Total: 8})
+		<-ctx.Done()
+		return tidywizard.Result{}
 	}
-	clk.advance(10 * time.Second)
-	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 20, 100)) // 1 s per item: 80 s left, rounded up
-	if !strings.Contains(out.String(), "(20s, ~1m20s left)") {
-		t.Fatalf("%q", out.String())
+	_, errText, err := runTidyErr(t, "plan", "--timeout", "50ms")
+	if err == nil {
+		t.Fatal("no timeout error")
+	}
+	screen := newFakeScreen(80, 24)
+	screen.feed(errText)
+	lines := screen.lines()
+	if len(lines) < 2 || !strings.HasPrefix(lines[1], "! a stopped observing worktrees [###-----] 3/8") || screen.col != 0 || len(screen.unknown) != 0 {
+		t.Fatalf("%q cursor %d,%d", lines, screen.row, screen.col)
 	}
 }
