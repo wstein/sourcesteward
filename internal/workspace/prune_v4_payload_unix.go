@@ -56,6 +56,12 @@ func pruneV4PayloadError() error {
 // preparePruneV4Payload is called only under the shared state-store lock. It
 // never removes partial evidence or makes a destructive effect eligible alone.
 func preparePruneV4Payload(ctx context.Context, p RegistrationPruneV4Plan, s *store) (string, error) {
+	return preparePruneV4PayloadWithLimits(ctx, p, s, defaultPruneMetadataLimits())
+}
+
+// The private limits parameter lets boundary tests exercise N and N+1 without
+// allocating maximum-size native indexes. Production always uses the contract limits.
+func preparePruneV4PayloadWithLimits(ctx context.Context, p RegistrationPruneV4Plan, s *store, limits pruneMetadataLimits) (string, error) {
 	if e := s.validate(); e != nil {
 		return "", e
 	}
@@ -93,7 +99,6 @@ func preparePruneV4Payload(ctx context.Context, p RegistrationPruneV4Plan, s *st
 		return "", pruneV4PayloadError()
 	}
 	defer src.Close()
-	limits := defaultPruneMetadataLimits()
 	if len(p.Expected.Metadata) > limits.Entries {
 		return "", failure("prune-metadata-limit", "Registration metadata entry limit exceeded.")
 	}
