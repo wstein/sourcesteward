@@ -161,7 +161,7 @@ func TestInteractiveWithoutATerminalOnlyPlans(t *testing.T) {
 			t.Fatalf("%+v: %v", tc, err)
 		}
 		text := out.String()
-		if !strings.Contains(text, "Analysed 2 repositories") || strings.Contains(text, "Apply which?") || !strings.Contains(text, "stw tidy plan --save") || !strings.Contains(text, "--json") {
+		if !strings.Contains(text, "Workspace /ws") || strings.Contains(text, "Apply which?") || !strings.Contains(text, "stw tidy plan --save") || !strings.Contains(text, "--json") {
 			t.Errorf("%+v:\n%s", tc, text)
 		}
 		if len(i.planner.specs) != 0 || len(i.applied) != 0 {
