@@ -206,3 +206,79 @@ func TestRegistrationPruneV4RestoreJournalBindsPayload(t *testing.T) {
 	r := RestoreRegistrationPruneV4(context.Background(), o)
 	pruneV4GuardReason(t, r, "refused", "prune-restore-refused")
 }
+
+func TestRegistrationPruneV4RestoreRefusesReusedCompletedSlot(t *testing.T) {
+	p := restoreV4Fixture(t)
+	o := restoreV4Options(p)
+	o.Apply, o.Authorize = true, true
+	if r := RestoreRegistrationPruneV4(context.Background(), o); r.Status != "ok" {
+		t.Fatalf("restore: %+v", r)
+	}
+	common := p.Expected.SourceSnapshot.Identity.RepositoryDir
+	pruneMust(t, os.Rename(p.Registration.GitDir, filepath.Join(common, "held-original")))
+	root, _, e := openCanonical(common)
+	pruneMust(t, e)
+	defer root.Close()
+	pruneMust(t, copyPruneV4Restore(context.Background(), p, root, "replacement"))
+	pruneMust(t, os.Rename(filepath.Join(common, "replacement"), p.Registration.GitDir))
+	r := RestoreRegistrationPruneV4(context.Background(), o)
+	pruneV4GuardReason(t, r, "refused", "prune-restore-refused")
+}
+
+func TestRegistrationPruneV4RestoreCompletionFailureRetainsReadablePartial(t *testing.T) {
+	p := restoreV4Fixture(t)
+	o := restoreV4Options(p)
+	o.Apply, o.Authorize = true, true
+	fired := false
+	ctx := pruneHookContext(func(stage, path string, v any) {
+		if stage == "v4-restore-before-complete" {
+			fired = true
+			j := v.(*pruneV4RestoreJournal)
+			j.Diagnostics = []Diagnostic{{Code: strings.Repeat("x", pruneV4RecordLimit), Message: "injected record limit"}}
+		}
+	})
+	r := RestoreRegistrationPruneV4(ctx, o)
+	if !fired {
+		t.Fatal("completion failure seam not exercised")
+	}
+	pruneV4GuardReason(t, r, "partial", "record-limit")
+	s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), false, []string{"journals"})
+	pruneMust(t, e)
+	defer s.Close()
+	raw, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
+	pruneMust(t, e)
+	j, e := readPruneV4RestoreForPlan(s, p, pruneV4Hash("stw-registration-journal-file-v4", raw), pruneV4GuardJournal(t, p).PayloadDigest)
+	pruneMust(t, e)
+	if j == nil || j.Phase != "partial" || !reflect.DeepEqual(j.Remaining, []string{"restore-registration"}) {
+		t.Fatalf("invalid retained partial: %+v", j)
+	}
+}
+func TestRegistrationPruneV4RestoreReaderRejectsOtherPlanVocabulary(t *testing.T) {
+	p := restoreV4Fixture(t)
+	o := restoreV4Options(p)
+	o.Apply, o.Authorize = true, true
+	if r := RestoreRegistrationPruneV4(context.Background(), o); r.Status != "ok" {
+		t.Fatalf("restore: %+v", r)
+	}
+	dir := filepath.Join(p.StateDir, pruneV4Namespace, "restores")
+	names, e := os.ReadDir(dir)
+	pruneMust(t, e)
+	raw, e := os.ReadFile(filepath.Join(dir, names[0].Name()))
+	pruneMust(t, e)
+	var other pruneV4RestoreJournal
+	pruneMust(t, json.Unmarshal(raw, &other))
+	other.RestoreID = strings.Repeat("e", 32)
+	other.PlanID = strings.Repeat("f", 32)
+	other.HistoryRef = "refs/stw/recovery/registration-prune/" + other.PlanID + "/head"
+	other.Effects[0].Action = "unknown-operation"
+	raw, e = pruneV4Canonical(other, "")
+	pruneMust(t, e)
+	pruneMust(t, os.WriteFile(filepath.Join(dir, other.RestoreID+".json"), append(raw, '\n'), 0600))
+	s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), false, []string{"journals"})
+	pruneMust(t, e)
+	defer s.Close()
+	raw, e = readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
+	pruneMust(t, e)
+	_, e = readPruneV4RestoreForPlan(s, p, pruneV4Hash("stw-registration-journal-file-v4", raw), pruneV4GuardJournal(t, p).PayloadDigest)
+	assertPruneReason(t, e, "prune-restore-refused", pruneV4RestoreError().Error())
+}
