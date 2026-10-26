@@ -500,7 +500,7 @@ The plan id needs the ids of the sub-plans, and the sub-plans are ordinary store
 ```
 $ stw tidy
 Workspace: /ws
-Derived:   workspace /ws (discovery), remote:a origin (origin), remote:b origin (origin)
+Derived:   workspace /ws (discovery), remote:a origin (origin), remote:b origin (origin), online default (human wizard)
 Mode:      human (stdin tty, stdout tty, no agent marker)
 Analysed 2 repositories (0 skipped, 0 with errors)
 

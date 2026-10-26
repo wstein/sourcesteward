@@ -135,6 +135,11 @@ func FormatOnlineNotice(checked, of int, reasons []string) string {
 		}
 		seen[r] = true
 	}
+	// The generic failure is explained by any specific reason (for example a missing credential
+	// fails every read of the repository and of the tracking evidence alike).
+	if len(seen) > 1 {
+		delete(seen, ReasonError)
+	}
 	var texts []string
 	for _, r := range reasonOrder {
 		if seen[r] {

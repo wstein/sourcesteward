@@ -76,6 +76,27 @@ type wizardRun struct {
 	mode       owner.Evidence
 	timeoutSet bool
 	timeout    time.Duration
+	// online is the pull request evidence of the human wizard (empty when it ran offline).
+	online tidywizard.OnlineOutcome
+}
+
+// readOnline reads the pull request evidence of the open tips when the human wizard is online,
+// says on stderr, once, how many repositories were checked and why the others are judged offline,
+// and records the derived online entry. A failure is never an error: the levels are the offline
+// ones (Spec 044 D13).
+func (r *wizardRun) readOnline(cmd *cobra.Command, choice tidyOnlineChoice) {
+	if !choice.On {
+		r.prep.Derived = append(append([]derive.Derived{}, r.prep.Derived...), derive.Derived{Name: "online", Value: choice.Value, Source: choice.Source, Overridden: true})
+		return
+	}
+	members := tidyOnlineMembers(r.prep, r.res)
+	out := tidyOnlineFetch(r.ctx, members, r.res.Candidates)
+	r.online = out
+	notice, entry := tidyOnlineSummary(choice, members, r.res, out)
+	r.prep.Derived = append(append([]derive.Derived{}, r.prep.Derived...), entry)
+	if notice != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), notice)
+	}
 }
 
 // startWizard detects the mode, derives the caller, analyses the workspace read only and narrows the
@@ -93,6 +114,12 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	stdinTTY, stdoutTTY := tidyTerminalFacts(cmd.InOrStdin(), cmd.OutOrStdout())
 	environ := tidyEnviron()
 	mode := owner.Detect(owner.Env{StdinTTY: stdinTTY, StdoutTTY: stdoutTTY, Environ: environ, OSUser: planset.Getenv("USER"), Mine: w.mine, ByOwner: w.byOwner})
+	// Online is the default of the human wizard only (Spec 044 D13); every other run is offline unless --online.
+	humanWizard := w.interactive && !w.structured && mode.Mode == owner.ModeHuman
+	online, err := resolveTidyOnline(cmd.Flags().Changed("online"), w.offline, humanWizard)
+	if err != nil {
+		return nil, err
+	}
 	caller := derive.Caller(environValue(environ, "STW_OWNER"), planset.Getenv("USER"), mode.Mode == owner.ModeAgent)
 	if w.mine && caller.Value == "" {
 		return nil, fmt.Errorf("--mine needs the caller label: set $STW_OWNER")
@@ -132,7 +159,7 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 		r.ctx = workspace.WithGitTrace(r.ctx, prog.Git)
 	}
 	preparing := tidyProgressNow()
-	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: cmd.Flags().Changed("online")})
+	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: online.On, OnlineDefault: online.Value == tidyOnlineDefault})
 	prog.Prepared(tidyProgressNow().Sub(preparing))
 	if err == nil && w.trace != "" {
 		// The trace file is created only now, when the repositories are known: a new file inside
@@ -172,6 +199,9 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	prog.Finish()
 	if w.verbose {
 		prog.Summary()
+	}
+	if humanWizard && online.Value != "" {
+		r.readOnline(cmd, online)
 	}
 	r.res.Candidates = narrowView(r.res.Candidates, w, caller.Value)
 	return r, nil

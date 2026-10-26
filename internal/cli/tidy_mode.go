@@ -28,7 +28,7 @@ const (
 var tidyFlagClasses = map[string]flagClass{
 	// wizard-only
 	"workspace": flagWizard, "mine": flagWizard, "by-owner": flagWizard, "member": flagWizard, "member-base": flagWizard,
-	"only": flagWizard, "save": flagWizard, "yes": flagWizard, "verbose": flagWizard, "quiet": flagWizard, "progress": flagWizard, "trace": flagWizard,
+	"only": flagWizard, "offline": flagWizard, "save": flagWizard, "yes": flagWizard, "verbose": flagWizard, "quiet": flagWizard, "progress": flagWizard, "trace": flagWizard,
 	// shared (--human forces text, which is also what the expert layer prints without --json)
 	"state-dir": flagShared, "online": flagShared, "timeout": flagShared, "json": flagShared, "human": flagShared,
 	// expert
@@ -47,10 +47,14 @@ type tidyWizardOptions struct {
 	workspace  string
 	mine, save bool
 	human      bool
-	byOwner    []string
-	member     []string
-	memberBase []string
-	only       string
+	// offline is --offline: no network reads (the human wizard is online by default, Spec 044 D13).
+	offline bool
+	// interactive is set by the entry point that may ask questions (bare `stw tidy` without --json).
+	interactive bool
+	byOwner     []string
+	member      []string
+	memberBase  []string
+	only        string
 	// stateDirs records every --state-dir of the command line, for the wizard layer.
 	stateDirs []string
 	// verbose is --verbose: the timings and counts of the analysis on stderr afterwards.
@@ -72,6 +76,7 @@ func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 	f.StringArrayVar(&o.memberBase, "member-base", nil, "Override the derived base of one member as NAME=REF (wizard layer, repeatable)")
 	f.StringVar(&o.only, "only", "", "Comma list of retire, branches, tracking, stale-worktrees (wizard layer; default all)")
 	f.BoolVar(&o.save, "save", false, "Store the plan set of the safe items of scope own (wizard layer)")
+	f.BoolVar(&o.offline, "offline", false, "Make no network read (wizard layer; accepted here for symmetry, plan is offline by default); excludes --online")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
 	f.BoolVar(&o.verbose, "verbose", false, "Print the phase timings and counts of the analysis to stderr afterwards (wizard layer)")
 	addTidyProgressFlags(f, o)
@@ -128,6 +133,9 @@ func validateTidyWizardValues(cmd *cobra.Command, o *tidyWizardOptions) error {
 	}
 	if changed("workspace") && o.workspace == "" {
 		return fmt.Errorf("--workspace needs a nonempty path")
+	}
+	if changed("online") && changed("offline") {
+		return fmt.Errorf("--online and --offline exclude each other")
 	}
 	return nil
 }
@@ -188,7 +196,8 @@ func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
 	f.StringArrayVar(&o.memberBase, "member-base", nil, "Override the derived base of one member as NAME=REF (repeatable)")
 	f.StringVar(&o.only, "only", "", "Comma list of retire, branches, tracking, stale-worktrees (default all)")
 	f.StringArrayVar(&o.stateDirs, "state-dir", nil, "Extra private state directory holding creation records (repeatable; the first valid one stores plans)")
-	f.Bool("online", false, "Permit the contract-3 authenticated reads (default off)")
+	f.Bool("online", false, "Permit the contract-3 authenticated reads (default on in the human wizard, off with --offline; opt-in elsewhere)")
+	f.BoolVar(&o.offline, "offline", false, "Make no network read; the human wizard reads GitHub by default (wizard layer; excludes --online)")
 	f.DurationVar(&o.timeout, "timeout", 0, "Deadline over the whole analysis; it also replaces the scaled observation window of each repository (at most 1h); without it the proof phase may run 60 s past the window")
 	f.BoolVar(&o.json, "json", false, "Print the overview as one document; asks nothing, stores nothing")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
@@ -219,5 +228,6 @@ func runTidyBare(cmd *cobra.Command, o *tidyBareOptions) error {
 	if o.json {
 		return runTidyWizardPlan(cmd, &o.tidyWizardOptions, true, o.timeout)
 	}
+	o.interactive = true
 	return runTidyInteractive(cmd, &o.tidyWizardOptions, o.timeout)
 }

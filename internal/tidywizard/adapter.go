@@ -20,7 +20,10 @@ type RepoSpec struct {
 	Name, Path, Base string
 	Online           bool
 	Remote           string
-	Skip             string
+	// OnlineDefault marks Online as the implicit default of the human wizard (Spec 044 D13): the
+	// repository is judged offline when its tracking evidence fails as a whole.
+	OnlineDefault bool
+	Skip          string
 	// Error is a failure of the preparation for this repository (for example unreadable references):
 	// the repository is reported as an error row with this reason and is not observed.
 	Error string
@@ -106,7 +109,14 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		proof, incomplete := proofFact(b.Proof, b.Incomplete, kindBranch)
 		f.Branches = append(f.Branches, Branch{Name: strings.TrimPrefix(b.Name, "refs/heads/"), IsBase: b.IsBase, Tip: b.OID, Proof: proof, Ahead: b.Ahead, AuthorHint: b.AuthorHint, Incomplete: incomplete, Reason: b.Reason, Upstream: b.Upstream})
 	}
-	for _, r := range obs.TrackingRefs {
+	tracking := obs.TrackingRefs
+	if reason := failedTracking(spec, tracking); reason != "" {
+		// The implicit online read failed for the whole repository: judged offline, as with
+		// --offline, with the reason kept for the one notice line.
+		tracking, f.OnlineFallback = nil, reason
+		obs.TrackingSkipped = "tracking-requires-online"
+	}
+	for _, r := range tracking {
 		proof, incomplete := proofFact(r.Proof, r.Incomplete, kindTracking)
 		reason := r.Reason
 		if !trackingReasons[reason] && reason != "" {
@@ -127,6 +137,29 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	}
 	f.Notices = append(f.Notices, obs.Limitations...)
 	return f, nil
+}
+
+// failedTracking returns the fallback reason of a repository whose implicit online read failed as
+// a whole: every tracking reference is incomplete with a reason (the observer sets that only when
+// the evidence of the remote could not be read at all). An explicit --online never falls back.
+func failedTracking(spec RepoSpec, refs []workspace.TrackingRefEvidence) string {
+	if !spec.Online || !spec.OnlineDefault || len(refs) == 0 {
+		return ""
+	}
+	for _, r := range refs {
+		if r.Incomplete == "" {
+			return ""
+		}
+	}
+	switch refs[0].Incomplete {
+	case "hosting-proof-unsupported":
+		return ReasonRemoteUnsupported
+	case "hosting-evidence-limit", "proof-budget-exhausted":
+		return ReasonMemberBudget
+	case "deadline-exceeded":
+		return ReasonTimeout
+	}
+	return ReasonError
 }
 
 // trackingReasons is the closed list of reasons the observers give for a tracking reference:

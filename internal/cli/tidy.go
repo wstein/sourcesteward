@@ -38,6 +38,9 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	var pruneV4 pruneV4Flags
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if contract == "4" || cmd.Flags().Changed("prune-registration") || cmd.Flags().Changed("registration-gitdir") {
+			if cmd.Flags().Changed("offline") {
+				return fmt.Errorf("--offline is a wizard flag and cannot be used with the expert layer (--contract 4)")
+			}
 			return runPruneV4Plan(cmd, args, contract, pruneV4)
 		}
 		layer, err := selectTidyPlanLayer(cmd, args, &wizard)

@@ -528,3 +528,23 @@ func TestTipReachesTheRowsButNotTheJSON(t *testing.T) {
 		t.Fatalf("the tip is in the JSON: %s %v", raw, err)
 	}
 }
+
+func TestFormatOnlineNotice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		checked, of int
+		reasons     []string
+		want        string
+	}{
+		"nothing":         {0, 0, nil, ""},
+		"all":             {3, 3, nil, "GitHub: checked 3 of 3 repositories"},
+		"one reason once": {1, 3, []string{ReasonRateLimit, ReasonRateLimit}, "GitHub: checked 1 of 3 repositories; the others are judged offline (GitHub rate limit reached)"},
+		"fixed order":     {0, 2, []string{ReasonTimeout, ReasonNotAuthenticated}, "GitHub: checked 0 of 2 repositories; the others are judged offline (gh is not authenticated; timeout reached)"},
+		"generic hidden":  {0, 2, []string{ReasonError, ReasonNotAuthenticated}, "GitHub: checked 0 of 2 repositories; the others are judged offline (gh is not authenticated)"},
+		"generic alone":   {0, 2, []string{ReasonError}, "GitHub: checked 0 of 2 repositories; the others are judged offline (a GitHub read failed)"},
+		"unknown word":    {0, 1, []string{"surprise"}, "GitHub: checked 0 of 1 repositories; the others are judged offline (a GitHub read failed)"},
+	} {
+		if got := FormatOnlineNotice(tc.checked, tc.of, tc.reasons); got != tc.want {
+			t.Errorf("%s: %q", name, got)
+		}
+	}
+}

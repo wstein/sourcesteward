@@ -397,3 +397,28 @@ func TestPrepareUsesTheConfiguredRemotes(t *testing.T) {
 		}
 	}
 }
+
+// Spec 044 D13: the implicit online default of the human wizard is recorded on the spec of every
+// repository that is read online, so the adapter may judge a failed one offline; an explicit
+// --online is not.
+func TestPrepareMarksTheImplicitOnlineDefault(t *testing.T) {
+	w := world()
+	p, err := Prepare(context.Background(), Options{CWD: "/ws", Online: true, OnlineDefault: true}, w.deps())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := specOf(p, "."); !s.Online || !s.OnlineDefault {
+		t.Errorf("implicit: %+v", s)
+	}
+	if s := specOf(p, "b"); s.OnlineDefault {
+		t.Errorf("a skipped repository is not read online: %+v", s)
+	}
+	p, _ = Prepare(context.Background(), Options{CWD: "/ws", Online: true}, w.deps())
+	if s := specOf(p, "."); !s.Online || s.OnlineDefault {
+		t.Errorf("explicit: %+v", s)
+	}
+	p, _ = Prepare(context.Background(), Options{CWD: "/ws", OnlineDefault: true}, w.deps())
+	if s := specOf(p, "."); s.Online || s.OnlineDefault {
+		t.Errorf("the default flag alone reads nothing: %+v", s)
+	}
+}
