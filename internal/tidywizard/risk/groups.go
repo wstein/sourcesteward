@@ -31,8 +31,9 @@ type Group struct {
 }
 
 // Family returns leading ASCII lowercase letters of the first component below
-// /tmp, as written. It does not clean, resolve, inspect or execute the path.
+// /tmp after lexical cleaning. It never resolves, inspects or executes a path.
 func Family(p string) string {
+	p = path.Clean(p)
 	if !strings.HasPrefix(p, "/tmp/") {
 		return ""
 	}
@@ -61,7 +62,7 @@ func GroupRows(rows []Row) []Group {
 			if families[f] == nil {
 				families[f] = map[string]bool{}
 			}
-			families[f][r.Path] = true
+			families[f][path.Clean(r.Path)] = true
 		}
 	}
 	groups := map[groupIdentity][]Row{}
@@ -78,7 +79,7 @@ func GroupRows(rows []Row) []Group {
 			switch {
 			case scratchpad(r.Path):
 				identity.Place = "scratchpads"
-			case strings.HasPrefix(r.Path, "/tmp/"):
+			case strings.HasPrefix(path.Clean(r.Path), "/tmp/"):
 				identity.Place = "tmp-other"
 				if f := Family(r.Path); f != "" && len(families[f]) >= 3 {
 					identity.Place = "tmp-family"
@@ -127,7 +128,7 @@ func groupable(r Row) bool {
 	return r.Risk.Level == Green || r.Risk.Level == Yellow || r.Risk.Level == Orange
 }
 func scratchpad(p string) bool {
-	for _, component := range strings.Split(p, "/") {
+	for _, component := range strings.Split(path.Clean(p), "/") {
 		if component == "scratchpad" {
 			return true
 		}
