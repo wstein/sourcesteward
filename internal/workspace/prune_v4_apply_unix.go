@@ -284,7 +284,7 @@ func validPruneV4JournalEffects(p RegistrationPruneV4Plan, j pruneV4Journal) boo
 	if !reflect.DeepEqual(j.Remaining, all[len(all)-len(j.Remaining):]) {
 		return false
 	}
-	if len(j.Effects) > 0 && !pruneV4ID(j.PayloadDigest, 64) {
+	if j.PayloadDigest != "" && !pruneV4ID(j.PayloadDigest, 64) || len(j.Effects) > 0 && j.PayloadDigest == "" {
 		return false
 	}
 	switch j.Phase {
