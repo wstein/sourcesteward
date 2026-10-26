@@ -19,13 +19,17 @@ func TestEveryBareTidyFlagIsClassified(t *testing.T) {
 			return
 		}
 		registered[f.Name] = true
+		// The bare overview selector is explicit; plan/apply keep their expert dispatch.
+		if f.Name == "contract" && tidyFlagClasses[f.Name] == flagExpert {
+			return
+		}
 		switch tidyFlagClasses[f.Name] {
 		case flagWizard, flagShared:
 		default:
 			t.Errorf("bare tidy: --%s is not a wizard or shared flag", f.Name)
 		}
 	})
-	for _, name := range []string{"workspace", "mine", "by-owner", "member", "member-base", "only", "state-dir", "online", "timeout", "json", "human"} {
+	for _, name := range []string{"workspace", "mine", "by-owner", "member", "member-base", "only", "state-dir", "online", "timeout", "json", "human", "contract"} {
 		if !registered[name] {
 			t.Errorf("bare tidy does not accept --%s", name)
 		}
