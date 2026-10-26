@@ -267,12 +267,45 @@ func displayOrder(d Document) []tidywizard.Candidate {
 	return out
 }
 
-// TextOptions tunes the text. The zero value is the default.
-type TextOptions struct{}
+// TextOptions tunes the text. The zero value is the default: plain text, no color.
+type TextOptions struct {
+	// Color wraps already escaped text in SGR sequences (verdicts, headings, reasons, effects). The
+	// caller sets it only for a terminal without NO_COLOR; with it off the bytes are the plain text.
+	Color bool
+}
+
+// The styles of the colored text.
+const (
+	styleBold   = "1"
+	styleDim    = "2"
+	styleRed    = "31"
+	styleGreen  = "32"
+	styleYellow = "33"
+)
+
+// painter returns the function that styles a string that has already passed esc. It is the only
+// place that writes an escape sequence, so no text from outside can add one.
+func painter(on bool) func(style, s string) string {
+	if !on {
+		return func(_, s string) string { return s }
+	}
+	return func(style, s string) string { return "\x1b[" + style + "m" + s + "\x1b[0m" }
+}
+
+func verdictStyle(v tidywizard.Verdict) string {
+	switch v {
+	case tidywizard.VerdictSafe:
+		return styleGreen
+	case tidywizard.VerdictDecision:
+		return styleYellow
+	}
+	return styleDim
+}
 
 // Text renders the overview for a terminal. Every string from outside passes esc and its bound.
-func Text(d Document, _ TextOptions) string {
+func Text(d Document, opts TextOptions) string {
 	e := untrusted.Esc
+	paint := painter(opts.Color)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Workspace: %s\n", e(d.Workspace))
 	if len(d.Derived) > 0 {
@@ -301,11 +334,11 @@ func Text(d Document, _ TextOptions) string {
 	for _, r := range d.Repositories {
 		switch r.State {
 		case "skipped":
-			fmt.Fprintf(&b, "%s   skipped: %s\n", e(r.Name), e(r.Reason))
+			fmt.Fprintf(&b, "%s   %s\n", paint(styleBold, e(r.Name)), paint(styleYellow, "skipped: "+e(r.Reason)))
 		case "error":
-			fmt.Fprintf(&b, "%s   error: %s\n", e(r.Name), e(r.Reason))
+			fmt.Fprintf(&b, "%s   %s\n", paint(styleBold, e(r.Name)), paint(styleRed, "error: "+e(r.Reason)))
 		default:
-			fmt.Fprintf(&b, "%s   base %s\n", e(r.Name), baseOrNone(r.Base, e))
+			fmt.Fprintf(&b, "%s   base %s\n", paint(styleBold, e(r.Name)), baseOrNone(r.Base, e))
 		}
 		for _, n := range d.repoNotices[r.Name] {
 			fmt.Fprintf(&b, "  notice: %s\n", n)
@@ -313,18 +346,18 @@ func Text(d Document, _ TextOptions) string {
 	}
 	for _, g := range ownerGroups(d) {
 		if g.suffix == "" {
-			b.WriteString("\nowner unknown\n")
+			b.WriteString("\n" + paint(styleDim, "owner unknown") + "\n")
 		} else {
-			fmt.Fprintf(&b, "\nowner %s %s\n", e(g.label), g.suffix)
+			fmt.Fprintf(&b, "\n%s\n", paint(styleDim, fmt.Sprintf("owner %s %s", e(g.label), g.suffix)))
 		}
 		for _, r := range g.repos {
-			fmt.Fprintf(&b, "  %s\n", e(r.name))
+			fmt.Fprintf(&b, "  %s\n", paint(styleBold, e(r.name)))
 			for i, c := range r.candidates {
 				if i == MaxRowsPerRepository {
 					fmt.Fprintf(&b, "    and %d more (use --json or details)\n", len(r.candidates)-i)
 					break
 				}
-				b.WriteString("  " + row(c, numbers[c.ID], e))
+				b.WriteString("  " + row(c, numbers[c.ID], e, paint))
 			}
 		}
 	}
@@ -378,7 +411,7 @@ func modeLine(m owner.Evidence) string {
 }
 
 // row renders one candidate. number 0 means no number (a retain row).
-func row(c tidywizard.Candidate, number int, e func(string) string) string {
+func row(c tidywizard.Candidate, number int, e func(string) string, paint func(style, s string) string) string {
 	label := "[-]"
 	if number > 0 {
 		label = fmt.Sprintf("[%d]", number)
@@ -388,7 +421,7 @@ func row(c tidywizard.Candidate, number int, e func(string) string) string {
 		subject = c.Branch
 	}
 	var parts []string
-	parts = append(parts, fmt.Sprintf("%s %-8s %-12s %s", label, e(string(c.Verdict)), e(string(c.Kind)), e(subject)))
+	parts = append(parts, fmt.Sprintf("%s %s %-12s %s", label, paint(verdictStyle(c.Verdict), fmt.Sprintf("%-8s", e(string(c.Verdict)))), e(string(c.Kind)), e(subject)))
 	if c.Task != "" {
 		parts = append(parts, "task "+e(c.Task))
 	}
@@ -407,10 +440,10 @@ func row(c tidywizard.Candidate, number int, e func(string) string) string {
 		what = append(what, "integrated ("+e(string(c.Proof))+")")
 	}
 	if c.Reason != "" {
-		what = append(what, e(c.Reason))
+		what = append(what, paint(styleDim, e(c.Reason)))
 	}
 	if c.Evidence != "" {
-		what = append(what, e(c.Evidence))
+		what = append(what, paint(styleDim, e(c.Evidence)))
 	}
 	if len(what) > 0 {
 		parts = append(parts, strings.Join(what, ": "))
@@ -420,7 +453,7 @@ func row(c tidywizard.Candidate, number int, e func(string) string) string {
 		for _, f := range c.Effects {
 			fx = append(fx, e(f))
 		}
-		parts = append(parts, "effects "+strings.Join(fx, ", "))
+		parts = append(parts, "effects "+paint(styleBold, strings.Join(fx, ", ")))
 	}
 	if c.Verdict == tidywizard.VerdictSafe && c.Scope != owner.ScopeOwn {
 		parts = append(parts, "not preselected")
