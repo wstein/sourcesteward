@@ -1,14 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v4/registration-prune.schema.json",
-  "title": "Registration prune contract 4 planner and stored plan",
-  "$comment": "Source slice only: no apply, journal, restore, overview, or plan-set publication is implied. Existing v2/v3 files remain frozen.",
+  "title": "Registration prune contract 4 plans, apply and recovery",
+  "$comment": "Unpublished source contract. Administrative restore, overview and plan-set support are not implemented. Existing v2/v3 files remain frozen.",
   "oneOf": [
     {
       "$ref": "#/$defs/Plan"
     },
     {
       "$ref": "#/$defs/Result"
+    },
+    {
+      "$ref": "#/$defs/Journal"
+    },
+    {
+      "$ref": "#/$defs/Payload"
     }
   ],
   "$defs": {
@@ -826,7 +832,11 @@
           "const": 4
         },
         "command": {
-          "const": "tidy-plan"
+          "type": "string",
+          "enum": [
+            "tidy-plan",
+            "tidy-apply"
+          ]
         },
         "operation": {
           "const": "registration-prune"
@@ -911,6 +921,268 @@
             }
           }
         }
+      ]
+    },
+    "PayloadEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "kind": {
+          "enum": [
+            "file",
+            "directory",
+            "absent"
+          ]
+        },
+        "mode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 67108864
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "mode",
+        "size",
+        "content_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "absent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "mode": {
+                "type": "null"
+              },
+              "size": {
+                "const": 0
+              },
+              "content_sha256": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "mode": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "file"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "content_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "size": {
+                "const": 0
+              },
+              "content_sha256": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4
+        },
+        "operation": {
+          "const": "registration-prune"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "plan_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PayloadEntry"
+          },
+          "maxItems": 1024
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "plan_id",
+        "plan_digest",
+        "entries"
+      ]
+    },
+    "Effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "pin-history",
+            "remove-metadata"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "intent": {
+          "enum": [
+            "create-absent",
+            "unlink-exact"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "planned",
+            "observed",
+            "refused",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "target",
+        "intent",
+        "outcome"
+      ]
+    },
+    "Journal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4
+        },
+        "operation": {
+          "const": "registration-prune"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "plan_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "recovery-confirmed",
+            "removing",
+            "complete",
+            "partial"
+          ]
+        },
+        "payload_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "const": ""
+            }
+          ]
+        },
+        "history_ref": {
+          "type": "string",
+          "pattern": "^refs/stw/recovery/registration-prune/[0-9a-f]{32}/head$"
+        },
+        "history_oid": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "maxItems": 1025
+        },
+        "remaining": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "prepare-recovery",
+              "pin-history",
+              "remove-registration"
+            ]
+          },
+          "maxItems": 3
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "maxItems": 1024
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "plan_id",
+        "plan_digest",
+        "phase",
+        "payload_digest",
+        "history_ref",
+        "history_oid",
+        "effects",
+        "remaining",
+        "diagnostics"
       ]
     }
   }
