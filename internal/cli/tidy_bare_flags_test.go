@@ -19,11 +19,7 @@ func TestEveryBareTidyFlagIsClassified(t *testing.T) {
 			return
 		}
 		registered[f.Name] = true
-		// The bare overview selector is explicit; plan/apply keep their expert dispatch.
-		if f.Name == "contract" && tidyFlagClasses[f.Name] == flagExpert {
-			return
-		}
-		switch tidyFlagClasses[f.Name] {
+		switch tidyFlagClass(tidyCommand(), f.Name) {
 		case flagWizard, flagShared:
 		default:
 			t.Errorf("bare tidy: --%s is not a wizard or shared flag", f.Name)
@@ -159,6 +155,22 @@ func TestExpertSubcommandsRejectWizardOnlyFlags(t *testing.T) {
 		}
 		if _, err := runTidy(t, "", args...); !isUsage(err) {
 			t.Errorf("%v: %v", args, err)
+		}
+	}
+}
+
+func TestTidyContractFlagClassDependsOnCommand(t *testing.T) {
+	cmd := tidyCommand()
+	if tidyFlagClass(cmd, "contract") != flagShared {
+		t.Fatal("bare contract selector must not be expert")
+	}
+	for _, name := range []string{"plan", "apply"} {
+		sub, _, err := cmd.Find([]string{name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tidyFlagClass(sub, "contract") != flagExpert {
+			t.Fatalf("%s contract must keep expert dispatch", name)
 		}
 	}
 }

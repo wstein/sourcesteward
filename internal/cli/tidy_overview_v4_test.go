@@ -181,3 +181,91 @@ func TestTidyOverviewV4NeverReadsInputAndReportsWriterFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestTidyOverviewV4HiddenPruneDoesNotHideLegacyRow(t *testing.T) {
+	w := newInteractive(t, true, true, "STW_OWNER=codex", "STW_AGENT=1")
+	p := overviewPrune(0, "", owner.ScopeUnknown)
+	p.Verdict, p.OwnerSource = tidywizard.RegistrationPruneBlocked, owner.SourceUnknown
+	c := wcand("a", tidywizard.KindStaleWorktree, "missing", tidywizard.VerdictRetain, "codex", owner.SourceTaskRecord, owner.ScopeOwn)
+	c.Path = p.Destination
+	w.res.Candidates = []tidywizard.Candidate{c}
+	overviewSource(t, tidywizard.RegistrationPruneResult{Rows: []tidywizard.RegistrationPrune{p}})
+	out, err := runTidy(t, "", "--contract", "4", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := overviewDocument(t, out)
+	if len(doc.RegistrationPrunes) != 0 || len(doc.Candidates) != 1 || doc.Candidates[0].ID != c.ID {
+		t.Fatalf("hidden prune swallowed visible legacy row: %s", out)
+	}
+}
+
+func TestTidyOverviewV4ReportsCutAndCancellationExit(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		json, textBytes, cancel bool
+	}{
+		{name: "json row bound", json: true}, {name: "text row bound"}, {name: "text byte bound", textBytes: true}, {name: "canceled after analysis", json: true, cancel: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			newInteractive(t, true, true, "STW_OWNER=codex")
+			rows := []tidywizard.RegistrationPrune{overviewPrune(0, "codex", owner.ScopeOwn)}
+			if tc.textBytes {
+				rows[0].Limitations = make([]string, 50000)
+				for i := range rows[0].Limitations {
+					rows[0].Limitations[i] = strings.Repeat("x", 120)
+				}
+			} else if !tc.cancel {
+				for i := 1; i <= tidywizard.MaxCandidates; i++ {
+					rows = append(rows, overviewPrune(i, "codex", owner.ScopeOwn))
+				}
+			}
+			overviewSource(t, tidywizard.RegistrationPruneResult{Rows: rows})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.cancel {
+				original := tidyRegistrationPrunes
+				tidyRegistrationPrunes = func(ctx context.Context, repos []tidywizard.RepoSpec, stores []derive.Store, mode owner.Evidence, cfg tidywizard.Config) tidywizard.RegistrationPruneResult {
+					result := original(ctx, repos, stores, mode, cfg)
+					cancel()
+					return result
+				}
+			}
+			args := []string{"tidy", "--contract", "4"}
+			if tc.json {
+				args = append(args, "--json")
+			}
+			var out, diag bytes.Buffer
+			code := Run(ctx, "dev", args, &out, &diag)
+			reason := "output-limit"
+			if tc.cancel {
+				reason = "interrupted"
+			}
+			if code != 1 || !strings.Contains(diag.String(), reason) || out.Len() == 0 {
+				t.Fatalf("code=%d reason=%s diagnostics=%s output bytes=%d", code, reason, diag.String(), out.Len())
+			}
+			if tc.json && !tc.cancel && !overviewDocument(t, out.String()).Truncated {
+				t.Fatal("cut JSON not marked truncated")
+			}
+		})
+	}
+}
+
+func TestTidyOverviewV4PreservesRepositoryFailureCause(t *testing.T) {
+	for _, state := range []string{"error", "skipped"} {
+		t.Run(state, func(t *testing.T) {
+			w := newInteractive(t, true, true, "STW_OWNER=codex")
+			w.res.Repositories[0].State = state
+			w.res.Repositories[0].Reason = "base-ambiguous"
+			overviewSource(t, tidywizard.RegistrationPruneResult{Incomplete: true, Notices: []string{"registration-prune-inventory-incomplete"}})
+			out, err := runTidy(t, "", "--contract", "4", "--json")
+			var failure runtimeFailure
+			if !errors.As(err, &failure) || !strings.Contains(err.Error(), `repository "a"`) || (state == "skipped" && !strings.Contains(err.Error(), "base-ambiguous")) {
+				t.Fatalf("lost repository failure: %v", err)
+			}
+			if !strings.Contains(out, "registration-prune-inventory-incomplete") {
+				t.Fatalf("lost registration notice: %s", out)
+			}
+		})
+	}
+}

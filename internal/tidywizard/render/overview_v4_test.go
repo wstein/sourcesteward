@@ -51,13 +51,15 @@ func TestOverviewV4ReplacesOnlyMatchingLegacyRegistrations(t *testing.T) {
 			in := input()
 			matched := cand("a", kind, p.Destination, tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeOwn)
 			otherRepo := cand("b", kind, p.Destination, tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeOwn)
+			sameRepo := cand("a", kind, p.Destination+"-other", tidywizard.VerdictRetain, "evidence-incomplete", owner.ScopeOwn)
 			branch := cand("a", tidywizard.KindBranch, "branch", tidywizard.VerdictRetain, "unmerged", owner.ScopeOwn)
-			in.Result.Candidates = []tidywizard.Candidate{matched, otherRepo, branch}
+			branch.Path = p.Destination
+			in.Result.Candidates = []tidywizard.Candidate{matched, otherRepo, sameRepo, branch}
 			d := BuildV4(in, []tidywizard.RegistrationPrune{p})
-			if len(d.Candidates) != 2 || d.Candidates[0].Repo != "b" || d.Candidates[1].Kind != tidywizard.KindBranch || len(d.RegistrationPrunes) != 1 {
+			if len(d.Candidates) != 3 || d.Candidates[0].Repo != "b" || d.Candidates[1].Path != sameRepo.Path || d.Candidates[2].Kind != tidywizard.KindBranch || len(d.RegistrationPrunes) != 1 {
 				t.Fatalf("deduplication: %+v", d)
 			}
-			if len(in.Result.Candidates) != 3 || in.Result.Candidates[0].ID != matched.ID {
+			if len(in.Result.Candidates) != 4 || in.Result.Candidates[0].ID != matched.ID {
 				t.Fatal("v4 mutated the legacy candidate slice")
 			}
 		})
@@ -123,6 +125,7 @@ func TestOverviewV4EscapesPruneTextAndKeepsDisplayBound(t *testing.T) {
 		rows[i].Owner = hostile
 		rows[i].Task = hostile
 		rows[i].Limitations = []string{hostile}
+		rows[i].Effects = []string{hostile}
 	}
 	text, cut := TextV4(BuildV4(in, rows), TextOptions{})
 	if cut {
@@ -171,5 +174,25 @@ func TestOverviewV4LegacyRowsRemainPlainText(t *testing.T) {
 	text, cut := TextV4(BuildV4(in, nil), TextOptions{})
 	if cut || !strings.Contains(text, "plain-branch") || strings.Contains(text, "\x1b[") {
 		t.Fatalf("plain overview row: cut=%v text=%q", cut, text)
+	}
+}
+
+func TestOverviewV4SortsUnorderedRegistrationRows(t *testing.T) {
+	a, b, c, d, e := pruneRow(0), pruneRow(1), pruneRow(2), pruneRow(3), pruneRow(4)
+	a.Repo, a.Name, a.GitDir = "b", "a", "/a"
+	b.Repo, b.Name, b.GitDir = "a", "z", "/a"
+	c.Repo, c.Name, c.GitDir = "a", "a", "/z"
+	d.Repo, d.Name, d.GitDir = "a", "a", "/a"
+	e.Repo, e.Name, e.GitDir = "a", "a", "/a"
+	rows := []tidywizard.RegistrationPrune{a, b, c, e, d}
+	got := BuildV4(input(), rows).RegistrationPrunes
+	want := []string{d.ID, e.ID, c.ID, b.ID, a.ID}
+	for i := range want {
+		if got[i].ID != want[i] {
+			t.Fatalf("position %d got %s want %s", i, got[i].ID, want[i])
+		}
+	}
+	if rows[0].ID != a.ID || rows[3].ID != e.ID {
+		t.Fatal("sort mutated input")
 	}
 }

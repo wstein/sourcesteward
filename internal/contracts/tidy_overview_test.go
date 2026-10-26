@@ -12,8 +12,7 @@ import (
 )
 
 // overviewRaw is a real document produced by the renderer, with every shape of row and hostile text.
-func overviewRaw(t *testing.T, mutate func(*render.Input)) []byte {
-	t.Helper()
+func overviewInput(mutate func(*render.Input)) render.Input {
 	cand := func(repo string, kind tidywizard.Kind, subject string, v tidywizard.Verdict, scope owner.Scope) tidywizard.Candidate {
 		c := tidywizard.Candidate{ID: string(kind) + ":" + repo + ":" + subject, Repo: repo, Kind: kind, Verdict: v, Owner: "claude", OwnerSource: owner.SourceTaskRecord, Scope: scope, Proof: tidywizard.ProofNone, Effects: []string{}}
 		if kind == tidywizard.KindWorktree {
@@ -46,7 +45,12 @@ func overviewRaw(t *testing.T, mutate func(*render.Input)) []byte {
 	if mutate != nil {
 		mutate(&in)
 	}
-	b, _, err := render.JSON(render.Build(in))
+	return in
+}
+
+func overviewRaw(t *testing.T, mutate func(*render.Input)) []byte {
+	t.Helper()
+	b, _, err := render.JSON(render.Build(overviewInput(mutate)))
 	if err != nil {
 		t.Fatal(err)
 	}

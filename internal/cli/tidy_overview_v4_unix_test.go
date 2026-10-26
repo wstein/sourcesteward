@@ -79,10 +79,17 @@ func TestTidyOverviewV4NativeReadOnlyMissingRegistration(t *testing.T) {
 	if row.Name != r.name || row.GitDir != r.gitdir || row.Destination != r.destination || row.Reason != "registration-prune-ready" || row.Proof != "owned-missing-registration" || len(row.Effects) != 1 || row.Effects[0] != "remove-registration" || len(row.EvidenceDigest) != 64 {
 		t.Fatalf("native proof lost: %+v", row)
 	}
+	primary := false
 	for _, c := range d.Candidates {
+		if string(c.Kind) == "worktree" && c.Path == r.source {
+			primary = true
+		}
 		if c.Path == r.destination {
 			t.Fatalf("registration counted again as legacy row: %+v", c)
 		}
+	}
+	if !primary {
+		t.Fatal("primary checkout disappeared from legacy candidates")
 	}
 	for i, root := range []string{r.source, r.state, r.moved} {
 		overviewUnchanged(t, before[i], overviewTree(t, root))
