@@ -35,13 +35,25 @@ func TestRegistrationPruneV4RestoreReviewNativeMaintenanceParentRefusal(t *testi
 	for _, kind := range []string{"removed", "replaced"} {
 		t.Run(kind, func(t *testing.T) {
 			p := restoreV4Fixture(t)
-			gitFixture(t, p.SourcePath, "worktree", "prune")
 			parent := filepath.Dir(p.Registration.GitDir)
+			// Keep the original inode allocated: immediate remove/mkdir can
+			// otherwise reuse it and fail to model an observable replacement.
+			held, e := os.Open(parent)
+			pruneMust(t, e)
+			defer held.Close()
+			original, e := held.Stat()
+			pruneMust(t, e)
+			gitFixture(t, p.SourcePath, "worktree", "prune")
 			if _, e := os.Lstat(parent); !os.IsNotExist(e) {
 				t.Fatalf("native prune did not remove empty administrative parent: %v", e)
 			}
 			if kind == "replaced" {
 				pruneMust(t, os.Mkdir(parent, 0700))
+				replacement, e := os.Stat(parent)
+				pruneMust(t, e)
+				if os.SameFile(original, replacement) {
+					t.Fatal("replacement fixture reused the original directory identity")
+				}
 			}
 			before := treeSnapshot(t, p.StateDir, p.Expected.SourceSnapshot.Identity.RepositoryDir)
 			for _, o := range []RegistrationPruneV4RestoreOptions{restoreV4Options(p), restoreV4ReviewApplied(p)} {
