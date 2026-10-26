@@ -18,6 +18,12 @@ func tidyPRJSON(number int, head, base string) string {
 }
 func tidyFixtureSession(t *testing.T, handle func(*http.Request) (*http.Response, error)) *TidySession {
 	t.Helper()
+	return tidyFixtureSessionOver(t, handle)
+}
+
+// tidyFixtureSessionOver is a session whose requests go through handle, which may be shared.
+func tidyFixtureSessionOver(t *testing.T, handle func(*http.Request) (*http.Response, error)) *TidySession {
+	t.Helper()
 	ledger := &tidyHTTPLedger{}
 	client, err := newSDKClient("github.com", "fixture-secret", t.TempDir(), tidyBudgetTransport{next: roundTripFunc(handle), ledger: ledger})
 	if err != nil {
