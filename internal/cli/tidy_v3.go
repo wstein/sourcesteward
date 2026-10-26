@@ -151,7 +151,7 @@ func parseTidyV3ProofKinds(value string) ([]string, error) {
 }
 func addTidyV3ApplyFlags(cmd *cobra.Command, contract *string, o *workspace.V3ApplyOptions) {
 	f := cmd.Flags()
-	f.StringVar(contract, "contract", "", "Apply only an immutable contract 3 plan")
+	f.StringVar(contract, "contract", "", "Apply an immutable contract 3 plan or a contract 4 registration prune plan")
 	f.BoolVar(&o.Online, "online", false, "Acknowledge exactly the stored plan's authenticated GitHub reads")
 	f.StringVar(&o.CompletedWorktree, "completed-worktree", "", "Reassert the exact legacy completion path and exclusive authority")
 	f.DurationVar(&o.Timeout, "timeout", 0, "Replace the default deadlines of the operation (default scales with the number of deletions)")
