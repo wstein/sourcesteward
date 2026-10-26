@@ -21,10 +21,18 @@ jobs:
   # affected lists the changed Go packages plus their reverse dependencies (T1, Spec 039) and
   # affected_reason is docs-only, packages or all (fail closed: all). No path filter is used,
   # so every check still reports a status.
+  # is_stack_tip (scripts/ci_stack.py, Spec 039) is false only for a pull request whose head branch
+  # is the base branch of another open pull request of this repository: only that case skips the
+  # conformance shards (the tip of the stack runs them). The lookup lists the open pull requests,
+  # which needs pull-requests: read (this job only); any doubt or failure means tip.
   changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
+      is_stack_tip: ${{ steps.stack.outputs.is_stack_tip }}
       docs_only: ${{ steps.classify.outputs.docs_only }}
       affected: ${{ steps.affected.outputs.affected }}
       affected_reason: ${{ steps.affected.outputs.affected_reason }}
@@ -49,6 +57,27 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: python3 -B scripts/ci_changes.py affected >> "$GITHUB_OUTPUT"
+      # Branch names are untrusted data: they reach the script only through the environment and
+      # are never part of a shell line. A failed lookup removes the file and counts as a tip.
+      - name: Detect the tip of a stack
+        id: stack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          prs="$RUNNER_TEMP/open-prs.json"
+          if [ "$EVENT_NAME" = pull_request ]; then
+            gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+              --jq '.[] | {number, base_ref: .base.ref, base_repo: .base.repo.full_name, head_repo: .head.repo.full_name}' \
+              > "$prs" || rm -f "$prs"
+          fi
+          python3 -B scripts/ci_stack.py --prs-file "$prs" >> "$GITHUB_OUTPUT"
 
   check:
     needs: [changes]
@@ -117,8 +146,9 @@ jobs:
             packages="$AFFECTED"
           fi
           # internal/workspace is never run plain here (it exceeds the 40 minute timeout): the
-          # conformance shards run it on every pull request that is not documentation-only,
-          # including pull requests stacked on another branch.
+          # conformance shards run it (every push to main, every pull request that is neither
+          # documentation-only nor below another open pull request). A pull request below the tip
+          # of a stack does not run it: the tip contains its commits and runs the shards.
           if [ "$packages" = './...' ]; then
             packages="$(python3 -B scripts/ci_shards.py packages)"
             set -- $packages
@@ -128,7 +158,7 @@ jobs:
           fi
           set -- $packages
           if [ "$#" -eq 0 ]; then
-            echo 'Only internal/workspace is affected: the conformance shards run it' | tee -a "$GITHUB_STEP_SUMMARY"
+            echo 'Only internal/workspace is affected: the conformance shards of the stack tip run it' | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           echo "Go tests ($AFFECTED_REASON): $*" >> "$GITHUB_STEP_SUMMARY"
@@ -148,9 +178,12 @@ jobs:
         with:
           path: /tmp/sourcesteward-pages
 
-  # Runs on every event, also for a PR stacked on another PR branch: check leaves
-  # internal/workspace to the shards, so skipping them would leave it untested or make check
-  # time out. Documentation-only PRs skip the shards inside the called workflow. Pull
+  # Always called, so the required `suite` check reports on every event. check leaves
+  # internal/workspace to the shards, so the shards run on every push to main and on every
+  # pull request that is the tip of a stack or on the default branch (is_stack_tip, owner
+  # decision 2026-10-26). They are skipped inside the called workflow for a documentation-only
+  # pull request and for a pull request below the tip (`suite` then passes, see conformance.yml).
+  # The ci-full label forces them. Pull
   # requests run only the current lane, unless they carry the ci-full label (both lanes on every
   # push, also applied later via ci-full.yml); the minimum lane also gates main after the merge
   # and runs in the race schedule.
@@ -165,6 +198,8 @@ jobs:
     with:
       lane: ${{ matrix.lane }}
       docs_only: ${{ needs.changes.outputs.docs_only }}
+      # Anything but an explicit false (including a failed changes output) runs the shards.
+      stack_tip: ${{ needs.changes.outputs.is_stack_tip != 'false' || contains(github.event.pull_request.labels.*.name, 'ci-full') }}
 
   pages:
     needs: [check, conformance]
