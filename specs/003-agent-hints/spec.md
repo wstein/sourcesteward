@@ -5,7 +5,7 @@
 **Status**: Specified
 **Input**: Add LLM hints like SheetMill PR #19, adapted to SourceSteward's current capabilities.
 
-> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `agent-hints-verification.md`); the status line above is the state at writing.
+> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `docs/agent-hints-verification.md`, repository-relative); the status line above is the state at writing.
 
 ## User Scenarios & Testing
 

@@ -6,7 +6,7 @@
 **Input**: Use the selected wider tie as the logo, create flat SVG assets, update the site/favicon
 with navy, orange and white, test small sizes, and publish using atomic Conventional Commits.
 
-> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `../brand/verification.md`); the status line above is the state at writing.
+> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `brand/verification.md`, repository-relative); the status line above is the state at writing.
 
 ## User Scenarios & Testing
 
