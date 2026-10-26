@@ -172,6 +172,8 @@ func retirementV3BudgetResult(r *V3Result, b *tidyV3ProofBudget) {
 }
 func (c tidyV3RetirementCoordinator) observeCurrent(ctx context.Context, o V3PlanOptions, p V3Plan, expected Snapshot, native V3NativeState, baseline tidyV3LegacyObservation, budget *tidyV3ProofBudget, session tidyV3Hosting) (tidyV3LegacyObservation, error) {
 	var out tidyV3LegacyObservation
+	// Both the provider proof and the native comparison see the sibling effects.
+	expected, native = c.chain.apply(expected, native)
 	if session != nil {
 		if err := (tidyV3RefsApplyCoordinator{refs: c.refs}).revalidateProof(ctx, p, expected, retirementV3Candidate(*p.Retirement), session); err != nil {
 			return out, err
@@ -190,7 +192,6 @@ func (c tidyV3RetirementCoordinator) observeCurrent(ctx context.Context, o V3Pla
 			return out, failure("evidence-changed", "Selected native provider configuration changed.")
 		}
 	}
-	expected, native = c.chain.apply(expected, native)
 	if out.Native.Expected != expected || !reflect.DeepEqual(out.Native.Native, native) {
 		return out, failure("evidence-changed", "Source/native state differs from the exact permitted operation delta.")
 	}

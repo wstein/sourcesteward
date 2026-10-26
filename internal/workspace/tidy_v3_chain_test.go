@@ -9,6 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/wstein/sourcesteward/internal/hosting"
 )
 
 // chainWork is one repository with n retirable legacy worktrees t1..tn, one worktree that stays
@@ -60,6 +63,16 @@ func newChainWorkAt(t *testing.T, state string, dests []string, sameTip bool) *c
 			gitFixture(t, w.source, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("merge t%d", i+1), fmt.Sprintf("t%d", i+1))
 		}
 	}
+	// A branch whose change the base received as a copy (patch-id integration proof).
+	mainBranch := gitFixture(t, w.source, "symbolic-ref", "--short", "HEAD")
+	gitFixture(t, w.source, "switch", "-q", "-c", "sq", gitFixture(t, w.source, "rev-list", "--max-parents=0", "HEAD"))
+	if e := os.WriteFile(filepath.Join(w.source, "sq.txt"), []byte("squashed\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	gitFixture(t, w.source, "add", "sq.txt")
+	gitFixture(t, w.source, "commit", "-qm", "sq change")
+	gitFixture(t, w.source, "switch", "-q", mainBranch)
+	gitFixture(t, w.source, "cherry-pick", "sq")
 	gitFixture(t, w.source, "branch", "old", "HEAD")
 	gitFixture(t, w.source, "commit", "--allow-empty", "-qm", "later chosen base")
 	for _, dest := range w.dests {
@@ -251,6 +264,16 @@ func TestTidyV3ChainRefusesWhatNoJournalExplains(t *testing.T) {
 		},
 		"unrelated entry in the registration parent": func(w *chainWork) {
 			if e := os.Mkdir(filepath.Join(filepath.Dir(w.plans[1].Retirement.Registration.Path), "unrelated"), 0700); e != nil {
+				t.Fatal(e)
+			}
+		},
+		"unrelated sibling touched": func(w *chainWork) {
+			if e := os.Chtimes(w.dests[2], time.Unix(1, 0), time.Unix(1, 0)); e != nil {
+				t.Fatal(e)
+			}
+		},
+		"unrelated registration sibling touched": func(w *chainWork) {
+			if e := os.Chtimes(w.plans[2].Retirement.Registration.Path, time.Unix(1, 0), time.Unix(1, 0)); e != nil {
 				t.Fatal(e)
 			}
 		},
@@ -508,5 +531,154 @@ func TestTidyV3ChainStepRequiresTheStateAnEffectCameFrom(t *testing.T) {
 		if _, ok := v3ChainStep(p, c.state, c.kind, c.id); ok != c.ok {
 			t.Errorf("%s: got %t", c.name, ok)
 		}
+	}
+}
+
+func (w *chainWork) planRefs(ref string) string {
+	w.t.Helper()
+	planned := w.c.refs.plan(context.Background(), V3PlanOptions{Path: w.source, Base: "HEAD", StateDir: w.state, Refs: []string{ref}, ProtectWorktrees: []string{}})
+	if planned.Status != "ok" || planned.Plan == nil || len(planned.Plan.Candidates) != 1 || planned.Plan.Candidates[0].Decision != "delete" {
+		w.t.Fatalf("reference plan of %s: %+v %+v", ref, planned.Diagnostics, planned.Plan)
+	}
+	return planned.Plan.PlanID
+}
+
+func (w *chainWork) applyRef(id string, siblings []string) V3Result {
+	return defaultTidyV3RefsApplyCoordinator().apply(context.Background(), V3ApplyOptions{StateDir: w.state, PlanID: id, Authorize: true, ProtectWorktrees: []string{}, SiblingPlans: siblings})
+}
+
+// The integration proof of a branch plan is re-evaluated against the live repository, which
+// holds the retirement's effects too.
+func TestTidyV3ChainPatchIDBranchPlanAfterARetirement(t *testing.T) {
+	w := newChainWork(t, privateDir(t), 2, true)
+	ref := w.planRefs("refs/heads/sq")
+	if got := gitFixture(t, w.source, "for-each-ref", "--format=%(refname)", "refs/heads/sq"); got == "" {
+		t.Fatal("fixture")
+	}
+	w.mustApply(0, append(w.others(0), ref))
+	if r := w.applyRef(ref, w.others(-1)); r.Status != "ok" {
+		t.Fatalf("branch plan after a retirement: %s %+v", r.Status, r.Diagnostics)
+	}
+	if got := gitFixture(t, w.source, "for-each-ref", "--format=%(refname)", "refs/heads/sq"); got != "" {
+		t.Fatal("the branch remains")
+	}
+	w.mustApply(1, append(w.others(1), ref))
+	w.requireRetired(0)
+	w.requireRetired(1)
+}
+
+func TestTidyV3ChainPatchIDBranchPlanStillRefusesAnUnrelatedChange(t *testing.T) {
+	w := newChainWork(t, privateDir(t), 2, true)
+	ref := w.planRefs("refs/heads/sq")
+	w.mustApply(0, append(w.others(0), ref))
+	gitFixture(t, w.source, "branch", "unrelated", "HEAD")
+	requireEvidenceChanged(t, w.applyRef(ref, w.others(-1)))
+	if gitFixture(t, w.source, "for-each-ref", "--format=%(refname)", "refs/heads/sq") == "" {
+		t.Fatal("the refused plan deleted its branch")
+	}
+}
+
+// Online retirements: the provider proof is revalidated against the live repository too.
+func TestTidyV3ChainOnlineRetirementsOfOneRepository(t *testing.T) {
+	for _, unrelated := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unrelated-change=%t", unrelated), func(t *testing.T) {
+			source := fixtureGit(t)
+			state := privateDir(t)
+			parent := gitTempDir(t)
+			root := gitFixture(t, source, "rev-parse", "HEAD")
+			sourceRef := gitFixture(t, source, "symbolic-ref", "HEAD")
+			gitFixture(t, source, "remote", "add", "origin", "https://github.com/owner/repo.git")
+			repo := hosting.TidyRepositoryIdentity{Host: "github.com", TidyRepositoryID: hosting.TidyRepositoryID{ID: 1, NodeID: "R_fixture", FullName: "owner/repo"}, DefaultBranch: "main"}
+			rows := map[string]hosting.TidyHeadEvidence{}
+			dests, opts := []string{}, []V3PlanOptions{}
+			prev := root
+			for i := 1; i <= 2; i++ {
+				dest := filepath.Join(parent, fmt.Sprintf("t%d", i))
+				gitFixture(t, source, "worktree", "add", "-q", "-b", fmt.Sprintf("t%d", i), dest, root)
+				if e := os.WriteFile(filepath.Join(dest, fmt.Sprintf("f%d", i)), []byte("x\n"), 0600); e != nil {
+					t.Fatal(e)
+				}
+				gitFixture(t, dest, "add", ".")
+				gitFixture(t, dest, "commit", "-qm", fmt.Sprintf("work %d", i))
+				head := gitFixture(t, dest, "rev-parse", "HEAD")
+				result := gitFixture(t, source, "commit-tree", gitFixture(t, dest, "rev-parse", "HEAD^{tree}"), "-p", prev, "-m", "independent integrated result")
+				gitFixture(t, source, "update-ref", sourceRef, result)
+				prev = result
+				rows[head] = tidyV3PR(repo, head, root, result, "deleted-intermediate-stack-base", i)
+				dests = append(dests, dest)
+				opts = append(opts, V3PlanOptions{Path: source, Base: "HEAD", StateDir: state, CompletedWorktree: dest, Owner: "operator", RemoveRegistration: true, RemoveFiles: dest, ProtectWorktrees: []string{}, IntegrationProofs: []string{"ancestor"}, Online: true, Remote: "origin", PRHints: []V3PRHint{{OID: head, Number: int64(i)}}})
+			}
+			c := defaultTidyV3RetirementCoordinator()
+			c.refs.openHosting = func(context.Context, string, hosting.TidySessionOptions) (tidyV3Hosting, error) {
+				return &fixtureTidyV3Hosting{repo: repo, rows: rows, budget: hosting.TidyHTTPBudget{Requests: 1, RawBytes: 1, NetworkAttempted: true}}, nil
+			}
+			plans := []V3Plan{}
+			for _, o := range opts {
+				planned := c.plan(context.Background(), o)
+				if planned.Plan == nil || planned.Plan.Retirement.Integration.Proof != "github-merged-head" {
+					t.Fatalf("online plan: %+v", planned.Diagnostics)
+				}
+				plans = append(plans, *planned.Plan)
+			}
+			apply := func(i int) V3Result {
+				return c.apply(context.Background(), V3ApplyOptions{StateDir: state, PlanID: plans[i].PlanID, Authorize: true, Online: true, CompletedWorktree: dests[i], Owner: "operator", ProtectWorktrees: []string{}, SiblingPlans: []string{plans[1-i].PlanID}})
+			}
+			if r := apply(0); r.Status != "ok" {
+				t.Fatalf("first online retirement: %s %+v", r.Status, r.Diagnostics)
+			}
+			if unrelated {
+				gitFixture(t, source, "branch", "unrelated", "HEAD")
+				requireEvidenceChanged(t, apply(1))
+				if _, e := os.Stat(dests[1]); e != nil {
+					t.Fatal("the refused retirement touched its worktree")
+				}
+				return
+			}
+			if r := apply(1); r.Status != "ok" {
+				t.Fatalf("second online retirement: %s %+v", r.Status, r.Diagnostics)
+			}
+			for _, d := range dests {
+				if _, e := os.Lstat(d); !os.IsNotExist(e) {
+					t.Fatalf("%s remains", d)
+				}
+			}
+		})
+	}
+}
+
+// Tracking-reference plans of one repository apply one after the other in one run.
+func TestTidyV3ChainTrackingPlansOfOneRepository(t *testing.T) {
+	for _, unrelated := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unrelated-change=%t", unrelated), func(t *testing.T) {
+			o, c, _, _ := fixtureTidyV3TrackingPlanner(t)
+			dir := o.Expected.Identity.WorkspaceRoot
+			oid := gitFixture(t, dir, "rev-parse", "refs/remotes/origin/stale")
+			gitFixture(t, dir, "update-ref", "refs/remotes/origin/stale-2", oid)
+			state := privateDir(t)
+			plans := []V3Plan{}
+			for _, ref := range []string{"refs/remotes/origin/stale", "refs/remotes/origin/stale-2"} {
+				planned := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: "HEAD", Online: true, TrackingRemote: "origin", Refs: []string{ref}, StateDir: state, ProtectWorktrees: []string{}})
+				if planned.Status != "ok" || planned.Plan == nil || len(v3Eligible(*planned.Plan)) != 1 {
+					t.Fatalf("tracking plan of %s: %+v", ref, planned.Diagnostics)
+				}
+				plans = append(plans, *planned.Plan)
+			}
+			apply := func(i int) V3Result {
+				return c.apply(context.Background(), V3ApplyOptions{StateDir: state, PlanID: plans[i].PlanID, Authorize: true, Online: true, ProtectWorktrees: []string{}, SiblingPlans: []string{plans[1-i].PlanID}})
+			}
+			if r := apply(0); r.Status != "ok" {
+				t.Fatalf("first tracking plan: %s %+v", r.Status, r.Diagnostics)
+			}
+			if unrelated {
+				gitFixture(t, dir, "branch", "unrelated", "HEAD")
+				requireEvidenceChanged(t, apply(1))
+				requireTidyV3Ref(t, dir, "refs/remotes/origin/stale-2", oid)
+				return
+			}
+			if r := apply(1); r.Status != "ok" {
+				t.Fatalf("second tracking plan: %s %+v", r.Status, r.Diagnostics)
+			}
+			requireTrackingRefAbsent(t, dir, "refs/remotes/origin/stale-2")
+		})
 	}
 }
