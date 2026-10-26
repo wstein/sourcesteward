@@ -130,8 +130,16 @@ those of `specs/041-tidy-wizard/spec.md` at main `6d4c75ed`):
 | Grouping of the text overview, decision 2026-10-25 (#255), rules 1 to 6 | owner, then repository | Replaced for text output by kind and risk (D15 asks the owner to confirm); `--rows` prints the old view |
 | Risks, line 726 | "mitigated by default none, a summary with effect counts, `decision` rows never included in `a`" | "mitigated by green-only defaults, a summary with the count of directories deleted for good, the typed words, and `decision` rows never taken by a group, `y`, `a` or a selector" |
 | OQ13 (owner of an unregistered worktree) | `commit-author` is a hint, never `own` | Unchanged; there is no `you` label (see D7) |
-| FR-016, SI9, the `--online` row of the flag table, non-goal at line 37 | "`--online` is the only way to network; default offline" | Human wizard only: online by default, `--offline` opts out ([D13](#online-by-default-in-the-human-wizard-d13)). Agent mode and `stw tidy plan`: unchanged |
-| Spec 031 FR-011 and the Spec 029 online contract (the explicit `--online` rule) | online only by `--online` | Unchanged for the expert layer and for agents. For the human wizard the contract-3 reads are performed without the flag under the budget below; the reads, endpoints, bounds, token handling and "no write" rules are those documents' own. Spec 031 and 029 texts are not rewritten; this table is the amendment |
+| 041 SI9 (line 565) and FR-016 (line 595) | "no network unless `--online`"; "`--online` is the only way to network; default offline" | Human wizard only: online by default, `--offline` opts out ([D13](#online-by-default-in-the-human-wizard-d13)). Agent mode, `stw tidy plan`, `--json`, `--save` and the expert layer: unchanged |
+| 041 non-goal (line 37) | "no fetch beyond what `--online` already allows in contract 3; no GitHub write" | Same, with "in the human wizard, what the default online reads allow"; still no fetch and no write |
+| 041 `--online` flag row (line 133) | "allow the contract-3 authenticated reads (default off, as today)" | "default on in the human wizard, off with `--offline`; opt-in elsewhere" |
+| 041 observer options (line 241) | "`Online` and `Remote` are set only by `--online`; without `Online` no network is attempted" | `Online` and `Remote` are set by `--online`, or by the human wizard's default when the run is online; without `Online` no network is attempted (unchanged) |
+| 041 Decision 8, tracking refs (line 703) | "only with `--online` (contract 3 needs it); offline wizard skips them with a notice" | In the human wizard tracking references are analysed whenever the run is online (default); with `--offline` they are skipped with the notice `tracking-requires-online`, as today. Elsewhere unchanged |
+| Spec 029 FR-001 (line 87), the Spec 029 online contract; Spec 031 FR-011 (line 105) | "online evidence requires explicit `--online` selection"; "forge-free proofs run without `--online` and without network" | 029 FR-001 is unchanged for the expert layer, agents and `plan`; for the human wizard the contract-3 reads run without the flag under the budget in D13. 031 FR-011 stays true (forge-free proofs need no network); the reads, endpoints, bounds, token handling and "no write" rules are those documents' own. Spec 031 and 029 texts are not rewritten; this table is the amendment |
+
+Swept and **not** changed (they describe offline facts that stay true): 041 lines 149-150 (base and freshness are read locally, the wizard
+never fetches), 041 line 340 (jj has no tracking evidence), 041 line 645 (offline observation reads no remote), 029 lines 14 and 18, 031
+lines 40 and 165 (offline fixtures).
 
 ### What stays exactly as it is
 
@@ -232,9 +240,11 @@ read-only GET requests, the Spec 031 closed endpoint set, the token never in out
 | Situation | Behavior |
 | --- | --- |
 | Human wizard (`stw tidy` on terminals), authenticated, remote is github.com | Online reads run; one line "GitHub: checked N of M repositories" |
-| Not authenticated, remote not github.com, any failure, rate limit, deadline | That member (or the rest of the run, for a rate limit) is judged **offline**; one notice line names the reason; exit code unchanged; levels as offline |
+| Not authenticated, remote not github.com, an error or deadline of one member's session, that member's own 128-request or 30-second budget | **That member only** is judged offline; one notice line names the reason; exit code unchanged; levels as offline |
+| Rate limit exhausted (403 or 429), a 5xx, the per-run cap of 512 requests, `--timeout` expiry | **Every member that has not finished its reads** is judged offline; members that finished keep their online levels; one notice line; nothing is retried |
 | `--offline` | No network, as today; `--online` and `--offline` together are a usage error (exit 2) |
-| `stw tidy plan`, `stw tidy --json`, `--save`, agent mode, the expert layer | Offline by default; `--online` opts in, behavior as today; `--offline` is accepted and changes nothing |
+| `stw tidy plan`, `stw tidy --json`, `--save`, agent mode | Offline by default; `--online` opts in, behavior as today; `--offline` is accepted (wizard layer) and changes nothing |
+| The expert layer (a `PATH` or any expert flag) | Offline unless `--online`, as today; `--offline` is **not accepted** there (exit 2, like every wizard-only flag) |
 | An explicit `--online` | Behavior as today (the contract-3 failure rules); only the implicit default falls back silently |
 
 **Phase 1 use of the reads.** Spec 031 discovery (FR-013 to FR-018) runs per explicitly resolved repository, closed endpoint set, up to 10
@@ -245,9 +255,9 @@ a hint. Positive evidence is usable whatever the coverage; absence is inconclusi
 **Budget across the workspace (F6).** The live workspace has 7 members and about 466 distinct tips (165 safe plus 301 unmerged), more than
 one session can cover. The allocation:
 
-- **Per member:** one session with the Spec 031 limits unchanged (128 requests, 32 MiB, 30 s), one session per member, members through
-  the existing fan-out (width 4).
-- **Per run:** at most 512 requests in all; the members that do not fit are judged offline for the remainder. `--timeout`, when given,
+- **Per member:** Spec 031 FR-018 states 128 requests, 32 MiB and 30 s "per run" for one explicitly resolved repository; the wizard reads
+  that **per member**: one session per member with those limits unchanged, members through the existing fan-out (width 4).
+- **Per run:** at most 512 requests in all; the members that have not finished when the cap is reached are judged offline for the remainder (the run-wide rule in the table above). `--timeout`, when given,
   bounds the whole analysis including every online session; a session ends at that deadline.
 - **Tips per member:** at most 64 distinct tips, taken in this order: `safe` rows with an `equivalent` proof (by name), then `unmerged`
   rows (by name). The rest are "not checked"; the overview says "N of M rows not checked against GitHub". On a workspace like the live
@@ -335,14 +345,20 @@ empty `except`, an unterminated quote, or a line over 256 bytes is an invalid an
 
 After the last group, one summary lists the selection by group with counts, level counts, effects, the typed words that will be asked,
 and the undo lines (screen 3). **Its last line, directly before the first typed prompt, states the irreversible effect: "This deletes N
-directories for good and M branches (restorable)."** (Owner condition for D2.) The order, all as today otherwise:
+directories for good and M branches (restorable)."** (Owner condition for D2.) The order:
 
 1. the summary and that line;
 2. if foreign items are chosen, the typed confirmation per word, sorted (`claude`, `codex`, `unknown` in the mockup), read from
-   `/dev/tty`, plain, while the plan set is built (`planset.go:492`); if all chosen items are own, the question "Store this plan set?
-   [y/N]" follows the line instead;
-3. the stored plan id and the question "Apply it now?", whose text repeats the counts (default no);
+   `/dev/tty`, plain, while the plan set is built (`planset.go:492`); if all chosen items are own, the new question "Store this plan set?
+   [y/N]" (default no) follows the line;
+3. the stored plan id and the question "Apply it now?" (default no), whose text now repeats the counts;
 4. the typed confirmation again inside the unchanged apply path.
+
+**What changes against today's flow** (`internal/cli/tidy_interactive.go:48-93`, where a choice is built and stored at once, then "Apply it
+now?"): the grouped steps and the summary replace the single "Apply which?" question; the summary's last line is new; the store question
+for an own-only selection is new (today none is asked before storing); the apply question gains the counts. **Unchanged**: the typed words
+and their text, `planset.Build`, the store, the apply path and its second typed confirmation, the default no on every storing and
+applying question.
 
 A wrong word, no terminal, an interrupt or `q` stores or applies nothing more. The typed prompt stays **plain text** (no color, no menu);
 it is the protection, and the environment markers are only the accident guard in front of it.
@@ -532,8 +548,7 @@ Rows: l = list a reason, or run  stw tidy --rows
 
 - **Flags (wizard layer).** New: `--rows` (print the row view grouped by owner, as before the change, with all rows) and `--offline` (no
   network reads; exclusive with `--online`, exit 2). Both are classified as wizard-layer flags (not accepted with a `PATH` or an expert
-  flag, as `internal/cli/tidy_mode.go:31` classifies the others; the flag test lists them) and `--offline` is accepted and a no-op in
-  agent mode, `plan` and `--json`. Existing and unchanged: `--verbose`, `--quiet`, `--progress`, `--trace` (progress and timings go to
+  flag, as `internal/cli/tidy_mode.go:31` classifies the others; the flag test lists them) and `--offline` is accepted on `stw tidy` and `stw tidy plan`, where it is a no-op in agent mode, `plan` and `--json` (they are offline by default), and refused in the expert layer. Existing and unchanged: `--verbose`, `--quiet`, `--progress`, `--trace` (progress and timings go to
   stderr, nothing to stdout; #297, merged; `internal/cli/tidy_wizard.go:109`).
 - **JSON.** Additive optional fields on each candidate of `tidy-overview`: `risk` (`green|yellow|orange|red|kept`),
   `risk_reasons[]`, `group` (a stable group key), and `pr` (merged pull request number, online only); `summary` gains counts per level;
