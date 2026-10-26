@@ -82,7 +82,13 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 		removed[m.Path] = true
 		j.Effects[len(j.Effects)-1].Outcome = "observed"
 		if m.Path != "." {
-			if e = syncDirectory(root); e != nil {
+			effectParent, openErr := root.OpenRoot(filepath.Dir(m.Path))
+			if openErr != nil {
+				return failure("prune-removal-incomplete", "Administrative parent durability cannot be observed.")
+			}
+			e = syncDirectory(effectParent)
+			effectParent.Close()
+			if e != nil {
 				return failure("prune-removal-incomplete", "Administrative removal durability is unconfirmed.")
 			}
 		} else {
@@ -138,6 +144,21 @@ func validatePruneV4RemovalBoundary(ctx context.Context, p RegistrationPruneV4Pl
 	}
 	if source != p.Expected.SourceSnapshot.Identity {
 		return failure("prune-evidence-changed", "Source native identity changed during removal.")
+	}
+	bin, e := gitExecutable()
+	if e != nil {
+		return e
+	}
+	safety, e := gitSafety(ctx, bin, source, expected.SourceSnapshot.BaseCommit)
+	if e != nil {
+		return e
+	}
+	refs, e := readTidyV3References(gitCollectionReaderFor(ctx, bin, p.SourcePath), source.ObjectFormat)
+	if e != nil {
+		return e
+	}
+	if safety != expected.SourceSnapshot.SafetyDigest || !reflect.DeepEqual(refs, expected.Native.References) {
+		return failure("prune-evidence-changed", "Source safety or exact references changed before administrative removal.")
 	}
 	siblings, e := observePruneV4Siblings(ctx, source.RepositoryDir)
 	if e != nil {
