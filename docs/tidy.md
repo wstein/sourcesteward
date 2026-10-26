@@ -111,7 +111,7 @@ schemas or emit the new risk fields.
 
 The text of `stw tidy plan`, and of bare `stw tidy` without a terminal or in an agent run, is a short grouped overview followed by a
 retain table (Spec 044). Internal codes are replaced by sentences; the codes stay in `--json`, `--verbose` and `--rows`. This is the real
-output on a recording of the owner's workspace of 2026-10-26 (7 repositories, 1,129 candidates; `testdata/workspace-20261026.json` of
+output on a recording of the owner's workspace of 2026-10-26 (7 repositories, 1,129 candidates; `testdata/workspace-20261026.rec` of
 `internal/tidywizard/render`, tested against these bytes):
 
 ```text

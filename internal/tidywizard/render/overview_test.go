@@ -17,7 +17,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 )
 
-// realFixture is the recorded workspace of 2026-10-26 (testdata/workspace-20261026.json): the 165
+// realFixture is the recorded workspace of 2026-10-26 (testdata/workspace-20261026.rec): the 165
 // safe rows unchanged and the 964 retained rows aggregated by what the retain table reads.
 type realFixture struct {
 	Workspace    string                 `json:"workspace"`
@@ -42,7 +42,7 @@ type realRetained struct {
 // time means unknown, which the ladder treats as recent).
 func realDocument(t *testing.T, activity time.Time) Document {
 	t.Helper()
-	b, err := os.ReadFile("testdata/workspace-20261026.json")
+	b, err := os.ReadFile("testdata/workspace-20261026.rec")
 	if err != nil {
 		t.Fatal(err)
 	}
