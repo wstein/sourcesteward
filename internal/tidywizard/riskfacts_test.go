@@ -82,6 +82,9 @@ func TestRiskFactsOfATrackingReferenceAndAMergedPullRequest(t *testing.T) {
 	if a := risk.Evaluate(RiskFacts(b, 0), now); a.Level != risk.Yellow {
 		t.Fatalf("without a merged pull request: %+v", a)
 	}
+	if a := risk.Evaluate(RiskFacts(b, 1), now); a.Level != risk.Green {
+		t.Fatalf("pull request number 1: %+v", a)
+	}
 	if a := risk.Evaluate(RiskFacts(b, 17), now); a.Level != risk.Green || !reflect.DeepEqual(a.Reasons, []string{risk.ReasonPRMergedHead}) {
 		t.Fatalf("a merged pull request: %+v", a)
 	}
