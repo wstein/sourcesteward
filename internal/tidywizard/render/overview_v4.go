@@ -226,7 +226,7 @@ rows:
 				break
 			}
 			if r.legacy != nil {
-				if !w.line("  %s", strings.TrimSuffix(row(*r.legacy, 0, e), "\n")) {
+				if !w.line("  %s", strings.TrimSuffix(row(*r.legacy, 0, e, painter(false)), "\n")) {
 					break rows
 				}
 				continue
