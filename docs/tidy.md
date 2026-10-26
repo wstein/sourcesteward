@@ -657,7 +657,7 @@ restoring its administrative entry:
 stw tidy restore --contract 4 --plan PLAN_ID --state-dir /private/state --json
 stw tidy restore --contract 4 --plan PLAN_ID --state-dir /private/state --apply --authorize --json
 stw tidy history /repository --contract 4 --state-dir /private/state --limit 256 --json
-stw tidy restore --contract 4 --list --state-dir /private/state --limit 256 --json
+stw tidy restore /repository --contract 4 --list --state-dir /private/state --limit 256 --json
 ```
 
 `PLAN_ID` is the original full 32-character lowercase hexadecimal prune plan ID.
@@ -669,12 +669,23 @@ history pin must validate. An incomplete prune or prior restore refuses; a
 completed restore also refuses another restore because the occupied slot cannot
 be proved to be the same directory from the closed journal representation.
 
+Applying restore compares the full stored caller/mode evidence, including
+editor, agent and terminal markers. A later shell with different evidence is
+refused even when the owner identity is unchanged. This slice does not relax
+that comparison or migrate stored authorization evidence.
+
 Restore copies the exact bounded metadata into a private staging directory in
 the repository's common directory and publishes it at the original name with
 native no-replace rename. A separate restore journal records intent and outcome;
 the original prune journal and recovery payload stay unchanged. Failure after
 intent is partial and retains its journal and any staging directory for
 inspection; it never automatically retries, overwrites or removes a reused slot.
+
+Native maintenance can remove an empty `worktrees` directory after the final
+registration is pruned. Restore refuses if that original parent disappeared or
+was replaced; it does not recreate it or weaken the directory-identity check.
+The retained payload remains available for separately reviewed manual recovery.
+
 The original checkout stays missing and locked. Restore does not recreate user
 files, their ownership, inodes or timestamps, or execute hooks or repair.
 
@@ -684,9 +695,16 @@ explicit found-path placeholder; it is guidance, not an executed transcript.
 After repair, verify the native registration, original lock, HEAD/index and
 user files. The source test fixture performs repair only in a temporary repo.
 
-History and `restore --list` list only the new namespace, newest first within
-the disclosed scan bound. They do not read raw recovery payloads or verify the
-pin, so a recorded payload is `unknown`, not verified `available`. The default
+History and `restore --list` select the repository from optional PATH, or the
+current directory when PATH is omitted. `--state-dir` alone does not select a
+repository. They filter the shared store to that repository, newest first within
+the disclosed scan bound. Totals count matching records examined within the
+directory and byte bounds; a truncated total can be a lower bound.
+
+These listings read prune journals only, not restore journals. They cannot
+identify a completed or partial restore. Preserve the restore ID and journal
+pointer from the restore result for separate inspection. They do not read raw
+recovery payloads or verify the pin, so a recorded payload is `unknown`, not verified `available`. The default
 limit is 256, the ceiling is 1024, and output is bounded to 4 MiB. Truncation is
 explicit and succeeds; invalid records or operational failures refuse. Exit
 codes are 0 for complete inspection/mutation/listing, 1 for refusal, partial or

@@ -32,13 +32,27 @@ journal, complete recovery and any staging path; the result names that residual.
 No automatic rollback, manual-file transcript or checkout-file restoration is
 claimed. Repair guidance is escaped argv data with a found-path placeholder.
 
-History/listing reads plans and prune journals only, with strict version/shape
-checks, record identities and a bounded scan/output. It never reads raw payload
+History/listing selects optional PATH or the current directory; the state
+directory alone does not select a repository. It filters plans from other
+repositories while charging their reads to the same scan budget. Totals count
+matching records examined within directory/byte bounds and can be a lower bound
+when truncated. Listing reads plans and prune journals only, with strict
+version/shape checks, record identities and a bounded scan/output. It never reads raw payload
 bytes or treats a pointer as verified recovery. A recorded payload has status
 `unknown`; restoration inspection verifies actual eligibility separately. The
 count limit defaults to 256 and is capped at 1024. Truncation is successful,
 explicit and never authorizes omitted records. Encoded records are bounded at
 1 MiB before allocation, rather than inheriting the legacy reader's larger limit.
+Restore journals are not listed: history cannot identify complete or partial
+restores. Preserve the restore result's ID and journal pointer for inspection.
+
+Native maintenance may remove the empty native `worktrees` parent after the last
+registration is pruned. Restore refuses a missing/replaced parent with
+`prune-registration-parent-changed`; it never recreates it or relaxes the bound
+identity. The retained payload remains available for separately reviewed manual
+recovery. Applying restore also retains exact stored caller/mode equality,
+including volatile editor, agent and terminal markers. A later shell with
+different evidence is refused even when the owner is unchanged.
 
 New plan capability wording now describes administrative restore accurately.
 Because `recovery_limits` is digest-bound, this changes newly generated plan
