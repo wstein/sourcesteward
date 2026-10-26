@@ -1,0 +1,461 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "evidence": {
+          "maxLength": 512,
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "worktree",
+            "branch",
+            "tracking-ref",
+            "stale-worktree"
+          ]
+        },
+        "owner": {
+          "type": "string"
+        },
+        "owner_source": {
+          "enum": [
+            "task-record",
+            "path-convention",
+            "commit-author",
+            "unknown"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "proof": {
+          "enum": [
+            "ancestor",
+            "patch-id",
+            "merge-noop",
+            "no-net-change",
+            "empty-working-copy-integrated-parent",
+            "github-branch-absent",
+            "none"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "own",
+            "other",
+            "unknown"
+          ]
+        },
+        "task": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "safe",
+            "retain",
+            "decision"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "kind",
+        "verdict",
+        "reason",
+        "owner",
+        "owner_source",
+        "scope",
+        "path",
+        "branch",
+        "task",
+        "proof",
+        "effects",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "Derived": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "overridden": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source",
+        "overridden"
+      ],
+      "type": "object"
+    },
+    "Mode": {
+      "additionalProperties": false,
+      "properties": {
+        "by_owner": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "caller": {
+          "type": "string"
+        },
+        "caller_source": {
+          "type": "string"
+        },
+        "markers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mine": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "human",
+            "agent"
+          ]
+        },
+        "stdin_tty": {
+          "type": "boolean"
+        },
+        "stdout_tty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "stdin_tty",
+        "stdout_tty",
+        "markers",
+        "mine",
+        "by_owner",
+        "caller",
+        "caller_source"
+      ],
+      "type": "object"
+    },
+    "RegistrationPrune": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "effects": {
+                "maxItems": 0
+              },
+              "proof": {
+                "const": "none"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "safe"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effects": {
+                "minItems": 1
+              },
+              "evidence_digest": {
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "owner": {
+                "minLength": 1
+              },
+              "owner_source": {
+                "const": "task-record"
+              },
+              "proof": {
+                "const": "owned-missing-registration"
+              },
+              "reason": {
+                "const": "registration-prune-ready"
+              },
+              "task": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "destination": {
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "const": "remove-registration"
+          },
+          "maxItems": 1,
+          "type": "array"
+        },
+        "evidence_digest": {
+          "pattern": "^([0-9a-f]{64})?$",
+          "type": "string"
+        },
+        "gitdir": {
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "kind": {
+          "const": "registration-prune"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "owner_source": {
+          "enum": [
+            "task-record",
+            "unknown"
+          ]
+        },
+        "proof": {
+          "enum": [
+            "owned-missing-registration",
+            "none"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "registration-prune-ready",
+            "registration-prune-absence-unproven",
+            "registration-prune-ownership-unproven",
+            "registration-prune-changed",
+            "registration-prune-unsupported",
+            "registration-prune-inventory-blocked",
+            "registration-prune-recovery-unavailable"
+          ]
+        },
+        "repo": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "own",
+            "other",
+            "unknown"
+          ]
+        },
+        "task": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "safe",
+            "retain",
+            "blocked",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "repo",
+        "name",
+        "gitdir",
+        "destination",
+        "owner",
+        "owner_source",
+        "scope",
+        "task",
+        "verdict",
+        "reason",
+        "proof",
+        "effects",
+        "evidence_digest",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "Repository": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "analysed",
+            "skipped",
+            "error"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "backend",
+        "base",
+        "remote",
+        "state",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retain": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "safe": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "safe",
+        "retain",
+        "decision"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v4/tidy-overview.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Explicit opt-in overview4, unpublished. Legacy candidates and summary keep their existing shape; registration_prunes has its own typed verdicts. The producer bounds both arrays together at 4096 and the whole document at 4 MiB.",
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      },
+      "maxItems": 4096,
+      "type": "array"
+    },
+    "command": {
+      "const": "tidy-overview"
+    },
+    "derived": {
+      "items": {
+        "$ref": "#/$defs/Derived"
+      },
+      "type": "array"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode"
+    },
+    "notices": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "plan_id": {
+      "maxLength": 64,
+      "pattern": "^([0-9a-f]{64})?$",
+      "type": "string"
+    },
+    "registration_prunes": {
+      "items": {
+        "$ref": "#/$defs/RegistrationPrune"
+      },
+      "maxItems": 4096,
+      "type": "array"
+    },
+    "repositories": {
+      "items": {
+        "$ref": "#/$defs/Repository"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 4
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "workspace": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "workspace",
+    "derived",
+    "repositories",
+    "candidates",
+    "summary",
+    "mode",
+    "plan_id",
+    "notices",
+    "truncated",
+    "registration_prunes"
+  ],
+  "title": "stw tidy overview (Spec 041)",
+  "type": "object"
+}
