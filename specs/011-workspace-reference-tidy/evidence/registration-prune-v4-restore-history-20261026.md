@@ -132,3 +132,62 @@ wizard T012b require their own reviewed integration after expert restore merge.
 That slice must consume the shared `loadV3Chain` / `v3Chain.apply` derivation for
 sibling dispatch, rather than mutating saved baselines. No wave-closing ticks
 belong to this PR.
+
+## Opus review correction round
+
+The posted [review of b6f1adaf](https://github.com/wstein/sourcesteward/pull/295#pullrequestreview-5648008600)
+identified shared-store filtering, causal restore-guard coverage and disclosure
+gaps. The correction keeps the accepted authorization and identity rules.
+Tests assert diagnostic code and message as well as refusal/partial status,
+so a later rejection cannot mask a missing gate. Private observation hooks
+exercise changes between validation steps without adding public options.
+
+Each mutation below compiled and failed its named guard test. Reproduce by
+disabling only that guard with a Go overlay and running
+`go test ./internal/workspace -count=1 -run '^TestRegistrationPruneV4RestoreGuard'`.
+The unmodified guard suite passed before the probes (61.3 s). These are targeted
+mutation checks, not an exhaustive concurrency proof.
+
+| Disabled guard | Failing test suffix after `TestRegistrationPruneV4RestoreGuard` |
+| --- | --- |
+| other-owner | `OtherOwnerConfirmation` |
+| incomplete-prune | `IncompletePrune/partial` |
+| prune-journal-digest | `JournalDigestBinding` |
+| restores-private | `PrivateRestoreDirectory` |
+| again-under-lock | `RechecksPriorUnderLock` |
+| common-root-id | `HeldDescriptorBindings/root` |
+| parent-id | `HeldDescriptorBindings/parent` |
+| staged-id | `HeldDescriptorBindings/staged` |
+| prepublication-revalidate | `RevalidatesBeforePublication/ownership` |
+| staged-verification | `RevalidatesBeforePublication/staged-bytes` |
+| copy-size-digest | `CopyChecksBytesAfterPayloadRead` |
+| metadata-mode | `VerifiesRestoredModes` |
+| post-mount | `PostMountAndSiblings/mount` |
+| post-sibling | `PostMountAndSiblings/sibling` |
+| pre-ownership | `PrepublicationOwnership` |
+
+Separately removing only the private restore directory owner check or only its
+0700 mode check also compiled and failed `PrivateRestoreDirectory`: 17 restore
+guard probes were caught in total.
+
+The shared-store fixture contains two independently created native repositories.
+Three further compiled mutations failed: inverted repository filter, counting
+foreign plans in totals, and omitting plan bytes from the scan budget. An invalid
+foreign plan still refuses with its specific reason before repository filtering.
+Integrated history/list tests passed (workspace 24.124 s; CLI 0.040 s).
+
+Before this round, the full Go suite passed at b6f1adaf (workspace 1449.055 s).
+Its enclosing committed-pristine `make check` later failed only because the
+Hugo-dependent script test could not find `.tools/hugo` (399 tests, one error).
+The review-round script rerun had the same sole missing-tool error (5.951 s).
+The earlier full-suite result does not claim a full-suite run on the correction
+head. Native CI and the posted delta review remain required for that head.
+
+Affected restore checks also passed before integration: diagnostic regressions
+17.8 s, existing restore regressions 77.5 s and CLI restore checks 9.8 s.
+The diagnostics and guard cases were observed failing before their corrections;
+the corresponding test/code fixes are committed together rather than presented
+as test-only RED commits. Integrated vet and Darwin arm64 test compilation
+passed. Compilation is not native macOS execution. Spelling checks pass on all
+PR-changed files; a whole-repository spelling run reports pre-existing findings
+in untouched files, which this package does not change.
