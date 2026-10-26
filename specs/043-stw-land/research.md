@@ -73,3 +73,46 @@ observed on `wstein/anchorage-workspace`).
 R1, R2: the landed SHA equals the reviewed SHA, so exact-head review stays valid. R3, R4: the order of FR-030 to FR-032. C1, N1 and the
 read-only observations: OQ2, OQ4 as hard gates (`land-unmeasured`) and the first dogfood step (a scratch repository with a copy of the real
 ruleset).
+
+## Stack landing: spike observations and what is still to be measured (2026-10-26)
+
+Source: the notes of the `wstein/stw-release-spike` author (the first stack, a native `gh stack` stack of three pull requests, and the
+ruleset settings of that repository; session scratchpad `spike-release-notes.md` sections D, E and "Stacking", and `spike-settings.md`).
+These are observations of the spike repository, not of `wstein/sourcesteward` or `wstein/anchorage-workspace`.
+
+**Observed (the facts FR-060 to FR-079 rely on)**
+
+- **S-A** A pull request with `base=main` whose branch contains its parent's commits shows parent plus child commits (4 commits for the
+  second pull request of a two-pull-request stack); with `base=<parent branch>` only the child's own commits. Two pull requests on the same
+  head SHA doubled the `check` runs of that SHA. (Edge case in spec.md: both base shapes accepted.)
+- **S-B** After the owner rebase-merged the bottom (#5), GitHub retargeted the next pull request (#6) to `main` and force-pushed new heads
+  for **every** remaining pull request of the stack (events `automatic_base_change_succeeded`, `head_ref_force_pushed`); with
+  `delete_branch_on_merge` on, the bottom branch was deleted. Rebase-merge gave every commit a new SHA (restack needed for a non-native
+  child, D).
+- **S-C** #6 had **no** `pull_request` check run on its new head (empty `statusCheckRollup`, merge state BLOCKED by the required check
+  `check`); #7 got a run about 3.5 minutes late. So "automatic restack never triggers CI" is confirmed for #6 and refuted for #7: not
+  conclusive. `gh pr close 6 && gh pr reopen 6` started the run at once with the head unchanged. This is the distinct state of FR-064.
+- **S-D** Merging the top pull request of a native stack (base = the parent branch) is allowed by GitHub and merges into the parent's branch,
+  not into `main`; nothing reaches `main`. A stack lands bottom-up only, one merge per pull request, each needing its CI again.
+- **S-E** The spike ruleset `main` has `non_fast_forward`, `required_linear_history`, `pull_request` (rebase only), required check `check`, bypass
+  actor RepositoryRole 5 with `bypass_mode: pull_request`. Bypass in that mode applies to pull requests only, so a direct push is **expected
+  to be refused** (not measured). A direct push needs `bypass_mode: always`, which also lets any token of the same account push (so
+  "agents cannot" would hold by policy only, no GitHub separation).
+- **S-F** CI start delays of three minutes and more are common, so a plan can see `checks-pending` for a long time; the apply refuses it.
+
+**Not measured; to be measured in the spike with a second stack (the spike author prepares it; the owner is at the terminal)**
+
+Each test names the exact observation. The spike repository is configured as in S-E; for E1 to E3 the ruleset bypass mode is set to `always`
+by the owner (owner-only settings) and the result recorded; with `pull_request` the first observation is the verbatim refusal (E0).
+
+| ID | Test | Observation to record | Lifts |
+| --- | --- | --- | --- |
+| E0 | With the bypass mode as it is now (`pull_request`), the owner pushes the tip of the second stack: `git push origin <tip>:refs/heads/main` | the verbatim remote refusal, exact text | FR-040 text, FR-067 `ruleset-forbids-push` |
+| E1 | Second stack of three pull requests (A base main, B base A's branch, C base B's branch; variant: all three base main with a linear chain of heads), all CLEAR, checks green on every head. Bypass `always`. Push the tip SHA to `main` once | after 2 minutes, then 10 minutes: state, `mergedAt`, `merge_commit_sha` of A, B and C; whether all are `MERGED` and each `merge_commit_sha` equals its own head (R1 measured this for one pull request only); the events of each pull request; the order and delay of the marking | FR-073, `land-unmeasured` for chains |
+| E2 | Same run, `delete_branch_on_merge` on (the spike setting) | which of the three head branches still exist after the marking; whether GitHub deletes the heads of pull requests marked by a push | FR-075, FR-031 interplay |
+| E3 | Same run | whether any pull request stays OPEN or is CLOSED (for example B or C with a base that vanished), its base and `mergeStateStatus` | FR-073 `landed-not-marked`, FR-066 |
+| E4 | A chain whose bottom is not a fast-forward (main moved by an unrelated commit before the push) | the remote refusal text of the push (`fetch first`/`non-fast-forward`) with bypass `always` | FR-071, FR-042 |
+
+Until E1 to E3 are recorded for a repository shape, `stw land --stack` stays `land-unmeasured` for it (decision 9), and the spike repository
+is the first shape to be added with `stack: true` to `internal/land/shapes.json`. The real repositories follow only after the owner has
+chosen the ruleset bypass question (spec.md Q2).

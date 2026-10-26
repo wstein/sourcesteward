@@ -4,6 +4,12 @@
 > [current profiles](../016-stacked-pr-coordination/contracts/owner-decisions.md) supersede earlier undecided recommendations.
 > Human-only landing and measured-shape/retarget gates remain; trusted workspace policy is authority.
 > This is a documentation target, not implementation or native acceptance.
+>
+> **Owner-decision amendment — 2026-10-26 (stack landing):** `stw land --stack` lands a whole linear chain of reviewed pull
+> requests with **one** fast-forward push of the tip; see [Stack landing](#stack-landing---stack-owner-decision-2026-10-26).
+> Dependent parts are by default ONE pull request with a commit series (workspace `AGENTS.md`), which the single-PR landing
+> already covers; `--stack` is for the separate stacked PRs that remain. First feature after v0.2.0; first measured in the spike
+> repository `wstein/stw-release-spike` (research.md, "Stack landing: to be measured in the spike").
 
 **Branch**: `docs/spec-043-stw-land` | **Created**: 2026-10-24
 **Status**: Draft specification; no runtime implementation. Requires an independent review of the exact head before tasks start.
@@ -18,8 +24,10 @@ owner's choice of the GitHub merge button.
 
 1. **Owner-only.** The command refuses in agent mode and never runs from an agent session (FR-001 to FR-004). An agent may run only
    `stw land --plan` (read-only), see the rule for `--plan` below.
-2. **One pull request per run.** A stack is landed by one run per pull request, bottom first. The run for a child performs the retarget
-   step of the measured order (decision 6); nothing lands two pull requests at once.
+2. **One pull request per run, or one chain with `--stack`.** Without `--stack` a stack is landed by one run per pull request, bottom
+   first, and the run for a child performs the retarget step of the measured order (decision 6). With `--stack` (owner decision
+   2026-10-26) one run lands a whole linear chain with a single push of the tip and no retarget at all (FR-060 to FR-079); no other
+   run lands two pull requests.
 3. **Fresh preconditions.** Every precondition is read again immediately before the effect; nothing from `--plan` is trusted by the apply.
 4. **Git decides.** Fast-forwardness is computed with Git over local objects (`merge-base --is-ancestor`); the GitHub API is evidence for
    state, never the proof of an ancestry.
@@ -40,7 +48,7 @@ owner's choice of the GitHub merge button.
 8. **Out of scope for v1.** jj repositories (refused, `unsupported-vcs`), non-GitHub forges (refused, `unsupported-forge`), pull requests
    from forks, landing as anything other than a fast-forward (no squash, no rebase-merge, no merge commit), tags, releases, submodule
    gitlinks, auto-restack of a child that is not a fast-forward (Spec 015/016 remain the tools for that), and landing several pull
-   requests in one run.
+   requests in one run other than the linear chain of `--stack`.
 9. **Hard gate: unmeasured repository shapes fail closed.** Rulesets and branch protection are **not measured**. Read-only
    observations (research.md, "Real repositories, read-only observations") show that `wstein/sourcesteward` has `delete_branch_on_merge`
    true and an active ruleset `main` with `deletion`, `non_fast_forward`, `required_linear_history`, `pull_request` (rebase only) and
@@ -123,7 +131,10 @@ For each precondition of FR-010 to FR-019 a test shows the typed reason, exit st
 stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PATH]
          [--remote NAME] [--delete-branch] [--ack-draft] [--wait DURATION]
          [--json | --human]
+stw land --stack NUMBER[,NUMBER...] --reviewed NUMBER:SHA [--reviewed NUMBER:SHA ...] [--plan] [same options]
 ```
+
+The second form is the stack landing (FR-060 and following). `--stack`, `--pr` and `--head` exclude each other (exit 2).
 
 | Flag | Meaning |
 | --- | --- |
@@ -131,7 +142,8 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
 | `--head SHA` | the full 40 hex object id to land (required); must equal the PR's current head |
 | `--reviewed SHA` | the owner's statement that an independent review of exactly this head was CLEAR (required for plan and apply, so a plan shows what apply will do; see OQ1); must equal `--head` |
 | `--plan` | read-only: preconditions, effects, exact commands; no effect; allowed in agent mode |
-| `--delete-branch` | delete the landed PR's head branch on the remote after the retargets (decision 7) |
+| `--stack LIST` | land the listed pull requests as one linear chain with one push of the tip, bottom first, tip last (FR-060); needs one `--reviewed NUMBER:SHA` per listed pull request, no more and no fewer |
+| `--delete-branch` | delete the landed PR's head branch on the remote after the retargets (decision 7); with `--stack`, each landed PR's own head branch (FR-075) |
 | `--ack-draft` | the owner acknowledges the pull request is a Draft (FR-013); recorded in the output |
 | `--wait DURATION` | bounded wait for GitHub to report the pull request merged; default `30s`, maximum `2m` |
 | `--remote NAME` | remote; default `origin` if present, else the single remote, else `remote-ambiguous` (exit 1) |
@@ -245,7 +257,7 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
   listed in `UNPUBLISHED_SCHEMAS`): `schema_version`, `command: "land"`, `operation` (`plan` or `apply`), `mode` (`human` or `agent`) with
   the mode evidence as in Spec 041, `repository`, `pull_request` (number, state as read, head sha, base ref, `github_reported` mergeable fields,
   draft), `inputs` (`head`, `reviewed`, `ack_draft`, `delete_branch`), `preconditions` (array of `{id, ok, value, reason}`),
-  `landable`, `apply_allowed` (false in agent mode or while any precondition including `land-unmeasured` fails), `effects` (array of `{id, kind, argv, outcome, detail}` where `kind` is `fetch`, `retarget`, `push`, `delete-branch`;
+  `chain` (only with `--stack`, FR-079), `landable`, `apply_allowed` (false in agent mode or while any precondition including `land-unmeasured` fails), `effects` (array of `{id, kind, argv, outcome, detail}` where `kind` is `fetch`, `retarget`, `push`, `delete-branch`;
   argv is the exact vector), `children`, `result` (`landed`, `already-landed`, `landed-not-marked`, `refused`, `failed`), `reasons`,
   `truncated`.
 - **FR-052** `--json` and `--human` are one result model; the schema carries valid and invalid fixtures.
@@ -258,13 +270,134 @@ stw land --pr NUMBER --head SHA --reviewed SHA [--plan] [--repo OWNER/NAME | PAT
 | 1 | refusal (any typed reason above, agent mode, failed confirmation), failed precondition in `--plan`, `push-refused`, `base-moved`, `landed-not-marked`, `merged-other-sha`, a failed retarget or deletion, cancellation, operational or output failure |
 | 2 | invalid usage (missing `--pr`, `--head` or `--reviewed`; `--head` not 40 hex; `--yes`; `--json` with `--human`; bad `--wait`; outside a repository) |
 
+## Stack landing (`--stack`), owner decision 2026-10-26
+
+Owner decision 2026-10-26, answer "A yes" (German source in the owner-decision record of the workspace): `stw land --stack` lands a
+whole stack with ONE fast-forward push of the TIP. Every pull request in the chain must be CLEAR, the chain linear, the CI on the tip
+green and the ruleset must allow the owner's direct push. GitHub marks every pull request whose head is in the default branch as
+merged. No rebase, no new SHAs, no restack, no retarget. This is the owner's way out of the bottom-up merge, whose rebase-merge
+rewrites every SHA and forces a restack and a new CI run per pull request (spike observation D and E in research.md).
+
+Companion rule (answer "B yes"): dependent parts are by default ONE pull request with a commit series (a "virtual stack"; the rule is in the
+workspace `AGENTS.md`). Such a pull request needs no `--stack`: the single landing of FR-016 and FR-018 already pushes its whole range
+once. `--stack` serves the separate stacked pull requests that must be merged independently or were opened before the rule.
+
+**Interface.** The explicit form is `stw land --stack 12,13,14 --reviewed 12:SHA --reviewed 13:SHA --reviewed 14:SHA` (bottom first). The
+explicit list is the owner's statement of the chain, so no discovery can add a pull request nobody named. A flagless wizard
+(`stw land` in human mode, listing the chains it finds, as the Spec 045 release wizard does for its steps) is **not** part of this
+slice; see Open question Q1. The conventions are the ones of Specs 044 and 045: human mode only, the typed approval read from `/dev/tty`
+and never stdin (as Spec 044 D16), refusal in agent mode, `--plan` read-only and allowed for agents.
+
+### Preconditions of a chain
+
+Each is read fresh immediately before the effect and again before the push (FR-034 applies to the whole chain). `--plan` lists every failing
+one.
+
+- **FR-060 Named chain.** The list has 2 to 8 distinct pull requests (bound, default 8; a single number is a usage error: use
+  `--pr`). Each is open, from the same repository (not a fork), not merged, and the `--reviewed` set equals the list exactly (a missing,
+  extra or duplicate entry is a usage error, exit 2).
+- **FR-061 Heads equal the recorded reviewed heads.** For each pull request the current head SHA equals the SHA in its `--reviewed
+  NUMBER:SHA` (`head-changed` with the number). A head that GitHub changed itself (automatic rebase after a merge, events
+  `head_ref_force_pushed` or `automatic_base_change_succeeded`, spike observation E) is the same refusal and also reports FR-064.
+- **FR-062 Review evidence: what stw checks and what it does not.** stw has no review ledger and does not invent one. For each pull
+  request it checks (a) the exact head equals the SHA the owner states as reviewed (FR-061), (b) the check evidence of FR-012 and
+  FR-064, and (c) it reads and **displays** the reviews on that exact head (`GET /repos/{o}/{r}/pulls/{n}/reviews`: `commit_id` equal to the
+  head, state, reviewer) filtered by the trusted workspace reviewer policy of OQ1 where the policy exists, as the field `review_evidence`
+  (`found`, `none`, or `unknown`). `review_evidence` is information, never a pass or a refusal by itself, because the independent
+  review of this workspace may be recorded as a comment or a report outside GitHub's review objects. The owner's confirmation of the review state
+  for the whole chain is the typed approval word of FR-072, shown after a table of every pull request, its head, its
+  `review_evidence` and its checks. What stw does not verify: that the independent review was CLEAR.
+- **FR-063 Chain is linear.** For every consecutive pair the lower head is an **ancestor** of the next head
+  (`git merge-base --is-ancestor <head_i> <head_i+1>` exit 0, over local objects after the private fetch of FR-016) and the heads
+  differ; exit 1 is `chain-not-linear`, exit 128 is `object-missing`. Each pull request's GitHub base is the default branch or the head
+  ref of the previous pull request in the list; any other base is `base-not-in-chain`. Git decides, not the API (decision 4).
+- **FR-064 Checks on every head, distinct states.** Required contexts (FR-012, default branch union) are green on the **tip** head
+  (`checks-not-green` otherwise). No other pull request of the chain has a failing or missing required context on its own head
+  (a pending one is `checks-pending`); with Spec 039's tiered CI the non-tip heads run the light lane only, so the heavy shards are
+  required on the tip alone and the required contexts are read from the rules, not assumed. A head with an **empty check rollup after
+  a change made by GitHub** (an event `head_ref_force_pushed` or `automatic_base_change_succeeded` not caused by the owner's push, spike
+  observation E, gap S9) is a distinct state `head-changed-no-checks`, not `checks-not-green`. The refusal text offers the owner's way out
+  as text only: `gh pr close N && gh pr reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike);
+  stw never runs it (FR-033).
+- **FR-065 Bottom fast-forwards the default branch.** The remote default tip read by `git ls-remote` in this run is an ancestor of the
+  bottom head (equivalently, the merge base of the bottom and the default tip equals the default tip). If the default branch moved,
+  the reason is `not-fast-forward` with the detail `rebase needed`: the owner restacks per Spec 015/016 and re-reviews; stw never
+  rewrites. The identity check of FR-017 and the range bound of FR-018 apply to the range old-tip..tip (all commits of the chain, up to
+  the configured bound).
+- **FR-066 No side child.** A pull request that is not in the list but whose base ref is the head ref of a listed pull request
+  (a "side child") is `stack-side-child`: the landing would merge its base away. The owner lands it separately first or retargets it by
+  hand. The refusal lists it; `--stack` never retargets (FR-070).
+- **FR-067 Ruleset allows the owner's direct push (read-only check).** The rules for the default branch and the active rulesets are read
+  (FR-012 sources plus `GET /repos/{o}/{r}/rulesets/{id}` for the bypass list). The owner's push is expected to be accepted only if the
+  repository shape has a bypass for the owner's role with `bypass_mode: always`. In mode `pull_request` the bypass applies to pull
+  requests only, so the direct push is refused by the `pull_request` rule even for the owner (spike settings notes 2026-10-26; expected,
+  not measured). Result: `ruleset-forbids-push` for a readable ruleset that cannot allow it, `land-unmeasured` for a readable one not
+  yet measured, and `land-unmeasured` for an unreadable one (decision 9). The mode of the bypass is part of the normalized shape key
+  in `internal/land/shapes.json`, which gains the field `stack` (measured for the chain landing or not). Only the owner changes a ruleset;
+  this spec never proposes a workaround. Note for the owner's decision, not for stw: with bypass mode `always` any token of the same
+  account can push the default branch, including an agent's `gh` login; "agents cannot" then holds by the workspace policy and the mode
+  guard only (SI8), unless a separate agent identity without the bypass exists.
+- **FR-068 Draft, mergeability, fork, mode.** FR-013 (a Draft needs `--ack-draft`, which then names the numbers), FR-014 and FR-010
+  apply to every pull request of the chain; agent mode refuses apply (FR-001).
+
+### Effects
+
+- **FR-070 One push, no base edit.** The landing effect is exactly `git push --porcelain <remote> <tip-sha>:refs/heads/<default>` (FR-020
+  unchanged: no force mode, no lease, no `+`, fully qualified ref). **No** `gh pr edit` and no other write exists in chain mode, because
+  every listed pull request lands with the push and side children are refused (FR-066). The Spec 022 transport extension is therefore
+  smaller than for the single landing: the chain mode adds no endpoint; the argument-vector allowlist of FR-033 gains the chain push
+  and, on request, the branch deletes of FR-075 (the single landing's base edit stays what it is).
+- **FR-071 Atomicity.** One ref update is atomic on the remote: either the whole chain lands, or nothing does (a rejection leaves the
+  default branch untouched). The fast-forward compare-and-swap of FR-042 applies: a moved default branch is `base-moved`, exit 1, no retry.
+  The marking of the pull requests as merged is GitHub's own, asynchronous step after the push and is not atomic (FR-073).
+- **FR-072 Typed approval.** After the table of FR-062 the owner types `land stack TIPNUMBER SHA8 COUNT` (the tip pull request number, the
+  first 8 characters of the tip head and the number of pull requests; for example `land stack 14 3f9c2a41 3`) read from `/dev/tty`; three
+  tries, then `confirmation-failed`; no terminal `confirmation-unavailable`; `--yes` is a usage error (FR-003). Never in agent mode.
+- **FR-073 Marking, bounded wait.** After the push the run waits (FR-022 bound) for **each** listed pull request to be reported `MERGED`
+  with `merge_commit_sha` equal to its own head (measured for a single pull request, R1; for a chain this is **to be measured in the spike**,
+  research.md E1). Per pull request outcomes are `landed`, `landed-not-marked` (the default branch contains its head, GitHub did not mark it
+  within the wait; exit 1, no retry, no repair), or `merged-other-sha`. The tip's own marking is checked as FR-022 does. Which
+  pull requests GitHub marks (all with an ancestor head, or only the tip) is unmeasured; until E1 is recorded, `--stack` stays
+  `land-unmeasured`.
+- **FR-074 Replay.** Idempotent as FR-041: if the default branch already contains the tip head, the push is skipped and the per pull request
+  states are classified and reported (`already-landed` when all are `MERGED` with their own head). An interrupted run (signal, lost
+  terminal) before the push changed nothing; after the push the rerun only observes (FR-044 applies: a running `git push` is waited on).
+- **FR-075 Branches.** stw deletes nothing unless `--delete-branch`: then, after all pull requests are `MERGED` and only for each landed
+  pull request's own head ref (decision 7: same repository, name equals the PR head ref, `--force-with-lease=refs/heads/<ref>:<head>`),
+  one push per branch so each outcome is its own. With `delete_branch_on_merge` on, GitHub may delete the heads itself after marking
+  (then `already-absent`, FR-032); whether it does so for pull requests marked by a push and not by the merge button is **to be measured in
+  the spike** (E2). No child exists whose base is a landed branch (FR-066), so the closing of R3 cannot occur.
+- **FR-076 Pull request bodies.** stw never edits bodies, titles, labels, comments or state of any pull request (FR-033), nor does it
+  close a pull request that GitHub left open (FR-073); it reports each state and the owner decides.
+- **FR-077 Failure semantics.** `push-refused` (FR-040), `base-moved` (FR-042), a precondition refusal and `confirmation-failed` leave the
+  repository, the default branch and every pull request exactly as before. Cancellation before the push: nothing happened. Journal:
+  one immutable intent fact before the push and one outcome fact after it (FR-043), plus one outcome fact per branch delete.
+- **FR-078 Not a restack.** A chain that is not linear or whose bottom is not a fast-forward is refused with the typed reason. The way
+  forward is the bottom-up landing of `stw land --pr` (one per run) or a restack (Spec 015/016), each with its own review rules.
+- **FR-079 JSON.** `--json` adds `chain`: an array in bottom-first order of `{number, head, base_ref, review_evidence, checks, state,
+  outcome}` and the typed `reasons` of every failing precondition with the pull request number. The schema stays unpublished (FR-051).
+
+### Scenarios
+
+- **US6 (P1) Show the chain landing.** *Given* three CLEAR pull requests stacked on `main`, *when* `stw land --stack 12,13,14 --reviewed
+  12:S1 --reviewed 13:S2 --reviewed 14:S3 --plan` runs (also in agent mode), *then* it prints the chain table, every precondition of FR-060 to
+  FR-068, the one push `git push --porcelain origin S3:refs/heads/main`, no write, exit 0 (or exit 1 with all failing preconditions).
+- **US7 (P1) Land the chain.** *Given* human mode, all preconditions green and the typed approval, *when* apply runs, *then* the preconditions are
+  read again, S3 is pushed once, GitHub reports 12, 13 and 14 `MERGED` with their own heads, no base edit and no branch deletion took place,
+  exit 0.
+- **US8 (P2) Refusals change nothing.** Per FR-060 to FR-068 one test shows the typed reason, no push; among them `chain-not-linear`,
+  `not-fast-forward` (default branch moved), `head-changed-no-checks` with the close-and-reopen text, `checks-not-green` on the tip,
+  `stack-side-child`, `ruleset-forbids-push`, `land-unmeasured`.
+- **US9 (P2) Replay.** After a push that was interrupted before the marking, a rerun skips the push and reports the per pull request states.
+
 ## Safety
 
 SI1 only the owner in human mode with the typed `/dev/tty` confirmation applies; SI2 nothing is pushed except the exact reviewed head
 as a plain fast-forward push (no force mode); SI3 the default branch is never rewritten; SI4 no branch is deleted before the
 children are retargeted, and none that the PR did not own; SI5 the Git ancestry computation decides, not the API; SI6 untrusted text is
 escaped and bounded; SI7 credentials come only from the Spec 022 bounded lookup and are never printed; SI8 mode detection is an accident
-guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported verbatim and never worked around.
+guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported verbatim and never worked around; SI10 `--stack` pushes exactly one ref update (the tip), edits no
+pull request and deletes no branch unless asked.
 
 ## Edge cases
 
@@ -273,6 +406,12 @@ guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported 
   re-reviews the new head. stw does not rebase.
 - The head contains a merge commit or the range has several commits: allowed if fast-forward and identity checks hold.
 - A fast-forward whose commits are authored by a co-author trailer only: identity is author/committer fields only.
+- `--stack` with a head that GitHub force-pushed after a merge below it: `head-changed` plus `head-changed-no-checks` when the rollup is
+  empty (FR-064); the owner closes and reopens that pull request or pushes, and re-reviews.
+- `--stack` where the pull requests all have base `main` but their heads are a linear chain (the repository convention before the
+  rule of one PR with a commit series): accepted, FR-063 allows both base shapes; the diff each PR shows then contains its parents'
+  commits, which changes nothing about the landing.
+- `--stack` with one pull request left of the chain already `MERGED`: `already-merged-elsewhere` for that number; the owner names the rest.
 - Stack: child head is based on the bottom's head; after the bottom lands, the child is a fast-forward of the new default branch only if
   the bottom landed as exactly its head (always true for this command).
 - Two children of one bottom: both retargeted; each child later lands only if still a fast-forward (the second child usually is not;
@@ -293,6 +432,13 @@ guard, not a boundary; SI9 an unmeasured forge behaviour (rulesets) is reported 
   `stw hosting merge-state`, not to this command's explicit refusals.
 - **Spec 022.** Reads use the bounded transport. Proposed child-base editing through `gh pr edit` needs the separately reviewed write allowlist below; no endpoint is admitted by this draft. The push uses the native Git runner only after the human landing capability gates pass.
 - **Spec 041/042.** Mode detection and the typed confirmation pattern are reused; the agent-attribution gate is not applicable.
+- **Spec 016 / 015.** The chain landing replaces the bottom-up merge plus restack for the cases where every pull request of the chain is
+  CLEAR and the bottom still fast-forwards; it never replaces a restack for a moved default branch. Reconciliation item 2 below is
+  widened (the one push of a linear chain).
+- **Spec 045.** The release wizard and `stw land --stack` share the conventions (human mode, typed approval on `/dev/tty`, no agent
+  writes). The flagless land wizard of Q1 would follow Spec 045; the release wizard does not call `stw land`.
+- **Spec 039 (tiered CI).** The heavy conformance gate runs only on the tip of a stack (owner decision 2026-10-26, answer C), which is the
+  head `--stack` pushes; FR-064 reads the required contexts from the rules and does not name a shard.
 - **Spec 032.** After a landing the owner runs `stw sync`; `stw land` does not touch local branches or worktrees.
 
 ## Reconciliation (owner decisions, not assumed)
@@ -303,13 +449,15 @@ amendment or constitution change listed below. Each reconciliation item remains
 OPEN for a separate owner decision after its proposed amendment and evidence are
 reviewable; these recommendations grant no landing/settings authorization.
 
-- **Spec 022** ("no write API is added"; read-only transport). `stw land` proposes one write endpoint, `PATCH /repos/{o}/{r}/pulls/{n}` with
+- **Spec 022** ("no write API is added"; read-only transport). The chain mode (`--stack`) adds no write endpoint (one `git push` of the tip
+  and, on request, branch deletes; FR-070). `stw land` proposes one write endpoint, `PATCH /repos/{o}/{r}/pulls/{n}` with
   `base`, through `gh pr edit`. Proposed amendment: "Spec 043 adds exactly one write through this transport, the base edit of an open pull
   request, from a closed allowlist, in human mode only."
 - **Spec 016 FR-006** ("do not merge PRs, delete remote refs, force-push ... in this slice") and the **Spec 012 later-effects catalog L5**
   (`stack merge`, owned by 016). `stw land` is a merge-equivalent and, with `--delete-branch`, a remote deletion. Proposed amendment: in
-  016 and in L5, "The fast-forward landing of one reviewed pull request, with the retarget of its children and optional deletion of its
-  own head branch, is owned by Spec 043; Spec 016 and L5 keep the native-stack merge."
+  016 and in L5, "The fast-forward landing of one reviewed pull request, or of one linear chain of reviewed pull requests by one push of
+  its tip, with the retarget of the children of a single landing and optional deletion of the landed head branches, is owned by Spec
+  043; Spec 016 and L5 keep the native-stack merge."
 - **Constitution** ("History editing, remote deletion, push/merge automation ... require later specifications"). Spec 043 is that later
   specification only if accepted by the owner. Proposed amendment: "Push/merge automation is limited to Spec 043 `stw land`, owner-only,
   human mode, typed confirmation, never by agents or schedules."
@@ -346,8 +494,16 @@ optional host-only signing and CLI exit-contract revision 2.
 | OQ6 | DECIDED: refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | adopted recommendation; owner-answer override: 016 OQ-SIGN | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
 | OQ7 | DECIDED: forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | adopted recommendation | No native or forge fallback. |
 | OQ8 | DECIDED: use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | adopted recommendation; owner-answer override: 016 OQ-STORE | Journal integration/conformance before owner apply; sync v1 unchanged. |
+| ST1 (2026-10-26) | DECIDED "A yes": `stw land --stack` lands a linear chain with one push of the tip (FR-060 to FR-079); first feature after v0.2.0; first measured in `wstein/stw-release-spike` with a second stack. | direct owner answer 2026-10-26 | Measurements E1 to E4 (research.md) and the security review task before code; stays `land-unmeasured` until recorded. |
+| ST2 (2026-10-26) | DECIDED "B yes": dependent parts are by default one PR with a commit series; separate stacked PRs only when parts must merge independently (depth at most two). | direct owner answer 2026-10-26 | Workspace `AGENTS.md` (anchorage-workspace PR); no change to this command. |
 
 ## Open questions (not decided here)
+
+- **Q1 (owner, not blocking).** Flagless wizard (`stw land` in human mode listing chains it finds) in this slice or later? Recommended: later, on
+  the same engine; the explicit `--stack` list is the safer first form because no discovery can add a pull request nobody named.
+- **Q2 (owner).** Ruleset bypass mode `always` for the owner's role is needed for any direct push (FR-067); it also lets an agent session
+  that holds the owner's token push the default branch. Accept the policy-only separation (AGENTS.md and the mode guard) or set up a
+  separate agent identity first?
 
 Compatibility anchor only: the IDs above are settled owner decisions, not open
 questions. Remaining unavailable capabilities require implementation/measurement
