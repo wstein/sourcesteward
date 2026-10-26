@@ -6,6 +6,8 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -31,6 +33,7 @@ func TestRegistrationPruneV4HistoryReadOnlyAndNoPayloadRead(t *testing.T) {
 	// Listing must succeed without opening even the payload namespace.
 	pruneMust(t, os.Symlink("/nonexistent-private-payload", filepath.Join(p.StateDir, pruneV4Namespace, "payloads")))
 	before := pruneV4GuardFiles(t, p.SourcePath)
+	beforeState := pruneV4HistoryTree(t, p.StateDir)
 	r := HistoryRegistrationPruneV4(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
 	if r.Status != "ok" || r.Command != "tidy-history" || r.Operation != "registration-prune" || r.SchemaVersion != 4 || r.Truncated || len(r.Entries) != 1 {
 		t.Fatalf("history: %+v", r)
@@ -42,7 +45,10 @@ func TestRegistrationPruneV4HistoryReadOnlyAndNoPayloadRead(t *testing.T) {
 	if !reflect.DeepEqual(before, pruneV4GuardFiles(t, p.SourcePath)) {
 		t.Fatal("history changed repository bytes")
 	}
-	for _, path := range []string{filepath.Join(p.StateDir, pruneV4Namespace, "restores"), filepath.Join(p.StateDir, pruneV4Namespace, "lock")} {
+	if !reflect.DeepEqual(beforeState, pruneV4HistoryTree(t, p.StateDir)) {
+		t.Fatal("history changed state bytes or entries")
+	}
+	for _, path := range []string{filepath.Join(p.StateDir, pruneV4Namespace, "restores")} {
 		if _, err := os.Lstat(path); !os.IsNotExist(err) {
 			t.Fatalf("inspection created %s: %v", path, err)
 		}
@@ -121,4 +127,58 @@ func TestRegistrationPruneV4HistoryMissingNamespaceDoesNotInitialize(t *testing.
 	if _, err := os.Stat(filepath.Join(p.StateDir, pruneV4Namespace)); !os.IsNotExist(err) {
 		t.Fatalf("namespace initialized: %v", err)
 	}
+}
+
+func TestRegistrationPruneV4RecordByteCeiling(t *testing.T) {
+	dir := t.TempDir()
+	pruneMust(t, os.Chmod(dir, 0700))
+	root, err := os.OpenRoot(dir)
+	pruneMust(t, err)
+	defer root.Close()
+	// JSON quotes plus the required final LF count toward the encoded record ceiling.
+	exact := strings.Repeat("a", (1<<20)-3)
+	pruneMust(t, writePruneV4Record(root, "exact.json", exact, true))
+	info, err := root.Stat("exact.json")
+	pruneMust(t, err)
+	if info.Size() != 1<<20 {
+		t.Fatalf("encoded bytes=%d", info.Size())
+	}
+	err = writePruneV4Record(root, "over.json", exact+"a", true)
+	if tidyErrorCode(err) != "record-limit" {
+		t.Fatalf("want record-limit, got %v", err)
+	}
+	if _, err = root.Stat("over.json"); !os.IsNotExist(err) {
+		t.Fatalf("oversize record persisted: %v", err)
+	}
+}
+
+func pruneV4HistoryTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	pruneMust(t, filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		value := fmt.Sprint(info.Mode())
+		if d.Type()&os.ModeSymlink != 0 {
+			target, e := os.Readlink(path)
+			if e != nil {
+				return e
+			}
+			value += target
+		} else if !d.IsDir() {
+			b, e := os.ReadFile(path)
+			if e != nil {
+				return e
+			}
+			value += string(b)
+		}
+		out[path] = value
+		return nil
+	}))
+	return out
 }
