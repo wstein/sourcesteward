@@ -1,7 +1,7 @@
 # Specification: `stw tidy` as a janitor, the human tidy wizard
 
 **Created**: 2026-10-26 | **Status**: Draft specification, documentation only (no code, schema or script changes). Needs an independent
-review of the exact head before tasks start; owner decisions D1 to D5 and D13 are recorded below. Owner direction of 2026-10-26 (quoted in
+review of the exact head before tasks start; every owner decision (D1 to D15) is recorded below. The single typed word of D12 needs an independent security review before any code. Owner direction of 2026-10-26 (quoted in
 [Why](#why)). It **amends** [Spec 041](../041-tidy-wizard/spec.md) for the human path only and builds on
 [Spec 011](../011-workspace-reference-tidy/spec.md), [Spec 029](../029-tidy-dogfood-safety/spec.md),
 [Spec 031](../031-tidy-integration-proofs/spec.md) and [Spec 042](../042-agent-attribution/spec.md). Plan: [plan.md](plan.md);
@@ -45,7 +45,7 @@ are untouched.
 
 ## Decided by the owner (2026-10-26)
 
-Owner answer, verbatim: "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j", and on the online default: "online std? offline optin?".
+Owner answers, verbatim: "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j"; on the online default: "online std? offline optin?". The remaining decisions D6 to D12, D14 and D15 were answered the same day (about 15:40 UTC): D6 72 hours (the owner's own value), D7 to D11, D14 and D15 as recommended, D12 "only ask once", clarified as one typed word per wizard run.
 
 | # | Decision | Consequence in this spec |
 | --- | --- | --- |
@@ -55,6 +55,15 @@ Owner answer, verbatim: "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j"
 | D4 yes | Owner `unknown` is choosable with the typed word `unknown` | As in Spec 041 `ConfirmWord` |
 | D5 yes | Group defaults follow the risk (green takes, yellow and orange skip) | Replaces Spec 041 "default none" for group steps only |
 | Phases | Phase 1 = v0.2.0, phase 2 = v0.3.0 | [Scope and phases](#scope-and-phases) |
+| D6 72 hours | R1 (recent activity) looks at worktrees changed more than 24 hours and at most 72 hours ago (the owner's own value; this spec had proposed 7 days) | Risk ladder R1; it only raises a level, never blocks |
+| D7 no label | No `you` label; keep "hint: NAME" | Owner as information |
+| D8 not in phase 1 | A merged pull request head does not become a deletion proof in phase 1 | Online evidence only lifts to green (C2); the `proof` enum is unchanged |
+| D9 read-only | `stw watch` and `stw pulls` stay read-only; no automatic done marking | Phase 2 `done` is explicit only |
+| D10 phase 2 | A real TUI checklist in phase 2, after the line wizard has been used | T022; the line wizard stays the fallback |
+| D11 with phase 2 | The agent workflow sentence goes into the workspace `AGENTS.md` with phase 2 | T021 |
+| D12 once per run | **One** typed word per wizard run: the plan built and applied at once with `y` in the same run asks once; a later separate `stw tidy apply PLAN-ID` asks again; the agent path is unchanged. Replaces "twice, as today" | [Single confirmation](#single-confirmation-per-wizard-run-d12); needs a security review (T012c) before code |
+| D14 yes | `a` takes all green rows of every owner, the same rule as Enter | FR-002 |
+| D15 yes | The grouped text overview replaces the owner grouping of decision #255; `--rows` keeps the old view | Amendment table |
 | D13 yes | Online is the default in the human wizard; offline is opt-in (`--offline`) | [Online by default](#online-by-default-in-the-human-wizard-d13) |
 
 ## Why
@@ -85,7 +94,7 @@ Three causes make this unusable for a human: the text is machine-shaped (one den
 | Phase | Release | Content |
 | --- | --- | --- |
 | 1 | v0.2.0 | Janitor mode, risk model, online by default with `--offline`, grouped overview, group steps, selectors, final summary, retain table, human wording, the `--rows` and `--offline` flags |
-| 2 | v0.3.0 | `stw workspace done`, tidy use of the done mark, adopt for unlocked legacy worktrees, optional TUI checklist, the PR-attested proof class decision (D8) |
+| 2 | v0.3.0 | `stw workspace done`, tidy use of the done mark, adopt for unlocked legacy worktrees, the TUI checklist (D10), a later look at the PR-attested proof class (D8) |
 
 Phase 1 adds no dependency and no new write effect. Everything the wizard deletes is deleted by the existing apply path of Spec 041.
 
@@ -125,11 +134,13 @@ those of `specs/041-tidy-wizard/spec.md` at main `6d4c75ed`):
 | SC-011 | `a` selects own safe items only | Replaced for the human path by SC-001 and SC-002 here; the agent-mode half stays |
 | SI4 (line 563) | "other owners' work is touched only by a human's explicit choice with the full proof, never preselected, behind a typed `/dev/tty` confirmation, and never by agent-run mode without that human authorization" | "... touched only by a human's explicit choice with the full proof (a number, selector, group answer or `a`), behind the typed `/dev/tty` confirmation; never in agent mode without that human authorization; a selection applies nothing" |
 | Decision 14 (line 708), the legacy completion | "exact path, declared complete by the human's explicit choice" | The selection covering that path is the declaration; the final summary lists the paths (counts) before the typed words. All 122 safe worktrees of the live data are unregistered, so all go through this path |
+| FR-006f and "Typed confirmation for foreign items" (the confirmation of a chosen foreign item, and of `apply` of a plan with `authorized_scopes`) | the typed word is read when the plan set is built and again at every apply | D12: **one** typed word per wizard run (the plan applied at once with `y` in the same run); a later separate `stw tidy apply PLAN-ID` and the agent path ask as today ([Single confirmation](#single-confirmation-per-wizard-run-d12)) |
+| Plan set and apply, "on a TTY the prompt names the plan id and the effect counts"; SC-012 (a plan with `authorized_scopes` is applied only by the human path with the typed confirmation) | the apply prompt names the plan id; the typed confirmation is required at apply | Still true: the typed confirmation happened in the same human run and is bound to that plan id; a separate apply of a stored plan asks again |
 | Wizard interaction, Rules | "the default answer is always none/no" | Group steps only: default by risk (D5). The questions that store or apply, and the typed prompt, keep the default no |
 | Prompt text (`prompt.Select`) | one question over all rows | Overview, group steps and the expert line; strict parsing (3 invalid answers end the run, end of input chooses nothing, 256-byte lines) is kept |
-| Grouping of the text overview, decision 2026-10-25 (#255), rules 1 to 6 | owner, then repository | Replaced for text output by kind and risk (D15 asks the owner to confirm); `--rows` prints the old view |
+| Grouping of the text overview, decision 2026-10-25 (#255), rules 1 to 6 | owner, then repository | Replaced for text output by kind and risk (D15, decided); `--rows` prints the old view |
 | Risks, line 726 | "mitigated by default none, a summary with effect counts, `decision` rows never included in `a`" | "mitigated by green-only defaults, a summary with the count of directories deleted for good, the typed words, and `decision` rows never taken by a group, `y`, `a` or a selector" |
-| OQ13 (owner of an unregistered worktree) | `commit-author` is a hint, never `own` | Unchanged; there is no `you` label (see D7) |
+| OQ13 (owner of an unregistered worktree) | `commit-author` is a hint, never `own` | Unchanged; there is no `you` label (D7, decided) |
 | 041 SI9 (line 565) and FR-016 (line 595) | "no network unless `--online`"; "`--online` is the only way to network; default offline" | Human wizard only: online by default, `--offline` opts out ([D13](#online-by-default-in-the-human-wizard-d13)). Agent mode, `stw tidy plan`, `--json`, `--save` and the expert layer: unchanged |
 | 041 non-goal (line 37) | "no fetch beyond what `--online` already allows in contract 3; no GitHub write" | Same, with "in the human wizard, what the default online reads allow"; still no fetch and no write |
 | 041 `--online` flag row (line 133) | "allow the contract-3 authenticated reads (default off, as today)" | "default on in the human wizard, off with `--offline`; opt-in elsewhere" |
@@ -149,8 +160,9 @@ lines 40 and 165 (offline fixtures).
   `authorized_scopes` is written by the human path only (`owner.Authorize`, `scope.go:67`) and bound into the plan id.
 - **Typed confirmation** (041 FR-006f): the confirmation word is the owner label (scope `other`, one word) or the literal word
   `unknown`, followed by the first six characters of the plan id, read from `/dev/tty`, asked once per word in sorted order
-  (`internal/tidywizard/owner/confirm.go:45`, `:59`; `planset.go:468-494`); it runs when the plan set is built and again at apply
-  (`apply.go:300`). Unchanged. Items of scope `own` need no word.
+  (`internal/tidywizard/owner/confirm.go:45`, `:59`; `planset.go:468-494`). The words, their text and the plan-id binding are unchanged.
+  What changes is how often they are asked in one run (D12, below): once, where today they are asked when the plan set is built and
+  again at apply (`apply.go:300`). Items of scope `own` need no word.
 - Scopes, `owner_source`, the owner derivation order, the proofs (ancestor, patch-id, merge-noop, no-net-change), the recently-active
   retain rule (24 h, `classify.go:33`, `:413`), the plan set, the dependent branch leg, journals and recovery roots.
 - Exit codes 0, 1 and 2, the no-terminal degradation (US7, FR-009), `esc` and the 120-character bound (FR-042).
@@ -193,7 +205,7 @@ expose a fact, T001 adds it.
    (`docs/tidy.md:584`, `:348-351`), but `safe` guarantees a clean tree with no ignored extras and a proven HEAD that stays pinned.
 3. **Raises**, each adds one step (green, yellow, orange), at most orange, each counted once:
    - **R1 recent activity**: a worktree of scope `other` or `unknown` whose newest HEAD, index or tracked-file time is older than the
-     24-hour retain window but within 7 days (`LastActivity`, already observed; the window is D6).
+     24-hour retain window but within 72 hours (`LastActivity`, already observed; the window is D6, decided).
    - **R2 nobody vouches**: a worktree, S equivalent, with no creation record and an owner of scope `unknown` (no task record, no path
      convention).
    - **R3 (phase 2) another owner's unfinished task**: a creation record exists, its owner is not the caller, and it has no done mark.
@@ -245,7 +257,7 @@ read-only GET requests, the Spec 031 closed endpoint set, the token never in out
 | `--offline` | No network, as today; `--online` and `--offline` together are a usage error (exit 2) |
 | `stw tidy plan`, `stw tidy --json`, `--save`, agent mode | Offline by default; `--online` opts in, behavior as today; `--offline` is accepted (wizard layer) and changes nothing |
 | The expert layer (a `PATH` or any expert flag) | Offline unless `--online`, as today; `--offline` is **not accepted** there (exit 2, like every wizard-only flag) |
-| An explicit `--online` | Behavior as today (the contract-3 failure rules); only the implicit default falls back silently |
+| An explicit `--online` | Behavior as today (the contract-3 failure rules); only the implicit default falls back, and it says so in its one notice line |
 
 **Phase 1 use of the reads.** Spec 031 discovery (FR-013 to FR-018) runs per explicitly resolved repository, closed endpoint set, up to 10
 pages of 100 closed pull requests, 128 requests, 32 MiB and one 30-second deadline per run, and targets unproven tips. The wizard extends
@@ -262,8 +274,8 @@ one session can cover. The allocation:
 - **Tips per member:** at most 64 distinct tips, taken in this order: `safe` rows with an `equivalent` proof (by name), then `unmerged`
   rows (by name). The rest are "not checked"; the overview says "N of M rows not checked against GitHub". On a workspace like the live
   one coverage is often incomplete; that is expected and harmless (offline levels apply).
-- **Rate limit or server trouble:** a 403 or 429 that reports an exhausted rate limit, a 5xx, or a timeout stops all further online
-  calls of the run, the unchecked rows are judged offline, nothing is retried; one notice line.
+- **Rate limit or server trouble:** a 403 or 429 that reports an exhausted rate limit, a 5xx, or the expiry of `--timeout` stops all further online
+  calls of the run (a timeout of one member's own 30-second session ends that member only, see the table above), the unchecked rows are judged offline, nothing is retried; one notice line.
 - **Bookkeeping:** requests are counted before they are sent and failures count (031 FR-018).
 
 **Phase 1 effects.** A `safe` row whose tip equals a merged head is strong (green, evidence "merged as #N"). An `unmerged` row whose tip
@@ -352,13 +364,45 @@ directories for good and M branches (restorable)."** (Owner condition for D2.) T
    `/dev/tty`, plain, while the plan set is built (`planset.go:492`); if all chosen items are own, the new question "Store this plan set?
    [y/N]" (default no) follows the line;
 3. the stored plan id and the question "Apply it now?" (default no), whose text now repeats the counts;
-4. the typed confirmation again inside the unchanged apply path.
+4. on `y`, the apply runs **without a second typed word** (D12): the words of step 2 already covered this very plan.
 
 **What changes against today's flow** (`internal/cli/tidy_interactive.go:48-93`, where a choice is built and stored at once, then "Apply it
-now?"): the grouped steps and the summary replace the single "Apply which?" question; the summary's last line is new; the store question
-for an own-only selection is new (today none is asked before storing); the apply question gains the counts. **Unchanged**: the typed words
-and their text, `planset.Build`, the store, the apply path and its second typed confirmation, the default no on every storing and
-applying question.
+now?", and the apply path asks the typed words again): the grouped steps and the summary replace the single "Apply which?" question; the
+summary's last line is new; the store question for an own-only selection is new; the apply question gains the counts; **the typed word
+is asked once per run, not twice** (D12). **Unchanged**: the words and their text, `planset.Build`, the store, the stale checks, the
+default no on every storing and applying question, and the whole path of a separate `stw tidy apply PLAN-ID`.
+
+### Single confirmation per wizard run (D12)
+
+**Decision (owner, 2026-10-26): one typed word per wizard run.** This changes the apply path and therefore **requires an independent
+security review of the design and of the exact code head before any code is merged** (T012c; the review also covers the cases below).
+
+**Mechanism.**
+
+- After `owner.Confirm` succeeds for every word of a plan set built in this run, the wizard creates a **confirmation receipt**: an
+  in-memory value of an unexported type, built only by the wizard package right after those confirmations, holding the full plan id,
+  the mode evidence of this run, the sorted words that were confirmed and a random per-run nonce. It is never written to the state
+  directory, a file, the environment or an argument, and has no serialized form.
+- The wizard passes the receipt to the apply call of the same process (`ApplyRequest`, `internal/tidywizard/planset/apply.go:197-203`).
+  Apply skips the typed prompt for a word only if **all** hold: the receipt's plan id equals the plan id of the set being applied (the
+  id is content-addressed and covers the items, `authorized_scopes` and the mode evidence, so another plan, an edited plan or a plan
+  with more foreign words never matches); the set's current required words (computed at apply from the stored items, `apply.go:239`) are
+  all in the receipt's list; the receipt's mode is human; the receipt nonce is the one this process created; and the receipt has not been
+  used. Any mismatch asks for the missing word on `/dev/tty` as today.
+- The receipt is single use and dies with the run: answering `n`, Enter or end of input at "Apply it now?", an interrupt, or any error
+  discards it. It is never kept for a later `apply`.
+- **Nothing else is relaxed**: the stored plan is re-verified (store mode, owner, content-addressed id) and every stale check runs at
+  apply exactly as today; a stale plan refuses with `evidence-changed` and changes nothing; `--yes` is still not honored for plans with
+  foreign items.
+
+**Other runs.** A plan stored by an earlier run, or applied by a separate `stw tidy apply PLAN-ID` (with or without `--yes`), has no
+receipt, so the typed words are asked at apply exactly as today. The agent path is unchanged: agent mode never builds a receipt and its
+`apply` still refuses `other` and `unknown` items without `authorized_scopes` and still needs the human path for them.
+
+**Security review questions** (T012c): can any code outside the wizard path construct or replay a receipt; can a receipt authorize a
+plan other than the one confirmed (including a plan with the same six-character prefix); what a same-user process can do that it could not
+do before (it already can drive a pty, 041 FR-006g); the window between the confirmation and the apply, and the stale checks across it;
+behavior on interrupt, concurrent wizard runs and a plan store changed in between; and regression of the separate apply and the agent path.
 
 A wrong word, no terminal, an interrupt or `q` stores or applies nothing more. The typed prompt stays **plain text** (no color, no menu);
 it is the protection, and the environment markers are only the accident guard in front of it.
@@ -401,9 +445,9 @@ wrote) that the task is finished and, optionally, which pull request merged it.
 - **Effect on tidy.** The mark never makes anything deletable and never lifts a row above **yellow** (ladder step 4); it removes R2 and R3
   and adds the text "agent says done". Only forge evidence (C2) makes green. Without a proof the row stays red.
 - **Agent step.** The workspace `AGENTS.md` workflow would gain: "After the owner reports the merge, run `stw workspace done TASK
-  --merged PR`." (D11, the owner's file.) Agents that never run it lose nothing: the online reads (C2) find the merged pull request
+  --merged PR`." (D11, decided: with phase 2; the owner's file.) Agents that never run it lose nothing: the online reads (C2) find the merged pull request
   from the branch tip.
-- **Automatic marking.** Not recommended (D9): `stw watch` and `stw pulls` are read-only by contract (Specs 035 and 036), and C2 already
+- **Automatic marking.** Not done (D9, decided): `stw watch` and `stw pulls` are read-only by contract (Specs 035 and 036), and C2 already
   recognizes a merged head at tidy time without writing a record.
 
 ### Adopt legacy worktrees
@@ -420,7 +464,7 @@ value `adopted`, which never counts as `task-record` for agent mode, and **never
 ### Real TUI checklist
 
 An optional checklist (arrow keys, space) needs a terminal library and therefore a pinned dependency; Spec 041 OQ10 chose plain lines.
-Decision D10. The line wizard stays the fallback in every case (no terminal, narrow terminal, `NO_COLOR`).
+Decided (D10): in phase 2, after the line wizard has been used. The line wizard stays the fallback in every case (no terminal, narrow terminal, `NO_COLOR`).
 
 ## Screens
 
@@ -581,8 +625,10 @@ Rows: l = list a reason, or run  stw tidy --rows
 - **FR-008** One question per group with the keys and defaults of the table; the strict parsing of Spec 041 is kept.
 - **FR-010** Selection grammar, `except`, quoting and selectors as specified; red and kept rows match nothing.
 - **FR-011** The final summary ends with the line stating the directories deleted for good and the branches, directly before the first
-  typed prompt (or the store question); the typed prompt is unchanged, read from `/dev/tty`, plain, once per word, refused without a
-  terminal or with a wrong word.
+  typed prompt (or the store question); the typed prompt text is unchanged, read from `/dev/tty`, plain, once per word, refused without a
+  terminal or with a wrong word; within one wizard run the words are asked once (FR-017).
+- **FR-017** Single confirmation (D12): a receipt as specified covers the apply of the plan set built in the same run and nothing else;
+  a separate or later `stw tidy apply PLAN-ID` and agent mode ask as today.
 - **FR-012** The retain table lists every reason with count, level, sentence and action; counts sum to the retained total.
 - **FR-013** Output obeys `esc`, the 120-character bound and the row bounds (FR-042, FR-041); color is decoration only (the level word is
   always printed; `NO_COLOR` is honored as today).
@@ -607,7 +653,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - **SC-004** Red rows never get a number, never match a selector, and forcing one into a plan makes apply refuse (as 041 SC-002).
 - **SC-005** Online double with **7 members and about 466 tips**: at most 128 requests and 64 tips per member, at most 512 in all, every
   request a read (the double fails on any write method); a merged head makes a `safe` row green with `pr` and leaves an `unmerged` row
-  red; not authenticated, a non-github.com remote, 403 with exhausted rate limit, 429, 5xx, a timeout and `--timeout` expiry each fall back
+  red; not authenticated, a non-github.com remote, 403 with exhausted rate limit, 429, 5xx and `--timeout` expiry each stop the unfinished members, and an error or 30-second timeout of one member's session ends only that member; each falls back
   to offline levels with one notice and exit code unchanged; `--offline` makes no request; `--online --offline` is exit 2.
 - **SC-006** Grammar table: numbers, ranges, every selector, quoted label, `except`, a selector that matches nothing, a red number, a
   `decision` number and a `decision` hit by `y`, `a` and a selector, junk, 257 bytes; `w t except 85-86` selects the expected set; `t` includes
@@ -615,6 +661,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - **SC-007** Transcript test of the screens and the retain table from the fixture: group order, wording, undo lines and counts equal the
   golden; the retain counts sum to the retained total; the summary's last line states the directory and branch counts, the typed words
   are sorted (`claude`, `codex`, `unknown`) and the prompt text is the real one.
+- **SC-014** Single confirmation (D12): in one run the typed words are asked once and the apply runs; a receipt for plan A does not apply plan B, nor A with an edited `authorized_scopes` or an added foreign word; a used, replayed or other-process receipt is refused; `n` at "Apply it now?" discards it; a separate `stw tidy apply PLAN-ID` of the stored plan asks the words again; agent-mode apply of a foreign plan without `authorized_scopes` still exits 1 `scope-not-authorized`; stale checks still refuse.
 - **SC-008** The typed prompt: a bare `y`, the wrong word, stdin input and no controlling terminal refuse and store or apply nothing; the
   prompt text is unchanged byte for byte.
 - **SC-009** Hostile names (ESC, CR, NUL, bidi, a name starting with letters then ESC) in branch, path and owner reach no terminal byte
@@ -668,17 +715,8 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 
 ## Open decisions for the owner
 
-| # | Question | Recommendation |
-| --- | --- | --- |
-| D6 | The "recent activity" window for R1 | 7 days (proposed); it only raises a level, never blocks |
-| D7 | A `you` label for tips authored under the owner's Git identity | No: agents commit under that identity, so it would show agent work as the owner's. Keep "hint: NAME" |
-| D8 | May a merged pull request head become a deletion proof inside the wizard (changes the frozen `proof` enum)? | Not in phase 1; decide after dogfood in phase 2 |
-| D9 | Should `stw watch` or `stw pulls` mark tasks done automatically? | No; both stay read-only, the online reads already find merged heads |
-| D10 | A real TUI checklist (needs a pinned dependency)? | Decide in phase 2, after the line wizard has been used; the line wizard stays |
-| D11 | The workflow sentence for agents ("after the owner reports the merge, run `stw workspace done`") in the workspace `AGENTS.md` | Add it with phase 2; it is the owner's file |
-| D12 | Is the typed word asked twice (at store and at apply, as today) acceptable? | Yes for phase 1; asking once is a later change to the apply path |
-| D14 | `a` takes all green rows of every owner (D1 decided Enter on a green group, not `a`) | Yes, same rule as Enter |
-| D15 | The text overview grouped by kind and risk replaces the owner grouping of decision #255 (2026-10-25) | Yes; `--rows` keeps the old view |
+None. D1 to D15 are decided, see [Decided by the owner](#decided-by-the-owner-2026-10-26). A later question (for example whether
+`github-merged-head` may become a proof in phase 2 after dogfood, D8) is raised again when it arises.
 
 ## Measured data: the live workspace of 2026-10-26
 
