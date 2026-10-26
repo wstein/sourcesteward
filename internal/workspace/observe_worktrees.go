@@ -627,6 +627,8 @@ func (c worktreeObserver) proofs(ctx context.Context, observed tidyV3NativeObser
 	// at the same time; each tip then works on its own copy of the run (its own per-tip clock).
 	run.ensureObjectDir()
 	run.phaseStart, run.phaseStarted = run.engine.now(), true
+	// The tips share one base; their copies of the run share the memo of base-side patch-ids.
+	run.enablePatchMemo()
 	return func(ctx context.Context, oid string) (string, string) {
 		tipRun := *run
 		local := c.refs.localProofs(&tipRun, observed.Expected, policy)
