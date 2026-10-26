@@ -202,6 +202,7 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 	if e != nil {
 		return stop(e)
 	}
+	pruneObservationStep(ctx, "v4-before-remove-post", p.Registration.GitDir, nil)
 	j.Phase = "complete"
 	j.Remaining = []string{}
 	if e = verifyPruneV4Post(ctx, p, expected, j); e != nil {
