@@ -582,10 +582,11 @@ Next: one question per group. Nothing changes until the final summary and your t
 Enter = continue   q = quit
 ```
 
-**Fold rule (normative, SC-012).** The overview must fit 24 logical lines. **Green groups and groups that need the owner's attention (orange) are never folded.** Only the smallest groups
-of the **same effect class** fold, into one line that names the effect and the count: "reversible" (branches), "files deleted" (directories) or "files deleted, branch too" (directories with a branch
-leg); the folded groups stay separate groups of the wizard, each its own step, and `l` shows them. Groups are folded from the smallest upward, only as far as the 24 lines require. The real output is the
-render golden of the implementation pull request (#317).
+**Fold rule (normative, SC-012).** The overview must fit 24 logical lines. **Green groups are never folded.** Other groups fold **smallest first, and only within one effect class**, into one line that
+names the effect and the count: the line shows the largest group of the class and then "+ N smaller groups: <effect>", where the effect is "reversible" (branches), "files deleted" (directories) or "files
+deleted, branch too" (directories with a branch leg). A fold line **may absorb groups beyond the smallest** when that is needed to reach 24 lines (the real golden has a line "8 branches + 4 smaller groups"
+that absorbs more than the one-item groups). The folded groups stay separate groups of the wizard, each its own step, and `l` shows them. The real output is the render golden of the implementation pull request
+(#317, `overview-real-activity-old.txt.golden`).
 
 The mockup folds the three one-item branch groups (chartscribe, sheetmill, workharbor) into one line and the two one-item directory groups (crewbook
 and the workspace) into the last line, to fit a screen: they are still separate groups of the wizard (15 in all), and `l` shows them. Totals: 43
@@ -741,7 +742,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - **SC-010** Every reason, proof and risk word has a sentence and an action; a new code without one fails the test.
 - **SC-011** `stw tidy --json`, the expert layer and every Spec 041 test and golden other than the text overview pass unchanged; the
   tidy flags are all classified (`--rows` and `--offline` included).
-- **SC-012** With at least 960 retained rows and 165 choosable rows the first screen has at most 24 **logical lines** and no row of a retained code; the fold rule above holds (green and orange groups never folded; only the smallest groups of one effect class fold into one line naming the effect). The `Derived` line counts as one logical line: it may wrap or be truncated to the terminal width, its full text is in `--verbose`.
+- **SC-012** With at least 960 retained rows and 165 choosable rows the first screen has at most 24 **logical lines** and no row of a retained code; the fold rule above holds (green groups never folded; other groups fold smallest first within one effect class into a line naming the effect and the count, and a fold line may absorb more than the smallest groups to reach 24 lines). The `Derived` line counts as one logical line: it may wrap or be truncated to the terminal width, its full text is in `--verbose`.
 - **SC-013 (phase 2)** `workspace done`: idempotent, state directory only (a before and after snapshot of every repository and worktree
   is equal), refused for another session's task, accepted on a task without a record (and so documented as a claim), additive in the
   schema; a done mark never makes a row choosable and never lifts it above yellow.
