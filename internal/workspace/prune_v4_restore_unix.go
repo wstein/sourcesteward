@@ -101,9 +101,9 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return failPruneV4(r, e)
 	}
 	if !o.Apply {
-		repair, _ := json.Marshal([]string{"git", "-C", p.SourcePath, "worktree", "repair", "<owner-selected-found-path>"})
+		repair := pruneV4RestoreRepairArgv(p)
 		r.Status = "ok"
-		r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "planned", Detail: "Restore the exact saved registration at " + p.Registration.GitDir + "; original checkout remains absent and locked. Repair argv data (separate owner authorization): " + string(repair)}}
+		r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "planned", Detail: "Restore the exact saved registration at " + p.Registration.GitDir + "; original checkout remains absent and locked. Repair argv data (separate owner authorization): " + repair}}
 		return r
 	}
 	parent, e := openStoreKinds(p.StateDir, true, []string{pruneV4Namespace})
@@ -234,7 +234,7 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return stop(e)
 	}
 	r.Status = "ok"
-	r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "complete", Detail: "Restored the exact saved administrative registration; checkout remains missing and locked. Native repair of an owner-selected found path is a separate action."}}
+	r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "complete", Detail: "Restored the exact saved administrative registration; checkout remains missing and locked. Repair argv data (separate owner authorization): " + pruneV4RestoreRepairArgv(p)}}
 	return r
 }
 func pruneV4RestoreStaging(p RegistrationPruneV4Plan, id string) string {
@@ -543,4 +543,9 @@ func validatePruneV4RestoreOwnership(p RegistrationPruneV4Plan) error {
 		return failure("prune-ownership-refused", "Original creation ownership changed before restore.")
 	}
 	return nil
+}
+
+func pruneV4RestoreRepairArgv(p RegistrationPruneV4Plan) string {
+	data, _ := json.Marshal([]string{"git", "-C", p.SourcePath, "worktree", "repair", "<owner-selected-found-path>"})
+	return string(data)
 }
