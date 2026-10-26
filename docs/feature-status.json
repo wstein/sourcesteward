@@ -95,7 +95,7 @@
       "id": "015-local-restacking",
       "status": "planned",
       "spec": "../specs/015-local-restacking/spec.md",
-      "evidence": null
+      "evidence": "../specs/015-local-restacking/verification.md"
     },
     {
       "id": "016-stacked-pr-coordination",
@@ -137,7 +137,7 @@
       "id": "021-submodule-pin-audit",
       "status": "planned",
       "spec": "../specs/021-submodule-pin-audit/spec.md",
-      "evidence": null
+      "evidence": "../specs/021-submodule-pin-audit/tasks.md"
     },
     {
       "id": "025-pr-merge-state",
@@ -161,13 +161,13 @@
       "id": "023-multi-repo-inventory",
       "status": "planned",
       "spec": "../specs/023-multi-repo-inventory/spec.md",
-      "evidence": null
+      "evidence": "../specs/023-multi-repo-inventory/verification.md"
     },
     {
       "id": "027-inventory-limits",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/027-inventory-limits/spec.md",
-      "evidence": null
+      "evidence": "../specs/027-inventory-limits/verification.md"
     },
     {
       "id": "029-tidy-dogfood-safety",
@@ -179,7 +179,7 @@
       "id": "030-pr-status",
       "status": "planned",
       "spec": "../specs/030-pr-status/spec.md",
-      "evidence": null
+      "evidence": "../docs/progress.md#active-work-spec-030-pr-status-slice-1-source-implemented-verification-pending"
     },
     {
       "id": "031-tidy-integration-proofs",
@@ -195,9 +195,9 @@
     },
     {
       "id": "033-stw-status",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/033-stw-status/spec.md",
-      "evidence": null
+      "evidence": "status.md"
     },
     {
       "id": "034-bootstrap-release",
@@ -212,10 +212,58 @@
       "evidence": "../docs/progress.md#spec-035-stw-watch-accepted-visible-2026-10-22"
     },
     {
+      "id": "036-stw-pulls",
+      "status": "implemented",
+      "spec": "../specs/036-stw-pulls/spec.md",
+      "evidence": "../docs/progress.md#spec-036-stw-pulls-implemented-in-source-review-and-acceptance-pending-2026-10-22"
+    },
+    {
+      "id": "037-stw-status-overview",
+      "status": "implemented",
+      "spec": "../specs/037-stw-status-overview/spec.md",
+      "evidence": "../docs/progress.md#spec-037-stw-status-online-work-package-e-command-and-output-implemented-in-source-2026-10-22"
+    },
+    {
+      "id": "038-stw-issues",
+      "status": "implemented",
+      "spec": "../specs/038-stw-issues/spec.md",
+      "evidence": "../docs/progress.md#spec-038-stw-issues-command-schema-and-action-categories-in-source-2026-10-22"
+    },
+    {
+      "id": "039-tiered-ci",
+      "status": "planned",
+      "spec": "../specs/039-tiered-ci/spec.md",
+      "evidence": "../specs/039-tiered-ci/plan.md"
+    },
+    {
+      "id": "040-concurrency-discipline",
+      "status": "planned",
+      "spec": "../specs/040-concurrency-discipline/spec.md",
+      "evidence": "../specs/040-concurrency-discipline/tasks.md"
+    },
+    {
       "id": "041-tidy-wizard",
       "status": "implemented",
       "spec": "../specs/041-tidy-wizard/spec.md",
       "evidence": "../docs/progress.md#spec-041-stw-tidy-wizard-implemented-unpublished-schema-acceptance-recorded-2026-10-25"
+    },
+    {
+      "id": "042-agent-attribution",
+      "status": "planned",
+      "spec": "../specs/042-agent-attribution/spec.md",
+      "evidence": "../specs/042-agent-attribution/tasks.md"
+    },
+    {
+      "id": "043-stw-land",
+      "status": "planned",
+      "spec": "../specs/043-stw-land/spec.md",
+      "evidence": "../specs/043-stw-land/tasks.md"
+    },
+    {
+      "id": "044-tidy-janitor-wizard",
+      "status": "planned",
+      "spec": "../specs/044-tidy-janitor-wizard/spec.md",
+      "evidence": "../specs/044-tidy-janitor-wizard/tasks.md"
     }
   ]
 }
