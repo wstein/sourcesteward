@@ -17,7 +17,7 @@ func TestFamily(t *testing.T) {
 		{"/tmp/workharbor-baseline-x/checkout", "workharbor"}, {"/tmp/whr007-ci-binding", "whr"}, {"/tmp/whr-006-t030-apply", "whr"},
 		{"/tmp/whr with spaces/checkout", "whr"}, {"/tmp/crewbook-child/UPPER", "crewbook"}, {"/tmp/whr\x1b[2J-evil", "whr"}, {"/tmp/whr\r\x00\u202e", "whr"},
 		{"/tmp/WHR-baseline", ""}, {"/tmp/7whr", ""}, {"/tmp/évil", ""}, {"/tmp/", ""}, {"/tmp", ""},
-		{"/temporary/whr", ""}, {"/tmpish/whr", ""}, {"relative/tmp/whr", ""}, {"/tmp/-whr", ""},
+		{"/temporary/whr", ""}, {"/tmpish/whr", ""}, {"relative/tmp/whr", ""}, {"/tmp/-whr", ""}, {"/tmp//whr-a", "whr"}, {"/tmp/../home/whr-a", ""}, {"/tmp/./whr-a/", "whr"},
 	} {
 		t.Run(fmt.Sprintf("%q", tc.path), func(t *testing.T) {
 			if got := Family(tc.path); got != tc.want {
@@ -146,5 +146,30 @@ func TestGroupKeysPreserveRawIdentityBytes(t *testing.T) {
 	groups = GroupRows([]Row{a, b})
 	if len(groups) != 2 || groups[0].Key == groups[1].Key {
 		t.Fatalf("different raw effects share a group: %+v", groups)
+	}
+}
+
+func TestGroupPathCleaningAndScratchpadFamilyExclusion(t *testing.T) {
+	rows := []Row{riskRow("a", "r", "/tmp/whr-a", Green), riskRow("b", "r", "/tmp/whr-b", Green), riskRow("s", "r", "/tmp/whr-c/scratchpad/x", Green)}
+	for _, g := range GroupRows(rows) {
+		if g.Place == "tmp-family" {
+			t.Fatalf("scratchpad invented a third family member: %+v", g)
+		}
+	}
+	rows = []Row{riskRow("a", "r", "/tmp/../home/x", Green)}
+	g := GroupRows(rows)
+	if len(g) != 1 || g[0].Place != "workspace" || g[0].Parent != "/home" {
+		t.Fatalf("unclean tmp escape: %+v", g)
+	}
+	rows = []Row{riskRow("a", "r", "/tmp//whr-a", Green), riskRow("b", "r", "/tmp/./whr-b", Green), riskRow("c", "r", "/tmp/whr-c", Green)}
+	g = GroupRows(rows)
+	if len(g) != 1 || g[0].Place != "tmp-family" || g[0].Family != "whr" {
+		t.Fatalf("cleaned family: %+v", g)
+	}
+	// Alias spelling does not manufacture a third distinct directory.
+	rows = []Row{riskRow("a", "r", "/tmp/whr-a", Green), riskRow("b", "r", "/tmp/./whr-a", Green), riskRow("c", "r", "/tmp/whr-b", Green)}
+	g = GroupRows(rows)
+	if len(g) != 1 || g[0].Place != "tmp-other" {
+		t.Fatalf("alias inflated family count: %+v", g)
 	}
 }
