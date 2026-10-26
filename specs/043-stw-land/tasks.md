@@ -9,10 +9,7 @@
 
 **Gate**: all runtime boxes stay unchecked until the design review of the exact head of this spec is CLEAR and the dated owner decision profile has been implemented. OQ2 and OQ4 are hard gates for apply (`land-unmeasured`), not defaults: T002 comes first and
 its result must be in research.md before T009. Tests use temporary repositories with a bare remote and a fake `gh` transport (Spec 022
-fixtures); never a real repository. Failing test first for each task. Each slice updates `docs/commands.md` and `docs/json-contracts.md`.
-
-**Stack landing amendment (2026-10-26)**: slice 5 below adds `--stack`. It is gated by the measurements E1 to E3 (research.md), the independent
-security review T023 **before any code** of it, and, like all of this feature, the first feature after v0.2.0. All boxes stay unchecked.
+fixtures); never a real repository. Failing test first for each task. Each slice updates `docs/commands.md` and `docs/json-contracts.md`. **Stack landing amendment (2026-10-26)**: slice 5 below adds `--stack`. It is gated by the measurements E1 to E3 (research.md), the independent security review T023 **before any code** of it, and, like all of this feature, the first feature after v0.2.0. All boxes stay unchecked.
 
 ## Slice 0 - Design
 
