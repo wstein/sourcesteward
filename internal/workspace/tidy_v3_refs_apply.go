@@ -225,7 +225,7 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 	}
 	if prior != nil {
 		err = verifyV3Retry(ctx, p, *prior, func(ctx context.Context, _ V3Plan, j V3Journal) error {
-			if err := c.revalidateAll(ctx, p, j.CurrentExpected, session); err != nil {
+			if err := c.revalidateAll(ctx, p, j.CurrentExpected, j.CurrentNative, session); err != nil {
 				return err
 			}
 			if _, err := c.observeCurrent(ctx, p, j.CurrentExpected, j.CurrentNative); err != nil {
@@ -247,7 +247,7 @@ func (c tidyV3RefsApplyCoordinator) applyRefs(ctx context.Context, o V3ApplyOpti
 		r.Actions = tidyV3JournalActions(*prior)
 		return r
 	}
-	if err = c.revalidateAll(ctx, p, p.Expected, session); err != nil {
+	if err = c.revalidateAll(ctx, p, p.Expected, initial, session); err != nil {
 		return failTidyV3(r, err)
 	}
 	if _, err = c.observeCurrent(ctx, p, p.Expected, initial); err != nil {
@@ -399,7 +399,7 @@ func (c tidyV3RefsApplyCoordinator) observeCurrent(ctx context.Context, p V3Plan
 	}
 	return out, nil
 }
-func (c tidyV3RefsApplyCoordinator) revalidateAll(ctx context.Context, p V3Plan, expected Snapshot, s tidyV3Hosting) error {
+func (c tidyV3RefsApplyCoordinator) revalidateAll(ctx context.Context, p V3Plan, expected Snapshot, native V3NativeState, s tidyV3Hosting) error {
 	if s != nil {
 		if p.Online == nil || tidyV3Repository(s.Repository()) != p.Online.Repository {
 			return failure("evidence-changed", "Provider repository identity changed.")
@@ -409,7 +409,9 @@ func (c tidyV3RefsApplyCoordinator) revalidateAll(ctx context.Context, p V3Plan,
 		}
 	}
 	for _, target := range v3Eligible(p) {
-		if err := c.revalidateProof(ctx, p, expected, target, s); err != nil {
+		// The proofs compare the live snapshot, which holds the sibling effects too.
+		live, _ := c.chain.apply(expected, native)
+		if err := c.revalidateProof(ctx, p, live, target, s); err != nil {
 			return err
 		}
 	}
@@ -442,7 +444,8 @@ func (c tidyV3RefsApplyCoordinator) revalidateAction(ctx context.Context, p V3Pl
 	if _, err := c.observeCurrent(ctx, p, expected, native); err != nil {
 		return err
 	}
-	if err := c.revalidateProof(ctx, p, expected, target, s); err != nil {
+	live, _ := c.chain.apply(expected, native)
+	if err := c.revalidateProof(ctx, p, live, target, s); err != nil {
 		return err
 	}
 	// Provider reads may take time: sample complete native protections afterward.

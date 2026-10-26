@@ -349,6 +349,7 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 	if e := ctx.Err(); e != nil {
 		return e
 	}
+	expected, native = c.chain.apply(expected, native)
 	// Revalidate provider first, then sample native postconditions afterward.
 	if session != nil {
 		if e := (tidyV3RefsApplyCoordinator{refs: c.refs}).revalidateProof(ctx, p, expected, retirementV3Candidate(*p.Retirement), session); e != nil {
@@ -361,7 +362,6 @@ func (c tidyV3RetirementCoordinator) verifyAbsent(ctx context.Context, p V3Plan,
 	}
 	out.Native.ProtectedRoots = append([]string{}, p.Retirement.ProtectedRoots...)
 	out.Expected = v3SnapshotWithState(out.Expected, out.Native)
-	expected, native = c.chain.apply(expected, native)
 	if out.Expected != expected || !reflect.DeepEqual(out.Native, native) {
 		return failure("evidence-changed", "Native post-state differs from exact recovery/registration delta; branches remain protected.")
 	}
