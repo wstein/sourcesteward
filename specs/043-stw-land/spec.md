@@ -330,7 +330,7 @@ one.
   login and is not this state), the state is
   `head-changed-no-checks` (spike observation S-C); if the rollup is empty and **no** such event exists, the state is `checks-missing`
   (the run has not started or was never triggered). The actor test is **unmeasured** (GitHub may name the merging owner as the actor of an
-  automatic restack; the spike recorded events, not their actors, to be recorded in E1): both outcomes refuse, and only the hint text depends
+  automatic restack; the spike notes (S9) name the repository owner account as that actor, so the test may not tell the cases apart; to be recorded in E1): both outcomes refuse, and only the hint text depends
   on the measurement. The refusal text offers the owner's way out as text only: `gh pr close N
   && gh pr reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike); stw never runs it (FR-033).
 - **FR-065 Bottom fast-forwards the default branch.** The remote default tip read by `git ls-remote` in this run is an ancestor of the
