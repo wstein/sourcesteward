@@ -1,7 +1,7 @@
 # Specification: `stw tidy` as a janitor, the human tidy wizard
 
 **Created**: 2026-10-26 | **Status**: Draft specification, documentation only (no code, schema or script changes). Needs an independent
-review of the exact head before tasks start; owner decisions D1 to D15 are recorded below and D16 is open. The single typed word of D12 needs an independent security review before any code. Owner direction of 2026-10-26 (quoted in
+review of the exact head before tasks start; all owner decisions D1 to D16 are recorded below, none is open. The single typed word of D12 needs an independent security review before any code. Owner direction of 2026-10-26 (quoted in
 [Why](#why)). It **amends** [Spec 041](../041-tidy-wizard/spec.md) for the human path only and builds on
 [Spec 011](../011-workspace-reference-tidy/spec.md), [Spec 029](../029-tidy-dogfood-safety/spec.md),
 [Spec 031](../031-tidy-integration-proofs/spec.md) and [Spec 042](../042-agent-attribution/spec.md). Plan: [plan.md](plan.md);
@@ -32,7 +32,7 @@ own branches carry only a commit-author hint.
    Internal codes stay in `--json`, `--verbose` and `--rows`.
 5. **Wizard steps by group** with single keys (Enter or `y` take the group, `s` skip, `l` list, `r` review each, `q` quit),
    numbers, ranges and selectors as expert input, exclusions (`except 85-86`), then **one final summary that states how many
-   directories will be deleted for good**, directly before the **unchanged strict typed prompt** read from `/dev/tty`.
+   directories will be deleted for good**, directly before the **unchanged strict typed prompt** read from `/dev/tty`; the store and apply answers are read from `/dev/tty` too (D16).
 6. **Retain explained.** A table per reason with the count and one "what to do" sentence; rows only on request.
 7. **Phase 2:** `stw workspace done TASK` (an agent says "finished, merged"), an **adopt** option for legacy unlocked worktrees, and an
    optional TUI checklist.
@@ -46,7 +46,7 @@ passes; `stw tidy apply` and agent mode never do.
 
 ## Decided by the owner (2026-10-26)
 
-Owner answers, verbatim: "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j"; on the online default: "online std? offline optin?". The remaining decisions D6 to D12, D14 and D15 were answered the same day (about 15:40 UTC): D6 72 hours (the owner's own value), D7 to D11, D14 and D15 as recommended, D12 "only ask once", clarified as one typed word per wizard run.
+Owner answers, verbatim (D16: "Ja, D16 ist in Ordnung, macht es so, ja"): "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j"; on the online default: "online std? offline optin?". D16 followed the same day. The remaining decisions D6 to D12, D14 and D15 were answered the same day (about 15:40 UTC): D6 72 hours (the owner's own value), D7 to D11, D14 and D15 as recommended, D12 "only ask once", clarified as one typed word per wizard run.
 
 | # | Decision | Consequence in this spec |
 | --- | --- | --- |
@@ -65,6 +65,7 @@ Owner answers, verbatim: "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j
 | D12 once per run | **One** typed word per wizard run: the plan built and applied at once with `y` in the same run asks once; a later separate `stw tidy apply PLAN-ID` asks again; the agent path is unchanged. Replaces "twice, as today" | [Single confirmation](#single-confirmation-per-wizard-run-d12); needs a security review (T012c) before code |
 | D14 yes | `a` takes all green rows of every owner, the same rule as Enter | FR-002 |
 | D15 yes | The grouped text overview replaces the owner grouping of decision #255; `--rows` keeps the old view | Amendment table |
+| D16 yes | In human mode the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-82`) are read from `/dev/tty`, not stdin; with no controlling terminal nothing is stored or applied (exit 1) | FR-018, SC-015, T013b; `--yes` with an explicit plan id is unchanged |
 | D13 yes | Online is the default in the human wizard; offline is opt-in (`--offline`) | [Online by default](#online-by-default-in-the-human-wizard-d13) |
 
 ## Why
@@ -406,7 +407,7 @@ security review of the design and of the exact code head before any code is merg
 well. With the receipt, within one run the apply rests on the `y` answer to "Apply it now?", which is read from **stdin**
 (`internal/cli/tidy_interactive.go:74`), after the words were typed at build. What a stdin writer gains: it can approve the apply of exactly
 the plan whose words the human just typed on `/dev/tty`, not another plan and not a later one. The same stdin `y` is already the only gate
-before applying an own-only plan. D16 asks the owner to read this answer from `/dev/tty` too.
+before applying an own-only plan. D16 (decided) reads this answer from `/dev/tty` too, which removes this residual risk.
 
 **Other runs.** A plan stored by an earlier run, or applied by a separate `stw tidy apply PLAN-ID` (with or without `--yes`), has no
 receipt, so the typed words are asked at apply exactly as today. The agent path is unchanged: agent mode never builds a receipt and its
@@ -640,6 +641,7 @@ Rows: l = list a reason, or run  stw tidy --rows
 - **FR-011** The final summary ends with the line stating the directories deleted for good and the branches, directly before the first
   typed prompt (or the store question); the typed prompt text is unchanged, read from `/dev/tty`, plain, once per word, refused without a
   terminal or with a wrong word; within one wizard run the words are asked once (FR-017).
+- **FR-018** (D16) In human mode the answers to the store question, the apply question and the prompt of a separate `stw tidy apply PLAN-ID` are read from `/dev/tty`; without a controlling terminal nothing is stored or applied (exit 1); `--yes` with an explicit plan id and agent mode are unchanged.
 - **FR-017** Single confirmation (D12): a receipt as specified covers the apply of the plan set built in the same run and nothing else;
   a separate or later `stw tidy apply PLAN-ID` and agent mode ask as today.
 - **FR-012** The retain table lists every reason with count, level, sentence and action; counts sum to the retained total.
@@ -681,7 +683,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
   apply PLAN-ID` of the stored plan asks the words again and passes no receipt (`tidy.go:111`); agent-mode apply of a foreign plan without
   `authorized_scopes` still exits 1 `scope-not-authorized`; stale checks still refuse with `evidence-changed`; the separate-apply and
   agent-mode tests of Spec 041 pass unchanged.
-- **SC-015** (D16, if the owner confirms) In human mode the answers to "Store this plan set?", "Apply it now?" and the `stw tidy apply PLAN-ID`
+- **SC-015** (D16, decided) In human mode the answers to "Store this plan set?", "Apply it now?" and the `stw tidy apply PLAN-ID`
   prompt are read from `/dev/tty`: a `y` on stdin alone stores and applies nothing; with both streams on terminals but **no controlling
   terminal** the question is not asked, nothing is stored or applied, and the run ends with exit 1 and a message that names the missing
   terminal and the safe alternatives (`stw tidy plan --save`, then apply from a terminal); `--yes` with an explicit plan id behaves as before
@@ -740,13 +742,8 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 
 ## Open decisions for the owner
 
-D1 to D15 are decided, see [Decided by the owner](#decided-by-the-owner-2026-10-26). One is open:
-
-| # | Question | Recommendation |
-| --- | --- | --- |
-| D16 | In human mode, read the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-82`, also read from stdin today) from `/dev/tty` like the typed words, not from stdin (hardening that follows from D12: with one typed word per run the apply rests on that answer, see the residual risk) | Yes in human mode, everywhere a `y` authorizes a store or an apply. It matches the existing rule that a bare `y` does not replace the typed word and that without a controlling terminal nothing is stored or applied (Spec 041 line 413). `--yes` with an explicit plan id stays as it is (foreign items still refuse it). Task T013b, criterion SC-015 |
-
-A later question (for example whether `github-merged-head` may become a proof in phase 2 after dogfood, D8) is raised when it arises.
+None open. D1 to D16 are decided, see [Decided by the owner](#decided-by-the-owner-2026-10-26). A later question (for example
+whether `github-merged-head` may become a proof in phase 2 after dogfood, D8) is raised when it arises.
 
 ## Measured data: the live workspace of 2026-10-26
 
