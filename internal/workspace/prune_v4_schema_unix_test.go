@@ -91,9 +91,35 @@ func TestRegistrationPruneV4SchemaMatchesNativePlan(t *testing.T) {
 }
 
 func TestRegistrationPruneV4SchemaMatchesApplyRecords(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		t.Run(map[bool]string{false: "complete", true: "partial"}[partial], func(t *testing.T) {
+			testRegistrationPruneV4SchemaApplyRecords(t, partial)
+		})
+	}
+}
+
+func testRegistrationPruneV4SchemaApplyRecords(t *testing.T, partial bool) {
 	_, p := fixturePruneV4(t)
-	r := ApplyRegistrationPruneV4(context.Background(), RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
-	if r.Status != "ok" {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	calls := 0
+	if partial {
+		ctx = context.WithValue(ctx, pruneObservationHookKey{}, pruneObservationHook(func(stage, path string, _ any) {
+			if stage == "v4-before-unlink" {
+				calls++
+				if calls == 2 {
+					cancel()
+				}
+			}
+		}))
+	}
+	opts := RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode}
+	r := ApplyRegistrationPruneV4(ctx, opts)
+	want := "ok"
+	if partial {
+		want = "partial"
+	}
+	if r.Status != want {
 		t.Fatal(r)
 	}
 	raw, e := os.ReadFile("../../schemas/v4/registration-prune.schema.json")
@@ -118,6 +144,25 @@ func TestRegistrationPruneV4SchemaMatchesApplyRecords(t *testing.T) {
 		t.Fatal(e)
 	}
 	documents := [][]byte{encoded}
+	replay := ApplyRegistrationPruneV4(context.Background(), opts)
+	if replay.Status != want {
+		t.Fatalf("replay: %+v", replay)
+	}
+	b, e := json.Marshal(replay)
+	if e != nil {
+		t.Fatal(e)
+	}
+	documents = append(documents, b)
+	opts.Mode.Caller = "wrong-owner"
+	refused := ApplyRegistrationPruneV4(context.Background(), opts)
+	if refused.Status != "refused" || len(refused.Diagnostics) != 1 || refused.Diagnostics[0].Code != "prune-scope-refused" {
+		t.Fatalf("post-plan refusal: %+v", refused)
+	}
+	b, e = json.Marshal(refused)
+	if e != nil {
+		t.Fatal(e)
+	}
+	documents = append(documents, b)
 	for _, path := range paths {
 		b, e := os.ReadFile(path)
 		if e != nil {
