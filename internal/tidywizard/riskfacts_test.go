@@ -73,6 +73,80 @@ func TestRiskFactsMapEveryClassifierShape(t *testing.T) {
 	}
 }
 
+// The dirt observed on a worktree reaches the ladder even when the classifier stopped at an earlier
+// reason (Spec 044 Levels): an integrated, locked or record-missing worktree with uncommitted or
+// extra files is red, not kept.
+func TestObservedDirtReachesTheLadderBehindAnEarlierReason(t *testing.T) {
+	long := now.Add(-100 * time.Hour)
+	for name, mod := range map[string]func(*Worktree){
+		"record missing":       func(w *Worktree) { w.Record = RecordMissing },
+		"record ambiguous":     func(w *Worktree) { w.Record = RecordAmbiguous },
+		"locked by another":    func(w *Worktree) { w.Lock = LockForeign },
+		"not judged elsewhere": func(w *Worktree) { w.Record = RecordMissing; w.Proof = ProofAncestor },
+	} {
+		for fact, set := range map[string]func(*Worktree){"dirty": func(w *Worktree) { w.Dirty = true }, "extras": func(w *Worktree) { w.IgnoredExtras = true }} {
+			w := stwTree("a")
+			w.LastActivity = long
+			mod(&w)
+			set(&w)
+			c, a := riskOf(t, repo([]Worktree{w}, nil))
+			want := risk.ReasonUncommittedFiles
+			if fact == "extras" {
+				want = risk.ReasonExtraFiles
+			}
+			if c.Verdict != VerdictRetain || a.Level != risk.Red || !contains(a.Reasons, want) {
+				t.Errorf("%s with %s: reason %q level %s %v", name, fact, c.Reason, a.Level, a.Reasons)
+			}
+		}
+	}
+	// A clean integrated record-missing row stays kept.
+	w := stwTree("a")
+	w.LastActivity = long
+	w.Record = RecordMissing
+	if _, a := riskOf(t, repo([]Worktree{w}, nil)); a.Level != risk.Kept {
+		t.Errorf("clean: %+v", a)
+	}
+	// A primary checkout with observed dirt stays kept (foreman clarification c).
+	p := stwTree("p")
+	p.Primary, p.Dirty = true, true
+	if _, a := riskOf(t, repo([]Worktree{p}, nil)); a.Level != risk.Kept {
+		t.Errorf("primary: %+v", a)
+	}
+}
+
+// The worktree the command runs in is a linked worktree like any other: only a primary checkout is
+// kept whatever its content, so an unmerged or dirty current worktree is red.
+func TestCurrentWorktreeIsNotAPrimaryCheckout(t *testing.T) {
+	cur := func(f func(*Worktree)) Worktree {
+		w := stwTree("cur")
+		w.Path = "/ws/repo/cwd-tree"
+		f(&w)
+		return w
+	}
+	for name, tt := range map[string]struct {
+		w     Worktree
+		level risk.Level
+	}{
+		"integrated": {cur(func(*Worktree) {}), risk.Kept},
+		"unmerged":   {cur(func(w *Worktree) { w.Proof = ProofNone }), risk.Red},
+		"dirty":      {cur(func(w *Worktree) { w.Dirty = true }), risk.Red},
+	} {
+		c, a := riskOf(t, repo([]Worktree{tt.w}, nil))
+		if c.Reason != "current-worktree" || a.Level != tt.level {
+			t.Errorf("%s: reason %q level %s", name, c.Reason, a.Level)
+		}
+	}
+}
+
+func contains(in []string, s string) bool {
+	for _, x := range in {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRiskFactsOfATrackingReferenceAndAMergedPullRequest(t *testing.T) {
 	c := Candidate{ID: "tracking-ref:r:refs/remotes/origin/x", Repo: "r", Kind: KindTrackingRef, Verdict: VerdictSafe, Proof: ProofBranchAbsent, Scope: owner.ScopeUnknown, Effects: []string{"delete-tracking-ref:refs/remotes/origin/x"}}
 	if a := risk.Evaluate(RiskFacts(c, 0), now); a.Level != risk.Green || !reflect.DeepEqual(a.Reasons, []string{risk.ReasonProofGitHubBranchAbsent}) {
@@ -105,7 +179,6 @@ func TestRiskFactsCarryTheObservedFields(t *testing.T) {
 	}
 	for reason, check := range map[string]func(risk.Facts) bool{
 		"primary-checkout":    func(f risk.Facts) bool { return f.Primary },
-		"current-worktree":    func(f risk.Facts) bool { return f.Primary },
 		"dirty":               func(f risk.Facts) bool { return f.Dirty },
 		"ignored-extras":      func(f risk.Facts) bool { return f.IgnoredExtras },
 		"evidence-incomplete": func(f risk.Facts) bool { return f.Incomplete },

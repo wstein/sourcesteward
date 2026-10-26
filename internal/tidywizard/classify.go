@@ -207,6 +207,10 @@ type Candidate struct {
 	// classifier already reads for `recently-active`; zero when unknown. It feeds the risk ladder
 	// (Spec 044 R1) only: it changes no verdict and is never part of the JSON document.
 	LastActivity time.Time `json:"-"`
+	// Dirty and IgnoredExtras are the observed facts of a worktree, kept even when the classifier
+	// stopped at an earlier reason (record missing, locked, protected); the risk ladder reads them.
+	// Never part of the JSON document.
+	Dirty, IgnoredExtras bool `json:"-"`
 	// The additive fields of Spec 044. Risk, RiskReasons and Group are set by the renderer when it
 	// is given the run clock (never by the classifier); PR is the number of a pull request merged
 	// into the base whose head is the tip (online evidence), set by whoever read it. All are
@@ -421,7 +425,7 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 	if w.DirMissing {
 		return classifyStale(c, w, record)
 	}
-	c.LastActivity = w.LastActivity
+	c.LastActivity, c.Dirty, c.IgnoredExtras = w.LastActivity, w.Dirty, w.IgnoredExtras
 	switch {
 	case protectedReason != "":
 		return c.retain(protectedReason, "")
