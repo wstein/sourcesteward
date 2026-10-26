@@ -90,10 +90,9 @@ manifest-2 identities, when saving is implemented, use full 64-hex digests rathe
 than legacy 12-hex IDs. The combined candidate bound is 4096 and either output
 format is bounded to 4 MiB. Exit 0 means complete observation, exit 1 means
 incomplete evidence or truncated / failed output, and exit 2 means invalid
-usage. Registration observation stays offline. Today legacy authenticated reads
-require `--online`; Spec 044 D13 will make only the human wizard online by
-default, with `--offline` to opt out. Agent runs,
-`plan` and `--json` keep their offline default.
+usage. Registration observation stays offline. Legacy reads follow the Spec 044
+D13 policy above: only the human wizard is online by default; `--offline` opts
+out. Agent runs, `plan` and `--json` keep their offline default.
 
 Only visible registration rows suppress matching legacy worktree rows, by exact
 repository and destination. Output bounds may then cut either representation;
