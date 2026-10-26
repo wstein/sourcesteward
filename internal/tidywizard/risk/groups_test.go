@@ -173,3 +173,39 @@ func TestGroupPathCleaningAndScratchpadFamilyExclusion(t *testing.T) {
 		t.Fatalf("alias inflated family count: %+v", g)
 	}
 }
+
+func TestGroupConsequencesAndRepositoryCounts(t *testing.T) {
+	rows := []Row{riskRow("a", "repo-b", "/tmp/whr-a", Green), riskRow("b", "repo-a", "/tmp/whr-b", Yellow), riskRow("c", "repo-a", "/tmp/whr-c", Green)}
+	rows[0].Effects = append(rows[0].Effects, "delete-branch:a", "delete-branch:a")
+	rows[1].Effects = append(rows[1].Effects, "delete-branch:b")
+	// Counts describe rows with an effect, not duplicate strings or risk scores.
+	for _, g := range GroupRows(rows) {
+		wantEffects := []EffectCount{{Effect: "remove-files", Count: len(g.Rows)}, {Effect: "remove-registration", Count: len(g.Rows)}}
+		branches := 0
+		repoCounts := map[string]int{}
+		for _, r := range g.Rows {
+			repoCounts[r.Repo]++
+			if r.ID == "a" || r.ID == "b" {
+				branches++
+			}
+		}
+		if branches > 0 {
+			wantEffects = append([]EffectCount{{Effect: "delete-branch", Count: branches}}, wantEffects...)
+		}
+		if !reflect.DeepEqual(g.Effects, wantEffects) {
+			t.Fatalf("effect counts %+v; want %+v", g.Effects, wantEffects)
+		}
+		total := 0
+		prev := ""
+		for _, r := range g.Repositories {
+			if r.Repo <= prev || r.Count != repoCounts[r.Repo] {
+				t.Fatalf("repository counts: %+v", g.Repositories)
+			}
+			prev = r.Repo
+			total += r.Count
+		}
+		if total != len(g.Rows) {
+			t.Fatalf("repository total %d; rows %d", total, len(g.Rows))
+		}
+	}
+}
