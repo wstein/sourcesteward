@@ -302,7 +302,7 @@ func TestRegistrationPruneV4PayloadExactBounds(t *testing.T) {
 }
 
 func TestRegistrationPruneV4ReviewJournalRejectsUnknownVocabulary(t *testing.T) {
-	for _, field := range []string{"action", "intent", "target", "remaining", "duplicate", "reordered", "missing-effect"} {
+	for _, field := range []string{"action", "intent", "target", "remaining", "duplicate", "reordered", "missing-effect", "early-payload-digest"} {
 		t.Run(field, func(t *testing.T) {
 			_, p := fixturePruneV4(t)
 			o := RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode}
@@ -334,6 +334,11 @@ func TestRegistrationPruneV4ReviewJournalRejectsUnknownVocabulary(t *testing.T) 
 				j.Effects[0], j.Effects[1] = j.Effects[1], j.Effects[0]
 			case "missing-effect":
 				j.Effects = j.Effects[:len(j.Effects)-1]
+			case "early-payload-digest":
+				j.Phase = "partial"
+				j.Effects = []pruneV4Effect{}
+				j.PayloadDigest = "malformed"
+				j.Remaining = []string{"prepare-recovery", "pin-history", "remove-registration"}
 			}
 			raw, e = pruneV4Canonical(j, "")
 			if e != nil {
