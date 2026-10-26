@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -45,7 +46,7 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	}
 	r.Backend = "git"
 	r.Plan = &p
-	r.Limitations = append([]string{}, p.RecoveryLimits...)
+	r.Limitations = []string{"Restoring metadata does not recover missing objects or user files; the complete retained payload and history pin must remain available."}
 	r.Limitations = append(r.Limitations, "Only administrative metadata is restored; checkout files, ownership, inodes and timestamps are not recreated. Native git worktree repair of a found checkout requires a separate owner action.")
 	if o.Apply {
 		if ValidateV3RunMode(&o.Mode) != nil || !reflect.DeepEqual(o.Mode, p.Mode) {
@@ -71,13 +72,13 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		s.Close()
 		return failPruneV4(r, e)
 	}
-	raw, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(v3RecordLimit))
+	raw, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
 	if e != nil {
 		s.Close()
 		return failPruneV4(r, e)
 	}
 	journalDigest := pruneV4Hash("stw-registration-journal-file-v4", raw)
-	prior, e := readPruneV4RestoreForPlan(s, p, journalDigest)
+	prior, e := readPruneV4RestoreForPlan(s, p, journalDigest, j.PayloadDigest)
 	s.Close()
 	if e != nil {
 		return failPruneV4(r, e)
@@ -86,23 +87,23 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return failPruneV4(r, failure("prune-restore-refused", "An incomplete prune requires manual inspection; automatic administrative restore is unavailable."))
 	}
 	if prior != nil {
+		if e = validatePruneV4RestoreOwnership(p); e != nil {
+			return failPruneV4(r, e)
+		}
 		if prior.Phase != "complete" {
 			return failPruneV4(r, failure("prune-restore-refused", "A prior administrative restore is incomplete; inspect its retained journal before recovery."))
 		}
-		if e = verifyPruneV4Restored(ctx, p, j); e != nil {
-			return failPruneV4(r, e)
-		}
-		r.Status = "ok"
-		r.Actions = []ActionOutcome{{Name: "verified-replay", Status: "complete", Detail: "Verified the completed administrative restore; no effect repeated."}}
-		return r
+		return failPruneV4(r, failure("prune-restore-refused", "Administrative restore already completed; the original registration slot is not eligible for another restore."))
 	}
+
 	validate := func() error { return validatePruneV4Restore(ctx, p, j, journalDigest) }
 	if e = validate(); e != nil {
 		return failPruneV4(r, e)
 	}
 	if !o.Apply {
+		repair, _ := json.Marshal([]string{"git", "-C", p.SourcePath, "worktree", "repair", "<owner-selected-found-path>"})
 		r.Status = "ok"
-		r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "planned", Detail: "Restore the exact saved registration at " + p.Registration.GitDir + "; original checkout remains absent and locked. Repair, if needed: git -C " + p.SourcePath + " worktree repair <owner-selected-found-path> (separate authorization)."}}
+		r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "planned", Detail: "Restore the exact saved registration at " + p.Registration.GitDir + "; original checkout remains absent and locked. Repair argv data (separate owner authorization): " + string(repair)}}
 		return r
 	}
 	parent, e := openStoreKinds(p.StateDir, true, []string{pruneV4Namespace})
@@ -120,7 +121,7 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return failPruneV4(r, e)
 	}
 	defer s.Close()
-	again, e := readPruneV4RestoreForPlan(s, p, journalDigest)
+	again, e := readPruneV4RestoreForPlan(s, p, journalDigest, j.PayloadDigest)
 	if e != nil || again != nil {
 		return failPruneV4(r, pruneV4RestoreError())
 	}
@@ -134,7 +135,18 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	}
 	stop := func(err error) RegistrationPruneV4Result {
 		restore.Phase = "partial"
-		restore.Diagnostics = []Diagnostic{{Code: tidyErrorCode(err), Message: pruneV4Message(err)}}
+		restore.Remaining = []string{"restore-registration"}
+		restore.Diagnostics = []Diagnostic{{Code: tidyErrorCode(err), Message: "Administrative restore failed; retained journal records confirmed and uncertain effects."}}
+		var op operationError
+		if errors.As(err, &op) {
+			restore.Diagnostics[0].Message = op.Message
+		}
+		if errors.Is(err, context.Canceled) {
+			restore.Diagnostics = []Diagnostic{{Code: "canceled", Message: "Administrative restore canceled; retained journal records possible effects."}}
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			restore.Diagnostics = []Diagnostic{{Code: "canceled", Message: "Administrative restore deadline exceeded; retained journal records possible effects."}}
+		}
 		_ = writePruneV4Record(s.dirs["restores"], id+".json", restore, false)
 		r.Status = "partial"
 		r.Diagnostics = restore.Diagnostics
@@ -195,6 +207,7 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	restore.Phase = "complete"
 	restore.Effects[0].Outcome = "observed"
 	restore.Remaining = []string{}
+	pruneObservationStep(ctx, "v4-restore-before-complete", p.Registration.GitDir, &restore)
 	if e = writePruneV4Record(s.dirs["restores"], id+".json", restore, false); e != nil {
 		return stop(e)
 	}
@@ -221,22 +234,12 @@ func validatePruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, j pr
 		return e
 	}
 	defer s.Close()
-	b, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(v3RecordLimit))
+	b, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
 	if e != nil || pruneV4Hash("stw-registration-journal-file-v4", b) != digest {
 		return pruneV4RestoreError()
 	}
-	owner, e := openStore(p.StateDir, false)
-	if e != nil {
+	if e = validatePruneV4RestoreOwnership(p); e != nil {
 		return e
-	}
-	creation, task, jd, e := readRetirementOwnership(owner, p.Registration.Task, p.Registration.Owner)
-	owner.Close()
-	if e != nil {
-		return failure("prune-ownership-refused", "Original creation ownership is unavailable before restore.")
-	}
-	td, e := v3RecordDigest(task)
-	if e != nil || td != p.Expected.TaskDigest || creation.Digest != p.Expected.CreationDigest || jd != p.Expected.CreationJournalDigest {
-		return failure("prune-ownership-refused", "Original creation ownership changed before restore.")
 	}
 	id, e := currentIdentity(filepath.Dir(p.Registration.GitDir))
 	if e != nil || id != p.Expected.RegistrationParent {
@@ -265,6 +268,9 @@ func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Pla
 	return nil
 }
 func verifyPruneV4Restored(ctx context.Context, p RegistrationPruneV4Plan, j pruneV4Journal) error {
+	if e := validatePruneV4RestoreOwnership(p); e != nil {
+		return e
+	}
 	if e := revalidatePruneV4Absence(ctx, p); e != nil {
 		return e
 	}
@@ -392,7 +398,7 @@ func copyPruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, root *os
 	}
 	return syncDirectory(root)
 }
-func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest string) (*pruneV4RestoreJournal, error) {
+func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest, payloadDigest string) (*pruneV4RestoreJournal, error) {
 	st, e := s.root.Lstat("restores")
 	if errors.Is(e, os.ErrNotExist) {
 		return nil, nil
@@ -422,14 +428,19 @@ func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest 
 		return nil, failure("record-limit", "Administrative restore history exceeds its scan bound.")
 	}
 	var found *pruneV4RestoreJournal
+	total := 0
 	for _, n := range names {
 		id := strings.TrimSuffix(n.Name(), ".json")
 		if !pruneV4ID(id, 32) || n.Name() != id+".json" {
 			return nil, pruneV4RestoreError()
 		}
-		raw, e := readPruneV4PrivateFile(dir, n.Name(), int64(v3RecordLimit))
+		raw, e := readPruneV4PrivateFile(dir, n.Name(), int64(pruneV4RecordLimit))
 		if e != nil {
 			return nil, e
+		}
+		total += len(raw)
+		if total > 4<<20 {
+			return nil, failure("record-limit", "Administrative restore history exceeds its byte bound.")
 		}
 		var j pruneV4RestoreJournal
 		if decodeStrict(raw, &j) != nil {
@@ -442,13 +453,35 @@ func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest 
 		if j.Phase != "prepared" && j.Phase != "restoring" && j.Phase != "complete" && j.Phase != "partial" {
 			return nil, pruneV4RestoreError()
 		}
-		if j.PlanID != p.PlanID {
-			continue
-		}
-		if found != nil || j.PlanDigest != p.Digest || j.PruneJournalDigest != pruneDigest || j.HistoryRef != pruneV4HistoryRef(p) || j.HistoryOID != p.Expected.ResolvedHEAD || len(j.Effects) != 1 {
+
+		if len(j.Effects) != 1 || j.HistoryRef != "refs/stw/recovery/registration-prune/"+j.PlanID+"/head" || !(pruneV4ID(j.HistoryOID, 40) || pruneV4ID(j.HistoryOID, 64)) {
 			return nil, pruneV4RestoreError()
 		}
 		effect := j.Effects[0]
+		if effect.Action != "restore-registration" || !v3CanonicalPath(effect.Target) || effect.Intent != "create-absent" {
+			return nil, pruneV4RestoreError()
+		}
+		if effect.Outcome != "planned" && effect.Outcome != "unknown" && effect.Outcome != "observed" && effect.Outcome != "refused" {
+			return nil, pruneV4RestoreError()
+		}
+		if j.Phase == "complete" {
+			if effect.Outcome != "observed" || len(j.Remaining) != 0 || len(j.Diagnostics) != 0 {
+				return nil, pruneV4RestoreError()
+			}
+		} else if !reflect.DeepEqual(j.Remaining, []string{"restore-registration"}) {
+			return nil, pruneV4RestoreError()
+		}
+		if j.PlanID != p.PlanID {
+			continue
+		}
+		if j.PayloadDigest != payloadDigest {
+			return nil, pruneV4RestoreError()
+		}
+
+		if found != nil || j.PlanDigest != p.Digest || j.PruneJournalDigest != pruneDigest || j.HistoryRef != pruneV4HistoryRef(p) || j.HistoryOID != p.Expected.ResolvedHEAD || len(j.Effects) != 1 {
+			return nil, pruneV4RestoreError()
+		}
+		effect = j.Effects[0]
 		if effect.Action != "restore-registration" || effect.Target != p.Registration.GitDir || effect.Intent != "create-absent" {
 			return nil, pruneV4RestoreError()
 		}
@@ -465,4 +498,21 @@ func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest 
 		found = &j
 	}
 	return found, nil
+}
+
+func validatePruneV4RestoreOwnership(p RegistrationPruneV4Plan) error {
+	owner, e := openStore(p.StateDir, false)
+	if e != nil {
+		return e
+	}
+	creation, task, jd, e := readRetirementOwnership(owner, p.Registration.Task, p.Registration.Owner)
+	owner.Close()
+	if e != nil {
+		return failure("prune-ownership-refused", "Original creation ownership is unavailable before restore.")
+	}
+	td, e := v3RecordDigest(task)
+	if e != nil || td != p.Expected.TaskDigest || creation.Digest != p.Expected.CreationDigest || jd != p.Expected.CreationJournalDigest {
+		return failure("prune-ownership-refused", "Original creation ownership changed before restore.")
+	}
+	return nil
 }
