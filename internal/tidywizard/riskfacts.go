@@ -5,6 +5,7 @@ package tidywizard
 import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
+	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
 // RiskFacts maps a classifier candidate to the facts of the Spec 044 risk ladder. It is the one
@@ -15,8 +16,7 @@ import (
 // (not known), which the ladder treats conservatively.
 //
 // mergedPR is the number of a pull request merged into the base whose head equals the tip (the
-// online evidence of Spec 044 C2); 0 means none or not looked up. The upstream-gone fact is not
-// carried on the candidate yet and stays false.
+// online evidence of Spec 044 C2); 0 means none or not looked up.
 func RiskFacts(c Candidate, mergedPR int) risk.Facts {
 	return risk.Facts{
 		Kind: string(c.Kind), Verdict: string(c.Verdict), Proof: string(c.Proof), Reason: c.Reason,
@@ -30,6 +30,7 @@ func RiskFacts(c Candidate, mergedPR int) risk.Facts {
 		Incomplete:        c.Reason == "evidence-incomplete",
 		NoWork:            c.Evidence == "no-work",
 		MergedHead:        mergedPR > 0,
+		UpstreamGone:      c.Kind == KindBranch && c.Upstream == workspace.UpstreamGone,
 		LastActivity:      c.LastActivity,
 	}
 }

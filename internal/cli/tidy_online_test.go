@@ -297,3 +297,54 @@ func TestProductionFetchUsesTheSharedBudget(t *testing.T) {
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// The merged pull request of a tip is on the candidate the wizard goes on with (Spec 044 C2): the
+// planner sees the number of the asked tip and none for a tip without a merged answer, and an
+// offline run (--offline) attaches nothing.
+func TestMergedPullRequestNumberReachesTheCandidates(t *testing.T) {
+	prs := func(w *interactive) map[string]int {
+		got := map[string]int{}
+		for _, s := range w.planner.specs {
+			for _, c := range s.Items {
+				got[c.ID] = c.PR
+			}
+		}
+		return got
+	}
+	w := newInteractive(t, true, true)
+	markOnline(w.wizardWorld)
+	for i := range w.res.Candidates {
+		switch w.res.Candidates[i].ID {
+		case "branch:a:claude/old":
+			w.res.Candidates[i].Tip = "tipOld"
+		case "worktree:a:own1":
+			w.res.Candidates[i].Tip = "tipOwn"
+		}
+	}
+	w.online = tidywizard.OnlineOutcome{Facts: map[tidywizard.TipKey]tidywizard.PREvidence{
+		{Repo: "a", Tip: "tipOld"}: {State: tidywizard.PRMerged, Number: 42},
+		{Repo: "a", Tip: "tipOwn"}: {State: tidywizard.PRUnknown},
+	}}
+	if _, _, err := runTidyBoth(t, "a\nn\n"); err != nil {
+		t.Fatal(err)
+	}
+	got := prs(w)
+	if got["branch:a:claude/old"] != 42 || got["worktree:a:own1"] != 0 || len(got) == 0 {
+		t.Errorf("pull request numbers %v", got)
+	}
+
+	w = newInteractive(t, true, true)
+	markOnline(w.wizardWorld)
+	for i := range w.res.Candidates {
+		if w.res.Candidates[i].ID == "branch:a:claude/old" {
+			w.res.Candidates[i].Tip = "tipOld"
+		}
+	}
+	w.online = tidywizard.OnlineOutcome{Facts: map[tidywizard.TipKey]tidywizard.PREvidence{{Repo: "a", Tip: "tipOld"}: {State: tidywizard.PRMerged, Number: 42}}}
+	if _, _, err := runTidyBoth(t, "a\nn\n", "--offline"); err != nil {
+		t.Fatal(err)
+	}
+	if got := prs(w); got["branch:a:claude/old"] != 0 || len(got) == 0 {
+		t.Errorf("--offline attached %v", got)
+	}
+}

@@ -451,3 +451,24 @@ func TestFoldingKeepsGreenGroupsAndEffectClasses(t *testing.T) {
 		t.Errorf("green groups were folded: %d", len(got))
 	}
 }
+
+// A merged pull request of the tip makes a row green in the group and the JSON carries its number;
+// the group line counts it as green (Spec 044 C2).
+func TestMergedPullRequestTurnsAGroupGreenInTheOverview(t *testing.T) {
+	in := riskInput()
+	c := cand("r", tidywizard.KindBranch, "old", tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	c.Proof, c.Effects, c.PR = tidywizard.ProofPatchID, []string{"delete-branch:old"}, 17
+	in.Result.Candidates = []tidywizard.Candidate{c}
+	in.Result.Repositories = []tidywizard.RepoResult{{Name: "r", State: "analysed", Notices: []string{}}}
+	d := Build(in)
+	if out := Overview(d, OverviewOptions{}); !strings.Contains(out, "1 branch") || !strings.Contains(out, " green") || strings.Contains(out, "yellow") {
+		t.Errorf("overview:\n%s", out)
+	}
+	if got := d.Candidates[0]; got.PR != 17 || got.Risk != "green" || got.RiskReasons[0] != risk.ReasonPRMergedHead {
+		t.Errorf("%+v", got)
+	}
+	in.Result.Candidates[0].PR = 0
+	if out := Overview(Build(in), OverviewOptions{}); !strings.Contains(out, "yellow") {
+		t.Errorf("without the number:\n%s", out)
+	}
+}
