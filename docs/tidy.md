@@ -68,6 +68,31 @@ The pull request evidence asks, per repository, about at most 64 distinct tips: 
 
 A repository whose reads cannot run is judged offline on its own and the run goes on with the levels of an offline run: `gh` is not authenticated, the remote is not a github.com repository, one repository ran into its own request or time budget, a response exceeded its size bound, or one read failed. A 429, a 403 that reports an exhausted rate limit (`X-RateLimit-Remaining: 0` or `Retry-After`), a 5xx, the cap of 512 requests or the end of `--timeout` judges every repository that has not finished offline, tracking reads included; nothing is retried. The wizard says so once on stderr, `GitHub: checked N of M repositories` (`repository` when M is 1), followed by `; the others are judged offline (` and the reasons when some were judged offline, and the exit code does not change. The derived entry `online` of the overview text is `default`, `flag` (an explicit `--online`) or `off` (`--offline`, or every repository fell back, with `fallback: ` and the reasons); runs outside the human wizard print no such entry, so their output is unchanged.
 
+**Explicit overview 4 (read-only first slice).**
+`stw tidy --contract 4 --json` opts into the separate, unpublished
+`schemas/v4/tidy-overview.schema.json` contract. Without `--json`, the same
+explicit selector prints text. Both forms only observe: they never read a choice,
+store a plan or apply cleanup, even at a human terminal. The default overview
+and expert `plan` / `apply` dispatch retain their existing contracts.
+
+The additional `registration_prunes` array describes owned, locked Git
+registrations whose checkout directory is missing. Each row carries its own
+native absence, ownership and recovery witnesses; integration ancestry is not
+its proof. A matching legacy worktree row is replaced rather than counted twice.
+The legacy `summary` continues to count legacy candidates; the text output shows
+separate registration verdict counts. Owner views and `--only stale-worktrees`
+filter the new rows too. `safe` describes observed eligibility and authorizes
+nothing. jj cannot use this Git-specific operation.
+
+This slice does not save manifest-2 plan sets or add wizard selection / apply-set
+dispatch. Those remain later T012b integration work. Its `plan_id` is empty;
+manifest-2 identities, when saving is implemented, use full 64-hex digests rather
+than legacy 12-hex IDs. The combined candidate bound is 4096 and either output
+format is bounded to 4 MiB. Exit 0 means complete observation, exit 1 means
+incomplete evidence or truncated / failed output, and exit 2 means invalid
+usage. Registration observation stays offline; `--online` only opts into the
+existing legacy authenticated reads.
+
 **Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per worktree (jj: workspace) and per local branch (jj: bookmark) of that repository, at most 10 minutes; the Git proof phase gets the rest of that window, at least 60 s, so without `--timeout` it can run up to 60 s past the window; with `--timeout` the given deadline bounds everything. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace, 10 s per proof command, 20 s per tip) and the plan, apply and restore deadlines of the expert layer are not scaled. When candidates are retained as `evidence-incomplete` with the evidence `deadline-exceeded` or `proof-budget-exhausted`, the overview ends with a notice `N of M not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m`: N is the number of those candidates (`--timeout` widens the window, the content reads and the proof phase, but not the 20 s per-tip proof budget nor the per-worktree content budget, which also end as `proof-budget-exhausted` and are counted too, so the hint can fail for those items) and M the number of all candidates of the overview, counted after the view is narrowed (`--only`, `--mine`, `--by-owner`) and before the output is cut at the candidate bound. The notice is the text line `notice: ...` and an entry of the `notices` array of `--json`.
 
 ### Long runs: progress, `--verbose`, `--trace` and agent markers
