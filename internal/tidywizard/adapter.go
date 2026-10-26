@@ -104,7 +104,7 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	}
 	for _, b := range obs.Branches {
 		proof, incomplete := proofFact(b.Proof, b.Incomplete, kindBranch)
-		f.Branches = append(f.Branches, Branch{Name: strings.TrimPrefix(b.Name, "refs/heads/"), IsBase: b.IsBase, Proof: proof, Ahead: b.Ahead, AuthorHint: b.AuthorHint, Incomplete: incomplete, Reason: b.Reason, Upstream: b.Upstream})
+		f.Branches = append(f.Branches, Branch{Name: strings.TrimPrefix(b.Name, "refs/heads/"), IsBase: b.IsBase, Tip: b.OID, Proof: proof, Ahead: b.Ahead, AuthorHint: b.AuthorHint, Incomplete: incomplete, Reason: b.Reason, Upstream: b.Upstream})
 	}
 	for _, r := range obs.TrackingRefs {
 		proof, incomplete := proofFact(r.Proof, r.Incomplete, kindTracking)
@@ -160,7 +160,7 @@ func joinJJRecord(jj JJRecords, w *Worktree, repoDir string) {
 func (a Adapter) worktree(e workspace.WorktreeEvidence) Worktree {
 	w := Worktree{
 		Path: e.Path, Primary: e.Primary, DirMissing: e.DirMissing, Prunable: e.Prunable,
-		Branch: strings.TrimPrefix(e.HeadRef, "refs/heads/"), Dirty: e.Dirty, IgnoredExtras: e.IgnoredExtras,
+		Branch: strings.TrimPrefix(e.HeadRef, "refs/heads/"), Tip: e.HeadOID, Dirty: e.Dirty, IgnoredExtras: e.IgnoredExtras,
 		Ahead: e.Ahead, AuthorHint: e.AuthorHint, LastActivity: e.LastActivity, HasOwnCommit: e.HasOwnCommit,
 	}
 	w.Lock, w.Task = lockOf(e)

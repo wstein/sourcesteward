@@ -216,7 +216,7 @@ func openTidySession(parent context.Context, path string, o TidySessionOptions, 
 	}
 	api, cleanup, err := d.api(ctx, target, "github.com", tidyBudgetTransport{next: rt, ledger: s.ledger})
 	if err != nil {
-		return fail(errors.New("tidy hosting authentication unavailable"))
+		return fail(ErrTidyAuthentication)
 	}
 	previous := s.cleanup
 	s.cleanup = func() { cleanup(); previous() }

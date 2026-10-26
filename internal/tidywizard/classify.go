@@ -104,10 +104,12 @@ type Worktree struct {
 	Primary              bool
 	DirMissing, Prunable bool
 	Branch               string // attached local branch, empty when detached
-	Lock                 Lock
-	Task                 string
-	Record               Record
-	TaskOwner            string // owner label of the found record
+	// Tip is the full object id of HEAD (the tip an online lookup asks about); empty when unknown.
+	Tip       string
+	Lock      Lock
+	Task      string
+	Record    Record
+	TaskOwner string // owner label of the found record
 	// JJOwned: a jj workspace (it has no stw lock) whose complete creation record was found by its
 	// destination and repository; Task and TaskOwner come from it.
 	JJOwned              bool
@@ -124,8 +126,10 @@ type Worktree struct {
 
 // Branch holds the facts of one local branch or jj bookmark.
 type Branch struct {
-	Name       string
-	IsBase     bool
+	Name   string
+	IsBase bool
+	// Tip is the full object id of the branch tip; empty when unknown.
+	Tip        string
 	Proof      Proof
 	Ahead      int
 	AuthorHint string
@@ -193,6 +197,9 @@ type Candidate struct {
 	// Upstream is the upstream-gone fact of a branch candidate (Spec 044 T004). It is evidence
 	// text for the renderer, never a level and never part of the JSON document.
 	Upstream workspace.UpstreamState `json:"-"`
+	// Tip is the full object id of the tip of a worktree or branch candidate, the key of the online
+	// pull request evidence (Spec 044 T005); never part of the JSON document.
+	Tip string `json:"-"`
 }
 
 // RepoResult reports one repository: State is analysed, skipped or error.
@@ -380,7 +387,7 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 		kind = KindStaleWorktree
 	}
 	c := newCandidate(repo, kind, w.Path)
-	c.Path, c.Branch, c.Task, c.Proof = w.Path, w.Branch, w.Task, normalize(w.Proof)
+	c.Path, c.Branch, c.Task, c.Proof, c.Tip = w.Path, w.Branch, w.Task, normalize(w.Proof), w.Tip
 	record := w.Record
 	if w.Lock != LockStw {
 		record = RecordNone
@@ -458,7 +465,7 @@ func classifyStale(c Candidate, w Worktree, record Record) Candidate {
 
 func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate {
 	c := newCandidate(repo, KindBranch, b.Name)
-	c.Branch, c.Proof, c.Upstream = b.Name, normalize(b.Proof), b.Upstream
+	c.Branch, c.Proof, c.Upstream, c.Tip = b.Name, normalize(b.Proof), b.Upstream, b.Tip
 	c = c.withOwner(owner.Resolve(owner.Item{Branch: b.Name, AuthorHint: b.AuthorHint}, cfg.Caller, cfg.Agent))
 	switch {
 	case b.Incomplete != "":

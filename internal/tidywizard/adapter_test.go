@@ -77,7 +77,7 @@ func TestAdapterMapsWorktreeFacts(t *testing.T) {
 	for _, w := range f.Worktrees {
 		by[w.Path] = w
 	}
-	want := Worktree{Path: "/ws/wt/a", Branch: "feat/a", Lock: LockStw, Task: "a", Record: RecordFound, TaskOwner: "werner", Dirty: true, IgnoredExtras: true, Proof: ProofAncestor, Ahead: 3, AuthorHint: "Ana", LastActivity: old, HasOwnCommit: true}
+	want := Worktree{Path: "/ws/wt/a", Branch: "feat/a", Tip: "a1", Lock: LockStw, Task: "a", Record: RecordFound, TaskOwner: "werner", Dirty: true, IgnoredExtras: true, Proof: ProofAncestor, Ahead: 3, AuthorHint: "Ana", LastActivity: old, HasOwnCommit: true}
 	if got := by["/ws/wt/a"]; !reflect.DeepEqual(got, want) {
 		t.Errorf("linked:\n got  %+v\n want %+v", got, want)
 	}
