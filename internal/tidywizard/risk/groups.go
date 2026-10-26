@@ -3,8 +3,8 @@ package risk
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"path"
 	"sort"
 	"strings"
@@ -150,11 +150,10 @@ func effectClass(in []string) string {
 		out = append(out, effect)
 	}
 	sort.Strings(out)
-	b, _ := json.Marshal(out)
-	return string(b)
+	return framed(out...)
 }
 func groupKey(identity groupIdentity) string {
-	b, _ := json.Marshal(identity)
+	b := framed(identity.Kind, identity.Effects, identity.Place, identity.Family, identity.Parent, identity.Repo)
 	digest := sha256.Sum256(append([]byte("stw-janitor-group\n"), b...))
 	// Encode each hex nibble as a..p: a fixed-size key with no control bytes,
 	// digits or raw untrusted text, even when two sanitized names would collide.
@@ -167,4 +166,15 @@ func groupKey(identity groupIdentity) string {
 		}
 	}
 	return "group" + string(key)
+}
+
+// Length framing preserves raw Unix bytes; JSON string replacement would merge
+// distinct non-UTF-8 paths/effects. These are internal identities, never output.
+func framed(parts ...string) string {
+	var b []byte
+	for _, part := range parts {
+		b = binary.AppendUvarint(b, uint64(len(part)))
+		b = append(b, part...)
+	}
+	return string(b)
 }
