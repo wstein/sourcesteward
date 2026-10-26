@@ -95,6 +95,9 @@ func ObserveRegistrationPruneV4Inventory(ctx context.Context, path string) Regis
 	if err != nil {
 		return fail(err)
 	}
+	// Exercise sampled-inventory races through the existing private testpoint;
+	// normal callers supply no hook.
+	pruneObservationStep(ctx, "v4-overview-inventory-read", id.RepositoryDir, &native)
 	parent := filepath.Join(id.RepositoryDir, "worktrees")
 	if _, err = os.Lstat(parent); errors.Is(err, os.ErrNotExist) {
 		if len(native) != 1 {
