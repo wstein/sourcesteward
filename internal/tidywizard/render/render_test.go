@@ -8,6 +8,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -629,5 +630,33 @@ func TestDeadlineNoticeCountsTheItemsNotJudged(t *testing.T) {
 	}
 	if doc.Summary.Retain != 3+4 {
 		t.Errorf("the verdicts changed: %+v", doc.Summary)
+	}
+}
+
+var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// Color wraps escaped text only: without the color sequences the bytes are exactly the plain
+// text, and the hostile fixture (ESC, CR, NUL, bidi in names, owners, evidence) adds no escape
+// sequence of its own.
+func TestColorChangesNoByteOfThePlainText(t *testing.T) {
+	doc := Build(input())
+	plain := Text(doc, TextOptions{})
+	colored := Text(doc, TextOptions{Color: true})
+	if colored == plain {
+		t.Fatal("color did nothing")
+	}
+	if got := sgr.ReplaceAllString(colored, ""); got != plain {
+		t.Fatalf("stripping the sequences does not give the plain text:\n%s", got)
+	}
+	if strings.Contains(sgr.ReplaceAllString(colored, ""), "\x1b") || strings.Contains(colored, "\r") {
+		t.Fatal("a raw ESC or CR from the data reached the colored text")
+	}
+	for _, want := range []string{"\x1b[32msafe    \x1b[0m", "\x1b[2mretain  \x1b[0m", "\x1b[33mdecision\x1b[0m", "effects \x1b[1mremove-registration, remove-files"} {
+		if !strings.Contains(colored, want) {
+			t.Errorf("%q missing", want)
+		}
+	}
+	if !strings.Contains(colored, "\x1b[31merror: ") || !strings.Contains(colored, "\x1b[1mbundledock\x1b[0m") {
+		t.Error("error repository is not red or heading not bold")
 	}
 }
