@@ -58,6 +58,8 @@ Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]:
 
 The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is the first 12 hex characters of a SHA-256 over the plan content and is shown here as `3f9c2a7e41b8` so the sample stays stable).
 
+**Reading the summary.** `summary: N safe (A own, B other)` splits the safe rows by scope: `A` counts scope `own`, and `B` counts every other safe row, so `B` includes the rows of scope `unknown` as well as those of scope `other`; the sample above has one `other` and no `unknown` safe row. In agent mode only an item owned by a task record is `own`: a branch or worktree that merely follows the naming convention, such as `claude/*`, shows `owner claude (path-convention) [unknown]` even when the caller is `claude`, appears under `owner unknown`, is counted in `B`, is refused for an agent apply (`scope-not-authorized`) and needs the typed confirmation of a human at a terminal. The summary does not number `unknown` rows separately; they are listed under the heading `owner unknown`, and `--json` gives each candidate's `scope`.
+
 **Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--timeout`, `--json` and `--human`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
 **Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per worktree (jj: workspace) and per local branch (jj: bookmark) of that repository, at most 10 minutes; the Git proof phase gets the rest of that window, at least 60 s, so without `--timeout` it can run up to 60 s past the window; with `--timeout` the given deadline bounds everything. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace, 10 s per proof command, 20 s per tip) and the plan, apply and restore deadlines of the expert layer are not scaled. When candidates are retained as `evidence-incomplete` with the evidence `deadline-exceeded` or `proof-budget-exhausted`, the overview ends with a notice `N of M not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m`: N is the number of those candidates (`--timeout` widens the window, the content reads and the proof phase, but not the 20 s per-tip proof budget nor the per-worktree content budget, which also end as `proof-budget-exhausted` and are counted too, so the hint can fail for those items) and M the number of all candidates of the overview, counted after the view is narrowed (`--only`, `--mine`, `--by-owner`) and before the output is cut at the candidate bound. The notice is the text line `notice: ...` and an entry of the `notices` array of `--json`.
@@ -524,6 +526,42 @@ stw tidy restore /absolute/clone --contract 3 --plan PLAN_ID --state-dir /privat
   --apply --authorize --json
 ```
 
+**Flags and ids.** `restore`, `restore --list` and `history` all require `--contract 3` and `--state-dir DIR` (an absolute canonical path of the private directory that holds the plan and its journals). Without them they exit 2 before any work: `--contract 3 is required`, then `--state-dir is required: the private directory that holds the plan and journals of the tidy apply`. Unlike `plan`, `apply` and `stw workspace`, these three do not read `$STW_STATE_DIR`: pass the directory even when the variable is set.
+
+`PLAN_ID` is a sub-plan id, not the plan set id that `stw tidy plan --save` prints. One tidy apply runs one sub-plan per worktree, and each writes its own journal; `history` and `restore` key on the journal ids, so `restore --plan SETID` is refused with `plan-not-found`. The retirement of a worktree and the deletion of its branch are two journals:
+
+| Journal mode | Plan id | `restorable` | What `restore` does |
+| --- | --- | --- | --- |
+| `owned-retirement` (worktree retirement) | the `Sub-plan:` id that `tidy apply` prints (`outcomes[].sub_plan` with `--json`) | always 0: a retired worktree is not restored | refused as `unsupported-mode` |
+| `local-refs` (branch deletion, also the `branch-leg` outcome of a retirement) | its own id, which `tidy apply` does not print: take it from `history` | the deleted branches | plans or creates the branches |
+
+So to restore the branch of a retired worktree, run `history`, pick the `local-refs` journals (the one written right after the retirement of the same apply is the branch leg), and read the branch of each with the read-only `restore --plan ID`. A real run of a two-worktree plan set:
+
+```text
+$ stw tidy apply 9a3a491b6c55 --yes
+Tidy plan set: "9a3a491b6c55"
+Status: "ok"
+Sub-plan: "b0e76e648be0ffccf27bd0ebf3c7ddfc" repo="." kind="retire" worktree="/w/t-one" status="applied" code="" message=""
+Sub-plan: "b0e76e648be0ffccf27bd0ebf3c7ddfc" repo="." kind="branch-leg" worktree="/w/t-one" status="applied" code="" message=""
+Sub-plan: "b4b9aaca02903830abdf1d96e2fde7e6" repo="." kind="retire" worktree="/w/t-two" status="applied" code="" message=""
+Sub-plan: "b4b9aaca02903830abdf1d96e2fde7e6" repo="." kind="branch-leg" worktree="/w/t-two" status="applied" code="" message=""
+$ stw tidy history --contract 3 --state-dir /private/task-state
+Tidy operation: "tidy-history"
+Contract: 3
+Status: "ok"
+Total: 4 scan_truncated=false
+Journal: plan="1e690ba8b5d5ca680b168109223ffa84" time="2026-10-26T03:56:37.408680671Z" mode="local-refs" deleted=1 retained=0 restorable=1 recovery_refs="present" decisions_human=0 decisions_ai=0 status="complete"
+Journal: plan="b4b9aaca02903830abdf1d96e2fde7e6" time="2026-10-26T03:56:35.882674516Z" mode="owned-retirement" deleted=1 retained=0 restorable=0 recovery_refs="present" decisions_human=0 decisions_ai=0 status="complete"
+Journal: plan="74946c45f3708d48a82b6e30d162ee00" time="2026-10-26T03:56:33.906666546Z" mode="local-refs" deleted=1 retained=0 restorable=1 recovery_refs="present" decisions_human=0 decisions_ai=0 status="complete"
+Journal: plan="b0e76e648be0ffccf27bd0ebf3c7ddfc" time="2026-10-26T03:56:32.331660193Z" mode="owned-retirement" deleted=1 retained=0 restorable=0 recovery_refs="present" decisions_human=0 decisions_ai=0 status="complete"
+$ stw tidy restore --contract 3 --state-dir /private/task-state --plan 9a3a491b6c55
+Diagnostic: "plan-not-found" "No stored tidy journal has this plan identity."
+$ stw tidy restore --contract 3 --state-dir /private/task-state --plan b4b9aaca02903830abdf1d96e2fde7e6
+Diagnostic: "unsupported-mode" "Only local-reference journals can be restored."
+```
+
+The sample is real output on a throwaway workspace; each `Journal:` line is followed by a `Run mode:` line that is omitted here, `Diagnostic:` lines are the one relevant line of each refused result (the result also carries `Status: "refused"`, the plan id and counts, and the command exits 1), and the worktree paths are shortened.
+
 Per journal entry that reached a confirmed recovery the plan shows the full branch ref, the tip
 OID, the proof class, flags and the reviewer decision (who, kind, why), and one state:
 
@@ -578,8 +616,9 @@ after the branch exists and reports each key `applied`, `skipped` or `failed`; a
 removes the branch, adds the diagnostic `restore-config-failed` and makes the run `partial`. A rerun
 writes nothing.
 
-`stw tidy history` and `stw tidy restore --list` (same reader, read-only, `--state-dir` and
-`--limit`, default 256, at most 1,024) list the stored journals newest first by journal time: plan
+Tidy deletes only the branch reference (`git update-ref -d`); it does not remove the `branch.NAME.remote` and `branch.NAME.merge` keys of `.git/config`, so a deleted branch leaves them behind (a branch with both keys leaves two) until `git config --remove-section branch.NAME` removes them. The journal records them before the deletion, and the restore plan therefore reports each key still present as `skip-already-set`: nothing is written and the restored branch picks the existing keys up again. They are written back (`reapply`) only when the keys are gone. A leftover section of a branch that is never restored is harmless and is not touched by tidy.
+
+`stw tidy history` and `stw tidy restore --list` (same reader, read-only, both with the required `--contract 3 --state-dir DIR` and the optional `--limit`, default 256, at most 1,024; `PATH`, default `.`, is the clone) list the stored journals newest first by journal time: plan
 ID, time, mode, numbers deleted, retained and restorable, whether the recovery refs are `present`,
 `partial` or `absent`, the number of `human` and `ai` decisions and the journal status `complete`,
 `incomplete` or `unreadable` (an unreadable journal is listed with its ID, never skipped). Journals of
