@@ -5,11 +5,11 @@ runs the real approvals. No work package builds, tags, dispatches or publishes o
 
 ## Phases
 
-- **1a (the spike):** packages R1 to R8 below, on the spike repository, which gets its own `release-build.yml` and `release-publish.yml` from the Spec 026 workflow contract.
-- **1b (real projects):** `stw` needs Spec 026 WI8 (T035 to T039: `release-build.yml`, `release-publish.yml`, `release-repro.yml`, workflow rule tests) and T047 (the self-hosting
-  switch: the `v0.1.0` record and removal of the bootstrap workflow, which would otherwise also build on the wizard's tag push); `whr` needs a `.stw/release.toml` and the two
-  workflows (it is a Spec 026 wave 2 polyglot project). Packages R9 to R11. Which path v0.2.0 takes is the owner's decision D14: until 1b is done, v0.2.0 can only use today's
-  tag-first flow with a hand-set tag.
+- **Now (D14):** `stw` and `whr` v0.2.0 are released by hand with today's tag-first flow; the steps are written down as a release protocol (T029), the wizard's test case.
+- **1a (the spike):** packages R1 to R8 below, on the spike repository, which gets its own `release-build.yml`, `release-publish.yml` and CI workflow (T018a; the gate tool is built from a pinned source revision).
+- **1b (retrofit, target v0.2.1):** `stw` needs Spec 026 WI8 (T035 to T039: `release-build.yml`, `release-publish.yml`, `release-repro.yml`, workflow rule tests) and T047 (the self-hosting switch:
+  the `v0.1.0` record and removal of the bootstrap workflow, which would otherwise also build on the wizard's tag push); `whr` needs a `.stw/release.toml` and the two workflows (a Spec 026
+  wave 2 polyglot project). Packages R9 to R11.
 - **2:** polish and the owner's later decisions (D2, D5, `oci-image`, the tag-first flow).
 
 | Package | Seam | Content | Depends on |
@@ -21,7 +21,7 @@ runs the real approvals. No work package builds, tags, dispatches or publishes o
 | R5 assets and record | `internal/releasewizard`, hosting download read | step 5 (bounded download, verify), step 6 (record on a topic branch) | R3 |
 | R6 tag | `internal/releasewizard/tag` | step 8: fresh checks, unsigned hook-free tag object, push URL check, explicit refspec, remote verification, ruleset rule, journal | R3, R4 and the security review T004 |
 | R7 docs | `docs/release.md` and the others of the docs impact | wizard first, manual route kept, the amendments, unhide the group (D11) | R1 to R6 |
-| R8 spike rounds | the spike repository | the three rounds of the test plan; evidence in the pull request body | R1 to R7 |
+| R8 spike rounds | the spike repository | its workflows (T018a), then the three rounds of the test plan; evidence in the pull request body | R1 to R7 |
 | R9 stw workflows | `.github/workflows`, Spec 026 WI8 | `release-build.yml`, `release-publish.yml`, `release-repro.yml` and their rule tests for `stw` | Spec 026 T035 to T039 |
 | R10 stw self-hosting | Spec 026 T047 | the `v0.1.0` record, the bootstrap workflow removed | R9, the `v0.1.0` release |
 | R11 whr contract | `workharbor` | `.stw/release.toml`, the two workflows, its own review | owner decision on its release policy |
