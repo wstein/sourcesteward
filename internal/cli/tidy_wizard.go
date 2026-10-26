@@ -75,6 +75,7 @@ type wizardRun struct {
 	prep       analysis.Prepared
 	res        tidywizard.Result
 	mode       owner.Evidence
+	cfg        tidywizard.Config
 	timeoutSet bool
 	timeout    time.Duration
 	// online is the pull request evidence of the human wizard (empty when it ran offline).
@@ -207,7 +208,8 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	}
 	r.prep = prep
 	prog.SetRepos(prep.Names)
-	r.res = tidyAnalyse(r.ctx, prep, tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()})
+	r.cfg = tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()}
+	r.res = tidyAnalyse(r.ctx, prep, r.cfg)
 	prog.Finish()
 	if w.verbose {
 		prog.Summary()
