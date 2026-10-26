@@ -217,14 +217,15 @@ func TestLadderConservativeBackendAndStructuralCases(t *testing.T) {
 		level   Level
 		reasons []string
 	}{
-		{"missing stale with incomplete evidence", Facts{Kind: "stale-worktree", Verdict: "retain", Proof: "none", DirectoryMissing: true, Incomplete: true}, Kept, []string{}},
-		{"primary observed dirt", Facts{Kind: "worktree", Verdict: "retain", Proof: "none", Primary: true, Dirty: true}, Kept, []string{}},
 		{"tracking proof none structural reason", Facts{Kind: "tracking-ref", Verdict: "retain", Proof: "none", Reason: "protected"}, Red, []string{"not-integrated"}},
-		{"jj proof base is equivalent", Facts{Kind: "worktree", Verdict: "safe", Proof: "empty-working-copy", Scope: owner.ScopeOwn, HasCreationRecord: true}, Yellow, []string{"proof-equivalent"}},
+		{"bare jj proof is unknown", Facts{Kind: "worktree", Verdict: "safe", Proof: "empty-working-copy", Scope: owner.ScopeOwn, HasCreationRecord: true}, Red, []string{"not-judged"}},
+		{"bare jj proof cannot be lifted by no work", Facts{Kind: "worktree", Verdict: "safe", Proof: "empty-working-copy", NoWork: true}, Red, []string{"not-judged"}},
+		{"bare jj proof cannot be lifted by merged head", Facts{Kind: "branch", Verdict: "decision", Proof: "empty-working-copy", MergedHead: true}, Red, []string{"not-judged"}},
+		{"retained bare jj proof stays retained", Facts{Kind: "worktree", Verdict: "retain", Proof: "empty-working-copy", Reason: "registration-record-missing"}, Kept, []string{}},
 		{"jj integrated parent proof is equivalent", Facts{Kind: "worktree", Verdict: "safe", Proof: "empty-working-copy-integrated-parent", Scope: owner.ScopeOwn, HasCreationRecord: true}, Yellow, []string{"proof-equivalent"}},
 		{"retained unknown kind stays retained", Facts{Kind: "future-kind", Verdict: "retain", Proof: "ancestor", NoWork: true, MergedHead: true}, Kept, []string{}},
 		{"retained unknown proof stays retained", Facts{Kind: "worktree", Verdict: "retain", Proof: "future-proof", Reason: "registration-record-missing", NoWork: true, MergedHead: true}, Kept, []string{}},
-		{"retained jj stays retained", Facts{Kind: "worktree", Verdict: "retain", Proof: "empty-working-copy", Reason: "jj-retirement-unsupported", Scope: owner.ScopeOwn}, Kept, []string{}},
+		{"retained jj stays retained", Facts{Kind: "worktree", Verdict: "retain", Proof: "empty-working-copy-integrated-parent", Reason: "jj-retirement-unsupported", Scope: owner.ScopeOwn}, Kept, []string{}},
 		{"unrecognized verdict stays unselectable", Facts{Kind: "branch", Verdict: "sfae", Proof: "ancestor"}, Kept, []string{}},
 	}
 	for _, tc := range cases {
@@ -232,6 +233,24 @@ func TestLadderConservativeBackendAndStructuralCases(t *testing.T) {
 			got := Evaluate(tc.facts, now)
 			if got.Level != tc.level || !reflect.DeepEqual(got.Reasons, tc.reasons) {
 				t.Fatalf("got %+v want %s/%v", got, tc.level, tc.reasons)
+			}
+		})
+	}
+}
+
+func TestLadderClarificationTwoRetainsStructuralRows(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name  string
+		facts Facts
+	}{
+		{"stale with incomplete evidence", Facts{Kind: "stale-worktree", Verdict: "retain", Proof: "none", DirectoryMissing: true, Incomplete: true}},
+		{"primary with observed dirt", Facts{Kind: "worktree", Verdict: "retain", Proof: "none", Primary: true, Dirty: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Evaluate(tc.facts, now)
+			if got.Level != Kept || !reflect.DeepEqual(got.Reasons, []string{}) {
+				t.Fatalf("clarification 2 requires kept with no risk reasons, got %+v", got)
 			}
 		})
 	}
