@@ -311,6 +311,9 @@ func (p *tidyProgress) write(f tidyFrame) {
 		return
 	}
 	fmt.Fprintln(p.w, f.line)
+	// A block drawn before (the terminal was higher then) stays where it is as ordinary output; the
+	// next block starts below this line instead of moving up over it.
+	p.drawnW = nil
 }
 
 // line is `[3/7] name: observing worktrees 12/40 (38s)`; the elapsed time is that of the whole
