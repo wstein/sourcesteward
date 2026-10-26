@@ -63,7 +63,6 @@ func (c pruneV4HistoryCoordinator) history(ctx context.Context, o RegistrationPr
 	if err != nil {
 		return failPruneV4History(r, err)
 	}
-	r.Total = len(records)
 	sort.Slice(records, func(i, j int) bool {
 		if records[i].time.Equal(records[j].time) {
 			return records[i].id < records[j].id
@@ -75,8 +74,8 @@ func (c pruneV4HistoryCoordinator) history(ctx context.Context, o RegistrationPr
 	// Reserve space for the complete envelope and truncation summary before adding rows.
 	base, _ := json.Marshal(r)
 	outputSize := len(base) + 1024
-	bound := "journals"
-	for _, record := range records[:min(len(records), limit)] {
+	scanBytesTruncated, outputTruncated := false, false
+	for _, record := range records {
 		if err = ctx.Err(); err != nil {
 			return failPruneV4History(r, err)
 		}
@@ -84,7 +83,7 @@ func (c pruneV4HistoryCoordinator) history(ctx context.Context, o RegistrationPr
 		// concurrent change. Reserve that worst case before calling it, then charge
 		// the exact canonical record size on success. Even a refused read is bounded.
 		if remaining < pruneV4RecordLimit {
-			bound = "scan-bytes"
+			scanBytesTruncated = true
 			break
 		}
 		planRead, e := pruneV4HistoryCapture(s.dirs["plans"], record.id+".json")
@@ -105,10 +104,16 @@ func (c pruneV4HistoryCoordinator) history(ctx context.Context, o RegistrationPr
 		}
 		recordsRead = append(recordsRead, planRead)
 		if p.Expected.SourceSnapshot.Identity.RepositoryDir != n.id.RepositoryDir {
-			return failPruneV4History(r, failure("prune-history-refused", "Stored registration history belongs to a different repository."))
+			continue
+		}
+		r.Total++
+		// Keep scanning bounded plans after reaching the output/count bound so
+		// total counts only this repository's matching records, not other repos.
+		if len(r.Entries) >= limit || outputTruncated {
+			continue
 		}
 		if remaining < pruneV4RecordLimit {
-			bound = "scan-bytes"
+			scanBytesTruncated = true
 			break
 		}
 		journalRead, e := pruneV4HistoryCapture(s.dirs["journals"], record.id+".json")
@@ -146,8 +151,8 @@ func (c pruneV4HistoryCoordinator) history(ctx context.Context, o RegistrationPr
 			return failPruneV4History(r, e)
 		}
 		if outputSize+len(encoded)+1 > c.outputBytes {
-			bound = "output-bytes"
-			break
+			outputTruncated = true
+			continue
 		}
 		outputSize += len(encoded) + 1
 		r.Entries = append(r.Entries, row)
@@ -170,9 +175,15 @@ func (c pruneV4HistoryCoordinator) history(ctx context.Context, o RegistrationPr
 	if err = ctx.Err(); err != nil {
 		return failPruneV4History(r, err)
 	}
-	if scanTruncated || len(r.Entries) < r.Total {
-		r.Truncated = true
-		r.Truncation = append(r.Truncation, V3HistoryTruncation{Unit: bound, Shown: len(r.Entries), Total: r.Total})
+	r.Truncated = scanTruncated || scanBytesTruncated || outputTruncated || len(r.Entries) < r.Total
+	if len(r.Entries) < r.Total && !scanBytesTruncated && !outputTruncated {
+		r.Truncation = append(r.Truncation, V3HistoryTruncation{Unit: "journals", Shown: len(r.Entries), Total: r.Total})
+	}
+	if scanBytesTruncated {
+		r.Truncation = append(r.Truncation, V3HistoryTruncation{Unit: "scan-bytes", Shown: len(r.Entries), Total: r.Total})
+	}
+	if outputTruncated {
+		r.Truncation = append(r.Truncation, V3HistoryTruncation{Unit: "output-bytes", Shown: len(r.Entries), Total: r.Total})
 	}
 	if scanTruncated {
 		r.Truncation = append(r.Truncation, V3HistoryTruncation{Unit: "directory-entries", Shown: c.scanLimit, Total: c.scanLimit + 1})
