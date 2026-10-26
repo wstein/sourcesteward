@@ -8,7 +8,7 @@ without a notice. Modules used only by tests or by other operating systems (the 
 `santhosh-tekuri/jsonschema/v6`, `inconshreveable/mousetrap`, which Cobra links on Windows only) are
 not linked into the shipped binaries and have no row. The release archives contain this directory.
 
-Pinned SDK: github.com/cli/go-gh/v2 v2.16.2 (official GitHub CLI SDK). Only pkg/api is used; native
+Pinned SDK: github.com/cli/go-gh/v2 v2.17.0 (official GitHub CLI SDK). Only pkg/api is used; native
 discovery and bounded authentication remain owned by SourceSteward. No third-party source is vendored;
 versions are pinned in go.mod/go.sum. Identical license terms are stored once. MIT copyright notices
 are collected with the shared permission/disclaimer text; Go modules share their byte-identical BSD
@@ -17,7 +17,7 @@ license and patent grant. Distinct safeexec, pflag, timezone and YAML terms/noti
 | Module | Version | Retained attribution and terms |
 | --- | --- | --- |
 | github.com/aymanbagabas/go-osc52/v2 | v2.0.1 | [MIT](licenses/MIT.txt) |
-| github.com/cli/go-gh/v2 | v2.16.2 | [MIT](licenses/MIT.txt) |
+| github.com/cli/go-gh/v2 | v2.17.0 | [MIT](licenses/MIT.txt) |
 | github.com/cli/safeexec | v1.0.1 | [BSD-2](licenses/BSD-2-safeexec.txt) |
 | github.com/cli/shurcooL-graphql | v0.0.4 | [MIT](licenses/MIT.txt) |
 | github.com/henvic/httpretty | v0.2.0 | [MIT](licenses/MIT.txt) |

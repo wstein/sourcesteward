@@ -3,7 +3,7 @@ module github.com/wstein/sourcesteward
 go 1.27.2
 
 require (
-	github.com/cli/go-gh/v2 v2.16.2
+	github.com/cli/go-gh/v2 v2.17.0
 	github.com/mattn/go-isatty v0.0.24
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
