@@ -12,6 +12,8 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > minutes in 7 jobs; a restack of three PRs needs about 21 jobs (limit 20), so restack one PR at a time. Statements below that stacked
 > PRs skip T2, or that T1 may run `internal/workspace` plain, describe the WP-2 target and are void for `internal/workspace`.
 
+> **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
+
 ## Problem (owner, 2026-10-22)
 
 Every pull request runs the full matrix (race tests of all packages and 12 Git/jj conformance shards). A run takes 15 to 30 minutes,

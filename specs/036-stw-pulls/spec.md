@@ -3,6 +3,8 @@
 **Created**: 2026-10-22 | **Status**: proposed (spec-light: this page, [contracts/pulls.md](contracts/pulls.md) and [plan.md](plan.md)
 are the whole design; no implementation yet).
 
+> **Status note (2026-10-26):** `stw pulls` is merged and visible (PRs 143, 144, 145, 146, 149); there is no independent review or acceptance record yet, so the feature is `implemented`, not `verified`.
+
 GitHub's pull request inbox lists only PRs where the owner is requested reviewer or assignee. Bot PRs (dependabot, the
 github-actions upgrade bot) never appear there, while the repository's PR tab shows them. `stw pulls` prints a **snapshot of every
 open PR** of the workspace repositories (mode A), grouped by what needs action, and opt-in (`--owner`, mode C) of the repositories

@@ -5,6 +5,8 @@
 **Status**: Draft for pre-implementation analysis
 **Input**: Implement Tier 1 Git/jj policy and native jj inspection with compatible schemas and conformance CI.
 
+> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `../specs/008-jj-inspection/verification.md`); the status line above is the state at writing.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Inspect either Tier 1 backend (Priority: P1)

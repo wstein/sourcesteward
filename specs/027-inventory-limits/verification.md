@@ -2,6 +2,8 @@
 
 Status: implemented on branch `codex/027-inventory-limits`; hosted CI, the binary acceptance run and the Git 2.46.0 lane are **not run**. The feature stays `planned` in docs/feature-status.json until that evidence exists. No tag, release, publication, image or documentation build was run.
 
+> **Status note (2026-10-26):** all 18 tasks are ticked, the work is merged (PR 55) and the hosted minimum and current lanes run the real-binary smokes green on `main`; the feature is `implemented`. The verification record keeps its original wording.
+
 ## Environment
 
 linux/arm64 container, Go 1.27.2, Git 2.56.0 (`/usr/local/bin/git`) and Git 2.47.3 (`/usr/bin/git`), jj not installed. CI evidence (ubuntu-24.04 amd64, Git minimum and current lanes) does not exist yet; every result below is local evidence.

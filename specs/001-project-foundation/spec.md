@@ -6,6 +6,8 @@
 
 **Status**: Specified
 
+> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `verification.md`); the status line above is the state at writing.
+
 **Input**: Create SourceSteward with an initial empty commit, a command-line scaffold,
 specification workflow, public repository metadata, project website and branding related
 to BundleDock/WorkHarbor. Serve humans and agents without claiming planned features exist.

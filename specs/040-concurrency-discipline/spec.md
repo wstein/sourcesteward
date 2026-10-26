@@ -5,6 +5,8 @@ edge, goroutines in one package, `go` statements forbidden elsewhere by the arch
 or allowlist is changed by this specification. It builds on the `internal/issues` pool and its `testing/synctest` test, and it follows
 Spec 039 D10 (`-race` runs nightly and weekly, not on pull requests).
 
+> **Status note (2026-10-26):** only `internal/fanout.Do` (PR 215) is merged; the other work packages are open, so the feature stays `planned`.
+
 ## Problem
 
 `go` statements are spread over seven packages (`cmd/stw`, `inspection`, `issues`, `pulls`, `stwsync`, `release`, `workspace`), 14 in non-test code (measured 2026-10-22 on `origin/main` with

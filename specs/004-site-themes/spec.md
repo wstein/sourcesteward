@@ -5,6 +5,8 @@
 **Status**: Reviewed before implementation
 **Input**: Make the project-site link visible in README and add a light/dark Pages switch.
 
+> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `../specs/004-site-themes/verification.md`); the status line above is the state at writing.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Find the project site (Priority: P1)

@@ -137,7 +137,7 @@
       "id": "021-submodule-pin-audit",
       "status": "planned",
       "spec": "../specs/021-submodule-pin-audit/spec.md",
-      "evidence": "../specs/021-submodule-pin-audit/tasks.md"
+      "evidence": null
     },
     {
       "id": "025-pr-merge-state",
@@ -233,13 +233,13 @@
       "id": "039-tiered-ci",
       "status": "planned",
       "spec": "../specs/039-tiered-ci/spec.md",
-      "evidence": "../specs/039-tiered-ci/plan.md"
+      "evidence": null
     },
     {
       "id": "040-concurrency-discipline",
       "status": "planned",
       "spec": "../specs/040-concurrency-discipline/spec.md",
-      "evidence": "../specs/040-concurrency-discipline/tasks.md"
+      "evidence": null
     },
     {
       "id": "041-tidy-wizard",
@@ -251,19 +251,19 @@
       "id": "042-agent-attribution",
       "status": "planned",
       "spec": "../specs/042-agent-attribution/spec.md",
-      "evidence": "../specs/042-agent-attribution/tasks.md"
+      "evidence": null
     },
     {
       "id": "043-stw-land",
       "status": "planned",
       "spec": "../specs/043-stw-land/spec.md",
-      "evidence": "../specs/043-stw-land/tasks.md"
+      "evidence": null
     },
     {
       "id": "044-tidy-janitor-wizard",
       "status": "planned",
       "spec": "../specs/044-tidy-janitor-wizard/spec.md",
-      "evidence": "../specs/044-tidy-janitor-wizard/tasks.md"
+      "evidence": null
     }
   ]
 }
