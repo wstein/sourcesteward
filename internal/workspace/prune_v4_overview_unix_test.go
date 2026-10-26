@@ -4,7 +4,10 @@
 package workspace
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -167,5 +170,100 @@ func TestRegistrationPruneV4OverviewMountAndRaceRefusal(t *testing.T) {
 	got := ObserveRegistrationPruneV4(ctx, o)
 	if got.Status != "refused" || got.Complete() {
 		t.Fatalf("canceled: %+v", got)
+	}
+}
+
+func TestRegistrationPruneV4OverviewDigestBindsEveryWitness(t *testing.T) {
+	o, _ := overviewPruneFixture(t)
+	original := ObserveRegistrationPruneV4(context.Background(), o)
+	if !original.Complete() {
+		t.Fatalf("fixture not complete: %+v", original)
+	}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaves := []string{}
+	var collect func(reflect.Value, string)
+	collect = func(v reflect.Value, path string) {
+		switch v.Kind() {
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				collect(v.Field(i), path+"."+v.Type().Field(i).Name)
+			}
+		case reflect.Slice:
+			for i := 0; i < v.Len(); i++ {
+				collect(v.Index(i), fmt.Sprintf("%s[%d]", path, i))
+			}
+		case reflect.String, reflect.Bool, reflect.Int, reflect.Int64, reflect.Uint32, reflect.Uint64:
+			leaves = append(leaves, path)
+		}
+	}
+	collect(reflect.ValueOf(original.Registration), "Registration")
+	collect(reflect.ValueOf(original.Expected), "Expected")
+	for _, path := range leaves {
+		t.Run(path, func(t *testing.T) {
+			var changed RegistrationPruneV4Observation
+			if err := json.Unmarshal(raw, &changed); err != nil {
+				t.Fatal(err)
+			}
+			changed.admittedDigest = original.admittedDigest
+			var mutate func(reflect.Value, string)
+			mutate = func(v reflect.Value, current string) {
+				if current == path {
+					switch v.Kind() {
+					case reflect.String:
+						v.SetString(v.String() + "x")
+					case reflect.Bool:
+						v.SetBool(!v.Bool())
+					case reflect.Int, reflect.Int64:
+						v.SetInt(v.Int() + 1)
+					case reflect.Uint32, reflect.Uint64:
+						v.SetUint(v.Uint() + 1)
+					}
+					return
+				}
+				switch v.Kind() {
+				case reflect.Struct:
+					for i := 0; i < v.NumField(); i++ {
+						mutate(v.Field(i), current+"."+v.Type().Field(i).Name)
+					}
+				case reflect.Slice:
+					for i := 0; i < v.Len(); i++ {
+						mutate(v.Index(i), fmt.Sprintf("%s[%d]", current, i))
+					}
+				}
+			}
+			mutate(reflect.ValueOf(&changed.Registration).Elem(), "Registration")
+			mutate(reflect.ValueOf(&changed.Expected).Elem(), "Expected")
+			if changed.Complete() {
+				t.Fatal("changed witness remains complete")
+			}
+		})
+	}
+	if len(leaves) < 100 {
+		t.Fatalf("unexpectedly incomplete witness coverage: %d", len(leaves))
+	}
+	expected := map[string]any{"schema_version": 4, "operation": "registration-prune", "registration": original.Registration, "expected": original.Expected}
+	// Recursively sorted map encoding is independent of the typed field order.
+	b, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var canonical any
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	decoder.UseNumber()
+	if err = decoder.Decode(&canonical); err != nil {
+		t.Fatal(err)
+	}
+	b, err = json.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pruneV4Hash("stw-registration-evidence-v4", b); got != original.EvidenceDigest {
+		t.Fatalf("evidence digest omitted a field or used the wrong domain: %s", got)
+	}
+	if pruneV4Hash("stw-registration-row-v4", b) == original.EvidenceDigest {
+		t.Fatal("row and evidence domains interchangeable")
 	}
 }
