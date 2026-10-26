@@ -48,10 +48,13 @@ func runTidyOverviewV4(cmd *cobra.Command, o *tidyBareOptions) error {
 	if cause := interruption(run.ctx, run.timeoutSet, o.timeout); cause != nil {
 		return runtimeFailure{cause}
 	}
+	if err := wizardExit(doc.Truncated || cut, run.prep, run.res); err != nil {
+		return err
+	}
 	if observed.Incomplete {
 		return runtimeFailure{errors.New("registration-prune-inventory-incomplete: registration evidence is incomplete; nothing was changed")}
 	}
-	return wizardExit(doc.Truncated || cut, run.prep, run.res)
+	return nil
 }
 
 func overviewPruneView(rows []tidywizard.RegistrationPrune, mode owner.Evidence, only string) []tidywizard.RegistrationPrune {

@@ -1,7 +1,7 @@
 {
   "$defs": {
     "Candidate": {
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "branch": {
           "type": "string"
@@ -95,7 +95,7 @@
       "type": "object"
     },
     "Derived": {
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "name": {
           "type": "string"
@@ -358,7 +358,7 @@
       "type": "object"
     },
     "Summary": {
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "decision": {
           "minimum": 0,
