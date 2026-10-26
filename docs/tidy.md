@@ -708,7 +708,11 @@ recovery payloads or verify the pin, so a recorded payload is `unknown`, not ver
 limit is 256, the ceiling is 1024, and output is bounded to 4 MiB. Truncation is
 explicit and succeeds; invalid records or operational failures refuse. Exit
 codes are 0 for complete inspection/mutation/listing, 1 for refusal, partial or
-operational failure, and 2 for invalid usage. Old contracts are unchanged.
+operational failure, and 2 for invalid usage. Like contract-3 history, listing
+skips entries whose names lack a `.json` suffix in the journal namespace.
+An entry with that suffix must be a valid private regular journal file. Restore
+inspection uses its stricter restore-journal reader and refuses stray entries
+there. Old contracts are unchanged.
 
 [Restore/history evidence and limits](../specs/011-workspace-reference-tidy/evidence/registration-prune-v4-restore-history-20261026.md)
 separate source checks from pending native platform and acceptance evidence.
