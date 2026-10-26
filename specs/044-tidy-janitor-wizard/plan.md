@@ -9,12 +9,12 @@ apply path, the proofs, the plan set or the agent mode is edited.
 | P1 risk | new `internal/tidywizard/risk` (pure functions) | the ladder, `risk_reasons`, red reasons, group level, the family rule and group keys | none |
 | P2 evidence | `internal/workspace` observers, `internal/tidywizard/adapter.go`, the hosting discovery caller | upstream-gone fact (read-only, local refs), observed dirt facts for the risk function, online-by-default reads with the budget, fallback and `--offline`, merged-head lookup through the existing Spec 031 discovery | P1 (types) |
 | P3 render | `internal/tidywizard/render`, `internal/cli/tidy_wizard.go`, `internal/cli/tidy_mode.go` | sentence table, grouped text overview, retain table, `--rows` and `--offline` (flag classification), additive JSON fields and schema | P1 |
-| P4 steps | `internal/tidywizard/prompt`, `internal/cli/tidy_interactive.go` | group steps, keys, defaults by level, selection grammar, final summary; the typed prompt and apply path untouched | P1, P3 |
+| P4 steps | `internal/tidywizard/prompt`, `internal/cli/tidy_interactive.go`, `internal/tidywizard/planset/apply.go` | group steps, keys, defaults by level, selection grammar, final summary; the single confirmation per run (D12: the confirmation receipt, after the independent security review T012c); the separate apply and the agent path untouched | P1, P3 |
 | P5 docs | `docs/tidy.md`, `docs/commands.md`, `docs/json-contracts.md`, `docs/progress.md`, `docs/roadmap.md`, `docs/feature-status.json` | wizard section, amendment list against Spec 041, dogfood note | P1 to P4 |
 | P6 done (phase 2) | `internal/workspace`, `internal/cli` | `stw workspace done`, additive `done` block, attribution gate, use in the ladder (C3, R3) | P1 |
 | P7 adopt (phase 2) | `internal/tidywizard/owner`, `internal/cli` | `stw tidy adopt`, adoption records, safeguards | P6 |
 
-Phase 1 ships P1 to P5 as v0.2.0; phase 2 ships P6, P7 and the owner's decisions D8 and D10 as v0.3.0. P2 starts once the P1 types exist (a second
+Phase 1 ships P1 to P5 as v0.2.0; phase 2 ships P6, P7 and the TUI checklist (D10) as v0.3.0. P2 starts once the P1 types exist (a second
 branch stacked on P1, at most two levels, or after P1 merged); the files differ (observers and adapter against a new package). P3 and P4 edit
 different files; both wait for P1.
 
