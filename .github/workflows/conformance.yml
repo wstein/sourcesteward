@@ -1,7 +1,8 @@
 name: Git/jj conformance
 
 # Reusable conformance suite for one pinned backend lane. Called by ci.yml (pushes to main and
-# every pull request, stacked or not) and by ci-full.yml (label event).
+# every pull request; the shards of a pull request below the tip of a stack are skipped) and by
+# ci-full.yml (label event).
 on:
   workflow_call:
     inputs:
@@ -13,6 +14,11 @@ on:
         description: True for a documentation-only pull request, whose shards are skipped
         required: false
         default: 'false'
+        type: string
+      stack_tip:
+        description: False for a pull request below the tip of a stack (another open pull request is based on its branch), whose shards are skipped; the tip runs them
+        required: false
+        default: 'true'
         type: string
       race:
         description: True for the scheduled race runs (race.yml); every pull request and push path leaves it false
@@ -28,8 +34,9 @@ jobs:
   # scripts/ci_shards.py); shard 0 runs every other package and shard 5 the real-CLI smoke checks.
   shard:
     name: shard ${{ matrix.shard }}
-    # Only a pull_request may skip the shards, and only when ci.yml classified it docs-only.
-    if: inputs.docs_only != 'true' || github.event_name != 'pull_request'
+    # Only a pull_request may skip the shards, and only when ci.yml classified it docs-only or below
+    # the tip of a stack (stack_tip false).
+    if: github.event_name != 'pull_request' || (inputs.docs_only != 'true' && inputs.stack_tip != 'false')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     strategy:
@@ -152,12 +159,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      # A skipped shard job is a pass only for a documentation-only pull request; everywhere
-      # else (docs_only false, push, dispatch, schedule, tag) skipped, cancelled and failed fail.
+      # A skipped shard job is a pass only for a pull request that is documentation-only or below the
+      # tip of a stack; everywhere else (push, dispatch, schedule, tag, any other pull request)
+      # skipped, cancelled and failed fail.
       - name: Require every shard of this lane to have passed
         env:
           SHARDS_RESULT: ${{ needs.shard.result }}
           DOCS_ONLY: ${{ inputs.docs_only }}
+          STACK_TIP: ${{ inputs.stack_tip }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           case "$SHARDS_RESULT" in
@@ -165,8 +174,10 @@ jobs:
             skipped)
               if [ "$EVENT_NAME" = pull_request ] && [ "$DOCS_ONLY" = true ]; then
                 echo "shards skipped for a documentation-only pull request"
+              elif [ "$EVENT_NAME" = pull_request ] && [ "$STACK_TIP" = false ]; then
+                echo "shards skipped for a pull request below the tip of a stack: the tip runs them"
               else
-                echo "shards were skipped but the change is not a documentation-only pull request"
+                echo "shards were skipped but the change is neither a documentation-only pull request nor below a stack tip"
                 exit 1
               fi
               ;;
