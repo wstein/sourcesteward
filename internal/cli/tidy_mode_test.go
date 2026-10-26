@@ -51,7 +51,7 @@ func TestEveryTidyFlagIsClassified(t *testing.T) {
 
 // The classes of the specification, flag by flag.
 func TestTidyFlagClasses(t *testing.T) {
-	for _, name := range []string{"workspace", "mine", "by-owner", "member", "member-base", "only", "save", "yes"} {
+	for _, name := range []string{"workspace", "mine", "by-owner", "member", "member-base", "only", "save", "yes", "verbose", "quiet", "progress", "trace"} {
 		if tidyFlagClasses[name] != flagWizard {
 			t.Errorf("--%s must be wizard-only", name)
 		}

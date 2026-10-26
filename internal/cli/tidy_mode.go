@@ -28,7 +28,7 @@ const (
 var tidyFlagClasses = map[string]flagClass{
 	// wizard-only
 	"workspace": flagWizard, "mine": flagWizard, "by-owner": flagWizard, "member": flagWizard, "member-base": flagWizard,
-	"only": flagWizard, "save": flagWizard, "yes": flagWizard,
+	"only": flagWizard, "save": flagWizard, "yes": flagWizard, "verbose": flagWizard, "quiet": flagWizard, "progress": flagWizard, "trace": flagWizard,
 	// shared (--human forces text, which is also what the expert layer prints without --json)
 	"state-dir": flagShared, "online": flagShared, "timeout": flagShared, "json": flagShared, "human": flagShared,
 	// expert
@@ -53,6 +53,14 @@ type tidyWizardOptions struct {
 	only       string
 	// stateDirs records every --state-dir of the command line, for the wizard layer.
 	stateDirs []string
+	// verbose is --verbose: the timings and counts of the analysis on stderr afterwards.
+	verbose bool
+	// quiet is --quiet (no live progress), progress is --progress (plain progress lines without a terminal).
+	quiet, progress bool
+	// trace is --trace FILE: one JSON line per Git process.
+	trace string
+	// structured is set by the entry point that prints JSON: no live progress then.
+	structured bool
 }
 
 func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
@@ -65,6 +73,15 @@ func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 	f.StringVar(&o.only, "only", "", "Comma list of retire, branches, tracking, stale-worktrees (wizard layer; default all)")
 	f.BoolVar(&o.save, "save", false, "Store the plan set of the safe items of scope own (wizard layer)")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
+	f.BoolVar(&o.verbose, "verbose", false, "Print the phase timings and counts of the analysis to stderr afterwards (wizard layer)")
+	addTidyProgressFlags(f, o)
+}
+
+// addTidyProgressFlags registers the flags that steer the progress output on stderr.
+func addTidyProgressFlags(f *pflag.FlagSet, o *tidyWizardOptions) {
+	f.BoolVar(&o.quiet, "quiet", false, "No live progress line on stderr (it is on by default when stderr is a terminal)")
+	f.BoolVar(&o.progress, "progress", false, "Print progress lines to stderr every few seconds even when stderr is not a terminal")
+	f.StringVar(&o.trace, "trace", "", "Write one JSON line per Git process (arguments, duration, exit code) to this new file; stdout is unchanged")
 }
 
 // changedTidyFlags returns the names of the flags set on the command line, sorted.
@@ -175,6 +192,8 @@ func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
 	f.DurationVar(&o.timeout, "timeout", 0, "Deadline over the whole analysis; it also replaces the scaled observation window of each repository (at most 1h); without it the proof phase may run 60 s past the window")
 	f.BoolVar(&o.json, "json", false, "Print the overview as one document; asks nothing, stores nothing")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
+	f.BoolVar(&o.verbose, "verbose", false, "Print the phase timings and counts of the analysis to stderr afterwards")
+	addTidyProgressFlags(f, &o.tidyWizardOptions)
 	// save and yes are registered hidden, unbound, only to refuse them whatever their value.
 	f.Bool("save", false, "")
 	f.Bool("yes", false, "")
@@ -196,6 +215,7 @@ func runTidyBare(cmd *cobra.Command, o *tidyBareOptions) error {
 	if err := validateTidyWizardValues(cmd, &o.tidyWizardOptions); err != nil {
 		return err
 	}
+	o.structured = o.json
 	if o.json {
 		return runTidyWizardPlan(cmd, &o.tidyWizardOptions, true, o.timeout)
 	}
