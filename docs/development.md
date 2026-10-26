@@ -100,12 +100,21 @@ pull request, including a PR stacked on another PR branch (its base is not the d
 `check` never runs `internal/workspace` (a plain run exceeds the 40 minute timeout), so the
 shards must run on stacked PRs too. Documentation-only PRs skip the shards (below). The separate workflow
 `ci-full.yml` runs it when the `ci-full` label is applied (a `labeled` event), so labelling
-never re-runs `check`. An unlabelled pull request runs only the `current` lane; a PR with the
+never re-runs `check`; it runs both lanes, so the `current` lane runs a second time (about 68
+runner minutes) next to the run `ci.yml` already made. An unlabelled pull request runs only the `current` lane; a PR with the
 `ci-full` label runs both lanes on every push (`ci.yml`) and when labelled (`ci-full.yml`), and
 the `minimum` lane also runs on pushes to `main` (the post-merge gate) and in the scheduled race
-workflow. The owner or dispatcher puts `ci-full` on the top PR of a stack to
-add the `minimum` lane there. The post-merge push to `main` runs everything again. A retarget of a
-stacked PR to `main` needs no action: the stacked and unstacked paths are the same.
+workflow. Since every PR runs the `current` lane, the label is only useful to get the `minimum` lane
+early on the top PR of a stack (otherwise `main` runs it after the merge); it is optional. The
+post-merge push to `main` runs everything again. A retarget of a stacked PR to `main` needs no
+action: the stacked and unstacked paths are the same. If the `changes` job fails, `conformance`
+is skipped and the required `suite` check does not report, so the merge is blocked (fail closed).
+
+Cost (owner decision 2026-10-26, Spec 039 amendment): one push to a PR runs about 78 runner
+minutes (`check` about 10, six `current` shards about 68) in 7 concurrent jobs, wall time about 14
+minutes. GitHub allows 20 concurrent jobs, so a restack of three PRs (about 21 jobs) queues:
+restack and push one PR at a time, and batch fixes into one push. A newer push cancels the
+older run of the same PR.
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
 runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
@@ -162,9 +171,10 @@ package and `shard 5` the real-CLI smoke checks
 (its own job, so the smoke scripts no longer lengthen shard 0). The aggregate job `suite` needs the shards of its own
 lane only, so the lane's check name stays stable. The `check` job runs
 `python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
-list none. On every event, `check` runs
-`go test` on every package except `internal/workspace`, which the shards cover on
-both lanes with jj. The conformance caller has no `if:` and `check` no tier switch, so the two
+list none. Whenever `check` runs Go tests (not for
+documentation-only PRs; with reason `packages` only the affected list), it leaves out
+`internal/workspace`, which the shards run with jj (the `current` lane on pull requests, both
+lanes on `main` and with `ci-full`). The conformance caller has no `if:` and `check` no tier switch, so the two
 cannot drift apart. The weights are local
 non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change
 (the fixture speed-up work will do that).

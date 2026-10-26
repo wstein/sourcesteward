@@ -116,8 +116,9 @@ jobs:
           if [ "$AFFECTED_REASON" = packages ] && [ -n "$AFFECTED" ]; then
             packages="$AFFECTED"
           fi
-          # internal/workspace runs in the conformance shards on every event (a plain run of it
-          # exceeds the 40 minute timeout), including pull requests stacked on another branch.
+          # internal/workspace is never run plain here (it exceeds the 40 minute timeout): the
+          # conformance shards run it on every pull request that is not documentation-only,
+          # including pull requests stacked on another branch.
           if [ "$packages" = './...' ]; then
             packages="$(python3 -B scripts/ci_shards.py packages)"
             set -- $packages

@@ -40,10 +40,10 @@ Truth table (a row applies in this order; the first match wins; the child row pr
 | 3 | pull_request | `docs_only` | `false` | `docs-only` |
 | 4 | pull_request | filtered T2 evidence exists for the head SHA | `false` (evidence) | `evidence from run <id>` |
 | 5 | pull_request | label `ci-full` present | `true` | `label` |
-| 6 | pull_request | Draft | `false` | `draft` |
+| 6 | pull_request | Draft | `false` | `draft` (WP-2 target; until WP-2 every PR runs the shards, amendment 2026-10-26) |
 | 7 | pull_request | head repository differs from base repository (fork) | `true` | `unstacked` |
 | 8 | pull_request | an open same-repo PR has this head ref as base, and tip evidence exists | `false` (evidence) | `evidence from tip #N run <id>` |
-| 9 | pull_request | an open same-repo PR has this head ref as base, no tip evidence | `false`, `suite` fails | `T2 pending on #N` (`deferred-to-tip #N` in the summary) |
+| 9 | pull_request | an open same-repo PR has this head ref as base, no tip evidence | `false`, `suite` fails | `T2 pending on #N` (`deferred-to-tip #N` in the summary; WP-2 target, see the amendment of 2026-10-26: T1 cannot run `internal/workspace` plain) |
 | 10 | pull_request | base is the default branch | `true` | `unstacked` |
 | 11 | pull_request | otherwise (stacked, no same-repo child) | `true` | `stack-tip` |
 
