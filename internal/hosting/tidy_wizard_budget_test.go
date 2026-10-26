@@ -99,14 +99,14 @@ func TestTidyRunBudgetATransportErrorIsOneMembersFailure(t *testing.T) {
 	}
 }
 
-// Every method but GET and HEAD is refused before anything is counted or sent.
+// Every method but GET is refused before anything is counted or sent.
 func TestTidyRunBudgetRefusesEveryWrite(t *testing.T) {
 	var sent atomic.Int64
 	b := NewTidyRunBudget(roundTripFunc(func(*http.Request) (*http.Response, error) {
 		sent.Add(1)
 		return response(200, `{}`), nil
 	}), 10)
-	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, "PURGE"} {
+	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, "PURGE"} {
 		if _, err := b.RoundTrip(budgetRequest(t, m)); !errors.Is(err, ErrTidyRunStopped) {
 			t.Errorf("%s: %v", m, err)
 		}

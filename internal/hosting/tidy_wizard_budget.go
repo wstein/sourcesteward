@@ -34,8 +34,7 @@ var ErrTidyRunStopped = errors.New("tidy online run stopped")
 var ErrTidyAuthentication = errors.New("tidy hosting authentication unavailable")
 
 // TidyRunBudget is the shared inner transport of the member sessions of one wizard run. It counts
-// each request before it is sent (a failure counts too), refuses anything that is not a GET or a
-// HEAD, and, once a 429, an exhausted 403, a 5xx or the run cap has been seen, sends nothing more:
+// each request before it is sent (a failure counts too), refuses anything that is not a GET, and, once a 429, an exhausted 403, a 5xx or the run cap has been seen, sends nothing more:
 // nothing is retried. It sits below the fixed github.com transport guard, which still applies to
 // every request; it adds no host and no method.
 type TidyRunBudget struct {
@@ -90,7 +89,7 @@ func (b *TidyRunBudget) halt(reason TidyStopReason) {
 
 // RoundTrip implements http.RoundTripper.
 func (b *TidyRunBudget) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+	if req.Method != http.MethodGet {
 		return nil, ErrTidyRunStopped
 	}
 	b.mu.Lock()
