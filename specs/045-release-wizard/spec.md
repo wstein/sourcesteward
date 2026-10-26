@@ -169,8 +169,8 @@ State 1 is not durable. States 2, 8 and the `dispatching` line exist because of 
 2. `T lightweight`, `elsewhere` or `vanished`: `conflict` (a tag is never moved or re-created; a vanished tag blocks the version for good).
 3. `R drafts`, or `U several`, or `M on-main-different`: `conflict`.
 4. `T at-D`: `R draft` gives 11 or 12 by the publish run; a publish run `failure` gives 14; `R none` (no draft left) gives `conflict`.
-5. `T none` or `local-only`: `U success` and no draft gives `conflict`; `U failure` with a draft gives `conflict`; otherwise by `U`/`R`/`M`/`A` as the table above (3, 4, 5, 6 to 10).
-6. `U none`, `R none`, `T none`, `M none`: 2 if the journal has `dispatching`, else 0 or 1.
+5. `U none`, `R none`, `T none`, `M none`: 2 if the journal has `dispatching`, else 0 or 1.
+6. `T none` or `local-only`: `U success` and no draft gives `conflict`; `U failure` with a draft gives `conflict`; otherwise by `U`/`R`/`M`/`A` as the table above (3, 4, 5, 6 to 10).
 7. Any other vector: `conflict`.
 
 **The journal only restricts.** A journal line never advances a step. The effect lines (`dispatching`, `dispatched`, `tag-created-local`, `tag-pushed`) **block repeating**
