@@ -192,7 +192,7 @@ grouped steps of Spec 044 are not implemented yet.
 **JSON.** The `tidy-overview` document gains optional members, present whenever the command knows the time of the run (`stw tidy plan --json`
 and `stw tidy --json` always do): each candidate has `risk` (`green`, `yellow`, `orange`, `red` or `kept`), `risk_reasons[]` (stable words such as
 `proof-equivalent` or `not-integrated`; absent for a kept row), `group` (an opaque key shared by the rows of one group, only for green, yellow and
-orange rows) and `pr` (the number of a pull request of the repository, merged into the base, whose head is the tip; only the human wizard reads it, online by default, so it is absent from `--offline` runs, `stw tidy plan` and `--json`, and for a tip that was not asked or whose answer was unknown or closed without a merge), and `summary.risk` counts the
+orange rows) and `pr` (the number of a pull request of the repository, merged into the base, whose head is the tip; only the human wizard reads it, online by default, so it is absent from `--offline` runs, `stw tidy plan` and `--json`, and for a tip that was not asked or whose answer was unknown or closed without a merge). In this version no command prints the document of a human run (the human wizard shows the row view), so `pr` appears in no output yet; it is carried for the group steps, and `summary.risk` counts the
 candidates per level. The existing members, their values and the order of the candidates are unchanged.
 
 ### Long runs: progress, `--verbose`, `--trace` and agent markers

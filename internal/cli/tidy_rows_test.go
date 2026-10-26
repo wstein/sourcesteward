@@ -4,6 +4,7 @@ package cli
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 )
@@ -117,5 +118,29 @@ func TestGroupedOverviewShowsARefusedStateDirectory(t *testing.T) {
 	out, err := runTidy(t, "", "plan")
 	if err == nil || !strings.Contains(out, "state-dirs /s (skipped: state-dir-unsafe) (--state-dir)") {
 		t.Errorf("%v\n%s", err, out)
+	}
+}
+
+// The one clock of the run reaches the grouped text of bare `stw tidy` without a terminal: a
+// worktree of another owner that changed 100 hours before the run is not raised by recent
+// activity, one that changed 48 hours before is (Spec 044 R1, 72 hours).
+func TestBareTidyWithoutATerminalUsesTheClockOfTheRun(t *testing.T) {
+	i := newInteractive(t, false, false)
+	run := tidyNow()
+	for k := range i.res.Candidates {
+		if i.res.Candidates[k].ID == "worktree:a:whr1" {
+			i.res.Candidates[k].LastActivity = run.Add(-100 * time.Hour)
+			two := i.res.Candidates[k]
+			two.ID, two.Path, two.LastActivity = "worktree:a:whr2", "/w/whr2", run.Add(-48*time.Hour)
+			i.res.Candidates = append(i.res.Candidates, two)
+			break
+		}
+	}
+	out, err := runTidy(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "3 directories") || !strings.Contains(out, "yellow  (2 green, 1 yellow)") {
+		t.Errorf("the levels do not follow the clock of the run:\n%s", out)
 	}
 }
