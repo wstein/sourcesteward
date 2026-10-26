@@ -14,15 +14,20 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > original wish below. The `current` shards run for a push to `main`, for every pull request whose base is the default branch, for the
 > tip of a stack (a pull request whose head branch is not the base branch of any open pull request) and for a pull request with the
 > `ci-full` label; documentation-only pull requests still skip them. A pull request whose head branch **is** the base branch of
-> another open pull request of this repository (a head from a branch of this repository, not a fork) runs only the light lane: `check`
-> without `internal/workspace`, which the tip contains and tests. `check` and `Git/jj conformance (current) / suite` still report on every
+> another open, non-Draft pull request of this repository (a head from a branch of this repository, not a fork; a Draft child does not count) runs only the light lane: `check`
+> without `internal/workspace`, which the tip tests when it contains the pull request's current head (see the residual risk below). `check` and `Git/jj conformance (current) / suite` still report on every
 > pull request: `suite` passes with skipped shards for such a pull request, the same mechanism as for a documentation-only one. The
 > decision is made by the `changes` job of `ci.yml` with `scripts/ci_stack.py` from the open pull requests (`pull-requests: read` for that
-> job only) and fails closed: any doubt or lookup failure means tip. It is evaluated when the run starts (a new push, `reopened`, or a
-> re-run of the jobs): opening or closing a child pull request starts no run of its parent. A stack of three costs one heavy run
+> job only) and fails closed: any doubt or lookup failure means tip. It is evaluated when the run starts (a new push, `reopened`, or
+> "Re-run all jobs"): opening or closing a child pull request starts no run of its parent. A stack of three costs one heavy run
 > (about 78 runner minutes, 7 jobs) plus two light runs (about 10 minutes, 2 jobs each) per push cycle. Statements below that T2
 > evidence must exist before a parent is Ready, or that a parent's `suite` fails until then (`T2 pending on #N`), describe the WP-2
-> target and are replaced by this rule: the heavy gate of the tip covers every commit below it.
+> target and are replaced by this rule. **Residual risk:** the tip's shards cover a commit below it only when the tip contains it; a push
+> to a parent after its child exists runs only the light lane, the tip's shards run against the parent branch and never against `main`,
+> and the parent's `suite` is green without shards, so the containment check below (compare) is not enforced. Rule: before merging a pull
+> request below the tip, the tip's latest heavy run must be green on a head that contains the parent's current head, or the parent carries
+> `ci-full`; after a web rebase-merge the post-merge run on `main` is the last gate; `stw land --stack` (one fast-forward of the tip)
+> removes the gap.
 
 > **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
 
