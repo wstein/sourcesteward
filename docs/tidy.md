@@ -100,12 +100,15 @@ runs the same apply code for that plan id.
 retirement of a repository would make the next one look changed (a registration is gone, a recovery reference exists). Apply therefore
 explains exactly those effects: before it compares a sub-plan with the repository, it adds the effects recorded in the journal of every
 other sub-plan of the same repository and state directory whose journal is complete, and those of the branch deletions this run applied,
-to the stored baseline. Three owned worktrees of one repository retire in one run; retirement and branch sub-plans of a repository
-explain one another. Nothing else is tolerated: a new commit, branch, worktree or reference and a new entry beside a target or its
-registration directory still end the later sub-plan as `stale` with `evidence-changed`, a dirty or changed target is refused as before,
-and a sub-plan that failed or was skipped, or whose journal is not complete, explains nothing. Limit: the branch deletions of an earlier run are not known to a later run, so after a
-run that stopped between two retirements with branch deletions, the remaining retirements of that repository report `stale` and need
-a new plan.
+to the stored baseline. The same baseline serves the integration proofs that are re-evaluated at apply. Three owned worktrees of one
+repository retire in one run; retirement and branch sub-plans of a repository explain one another. Nothing else is tolerated: a new
+commit, branch, worktree or reference and a new entry beside a target or its registration directory still end the later sub-plan as
+`stale` with `evidence-changed`, a dirty or changed target is refused as before, and a sub-plan that failed or was skipped, or whose
+journal is not complete, explains nothing. Limit: the branch deletion that follows a retirement is planned and journaled at apply time
+under a new plan id that no stored record links to the retirement. A run knows only the branch deletions it applied itself. If an
+earlier run applied a retirement with its branch deletion and a later retirement of that repository was not applied in that run (it was
+stale, refused, failed or never reached), the later run cannot explain the earlier branch deletion, so that retirement reports `stale`
+and needs a new plan.
 
 **Non-interactive use.**
 
