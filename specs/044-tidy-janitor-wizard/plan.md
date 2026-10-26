@@ -2,7 +2,8 @@
 
 Test-first throughout, temporary repositories and a fake hosting transport only, no network, no build or release. Each work package is
 for one middle-tier author and ends with its tests green and `make check` clean. The code lives where Spec 041 put it; nothing in the
-proofs, the plan set, the stale checks, the effects or the agent mode is edited. The one change to the apply entry is the D12 receipt (P4).
+proofs, the stale checks, the effects, the content of a plan set or the agent mode is edited. The one change to the apply entry and to
+`planset.Build` is the D12 receipt (P4, after its security review).
 
 | Package | Seam | Content | Depends on |
 | --- | --- | --- | --- |
