@@ -6,7 +6,7 @@
 
 **Status**: Specified
 
-> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `verification.md`); the status line above is the state at writing.
+> **Status note (2026-10-26):** `docs/feature-status.json` records this feature as `verified` (evidence: `docs/verification.md`, repository-relative); the status line above is the state at writing.
 
 **Input**: Create SourceSteward with an initial empty commit, a command-line scaffold,
 specification workflow, public repository metadata, project website and branding related
