@@ -71,7 +71,7 @@ func TestTidyPruneV4RestoreHumanDisclosesLimitations(t *testing.T) {
 	out.Reset()
 	err.Reset()
 	code = Run(context.Background(), "dev", []string{"tidy", "restore", "--contract", "4", "--plan", id, "--state-dir", repo.state}, &out, &err)
-	if code != 0 || !strings.Contains(out.String(), "Only administrative metadata is restored") {
+	if code != 0 || !strings.Contains(out.String(), "Only administrative metadata is restored") || !strings.Contains(out.String(), "<owner-selected-found-path>") || strings.Contains(out.String(), `\u003c`) {
 		t.Fatalf("human limitations omitted: exit=%d out=%s err=%s", code, out.String(), err.String())
 	}
 }
