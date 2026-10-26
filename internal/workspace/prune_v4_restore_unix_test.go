@@ -55,8 +55,8 @@ func TestRegistrationPruneV4RestoreRawMetadataAndRepairMovedCheckout(t *testing.
 		t.Fatal("restore created checkout", e)
 	}
 	// Repair is a separately authorized native operation in this disposable fixture.
-	gitRun(t, p.SourcePath, "worktree", "repair", moved)
-	gitRun(t, moved, "status", "--porcelain")
+	gitFixture(t, p.SourcePath, "worktree", "repair", moved)
+	gitFixture(t, moved, "status", "--porcelain")
 	after, e := os.ReadFile(filepath.Join(p.Registration.GitDir, "index"))
 	pruneMust(t, e)
 	if !bytes.Equal(index, after) {
@@ -91,7 +91,7 @@ func TestRegistrationPruneV4RestoreRefusalReasons(t *testing.T) {
 				pruneMust(t, os.WriteFile(filepath.Join(p.PayloadPath, "files", "HEAD"), []byte("corrupt"), 0600))
 				code = "prune-recovery-refused"
 			case "missing-pin":
-				gitRun(t, p.SourcePath, "update-ref", "-d", pruneV4HistoryRef(p))
+				gitFixture(t, p.SourcePath, "update-ref", "-d", pruneV4HistoryRef(p))
 				code = "prune-postcondition-refused"
 			case "wrong-mode":
 				o.Mode.Caller = "foreign"
