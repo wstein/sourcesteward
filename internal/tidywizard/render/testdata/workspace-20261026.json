@@ -1,0 +1,3381 @@
+{
+ "_comment": "Recorded from the real stw tidy plan --json of the owner's workspace on 2026-10-26 (7 repositories, 1129 candidates): the 165 safe rows unchanged, the 964 retained rows aggregated by kind, verdict, reason, proof, scope and owner source (the retain table needs nothing else). Activity times, upstream state and pull request facts were not recorded.",
+ "repositories": [
+  ".",
+  "bundledock",
+  "chartscribe",
+  "crewbook",
+  "sheetmill",
+  "sourcesteward",
+  "workharbor"
+ ],
+ "retained": [
+  {
+   "count": 1,
+   "kind": "branch",
+   "owner_source": "path-convention",
+   "proof": "ancestor",
+   "reason": "branch-attached-elsewhere",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 3,
+   "kind": "branch",
+   "owner_source": "commit-author",
+   "proof": "ancestor",
+   "reason": "branch-attached-elsewhere",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 61,
+   "kind": "branch",
+   "owner_source": "path-convention",
+   "proof": "patch-id",
+   "reason": "branch-attached-elsewhere",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 152,
+   "kind": "branch",
+   "owner_source": "commit-author",
+   "proof": "patch-id",
+   "reason": "branch-attached-elsewhere",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 50,
+   "kind": "branch",
+   "owner_source": "path-convention",
+   "proof": "none",
+   "reason": "unmerged",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 85,
+   "kind": "branch",
+   "owner_source": "commit-author",
+   "proof": "none",
+   "reason": "unmerged",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 17,
+   "kind": "stale-worktree",
+   "owner_source": "unknown",
+   "proof": "none",
+   "reason": "registration-record-missing",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 3,
+   "kind": "stale-worktree",
+   "owner_source": "unknown",
+   "proof": "none",
+   "reason": "unregistered",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 1,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "ancestor",
+   "reason": "dirty",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 4,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "none",
+   "reason": "dirty",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 1,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "none",
+   "reason": "dirty",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 17,
+   "kind": "worktree",
+   "owner_source": "unknown",
+   "proof": "none",
+   "reason": "evidence-incomplete",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 1,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "ancestor",
+   "reason": "ignored-extras",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 16,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "none",
+   "reason": "ignored-extras",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 1,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "none",
+   "reason": "ignored-extras",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 4,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "patch-id",
+   "reason": "ignored-extras",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 1,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "patch-id",
+   "reason": "ignored-extras",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 7,
+   "kind": "worktree",
+   "owner_source": "unknown",
+   "proof": "none",
+   "reason": "primary-checkout",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 7,
+   "kind": "worktree",
+   "owner_source": "task-record",
+   "proof": "patch-id",
+   "reason": "recently-active",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 20,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "patch-id",
+   "reason": "recently-active",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 3,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "ancestor",
+   "reason": "registration-record-missing",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 7,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "ancestor",
+   "reason": "registration-record-missing",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 41,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "none",
+   "reason": "registration-record-missing",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 6,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "none",
+   "reason": "registration-record-missing",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 172,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "patch-id",
+   "reason": "registration-record-missing",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 117,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "patch-id",
+   "reason": "registration-record-missing",
+   "scope": "unknown",
+   "verdict": "retain"
+  },
+  {
+   "count": 139,
+   "kind": "worktree",
+   "owner_source": "path-convention",
+   "proof": "none",
+   "reason": "unmerged",
+   "scope": "other",
+   "verdict": "retain"
+  },
+  {
+   "count": 27,
+   "kind": "worktree",
+   "owner_source": "commit-author",
+   "proof": "none",
+   "reason": "unmerged",
+   "scope": "unknown",
+   "verdict": "retain"
+  }
+ ],
+ "safe": [
+  {
+   "branch": "feat/devcontainer-volume-and-history",
+   "effects": [
+    "delete-branch:feat/devcontainer-volume-and-history"
+   ],
+   "evidence": "",
+   "id": "branch:.:feat/devcontainer-volume-and-history",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "ancestor",
+   "reason": "",
+   "repo": ".",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "tmp/ci-wait",
+   "effects": [
+    "delete-branch:tmp/ci-wait"
+   ],
+   "evidence": "",
+   "id": "branch:.:tmp/ci-wait",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "ancestor",
+   "reason": "",
+   "repo": ".",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/bundledock-wp3-source-build-schema",
+   "effects": [
+    "delete-branch:claude/bundledock-wp3-source-build-schema"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:claude/bundledock-wp3-source-build-schema",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/bundledock-wp4a-lock-binding",
+   "effects": [
+    "delete-branch:claude/bundledock-wp4a-lock-binding"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:claude/bundledock-wp4a-lock-binding",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/bundledock-wp4b-resolver-updater",
+   "effects": [
+    "delete-branch:claude/bundledock-wp4b-resolver-updater"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:claude/bundledock-wp4b-resolver-updater",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/bundledock-wp4d-compile-stage",
+   "effects": [
+    "delete-branch:claude/bundledock-wp4d-compile-stage"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:claude/bundledock-wp4d-compile-stage",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "feat/catalog-smill",
+   "effects": [
+    "delete-branch:feat/catalog-smill"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:feat/catalog-smill",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "feat/catalog-zk",
+   "effects": [
+    "delete-branch:feat/catalog-zk"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:feat/catalog-zk",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/release-test-git-maintenance",
+   "effects": [
+    "delete-branch:fix/release-test-git-maintenance"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:fix/release-test-git-maintenance",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "merge-noop",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/release-test-git-maintenance-2",
+   "effects": [
+    "delete-branch:fix/release-test-git-maintenance-2"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:fix/release-test-git-maintenance-2",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "wp5a-sqlite3-notices-smoke",
+   "effects": [
+    "delete-branch:wp5a-sqlite3-notices-smoke"
+   ],
+   "evidence": "",
+   "id": "branch:bundledock:wp5a-sqlite3-notices-smoke",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "bundledock",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/release-ci-guard-retry",
+   "effects": [
+    "delete-branch:fix/release-ci-guard-retry"
+   ],
+   "evidence": "",
+   "id": "branch:chartscribe:fix/release-ci-guard-retry",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "chartscribe",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "ci/cheaper-docs-only-and-dedupe",
+   "effects": [
+    "delete-branch:ci/cheaper-docs-only-and-dedupe"
+   ],
+   "evidence": "",
+   "id": "branch:crewbook:ci/cheaper-docs-only-and-dedupe",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/branch-from-origin-default",
+   "effects": [
+    "delete-branch:docs/branch-from-origin-default"
+   ],
+   "evidence": "",
+   "id": "branch:crewbook:docs/branch-from-origin-default",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/skill-agents-md-only",
+   "effects": [
+    "delete-branch:docs/skill-agents-md-only"
+   ],
+   "evidence": "",
+   "id": "branch:crewbook:docs/skill-agents-md-only",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/skill-new-repo-setup",
+   "effects": [
+    "delete-branch:docs/skill-new-repo-setup"
+   ],
+   "evidence": "",
+   "id": "branch:crewbook:docs/skill-new-repo-setup",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/pr-watch-takeover-race",
+   "effects": [
+    "delete-branch:fix/pr-watch-takeover-race"
+   ],
+   "evidence": "",
+   "id": "branch:crewbook:fix/pr-watch-takeover-race",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/authorized-model-selection",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:docs/authorized-model-selection"
+   ],
+   "evidence": "",
+   "id": "worktree:crewbook:/tmp/crewbook-model-policy",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/crewbook-model-policy",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/publication-authorization",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:docs/publication-authorization"
+   ],
+   "evidence": "",
+   "id": "worktree:crewbook:/tmp/crewbook-publication-policy",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/crewbook-publication-policy",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/context-token-efficiency",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:docs/context-token-efficiency"
+   ],
+   "evidence": "",
+   "id": "worktree:crewbook:/tmp/crewbook-token-efficiency",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/crewbook-token-efficiency",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:crewbook:/tmp/crewbook-token-efficiency-review-astra",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/crewbook-token-efficiency-review-astra",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:crewbook:/tmp/review-model-policy-sol-crewbook",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/review-model-policy-sol-crewbook",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:crewbook:/tmp/review-publication-policy-astra-crewbook",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/review-publication-policy-astra-crewbook",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "crewbook",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/release-ci-guard-retry",
+   "effects": [
+    "delete-branch:fix/release-ci-guard-retry"
+   ],
+   "evidence": "",
+   "id": "branch:sheetmill:fix/release-ci-guard-retry",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sheetmill",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:sheetmill:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/sm-lows/a",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/sm-lows/a",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "sheetmill",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:sheetmill:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/sm-lows/b",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/sm-lows/b",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "sheetmill",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/spec041-wp4a-plan-set",
+   "effects": [
+    "delete-branch:claude/spec041-wp4a-plan-set"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:claude/spec041-wp4a-plan-set",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/spec041-wp4b-planner",
+   "effects": [
+    "delete-branch:claude/spec041-wp4b-planner"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:claude/spec041-wp4b-planner",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "claude/spec041-wp4d-branch-leg",
+   "effects": [
+    "delete-branch:claude/spec041-wp4d-branch-leg"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:claude/spec041-wp4d-branch-leg",
+   "kind": "branch",
+   "owner": "claude",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/011-prune-v4-history-author-20261026",
+   "effects": [
+    "delete-branch:codex/011-prune-v4-history-author-20261026"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:codex/011-prune-v4-history-author-20261026",
+   "kind": "branch",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/011-prune-v4-history-fixes-20261026",
+   "effects": [
+    "delete-branch:codex/011-prune-v4-history-fixes-20261026"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:codex/011-prune-v4-history-fixes-20261026",
+   "kind": "branch",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/041-acceptance-evidence",
+   "effects": [
+    "delete-branch:docs/041-acceptance-evidence"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:docs/041-acceptance-evidence",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "feat/032-sync-restore",
+   "effects": [
+    "delete-branch:feat/032-sync-restore"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:feat/032-sync-restore",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/217-ref-transaction-descendants",
+   "effects": [
+    "delete-branch:fix/217-ref-transaction-descendants"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:fix/217-ref-transaction-descendants",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "fix/release-ci-guard-retry",
+   "effects": [
+    "delete-branch:fix/release-ci-guard-retry"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:fix/release-ci-guard-retry",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "pre-restack",
+   "effects": [
+    "delete-branch:pre-restack"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:pre-restack",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "pre-restack-b",
+   "effects": [
+    "delete-branch:pre-restack-b"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:pre-restack-b",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r10-capture",
+   "effects": [
+    "delete-branch:r10-capture"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r10-capture",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r10-compare",
+   "effects": [
+    "delete-branch:r10-compare"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r10-compare",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r10-core",
+   "effects": [
+    "delete-branch:r10-core"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r10-core",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r10-retire",
+   "effects": [
+    "delete-branch:r10-retire"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r10-retire",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r10-spec030",
+   "effects": [
+    "delete-branch:r10-spec030"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r10-spec030",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r10-spec031",
+   "effects": [
+    "delete-branch:r10-spec031"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r10-spec031",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-all",
+   "effects": [
+    "delete-branch:r9-all"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-all",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-capture",
+   "effects": [
+    "delete-branch:r9-capture"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-capture",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-compare",
+   "effects": [
+    "delete-branch:r9-compare"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-compare",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-core",
+   "effects": [
+    "delete-branch:r9-core"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-core",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-retire",
+   "effects": [
+    "delete-branch:r9-retire"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-retire",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-spec030",
+   "effects": [
+    "delete-branch:r9-spec030"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-spec030",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "r9-spec031",
+   "effects": [
+    "delete-branch:r9-spec031"
+   ],
+   "evidence": "",
+   "id": "branch:sourcesteward:r9-spec031",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:sourcesteward:/tmp/stw104-qa-schema-ddd87226",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/stw104-qa-schema-ddd87226",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:sourcesteward:/tmp/stw104-review-ddd8722",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/stw104-review-ddd8722",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "sourcesteward",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "archive/w1-pre-ingress-f9ee51f5",
+   "effects": [
+    "delete-branch:archive/w1-pre-ingress-f9ee51f5"
+   ],
+   "evidence": "",
+   "id": "branch:workharbor:archive/w1-pre-ingress-f9ee51f5",
+   "kind": "branch",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "",
+   "proof": "patch-id",
+   "reason": "",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/fix198-r1",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/fix198-r1",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/restack201-202",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/restack201-202",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/restack203b",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/restack203b",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/restack207",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/restack207",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/v203",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/claude-1000/-workspaces-Anchorage/758a2430-cf93-4863-a486-ff5e320a7345/scratchpad/v203",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/006-t030-apply-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/006-t030-apply-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-006-t030-apply-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-006-t030-apply-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/006-t030-cli-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/006-t030-cli-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-006-t030-cli-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-006-t030-cli-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/006-t030-proposal-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/006-t030-proposal-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-006-t030-proposal-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-006-t030-proposal-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/007-ci-evidence-20261021",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:docs/007-ci-evidence-20261021"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-007-ci-evidence-20261021",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-007-ci-evidence-20261021",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/007-policy-recovery-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/007-policy-recovery-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-007-policy-recovery-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-007-policy-recovery-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-009-all-defaults-review-91d8585",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-009-all-defaults-review-91d8585",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/009-all-tools-defaults-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/009-all-tools-defaults-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-009-all-tools-defaults-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-009-all-tools-defaults-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "feat/009-canonical-hostsetup-contracts",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:feat/009-canonical-hostsetup-contracts"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-009-canonical-publication-20261021",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-009-canonical-publication-20261021",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-009-defaults-restack-review-de19272",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-009-defaults-restack-review-de19272",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "feat/009-catalogue-loader",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:feat/009-catalogue-loader"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-009-first-publication-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-009-first-publication-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-h33-restack-review-3e272d0d",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-h33-restack-review-3e272d0d",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-h33-restack-review-415091f9",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-h33-restack-review-415091f9",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-h33-review-019bc93f",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-h33-review-019bc93f",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-h33-test-quality-019bc93f",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-h33-test-quality-019bc93f",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/146-t028-manifest-findings",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/146-t028-manifest-findings"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-init-lane-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-init-lane-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "no-work",
+   "id": "worktree:workharbor:/tmp/whr-lanea-options-opus-review-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-lanea-options-opus-review-20261020",
+   "proof": "ancestor",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-pr165-independent-review-0b78cbb",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-pr165-independent-review-0b78cbb",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-pr165-review-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-pr165-review-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-pr173-review-786045d4",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-pr173-review-786045d4",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "docs/whr-preready-minimal-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:docs/whr-preready-minimal-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-preready-minimal-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-preready-minimal-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/pty-lane-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/pty-lane-20261020"
+   ],
+   "evidence": "no-work",
+   "id": "worktree:workharbor:/tmp/whr-pty-lane-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-pty-lane-20261020",
+   "proof": "ancestor",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-qa-t025-e742",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-qa-t025-e742",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-review-feature007-ce3cfc8",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-review-feature007-ce3cfc8",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/t025-current-test-bindings-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/t025-current-test-bindings-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t025-current-test-bindings-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t025-current-test-bindings-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/t025-foundation-recovery-20261020",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/t025-foundation-recovery-20261020"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t025-foundation-recovery-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t025-foundation-recovery-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t025-opus-recovery-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t025-opus-recovery-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t025-restack-sol-source-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t025-restack-sol-source-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t025-restack-sol-source-f5d08dea-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t025-restack-sol-source-f5d08dea-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/t026-directory-nofollow",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/t026-directory-nofollow"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t026-directory-author",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t026-directory-author",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t028-opus-review-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t028-opus-review-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-apply-sol-binding-55f0c274",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-apply-sol-binding-55f0c274",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-apply-testqa-55f0c274",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-apply-testqa-55f0c274",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-chain-sol-binding-2dded35d",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-chain-sol-binding-2dded35d",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-chain-sol-binding-95db7f0b",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-chain-sol-binding-95db7f0b",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-cli-sol-binding-2c967514",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-cli-sol-binding-2c967514",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-proposal-sol-binding-9dded737",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-proposal-sol-binding-9dded737",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t030-proposal-testqa-sol-9dded737",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t030-proposal-testqa-sol-9dded737",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t032-sol-binding-6fce2111",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t032-sol-binding-6fce2111",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t033-sol-binding-9405c63b",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t033-sol-binding-9405c63b",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t034-source-binding-bcf9eb18",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t034-source-binding-bcf9eb18",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t034-source-review-c3962321",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t034-source-review-c3962321",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-t036-restack-review-sol",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-t036-restack-review-sol",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr-wp0-opus-review-20261020",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr-wp0-opus-review-20261020",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr006-t034-sol-binding-1905539e",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr006-t034-sol-binding-1905539e",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr006-t034-sol-review-765ab974",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr006-t034-sol-review-765ab974",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "codex/006-t034-source-acceptance",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:codex/006-t034-source-acceptance"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr006-t034-source-acceptance",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr006-t034-source-acceptance",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "no-work",
+   "id": "worktree:workharbor:/tmp/whr007-ci-binding-sol-20261021",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr007-ci-binding-sol-20261021",
+   "proof": "ancestor",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr007-doc-review-sol-984bd610",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr007-doc-review-sol-984bd610",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr009-loader-publication-review-fcff",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr009-loader-publication-review-fcff",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr009-restack-review-sol",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr009-restack-review-sol",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr009-review-sol-canonical-e61",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr009-review-sol-canonical-e61",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr009-testquality-sol",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr009-testquality-sol",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr010-plan-independent-review",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr010-plan-independent-review",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr010-plan-independent-review-r2",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr010-plan-independent-review-r2",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/whr190-ci-review-3044021",
+   "kind": "worktree",
+   "owner": "codex",
+   "owner_source": "path-convention",
+   "path": "/tmp/whr190-ci-review-3044021",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "other",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-0jbykfta/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-0jbykfta/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-18gue17r/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-18gue17r/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-1rko7xas/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-1rko7xas/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-1tbbh4dx/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-1tbbh4dx/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-2_np6jpu/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-2_np6jpu/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-2yhtosek/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-2yhtosek/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-3gwtx1i0/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-3gwtx1i0/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-3jjza9i7/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-3jjza9i7/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-3x9wt5_v/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-3x9wt5_v/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-4min32lf/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-4min32lf/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-55vkundn/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-55vkundn/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-66kwh6mo/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-66kwh6mo/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-6g8503ku/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-6g8503ku/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-6zrr_dz4/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-6zrr_dz4/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-7j6u34a5/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-7j6u34a5/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-84xmciq0/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-84xmciq0/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-9yldx4v4/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-9yldx4v4/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-_5d42_a1/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-_5d42_a1/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-_6av08eh/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-_6av08eh/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-ak7otyxs/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-ak7otyxs/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-ap9vj3yb/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-ap9vj3yb/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-auj5xh53/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-auj5xh53/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-bpncbhu4/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-bpncbhu4/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-f5ydcipi/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-f5ydcipi/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-fsqi8co_/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-fsqi8co_/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-g131pl0q/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-g131pl0q/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-gjx4qexe/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-gjx4qexe/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-h46mfm0e/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-h46mfm0e/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-hl2atuvx/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-hl2atuvx/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-isw90n87/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-isw90n87/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-jih9p8e1/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-jih9p8e1/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-lssp0g4i/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-lssp0g4i/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-lxhaqcno/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-lxhaqcno/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-mk5fwp5r/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-mk5fwp5r/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-mw47zs2q/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-mw47zs2q/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-nynnrycy/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-nynnrycy/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-ohw_hp4j/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-ohw_hp4j/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-ojx72hzb/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-ojx72hzb/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-p8zo6omu/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-p8zo6omu/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-p9jgt2bo/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-p9jgt2bo/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-sdphk183/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-sdphk183/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-ssh652vt/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-ssh652vt/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-szrzsgzc/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-szrzsgzc/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-tvfk62lf/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-tvfk62lf/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-u9ltsjqu/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-u9ltsjqu/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-vjn811lz/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-vjn811lz/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-w9d8cb65/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-w9d8cb65/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "no-work",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-wz96xmqr/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-wz96xmqr/checkout",
+   "proof": "ancestor",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-xcwplo0c/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-xcwplo0c/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-zagwnv36/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-zagwnv36/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "",
+   "effects": [
+    "remove-registration",
+    "remove-files"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/tmp/workharbor-baseline-zgr46ulx/checkout",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/tmp/workharbor-baseline-zgr46ulx/checkout",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  },
+  {
+   "branch": "feat/009-production-catalogue",
+   "effects": [
+    "remove-registration",
+    "remove-files",
+    "delete-branch:feat/009-production-catalogue"
+   ],
+   "evidence": "",
+   "id": "worktree:workharbor:/workspaces/Anchorage/scratch/whr009-production-catalogue",
+   "kind": "worktree",
+   "owner": "author:Werner Stein",
+   "owner_source": "commit-author",
+   "path": "/workspaces/Anchorage/scratch/whr009-production-catalogue",
+   "proof": "patch-id",
+   "reason": "unregistered",
+   "repo": "workharbor",
+   "scope": "unknown",
+   "task": "",
+   "verdict": "safe"
+  }
+ ],
+ "total": 1129,
+ "workspace": "/workspaces/Anchorage"
+}
