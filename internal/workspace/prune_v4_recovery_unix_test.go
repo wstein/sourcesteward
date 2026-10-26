@@ -302,7 +302,7 @@ func TestRegistrationPruneV4PayloadExactBounds(t *testing.T) {
 }
 
 func TestRegistrationPruneV4ReviewJournalRejectsUnknownVocabulary(t *testing.T) {
-	for _, field := range []string{"action", "intent", "target", "remaining"} {
+	for _, field := range []string{"action", "intent", "target", "remaining", "duplicate", "reordered", "missing-effect"} {
 		t.Run(field, func(t *testing.T) {
 			_, p := fixturePruneV4(t)
 			o := RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode}
@@ -328,6 +328,12 @@ func TestRegistrationPruneV4ReviewJournalRejectsUnknownVocabulary(t *testing.T) 
 			case "remaining":
 				j.Phase = "partial"
 				j.Remaining = []string{"invented"}
+			case "duplicate":
+				j.Effects = append(j.Effects, j.Effects[len(j.Effects)-1])
+			case "reordered":
+				j.Effects[0], j.Effects[1] = j.Effects[1], j.Effects[0]
+			case "missing-effect":
+				j.Effects = j.Effects[:len(j.Effects)-1]
 			}
 			raw, e = pruneV4Canonical(j, "")
 			if e != nil {
@@ -362,5 +368,46 @@ func TestRegistrationPruneV4ReviewPartialExposesKnownEffectsAndRecovery(t *testi
 	}
 	if len(r.Actions) == 0 {
 		t.Fatalf("partial output omits known removal and available recovery: actions=%+v payload=%s diagnostics=%+v", r.Actions, p.PayloadPath, r.Diagnostics)
+	}
+	for _, result := range []RegistrationPruneV4Result{r, ApplyRegistrationPruneV4(context.Background(), RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})} {
+		payload, pin, removed := false, false, 0
+		for _, action := range result.Actions {
+			if strings.Contains(action.Detail, p.PayloadPath) {
+				payload = true
+			}
+			if action.Name == "pin-history" && strings.Contains(action.Detail, pruneV4HistoryRef(p)) {
+				pin = true
+			}
+			if action.Name == "remove-metadata" && action.Status == "complete" {
+				removed++
+			}
+		}
+		if result.Status != "partial" || !payload || !pin || removed != 1 {
+			t.Fatalf("partial replay lost recorded evidence: %+v", result)
+		}
+	}
+}
+
+func TestRegistrationPruneV4RefusesSymbolicHistoryPinBeforeRemoval(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	fired := false
+	ctx := pruneHookContext(func(stage, path string, _ any) {
+		if fired || stage != "v4-before-unlink" {
+			return
+		}
+		fired = true
+		gitFixture(t, p.SourcePath, "symbolic-ref", pruneV4HistoryRef(p), p.Expected.SourceSnapshot.Identity.HeadRef)
+	})
+	r := ApplyRegistrationPruneV4(ctx, RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
+	if r.Status != "partial" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "prune-evidence-changed" {
+		t.Fatalf("literal recovery refusal %+v", r)
+	}
+	for _, m := range p.Expected.Metadata {
+		if m.Kind == "file" {
+			b, e := os.ReadFile(filepath.Join(p.Registration.GitDir, m.Path))
+			if e != nil || gitDigest(string(b)) != m.Digest {
+				t.Fatalf("metadata removed with symbolic history pin: %s %v", m.Path, e)
+			}
+		}
 	}
 }
