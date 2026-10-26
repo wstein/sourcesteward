@@ -36,8 +36,12 @@ type patchIDRow struct{ patch, commit string }
 // logPatchArgs is the one patch stream of both sides: hashed by content, with
 // no external diff, no textconv and no rename detection.
 func logPatchArgs(rangeSpec string) []string {
-	return []string{"log", "--no-merges", "-p", "--binary", "--no-ext-diff", "--no-textconv", "--no-renames", "--format=%H", rangeSpec, "--"}
+	return append(slices.Clone(patchStreamOptions), rangeSpec, "--")
 }
+
+// patchStreamOptions are the options of every patch stream, shared by the range
+// stream and the memo's per-commit stream so the two can never diverge.
+var patchStreamOptions = []string{"log", "--no-merges", "-p", "--binary", "--no-ext-diff", "--no-textconv", "--no-renames", "--format=%H"}
 
 // patchIDs pipes one `log -p` stream into `patch-id --stable` and
 // `patch-id --verbatim` concurrently (one pass). The stream is never buffered.
