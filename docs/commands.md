@@ -22,7 +22,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
 | `stw workspace retire-plan [PATH]` | Prepare retention and retirement evidence | Preparation only; does not delete a workspace |
 | `stw tidy` | Interactive workspace-wide cleanup: overview, choice, stored plan set | Read-only analysis; stores a plan set after your choice; applies only after an explicit `y` |
-| `stw tidy plan` (no PATH, no expert flag) | Non-interactive workspace overview; `--save` stores the safe own items | Read-only; `--save` writes a private plan set |
+| `stw tidy plan` (no PATH, no expert flag) | Non-interactive workspace overview (grouped by kind and risk; `--rows` for the rows); `--save` stores the safe own items | Read-only; `--save` writes a private plan set |
 | `stw tidy plan [PATH]` | Review branch/bookmark integration or owned-workspace retirement | No deletion; optional private stored plan |
 | `stw tidy apply PLAN-ID` | Apply a stored plan set | Typed or explicit authorization; recovery evidence and fresh checks per sub-plan |
 | `stw tidy apply --plan ID` | Apply the reviewed reference or retirement plan | Explicit local authorization; recovery evidence and fresh checks |
@@ -282,7 +282,7 @@ stw tidy apply PLAN-ID --yes  # non-interactive; the explicit plan id is the aut
 ```
 
 Wizard flags (bare `stw tidy` and `stw tidy plan`): `--workspace PATH`, `--member NAME`, `--member-base NAME=REF`, `--only retire,branches,tracking,stale-worktrees`,
-`--mine`, `--by-owner LABEL`, repeatable `--state-dir`, `--online`, `--offline`, `--timeout`, `--json`, `--human`; `--save` belongs to `stw tidy plan` and `--yes` to `stw tidy apply PLAN-ID`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (a plan made in the same run is never authorized by `--yes`), and `stw tidy --json` prints the overview without asking, storing or applying (no `plan_id`). On `stw tidy plan`, any other flag, or a
+`--mine`, `--by-owner LABEL`, repeatable `--state-dir`, `--online`, `--offline`, `--timeout`, `--json`, `--human`, `--rows` (the row view instead of the grouped overview, text only); `--save` belongs to `stw tidy plan` and `--yes` to `stw tidy apply PLAN-ID`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (a plan made in the same run is never authorized by `--yes`), and `stw tidy --json` prints the overview without asking, storing or applying (no `plan_id`). On `stw tidy plan`, any other flag, or a
 `PATH`, selects the expert layer below, unchanged; on bare `stw tidy` an expert flag or a PATH is a usage error. Exit codes: 0 complete (also when nothing was asked because there is no terminal),
 1 refusal, incomplete or partial evidence, cancellation or output at its limit, 2 invalid usage.
 

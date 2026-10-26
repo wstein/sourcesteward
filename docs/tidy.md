@@ -60,7 +60,7 @@ The sample is the real output of the wizard on the fixture of `TestTidyExampleMa
 
 **Reading the summary.** `summary: N safe (A own, B other)` splits the safe rows by scope: `A` counts scope `own`, and `B` counts every other safe row, so `B` includes the rows of scope `unknown` as well as those of scope `other`; the sample above has one `other` and no `unknown` safe row. In agent mode only an item owned by a task record is `own`: a branch or worktree that merely follows the naming convention, such as `claude/*`, shows `owner claude (path-convention) [unknown]` even when the caller is `claude`, appears under `owner unknown`, is counted in `B`, is refused for an agent apply (`scope-not-authorized`) and needs the typed confirmation of a human at a terminal. The summary does not number `unknown` rows separately; they are listed under the heading `owner unknown`, and `--json` gives each candidate's `scope`.
 
-**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--offline`, `--timeout`, `--json`, `--human`, `--verbose`, `--quiet`, `--progress`, `--trace` and `--contract 4` (read-only overview 4, below); `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
+**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--offline`, `--timeout`, `--json`, `--human`, `--rows`, `--verbose`, `--quiet`, `--progress`, `--trace` and `--contract 4` (read-only overview 4, below); `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
 **Online reads (Spec 044, D13).** The human wizard, that is bare `stw tidy` without `--json` on a terminal for both stdin and stdout and without an agent marker, reads GitHub by default; `--offline` turns that off and makes no network read. The reads are the contract-3 tracking evidence (so tracking references now appear in the human wizard) and the pull request evidence of open tips; both are GET requests to github.com through the fixed bounded hosting transport with the credential of `gh`, and no write call exists. `--online` with `--offline` is a usage error (exit 2). Everything else stays offline unless `--online` is given: `stw tidy plan`, `--json`, `--save`, agent mode and the expert layer (a `PATH` or any expert flag). `--offline` is accepted on `stw tidy` and on `stw tidy plan`, where it changes nothing; with a `PATH` or an expert flag it is refused with exit 2 like every wizard flag.
 
@@ -106,6 +106,87 @@ digest together with its producer tests; this PR does not modify frozen v2/v3
 schemas or emit the new risk fields.
 
 **Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per worktree (jj: workspace) and per local branch (jj: bookmark) of that repository, at most 10 minutes; the Git proof phase gets the rest of that window, at least 60 s, so without `--timeout` it can run up to 60 s past the window; with `--timeout` the given deadline bounds everything. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace, 10 s per proof command, 20 s per tip) and the plan, apply and restore deadlines of the expert layer are not scaled. When candidates are retained as `evidence-incomplete` with the evidence `deadline-exceeded` or `proof-budget-exhausted`, the overview ends with a notice `N of M not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m`: N is the number of those candidates (`--timeout` widens the window, the content reads and the proof phase, but not the 20 s per-tip proof budget nor the per-worktree content budget, which also end as `proof-budget-exhausted` and are counted too, so the hint can fail for those items) and M the number of all candidates of the overview, counted after the view is narrowed (`--only`, `--mine`, `--by-owner`) and before the output is cut at the candidate bound. The notice is the text line `notice: ...` and an entry of the `notices` array of `--json`.
+
+### The grouped overview and the retain table
+
+The text of `stw tidy plan`, and of bare `stw tidy` without a terminal or in an agent run, is a short grouped overview followed by a
+retain table (Spec 044). Internal codes are replaced by sentences; the codes stay in `--json`, `--verbose` and `--rows`. This is the real
+output on a recording of the owner's workspace of 2026-10-26 (7 repositories, 1,129 candidates; `testdata/workspace-20261026.json` of
+`internal/tidywizard/render`, tested against these bytes):
+
+```text
+Workspace /workspaces/Anchorage   7 repositories analysed
+
+Can be cleaned (165 of 1,129 candidates)                                                 risk
+  1  55 directories  /tmp/whr*                         files deleted, codex              yellow  (3 green, 52 yellow)
+  2  43 branches     in 7 repositories                 reversible, 3 owners              yellow  (2 green, 41 yellow)
+  3  51 directories  /tmp/workharbor*                  files deleted, hint Werner Stein  orange  (1 green, 50 orange)
+  4  7 directories   agent scratchpads                 files deleted, hint Werner Stein  orange
+  5  4 directories   /tmp/crewbook*                    files deleted, hint Werner Stein  orange
+  6  4 directories   other in /tmp                     files deleted, hint Werner Stein  orange
+  7  1 directory     in /workspaces/Anchorage/scratch  files deleted, hint Werner Stein  orange
+     19 of the directories also delete their branch (reversible)
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR
+      PLAN_ID: see stw tidy history; deleted directories are not restored
+
+Kept (964): nothing here is offered for deletion
+  394 may hold unique work (red): not merged, uncommitted or untracked files, not judged
+  570 kept for another reason (record missing, branch in use, recently active, ...)
+notice: remote-tracking references are not read without --online (7 repositories)
+notice: Evidence is sampled and nontransactional; nothing was changed and nothing was fetched. (7 repositories)
+
+Every row with its codes: stw tidy --rows   The data: stw tidy --json
+```
+
+```text
+Kept: 964 candidates. Nothing here is offered for deletion.
+  count  level  why                                                                       what to do
+    316  kept   created by stw, record not found                                          re-run with the --state-dir that created it
+    301  RED    not merged: it has commits the base lacks                                 nothing is deleted; review it with the report
+    217  kept   branch is checked out in a kept worktree                                  decide on that worktree first, then run again
+     47  RED    created by stw, record not found; its commits are not on the base branch  do not delete; find the right --state-dir and judge it
+     27  kept   changed within the last 24 hours                                          wait, then run again
+     23  RED    untracked or ignored files                                                look inside; remove them yourself if junk
+     17  RED    not judged (deadline, budget or Git refused)                              run again with a larger window, for example --timeout 15m
+      7  kept   main checkout of a repository                                             never offered
+      6  RED    uncommitted changes                                                       commit or discard them yourself
+      3  kept   worktree entry whose directory is gone                                    no stw action yet
+Rows: run stw tidy --rows for every row with its codes, or stw tidy --json
+```
+
+**Groups.** A line is one kind of cleanup in one place: branches (reversible), tracking references, and worktree directories by place: agent
+scratchpads (a path component named `scratchpad`), a `/tmp` family (the leading lowercase ASCII letters of the first component below `/tmp`,
+needing three distinct directories), `other in /tmp`, and any other parent directory. The branch groups of the repositories are one line that
+says how many repositories. Lines are ordered by their level, green first, then by size. The level of a line is the level of its worst row, and
+a line with several levels lists how many rows each has. A directory that also deletes its branch is counted on its own line below the groups.
+The owner is information only: one owner is named, two are named together, more are counted, and a commit-author hint is shown as `hint NAME`.
+
+**Levels.** `green`: the work is on the base branch as the same commits (`ancestor`, `no-net-change`), the branch is gone from the remote
+(`github-branch-absent`), the worktree has no commit of its own, or a merged pull request had the tip as its head. `yellow`: the work is on the
+base as equal patches (`patch-id`, `merge-noop`), for example after a rebase merge. `orange`: a row with one more fact. Each of these facts raises
+a row one step, green to yellow or yellow to orange, never beyond orange: a worktree of another or an unknown owner whose last change is at most 72
+hours old or unknown, and an equal-patches worktree that no record and no path convention claims; a `decision` row is orange. `red`: the row may hold
+unique work: its commits are not on the base, it has uncommitted or untracked files, or it could not be judged. `kept`: kept for a structural
+reason without a known danger. Red and kept rows are never in a group and never offered. A level is a presentation of the evidence and never permission: the verdict,
+the proof, the choosable rows and the apply path are the ones of the analysis. The overview's activity time is the one the analysis already reads
+for `recently-active`; where it is not known, as in the recording above (which stores no activity times), every worktree of another owner
+is raised one step. The screen above assumes that every directory was last changed more than 72 hours before the run; without that assumption
+the same recording has 2 green, 45 yellow and 118 orange rows instead of 6, 93 and 66, and the groups of directories are all orange.
+
+**The retain table** has one line per reason and level of the kept rows: the count, `RED` (may hold unique work) or `kept`, a sentence and what to do,
+largest first. The counts add up to the retained rows (here 964: 394 red and 570 kept). A reason that this version does not describe is
+named, escaped, instead of being left out. The rows themselves are shown on request: `stw tidy --rows`.
+
+**`--rows`** prints the row view of Spec 041, byte for byte as before (one line per candidate with the codes, grouped by owner, at most 10 rows per
+repository in each owner group; `--json` lists every candidate). It is a wizard-layer flag (not accepted with a `PATH` or an expert flag, exit 2) and
+changes nothing in `--json`. In this version a person on a terminal who runs bare `stw tidy` still chooses by the numbers of the row view; the
+grouped steps of Spec 044 are not implemented yet.
+
+**JSON.** The `tidy-overview` document gains optional members, present whenever the command knows the time of the run (`stw tidy plan --json`
+and `stw tidy --json` always do): each candidate has `risk` (`green`, `yellow`, `orange`, `red` or `kept`), `risk_reasons[]` (stable words such as
+`proof-equivalent` or `not-integrated`; absent for a kept row), `group` (an opaque key shared by the rows of one group, only for green, yellow and
+orange rows) and `pr` (the number of a merged pull request whose head is the tip, only when such evidence is set), and `summary.risk` counts the
+candidates per level. The existing members, their values and the order of the candidates are unchanged.
 
 ### Long runs: progress, `--verbose`, `--trace` and agent markers
 
@@ -179,7 +260,7 @@ and base (the local branch of the remote's symbolic HEAD, else the remote-tracki
 (`${XDG_STATE_HOME:-~/.local/state}/stw/workspace` or `$STW_STATE_DIR`) and every `--state-dir`; the first valid store holds the plan set.
 
 **Modes.** Human mode needs a terminal on both stdin and stdout and no agent marker (`STW_AGENT`, `CLAUDECODE`, `CLAUDE_CODE_*`,
-`CODEX_*`, `AGY_*`). Every other run is agent mode, and `--mine` forces it. A human sees every owner, grouped: one heading per owner (`owner NAME (own)`, `owner NAME (other)`, `owner unknown`; own first, other owners sorted, unknown last) with a sub-heading per repository, at most 10 rows per repository in a group, and the owner column;
+`CODEX_*`, `AGY_*`). Every other run is agent mode, and `--mine` forces it. In the row view (`--rows`, and bare `stw tidy` on a terminal) a human sees every owner, grouped: one heading per owner (`owner NAME (own)`, `owner NAME (other)`, `owner unknown`; own first, other owners sorted, unknown last) with a sub-heading per repository, at most 10 rows per repository in a group, and the owner column;
 nothing owned by another owner or of unknown owner is preselected. An agent should narrow the view with `--mine`; in agent mode only
 items owned by a task record count as `own`. `--by-owner LABEL` narrows the view in any mode and never selects the mode. The mode is
 recorded in the plan set, the apply journal and `stw tidy history`.
@@ -188,7 +269,7 @@ recorded in the plan set, the apply journal and `stw tidy history`.
 (a reason such as `unmerged`, `dirty`, `recently-active`, `registration-record-missing`, `evidence-incomplete`,
 `stale-registration-no-plan-kind`) rows never carry an effect; items of another or an unknown owner are shown with their `scope` and are never preselected. Only `safe` and `decision` rows get a number.
 A worktree whose directory is missing is shown as a `retain` row and is not pruned. Such a registration does not stop `plan --save`: the plan for the other items of the same repository is stored, and the stale registration stays untouched and bound into the stored native evidence (one that appears or disappears before the apply refuses with `evidence-changed`). Only a registration that Git marks `prunable`, that is not locked and whose directory is absent below a real parent directory is accepted this way; a locked, replaced or aliased one still refuses the repository with `unknown-workspace-path`.
-Text shows at most 10 rows per repository inside each owner group (`and N more`); `--json` lists all candidates.
+The row view shows at most 10 rows per repository inside each owner group (`and N more`); `--json` lists all candidates.
 
 **Prompts.** The answer is parsed strictly and the default is none. `a` chooses all safe rows of scope own (never `decision` rows and
 never rows of other or unknown owners), numbers and ranges (`1,2,6`, `1-3`) choose rows, `o` asks per owner, `d N` shows the details of
