@@ -371,7 +371,7 @@ directories for good and M branches (restorable)."** (Owner condition for D2.) T
 **What changes against today's flow** (`internal/cli/tidy_interactive.go:48-93`, where a choice is built and stored at once, then "Apply it
 now?", and the apply path asks the typed words again): the grouped steps and the summary replace the single "Apply which?" question; the
 summary's last line is new; the store question for an own-only selection is new; the apply question gains the counts; **the typed word
-is asked once per run, not twice** (D12). **Unchanged**: the words and their text, `planset.Build`, the store, the stale checks, the
+is asked once per run, not twice** (D12). **Unchanged**: the words and their text, the plan set built by `planset.Build` (which additionally returns the receipt), the store, the stale checks, the
 default no on every storing and applying question, and the whole path of a separate `stw tidy apply PLAN-ID`.
 
 ### Single confirmation per wizard run (D12)
@@ -681,8 +681,11 @@ Each is testable with temporary repositories and a fake hosting transport (no re
   apply PLAN-ID` of the stored plan asks the words again and passes no receipt (`tidy.go:111`); agent-mode apply of a foreign plan without
   `authorized_scopes` still exits 1 `scope-not-authorized`; stale checks still refuse with `evidence-changed`; the separate-apply and
   agent-mode tests of Spec 041 pass unchanged.
-- **SC-015** (D16, if the owner confirms) In human mode the answers to "Apply it now?" and "Store this plan set?" are read from `/dev/tty`; a
-  `y` on stdin alone applies and stores nothing.
+- **SC-015** (D16, if the owner confirms) In human mode the answers to "Store this plan set?", "Apply it now?" and the `stw tidy apply PLAN-ID`
+  prompt are read from `/dev/tty`: a `y` on stdin alone stores and applies nothing; with both streams on terminals but **no controlling
+  terminal** the question is not asked, nothing is stored or applied, and the run ends with exit 1 and a message that names the missing
+  terminal and the safe alternatives (`stw tidy plan --save`, then apply from a terminal); `--yes` with an explicit plan id behaves as before
+  (foreign items still refuse it); agent mode is unaffected.
 - **SC-008** The typed prompt: a bare `y`, the wrong word, stdin input and no controlling terminal refuse and store or apply nothing; the
   prompt text is unchanged byte for byte.
 - **SC-009** Hostile names (ESC, CR, NUL, bidi, a name starting with letters then ESC) in branch, path and owner reach no terminal byte
@@ -718,8 +721,9 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - **#297 (merged).** Progress on stderr (`internal/cli/tidy_progress.go`), `--verbose` timings, `--quiet`, `--progress` and `--trace`
   are unchanged; the grouped overview and the steps write to stdout, progress never does. The analysis and the online reads run before
   the first screen.
-- **The strict prompt.** The janitor flow only builds the selection and the summary; it calls the same `planset.Build`, typed prompt and
-  `runTidyApplyPlanSet` (`internal/cli/tidy_interactive.go:60`, `:93`).
+- **The strict prompt.** The janitor flow only builds the selection and the summary; it calls `planset.Build` (`internal/cli/tidy_interactive.go:60`), which now also returns the opaque confirmation receipt (D12), the
+  same typed prompt, and `runTidyApplyPlanSet` (`:93`) with a new receipt parameter; `stw tidy apply` (`tidy.go:111`) calls the same function and
+  passes none.
 - **Spec 042.** The done command uses the attribution gate (D5) with the limits stated above. No session id is printed or stored in the
   new records.
 - **Spec 043.** `stw land` is unrelated except that a landed pull request becomes C2 evidence for tidy.
@@ -740,7 +744,7 @@ D1 to D15 are decided, see [Decided by the owner](#decided-by-the-owner-2026-10-
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| D16 | In human mode, read the answers to "Apply it now?" and "Store this plan set?" from `/dev/tty` like the typed words, not from stdin (hardening that follows from D12: with one typed word per run the apply rests on that answer, see the residual risk) | Yes; it is cheap and consistent with "a `y` or stdin never replaces the typed word". Task T013b, criterion SC-015 |
+| D16 | In human mode, read the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-82`, also read from stdin today) from `/dev/tty` like the typed words, not from stdin (hardening that follows from D12: with one typed word per run the apply rests on that answer, see the residual risk) | Yes in human mode, everywhere a `y` authorizes a store or an apply. It matches the existing rule that a bare `y` does not replace the typed word and that without a controlling terminal nothing is stored or applied (Spec 041 line 413). `--yes` with an explicit plan id stays as it is (foreign items still refuse it). Task T013b, criterion SC-015 |
 
 A later question (for example whether `github-merged-head` may become a proof in phase 2 after dogfood, D8) is raised when it arises.
 
