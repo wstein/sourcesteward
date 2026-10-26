@@ -208,3 +208,28 @@ func TestAllReasonsIsCompleteAndIndependent(t *testing.T) {
 		t.Fatalf("reason constants: %v", constants)
 	}
 }
+
+func TestLadderConservativeBackendAndStructuralCases(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name    string
+		facts   Facts
+		level   Level
+		reasons []string
+	}{
+		{"missing stale with incomplete evidence", Facts{Kind: "stale-worktree", Verdict: "retain", Proof: "none", DirectoryMissing: true, Incomplete: true}, Red, []string{"not-judged"}},
+		{"primary observed dirt", Facts{Kind: "worktree", Verdict: "retain", Proof: "none", Primary: true, Dirty: true}, Red, []string{"uncommitted-files"}},
+		{"tracking proof none structural reason", Facts{Kind: "tracking-ref", Verdict: "retain", Proof: "none", Reason: "protected"}, Red, []string{"not-integrated"}},
+		{"jj proof base is equivalent", Facts{Kind: "worktree", Verdict: "safe", Proof: "empty-working-copy", Scope: owner.ScopeOwn, HasCreationRecord: true}, Yellow, []string{"proof-equivalent"}},
+		{"retained jj stays retained", Facts{Kind: "worktree", Verdict: "retain", Proof: "empty-working-copy", Reason: "jj-retirement-unsupported", Scope: owner.ScopeOwn}, Kept, []string{}},
+		{"unrecognized verdict stays unselectable", Facts{Kind: "branch", Verdict: "sfae", Proof: "ancestor"}, Kept, []string{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Evaluate(tc.facts, now)
+			if got.Level != tc.level || !reflect.DeepEqual(got.Reasons, tc.reasons) {
+				t.Fatalf("got %+v want %s/%v", got, tc.level, tc.reasons)
+			}
+		})
+	}
+}

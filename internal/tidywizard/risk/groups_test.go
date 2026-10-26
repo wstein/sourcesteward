@@ -210,3 +210,32 @@ func TestGroupConsequencesAndRepositoryCounts(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupCarriesExactEffectClass(t *testing.T) {
+	a := riskRow("a", "repo", "/tmp/whr-a", Green)
+	b := riskRow("b", "repo", "/tmp/whr-b", Green)
+	c := riskRow("c", "repo", "/tmp/whr-c", Green)
+	b.Effects = append(b.Effects, "delete-branch:b", "delete-branch:b")
+	groups := GroupRows([]Row{a, b, c})
+	if len(groups) != 2 {
+		t.Fatalf("effect classes must remain separate: %+v", groups)
+	}
+	for _, g := range groups {
+		want := []string{"remove-files", "remove-registration"}
+		if len(g.Rows) == 1 {
+			want = append([]string{"delete-branch"}, want...)
+		}
+		if !reflect.DeepEqual(g.EffectClass, want) {
+			t.Fatalf("class: %q want %q", g.EffectClass, want)
+		}
+	}
+	// A renderer may read the class without decoding an opaque key or raw ref.
+	b.Effects[0] = "mutated"
+	for _, g := range groups {
+		for _, effect := range g.EffectClass {
+			if effect == "mutated" {
+				t.Fatal("effect class aliases caller storage")
+			}
+		}
+	}
+}
