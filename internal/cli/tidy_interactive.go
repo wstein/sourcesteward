@@ -31,7 +31,7 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 	}
 	defer run.cancel()
 	prep, res, mode := run.prep, run.res, run.mode
-	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, Notices: prep.Notices})
+	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, Notices: prep.Notices, Now: run.now})
 	out := cmd.OutOrStdout()
 	if _, err := io.WriteString(out, render.Text(doc, tidyTextOptions(out))); err != nil {
 		return runtimeFailure{err}

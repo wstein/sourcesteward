@@ -2,8 +2,10 @@
 package contracts_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -41,7 +43,10 @@ func overviewInput(mutate func(*render.Input)) render.Input {
 		Mode:    owner.Evidence{Mode: owner.ModeAgent, StdinTTY: false, StdoutTTY: true, Markers: []string{"CLAUDECODE"}, Mine: true, ByOwner: []string{"codex"}, Caller: "claude", CallerSource: "env"},
 		PlanID:  "3f9c2a7e41b8",
 		Notices: []string{"run"},
+		// The run clock turns the additive risk fields of Spec 044 on.
+		Now: time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC),
 	}
+	in.Result.Candidates[0].PR = 17
 	if mutate != nil {
 		mutate(&in)
 	}
@@ -68,6 +73,29 @@ func TestTidyOverviewSchemaAcceptsTheRenderedDocument(t *testing.T) {
 		in.Notices = nil
 	}))
 	valid(t, s, overviewRaw(t, func(in *render.Input) { in.Result.Truncated = true }))
+}
+
+// The additive fields are optional: a document without the run clock is the Spec 041 document and
+// still validates; with the clock every candidate carries a level and the summary the counts.
+func TestTidyOverviewSchemaTakesTheRiskFieldsAsOptional(t *testing.T) {
+	s := schemaAt(t, "v2", "tidy-overview")
+	without := overviewRaw(t, func(in *render.Input) { in.Now = time.Time{}; in.Result.Candidates[0].PR = 0 })
+	valid(t, s, without)
+	if strings.Contains(string(without), `"risk`) || strings.Contains(string(without), `"group"`) || strings.Contains(string(without), `"pr"`) {
+		t.Fatalf("a document without the clock carries risk fields:\n%s", without)
+	}
+	with := value(t, overviewRaw(t, nil)).(map[string]any)
+	for _, c := range with["candidates"].([]any) {
+		if _, ok := c.(map[string]any)["risk"].(string); !ok {
+			t.Fatalf("candidate without a risk: %v", c)
+		}
+	}
+	if _, ok := with["summary"].(map[string]any)["risk"].(map[string]any); !ok {
+		t.Fatal("summary without the risk counts")
+	}
+	if fmt.Sprint(with["candidates"].([]any)[0].(map[string]any)["pr"]) != "17" {
+		t.Fatal("the pull request number is not in the document")
+	}
 }
 
 func TestTidyOverviewSchemaRefusesViolations(t *testing.T) {
@@ -121,6 +149,22 @@ func TestTidyOverviewSchemaRefusesViolations(t *testing.T) {
 		"mode markers null":        func(v map[string]any) { v["mode"].(map[string]any)["markers"] = nil },
 		"mode by_owner entry type": func(v map[string]any) { v["mode"].(map[string]any)["by_owner"] = []any{7} },
 		"mode tty type":            func(v map[string]any) { v["mode"].(map[string]any)["stdin_tty"] = "yes" },
+		"risk unknown level":       func(v map[string]any) { first(v, "candidates")["risk"] = "purple" },
+		"risk type":                func(v map[string]any) { first(v, "candidates")["risk"] = 3 },
+		"risk reasons empty":       func(v map[string]any) { first(v, "candidates")["risk_reasons"] = []any{} },
+		"risk reason upper case":   func(v map[string]any) { first(v, "candidates")["risk_reasons"] = []any{"Proof-Ancestor"} },
+		"risk reason with a space": func(v map[string]any) { first(v, "candidates")["risk_reasons"] = []any{"proof ancestor"} },
+		"risk reasons null":        func(v map[string]any) { first(v, "candidates")["risk_reasons"] = nil },
+		"group key with a path":    func(v map[string]any) { first(v, "candidates")["group"] = "/tmp/whr" },
+		"group key too short":      func(v map[string]any) { first(v, "candidates")["group"] = "groupabc" },
+		"group key digits":         func(v map[string]any) { first(v, "candidates")["group"] = "group" + strings.Repeat("0", 64) },
+		"pr zero":                  func(v map[string]any) { first(v, "candidates")["pr"] = 0 },
+		"pr negative":              func(v map[string]any) { first(v, "candidates")["pr"] = -1 },
+		"pr text":                  func(v map[string]any) { first(v, "candidates")["pr"] = "17" },
+		"summary risk missing key": func(v map[string]any) { delete(v["summary"].(map[string]any)["risk"].(map[string]any), "kept") },
+		"summary risk extra key":   func(v map[string]any) { v["summary"].(map[string]any)["risk"].(map[string]any)["purple"] = 1 },
+		"summary risk negative":    func(v map[string]any) { v["summary"].(map[string]any)["risk"].(map[string]any)["red"] = -1 },
+		"summary risk type":        func(v map[string]any) { v["summary"].(map[string]any)["risk"] = "none" },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {

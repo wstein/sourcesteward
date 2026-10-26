@@ -12,12 +12,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf16"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
@@ -44,6 +46,10 @@ type Input struct {
 	PlanID    string
 	// Notices are run-level notices; the notices of each repository are added by Build.
 	Notices []string
+	// Now is the clock of the run. When it is set, Build adds the risk fields of Spec 044 to the
+	// candidates and the counts per level to the summary; without it the document is the one of
+	// Spec 041, byte for byte.
+	Now time.Time
 }
 
 // Repository is the repositories[] entry of the document.
@@ -62,6 +68,17 @@ type Summary struct {
 	Safe     int `json:"safe"`
 	Retain   int `json:"retain"`
 	Decision int `json:"decision"`
+	// Risk counts the candidates per risk level (Spec 044); set only with the run clock.
+	Risk *RiskCounts `json:"risk,omitempty"`
+}
+
+// RiskCounts is the number of candidates per risk level.
+type RiskCounts struct {
+	Green  int `json:"green"`
+	Yellow int `json:"yellow"`
+	Orange int `json:"orange"`
+	Red    int `json:"red"`
+	Kept   int `json:"kept"`
 }
 
 // Document is the tidy-overview document (schemas/v2/tidy-overview.schema.json).
@@ -81,6 +98,11 @@ type Document struct {
 	// notices of each repository, for the text (not part of the JSON).
 	repoNotices map[string][]string
 	runNotices  []string
+	// assessed is the risk of every candidate and groups the groupable ones (Spec 044); both are
+	// computed whether or not the JSON carries them, because the text needs them.
+	assessed map[string]risk.Assessment
+	groups   []risk.Group
+	groupOf  map[string]string
 }
 
 // Build assembles the document. No array is nil. The candidates keep the order of the result
@@ -108,6 +130,7 @@ func Build(in Input) Document {
 			d.Notices = append(d.Notices, r.Name+": "+n)
 		}
 	}
+	d.assess(in)
 	late := 0
 	for _, c := range in.Result.Candidates {
 		if c.Reason == "evidence-incomplete" && (c.Evidence == "deadline-exceeded" || c.Evidence == "proof-budget-exhausted") {
@@ -130,7 +153,7 @@ func Build(in Input) Document {
 		if c.Effects == nil {
 			c.Effects = []string{}
 		}
-		d.Candidates = append(d.Candidates, c)
+		d.Candidates = append(d.Candidates, d.withRisk(c, !in.Now.IsZero()))
 	}
 	if late > 0 {
 		// A fixed text with counts only. The items stay retained (evidence-incomplete); the hint

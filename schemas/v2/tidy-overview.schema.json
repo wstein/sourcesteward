@@ -16,6 +16,11 @@
           "maxLength": 512,
           "type": "string"
         },
+        "group": {
+          "description": "Opaque stable key of the overview group of a green, yellow or orange row.",
+          "pattern": "^group[a-p]{64}$",
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -41,6 +46,11 @@
         "path": {
           "type": "string"
         },
+        "pr": {
+          "description": "Number of the pull request merged into the base whose head is the tip (online evidence only).",
+          "minimum": 1,
+          "type": "integer"
+        },
         "proof": {
           "enum": [
             "ancestor",
@@ -57,6 +67,25 @@
         },
         "repo": {
           "type": "string"
+        },
+        "risk": {
+          "description": "Spec 044 risk level; present when the run clock was available. green, yellow and orange rows may be offered for deletion, red rows may hold unique work, kept rows are kept for a structural reason. A level is never integration evidence.",
+          "enum": [
+            "green",
+            "yellow",
+            "orange",
+            "red",
+            "kept"
+          ]
+        },
+        "risk_reasons": {
+          "description": "Stable kebab-case words that say why the row has its level; absent for a kept row.",
+          "items": {
+            "pattern": "^[a-z]+(-[a-z]+)*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
         },
         "scope": {
           "enum": [
@@ -217,6 +246,40 @@
         "retain": {
           "minimum": 0,
           "type": "integer"
+        },
+        "risk": {
+          "additionalProperties": false,
+          "description": "Candidates per risk level (Spec 044); present when the run clock was available.",
+          "properties": {
+            "green": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kept": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "orange": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "red": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "yellow": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "green",
+            "yellow",
+            "orange",
+            "red",
+            "kept"
+          ],
+          "type": "object"
         },
         "safe": {
           "minimum": 0,

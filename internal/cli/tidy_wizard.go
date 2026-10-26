@@ -83,6 +83,8 @@ type wizardRun struct {
 	// budget is the run budget of the online reads, shared by the tracking reads of the
 	// observation and the pull request reads (nil when the run is offline).
 	budget *hosting.TidyRunBudget
+	// now is the one clock of the run: the classifier and the risk ladder read the same instant.
+	now time.Time
 }
 
 // readOnline reads the pull request evidence of the open tips when the human wizard is online,
@@ -210,6 +212,7 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	prog.SetRepos(prep.Names)
 	r.cfg = tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()}
 	r.res = tidyAnalyse(r.ctx, prep, r.cfg)
+	r.now = r.cfg.Now
 	prog.Finish()
 	if w.verbose {
 		prog.Summary()
@@ -242,7 +245,7 @@ func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool
 			notices = append(notices, saveNote)
 		}
 	}
-	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, PlanID: planID, Notices: append(append([]string{}, prep.Notices...), notices...)})
+	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, PlanID: planID, Notices: append(append([]string{}, prep.Notices...), notices...), Now: run.now})
 	cut, err := writeWizardOverview(cmd.OutOrStdout(), doc, structured, planID, stored)
 	if err != nil {
 		return err

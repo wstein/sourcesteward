@@ -41,7 +41,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v2/hosting-prs.schema.json":            "a4d2a263bc8470fe78757c639b359fe4a30a52e0a0638c67e747a6d8eb696047",
 	"schemas/v2/inspect.schema.json":                "3824dbf58ee99eaa184218c292a8eff0e7c7ee1b7f455a77d9c1977f1478f595",
 	"schemas/v2/status.schema.json":                 "d661a641a3c956ff7ca91ca0e5c0cd88d48e5bffae8a6d8bd5cad455efae183c",
-	"schemas/v2/tidy-overview.schema.json":          "420b10a4b155d6f2b8a7cabbeb01b659c957b9431206ec4b5d6039d8e4ad5f0e",
+	"schemas/v2/tidy-overview.schema.json":          "106b87ef4caf39fdde2db74465ba9c4c866db813fe03c5361f5395690494ff3f",
 	"schemas/v2/tidy.schema.json":                   "c964a85de0941f41ceef84b6cc57235de984c7084ea1b4bacc8ebd799de19f2d",
 }
 
