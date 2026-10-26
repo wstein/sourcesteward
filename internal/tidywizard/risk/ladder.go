@@ -98,7 +98,7 @@ func Evaluate(f Facts, now time.Time) Assessment {
 	case f.Proof == "github-branch-absent":
 		out.Level = Green
 		out.Reasons = append(out.Reasons, ReasonProofGitHubBranchAbsent)
-	case f.Proof == "patch-id" || f.Proof == "merge-noop":
+	case f.Proof == "patch-id" || f.Proof == "merge-noop" || f.Proof == "empty-working-copy":
 		out.Level = Yellow
 		equivalent = true
 		out.Reasons = append(out.Reasons, ReasonProofEquivalent)
@@ -143,7 +143,7 @@ func knownKind(kind string) bool {
 }
 func knownProof(proof string) bool {
 	switch proof {
-	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop":
+	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop", "empty-working-copy":
 		return true
 	}
 	return false
