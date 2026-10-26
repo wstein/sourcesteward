@@ -195,7 +195,7 @@ func readRegistrationPruneV4Plan(state, id string, afterRead func()) (Registrati
 		return p, e
 	}
 	defer child.Close()
-	raw, e := child.readBytes("plans", id)
+	raw, e := pruneV4ReadPlanBytes(child, id)
 	if e != nil {
 		return p, e
 	}
