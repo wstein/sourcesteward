@@ -43,7 +43,7 @@ request is the specification only.
 - [ ] T011 Failing tests and implementation of step 4 (wait up to 30 minutes), state 2 with `no-run PRODUCT VERSION`, and the decision table including next version, higher version, `flow-unsupported` and `artifact-kind-unsupported` (FR-012).
 - [ ] T012a Failing tests and implementation of the state-2 exits (wait longer, `no-run PRODUCT VERSION` leaving state 2 for `ready`, abandon), the binding epochs, the exclusion of concluded failed runs, the `conflict` on an active or successful earlier-epoch run and the vanished-tag signals V1 to V4 with the negative cases of SC-024 (a normal pre-tag release never stops).
 - [ ] T012b Failing tests and implementation of leaving `conflict` (SC-025): the conflict kinds and their typed actions (`abandon`, `no-tag`, `no-run`), mapping rule 1a, the evidence table and the read-only commands, the crashed tag push in both outcomes, the `tag-push-rejected` and `tag-push-released` journal events.
-- [ ] T012d Port the mapping-rules table into a generated Go table test over the same vectors (SC-026); the conflict screen shows no action in agent mode or without a terminal.
+- [ ] T012d Port the model to a committed Go table test (SC-026): the mapping-rules table of the implementation, the 51 golden cases, the property checks including `abandoned` terminal under later journal lines, and the mutation list (every rule deleted, adjacent swaps, condition changes); every mutant killed or proven equivalent; the conflict screen shows no action in agent mode or without a terminal.
 - [ ] T012 Failing interruption tests (SC-002) for every row of the interruption table and the journal repairs.
 
 ### R5 assets and record
