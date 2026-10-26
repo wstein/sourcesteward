@@ -1,7 +1,6 @@
 //go:build linux || darwin
 
 // SPDX-License-Identifier: EUPL-1.2
-//
 package workspace
 
 import (
@@ -70,5 +69,53 @@ func TestRegistrationPruneV4RestoreSchemaNativeRecords(t *testing.T) {
 		if s.Validate(copy) == nil {
 			t.Fatalf("schema allows missing %s", key)
 		}
+	}
+}
+
+func TestRegistrationPruneV4HistorySchemaNativeResult(t *testing.T) {
+	p := restoreV4Fixture(t)
+	r := HistoryRegistrationPruneV4(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
+	if r.Status != "ok" {
+		t.Fatalf("history: %+v", r)
+	}
+	b, e := json.Marshal(r)
+	pruneMust(t, e)
+	v, e := jsonschema.UnmarshalJSON(bytes.NewReader(b))
+	pruneMust(t, e)
+	if e = pruneV4RestoreSchema(t).Validate(v); e != nil {
+		t.Fatal(e)
+	}
+}
+func TestRegistrationPruneV4RestoreSchemaPartialResult(t *testing.T) {
+	p := restoreV4Fixture(t)
+	o := restoreV4Options(p)
+	o.Apply, o.Authorize = true, true
+	ctx := pruneHookContext(func(stage, path string, v any) {
+		if stage == "v4-restore-before-publish" {
+			pruneMust(t, os.Mkdir(p.Registration.GitDir, 0700))
+		}
+	})
+	r := RestoreRegistrationPruneV4(ctx, o)
+	pruneV4GuardReason(t, r, "partial", "prune-restore-refused")
+	b, e := json.Marshal(r)
+	pruneMust(t, e)
+	v, e := jsonschema.UnmarshalJSON(bytes.NewReader(b))
+	pruneMust(t, e)
+	schema := pruneV4RestoreSchema(t)
+	if e = schema.Validate(v); e != nil {
+		t.Fatal(e)
+	}
+	dir := filepath.Join(p.StateDir, pruneV4Namespace, "restores")
+	names, e := os.ReadDir(dir)
+	pruneMust(t, e)
+	if len(names) != 1 {
+		t.Fatalf("journal count %d", len(names))
+	}
+	b, e = os.ReadFile(filepath.Join(dir, names[0].Name()))
+	pruneMust(t, e)
+	v, e = jsonschema.UnmarshalJSON(bytes.NewReader(b))
+	pruneMust(t, e)
+	if e = schema.Validate(v); e != nil {
+		t.Fatal(e)
 	}
 }
