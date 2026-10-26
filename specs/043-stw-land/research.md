@@ -77,14 +77,15 @@ ruleset).
 ## Stack landing: spike observations and what is still to be measured (2026-10-26)
 
 Source: the notes of the `wstein/stw-release-spike` author (the first stack, a native `gh stack` stack of three pull requests, and the
-ruleset settings of that repository; session scratchpad `spike-release-notes.md` sections D, E and "Stacking", and `spike-settings.md`).
+ruleset settings of that repository), recorded by the spike author in the session scratchpad of 2026-10-26 (`spike-release-notes.md`, sections D, E and
+"Stacking", and `spike-settings.md`); not a file of this repository.
 These are observations of the spike repository, not of `wstein/sourcesteward` or `wstein/anchorage-workspace`.
 
-**Observed (the facts FR-060 to FR-079 rely on)**
+**Observed (the facts FR-060 to FR-083 rely on)**
 
 - **S-A** A pull request with `base=main` whose branch contains its parent's commits shows parent plus child commits (4 commits for the
   second pull request of a two-pull-request stack); with `base=<parent branch>` only the child's own commits. Two pull requests on the same
-  head SHA doubled the `check` runs of that SHA. (Edge case in spec.md: both base shapes accepted.)
+  head SHA doubled the `check` runs of that SHA. (Spec FR-063: only the all-base-main shape is accepted until E1 and E2.)
 - **S-B** After the owner rebase-merged the bottom (#5), GitHub retargeted the next pull request (#6) to `main` and force-pushed new heads
   for **every** remaining pull request of the stack (events `automatic_base_change_succeeded`, `head_ref_force_pushed`); with
   `delete_branch_on_merge` on, the bottom branch was deleted. Rebase-merge gave every commit a new SHA (restack needed for a non-native

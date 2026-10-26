@@ -9,7 +9,7 @@
 > requests with **one** fast-forward push of the tip; see [Stack landing](#stack-landing---stack-owner-decision-2026-10-26).
 > Dependent parts are by default ONE pull request with a commit series (workspace `AGENTS.md`), which the single-PR landing
 > already covers; `--stack` is for the separate stacked PRs that remain. First feature after v0.2.0; first measured in the spike
-> repository `wstein/stw-release-spike` (research.md, "Stack landing: to be measured in the spike").
+> repository `wstein/stw-release-spike` (research.md, "Stack landing: spike observations and what is still to be measured").
 
 **Branch**: `docs/spec-043-stw-land` | **Created**: 2026-10-24
 **Status**: Draft specification; no runtime implementation. Requires an independent review of the exact head before tasks start.
@@ -26,7 +26,7 @@ owner's choice of the GitHub merge button.
    `stw land --plan` (read-only), see the rule for `--plan` below.
 2. **One pull request per run, or one chain with `--stack`.** Without `--stack` a stack is landed by one run per pull request, bottom
    first, and the run for a child performs the retarget step of the measured order (decision 6). With `--stack` (owner decision
-   2026-10-26) one run lands a whole linear chain with a single push of the tip and no retarget at all (FR-060 to FR-079); no other
+   2026-10-26) one run lands a whole linear chain with a single push of the tip and no retarget at all (FR-060 to FR-083); no other
    run lands two pull requests.
 3. **Fresh preconditions.** Every precondition is read again immediately before the effect; nothing from `--plan` is trusted by the apply.
 4. **Git decides.** Fast-forwardness is computed with Git over local objects (`merge-base --is-ancestor`); the GitHub API is evidence for
@@ -276,7 +276,7 @@ Owner decision 2026-10-26, answer "A yes" (German source in the owner-decision r
 whole stack with ONE fast-forward push of the TIP. Every pull request in the chain must be CLEAR, the chain linear, the CI on the tip
 green and the ruleset must allow the owner's direct push. GitHub is expected to mark every pull request whose head is in the default
 branch as merged (measured for one pull request, R1; for a chain **to be measured**, E1). No rebase, no new SHAs, no restack, no retarget. This is the owner's way out of the bottom-up merge, whose rebase-merge
-rewrites every SHA and forces a restack and a new CI run per pull request (spike observation D and E in research.md).
+rewrites every SHA and forces a restack and a new CI run per pull request (spike observations S-B to S-D in research.md).
 
 Companion rule (answer "B yes"): dependent parts are by default ONE pull request with a commit series (a "virtual stack"; the rule is in the
 workspace `AGENTS.md`). Such a pull request needs no `--stack`: the single landing of FR-016 and FR-018 already pushes its whole range
@@ -305,7 +305,7 @@ one.
   extra or duplicate entry is a usage error, exit 2).
 - **FR-061 Heads equal the recorded reviewed heads.** For each pull request the current head SHA equals the SHA in its `--reviewed
   NUMBER:SHA` (`head-changed` with the number). A head that GitHub changed itself (automatic rebase after a merge, events
-  `head_ref_force_pushed` or `automatic_base_change_succeeded`, spike observation E) is the same refusal and also reports FR-064.
+  `head_ref_force_pushed` or `automatic_base_change_succeeded`, spike observation S-B) is the same refusal and also reports FR-064.
 - **FR-062 Review evidence: what stw checks and what it does not.** stw has no review ledger and does not invent one. For each pull
   request it checks (a) the exact head equals the SHA the owner states as reviewed (FR-061), (b) the check evidence of FR-012 and
   FR-064, and (c) it reads and **displays** the reviews on that exact head (`GET /repos/{o}/{r}/pulls/{n}/reviews`: `commit_id` equal to the
@@ -319,15 +319,18 @@ one.
   differ; exit 1 is `chain-not-linear`, exit 128 is `object-missing`. The GitHub base of **every** pull request is the default branch
   (accepted shape above); a base that is the head ref of another listed pull request is the unmeasured native shape
   (`land-unmeasured`, `native-stack-shape`), and any other base is `base-not-in-chain`. Git decides, not the API (decision 4).
-- **FR-064 Checks follow the tiered CI.** Under the tiered CI (Spec 039; owner decision 2026-10-26, answer C; the CI change is a separate
-  pull request) only the **tip** and pull requests on the default branch run the heavy shards, and a head below the tip runs the light lane only.
-  Therefore: the **tip head** has every required context of FR-012 green (`checks-not-green` for a missing or failing one,
-  `tip-checks-pending` for a pending one); every other head needs only the checks its lane reports, none failing or pending
-  (`checks-not-green`, `checks-pending`) and, when its lane reports none at all, `head-changed-no-checks` below. The required contexts are
-  read from the rules, no shard is named. A head with an **empty check rollup after a change made by GitHub** (an event
-  `head_ref_force_pushed` or `automatic_base_change_succeeded` not caused by the owner's push, spike observation S-C) is the distinct state
-  `head-changed-no-checks`, not `checks-not-green`. The refusal text offers the owner's way out as text only: `gh pr close N && gh pr
-  reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike); stw never runs it (FR-033).
+- **FR-064 Checks on every head.** The **tip head** has every required context of FR-012 green (`checks-not-green` for a missing or failing
+  one, `tip-checks-pending` for a pending one); this is the check the direct push bypasses. A lower head needs only the checks it itself
+  reports, none failing or pending (`checks-not-green`, `checks-pending`). In the accepted shape (every base is the default branch) no
+  pull request's branch is the base of another, so the tiered CI of Spec 039 (owner decision 2026-10-26, answer C; CI pull request #313)
+  does not detect a tip: every head currently reports the heavy lane. An ancestor-aware tip detection that would let lower heads skip it
+  is a follow-up CI change, not a precondition of `stw land`. The required contexts are read from the rules; no shard is named.
+  A head with an **empty check rollup** is distinct from `checks-not-green`: if the events show a head change **made by GitHub** (event
+  `head_ref_force_pushed` or `automatic_base_change_succeeded` whose actor is not the owner's login nor the head repository's pushing
+  account that opened the pull request; an owner force-push has the owner's login and is not this state), the state is
+  `head-changed-no-checks` (spike observation S-C); if the rollup is empty and **no** such event exists, the state is `checks-missing`
+  (the run has not started or was never triggered). Both refuse. The refusal text offers the owner's way out as text only: `gh pr close N
+  && gh pr reopen N` starts the `pull_request` run without changing the head (measured on #6 of the spike); stw never runs it (FR-033).
 - **FR-065 Bottom fast-forwards the default branch.** The remote default tip read by `git ls-remote` in this run is an ancestor of the
   bottom head (equivalently, the merge base of the bottom and the default tip equals the default tip). If the default branch moved,
   the reason is `not-fast-forward` with the detail `rebase needed`: the owner restacks per Spec 015/016 and re-reviews; stw never
@@ -354,7 +357,7 @@ one.
 - **FR-070 One push, no base edit.** The landing effect is exactly `git push --porcelain <remote> <tip-sha>:refs/heads/<default>` (FR-020
   unchanged: no force mode, no lease, no `+`, fully qualified ref). **No** `gh pr edit` and no other write exists in chain mode, because
   every listed pull request lands with the push and side children are refused (FR-066). The Spec 022 transport extension is therefore
-  smaller than for the single landing: the chain mode adds no endpoint; the argument-vector allowlist of FR-033 gains the chain push
+  smaller than for the single landing: the chain mode adds no write endpoint (its new reads are FR-080); the argument-vector allowlist of FR-033 gains the chain push
   and, on request, the branch deletes of FR-075 (the single landing's base edit stays what it is).
 - **FR-071 Atomicity.** One ref update is atomic on the remote: either the whole chain lands, or nothing does (a rejection leaves the
   default branch untouched). The fast-forward compare-and-swap of FR-042 applies: a moved default branch is `base-moved`, exit 1, no retry.
@@ -368,7 +371,7 @@ one.
   head, GitHub did not mark it within the wait; exit 1, no retry, no repair), or `merged-other-sha`. **End state if GitHub does not mark
   them:** the commits are in the default branch with their original SHAs and the pull requests stay open. The owner's fallback is to close
   each with a comment naming the landing commit. stw prints the exact commands (`gh pr close N --comment "Landed in <tip sha> (range
-  M..tip)"`) and **never closes a pull request itself** (decision: no; FR-076). Until E1 is recorded, `--stack` stays `land-unmeasured`.
+  M..tip)"`) and **never closes a pull request itself** (FR-076). Until E1 is recorded, `--stack` stays `land-unmeasured`.
 - **FR-074 Replay.** Evaluated before FR-060 to FR-068 (which need open pull requests). Idempotent as FR-041: if the default branch already contains the tip head, the push is skipped and the per pull request
   states are classified and reported (`already-landed` when all are `MERGED` with their own head). An interrupted run (signal, lost
   terminal) before the push changed nothing; after the push the rerun only observes (FR-044 applies: a running `git push` is waited on).
@@ -437,7 +440,7 @@ pull request and deletes no branch unless asked.
 - `--stack` where the pull requests all have base `main` and their heads are a linear chain (the shape of this workflow): the accepted shape;
   the diff each pull request shows then contains its parents' commits, which changes nothing about the landing. A chain whose bases are
   the parents' branches (native `gh stack`) is refused `land-unmeasured` until E1 and E2 are recorded.
-- `--stack` with one pull request left of the chain already `MERGED`: `already-merged-elsewhere` for that number; the owner names the rest.
+- `--stack` with a listed pull request already `MERGED`: with `merge_commit_sha` equal to its own head it is part of a previous landing (replay, FR-074); with another SHA it is `already-merged-elsewhere` for that number, nothing changes and the owner names the rest.
 - Stack: child head is based on the bottom's head; after the bottom lands, the child is a fast-forward of the new default branch only if
   the bottom landed as exactly its head (always true for this command).
 - Two children of one bottom: both retargeted; each child later lands only if still a fast-forward (the second child usually is not;
@@ -520,7 +523,7 @@ optional host-only signing and CLI exit-contract revision 2.
 | OQ6 | DECIDED: refuse unmet/unknown signature policy; optional re-sign is separate local 015 capability before fresh final-SHA review. | adopted recommendation; owner-answer override: 016 OQ-SIGN | 043 neither creates commits nor signs; it lands only the exact already reviewed head. |
 | OQ7 | DECIDED: forks/other forges/native jj landing remain deferred/unavailable in this first human-only slice. | adopted recommendation | No native or forge fallback. |
 | OQ8 | DECIDED: use typed immutable durable private action record/profile with fsync and no unresolved expiry, distinct land namespace. | adopted recommendation; owner-answer override: 016 OQ-STORE | Journal integration/conformance before owner apply; sync v1 unchanged. |
-| ST1 (2026-10-26) | DECIDED "A yes": `stw land --stack` lands a linear chain with one push of the tip (FR-060 to FR-079); first feature after v0.2.0; first measured in `wstein/stw-release-spike` with a second stack. | direct owner answer 2026-10-26 | Measurements E1 to E4 (research.md) and the security review task before code; stays `land-unmeasured` until recorded. |
+| ST1 (2026-10-26) | DECIDED "A yes": `stw land --stack` lands a linear chain with one push of the tip (FR-060 to FR-083); first feature after v0.2.0; first measured in `wstein/stw-release-spike` with a second stack. | direct owner answer 2026-10-26 | Measurements E0 to E4 recorded (research.md); apply stays gated by E1 to E3 and the security review before code; stays `land-unmeasured` until recorded. |
 | ST2 (2026-10-26) | DECIDED "B yes": dependent parts are by default one PR with a commit series; separate stacked PRs only when parts must merge independently (depth at most two). | direct owner answer 2026-10-26 | Workspace `AGENTS.md` (anchorage-workspace PR); no change to this command. |
 
 ## Open questions (not decided here)
