@@ -180,7 +180,7 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	if e = validate(); e != nil {
 		return stop(e)
 	}
-	if e = verifyPruneV4RestoredMetadata(ctx, p, pruneV4RestoreStaging(p, id)); e != nil {
+	if e = verifyPruneV4RestoredMetadata(ctx, p, pruneV4RestoreStaging(p, id), true); e != nil {
 		return stop(e)
 	}
 	regParent, regID, e := openCanonical(filepath.Dir(p.Registration.GitDir))
@@ -191,8 +191,30 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	if regID != p.Expected.RegistrationParent {
 		return stop(pruneV4RestoreError())
 	}
+	staged, stagedID, e := openCanonical(pruneV4RestoreStaging(p, id))
+	if e != nil {
+		return stop(e)
+	}
+	defer staged.Close()
+	named, e := root.Lstat(name)
+	held, heldErr := staged.Stat(".")
+	if e != nil || heldErr != nil || !os.SameFile(named, held) || stagedID.Path != pruneV4RestoreStaging(p, id) {
+		return stop(pruneV4RestoreError())
+	}
 	if e = publishPruneV4Restore(root, name, regParent, p.Registration.Name); e != nil {
 		return stop(pruneV4RestoreError())
+	}
+	// Keep the staged root private until it has become the original slot.
+	// Chmod through the held descriptor, so a replaced path is never adopted.
+	for _, m := range p.Expected.Metadata {
+		if m.Path == "." {
+			if e = staged.Chmod(".", os.FileMode(m.Mode)); e != nil {
+				return stop(e)
+			}
+		}
+	}
+	if e = syncDirectory(staged); e != nil {
+		return stop(e)
 	}
 	if e = syncDirectory(root); e != nil {
 		return stop(e)
@@ -247,7 +269,7 @@ func validatePruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, j pr
 	}
 	return verifyPruneV4Post(ctx, p, p.Expected, j)
 }
-func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Plan, path string) error {
+func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Plan, path string, privateStaging bool) error {
 	actual, total, e := observePruneMetadata(ctx, path, defaultPruneMetadataLimits())
 	if e != nil {
 		return e
@@ -257,11 +279,15 @@ func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Pla
 	}
 	for i, m := range p.Expected.Metadata {
 		a := actual[i]
+		mode := m.Mode
+		if privateStaging && m.Path == "." {
+			mode = uint32(os.ModeDir | 0700)
+		}
 		kind := a.Kind
 		if kind == "regular" {
 			kind = "file"
 		}
-		if a.Path != m.Path || kind != m.Kind || a.Digest != m.Digest || a.Size != m.Size || a.Mode != m.Mode {
+		if a.Path != m.Path || kind != m.Kind || a.Digest != m.Digest || a.Size != m.Size || a.Mode != mode {
 			return pruneV4RestoreError()
 		}
 	}
@@ -277,7 +303,7 @@ func verifyPruneV4Restored(ctx context.Context, p RegistrationPruneV4Plan, j pru
 	if _, digest, e := readPruneV4Payload(ctx, p); e != nil || digest != j.PayloadDigest {
 		return pruneV4PayloadError()
 	}
-	if e := verifyPruneV4RestoredMetadata(ctx, p, p.Registration.GitDir); e != nil {
+	if e := verifyPruneV4RestoredMetadata(ctx, p, p.Registration.GitDir, false); e != nil {
 		return e
 	}
 	common, e := observePruneV4Common(ctx, p.Expected.SourceSnapshot.Identity.RepositoryDir)
@@ -382,8 +408,10 @@ func copyPruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, root *os
 	for i := len(p.Expected.Metadata) - 1; i >= 0; i-- {
 		m := p.Expected.Metadata[i]
 		if m.Kind == "directory" {
-			if e = dst.Chmod(m.Path, os.FileMode(m.Mode)); e != nil {
-				return e
+			if m.Path != "." {
+				if e = dst.Chmod(m.Path, os.FileMode(m.Mode)); e != nil {
+					return e
+				}
 			}
 			d, e := dst.OpenRoot(m.Path)
 			if e != nil {
