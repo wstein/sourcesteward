@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -136,15 +137,15 @@ func TestGroupKeysAreOpaqueLettersAndShared(t *testing.T) {
 		}
 		keys[c.Group]++
 	}
-	// The branch row has its own group; the three worktrees of this fixture are fewer than a
-	// family, so they share "other in /tmp", although one of them also deletes its branch.
-	if len(keys) != 2 {
-		t.Fatalf("groups %v", keys)
-	}
+	// The branch row has its own group; the worktree that also deletes its branch is a group of its
+	// own (its effect class differs), and the other two share "other in /tmp".
+	sizes := []int{}
 	for _, n := range keys {
-		if n != 1 && n != 3 {
-			t.Fatalf("group sizes %v", keys)
-		}
+		sizes = append(sizes, n)
+	}
+	sort.Ints(sizes)
+	if !reflect.DeepEqual(sizes, []int{1, 1, 2}) {
+		t.Fatalf("groups %v", keys)
 	}
 }
 

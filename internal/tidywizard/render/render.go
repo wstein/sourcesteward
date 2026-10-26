@@ -101,8 +101,11 @@ type Document struct {
 	// assessed is the risk of every candidate and groups the groupable ones (Spec 044); both are
 	// computed whether or not the JSON carries them, because the text needs them.
 	assessed map[string]risk.Assessment
-	groups   []risk.Group
-	groupOf  map[string]string
+	// all is every candidate the result held, also those past the cut of Candidates: the counts of
+	// the grouped text read this one set.
+	all     []tidywizard.Candidate
+	groups  []risk.Group
+	groupOf map[string]string
 }
 
 // Build assembles the document. No array is nil. The candidates keep the order of the result
@@ -331,12 +334,8 @@ func Text(d Document, opts TextOptions) string {
 	paint := painter(opts.Color)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Workspace: %s\n", e(d.Workspace))
-	if len(d.Derived) > 0 {
-		parts := make([]string, 0, len(d.Derived))
-		for _, v := range d.Derived {
-			parts = append(parts, fmt.Sprintf("%s %s (%s)", e(v.Name), e(v.Value), e(v.Source)))
-		}
-		fmt.Fprintf(&b, "Derived:   %s\n", strings.Join(parts, ", "))
+	if line := derivedLine(d); line != "" {
+		fmt.Fprintf(&b, "Derived:   %s\n", line)
 	}
 	fmt.Fprintf(&b, "Mode:      %s\n", modeLine(d.Mode))
 	skipped, failed := 0, 0
@@ -406,6 +405,16 @@ func Text(d Document, opts TextOptions) string {
 		b.WriteString("truncated: the overview is cut (use a narrower selection)\n")
 	}
 	return b.String()
+}
+
+// derivedLine is the escaped list of the derived values, or empty when there are none.
+func derivedLine(d Document) string {
+	e := untrusted.Esc
+	parts := make([]string, 0, len(d.Derived))
+	for _, v := range d.Derived {
+		parts = append(parts, fmt.Sprintf("%s %s (%s)", e(v.Name), e(v.Value), e(v.Source)))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func baseOrNone(base string, e func(string) string) string {

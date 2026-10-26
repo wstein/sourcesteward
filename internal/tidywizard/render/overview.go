@@ -20,18 +20,18 @@ type OverviewOptions struct {
 	Color bool
 }
 
-// OverviewGroup is one line of the grouped overview (Spec 044 "Overview first"): the rows of one
-// kind and place that share an effect class. Branch and tracking-reference groups of several
-// repositories are one line, with the repositories counted; the keys of the JSON stay per group.
+// OverviewGroup is one group of the grouped overview (Spec 044 "Overview first"): the rows of one
+// effect class and place. Its key is the one of the JSON (`group`); a branch group is one repository.
 type OverviewGroup struct {
+	Key                   string
 	Kind                  tidywizard.Kind
 	Place, Family, Parent string
-	Rows                  []risk.Row
-	Level                 risk.Level
-	Counts                risk.Counts
-	Repos                 []risk.RepositoryCount
-	// AlsoBranch is the number of worktree rows that also delete their branch.
-	AlsoBranch int
+	Repo                  string
+	// WithBranch marks a directory group whose rows also delete their branch.
+	WithBranch bool
+	Rows       []risk.Row
+	Level      risk.Level
+	Counts     risk.Counts
 	owners     []ownerCount
 }
 
@@ -40,109 +40,36 @@ type ownerCount struct {
 	n     int
 }
 
-// overviewGroups merges the risk groups of the document into the lines of the first screen, worst
-// level first (green before yellow before orange), then larger before smaller.
+// overviewGroups are the groups of the document in the order of the first screen: worst level
+// first (green before yellow before orange), then larger before smaller (the order of risk.GroupRows).
 func overviewGroups(d Document) []OverviewGroup {
-	byID := make(map[string]tidywizard.Candidate, len(d.Candidates))
-	for _, c := range d.Candidates {
+	byID := make(map[string]tidywizard.Candidate, len(d.all))
+	for _, c := range d.all {
 		byID[c.ID] = c
 	}
-	var out []OverviewGroup
-	index := map[string]int{}
+	out := make([]OverviewGroup, 0, len(d.groups))
 	for _, g := range d.groups {
-		kind := tidywizard.Kind(g.Kind)
-		key := string(kind) + "\x00" + g.Place + "\x00" + g.Family + "\x00" + g.Parent
-		if kind == tidywizard.KindBranch || kind == tidywizard.KindTrackingRef {
-			key = string(kind)
+		og := OverviewGroup{Key: g.Key, Kind: tidywizard.Kind(g.Kind), Place: g.Place, Family: g.Family, Parent: g.Parent, Repo: g.Repo, Rows: g.Rows, Level: g.Level, Counts: g.Counts}
+		for _, e := range g.EffectClass {
+			if e == "delete-branch" && og.Kind == tidywizard.KindWorktree {
+				og.WithBranch = true
+			}
 		}
-		i, ok := index[key]
-		if !ok {
-			i = len(out)
-			index[key] = i
-			out = append(out, OverviewGroup{Kind: kind, Place: g.Place, Family: g.Family, Parent: g.Parent})
-		}
-		og := &out[i]
-		og.Rows = append(og.Rows, g.Rows...)
-		og.Repos = append(og.Repos, g.Repositories...)
-		og.Counts.Green += g.Counts.Green
-		og.Counts.Yellow += g.Counts.Yellow
-		og.Counts.Orange += g.Counts.Orange
-	}
-	for i := range out {
-		g := &out[i]
-		switch {
-		case g.Counts.Orange > 0:
-			g.Level = risk.Orange
-		case g.Counts.Yellow > 0:
-			g.Level = risk.Yellow
-		default:
-			g.Level = risk.Green
-		}
-		g.Repos = mergeRepos(g.Repos)
 		owners := map[string]int{}
 		for _, r := range g.Rows {
-			c := byID[r.ID]
-			owners[ownerLabel(c)]++
-			if g.Kind == tidywizard.KindWorktree {
-				for _, e := range c.Effects {
-					if strings.HasPrefix(e, "delete-branch:") {
-						g.AlsoBranch++
-						break
-					}
-				}
-			}
+			owners[ownerLabel(byID[r.ID])]++
 		}
 		for l, n := range owners {
-			g.owners = append(g.owners, ownerCount{l, n})
+			og.owners = append(og.owners, ownerCount{l, n})
 		}
-		sort.Slice(g.owners, func(a, b int) bool {
-			if g.owners[a].n != g.owners[b].n {
-				return g.owners[a].n > g.owners[b].n
+		sort.Slice(og.owners, func(a, b int) bool {
+			if og.owners[a].n != og.owners[b].n {
+				return og.owners[a].n > og.owners[b].n
 			}
-			return g.owners[a].label < g.owners[b].label
+			return og.owners[a].label < og.owners[b].label
 		})
+		out = append(out, og)
 	}
-	sort.SliceStable(out, func(a, b int) bool {
-		x, y := out[a], out[b]
-		if x.Level != y.Level {
-			return levelRank(x.Level) < levelRank(y.Level)
-		}
-		if len(x.Rows) != len(y.Rows) {
-			return len(x.Rows) > len(y.Rows)
-		}
-		return x.sortKey() < y.sortKey()
-	})
-	return out
-}
-
-func (g OverviewGroup) sortKey() string {
-	return string(g.Kind) + "\x00" + g.Place + "\x00" + g.Family + "\x00" + g.Parent
-}
-
-func levelRank(l risk.Level) int {
-	switch l {
-	case risk.Green:
-		return 0
-	case risk.Yellow:
-		return 1
-	case risk.Orange:
-		return 2
-	case risk.Red:
-		return 3
-	}
-	return 4
-}
-
-func mergeRepos(in []risk.RepositoryCount) []risk.RepositoryCount {
-	counts := map[string]int{}
-	for _, r := range in {
-		counts[r.Repo] += r.Count
-	}
-	out := make([]risk.RepositoryCount, 0, len(counts))
-	for repo, n := range counts {
-		out = append(out, risk.RepositoryCount{Repo: repo, Count: n})
-	}
-	sort.Slice(out, func(a, b int) bool { return out[a].Repo < out[b].Repo })
 	return out
 }
 
@@ -184,10 +111,7 @@ func (g OverviewGroup) place() string {
 	e := untrusted.Esc
 	switch g.Kind {
 	case tidywizard.KindBranch, tidywizard.KindTrackingRef:
-		if len(g.Repos) == 1 {
-			return "in " + e(g.Repos[0].Repo)
-		}
-		return fmt.Sprintf("in %d repositories", len(g.Repos))
+		return "in " + e(g.Repo)
 	}
 	switch g.Place {
 	case "scratchpads":
@@ -206,6 +130,9 @@ func (g OverviewGroup) consequence() string {
 		return "reversible"
 	case tidywizard.KindTrackingRef:
 		return "reference deleted"
+	}
+	if g.WithBranch {
+		return "files deleted, branch too"
 	}
 	return "files deleted"
 }
@@ -282,28 +209,29 @@ func Overview(d Document, opts OverviewOptions) string {
 			failed++
 		}
 	}
-	fmt.Fprintf(&b, "Workspace %s   %d %s analysed", e(d.Workspace), len(d.Repositories)-skipped-failed, plural(len(d.Repositories)-skipped-failed == 1, "repository", "repositories"))
+	fmt.Fprintf(&b, "Workspace %s   %d %s analyzed", e(d.Workspace), len(d.Repositories)-skipped-failed, plural(len(d.Repositories)-skipped-failed == 1, "repository", "repositories"))
 	if skipped+failed > 0 {
-		fmt.Fprintf(&b, " (%d not analysed)", skipped+failed)
+		fmt.Fprintf(&b, " (%d not analyzed)", skipped+failed)
 	}
 	b.WriteString("\n")
-	if len(d.Mode.Markers) > 0 {
-		// An agent marker turns a terminal run into an agent run; the person must be told why
-		// nothing is asked (the marker names are escaped).
-		fmt.Fprintf(&b, "Mode:      %s\n", modeLine(d.Mode))
+	// Every derived value and the mode stay on the first screen (Spec 041 FR-010): a refused state
+	// directory and an agent marker explain why a run exits 1 or asks nothing.
+	if line := derivedLine(d); line != "" {
+		fmt.Fprintf(&b, "Derived:   %s\n", line)
 	}
+	fmt.Fprintf(&b, "Mode:      %s\n", modeLine(d.Mode))
 	shown := 0
 	for _, r := range d.Repositories {
 		if r.State != "skipped" && r.State != "error" {
 			continue
 		}
 		if shown == 3 {
-			fmt.Fprintf(&b, "  and %d more not analysed\n", skipped+failed-shown)
+			fmt.Fprintf(&b, "  and %d more not analyzed\n", skipped+failed-shown)
 			break
 		}
 		shown++
 		if r.State == "error" {
-			fmt.Fprintf(&b, "  %s: %s\n", paint(styleBold, e(r.Name)), paint(styleRed, "could not be analysed: "+e(r.Reason)))
+			fmt.Fprintf(&b, "  %s: %s\n", paint(styleBold, e(r.Name)), paint(styleRed, "could not be analyzed: "+e(r.Reason)))
 		} else {
 			fmt.Fprintf(&b, "  %s: %s\n", paint(styleBold, e(r.Name)), paint(styleYellow, "skipped, "+skipSentence(r.Reason)))
 		}
@@ -348,35 +276,86 @@ func Overview(d Document, opts OverviewOptions) string {
 	if d.Truncated {
 		b.WriteString("truncated: the overview is cut (use a narrower selection)\n")
 	}
-	b.WriteString("\nEvery row with its codes: stw tidy --rows   The data: stw tidy --json\n")
+	b.WriteString("The rows with their codes: stw tidy --rows (10 per repository and owner)   Every row: stw tidy --json\n")
 	return b.String()
 }
 
+// maxGroupLines is how many group lines the first screen shows; the smallest groups beyond that
+// are folded into one last line so the screen stays short (Spec 044 SC-012). The JSON keeps every
+// group key.
+const maxGroupLines = 10
+
 func writeGroups(b *strings.Builder, groups []OverviewGroup, choosable, total int, paint func(style, s string) string) {
-	type line struct{ num, what, place, effect, level, detail string }
-	rows := make([]line, 0, len(groups))
+	type line struct {
+		num, what, place, effect, word, detail string
+		level                                  risk.Level
+	}
+	rows := make([]line, 0, maxGroupLines)
 	w := line{}
 	longest := func(cur *string, s string) {
 		if n := len([]rune(s)); n > len([]rune(*cur)) {
 			*cur = s
 		}
 	}
-	undo, also := false, 0
-	for i, g := range groups {
+	undo := false
+	for _, g := range groups {
+		if g.Kind == tidywizard.KindBranch || g.WithBranch {
+			undo = true
+		}
+	}
+	// The smallest groups (the later one of equal size first) are folded; the others keep their order.
+	shown, folded := groups, []OverviewGroup(nil)
+	if len(groups) > maxGroupLines {
+		order := make([]int, len(groups))
+		for i := range order {
+			order[i] = i
+		}
+		sort.SliceStable(order, func(a, b int) bool {
+			if len(groups[order[a]].Rows) != len(groups[order[b]].Rows) {
+				return len(groups[order[a]].Rows) < len(groups[order[b]].Rows)
+			}
+			return order[a] > order[b]
+		})
+		fold := map[int]bool{}
+		for _, i := range order[:len(groups)-(maxGroupLines-1)] {
+			fold[i] = true
+		}
+		shown = nil
+		for i, g := range groups {
+			if fold[i] {
+				folded = append(folded, g)
+			} else {
+				shown = append(shown, g)
+			}
+		}
+	}
+	for i, g := range shown {
 		word, detail := g.levels()
-		l := line{num: fmt.Sprint(i + 1), what: g.noun(), place: g.place(), effect: g.consequence() + ", " + g.ownerText(), level: word, detail: detail}
-		rows = append(rows, l)
+		rows = append(rows, line{num: fmt.Sprint(i + 1), what: g.noun(), place: g.place(), effect: g.consequence() + ", " + g.ownerText(), word: word, detail: detail, level: g.Level})
+	}
+	if len(folded) > 0 {
+		f := OverviewGroup{Level: risk.Green}
+		n := 0
+		for _, g := range folded {
+			n += len(g.Rows)
+			f.Counts.Green += g.Counts.Green
+			f.Counts.Yellow += g.Counts.Yellow
+			f.Counts.Orange += g.Counts.Orange
+		}
+		switch {
+		case f.Counts.Orange > 0:
+			f.Level = risk.Orange
+		case f.Counts.Yellow > 0:
+			f.Level = risk.Yellow
+		}
+		word, detail := f.levels()
+		rows = append(rows, line{num: fmt.Sprint(len(shown) + 1), what: fmt.Sprintf("%d more groups", len(folded)), place: fmt.Sprintf("%d %s in all", n, plural(n == 1, "row", "rows")), effect: "the smallest groups; their keys are in --json", word: word, detail: detail, level: f.Level})
+	}
+	for _, l := range rows {
 		longest(&w.num, l.num)
 		longest(&w.what, l.what)
 		longest(&w.place, l.place)
 		longest(&w.effect, l.effect)
-		if g.Kind == tidywizard.KindBranch {
-			undo = true
-		}
-		also += g.AlsoBranch
-	}
-	if also > 0 {
-		undo = true
 	}
 	pad := func(s string, like string, right bool) string {
 		gap := strings.Repeat(" ", len([]rune(like))-len([]rune(s)))
@@ -385,26 +364,23 @@ func writeGroups(b *strings.Builder, groups []OverviewGroup, choosable, total in
 		}
 		return s + gap
 	}
-	title := fmt.Sprintf("Can be cleaned (%s of %s candidates)", thousands(choosable), thousands(total))
+	title := fmt.Sprintf("Can be cleaned (%s of %s candidates in %d groups)", thousands(choosable), thousands(total), len(groups))
 	width := 2 + len(w.num) + 2 + len([]rune(w.what)) + 2 + len([]rune(w.place)) + 2 + len([]rune(w.effect)) + 2
 	fmt.Fprintf(b, "%s%s%s\n", title, strings.Repeat(" ", max(2, width-len([]rune(title)))), "risk")
-	for i, l := range rows {
-		fmt.Fprintf(b, "  %s  %s  %s  %s  %s", pad(l.num, w.num, true), pad(l.what, w.what, false), pad(l.place, w.place, false), pad(l.effect, w.effect, false), paint(levelStyle(groups[i].Level), l.level))
+	for _, l := range rows {
+		fmt.Fprintf(b, "  %s  %s  %s  %s  %s", pad(l.num, w.num, true), pad(l.what, w.what, false), pad(l.place, w.place, false), pad(l.effect, w.effect, false), paint(levelStyle(l.level), l.word))
 		if l.detail != "" {
 			b.WriteString("  " + l.detail)
 		}
 		b.WriteString("\n")
 	}
-	if also > 0 {
-		fmt.Fprintf(b, "     %d of the directories also delete their branch (reversible)\n", also)
-	}
 	if undo {
-		b.WriteString("Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR\n")
-		b.WriteString("      PLAN_ID: see stw tidy history; deleted directories are not restored\n")
+		b.WriteString("Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize\n")
+		b.WriteString("      PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored\n")
 	}
 }
 
-// skipSentence is the wording of the reason a repository was not analysed.
+// skipSentence is the wording of the reason a repository was not analyzed.
 func skipSentence(reason string) string {
 	switch reason {
 	case "base-ambiguous":
@@ -459,6 +435,9 @@ type retainRow struct {
 // fact (not integrated) overrides the structural reason the classifier found first.
 var selfRed = map[string]bool{"unmerged": true, "dirty": true, "ignored-extras": true, "evidence-incomplete": true}
 
+// notChecked lists the reasons of kept worktree rows whose uncommitted files the view does not claim to know.
+var notChecked = map[string]bool{"registration-record-missing": true, "locked-foreign": true, "recently-active": true}
+
 // redActions are the actions of a red row whose classifier reason is structural.
 var redActions = map[string]string{
 	"registration-record-missing":   "do not delete; find the right --state-dir and judge it",
@@ -474,7 +453,7 @@ func retainRows(d Document) []retainRow {
 	}
 	counts := map[key]int{}
 	first := map[key]risk.Assessment{}
-	for _, c := range d.Candidates {
+	for _, c := range d.all {
 		a := d.assessed[c.ID]
 		if a.Level != risk.Red && a.Level != risk.Kept {
 			continue
@@ -490,6 +469,10 @@ func retainRows(d Document) []retainRow {
 		s := Sentence{Why: "kept without a stated reason", Action: "see stw tidy --rows"}
 		if k.reason != "" {
 			s = reasonSentenceOrFallback(k.reason)
+		}
+		if k.level == risk.Kept && notChecked[k.reason] {
+			// The dirt of an integrated row kept for a structural reason is not necessarily known here.
+			s.Why += "; integrated, not checked for uncommitted files"
 		}
 		if k.stale {
 			s = Sentence{Why: "worktree entry whose directory is gone", Action: "no stw action yet"}
@@ -543,6 +526,6 @@ func RetainTable(d Document, opts OverviewOptions) string {
 		}
 		fmt.Fprintf(&b, "  %5s  %s  %-*s  %s\n", thousands(r.Count), paint(levelStyle(r.Level), fmt.Sprintf("%-5s", word)), whyW, r.Why, r.Action)
 	}
-	b.WriteString("Rows: run stw tidy --rows for every row with its codes, or stw tidy --json\n")
+	b.WriteString("Rows with their codes: stw tidy --rows (10 per repository and owner); every row: stw tidy --json\n")
 	return b.String()
 }

@@ -1,5 +1,103 @@
 {
- "_comment": "Recorded from the real stw tidy plan --json of the owner's workspace on 2026-10-26 (7 repositories, 1129 candidates): the 165 safe rows unchanged, the 964 retained rows aggregated by kind, verdict, reason, proof, scope and owner source (the retain table needs nothing else). Activity times, upstream state and pull request facts were not recorded.",
+ "_comment": "Recorded from the real stw tidy plan --json of the owner's workspace on 2026-10-26 (7 repositories, 1129 candidates): the 165 safe rows unchanged, the 964 retained rows aggregated by kind, verdict, reason, proof, scope and owner source (the retain table needs nothing else). Activity times, upstream state and pull request facts were not recorded. The derived values are the real ones.",
+ "derived": [
+  {
+   "name": "workspace",
+   "overridden": false,
+   "source": "discovery",
+   "value": "/workspaces/Anchorage"
+  },
+  {
+   "name": "remote:.",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:.",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "remote:bundledock",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:bundledock",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "remote:chartscribe",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:chartscribe",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "remote:crewbook",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:crewbook",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "remote:sheetmill",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:sheetmill",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "remote:sourcesteward",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:sourcesteward",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "remote:workharbor",
+   "overridden": false,
+   "source": "origin",
+   "value": "origin"
+  },
+  {
+   "name": "base:workharbor",
+   "overridden": false,
+   "source": "refs/remotes/origin/HEAD",
+   "value": "refs/heads/main"
+  },
+  {
+   "name": "state-dirs",
+   "overridden": false,
+   "source": "default",
+   "value": "/home/vscode/.local/state/stw/workspace (7 records)"
+  }
+ ],
  "repositories": [
   ".",
   "bundledock",

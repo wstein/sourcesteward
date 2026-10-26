@@ -15,10 +15,10 @@ type Sentence struct{ Why, Action string }
 
 // reasonSentences covers every code of tidywizard.AllReasons (a test fails for a missing one).
 var reasonSentences = map[string]Sentence{
-	"unmerged":                        {"not merged: it has commits the base lacks", "nothing is deleted; review it with the report"},
+	"unmerged":                        {"not merged: it has commits the base lacks", "nothing is deleted; review: stw tidy plan REPO --contract 3 --report-dir DIR"},
 	"dirty":                           {"uncommitted changes", "commit or discard them yourself"},
 	"ignored-extras":                  {"untracked or ignored files", "look inside; remove them yourself if junk"},
-	"evidence-incomplete":             {"not judged (deadline, budget or Git refused)", "run again with a larger window, for example --timeout 15m"},
+	"evidence-incomplete":             {"not judged (for example a deadline or Git refused)", "assume unique work; after a deadline run again with --timeout 15m"},
 	"registration-record-missing":     {"created by stw, record not found", "re-run with the --state-dir that created it"},
 	"registration-record-ambiguous":   {"created by stw, several differing records", "find the right --state-dir; nothing is deleted"},
 	"locked-foreign":                  {"locked by something other than stw", "unlock it yourself if you know why it is locked"},
@@ -45,7 +45,7 @@ var proofSentences = map[string]Sentence{
 	"patch-id":                             {"on the base as equal patches (a rebase merge)", "compare with the base if unsure"},
 	"merge-noop":                           {"merging it into the base changes nothing", "compare with the base if unsure"},
 	"no-net-change":                        {"its changes cancel out against the base", "nothing is lost by deleting it"},
-	"empty-working-copy-integrated-parent": {"empty working copy whose parent is on the base", "nothing is lost by deleting it"},
+	"empty-working-copy-integrated-parent": {"empty working copy whose parent is on the base", "compare with the base if unsure"},
 	"github-branch-absent":                 {"the remote no longer has the branch", "the local reference can go"},
 	"none":                                 {"not on the base", "never offered"},
 }
@@ -70,9 +70,9 @@ var riskReasonSentences = map[string]Sentence{
 
 // levelSentences covers the five risk levels.
 var levelSentences = map[risk.Level]Sentence{
-	risk.Green:  {"provably on the base branch", "offered; Enter takes it"},
-	risk.Yellow: {"on the base as equal patches, not as the same commits", "offered; it needs a yes"},
-	risk.Orange: {"on the base as equal patches and one more fact raises the risk", "offered; it needs a yes, never a default"},
+	risk.Green:  {"provably on the base branch", "offered for deletion"},
+	risk.Yellow: {"on the base as equal patches, not as the same commits", "offered for deletion; compare with the base if unsure"},
+	risk.Orange: {"on the base as equal patches and one more fact raises the risk", "offered for deletion; check the extra fact first"},
 	risk.Red:    {"may hold unique work", "never offered for deletion"},
 	risk.Kept:   {"kept for a structural reason", "never offered for deletion"},
 }
