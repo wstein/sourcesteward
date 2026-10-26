@@ -111,31 +111,45 @@ is skipped and the required `suite` check does not report, so the merge is block
 
 Heavy gate on the tip of a stack (owner decision 2026-10-26, "C yes", Spec 039 amendment). The shards run
 for a push to `main`, for every PR whose base is the default branch, for the tip of a stack and for a PR with
-the `ci-full` label. A PR is below the tip when its head branch is the base branch of another open PR of
-this repository whose head is also a branch of this repository. Such a PR runs only the light lane: `check`
+the `ci-full` label. A PR is below the tip when its head branch is the base branch of another open,
+non-Draft PR of this repository whose head is also a branch of this repository. A Draft child does not
+count (authors push early as Draft), so a forgotten Draft child cannot remove the heavy gate. Such a PR runs only the light lane: `check`
 (without `internal/workspace`) and the aggregate `suite`, which passes with the skipped shards, the same
 mechanism as for a documentation-only PR, so both required checks (`check` and
 `Git/jj conformance (current) / suite`) still report on every PR. The `changes` job decides this with
 `scripts/ci_stack.py`: it lists the open PRs with `gh api` (the job alone has `pull-requests: read`) and
 looks for a child. Branch names reach the script only through the environment. Any doubt means tip, so the
 shards run: a fork PR, a failed or incomplete listing, a listing without the PR itself, the default
-branch as head branch, a child from a fork.
+branch as head branch, a child from a fork. If the `changes` job itself fails, `conformance` is skipped
+and `suite` does not report, so the merge is blocked.
 
-When the decision is made: when a run starts, that is a new push, a close and reopen, or a re-run of the jobs
-in the Actions UI (the lookup is repeated live). Opening, editing, retargeting, merging or closing another
-PR starts no run of this one, and no other trigger exists. So (1) a PR that was a tip keeps its earlier heavy
-run when a child appears later, and its next push runs only the light lane; the heavy run of the tip covers
-every commit below it, because the tip contains them. (2) When a child is merged or closed without
-merging, the parent's earlier light result stays: a parent whose child was closed unmerged has no heavy
-run for its head. Re-run its jobs or close and reopen it before merging it. (3) Merging the bottom PR by
-rebase makes GitHub retarget its child to `main`; that edit starts no run. The restack push that a rebase-merge
-needs does, and then the PR is on `main` or the tip and runs the shards. Merge a stack only after the tip is green.
+When the decision is made: when a run starts, that is a new push (also one that merging a child into this
+PR's branch makes), a close and reopen, or "Re-run all jobs" in the Actions UI (the lookup is repeated live;
+re-running only the conformance job reuses the stale `changes` output). Opening, editing, retargeting or
+closing a child, and a merge that does not move this PR's head, start no run of this one, and no other
+trigger exists. So (1) a PR that was a tip keeps its earlier heavy run when a child appears later, and its
+next push runs only the light lane. (2) When a child is closed without merging, the parent's earlier
+light result stays: it has no heavy run for its head. Re-run all jobs or close and reopen it before merging
+it. (3) Merging the bottom PR by rebase makes GitHub retarget its child to `main`; that edit starts no run.
+The restack push that a rebase-merge needs does, and then the PR is on `main` or the tip and runs the shards.
+
+Residual risk and the rule for owner and authors. The heavy run of the tip covers the commits below it only
+when the tip contains the parent's CURRENT head: a push to the parent after the child exists runs only the
+light lane, and the tip does not contain that commit until it is restacked. The tip's shards also run
+against its own base (the parent branch), never against `main`, and the required `suite` of a PR below the
+tip is green without shards, so GitHub does not enforce the rule. Therefore: before merging a PR below the
+tip, the latest heavy run of the tip must be green on a head that contains the parent's current head
+(restack the tip after every push below it); otherwise apply the `ci-full` label to the parent, which runs
+the shards for it. After a web rebase-merge the rewritten SHAs on `main` meet the shards only in the
+post-merge run on `main`: that run is the last gate. With `stw land --stack` (one fast-forward of the tip) the
+tip's run covers the chain exactly.
 
 Cost: one push to a tip or a PR on `main` runs about 78 runner minutes (`check` about 10, six `current`
 shards about 68) in 7 concurrent jobs, wall time about 14 minutes. A PR below the tip runs `check` and `suite`
-about 10 minutes in 2 concurrent jobs (the `changes` job is small). A stack of three PRs therefore costs one
-heavy run plus two light ones per push cycle (about 98 runner minutes, 11 jobs) instead of three heavy
-ones (about 234, 21 jobs, over the limit of 20 concurrent jobs). A newer push cancels the older run
+about 10 minutes in 2 concurrent jobs (`check` and `suite`; plus the small `changes` job). A stack of three
+PRs therefore costs one heavy run plus two light ones per push cycle (about 98 runner minutes; 7 + 2 + 2 =
+11 concurrent jobs, not counting `changes`) instead of three heavy ones (about 234 minutes, 21 jobs, over
+the limit of 20 concurrent jobs). A newer push cancels the older run
 of the same PR; batch fixes into one push.
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
