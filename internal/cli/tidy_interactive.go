@@ -33,7 +33,11 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 	prep, res, mode := run.prep, run.res, run.mode
 	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, Notices: prep.Notices, Now: run.now})
 	out := cmd.OutOrStdout()
-	if _, err := io.WriteString(out, render.Text(doc, tidyTextOptions(out))); err != nil {
+	// A person on a terminal still chooses by the numbers of the row view until the group steps of
+	// Spec 044 replace the question; everyone else gets the grouped overview unless --rows asks for
+	// the rows.
+	text := tidyOverviewText(out, doc, w.rows || mode.Mode == owner.ModeHuman)
+	if _, err := io.WriteString(out, text); err != nil {
 		return runtimeFailure{err}
 	}
 	exit := func() error { return wizardExit(doc.Truncated, prep, res) }

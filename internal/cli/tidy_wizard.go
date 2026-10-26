@@ -246,7 +246,7 @@ func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool
 		}
 	}
 	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, PlanID: planID, Notices: append(append([]string{}, prep.Notices...), notices...), Now: run.now})
-	cut, err := writeWizardOverview(cmd.OutOrStdout(), doc, structured, planID, stored)
+	cut, err := writeWizardOverview(cmd.OutOrStdout(), doc, structured, w.rows, planID, stored)
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func savePlanSet(ctx context.Context, prep analysis.Prepared, res tidywizard.Res
 }
 
 // writeWizardOverview prints the overview and reports whether the JSON had to be cut to its bound.
-func writeWizardOverview(out io.Writer, doc render.Document, structured bool, planID, stored string) (cut bool, err error) {
+func writeWizardOverview(out io.Writer, doc render.Document, structured, rows bool, planID, stored string) (cut bool, err error) {
 	if structured {
 		b, cut, err := render.JSON(doc)
 		if err != nil {
@@ -403,7 +403,7 @@ func writeWizardOverview(out io.Writer, doc render.Document, structured bool, pl
 		}
 		return cut, nil
 	}
-	text := render.Text(doc, tidyTextOptions(out))
+	text := tidyOverviewText(out, doc, rows)
 	if planID != "" {
 		text += fmt.Sprintf("\nStored plan set %s (%s). Nothing has been changed.\nApply it with: stw tidy apply %s\n", planID, stored, planID)
 	}
@@ -411,6 +411,20 @@ func writeWizardOverview(out io.Writer, doc render.Document, structured bool, pl
 		return false, runtimeFailure{err}
 	}
 	return false, nil
+}
+
+// tidyOverviewText is the human text of the overview: the grouped overview followed by the retain
+// table (Spec 044), or with --rows the row view of Spec 041, byte for byte as before.
+func tidyOverviewText(out io.Writer, doc render.Document, rows bool) string {
+	if rows {
+		return render.Text(doc, tidyTextOptions(out))
+	}
+	opts := render.OverviewOptions{Color: tidyTextOptions(out).Color}
+	text := render.Overview(doc, opts)
+	if table := render.RetainTable(doc, opts); table != "" {
+		text += "\n" + table
+	}
+	return text
 }
 
 // wizardExit is exit 1 after the overview when the evidence is incomplete: a repository error or

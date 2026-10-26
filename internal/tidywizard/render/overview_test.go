@@ -303,3 +303,18 @@ func TestOverviewStatesTheConsequencesAndTheUndoLine(t *testing.T) {
 		t.Errorf("an undo line without a branch:\n%s", out)
 	}
 }
+
+// An agent marker turns a terminal run into an agent run: the screen says so, escaped, and a run
+// without a marker has no mode line.
+func TestOverviewNamesTheAgentMarkers(t *testing.T) {
+	in := riskInput()
+	in.Mode = owner.Evidence{Mode: owner.ModeAgent, StdinTTY: true, StdoutTTY: true, Markers: []string{"CLAUDE_CODE_SSE_PORT", "X\x1b[2J"}}
+	out := Overview(Build(in), OverviewOptions{})
+	if !strings.Contains(out, "Mode:      agent (stdin tty, stdout tty, agent marker CLAUDE_CODE_SSE_PORT, X\\x1b[2J)\n") {
+		t.Errorf("mode line:\n%s", out)
+	}
+	in.Mode.Markers = []string{}
+	if out := Overview(Build(in), OverviewOptions{}); strings.Contains(out, "Mode:") {
+		t.Errorf("mode line without a marker:\n%s", out)
+	}
+}

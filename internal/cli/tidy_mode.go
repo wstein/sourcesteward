@@ -29,6 +29,7 @@ var tidyFlagClasses = map[string]flagClass{
 	// wizard-only
 	"workspace": flagWizard, "mine": flagWizard, "by-owner": flagWizard, "member": flagWizard, "member-base": flagWizard,
 	"only": flagWizard, "offline": flagWizard, "save": flagWizard, "yes": flagWizard, "verbose": flagWizard, "quiet": flagWizard, "progress": flagWizard, "trace": flagWizard,
+	"rows": flagWizard,
 	// shared (--human forces text, which is also what the expert layer prints without --json)
 	"state-dir": flagShared, "online": flagShared, "timeout": flagShared, "json": flagShared, "human": flagShared,
 	// expert
@@ -74,7 +75,12 @@ type tidyWizardOptions struct {
 	trace string
 	// structured is set by the entry point that prints JSON: no live progress then.
 	structured bool
+	// rows is --rows: the text is the row view of Spec 041 instead of the grouped overview.
+	rows bool
 }
+
+// rowsUsage is the help text of --rows.
+const rowsUsage = "Print one line per candidate with its codes, grouped by owner, instead of the grouped overview; text only, --json is unchanged"
 
 func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 	f := cmd.Flags()
@@ -88,6 +94,7 @@ func addTidyWizardPlanFlags(cmd *cobra.Command, o *tidyWizardOptions) {
 	f.BoolVar(&o.offline, "offline", false, "Make no network read (wizard layer; accepted here for symmetry, plan is offline by default); excludes --online")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
 	f.BoolVar(&o.verbose, "verbose", false, "Print the phase timings and counts of the analysis to stderr afterwards (wizard layer)")
+	f.BoolVar(&o.rows, "rows", false, rowsUsage+" (wizard layer)")
 	addTidyProgressFlags(f, o)
 }
 
@@ -214,6 +221,7 @@ func addTidyBareFlags(cmd *cobra.Command, o *tidyBareOptions) {
 	f.BoolVar(&o.json, "json", false, "Print the overview as one document; asks nothing, stores nothing")
 	f.BoolVar(&o.human, "human", false, "Force text output; excludes --json")
 	f.BoolVar(&o.verbose, "verbose", false, "Print the phase timings and counts of the analysis to stderr afterwards")
+	f.BoolVar(&o.rows, "rows", false, rowsUsage)
 	addTidyProgressFlags(f, &o.tidyWizardOptions)
 	// save and yes are registered hidden, unbound, only to refuse them whatever their value.
 	f.Bool("save", false, "")
