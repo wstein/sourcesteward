@@ -3,6 +3,10 @@
 **Created**: 2026-10-22 | **Status**: implemented; run once for `v0.1.0` (evidence: [verification](verification.md)) (spec-light: workflow, scripts and offline tests first;
 this page is the plan and the contract). Nothing here tags, builds, publishes or changes a repository setting.
 
+> **Note (2026-10-26):** the next paragraph is the history of the plan. `v0.1.0` was published on 2026-10-23
+> by this workflow (run and limits in [verification](verification.md)); `stw` has a release and a release workflow now.
+> Spec 026 below is still not implemented as a whole.
+
 `stw` has no release, no tag and no release workflow. Spec 026 (D7, D8, [bootstrap contract](../026-release-process/contracts/bootstrap.md))
 says its **first** release uses the simple tag-workflow pattern already merged in `sheetmill` (spec 019) and `chartscribe`
 (`specs/002-release`, which just released v0.1.0), not the future `stw release` machinery. This page adopts that pattern.
