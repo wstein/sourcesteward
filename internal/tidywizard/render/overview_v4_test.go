@@ -124,7 +124,10 @@ func TestOverviewV4EscapesPruneTextAndKeepsDisplayBound(t *testing.T) {
 		rows[i].Task = hostile
 		rows[i].Limitations = []string{hostile}
 	}
-	text := TextV4(BuildV4(in, rows), TextOptions{})
+	text, cut := TextV4(BuildV4(in, rows), TextOptions{})
+	if cut {
+		t.Fatal("small text overview was cut")
+	}
 	if strings.ContainsAny(text, "\x1b\r\x00\u202e") || !strings.Contains(text, untrusted.Esc(hostile)) || !strings.Contains(text, "and 2 more") {
 		t.Fatalf("escaped bounded text missing: %s", text)
 	}
@@ -147,5 +150,17 @@ func TestOverviewV4PlanIDUsesSeparateManifestDomain(t *testing.T) {
 		if _, _, e := JSONV4(BuildV4(in, nil)); e == nil {
 			t.Fatalf("accepted incompatible manifest id %q", id)
 		}
+	}
+}
+
+func TestOverviewV4TextBoundsWholeDocument(t *testing.T) {
+	row := pruneRow(0)
+	row.Limitations = make([]string, 50000)
+	for i := range row.Limitations {
+		row.Limitations[i] = strings.Repeat("x", 120)
+	}
+	text, cut := TextV4(BuildV4(input(), []tidywizard.RegistrationPrune{row}), TextOptions{})
+	if !cut || len(text) > MaxDocumentBytes || !strings.Contains(text, "output-limit") {
+		t.Fatalf("text byte bound: bytes=%d cut=%v", len(text), cut)
 	}
 }
