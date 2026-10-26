@@ -60,7 +60,7 @@ The sample is the real output of the wizard on the fixture of `TestTidyExampleMa
 
 **Reading the summary.** `summary: N safe (A own, B other)` splits the safe rows by scope: `A` counts scope `own`, and `B` counts every other safe row, so `B` includes the rows of scope `unknown` as well as those of scope `other`; the sample above has one `other` and no `unknown` safe row. In agent mode only an item owned by a task record is `own`: a branch or worktree that merely follows the naming convention, such as `claude/*`, shows `owner claude (path-convention) [unknown]` even when the caller is `claude`, appears under `owner unknown`, is counted in `B`, is refused for an agent apply (`scope-not-authorized`) and needs the typed confirmation of a human at a terminal. The summary does not number `unknown` rows separately; they are listed under the heading `owner unknown`, and `--json` gives each candidate's `scope`.
 
-**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--offline`, `--timeout`, `--json`, `--human`, `--verbose`, `--quiet`, `--progress` and `--trace`; `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
+**Flags.** Bare `stw tidy` takes `--workspace`, `--mine`, `--by-owner`, `--member`, `--member-base`, `--only`, a repeatable `--state-dir`, `--online`, `--offline`, `--timeout`, `--json`, `--human`, `--verbose`, `--quiet`, `--progress`, `--trace` and `--contract 4` (read-only overview 4, below); `stw tidy plan` takes the same and `--save`. Bare `stw tidy` refuses `--yes` and `--save` with exit 2 (`--yes` belongs to `apply PLAN-ID` and never authorizes a plan made in the same run; `--save` is `plan` only). `stw tidy --json` prints the overview document like `stw tidy plan --json`: it never prompts, stores or applies and has no `plan_id`.
 
 **Online reads (Spec 044, D13).** The human wizard, that is bare `stw tidy` without `--json` on a terminal for both stdin and stdout and without an agent marker, reads GitHub by default; `--offline` turns that off and makes no network read. The reads are the contract-3 tracking evidence (so tracking references now appear in the human wizard) and the pull request evidence of open tips; both are GET requests to github.com through the fixed bounded hosting transport with the credential of `gh`, and no write call exists. `--online` with `--offline` is a usage error (exit 2). Everything else stays offline unless `--online` is given: `stw tidy plan`, `--json`, `--save`, agent mode and the expert layer (a `PATH` or any expert flag). `--offline` is accepted on `stw tidy` and on `stw tidy plan`, where it changes nothing; with a `PATH` or an expert flag it is refused with exit 2 like every wizard flag.
 
@@ -90,8 +90,20 @@ manifest-2 identities, when saving is implemented, use full 64-hex digests rathe
 than legacy 12-hex IDs. The combined candidate bound is 4096 and either output
 format is bounded to 4 MiB. Exit 0 means complete observation, exit 1 means
 incomplete evidence or truncated / failed output, and exit 2 means invalid
-usage. Registration observation stays offline; `--online` only opts into the
-existing legacy authenticated reads.
+usage. Registration observation stays offline. On this implementation branch,
+legacy authenticated reads still require `--online`; Spec 044 D13 changes only
+the human wizard to online by default, with `--offline` to opt out. Agent runs,
+`plan` and `--json` keep their offline default.
+
+Only visible registration rows suppress matching legacy worktree rows, by exact
+repository and destination. Output bounds may then cut either representation;
+`truncated: true` and exit 1 disclose that a target can be absent from both arrays.
+The unpublished v4 schema permits additive properties in its legacy candidate,
+summary and derived objects so Spec 044 can extend the shared producer without
+breaking v4. Existing required fields and their types remain checked; the root
+and registration-prune objects remain closed. Spec 044 T008 must update the v2
+schema and its freeze digest together with its producer tests; this PR does not
+modify frozen v2/v3 schemas or emit the new risk fields.
 
 **Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per worktree (jj: workspace) and per local branch (jj: bookmark) of that repository, at most 10 minutes; the Git proof phase gets the rest of that window, at least 60 s, so without `--timeout` it can run up to 60 s past the window; with `--timeout` the given deadline bounds everything. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace, 10 s per proof command, 20 s per tip) and the plan, apply and restore deadlines of the expert layer are not scaled. When candidates are retained as `evidence-incomplete` with the evidence `deadline-exceeded` or `proof-budget-exhausted`, the overview ends with a notice `N of M not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m`: N is the number of those candidates (`--timeout` widens the window, the content reads and the proof phase, but not the 20 s per-tip proof budget nor the per-worktree content budget, which also end as `proof-budget-exhausted` and are counted too, so the hint can fail for those items) and M the number of all candidates of the overview, counted after the view is narrowed (`--only`, `--mine`, `--by-owner`) and before the output is cut at the candidate bound. The notice is the text line `notice: ...` and an entry of the `notices` array of `--json`.
 
