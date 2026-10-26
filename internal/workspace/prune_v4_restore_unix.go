@@ -281,7 +281,7 @@ func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Pla
 		a := actual[i]
 		mode := m.Mode
 		if privateStaging && m.Path == "." {
-			mode = uint32(os.ModeDir | 0700)
+			mode = 0700
 		}
 		kind := a.Kind
 		if kind == "regular" {
