@@ -19,6 +19,8 @@ func TestWorstLevelAndCounts(t *testing.T) {
 		{"orange", []Assessment{{Level: Orange}, {Level: Green}, {Level: Yellow}}, Orange, Counts{Green: 1, Yellow: 1, Orange: 1}},
 		{"red", []Assessment{{Level: Orange}, {Level: Red}, {Level: Green}}, Red, Counts{Green: 1, Orange: 1, Red: 1}},
 		{"kept", []Assessment{{Level: Kept}}, Kept, Counts{Kept: 1}},
+		{"unknown", []Assessment{{Level: "future"}, {Level: Green}}, Red, Counts{Red: 1, Green: 1}},
+		{"empty level", []Assessment{{}}, Red, Counts{Red: 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := Worst(tc.in); got != tc.want {
