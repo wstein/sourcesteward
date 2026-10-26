@@ -29,9 +29,13 @@ var (
 	}
 	tidyAnalyse = analysis.Run
 	// The working directory, absolute (the CLI imports no os: filepath.Abs resolves ".").
-	tidyGetwd      = func() (string, error) { return filepath.Abs(".") }
-	tidyNow        = time.Now
-	tidyPlannerFor = func(p analysis.Prepared) planset.Planner {
+	tidyGetwd = func() (string, error) { return filepath.Abs(".") }
+	tidyNow   = time.Now
+	// The clock of the progress timings, and the terminal test of stderr (an *os.File that is a terminal).
+	tidyProgressNow      = time.Now
+	tidyOpenTrace        = workspace.OpenTraceFile
+	tidyStderrIsTerminal = owner.IsTerminal
+	tidyPlannerFor       = func(p analysis.Prepared) planset.Planner {
 		repos := []planset.RepoSpec{}
 		for _, s := range p.Specs {
 			if s.Skip == "" {
@@ -79,6 +83,9 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	if cmd.Flags().Changed("timeout") && timeout <= 0 {
 		return nil, fmt.Errorf("--timeout must be a positive duration")
 	}
+	if w.quiet && w.progress {
+		return nil, fmt.Errorf("--quiet and --progress exclude each other")
+	}
 	if timeout > workspace.ObservationTimeoutMax {
 		return nil, fmt.Errorf("--timeout must not exceed %s", workspace.ObservationTimeoutMax)
 	}
@@ -99,9 +106,37 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 		// The same value is the observation window of every repository (it replaces the scaled default).
 		r.ctx = workspace.WithObservationTimeout(r.ctx, timeout)
 	}
+	// Progress goes to stderr only: a live line on a terminal, plain lines for a verbose run that is
+	// not on one, nothing at all with --json. The summary of --verbose follows the analysis.
+	stderr := cmd.ErrOrStderr()
+	progressMode := tidyProgressOff
+	switch {
+	case w.structured || w.quiet:
+	case tidyStderrIsTerminal(stderr):
+		progressMode = tidyProgressLive
+	case w.verbose || w.progress:
+		progressMode = tidyProgressPlain
+	}
+	prog := newTidyProgress(stderr, progressMode, tidyProgressNow)
+	if w.trace != "" {
+		f, err := tidyOpenTrace(w.trace)
+		if err != nil {
+			r.cancel()
+			return nil, fmt.Errorf("--trace: %s", escFull(err.Error()))
+		}
+		defer f.Close()
+		prog.trace = f
+	}
+	r.ctx = workspace.WithObserveProgress(r.ctx, prog.Event)
+	if w.verbose || w.trace != "" {
+		r.ctx = workspace.WithGitTrace(r.ctx, prog.Git)
+	}
+	preparing := tidyProgressNow()
 	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: cmd.Flags().Changed("online")})
+	prog.Prepared(tidyProgressNow().Sub(preparing))
 	if err != nil {
 		r.cancel()
+		prog.Finish()
 		// A deadline or an interrupt comes first: discovery reports its context ending as a
 		// missing workspace, which it is not.
 		if cause := interruption(r.ctx, r.timeoutSet, timeout); cause != nil {
@@ -117,6 +152,10 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	}
 	r.prep = prep
 	r.res = tidyAnalyse(r.ctx, prep, tidywizard.Config{Caller: caller.Value, Agent: mode.Mode == owner.ModeAgent, CWD: cwd, Now: tidyNow()})
+	prog.Finish()
+	if w.verbose {
+		prog.Summary()
+	}
 	r.res.Candidates = narrowView(r.res.Candidates, w, caller.Value)
 	return r, nil
 }
@@ -125,6 +164,7 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 // narrows the view (--only, --mine, --by-owner), optionally stores the plan set of the safe own
 // items (--save), prints the overview as text or JSON, and never applies anything.
 func runTidyWizardPlan(cmd *cobra.Command, w *tidyWizardOptions, structured bool, timeout time.Duration) error {
+	w.structured = structured
 	run, err := startWizard(cmd, w, timeout)
 	if err != nil {
 		return err
@@ -281,7 +321,7 @@ func writeWizardOverview(out io.Writer, doc render.Document, structured bool, pl
 		}
 		return cut, nil
 	}
-	text := render.Text(doc, render.TextOptions{})
+	text := render.Text(doc, tidyTextOptions(out))
 	if planID != "" {
 		text += fmt.Sprintf("\nStored plan set %s (%s). Nothing has been changed.\nApply it with: stw tidy apply %s\n", planID, stored, planID)
 	}
