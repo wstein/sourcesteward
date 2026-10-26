@@ -144,7 +144,12 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 	stop := func(err error) RegistrationPruneV4Result {
 		r.Status = "partial"
 		r.Plan = &p
-		r.Diagnostics = []Diagnostic{{Code: tidyErrorCode(err), Message: pruneV4Message(err)}}
+		code, message := tidyErrorCode(err), pruneV4Message(err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			code, message = "canceled", "Registration prune canceled or deadline exceeded; retained journal and recovery describe possible effects."
+		}
+		r.Diagnostics = []Diagnostic{{Code: code, Message: message}}
+		j.Phase = "partial"
 		j.Diagnostics = r.Diagnostics
 		// Preserve the last confirmed phase and pending intent if persistence fails.
 		_ = writePruneV4Record(s.dirs["journals"], p.PlanID+".json", j, false)
@@ -157,9 +162,9 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 	if e = validate(); e != nil {
 		return stop(e)
 	}
-	j.Phase = "recovery-prepared"
+	j.Phase = "prepared"
 	j.Remaining = []string{"pin-history", "remove-registration"}
-	j.Effects = append(j.Effects, pruneV4Effect{"pin-history", j.HistoryRef, "create-absent", "pending"})
+	j.Effects = append(j.Effects, pruneV4Effect{"pin-history", j.HistoryRef, "create-absent", "unknown"})
 	if e = writePruneV4Record(s.dirs["journals"], p.PlanID+".json", j, false); e != nil {
 		return stop(e)
 	}
@@ -180,7 +185,7 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 		return stop(pruneV4PayloadError())
 	}
 	j.Phase = "recovery-confirmed"
-	j.Effects[0].Outcome = "complete"
+	j.Effects[0].Outcome = "observed"
 	j.Remaining = []string{"remove-registration"}
 	if e = writePruneV4Record(s.dirs["journals"], p.PlanID+".json", j, false); e != nil {
 		return stop(e)
@@ -220,6 +225,24 @@ func readPruneV4Journal(s *store, p RegistrationPruneV4Plan) (pruneV4Journal, er
 	canonical, e := pruneV4Canonical(j, "")
 	if e != nil || !bytes.Equal(b, append(canonical, '\n')) || j.SchemaVersion != 4 || j.Operation != "registration-prune" || j.PlanID != p.PlanID || j.PlanDigest != p.Digest || j.HistoryRef != pruneV4HistoryRef(p) || j.HistoryOID != p.Expected.ResolvedHEAD || j.Effects == nil || j.Remaining == nil || j.Diagnostics == nil {
 		return j, failure("prune-journal-refused", "Stored prune journal does not match its exact plan.")
+	}
+	switch j.Phase {
+	case "prepared", "recovery-confirmed", "removing", "complete", "partial":
+	default:
+		return j, failure("prune-journal-refused", "Stored prune journal has an unknown phase.")
+	}
+	for _, effect := range j.Effects {
+		switch effect.Outcome {
+		case "planned", "observed", "refused", "unknown":
+		default:
+			return j, failure("prune-journal-refused", "Stored prune journal has an unknown effect outcome.")
+		}
+		if j.Phase == "complete" && effect.Outcome != "observed" {
+			return j, failure("prune-journal-refused", "Complete prune journal has an unconfirmed effect.")
+		}
+	}
+	if j.Phase == "complete" && (len(j.Remaining) != 0 || len(j.Diagnostics) != 0 || !pruneV4ID(j.PayloadDigest, 64)) {
+		return j, failure("prune-journal-refused", "Complete prune journal has incomplete recovery or remaining work.")
 	}
 	return j, nil
 }
