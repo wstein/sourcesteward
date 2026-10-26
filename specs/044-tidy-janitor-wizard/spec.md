@@ -206,7 +206,7 @@ these holds: proof `none` on a branch or an existing directory (`unmerged`, and 
 integrated); `dirty` or `ignored-extras` observed; or the row is **not judged** (`evidence-incomplete`), because then unique work cannot
 be ruled out. Primary checkouts (kept: "the repository's own checkout, never a candidate"), stale registrations whose directory is gone (kept: "the directory is gone, nothing to delete here"), and rows that are integrated (proof not `none`) and
 kept for `registration-record-missing`, `branch-attached-elsewhere`, `recently-active`, `locked-foreign` or `protected` are **kept**:
-their dirt is not necessarily known in this view, and the text says so ("integrated; not checked for uncommitted files"). The
+the row says why it is kept (for example "integrated, but no creation record was found") and states no claim about uncommitted files the view does not know. The
 risk function reads the observed facts (proof, `Dirty`, `IgnoredExtras`, `Incomplete`), not only the reason; where the adapter does not
 expose a fact, T001 adds it.
 
@@ -460,7 +460,7 @@ request (`l` at the table, or `--rows`). Red rows are counted separately because
 
 | Reason (code stays in JSON) | Count | Level | What it means | What to do |
 | --- | --- | --- | --- | --- |
-| Created by stw, record not found, integrated (`registration-record-missing`) | 299 worktrees, 17 stale | kept | The worktree is locked `stw:TASK`, no task record is in a known state directory; not checked for uncommitted files here | Re-run with the `--state-dir` that created them (agent scratch stores are separate directories). Nothing else frees them: neither phase offers another way |
+| Created by stw, record not found, integrated (`registration-record-missing`) | 299 worktrees, 17 stale | kept | The worktree is locked `stw:TASK`, no task record is in a known state directory; the row says only that it is integrated and has no record | Re-run with the `--state-dir` that created them (agent scratch stores are separate directories). Nothing else frees them: neither phase offers another way |
 | Created by stw, record not found, **not integrated** | 47 | red | As above, and its commits are not on the base | Do not delete. Find the right `--state-dir` and judge it with the review report |
 | Not merged (`unmerged`) | 301 | red | The branch or worktree has commits the base lacks | Nothing is deleted. Judge them with the review report: expert command `stw tidy plan REPO --contract 3 ... --report-dir DIR` (Spec 031) |
 | Branch is checked out elsewhere (`branch-attached-elsewhere`) | 217 | kept | A kept worktree has this branch checked out | Decide on that worktree first (it is kept for its own reason and may hold unmerged work), then run again |
@@ -581,6 +581,11 @@ Kept (964): nothing here is offered for deletion
 Next: one question per group. Nothing changes until the final summary and your typed confirmation.
 Enter = continue   q = quit
 ```
+
+**Fold rule (normative, SC-012).** The overview must fit 24 logical lines. **Green groups and groups that need the owner's attention (orange) are never folded.** Only the smallest groups
+of the **same effect class** fold, into one line that names the effect and the count: "reversible" (branches), "files deleted" (directories) or "files deleted, branch too" (directories with a branch
+leg); the folded groups stay separate groups of the wizard, each its own step, and `l` shows them. Groups are folded from the smallest upward, only as far as the 24 lines require. The real output is the
+render golden of the implementation pull request (#317).
 
 The mockup folds the three one-item branch groups (chartscribe, sheetmill, workharbor) into one line and the two one-item directory groups (crewbook
 and the workspace) into the last line, to fit a screen: they are still separate groups of the wizard (15 in all), and `l` shows them. Totals: 43
@@ -736,7 +741,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - **SC-010** Every reason, proof and risk word has a sentence and an action; a new code without one fails the test.
 - **SC-011** `stw tidy --json`, the expert layer and every Spec 041 test and golden other than the text overview pass unchanged; the
   tidy flags are all classified (`--rows` and `--offline` included).
-- **SC-012** With at least 960 retained rows and 165 choosable rows the first screen has at most 24 lines and no row of a retained code.
+- **SC-012** With at least 960 retained rows and 165 choosable rows the first screen has at most 24 **logical lines** and no row of a retained code; the fold rule above holds (green and orange groups never folded; only the smallest groups of one effect class fold into one line naming the effect). The `Derived` line counts as one logical line: it may wrap or be truncated to the terminal width, its full text is in `--verbose`.
 - **SC-013 (phase 2)** `workspace done`: idempotent, state directory only (a before and after snapshot of every repository and worktree
   is equal), refused for another session's task, accepted on a task without a record (and so documented as a claim), additive in the
   schema; a done mark never makes a row choosable and never lifts it above yellow.
@@ -748,7 +753,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 | Name with ESC, CR, NUL or bidi controls | escaped by `esc`, bounded at 120; the family key is `[a-z]` only |
 | No terminal on stdin or stdout, or agent marker | grouped overview only, offline, no question, nothing stored, exit 0 |
 | Narrow terminal (below 60 columns) | rows drop the branch column, then the example rows; the level word and counts never wrap away; width from the terminal, 80 if unknown |
-| 960 or more retained rows | one table, no rows until asked; the first screen stays within 24 lines |
+| 960 or more retained rows | one table, no rows until asked; the first screen stays within 24 logical lines (a wrapped or truncated `Derived` line is one line) |
 | Interrupted run (Ctrl-C, `--timeout`) | exit 1 naming the cause; before the plan set is stored nothing exists, after it the id is named and nothing was applied (as today, `tidy_interactive.go:98`) |
 | All rows red or kept | summary says "nothing can be cleaned"; the retain table follows; no questions |
 | Nothing to clean | one line "Nothing to clean."; exit 0 |
