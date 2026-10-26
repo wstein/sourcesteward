@@ -101,6 +101,9 @@ func TestRegistrationPruneV4RemovalBudgetAtAcceptedByteLimits(t *testing.T) {
 	if err != nil || total != pruneMetadataTotalLimit {
 		t.Fatalf("registration changed: total=%d error=%v", total, err)
 	}
+	if len(actual) != len(p.Expected.Metadata) {
+		t.Fatalf("metadata inventory length changed: got %d, want %d", len(actual), len(p.Expected.Metadata))
+	}
 	for i, m := range actual {
 		if m.Kind == "regular" {
 			m.Kind = "file"
