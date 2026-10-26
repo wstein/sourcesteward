@@ -162,6 +162,9 @@ type RepoFacts struct {
 	// Notices are facts about the whole repository that the overview shows (for example that
 	// tracking references were skipped offline); the classifier carries them unchanged.
 	Notices []string
+	// OnlineFallback is the reason (one of the Reason words) that the implicit online read of this
+	// repository failed and it was judged offline; empty otherwise (Spec 044 D13).
+	OnlineFallback string
 }
 
 // Source supplies the facts of a repository; it is the I/O seam of the classifier.
@@ -208,6 +211,8 @@ type RepoResult struct {
 	State   string   `json:"state"`
 	Reason  string   `json:"reason"`
 	Notices []string `json:"notices"`
+	// OnlineFallback is RepoFacts.OnlineFallback; never part of the JSON document.
+	OnlineFallback string `json:"-"`
 }
 
 // EscapedNotices is the form of the notices the overview shows: each one passes `esc` (control,
@@ -267,6 +272,7 @@ func Classify(ctx context.Context, src Source, repos []string, cfg Config) Resul
 			facts.Name = name
 			found[i] = classifyRepo(facts, cfg)
 			results[i].Notices = boundNotices(facts.Notices)
+			results[i].OnlineFallback = facts.OnlineFallback
 		}
 	})
 	if cancelled != nil {

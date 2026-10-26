@@ -33,6 +33,10 @@ type wizardWorld struct {
 	analyseCtx context.Context
 	prepared   int
 	planner    *spyPlanner
+	// The online pull request evidence seam (Spec 044 D13): every call is recorded, the outcome is set by the test.
+	fetches      int
+	fetchMembers []tidywizard.OnlineMember
+	online       tidywizard.OnlineOutcome
 }
 
 type spyPlanner struct {
@@ -101,10 +105,15 @@ func newWizardWorld(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *
 		Repositories: []tidywizard.RepoResult{{Name: "a", State: "analysed", Notices: []string{}}, {Name: "b", State: "analysed", Notices: []string{}}},
 		Candidates:   []tidywizard.Candidate{own, ownBranch, other, dec, ret, track},
 	}
-	oldP, oldA, oldW, oldN, oldPl, oldT, oldE := tidyPrepare, tidyAnalyse, tidyGetwd, tidyNow, tidyPlannerFor, tidyTerminalFacts, tidyEnviron
+	oldP, oldA, oldW, oldN, oldPl, oldT, oldE, oldF := tidyPrepare, tidyAnalyse, tidyGetwd, tidyNow, tidyPlannerFor, tidyTerminalFacts, tidyEnviron, tidyOnlineFetch
 	t.Cleanup(func() {
-		tidyPrepare, tidyAnalyse, tidyGetwd, tidyNow, tidyPlannerFor, tidyTerminalFacts, tidyEnviron = oldP, oldA, oldW, oldN, oldPl, oldT, oldE
+		tidyPrepare, tidyAnalyse, tidyGetwd, tidyNow, tidyPlannerFor, tidyTerminalFacts, tidyEnviron, tidyOnlineFetch = oldP, oldA, oldW, oldN, oldPl, oldT, oldE, oldF
 	})
+	tidyOnlineFetch = func(_ context.Context, members []tidywizard.OnlineMember, _ []tidywizard.Candidate) tidywizard.OnlineOutcome {
+		w.fetches++
+		w.fetchMembers = members
+		return w.online
+	}
 	tidyPrepare = func(ctx context.Context, o analysis.Options) (analysis.Prepared, error) {
 		w.gotOpt = o
 		_, w.hadDline = ctx.Deadline()

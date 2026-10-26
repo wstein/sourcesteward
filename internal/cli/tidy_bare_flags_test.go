@@ -45,7 +45,9 @@ func TestBareTidyFlagsReachTheAnalysis(t *testing.T) {
 		t.Errorf("got %+v deadline %v\nwant %+v", w.gotOpt, w.hadDline, want)
 	}
 	w = newInteractive(t, true, true)
-	if _, err = runTidy(t, "\n"); err != nil || w.hadDline || w.gotOpt.Online {
+	// Spec 044 D13: the human wizard (both streams on terminals) is online by default; only the
+	// flag value of an explicit --online is not the default.
+	if _, err = runTidy(t, "\n"); err != nil || w.hadDline || !w.gotOpt.Online || !w.gotOpt.OnlineDefault {
 		t.Errorf("defaults: %v %+v", err, w.gotOpt)
 	}
 }

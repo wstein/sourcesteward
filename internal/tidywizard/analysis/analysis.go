@@ -32,6 +32,10 @@ type Options struct {
 	StateDirs []string
 	// Online allows the contract-3 authenticated reads of tracking evidence.
 	Online bool
+	// OnlineDefault says that Online is the implicit default of the human wizard and not a flag
+	// (Spec 044 D13): a repository whose online read fails is then judged offline instead of
+	// reporting incomplete tracking evidence.
+	OnlineDefault bool
 }
 
 // Deps are the seams of the preparation; DefaultDeps is the production set.
@@ -159,7 +163,7 @@ func Prepare(ctx context.Context, o Options, d Deps) (Prepared, error) {
 			meta.Remote = chosen
 			if o.Online {
 				// The observer takes a remote exactly when it reads online.
-				spec.Remote, spec.Online = chosen, true
+				spec.Remote, spec.Online, spec.OnlineDefault = chosen, true, o.OnlineDefault
 			}
 			p.Derived = append(p.Derived, base.Derived)
 			spec.Base, meta.Base = base.Derived.Value, base.Derived.Value

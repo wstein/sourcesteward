@@ -820,3 +820,54 @@ func TestAdapterReportsARepositoryErrorOfThePreparation(t *testing.T) {
 		t.Errorf("%+v observed=%v", res.Repositories, observed)
 	}
 }
+
+// Spec 044 D13: when the online read is only the implicit default of the human wizard and the
+// tracking evidence of a repository failed as a whole, the repository is judged offline: its
+// tracking rows are dropped like an offline run, the fall back is recorded for the one notice
+// line, and nothing is an error or an incomplete row. An explicit --online keeps today's rows.
+func TestAdapterJudgesAFailedImplicitOnlineRepositoryOffline(t *testing.T) {
+	failed := workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{
+		{Name: "refs/remotes/origin/a", Incomplete: "hosting-evidence-unavailable"},
+		{Name: "refs/remotes/origin/b", Incomplete: "hosting-evidence-unavailable"},
+	}, Branches: []workspace.BranchEvidence{{Name: "refs/heads/topic", OID: "a1", Proof: "ancestor"}}}
+	for name, tc := range map[string]struct {
+		spec     RepoSpec
+		obs      workspace.WorktreeObservation
+		wantRefs int
+		fallback string
+	}{
+		"implicit failure":     {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, failed, 0, "error"},
+		"explicit failure":     {RepoSpec{Online: true, Remote: "origin"}, failed, 2, ""},
+		"unsupported":          {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, withReason(failed, "hosting-proof-unsupported"), 0, "remote-unsupported"},
+		"limit":                {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, withReason(failed, "hosting-evidence-limit"), 0, "member-budget"},
+		"deadline":             {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, withReason(failed, "deadline-exceeded"), 0, "timeout"},
+		"implicit success":     {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{{Name: "refs/remotes/origin/a", Proof: "none", Reason: "remote-source-present"}}}, 1, ""},
+		"implicit mixed":       {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, workspace.WorktreeObservation{TrackingRefs: []workspace.TrackingRefEvidence{{Name: "refs/remotes/origin/a", Proof: "none"}, {Name: "refs/remotes/origin/b", Incomplete: "observation-failed"}}}, 2, ""},
+		"implicit no tracking": {RepoSpec{Online: true, Remote: "origin", OnlineDefault: true}, workspace.WorktreeObservation{}, 0, ""},
+	} {
+		a, _ := testAdapter(tc.obs, nil)
+		tc.spec.Name, tc.spec.Path, tc.spec.Base = "r", "/ws/r", "refs/heads/main"
+		a.Repos["r"] = tc.spec
+		f, err := a.Facts(context.Background(), "r")
+		if err != nil || len(f.TrackingRefs) != tc.wantRefs || f.OnlineFallback != tc.fallback {
+			t.Errorf("%s: %+v %v", name, f, err)
+		}
+		if tc.fallback != "" && !slices.Contains(f.Notices, "tracking-requires-online") {
+			t.Errorf("%s: the offline notice is missing: %v", name, f.Notices)
+		}
+		res := Classify(context.Background(), a, []string{"r"}, cfg())
+		if len(res.Repositories) != 1 || res.Repositories[0].State != "analysed" || res.Repositories[0].OnlineFallback != tc.fallback {
+			t.Errorf("%s: %+v", name, res.Repositories)
+		}
+	}
+}
+
+func withReason(o workspace.WorktreeObservation, reason string) workspace.WorktreeObservation {
+	refs := []workspace.TrackingRefEvidence{}
+	for _, r := range o.TrackingRefs {
+		r.Incomplete = reason
+		refs = append(refs, r)
+	}
+	o.TrackingRefs = refs
+	return o
+}
