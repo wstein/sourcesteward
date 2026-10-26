@@ -203,6 +203,10 @@ type Candidate struct {
 	// Tip is the full object id of the tip of a worktree or branch candidate, the key of the online
 	// pull request evidence (Spec 044 T005); never part of the JSON document.
 	Tip string `json:"-"`
+	// LastActivity is the newest HEAD, index or tracked-file time of a worktree that the
+	// classifier already reads for `recently-active`; zero when unknown. It feeds the risk ladder
+	// (Spec 044 R1) only: it changes no verdict and is never part of the JSON document.
+	LastActivity time.Time `json:"-"`
 }
 
 // RepoResult reports one repository: State is analysed, skipped or error.
@@ -409,6 +413,7 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 	if w.DirMissing {
 		return classifyStale(c, w, record)
 	}
+	c.LastActivity = w.LastActivity
 	switch {
 	case protectedReason != "":
 		return c.retain(protectedReason, "")
