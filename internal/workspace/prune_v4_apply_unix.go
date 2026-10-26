@@ -15,13 +15,6 @@ import (
 	"time"
 )
 
-type RegistrationPruneV4ApplyOptions struct {
-	StateDir, PlanID string
-	Authorize        bool
-	Mode             V3RunMode
-	Confirm          func(word, planID string) error
-	SiblingPlans     []string
-}
 type pruneV4Effect struct {
 	Action  string `json:"action"`
 	Target  string `json:"target"`
