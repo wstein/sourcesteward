@@ -6,6 +6,7 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -192,5 +193,110 @@ func TestRegistrationPruneV4SourceChangeBeforeRemoval(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRegistrationPruneV4LateMountAndPartialRemoval(t *testing.T) {
+	for _, kind := range []string{"common-mount", "after-first-unlink"} {
+		t.Run(kind, func(t *testing.T) {
+			_, p := fixturePruneV4(t)
+			armed := false
+			calls := 0
+			base, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctx := context.WithValue(base, pruneV4MountReaderKey{}, func(fd int) (string, error) {
+				if armed {
+					return "changed-mount", nil
+				}
+				return pruneMountIdentity(fd)
+			})
+			ctx = context.WithValue(ctx, pruneObservationHookKey{}, pruneObservationHook(func(stage, path string, _ any) {
+				if stage != "v4-before-unlink" {
+					return
+				}
+				calls++
+				if kind == "common-mount" {
+					armed = true
+				} else if calls == 2 {
+					cancel()
+				}
+			}))
+			r := ApplyRegistrationPruneV4(ctx, RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
+			want := "prune-mount-changed"
+			if kind == "after-first-unlink" {
+				want = "canceled"
+			}
+			if r.Status != "partial" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != want {
+				t.Fatalf("partial reason %+v", r)
+			}
+			_, digest, e := readPruneV4Payload(context.Background(), p)
+			if e != nil || digest == "" {
+				t.Fatalf("recovery lost: %v", e)
+			}
+			raw, e := os.ReadFile(filepath.Join(p.StateDir, pruneV4Namespace, "journals", p.PlanID+".json"))
+			if e != nil {
+				t.Fatal(e)
+			}
+			var j pruneV4Journal
+			if e = json.Unmarshal(raw, &j); e != nil {
+				t.Fatal(e)
+			}
+			if j.Phase != "partial" || len(j.Remaining) == 0 {
+				t.Fatalf("missing residual %+v", j)
+			}
+			observed := 0
+			for _, effect := range j.Effects {
+				if effect.Action == "remove-metadata" && effect.Outcome == "observed" {
+					observed++
+				}
+			}
+			if kind == "after-first-unlink" && observed != 1 || kind == "common-mount" && observed != 0 {
+				t.Fatalf("wrong observed removals %d", observed)
+			}
+		})
+	}
+}
+
+func TestRegistrationPruneV4PayloadExactBounds(t *testing.T) {
+	for _, kind := range []string{"file", "total", "entries"} {
+		for _, over := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/over=%v", kind, over), func(t *testing.T) {
+				_, p := fixturePruneV4(t)
+				var maxFile int64
+				for _, m := range p.Expected.Metadata {
+					if m.Size > maxFile {
+						maxFile = m.Size
+					}
+				}
+				limits := pruneMetadataLimits{File: maxFile, Total: p.Expected.MetadataBytes, Entries: len(p.Expected.Metadata)}
+				if over {
+					switch kind {
+					case "file":
+						limits.File--
+					case "total":
+						limits.Total--
+					case "entries":
+						limits.Entries--
+					}
+				}
+				s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), true, []string{"plans", "journals", "payloads"})
+				if e != nil {
+					t.Fatal(e)
+				}
+				defer s.Close()
+				digest, e := preparePruneV4PayloadWithLimits(context.Background(), p, s, limits)
+				if over {
+					assertPruneReason(t, e, "prune-metadata-limit", "")
+					if digest != "" {
+						t.Fatal("overflow claimed recovery")
+					}
+				} else if e != nil || digest == "" {
+					t.Fatalf("exact bound: %v", e)
+				}
+				if _, e = os.Stat(p.Registration.GitDir); e != nil {
+					t.Fatal("payload preparation removed registration", e)
+				}
+			})
+		}
 	}
 }
