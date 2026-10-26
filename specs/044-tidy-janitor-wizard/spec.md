@@ -231,7 +231,7 @@ it never cancels a red cause of a retained row (a record-missing row with proof 
 3. **Raises**, each adds one step (green, yellow, orange), at most orange, each counted once:
    - **R1 recent activity**: a worktree whose scope is not `own` and whose newest HEAD, index or tracked-file time (`LastActivity`, already
      observed) is **at least 24 hours and at most 72 hours** old, **both ends inclusive** (the window is D6, decided). An **unknown, zero or
-     future** activity time counts as R1 (it cannot be shown to be old). A row younger than 24 hours is already `recently-active` and kept
+     future** activity time counts as R1 as a defensive rule of the pure ladder (it cannot be shown to be old; the classifier retains such rows today, P2 supplies the time). A row younger than 24 hours is already `recently-active` and kept
      by the classifier (`classify.go:413`, `<` 24 hours), so it never reaches the ladder. Every scope other than `own` counts, including an
      empty or unrecognized scope value.
    - **R2 nobody vouches**: a worktree, S equivalent, with no creation record and an owner of scope `unknown`; an empty or unrecognized
