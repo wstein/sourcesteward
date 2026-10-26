@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -782,5 +783,44 @@ func TestPatchSegmenterSizesAreIndependentOfChunking(t *testing.T) {
 		if _, ok := s.finish(); ok {
 			t.Errorf("%s was accepted", name)
 		}
+	}
+}
+
+// The worktree observation proves its tips against one base in one run: they
+// share the memo, so a commit of the base side is computed once (the tips are
+// read one after the other here; concurrent tips may compute a commit that is
+// still in flight in another tip, never one that has finished).
+func TestObserveWorktreesShareTheMemoAcrossTips(t *testing.T) {
+	repo := observeRepo(t)
+	topics := make([]string, 3)
+	for i := range topics {
+		topics[i] = observeAdd(t, repo, fmt.Sprintf("topic%d", i))
+		commitIn(t, topics[i], fmt.Sprintf("own%d", i), "own\n")
+	}
+	for i := 0; i < 5; i++ {
+		commitIn(t, repo, fmt.Sprintf("main%d", i), "main\n")
+	}
+	var mu sync.Mutex
+	var computed []string
+	obs := defaultWorktreeObserver()
+	obs.refs.integration.command = func(c integrationCommand) {
+		if isMemoStream(c) {
+			mu.Lock()
+			computed = append(computed, stdinCommits(c)...)
+			mu.Unlock()
+		}
+	}
+	if _, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase, Width: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if len(computed) == 0 {
+		t.Fatal("the observation did not use the memo")
+	}
+	seen := map[string]bool{}
+	for _, c := range computed {
+		if seen[c] {
+			t.Fatalf("commit %s computed twice in one observation", c)
+		}
+		seen[c] = true
 	}
 }
