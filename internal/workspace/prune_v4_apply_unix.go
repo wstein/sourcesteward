@@ -218,7 +218,7 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 
 func readPruneV4Journal(s *store, p RegistrationPruneV4Plan) (pruneV4Journal, error) {
 	var j pruneV4Journal
-	b, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(v3RecordLimit))
+	b, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
 	if e != nil {
 		if _, se := s.dirs["journals"].Lstat(p.PlanID + ".json"); errors.Is(se, os.ErrNotExist) {
 			return j, os.ErrNotExist

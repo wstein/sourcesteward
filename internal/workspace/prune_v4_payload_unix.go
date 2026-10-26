@@ -216,7 +216,7 @@ func readPruneV4Payload(ctx context.Context, p RegistrationPruneV4Plan) (pruneV4
 	if e != nil || !info.IsDir() || info.Mode().Perm() != 0700 || !privateOwner(info) {
 		return zero, "", pruneV4PayloadError()
 	}
-	raw, e := readPruneV4PrivateFile(dst, "manifest.json", int64(v3RecordLimit))
+	raw, e := readPruneV4PrivateFile(dst, "manifest.json", int64(pruneV4RecordLimit))
 	if e != nil {
 		return zero, "", e
 	}
@@ -339,7 +339,7 @@ func writePruneV4Record(root *os.Root, name string, value any, exclusive bool) e
 		return e
 	}
 	b = append(b, '\n')
-	if len(b) > v3RecordLimit {
+	if len(b) > pruneV4RecordLimit {
 		return failure("record-limit", "Contract-4 record exceeds its encoded bound.")
 	}
 	target := name
