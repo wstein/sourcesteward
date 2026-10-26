@@ -546,6 +546,9 @@ func validatePruneV4RestoreOwnership(p RegistrationPruneV4Plan) error {
 }
 
 func pruneV4RestoreRepairArgv(p RegistrationPruneV4Plan) string {
-	data, _ := json.Marshal([]string{"git", "-C", p.SourcePath, "worktree", "repair", "<owner-selected-found-path>"})
-	return string(data)
+	var data bytes.Buffer
+	encoder := json.NewEncoder(&data)
+	encoder.SetEscapeHTML(false)
+	_ = encoder.Encode([]string{"git", "-C", p.SourcePath, "worktree", "repair", "<owner-selected-found-path>"})
+	return strings.TrimSuffix(data.String(), "\n")
 }
