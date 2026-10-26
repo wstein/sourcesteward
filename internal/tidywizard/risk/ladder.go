@@ -52,8 +52,9 @@ type Assessment struct {
 // now is supplied by the run so every row shares one reference time.
 func Evaluate(f Facts, now time.Time) Assessment {
 	out := Assessment{Level: Kept, Reasons: []string{}}
-	// Primary checkouts and stale registrations remain structurally retained,
-	// including observed dirt or incomplete evidence (foreman clarification).
+	// Spec 044 clarification 2 keeps primary checkouts and stale registrations
+	// structurally retained, including observed dirt or incomplete evidence
+	// (red and kept edges (b)/(c)).
 	if f.Primary || f.Kind == "stale-worktree" {
 		return corroborate(out, f)
 	}
@@ -106,7 +107,7 @@ func Evaluate(f Facts, now time.Time) Assessment {
 	case f.Proof == "github-branch-absent":
 		out.Level = Green
 		out.Reasons = append(out.Reasons, ReasonProofGitHubBranchAbsent)
-	case f.Proof == "patch-id" || f.Proof == "merge-noop" || f.Proof == "empty-working-copy" || f.Proof == "empty-working-copy-integrated-parent":
+	case f.Proof == "patch-id" || f.Proof == "merge-noop" || f.Proof == "empty-working-copy-integrated-parent":
 		out.Level = Yellow
 		equivalent = true
 		out.Reasons = append(out.Reasons, ReasonProofEquivalent)
@@ -151,7 +152,7 @@ func knownKind(kind string) bool {
 }
 func knownProof(proof string) bool {
 	switch proof {
-	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop", "empty-working-copy", "empty-working-copy-integrated-parent":
+	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop", "empty-working-copy-integrated-parent":
 		return true
 	}
 	return false
