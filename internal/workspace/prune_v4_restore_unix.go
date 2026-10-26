@@ -31,6 +31,22 @@ func pruneV4RestoreError() error {
 	return failure("prune-restore-refused", "Administrative restore requires an absent original registration and unchanged recovery, ownership and native state.")
 }
 
+func pruneV4RestoreParentError() error {
+	return failure("prune-registration-parent-changed", "The native worktrees directory was removed or replaced; retained recovery remains available for separately reviewed manual recovery.")
+}
+func pruneV4RestoreNoAppliedError() error {
+	return failure("prune-not-applied", "No applied prune journal and recovery payload are recorded for this plan; inspection creates no recovery state.")
+}
+func pruneV4RestoreRootError() error {
+	return failure("prune-restore-root-changed", "The held common-directory root no longer matches the prune plan; retained recovery has not been published.")
+}
+func pruneV4RestoreStagingError() error {
+	return failure("prune-restore-staging-changed", "The staged registration pathname no longer identifies its held directory; retained recovery has not been published.")
+}
+func pruneV4RestoreMetadataError() error {
+	return failure("prune-restore-metadata-changed", "Restored administrative metadata differs from the exact saved manifest, bytes or modes.")
+}
+
 // RestoreRegistrationPruneV4 restores only a completed prune's administrative
 // metadata. Partial/ambiguous attempts remain inspectable but are not retried.
 func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4RestoreOptions) RegistrationPruneV4Result {
@@ -47,6 +63,8 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	r.Backend = "git"
 	r.Plan = &p
 	r.Limitations = []string{"Restoring metadata does not recover missing objects or user files; the complete retained payload and history pin must remain available."}
+	r.Limitations = append(r.Limitations, "Native maintenance can remove the empty worktrees directory after the last registration is pruned; a removed or replaced directory blocks automatic restore and leaves retained recovery for separately reviewed manual recovery.")
+	r.Limitations = append(r.Limitations, "Authorized restore requires exact stored caller and mode evidence, including marker names and TTY facts; a changed session environment can refuse a later restore.")
 	r.Limitations = append(r.Limitations, "Only administrative metadata is restored; checkout files, ownership, inodes and timestamps are not recreated. Native git worktree repair of a found checkout requires a separate owner action.")
 	if o.Apply {
 		if ValidateV3RunMode(&o.Mode) != nil || !reflect.DeepEqual(o.Mode, p.Mode) {
@@ -63,6 +81,18 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return failPruneV4(r, e)
 	}
 	defer closeSession()
+	recovery, _, e := openCanonical(filepath.Join(p.StateDir, pruneV4Namespace))
+	if e != nil {
+		return failPruneV4(r, e)
+	}
+	for _, kind := range []string{"journals", "payloads"} {
+		_, statErr := recovery.Lstat(kind)
+		if errors.Is(statErr, os.ErrNotExist) {
+			recovery.Close()
+			return failPruneV4(r, pruneV4RestoreNoAppliedError())
+		}
+	}
+	recovery.Close()
 	s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), false, []string{"plans", "journals", "payloads"})
 	if e != nil {
 		return failPruneV4(r, e)
@@ -70,6 +100,9 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	j, e := readPruneV4Journal(s, p)
 	if e != nil {
 		s.Close()
+		if errors.Is(e, os.ErrNotExist) {
+			e = pruneV4RestoreNoAppliedError()
+		}
 		return failPruneV4(r, e)
 	}
 	raw, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
@@ -78,13 +111,13 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return failPruneV4(r, e)
 	}
 	journalDigest := pruneV4Hash("stw-registration-journal-file-v4", raw)
-	prior, e := readPruneV4RestoreForPlan(s, p, journalDigest, j.PayloadDigest)
+	prior, e := readPruneV4RestoreForPlan(s, p, journalDigest, j.PayloadDigest, ctx)
 	s.Close()
 	if e != nil {
 		return failPruneV4(r, e)
 	}
 	if j.Phase != "complete" {
-		return failPruneV4(r, failure("prune-restore-refused", "An incomplete prune requires manual inspection; automatic administrative restore is unavailable."))
+		return failPruneV4(r, failure("prune-restore-incomplete-prune", "An incomplete prune requires manual inspection; automatic administrative restore is unavailable."))
 	}
 	if prior != nil {
 		if e = validatePruneV4RestoreOwnership(p); e != nil {
@@ -106,6 +139,7 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		r.Actions = []ActionOutcome{{Name: "restore-registration", Status: "planned", Detail: "Restore the exact saved registration at " + p.Registration.GitDir + "; original checkout remains absent and locked. Repair argv data (separate owner authorization): " + repair}}
 		return r
 	}
+	pruneObservationStep(ctx, "v4-restore-before-lock", p.Registration.GitDir, nil)
 	parent, e := openStoreKinds(p.StateDir, true, []string{pruneV4Namespace})
 	if e != nil {
 		return failPruneV4(r, e)
@@ -121,9 +155,12 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 		return failPruneV4(r, e)
 	}
 	defer s.Close()
-	again, e := readPruneV4RestoreForPlan(s, p, journalDigest, j.PayloadDigest)
-	if e != nil || again != nil {
-		return failPruneV4(r, pruneV4RestoreError())
+	again, e := readPruneV4RestoreForPlan(s, p, journalDigest, j.PayloadDigest, ctx)
+	if e != nil {
+		return failPruneV4(r, e)
+	}
+	if again != nil {
+		return failPruneV4(r, failure("prune-restore-already-recorded", "An administrative restore attempt appeared under the state lock; inspect its retained journal before recovery."))
 	}
 	id, e := randomID()
 	if e != nil {
@@ -155,11 +192,12 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	}
 	root, rootID, e := openCanonical(p.Expected.SourceSnapshot.Identity.RepositoryDir)
 	if e != nil {
-		return stop(e)
+		return stop(pruneV4RestoreRootError())
 	}
 	defer root.Close()
+	pruneObservationStep(ctx, "v4-restore-root-opened", p.Expected.SourceSnapshot.Identity.RepositoryDir, &rootID)
 	if rootID != p.Expected.CommonDirMount.Identity {
-		return stop(pruneV4RestoreError())
+		return stop(pruneV4RestoreRootError())
 	}
 	name := filepath.Base(pruneV4RestoreStaging(p, id))
 	if e = copyPruneV4Restore(ctx, p, root, name); e != nil {
@@ -185,24 +223,29 @@ func RestoreRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4Restor
 	}
 	regParent, regID, e := openCanonical(filepath.Dir(p.Registration.GitDir))
 	if e != nil {
-		return stop(e)
+		return stop(pruneV4RestoreParentError())
 	}
 	defer regParent.Close()
+	pruneObservationStep(ctx, "v4-restore-parent-opened", filepath.Dir(p.Registration.GitDir), &regID)
 	if regID != p.Expected.RegistrationParent {
-		return stop(pruneV4RestoreError())
+		return stop(pruneV4RestoreParentError())
 	}
 	staged, stagedID, e := openCanonical(pruneV4RestoreStaging(p, id))
 	if e != nil {
-		return stop(e)
+		return stop(pruneV4RestoreStagingError())
 	}
 	defer staged.Close()
+	pruneObservationStep(ctx, "v4-restore-staged-opened", pruneV4RestoreStaging(p, id), nil)
 	named, e := root.Lstat(name)
 	held, heldErr := staged.Stat(".")
 	if e != nil || heldErr != nil || !os.SameFile(named, held) || stagedID.Path != pruneV4RestoreStaging(p, id) {
-		return stop(pruneV4RestoreError())
+		return stop(pruneV4RestoreStagingError())
 	}
 	if e = publishPruneV4Restore(root, name, regParent, p.Registration.Name); e != nil {
-		return stop(pruneV4RestoreError())
+		if errors.Is(e, os.ErrExist) {
+			return stop(failure("prune-registration-occupied", "The original administrative registration slot became occupied before publication; retained recovery has not been overwritten."))
+		}
+		return stop(failure("prune-restore-publication-refused", "Native no-replace publication could not be confirmed; retained recovery and staging require manual inspection."))
 	}
 	// Keep the staged root private until it has become the original slot.
 	// Chmod through the held descriptor, so a replaced path is never adopted.
@@ -242,14 +285,14 @@ func pruneV4RestoreStaging(p RegistrationPruneV4Plan, id string) string {
 }
 func validatePruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, j pruneV4Journal, digest string) error {
 	if _, e := os.Lstat(p.Registration.GitDir); !errors.Is(e, os.ErrNotExist) {
-		return pruneV4RestoreError()
+		return failure("prune-registration-occupied", "The original administrative registration slot is occupied; restore never overwrites or adopts an existing entry.")
 	}
 	if e := revalidatePruneV4Absence(ctx, p); e != nil {
 		return e
 	}
 	fresh, e := ReadRegistrationPruneV4Plan(p.StateDir, p.PlanID)
 	if e != nil || !reflect.DeepEqual(fresh, p) {
-		return pruneV4RestoreError()
+		return failure("prune-restore-plan-changed", "The stored prune plan changed during restore inspection; retained recovery has not been published.")
 	}
 	s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), false, []string{"journals"})
 	if e != nil {
@@ -258,14 +301,15 @@ func validatePruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, j pr
 	defer s.Close()
 	b, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
 	if e != nil || pruneV4Hash("stw-registration-journal-file-v4", b) != digest {
-		return pruneV4RestoreError()
+		return failure("prune-journal-changed", "The original prune journal bytes changed during restore inspection; retained recovery has not been published.")
 	}
+	pruneObservationStep(ctx, "v4-restore-before-ownership", p.Registration.GitDir, nil)
 	if e = validatePruneV4RestoreOwnership(p); e != nil {
 		return e
 	}
 	id, e := currentIdentity(filepath.Dir(p.Registration.GitDir))
 	if e != nil || id != p.Expected.RegistrationParent {
-		return pruneV4RestoreError()
+		return pruneV4RestoreParentError()
 	}
 	return verifyPruneV4Post(ctx, p, p.Expected, j)
 }
@@ -275,7 +319,7 @@ func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Pla
 		return e
 	}
 	if len(actual) != len(p.Expected.Metadata) || total != p.Expected.MetadataBytes {
-		return pruneV4RestoreError()
+		return pruneV4RestoreMetadataError()
 	}
 	for i, m := range p.Expected.Metadata {
 		a := actual[i]
@@ -288,7 +332,7 @@ func verifyPruneV4RestoredMetadata(ctx context.Context, p RegistrationPruneV4Pla
 			kind = "file"
 		}
 		if a.Path != m.Path || kind != m.Kind || a.Digest != m.Digest || a.Size != m.Size || a.Mode != mode {
-			return pruneV4RestoreError()
+			return pruneV4RestoreMetadataError()
 		}
 	}
 	return nil
@@ -330,7 +374,7 @@ func verifyPruneV4Restored(ctx context.Context, p RegistrationPruneV4Plan, j pru
 		}
 	}
 	if !reflect.DeepEqual(want, got) {
-		return pruneV4RestoreError()
+		return failure("prune-restore-siblings-changed", "Protected administrative siblings changed during restore.")
 	}
 	expected := cloneV3Native(p.Expected.Native)
 	expected.References = append(expected.References, V3Reference{Name: j.HistoryRef, OID: j.HistoryOID})
@@ -377,6 +421,7 @@ func copyPruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, root *os
 			}
 			continue
 		}
+		pruneObservationStep(ctx, "v4-restore-before-copy-file", m.Path, nil)
 		in, e := src.OpenFile(m.Path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 		if e != nil {
 			return e
@@ -426,13 +471,20 @@ func copyPruneV4Restore(ctx context.Context, p RegistrationPruneV4Plan, root *os
 	}
 	return syncDirectory(root)
 }
-func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest, payloadDigest string) (*pruneV4RestoreJournal, error) {
+func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest, payloadDigest string, observations ...context.Context) (*pruneV4RestoreJournal, error) {
+	ctx := context.Background()
+	if len(observations) > 0 {
+		ctx = observations[0]
+	}
 	st, e := s.root.Lstat("restores")
 	if errors.Is(e, os.ErrNotExist) {
 		return nil, nil
 	}
+	if e == nil {
+		pruneObservationStep(ctx, "v4-restore-store-observed", filepath.Join(s.path, "restores"), &st)
+	}
 	if e != nil || !st.IsDir() || st.Mode().Perm() != 0700 || !privateOwner(st) {
-		return nil, pruneV4RestoreError()
+		return nil, failure("prune-restore-store-refused", "Administrative restore records require a private user-owned 0700 directory.")
 	}
 	dir, e := s.root.OpenRoot("restores")
 	if e != nil {
@@ -506,7 +558,10 @@ func readPruneV4RestoreForPlan(s *store, p RegistrationPruneV4Plan, pruneDigest,
 			return nil, pruneV4RestoreError()
 		}
 
-		if found != nil || j.PlanDigest != p.Digest || j.PruneJournalDigest != pruneDigest || j.HistoryRef != pruneV4HistoryRef(p) || j.HistoryOID != p.Expected.ResolvedHEAD || len(j.Effects) != 1 {
+		if j.PruneJournalDigest != pruneDigest {
+			return nil, failure("prune-restore-journal-changed", "The restore journal no longer binds the exact original prune journal bytes.")
+		}
+		if found != nil || j.PlanDigest != p.Digest || j.HistoryRef != pruneV4HistoryRef(p) || j.HistoryOID != p.Expected.ResolvedHEAD || len(j.Effects) != 1 {
 			return nil, pruneV4RestoreError()
 		}
 		effect = j.Effects[0]
