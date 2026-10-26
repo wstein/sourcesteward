@@ -282,3 +282,31 @@ func TestRegistrationPruneV4RestoreReaderRejectsOtherPlanVocabulary(t *testing.T
 	_, e = readPruneV4RestoreForPlan(s, p, pruneV4Hash("stw-registration-journal-file-v4", raw), pruneV4GuardJournal(t, p).PayloadDigest)
 	assertPruneReason(t, e, "prune-restore-refused", pruneV4RestoreError().Error())
 }
+
+func TestRegistrationPruneV4RestoreStagingRemainsPrivate(t *testing.T) {
+	p := restoreV4Fixture(t)
+	o := restoreV4Options(p)
+	o.Apply, o.Authorize = true, true
+	fired := false
+	ctx := pruneHookContext(func(stage, path string, v any) {
+		if stage != "v4-restore-before-publish" {
+			return
+		}
+		fired = true
+		names, e := os.ReadDir(filepath.Join(p.StateDir, pruneV4Namespace, "restores"))
+		pruneMust(t, e)
+		if len(names) != 1 {
+			t.Fatalf("restore journal count %d", len(names))
+		}
+		id := strings.TrimSuffix(names[0].Name(), ".json")
+		st, e := os.Lstat(pruneV4RestoreStaging(p, id))
+		pruneMust(t, e)
+		if st.Mode().Perm() != 0700 {
+			t.Fatalf("staging is not private before publication: %v", st.Mode())
+		}
+	})
+	r := RestoreRegistrationPruneV4(ctx, o)
+	if !fired || r.Status != "ok" {
+		t.Fatalf("private staging fired=%v result=%+v", fired, r)
+	}
+}
