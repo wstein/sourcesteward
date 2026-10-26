@@ -32,7 +32,7 @@ synchronization and native GitButler integration. Bounded recovery evidence is n
 
 **Release source work:** hidden `stw release check|plan|verify|record|build|dispatch`
 commands, bounded online evidence and pinned attestation verification have source
-implementations; workflows, bootstrap and release acceptance remain pending.
+implementations; the Spec 026 workflows and release acceptance remain pending (the bootstrap workflow of Spec 034 already published `v0.1.0`).
 See the [current matrix](docs/release.md) and [owner preparation](docs/releasing.md).
 
 [Website](https://wstein.github.io/sourcesteward/) · [Roadmap](docs/roadmap.md) · [Backend contract](docs/backends.md) ·

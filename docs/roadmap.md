@@ -6,9 +6,9 @@ No model, GitButler installation or cloud account is required to run those comma
 ## Implemented command families
 
 The [command catalog](commands.md) contains worked examples, effects and prerequisites.
-Current commands are `help`, `version`, `inspect`, `inventory`, `workspace plan/apply`,
-`workspace handoff/retire-plan`, `tidy plan/apply`, `hosting repo/pr/ci` and the optional
-jj-only `gh jj repo/pr/ci` extension. PR/CI reads require authenticated GitHub access;
+Current commands are `help`, `version`, `inspect`, `inventory`, `repos`, `workspace plan/apply`,
+`workspace handoff/retire-plan`, `tidy` (the wizard and `plan/apply/restore/history`), `sync`, `status`, `watch`,
+`pulls`, `issues`, `hosting repo/pr/ci` and the optional jj-only `gh jj repo/pr/ci` extension. PR/CI reads require authenticated GitHub access;
 local inspection and workspace/tidy workflows do not require a cloud account.
 
 ## Planned features — no current command implementation
