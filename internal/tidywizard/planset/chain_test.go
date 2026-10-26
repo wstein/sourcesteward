@@ -126,7 +126,7 @@ func TestApplyDoesNotNameTheLegPlanOfAFailedLeg(t *testing.T) {
 	}
 }
 
-// Rows the run never reached are applied by nobody: a cancelled run names nothing it did not do.
+// Rows the run never reached are applied by nobody: a canceled run names nothing it did not do.
 func TestApplyAfterCancellationStartsNoFurtherRow(t *testing.T) {
 	dir, set := stored(t, own(tidywizard.KindWorktree, "r", "a"), own(tidywizard.KindWorktree, "r", "b"), own(tidywizard.KindWorktree, "r", "c"))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -158,5 +158,39 @@ func TestV3ApplierHandsTheSiblingsToTheApply(t *testing.T) {
 	got.SiblingPlans[0] = "x"
 	if step.Siblings[0] != "p2" {
 		t.Fatal("the step shares its slice with the options")
+	}
+}
+
+// A repository whose sub-plans live in two state directories: a plan of the other directory
+// cannot be read by the apply of this one, so it is not named.
+func TestApplyNamesOnlySiblingsOfTheSameStateDirectory(t *testing.T) {
+	_, set := stored(t, own(tidywizard.KindWorktree, "r", "a"), own(tidywizard.KindWorktree, "r", "b"), own(tidywizard.KindWorktree, "r", "c"))
+	other := stateDir(t)
+	ordered := set.Ordered()
+	moved := ordered[2].ID
+	dir, forged := storeForged(t, set, func(s *Set) {
+		for i := range s.SubPlans {
+			if s.SubPlans[i].ID == moved {
+				s.SubPlans[i].StateDir = other
+			}
+		}
+	})
+	f := &fakeApplier{}
+	Apply(context.Background(), req(dir, forged, human, f))
+	for _, c := range f.calls {
+		if c.SubPlan.ID == moved {
+			if len(c.Siblings) != 0 {
+				t.Errorf("the plan alone in its state directory has siblings %v", c.Siblings)
+			}
+			continue
+		}
+		for _, s := range c.Siblings {
+			if s == moved {
+				t.Errorf("%s names %s of another state directory", c.SubPlan.ID, s)
+			}
+		}
+	}
+	if len(f.calls) != 3 {
+		t.Fatalf("calls %d", len(f.calls))
 	}
 }
