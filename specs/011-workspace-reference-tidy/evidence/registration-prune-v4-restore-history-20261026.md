@@ -191,3 +191,11 @@ as test-only RED commits. Integrated vet and Darwin arm64 test compilation
 passed. Compilation is not native macOS execution. Spelling checks pass on all
 PR-changed files; a whole-repository spelling run reports pre-existing findings
 in untouched files, which this package does not change.
+
+The integrated affected-suite run completed in 172.855 s for workspace and
+10.840 s for CLI. Workspace had one failure: the partial-result schema test
+still expected the former generic refusal code. Its assertion now checks
+`prune-registration-occupied` and the exact occupied-slot reason; the corrected
+test passed in 3.265 s. All other affected tests passed in that run. The complete
+affected suite was not rerun after this test-only assertion correction; native
+CI remains the full current-head verification.
