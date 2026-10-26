@@ -1,7 +1,7 @@
 # Specification: `stw tidy` as a janitor, the human tidy wizard
 
 **Created**: 2026-10-26 | **Status**: Draft specification, documentation only (no code, schema or script changes). Needs an independent
-review of the exact head and the owner decisions below before tasks start. Owner direction of 2026-10-26 (quoted in
+review of the exact head before tasks start; owner decisions D1 to D5 and D13 are recorded below. Owner direction of 2026-10-26 (quoted in
 [Why](#why)). It **amends** [Spec 041](../041-tidy-wizard/spec.md) for the human path only and builds on
 [Spec 011](../011-workspace-reference-tidy/spec.md), [Spec 029](../029-tidy-dogfood-safety/spec.md),
 [Spec 031](../031-tidy-integration-proofs/spec.md) and [Spec 042](../042-agent-attribution/spec.md). Plan: [plan.md](plan.md);
@@ -20,31 +20,42 @@ own branches carry only a commit-author hint.
 1. **Janitor mode** (Spec 041 human mode, both streams on terminals, no agent marker): every integrated item can be chosen, whoever
    it belongs to. The owner label stays **information** and feeds the risk level; it no longer decides what a human may choose.
    Agent mode, `stw tidy plan`/`--save`/`apply` for agents, scopes `own`/`other`/`unknown`, `authorized_scopes` and
-   `scope-not-authorized` stay exactly as they are.
+   `scope-not-authorized` stay exactly as they are. The Spec 041 texts this contradicts are listed one by one
+   ([Amendments](#amendments-to-spec-041-and-the-online-contract)).
 2. **Risk model.** Every choosable row and every group gets a level, **green, yellow, orange or red**, from fixed rules and with a
-   one-line reason ("why orange"). Red (unmerged or dirty work) is never offered for deletion.
-3. **Better criteria with the forge.** With `--online`, a merged pull request whose head equals the branch tip becomes the
-   strongest evidence (green). Offline everything still works, only with fewer green rows. No GitHub write call is added.
-4. **Grouped overview first.** A short summary by kind and risk with human sentences ("43 branches, reversible", "122 worktree
-   directories, files are deleted: 55 in `whr-*`, 51 in `workharbor-*`, 7 agent scratchpads ...") and the consequence of each
-   group, including the exact undo command where one exists. Internal codes stay in `--json` and `--verbose`.
+   one-line reason ("why orange"). Red (possible unique work) is never offered for deletion.
+3. **Forge evidence, online by default for the human wizard** (decided, D13). The human wizard reads GitHub with the existing
+   contract-3 reads (github.com only, bounded budget, no writes) when it is authenticated and falls back to offline with a one-line
+   notice; `--offline` opts out. A merged pull request whose head equals the branch tip is the strongest evidence (green). Agent mode
+   and `stw tidy plan` keep offline as the default.
+4. **Grouped overview first.** A short summary by kind and risk with human sentences and the consequence of each group.
+   Internal codes stay in `--json`, `--verbose` and `--rows`.
 5. **Wizard steps by group** with single keys (Enter or `y` take the group, `s` skip, `l` list, `r` review each, `q` quit),
-   numbers and ranges as the expert input, group selectors (`b`, `w`, `t`, `o`, `m`, `g`) and exclusions (`except 85-86`), then
-   **one final summary** before the **unchanged strict typed prompt** read from `/dev/tty`.
+   numbers, ranges and selectors as expert input, exclusions (`except 85-86`), then **one final summary that states how many
+   directories will be deleted for good**, directly before the **unchanged strict typed prompt** read from `/dev/tty`.
 6. **Retain explained.** A table per reason with the count and one "what to do" sentence; rows only on request.
-7. **Phase 2:** `stw workspace done TASK` (an agent says "finished, merged"), an **adopt** option for legacy worktrees without a
-   creation record, and an optional real TUI checklist.
+7. **Phase 2:** `stw workspace done TASK` (an agent says "finished, merged"), an **adopt** option for legacy unlocked worktrees, and an
+   optional TUI checklist.
 
-**Phases.** Phase 1 = v0.2.0: items 1, 2, 4, 5, 6, human wording, and item 3 as display. Phase 2 = v0.3.0: item 7.
+**Phases (accepted by the owner, 2026-10-26).** Phase 1 = v0.2.0: items 1 to 6 and human wording. Phase 2 = v0.3.0: item 7.
 
 **What does not change.** No auto-apply; nothing unmerged is ever deleted; no agent-mode loosening; no new GitHub write; no new
-dependency in phase 1; the typed `/dev/tty` confirmation stays plain; the apply code path, proofs, plan ids and recovery
-manifests are untouched.
+dependency in phase 1; the typed `/dev/tty` confirmation stays plain; the apply code path, proofs, plan ids and recovery manifests
+are untouched.
 
-**Top decisions for the owner** ([full list](#decisions-for-the-owner)): D1 may Enter take green groups of any owner (recommended:
-yes, green only); D2 does removing worktree directories need a second typed confirmation (recommended: no, the existing typed
-words stay); D3 do red rows ever become selectable (recommended: never); D4 the rule for owner `unknown` (recommended: choosable,
-typed word `unknown` as today); D5 are the group steps' defaults by level acceptable (recommended: yes).
+## Decided by the owner (2026-10-26)
+
+Owner answer, verbatim: "D1j D2Nein, die strenge Abfrage genügt. D3nie D4j D5j", and on the online default: "online std? offline optin?".
+
+| # | Decision | Consequence in this spec |
+| --- | --- | --- |
+| D1 yes | Enter takes green groups of any owner (green only) | Group steps; [FR-002](#functional-phase-1-unless-marked) |
+| D2 no | No second typed confirmation for removing worktree directories; the strict typed prompt suffices | Condition: the summary line directly before the typed prompt states how many directories are deleted for good and how many branches; see [Final summary](#final-summary-and-the-typed-prompt) |
+| D3 never | Red rows are never selectable | Red rows have no number and match no selector |
+| D4 yes | Owner `unknown` is choosable with the typed word `unknown` | As in Spec 041 `ConfirmWord` |
+| D5 yes | Group defaults follow the risk (green takes, yellow and orange skip) | Replaces Spec 041 "default none" for group steps only |
+| Phases | Phase 1 = v0.2.0, phase 2 = v0.3.0 | [Scope and phases](#scope-and-phases) |
+| D13 yes | Online is the default in the human wizard; offline is opt-in (`--offline`) | [Online by default](#online-by-default-in-the-human-wizard-d13) |
 
 ## Why
 
@@ -73,8 +84,8 @@ Three causes make this unusable for a human: the text is machine-shaped (one den
 
 | Phase | Release | Content |
 | --- | --- | --- |
-| 1 | v0.2.0 | Janitor mode, risk model, grouped overview, group steps, selectors, final summary, retain table, human wording, `--online` display of merged-PR evidence where Spec 031 already provides it, the `--rows` flag |
-| 2 | v0.3.0 | `stw workspace done`, tidy use of the done mark, adopt for legacy worktrees, optional TUI checklist, PR-attested proof class decision (D8) |
+| 1 | v0.2.0 | Janitor mode, risk model, online by default with `--offline`, grouped overview, group steps, selectors, final summary, retain table, human wording, the `--rows` and `--offline` flags |
+| 2 | v0.3.0 | `stw workspace done`, tidy use of the done mark, adopt for unlocked legacy worktrees, optional TUI checklist, the PR-attested proof class decision (D8) |
 
 Phase 1 adds no dependency and no new write effect. Everything the wizard deletes is deleted by the existing apply path of Spec 041.
 
@@ -85,24 +96,42 @@ marker is in the environment, and `--mine` is not given (`internal/tidywizard/ow
 not a boundary** (041 FR-006g): an agent that drives a pty is not stopped by it. The deletion safety stays with the proofs (041
 SI2), the stale checks, the recovery manifest and the typed prompt.
 
-**Rule.** In janitor mode a row is choosable iff its verdict is `safe` or `decision` (a proof exists and every precondition holds).
-The owner label, `owner_source` and `scope` no longer influence which rows may be chosen, selected by a group, or taken by `a`. They
-are shown as information and feed two risk rules (R2 and R3 below).
+**Rule.** In janitor mode a row is choosable iff its verdict is `safe`, or `decision` (by its number only, see FR-001). The owner label,
+`owner_source` and `scope` no longer influence which rows may be chosen, selected by a group, or taken by `a`. They are shown as
+information and feed the risk rules R2 and R3.
 
 **What the human path already allowed.** A human may already choose any safe row by number (`owner.Plannable` returns every entry
 in human mode, `internal/tidywizard/owner/scope.go:56`), and `--by-owner` already narrows only the view. What blocks the owner
 today is the shortcuts: `a` takes `own` rows only, `o` asks per owner label, and the layout groups by owner. Those change.
 
-### Amendments to Spec 041
+**New meaning of "explicit choice".** Spec 041 requires an explicit human choice for work of other owners and forbids preselecting it.
+In janitor mode a **selection** is made by number, selector, a group answer (Enter on a green group, `y`) or `a`; each counts as the
+explicit choice. A selection applies nothing. What protects the owner is unchanged and sits after it: the final summary, the typed
+`/dev/tty` words, the stored plan and the unchanged apply path. In agent mode there is no selection at all.
 
-| 041 id | Text today | In janitor mode (human path) |
+### Amendments to Spec 041 and the online contract
+
+Every Spec 041 text that letting Enter, `a` or a group take rows of other owners contradicts, with its new wording (line numbers are
+those of `specs/041-tidy-wizard/spec.md` at main `6d4c75ed`):
+
+| 041 text | Today | New wording (human path) |
 | --- | --- | --- |
-| FR-006b, US4a ("never preselected"), Scope of ownership is a view (human mode) | `other` and `unknown` are never preselected; `a` selects `own` only | Amended: the group step may take a group whose default is yes (D1; green only by default). `a` becomes "all green rows of every owner". Nothing is applied by a selection; applying needs the final summary and the typed prompt |
-| SC-011 | `a` selects own safe items only; foreign items only by number or `o` | Replaced by SC-001 and SC-002 of this spec for the human path; the agent-mode half of SC-011 stays |
-| Wizard interaction, Rules ("the default answer is always none/no") | one default for every prompt | Amended for the group steps only: the default depends on the level of the group (green: take, yellow and orange: skip). The question before the plan is stored, the apply question and the typed prompt keep the default no |
-| Wizard interaction (prompt text `[a]ll own safe ... [o]wner`), `prompt.Select` | one question over all rows | Replaced by overview, group steps and the expert line (below); the strict parsing rules (3 invalid answers end the run, EOF means nothing chosen, 256-byte lines) are kept |
-| Grouping of the text overview, decision 2026-10-25 (#255), rules 1 to 6 | owner, then repository | Replaced for text output by kind and risk. The JSON order is unchanged. `--rows` prints the old per-owner row view |
-| OQ13 (owner of an unregistered worktree) | `commit-author` is a hint, never `own` | Kept. Added: a display label `you` when the tip author equals the caller's global Git identity (FR-009). It is information, scope stays `unknown` |
+| US4a (line 56) | foreign items "never preselected and need the same proof" | Foreign items are shown with their owner as information; a selection (see above) is the explicit choice; the same proof is required |
+| Non-goals, line 34-36 | work of other owners "removable only by explicit choice with the full proof" | Unchanged in substance: a selection is the explicit choice; an agent-run command never touches it |
+| Candidate table, line 222 (unregistered or foreign worktree, `safe`, `scope` `other` or `unknown`) | "human mode: shown, never preselected, removable only by explicit choice" | "human mode: shown with its owner and risk, choosable by number, selector, group answer or `a` (green only); agent mode: not shown and not plannable" |
+| Ownership section, human mode, line 398 | "No candidate with `scope` `other` or `unknown` is ever preselected: `a` ... selects `own` items only" | "No selection is ever stored or applied without the summary and the typed words. `a` takes all green rows of every owner; a green group takes its rows on Enter; yellow and orange groups need `y`" |
+| FR-006a (line 577) | "all candidates ... visible ..., grouped by owner" | Visible without any flag; the text overview is grouped by kind and risk with the owner as a column; `--rows` prints the by-owner view; JSON order is unchanged |
+| FR-006b (line 578) | "never preselected (`a` selects `own` only)" | As the ownership row above; red rows are never selectable and `decision` rows only by number |
+| SC-011 | `a` selects own safe items only | Replaced for the human path by SC-001 and SC-002 here; the agent-mode half stays |
+| SI4 (line 563) | "other owners' work is touched only by a human's explicit choice with the full proof, never preselected, behind a typed `/dev/tty` confirmation, and never by agent-run mode without that human authorization" | "... touched only by a human's explicit choice with the full proof (a number, selector, group answer or `a`), behind the typed `/dev/tty` confirmation; never in agent mode without that human authorization; a selection applies nothing" |
+| Decision 14 (line 708), the legacy completion | "exact path, declared complete by the human's explicit choice" | The selection covering that path is the declaration; the final summary lists the paths (counts) before the typed words. All 122 safe worktrees of the live data are unregistered, so all go through this path |
+| Wizard interaction, Rules | "the default answer is always none/no" | Group steps only: default by risk (D5). The questions that store or apply, and the typed prompt, keep the default no |
+| Prompt text (`prompt.Select`) | one question over all rows | Overview, group steps and the expert line; strict parsing (3 invalid answers end the run, end of input chooses nothing, 256-byte lines) is kept |
+| Grouping of the text overview, decision 2026-10-25 (#255), rules 1 to 6 | owner, then repository | Replaced for text output by kind and risk (D15 asks the owner to confirm); `--rows` prints the old view |
+| Risks, line 726 | "mitigated by default none, a summary with effect counts, `decision` rows never included in `a`" | "mitigated by green-only defaults, a summary with the count of directories deleted for good, the typed words, and `decision` rows never taken by a group, `y`, `a` or a selector" |
+| OQ13 (owner of an unregistered worktree) | `commit-author` is a hint, never `own` | Unchanged; there is no `you` label (see D7) |
+| FR-016, SI9, the `--online` row of the flag table, non-goal at line 37 | "`--online` is the only way to network; default offline" | Human wizard only: online by default, `--offline` opts out ([D13](#online-by-default-in-the-human-wizard-d13)). Agent mode and `stw tidy plan`: unchanged |
+| Spec 031 FR-011 and the Spec 029 online contract (the explicit `--online` rule) | online only by `--online` | Unchanged for the expert layer and for agents. For the human wizard the contract-3 reads are performed without the flag under the budget below; the reads, endpoints, bounds, token handling and "no write" rules are those documents' own. Spec 031 and 029 texts are not rewritten; this table is the amendment |
 
 ### What stays exactly as it is
 
@@ -110,98 +139,129 @@ today is the shortcuts: `a` takes `own` rows only, `o` asks per owner label, and
   plan `own` items from a task record only (041 FR-006c, `owner.Plannable`, `planset.SelectSafe` at `internal/tidywizard/planset/planset.go:300`).
   `apply` refuses `other` and `unknown` items without `authorized_scopes` (`scope-not-authorized`, 041 FR-006d), and
   `authorized_scopes` is written by the human path only (`owner.Authorize`, `scope.go:67`) and bound into the plan id.
-- **Typed confirmation** (041 FR-006f): the confirmation word is the owner label, or the literal word `unknown`, followed by the
-  first six characters of the plan id, read from `/dev/tty`, asked once per word (`internal/tidywizard/owner/confirm.go:45`,
-  `:59`); it runs when the plan set is built (`planset.go:492`) and again at apply (`apply.go:300`). Unchanged.
+- **Typed confirmation** (041 FR-006f): the confirmation word is the owner label (scope `other`, one word) or the literal word
+  `unknown`, followed by the first six characters of the plan id, read from `/dev/tty`, asked once per word in sorted order
+  (`internal/tidywizard/owner/confirm.go:45`, `:59`; `planset.go:468-494`); it runs when the plan set is built and again at apply
+  (`apply.go:300`). Unchanged. Items of scope `own` need no word.
 - Scopes, `owner_source`, the owner derivation order, the proofs (ancestor, patch-id, merge-noop, no-net-change), the recently-active
-  retain rule (24 h, `classify.go:33`), the plan set, the dependent branch leg, journals and recovery roots.
+  retain rule (24 h, `classify.go:33`, `:413`), the plan set, the dependent branch leg, journals and recovery roots.
 - Exit codes 0, 1 and 2, the no-terminal degradation (US7, FR-009), `esc` and the 120-character bound (FR-042).
 
 ## Risk model
 
-Each choosable row gets one level, each group the worst level of its rows (and the counts per level). Retain rows never get a
-level of "safe-ness"; they are *kept* (see [Retain explained](#retain-explained)), except those that guard real work, which are
-**red**.
+Each choosable row gets one level, each group the worst level of its rows (and the counts per level). Rows that are kept get a level only
+when they may hold unique work.
 
 ### Levels
 
 | Level | Meaning | Offered for deletion |
 | --- | --- | --- |
-| green | The work is provably on the base, or nothing unique exists, and the effect is restorable or removes only a clean copy | yes |
-| yellow | Integrated by equivalence (same patches, not the same commits) or restorable only with effort | yes |
-| orange | Integrated by equivalence **and** one more fact makes a mistake likelier (recent activity, nobody can vouch for the item, another owner's unfinished task) | yes, never a default |
-| red | Unique work is at stake: `unmerged`, `dirty`, `ignored-extras` | never |
+| green | The work is provably on the base, or nothing unique exists, and what is deleted is a clean copy or a restorable reference | yes |
+| yellow | Integrated by equivalence (same patches, not the same commits) | yes |
+| orange | Integrated by equivalence **and** one more fact makes a mistake likelier (recent activity, nobody can vouch, another owner's unfinished task, a decision row) | yes, never a default |
+| red | Possible unique work: see the list below | never |
+| kept | Kept for a structural reason and nothing known says unique work is there | never |
 
-Rows kept for another reason (`primary-checkout`, `current-worktree`, `registration-record-missing`, `branch-attached-elsewhere`,
-`recently-active`, `evidence-incomplete`, `locked-foreign`, `protected`, `base-*`, `jj-retirement-unsupported`) have no level; the
-row says "kept" and why. `evidence-incomplete` means "not judged", not "dangerous".
+**Red** is any kept row, whatever the first reason the classifier found (it checks `evidence-incomplete`, `locked-foreign` and
+`registration-record-missing` before the content reasons, `internal/tidywizard/classify.go:396-409`), for which at least one of
+these holds: proof `none` on a branch or an existing directory (`unmerged`, and also `registration-record-missing` rows that are not
+integrated); `dirty` or `ignored-extras` observed; or the row is **not judged** (`evidence-incomplete`), because then unique work cannot
+be ruled out. Primary checkouts, stale registrations whose directory is gone, and rows that are integrated (proof not `none`) and
+kept for `registration-record-missing`, `branch-attached-elsewhere`, `recently-active`, `locked-foreign` or `protected` are **kept**:
+their dirt is not necessarily known in this view, and the text says so ("integrated; not checked for uncommitted files"). The
+risk function reads the observed facts (proof, `Dirty`, `IgnoredExtras`, `Incomplete`), not only the reason; where the adapter does not
+expose a fact, T001 adds it.
 
 ### The ladder (exact, all inputs are existing evidence unless marked)
 
 1. **Strength of the proof, S.**
-   - **strong** if the proof word is `ancestor` or `no-net-change`; or the evidence is `no-work` (no commit of its own; 041 FR-006h);
-     or, with `--online`, the tip OID equals the head of a pull request merged into the base (C2); or the proof is `patch-id` or
-     `merge-noop` and a corroboration holds: the branch's upstream is gone (C1, a branch whose remote-tracking branch was
-     deleted; read from the local ref database without network) or, in phase 2, the task record carries a done mark with a
-     merged pull request number (C3).
-   - **equivalent** otherwise (`patch-id` or `merge-noop`, whitespace-only differences are never `safe`; the wizard has no
-     `--accept-whitespace-differences`, so those rows stay `retain` `unmerged`).
-2. **Base level.** strong gives **green**; equivalent gives **yellow**. (Effect type is shown, not scored: a `delete-branch`
-   effect is restorable with `stw tidy restore` from its recovery ref (`docs/tidy.md:566`), the removal of a worktree directory is
-   not restorable (`docs/tidy.md:584`, `:348-351`) but the verdict `safe` already guarantees a clean tree with no ignored extras, so
-   the committed state is pinned and nothing but a copy of it is deleted.)
+   - **strong** if the proof word is `ancestor`, `no-net-change` or `github-branch-absent` (a tracking reference); or the evidence is
+     `no-work` (no commit of its own; 041 FR-006h); or the tip OID equals the head of a pull request merged into the base (C2,
+     forge evidence, see D13).
+   - **equivalent** otherwise: `patch-id` or `merge-noop`. Whitespace-only differences are never `safe` (the wizard has no
+     `--accept-whitespace-differences`; those rows stay `retain` `unmerged`, hence red).
+2. **Base level.** strong gives **green**; equivalent gives **yellow**. The effect type is shown, not scored: a `delete-branch` effect is
+   restorable with `stw tidy restore` from its recovery ref (`docs/tidy.md:566`); the removal of a worktree directory is not restorable
+   (`docs/tidy.md:584`, `:348-351`), but `safe` guarantees a clean tree with no ignored extras and a proven HEAD that stays pinned.
 3. **Raises**, each adds one step (green, yellow, orange), at most orange, each counted once:
-   - **R1 recent activity**: a worktree of scope `other` or `unknown` whose newest HEAD, index or tracked-file time is older than
-     the 24-hour retain window but within 7 days (`LastActivity`, already observed). Window: proposed.
-   - **R2 nobody vouches**: a worktree, S equivalent, with no creation record and an owner of scope `unknown` or an
-     `author:` hint (no task record, no path convention). Nobody can say whose it is or whether it still matters.
+   - **R1 recent activity**: a worktree of scope `other` or `unknown` whose newest HEAD, index or tracked-file time is older than the
+     24-hour retain window but within 7 days (`LastActivity`, already observed; the window is D6).
+   - **R2 nobody vouches**: a worktree, S equivalent, with no creation record and an owner of scope `unknown` (no task record, no path
+     convention).
    - **R3 (phase 2) another owner's unfinished task**: a creation record exists, its owner is not the caller, and it has no done mark.
-   - **R4 decision rows**: a `decision` row (`lock-mismatch`, legacy completion) is at least orange.
-4. **Red** is the verdict `retain` with reason `unmerged`, `dirty` or `ignored-extras`. It is shown with its reason and a consequence
-   ("2 commits on this branch exist nowhere else") and has no number a human could type.
+   - **R4 decision rows**: a `decision` row (`lock-mismatch`) is at least orange.
+4. **Weak corroboration never makes green.** Two facts only add text and, where stated, remove a raise; neither lifts `equivalent` to
+   `strong`, because neither is integration evidence:
+   - **C1 upstream gone** (a branch whose remote-tracking branch no longer exists, read from the local reference database, no
+     network): adds the text "upstream branch is gone". A pull request closed unmerged, a manual delete or a prune produce the same
+     state, so it changes no level.
+   - **C3 done mark** (phase 2): a claim by the task's owner. It removes R3 and R2 for that row and adds the text "agent says done". A
+     done mark never lifts a row above **yellow**; only forge evidence (C2) lifts it to green. Who may set the mark: see Phase 2.
+5. **Red rows** have no number a human could type and match no selector; the row shows its reason and, where known, the consequence
+   ("2 commits on this branch exist nowhere else").
 
 ### Reasons ("why orange")
 
 Every level carries `risk_reasons[]`: stable kebab-case words in JSON (`proof-ancestor`, `proof-no-net-change`, `no-own-commit`,
-`pr-merged-head`, `upstream-gone`, `done-mark`, `proof-equivalent`, `recent-activity`, `nobody-vouches`, `task-not-done`,
-`decision-row`) and one human sentence per word in text. Example, orange: "Why orange: the work is on main as equal patches (a
-rebase merge), not as the same commits; the directory is deleted for good; no record says whose it is."
+`pr-merged-head`, `proof-equivalent`, `recent-activity`, `nobody-vouches`, `task-not-done`, `decision-row`, `upstream-gone`,
+`done-mark`, and for red `not-integrated`, `uncommitted-files`, `extra-files`, `not-judged`) and one human sentence per word in text.
+Example, orange: "Why orange: the work is on main as equal patches (a rebase merge), not as the same commits; the directory is deleted for
+good; no record says whose it is."
 
-### Effect and consequence facts (shown with every group, never scored)
+### Consequence facts (shown with every group, never scored)
 
-Kind and effect (`delete-branch`: restorable; `remove-registration` plus `remove-files`: not restorable), the number of items and
-repositories, the recovery location (the state directory of the run, recovery refs `refs/stw/recovery/v3/...`), the exact undo command
-where one exists, and, when known, an upper bound of size: the tracked-file count that the activity scan reads (at most 8,192 per
-worktree, `retirement-file-limit` above that; 041 Read-only observers). No new filesystem walk is added; no size is shown when the
-count is not known.
+Kind and effect, the number of items and repositories, the recovery location (the state directory of the run, recovery refs
+`refs/stw/recovery/v3/...`), the undo command where one exists (branches only: one `stw tidy restore PATH --contract 3 --state-dir DIR
+--plan ID` per repository, the ids printed by `stw tidy history`, `docs/tidy.md:571-587`), and, when known, an upper bound of size: the
+tracked-file count that the activity scan reads (at most 8,192 per worktree; 041 Read-only observers). No new filesystem walk.
 
 ### Measured example
 
-Applied to the live workspace data (R1 cannot be evaluated: `overview.json` carries no activity times, so it is shown as 0; C1 and C2
-are not evaluable offline): **green 6, yellow 93, orange 66** of 165 safe rows, and **red 330** (301 `unmerged`, 23 `ignored-extras`,
-6 `dirty`) of the 964 retained rows.
+Applied to the live data (R1, C1 and C2 are not evaluable from the file, so they change nothing here; the mockups show the offline
+ladder): **green 6, yellow 93, orange 66** of the 165 safe rows. Of the 964 retained rows **394 are red** (301 `unmerged`, 47
+`registration-record-missing` worktrees with proof `none`, 23 `ignored-extras`, 17 `evidence-incomplete`, 6 `dirty`) and **570 are
+kept** (299 record-missing worktrees that are integrated, 17 stale record-missing, 217 `branch-attached-elsewhere`, 27
+`recently-active`, 7 `primary-checkout`, 3 `unregistered` stale). The dirt of the 299 integrated record-missing rows is not in the file.
 
-## Better criteria with the forge (`--online`)
+## Online by default in the human wizard (D13)
 
-**Today.** `--online` allows the contract-3 authenticated reads (default off); in the wizard it fills tracking references only
-(041 Read-only observers, `TrackingSkipped: tracking-requires-online`). Spec 031 already has merged-pull-request discovery keyed by
-distinct head OID (031 FR-013 to FR-018: closed endpoint set, up to 10 pages of 100, 128 requests and one 30-second deadline per run,
-github.com only, no write) and the proof class `github-merged-head` for local reference plans.
+**Decision (owner, 2026-10-26): "online std? offline optin?" answered yes.** In janitor mode the wizard performs the existing
+contract-3 authenticated reads without a flag, and `--offline` opts out. Everything else about `--online` stays: github.com only,
+read-only GET requests, the Spec 031 closed endpoint set, the token never in output (041 SI10), no write call.
 
-**Phase 1 (display and risk only).** With `--online` the wizard reuses that discovery, read-only, for every distinct tip OID of a
-row that is `safe` or kept as `unmerged`:
+| Situation | Behavior |
+| --- | --- |
+| Human wizard (`stw tidy` on terminals), authenticated, remote is github.com | Online reads run; one line "GitHub: checked N of M repositories" |
+| Not authenticated, remote not github.com, any failure, rate limit, deadline | That member (or the rest of the run, for a rate limit) is judged **offline**; one notice line names the reason; exit code unchanged; levels as offline |
+| `--offline` | No network, as today; `--online` and `--offline` together are a usage error (exit 2) |
+| `stw tidy plan`, `stw tidy --json`, `--save`, agent mode, the expert layer | Offline by default; `--online` opts in, behavior as today; `--offline` is accepted and changes nothing |
+| An explicit `--online` | Behavior as today (the contract-3 failure rules); only the implicit default falls back silently |
 
-- a `safe` row whose tip equals a merged pull request head is **strong** (C2): green, with the evidence "merged as #N";
-- an `unmerged` row whose tip equals a merged pull request head is **not** made selectable: it stays red with the added text
-  "merged as #N, but the local proofs disagree: review it" (D8 asks whether this may ever become a proof);
-- discovery failure, an exceeded bound or an incomplete collection never raises or lowers a level; the row is judged offline and the
-  overview says "N rows could not be checked against GitHub" (031 FR-017: absence is inconclusive, presence is positive evidence).
+**Phase 1 use of the reads.** Spec 031 discovery (FR-013 to FR-018) runs per explicitly resolved repository, closed endpoint set, up to 10
+pages of 100 closed pull requests, 128 requests, 32 MiB and one 30-second deadline per run, and targets unproven tips. The wizard extends
+it, read-only, to the `safe` tips whose proof is only `equivalent`, so that a merged head makes them green, and to `unmerged` tips for
+a hint. Positive evidence is usable whatever the coverage; absence is inconclusive (031 FR-017).
 
-No new endpoint, no write, no other host, no new flag (`--online` and `--timeout` exist). Offline is the default and stays complete
-without it.
+**Budget across the workspace (F6).** The live workspace has 7 members and about 466 distinct tips (165 safe plus 301 unmerged), more than
+one session can cover. The allocation:
 
-**Phase 2.** D8: whether `github-merged-head` becomes a deletion proof inside the wizard (it changes the frozen
-`tidy-overview` `proof` enum). Recommended: not before phase 2 and only after a measured dogfood run.
+- **Per member:** one session with the Spec 031 limits unchanged (128 requests, 32 MiB, 30 s), one session per member, members through
+  the existing fan-out (width 4).
+- **Per run:** at most 512 requests in all; the members that do not fit are judged offline for the remainder. `--timeout`, when given,
+  bounds the whole analysis including every online session; a session ends at that deadline.
+- **Tips per member:** at most 64 distinct tips, taken in this order: `safe` rows with an `equivalent` proof (by name), then `unmerged`
+  rows (by name). The rest are "not checked"; the overview says "N of M rows not checked against GitHub". On a workspace like the live
+  one coverage is often incomplete; that is expected and harmless (offline levels apply).
+- **Rate limit or server trouble:** a 403 or 429 that reports an exhausted rate limit, a 5xx, or a timeout stops all further online
+  calls of the run, the unchecked rows are judged offline, nothing is retried; one notice line.
+- **Bookkeeping:** requests are counted before they are sent and failures count (031 FR-018).
+
+**Phase 1 effects.** A `safe` row whose tip equals a merged head is strong (green, evidence "merged as #N"). An `unmerged` row whose tip
+equals a merged head stays red with the added text "merged as #N, but the local proofs disagree: review it" (D8 asks whether this may ever
+become a proof). A tracking reference with `github-branch-absent` (contract 3) now appears in the human wizard by default, as a group
+"Tracking references" (local reference deletion; strong). The latency of the reads shows on the stderr progress line (#297).
+
+**Phase 2.** D8 only: whether `github-merged-head` becomes a deletion proof (it changes the frozen `proof` enum).
 
 ## Overview first
 
@@ -210,23 +270,26 @@ same candidates the JSON carries; `--json` is unchanged except the additive fiel
 
 **Groups.** One group per (kind and effect, place):
 
-- **Branch deletions** (`delete-branch` only): one group, with counts per repository.
-- **Worktree directories**, by place: *agent scratchpads* (path contains `/scratchpad/`), *`/tmp`* by **family** (the leading lowercase
-  letters of the directory name, for example `whr` for `whr-006-t030-apply` and `whr007-ci-binding`, `workharbor` for
-  `workharbor-baseline-0jbykfta`; a family needs at least 3 members, otherwise the item goes to "other in /tmp"), and
-  *in the workspace* (anything else, by parent directory). A hostile name has no letters, so it falls into "other" and is shown
-  escaped.
+- **Branch deletions** (`delete-branch` only), counted per repository.
+- **Tracking references** (online only).
+- **Worktree directories**, by place: *agent scratchpads* (a path component equal to `scratchpad`), *`/tmp`* by **family** (the leading
+  ASCII lowercase letters of the first path component below `/tmp`; for `/tmp/workharbor-baseline-0jbykfta/checkout` that is
+  `workharbor`, for `/tmp/whr007-ci-binding` and `/tmp/whr-006-t030-apply` it is `whr`; a family needs at least 3 members, otherwise the
+  items go to "other in /tmp"), and *in the workspace* (anything else, by parent directory).
 - **Kept** rows are not groups; they are the [retain table](#retain-explained).
 
-Groups are ordered by risk (green first), then by size. Each line says what happens, how many, how risky, and what undoes it.
+The key is built only from `[a-z]` of the raw name, so a hostile name (for example one that starts with letters and carries ESC) cannot
+inject bytes into a key; all names displayed pass `esc` and the 120-character bound.
+
+Groups are ordered by worst risk (green first), then by size. Each line says what happens, how many, how risky, and what undoes it.
 
 **Wording.** Text uses sentences, not codes. Codes (`registration-record-missing`, `patch-id`, `branch-attached-elsewhere`, ...) appear
-only in `--json`, `--verbose`, `--rows` and `d N` details. A table in `internal/tidywizard/render` maps every reason and proof word to a
-sentence and a test fails when a code has none (SC-010).
+only in `--json`, `--verbose`, `--rows` and `d N` details. A table in `internal/tidywizard/render` maps every reason, proof and risk word
+to a sentence and an action, and a test fails when a code has none (SC-010).
 
-**Owner as information.** The owner appears as a column of the group step and as a count line ("owner: 51 yourself, 55 codex"); the label
-`you` is shown for tip authors equal to the caller's global Git identity, otherwise the label as derived (`codex`, `claude`,
-`author:NAME`, `unknown`).
+**Owner as information.** The owner is a column of the group step and a count line ("owner: 51 hint Werner Stein, 55 codex"); the label is
+the derived one (`codex`, `claude`, `author:NAME` shown as "hint: NAME", `unknown`). There is no `you` label: agents commit under the
+owner's Git identity, so a match with that identity would show foreign agent work as the owner's (D7).
 
 ## Wizard steps
 
@@ -234,98 +297,109 @@ Human mode with a terminal only. After the overview the wizard walks the groups 
 these answers; they build a selection.
 
 **One screen per group:** header (what, how many, level counts), the consequence lines, the "why" of the worst level, three example
-rows, then the question. Keys (a single line answer followed by Enter, no raw mode in phase 1):
+rows, then the question. Answers are one line followed by Enter (no raw mode in phase 1).
 
-| Key | Meaning |
-| --- | --- |
-| Enter | the default of this group: **take** for green, **skip** for yellow and orange (D1, D5) |
-| `y` | take the whole group (also yellow and orange) |
-| `s` | skip the group |
-| `l` | list every row of the group (paged, 20 rows at a time) |
-| `r` | review each row of the group: one line each, `y`, `n` or `q` |
-| `q` | quit; nothing is stored |
+### Keys and grammar (one table)
 
-**Expert input** (kept): at any group question, and at the final summary via `e`, the line may be numbers, ranges and selectors
-(grammar below). Numbers are the display numbers of the listing; they are stable within the run and printed by `l`.
-
-### Selection grammar
+| Input | Where | Meaning |
+| --- | --- | --- |
+| Enter | group step | the default of the group: **take** for a green group, **skip** for yellow and orange (D1, D5) |
+| `y` | group step | take the whole group's choosable rows (also yellow and orange); never a `decision` row |
+| `s` | group step | skip the group |
+| `l` | group step, retain table | list every row of the group (20 at a time) with its number |
+| `r` | group step | review each row: `y`, `n` or `q` per row (the only place a number-less row choice is possible) |
+| `d N` | any list | show the details and the codes of row N |
+| `a` | overview, final summary | take **all green rows** of every owner (D14); never yellow, orange or `decision` rows |
+| `e` | final summary | edit the selection with a line of terms (below) |
+| `q` | any question | quit; nothing is stored |
+| a term line | group question, `e` | numbers, ranges, selectors and `except` |
 
 ```
 line      = term { (" " | ",") term } [ " except " term { (" " | ",") term } ]
 term      = NUMBER | NUMBER "-" NUMBER | selector
-selector  = "b"            all branch deletions
-          | "w"            all worktree directories
-          | "t"            all worktree directories under /tmp
-          | "g"            all green rows
-          | "o:" LABEL     all rows of that owner label (exact, as shown)
-          | "m:" REPO      all rows of that repository
+selector  = "a"                all green rows
+          | "b"                all branch deletions
+          | "w"                all worktree directories
+          | "t"                all worktree directories whose path starts with /tmp/ (this includes the agent scratchpads)
+          | "o:" LABEL         all rows of that owner label, exact as shown; a label with a space is quoted: o:"author:Werner Stein"
+          | "m:" REPO          all rows of that repository
 ```
 
-The result is the union of the terms before `except`, minus the union after it, intersected with the choosable rows (red and kept
-rows have no number and match no selector). A letter, number or word that does not parse, a number that is not choosable, an empty
-`except`, or a line over 256 bytes is an invalid answer (three end the run, as today). Example: `w t except 85-86`. Selectors never
-select a `decision` row; those keep the per-row second confirmation of Spec 041.
+The result is the union of the terms before `except`, minus the union after it, intersected with the choosable rows. Red and kept rows
+have no number and match no selector. **`decision` rows are taken by their number only**, each with the Spec 041 per-row second
+confirmation, and never by `y`, `a`, Enter or any other selector. A word that does not parse, a number that is not choosable, an
+empty `except`, an unterminated quote, or a line over 256 bytes is an invalid answer (three end the run, as today). Example:
+`w t except 85-86`. Numbers are the display numbers printed by `l`; they are stable within the run.
 
 ### Final summary and the typed prompt
 
-After the last group, one summary lists the selection by group with counts, level counts, effects, the typed words that will be
-asked, and the undo lines (screen 3 below). Then, in this order, all as today: the question "Store this plan set?" (default no), the
-typed confirmation per word on `/dev/tty` while the plan set is built, the stored plan id, the question "Apply it now?" (default no),
-and the typed confirmation again inside the unchanged apply path. A wrong word, no terminal, an interrupt or `q` stores or applies
-nothing more. The typed prompt stays **plain text** (no color, no menu); it is the protection, and the environment markers are only
-the accident guard in front of it.
+After the last group, one summary lists the selection by group with counts, level counts, effects, the typed words that will be asked,
+and the undo lines (screen 3). **Its last line, directly before the first typed prompt, states the irreversible effect: "This deletes N
+directories for good and M branches (restorable)."** (Owner condition for D2.) The order, all as today otherwise:
+
+1. the summary and that line;
+2. if foreign items are chosen, the typed confirmation per word, sorted (`claude`, `codex`, `unknown` in the mockup), read from
+   `/dev/tty`, plain, while the plan set is built (`planset.go:492`); if all chosen items are own, the question "Store this plan set?
+   [y/N]" follows the line instead;
+3. the stored plan id and the question "Apply it now?", whose text repeats the counts (default no);
+4. the typed confirmation again inside the unchanged apply path.
+
+A wrong word, no terminal, an interrupt or `q` stores or applies nothing more. The typed prompt stays **plain text** (no color, no menu);
+it is the protection, and the environment markers are only the accident guard in front of it.
 
 ## Retain explained
 
 After the groups the wizard prints one table of kept rows: count, a human reason and one "what to do" sentence. Rows are shown only on
-request (`l` at the table, or `--rows`).
+request (`l` at the table, or `--rows`). Red rows are counted separately because they may hold unique work.
 
-| Reason (code stays in JSON) | Count | What it means | What to do |
-| --- | --- | --- | --- |
-| Created by stw, record not found (`registration-record-missing`) | 346 worktrees, 17 stale | The worktree is locked `stw:TASK` but no task record is in a known state directory | Re-run with the `--state-dir` that created them (agent scratch stores are separate directories). Records that no longer exist: phase 2 adopt |
-| Not merged (`unmerged`) | 301 | The branch or worktree has commits the base lacks | Nothing is deleted. To judge them, make the review report per repository with the expert command `stw tidy plan REPO --contract 3 ... --report-dir DIR` (Spec 031) |
-| Branch is checked out elsewhere (`branch-attached-elsewhere`) | 217 | A kept worktree has this branch checked out | Clean up that worktree first, then run again |
-| Recently active (`recently-active`) | 27 | A job may still be running there (changed within 24 hours) | Wait, then run again |
-| Untracked or ignored files (`ignored-extras`) | 23 | The directory holds files Git does not track | Look inside and remove them yourself if they are junk; stw never deletes them |
-| Not judged (`evidence-incomplete`) | 17 | A deadline or proof budget ran out | Run again with a larger window, for example `--timeout 15m` |
-| Repository checkout (`primary-checkout`) | 7 | The main checkout of a repository | Never offered |
-| Uncommitted changes (`dirty`) | 6 | Tracked files differ from the commit | Commit or discard them yourself |
-| Registration without directory (`unregistered`, stale) | 3 | A worktree entry whose directory is gone | No stw action yet (Spec 041 T012b) |
+| Reason (code stays in JSON) | Count | Level | What it means | What to do |
+| --- | --- | --- | --- | --- |
+| Created by stw, record not found, integrated (`registration-record-missing`) | 299 worktrees, 17 stale | kept | The worktree is locked `stw:TASK`, no task record is in a known state directory; not checked for uncommitted files here | Re-run with the `--state-dir` that created them (agent scratch stores are separate directories). Nothing else frees them: neither phase offers another way |
+| Created by stw, record not found, **not integrated** | 47 | red | As above, and its commits are not on the base | Do not delete. Find the right `--state-dir` and judge it with the review report |
+| Not merged (`unmerged`) | 301 | red | The branch or worktree has commits the base lacks | Nothing is deleted. Judge them with the review report: expert command `stw tidy plan REPO --contract 3 ... --report-dir DIR` (Spec 031) |
+| Branch is checked out elsewhere (`branch-attached-elsewhere`) | 217 | kept | A kept worktree has this branch checked out | Decide on that worktree first (it is kept for its own reason and may hold unmerged work), then run again |
+| Recently active (`recently-active`) | 27 | kept | A job may still be running there (changed within 24 hours) | Wait, then run again |
+| Untracked or ignored files (`ignored-extras`) | 23 | red | The directory holds files Git does not track | Look inside and remove them yourself if they are junk; stw never deletes them |
+| Not judged (`evidence-incomplete`) | 17 | red | A deadline or proof budget ran out, or Git refused the tree | Run again with a larger window, for example `--timeout 15m`; until then assume unique work |
+| Repository checkout (`primary-checkout`) | 7 | kept | The main checkout of a repository | Never offered |
+| Uncommitted changes (`dirty`) | 6 | red | Tracked files differ from the commit | Commit or discard them yourself |
+| Registration without directory (`unregistered`, stale) | 3 | kept | A worktree entry whose directory is gone | No stw action yet (Spec 041 T012b) |
 
-The counts are those of the live workspace; the sentences are fixed text per code (SC-010). The table is computed from the same
-candidates, so the numbers always add up to the retained total.
+The counts are those of the live workspace and sum to 964 (394 red, 570 kept); the sentences are fixed text per code (SC-010).
 
 ## Phase 2
 
 ### Agents say "done" (`stw workspace done`)
 
 `stw workspace done TASK [--merged PR] [--state-dir DIR]` records in the **existing task record** (the file `stw workspace apply`
-wrote) that the owner of the task considers it finished and, optionally, which pull request merged it.
+wrote) that the task is finished and, optionally, which pull request merged it.
 
 - **Not the state field.** The record's `state` is `complete` when *creation* completed (`internal/workspace/workspace.go:462`), so the
   mark is a new additive optional block, like `origin` (Spec 042 D1, D3): `done` with `at` (UTC), `by` (the origin kind) and
-  `merged_pr` (number, optional). The frozen v1 workspace schema must allow it; T-tasks verify that as Spec 042 did.
-- **State directory only.** No network, no remote write, no change to any repository or worktree. The record is rewritten atomically and
-  only the `done` block is added; an existing `done` is returned, not overwritten (idempotent, as `origin` is written once).
-- **Attribution gate.** The command calls the Spec 042 D5 gate: another session's task is refused (`attribution-mismatch`); a human run
-  is never blocked.
-- **It is a claim, not a proof.** The mark never makes anything deletable. It is corroboration C3 (lowers equivalent to strong, only for
-  a row that already has a proof), removes R3, and adds the line "agent says done" to the reason. Without a proof the row stays red.
-- **Agent step.** Add to the workspace `AGENTS.md` workflow (owner's file, owner's approval; this spec proposes the sentence): "After the owner
-  reports the merge, run `stw workspace done TASK --merged PR`." Agents that never run it lose nothing: `--online` (C2) finds the
-  merged pull request from the branch tip anyway.
-- **Automatic marking.** Not recommended (D9): `stw watch` and `stw pulls` are read-only by contract (Spec 035 and 036), and C2 already
+  `merged_pr` (number, optional). The frozen v1 workspace schema must allow it; T017 verifies that as Spec 042 did.
+- **State directory only.** No network, no remote write, no change to any repository or worktree. The record is rewritten atomically,
+  only the `done` block is added, an existing `done` is returned and not overwritten.
+- **Who may mark.** The command takes the Spec 042 D5 gate, which refuses another session's task (`attribution-mismatch`) and
+  never blocks a human run; it does **not** gate a task without a record or without a recorded session (042 D5), so any agent on such a
+  task, or any process of the user, can set the mark. It is therefore **a claim by whoever ran it, not evidence**.
+- **Effect on tidy.** The mark never makes anything deletable and never lifts a row above **yellow** (ladder step 4); it removes R2 and R3
+  and adds the text "agent says done". Only forge evidence (C2) makes green. Without a proof the row stays red.
+- **Agent step.** The workspace `AGENTS.md` workflow would gain: "After the owner reports the merge, run `stw workspace done TASK
+  --merged PR`." (D11, the owner's file.) Agents that never run it lose nothing: the online reads (C2) find the merged pull request
+  from the branch tip.
+- **Automatic marking.** Not recommended (D9): `stw watch` and `stw pulls` are read-only by contract (Specs 035 and 036), and C2 already
   recognizes a merged head at tidy time without writing a record.
 
 ### Adopt legacy worktrees
 
-For worktrees without a creation record, `stw tidy adopt PATTERN=OWNER ...` (example `/tmp/whr*=codex`) supplies an owner label the
-built-in path table does not know. Safeguards: human mode and a terminal only; the pattern is an absolute path glob under `/tmp` or the
-workspace, never `*` alone, matched only against existing linked worktrees of known members (never the primary or current checkout);
-the matches are listed and need `y`; the result is an **adoption record** in the state directory (new `adoptions` namespace, path,
-repository identity, the HEAD at adoption, label, time), not a task record. It changes only `owner` and `owner_source` (`adopted`, which
-never counts as `task-record` for agent mode) and **never a verdict**: a worktree locked `stw:TASK` without record keeps needing the
-`--state-dir` that created it, because owned retirement binds the creation record.
+For **unlocked** worktrees without a creation record, `stw tidy adopt PATTERN=OWNER ...` (example `/tmp/whr*=codex`) supplies an owner
+label the built-in path table does not know. It removes R2 for them and nothing else. **It does not help the 363
+`registration-record-missing` rows**: those are all locked `stw:TASK` (`classify.go:380-383`, `:401`), owned retirement binds the creation
+record, and only the `--state-dir` that holds it frees them. Safeguards: human mode and a terminal only; the pattern is an absolute path glob
+under `/tmp` or the workspace, never `*` alone, matched only against existing linked worktrees of known members (never the primary or
+current checkout); the matches are listed and need `y`; the result is an **adoption record** in the state directory (new `adoptions`
+namespace: path, repository identity, the HEAD at adoption, label, time), not a task record. It sets `owner` and a new `owner_source`
+value `adopted`, which never counts as `task-record` for agent mode, and **never changes a verdict**.
 
 ### Real TUI checklist
 
@@ -372,26 +446,27 @@ summary: 3 safe (0 own, 3 other), 6 retain
 ```
 
 The next three screens and the retain table are **MOCKUPS**: the program cannot produce them yet. Their numbers are computed from the
-real `overview.json` of 2026-10-26 (counts, owners, paths and proofs are real; levels follow the ladder above with R1, C1 and C2 not
-evaluable; the numbering and the undo ids are invented).
+real `overview.json` of 2026-10-26 (counts, owners, paths and proofs are real; levels follow the offline ladder with R1 and C1 not
+evaluable; the numbering and the undo ids are invented; the GitHub line shows the offline case).
 
 ### Screen 1 (mockup): grouped overview
 
 ```text
-Workspace /workspaces/Anchorage   7 repositories analysed   mode: you (terminal, no agent)
+Workspace /workspaces/Anchorage   7 repositories analysed   GitHub: offline in this mockup
 
-Can be cleaned (165 of 1,129 candidates)                        risk
-  1  55 directories  /tmp/whr-*          files deleted, codex   yellow  (3 green, 52 yellow)
-  2  43 branches                         reversible             yellow  (2 green, 41 yellow)
-  3  51 directories  /tmp/workharbor-*   files deleted, you     orange  (1 green, 50 orange)
-  4   7 directories  agent scratchpads   files deleted, you     orange
-  5   4 directories  /tmp/crewbook-*      files deleted, you     orange
-  6   4 directories  other in /tmp        files deleted, you     orange
-  7   1 directory    in the workspace     files deleted, you     orange
+Can be cleaned (165 of 1,129 candidates)                              risk
+  1  55 directories  /tmp/whr-*          files deleted, codex           yellow  (3 green, 52 yellow)
+  2  43 branches                         reversible                     yellow  (2 green, 41 yellow)
+  3  51 directories  /tmp/workharbor-*   files deleted, hint Werner     orange  (1 green, 50 orange)
+  4   7 directories  agent scratchpads   files deleted, hint Werner     orange
+  5   4 directories  /tmp/crewbook-*      files deleted, hint Werner     orange
+  6   4 directories  other in /tmp        files deleted, hint Werner     orange
+  7   1 directory    in the workspace     files deleted, hint Werner     orange
      19 of the directories also delete their branch (reversible)
 
-Kept (964): nothing is deleted, nothing unmerged is ever offered
-  330 unmerged or changed work (red)   634 other reasons, see the table at the end
+Kept (964): nothing here is offered for deletion
+  394 may hold unique work (red): not merged, uncommitted or untracked files, not judged
+  570 kept for another reason (record missing, branch in use, recently active, ...)
 
 Next: one question per group. Nothing changes until the final summary and your typed confirmation.
 Enter = continue   q = quit
@@ -420,136 +495,150 @@ Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit   (Ent
 
 ```text
 Summary: nothing has been changed yet
-  group                         items   risk     effect
-  55 directories /tmp/whr-*        55   yellow   delete 55 directories, 15 branches
-  43 branches                      43   yellow   delete 43 branches (reversible)
-  51 directories /tmp/workharbor-* 51   orange   delete 51 directories
+  group                            items   risk     effect
+  55 directories /tmp/whr-*           55   yellow   delete 55 directories, 15 branches
+  43 branches                         43   yellow   delete 43 branches (7 claude, 2 codex, 34 hint Werner)
+  51 directories /tmp/workharbor-*    51   orange   delete 51 directories
   skipped: 4 groups (16 directories)
   total: 149 items in 7 repositories; 964 kept rows untouched
-
-Undo: branches   stw tidy restore --contract 3 --state-dir DIR --plan <printed after apply>
-      directories  not restorable; committed history stays pinned
-Typed words that will be asked (on /dev/tty): codex   unknown
-Store this plan set? [y/N]: y
-Foreign items (codex). Type "codex 3f9c2a" to confirm:
+Undo: branches only, one restore per repository:
+      stw tidy restore REPO --contract 3 --state-dir DIR --plan ID   (ids: stw tidy history)
+Typed words that will be asked (on /dev/tty): claude, codex, unknown
+This deletes 106 directories for good and 58 branches (restorable).
+Foreign items (claude). Type "claude 3f9c2a" to confirm:
 ```
 
-The last line is the real prompt text (`internal/tidywizard/owner/confirm.go:75`).
+The last line is the real prompt text (`internal/tidywizard/owner/confirm.go:75`); the words follow in sorted order (`planset.go:468-494`).
 
 ### Screen 4 (mockup): retain table
 
 ```text
 Kept: 964 candidates. Nothing here is offered for deletion.
-  count  why                                        what to do
-    363  created by stw, record not found           re-run with the --state-dir that created them
-    301  not merged (red)                           nothing is deleted; review with the report, see docs/tidy.md
-    217  branch is checked out in a kept worktree   clean up that worktree first, then run again
-     27  recently active (within 24 hours)          wait, then run again
-     23  untracked or ignored files (red)           look inside; remove them yourself if junk
-     17  not judged (deadline)                      run again with --timeout 15m
-      7  main checkout of a repository              never offered
-      6  uncommitted changes (red)                  commit or discard them yourself
-      3  worktree entry whose directory is gone     no stw action yet
+  count  level  why                                         what to do
+    316  kept   created by stw, record not found            re-run with the --state-dir that created them
+    301  RED    not merged                                  nothing is deleted; review with the report
+    217  kept   branch is checked out in a kept worktree    decide on that worktree first, then run again
+     47  RED    created by stw, record not found, not on main   do not delete; find the right --state-dir
+     27  kept   recently active (within 24 hours)           wait, then run again
+     23  RED    untracked or ignored files                  look inside; remove them yourself if junk
+     17  RED    not judged (deadline or Git refused)        run again with --timeout 15m
+      7  kept   main checkout of a repository               never offered
+      6  RED    uncommitted changes                         commit or discard them yourself
+      3  kept   worktree entry whose directory is gone      no stw action yet
 Rows: l = list a reason, or run  stw tidy --rows
 ```
 
 ## Interfaces
 
-- **Flags (wizard layer).** New: `--rows` (print the row view grouped by owner, as before the change, with all rows). Existing and
-  unchanged: `--verbose`, `--quiet`, `--progress`, `--trace` (progress and timings go to stderr, nothing to stdout; #297,
-  merged; `internal/cli/tidy_mode.go:31`, `internal/cli/tidy_wizard.go:109`). The flag classification test must list `--rows`.
-- **JSON.** Additive optional fields on each candidate of `tidy-overview`: `risk` (`green|yellow|orange|red|none`),
-  `risk_reasons[]`, `group` (a stable group key), and `pr` (merged pull request number, `--online` only). The schema is frozen but
-  unpublished (`UNPUBLISHED_SCHEMAS`), so it is amended with its freeze digest in the same change; `summary` gains counts per level.
+- **Flags (wizard layer).** New: `--rows` (print the row view grouped by owner, as before the change, with all rows) and `--offline` (no
+  network reads; exclusive with `--online`, exit 2). Both are classified as wizard-layer flags (not accepted with a `PATH` or an expert
+  flag, as `internal/cli/tidy_mode.go:31` classifies the others; the flag test lists them) and `--offline` is accepted and a no-op in
+  agent mode, `plan` and `--json`. Existing and unchanged: `--verbose`, `--quiet`, `--progress`, `--trace` (progress and timings go to
+  stderr, nothing to stdout; #297, merged; `internal/cli/tidy_wizard.go:109`).
+- **JSON.** Additive optional fields on each candidate of `tidy-overview`: `risk` (`green|yellow|orange|red|kept`),
+  `risk_reasons[]`, `group` (a stable group key), and `pr` (merged pull request number, online only); `summary` gains counts per level;
+  `derived[]` gains `online` (`default`, `flag`, `off`) with a reason when it fell back. The schema is frozen but unpublished
+  (`UNPUBLISHED_SCHEMAS`), so it is amended with its freeze digest in the same change. Phase 2 adds the `done` block (task record,
+  workspace schema v1), the `adoptions` namespace and the `owner_source` value `adopted` (overview schema enum).
 - **No new write effect.** The wizard stores a plan set exactly as today; `--save` for agents is unchanged.
-- **Exit codes** unchanged.
+- **Exit codes** unchanged; an online fallback is never an error.
 
 ## Requirements
 
 ### Functional (phase 1 unless marked)
 
-- **FR-001** In janitor mode every row with verdict `safe` or `decision` is choosable by number, group or selector regardless of
-  `owner`, `owner_source` and `scope`; agent mode is unchanged (041 FR-006c, FR-006d).
-- **FR-002** `a` takes all green rows of every owner; it never takes a yellow, orange or `decision` row.
-- **FR-003** Each choosable row has a `risk` computed by the ladder, with `risk_reasons[]`; each group has the worst level and counts
-  per level. Rows with `unmerged`, `dirty` or `ignored-extras` are red and have no number.
-- **FR-004** The ladder reads only evidence of the analysis (proof word, evidence word, activity time, creation record, owner source,
-  upstream state read from the local reference database) and, with `--online`, the Spec 031 pull request discovery. No other input.
-- **FR-005** `--online` marks a tip equal to a merged pull request head as strong (C2). Discovery failure never changes a level and is
-  counted in a notice. No new endpoint, no write, no new flag.
+- **FR-001** In janitor mode every row with verdict `safe` is choosable by number, group answer, `a` or selector regardless of `owner`,
+  `owner_source` and `scope`; a `decision` row is choosable **by its number only**, with the 041 per-row second confirmation, never by
+  a group, `y`, `a`, Enter or a selector; agent mode is unchanged (041 FR-006c, FR-006d).
+- **FR-002** Enter on a green group takes it; `a` takes all green rows of every owner (D14); neither takes a yellow, orange or `decision`
+  row.
+- **FR-003** Each row has a `risk` and `risk_reasons[]`; each group has the worst level and counts per level. Red rows (possible unique
+  work, see the risk model) have no number and match no selector.
+- **FR-004** The ladder reads only evidence of the analysis (proof word, evidence word, observed dirt facts, activity time, creation
+  record, owner source, upstream state read from the local reference database) and the online reads. No other input.
+- **FR-005** Online reads follow D13: default in the human wizard, off with `--offline`; the budget (per member 128 requests, 32 MiB, 30 s;
+  per run 512 requests; at most 64 tips per member; `--timeout` bounds everything; a rate limit stops the run's online calls) and the
+  offline fallback with one notice line; no write, no other host.
 - **FR-006** The text overview is the grouped overview; every code is replaced by a sentence; `--json`, `--verbose`, `--rows` and `d N`
   keep the codes.
-- **FR-007** Each group shows the count, level counts, effect, recovery location, the exact undo command where one exists, and an upper
-  bound of size only when already known.
-- **FR-008** The wizard asks one question per group with the keys and defaults of [Wizard steps](#wizard-steps); the strict parsing
-  of Spec 041 (three invalid answers, EOF means nothing chosen, 256 bytes) is kept.
-- **FR-009** The label `you` is shown for a tip author equal to the global Git identity (`user.name` or `user.email`) of the caller,
-  read once with two bounded `git config --global --get` calls (the only read of global Git configuration; the observers keep ignoring it); unreadable means no label. It never changes `scope`.
-- **FR-010** Selection grammar, `except`, and selectors as specified; red and kept rows match nothing.
-- **FR-011** The final summary precedes the unchanged typed prompt, which is read from `/dev/tty`, plain, once per word, and refused
-  without a terminal or with a wrong word.
-- **FR-012** The retain table lists every reason with count, sentence and one action sentence; counts sum to the retained total.
+- **FR-007** Each group shows the count, level counts, effect, recovery location, the undo command (one restore per repository, branches
+  only) and an upper bound of size only when already known.
+- **FR-008** One question per group with the keys and defaults of the table; the strict parsing of Spec 041 is kept.
+- **FR-010** Selection grammar, `except`, quoting and selectors as specified; red and kept rows match nothing.
+- **FR-011** The final summary ends with the line stating the directories deleted for good and the branches, directly before the first
+  typed prompt (or the store question); the typed prompt is unchanged, read from `/dev/tty`, plain, once per word, refused without a
+  terminal or with a wrong word.
+- **FR-012** The retain table lists every reason with count, level, sentence and action; counts sum to the retained total.
 - **FR-013** Output obeys `esc`, the 120-character bound and the row bounds (FR-042, FR-041); color is decoration only (the level word is
   always printed; `NO_COLOR` is honored as today).
-- **FR-014** No terminal: the wizard prints the grouped overview, asks nothing, stores nothing, exit 0 (041 US7, FR-009 there).
-- **FR-015 (phase 2)** `stw workspace done TASK [--merged PR]` as specified; the done block is additive and idempotent.
-- **FR-016 (phase 2)** Tidy treats a done mark as C3 only together with a proof; `adopt` as specified.
+- **FR-014** No terminal: the wizard prints the grouped overview offline, asks nothing, stores nothing, exit 0 (041 US7).
+- **FR-015 (phase 2)** `stw workspace done TASK [--merged PR]` as specified; the done block is additive and idempotent; it is a claim and
+  never lifts a row above yellow.
+- **FR-016 (phase 2)** `adopt` as specified.
+
+(FR-009 of the first draft, the `you` label, is dropped; the number is not reused.)
 
 ### Success criteria
 
 Each is testable with temporary repositories and a fake hosting transport (no real repository, no network).
 
-- **SC-001** Janitor mode: a fixture with items of `codex`, `claude`, `unknown` and own owners, all proven integrated, shows every row
-  choosable and `a` takes exactly the green rows of all owners.
+- **SC-001** Janitor mode: a fixture with items of `codex`, `claude`, `unknown` and own owners, all proven integrated, shows every
+  `safe` row choosable and `a` takes exactly the green rows of all owners; a `decision` row is taken only by its number.
 - **SC-002** Agent mode on the same fixture: no prompt, only `own` items from a task record listed and planned; `apply` of a plan
-  with a foreign item and no `authorized_scopes` exits 1 `scope-not-authorized`; byte-identical to Spec 041 SC-012 results.
-- **SC-003** Ladder table test: one row per case (strong and equivalent proofs, each corroboration, each raise, caps at orange, red
-  reasons) with the expected level and `risk_reasons`; a mutation of any threshold or of "at most orange" fails a test.
-- **SC-004** Red rows (`unmerged`, `dirty`, `ignored-extras`) never get a number, never match a selector, and forcing one into a plan
-  makes apply refuse (as 041 SC-002).
-- **SC-005** `--online` with the fake transport: a tip equal to a merged head is green with `pr`; an `unmerged` row with a merged head
-  stays red; failure, 403 and an incomplete collection leave levels unchanged and add a notice; the request count stays within 031 FR-018;
-  no request is a write (the double records methods).
-- **SC-006** Grammar table: numbers, ranges, every selector, `except`, a selector that matches nothing, a red number, junk, 257 bytes;
-  `w t except 85-86` selects the expected set.
-- **SC-007** Transcript test of the three screens and the retain table from the fixture: the group order, wording, undo lines and
-  counts equal the golden; the counts of the retain table sum to the retained total.
+  with a foreign item and no `authorized_scopes` exits 1 `scope-not-authorized`; results byte-identical to Spec 041 SC-012.
+- **SC-003** Ladder table test: one row per case (strong and equivalent proofs, `no-work`, C1 changes nothing, each raise, the cap at
+  orange, each red cause including a record-missing row with proof `none` and a not-judged row); a mutation of any threshold or of "at
+  most orange" fails a test.
+- **SC-004** Red rows never get a number, never match a selector, and forcing one into a plan makes apply refuse (as 041 SC-002).
+- **SC-005** Online double with **7 members and about 466 tips**: at most 128 requests and 64 tips per member, at most 512 in all, every
+  request a read (the double fails on any write method); a merged head makes a `safe` row green with `pr` and leaves an `unmerged` row
+  red; not authenticated, a non-github.com remote, 403 with exhausted rate limit, 429, 5xx, a timeout and `--timeout` expiry each fall back
+  to offline levels with one notice and exit code unchanged; `--offline` makes no request; `--online --offline` is exit 2.
+- **SC-006** Grammar table: numbers, ranges, every selector, quoted label, `except`, a selector that matches nothing, a red number, a
+  `decision` number and a `decision` hit by `y`, `a` and a selector, junk, 257 bytes; `w t except 85-86` selects the expected set; `t` includes
+  the scratchpads.
+- **SC-007** Transcript test of the screens and the retain table from the fixture: group order, wording, undo lines and counts equal the
+  golden; the retain counts sum to the retained total; the summary's last line states the directory and branch counts, the typed words
+  are sorted (`claude`, `codex`, `unknown`) and the prompt text is the real one.
 - **SC-008** The typed prompt: a bare `y`, the wrong word, stdin input and no controlling terminal refuse and store or apply nothing; the
   prompt text is unchanged byte for byte.
-- **SC-009** Hostile names (ESC, CR, NUL, bidi) in branch, path and owner reach no terminal byte unescaped in any screen, group key
-  or example row; `--json` carries them as data.
-- **SC-010** Every reason and proof word has a sentence and an action; a new code without one fails the test.
+- **SC-009** Hostile names (ESC, CR, NUL, bidi, a name starting with letters then ESC) in branch, path and owner reach no terminal byte
+  unescaped in any screen, group key or example row; the family key contains only `[a-z]`; `--json` carries them as data.
+- **SC-010** Every reason, proof and risk word has a sentence and an action; a new code without one fails the test.
 - **SC-011** `stw tidy --json`, the expert layer and every Spec 041 test and golden other than the text overview pass unchanged; the
-  tidy flags are all classified (`--rows` included).
-- **SC-012** With 960 retained rows and 165 choosable rows the first screen has at most 24 lines and no row of a retained code.
-- **SC-013 (phase 2)** `workspace done`: idempotent, state directory only (a before and after snapshot of every repository and
-  worktree is equal), refused for another session's task, additive in the schema; a done mark without proof never makes a row choosable.
+  tidy flags are all classified (`--rows` and `--offline` included).
+- **SC-012** With at least 960 retained rows and 165 choosable rows the first screen has at most 24 lines and no row of a retained code.
+- **SC-013 (phase 2)** `workspace done`: idempotent, state directory only (a before and after snapshot of every repository and worktree
+  is equal), refused for another session's task, accepted on a task without a record (and so documented as a claim), additive in the
+  schema; a done mark never makes a row choosable and never lifts it above yellow.
 
 ## Edge cases
 
 | Case | Behavior |
 | --- | --- |
-| Name with ESC, CR, NUL or bidi controls | escaped by `esc`, bounded at 120; the family function sees only letters, so it falls to "other" |
-| No terminal on stdin or stdout, or agent marker | grouped overview only, no question, nothing stored, exit 0 |
-| Narrow terminal (below 60 columns) | rows drop the branch column, then the example rows; the level word and counts never wrap away; columns come from the terminal size, fixed 80 if unknown |
-| 960 retained rows | one table, no rows until asked; the first screen stays within 24 lines |
+| Name with ESC, CR, NUL or bidi controls | escaped by `esc`, bounded at 120; the family key is `[a-z]` only |
+| No terminal on stdin or stdout, or agent marker | grouped overview only, offline, no question, nothing stored, exit 0 |
+| Narrow terminal (below 60 columns) | rows drop the branch column, then the example rows; the level word and counts never wrap away; width from the terminal, 80 if unknown |
+| 960 or more retained rows | one table, no rows until asked; the first screen stays within 24 lines |
 | Interrupted run (Ctrl-C, `--timeout`) | exit 1 naming the cause; before the plan set is stored nothing exists, after it the id is named and nothing was applied (as today, `tidy_interactive.go:98`) |
 | All rows red or kept | summary says "nothing can be cleaned"; the retain table follows; no questions |
 | Nothing to clean | one line "Nothing to clean."; exit 0 |
 | A group of 1 item | the step is still shown; one line header |
-| Mixed levels in a group | `y` takes all; `r` reviews each; Enter follows the worst level (default skip if any yellow or orange) |
-| Selection includes a `decision` row | selectors skip it; only its number asks the per-row second confirmation (041) |
+| Mixed levels in a group | `y` takes all choosable rows; `r` reviews each; Enter follows the worst level (skip if any yellow or orange) |
+| Selection includes a `decision` row | only its number takes it, with the per-row second confirmation |
 | `--by-owner`, `--only`, `--member` | narrow the view first; groups and counts are computed on the narrowed set |
-| Discovery fails online | levels unchanged, notice counts the rows not checked |
+| Online fails, rate limit, not authenticated | levels as offline; one notice; exit code unchanged |
 | Stale state between the selection and apply | the existing stale checks refuse with `evidence-changed`; nothing changed |
 
 ## Composition with other work
 
 - **#297 (merged).** Progress on stderr (`internal/cli/tidy_progress.go`), `--verbose` timings, `--quiet`, `--progress` and `--trace`
-  are unchanged; the grouped overview and the steps write to stdout, progress never does. The analysis time is spent before the first screen.
+  are unchanged; the grouped overview and the steps write to stdout, progress never does. The analysis and the online reads run before
+  the first screen.
 - **The strict prompt.** The janitor flow only builds the selection and the summary; it calls the same `planset.Build`, typed prompt and
   `runTidyApplyPlanSet` (`internal/cli/tidy_interactive.go:60`, `:93`).
-- **Spec 042.** The done command uses the attribution gate (D5). No session id is printed or stored in the new records.
+- **Spec 042.** The done command uses the attribution gate (D5) with the limits stated above. No session id is printed or stored in the
+  new records.
 - **Spec 043.** `stw land` is unrelated except that a landed pull request becomes C2 evidence for tidy.
 
 ## Non-goals
@@ -560,43 +649,43 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - No new write call to GitHub (reads only, github.com only, the Spec 031 bounds); the `done` command writes only the state directory.
 - No new dependency in phase 1; no raw-mode keyboard handling in phase 1.
 - No new integration proof; the proofs of Specs 011 and 031 are unchanged.
-- No guess about ownership beyond the existing derivation; `you` is a display label.
+- No guess about ownership beyond the existing derivation; no `you` label.
 
-## Decisions for the owner
+## Open decisions for the owner
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| D1 | May a group step take green rows of other and unknown owners with Enter? | Yes, green only. Enter skips yellow and orange; `y` takes them. Nothing is applied by Enter: the final summary and the typed prompt follow |
-| D2 | Does removing worktree directories need a second typed confirmation beyond the existing words? | No. The rows are clean and pinned; the existing typed word per owner stays. Revisit after the first dogfood run |
-| D3 | May red rows ever become selectable? | Never. A human who wants them gone uses Git or the review report and decides there |
-| D4 | The rule for owner `unknown` | Choosable like every other owner; the typed word is `unknown` as today; no extra flag |
-| D5 | Are group defaults by level (green take, others skip) acceptable against 041 "default is always none"? | Yes; the questions that store or apply keep the default no |
-| D6 | The "recent activity" window for R1 | 7 days (proposed); only raises a level, never blocks |
-| D7 | Is `you` from the global Git identity acceptable as a display label (FR-009)? | Yes; display only |
+| D6 | The "recent activity" window for R1 | 7 days (proposed); it only raises a level, never blocks |
+| D7 | A `you` label for tips authored under the owner's Git identity | No: agents commit under that identity, so it would show agent work as the owner's. Keep "hint: NAME" |
 | D8 | May a merged pull request head become a deletion proof inside the wizard (changes the frozen `proof` enum)? | Not in phase 1; decide after dogfood in phase 2 |
-| D9 | Should `stw watch` or `stw pulls` mark tasks done automatically? | No; both stay read-only, `--online` already finds merged heads |
+| D9 | Should `stw watch` or `stw pulls` mark tasks done automatically? | No; both stay read-only, the online reads already find merged heads |
 | D10 | A real TUI checklist (needs a pinned dependency)? | Decide in phase 2, after the line wizard has been used; the line wizard stays |
 | D11 | The workflow sentence for agents ("after the owner reports the merge, run `stw workspace done`") in the workspace `AGENTS.md` | Add it with phase 2; it is the owner's file |
-| D12 | Is one typed word asked twice (at store and at apply, as today) acceptable? | Yes for phase 1; asking once is a later change to the apply path |
+| D12 | Is the typed word asked twice (at store and at apply, as today) acceptable? | Yes for phase 1; asking once is a later change to the apply path |
+| D14 | `a` takes all green rows of every owner (D1 decided Enter on a green group, not `a`) | Yes, same rule as Enter |
+| D15 | The text overview grouped by kind and risk replaces the owner grouping of decision #255 (2026-10-25) | Yes; `--rows` keeps the old view |
 
 ## Measured data: the live workspace of 2026-10-26
 
 All numbers come from `overview.json` (`stw tidy plan --json`, agent mode, offline, main `6d4c75ed`), queried with `jq`. Groups use the
-family rule above. Not in the file and therefore not claimed: activity times, upstream state, sizes. The 122 safe worktree directories are
-121 under `/tmp` (55 `whr-*`, 51 `workharbor-*`, 7 agent scratchpads, 4 `crewbook-*`, 4 other) and 1 in the workspace. The owner's
-earlier estimate (63 under `/tmp`, 57 baseline) differs from the file; the file is used.
+family rule above. Not in the file and therefore not claimed: activity times, upstream state, sizes, the dirt of kept rows. The 122 safe
+worktree directories are 121 under `/tmp` (55 `whr-*`, 51 `workharbor-*`, 7 under `scratchpad`, 4 `crewbook-*`, 4 other) and 1 in the
+workspace. The owner's earlier estimate (63 under `/tmp`, 57 baseline) differs from the file; the file is used.
 
 ## Docs impact
 
-`docs/tidy.md` (wizard section: janitor mode, risk ladder, steps, grammar, retain table; amendments listed against Spec 041), `docs/commands.md`
-(`--rows`, later `workspace done`, `tidy adopt`), `docs/json-contracts.md` and `schemas/v2/tidy-overview.schema.json` with fixtures and
-freeze digest (additive fields), `docs/agent-guide.md` (agents are unchanged; phase 2 done step), `docs/workspaces.md` (phase 2 `done`),
-`docs/progress.md`, `docs/roadmap.md`, `docs/feature-status.json` (status `planned`). Spec 041 gets a pointer to this spec; its text is
-not rewritten.
+`docs/tidy.md` (wizard section: janitor mode, the amendment list against Spec 041, risk ladder, steps, grammar, online default, retain
+table), `docs/commands.md` (`--rows`, `--offline`; phase 2 `workspace done`, `tidy adopt`), `docs/json-contracts.md` and
+`schemas/v2/tidy-overview.schema.json` with fixtures and freeze digest (additive fields; phase 2 `owner_source` value), the workspace v1
+schema and `docs/workspaces.md` (phase 2 `done` block), `docs/agent-guide.md` (agents unchanged; phase 2 done step), `docs/progress.md`
+(status lines only, set by the last pull request of a wave), `docs/roadmap.md`, `docs/feature-status.json` (status `planned`). Spec 041
+gets a pointer to this spec; Specs 031 and 029 get a pointer to the online amendment; their text is not rewritten.
 
 ## Risks
 
-- A one-key "take" tempts: mitigated by green-only default, the summary, the typed words and the unchanged apply refusals.
-- Levels can be mistaken for proof: the text says "risk" and always lists the proof word in details; a level never makes a row choosable.
+- A one-key "take" tempts: mitigated by green-only defaults, the summary with the count of directories deleted for good, the typed words
+  and the unchanged apply refusals.
+- Levels can be mistaken for proof: the text says "risk" and the proof word is in the details; a level never makes a row choosable.
+- Online by default adds latency and a network dependency to the human wizard: bounded budget, one fallback rule, progress on stderr.
 - The family rule may group badly: the group is a view; `l` and `r` always show the rows and numbers still work.
 - Grouped text changes the golden of Spec 041's text overview: it is unreleased; the JSON is additive only.
