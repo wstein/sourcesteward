@@ -150,3 +150,47 @@ func TestRegistrationPruneV4JournalRejectsUnknownPhase(t *testing.T) {
 		t.Fatalf("journal reason %+v", r)
 	}
 }
+
+func TestRegistrationPruneV4PayloadRejectsExtraSidecar(t *testing.T) {
+	_, p := fixturePruneV4(t)
+	r := ApplyRegistrationPruneV4(context.Background(), RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
+	if r.Status != "ok" {
+		t.Fatal(r)
+	}
+	if e := os.WriteFile(filepath.Join(p.PayloadPath, "files", "unexpected"), []byte("unbound"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	_, _, e := readPruneV4Payload(context.Background(), p)
+	assertPruneReason(t, e, "prune-recovery-refused", "Complete private registration recovery could not be verified.")
+}
+func TestRegistrationPruneV4SourceChangeBeforeRemoval(t *testing.T) {
+	for _, kind := range []string{"reference", "source-config"} {
+		t.Run(kind, func(t *testing.T) {
+			_, p := fixturePruneV4(t)
+			fired := false
+			ctx := pruneHookContext(func(stage, path string, _ any) {
+				if fired || stage != "v4-before-unlink" {
+					return
+				}
+				fired = true
+				if kind == "reference" {
+					gitFixture(t, p.SourcePath, "update-ref", "refs/heads/foreign", p.Expected.ResolvedHEAD)
+				} else {
+					gitFixture(t, p.SourcePath, "config", "stw.changed", "true")
+				}
+			})
+			r := ApplyRegistrationPruneV4(ctx, RegistrationPruneV4ApplyOptions{StateDir: p.StateDir, PlanID: p.PlanID, Authorize: true, Mode: p.Mode})
+			if r.Status != "partial" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "prune-evidence-changed" {
+				t.Fatalf("source refusal %+v", r)
+			}
+			for _, m := range p.Expected.Metadata {
+				if m.Kind == "file" {
+					b, e := os.ReadFile(filepath.Join(p.Registration.GitDir, m.Path))
+					if e != nil || gitDigest(string(b)) != m.Digest {
+						t.Fatalf("metadata removed before detecting source change: %s %v", m.Path, e)
+					}
+				}
+			}
+		})
+	}
+}
