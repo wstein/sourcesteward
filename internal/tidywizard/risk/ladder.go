@@ -56,16 +56,16 @@ func Evaluate(f Facts, now time.Time) Assessment {
 	noProof := f.Proof == "none" || f.Proof == ""
 	// Content facts outrank the classifier's first structural refusal reason.
 	if f.Reason == "unmerged" || (noProof && !f.Primary && !f.DirectoryMissing && f.Kind != "stale-worktree") {
-		out.Reasons = append(out.Reasons, "not-integrated")
+		out.Reasons = append(out.Reasons, ReasonNotIntegrated)
 	}
 	if f.Dirty || f.Reason == "dirty" {
-		out.Reasons = append(out.Reasons, "uncommitted-files")
+		out.Reasons = append(out.Reasons, ReasonUncommittedFiles)
 	}
 	if f.IgnoredExtras || f.Reason == "ignored-extras" {
-		out.Reasons = append(out.Reasons, "extra-files")
+		out.Reasons = append(out.Reasons, ReasonExtraFiles)
 	}
 	if f.Incomplete || f.Reason == "evidence-incomplete" {
-		out.Reasons = append(out.Reasons, "not-judged")
+		out.Reasons = append(out.Reasons, ReasonNotJudged)
 	}
 	if len(out.Reasons) > 0 {
 		out.Level = Red
@@ -78,33 +78,33 @@ func Evaluate(f Facts, now time.Time) Assessment {
 	// A hand-mapped typo must never become a green default-deletion row.
 	if !knownKind(f.Kind) || !knownProof(f.Proof) {
 		out.Level = Red
-		out.Reasons = append(out.Reasons, "not-judged")
+		out.Reasons = append(out.Reasons, ReasonNotJudged)
 		return corroborate(out, f)
 	}
 	equivalent := false
 	switch {
 	case f.NoWork:
 		out.Level = Green
-		out.Reasons = append(out.Reasons, "no-own-commit")
+		out.Reasons = append(out.Reasons, ReasonNoOwnCommit)
 	case f.MergedHead:
 		out.Level = Green
-		out.Reasons = append(out.Reasons, "pr-merged-head")
+		out.Reasons = append(out.Reasons, ReasonPRMergedHead)
 	case f.Proof == "ancestor":
 		out.Level = Green
-		out.Reasons = append(out.Reasons, "proof-ancestor")
+		out.Reasons = append(out.Reasons, ReasonProofAncestor)
 	case f.Proof == "no-net-change":
 		out.Level = Green
-		out.Reasons = append(out.Reasons, "proof-no-net-change")
+		out.Reasons = append(out.Reasons, ReasonProofNoNetChange)
 	case f.Proof == "github-branch-absent":
 		out.Level = Green
-		out.Reasons = append(out.Reasons, "proof-github-branch-absent")
+		out.Reasons = append(out.Reasons, ReasonProofGitHubBranchAbsent)
 	case f.Proof == "patch-id" || f.Proof == "merge-noop":
 		out.Level = Yellow
 		equivalent = true
-		out.Reasons = append(out.Reasons, "proof-equivalent")
+		out.Reasons = append(out.Reasons, ReasonProofEquivalent)
 	default:
 		out.Level = Red
-		out.Reasons = append(out.Reasons, "not-judged")
+		out.Reasons = append(out.Reasons, ReasonNotJudged)
 		return corroborate(out, f)
 	}
 	// Unknown or future activity cannot lower a non-own worktree's risk.
@@ -112,15 +112,15 @@ func Evaluate(f Facts, now time.Time) Assessment {
 	// conservative boundary also covers exact 24h and malformed caller facts.
 	if worktree && f.Scope != owner.ScopeOwn && (f.LastActivity.IsZero() || now.Sub(f.LastActivity) <= 72*time.Hour) {
 		out.Level = raise(out.Level)
-		out.Reasons = append(out.Reasons, "recent-activity")
+		out.Reasons = append(out.Reasons, ReasonRecentActivity)
 	}
 	if worktree && equivalent && !f.HasCreationRecord && f.Scope != owner.ScopeOwn && f.Scope != owner.ScopeOther && f.OwnerSource != owner.SourcePathConvention {
 		out.Level = raise(out.Level)
-		out.Reasons = append(out.Reasons, "nobody-vouches")
+		out.Reasons = append(out.Reasons, ReasonNobodyVouches)
 	}
 	if f.Verdict == "decision" {
 		out.Level = Orange
-		out.Reasons = append(out.Reasons, "decision-row")
+		out.Reasons = append(out.Reasons, ReasonDecisionRow)
 	}
 	return corroborate(out, f)
 }
@@ -133,7 +133,7 @@ func raise(level Level) Level {
 }
 func corroborate(out Assessment, f Facts) Assessment {
 	if f.Kind == "branch" && f.UpstreamGone {
-		out.Reasons = append(out.Reasons, "upstream-gone")
+		out.Reasons = append(out.Reasons, ReasonUpstreamGone)
 	}
 	return out
 }
