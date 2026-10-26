@@ -10,7 +10,8 @@ published schema or completion checkbox.
 ## Actual accepted byte limits
 
 `TestRegistrationPruneV4RemovalBudgetAtAcceptedByteLimits` creates a real
-registration with a 64 MiB metadata file and exactly 256 MiB of total metadata.
+registration with metadata files up to 64 MiB (three at the limit) and exactly
+256 MiB of total metadata.
 It uses admitted `index`, `logs/HEAD`, `ORIG_HEAD` and `config.worktree` files;
 other required metadata remains present. The normal planner must accept that
 exact total, and apply must create and verify complete private recovery.
