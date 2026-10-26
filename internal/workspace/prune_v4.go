@@ -16,7 +16,10 @@ import (
 	"unicode/utf8"
 )
 
-const pruneV4Namespace = "tidy-registration-v4"
+const (
+	pruneV4Namespace   = "tidy-registration-v4"
+	pruneV4RecordLimit = 1 << 20
+)
 
 // RegistrationPruneV4Options names exactly one registration. Confirm is used
 // only by a human planning another recorded owner's registration; it grants no apply authority.
@@ -124,7 +127,7 @@ func (r RegistrationPruneV4Result) Error() string {
 
 func pruneV4Canonical(v any, omit string) ([]byte, error) {
 	raw, e := json.Marshal(v)
-	if e != nil || len(raw) > v3RecordLimit {
+	if e != nil || len(raw) > pruneV4RecordLimit {
 		return nil, failure("record-limit", "Contract-4 record exceeds its encoded bound.")
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -315,7 +318,7 @@ func writePruneV4Plan(parent, child *store, p RegistrationPruneV4Plan) error {
 		return e
 	}
 	raw = append(raw, '\n')
-	if len(raw) > v3RecordLimit {
+	if len(raw) > pruneV4RecordLimit {
 		return failure("record-limit", "Stored contract-4 plan exceeds its bound.")
 	}
 	if e = parent.validate(); e != nil {
