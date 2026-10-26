@@ -182,3 +182,122 @@ func pruneV4HistoryTree(t *testing.T, root string) map[string]string {
 	}))
 	return out
 }
+
+func TestRegistrationPruneV4HistoryRefusesConcurrentRecordReplacement(t *testing.T) {
+	for _, kind := range []string{"plans", "journals"} {
+		t.Run(kind, func(t *testing.T) {
+			p := pruneV4HistoryFixture(t)
+			path := filepath.Join(p.StateDir, pruneV4Namespace, kind, p.PlanID+".json")
+			c := pruneV4HistoryCoordinator{scanLimit: 4096, scanBytes: 4 << 20, outputBytes: 4 << 20, afterRead: func() {
+				b, e := os.ReadFile(path)
+				pruneMust(t, e)
+				pruneMust(t, os.Rename(path, path+".replaced"))
+				pruneMust(t, os.WriteFile(path, b, 0600))
+			}}
+			r := c.history(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
+			if r.Status != "refused" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "changed-state" {
+				t.Fatalf("replacement: %+v", r)
+			}
+		})
+	}
+}
+
+func TestRegistrationPruneV4HistoryReportsUnverifiedRecovery(t *testing.T) {
+	p := pruneV4HistoryFixture(t)
+	path := filepath.Join(p.StateDir, pruneV4Namespace, "journals", p.PlanID+".json")
+	j := pruneV4GuardJournal(t, p)
+	j.PayloadDigest = strings.Repeat("a", 64)
+	b, err := pruneV4Canonical(j, "")
+	pruneMust(t, err)
+	pruneMust(t, os.WriteFile(path, append(b, '\n'), 0600))
+	// Neither a recorded digest nor a pointer proves present, intact recovery.
+	r := HistoryRegistrationPruneV4(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
+	if r.Status != "ok" || len(r.Entries) != 1 || r.Entries[0].RecoveryStatus != "unknown" || r.Entries[0].PayloadDigest == nil || *r.Entries[0].PayloadDigest != j.PayloadDigest {
+		t.Fatalf("availability: %+v", r)
+	}
+}
+
+func TestRegistrationPruneV4HistoryReportsScanAndOutputBounds(t *testing.T) {
+	p := pruneV4HistoryFixture(t)
+	for _, tc := range []struct {
+		name                              string
+		scanLimit, scanBytes, outputBytes int
+		unit                              string
+	}{
+		{"directory", 0, 4 << 20, 4 << 20, "directory-entries"},
+		{"scan bytes", 4096, 0, 4 << 20, "scan-bytes"},
+		{"output bytes", 4096, 4 << 20, 1800, "output-bytes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := pruneV4HistoryCoordinator{scanLimit: tc.scanLimit, scanBytes: tc.scanBytes, outputBytes: tc.outputBytes}
+			r := c.history(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
+			if r.Status != "ok" || !r.Truncated || len(r.Entries) != 0 {
+				t.Fatalf("bounded: %+v", r)
+			}
+			found := false
+			for _, truncation := range r.Truncation {
+				found = found || truncation.Unit == tc.unit
+			}
+			if !found {
+				t.Fatalf("missing %s: %+v", tc.unit, r)
+			}
+			b, err := json.Marshal(r)
+			pruneMust(t, err)
+			if len(b)+1 > tc.outputBytes {
+				t.Fatalf("output exceeds bound: %d", len(b)+1)
+			}
+		})
+	}
+}
+
+func TestRegistrationPruneV4HistoryRefusesUnsafeJournalFiles(t *testing.T) {
+	for _, kind := range []string{"symlink", "hardlink", "directory", "oversize", "invalid-id"} {
+		t.Run(kind, func(t *testing.T) {
+			p := pruneV4HistoryFixture(t)
+			path := filepath.Join(p.StateDir, pruneV4Namespace, "journals", p.PlanID+".json")
+			switch kind {
+			case "symlink":
+				pruneMust(t, os.Rename(path, path+".safe"))
+				pruneMust(t, os.Symlink(path+".safe", path))
+			case "hardlink":
+				pruneMust(t, os.Link(path, path+".linked"))
+			case "directory":
+				pruneMust(t, os.Remove(path))
+				pruneMust(t, os.Mkdir(path, 0700))
+			case "oversize":
+				f, e := os.OpenFile(path, os.O_RDWR, 0600)
+				pruneMust(t, e)
+				pruneMust(t, f.Truncate((1<<20)+1))
+				pruneMust(t, f.Close())
+			case "invalid-id":
+				pruneMust(t, os.Rename(path, filepath.Join(filepath.Dir(path), "old-format.json")))
+			}
+			r := HistoryRegistrationPruneV4(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
+			if r.Status != "refused" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "prune-journal-refused" {
+				t.Fatalf("unsafe file: %+v", r)
+			}
+		})
+	}
+}
+
+func TestRegistrationPruneV4HistoryDefaultCountLimit(t *testing.T) {
+	p := pruneV4HistoryFixture(t)
+	for i := 0; i < 256; i++ {
+		q := p
+		q.PlanID = fmt.Sprintf("%032x", i)
+		q.PayloadPath = filepath.Join(q.StateDir, pruneV4Namespace, "payloads", q.PlanID)
+		savePruneV4Fixture(t, q)
+		q, err := ReadRegistrationPruneV4Plan(q.StateDir, q.PlanID)
+		pruneMust(t, err)
+		j := pruneV4Journal{4, "registration-prune", q.PlanID, q.Digest, "prepared", "", pruneV4HistoryRef(q), q.Expected.ResolvedHEAD, []pruneV4Effect{}, []string{"prepare-recovery", "pin-history", "remove-registration"}, []Diagnostic{}}
+		b, err := pruneV4Canonical(j, "")
+		pruneMust(t, err)
+		pruneMust(t, os.WriteFile(filepath.Join(q.StateDir, pruneV4Namespace, "journals", q.PlanID+".json"), append(b, '\n'), 0600))
+	}
+	// Raise only the independent scan budget to isolate the default count limit.
+	c := pruneV4HistoryCoordinator{scanLimit: 4096, scanBytes: 64 << 20, outputBytes: 4 << 20}
+	r := c.history(context.Background(), RegistrationPruneV4HistoryOptions{Path: p.SourcePath, StateDir: p.StateDir})
+	if r.Status != "ok" || !r.Truncated || len(r.Entries) != 256 || r.Total != 257 {
+		t.Fatalf("default count: status=%s shown=%d total=%d truncation=%+v diagnostics=%+v", r.Status, len(r.Entries), r.Total, r.Truncation, r.Diagnostics)
+	}
+}

@@ -23,7 +23,7 @@ func TestTidyPruneV4HistoryDispatch(t *testing.T) {
 				t.Fatalf("dispatch error=%v old calls=%d", err, s.historyCalls+s.restoreCalls)
 			}
 			var r map[string]any
-			if e := json.Unmarshal([]byte(out), &r); e != nil {
+			if e := json.NewDecoder(strings.NewReader(out)).Decode(&r); e != nil {
 				t.Fatalf("JSON: %v %s", e, out)
 			}
 			if r["schema_version"] != float64(4) || r["command"] != "tidy-history" || r["operation"] != "registration-prune" {
