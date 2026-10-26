@@ -2,8 +2,15 @@
 
 **Created**: 2026-10-22 | **Binding owner decision (2026-10-22): no `-race` on pull requests**, race runs nightly and weekly (D10). | **Status**: proposed (spec-light; open questions decided by the owner 2026-10-22, see "Decisions": this page, [contracts/tiers.md](contracts/tiers.md) and
 [plan.md](plan.md) are the whole design; documentation only, no workflow or script is changed by this specification). It
-**amends** the CI tier design recorded in [development](../../docs/development.md) (the `CONFORMANCE_TIER` expression and the
-`ci-full` label) and keeps the shard design of `scripts/ci_shards.py`.
+**amends** the CI tier design recorded in [development](../../docs/development.md) (the former `CONFORMANCE_TIER` expression, removed
+on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/ci_shards.py`.
+
+> **Amendment 2026-10-26 (owner decision, answer "Ja, jeder PR gleich").** Every pull request, stacked or not, runs the
+> `current` conformance shards (docs-only PRs excepted) until WP-2 lands. This reverses the wish below to run the heavy tests on the
+> stack tip only: a stacked PR skipped the shards, so `check` ran `internal/workspace` plain and timed out after 40 minutes
+> (PR 299, run 40309873142). `ci.yml` has no `CONFORMANCE_TIER` and no base-branch condition any more. Cost per push is about 78 runner
+> minutes in 7 jobs; a restack of three PRs needs about 21 jobs (limit 20), so restack one PR at a time. Statements below that stacked
+> PRs skip T2, or that T1 may run `internal/workspace` plain, describe the WP-2 target and are void for `internal/workspace`.
 
 ## Problem (owner, 2026-10-22)
 
@@ -154,7 +161,7 @@ Whether T1 needs the sandbox install (median 104 s, 8 to 260 s; WP-1 re-read 105
 without it. The T1 job installs the sandbox only when the affected set contains a package that needs it, and WP-1 measures which part
 of the install is `apt-get update`. The fixed T1 floor from the measured steps is checkout 2 s, setup-go 12 s, Node 1 s, Hugo 1 s, static
 checks 24 s, shard coverage 6 s, import boundaries 7 s, Pages artifact 1 s = about 55 s without the sandbox, about 160 s with it (median install), plus the
-affected tests (WP-1, measured locally, `docs/progress.md`: all 20 packages with tests take 11 min 49 s, of which `internal/workspace` 698 s; without it the longest package takes 170 s; CI speed unmeasured). T1 runs `internal/workspace` only when the conformance shards do not run for the pull request (`CONFORMANCE_TIER` false), as `ci.yml` does today. The 5 minute target is feasible when the affected tests fit in about 2 minutes; WP-1 measures the widest case (`all`) and the target is then set by Decision D3.
+affected tests (WP-1, measured locally, `docs/progress.md`: all 20 packages with tests take 11 min 49 s, of which `internal/workspace` 698 s; without it the longest package takes 170 s; CI speed unmeasured). T1 never runs `internal/workspace` plain: a plain run exceeds the 40 minute timeout (run 40309873142), so `ci.yml` now leaves it to the conformance shards on every event (amendment 2026-10-26); WP-2 must shard or defer it, never run it in T1. The 5 minute target is feasible when the affected tests fit in about 2 minutes; WP-1 measures the widest case (`all`) and the target is then set by Decision D3.
 
 ### Race coverage (owner decision D10, 2026-10-22)
 
@@ -277,7 +284,7 @@ stable through every change below:
 | `Git/jj conformance (minimum) / suite` | T3 verdict of the minimum lane; on a pull request it passes with reason `minimum lane runs on T3` (Decision D1) | must be made to (see below) |
 | `Git/jj conformance (current) / suite` | T2 verdict of the current lane (T3 on `main`) | must be made to (see below) |
 
-Today the conformance caller job is skipped on a stacked PR, so these two names do not report at all there: a ruleset requiring them
+Before the amendment of 2026-10-26 the conformance caller job was skipped on a stacked PR, so these two names did not report at all there: a ruleset requiring them
 would leave such a PR `Expected` forever, and GitHub treats a skipped required job as passed. The workflow change of WP-2 therefore
 **always calls** the conformance workflow and passes `t2_required`; the `suite` job passes on `success`, passes on `skipped` only when
 the `tier` reason is `docs-only`, `draft`, own evidence, tip evidence or (lane `minimum`) `minimum lane runs on T3` on a pull request (reason printed), and fails otherwise (including `T2 pending on #N` and `t2_required` true) (the existing docs-only rule becomes one
