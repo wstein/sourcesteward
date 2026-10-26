@@ -287,6 +287,11 @@ func Overview(d Document, opts OverviewOptions) string {
 		fmt.Fprintf(&b, " (%d not analysed)", skipped+failed)
 	}
 	b.WriteString("\n")
+	if len(d.Mode.Markers) > 0 {
+		// An agent marker turns a terminal run into an agent run; the person must be told why
+		// nothing is asked (the marker names are escaped).
+		fmt.Fprintf(&b, "Mode:      %s\n", modeLine(d.Mode))
+	}
 	shown := 0
 	for _, r := range d.Repositories {
 		if r.State != "skipped" && r.State != "error" {

@@ -159,7 +159,7 @@ func verdicts(d render.Document) map[string]bool {
 // The overview is printed in text, nothing is stored, the exit is 0 for a complete analysis.
 func TestWizardPlanPrintsTheOverviewAndStoresNothing(t *testing.T) {
 	w := newWizardWorld(t, true, true)
-	out, err := runTidy(t, "", "plan")
+	out, err := runTidy(t, "", "plan", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestWizardPlanExitsOneWhenEvidenceIsIncomplete(t *testing.T) {
 		mutate(w)
 		out, err := runTidy(t, "", "plan")
 		var failure runtimeFailure
-		if !errors.As(err, &failure) || !strings.Contains(out, "Analysed 2 repositories") {
+		if !errors.As(err, &failure) || !strings.Contains(out, "Workspace /ws") {
 			t.Errorf("%s: err %v, output %q", name, err, out)
 		}
 	}
@@ -505,7 +505,7 @@ func TestWizardPlanSaveFailuresPrintTheOverviewFirst(t *testing.T) {
 				if d := docOf(t, out); d.Command != "tidy-overview" || d.PlanID != "" {
 					t.Errorf("%s: %+v", name, d)
 				}
-			} else if !strings.Contains(out, "Analysed 2 repositories") {
+			} else if !strings.Contains(out, "Workspace /ws") {
 				t.Errorf("%s: no overview before the failure:\n%s", name, out)
 			}
 		}
@@ -544,7 +544,7 @@ func TestWizardPlanDeadlineDuringTheAnalysis(t *testing.T) {
 	}
 	out, err := runTidy(t, "", "plan", "--timeout", "1ns")
 	var failure runtimeFailure
-	if !errors.As(err, &failure) || !strings.Contains(err.Error(), "--timeout") || !strings.Contains(out, "Analysed 2 repositories") {
+	if !errors.As(err, &failure) || !strings.Contains(err.Error(), "--timeout") || !strings.Contains(out, "Workspace /ws") {
 		t.Errorf("%v\n%s", err, out)
 	}
 }
