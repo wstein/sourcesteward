@@ -845,6 +845,7 @@
           "enum": [
             "ok",
             "refused",
+            "partial",
             "error"
           ]
         },
@@ -899,7 +900,10 @@
           "if": {
             "properties": {
               "status": {
-                "const": "ok"
+                "enum": [
+                  "ok",
+                  "partial"
+                ]
               }
             }
           },
