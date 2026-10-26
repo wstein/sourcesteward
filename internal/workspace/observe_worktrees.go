@@ -10,9 +10,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
+	"github.com/wstein/sourcesteward/internal/fanout"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
@@ -151,6 +154,7 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	start := time.Now()
 	obsCtx, cancel := context.WithDeadline(ctx, start.Add(c.windowFor(ctx, 0)))
 	defer cancel()
+	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseRefs})
 	observed, err := c.refs.observe(obsCtx, o.Path, o.Base)
 	if err != nil {
 		return WorktreeObservation{}, err
@@ -175,30 +179,45 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	}
 	facts := newCommitFacts(c.read, bin, root, observed.Expected.BaseCommit)
 	// Content phase: registrations, then each worktree with its own content budget.
-	for i, reg := range observed.Native.Registrations {
+	nWorktrees := len(observed.Native.Registrations)
+	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseWorktrees, Total: nWorktrees})
+	out.Worktrees = make([]WorktreeEvidence, nWorktrees)
+	var worktreesDone atomic.Int64
+	observeAll(obsCtx, nWorktrees, observerWidth, func(i int) {
+		start := time.Now()
+		reg := observed.Native.Registrations[i]
 		w := WorktreeEvidence{Path: reg.Path, HeadOID: reg.HeadOID, HeadRef: reg.HeadRef, Locked: reg.Locked, LockReason: reg.LockReason, Prunable: reg.Prunable}
 		if i >= observerWorktreeLimit {
 			w.Incomplete = "worktree-limit"
 		} else {
 			c.observeWorktreeContent(obsCtx, bin, facts, observed.Expected.Identity.RepositoryDir, &w)
 		}
-		out.Worktrees = append(out.Worktrees, w)
-	}
+		out.Worktrees[i] = w
+		ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseWorktrees, Done: int(worktreesDone.Add(1)), Total: nWorktrees, Item: w.Path, Took: time.Since(start)})
+	})
+	reportWindow(ctx, obsCtx, ObservePhaseWorktrees)
 	var branches []V3Reference
 	for _, r := range observed.Native.References {
 		if strings.HasPrefix(r.Name, "refs/heads/") {
 			branches = append(branches, r)
 		}
 	}
-	for i, r := range branches {
+	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseBranches, Total: len(branches)})
+	out.Branches = make([]BranchEvidence, len(branches))
+	var branchesDone atomic.Int64
+	observeAll(obsCtx, len(branches), observerWidth, func(i int) {
+		start := time.Now()
+		r := branches[i]
 		b := BranchEvidence{Name: r.Name, OID: r.OID, IsBase: isBaseBranch(r.Name, o.Base)}
 		if i >= observerBranchLimit {
 			b.Incomplete = "branch-limit"
 		} else {
 			b.Ahead, b.AuthorHint, b.Incomplete = facts.history(obsCtx, r.OID)
 		}
-		out.Branches = append(out.Branches, b)
-	}
+		out.Branches[i] = b
+		ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseBranches, Done: int(branchesDone.Add(1)), Total: len(branches), Item: b.Name, Took: time.Since(start)})
+	})
+	reportWindow(ctx, obsCtx, ObservePhaseBranches)
 	// Proof phase: one integration run for the repository, every distinct tip once.
 	// It gets the rest of the window, never less than the old 60 s.
 	phase := proofPhaseTimeout(time.Until(end))
@@ -210,12 +229,45 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 		return WorktreeObservation{}, err
 	}
 	defer closeRun()
+	// Every distinct tip is proven once, in the order its first item appears (worktrees, then
+	// branches); the tips are proven a few at a time (observerWidth), each under its own per-tip
+	// budget and the shared phase budget.
+	type tipOutcome struct{ proof, reason string }
+	var tips, tipLabel []string
+	tipIndex := map[string]int{}
+	addTip := func(oid, label string) {
+		if _, ok := tipIndex[oid]; !ok {
+			tipIndex[oid] = len(tips)
+			tips = append(tips, oid)
+			tipLabel = append(tipLabel, label)
+		}
+	}
+	for _, w := range out.Worktrees {
+		if w.Incomplete == "" && !w.DirMissing && !w.Primary {
+			addTip(w.HeadOID, w.Path)
+		}
+	}
+	for _, b := range out.Branches {
+		if b.Incomplete == "" {
+			addTip(b.OID, b.Name)
+		}
+	}
+	outcomes := make([]tipOutcome, len(tips))
+	var proven atomic.Int64
+	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseProofs, Total: len(tips)})
+	observeAll(proofCtx, len(tips), observerWidth, func(i int) {
+		start := time.Now()
+		p, r := proofs(proofCtx, tips[i])
+		outcomes[i] = tipOutcome{p, r}
+		ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseProofs, Done: int(proven.Add(1)), Total: len(tips), Item: tipLabel[i], Took: time.Since(start)})
+	})
 	for i := range out.Worktrees {
 		w := &out.Worktrees[i]
 		if w.Incomplete != "" || w.DirMissing || w.Primary {
 			continue
 		}
-		if w.Proof, w.Incomplete = proofs(proofCtx, w.HeadOID); w.Incomplete != "" {
+		o := outcomes[tipIndex[w.HeadOID]]
+		if w.Proof, w.Incomplete = o.proof, o.reason; w.Incomplete != "" {
 			clearContent(w)
 		}
 	}
@@ -224,14 +276,40 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 		if b.Incomplete != "" {
 			continue
 		}
-		if b.Proof, b.Incomplete = proofs(proofCtx, b.OID); b.Incomplete != "" {
+		o := outcomes[tipIndex[b.OID]]
+		if b.Proof, b.Incomplete = o.proof, o.reason; b.Incomplete != "" {
 			b.Ahead, b.AuthorHint = 0, ""
 		}
 	}
+	reportWindow(ctx, proofCtx, ObservePhaseProofs)
 	if o.Online {
+		ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseTracking})
 		c.observeTracking(ctx, o, observed, &out)
 	}
 	return out, nil
+}
+
+// observerWidth is the number of worktrees, and of branches, of one repository that are observed
+// at the same time (Spec 040 widths: the analysis already runs four repositories at the same
+// time, so at most sixteen items are read at once). A variable only so a test can compare the
+// sequential result with the concurrent one.
+var observerWidth = 4
+
+// observeAll runs fn(0..n-1) with at most width calls at the same time through internal/fanout and
+// returns when all have returned. Every item runs even when ctx has ended (the item itself then
+// reports the context as its Incomplete reason, as the sequential loop did): the scheduling
+// context is detached, the items see ctx. Each call writes only its own slot.
+func observeAll(ctx context.Context, n, width int, fn func(i int)) {
+	_ = fanout.Do(context.WithoutCancel(ctx), n, width, func(_ context.Context, i int) { fn(i) })
+}
+
+// reportWindow tells the progress sink that the window of a phase ended before the phase did: the
+// context of the phase finished while the context of the run is still alive (a deadline, never
+// an interrupt of the run).
+func reportWindow(run, phase context.Context, name ObservePhase) {
+	if phase.Err() != nil && run.Err() == nil {
+		ReportObserve(run, ObserveEvent{Phase: ObservePhaseWindow, Note: string(name)})
+	}
 }
 
 // observeTracking fills the tracking references of the selected remote from the read-only part of
@@ -453,6 +531,7 @@ func incompleteReason(err error) string {
 // commitFacts reads the history facts of commits (commits ahead of the base, tip author) once
 // per distinct OID.
 type commitFacts struct {
+	mu              sync.Mutex // guards the three maps: items of one repository are read concurrently
 	run             func(context.Context, string, string, ...string) (string, error)
 	bin, root, base string
 	ahead           map[string]int
@@ -465,13 +544,21 @@ func newCommitFacts(read func(context.Context, string, string, ...string) (strin
 }
 
 func (f *commitFacts) history(ctx context.Context, oid string) (int, string, string) {
+	f.mu.Lock()
 	if reason, ok := f.failed[oid]; ok {
+		f.mu.Unlock()
 		return 0, "", reason
 	}
 	if n, ok := f.ahead[oid]; ok {
-		return n, f.author[oid], ""
+		author := f.author[oid]
+		f.mu.Unlock()
+		return n, author, ""
 	}
+	f.mu.Unlock()
+	// Two items with the same tip may both read it; the reads are deterministic and equal.
 	n, author, err := f.read(ctx, oid)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err != nil {
 		f.failed[oid] = incompleteReason(err)
 		return 0, "", f.failed[oid]
@@ -527,8 +614,13 @@ func (c worktreeObserver) proofs(ctx context.Context, observed tidyV3NativeObser
 	if err != nil {
 		return nil, func() {}, err
 	}
-	local := c.refs.localProofs(run, observed.Expected, policy)
+	// The private object directory and the clock of the phase are set before the tips are proven
+	// at the same time; each tip then works on its own copy of the run (its own per-tip clock).
+	run.ensureObjectDir()
+	run.phaseStart, run.phaseStarted = run.engine.now(), true
 	return func(ctx context.Context, oid string) (string, string) {
+		tipRun := *run
+		local := c.refs.localProofs(&tipRun, observed.Expected, policy)
 		return proofOutcome(local.prove(ctx, oid, []string{}))
 	}, closeRun, nil
 }

@@ -53,6 +53,7 @@ func executeNativeStreamBudgeted(ctx context.Context, cancel context.CancelFunc,
 // (merge-base, merge-tree). stdin is streamed, never buffered.
 func executeNativeStreamExit(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, stdin io.Reader, limit int64, parse func(io.Reader) error, budget *tidyV3ProofBudget, tolerateExit bool) (nativeStreamStats, int, error) {
 	var stats nativeStreamStats
+	defer traceCommand(ctx, cmd)()
 	out, e := cmd.StdoutPipe()
 	if e != nil {
 		return stats, -1, e

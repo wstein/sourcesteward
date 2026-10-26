@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -239,8 +240,14 @@ func TestObserveProofPhaseExhaustionIsIncompleteNeverNone(t *testing.T) {
 	b := observeAdd(t, repo, "b")
 	commitIn(t, b, "y", "y\n")
 	clock := time.Now()
+	var clockMu sync.Mutex // the tips are proven a few at a time
 	obs := defaultWorktreeObserver()
-	obs.refs.integration.now = func() time.Time { clock = clock.Add(61 * time.Second); return clock }
+	obs.refs.integration.now = func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		clock = clock.Add(61 * time.Second)
+		return clock
+	}
 	o, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase})
 	if err != nil {
 		t.Fatal(err)

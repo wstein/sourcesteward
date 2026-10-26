@@ -210,7 +210,9 @@ func runSandboxed(ctx context.Context, bin string, args []string, cwd string, wr
 	var out, errout nativeCapture
 	c.Stdout = &out
 	c.Stderr = &errout
+	end := traceCommand(ctx, c)
 	e = c.Run()
+	end()
 	if ctx.Err() != nil {
 		return "", -1, ctx.Err()
 	}
