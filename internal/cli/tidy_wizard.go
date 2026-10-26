@@ -99,6 +99,8 @@ func (r *wizardRun) readOnline(cmd *cobra.Command, choice tidyOnlineChoice) {
 	members := tidyOnlineMembers(r.prep, r.res)
 	out := tidyOnlineFetch(r.ctx, members, r.res.Candidates, r.budget)
 	r.online = out
+	// The merged pull request of a tip is evidence for the risk ladder and the `pr` member of the JSON.
+	out.AttachPR(r.res.Candidates)
 	notice, entry := tidyOnlineSummary(choice, members, r.res, out)
 	r.prep.Derived = append(append([]derive.Derived{}, r.prep.Derived...), entry)
 	if notice != "" {
