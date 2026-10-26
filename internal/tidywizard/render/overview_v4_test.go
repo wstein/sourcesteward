@@ -164,3 +164,12 @@ func TestOverviewV4TextBoundsWholeDocument(t *testing.T) {
 		t.Fatalf("text byte bound: bytes=%d cut=%v", len(text), cut)
 	}
 }
+
+func TestOverviewV4LegacyRowsRemainPlainText(t *testing.T) {
+	in := input()
+	in.Result.Candidates = []tidywizard.Candidate{cand("a", tidywizard.KindBranch, "plain-branch", tidywizard.VerdictSafe, "merged", owner.ScopeOwn)}
+	text, cut := TextV4(BuildV4(in, nil), TextOptions{})
+	if cut || !strings.Contains(text, "plain-branch") || strings.Contains(text, "\x1b[") {
+		t.Fatalf("plain overview row: cut=%v text=%q", cut, text)
+	}
+}
